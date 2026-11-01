@@ -9,17 +9,6 @@
 #include <QString>
 #include <QApplication>
 
-namespace GRC
-{
-class Progress;
-}
-
-class QAction;
-class QMenuBar;
-class QMenu;
-class QMainWindow;
-class QProgressDialog;
-
 class UpgradeQt : QObject
 {
     Q_OBJECT
@@ -30,13 +19,7 @@ public:
     //!
     UpgradeQt();
     //!
-    //! \brief Main function for snapshot task.
-    //!
-    //! \return Returns success of snapshot task.
-    //!
-    bool SnapshotMain(QApplication& SnapshotApp);
-    //!
-    //! \brief ErrorMsg box for displaying errors that have occurred during snapshot process.
+    //! \brief ErrorMsg box for displaying errors that have occurred during the blockchain reset.
     //!
     //! \param text Main text displaying on QMessageBox.
     //! \param informativetext Informative text displaying on QMessageBox.
@@ -53,12 +36,6 @@ public:
     //!
     static int Msg(const std::string& text, const std::string& informativetext, bool question = false);
     //!
-    //! \brief Function return intent of user of requested action.
-    //!
-    //! \return bool
-    //!
-    static bool CancelOperation();
-    //!
     //! \brief Function to convert std::string to QString to keep code cleaner
     //!
     //! \param String to convert to QString
@@ -66,24 +43,11 @@ public:
     //! \return QString
     static QString ToQString(const std::string& string);
     //!
-    //! \brief Small function to delete the snapshot.zip file
-    //!
-    static void DeleteSnapshot();
-    //!
     //! \brief Main function for sync from zero task.
     //!
     //! \return Returns success of blockchain data cleanup task.
     //!
     static bool ResetBlockchain(QApplication& ResetBlockchainApp);
-
-private:
-#ifdef Q_OS_MAC
-    QAction *m_quitAction;
-    QMenuBar *m_appMenuBar;
-    QMenu *trayIconMenu;
-#endif
-
-    QProgressDialog *m_Progress;
 };
 
 #endif // GRIDCOIN_QT_UPGRADEQT_H

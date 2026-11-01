@@ -29,3 +29,6 @@ clen
 siz
 anull
 doas
+som
+crypted
+lief

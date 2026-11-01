@@ -11,6 +11,7 @@
 #include "streams.h"
 #include "sync.h"
 
+#include <atomic>
 #include <map>
 #include <string>
 #include <vector>
@@ -18,7 +19,7 @@
 #include <db_cxx.h>
 
 class CAddress;
-class CAddrMan;
+class AddrMan;
 class CBlockLocator;
 class CDiskBlockIndex;
 class CDiskTxPos;
@@ -28,7 +29,15 @@ class CTxIndex;
 class CWallet;
 class CWalletTx;
 
-extern unsigned int nWalletDBUpdated;
+// Dirty-write counter incremented by every wallet write and polled by
+// ThreadFlushWalletDB to decide when to flush. Touched by every wallet-update
+// thread and read by the flush thread; making it atomic closes a TSan data
+// race covering all increment sites (walletdb.h Write* helpers + walletdb.cpp
+// WriteName/EraseName/WriteBestBlock) and the read sites in
+// ThreadFlushWalletDB. The default seq_cst operator++ / operator T() keep the
+// existing call sites unchanged (Bitcoin Core handles the same counter the
+// same way).
+extern std::atomic<unsigned int> nWalletDBUpdated;
 
 void ThreadFlushWalletDB(void* parg);
 
@@ -152,8 +161,14 @@ protected:
     {
         if (!pdb)
             return false;
-        if (fReadOnly)
+        if (fReadOnly) {
+            // The assert records an invariant the caller is expected to keep; the
+            // return is what makes the refusal operational. Without it the assert
+            // IS the guard, and removing it would let a write proceed on a handle
+            // opened read-only. Mirrors the !pdb refusal directly above.
             assert(!"Write called on database in read-only mode");
+            return false;
+        }
 
         // Key
         CDataStream ssKey(SER_DISK, CLIENT_VERSION);
@@ -181,8 +196,11 @@ protected:
     {
         if (!pdb)
             return false;
-        if (fReadOnly)
+        if (fReadOnly) {
+            // See Write() above: the return, not the assert, is the guard.
             assert(!"Erase called on database in read-only mode");
+            return false;
+        }
 
         // Key
         CDataStream ssKey(SER_DISK, CLIENT_VERSION);

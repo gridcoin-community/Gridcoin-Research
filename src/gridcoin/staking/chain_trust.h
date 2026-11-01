@@ -6,9 +6,14 @@
 #define GRIDCOIN_STAKING_CHAIN_TRUST_H
 
 #include "arith_uint256.h"
+#include "sync.h"
 
 #include <array>
 #include <vector>
+
+extern CCriticalSection cs_main;
+
+class CBlockIndex;
 
 namespace GRC {
 //!
@@ -31,7 +36,7 @@ class ChainTrustCache
 {
 public:
     ChainTrustCache()
-        : m_best_pindex(new CBlockIndex()) // Genesis bootstrap placeholder
+        : m_best_pindex(&GenesisPlaceholder())
     {
     }
 
@@ -42,13 +47,9 @@ public:
     //! \param genesis Blockchain index for the genesis block.
     //! \param tip     Blockchain index for the highest known block.
     //!
-    void Initialize(const CBlockIndex* genesis, const CBlockIndex* tip)
+    void Initialize(const CBlockIndex* genesis, const CBlockIndex* tip) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         int64_t start_time = GetTimeMillis();
-
-        if (m_best_pindex->phashBlock == nullptr) {
-            delete m_best_pindex; // Free genesis bootstrap placeholder
-        }
 
         m_best_pindex = tip;
         m_best_trust = 0;
@@ -72,7 +73,7 @@ public:
     //!
     //! \return Chain trust value at the current best block.
     //!
-    arith_uint256 Best() const
+    arith_uint256 Best() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return m_best_trust;
     }
@@ -85,7 +86,7 @@ public:
     //!
     //! \return \c true if the specified block exhibits greater chain trust.
     //!
-    bool Favors(const CBlockIndex* pindex) const
+    bool Favors(const CBlockIndex* pindex) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return GetTrust(pindex) > Best();
     }
@@ -97,7 +98,7 @@ public:
     //!
     //! \return Chain trust value for the specified block.
     //!
-    arith_uint256 GetTrust(const CBlockIndex* pindex) const
+    arith_uint256 GetTrust(const CBlockIndex* pindex) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         arith_uint256 chain_trust;
 
@@ -140,7 +141,7 @@ public:
     //! \param pindex Points to the block index entry selected as the tip of
     //! the chain.
     //!
-    void SetBest(const CBlockIndex* pindex)
+    void SetBest(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         m_best_trust = pindex->GetBlockTrust() + GetTrust(pindex->pprev);
         m_best_pindex = pindex;
@@ -153,6 +154,19 @@ public:
     }
 
 private:
+    //!
+    //! \brief Stands in for the tip until the first Initialize() or SetBest()
+    //! so that GetTrust() can read m_best_pindex unconditionally.
+    //!
+    //! Static, so neither call has to free it. On a new chain SetBest() runs
+    //! before Initialize(), which is where the placeholder used to be freed.
+    //!
+    static const CBlockIndex& GenesisPlaceholder()
+    {
+        static const CBlockIndex placeholder;
+        return placeholder;
+    }
+
     //!
     //! \brief A circular buffer that caches chain trust values for blocks
     //! recently-connected to the chain.
@@ -359,5 +373,14 @@ private:
     LongTrustCache m_long_cache;      //!< Caches chain trust at height intervals.
 }; // ChainTrustCache
 } // namespace GRC
+
+//! Chain trust cache for the active chain. Defined in chain_trust.cpp (moved
+//! from main.cpp, issue #3125 C9).
+extern GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
+
+//!
+//! \brief Re-exports chain trust values for reporting.
+//!
+arith_uint256 GetChainTrust(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 #endif // GRIDCOIN_STAKING_CHAIN_TRUST_H

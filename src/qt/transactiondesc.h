@@ -3,24 +3,22 @@
 
 #include <QString>
 #include <QObject>
-#include <string>
 
-#include "wallet/ismine.h"
+#include "interfaces/wallet_tx_channel.h"
 
-class CWallet;
-class CWalletTx;
-
-/** Provide a human-readable extended HTML description of a transaction.
+/** Render a human-readable extended HTML description of a transaction from the
+ *  node-filled GRC::WalletTxDetail value DTO. All localization lives here on
+ *  the GUI side (multiprocess design §4.1); the node never renders HTML.
  */
 class TransactionDesc: public QObject
 {
     Q_OBJECT
 public:
-    static QString toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vout);
+    static QString toHTML(const GRC::WalletTxDetail& detail);
 private:
     TransactionDesc() {}
 
-    static QString FormatTxStatus(const CWalletTx& wtx);
+    static QString FormatTxStatus(const GRC::WalletTxDetail& detail);
 };
 
 #endif // BITCOIN_QT_TRANSACTIONDESC_H

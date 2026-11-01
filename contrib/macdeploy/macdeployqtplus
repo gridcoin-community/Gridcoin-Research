@@ -16,7 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import sys, re, os, platform, shutil, stat, subprocess, os.path
+import sys, re, os, platform, shutil, stat, subprocess, os.path, time
 from argparse import ArgumentParser
 try:
     from ds_store import DSStore
@@ -25,8 +25,13 @@ try:
 except ImportError:
     HAS_DS_STORE = False
 from pathlib import Path
-from subprocess import PIPE, run
+from subprocess import CalledProcessError, PIPE, run
 from typing import List, Optional
+
+# Line-buffer stdout. Run from make, stdout is a pipe and block-buffered,
+# while the tools this script runs write straight to the log, so a progress
+# or retry message could land far from the error it belongs to.
+sys.stdout.reconfigure(line_buffering=True)
 
 # This is ported from the original macdeployqt with modifications
 
@@ -336,7 +341,21 @@ def codesignItem(path: str, identity: str, entitlements: Optional[str],
     cmd.append(path)
     if verbose:
         print("  codesign:", " ".join(cmd))
-    subprocess.check_call(cmd)
+    # --timestamp has Apple's timestamp server countersign the signature, so
+    # signing fails whenever that server does not answer: "A timestamp was
+    # expected but was not found." Observed on a macos-15-intel runner, on the
+    # first framework signed. Retry it the way the hdiutil calls below are
+    # retried; --force, already passed, makes a retry replace any signature
+    # an earlier attempt wrote. The final attempt raises like check_call would.
+    attempts, delay = 4, 15
+    for attempt in range(1, attempts + 1):
+        result = run(cmd)
+        if result.returncode == 0:
+            return
+        if attempt < attempts:
+            print(f"codesign {path} failed (attempt {attempt}/{attempts}), retrying in {delay}s...")
+            time.sleep(delay)
+    result.check_returncode()
 
 def copyFramework(framework: FrameworkInfo, path: str, verbose: int) -> Optional[str]:
     if framework.sourceFilePath.startswith("Qt"):
@@ -382,6 +401,35 @@ def copyFramework(framework: FrameworkInfo, path: str, verbose: int) -> Optional
         headers_dir = os.path.join(to_dir, framework.binaryDirectory, "Headers")
         if os.path.exists(headers_dir):
             shutil.rmtree(headers_dir)
+
+        # Seal the framework root: codesign refuses a framework whose root
+        # holds real entries other than Versions ("unsealed contents present
+        # in the root directory of an embedded framework"). Bottled Qt kegs
+        # ship clean roots, but source-built kegs -- what Homebrew now
+        # produces on Intel under its Tier 3 fallback -- can leave real
+        # files or directories (build artifacts such as .prl files) at the
+        # root. Re-home them under the versioned directory and leave the
+        # symlink the sealed layout expects.
+        versions_dir = os.path.join(to_dir, "Versions")
+        if os.path.isdir(versions_dir):
+            versioned_root = os.path.join(versions_dir, framework.version)
+            for entry in os.listdir(to_dir):
+                if entry == "Versions":
+                    continue
+                entry_path = os.path.join(to_dir, entry)
+                if os.path.islink(entry_path):
+                    continue
+                versioned_path = os.path.join(versioned_root, entry)
+                if os.path.exists(versioned_path):
+                    if os.path.isdir(entry_path):
+                        shutil.rmtree(entry_path)
+                    else:
+                        os.remove(entry_path)
+                else:
+                    shutil.move(entry_path, versioned_path)
+                os.symlink(os.path.join("Versions", framework.version, entry), entry_path)
+                if verbose:
+                    print("Sealed framework root entry:", entry)
 
     permissions = os.stat(toPath)
     if not permissions.st_mode & stat.S_IWRITE:
@@ -438,6 +486,52 @@ def deployFrameworks(frameworks: List[FrameworkInfo], bundlePath: str, binaryPat
                 frameworks.append(dependency)
 
     return deploymentInfo
+
+def helperBinaries(applicationBundle: ApplicationBundleInfo) -> List[str]:
+    """Executables shipped in Contents/Helpers, in a stable order.
+
+    Contents/MacOS is for the bundle's MAIN executable. Auxiliary executables belong
+    in Contents/Helpers: codesign treats a stray Mach-O in Contents/MacOS as a
+    subcomponent that must be independently valid, and an unsigned one there makes the
+    whole bundle fail verification with "code object is not signed at all".
+    """
+    helpersDir = os.path.join(applicationBundle.path, "Contents", "Helpers")
+    if not os.path.isdir(helpersDir):
+        return []
+    out = []
+    for name in sorted(os.listdir(helpersDir)):
+        path = os.path.join(helpersDir, name)
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            out.append(path)
+    return out
+
+
+def deployFrameworksForHelpers(applicationBundle: ApplicationBundleInfo, deploymentInfo: DeploymentInfo, strip: bool, verbose: int):
+    """Relocate library references for the helper executables.
+
+    The bundle ships gridcoinresearchd so the multiprocess (GUI/node split) build is
+    usable from the DMG. ApplicationBundleInfo.binaryPath names only the GUI, so
+    without this pass the daemon keeps whatever absolute install names it linked
+    against -- typically Homebrew paths under /usr/local or /opt/homebrew. It would run
+    on the build machine and on any developer box with the same brew packages, and fail
+    on a clean install with a dyld error naming a library the user has never heard of.
+
+    Contents/Helpers is a sibling of Contents/Frameworks, exactly as Contents/MacOS is,
+    so the @executable_path/../Frameworks/... install names deployFrameworks() writes
+    resolve from a helper unchanged.
+
+    deployFrameworks() is safe to call again here: it rewrites the passed binary's
+    install names first, and copyFramework() returns None for anything already in the
+    bundle, so shared libraries are relocated rather than duplicated. Libraries a helper
+    needs and the GUI does not are copied in on this pass.
+    """
+    for binaryPath in helperBinaries(applicationBundle):
+        print(f"+ Deploying frameworks for {os.path.basename(binaryPath)} +")
+        frameworks = getFrameworks(binaryPath, verbose)
+        if not frameworks:
+            continue
+        deployFrameworks(frameworks, applicationBundle.path, binaryPath, strip, verbose, deploymentInfo)
+
 
 def deployFrameworksForAppBundle(applicationBundle: ApplicationBundleInfo, strip: bool, verbose: int) -> DeploymentInfo:
     frameworks = getFrameworks(applicationBundle.binaryPath, verbose)
@@ -572,6 +666,7 @@ print("+ Deploying frameworks +")
 
 try:
     deploymentInfo = deployFrameworksForAppBundle(applicationBundle, config.strip, verbose)
+    deployFrameworksForHelpers(applicationBundle, deploymentInfo, config.strip, verbose)
     if deploymentInfo.qtPath is None:
         deploymentInfo.qtPath = os.getenv("QTDIR", None)
         if deploymentInfo.qtPath is None:
@@ -715,14 +810,28 @@ if config.sign is not None and platform.system() == "Darwin":
                     codesignItem(os.path.join(dirpath, filename),
                                  identity, None, hardened, verbose)
 
-    # 3. Sign the main executable (with entitlements)
+    # 3. Sign helper executables in Contents/Helpers, BEFORE the main binary and the
+    #    bundle. Inside-out order is not a style choice here: codesign validates a
+    #    bundle's subcomponents, so an unsigned helper makes signing the bundle fail
+    #    with "code object is not signed at all" naming the helper as the subcomponent.
+    #    Helpers get the same entitlements as the main binary -- gridcoinresearchd does
+    #    the same networking and file access the GUI does when it runs core in-process,
+    #    so under a hardened runtime it needs the same grants.
+    helpers_dir = os.path.join(target, "Contents", "Helpers")
+    if os.path.exists(helpers_dir):
+        for item in sorted(os.listdir(helpers_dir)):
+            item_path = os.path.join(helpers_dir, item)
+            if os.path.isfile(item_path) and os.access(item_path, os.X_OK):
+                codesignItem(item_path, identity, entitlements_path, hardened, verbose)
+
+    # 4. Sign the main executable (with entitlements)
     main_binary = os.path.join(target, "Contents", "MacOS", "gridcoinresearch")
     codesignItem(main_binary, identity, entitlements_path, hardened, verbose)
 
-    # 4. Sign the top-level app bundle (with entitlements)
+    # 5. Sign the top-level app bundle (with entitlements)
     codesignItem(target, identity, entitlements_path, hardened, verbose)
 
-    # 5. Verify
+    # 6. Verify
     print("+ Verifying code signature +")
     subprocess.check_call(["codesign", "--verify", "--strict", "--verbose=2", target])
 
@@ -743,14 +852,39 @@ if config.dmg is not None:
 
     tempname: str = dmg_basename + ".temp.dmg"
 
-    run(["hdiutil", "create", tempname, "-srcfolder", "dist", "-format", "UDRW", "-size", str(size), "-volname", appname], check=True, universal_newlines=True)
+    def run_hdiutil_with_retry(args, attempts=4, delay=15, **kwargs):
+        # hdiutil races against Spotlight/fseventsd still indexing freshly
+        # written files on CI runners and fails transiently with "Resource
+        # busy" or "Resource temporarily unavailable"; a short pause and a
+        # retry clears it. The final attempt raises like check=True would.
+        # check must not sneak in through kwargs: it would raise on the
+        # first failure and silently bypass the retry this helper exists for.
+        kwargs.pop("check", None)
+        kwargs.setdefault("universal_newlines", True)
+        for attempt in range(1, attempts + 1):
+            result = run(["hdiutil"] + args, **kwargs)
+            if result.returncode == 0:
+                return result
+            if attempt < attempts:
+                print(f"hdiutil {args[0]} failed (attempt {attempt}/{attempts}), retrying in {delay}s...")
+                time.sleep(delay)
+        result.check_returncode()
+
+    # -ov: a failed attempt can leave a partial temp image behind; overwrite
+    # it so the retry does not die on "File exists".
+    run_hdiutil_with_retry(["create", tempname, "-ov", "-srcfolder", "dist", "-format", "UDRW", "-size", str(size), "-volname", appname])
 
     if verbose:
         print("Attaching temp image...")
-    output = run(["hdiutil", "attach", tempname, "-readwrite"], check=True, universal_newlines=True, stdout=PIPE).stdout
+    output = run_hdiutil_with_retry(["attach", tempname, "-readwrite"], stdout=PIPE).stdout
 
     m = re.search(r"/Volumes/(.+$)", output)
     disk_root = m.group(0)
+    # The image's own device node is the first /dev/diskN line attach prints.
+    # An APFS image adds a synthesized container disk after it; ejecting the
+    # image's device takes the container and the volume with it.
+    d = re.search(r"^(/dev/disk\d+)\s", output, re.MULTILINE)
+    device = d.group(1)
 
     print("+ Applying fancy settings +")
 
@@ -768,9 +902,38 @@ if config.dmg is not None:
 
     print("+ Finalizing .dmg disk image +")
 
-    run(["hdiutil", "detach", f"/Volumes/{appname}"], universal_newlines=True)
+    # The DETACH is the operation that races the indexer, not the convert, and
+    # it was the one call here that neither retried nor checked its result.
+    # Spotlight and fseventsd index the volume we have just written and hold it
+    # open, so the eject fails with "Resource busy". Nothing looked at that, and
+    # the convert below then ran against a still-mounted image and failed with
+    # "Resource temporarily unavailable" -- four times, because retrying a
+    # convert cannot un-mount anything. Observed on a macos-15-intel runner:
+    # one failed eject followed by four identical convert failures, and a
+    # traceback that named convert as the culprit.
+    #
+    # Retry the eject instead, and fail loudly if it never takes.
+    #
+    # Detach the device node, not the mount path. A detach can unmount the
+    # volume and then fail to eject the device: 'couldn't eject "disk2" -
+    # Resource busy'. The mount path is gone at that point but the image is
+    # still attached, so every later detach of the path, -force included,
+    # fails with "No such file or directory" and the retry can never succeed.
+    # Observed on a macos-15-intel runner: one busy eject, then seven of
+    # those. The device node names the image until it is detached, mounted
+    # or not.
+    try:
+        run_hdiutil_with_retry(["detach", device])
+    except CalledProcessError:
+        # Last resort. -force ejects a volume something else still holds open.
+        # Everything that writes to the image is done by this point -- the
+        # fancy settings above are the last thing to touch it -- so there is
+        # nothing left to lose by forcing, and it beats failing a release
+        # because an indexer was still reading.
+        print("hdiutil detach still busy after retries; forcing the eject")
+        run_hdiutil_with_retry(["detach", "-force", device])
 
-    run(["hdiutil", "convert", tempname, "-format", "UDZO", "-o", dmg_basename, "-imagekey", "zlib-level=9"], check=True, universal_newlines=True)
+    run_hdiutil_with_retry(["convert", tempname, "-format", "UDZO", "-o", dmg_basename, "-imagekey", "zlib-level=9"])
 
     os.unlink(tempname)
 

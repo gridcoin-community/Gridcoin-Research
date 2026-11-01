@@ -4,7 +4,6 @@
 
 #include "amount.h"
 #include "chainparams.h"
-#include "main.h"
 #include "gridcoin/appcache.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/mrc.h"
@@ -16,6 +15,7 @@
 #include "gridcoin/project.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/scraper/scraper_registry.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/sidestake.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
@@ -163,7 +163,7 @@ public:
     //! projects), or the objects are independent and unique by key and admit to
     //! simple reversion, such as polls/votes.
     //!
-    void ResetHandlers()
+    void ResetHandlers() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // Nothing to do.
     }
@@ -174,7 +174,7 @@ public:
     //!
     //! \param ctx References the contract and associated context.
     //!
-    void Apply(const ContractContext& ctx)
+    void Apply(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (ctx->m_action == ContractAction::ADD) {
             ctx.Log("INFO: Add contract");
@@ -185,6 +185,18 @@ public:
         if (ctx->m_action == ContractAction::REMOVE) {
             ctx.Log("INFO: Delete contract");
             GetHandler(ctx->m_type.Value()).Delete(ctx);
+            return;
+        }
+
+        if (ctx->m_action == ContractAction::OPEN) {
+            // OPEN must be applied symmetrically with Revert (which forwards
+            // every action to the handler). Without this branch a POOL_APPROVE
+            // OPEN was silently dropped here yet still reverted on a reorg —
+            // popping an entry Apply never pushed and, for a builtin CPID,
+            // erasing the grandfathered seed (null m_previous_hash → no
+            // resurrection). See PoolRegistry::Open / Revert.
+            ctx.Log("INFO: Open contract");
+            GetHandler(ctx->m_type.Value()).Open(ctx);
             return;
         }
 
@@ -200,7 +212,7 @@ public:
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS)
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return GetHandler(contract.m_type.Value()).Validate(contract, tx, DoS);
     }
@@ -214,7 +226,7 @@ public:
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS)
+    bool BlockValidate(const ContractContext& ctx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (!GetHandler(ctx.m_contract.m_type.Value()).BlockValidate(ctx, DoS)) {
             error("%s: Contract of type %s failed validation.",
@@ -233,7 +245,7 @@ public:
     //!
     //! \param ctx References the contract and associated context.
     //!
-    void Revert(const ContractContext& ctx)
+    void Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         ctx.Log("INFO: Revert contract");
 
@@ -276,9 +288,11 @@ protected:
             case ContractType::PROTOCOL:   return GetProtocolRegistry();
             case ContractType::SCRAPER:    return GetScraperRegistry();
             case ContractType::VOTE:       return GetPollRegistry();
-            case ContractType::MRC:        return m_mrc_contract_handler;
-            case ContractType::SIDESTAKE:  return GetSideStakeRegistry();
-            default:                       return m_unknown_handler;
+            case ContractType::MRC:           return m_mrc_contract_handler;
+            case ContractType::SIDESTAKE:     return GetSideStakeRegistry();
+            case ContractType::POOL_REGISTER: return GetPoolRegistry();
+            case ContractType::POOL_APPROVE:  return GetPoolRegistry();
+            default:                          return m_unknown_handler;
         }
     }
 }; // class Dispatcher
@@ -362,7 +376,7 @@ Contract GRC::MakeLegacyContract(
     return contract;
 }
 
-void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
+void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CBlockIndex*& pindex = pindex_start;
 
@@ -375,7 +389,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
         pindex = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Params().GetConsensus().StandardContractReplayLookback);
     }
 
-    if (pindex->nHeight < (fTestNet ? 1 : 164618)) {
+    if (pindex->nHeight < (OnTestnet() ? 1 : 164618)) {
         return;
     }
 
@@ -501,7 +515,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 void GRC::ApplyContracts(
     const CBlock& block,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract)
+    bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     out_found_contract = false;
 
@@ -517,7 +531,7 @@ void GRC::ApplyContracts(
 void GRC::ApplyContracts(
     const CTransaction& tx,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract)
+    bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     for (const auto& contract : tx.GetContracts()) {
         // Do not (re)apply contracts that have already been stored/loaded into
@@ -576,7 +590,7 @@ void GRC::ApplyContracts(
     }
 }
 
-bool GRC::ValidateContracts(const CTransaction& tx, int& DoS)
+bool GRC::ValidateContracts(const CTransaction& tx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     for (const auto& contract : tx.GetContracts()) {
         if (!g_dispatcher.Validate(contract, tx, DoS)) {
@@ -587,7 +601,7 @@ bool GRC::ValidateContracts(const CTransaction& tx, int& DoS)
     return true;
 }
 
-bool GRC::BlockValidateContracts(const CBlockIndex* const pindex, const CTransaction& tx, int& DoS)
+bool GRC::BlockValidateContracts(const CBlockIndex* const pindex, const CTransaction& tx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     for (const auto& contract: tx.GetContracts()) {
         if (!g_dispatcher.BlockValidate({ contract, tx, pindex }, DoS)) {
@@ -598,7 +612,7 @@ bool GRC::BlockValidateContracts(const CBlockIndex* const pindex, const CTransac
     return true;
 }
 
-void GRC::RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex)
+void GRC::RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Reverse the contracts. Reorganize will load any previous versions:
     for (const auto& contract : tx.GetContracts()) {
@@ -685,6 +699,14 @@ bool Contract::RequiresMasterKey() const
         case ContractType::SCRAPER:   return true;
         case ContractType::VOTE:      return m_action == ContractAction::REMOVE;
         case ContractType::SIDESTAKE: return true;
+
+        // POOL_REGISTER is intentionally NOT here: operators submit it with
+        // a payload-level operator signature (no master key required), and
+        // entries land in PENDING until a POOL_APPROVE follows. Only the
+        // approve/de-list action requires master-key authority.
+        case ContractType::POOL_APPROVE:
+            return true;
+
         default:                      return false;
     }
 }
@@ -778,6 +800,8 @@ Contract::Type Contract::Type::Parse(std::string input)
     if (input == "protocol")       return ContractType::PROTOCOL;
     if (input == "message")        return ContractType::MESSAGE;
     if (input == "sidestake")      return ContractType::SIDESTAKE;
+    if (input == "pool_register")  return ContractType::POOL_REGISTER;
+    if (input == "pool_approve")   return ContractType::POOL_APPROVE;
 
     return ContractType::UNKNOWN;
 }
@@ -794,8 +818,10 @@ std::string Contract::Type::ToString() const
         case ContractType::PROTOCOL:   return "protocol";
         case ContractType::SCRAPER:    return "scraper";
         case ContractType::VOTE:       return "vote";
-        case ContractType::SIDESTAKE:  return "sidestake";
-        default:                       return "";
+        case ContractType::SIDESTAKE:     return "sidestake";
+        case ContractType::POOL_REGISTER: return "pool_register";
+        case ContractType::POOL_APPROVE:  return "pool_approve";
+        default:                          return "";
     }
 }
 
@@ -811,8 +837,10 @@ std::string Contract::Type::ToString(ContractType contract_type)
         case ContractType::PROTOCOL:   return "protocol";
         case ContractType::SCRAPER:    return "scraper";
         case ContractType::VOTE:       return "vote";
-        case ContractType::SIDESTAKE:  return "sidestake";
-        default:                       return "";
+        case ContractType::SIDESTAKE:     return "sidestake";
+        case ContractType::POOL_REGISTER: return "pool_register";
+        case ContractType::POOL_APPROVE:  return "pool_approve";
+        default:                          return "";
     }
 }
 
@@ -828,8 +856,10 @@ std::string Contract::Type::ToTranslatedString(ContractType contract_type)
         case ContractType::PROTOCOL:   return _("protocol");
         case ContractType::SCRAPER:    return _("scraper");
         case ContractType::VOTE:       return _("vote");
-        case ContractType::SIDESTAKE:  return _("sidestake");
-        default:                       return "";
+        case ContractType::SIDESTAKE:     return _("sidestake");
+        case ContractType::POOL_REGISTER: return _("pool_register");
+        case ContractType::POOL_APPROVE:  return _("pool_approve");
+        default:                          return "";
     }
 }
 
@@ -845,6 +875,7 @@ Contract::Action Contract::Action::Parse(std::string input)
 {
     if (input == "A")  return ContractAction::ADD;
     if (input == "D")  return ContractAction::REMOVE;
+    if (input == "O")  return ContractAction::OPEN;
 
     return ContractAction::UNKNOWN;
 }
@@ -854,6 +885,7 @@ std::string Contract::Action::ToString() const
     switch (m_value) {
         case ContractAction::ADD:    return "A";
         case ContractAction::REMOVE: return "D";
+        case ContractAction::OPEN:   return "O";
         default:                     return "";
     }
 }
@@ -928,6 +960,12 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint3
         case ContractType::SIDESTAKE:
             // Sidestakes have no legacy representation as a contract.
             assert(false && "Attempted to convert non-existent legacy sidestake contract.");
+        case ContractType::POOL_REGISTER:
+            // Pool registrations have no legacy representation as a contract.
+            assert(false && "Attempted to convert non-existent legacy pool_register contract.");
+        case ContractType::POOL_APPROVE:
+            // Pool approvals have no legacy representation as a contract.
+            assert(false && "Attempted to convert non-existent legacy pool_approve contract.");
         case ContractType::OUT_OF_BOUND:
             assert(false);
     }
@@ -935,6 +973,11 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint3
     return ContractPayload::Make<EmptyPayload>();
 }
 
+// The poll, project, protocol and scraper payloads each set their version during
+// deserialization, from the stream or, for a legacy protocol or scraper entry, to
+// 1, and nothing read before that depends on the version. So the version a
+// payload is constructed with here never reaches the parsed contract, and parsing
+// a contract depends on no chain state and needs no lock.
 void Contract::Body::ResetType(const ContractType type)
 {
     switch (type) {
@@ -954,38 +997,28 @@ void Contract::Body::ResetType(const ContractType type)
             m_payload.Reset(new TxMessage());
             break;
         case ContractType::POLL:
-            // Note that the contract code expects cs_main to already be taken which
-            // means that the access to nBestHeight is safe.
-            // TODO: This ternary should be removed at the next mandatory after
-            // Kermit's Mom.
-            m_payload.Reset(new PollPayload(IsPollV3Enabled(nBestHeight) ? 3 : 2));
+            m_payload.Reset(new PollPayload());
             break;
         case ContractType::PROJECT:
-            // Note that the contract code expects cs_main to already be taken which
-            // means that the access to nBestHeight is safe.
-            // TODO: This ternary should be removed at the next mandatory after
-            // Kermit's Mom.
-            m_payload.Reset(new Project(IsV13Enabled(nBestHeight) ? 3 : 2));
+            m_payload.Reset(new Project());
             break;
         case ContractType::PROTOCOL:
-            // Note that the contract code expects cs_main to already be taken which
-            // means that the access to nBestHeight is safe.
-            // TODO: This ternary should be removed at the next mandatory after
-            // Kermit's Mom.
-            m_payload.Reset(new ProtocolEntryPayload(IsV13Enabled(nBestHeight) ? 2 : 1));
+            m_payload.Reset(new ProtocolEntryPayload());
             break;
         case ContractType::SCRAPER:
-            // Note that the contract code expects cs_main to already be taken which
-            // means that the access to nBestHeight is safe.
-            // TODO: This ternary should be removed at the next mandatory after
-            // Kermit's Mom.
-            m_payload.Reset(new ScraperEntryPayload(IsV13Enabled(nBestHeight) ? 2 : 1));
+            m_payload.Reset(new ScraperEntryPayload());
             break;
         case ContractType::VOTE:
             m_payload.Reset(new Vote());
             break;
         case ContractType::SIDESTAKE:
             m_payload.Reset(new SideStakePayload());
+            break;
+        case ContractType::POOL_REGISTER:
+            m_payload.Reset(new PoolRegisterPayload());
+            break;
+        case ContractType::POOL_APPROVE:
+            m_payload.Reset(new PoolApprovePayload());
             break;
         case ContractType::OUT_OF_BOUND:
             assert(false);
@@ -996,7 +1029,7 @@ void Contract::Body::ResetType(const ContractType type)
 // Abstract Class: IContractHandler
 // -----------------------------------------------------------------------------
 
-void IContractHandler::Revert(const ContractContext& ctx)
+void IContractHandler::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (ctx->m_action == ContractAction::ADD) {
         Delete(ctx);

@@ -4,6 +4,7 @@
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
 #include "uint256.h"
+#include <gridcoin/scraper/fwd.h>
 #include <node/ui_interface.h>
 
 #include <boost/signals2/optional_last_value.hpp>
@@ -15,7 +16,6 @@ CClientUIInterface uiInterface;
 
 struct UISignals {
     boost::signals2::signal<CClientUIInterface::ThreadSafeMessageBoxSig> ThreadSafeMessageBox;
-    boost::signals2::signal<CClientUIInterface::ThreadSafeAskQuestionSig> ThreadSafeAskQuestion;
     boost::signals2::signal<CClientUIInterface::InitMessageSig> InitMessage;
     boost::signals2::signal<CClientUIInterface::NotifyNumConnectionsChangedSig> NotifyNumConnectionsChanged;
     boost::signals2::signal<CClientUIInterface::NotifyAlertChangedSig> NotifyAlertChanged;
@@ -25,16 +25,16 @@ struct UISignals {
     boost::signals2::signal<CClientUIInterface::AccrualChangedFromStakeOrMRCSig> AccrualChangedFromStakeOrMRC;
     boost::signals2::signal<CClientUIInterface::MRCChangedSig> MRCChanged;
     boost::signals2::signal<CClientUIInterface::BeaconChangedSig> BeaconChanged;
+    boost::signals2::signal<CClientUIInterface::PSGTPoolChangedSig> PSGTPoolChanged;
     boost::signals2::signal<CClientUIInterface::NewPollReceivedSig> NewPollReceived;
     boost::signals2::signal<CClientUIInterface::NewVoteReceivedSig> NewVoteReceived;
     boost::signals2::signal<CClientUIInterface::NotifyScraperEventSig> NotifyScraperEvent;
-    boost::signals2::signal<CClientUIInterface::ThreadSafeAskFeeSig> ThreadSafeAskFee;
-    boost::signals2::signal<CClientUIInterface::ThreadSafeHandleURISig> ThreadSafeHandleURI;
     boost::signals2::signal<CClientUIInterface::QueueShutdownSig> QueueShutdown;
     boost::signals2::signal<CClientUIInterface::TranslateSig> Translate;
     boost::signals2::signal<CClientUIInterface::NotifyBlocksChangedSig> NotifyBlocksChanged;
     boost::signals2::signal<CClientUIInterface::UpdateMessageBoxSig> UpdateMessageBox;
     boost::signals2::signal<CClientUIInterface::RwSettingsUpdatedSig> RwSettingsUpdated;
+    boost::signals2::signal<CClientUIInterface::MandatorySideStakeChangedSig> MandatorySideStakeChanged;
 };
 static UISignals g_ui_signals;
 
@@ -45,7 +45,6 @@ static UISignals g_ui_signals;
     }
 
 ADD_SIGNALS_IMPL_WRAPPER(ThreadSafeMessageBox);
-ADD_SIGNALS_IMPL_WRAPPER(ThreadSafeAskQuestion);
 ADD_SIGNALS_IMPL_WRAPPER(InitMessage);
 ADD_SIGNALS_IMPL_WRAPPER(NotifyNumConnectionsChanged);
 ADD_SIGNALS_IMPL_WRAPPER(NotifyAlertChanged);
@@ -55,22 +54,19 @@ ADD_SIGNALS_IMPL_WRAPPER(ResearcherChanged);
 ADD_SIGNALS_IMPL_WRAPPER(AccrualChangedFromStakeOrMRC);
 ADD_SIGNALS_IMPL_WRAPPER(MRCChanged);
 ADD_SIGNALS_IMPL_WRAPPER(BeaconChanged);
+ADD_SIGNALS_IMPL_WRAPPER(PSGTPoolChanged);
 ADD_SIGNALS_IMPL_WRAPPER(NewPollReceived);
 ADD_SIGNALS_IMPL_WRAPPER(NewVoteReceived);
 ADD_SIGNALS_IMPL_WRAPPER(NotifyScraperEvent);
-ADD_SIGNALS_IMPL_WRAPPER(ThreadSafeAskFee);
-ADD_SIGNALS_IMPL_WRAPPER(ThreadSafeHandleURI);
 ADD_SIGNALS_IMPL_WRAPPER(QueueShutdown);
 ADD_SIGNALS_IMPL_WRAPPER(Translate);
 ADD_SIGNALS_IMPL_WRAPPER(NotifyBlocksChanged);
 ADD_SIGNALS_IMPL_WRAPPER(UpdateMessageBox);
 ADD_SIGNALS_IMPL_WRAPPER(RwSettingsUpdated);
+ADD_SIGNALS_IMPL_WRAPPER(MandatorySideStakeChanged);
 
 void CClientUIInterface::ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style) { return g_ui_signals.ThreadSafeMessageBox(message, caption, style); }
 void CClientUIInterface::UpdateMessageBox(const std::string& version, const int& update_type, const std::string& message) { return g_ui_signals.UpdateMessageBox(version, update_type, message); }
-bool CClientUIInterface::ThreadSafeAskFee(int64_t nFeeRequired, const std::string& strCaption) { return g_ui_signals.ThreadSafeAskFee(nFeeRequired, strCaption).value_or(false); }
-bool CClientUIInterface::ThreadSafeAskQuestion(std::string caption, std::string body) { return g_ui_signals.ThreadSafeAskQuestion(caption, body).value_or(false); }
-void CClientUIInterface::ThreadSafeHandleURI(const std::string& strURI) { return g_ui_signals.ThreadSafeHandleURI(strURI); }
 void CClientUIInterface::InitMessage(const std::string &message) { return g_ui_signals.InitMessage(message); }
 void CClientUIInterface::QueueShutdown() { return g_ui_signals.QueueShutdown(); }
 std::string CClientUIInterface::Translate(const char* psz) { return g_ui_signals.Translate(psz).value_or(std::string(psz)); }
@@ -82,11 +78,35 @@ void CClientUIInterface::ResearcherChanged() { return g_ui_signals.ResearcherCha
 void CClientUIInterface::AccrualChangedFromStakeOrMRC() { return g_ui_signals.AccrualChangedFromStakeOrMRC(); }
 void CClientUIInterface::MRCChanged() { return g_ui_signals.MRCChanged(); }
 void CClientUIInterface::BeaconChanged() { return g_ui_signals.BeaconChanged(); }
+void CClientUIInterface::PSGTPoolChanged(const uint256& revision_hash, ChangeType status, int reason) { return g_ui_signals.PSGTPoolChanged(revision_hash, status, reason); }
 void CClientUIInterface::NewPollReceived(int64_t poll_time) { return g_ui_signals.NewPollReceived(poll_time); }
 void CClientUIInterface::NewVoteReceived(const uint256& poll_txid) { return g_ui_signals.NewVoteReceived(poll_txid); }
 void CClientUIInterface::NotifyAlertChanged(const uint256 &hash, ChangeType status) { return g_ui_signals.NotifyAlertChanged(hash, status); }
-void CClientUIInterface::NotifyScraperEvent(const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message) { return g_ui_signals.NotifyScraperEvent(ScraperEventtype, status, message); }
+void CClientUIInterface::NotifyScraperEvent(const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message)
+{
+    // Remember the last icon-relevant event so a late-connecting UI can hydrate
+    // (see GetLastScraperEvent). Log events carry console text, not an icon
+    // state, and the GUI routes them separately, so they must not overwrite the
+    // cached status. relaxed ordering: the value is a self-contained snapshot
+    // read independently, with no other memory it must synchronize against.
+    if (ScraperEventtype != scrapereventtypes::Log) {
+        const uint32_t packed = (static_cast<uint32_t>(static_cast<int>(ScraperEventtype)) << 16)
+                                | (static_cast<uint32_t>(static_cast<int>(status)) & 0xFFFFu);
+        m_last_scraper_event.store(packed, std::memory_order_relaxed);
+    }
+    return g_ui_signals.NotifyScraperEvent(ScraperEventtype, status, message);
+}
+
+bool CClientUIInterface::GetLastScraperEvent(int& event_type, int& status) const
+{
+    const uint32_t packed = m_last_scraper_event.load(std::memory_order_relaxed);
+    if (packed == kNoScraperEvent) return false;
+    event_type = static_cast<int>(packed >> 16);
+    status = static_cast<int>(packed & 0xFFFFu);
+    return true;
+}
 void CClientUIInterface::RwSettingsUpdated() { return g_ui_signals.RwSettingsUpdated(); }
+void CClientUIInterface::MandatorySideStakeChanged() { return g_ui_signals.MandatorySideStakeChanged(); }
 
 bool InitError(const std::string &str)
 {

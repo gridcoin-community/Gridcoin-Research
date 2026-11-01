@@ -7,6 +7,7 @@
 
 
 #include <QProcess>
+#include "qt/guilog.h"
 #include <QInputDialog>
 
 #include "qt/decoration.h"
@@ -18,10 +19,14 @@
 #include "sendcoinsdialog.h"
 #include "favoritespage.h"
 #include "signverifymessagedialog.h"
+#include "multisigndialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
 #include "voting/polltab.h"
 #include "voting/votingpage.h"
+#include "psgtpoolpage.h"
+
+#include "interfaces/psgt.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "researcher/researchermodel.h"
@@ -37,19 +42,17 @@
 #include "notificator.h"
 #include "guiutil.h"
 #include "rpcconsole.h"
-#include "wallet/wallet.h"
 #include "init.h"
-#include "main.h"
 #include "clicklabel.h"
-#include "univalue.h"
 #include "upgradeqt.h"
 #include "voting/votingmodel.h"
 #include "voting/polltablemodel.h"
 #include "syncoverlay.h"
 #include "updatedialog.h"
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 #include "macdockiconhandler.h"
+#include "macos_appearance.h"
 #endif
 
 #include <QApplication>
@@ -61,6 +64,8 @@
 #include <QIcon>
 #include <QTabWidget>
 #include <QVBoxLayout>
+#include <QFrame>
+#include <QHBoxLayout>
 #include <QToolBar>
 #include <QToolButton>
 #include <QStatusBar>
@@ -86,24 +91,18 @@
 
 #include <boost/lexical_cast.hpp>
 
-#include "rpc/server.h"
-#include "rpc/client.h"
-#include "rpc/protocol.h"
-#include "gridcoin/backup.h"
-#include "gridcoin/staking/difficulty.h"
-#include "gridcoin/superblock.h"
-
 #include <boost/algorithm/string/join.hpp>
 #include "util.h"
 
-extern CWallet* pwalletMain;
 extern std::string FromQString(QString qs);
-extern CCriticalSection cs_ConvergedScraperStatsCache;
 
 BitcoinGUI::BitcoinGUI(QWidget* parent)
         : QMainWindow(parent)
         , clientModel(nullptr)
         , walletModel(nullptr)
+        , votingModel(nullptr)
+        , m_sync_overlay(nullptr)
+        , m_in_sync(false)
         , encryptWalletAction(nullptr)
         , changePassphraseAction(nullptr)
         , unlockWalletAction(nullptr)
@@ -111,17 +110,10 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
         , trayIcon(nullptr)
         , notificator(nullptr)
         , rpcConsole(nullptr)
-        , m_sync_overlay(nullptr)
-        , m_in_sync(false)
-        , nWeight(0)
 {
     QSettings settings;
 
-    QString window_geometry_key = "MainWindowGeometry";
-
-    if (GetDataDir() != GetDefaultDataDir()) {
-        window_geometry_key += "_" + QString().fromStdString(SanitizeString(GetDataDir().string()));
-    }
+    const QString window_geometry_key = GUIUtil::nodeSettingsKey("MainWindowGeometry");
 
     if (!restoreGeometry(settings.value(window_geometry_key).toByteArray())) {
         // Restore failed (perhaps missing setting), center the window
@@ -142,7 +134,7 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
     // render smaller with the Cocoa integration plugin:
     //
     QFont appFont = qApp->font();
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     appFont.setPointSize(10);
 #else
     appFont.setPointSize(13);
@@ -169,15 +161,16 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
 
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     qApp->setWindowIcon(QPixmap(":/images/gridcoin"));
     setWindowIcon(QPixmap(":/images/gridcoin"));
 #else
-    setUnifiedTitleAndToolBarOnMac(true);
+    // No setUnifiedTitleAndToolBarOnMac(true): in Qt 6 it makes the window background translucent, so the
+    // stylesheet's window color gives way to the system appearance's. The toolbar is on the left anyway.
     QApplication::setAttribute(Qt::AA_DontShowIconsInMenus);
 #endif
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     m_app_nap_inhibitor = new CAppNapInhibitor;
     m_app_nap_inhibitor->disableAppNap();
 
@@ -206,8 +199,11 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
     transactionView = new TransactionView(this);
     addressBookPage = new FavoritesPage(this);
     votingPage = new VotingPage(this);
+    psgtPoolPage = new PSGTPoolPage(this);
 
     signVerifyMessageDialog = new SignVerifyMessageDialog(this);
+    multisignDialog = new MultisignPSGTDialog(this);
+    psgtPoolPage->setMultisignDialog(multisignDialog);
 
     centralWidget = new QStackedWidget(this);
     centralWidget->addWidget(overviewPage);
@@ -216,8 +212,34 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
     centralWidget->addWidget(transactionView);
     centralWidget->addWidget(addressBookPage);
     centralWidget->addWidget(votingPage);
+    centralWidget->addWidget(psgtPoolPage);
 
-    setCentralWidget(centralWidget);
+    // Dismissible warning banner above the page stack (multiprocess mixed-build
+    // warning; hidden until showBuildMismatchWarning()). Wrap the stack + banner
+    // in a container so the banner reflows the pages rather than overlaying them.
+    m_build_warning_banner = new QFrame(this);
+    m_build_warning_banner->setObjectName("buildWarningBanner");
+    m_build_warning_banner->setStyleSheet(
+        "#buildWarningBanner { background-color: #8a6d3b; }"
+        "#buildWarningBanner QLabel { color: white; }");
+    m_build_warning_banner->setVisible(false);
+    QHBoxLayout *bannerLayout = new QHBoxLayout(m_build_warning_banner);
+    bannerLayout->setContentsMargins(8, 4, 8, 4);
+    m_build_warning_label = new QLabel(m_build_warning_banner);
+    m_build_warning_label->setWordWrap(true);
+    QToolButton *bannerDismiss = new QToolButton(m_build_warning_banner);
+    bannerDismiss->setText(tr("Dismiss"));
+    connect(bannerDismiss, &QToolButton::clicked, m_build_warning_banner, &QWidget::hide);
+    bannerLayout->addWidget(m_build_warning_label, 1);
+    bannerLayout->addWidget(bannerDismiss, 0);
+
+    QWidget *centralContainer = new QWidget(this);
+    QVBoxLayout *centralContainerLayout = new QVBoxLayout(centralContainer);
+    centralContainerLayout->setContentsMargins(0, 0, 0, 0);
+    centralContainerLayout->setSpacing(0);
+    centralContainerLayout->addWidget(m_build_warning_banner);
+    centralContainerLayout->addWidget(centralWidget);
+    setCentralWidget(centralContainer);
 
     // Create sync overlay — sits on top of the central widget and blocks
     // interaction until the wallet is in sync (or the user dismisses it).
@@ -259,16 +281,12 @@ BitcoinGUI::~BitcoinGUI()
 {
     QSettings settings;
 
-    QString window_geometry_key = "MainWindowGeometry";
-
-    if (GetDataDir() != GetDefaultDataDir()) {
-        window_geometry_key += "_" + QString().fromStdString(SanitizeString(GetDataDir().string()));
-    }
+    const QString window_geometry_key = GUIUtil::nodeSettingsKey("MainWindowGeometry");
 
     settings.setValue(window_geometry_key, saveGeometry());
     if(trayIcon) // Hide tray icon, as deleting will let it linger until quit (on Ubuntu)
         trayIcon->hide();
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     delete m_app_nap_inhibitor;
     delete m_dock_shutdown_handler;
     delete appMenuBar;
@@ -296,7 +314,17 @@ void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
         QString sMainWindowHTML = qssStream.readAll();
         qss.close();
 
+#ifdef Q_OS_MACOS
+        // Draw the title bars and other native window parts in the theme's appearance, not the system's:
+        SetMacAppearance(qssFileName == "dark");
+#endif
         qApp->setStyleSheet(sMainWindowHTML);
+#ifdef Q_OS_MACOS
+        // The first stylesheet installs a new application style, which reloads Qt's per-class fonts from the
+        // platform theme: 11 pt toolbar buttons and table headers on macOS. Each later theme change repolishes
+        // with them and shrinks that text. Set the application font again to drop them, as the constructor does.
+        qApp->setFont(qApp->font());
+#endif
     }
 
     sSheet=qssFileName;
@@ -310,6 +338,26 @@ void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
     // Reapply the appropriate beacon icon color scheme:
     if (researcherModel) {
         researcherModel->setTheme(sSheet);
+    }
+
+    // The connection, staking and scraper icons otherwise change their image
+    // only in their own updates, which can be minutes away. (The sync icons are
+    // the same in both themes.)
+    redrawStatusIcon(labelConnectionsIcon, m_connections_icon);
+    redrawStatusIcon(labelStakingIcon, m_staking_icon);
+    redrawStatusIcon(labelScraperIcon, m_scraper_icon);
+}
+
+void BitcoinGUI::setStatusIcon(QLabel* label, QString& shown, const QString& icon)
+{
+    shown = icon;
+    redrawStatusIcon(label, shown);
+}
+
+void BitcoinGUI::redrawStatusIcon(QLabel* label, const QString& shown)
+{
+    if (!shown.isEmpty()) {
+        label->setPixmap(GRC::ScaleStatusIcon(this, shown + "_" + sSheet));
     }
 }
 
@@ -380,18 +428,28 @@ void BitcoinGUI::createActions()
     openGuidesAction->setStatusTip(tr("Open the Gridcoin Guides"));
     openGuidesAction->setMenuRole(QAction::TextHeuristicRole);
 
-    // We use lambdas here to squash the argument to showNormalIfMinized.
-    connect(overviewAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
-    connect(overviewAction, &QAction::triggered, this, &BitcoinGUI::gotoOverviewPage);
-    connect(sendCoinsAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
-    connect(sendCoinsAction, &QAction::triggered, this, &BitcoinGUI::gotoSendCoinsPage);
-    connect(receiveCoinsAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
-    connect(receiveCoinsAction, &QAction::triggered, this, &BitcoinGUI::gotoReceiveCoinsPage);
-    connect(historyAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
-    connect(historyAction, &QAction::triggered, this, &BitcoinGUI::gotoHistoryPage);
-    connect(addressBookAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
-    connect(addressBookAction, &QAction::triggered, this, &BitcoinGUI::gotoAddressBookPage);
-    connect(votingAction, &QAction::triggered, this, &BitcoinGUI::gotoVotingPage);
+    // Drive tab navigation from QAction::toggled (the checked-state transition)
+    // rather than QAction::triggered. A screen reader activates these checkable
+    // toolbar buttons through the accessibility "toggle" path, which flips the
+    // checked state and emits toggled() but never triggered() -- so a
+    // triggered-based connection left assistive-technology users able to move
+    // the tab highlight but not actually change pages (issue #2604).
+    // toggled() fires for mouse, keyboard shortcut and accessibility activation
+    // alike; the checked-true filter ensures only the newly-selected tab (not
+    // the one being unchecked by the exclusive QActionGroup) navigates.
+    auto connectTabAction = [this](QAction* action, void (BitcoinGUI::*gotoPage)()) {
+        connect(action, &QAction::toggled, this, [this, gotoPage](bool checked) {
+            if (!checked) return;
+            this->showNormalIfMinimized();
+            (this->*gotoPage)();
+        });
+    };
+    connectTabAction(overviewAction, &BitcoinGUI::gotoOverviewPage);
+    connectTabAction(sendCoinsAction, &BitcoinGUI::gotoSendCoinsPage);
+    connectTabAction(receiveCoinsAction, &BitcoinGUI::gotoReceiveCoinsPage);
+    connectTabAction(historyAction, &BitcoinGUI::gotoHistoryPage);
+    connectTabAction(addressBookAction, &BitcoinGUI::gotoAddressBookPage);
+    connectTabAction(votingAction, &BitcoinGUI::gotoVotingPage);
 
     connect(websiteAction, &QAction::triggered, this, &BitcoinGUI::websiteClicked);
     connect(bxAction, &QAction::triggered, this, &BitcoinGUI::bxClicked);
@@ -443,6 +501,7 @@ void BitcoinGUI::createActions()
     lockWalletAction->setToolTip(tr("Lock wallet"));
     signMessageAction = new QAction(tr("Sign &message..."), this);
     verifyMessageAction = new QAction(tr("&Verify message..."), this);
+    multisignAction = new QAction(tr("&Multisign (PSGT)..."), this);
 
     exportAction = new QAction(tr("&Export..."), this);
     exportAction->setToolTip(tr("Export the data in the current tab to a file"));
@@ -450,8 +509,6 @@ void BitcoinGUI::createActions()
     openRPCConsoleAction->setToolTip(tr("Open debugging and diagnostic console"));
     // initially disable the debug window menu item
     openRPCConsoleAction->setEnabled(false);
-    snapshotAction = new QAction(tr("&Snapshot Download"), this);
-    snapshotAction->setToolTip(tr("Download and apply latest snapshot"));
     resetblockchainAction = new QAction(tr("&Reset blockchain data"), this);
     resetblockchainAction->setToolTip(tr("Remove blockchain data and start chain from zero"));
 
@@ -472,8 +529,13 @@ void BitcoinGUI::createActions()
     connect(lockWalletAction, &QAction::triggered, this, &BitcoinGUI::lockWallet);
     connect(signMessageAction, &QAction::triggered, this, [this]{ this->gotoSignMessageTab(QString {}); });
     connect(verifyMessageAction, &QAction::triggered, this, [this]{ this->gotoVerifyMessageTab(QString {}); });
+    connect(multisignAction, &QAction::triggered, this, &BitcoinGUI::gotoMultisignDialog);
+
+    psgtPoolAction = new QAction(tr("PSGT &pool..."), this);
+    psgtPoolAction->setStatusTip(tr("Multisig transactions awaiting signatures (PSGT pool)"));
+    psgtPoolAction->setMenuRole(QAction::NoRole);
+    connect(psgtPoolAction, &QAction::triggered, this, &BitcoinGUI::gotoPSGTPoolPage);
     connect(diagnosticsAction, &QAction::triggered, this, &BitcoinGUI::diagnosticsClicked);
-    connect(snapshotAction, &QAction::triggered, this, &BitcoinGUI::snapshotClicked);
     connect(resetblockchainAction, &QAction::triggered, this, &BitcoinGUI::resetblockchainClicked);
 }
 
@@ -547,9 +609,9 @@ void BitcoinGUI::setIcons()
     changePassphraseAction->setIcon(QPixmap(":/icons/key"));
     signMessageAction->setIcon(QPixmap(":/icons/edit"));
     verifyMessageAction->setIcon(QPixmap(":/icons/transaction_0"));
+    multisignAction->setIcon(QPixmap(":/icons/edit"));
     exportAction->setIcon(QPixmap(":/icons/export"));
     openRPCConsoleAction->setIcon(QPixmap(":/icons/debugwindow"));
-    snapshotAction->setIcon(QPixmap(":/images/gridcoin"));
     openConfigAction->setIcon(QPixmap(":/icons/edit"));
     resetblockchainAction->setIcon(QPixmap(":/images/gridcoin"));
 }
@@ -565,7 +627,7 @@ void BitcoinGUI::showEvent(QShowEvent *event)
 
 void BitcoinGUI::createMenuBar()
 {
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     // Create a decoupled menu bar on Mac which stays even if the window is closed
     appMenuBar = new QMenuBar();
     QMenu *file = appMenuBar->addMenu(tr("&File"));
@@ -579,20 +641,18 @@ void BitcoinGUI::createMenuBar()
     // Configure the menus
     file->addAction(backupWalletAction);
     file->addAction(exportAction);
-    file->addAction(signMessageAction);
-    file->addAction(verifyMessageAction);
+    QMenu *signMenu = file->addMenu(tr("Sign &message"));
+    signMenu->addAction(signMessageAction);
+    signMenu->addAction(verifyMessageAction);
+    QMenu *multisigMenu = file->addMenu(tr("MultiSig &Txns"));
+    multisigMenu->addAction(multisignAction);
+    multisigMenu->addAction(psgtPoolAction);
     file->addSeparator();
-
-    // Snapshot GUI menu action disabled due to snapshot CDN abuse in 202308.
-    if (/* !gArgs.GetBoolArg("-testnet", false) */ false)
-    {
-        file->addAction(snapshotAction);
-    }
 
     file->addAction(resetblockchainAction);
 
     file->addSeparator();
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     file->addAction(quitAction);
 #endif
 
@@ -629,7 +689,7 @@ void BitcoinGUI::createMenuBar()
     help->addSeparator();
     help->addAction(aboutAction);
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     file->addSeparator();
     file->addAction(quitAction);
 #endif
@@ -652,7 +712,7 @@ void BitcoinGUI::createToolBars()
     logoWrapper->setObjectName("toolbarLogoWrapper");
     logoWrapper->setLayout(logoWrapperLayout);
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     // Windows and Linux: collapse the main application's menu bar into a menu
     // button. On macOS, we'll continue to use the system's separate menu bar.
     QPushButton *menuButton = new QPushButton();
@@ -755,18 +815,47 @@ void BitcoinGUI::createToolBars()
     //12-21-2015 Prevent Lock from falling off the page
     frameBlocksLayout->addStretch();
 
-    if (gArgs.GetBoolArg("-staking", true))
-    {
-        labelStakingIcon->setToolTip(tr("Not staking: Miner is not initialized."));
-    }
-    else
-    {
-        labelStakingIcon->setToolTip(tr("Not staking: Disabled by configuration."));
-    }
+    // Placeholder until setClientModel() pushes the node's miner status, which also reports a node that
+    // does not stake ("Disabled by configuration").
+    labelStakingIcon->setToolTip(tr("Not staking: Miner is not initialized."));
 
     statusBar()->addPermanentWidget(frameBlocks);
 
     addToolBarBreak(Qt::TopToolBarArea);
+}
+
+void BitcoinGUI::showBuildMismatchWarning(const QString& gui_commit, const QString& node_commit)
+{
+    if (!m_build_warning_banner || !m_build_warning_label) return;
+    m_build_warning_label->setText(tr("The GUI (%1) and the Gridcoin daemon (%2) were built from "
+                                      "different commits. Mixed builds can behave unexpectedly.")
+                                       .arg(gui_commit, node_commit));
+    m_build_warning_banner->setVisible(true);
+}
+
+void BitcoinGUI::setIpcConnectionInfo(const GuiIpcInfo& info)
+{
+    m_ipc_info = info;
+
+    // Reset blockchain data cannot work from this process in the split build.
+    // resetblockchainClicked() only sets fResetBlockchainRequest and calls
+    // requestQuit(); the deletion itself happens as THIS process exits
+    // (UpgradeQt::ResetBlockchain in bitcoin.cpp). In -multiprocess the blockchain
+    // belongs to the core, which keeps running when the GUI closes and holds those
+    // files open -- so the GUI would either delete data underneath a live node or
+    // quietly do nothing, depending on the platform's unlink semantics. Neither is
+    // an outcome to offer behind a confirmation dialog that promises a resync.
+    //
+    // Disabled rather than hidden so the entry does not silently differ between
+    // builds, and the reason goes in the TEXT rather than a tooltip: QMenu does not
+    // show action tooltips unless setToolTipsVisible(true) is set on the menu, which
+    // it is not here, so a tooltip alone would be invisible.
+    if (m_ipc_info.active && resetblockchainAction) {
+        resetblockchainAction->setEnabled(false);
+        resetblockchainAction->setText(tr("&Reset blockchain data (not available in multiprocess mode)"));
+        resetblockchainAction->setToolTip(tr("The blockchain data belongs to the separate Gridcoin core "
+                                             "process. Stop the core and reset it there."));
+    }
 }
 
 void BitcoinGUI::setClientModel(ClientModel *clientModel)
@@ -778,7 +867,7 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
         if(clientModel->isTestNet())
         {
             setWindowTitle(windowTitle() + QString(" ") + tr("[testnet]"));
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
             qApp->setWindowIcon(QPixmap(":/images/gridcoin_testnet"));
             setWindowIcon(QPixmap(":/images/gridcoin_testnet"));
 #endif
@@ -809,9 +898,27 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
 
         setMinerStatus(false, 0.0, 0.0, 0.0);
         connect(clientModel, &ClientModel::minerStatusChanged, this, &BitcoinGUI::setMinerStatus);
+        // Hydrate the miner status from the core's current staking state now that
+        // the signal is connected. Otherwise the fields sit at the false/0 default
+        // until the next MinerStatusChanged push -- which, when the GUI attaches to
+        // an already-running node (-multiprocess), may be a long way off.
+        clientModel->refreshMinerStatus();
 
-        // Start with out-of-sync message for scraper/NN.
-        updateScraperIcon((int)scrapereventtypes::OutOfSync, CT_UPDATING);
+        // Initialize the scraper icon from the core's current scraper status. We
+        // subscribe to future NotifyScraperEvent pushes below, but the last event
+        // may have fired before we connected (e.g. attaching to an already-
+        // converged node in -multiprocess mode), so hydrate now rather than
+        // leaving the icon on a stale out-of-sync default.
+        int scraper_event_type = (int)scrapereventtypes::OutOfSync;
+        int scraper_event_status = CT_UPDATING;
+        {
+            const interfaces::ScraperConvergenceSnapshot snapshot = clientModel->getScraperConvergenceSnapshot();
+            if (snapshot.current_event_type >= 0) {
+                scraper_event_type = snapshot.current_event_type;
+                scraper_event_status = snapshot.current_event_status;
+            }
+        }
+        updateScraperIcon(scraper_event_type, scraper_event_status);
         connect(clientModel, &ClientModel::updateScraperStatus, this, &BitcoinGUI::updateScraperIcon);
 
         // Report errors from network/worker thread
@@ -825,10 +932,44 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
         connect(m_mask_values_action, &QAction::toggled, this, &BitcoinGUI::setPrivacy);
 
         rpcConsole->setClientModel(clientModel);
+        diagnosticsDialog->setClientModel(clientModel);
         addressBookPage->setOptionsModel(clientModel->getOptionsModel());
         receiveCoinsPage->setOptionsModel(clientModel->getOptionsModel());
         votingPage->setOptionsModel(clientModel->getOptionsModel());
+
+        psgtPoolPage->setClientModel(clientModel);
+        sendCoinsPage->setClientModel(clientModel);
+        // PSGT pool notifications (#2910): drive the page's table model and the
+        // signature-requested toast off the core PSGTPoolChanged signal.
+        connect(clientModel, &ClientModel::psgtPoolChanged,
+                this, &BitcoinGUI::handlePSGTPoolChanged);
     }
+    else
+    {
+        // Shutdown teardown: propagate the cleared model so the RPC console
+        // stops its executor thread before the interfaces::Node it references
+        // is destroyed. The diagnostics dialog likewise drops its node pointer.
+        rpcConsole->setClientModel(nullptr);
+        diagnosticsDialog->setClientModel(nullptr);
+
+        // Every child handed the model above must be cleared here too, or it
+        // keeps a raw pointer to a ClientModel that is about to be destroyed.
+        // The send page dereferences its copy whenever the message field's
+        // visibility is refreshed, which user interaction can still trigger
+        // while the window is coming down. The pool page was already missing
+        // from this branch before the send page joined it; both take the model
+        // by raw pointer and both clear it correctly when handed nullptr, so
+        // the fix is simply to hand it to them.
+        psgtPoolPage->setClientModel(nullptr);
+        sendCoinsPage->setClientModel(nullptr);
+    }
+}
+
+void BitcoinGUI::setPSGTPoolContext(interfaces::PSGTPoolContext *context)
+{
+    m_psgt_pool_context = context;
+    psgtPoolPage->setPSGTPoolContext(context);
+    multisignDialog->setPSGTPoolContext(context);
 }
 
 void BitcoinGUI::setWalletModel(WalletModel *walletModel)
@@ -851,16 +992,33 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         receiveCoinsPage->setAddressTableModel(walletModel->getAddressTableModel());
         sendCoinsPage->setModel(walletModel);
         signVerifyMessageDialog->setModel(walletModel);
+        multisignDialog->setModel(walletModel);
+        psgtPoolPage->setWalletModel(walletModel);
 
         setEncryptionStatus(walletModel->getEncryptionStatus());
         connect(walletModel, &WalletModel::encryptionStatusChanged, this, &BitcoinGUI::setEncryptionStatus);
 
-        // Balloon pop-up for new transaction
-        connect(walletModel->getTransactionTableModel(), &TransactionTableModel::rowsInserted,
-                this, &BitcoinGUI::incomingTransaction);
+        // Balloon pop-up for new transactions: driven off the drained wallet-event
+        // stream (VIEW_FULL RowsInserted records), not a full-replica model row
+        // insertion — the GUI holds no full transaction replica.
+        connect(walletModel, &WalletModel::walletEventsDrained,
+                this, &BitcoinGUI::processDrainedTransactions);
 
         // Ask for passphrase if needed
-        connect(walletModel, &WalletModel::requireUnlock, this, &BitcoinGUI::unlockWallet);
+        connect(walletModel, &WalletModel::requireUnlock, this, &BitcoinGUI::unlockWalletForOperation);
+    }
+    else
+    {
+        // Teardown (Phase 1c-ii-c): drive the tx-table view holders to detach
+        // their per-view models (OverviewTxModel / DetailedTxModel) NOW, while
+        // the previous WalletModel and its node-side WalletTxSource are still
+        // alive. bitcoin.cpp calls setWalletModel(nullptr) before destroying the
+        // model and the source; without this propagation those view models would
+        // instead be destroyed later with this window — after the source is gone
+        // — and their destructors' unregisterView() would dereference freed
+        // state. Only the two tx-table holders own such views.
+        transactionView->setModel(nullptr);
+        overviewPage->setWalletModel(nullptr);
     }
 }
 
@@ -868,34 +1026,60 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
 {
     this->researcherModel = researcherModel;
 
-    if (!researcherModel) {
-        return;
-    }
-
+    // Propagate BEFORE the detach early-return below. OverviewPage and the
+    // diagnostics dialog each keep their own raw copy of this pointer, and
+    // bitcoin.cpp calls setResearcherModel(nullptr) while ResearcherModel is
+    // still alive but about to leave scope. Returning early on nullptr (as this
+    // used to) left both copies dangling for the rest of the window's life --
+    // asymmetric with setVotingModel() / setPSGTPoolContext(), which already
+    // propagate first and only then decide whether there is anything to wire up.
     overviewPage->setResearcherModel(researcherModel);
     diagnosticsDialog->SetResearcherModel(researcherModel);
 
+    if (!researcherModel) {
+        // The tooltip-refresh timer is parented to this window, so it outlives
+        // the detach. Stop it: otherwise any nested event loop entered after
+        // teardown (a modal, a progress dialog) would let it fire
+        // updateBeaconIcon() with no model attached.
+        if (m_beacon_status_update_timer) {
+            m_beacon_status_update_timer->stop();
+        }
+
+        return;
+    }
+
     updateBeaconIcon();
-    connect(researcherModel, &ResearcherModel::beaconChanged, this, &BitcoinGUI::updateBeaconIcon);
 
-    QTimer *beacon_status_update_timer = new QTimer(this);
+    // Qt::UniqueConnection: this runs on EVERY call with a non-null model, so a
+    // second attach would otherwise stack a duplicate connection and fire
+    // updateBeaconIcon() once per attach for every beaconChanged signal. Only one
+    // call site exists today -- this is closing the latent edge, not fixing a live
+    // duplicate -- so that a future re-attach path cannot introduce one silently.
+    // (Valid here only because the slot is a member-function pointer;
+    // UniqueConnection is not supported for lambda targets.)
+    connect(researcherModel, &ResearcherModel::beaconChanged, this, &BitcoinGUI::updateBeaconIcon,
+            Qt::UniqueConnection);
 
-    // This timer trigger is to support updating the beacon age and time to expiration in the tooltip.
-    // Once a minute is sufficient.
-    connect(beacon_status_update_timer, &QTimer::timeout, this, &BitcoinGUI::updateBeaconIcon);
+    if (!m_beacon_status_update_timer) {
+        m_beacon_status_update_timer = new QTimer(this);
+
+        // This timer trigger is to support updating the beacon age and time to expiration in the tooltip.
+        // Once a minute is sufficient.
+        connect(m_beacon_status_update_timer, &QTimer::timeout, this, &BitcoinGUI::updateBeaconIcon);
+    }
 
     // Check every minute
-    beacon_status_update_timer->start(1000 * 60);
+    m_beacon_status_update_timer->start(1000 * 60);
 }
 
 void BitcoinGUI::setMRCModel(MRCModel *mrcModel)
 {
     m_mrc_model = mrcModel;
 
-    if (!mrcModel) {
-        return;
-    }
-
+    // Propagate unconditionally, including the nullptr detach: OverviewPage holds
+    // its own copy and MRCModel is a stack object in StartGridcoinQt that is
+    // destroyed right after teardown. OverviewPage::onMRCRequestClicked's null
+    // check would otherwise pass on a freed model.
     overviewPage->setMRCModel(mrcModel);
 }
 
@@ -924,7 +1108,7 @@ void BitcoinGUI::setVotingModel(VotingModel *votingModel)
 
 void BitcoinGUI::createTrayIcon()
 {
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     trayIcon = new QSystemTrayIcon(this);
     trayIcon->setToolTip(tr("Gridcoin client"));
     trayIcon->setIcon(QPixmap(":/images/gridcoin"));
@@ -943,7 +1127,7 @@ bool BitcoinGUI::isPrivacyModeActivated() const
 
 void BitcoinGUI::createTrayIconMenu()
 {
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     // return if trayIcon is unset (only on non-Mac OSes)
     if (!trayIcon)
         return;
@@ -980,13 +1164,13 @@ void BitcoinGUI::createTrayIconMenu()
     trayIconMenu->addSeparator();
     trayIconMenu->addAction(optionsAction);
     trayIconMenu->addAction(openRPCConsoleAction);
-#ifndef Q_OS_MAC // This is built-in on Mac
+#ifndef Q_OS_MACOS // This is built-in on Mac
     trayIconMenu->addSeparator();
     trayIconMenu->addAction(quitAction);
 #endif
 }
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
 void BitcoinGUI::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
 {
     if(reason == QSystemTrayIcon::Trigger)
@@ -1024,7 +1208,7 @@ void BitcoinGUI::openConfigClicked()
         res = QProcess::startDetached("C:\\Windows\\system32\\notepad.exe", QStringList{qPathConfig});
     }
 #endif
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     // Workaround for macOS-specific behaviour; see https://github.com/bitcoin/bitcoin/issues/15409
     if (!res) {
         res = QProcess::startDetached("/usr/bin/open", QStringList{"-t", qPathConfig});
@@ -1050,6 +1234,7 @@ void BitcoinGUI::aboutClicked()
 {
     AboutDialog dlg;
     dlg.setModel(clientModel);
+    dlg.setIpcConnectionInfo(m_ipc_info);
     dlg.exec();
 }
 
@@ -1065,8 +1250,7 @@ void BitcoinGUI::setNumConnections(int n)
         default: icon = ":/icons/status_connection_4"; break;
     }
 
-    icon.append("_").append(sSheet);
-    labelConnectionsIcon->setPixmap(GRC::ScaleStatusIcon(this, icon));
+    setStatusIcon(labelConnectionsIcon, m_connections_icon, icon);
 
     if (n == 0)
     {
@@ -1175,10 +1359,10 @@ void BitcoinGUI::setMinerStatus(
 
     updateStakingIcon(staking, net_weight, coin_weight, etts_days);
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     if (staking) {
         m_app_nap_inhibitor->disableAppNap();
-    } else if (!OutOfSyncByAge()) {
+    } else if (!clientModel->node().isOutOfSyncByAge()) {
         m_app_nap_inhibitor->enableAppNap();
     }
 #endif
@@ -1201,7 +1385,7 @@ void BitcoinGUI::update(const QString &title, const QString& version, const int&
 
     updateMessageDialog->setWindowTitle(title);
     updateMessageDialog->setVersion(version);
-    updateMessageDialog->setUpgradeType(static_cast<GRC::Upgrade::UpgradeType>(upgrade_type));
+    updateMessageDialog->setUpgradeType(upgrade_type);
     updateMessageDialog->setDetails(message);
     updateMessageDialog->setModal(false);
 
@@ -1215,7 +1399,7 @@ void BitcoinGUI::update(const QString &title, const QString& version, const int&
 void BitcoinGUI::changeEvent(QEvent *e)
 {
     QMainWindow::changeEvent(e);
-#ifndef Q_OS_MAC // Ignored on Mac
+#ifndef Q_OS_MACOS // Ignored on Mac
     if(e->type() == QEvent::WindowStateChange)
     {
         if(clientModel && clientModel->getOptionsModel()->getMinimizeToTray())
@@ -1233,7 +1417,26 @@ void BitcoinGUI::changeEvent(QEvent *e)
 
 void BitcoinGUI::closeEvent(QCloseEvent *event)
 {
-#ifndef Q_OS_MAC // Ignored on Mac
+#ifndef Q_OS_MACOS // Ignored on Mac
+    // An explicit shutdown -- requestQuit(): menu Exit / Ctrl-Q / tray Exit, a
+    // snapshot or reset-blockchain restart, the post-encryption restart, or a
+    // core-initiated QueueShutdown -- calls qApp->quit(), which on Qt6 lands
+    // here via closeAllWindows(). Accept the close so the application actually
+    // exits, rather than honoring "minimize on close" and vetoing the quit.
+    // The X window button leaves m_quit_requested false and still minimizes.
+    // See issue #2995.
+    if (m_quit_requested)
+    {
+        // Consume the latch as it is read. A requestQuit() always terminates the
+        // process today, but clearing it here keeps the design self-healing: if a
+        // quit were ever vetoed (e.g. a future close-vetoing dialog left the app
+        // alive), the flag would not stay stuck true and silently disable
+        // minimize-on-close for the next X-button close.
+        m_quit_requested = false;
+        QMainWindow::closeEvent(event);
+        return;
+    }
+
     if(clientModel && clientModel->getOptionsModel())
     {
         if(!clientModel->getOptionsModel()->getMinimizeOnClose())
@@ -1259,104 +1462,65 @@ void BitcoinGUI::closeEvent(QCloseEvent *event)
 }
 
 
-void BitcoinGUI::askQuestion(std::string caption, std::string body, bool *result)
-{
-
-        QString qsCaption = tr(caption.c_str());
-        QString qsBody = tr(body.c_str());
-        QMessageBox::StandardButton retval = QMessageBox::question(this, qsCaption, qsBody, QMessageBox::Yes|QMessageBox::Cancel,   QMessageBox::Cancel);
-        *result = (retval == QMessageBox::Yes);
-
-}
-
-void BitcoinGUI::askFee(qint64 nFeeRequired, bool *payFee)
-{
-    QString strMessage =
-        tr("This transaction is over the size limit.  You can still send it for a fee of %1, "
-          "which goes to the nodes that process your transaction and helps to support the network.  "
-          "Do you want to pay the fee?").arg(
-                BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, nFeeRequired));
-    QMessageBox::StandardButton retval = QMessageBox::question(
-          this, tr("Confirm transaction fee"), strMessage,
-          QMessageBox::Yes|QMessageBox::Cancel, QMessageBox::Yes);
-    *payFee = (retval == QMessageBox::Yes);
-}
-
-void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int end)
+void BitcoinGUI::processDrainedTransactions(const std::vector<GRC::WalletEvent>& events)
 {
     if(!walletModel || !clientModel)
         return;
-    TransactionTableModel *ttm = walletModel->getTransactionTableModel();
-    qint64 amount = ttm->index(start, TransactionTableModel::Amount, parent)
-                    .data(Qt::EditRole).toULongLong();
 
-    // On new transaction, make an info balloon
-    // Unless the initial block download is in progress OR transaction notification
-    // is disabled, to prevent balloon-spam.
-    if(!(clientModel->inInitialBlockDownload() || walletModel->getOptionsModel()->getDisableTrxNotifications()))
+    // Make an info balloon per new wallet transaction — unless the initial block
+    // download is in progress OR transaction notifications are disabled, to
+    // prevent balloon-spam.
+    if(clientModel->inInitialBlockDownload() || walletModel->getOptionsModel()->getDisableTrxNotifications())
+        return;
+
+    TransactionTableModel *ttm = walletModel->getTransactionTableModel();
+    if(!ttm)
+        return;
+
+    const int unit = walletModel->getOptionsModel()->getDisplayUnit();
+    for(const GRC::WalletEvent& ev : events)
     {
-        QString date = ttm->index(start, TransactionTableModel::Date, parent)
-                        .data().toString();
-        QString type = ttm->index(start, TransactionTableModel::Type, parent)
-                        .data().toString();
-        QString address = ttm->index(start, TransactionTableModel::ToAddress, parent)
-                        .data().toString();
-        QIcon icon = qvariant_cast<QIcon>(ttm->index(start,
-                            TransactionTableModel::ToAddress, parent)
-                        .data(Qt::DecorationRole));
+        // Only the native unfiltered VIEW_FULL stream, and one balloon per new tx
+        // (its first, representative part) — matching the old rowsInserted path.
+        const auto* ins = std::get_if<GRC::RowsInsertedPayload>(&ev.payload);
+        if(!ins || ins->viewId != GRC::VIEW_FULL || ins->records.empty())
+            continue;
+
+        const TransactionRecord& rec = ins->records.front();
+        const qint64 amount   = ttm->formatRole(&rec, TransactionTableModel::Amount, Qt::EditRole).toLongLong();
+        const QString date    = ttm->formatRole(&rec, TransactionTableModel::Date, Qt::DisplayRole).toString();
+        const QString type    = ttm->formatRole(&rec, TransactionTableModel::Type, Qt::DisplayRole).toString();
+        const QString address = ttm->formatRole(&rec, TransactionTableModel::ToAddress, Qt::DisplayRole).toString();
+        const QIcon icon      = qvariant_cast<QIcon>(ttm->formatRole(&rec, TransactionTableModel::ToAddress, Qt::DecorationRole));
 
         notificator->notify(Notificator::Information,
-                            (amount)<0 ? tr("Sent transaction") :
-                                         tr("Incoming transaction"),
+                            (amount) < 0 ? tr("Sent transaction") :
+                                           tr("Incoming transaction"),
                               tr("Date: %1\n"
                                  "Amount: %2\n"
                                  "Type: %3\n"
                                  "Address: %4")
                               .arg(date,
-                                   BitcoinUnits::formatWithUnit(walletModel->getOptionsModel()->getDisplayUnit(), amount, true),
+                                   BitcoinUnits::formatWithUnit(unit, amount, true),
                                    type,
                                    address),
                               icon);
     }
 }
 
-void BitcoinGUI::snapshotClicked()
+void BitcoinGUI::resetblockchainClicked()
 {
-    QMessageBox Msg;
-
-    Msg.setIcon(QMessageBox::Question);
-    Msg.setText(tr("Do you wish to download and apply the latest snapshot? If yes the wallet will shutdown and perform the task."));
-    Msg.setInformativeText(tr("Warning: Canceling after stage 2 will result in sync from 0 or corrupted blockchain files."));
-    Msg.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    Msg.setDefaultButton(QMessageBox::No);
-
-    int result = Msg.exec();
-    bool fProceed;
-
-    switch (result)
-    {
-        case QMessageBox::Yes    :    fProceed = true;     break;
-        case QMessageBox::No     :    fProceed = false;    break;
-        default                  :    fProceed = false;    break;
-    }
-
-    if (!fProceed)
-    {
-        Msg.close();
-
+    // The menu entry is disabled in the split build (see setIpcConnectionInfo), but
+    // a QAction can still be triggered programmatically, and menus get rearranged.
+    // Refuse here too rather than rely on the entry being unreachable.
+    if (m_ipc_info.active) {
+        QMessageBox::information(this, tr("Reset blockchain data"),
+            tr("This is not available in multiprocess mode. The blockchain data belongs to the "
+               "separate Gridcoin core process, which keeps running when this window closes. "
+               "Stop the core and reset its data directly."));
         return;
     }
 
-    else
-    {
-        fSnapshotRequest = true;
-
-        qApp->quit();
-    }
-}
-
-void BitcoinGUI::resetblockchainClicked()
-{
     QMessageBox Msg;
 
     Msg.setIcon(QMessageBox::Question);
@@ -1386,7 +1550,7 @@ void BitcoinGUI::resetblockchainClicked()
     {
         fResetBlockchainRequest = true;
 
-        qApp->quit();
+        requestQuit();
     }
 }
 
@@ -1398,10 +1562,10 @@ void BitcoinGUI::setPrivacy()
 
     clientModel->getOptionsModel()->setMaskValues(privacy_mode);
 
-    // Need to call updateMinerStatus from here to feed back in the Coin Weight to the overview screen.
-    // Not ideal, but the normal trigger to update the Staking fields on the overview screen normally come from
+    // Need to refresh the miner status from here to feed back in the Coin Weight to the overview screen.
+    // Not ideal, but the normal trigger to update the Staking fields on the overview screen normally comes from
     // the core, not the GUI. Here the privacy state change is coming from the GUI.
-    clientModel->updateMinerStatus(g_miner_status.StakingActive(), g_miner_status.GetSearchReport().CoinWeight());
+    clientModel->refreshMinerStatus();
 }
 
 bool BitcoinGUI::tryQuit()
@@ -1418,8 +1582,22 @@ bool BitcoinGUI::tryQuit()
         return false;
     }
 
-    qApp->quit();
+    requestQuit();
     return true;
+}
+
+bool BitcoinGUI::m_quit_requested = false;
+
+void BitcoinGUI::requestQuit()
+{
+    // Mark the shutdown as explicit so closeEvent() accepts the close instead of
+    // minimizing, then quit() the normal way. On Qt6 quit() runs the full
+    // closeAllWindows() / closeEvent() / aboutToQuit() sequence -- unlike a blunt
+    // exit() that would short-circuit it; on Qt5 quit() is exit(0) and skips that
+    // sequence, which is fine because Qt5 never hits the minimize-on-close veto.
+    // See the requestQuit() doc and issue #2995.
+    m_quit_requested = true;
+    QApplication::quit();
 }
 
 void BitcoinGUI::diagnosticsClicked()
@@ -1601,6 +1779,82 @@ void BitcoinGUI::gotoVerifyMessageTab(QString addr)
         signVerifyMessageDialog->setAddress_VM(addr);
 }
 
+void BitcoinGUI::gotoMultisignDialog()
+{
+    multisignDialog->show();
+    multisignDialog->raise();
+    multisignDialog->activateWindow();
+}
+
+void BitcoinGUI::gotoPSGTPoolPage()
+{
+    centralWidget->setCurrentWidget(psgtPoolPage);
+
+    exportAction->setEnabled(false);
+    disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
+}
+
+std::vector<PSGTToastDamp::Entry> BitcoinGUI::currentPSGTPoolEntries() const
+{
+    std::vector<PSGTToastDamp::Entry> pool;
+
+    for (const auto& row : m_psgt_pool_context->entries()) {
+        pool.push_back({row.revision_hex, row.tx_hash_hex});
+    }
+
+    return pool;
+}
+
+void BitcoinGUI::handlePSGTPoolChanged(QString revision_hash, quint8 change_type, int reason)
+{
+    // The removal reason is unused here; the table model consumes it (to label
+    // the history row).
+    Q_UNUSED(reason);
+
+    if (!clientModel || !m_psgt_pool_context) {
+        return;
+    }
+
+    const std::string revision_hex = revision_hash.toStdString();
+
+    // A removal is the only point at which the pool shrinks. Forget the spends
+    // that left with it. Every GUI wallet sees every network PSGT leave the
+    // pool, so skip the pool fetch when there is nothing remembered.
+    if (change_type == CT_DELETED) {
+        if (m_psgt_toast_damp.AnnouncedCount() > 0) {
+            m_psgt_toast_damp.Prune(currentPSGTPoolEntries());
+        }
+        return;
+    }
+
+    // Toast only for an entry that needs THIS wallet's signature.
+    if (!m_psgt_pool_context->walletMustSignRevision(revision_hex) || !notificator) {
+        return;
+    }
+
+    // Every co-signer's revision fires this handler, and walletMustSignRevision
+    // answers true for all of them until this wallet signs, so the predicate
+    // alone would announce the same request once per co-signer ahead of this
+    // wallet (at most m-1 times for an m-of-n; never twice for a 2-of-3). The
+    // damp keys on the unsigned transaction, so an initiator superseding the
+    // pending spend with a different transaction (delivered as an update under
+    // the same image) is announced as the new request it is. CT_NEW means the
+    // pool's image slot was empty when this revision arrived, i.e. a new
+    // request by the pool's own definition: it is announced regardless of what
+    // the damp remembers, so the decision does not depend on the order in
+    // which a removal and a resubmission reach this thread.
+    if (!m_psgt_toast_damp.ShouldToastRevision(currentPSGTPoolEntries(), revision_hex,
+                                               /*first_revision=*/change_type == CT_NEW)) {
+        return;
+    }
+
+    notificator->notify(
+        Notificator::Information,
+        tr("Multisig signature requested"),
+        tr("A multisig transaction is waiting for your signature. Open the "
+           "PSGT pool to review and sign it."));
+}
+
 void BitcoinGUI::dragEnterEvent(QDragEnterEvent *event)
 {
     // Accept only URIs
@@ -1655,12 +1909,23 @@ void BitcoinGUI::setEncryptionStatus(int status)
         encryptWalletAction->setEnabled(true);
         break;
     case WalletModel::Unlocked:
-        if (fWalletUnlockStakingOnly) {
+    case WalletModel::UnlockedForStakingOnly:
+    {
+        // The status carries the scope now, so this paints from the value it
+        // was handed. It used to make a SECOND call here at paint time, which
+        // could disagree with the status that selected this arm: a relock
+        // racing the queued delivery painted the wrong frame either way. One
+        // read cannot disagree with itself.
+        const bool staking_only = (status == WalletModel::UnlockedForStakingOnly);
+
+        if (staking_only) {
             labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_unlocked_" + sSheet));
         } else {
             labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_none_" + sSheet));
         }
-        labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently %1 ").arg(fWalletUnlockStakingOnly ? tr("<b>unlocked for staking only</b>") : tr("<b>fully unlocked</b>")));
+
+        labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently %1 ").arg(staking_only ? tr("<b>unlocked for staking only</b>") :
+                                                                                               tr("<b>unlocked</b>")));
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
         unlockWalletAction->setVisible(false);
@@ -1669,6 +1934,7 @@ void BitcoinGUI::setEncryptionStatus(int status)
         lockWalletAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_7));
         encryptWalletAction->setEnabled(false);
         break;
+    }
     case WalletModel::Locked:
         labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_locked_" + sSheet));
         labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently <b>locked</b>"));
@@ -1690,6 +1956,10 @@ void BitcoinGUI::encryptWallet()
     AskPassphraseDialog dlg(AskPassphraseDialog::Encrypt, this);
 
     dlg.setModel(walletModel);
+    // GuiIpcInfo::active is true only in the -multiprocess split build, where the
+    // wallet lives in a separate core process; the dialog uses it to guide the
+    // user to restart the core (this GUI closing would not) after encryption.
+    dlg.setMultiprocess(m_ipc_info.active);
     dlg.exec();
 
     setEncryptionStatus(walletModel->getEncryptionStatus());
@@ -1697,17 +1967,43 @@ void BitcoinGUI::encryptWallet()
 
 void BitcoinGUI::backupWallet()
 {
+    if (!walletModel) return;
+
+    // Pass a full suggested path, not a bare directory. getSaveFileName treats its
+    // dir argument as a starting *file* name when the directory does not exist,
+    // so under Flatpak -- where the sandbox has no ~/Documents -- both dialogs
+    // opened pre-filled with the name "Documents". On a native build the
+    // directory does exist, so the effect is milder but still wrong: no filename
+    // was ever suggested.
     QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-    QString walletfilename = QFileDialog::getSaveFileName(this, tr("Backup Wallet"), saveDir, tr("Wallet Data (*.dat)"));
+
+    // Suggest the names actually in use, taking only the filename component so a
+    // configured path cannot leak into the suggestion. boostPathToQString keeps a
+    // non-ASCII name, which a wallet or conf file is perfectly entitled to have.
+    const QString wallet_suggestion = GUIUtil::boostPathToQString(
+        fs::path(gArgs.GetArg("-wallet", "wallet.dat")).filename());
+    const QString config_suggestion = GUIUtil::boostPathToQString(
+        fs::path(gArgs.GetArg("-conf", GRIDCOIN_CONF_FILENAME)).filename());
+
+    // writableLocation() returns empty when neither XDG_DOCUMENTS_DIR nor HOME is
+    // set. Joining onto that would suggest "/wallet.dat" at the filesystem root,
+    // so fall back to offering the bare name and letting the dialog choose where
+    // to open.
+    const QString wallet_default = saveDir.isEmpty() ? wallet_suggestion : saveDir + "/" + wallet_suggestion;
+    const QString config_default = saveDir.isEmpty() ? config_suggestion : saveDir + "/" + config_suggestion;
+
+    QString walletfilename = QFileDialog::getSaveFileName(
+        this, tr("Backup Wallet"), wallet_default, tr("Wallet Data (*.dat)"));
     if(!walletfilename.isEmpty()) {
-        if(!GRC::BackupWallet(*pwalletMain, FromQString(walletfilename))) {
+        if(!walletModel->backupWallet(FromQString(walletfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }
-    QString configfilename = QFileDialog::getSaveFileName(this, tr("Backup Config"), saveDir, tr("Wallet Config (*.conf)"));
+    QString configfilename = QFileDialog::getSaveFileName(
+        this, tr("Backup Config"), config_default, tr("Wallet Config (*.conf)"));
     if(!configfilename.isEmpty()) {
-        if(!GRC::BackupConfigFile(FromQString(configfilename))) {
-            QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
+        if(!walletModel->backupConfigFile(FromQString(configfilename))) {
+            QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the config file to the new location."));
         }
     }
 }
@@ -1723,15 +2019,34 @@ void BitcoinGUI::unlockWallet()
 {
     if(!walletModel)
         return;
-    // Unlock wallet when requested by wallet model
+    // The Unlock BUTTON. A directive, so it offers the staking-only choice and
+    // what the user picks outlives this dialog. Only shown while locked.
     if(walletModel->getEncryptionStatus() == WalletModel::Locked)
     {
-        AskPassphraseDialog::Mode mode = sender() == unlockWalletAction ?
-              AskPassphraseDialog::UnlockStaking : AskPassphraseDialog::Unlock;
-        AskPassphraseDialog dlg(mode, this);
+        AskPassphraseDialog dlg(AskPassphraseDialog::UnlockStaking, this);
         dlg.setModel(walletModel);
         dlg.exec();
     }
+}
+
+void BitcoinGUI::unlockWalletForOperation(bool elevate)
+{
+    if(!walletModel)
+        return;
+
+    // Which question to ask is NOT re-derived from the wallet state here. The
+    // model decided it from the read it had already taken, and the unlock can
+    // expire between that read and this one: answering "unlock" then starts a
+    // fresh unlock with no deadline, which the model's UnlockContext would go on
+    // to narrow to staking-only permanently -- silently turning a time-boxed
+    // unlock into an open-ended one.
+    //
+    // Elevate refuses a locked wallet, so if that is what happened the dialog
+    // reports it and the wallet stays locked, which is what the timer decided.
+    AskPassphraseDialog dlg(elevate ? AskPassphraseDialog::Elevate
+                                    : AskPassphraseDialog::Unlock, this);
+    dlg.setModel(walletModel);
+    dlg.exec();
 }
 
 void BitcoinGUI::lockWallet()
@@ -1765,22 +2080,6 @@ void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
     }
     else if(fToggleHidden)
         hide();
-}
-
-void BitcoinGUI::updateWeight()
-{
-    if (!pwalletMain)
-        return;
-
-    TRY_LOCK(cs_main, lockMain);
-    if (!lockMain)
-        return;
-
-    TRY_LOCK(pwalletMain->cs_wallet, lockWallet);
-    if (!lockWallet)
-        return;
-
-    nWeight = GRC::GetStakeWeight(*pwalletMain);
 }
 
 QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
@@ -1828,41 +2127,73 @@ void BitcoinGUI::updateStakingIcon(
     double coin_weight,
     double etts_days)
 {
-    LogPrint(BCLog::MISC, "BitcoinGUI::updateStakingIcon()");
+    GUILogPrint(GUILogCategory::MISC, "BitcoinGUI::updateStakingIcon()");
 
     if (staking)
     {
-        labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_yes_" + sSheet));
-        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> staking frequency is %3.")
-                                     .arg(QString::number(coin_weight, 'f', 0),
-                                          QString::number(net_weight, 'f', 0),
-                                          GetEstimatedStakingFrequency(etts_days)));
+        setStatusIcon(labelStakingIcon, m_staking_icon, ":/icons/status_staking_yes");
     }
     else if (coin_weight == 0.0)
     {
-        labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_problem_" + sSheet));
-        labelStakingIcon->setToolTip(tr("Unable to stake: %1")
-                                     .arg(clientModel->getMinerWarnings()));
+        setStatusIcon(labelStakingIcon, m_staking_icon, ":/icons/status_staking_problem");
     }
     else
     {
-        labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_no_" + sSheet));
-        labelStakingIcon->setToolTip(tr("Not staking currently: %1, <b>Estimated</b> staking frequency is %2.")
-                                     .arg(clientModel->getMinerWarnings(),
-                                          GetEstimatedStakingFrequency(etts_days)));
+        setStatusIcon(labelStakingIcon, m_staking_icon, ":/icons/status_staking_no");
+    }
+
+    labelStakingIcon->setToolTip(StakingToolTip(staking,
+                                                net_weight,
+                                                coin_weight,
+                                                etts_days,
+                                                isPrivacyModeActivated(),
+                                                clientModel->getMinerWarnings()));
+}
+
+QString BitcoinGUI::StakingToolTip(
+    bool staking,
+    double net_weight,
+    double coin_weight,
+    unsigned int etts_seconds,
+    bool masked,
+    const QString& warnings)
+{
+    // Mask values shows "#.##" for the coin weight on the overview page. The
+    // staking estimate is computed from the wallet's stakeable balance, so it
+    // is masked along with the coin weight. The network weight is not wallet
+    // data and stays visible.
+    const QString mask = QStringLiteral("#.##");
+
+    if (staking)
+    {
+        return tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> staking frequency is %3.")
+            .arg(masked ? mask : QString::number(coin_weight, 'f', 0),
+                 QString::number(net_weight, 'f', 0),
+                 masked ? mask : GetEstimatedStakingFrequency(etts_seconds));
+    }
+    else if (coin_weight == 0.0)
+    {
+        return tr("Unable to stake: %1")
+            .arg(warnings);
+    }
+    else
+    {
+        return tr("Not staking currently: %1, <b>Estimated</b> staking frequency is %2.")
+            .arg(warnings,
+                 masked ? mask : GetEstimatedStakingFrequency(etts_seconds));
     }
 }
 
 
 void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 {
-    LogPrint(BCLog::MISC, "BitcoinGUI::updateScraperIcon()");
+    GUILogPrint(GUILogCategory::MISC, "BitcoinGUI::updateScraperIcon()");
 
-    LOCK(cs_ConvergedScraperStatsCache);
+    // Value snapshot through the node interface; the scraper cache lock is
+    // taken node-side and never held here.
+    const interfaces::ScraperConvergenceSnapshot snapshot = clientModel->getScraperConvergenceSnapshot();
 
-    const ConvergedScraperStats& ConvergedScraperStatsCache = clientModel->getConvergedScraperStatsCache();
-
-    int64_t nConvergenceTime = ConvergedScraperStatsCache.nTime;
+    int64_t nConvergenceTime = snapshot.time;
 
     QString qsExcludedProjects;
     QString qsIncludedScrapers;
@@ -1873,9 +2204,9 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
     // Note that the translation macro tr is applied in the setToolTip call below.
     // If the convergence cache has excluded projects...
-    if (!ConvergedScraperStatsCache.Convergence.vExcludedProjects.empty())
+    if (!snapshot.excluded_projects.empty())
     {
-        qsExcludedProjects = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vExcludedProjects, ", ")).c_str());
+        qsExcludedProjects = QString(((std::string)boost::algorithm::join(snapshot.excluded_projects, ", ")).c_str());
     }
     else
     {
@@ -1883,25 +2214,25 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     }
 
     // If scraper logging category is turned on then show scrapers in tooltip...
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::SCRAPER))
+    if (GUILog::WillLogCategory(GUILogCategory::SCRAPER))
     {
         bDisplayScrapers = true;
 
         // No need to include "none" for included scrapers, because if no scrapers there will not be a convergence.
-        qsIncludedScrapers = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vIncludedScrapers, ", ")).c_str());
+        qsIncludedScrapers = QString(((std::string)boost::algorithm::join(snapshot.included_scrapers, ", ")).c_str());
 
-        if (!ConvergedScraperStatsCache.Convergence.vExcludedScrapers.empty())
+        if (!snapshot.excluded_scrapers.empty())
         {
-            qsExcludedScrapers = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vExcludedScrapers, ", ")).c_str());
+            qsExcludedScrapers = QString(((std::string)boost::algorithm::join(snapshot.excluded_scrapers, ", ")).c_str());
         }
         else
         {
             qsExcludedScrapers = tr("none");
         }
 
-        if (!ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing.empty())
+        if (!snapshot.scrapers_not_publishing.empty())
         {
-            qsScrapersNotPublishing = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing, ", ")).c_str());
+            qsScrapersNotPublishing = QString(((std::string)boost::algorithm::join(snapshot.scrapers_not_publishing, ", ")).c_str());
         }
         else
         {
@@ -1911,23 +2242,23 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
     if (scraperEventtype == (int)scrapereventtypes::OutOfSync && status == CT_UPDATING)
     {
-        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_waiting_" + sSheet));
+        setStatusIcon(labelScraperIcon, m_scraper_icon, ":/icons/status_scraper_waiting");
         labelScraperIcon->setToolTip(tr("Scraper: waiting on wallet to sync."));
     }
     else if (scraperEventtype == (int)scrapereventtypes::Sleep && status == CT_NEW)
     {
-        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_inactive_" + sSheet));
+        setStatusIcon(labelScraperIcon, m_scraper_icon, ":/icons/status_scraper_inactive");
         labelScraperIcon->setToolTip(tr("Scraper: superblock not needed - inactive."));
     }
     else if (scraperEventtype == (int)scrapereventtypes::Stats && (status == CT_NEW || status == CT_UPDATED || status == CT_UPDATING))
     {
-        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_waiting_" + sSheet));
+        setStatusIcon(labelScraperIcon, m_scraper_icon, ":/icons/status_scraper_waiting");
         labelScraperIcon->setToolTip(tr("Scraper: downloading and processing stats."));
     }
     else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
              && (status == CT_NEW || status == CT_UPDATED) && nConvergenceTime)
     {
-        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_ok_" + sSheet));
+        setStatusIcon(labelScraperIcon, m_scraper_icon, ":/icons/status_scraper_ok");
 
         if (bDisplayScrapers)
         {
@@ -1953,7 +2284,7 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
              && status == CT_DELETED)
     {
-        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_no_convergence_" + sSheet));
+        setStatusIcon(labelScraperIcon, m_scraper_icon, ":/icons/status_scraper_no_convergence");
         labelScraperIcon->setToolTip(tr("Scraper: No convergence able to be achieved. Will retry in a few minutes."));
     }
 
@@ -1961,7 +2292,14 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
 void BitcoinGUI::updateBeaconIcon()
 {
-    LogPrint(BCLog::MISC, "BitcoinGUI::updateBeaconIcon()");
+    GUILogPrint(GUILogCategory::MISC, "BitcoinGUI::updateBeaconIcon()");
+
+    // Every sibling slot null-checks its model (see OverviewPage). This one is
+    // additionally driven by a window-parented timer, so it can still be reached
+    // after setResearcherModel(nullptr) has detached the model.
+    if (!researcherModel) {
+        return;
+    }
 
     if (researcherModel->configuredForNoncruncherMode()
         || researcherModel->detectedPoolMode())

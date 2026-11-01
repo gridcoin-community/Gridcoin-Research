@@ -18,12 +18,6 @@
 #include <limits>
 #include <string>
 
-extern bool fTestNet;
-static inline unsigned short GetDefaultPort(const bool testnet = fTestNet)
-{
-    return testnet ? 32748 : 32749;
-}
-
 
 /** Message header.
  * (4) message start.
@@ -252,6 +246,12 @@ namespace NetMsgType {
     * Gridcoin specific message
     */
     extern const char *PART;
+
+    /**
+    * Gridcoin specific message: a partially signed transaction for the
+    * PSGT pool (#2910). Payload is the raw binary PSGT wire bytes.
+    */
+    extern const char *PSGT;
 
     /**
     * Gridcoin alias for version message (will be removed)

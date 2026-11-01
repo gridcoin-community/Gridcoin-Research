@@ -1,0 +1,63 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef GRIDCOIN_IPC_CONNECT_H
+#define GRIDCOIN_IPC_CONNECT_H
+
+#include "fs.h"
+#include "interfaces/ipc.h"
+#include "ipc/handshake.h" // HandshakeResult (build/identity/soft-warnings)
+
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
+
+namespace interfaces {
+class Init;
+} // namespace interfaces
+
+namespace ipc {
+
+//! A live connection to a node process: the remote Init capability plus the Ipc
+//! that owns the underlying socket and event loop. The Init is a proxy valid
+//! only while the Ipc lives, so a caller keeps the whole struct alive for as
+//! long as it uses any interface reached through init.
+struct GuiConnection {
+    std::unique_ptr<interfaces::Ipc> ipc;
+    std::unique_ptr<interfaces::Init> init;
+    //! The successful handshake's build fingerprint, node identity token, and any
+    //! soft (non-fatal) findings -- consumed GUI-side for identity binding and the
+    //! mixed-build banner.
+    HandshakeResult handshake;
+};
+
+//! GUI side: perform the connect handshake against a node listening on
+//! <data_dir>/<network>/node.sock (doc/multiprocess_design.md section 4.3):
+//!
+//!   1. read the node's ipc.cookie -- its absence means no -multiprocess node
+//!      is serving this datadir: none is running with -multiprocess, one is
+//!      still starting (the cookie is written after core init, just before the
+//!      node starts listening), or the last one shut down cleanly and deleted
+//!      it. There is then no credential to authenticate with and nothing to
+//!      dial. A node that crashed or was killed leaves a stale cookie behind;
+//!      that is harmless -- connectAddress in step 2 then simply fails with no
+//!      listener;
+//!   2. MakeIpc + connectAddress("unix") to obtain the remote Init;
+//!   3. ClientHandshake -- authenticate with the cookie and verify
+//!      schema/protocol/network compatibility (result stashed in .handshake).
+//!
+//! On success returns the connection. On any failure returns std::nullopt and
+//! sets \p error_out to a human-readable reason. If \p on_disconnect is set it is
+//! invoked (on the IPC event-loop thread) when the node drops the connection
+//! unexpectedly (crash / SIGKILL, or a stop that raced the shutdown handshake) —
+//! the GUI uses it to quit cleanly rather than fault on the next call to a
+//! now-dead proxy.
+std::optional<GuiConnection> ConnectToNode(const fs::path& data_dir,
+                                           std::string& error_out,
+                                           std::function<void()> on_disconnect = {});
+
+} // namespace ipc
+
+#endif // GRIDCOIN_IPC_CONNECT_H

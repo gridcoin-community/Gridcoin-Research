@@ -512,11 +512,12 @@ public:
     //! \brief Fetch the applicable magnitude factor for the poll. This is the magnitude factor of the last entry in the
     //! protocol registry database that has a timestamp at or before the poll start timestamp.
     //!
-    //! \param index CBlockIndex of block containing poll transaction (poll start).
+    //! \param index     CBlockIndex of block containing poll transaction (poll start).
+    //! \param timestamp Time of the poll transaction.
     //!
     //! \return Fraction Magnitude factor expressed as a Fraction.
     //!
-    Fraction ResolveMagnitudeWeightFactor(const CBlockIndex* index) const;
+    static Fraction ResolveMagnitudeWeightFactor(const CBlockIndex* index, const int64_t timestamp);
 
     //!
     //! \brief Get the set of possible answers to the poll.

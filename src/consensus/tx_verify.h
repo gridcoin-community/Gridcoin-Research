@@ -5,7 +5,8 @@
 #ifndef BITCOIN_CONSENSUS_TX_VERIFY_H
 #define BITCOIN_CONSENSUS_TX_VERIFY_H
 
-#include "main.h"
+#include "primitives/block.h"
+#include <validation.h>
 
 #include <utility>
 #include <vector>

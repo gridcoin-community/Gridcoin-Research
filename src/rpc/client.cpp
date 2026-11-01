@@ -12,7 +12,7 @@
 #include "client.h"
 #include "server.h"
 #include "wallet/db.h"
-#include "util.h"
+#include <util.h>
 
 // #undef printf
 #include <set>
@@ -22,7 +22,6 @@
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/asio/ssl.hpp>
 #include <boost/shared_ptr.hpp>
 #include <list>
 #include <stdexcept>
@@ -44,24 +43,76 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
                                   "If the file does not exist, create it with owner-readable-only file permissions."),
                                 GetConfigFile().string()));
 
+    // -rpcssl is gone, and this path never reaches StartRPCThreads(), so the
+    // warning the daemon logs for it is never seen by someone running the CLI.
+    // Say it here too: an operator who believes this connection is wrapped in
+    // TLS is about to send Basic-auth credentials in clear text.
+    //
+    // Loopback only warns. Crossing a network refuses outright -- that is where
+    // the credentials are actually exposed, and continuing silently would be a
+    // downgrade the operator did not ask for and cannot see.
     // Connect to localhost
-    bool fUseSSL = gArgs.GetBoolArg("-rpcssl");
     ioContext io_context;
-    ssl::context context(ssl::context::sslv23);
-    context.set_options(ssl::context::no_sslv2);
-    asio::ssl::stream<asio::ip::tcp::socket> sslStream(io_context, context);
-    SSLIOStreamDevice<asio::ip::tcp> d(sslStream, fUseSSL);
-    iostreams::stream< SSLIOStreamDevice<asio::ip::tcp> > stream(d);
+    asio::ip::tcp::socket socket(io_context);
+    SocketIOStreamDevice<asio::ip::tcp> d(socket);
+    iostreams::stream< SocketIOStreamDevice<asio::ip::tcp> > stream(d);
 
     bool fWait = gArgs.GetBoolArg("-rpcwait", false); // -rpcwait means try until server has started or timeout is reached
     int timeout = gArgs.GetArg("-rpcwaittimeout", DEFAULT_WAIT_CLIENT_TIMEOUT); // The max time to wait
 
     std::chrono::seconds deadline = GetTime<std::chrono::seconds>() + std::chrono::seconds{timeout};
 
+    const std::string rpc_host = gArgs.GetArg("-rpcconnect", "127.0.0.1");
+    const std::string rpc_port = gArgs.GetArg("-rpcport", ToString(GetDefaultRPCPort()));
+
+    // GetBoolArg, not IsArgSet: IsArgSet is true for "rpcssl=0" and for
+    // "-norpcssl", configurations that explicitly turned TLS OFF, and treating
+    // those as a request for encryption would refuse remote calls from
+    // operators who never wanted it. Presence is not intent.
+    const bool ssl_requested = gArgs.GetBoolArg("-rpcssl", false);
+
     do {
+        // Resolve ONCE per attempt, and connect to exactly what was resolved.
+        //
+        // -rpcssl is gone, and this path never reaches StartRPCThreads(), so the
+        // warning the daemon logs for it is never seen here. Someone running the
+        // CLI with it set believes this connection is encrypted while Basic-auth
+        // credentials go out in clear text. On loopback that warns; to anything
+        // else it refuses, since that is where the credentials cross a network.
+        //
+        // The endpoints are handed to connect() rather than re-resolved inside
+        // it. Checking one resolution and connecting on another leaves a window
+        // where rotation between the two lookups passes the check with loopback
+        // and then connects somewhere else.
+        boost::asio::ip::tcp::resolver::results_type endpoints;
+        try {
+            asio::ip::tcp::resolver res(io_context);
+            endpoints = res.resolve(rpc_host, rpc_port);
+        } catch (const std::exception&) {
+            endpoints = {};
+        }
+
+        if (ssl_requested) {
+            bool loopback = endpoints.begin() != endpoints.end();
+            for (const auto& ep : endpoints) {
+                if (!ep.endpoint().address().is_loopback()) { loopback = false; break; }
+            }
+
+            if (loopback) {
+                LogPrintf("WARNING: -rpcssl is no longer supported and is being ignored. This "
+                          "connection to %s is NOT encrypted.\n", rpc_host);
+            } else {
+                throw std::runtime_error(strprintf(
+                    _("-rpcssl is no longer supported, and -rpcconnect=%s does not resolve to a "
+                      "loopback address. Sending RPC credentials to it would transmit them "
+                      "unencrypted. Remove -rpcssl to proceed deliberately, and tunnel the "
+                      "connection (for example over SSH) if it crosses an untrusted network."),
+                    rpc_host));
+            }
+        }
+
         // If connection succeeds, immediately break. No need to wait.
-        if (d.connect(gArgs.GetArg("-rpcconnect", "127.0.0.1"),
-                      gArgs.GetArg("-rpcport", ToString(GetDefaultRPCPort())))) {
+        if (d.connect(endpoints)) {
             break;
         }
 
@@ -92,7 +143,7 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
     // Receive HTTP reply message headers and body
     map<string, string> mapHeaders;
     string strReply;
-    ReadHTTPMessage(stream, mapHeaders, strReply, nProto);
+    ReadHTTPMessage(stream, mapHeaders, strReply, nProto, MAX_RPC_RESPONSE_SIZE);
 
     if (nStatus == HTTP_UNAUTHORIZED)
         throw runtime_error("incorrect rpcuser or rpcpassword (authorization failed)");
@@ -127,6 +178,12 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "addmultisigaddress"     , 0 },
     { "addmultisigaddress"     , 1 },
     { "burn"                   , 0 },
+    { "claimhtlc"              , 1 },
+    { "createhtlc"             , 3 },
+    { "createhtlc"             , 4 },
+    { "generatesuperblock"     , 0 },
+    { "generatesuperblock"     , 1 },
+    { "generatesuperblock"     , 2 },
     { "createrawtransaction"   , 0 },
     { "createrawtransaction"   , 1 },
     { "consolidatemsunspent"   , 1 },
@@ -136,15 +193,19 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "consolidateunspent"     , 3 },
     { "consolidateunspent"     , 4 },
     { "dumpprivkey"            , 1 },
+    { "fundrawtransaction"     , 1 },
     { "getbalance"             , 1 },
     { "getbalance"             , 2 },
     { "getbalancedetail"       , 0 },
     { "getbalancedetail"       , 1 },
     { "getrawtransaction"      , 1 },
+    { "gettxoutproof"          , 0 },
     { "getreceivedbyaccount"   , 1 },
     { "getreceivedbyaddress"   , 1 },
+    { "getreceivedbylabel"     , 1 },
     { "gettransaction"         , 1 },
     { "importprivkey"          , 2 },
+    { "inspectwalletstate"     , 0 },
     { "keypoolrefill"          , 0 },
     { "listaccounts"           , 0 },
     { "listaccounts"           , 1 },
@@ -154,6 +215,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "listreceivedbyaddress"  , 0 },
     { "listreceivedbyaddress"  , 1 },
     { "listreceivedbyaddress"  , 2 },
+    { "listreceivedbylabel"    , 0 },
+    { "listreceivedbylabel"    , 1 },
+    { "listreceivedbylabel"    , 2 },
     { "listsinceblock"         , 1 },
     { "listsinceblock"         , 2 },
     { "liststakes"             , 0 },
@@ -172,8 +236,10 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "rainbymagnitude"        , 1 },
     { "rainbymagnitude"        , 2 },
     { "rainbymagnitude"        , 3 },
+    { "refundhtlc"             , 1 },
     { "reservebalance"         , 0 },
     { "reservebalance"         , 1 },
+    { "restoreseedphrase"      , 2 },
     { "scanforunspent"         , 1 },
     { "scanforunspent"         , 2 },
     { "scanforunspent"         , 3 },
@@ -183,18 +249,39 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sendmany"               , 2 },
     { "sendtoaddress"          , 1 },
     { "settxfee"               , 0 },
+    { "sweepuncoveredcoins"    , 1 },
+    { "sweepuncoveredcoins"    , 2 },
     { "sethdseed"              , 0 },
-    { "signrawtransaction"     , 1 },
-    { "signrawtransaction"     , 2 },
+    { "splitunspent"           , 1 },
+    { "splitunspent"           , 2 },
+    { "stakelimit"             , 0 },
+    { "signrawtransaction"              , 1 },
+    { "signrawtransaction"              , 2 },
+    { "signrawtransactionwithkey"       , 1 },
+    { "signrawtransactionwithkey"       , 2 },
+    { "signrawtransactionwithwallet"    , 1 },
+    { "createpsgt"                      , 0 },
+    { "createpsgt"                      , 1 },
+    { "createpsgt"                      , 2 },
+    { "combinepsgt"                     , 0 },
+    { "walletcreatefundedpsgt"          , 0 },
+    { "walletcreatefundedpsgt"          , 1 },
+    { "walletcreatefundedpsgt"          , 2 },
+    { "walletcreatefundedpsgt"          , 3 },
+    { "listpsgtpool"                    , 0 },
     { "upgradewallet"          , 0 },
     { "walletpassphrase"       , 1 },
     { "walletpassphrase"       , 2 },
 
     // Staking
     { "advertisebeacon"        , 0 },
+    { "advertisebeaconv3"      , 1 },
     { "beaconreport"           , 0 },
     { "createmrcrequest"       , 0 },
     { "createmrcrequest"       , 1 },
+    { "createmrcrequest"       , 2 },
+    { "generate"               , 0 },
+    { "generatetoaddress"      , 0 },
     { "getmrcinfo"             , 0 },
     { "getmrcinfo"             , 2 },
     { "getmrcinfo"             , 3 },
@@ -215,6 +302,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getblockstats"          , 2 },
     { "inspectaccrualsnapshot" , 0 },
     { "listmanifests"          , 0 },
+    { "listpools"              , 0 },
     { "listprojects"           , 0 },
     { "getautogreylist"        , 0 },
     { "getautogreylist"        , 1 },
@@ -231,6 +319,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "versionreport"          , 1 },
 
     // Network
+    { "getrawmempool"          , 0 },
+    { "testmempoolaccept"      , 0 },
     { "getaddednodeinfo"       , 0 },
     { "getnodeaddresses"       , 0 },
     { "getblock"               , 1 },
@@ -241,6 +331,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getblocksbatch"         , 1 },
     { "getblocksbatch"         , 2 },
     { "getblockhash"           , 0 },
+    { "setmocktime"            , 0 },
+    { "disconnectnode"         , 1 },
     { "setban"                 , 2 },
     { "setban"                 , 3 },
     { "showblock"              , 0 },
@@ -272,6 +364,15 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "votebyid"               , 20 },
     { "votebyid"               , 21 },
 };
+
+std::vector<std::pair<std::string, int>> ListConvertedParams()
+{
+    std::vector<std::pair<std::string, int>> entries;
+    for (const auto& elem : vRPCConvertParams) {
+        entries.emplace_back(elem.methodName, elem.paramIdx);
+    }
+    return entries;
+}
 
 class CRPCConvertTable
 {

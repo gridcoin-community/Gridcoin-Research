@@ -9,6 +9,11 @@
 #include "wallet/wallet.h"
 #include <boost/thread.hpp>
 
+#include <atomic>
+#include <string>
+#include <utility>
+#include <vector>
+
 //! Default value for -daemon option
 static constexpr bool DEFAULT_DAEMON = false;
 //! Default value for -daemonwait option
@@ -18,9 +23,24 @@ extern CWallet* pwalletMain;
 
 void InitLogging();
 
-void StartShutdown();
+//! \brief The private key behind the regtest genesis premine.
+//!
+//! The regtest genesis coinbase pays 10 UTXOs to the P2PKH of the secp256k1
+//! privkey-scalar=1 compressed pubkey. Exposed so that test fixtures can sign
+//! spends of the premine without restating the constant.
+CKey GetRegtestPremineKey();
 
-bool ShutdownRequested();
+//! \brief Plant the regtest premine key into \p pwallet and surface its coins.
+//!
+//! Idempotent: does nothing if the wallet already holds the key. On a fresh
+//! plant it also nudges nTimeFirstKey below the genesis timestamp and rescans
+//! from pindexGenesisBlock, because genesis is loaded before the key exists and
+//! the wallet-birthday optimisation would otherwise skip it.
+//!
+//! Callers must NOT hold cs_main or pwallet->cs_wallet; both are taken here.
+void PlantRegtestPremineKey(CWallet* pwallet);
+
+void StartShutdown();
 
 void Shutdown(void* parg);
 bool AppInit2(ThreadHandlerPtr threads);
@@ -36,6 +56,46 @@ void SetupServerArgs();
 std::string VersionMessage();
 std::string LogSomething();
 
-extern bool fSnapshotRequest;
+//! Apply the immediate side effect of a changed read-write setting for the
+//! "push-model" knobs whose consumers do not re-read gArgs live (currently
+//! -proxy and -reservebalance apply here; -upnp restarts the port-map thread).
+//! No-op for pull-model settings (the staking cluster etc., which re-read gArgs
+//! on use). Shared by the changesettings RPC and interfaces::Node::changeSettings
+//! so a live edit takes effect without a restart in both paths.
+void ApplyRwSettingSideEffect(const std::string& name);
+
+//! Validate, persist to gridcoinsettings.json, set in the running args, and apply
+//! one or more settings given as name/value strings. Two-phase: every setting is
+//! fully validated (name is a known arg; proxy/reservebalance values must parse)
+//! before any is applied, so a validation failure changes nothing. An EMPTY value
+//! erases the setting, from gridcoinsettings.json and from the running args, so
+//! the arg falls back to the command line, then the config file, then its default.
+//! It does not mean "off" or zero: a -proxy or -reservebalance set in the config
+//! file applies again. On success, each name is categorized into
+//! no_change_out / immediate_out / requires_restart_list_out and
+//! requires_restart_out is set. On failure returns false with error_out set and
+//! invalid_input_out distinguishing a caller/validation error (true; nothing was
+//! changed) from an internal storage error (false). On a storage failure the
+//! failing setting is unchanged in the settings file, in memory and in the
+//! running args. Settings processed before it (in name order, not the order
+//! given) stay applied and stored. The rest are not touched. Shared core of the
+//! changesettings RPC and interfaces::Node::changeSettings.
+bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& settings,
+                    bool& requires_restart_out,
+                    std::vector<std::string>& no_change_out,
+                    std::vector<std::string>& immediate_out,
+                    std::vector<std::string>& requires_restart_list_out,
+                    bool& invalid_input_out,
+                    std::string& error_out);
+
 extern bool fResetBlockchainRequest;
+
+//! Node-lifecycle flags, defined in init.cpp (moved from main.cpp, issue
+//! #3125 C9): fQtActive is set by the Qt entry point before core init so
+//! shutdown paths know a GUI owns the event loop;
+//! bGridcoinCoreInitComplete flips once AppInit2 finishes and gates
+//! interfaces::Init::isCoreReady (#3170) plus the GUI splash handoff.
+extern bool fQtActive;
+extern std::atomic<bool> bGridcoinCoreInitComplete;
+
 #endif

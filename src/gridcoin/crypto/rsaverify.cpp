@@ -58,4 +58,42 @@ bool VerifyRSASHA512(
     return EVP_DigestVerifyFinal(ctx.get(), signature.data(), signature.size()) == 1;
 }
 
+std::vector<uint8_t> GetPublicKeyDER(const std::string& pem_pubkey)
+{
+    if (pem_pubkey.empty()) {
+        return {};
+    }
+
+    std::unique_ptr<BIO, decltype(&BIO_free)> bio(
+        BIO_new_mem_buf(pem_pubkey.data(), static_cast<int>(pem_pubkey.size())),
+        BIO_free);
+
+    if (!bio) {
+        return {};
+    }
+
+    std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(
+        PEM_read_bio_PUBKEY(bio.get(), nullptr, nullptr, nullptr),
+        EVP_PKEY_free);
+
+    if (!pkey) {
+        return {};
+    }
+
+    const int length = i2d_PUBKEY(pkey.get(), nullptr);
+
+    if (length <= 0) {
+        return {};
+    }
+
+    std::vector<uint8_t> der(length);
+    unsigned char* out = der.data();
+
+    if (i2d_PUBKEY(pkey.get(), &out) != length) {
+        return {};
+    }
+
+    return der;
+}
+
 } // namespace GRC

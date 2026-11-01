@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#include "main.h"
+#include "primitives/block.h"
 #include <uint256.h>
 
 uint256 ComputeMerkleRoot(std::vector<uint256> leaves, bool* mutated = nullptr);

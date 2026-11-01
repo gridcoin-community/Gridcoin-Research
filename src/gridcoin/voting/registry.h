@@ -31,6 +31,7 @@ public:
 
 class Contract;
 class PollRegistry;
+class SuperblockPtr;
 
 //!
 //! \brief Stores an in-memory reference to a poll contract and its votes.
@@ -137,6 +138,10 @@ public:
     //!
     //! \brief Get the block index pointer for the first block in the poll duration.
     //!
+    //! This is the block that contains the poll contract, recorded when the poll
+    //! was registered. It needs no lock: block index entries are never freed, and
+    //! the registry deletes the poll if that block is disconnected.
+    //!
     //! \return pointer to block index object.
     //!
     CBlockIndex* GetStartingBlockIndexPtr() const;
@@ -165,16 +170,26 @@ public:
     //!
     //! \brief Get the magnitude weight factor at the poll start.
     //!
+    //! Resolved on each call from the poll's block and transaction time, against
+    //! the current protocol registry, as a read of the poll from disk always did.
+    //! A factor fixed at registration could differ between a node that saw the
+    //! poll arrive and one that replayed it later, when an entry stamped before
+    //! the poll was mined after it.
+    //!
     //! \return Fraction representing magnitude weight factor.
     //!
     Fraction GetMagnitudeWeightFactor() const;
 
     //!
     //! \brief Computes the Active Vote Weight for the poll, which is used to determine whether the poll is validated.
-    //! \param result: The actual tabulated votes (poll result)
+    //! \param result: The actual tabulated votes (poll result). Its poll supplies
+    //! the magnitude weight factor, the one the votes were weighed with.
+    //! \param pindex_tip: Pinned chain tip used as the end of the range for an
+    //! active poll, so every poll in a table build tallies against one consistent
+    //! tip rather than a live pindexBest that shifts each block.
     //! \return ActiveVoteWeight
     //!
-    std::optional<CAmount> GetActiveVoteWeight(const PollResultOption &result) const;
+    std::optional<CAmount> GetActiveVoteWeight(const PollResult& result, const CBlockIndex* pindex_tip) const;
 
     //!
     //! \brief Provides string equivalent of PollNotificationType
@@ -216,13 +231,13 @@ private:
     uint256 m_txid;                             //!< Hash of the poll transaction.
     uint32_t m_payload_version;                 //!< Version of the poll (payload).
     PollType m_type;                            //!< Type of the poll.
-    mutable PollWeightType m_weight_type;       //!< Weight type of the poll.
+    PollWeightType m_weight_type;               //!< Weight type of the poll.
     const std::string* m_ptitle;                //!< Title of the poll for indexing/mapping purposes.
     std::string m_title;                        //!< Original title of the poll for display purposes.
-    mutable int64_t m_timestamp;                //!< Timestamp of the poll transaction.
+    int64_t m_timestamp;                        //!< Timestamp of the poll transaction.
     uint32_t m_duration_days;                   //!< Number of days the poll remains active.
+    const CBlockIndex* m_pindex;                //!< Block that contains the poll contract.
     std::vector<uint256> m_votes;               //!< Hashes of the linked vote transactions.
-    mutable Fraction m_magnitude_weight_factor; //!< Magnitude weight factor for the poll (defined at poll start).
     mutable bool m_expiration_warn_notified;    //!< Flag to indicate whether the expiration warning was sent.
 }; // PollReference
 
@@ -239,7 +254,27 @@ public:
     using PollMapByTitle = std::map<std::string, PollReference>;
     using PollMapByTxid = std::map<uint256, PollReference*>;
 
-    CCriticalSection cs_poll_registry;  //!< Lock for poll registry.
+    //!
+    //! \brief Lock for poll registry.
+    //!
+    //! STATIC, and that is load-bearing for the thread-safety annotations rather
+    //! than a statement about instances (there is exactly one registry —
+    //! GetPollRegistry() — and never has been another).
+    //!
+    //! Sequence and Iterator are nested classes that do not own the lock, so their
+    //! EXCLUSIVE_LOCKS_REQUIRED clauses have to name it through the enclosing
+    //! class. Clang's analyzer can only resolve that to a single, unambiguous
+    //! object if the member is static; while it was non-static the annotation
+    //! resolved to an unmatchable "some instance's cs_poll_registry", and a caller
+    //! that correctly held GetPollRegistry().cs_poll_registry was reported as NOT
+    //! holding it. That false positive is why the requirements used to live only
+    //! on the out-of-line definitions in registry.cpp, where nothing outside the
+    //! translation unit ever saw them — so no caller was ever checked, which is
+    //! how an unlocked traversal reached production (VotingManagerImpl::
+    //! latestActivePollTime).
+    //!
+    //! Not `mutable`: a static member is not part of any instance's constness.
+    static CCriticalSection cs_poll_registry;
 
     //!
     //! \brief A traversable, immutable sequence of the polls in the registry.
@@ -270,22 +305,22 @@ public:
                 BaseIterator iter,
                 BaseIterator end,
                 const FilterFlag flags,
-                const int64_t now);
+                const int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Initialize an iterator for the end of the sequence.
             //!
-            Iterator(BaseIterator end);
+            Iterator(BaseIterator end) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Get the poll reference at the current position.
             //!
-            const PollReference& Ref() const;
+            const PollReference& Ref() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Load the poll at the current position from disk.
             //!
-            PollOption TryPollFromDisk() const;
+            PollOption TryPollFromDisk() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Get a reference to the current position.
@@ -304,24 +339,24 @@ public:
             //!
             //! \brief Advance the current position.
             //!
-            Iterator& operator++();
+            Iterator& operator++() EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Advance the current position.
             //!
-            Iterator operator++(int);
+            Iterator operator++(int) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Determine whether the item at the current position is
             //! equal to the specified position.
             //!
-            bool operator==(const Iterator& other) const;
+            bool operator==(const Iterator& other) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
             //!
             //! \brief Determine whether the item at the current position is
             //! not equal to the specified position.
             //!
-            bool operator!=(const Iterator& other) const;
+            bool operator!=(const Iterator& other) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
         private:
             BaseIterator m_iter GUARDED_BY(cs_poll_registry); //!< The current position.
@@ -333,7 +368,7 @@ public:
             //! \brief Advance the iterator to the next item that matches the
             //! configured filters.
             //!
-            void SeekNextMatch();
+            void SeekNextMatch() EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
         }; // Iterator
 
         //!
@@ -342,14 +377,14 @@ public:
         //! \param polls The set of poll references in the registry.
         //! \param flags Attributes to filter polls by.
         //!
-        Sequence(const PollMapByTitle& polls, const FilterFlag flags = NO_FILTER);
+        Sequence(const PollMapByTitle& polls, const FilterFlag flags = NO_FILTER) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
         //!
         //! \brief Set the attributes to filter polls by.
         //!
         //! \return A new sequence for the specified poll filters.
         //!
-        Sequence Where(const FilterFlag flags) const;
+        Sequence Where(const FilterFlag flags) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
         //!
         //! \brief Set whether the sequence skips finished polls.
@@ -358,17 +393,17 @@ public:
         //!
         //! \return A new sequence for the specified poll status filters.
         //!
-        Sequence OnlyActive(const bool active_only = true) const;
+        Sequence OnlyActive(const bool active_only = true) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
         //!
         //! \brief Returns an iterator to the beginning.
         //!
-        Iterator begin() const;
+        Iterator begin() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
         //!
         //! \brief Returns an iterator to the end.
         //!
-        Iterator end() const;
+        Iterator end() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     private:
         const PollMapByTitle& m_polls GUARDED_BY(cs_poll_registry) ; //!< Poll references in the registry.
@@ -381,7 +416,7 @@ public:
     //! \return A traversable type that iterates over the poll references in
     //! the registry and reads poll objects from disk.
     //!
-    const Sequence Polls() const;
+    const Sequence Polls() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Get the most recent poll submitted to the network.
@@ -389,7 +424,7 @@ public:
     //! \return Points to a poll object or \c nullptr when no recent polls
     //! exist.
     //!
-    const PollReference* TryLatestActive() const;
+    const PollReference* TryLatestActive() const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Get the poll with the specified transaction ID.
@@ -399,7 +434,7 @@ public:
     //! \return Points to a poll object or \c nullptr when no poll exists for
     //! the supplied transaction hash.
     //!
-    const PollReference* TryByTxid(const uint256 txid) const;
+    const PollReference* TryByTxid(const uint256 txid) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Get the poll with the specified title.
@@ -409,7 +444,7 @@ public:
     //! \return Points to a poll object or \c nullptr when no poll contains a
     //! matching title.
     //!
-    const PollReference* TryByTitle(const std::string& title) const;
+    const PollReference* TryByTitle(const std::string& title) const EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Get an existing poll in the registry, or if not found, demand load a
@@ -420,13 +455,14 @@ public:
     //!
     //! \return Points to a poll object or \c nullptr if no poll added that matches
     //! the supplied txid.
-    const PollReference* TryByTxidWithAddHistoricalPollAndVotes(const uint256 txid);
+    const PollReference* TryByTxidWithAddHistoricalPollAndVotes(const uint256 txid)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_poll_registry);
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical
     //! contract replay.
     //!
-    void Reset() override;
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Perform contextual validation for the provided contract.
@@ -437,7 +473,7 @@ public:
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Perform contextual validation for the provided contract including block context. This is used
@@ -448,28 +484,58 @@ public:
     //!
     //! \return  \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Register a poll or vote from contract data.
     //!
     //! \param ctx References the poll or vote contract and associated context.
     //!
-    void Add(const ContractContext& ctx) override;
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Deregister the poll or vote specified by contract data.
     //!
     //! \param ctx References the poll or vote contract and associated context.
     //!
-    void Delete(const ContractContext& ctx) override;
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Detect reorganizations that would affect registry traversal.
     //!
     void DetectReorg();
 
-    std::atomic<bool> registry_traversal_in_progress = false;      //!< Boolean that registry traversal is in progress.
+    //!
+    //! \brief RAII scope that marks a registry traversal in progress for its
+    //! lifetime.
+    //!
+    //! registry_traversal_in_progress is a COUNT of active traversals, not a
+    //! bool: table builds can overlap (e.g. a GUI PollResultCache::BuildPollTable
+    //! and a concurrent RPC PollResultToJson/VoteDetailsToJson tally). A plain
+    //! bool let the first traversal to finish clear the flag while another was
+    //! still running, so DetectReorg could wrongly clear
+    //! reorg_occurred_during_reg_traversal mid-traversal. Incrementing on entry
+    //! and decrementing on exit (on every path, including exceptions) keeps the
+    //! reorg detector armed until the LAST traversal finishes.
+    //!
+    class TraversalScope
+    {
+    public:
+        explicit TraversalScope(PollRegistry& registry) : m_registry(registry)
+        {
+            ++m_registry.registry_traversal_in_progress;
+        }
+
+        ~TraversalScope() { --m_registry.registry_traversal_in_progress; }
+
+        TraversalScope(const TraversalScope&) = delete;
+        TraversalScope& operator=(const TraversalScope&) = delete;
+
+    private:
+        PollRegistry& m_registry;
+    };
+
+    std::atomic<int> registry_traversal_in_progress = 0;           //!< Count of registry traversals in progress.
     std::atomic<bool> reorg_occurred_during_reg_traversal = false; //!< Boolean to indicate whether a reorg occurred.
 
 private:
@@ -485,7 +551,7 @@ private:
     //! \return Points to a poll object or \c nullptr when no poll contains a
     //! matching title.
     //!
-    PollReference* TryBy(const std::string& title);
+    PollReference* TryBy(const std::string& title) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Get the poll with the specified title.
@@ -495,7 +561,7 @@ private:
     //! \return Points to a poll object or \c nullptr when no poll exists for
     //! the supplied transaction hash.
     //!
-    PollReference* TryBy(const uint256 txid);
+    PollReference* TryBy(const uint256 txid) EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry);
 
     //!
     //! \brief Register a poll from contract data.
@@ -532,6 +598,19 @@ private:
 //! \return Current global poll registry instance.
 //!
 PollRegistry& GetPollRegistry();
+
+//!
+//! \brief Find the last well-formed superblock at or before a block.
+//!
+//! The superblock flags in the block index are not set for superblocks before
+//! height 1034768 on mainnet or 196562 on testnet, so below those heights the
+//! claim of every block is read.
+//!
+//! \param pindex The block to search back from.
+//!
+//! \return The superblock, bound to its block, or nothing if none is found.
+//!
+std::optional<SuperblockPtr> LastWellFormedSuperblock(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 }
 
 #endif // GRIDCOIN_VOTING_REGISTRY_H

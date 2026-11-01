@@ -8,17 +8,20 @@
 #include "consensus/merkle.h"
 #include "consensus/tx_verify.h"
 #include "txdb.h"
+#include "node/shutdown.h"
 #include "miner.h"
-#include "main.h"
+#include "node/chainman.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/autogreylist.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/kernel.h"
+#include "gridcoin/consensus/block_rewards.h"
 #include "gridcoin/staking/reward.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/tally.h"
@@ -26,12 +29,13 @@
 #include "policy/fees.h"
 #include "random.h"
 #include "util.h"
+#include "util/threadnames.h"
 #include "validation.h"
 #include "wallet/wallet.h"
+#include "txmempool.h"
 
 #include <memory>
 #include <algorithm>
-#include <tuple>
 
 using namespace std;
 
@@ -40,27 +44,75 @@ using namespace std;
 //
 
 unsigned int nMinerSleep;
+CAmount nMinerMinTxFee = -1;  // -1: -mintxfee unset, use GetBaseFee
+
+// Non-release-build staking cripple; see miner.h. Extracted from the former
+// util.h global. Set from init (AppInit2, mainnet gating).
+static bool fDevbuildCripple = false;
+bool GetDevbuildCripple() { return fDevbuildCripple; }
+void SetDevbuildCripple(bool crippled) { fDevbuildCripple = crippled; }
+
+// Constant stuff for coinbase transactions we create (moved from main.cpp,
+// issue #3125 C9; declared in miner.h):
+CScript COINBASE_FLAGS;
+
+std::atomic<int> g_stakelimit_height{0};
+
+int32_t ComputeBlockVersion(int height)
+{
+    // Block version transition ladder. Handling for versions prior to v13 was
+    // removed because no block of an earlier version than v13 can be staked
+    // now; below the v13 gate we still stamp 12 for completeness. The final
+    // rung returns CBlock::CURRENT_VERSION rather than a literal 15 so the
+    // miner default tracks any future CURRENT_VERSION bump (see the header and
+    // issue #3121). This must stay in lockstep with the AcceptBlock version
+    // lower bound in validation.cpp.
+    if (!IsV13Enabled(height)) {
+        return 12;
+    } else if (!IsV14Enabled(height)) {
+        return 13;
+    } else if (!IsV15Enabled(height)) {
+        return 14;
+    }
+
+    return CBlock::CURRENT_VERSION;
+}
 
 namespace {
 class COrphan
 {
 public:
-    CTransaction* ptx;
+    const CTransaction* ptx;
     set<uint256> setDependsOn;
-    double dFeePerKb;
+    //! The fee and size it enters the candidate heap with once its parents are in.
+    FeeRate rate;
 
-    COrphan(CTransaction* ptxIn)
+    COrphan(const CTransaction* ptxIn)
     {
         ptx = ptxIn;
-        dFeePerKb = 0;
     }
 
-    void print() const
+};
+
+//! A transaction waiting for a place in the block. The heap pops the greatest
+//! first: the highest fee rate, compared exactly (FeeRate), and between equal
+//! rates the lower transaction hash, so that ties come out in the same order on
+//! every run. "Lower" is uint256's operator<, a memcmp of the hash's bytes in
+//! memory order, which is not the order of the hex strings shown in logs and by
+//! RPC. The double rate this replaced broke ties on the transactions' addresses
+//! in memory.
+struct BlockCandidate
+{
+    FeeRate rate;
+    uint256 hash;
+    const CTransaction* tx = nullptr;
+
+    bool operator<(const BlockCandidate& other) const
     {
-        LogPrintf("COrphan(hash=%s, dFeePerKb=%.1f)",
-               ptx->GetHash().ToString().substr(0,10), dFeePerKb);
-        for (auto const& hash : setDependsOn)
-            LogPrintf("   setDependsOn %s", hash.ToString().substr(0,10));
+        if (rate < other.rate) return true;
+        if (other.rate < rate) return false;
+
+        return other.hash < hash;
     }
 };
 
@@ -132,34 +184,18 @@ bool TrySignClaim(
 
     return true;
 }
-
-//!
-//! \brief Temporary overload to cast const claims for the final signature.
-//!
-//! TODO: Refactor the block API to provide easier access to the claim contract
-//! for this.
-//!
-bool TrySignClaim(
-    CWallet* pwallet,
-    const GRC::Claim& claim,
-    const CBlock& block,
-    const bool dry_run = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    return TrySignClaim(pwallet, const_cast<GRC::Claim&>(claim), block, dry_run);
-}
 }
 
 // This is in anonymous namespace because it is only to be used by miner code here in this file.
-bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map,
+bool CreateMRCRewards(CMutableTransaction& mtxCoinbase, CMutableTransaction& mtxCoinstake,
+                      CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map,
                       std::map<GRC::Cpid, uint256>& mrc_tx_map, CAmount& reward, uint32_t& claim_contract_version,
                       GRC::Claim& claim, CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    // For convenience
-    CTransaction& coinstake = blocknew.vtx[1];
     std::vector<CTxOut> mrc_outputs;
 
     // coinstake.vout size should be 2 at this point. If not something is really wrong so assert immediately.
-    assert(coinstake.vout.size() == 2);
+    assert(mtxCoinstake.vout.size() == 2);
 
     CAmount mrc_rewards = 0;
     CAmount staker_fees = 0;
@@ -246,7 +282,7 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
         } // mrc_map iteration
 
         // Now that the MRC outputs are created, add the fees to the staker to the coinstake output 1 value.
-        coinstake.vout[1].nValue += staker_fees;
+        mtxCoinstake.vout[1].nValue += staker_fees;
 
         // Increment the reward parameter to include the staker_fees. This is important for mandatory sidestakes later.
         reward += staker_fees;
@@ -258,11 +294,11 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
             script_foundation_key.SetDestination(FoundationSideStakeAddress());
 
             // Put the foundation "sidestake" (MRC fees to the foundation) on the coinstake.
-            coinstake.vout.push_back(CTxOut(foundation_fees, script_foundation_key));
+            mtxCoinstake.vout.push_back(CTxOut(foundation_fees, script_foundation_key));
         }
 
         // Put the MRC payments on the coinstake.
-        coinstake.vout.insert(coinstake.vout.end(), mrc_outputs.begin(), mrc_outputs.end());
+        mtxCoinstake.vout.insert(mtxCoinstake.vout.end(), mrc_outputs.begin(), mrc_outputs.end());
 
         // Put the mrc_tx_map in the claim
         claim.m_mrc_tx_map = mrc_tx_map;
@@ -275,7 +311,7 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
     if (!TrySignClaim(pwallet, claim, blocknew, true)) {
         error("%s: Failed to sign researcher claim. Staking as non-cruncher", __func__);
 
-        coinstake.vout[1].nValue -= claim.m_research_subsidy;
+        mtxCoinstake.vout[1].nValue -= claim.m_research_subsidy;
         claim.m_mining_id = GRC::MiningId::ForNoncruncher();
         claim.m_research_subsidy = 0;
         claim.m_magnitude = 0;
@@ -294,10 +330,10 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
              FormatMoney(mrc_rewards));
 
     // Now the claim is complete. Put on the coinbase.
-    blocknew.vtx[0].vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
-                                                claim_contract_version,
-                                                GRC::ContractAction::ADD,
-                                                std::move(claim)));
+    mtxCoinbase.vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
+                                            claim_contract_version,
+                                            GRC::ContractAction::ADD,
+                                            std::move(claim)));
 
     return true;
 }
@@ -307,7 +343,8 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
 //} // anonymous namespace
 
 // CreateRestOfTheBlock: collect transactions into block and fill in header
-bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
+bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
+                          const CMutableTransaction& mtxCoinstake, CBlockIndex* pindexPrev,
                           std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map)
 {
 
@@ -318,23 +355,33 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
     pindex_contract_validate.nHeight = nHeight;
 
     // Create coinbase tx
-    CTransaction &CoinBase = block.vtx[0];
-    CoinBase.nTime = block.nTime;
-    CoinBase.vin.resize(1);
-    CoinBase.vin[0].prevout.SetNull();
-    CoinBase.vout.resize(1);
-    // Height first in coinbase required for block.version=2
-    CoinBase.vin[0].scriptSig = (CScript() << nHeight) + COINBASE_FLAGS;
-    assert(CoinBase.vin[0].scriptSig.size() <= 100);
-    CoinBase.vout[0].SetEmpty();
+    mtxCoinbase.nTime = block.nTime;
+    mtxCoinbase.vin.resize(1);
+    mtxCoinbase.vin[0].prevout.SetNull();
+    mtxCoinbase.vout.resize(1);
+    // Height first in coinbase required for block.version=2. CheckTransaction
+    // requires scriptSig size in [2, 100]; for small heights (1..16) the
+    // literal OP_N push is only 1 byte and COINBASE_FLAGS is uninitialized
+    // (empty CScript) outside mining-pool builds, so the scriptSig would be a
+    // single byte. Pad with OP_0 ONLY when the script would otherwise be < 2
+    // bytes; this keeps mainnet/testnet coinbase bytes identical (heights >= 17
+    // already push >= 2 bytes) while satisfying the size rule for low regtest
+    // heights. The BIP34 height check is a prefix match, so the trailing OP_0
+    // does not affect consensus.
+    CScript coinbase_script = CScript() << nHeight;
+    if (coinbase_script.size() + COINBASE_FLAGS.size() < 2) coinbase_script << OP_0;
+    mtxCoinbase.vin[0].scriptSig = coinbase_script + COINBASE_FLAGS;
+    assert(mtxCoinbase.vin[0].scriptSig.size() <= 100);
+    mtxCoinbase.vout[0].SetEmpty();
 
-    // Note that block.vtx[1], the coinstake, has already been created by CreateCoinStake on block and passed into this
-    // function. There is no point in going through this work to compose a complete block unless the CreateCoinStake
-    // succeeds. Note that the coinstake transaction here has not gone through the split/sidestake process nor have the MRC
-    // outputs been added, so there are currently two outputs on the coinstake, the empty one, and the reward return.
-    // We will need to add a reserved size placeholder for the fully built out coinstake, which will include the non-MRC
-    // output limit plus the number of MRC's intended to be bound to the block. This is done below using this size.
-    size_t coinstake_output_ser_size = GetSerializeSize(block.vtx[1].vout[1], SER_NETWORK, PROTOCOL_VERSION);
+    // Note that the coinstake has already been built by CreateCoinStake into mtxCoinstake and passed into this function.
+    // There is no point in going through this work to compose a complete block unless CreateCoinStake succeeds. The
+    // coinstake has not gone through the split/sidestake process nor have the MRC outputs been added, so there are
+    // currently two outputs on the coinstake, the empty one, and the reward return. It will be copied to block.vtx[1]
+    // after all mutations are complete. We will need to add a reserved size placeholder for the fully built out
+    // coinstake, which will include the non-MRC output limit plus the number of MRC's intended to be bound to the
+    // block. This is done below using this size.
+    size_t coinstake_output_ser_size = GetSerializeSize(mtxCoinstake.vout[1], SER_NETWORK, PROTOCOL_VERSION);
 
     // We need this to detect an MRC in the mempool that is from the staker (i.e. the staker is a researcher with an active
     // beacon). This could happen if they send an MRC and then stake right after.
@@ -355,9 +402,15 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
     // a transaction spammer can cheaply fill blocks using
     // 0-satoshi-fee transactions. It should be set above the real
     // cost to you of processing a transaction.
-    int64_t nMinTxFee = GetBaseFee(CoinBase);
-    if (gArgs.IsArgSet("-mintxfee"))
-        ParseMoney(gArgs.GetArg("-mintxfee", "dummy"), nMinTxFee);
+    //
+    // When -mintxfee is unset the floor is GetBaseFee of the COINBASE, not of
+    // each candidate. That is only equivalent because AcceptToMemoryPool
+    // rejects nVersion < 2, so every mempool transaction carries the same x10
+    // multiplier the default-constructed coinbase does. If that ever stops
+    // holding, take the base fee per candidate instead.
+    int64_t nMinTxFee = nMinerMinTxFee >= 0
+            ? nMinerMinTxFee
+            : GetBaseFee(CTransaction(mtxCoinbase));
 
     // Collect memory pool transactions into the block
     int64_t nFees = 0;
@@ -370,14 +423,16 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
         map<uint256, vector<COrphan*> > mapDependers;
 
         // This vector will be sorted into a priority queue:
-        std::vector<std::pair<double, CTransaction*>> vecPriority;
+        std::vector<BlockCandidate> vecPriority;
         vecPriority.reserve(mempool.mapTx.size());
 
         Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
 
-        for (auto& [_, tx] : mempool.mapTx)
+        for (const auto& [_, entry] : mempool.mapTx)
         {
-            if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight))
+            const CTransaction& tx = entry.GetTx();
+            // Finality is judged at the block's own time, as AcceptBlock judges it.
+            if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight, block.GetBlockTime()))
                 continue;
 
             // Double-check that contracts pass contextual validation again so
@@ -396,6 +451,72 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                     tx.GetHash().ToString());
 
                 continue;
+            }
+
+            // A claim rides in the coinbase, so one here would make this block
+            // invalid under v15 rules. Contract dispatch does not screen it --
+            // CLAIM has no handler and falls to the permissive one -- so the
+            // check above passes it.
+            //
+            // The mempool refuses these once v15 is live, but this cannot rely
+            // on that: a transaction accepted before the activation height is
+            // still sitting there afterwards. Dropping it costs nothing; keeping
+            // it costs the whole block.
+            if (IsV15Enabled(nHeight)) {
+                bool claim_outside_coinbase = false;
+
+                for (const auto& contract : tx.GetContracts()) {
+                    if (contract.m_type == GRC::ContractType::CLAIM) {
+                        claim_outside_coinbase = true;
+                        break;
+                    }
+                }
+
+                if (claim_outside_coinbase) {
+                    LogPrint(BCLog::LogFlags::MINER,
+                        "%s: claim contract outside the coinbase. Skipped tx %s",
+                        __func__,
+                        tx.GetHash().ToString());
+
+                    continue;
+                }
+            }
+
+            // The same argument, for the same reason, about MESSAGE contracts.
+            // They are rejected from the disable height, contract dispatch does
+            // not screen them either -- MESSAGE has no registry handler and falls
+            // to the permissive one, exactly as CLAIM does -- and the mempool
+            // cannot be relied on to have kept them out.
+            //
+            // This is belt and braces rather than the primary containment, and
+            // deliberately so. AcceptToMemoryPool now evaluates contracts at the
+            // height of the block a transaction would ENTER (validation.h), so one
+            // carrying a MESSAGE contract is admitted only while the tip is at
+            // disable_height - 2 or lower -- and such a transaction is still valid
+            // for the next block, so it can be mined normally. If it is not,
+            // connecting that block runs the sweep in ReorganizeChain, which
+            // retires it before any template at or above the disable height is
+            // built. Both of those have to hold for this guard to be unreachable,
+            // and the cost of being wrong is that the staker loses the block for
+            // someone else's transaction, so the check stays.
+            if (!IsMessageContractEnabled(nHeight)) {
+                bool has_message_contract = false;
+
+                for (const auto& contract : tx.GetContracts()) {
+                    if (contract.m_type == GRC::ContractType::MESSAGE) {
+                        has_message_contract = true;
+                        break;
+                    }
+                }
+
+                if (has_message_contract) {
+                    LogPrint(BCLog::LogFlags::MINER,
+                        "%s: message contract disabled at this height. Skipped tx %s",
+                        __func__,
+                        tx.GetHash().ToString());
+
+                    continue;
+                }
             }
 
             COrphan* porphan = nullptr;
@@ -433,9 +554,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                         porphan = &vOrphan.back();
                         LogPrint(BCLog::LogFlags::NOISY, "Orphan tx %s ",tx.GetHash().GetHex());
                     }
-                    mapDependers[txin.prevout.hash].push_back(porphan);
                     porphan->setDependsOn.insert(txin.prevout.hash);
-                    nTotalIn += mempool.mapTx[txin.prevout.hash].vout[txin.prevout.n].nValue;
+                    nTotalIn += mempool.mapTx.at(txin.prevout.hash).GetTx().vout[txin.prevout.n].nValue;
 
                     continue;
                 }
@@ -443,6 +563,15 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                 nTotalIn += nValueIn;
             }
             if (fMissingInputs) continue;
+
+            // Register the candidate with each pooled parent it waits for.
+            if (porphan)
+            {
+                for (const uint256& parent_hash : porphan->setDependsOn)
+                {
+                    mapDependers[parent_hash].push_back(porphan);
+                }
+            }
 
             unsigned int nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
 
@@ -456,15 +585,15 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                 total_fee += mrc.m_fee - mrc.m_fee * foundation_fee_fraction.GetNumerator()
                                                    / foundation_fee_fraction.GetDenominator();
             }
-            double dFeePerKb =  (double)total_fee / (double(nTxSize)/1000.0);
+            const FeeRate rate{total_fee, nTxSize};
 
             if (porphan)
             {
-                porphan->dFeePerKb = dFeePerKb;
+                porphan->rate = rate;
             }
             else
             {
-                vecPriority.push_back(std::make_pair(dFeePerKb, &tx));
+                vecPriority.push_back(BlockCandidate{rate, tx.GetHash(), &tx});
             }
         }
 
@@ -484,14 +613,15 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
         }
 
         int nBlockSigOps = 100;
+        unsigned int nMinTxFeeRejected = 0;
 
         std::make_heap(vecPriority.begin(), vecPriority.end());
 
         while (!vecPriority.empty())
         {
             // Take highest priority transaction off the priority queue:
-            double dFeePerKb = vecPriority.front().first;
-            CTransaction& tx = *(vecPriority.front().second);
+            const FeeRate rate = vecPriority.front().rate;
+            const CTransaction& tx = *vecPriority.front().tx;
 
             std::pop_heap(vecPriority.begin(), vecPriority.end());
             vecPriority.pop_back();
@@ -503,6 +633,46 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
             {
                 LogPrintf("Tx size too large for tx %s blksize %" PRIu64 ", tx size %" PRId64,
                           tx.GetHash().GetHex(), nBlockSize, nTxSize);
+                continue;
+            }
+
+            // Fee-rate floor from -mintxfee. Both sides are satoshi per 1000
+            // bytes -- see the "Fee-per-kilobyte amount considered the same as
+            // free" comment where nMinTxFee is set -- not absolute amounts.
+            //
+            // Restored here: 1421209a0 removed the free-transaction path and
+            // with it the only read of nMinTxFee, so the option went on being
+            // parsed from -mintxfee while nothing consumed it.
+            //
+            // At the default (GetBaseFee, 100000 sat/KB) this rejects nothing.
+            // Relay already requires (1 + bytes/1000) * MIN_TX_FEE * 10, and
+            // over every size AcceptToMemoryPool admits -- 1 to
+            // MAX_STANDARD_TX_SIZE-1, IsStandardTx being unconditional on that
+            // path -- the resulting rate stays above the floor. The margin is
+            // thinnest at the top: 100001 sat/KB at 99999 bytes, i.e. 1 sat/KB.
+            // The floor bites only when an operator raises the option.
+            //
+            // The check compares the candidate's exact FeeRate with the floor as
+            // a FeeRate over 1000 bytes, the same comparison the heap ranks by.
+            // As a double, a rate exactly at a raised floor could come out below
+            // it: 137751 sat over 340 bytes is exactly 405150 sat/KB, yet with
+            // 64-bit doubles (x86_64, ARM) it came out just under 405150. (The
+            // x87 unit of 32-bit x86 happens to get exactly 405150 there; it
+            // misrounds other pairs.) The option is a floor, so paying exactly
+            // the floor must pass. fees_tests pins that pair.
+            //
+            // Note this is stricter than the pre-1421209a0 check, which also
+            // required (nBlockSize + nTxSize >= nBlockMinSize) and so left a
+            // free area at the front of the block. nBlockMinSize went with the
+            // free-transaction path; the floor is unconditional now, which is
+            // what -mintxfee's documented meaning describes.
+            if (rate < FeeRate{nMinTxFee, 1000})
+            {
+                ++nMinTxFeeRejected;
+
+                LogPrint(BCLog::LogFlags::NOISY,
+                         "Not including tx %s: fee %" PRId64 " sat over %u bytes is below -mintxfee %" PRId64 " sat/KB",
+                         tx.GetHash().GetHex(), rate.fee, rate.size, nMinTxFee);
                 continue;
             }
 
@@ -527,7 +697,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
             map<uint256, CTxIndex> mapTestPoolTmp(mapTestPool);
             MapPrevTx mapInputs;
             bool fInvalid;
-            if (!FetchInputs(tx, txdb, mapTestPoolTmp, false, true, mapInputs, fInvalid))
+            CValidationState miner_state;
+            if (!FetchInputs(tx, miner_state, txdb, mapTestPoolTmp, false, true, mapInputs, fInvalid))
             {
                 LogPrint(BCLog::LogFlags::NOISY, "Unable to fetch inputs for tx %s ", tx.GetHash().GetHex());
                 continue;
@@ -540,9 +711,21 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                          "Not including tx %s  due to TxFees of %" PRId64 ", bare min fee is %" PRId64,
                          tx.GetHash().GetHex(), nTxFees, nMinFee);
 
-                // Since transactions are sorted by fee, the fee of rest must also be lower
-                // than required.
-                break;
+                // continue, not break. This compares an ABSOLUTE fee against
+                // an absolute threshold while the heap is ordered by fee RATE
+                // (FeeRate), and the two orders are not the same: a larger
+                // transaction popped later, at a lower rate, can pay more in
+                // total than this one and clear a threshold this one missed.
+                //
+                // The heap is not globally descending either. An orphan is
+                // pushed onto it mid-loop when its parent is included (see
+                // mapDependers below), so a transaction entering after this
+                // point can outrank everything already popped.
+                //
+                // The "sorted by fee" justification for breaking belonged to
+                // the fee-RATE check that 1421209a0 deleted, not to this one;
+                // it came along with the edit and has been wrong since.
+                continue;
             }
 
             nTxSigOps += GetP2SHSigOpCount(tx, mapInputs);
@@ -553,7 +736,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                 continue;
             }
 
-            if (!ConnectInputs(tx, txdb, mapInputs, mapTestPoolTmp, CDiskTxPos(1,1,1), pindexPrev, false, true))
+            if (!ConnectInputs(tx, miner_state, txdb, mapInputs, mapTestPoolTmp, CDiskTxPos(1,1,1), pindexPrev, false, true))
             {
                 LogPrint(BCLog::LogFlags::NOISY, "Unable to connect inputs for tx %s ",tx.GetHash().GetHex());
                 continue;
@@ -641,8 +824,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
 
             if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || gArgs.GetBoolArg("-printpriority"))
             {
-                LogPrintf("feerate %.1f GRC/KB txid %s",
-                       dFeePerKb, tx.GetHash().ToString());
+                LogPrintf("fee %" PRId64 " sat over %u bytes txid %s",
+                       rate.fee, rate.size, tx.GetHash().ToString());
             }
 
             // Add transactions that depend on this one to the priority queue
@@ -656,7 +839,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                         porphan->setDependsOn.erase(hash);
                         if (porphan->setDependsOn.empty())
                         {
-                            vecPriority.push_back(std::make_pair(porphan->dFeePerKb, porphan->ptx));
+                            vecPriority.push_back(BlockCandidate{porphan->rate, porphan->ptx->GetHash(), porphan->ptx});
                             std::push_heap(vecPriority.begin(), vecPriority.end());
                         }
                     }
@@ -664,22 +847,27 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
             }
         }
 
+        if (nMinTxFeeRejected > 0) {
+            LogPrintf("CreateNewBlock(): -mintxfee (%s/KB) excluded %u mempool transaction(s)",
+                      FormatMoney(nMinTxFee), nMinTxFeeRejected);
+        }
+
         if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || gArgs.GetBoolArg("-printpriority"))
             LogPrintf("CreateNewBlock(): total size %" PRIu64, nBlockSize);
     }
 
     //Add fees to coinbase
-    block.vtx[0].vout[0].nValue= nFees;
+    mtxCoinbase.vout[0].nValue= nFees;
 
     // Fill in header
     block.hashPrevBlock  = pindexPrev->GetBlockHash();
-    block.vtx[0].nTime=block.nTime;
+    mtxCoinbase.nTime=block.nTime;
 
     return true;
 }
 
 
-bool CreateCoinStake(CBlock &blocknew, CKey &key,
+bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
     vector<const CWalletTx*> &StakeInputs,
     CWallet &wallet, CBlockIndex* pindexPrev) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
@@ -688,12 +876,9 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
 
     int64_t CoinWeight;
     arith_uint256 StakeKernelHash;
-    CTxDB txdb("r");
     int64_t StakeWeightSum = 0;
-    double StakeValueSum = 0;
     int64_t StakeWeightMin = MAX_MONEY;
     int64_t StakeWeightMax = 0;
-    CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
 
     bool kernel_found = false;
 
@@ -703,7 +888,7 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
     txnew.vout.clear();
 
     // Choose coins to use
-    vector<pair<const CWalletTx*,unsigned int>> CoinsToStake;
+    std::vector<StakeCandidate> CoinsToStake;
     GRC::MinerStatus::ErrorFlags error_flag;
 
     // This will be used to calculate the staking efficiency.
@@ -716,7 +901,6 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
             txnew.nTime,
             blocknew.nVersion,
             StakeWeightSum,
-            StakeValueSum,
             0, // This should be set to zero for an unsuccessful iteration due to no stakeable coins.
             StakeWeightMax,
             GRC::CalculateStakeWeightV8(balance));
@@ -742,41 +926,41 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
                                     "pindex->nStakeModifier = %" PRId64,
                                     nHeight_mod, StakeModifier);
 
-    for (const auto& pcoin : CoinsToStake)
+    // The kernel target before the UTXO weight is the same for every coin.
+    const arith_uint320 base_kernel_target = GRC::GetKernelTarget(blocknew.nBits, txnew.nTime, pindexPrev);
+
+    for (const StakeCandidate& candidate : CoinsToStake)
     {
-        const CWalletTx &CoinTx = *pcoin.first; //transaction that produced this coin
-        unsigned int CoinTxN = pcoin.second; //index of this coin inside it
-
-        unsigned int block_time;
-
-        block_time = mapBlockIndex[CoinTx.hashBlock]->nTime;
-
-        StakeValueSum += CoinTx.vout[CoinTxN].nValue / (double) COIN;
+        const CWalletTx &CoinTx = *candidate.tx; //transaction that produced this coin
+        const unsigned int CoinTxN = candidate.n; //index of this coin inside it
 
         CoinWeight = GRC::CalculateStakeWeightV8(CoinTx, CoinTxN);
 
-        StakeKernelHash = UintToArith256(GRC::CalculateStakeHashV8(block_time, CoinTx, CoinTxN, txnew.nTime, StakeModifier));
+        StakeKernelHash = UintToArith256(GRC::CalculateStakeHashV8(candidate.block_time, CoinTx, CoinTxN, txnew.nTime,
+                                                                   StakeModifier));
 
-        arith_uint320 StakeTarget = arith_uint256().SetCompact(blocknew.nBits);
+        arith_uint320 StakeTarget = base_kernel_target;
         StakeTarget *= arith_uint320(CoinWeight);
         StakeWeightSum += CoinWeight;
         StakeWeightMin = std::min(StakeWeightMin, CoinWeight);
         StakeWeightMax = std::max(StakeWeightMax, CoinWeight);
-        double StakeKernelDiff = GRC::GetBlockDifficulty(StakeKernelHash.GetCompact())*CoinWeight;
+        // Per-coin detail, computed only when MINER logging is enabled.
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::MINER)) {
+            const double StakeKernelDiff = GRC::GetBlockDifficulty(StakeKernelHash.GetCompact()) * CoinWeight;
 
-        LogPrint(BCLog::LogFlags::MINER,
-                 "CreateCoinStake: V%d Time %d, Bits %u, Weight %" PRId64 "\n"
-                 " Stk %72s\n"
-                 " Trg %72s\n"
-                 " Diff %0.7f of %0.7f",
-                 blocknew.nVersion,
-                 txnew.nTime,
-                 blocknew.nBits,
-                 CoinWeight,
-                 StakeKernelHash.GetHex(),
-                 StakeTarget.GetHex(),
-                 StakeKernelDiff,
-                 GRC::GetBlockDifficulty(blocknew.nBits));
+            LogPrintf("CreateCoinStake: V%d Time %d, Bits %u, Weight %" PRId64 "\n"
+                      " Stk %72s\n"
+                      " Trg %72s\n"
+                      " Diff %0.7f of %0.7f",
+                      blocknew.nVersion,
+                      txnew.nTime,
+                      blocknew.nBits,
+                      CoinWeight,
+                      StakeKernelHash.GetHex(),
+                      StakeTarget.GetHex(),
+                      StakeKernelDiff,
+                      GRC::GetBlockDifficulty(blocknew.nBits));
+        }
 
         if (arith_uint320(StakeKernelHash) <= StakeTarget)
         {
@@ -823,7 +1007,7 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
             }
 
             txnew.vin.push_back(CTxIn(CoinTx.GetHash(), CoinTxN));
-            StakeInputs.push_back(pcoin.first);
+            StakeInputs.push_back(candidate.tx);
 
             int64_t nCredit = CoinTx.vout[CoinTxN].nValue;
 
@@ -836,14 +1020,13 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
 
             break;
         } // if (StakeKernelHash <= StakeTarget)
-    } // for (const auto& pcoin : CoinsToStake)
+    } // for (const StakeCandidate& candidate : CoinsToStake)
 
     g_miner_status.UpdateLastSearch(
         kernel_found,
         txnew.nTime,
         blocknew.nVersion,
         StakeWeightSum,
-        StakeValueSum,
         StakeWeightMin,
         StakeWeightMax,
         GRC::CalculateStakeWeightV8(balance));
@@ -853,8 +1036,9 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
     return kernel_found;
 }
 
-void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStakeSplit, bool &fEnableSideStaking,
-    int64_t &nMinStakeSplitValue, double &dEfficiency)
+void SplitCoinStakeOutput(CMutableTransaction& mtxCoinstake, CBlock &blocknew, int64_t &nReward,
+    bool &fEnableStakeSplit, bool &fEnableSideStaking,
+    int64_t &nMinStakeSplitValue, double &dEfficiency) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // When this function is called, CreateCoinStake and CreateGridcoinReward have already been called
     // and there will be a single coinstake output (besides the empty one) that has the combined stake + research
@@ -888,7 +1072,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
         return;
 
     // Record the script public key for the base coinstake so we can reuse.
-    CScript CoinStakeScriptPubKey = blocknew.vtx[1].vout[1].scriptPubKey;
+    CScript CoinStakeScriptPubKey = mtxCoinstake.vout[1].scriptPubKey;
 
     // The maximum number of outputs allowed on the coinstake txn is 3 for block version 9 and below and
     // 8 for 10 and above (excluding MRC outputs). The first one must be empty, so that gives 2 and 7 usable ones,
@@ -905,34 +1089,62 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // Initialize nOutputUsed at 1, because one is already used for the empty coinstake flag output.
     unsigned int nOutputsUsed = 1;
 
-    // If the number of sidestaking allocation entries exceeds nMaxSideStakeOutputs, then shuffle the vSideStakeAlloc
-    // to support sidestaking with more than eight entries. This is a super simple solution but has some disadvantages.
-    // If the person made a mistake and has the entries in the config file add up to more than 100%, then those entries
-    // resulting a cumulative total over 100% will always be excluded, not just randomly excluded, because the cumulative
-    // check is done in the order of the entries in the config file. This is not regarded as a big issue, because
-    // all of the entries are supposed to add up to less than or equal to 100%. Also when there are more than
-    // mMaxSideStakeOutput entries, the residual returned to the coinstake will vary when the entries are shuffled,
-    // because the total percentage of the selected entries will be randomized. No attempt to renormalize
-    // the percentages is done.
-    SideStakeAlloc mandatory_sidestakes
-        = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::MANDATORY, false);
-    SideStakeAlloc local_sidestakes
-        = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::LOCAL, false);
+    // Mandatory and local sidestake computation — only needed when sidestaking is active.
+    std::vector<GRC::BlockRewardRules::MandatorySidestakeSpec> mandatory_specs;
+    SideStakeAlloc local_sidestakes;
+    unsigned int nMandatoryOutputLimit = GetMandatorySideStakeOutputLimit(blocknew.nVersion);
 
-    if (mandatory_sidestakes.size() > GetMandatorySideStakeOutputLimit(blocknew.nVersion)) {
-        Shuffle(mandatory_sidestakes.begin(), mandatory_sidestakes.end(), FastRandomContext());
-    }
+    // The coinstake destination. Needed both for the mandatory sidestake spec below and by the
+    // voluntary allocation lambda, which suppresses a sidestake back to the staking address.
+    CTxDestination coinstake_dest;
+    bool have_coinstake_dest = ExtractDestination(CoinStakeScriptPubKey, coinstake_dest);
 
-    if (local_sidestakes.size() > nMaxSideStakeOutputs
-                                      - std::min<unsigned int>(GetMandatorySideStakeOutputLimit(blocknew.nVersion),
-                                                                                mandatory_sidestakes.size())) {
-        Shuffle(local_sidestakes.begin(), local_sidestakes.end(), FastRandomContext());
+    if (fEnableSideStaking) {
+        // Compute the mandatory sidestake spec using BlockRewardRules — the shared invariant computation that
+        // both miner and validator consume. This replaces the separate ActiveSideStakeEntries() call and manual
+        // dust/address filtering that previously lived only here, eliminating the class of drift bugs where the
+        // miner and validator made different eligibility decisions (see #2848).
+        if (!have_coinstake_dest) {
+            LogPrintf("WARN: SplitCoinStakeOutput: could not extract coinstake destination, "
+                      "skipping mandatory sidestake spec computation.");
+        }
+
+        if (have_coinstake_dest) {
+            GRC::BlockRewardRules rules(pindexBest, blocknew.nVersion, blocknew.nTime);
+
+            mandatory_specs = GRC::BlockRewardRules::FilterEligible(
+                rules.ComputeEligibleMandatorySidestakes(coinstake_dest, nReward));
+        }
+
+        // Shuffle when over the limit — non-deterministic selection. The validator cannot reproduce the shuffle
+        // and doesn't need to; it matches against the eligible set regardless of order.
+        if (mandatory_specs.size() > nMandatoryOutputLimit) {
+            Shuffle(mandatory_specs.begin(), mandatory_specs.end(), FastRandomContext());
+        }
+
+        // If the number of voluntary sidestaking allocation entries exceeds the remaining output capacity, then
+        // shuffle the list to support sidestaking with more than the available number of entries. This is a super
+        // simple solution but has some disadvantages. If the person made a mistake and has the entries in the config
+        // file add up to more than 100%, then those entries resulting in a cumulative total over 100% will always be
+        // excluded, not just randomly excluded, because the cumulative check is done in the order of the entries in
+        // the config file. This is not regarded as a big issue, because all of the entries are supposed to add up to
+        // less than or equal to 100%. Also when there are more than the available number of entries, the residual
+        // returned to the coinstake will vary when the entries are shuffled, because the total percentage of the
+        // selected entries will be randomized. No attempt to renormalize the percentages is done.
+        local_sidestakes
+            = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::LOCAL, false);
+
+        if (local_sidestakes.size() > nMaxSideStakeOutputs
+                                          - std::min<unsigned int>(nMandatoryOutputLimit,
+                                                                   mandatory_specs.size())) {
+            Shuffle(local_sidestakes.begin(), local_sidestakes.end(), FastRandomContext());
+        }
     }
 
     // Initialize remaining stake output value to the total value of output for stake, which also includes
     // (interest or CBR), research rewards, and fees to the miner from the transactions in the block. vout elements at
     // index entries higher than 1 are MRC outputs.
-    int64_t nRemainingStakeOutputValue = blocknew.vtx[1].vout[1].nValue;
+    int64_t nRemainingStakeOutputValue = mtxCoinstake.vout[1].nValue;
 
     // We need the input value later.
     int64_t nInputValue = nRemainingStakeOutputValue - nReward;
@@ -941,15 +1153,16 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // also contains MRC outputs if MRC requests were bound in the block and validated by CreateMRC. Note that the additional
     // reward to the staker due from the allocated fees from MRC have already been added to the coinstake output. This was
     // the critical step to ensure the splitting is done correctly.
-    std::vector<CTxOut> orig_coinstake_vout = blocknew.vtx[1].vout;
+    std::vector<CTxOut> orig_coinstake_vout = mtxCoinstake.vout;
 
-    blocknew.vtx[1].vout.clear();
+    mtxCoinstake.vout.clear();
 
     CScript SideStakeScriptPubKey;
     GRC::Allocation SumAllocation;
 
-    // Lambda for sidestake allocation. This iterates through the provided sidestake vector until either all elements processed,
-    // the maximum number of sidestake outputs is reached via the provided output_limit, or accumulated allocation will exceed 100%.
+    // Lambda for voluntary sidestake allocation. This iterates through the provided sidestake vector until either all
+    // elements are processed, the maximum number of sidestake outputs is reached via the provided output_limit, or
+    // accumulated allocation will exceed 100%. Mandatory sidestakes are allocated separately above via the shared spec.
     const auto allocate_sidestakes = [&](SideStakeAlloc sidestakes, unsigned int output_limit) {
         for (auto iterSideStake = sidestakes.begin();
              (iterSideStake != sidestakes.end())
@@ -967,13 +1180,9 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             }
 
             // Do not process a distribution that would result in an output less than 1 CENT. This will flow back into
-            // the coinstake below. Prevents dust build-up.
-            //
-            // This is extremely important for mandatory sidestakes when validating this on a receiving node.
-            // This allows the validator to retrace the dust elimination for the coinstake mandatory sidestakes, and
-            // verify that EITHER the residual number of mandatory outputs after dust elimination is less than or equal to the
-            // maximum, in which case they all must be present and valid, OR, the residual number of outputs is greater than the
-            // maximum, which means that the maximum number of mandatory outputs MUST be present and valid.
+            // the coinstake below. Prevents dust build-up. For mandatory sidestakes, dust elimination is handled by
+            // the shared spec (ComputeEligibleMandatorySidestakes) above — this check applies to voluntary sidestakes
+            // only.
             //
             // Note that nOutputsUsed is NOT incremented if the output is suppressed by this check.
             if (allocation * nReward < CENT)
@@ -1002,7 +1211,14 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             // case. The coins should flow down to the coinstake outputs and be returned there. This will also simplify the
             // display logic in the UI, because it makes the sidestake and coinstake outputs disjoint from an address point
             // of view.
-            if (SideStakeScriptPubKey == CoinStakeScriptPubKey)
+            //
+            // The comparison MUST be on the destination, not the script. SideStakeScriptPubKey is P2PKH
+            // (SetDestination above) while CreateCoinStake converts a TX_PUBKEYHASH kernel to P2PK, so a script
+            // comparison never matched and this suppression silently did nothing: a voluntary sidestake back to
+            // the staking address was emitted anyway, leaving the coinstake and sidestake outputs sharing an
+            // address after all. Mandatory sidestakes already compare destinations
+            // (BlockRewardRules::ComputeEligibleMandatorySidestakes).
+            if (have_coinstake_dest && address == coinstake_dest)
                 continue;
 
             int64_t nSideStake = 0;
@@ -1017,7 +1233,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
                 // a match on the output flowing down.
                 nSideStake = nRemainingStakeOutputValue - nInputValue;
 
-            blocknew.vtx[1].vout.push_back(CTxOut(nSideStake, SideStakeScriptPubKey));
+            mtxCoinstake.vout.push_back(CTxOut(nSideStake, SideStakeScriptPubKey));
 
             LogPrintf("SplitCoinStakeOutput: create sidestake UTXO %i value %f to address %s",
                       nOutputsUsed,
@@ -1031,9 +1247,51 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     };
 
     if (fEnableSideStaking) {
-        // Iterate through mandatory SideStake vector until either all elements processed, the maximum number of
-        // mandatory sidestake outputs is reached, or accumulated allocation will exceed 100%.
-        allocate_sidestakes(mandatory_sidestakes, GetMandatorySideStakeOutputLimit(blocknew.nVersion));
+        // Allocate mandatory sidestakes from the shared spec. The spec entries have pre-computed required_amount
+        // values from the same computation the validator uses, so miner and validator are guaranteed to agree on
+        // eligibility and amounts. The 100% allocation cap and output limit are still enforced here to integrate
+        // with the voluntary sidestake flow that follows.
+        {
+            unsigned int mandatory_count = 0;
+
+            for (const auto& spec : mandatory_specs) {
+                if (mandatory_count >= nMandatoryOutputLimit) break;
+
+                if (SumAllocation + spec.alloc > 1) {
+                    LogPrintf("WARN: SplitCoinStakeOutput: mandatory allocation percentage over 100 percent, "
+                              "ending mandatory sidestake allocations.");
+                    break;
+                }
+
+                CScript script;
+                script.SetDestination(spec.dest);
+
+                int64_t nSideStake = 0;
+
+                // For allocations ending less than 100% assign using the spec's pre-computed amount.
+                if (SumAllocation + spec.alloc < 1) {
+                    nSideStake = spec.required_amount;
+                }
+                // Handle the final sidestake differently when it brings total allocation to exactly 100%,
+                // because testing showed in corner cases the output return to the staking address could be
+                // off by one Halford.
+                else if (SumAllocation + spec.alloc == 1) {
+                    nSideStake = nRemainingStakeOutputValue - nInputValue;
+                }
+
+                mtxCoinstake.vout.push_back(CTxOut(nSideStake, script));
+
+                LogPrintf("SplitCoinStakeOutput: create mandatory sidestake UTXO %i value %f to address %s",
+                          nOutputsUsed,
+                          CoinToDouble(nSideStake),
+                          EncodeDestination(spec.dest));
+
+                SumAllocation += spec.alloc;
+                nRemainingStakeOutputValue -= nSideStake;
+                nOutputsUsed++;
+                ++mandatory_count;
+            }
+        }
 
         // Iterate through local SideStake vector until either all elements processed, the maximum number of
         // sidestake outputs is reached, or accumulated allocation will exceed 100%.
@@ -1065,7 +1323,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
         int64_t nSumStakeOutputValue = 0;
         for (unsigned int i = 1; i < nSplitStakeOutputs; i++)
         {
-            blocknew.vtx[1].vout.push_back(CTxOut(nActualStakeOutputValue, CoinStakeScriptPubKey));
+            mtxCoinstake.vout.push_back(CTxOut(nActualStakeOutputValue, CoinStakeScriptPubKey));
             LogPrintf("SplitCoinStakeOutput: create stake UTXO %i value %f", nOutputsUsed,
                       CoinToDouble(nActualStakeOutputValue));
             nOutputsUsed++;
@@ -1075,14 +1333,14 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
         // so far, to recover anything lost from rounding. This will be a very small difference from the others.
         // The reason we go through this trouble is that integer division rounds down, and we don't even want
         // to have the wallet lose 1 Halford.
-        blocknew.vtx[1].vout.push_back(CTxOut((nRemainingStakeOutputValue - nSumStakeOutputValue), CoinStakeScriptPubKey));
+        mtxCoinstake.vout.push_back(CTxOut((nRemainingStakeOutputValue - nSumStakeOutputValue), CoinStakeScriptPubKey));
         LogPrintf("SplitCoinStakeOutput: create stake UTXO %i value %f", nOutputsUsed,
                   CoinToDouble(nRemainingStakeOutputValue - nSumStakeOutputValue));
     }
     else
     {
         // Stake splitting flag is false, so just push back a single output with the remaining output value.
-        blocknew.vtx[1].vout.push_back(CTxOut(nRemainingStakeOutputValue, CoinStakeScriptPubKey));
+        mtxCoinstake.vout.push_back(CTxOut(nRemainingStakeOutputValue, CoinStakeScriptPubKey));
     }
 
     // Now, the outputs are in the wrong order. We had to do the rewards distribution first
@@ -1091,13 +1349,13 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // One of the coinstake outputs MUST be at vout[1] to pass block validation, so we will
     // add the empty one at the end. And then use std::reverse to reverse vout.begin() to vout.end().
     // This will put the correct vout[0] and vout[1] in the right place.
-    blocknew.vtx[1].vout.push_back(CTxOut(0, CScript()));
-    std::reverse(blocknew.vtx[1].vout.begin(), blocknew.vtx[1].vout.end());
+    mtxCoinstake.vout.push_back(CTxOut(0, CScript()));
+    std::reverse(mtxCoinstake.vout.begin(), mtxCoinstake.vout.end());
 
     // Add the MRC outputs back now that the splitting/sidestaking is done. We start at 2, because the empty output and the
     // original unsplit coinstake have already been handled above.
     for (unsigned int i = 2; i < orig_coinstake_vout.size(); ++i) {
-        blocknew.vtx[1].vout.push_back(orig_coinstake_vout[i]);
+        mtxCoinstake.vout.push_back(orig_coinstake_vout[i]);
     }
 
     // The final state here of the coinstake blocknew.vtx[1].vout is
@@ -1124,7 +1382,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // MRC output 1 is always to the foundation (it is essentially a sidestake) and represents a cut of the MRC fees.
 }
 
-unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency)
+unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     int64_t nDesiredStakeOutputValue = 0;
     unsigned int nStakeOutputs = 1;
@@ -1160,22 +1418,47 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
 bool SignStakeBlock(CBlock &block, CKey &key,
                     vector<const CWalletTx*> &StakeInputs, CWallet *pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    //Sign the coinstake transaction
+    //Sign the coinstake transaction. Post-F3 CTransaction fields are const, so
+    //sign on a local CMutableTransaction and copy back when complete.
+    CMutableTransaction mtxCoinstake(block.vtx[1]);
     unsigned nIn = 0;
     for (auto const& pcoin : StakeInputs)
     {
-        if (!SignSignature(*pwallet, *pcoin, block.vtx[1], nIn++))
+        if (!SignSignature(*pwallet, *pcoin, mtxCoinstake, nIn++))
         {
             return error("SignStakeBlock: failed to sign coinstake");
         }
     }
+    block.vtx[1] = CTransaction(std::move(mtxCoinstake));
 
     // Researcher claim signatures depend on the coinstake transaction, so we
-    // sign claims after we sign the coinstake:
-    //
-    if (!TrySignClaim(pwallet, block.GetClaim(), block)) {
+    // sign claims after we sign the coinstake. The claim lives inside
+    // vtx[0].vContracts[0] (for v2+ blocks). CTransaction fields are const
+    // and the transaction hash is cached at construction time, so mutating
+    // the claim in place via const_cast (as the pre-F3 code did) leaves
+    // vtx[0].GetHash() stale and produces a merkle root on the wire that
+    // does not match the serialized content. Instead, pull a copy of the
+    // claim, sign the copy, and rebuild vtx[0] with the signed claim so
+    // the cached hash reflects the final on-wire content.
+    assert(!block.vtx[0].vContracts.empty());
+    GRC::Claim signed_claim = block.PullClaim();
+    if (!TrySignClaim(pwallet, signed_claim, block)) {
         return error("%s: failed to sign claim", __func__);
     }
+
+    CMutableTransaction mtxCoinbase(block.vtx[0]);
+    const uint32_t contract_version = mtxCoinbase.vContracts[0].m_version;
+    mtxCoinbase.vContracts[0] = GRC::MakeContract<GRC::Claim>(
+        contract_version,
+        GRC::ContractAction::ADD,
+        std::move(signed_claim));
+    block.vtx[0] = CTransaction(std::move(mtxCoinbase));
+
+    // The lazy claim cache on CBlock is stale after the rebuild above —
+    // GetClaim() on the post-assignment block would still be correct for
+    // v2+ blocks (it reads vContracts[0] directly), but resetting it is
+    // the defensive move in case legacy v1 paths ever populate it.
+    block.m_claim_contract_cache = GRC::Contract();
 
     //Sign the whole block
     block.hashMerkleRoot = BlockMerkleRoot(block);
@@ -1187,27 +1470,60 @@ bool SignStakeBlock(CBlock &block, CKey &key,
     return true;
 }
 
-void AddSuperblockContractOrVote(CBlock& blocknew)
+//! Explicit superblock staged by the regtest-only generatesuperblock RPC.
+//! Consumed exactly once by the next AddSuperblockContractOrVote call.
+static std::optional<GRC::Superblock> g_regtest_staged_superblock GUARDED_BY(cs_main);
+
+void StageRegtestSuperblock(GRC::Superblock superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    if (OutOfSyncByAge()) {
-        LogPrintf("AddSuperblockContractOrVote: Out of sync.");
-        return;
-    }
+    assert(Params().IsMockableChain()); // LINT-OK-ASSERT: regtest-only entry guard, unreachable via the RPC gate; abort beats staging a synthetic superblock on a live chain
+    g_regtest_staged_superblock = std::move(superblock);
+}
 
-    if (!GRC::Quorum::SuperblockNeeded(blocknew.nTime)) {
-        LogPrintf("AddSuperblockContractOrVote: Not needed.");
-        return;
-    }
+void AddSuperblockContractOrVote(CMutableTransaction& mtxCoinbase, int64_t nBlockTime) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    GRC::Superblock superblock;
 
-    GRC::Superblock superblock = GRC::Quorum::CreateSuperblock();
+    if (Params().IsMockableChain()) {
+        // Under -regtest, the only path to a superblock is the explicit
+        // `generatesuperblock` RPC. Scrapers are disabled, so auto-attach has
+        // nothing to attach: consume a staged superblock if the RPC left one,
+        // and otherwise stay silent exactly as before, so blocks produced by
+        // the deterministic staker carry no synthetic quorum payloads.
+        if (!g_regtest_staged_superblock) {
+            return;
+        }
+
+        superblock = std::move(*g_regtest_staged_superblock);
+        g_regtest_staged_superblock.reset();
+    } else {
+        if (OutOfSyncByAge()) {
+            LogPrintf("AddSuperblockContractOrVote: Out of sync.");
+            return;
+        }
+
+        if (!GRC::Quorum::SuperblockNeeded(nBlockTime)) {
+            LogPrintf("AddSuperblockContractOrVote: Not needed.");
+            return;
+        }
+
+        superblock = GRC::Quorum::CreateSuperblock();
+    }
 
     if (!superblock.WellFormed()) {
         LogPrintf("AddSuperblockContractOrVote: Local contract empty.");
         return;
     }
 
-    // TODO: fix the const cast:
-    GRC::Claim& claim = const_cast<GRC::Claim&>(blocknew.GetClaim());
+    // Re-stamp the greylist record anchored at the block being created (no-op below the
+    // redesign gate). The cached contract can have been built at an earlier tip; the record
+    // must carry the ONE anchor a validator can recover -- the containing block. Verified
+    // safe here: StakeBlock.nTime is final before this call, and the quorum hash excludes
+    // m_project_status, so re-stamping cannot change the contract hash other nodes match.
+    GRC::GetAutoGreylistCache()->StampProjectStatus(superblock, pindexBest->nHeight + 1,
+                                                    nBlockTime, pindexBest);
+
+    GRC::Claim claim = mtxCoinbase.vContracts[0].CopyPayloadAs<GRC::Claim>();
 
     claim.m_quorum_hash = superblock.GetHash();
     claim.m_superblock.Replace(std::move(superblock));
@@ -1215,17 +1531,24 @@ void AddSuperblockContractOrVote(CBlock& blocknew)
     LogPrintf(
         "AddSuperblockContractOrVote: Added our Superblock (size %" PRIszu ").",
         GetSerializeSize(claim.m_superblock, SER_NETWORK, 1));
+
+    mtxCoinbase.vContracts[0] = GRC::MakeContract<GRC::Claim>(
+        mtxCoinbase.vContracts[0].m_version,
+        GRC::ContractAction::ADD,
+        std::move(claim));
 }
 
 bool CreateGridcoinReward(
+        CMutableTransaction& mtxCoinbase,
+        CMutableTransaction& mtxCoinstake,
         CBlock &blocknew,
         CBlockIndex* pindexPrev,
         int64_t &nReward,
         GRC::Claim& claim) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Remove fees from coinbase:
-    int64_t nFees = blocknew.vtx[0].vout[0].nValue;
-    blocknew.vtx[0].vout[0].SetEmpty();
+    int64_t nFees = mtxCoinbase.vout[0].nValue;
+    mtxCoinbase.vout[0].SetEmpty();
 
     const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
 
@@ -1278,7 +1601,7 @@ bool CreateGridcoinReward(
     claim.m_client_version = FormatFullVersion().substr(0, GRC::Claim::MAX_VERSION_SIZE);
     claim.m_organization = gArgs.GetArg("-org", "").substr(0, GRC::Claim::MAX_ORGANIZATION_SIZE);
 
-    blocknew.vtx[1].vout[1].nValue += nReward;
+    mtxCoinstake.vout[1].nValue += nReward;
 
     return true;
 }
@@ -1290,11 +1613,22 @@ bool IsMiningAllowed(CWallet *pwallet)
         g_miner_status.AddError(GRC::MinerStatus::WALLET_LOCKED);
     }
 
-    if (fDevbuildCripple) {
+    if (GetDevbuildCripple()) {
         g_miner_status.AddError(GRC::MinerStatus::TESTNET_ONLY);
     }
 
-    if (vNodes.size() < GetMinimumConnectionsRequiredForStaking() || (!fTestNet && IsInitialBlockDownload())) {
+    // Connection count via the CConnman node-access API (issue #2558 PR 9a);
+    // GetNodeCount takes m_nodes_mutex internally, avoiding the TSan race with the
+    // ThreadSocketHandler / connection-accept writers. g_connman is null only
+    // before StartNode / after shutdown, where zero peers is the correct gate.
+    size_t numNodes = g_connman ? g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
+    // On regtest (IsMockableChain) a solo node must be able to stake without peers
+    // or a synced tip, so functional tests can drive the background staker
+    // deterministically (e.g. the stakelimit height ceiling). Skip the peer-count /
+    // IBD OFFLINE gate there only; main/testnet keep the full requirement.
+    if (!Params().IsMockableChain()
+            && (numNodes < GetMinimumConnectionsRequiredForStaking()
+                || (!OnTestnet() && IsInitialBlockDownload()))) {
         g_miner_status.AddError(GRC::MinerStatus::OFFLINE);
     }
 
@@ -1305,9 +1639,41 @@ bool IsMiningAllowed(CWallet *pwallet)
     return g_miner_status.StakingEnabled();
 }
 
+// Returns the efficiency-optimal post-stake UTXO size for the current network difficulty,
+// reading -stakingefficiency and -minstakesplitvalue (with their clamps and floors) from the
+// config regardless of whether -enablestakesplit is set. The effective minimum stake split
+// value (in Halfords) and efficiency are returned in the out-params.
+int64_t GetOptimalStakeSplitValue(int64_t& nMinStakeSplitValue, double& dEfficiency) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    // Pull efficiency for UTXO staking from config, but constrain to the interval [0.75, 0.98]. Use default of 0.90.
+    dEfficiency = (double)gArgs.GetArg("-stakingefficiency", 90) / 100;
+    if (dEfficiency > 0.98)
+        dEfficiency = 0.98;
+    else if (dEfficiency < 0.75)
+        dEfficiency = 0.75;
+
+    // Pull Minimum Post Stake UTXO Split Value from config or command line parameter.
+    // Default to 800 and do not allow it to be specified below 800 GRC.
+    nMinStakeSplitValue = max(gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC)
+                          * COIN;
+
+    // For the definition of the constant G, please see
+    // https://docs.google.com/document/d/1OyuTwdJx1Ax2YZ42WYkGn_UieN0uY13BTlA5G5IAN00/edit?usp=sharing
+    // Refer to page 5 for G. This link is a draft of an upcoming bluepaper section.
+    const double G = 9942.2056;
+
+    // Desired UTXO size post stake based on the efficiency and difficulty, but do not allow to go below
+    // the MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
+    // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
+    // equation (27) on page 10 as a reference for the below formula.
+    int64_t nDesiredStakeOutputValue = G * GRC::GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
+
+    return max(nMinStakeSplitValue, nDesiredStakeOutputValue);
+}
+
 // This function parses the config file for the directives for stake splitting. It is used
 // in StakeMiner for the miner loop and also called by rpc getstakinginfo.
-bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue)
+bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Parse StakeSplit and SideStaking flags.
     bool fEnableStakeSplit = gArgs.GetBoolArg("-enablestakesplit");
@@ -1316,33 +1682,10 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
     // If stake output splitting is enabled, determine efficiency and minimum stake split value.
     if (fEnableStakeSplit)
     {
-        // Pull efficiency for UTXO staking from config, but constrain to the interval [0.75, 0.98]. Use default of 0.90.
-        dEfficiency = (double)gArgs.GetArg("-stakingefficiency", 90) / 100;
-        if (dEfficiency > 0.98)
-            dEfficiency = 0.98;
-        else if (dEfficiency < 0.75)
-            dEfficiency = 0.75;
+        nDesiredStakeOutputValue = GetOptimalStakeSplitValue(nMinStakeSplitValue, dEfficiency);
 
         LogPrint(BCLog::LogFlags::MINER, "StakeMiner: dEfficiency = %f", dEfficiency);
-
-        // Pull Minimum Post Stake UTXO Split Value from config or command line parameter.
-        // Default to 800 and do not allow it to be specified below 800 GRC.
-        nMinStakeSplitValue = max(gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC)
-                              * COIN;
-
         LogPrint(BCLog::LogFlags::MINER, "StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));
-
-        // For the definition of the constant G, please see
-        // https://docs.google.com/document/d/1OyuTwdJx1Ax2YZ42WYkGn_UieN0uY13BTlA5G5IAN00/edit?usp=sharing
-        // Refer to page 5 for G. This link is a draft of an upcoming bluepaper section.
-        const double G = 9942.2056;
-
-        // Desired UTXO size post stake based on passed in efficiency and difficulty, but do not allow to go below
-        // passed in MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
-        // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
-        // equation (27) on page 10 as a reference for the below formula.
-        nDesiredStakeOutputValue = G * GRC::GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
-        nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
     }
 
     return fEnableStakeSplit;
@@ -1363,10 +1706,16 @@ void StakeMiner(CWallet *pwallet)
     std::string function = __func__;
     function += ": ";
 
-    while (!fShutdown)
+    while (!ShutdownInProgress())
     {
         // nMinStakeSplitValue and dEfficiency are out parameters.
-        bool fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency, nDesiredStakeOutputValue);
+        // cs_main is required for the GetAverageDifficulty(160) lookup inside;
+        // scope it tightly so the MilliSleep below doesn't hold the lock.
+        bool fEnableStakeSplit;
+        {
+            LOCK(cs_main);
+            fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency, nDesiredStakeOutputValue);
+        }
 
         // If the vSideStakeAlloc is not empty, then set fEnableSideStaking to true. Note that vSideStakeAlloc will not be empty
         // if non-zero allocation mandatory sidestakes are set OR local sidestaking is turned on by the -enablesidestaking config
@@ -1376,6 +1725,25 @@ void StakeMiner(CWallet *pwallet)
         // wait for next round
         if (!MilliSleep(nMinerSleep)) return;
 
+        // Regtest stakelimit (Particl-analog): pause once chain height reaches the
+        // limit. Keep looping so the thread can resume as soon as the limit is
+        // raised. Only consulted on chains where the RPC is reachable; on
+        // mainnet/testnet the global stays at 0 and this branch is no-op.
+        // nBestHeight is GUARDED_BY(cs_main); read the snapshot under the lock.
+        if (Params().IsMockableChain()) {
+            const int limit = g_stakelimit_height.load(std::memory_order_relaxed);
+            if (limit > 0) {
+                int height_now;
+                {
+                    LOCK(cs_main);
+                    height_now = nBestHeight;
+                }
+                if (height_now >= limit) {
+                    continue;
+                }
+            }
+        }
+
         g_timer.InitTimer("miner", LogInstance().WillLogCategory(BCLog::LogFlags::MISC));
 
         //clear miner messages
@@ -1384,6 +1752,7 @@ void StakeMiner(CWallet *pwallet)
         if (!IsMiningAllowed(pwallet))
         {
             g_miner_status.ClearLastSearch();
+            SetClockWarningStaking(false);
             continue;
         }
 
@@ -1401,33 +1770,39 @@ void StakeMiner(CWallet *pwallet)
 
         // * Create a bare block
 
-        // Block version transition handling. The other transition handling
-        // for block versions prior to v13 have been removed, because no blocks
-        // of an earlier version than v13 can be staked now.
-        if (!IsV13Enabled(pindexPrev->nHeight + 1)) {
-            StakeBlock.nVersion = 12;
-        } else if (!IsV14Enabled(pindexPrev->nHeight + 1)) {
-            StakeBlock.nVersion = 13;
+        StakeBlock.nVersion = ComputeBlockVersion(pindexPrev->nHeight + 1);
+
+        const int64_t adjusted_now = GetAdjustedTime();
+        StakeBlock.nTime = GRC::GetStakeTime(pindexPrev, adjusted_now);
+
+        // From v15 the stamp is lifted to parent - 48 when this node's clock is behind the parent. More than 96 s
+        // behind, the lifted stamp is outside this node's own acceptance window and the block would be rejected
+        // locally, so skip the attempt until the clock catches up.
+        if (IsV15Enabled(pindexPrev->nHeight + 1)
+            && CheckBlockTime(StakeBlock.nTime, pindexPrev->GetBlockTime(), adjusted_now, true) != BlockTimeCheck::OK) {
+            LogPrint(BCLog::LogFlags::MINER, "%s: clock too far behind the last block to stake on it", __func__);
+            SetClockWarningStaking(true);
+            continue;
         }
 
-        StakeBlock.nTime = GetAdjustedTime();
         StakeBlock.nNonce = 0;
         StakeBlock.nBits = GRC::GetNextTargetRequired(pindexPrev);
         StakeBlock.vtx.resize(2);
-        //tx 0 is coin_base
-        CTransaction &StakeTX = StakeBlock.vtx[1]; //tx 1 is coin_stake
+
+        CMutableTransaction mtxCoinstake;
 
         // * Try to create a CoinStake transaction
         CKey BlockKey;
         vector<const CWalletTx*> StakeInputs;
 
-        bool createcoinstake_success = CreateCoinStake(StakeBlock, BlockKey, StakeInputs, *pwallet, pindexPrev);
+        bool createcoinstake_success = CreateCoinStake(StakeBlock, mtxCoinstake, BlockKey, StakeInputs, *pwallet, pindexPrev);
+        SetClockWarningStaking(g_miner_status.StakingActive());
 
         g_timer.GetTimes(function + "CreateCoinStake", "miner");
 
         if (!createcoinstake_success) continue;
 
-        StakeBlock.nTime = StakeTX.nTime;
+        StakeBlock.nTime = mtxCoinstake.nTime;
 
         // * create rest of the block. Note that there is a little catch-22 here, because to be entirely proper, for block
         // sizing, CreateGridcoinReward and the SplitCoinstakeOutput should be done first because more outputs may be
@@ -1435,14 +1810,15 @@ void StakeMiner(CWallet *pwallet)
         // current order of this is fine, because we are using MAX_BLOCK_SIZE_GEN/2 as default, and in any case we clamp
         // to MAX_BLOCK_SIZE - 1000, which covers the little extra space taken by the up to six additional outputs allowed
         // for sidestaking/stakesplitting and 5 for MRC payments.
-        if (!CreateRestOfTheBlock(StakeBlock, pindexPrev, mrc_map)) continue;
+        CMutableTransaction mtxCoinbase;
+        if (!CreateRestOfTheBlock(StakeBlock, mtxCoinbase, mtxCoinstake, pindexPrev, mrc_map)) continue;
 
         LogPrintf("INFO: %s: created rest of the block", __func__);
 
         // * add Gridcoin reward to coinstake, fill-in nReward
         int64_t nReward = 0;
         GRC::Claim claim;
-        if (!CreateGridcoinReward(StakeBlock, pindexPrev, nReward, claim)) continue;
+        if (!CreateGridcoinReward(mtxCoinbase, mtxCoinstake, StakeBlock, pindexPrev, nReward, claim)) continue;
 
         g_timer.GetTimes(function + "CreateGridcoinReward", "miner");
 
@@ -1453,24 +1829,30 @@ void StakeMiner(CWallet *pwallet)
         // * Add MRC outputs to coinstake. This has to be done before the coinstake splitting/sidestaking, because
         // Some of the MRC fees go to the miner as part of the reward, and this affects the SplitCoinStakeOutput calculation.
         // Note that nReward here now includes the mrc fees to the staker.
-        if (!CreateMRCRewards(StakeBlock, mrc_map, mrc_tx_map, nReward, claim_contract_version, claim, pwallet)) continue;
+        if (!CreateMRCRewards(mtxCoinbase, mtxCoinstake, StakeBlock, mrc_map, mrc_tx_map, nReward, claim_contract_version, claim, pwallet)) continue;
 
         g_timer.GetTimes(function + "CreateMRC", "miner");
 
         LogPrintf("INFO: %s: added MRC reward outputs to coinstake", __func__);
 
+        AddSuperblockContractOrVote(mtxCoinbase, StakeBlock.nTime);
+
+        g_timer.GetTimes(function + "AddSuperblockContractOrVote", "miner");
+
+        // Copy back coinbase AFTER CreateMRCRewards and AddSuperblockContractOrVote
+        StakeBlock.vtx[0] = CTransaction(mtxCoinbase);
+
         // * If argument is supplied desiring stake output splitting or side staking, then call SplitCoinStakeOutput.
         if (fEnableStakeSplit || fEnableSideStaking)
-            SplitCoinStakeOutput(StakeBlock, nReward, fEnableStakeSplit, fEnableSideStaking,
+            SplitCoinStakeOutput(mtxCoinstake, StakeBlock, nReward, fEnableStakeSplit, fEnableSideStaking,
                                  nMinStakeSplitValue, dEfficiency);
+
+        // Copy back coinstake AFTER SplitCoinStakeOutput
+        StakeBlock.vtx[1] = CTransaction(mtxCoinstake);
 
         g_timer.GetTimes(function + "SplitCoinStakeOutput", "miner");
 
         LogPrintf("INFO: %s: performed stakesplitting/sidestaking", __func__);
-
-        AddSuperblockContractOrVote(StakeBlock);
-
-        g_timer.GetTimes(function + "AddSuperblockContractOrVote", "miner");
 
         // * sign boinchash, coinstake, wholeblock
         if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) continue;
@@ -1504,7 +1886,8 @@ void StakeMiner(CWallet *pwallet)
         }
 
         // * delegate to ProcessBlock
-        if (!ProcessBlock(nullptr, &StakeBlock, true)) {
+        CValidationState stake_state;
+        if (!ProcessBlock(nullptr, &StakeBlock, true, stake_state)) {
             error("%s: Block vehemently rejected", __func__);
             continue;
         }
@@ -1514,5 +1897,182 @@ void StakeMiner(CWallet *pwallet)
         g_miner_status.UpdateLastStake(StakeBlock.vtx[1].GetHash());
 
         g_timer.GetTimes(function + "ProcessBlock", "miner");
-    } //end while(!fShutdown)
+    } //end while(!ShutdownInProgress())
+}
+
+// Regtest helper: run one iteration of the staking pipeline and emit the
+// resulting block, or set `err` to the first stage that failed. Called by
+// the `generatetoaddress` / `generatesuperblock` RPCs. The caller is expected
+// to retry on transient failure (no stake found, etc). Refuses on non-mockable
+// chains so it cannot be invoked from network code paths.
+//
+// The pipeline mirrors StakeMiner's inner body, including the stake-split and
+// sidestake step, so regtest blocks carry the same coinstake output layout.
+// Refactoring StakeMiner to call this helper itself is still a follow-up — for
+// now the duplication is intentional to keep the mainnet/testnet staking path
+// untouched, at the cost of having to keep the two pipelines in step by hand.
+bool TryMineRegtestBlock(CWallet* pwallet,
+                         CBlock& blocknew_out,
+                         std::string& err,
+                         int stake_time_slot_offset)
+{
+    if (!Params().IsMockableChain()) {
+        err = "TryMineRegtestBlock: only valid on regtest";
+        return false;
+    }
+    if (!pwallet) {
+        err = "no wallet";
+        return false;
+    }
+
+    CBlock StakeBlock;
+    std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>> mrc_map;
+    std::map<GRC::Cpid, uint256> mrc_tx_map;
+
+    LOCK(cs_main);
+
+    CBlockIndex* pindexPrev = pindexBest;
+    if (!pindexPrev) {
+        err = "pindexBest is null";
+        return false;
+    }
+
+    StakeBlock.nVersion = ComputeBlockVersion(pindexPrev->nHeight + 1);
+
+    // Advance the candidate stake time by one 16-second mask slot per retry
+    // attempt. CreateCoinStake masks this to STAKE_TIMESTAMP_MASK granularity
+    // and evaluates the kernel at that single timestamp — no time search — so a
+    // block mined at a masked slot where no coin's kernel hash falls under
+    // target fails, and (because generatetoaddress mines many blocks within one
+    // 16-second wall-clock window) a same-slot retry re-rolls nothing. Stepping
+    // to the next slot rerolls the kernel. Offset 0 (the first attempt) keeps
+    // the original behaviour. From v15 a stamp more than 48 s ahead is not
+    // accepted, so the retries stay inside the window.
+    const bool v15 = IsV15Enabled(pindexPrev->nHeight + 1);
+    const int max_offset = v15
+        ? static_cast<int>(GRC::V15_FUTURE_TIME_BOUND / (GRC::STAKE_TIMESTAMP_MASK + 1))
+        : stake_time_slot_offset;
+    const int64_t adjusted_now = GetAdjustedTime();
+    StakeBlock.nTime = GRC::GetStakeTime(pindexPrev, adjusted_now
+        + static_cast<int64_t>(std::min(stake_time_slot_offset, max_offset)) * (GRC::STAKE_TIMESTAMP_MASK + 1));
+
+    // As in StakeMiner: a clock more than 96 s behind the parent cannot build a
+    // block its own validation accepts.
+    if (v15 && CheckBlockTime(StakeBlock.nTime, pindexPrev->GetBlockTime(), adjusted_now, true) != BlockTimeCheck::OK) {
+        err = "stake time is outside this node's block acceptance window (clock too far behind the last block)";
+        return false;
+    }
+    StakeBlock.nNonce = 0;
+    StakeBlock.nBits = GRC::GetNextTargetRequired(pindexPrev);
+    StakeBlock.vtx.resize(2);
+
+    CMutableTransaction mtxCoinstake;
+    CKey BlockKey;
+    std::vector<const CWalletTx*> StakeInputs;
+
+    if (!CreateCoinStake(StakeBlock, mtxCoinstake, BlockKey, StakeInputs, *pwallet, pindexPrev)) {
+        err = "CreateCoinStake: no stake found (need a mature UTXO with sufficient weight)";
+        return false;
+    }
+    StakeBlock.nTime = mtxCoinstake.nTime;
+
+    CMutableTransaction mtxCoinbase;
+    if (!CreateRestOfTheBlock(StakeBlock, mtxCoinbase, mtxCoinstake, pindexPrev, mrc_map)) {
+        err = "CreateRestOfTheBlock failed";
+        return false;
+    }
+
+    int64_t nReward = 0;
+    GRC::Claim claim;
+    if (!CreateGridcoinReward(mtxCoinbase, mtxCoinstake, StakeBlock, pindexPrev, nReward, claim)) {
+        err = "CreateGridcoinReward failed";
+        return false;
+    }
+
+    uint32_t claim_contract_version = IsV13Enabled(pindexPrev->nHeight + 1) ? 3 : 2;
+
+    if (!CreateMRCRewards(mtxCoinbase, mtxCoinstake, StakeBlock, mrc_map, mrc_tx_map,
+                           nReward, claim_contract_version, claim, pwallet)) {
+        err = "CreateMRCRewards failed";
+        return false;
+    }
+
+    // Snapshot any staged regtest superblock before the attach step consumes
+    // it. The two failure exits below (signing, ProcessBlock) return to a
+    // caller that retries with a new stake timestamp; without restoring the
+    // slot, the retry would mine a plain block and silently drop the staged
+    // superblock while the RPC still reported success.
+    std::optional<GRC::Superblock> staged_backup = g_regtest_staged_superblock;
+
+    AddSuperblockContractOrVote(mtxCoinbase, StakeBlock.nTime);
+
+    // Copy back coinbase AFTER CreateMRCRewards and AddSuperblockContractOrVote
+    StakeBlock.vtx[0] = CTransaction(mtxCoinbase);
+
+    // Mirror StakeMiner's split/sidestake step so regtest blocks carry the same coinstake output
+    // layout as mainnet and testnet -- stake splits, sidestakes, then the MRC region. Must run
+    // after CreateMRCRewards: nReward has the staker's cut of the MRC fees added to it there,
+    // and SplitCoinStakeOutput treats vout[i >= 2] as the MRC region to save and re-append.
+    //
+    // Both inputs are off by default (-enablestakesplit defaults false and the sidestake
+    // registry is empty on a clean chain), so this is a no-op unless a test opts in --
+    // SplitCoinStakeOutput early-returns in that case anyway.
+    int64_t nMinStakeSplitValue = 0;
+    double dEfficiency = 0;
+    int64_t nDesiredStakeOutputValue = 0;
+
+    bool fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency,
+                                                          nDesiredStakeOutputValue);
+
+    bool fEnableSideStaking = !GRC::GetSideStakeRegistry()
+                                   .ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, false)
+                                   .empty();
+
+    if (fEnableStakeSplit || fEnableSideStaking) {
+        SplitCoinStakeOutput(mtxCoinstake, StakeBlock, nReward, fEnableStakeSplit,
+                             fEnableSideStaking, nMinStakeSplitValue, dEfficiency);
+    }
+
+    // Copy back coinstake AFTER SplitCoinStakeOutput
+    StakeBlock.vtx[1] = CTransaction(mtxCoinstake);
+
+    if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) {
+        g_regtest_staged_superblock = std::move(staged_backup);
+        err = "SignStakeBlock failed (check beacon / investor mode)";
+        return false;
+    }
+
+    CValidationState stake_state;
+    if (!ProcessBlock(nullptr, &StakeBlock, true, stake_state)) {
+        g_regtest_staged_superblock = std::move(staged_backup);
+        err = "ProcessBlock rejected the block: " + stake_state.GetRejectReason();
+        return false;
+    }
+
+    g_miner_status.IncrementBlocksCreated();
+    g_miner_status.UpdateLastStake(StakeBlock.vtx[1].GetHash());
+    blocknew_out = StakeBlock;
+    return true;
+}
+
+void ThreadStakeMiner(void* parg)
+{
+    RenameThread("grc-stakeminer");
+    util::ThreadSetInternalName("grc-stakeminer");
+
+    LogPrint(BCLog::LogFlags::NET, "ThreadStakeMiner started");
+    CWallet* pwallet = (CWallet*)parg;
+    try
+    {
+        StakeMiner(pwallet);
+    }
+    catch (std::exception& e)
+    {
+        PrintException(&e, "ThreadStakeMiner()");
+    }
+    catch (...)
+    {
+        PrintException(nullptr, "ThreadStakeMiner()");
+    }
+    LogPrintf("ThreadStakeMiner exited");
 }

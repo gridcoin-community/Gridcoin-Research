@@ -3,6 +3,11 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <fs.h>
+
+#ifdef __linux__
+#include <sys/vfs.h>
+#endif
+#include <util/strencodings.h>
 #include <util/syserror.h>
 
 #ifndef WIN32
@@ -14,7 +19,6 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <codecvt>
 #include <windows.h>
 #endif
 
@@ -25,8 +29,7 @@ FILE *fopen(const fs::path& p, const char *mode)
 #ifndef WIN32
     return ::fopen(p.string().c_str(), mode);
 #else
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>,wchar_t> utf8_cvt;
-    return ::_wfopen(p.wstring().c_str(), utf8_cvt.from_bytes(mode).c_str());
+    return ::_wfopen(p.wstring().c_str(), Utf8ToWide(mode).c_str());
 #endif
 }
 
@@ -78,12 +81,19 @@ bool FileLock::TryLock()
 #else
 
 static std::string GetErrorReason() {
-    wchar_t* err;
-    FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        nullptr, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<WCHAR*>(&err), 0, nullptr);
+    const DWORD error = GetLastError();
+    wchar_t* err = nullptr;
+    const DWORD length = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        nullptr, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<WCHAR*>(&err), 0, nullptr);
+    // sign-compare checked: length is DWORD, which is unsigned; 0U is a non-negative literal, so both sides are unsigned.
+    if (length == 0U) {
+        // FormatMessageW failed, so it allocated no buffer.
+        return "Unknown error (" + ToString(error) + ")";
+    }
     std::wstring err_str(err);
     LocalFree(err);
-    return std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>().to_bytes(err_str);
+    // The system text ends with a line break, which is trimmed.
+    return TrimString(WideToUtf8(err_str)) + " (" + ToString(error) + ")";
 }
 
 FileLock::FileLock(const fs::path& file)
@@ -116,25 +126,6 @@ bool FileLock::TryLock()
 }
 #endif
 
-bool PathHasNonCodepageChars(const fs::path& path)
-{
-#ifdef WIN32
-    std::wstring wide = path.wstring();
-    BOOL used_default = FALSE;
-    // First call: determine the buffer size needed for the code page conversion.
-    int needed = WideCharToMultiByte(CP_ACP, 0, wide.c_str(), (int)wide.size(), nullptr, 0, nullptr, nullptr);
-    if (needed <= 0) return true;
-    // Second call: perform the actual conversion. WideCharToMultiByte sets used_default to TRUE if any
-    // character in the wide string could not be represented in the system code page and was replaced
-    // with a default substitution character.
-    std::string narrow(needed, '\0');
-    WideCharToMultiByte(CP_ACP, 0, wide.c_str(), (int)wide.size(), narrow.data(), needed, nullptr, &used_default);
-    return used_default != FALSE;
-#else
-    return false;
-#endif
-}
-
 std::string LongPathString(const fs::path& path)
 {
 #ifdef WIN32
@@ -156,59 +147,6 @@ std::string LongPathString(const fs::path& path)
 #endif
 }
 
-std::string ShortPathString(const fs::path& path)
-{
-#ifdef WIN32
-    if (!PathHasNonCodepageChars(path)) {
-        return path.string();
-    }
-    std::wstring wpath = path.wstring();
-    wchar_t short_path[MAX_PATH];
-    DWORD result = GetShortPathNameW(wpath.c_str(), short_path, MAX_PATH);
-    if (result > 0 && result < MAX_PATH) {
-        // Short path names are ASCII-safe, so narrow conversion is lossless.
-        return std::string(short_path, short_path + result);
-    }
-    // 8.3 name generation is disabled on this volume.
-    return "";
-#else
-    return path.string();
-#endif
-}
-
-std::string Utf8PathString(const fs::path& path)
-{
-#ifdef WIN32
-    if (!PathHasNonCodepageChars(path)) {
-        return path.string();
-    }
-    std::wstring wide = path.wstring();
-    int needed = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), (int)wide.size(), nullptr, 0, nullptr, nullptr);
-    if (needed <= 0) return path.string();
-    std::string utf8(needed, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), (int)wide.size(), utf8.data(), needed, nullptr, nullptr);
-    return utf8;
-#else
-    return path.string();
-#endif
-}
-
-std::string get_filesystem_error_message(const fs::filesystem_error& e)
-{
-#ifndef WIN32
-    return e.what();
-#else
-    // Convert from Multi Byte to utf-16
-    std::string mb_string(e.what());
-    int size = MultiByteToWideChar(CP_ACP, 0, mb_string.c_str(), mb_string.size(), nullptr, 0);
-
-    std::wstring utf16_string(size, L'\0');
-    MultiByteToWideChar(CP_ACP, 0, mb_string.c_str(), mb_string.size(), &*utf16_string.begin(), size);
-    // Convert from utf-16 to utf-8
-    return std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t>().to_bytes(utf16_string);
-#endif
-}
-
 #ifdef WIN32
 #ifdef __GLIBCXX__
 
@@ -216,7 +154,10 @@ std::string get_filesystem_error_message(const fs::filesystem_error& e)
 
 static std::string openmodeToStr(std::ios_base::openmode mode)
 {
-    switch (mode & ~std::ios_base::ate) {
+    // On an int, not the openmode itself: the flag combinations below are not
+    // enumerators of libstdc++'s _Ios_Openmode, and GCC 13's -Wswitch reports
+    // every such case as "not in enumerated type".
+    switch (static_cast<int>(mode & ~std::ios_base::ate)) {
     case std::ios_base::out:
     case std::ios_base::out | std::ios_base::trunc:
         return "w";
@@ -318,3 +259,23 @@ static_assert(sizeof(*fs::path().BOOST_FILESYSTEM_C_STR) == sizeof(wchar_t),
 #endif // WIN32
 
 } // fsbridge
+
+bool fsbridge::IsVolatileFilesystem(const fs::path& path)
+{
+#ifdef __linux__
+    struct statfs fs_info;
+
+    // Cannot tell: say no. Reporting "volatile" because a syscall failed would
+    // turn an unreadable path into a hard startup error.
+    if (statfs(path.string().c_str(), &fs_info) != 0) return false;
+
+    // From <linux/magic.h>, inlined so that header is not a build dependency.
+    constexpr decltype(fs_info.f_type) TMPFS_MAGIC_VALUE = 0x01021994;
+    constexpr decltype(fs_info.f_type) RAMFS_MAGIC_VALUE = 0x858458f6;
+
+    return fs_info.f_type == TMPFS_MAGIC_VALUE || fs_info.f_type == RAMFS_MAGIC_VALUE;
+#else
+    (void)path;
+    return false;
+#endif
+}

@@ -2,91 +2,218 @@
 
 #include <QDebug>
 #include <QSettings>
-#include <univalue.h>
 
 #include "bitcoinunits.h"
 #include "guiutil.h"
-#include "init.h"
+#include "interfaces/node.h"
+#include "util/strencodings.h" // For SplitHostPort (IPv6-aware host:port parsing).
 
-#include "miner.h"
-#include "wallet/walletdb.h"
+#include "amount.h" // For MIN_STAKE_SPLIT_VALUE_GRC.
 
-OptionsModel::OptionsModel(QObject *parent) :
-    QAbstractListModel(parent)
+#include <optional>
+#include <utility>
+
+namespace {
+//! Format a satoshi amount as a plain money string (no localization/thousands
+//! separators) for the -reservebalance setting, matching what the core's
+//! ParseMoney reads. BitcoinUnits::format inserts thin-space separators, so it
+//! cannot be used here.
+std::string FormatReserveBalanceSetting(qint64 sat)
 {
-    Init();
+    const bool negative = sat < 0;
+    const qint64 abs_sat = negative ? -sat : sat;
+    const qint64 coin = BitcoinUnits::factor(BitcoinUnits::BTC);
+    const int decimals = BitcoinUnits::decimals(BitcoinUnits::BTC);
+    QString s = (negative ? "-" : "") + QString::number(abs_sat / coin) + "."
+                + QString::number(abs_sat % coin).rightJustified(decimals, '0');
+    return s.toStdString();
 }
 
-bool static ApplyProxySettings()
+//! Push the effective proxy to the core -proxy setting: the GUI keeps its three
+//! proxy fields (enable + address) as local editing state in QSettings, and the
+//! effective value (the address when enabled, empty when disabled) is mirrored to
+//! gridcoinsettings.json through the node. Empty erases -proxy, so a -proxy on the
+//! command line or in the config file still applies; netbase cannot clear a live
+//! proxy, so disabling is effective on restart (unchanged from the previous
+//! behavior).
+bool PushEffectiveProxy(interfaces::Node& node, QSettings& settings)
 {
-    QSettings settings;
-    int port = 9050;
-    std::string hostname = "";
-    SplitHostPort(settings.value("addrProxy", "127.0.0.1:9050").toString().toStdString(), port, hostname);
-    CService addrProxy(LookupNumeric(hostname.c_str(), port));
-    if (!settings.value("fUseProxy", false).toBool()) {
-        addrProxy = CService();
-        return false;
+    const bool use_proxy = settings.value(GUIUtil::nodeSettingsKey("fUseProxy"), false).toBool();
+    const std::string addr =
+        use_proxy ? settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString().toStdString()
+                  : std::string();
+    return node.changeSettings({{"proxy", addr}}).ok;
+}
+
+//! Put a proxy field back as it was before a push that failed: its previous
+//! value, or no value when it had none.
+void RestoreProxyField(QSettings& settings, const QString& key, const std::optional<QVariant>& previous)
+{
+    if (previous) {
+        settings.setValue(key, *previous);
+    } else {
+        settings.remove(key);
     }
-    if (!addrProxy.IsValid())
-        return false;
-    if (!IsLimited(NET_IPV4))
-        SetProxy(NET_IPV4, addrProxy);
-    if (!IsLimited(NET_IPV6))
-        SetProxy(NET_IPV6, addrProxy);
-    SetNameProxy(addrProxy);
-    
-    return true;
+}
+
+//! Split a stored "host:port" proxy string into host and port, IPv6-aware
+//! (SplitHostPort strips the [] brackets around an IPv6 host and only treats a
+//! colon as the port separator when it is unambiguous). Port defaults to 9050.
+std::pair<QString, int> SplitProxy(const QString& addr)
+{
+    int port = 9050;
+    std::string host;
+    SplitHostPort(addr.toStdString(), port, host);
+    return {QString::fromStdString(host), port};
+}
+
+//! Format host + port back into the stored proxy string, bracketing an IPv6
+//! host (one containing a colon) so it round-trips through SplitProxy and is
+//! accepted by the node's proxy validation -- matching the old
+//! CService::ToStringIPPort() form.
+QString FormatProxy(const QString& host, int port)
+{
+    const QString h = host.contains(':') ? "[" + host + "]" : host;
+    return h + ":" + QString::number(port);
+}
+
+//! Whether a value submitted for a core setting is the one the model reports for
+//! it. The Options dialog's mapper submits every mapped field, edited or not, and
+//! loaded each widget from data(): a checkbox hands back its checked state and a
+//! line edit its text, so an untouched field comes back with the same string form
+//! as data()'s value. data() reads the two numeric settings through
+//! getSettingInt, so their string form is always an integer and compares exactly.
+bool SubmittedValueUnchanged(const QVariant& submitted, const QVariant& shown)
+{
+    return submitted.toString() == shown.toString();
+}
+} // namespace
+
+OptionsModel::OptionsModel(interfaces::Node& node, interfaces::SideStakeManager& sidestake_manager, QObject *parent) :
+    QAbstractListModel(parent),
+    m_node(node),
+    m_sidestake_manager(sidestake_manager)
+{
+    Init();
 }
 
 void OptionsModel::Init()
 {
     QSettings settings;
 
-    // These are Qt-only settings:
-    nDisplayUnit = settings.value("nDisplayUnit", BitcoinUnits::BTC).toInt();
+    // Give the per-node preference members determinate values up front. They are
+    // re-read from the per-node QSettings group in readNodeSettings() once the
+    // datadir is finalized, but Init() runs from the constructor (before that), so
+    // without this any access in the interim would read an uninitialized member.
+    // Keep these defaults in sync with readNodeSettings().
+    nDisplayUnit = BitcoinUnits::BTC;
+    fStartAtStartup = false;
+    fStartMin = true;
+    fMinimizeToTray = false;
+    fDisableTrxNotifications = false;
+    fDisablePollNotifications = false;
+    bDisplayAddresses = false;
+    fMinimizeOnClose = false;
+    fConfirmOnClose = false;
+    fCoinControlFeatures = false;
+    fLimitTxnDisplay = false;
+    fMaskValues = false;
+    limitTxnDate = QDate();
+    pollExpireNotification = 8.0;
+    walletStylesheet = "dark";
+
+    // language is a GUI-local (not per-node) preference used by the options dialog;
+    // captured here for the model. Every other Qt-only preference is per-node and
+    // read later, in readNodeSettings(), once GetDataDir() is known.
+    //
+    // NOTE: -lang / -datadir are NOT SoftSet here. They must be in gArgs *before*
+    // the Qt translator is installed and the Intro datadir dialog runs -- and, in
+    // the multiprocess build, before the node connection this model's m_node is
+    // sourced from even exists (this model is now constructed *after* that connect).
+    // So that pre-Intro SoftSet moved to EarlyReadGuiLangAndDatadir() in
+    // bitcoin.cpp main(), which runs well ahead of this constructor. This model
+    // keeps only the `language` member read for its own use.
+    language = settings.value("language", "").toString();
+
+    m_sidestake_model = new SideStakeTableModel(m_sidestake_manager, this);
+}
+
+void OptionsModel::readNodeSettings()
+{
+    // The per-node GUI preferences, read under the datadir-keyed QSettings group
+    // (GUIUtil::nodeSettingsKey) so multiple wallet instances on one machine do
+    // not overwrite each other. Deferred out of Init() because the datadir is not
+    // finalized there; the composition root calls this once it is.
+    QSettings settings;
+    nDisplayUnit = settings.value(GUIUtil::nodeSettingsKey("nDisplayUnit"), BitcoinUnits::BTC).toInt();
+    // fStartAtStartup / fStartMin are deliberately NOT per-node: the OS autostart
+    // entry they mirror (GUIUtil::SetStartOnSystemStartup) is keyed only by network
+    // ("gridcoin-mainnet.desktop" / "gridcoin-testnet.desktop"), not by datadir, so
+    // all same-network nodes share one entry. Per-node QSettings state would let the
+    // UI show an autostart status that disagrees with the single OS entry. Use flat
+    // keys. They are only as network-scoped as the QSettings store itself: the
+    // ApplicationName is "Gridcoin-Qt-testnet" when -testnet is on the command line
+    // and "Gridcoin-Qt" otherwise, so regtest reads and writes mainnet's values.
+    // That is safe only because SetStartOnSystemStartup does nothing on regtest
+    // and the options dialog hides the checkboxes there. Keep this in sync with
+    // the setData() cases.
     fStartAtStartup = settings.value("fStartAtStartup", false).toBool();
     fStartMin = settings.value("fStartMin", true).toBool();
-    fMinimizeToTray = settings.value("fMinimizeToTray", false).toBool();
-    fDisableTrxNotifications = settings.value("fDisableTrxNotifications", false).toBool();
-    fDisablePollNotifications = settings.value("fDisablePollNotifications", false).toBool();
-    bDisplayAddresses = settings.value("bDisplayAddresses", false).toBool();
-    fMinimizeOnClose = settings.value("fMinimizeOnClose", false).toBool();
-    fConfirmOnClose = settings.value("fConfirmOnClose", false).toBool();
-    fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
-    fLimitTxnDisplay = settings.value("fLimitTxnDisplay", false).toBool();
-    fMaskValues = settings.value("fMaskValues", false).toBool();
-    limitTxnDate = settings.value("limitTxnDate", QDate()).toDate();
-    pollExpireNotification = settings.value("pollExpireNotification", 8.0).toDouble();
-    nReserveBalance = settings.value("nReserveBalance").toLongLong();
-    language = settings.value("language", "").toString();
-    walletStylesheet = settings.value("walletStylesheet", "dark").toString();
+    fMinimizeToTray = settings.value(GUIUtil::nodeSettingsKey("fMinimizeToTray"), false).toBool();
+    fDisableTrxNotifications = settings.value(GUIUtil::nodeSettingsKey("fDisableTrxNotifications"), false).toBool();
+    fDisablePollNotifications = settings.value(GUIUtil::nodeSettingsKey("fDisablePollNotifications"), false).toBool();
+    bDisplayAddresses = settings.value(GUIUtil::nodeSettingsKey("bDisplayAddresses"), false).toBool();
+    fMinimizeOnClose = settings.value(GUIUtil::nodeSettingsKey("fMinimizeOnClose"), false).toBool();
+    fConfirmOnClose = settings.value(GUIUtil::nodeSettingsKey("fConfirmOnClose"), false).toBool();
+    fCoinControlFeatures = settings.value(GUIUtil::nodeSettingsKey("fCoinControlFeatures"), false).toBool();
+    fLimitTxnDisplay = settings.value(GUIUtil::nodeSettingsKey("fLimitTxnDisplay"), false).toBool();
+    fMaskValues = settings.value(GUIUtil::nodeSettingsKey("fMaskValues"), false).toBool();
+    limitTxnDate = settings.value(GUIUtil::nodeSettingsKey("limitTxnDate"), QDate()).toDate();
+    pollExpireNotification = settings.value(GUIUtil::nodeSettingsKey("pollExpireNotification"), 8.0).toDouble();
+    walletStylesheet = settings.value(GUIUtil::nodeSettingsKey("walletStylesheet"), "dark").toString();
+}
 
-    // These are shared with core Bitcoin; we want
-    // command-line options to override the GUI settings:
-    if (settings.contains("fUseUPnP")) {
-        gArgs.SoftSetBoolArg("-upnp", settings.value("fUseUPnP").toBool());
-    }
-    if (settings.contains("addrProxy") && settings.value("fUseProxy").toBool()) {
-        gArgs.SoftSetArg("-proxy", settings.value("addrProxy").toString().toStdString());
-    }
-    if (!language.isEmpty()) {
-        gArgs.SoftSetArg("-lang", language.toStdString());
-    }
-    if (settings.contains("fDisableUpdateCheck")) {
-        gArgs.SoftSetBoolArg("-disableupdatecheck", settings.value("fDisableUpdateCheck").toBool());
-    }
-    if (settings.contains("dataDir") && dataDir != GUIUtil::getDefaultDataDirectory()) {
-        // Use ShortPathString to get an 8.3 short path on Windows when the path contains characters
-        // outside the system code page. gArgs is a narrow-string store, and fs::path::string() would
-        // corrupt non-codepage characters via code page narrowing.
-        std::string datadir_narrow = fsbridge::ShortPathString(GUIUtil::qstringToBoostPath(settings.value("dataDir").toString()));
-        if (!datadir_narrow.empty()) {
-            gArgs.SoftSetArg("-datadir", datadir_narrow);
-        }
+void OptionsModel::migrateCoreSettings()
+{
+    // proxy / UPnP / reservebalance / update-check are now core read-write
+    // settings (gridcoinsettings.json), reached through interfaces::Node. On the
+    // first run after upgrade, move any values the user had in Gridcoin-Qt.conf
+    // into the core so they are not silently dropped, then stop touching them
+    // from QSettings. This runs from the composition root AFTER the config file
+    // and the read-write settings file are loaded and the network is selected --
+    // OptionsModel itself is constructed earlier (before those), so it must not
+    // write settings from its constructor.
+    QSettings settings;
+    if (settings.value("coreSettingsMigrated", false).toBool()) {
+        return;
     }
 
-    m_sidestake_model = new SideStakeTableModel(this);
+    // Only migrate a setting the user has NOT already set in gridcoinresearch.conf
+    // (or on the command line). The old Init() used SoftSet, so a config value
+    // always won over the remembered GUI value; skipping already-set settings
+    // preserves that precedence instead of force-overriding the config file.
+    std::vector<std::pair<std::string, std::string>> migrate;
+    if (!m_node.isSettingSet("proxy")
+            && settings.value("fUseProxy", false).toBool() && settings.contains("addrProxy")) {
+        migrate.emplace_back("proxy", settings.value("addrProxy").toString().toStdString());
+    }
+    if (!m_node.isSettingSet("upnp") && settings.contains("fUseUPnP")) {
+        migrate.emplace_back("upnp", settings.value("fUseUPnP").toBool() ? "1" : "0");
+    }
+    if (!m_node.isSettingSet("reservebalance")
+            && settings.contains("nReserveBalance") && settings.value("nReserveBalance").toLongLong() > 0) {
+        migrate.emplace_back("reservebalance",
+                             FormatReserveBalanceSetting(settings.value("nReserveBalance").toLongLong()));
+    }
+    if (!m_node.isSettingSet("disableupdatecheck") && settings.contains("fDisableUpdateCheck")) {
+        migrate.emplace_back("disableupdatecheck", settings.value("fDisableUpdateCheck").toBool() ? "1" : "0");
+    }
+    // Only mark the migration done once it has actually been persisted. If the
+    // node write fails, leave the flag unset so the next launch retries rather
+    // than permanently dropping the user's old Gridcoin-Qt.conf values.
+    if (migrate.empty() || m_node.changeSettings(migrate).ok) {
+        settings.setValue("coreSettingsMigrated", true);
+    }
 }
 
 int OptionsModel::rowCount(const QModelIndex & parent) const
@@ -114,27 +241,33 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case DisablePollNotifications:
             return QVariant(fDisablePollNotifications);
         case MapPortUPnP:
-            return settings.value("fUseUPnP", gArgs.GetBoolArg("-upnp", true));
+#ifdef USE_UPNP
+            // Ask for the same default the node applies -- init.cpp uses
+            // GetBoolArg("-upnp", USE_UPNP) -- so the checkbox reports what the
+            // daemon will actually do. A hardcoded true showed the box ticked in
+            // any build configured without -DDEFAULT_UPNP=ON, i.e. the CMake
+            // default, while the node had UPnP off.
+            return QVariant(m_node.getSettingBool("upnp", USE_UPNP));
+#else
+            // UPnP was not compiled in, so there is no port mapping to report.
+            return QVariant(false);
+#endif
         case MinimizeOnClose:
             return QVariant(fMinimizeOnClose);
         case ProxyUse:
-            return settings.value("fUseProxy", false);
-        case ProxyIP: {
-            proxyType proxy;
-            if (GetProxy(NET_IPV4, proxy))
-                return QVariant(QString::fromStdString(proxy.ToStringIP()));
-            else
-                return QVariant(QString::fromStdString("127.0.0.1"));
+            // GUI editing state: whether the user enabled the proxy. The effective
+            // proxy address is mirrored to the core -proxy setting on change.
+            return settings.value(GUIUtil::nodeSettingsKey("fUseProxy"), false);
+        case ProxyIP:
+            return QVariant(SplitProxy(settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString()).first);
+        case ProxyPort:
+            return QVariant(SplitProxy(settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString()).second);
+        case ReserveBalance: {
+            qint64 sat = 0;
+            BitcoinUnits::parse(BitcoinUnits::BTC,
+                                QString::fromStdString(m_node.getSettingStr("reservebalance", "")), &sat);
+            return QVariant(sat);
         }
-        case ProxyPort: {
-            proxyType proxy;
-            if (GetProxy(NET_IPV4, proxy))
-                return QVariant(proxy.GetPort());
-            else
-                return QVariant(9050);
-        }
-        case ReserveBalance:
-            return QVariant((qint64) nReserveBalance);
         case DisplayUnit:
             return QVariant(nDisplayUnit);
 		case DisplayAddresses:
@@ -142,7 +275,7 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case Language:
             return settings.value("language", "");
         case WalletStylesheet:
-            return settings.value("walletStylesheet", "dark");
+            return settings.value(GUIUtil::nodeSettingsKey("walletStylesheet"), "dark");
         case CoinControlFeatures:
             return QVariant(fCoinControlFeatures);
         case LimitTxnDisplay:
@@ -154,27 +287,23 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case PollExpireNotification:
             return QVariant(pollExpireNotification);
         case DisableUpdateCheck:
-            return QVariant(gArgs.GetBoolArg("-disableupdatecheck", false));
+            return QVariant(m_node.getSettingBool("disableupdatecheck", false));
         case DataDir:
             return settings.value("dataDir", GUIUtil::boostPathToQString(GetDataDir()));
         case EnableStaking:
-            // This comes from the core and is a read-write setting (see below).
-            return QVariant(gArgs.GetBoolArg("-staking", true));
+            // These come from the core and are read-write settings, read through
+            // the node so the GUI never touches gArgs directly.
+            return QVariant(m_node.getSettingBool("staking", true));
         case EnableStakeSplit:
-            // This comes from the core and is a read-write setting (see below).
-            return QVariant(gArgs.GetBoolArg("-enablestakesplit"));
+            return QVariant(m_node.getSettingBool("enablestakesplit", false));
         case EnableSideStaking:
-            // This comes from the core and is a read-write setting (see below).
-            return QVariant(gArgs.GetBoolArg("-enablesidestaking"));
+            return QVariant(m_node.getSettingBool("enablesidestaking", false));
         case StakingEfficiency:
-            // This comes from the core and is a read-write setting (see below).
-            return QVariant((double) gArgs.GetArg("-stakingefficiency", (int64_t) 90));
+            return QVariant((double) m_node.getSettingInt("stakingefficiency", 90));
         case MinStakeSplitValue:
-            // This comes from the core and is a read-write setting (see below).
-            return QVariant((qint64) gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC));
+            return QVariant((qint64) m_node.getSettingInt("minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC));
         case ContractChangeToInput:
-            // This comes from the core and is a read-write setting (see below).
-            return QVariant(gArgs.GetBoolArg("-contractchangetoinputaddress", false));
+            return QVariant(m_node.getSettingBool("contractchangetoinputaddress", false));
         default:
             return QVariant();
         }
@@ -194,6 +323,8 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             if (fStartAtStartup != value.toBool())
             {
                 fStartAtStartup = value.toBool();
+                // Flat key, not per-node: the OS autostart entry is per-network,
+                // not per-datadir. See readNodeSettings().
                 settings.setValue("fStartAtStartup", fStartAtStartup);
                 successful = GUIUtil::SetStartOnSystemStartup(fStartAtStartup, fStartMin);
             }
@@ -202,109 +333,183 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             if (fStartMin != value.toBool())
             {
                 fStartMin = value.toBool();
+                // Flat key, not per-node: see readNodeSettings().
                 settings.setValue("fStartMin", fStartMin);
                 successful = GUIUtil::SetStartOnSystemStartup(fStartAtStartup, fStartMin);
             }
             break;
         case MinimizeToTray:
             fMinimizeToTray = value.toBool();
-            settings.setValue("fMinimizeToTray", fMinimizeToTray);
+            settings.setValue(GUIUtil::nodeSettingsKey("fMinimizeToTray"), fMinimizeToTray);
             break;
         case ConfirmOnClose:
             fConfirmOnClose = value.toBool();
-            settings.setValue("fConfirmOnClose", fConfirmOnClose);
+            settings.setValue(GUIUtil::nodeSettingsKey("fConfirmOnClose"), fConfirmOnClose);
             break;
         case DisableTrxNotifications:
             fDisableTrxNotifications = value.toBool();
-            settings.setValue("fDisableTrxNotifications", fDisableTrxNotifications);
+            settings.setValue(GUIUtil::nodeSettingsKey("fDisableTrxNotifications"), fDisableTrxNotifications);
             break;
         case DisablePollNotifications:
             fDisablePollNotifications = value.toBool();
-            settings.setValue("fDisablePollNotifications", fDisablePollNotifications);
+            settings.setValue(GUIUtil::nodeSettingsKey("fDisablePollNotifications"), fDisablePollNotifications);
             break;
         case MapPortUPnP:
-            fUseUPnP = value.toBool();
-            settings.setValue("fUseUPnP", fUseUPnP);
-            MapPort();
+            // Core settings are written only when the submitted value differs from
+            // what data() reports. The dialog's mapper submits every field on OK,
+            // Apply and the side-staking toggle, edited or not, and a stored value
+            // outranks the config file, so writing an untouched field would pin the
+            // effective value (config file, command line or an init soft-set) into
+            // gridcoinsettings.json. ReserveBalance guards the same way. The same
+            // guard precedes each core setting's write below.
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
+            // Core setting: the node applies it (SetUseUPnP + MapPort start/stop
+            // the port-map thread) via the immediate-effect hook.
+            successful = m_node.changeSettings({{"upnp", value.toBool() ? "1" : "0"}}).ok;
             break;
         case MinimizeOnClose:
             fMinimizeOnClose = value.toBool();
-            settings.setValue("fMinimizeOnClose", fMinimizeOnClose);
+            settings.setValue(GUIUtil::nodeSettingsKey("fMinimizeOnClose"), fMinimizeOnClose);
             break;
-        case ProxyUse:
-            settings.setValue("fUseProxy", value.toBool());
-            ApplyProxySettings();
-            break;
+        // The proxy fields are GUI state in QSettings, mirrored to the core -proxy
+        // setting only when one of them changes. An untouched submit neither
+        // rewrites them nor pushes, so it no longer erases or overwrites a
+        // node-side proxy the dialog does not show. The exception is a stored
+        // addrProxy not in host:port form, which never equals the rebuilt
+        // address: the first untouched submit rewrites it once and pushes.
+        // Compare as bool and string: a value read back from the settings file
+        // is text.
+        //
+        // A push that fails restores the field it changed, or removes it if it had
+        // no value, so QSettings never holds a proxy field the node did not accept,
+        // and an identical resubmit pushes again. A failed enable is undone even
+        // when a later field in the same submit makes the address valid. The host
+        // is then stored with the proxy disabled, and re-ticking the box applies it.
+        case ProxyUse: {
+            const QString key = GUIUtil::nodeSettingsKey("fUseProxy");
+            if (value.toBool() == settings.value(key, false).toBool()) break;
+            const std::optional<QVariant> previous =
+                settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
+            settings.setValue(key, value.toBool());
+            successful = PushEffectiveProxy(m_node, settings);
+            if (!successful) RestoreProxyField(settings, key, previous);
+        }
+        break;
         case ProxyIP: {
-            proxyType proxy;
-            proxy = LookupNumeric("127.0.0.1", 9050);
-            GetProxy(NET_IPV4, proxy);
-
-            CNetAddr addr;
-            LookupHost(value.toString().toStdString().c_str(), addr, false);
-            proxy.SetIP(addr);
-            settings.setValue("addrProxy", proxy.ToStringIPPort().c_str());
-            successful = ApplyProxySettings();
+            // Replace the host part of the stored address; port is kept. IPv6-aware
+            // via SplitProxy/FormatProxy (brackets round-trip correctly).
+            const QString key = GUIUtil::nodeSettingsKey("addrProxy");
+            const QString stored = settings.value(key, "127.0.0.1:9050").toString();
+            const QString updated = FormatProxy(value.toString(), SplitProxy(stored).second);
+            if (updated == stored) break;
+            const std::optional<QVariant> previous =
+                settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
+            settings.setValue(key, updated);
+            successful = PushEffectiveProxy(m_node, settings);
+            if (!successful) RestoreProxyField(settings, key, previous);
         }
         break;
         case ProxyPort: {
-            proxyType proxy;
-            proxy = LookupNumeric("127.0.0.1", 9050);
-            GetProxy(NET_IPV4, proxy);
-            proxy.SetPort(value.toInt());
-            settings.setValue("addrProxy", proxy.ToStringIPPort().c_str());
-            successful = ApplyProxySettings();
+            // Replace the port part of the stored address; host is kept.
+            const QString key = GUIUtil::nodeSettingsKey("addrProxy");
+            const QString stored = settings.value(key, "127.0.0.1:9050").toString();
+            const QString updated = FormatProxy(SplitProxy(stored).first, value.toInt());
+            if (updated == stored) break;
+            const std::optional<QVariant> previous =
+                settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
+            settings.setValue(key, updated);
+            successful = PushEffectiveProxy(m_node, settings);
+            if (!successful) RestoreProxyField(settings, key, previous);
         }
         break;
-        case ReserveBalance:
-            nReserveBalance = value.toLongLong();
-            settings.setValue("nReserveBalance", (qint64) nReserveBalance);
-            emit reserveBalanceChanged(nReserveBalance);
-            break;
+        case ReserveBalance: {
+            // Clamp negatives: a reserve is never negative, and core ParseMoney
+            // would reject a "-..." string, leaving the value stale.
+            const qint64 sat = value.toLongLong() > 0 ? value.toLongLong() : 0;
+            // The Options dialog's mapper submits every mapped field on OK, edited
+            // or not. Writing an unchanged reserve would pin it into
+            // gridcoinsettings.json, which outranks the config file, so a
+            // -reservebalance added there later would be ignored. Only a change
+            // is stored.
+            if (sat == getReserveBalance()) {
+                successful = true;
+                break;
+            }
+            // Store as a plain money string, zero included. An empty value would
+            // erase the setting instead, and a -reservebalance in the config file
+            // would then apply again rather than the zero chosen here.
+            successful = m_node.changeSettings(
+                {{"reservebalance", FormatReserveBalanceSetting(sat)}}).ok;
+            if (successful) {
+                emit reserveBalanceChanged(sat);
+            }
+        }
+        break;
         case DisplayUnit:
             nDisplayUnit = value.toInt();
-            settings.setValue("nDisplayUnit", nDisplayUnit);
+            settings.setValue(GUIUtil::nodeSettingsKey("nDisplayUnit"), nDisplayUnit);
             emit displayUnitChanged(nDisplayUnit);
             break;
 		case DisplayAddresses:
              bDisplayAddresses = value.toBool();
-             settings.setValue("bDisplayAddresses", bDisplayAddresses);
+             settings.setValue(GUIUtil::nodeSettingsKey("bDisplayAddresses"), bDisplayAddresses);
              break;
         case Language:
             settings.setValue("language", value);
             break;
         case WalletStylesheet:
             walletStylesheet = value.toString();
-            settings.setValue("walletStylesheet", walletStylesheet);
+            settings.setValue(GUIUtil::nodeSettingsKey("walletStylesheet"), walletStylesheet);
             emit walletStylesheetChanged(walletStylesheet);
             break;
         case CoinControlFeatures: {
             fCoinControlFeatures = value.toBool();
-            settings.setValue("fCoinControlFeatures", fCoinControlFeatures);
+            settings.setValue(GUIUtil::nodeSettingsKey("fCoinControlFeatures"), fCoinControlFeatures);
             emit coinControlFeaturesChanged(fCoinControlFeatures);
             }
             break;
         case LimitTxnDisplay:
-            fLimitTxnDisplay = value.toBool();
-            settings.setValue("fLimitTxnDisplay", fLimitTxnDisplay);
-            emit LimitTxnDisplayChanged(fLimitTxnDisplay);
+            // The Options dialog commits every mapped field on OK, so setData() runs
+            // for this option on every commit; guarding on an actual change stops a
+            // full transaction-model reload from being re-triggered when the setting
+            // did not move (slow with a far-back limit date and many transactions).
+            if (fLimitTxnDisplay != value.toBool())
+            {
+                fLimitTxnDisplay = value.toBool();
+                settings.setValue(GUIUtil::nodeSettingsKey("fLimitTxnDisplay"), fLimitTxnDisplay);
+                emit LimitTxnDisplayChanged(fLimitTxnDisplay);
+            }
             break;
         case MaskValues:
             fMaskValues = value.toBool();
-            settings.setValue("fMaskValues", fMaskValues);
+            settings.setValue(GUIUtil::nodeSettingsKey("fMaskValues"), fMaskValues);
             emit MaskValuesChanged(fMaskValues);
             break;
         case LimitTxnDate:
-            limitTxnDate = value.toDate();
-            settings.setValue("limitTxnDate", limitTxnDate);
+            // A changed limit date only affects the displayed set while limiting is
+            // active, so persist it and drive a reload (via LimitTxnDisplayChanged,
+            // whose slot re-reads the date just stored) only then. Previously this
+            // case emitted nothing, so a date edit did not take effect until some
+            // unrelated reload.
+            if (limitTxnDate != value.toDate())
+            {
+                limitTxnDate = value.toDate();
+                settings.setValue(GUIUtil::nodeSettingsKey("limitTxnDate"), limitTxnDate);
+                if (fLimitTxnDisplay)
+                {
+                    emit LimitTxnDisplayChanged(fLimitTxnDisplay);
+                }
+            }
             break;
         case PollExpireNotification:
             pollExpireNotification = value.toDouble();
-            settings.setValue("pollExpireNotification", pollExpireNotification);
+            settings.setValue(GUIUtil::nodeSettingsKey("pollExpireNotification"), pollExpireNotification);
             break;
         case DisableUpdateCheck:
-            gArgs.ForceSetArg("-disableupdatecheck", value.toBool() ? "1" : "0");
-            settings.setValue("fDisableUpdateCheck", value.toBool());
+            // Core read-write setting (the core scheduler and the GUI both read
+            // it); route through the node so it persists to gridcoinsettings.json.
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
+            successful = m_node.changeSettings({{"disableupdatecheck", value.toBool() ? "1" : "0"}}).ok;
             break;
         case DataDir:
             // There is no SetArgument here, because the core data directory cannot
@@ -312,41 +517,34 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             dataDir = value.toString();
             settings.setValue("dataDir", dataDir);
             break;
+        // The following are core read-write settings stored in
+        // gridcoinsettings.json; a stored value overrides the read-only config
+        // file. The node validates, persists, and force-sets them (the miner
+        // re-reads them live on each stake). Each is written only when it
+        // changed; see MapPortUPnP.
         case EnableStaking:
-            // This is a core setting stored in the read-write settings file and once set will override the read-only
-            //config file.
-            gArgs.ForceSetArg("-staking", value.toBool() ? "1" : "0");
-            updateRwSetting("staking", gArgs.GetBoolArg("-staking", true));
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
+            successful = m_node.changeSettings({{"staking", value.toBool() ? "1" : "0"}}).ok;
             break;
         case EnableStakeSplit:
-            // This is a core setting stored in the read-write settings file and once set will override the read-only
-            //config file.
-            gArgs.ForceSetArg("-enablestakesplit", value.toBool() ? "1" : "0");
-            updateRwSetting("enablestakesplit", gArgs.GetBoolArg("-enablestakesplit"));
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
+            successful = m_node.changeSettings({{"enablestakesplit", value.toBool() ? "1" : "0"}}).ok;
             break;
         case EnableSideStaking:
-            // This is a core setting stored in the read-write settings file and once set will override the read-only
-            //config file.
-            gArgs.ForceSetArg("-enablesidestaking", value.toBool() ? "1" : "0");
-            updateRwSetting("enablesidestaking", gArgs.GetBoolArg("-enablesidestaking"));
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
+            successful = m_node.changeSettings({{"enablesidestaking", value.toBool() ? "1" : "0"}}).ok;
             break;
         case StakingEfficiency:
-            // This is a core setting stored in the read-write settings file and once set will override the read-only
-            //config file.
-            gArgs.ForceSetArg("-stakingefficiency", value.toString().toStdString());
-            updateRwSetting("stakingefficiency", gArgs.GetArg("-stakingefficiency", 90));
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
+            successful = m_node.changeSettings({{"stakingefficiency", value.toString().toStdString()}}).ok;
             break;
         case MinStakeSplitValue:
-            // This is a core setting stored in the read-write settings file and once set will override the read-only
-            //config file.
-            gArgs.ForceSetArg("-minstakesplitvalue", value.toString().toStdString());
-            updateRwSetting("minstakesplitvalue", gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC));
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
+            successful = m_node.changeSettings({{"minstakesplitvalue", value.toString().toStdString()}}).ok;
             break;
         case ContractChangeToInput:
-            // This is a core setting stored in the read-write settings file and once set will override the read-only
-            //config file.
-            gArgs.ForceSetArg("-contractchangetoinputaddress", value.toBool() ? "1" : "0");
-            updateRwSetting("contractchangetoinputaddress", gArgs.GetBoolArg("contractchangetoinputaddress"));
+            if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
+            successful = m_node.changeSettings({{"contractchangetoinputaddress", value.toBool() ? "1" : "0"}}).ok;
             break;
         default:
             break;
@@ -357,14 +555,22 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
     return successful;
 }
 
-qint64 OptionsModel::getTransactionFee()
-{
-    return nTransactionFee;
-}
-
 qint64 OptionsModel::getReserveBalance()
 {
-    return nReserveBalance;
+    qint64 sat = 0;
+    BitcoinUnits::parse(BitcoinUnits::BTC,
+                        QString::fromStdString(m_node.getSettingStr("reservebalance", "")), &sat);
+    return sat;
+}
+
+bool OptionsModel::isTestNet()
+{
+    return m_node.isTestNet();
+}
+
+bool OptionsModel::isMainNet()
+{
+    return m_node.isMainNet();
 }
 
 bool OptionsModel::getCoinControlFeatures()
@@ -380,6 +586,19 @@ void OptionsModel::toggleCoinControlFeatures()
 bool OptionsModel::getLimitTxnDisplay()
 {
     return fLimitTxnDisplay;
+}
+
+bool OptionsModel::getSuppressNetworkGraph()
+{
+    return gArgs.GetArg("-suppressnetworkgraph", "false") == "true";
+}
+
+bool OptionsModel::getShowOrphans()
+{
+    // Routed through the node settings surface (equivalent to the former
+    // gArgs.GetBoolArg("-showorphans", false)) so the transaction models can
+    // read it without a direct util/system.h include.
+    return m_node.getSettingBool("showorphans", false);
 }
 
 bool OptionsModel::getMaskValues()

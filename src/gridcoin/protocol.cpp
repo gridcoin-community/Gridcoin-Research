@@ -2,8 +2,11 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chain.h"
+#include "chainparams.h"
 #include "gridcoin/protocol.h"
 #include "node/ui_interface.h"
+#include "util/fraction.h"
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
@@ -19,6 +22,37 @@ ProtocolRegistry g_protocol_entries;
 ProtocolRegistry& GRC::GetProtocolRegistry()
 {
     return g_protocol_entries;
+}
+
+bool GRC::IsMagnitudeProtocolKey(const std::string& key)
+{
+    return key == "magnitudeunit" || key == "magnitudeweightfactor";
+}
+
+bool GRC::CheckMagnitudeEntryValue(const std::string& value, std::string& error)
+{
+    Fraction fraction;
+
+    // FromString throws std::out_of_range for a string that does not parse,
+    // a zero denominator and INT64_MIN. It returns the fraction reduced.
+    try {
+        fraction = Fraction::FromString(value);
+    } catch (const std::out_of_range&) {
+        error = "not a fraction";
+        return false;
+    }
+
+    if (!fraction.IsPositive()) {
+        error = "not positive";
+        return false;
+    }
+
+    if (fraction.GetNumerator() > MAX_MAGNITUDE_ENTRY_TERM || fraction.GetDenominator() > MAX_MAGNITUDE_ENTRY_TERM) {
+        error = strprintf("reduced to %s, a term exceeds %d", fraction.ToString(), MAX_MAGNITUDE_ENTRY_TERM);
+        return false;
+    }
+
+    return true;
 }
 
 // -----------------------------------------------------------------------------
@@ -187,8 +221,14 @@ ProtocolEntryPayload ProtocolEntryPayload::Parse(const std::string& key, const s
 // -----------------------------------------------------------------------------
 // Class: ProtocolRegistry
 // -----------------------------------------------------------------------------
-const ProtocolRegistry::ProtocolEntryMap& ProtocolRegistry::ProtocolEntries() const
+ProtocolRegistry::ProtocolEntryMap ProtocolRegistry::ProtocolEntries() const
 {
+    LOCK(cs_lock);
+
+    // Returns a by-value snapshot. The map is copied under the lock; its
+    // ProtocolEntry_ptr (shared_ptr) elements are shared, not deep-copied.
+    // Entries are immutable once published (mutations swap the pointer, never
+    // mutate a live entry), so the snapshot is safe to use after the lock drops.
     return m_protocol_entries;
 }
 
@@ -318,13 +358,23 @@ ProtocolEntryOption ProtocolRegistry::TryLastBeforeTimestamp(const std::string& 
 
     // Walk the revision history chain for the protocol entries with the provided key to find an active historical entry
     // with a timestamp that is equal to or less than the provided timestamp, if it exists.
-    HistoricalProtocolEntryMap::iterator hist_protocol_entry_iter = m_protocol_db.find(iter->second->m_previous_hash);
+    uint256 previous_hash = iter->second->m_previous_hash;
+    HistoricalProtocolEntryMap::iterator hist_protocol_entry_iter = m_protocol_db.find(previous_hash);
 
     while (hist_protocol_entry_iter != m_protocol_db.end()
            && !hist_protocol_entry_iter->second->m_previous_hash.IsNull()
            && hist_protocol_entry_iter->second->m_timestamp > timestamp)
     {
-        hist_protocol_entry_iter = m_protocol_db.find(hist_protocol_entry_iter->second->m_previous_hash);
+        previous_hash = hist_protocol_entry_iter->second->m_previous_hash;
+        hist_protocol_entry_iter = m_protocol_db.find(previous_hash);
+    }
+
+    // A previous hash with no entry in the historical map ends the chain. The
+    // history should never be broken, so say so: callers take no entry to mean
+    // the default value.
+    if (hist_protocol_entry_iter == m_protocol_db.end()) {
+        error("%s: The history of protocol key %s has no entry %s.", __func__, key, previous_hash.GetHex());
+        return nullptr;
     }
 
     // Check whether the final hist_protocol_entry_iter timestamp is before or equal to the timestamp.
@@ -335,7 +385,7 @@ ProtocolEntryOption ProtocolRegistry::TryLastBeforeTimestamp(const std::string& 
     }
 }
 
-void ProtocolRegistry::Reset()
+void ProtocolRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LOCK(cs_lock);
 
@@ -418,17 +468,17 @@ void ProtocolRegistry::AddDelete(const ContractContext& ctx)
     return;
 }
 
-void ProtocolRegistry::Add(const ContractContext& ctx)
+void ProtocolRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void ProtocolRegistry::Delete(const ContractContext& ctx)
+void ProtocolRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void ProtocolRegistry::Revert(const ContractContext& ctx)
+void ProtocolRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const auto payload = ctx->SharePayloadAs<ProtocolEntryPayload>();
 
@@ -442,7 +492,7 @@ void ProtocolRegistry::Revert(const ContractContext& ctx)
     if (entry_to_revert == m_protocol_entries.end()) {
         error("%s: The protocol entry for key %s to revert was not found in the protocol entry map.",
               __func__,
-              entry_to_revert->second->m_key);
+              payload->m_entry.m_key);
 
         // If there is no record in the current m_protocol_entries map, then there is nothing to do here. This
         // should not occur.
@@ -494,7 +544,17 @@ void ProtocolRegistry::Revert(const ContractContext& ctx)
     }
 }
 
-bool ProtocolRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const
+bool ProtocolRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    return ValidateAtHeight(contract, nBestHeight + 1, DoS);
+}
+
+bool ProtocolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    return ValidateAtHeight(ctx.m_contract, ctx.m_pindex->nHeight, DoS);
+}
+
+bool ProtocolRegistry::ValidateAtHeight(const Contract& contract, const int height, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (contract.m_version < 1) {
         return true;
@@ -514,12 +574,23 @@ bool ProtocolRegistry::Validate(const Contract& contract, const CTransaction& tx
         return false;
     }
 
-    return true;
-}
+    // Entries accepted before version 15 are not judged again: the rule applies from the height it activates.
+    std::string reason;
 
-bool ProtocolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
-{
-    return Validate(ctx.m_contract, ctx.m_tx, DoS);
+    if (IsV15Enabled(height)
+        && contract.m_action == ContractAction::ADD
+        && IsMagnitudeProtocolKey(payload->m_entry.m_key)
+        && !CheckMagnitudeEntryValue(payload->m_entry.m_value, reason)) {
+        DoS = 25;
+        error("%s: Protocol entry %s = %s refused: %s",
+              __func__,
+              payload->m_entry.m_key,
+              payload->m_entry.m_value,
+              reason);
+        return false;
+    }
+
+    return true;
 }
 
 int ProtocolRegistry::Initialize()
@@ -569,11 +640,6 @@ uint64_t ProtocolRegistry::PassivateDB()
     LOCK(cs_lock);
 
     return m_protocol_db.passivate_db();
-}
-
-ProtocolRegistry::ProtocolEntryDB &ProtocolRegistry::GetProtocolEntryDB()
-{
-    return m_protocol_db;
 }
 
 template<> const std::string ProtocolRegistry::ProtocolEntryDB::KeyType()

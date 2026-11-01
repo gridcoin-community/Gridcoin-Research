@@ -7,6 +7,8 @@
 
 #include <policy/policy.h>
 
+#include "chain.h"
+#include "consensus/consensus.h"
 #include "consensus/tx_verify.h"
 
 bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType)
@@ -29,7 +31,7 @@ bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType)
     return whichType != TX_NONSTANDARD;
 }
 
-bool IsStandardTx(const CTransaction& tx)
+bool IsStandardTx(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     std::string reason = "";
     if (tx.nVersion > CTransaction::CURRENT_VERSION)
@@ -178,7 +180,7 @@ bool AreInputsStandard(const CTransaction& tx, const MapPrevTx& mapInputs)
 
 unsigned int GetMinimumConnectionsRequiredForStaking()
 {
-    return fTestNet ? 1 : 3;
+    return OnTestnet() ? 1 : 3;
 }
 
 unsigned int GetMaxInputsForConsolidationTxn()

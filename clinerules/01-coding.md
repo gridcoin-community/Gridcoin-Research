@@ -46,14 +46,14 @@ The code is multi-threaded, and uses mutexes and locking macros to protect data 
 - `cs_wallet`: Wallet operations
 - `pwalletMain->cs_wallet`: Wallet instance lock
 
-**Lock Order**: Generally acquire `cs_main` before `cs_wallet` to prevent deadlocks. The `-DDEBUG_LOCKORDER` compile flag detects lock order violations.
+**Lock Order**: Generally acquire `cs_main` before `cs_wallet` to prevent deadlocks. The `-DENABLE_DEBUG_LOCKORDER=ON` CMake option detects lock order violations.
 
 **Legacy**: `CRITICAL_BLOCK`/`TRY_CRITICAL_BLOCK` are deprecated and being replaced with modern `LOCK` macros.
 
 Deadlocks due to inconsistent lock ordering (thread 1 locks cs_main
 and then cs_wallet, while thread 2 locks them in the opposite order:
 result, deadlock as each waits for the other to release its lock) are
-a problem. Compile with -DDEBUG_LOCKORDER to get lock order
+a problem. Configure with -DENABLE_DEBUG_LOCKORDER=ON to get lock order
 inconsistencies reported in the debug.log file.
 
 Re-architecting the core code so there are better-defined interfaces
@@ -64,24 +64,23 @@ and its cs_KeyStore lock for example).
 -------
 Threads
 
+See also the thread table in doc/developer-notes.md (Threads).
+
 ThreadAppInit2: Initializes Gridcoin.                       (grc-appinit2)
 
-    ThreadFlushWalletDB: Close the wallet.dat file if it hasn't been used (grc-wallet)
-                         in 500ms.
+    ThreadFlushWalletDB: Close the wallet.dat file once it has gone 2     (grc-wallet)
+                         seconds without an update (checked every 500ms).
 
-    StartNode          : Starts other network threads.                    (grc-start)
-
-        ThreadGetMyExternalIP     : Determines outside-the-firewall IP address,            (grc-ext-ip)
-                                    sends addr message to connected peers when
-                                    it determines it.
+    StartNode          : Starts other network threads.                    (grc-nodestart)
 
         ThreadDNSAddressSeed      : Loads addresses of peers from the DNS.                 (grc-dnsseed)
 
         ThreadMapPort             : Universal plug-and-play startup/shutdown.              (grc-UPnP)
 
-        ThreadSocketHandler       : Sends/Receives data from peers on port 8333.           (grc-net)
+        ThreadSocketHandler       : Sends/Receives data from peers on port 32749           (grc-net)
+                                    (testnet 32748).
 
-        ThreadOpenAddedConnections: Opens network connections to added nodes.              (grc-opencon)
+        ThreadOpenAddedConnections: Opens network connections to added nodes.              (grc-openaddedcon)
 
         ThreadOpenConnections     : Initiates new connections to peers.                    (grc-opencon)
 
@@ -89,31 +88,25 @@ ThreadAppInit2: Initializes Gridcoin.                       (grc-appinit2)
 
         ThreadDumpAddress         : Saves peers to peers.dat                               (grc-adrdump)
 
-        ThreadStakeMiner          : Generates Gridcoins.                                   (grc-stake-miner)
+    ThreadStakeMiner   : Generates Gridcoins. Launched by AppInit2        (grc-stake-miner)
+                         itself, not by StartNode.
 
-        ThreadScraper             : Pulls statistics from project servers.
-                                    Mutually exclusive with ScraperSubscriber
+    InitializeScraper  : Called from GRC::Initialize. Starts one of the two threads below
+                         (neither under -regtest).
 
-        ScraperSubscriber         : Generates superblocks.
+        ThreadScraper             : Pulls statistics from project servers.                 (grc-scraper)
+                                    Mutually exclusive with ThreadScraperSubscriber
+
+        ThreadScraperSubscriber   : Generates superblocks.                                 (grc-scrapersubscriber)
                                     Mutually exclusive with ThreadScraper
 
-    ThreadRPCServer    : Remote procedure call handler, listens on port 8332
-                          for connections and services them.
+    RPC threads (StartRPCThreads): Remote procedure call handler, listens on port 15715 (testnet 25715)
+                                   and services connections on a pool of -rpcthreads workers (default 4).
 
         ThreadTopUpKeyPool          : Replenishes the keystore's keypool.     (grc-key-top)
 
-        ThreadCleanWalletPassphrase : Re-locks an encrypted wallet after user (grc-lock-wa)
-                                      has unlocked it for a period of time.
-
-    CScheduler         : Schedules tasks.
+    CScheduler         : Schedules tasks.                                 (grc-scheduler)
 
 ipcThread     : Scans to check if a URI (gridcoin:) is used. (grc-gui-ipc)
 
 Shutdown      : Does an orderly shutdown of everything.     (grc-shutoff)
-
-----------------
-Snapshot Threads
-
-SnapshotDownloadThread: Downloads the snapshot from gridcoin.us. (grc-snapshotdl)
-
-SnapshotExtractThread : Extracts the downloaded snapshot.        (grc-snapshotex)

@@ -17,8 +17,6 @@
 #include <QPropertyAnimation>
 #include <QResizeEvent>
 
-using namespace GRC;
-
 namespace {
 QString RefreshMessage()
 {
@@ -134,6 +132,7 @@ private slots:
 PollTab::PollTab(QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::PollTab)
+    , m_voting_model(nullptr)
     , m_polltable_model(new PollTableModel(this))
     , m_no_result(new NoResult(this))
     , m_loading(new LoadingBar(this))
@@ -172,9 +171,14 @@ void PollTab::setVotingModel(VotingModel* model)
 
     ui->cards->setModel(m_polltable_model.get());
     ui->table->setModel(m_polltable_model.get());
+
+    // Accessibility (issue #2604): label both views so screen readers
+    // announce what list is being read.
+    ui->cards->setAccessibleName(tr("Polls (card view)"));
+    ui->table->setAccessibleName(tr("Polls (table view)"));
 }
 
-void PollTab::setPollFilterFlags(PollFilterFlag flags)
+void PollTab::setPollFilterFlags(interfaces::PollFilterFlag flags)
 {
     m_polltable_model->setPollFilterFlags(flags);
 }

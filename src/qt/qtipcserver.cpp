@@ -3,18 +3,17 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "qtipcserver.h"
+#include "qt/guilog.h"
 #include "guiconstants.h"
-#include "node/ui_interface.h"
 #include "util.h"
+
+#include <atomic>
+#include <functional>
+#include <string>
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/interprocess/ipc/message_queue.hpp>
-#include <boost/version.hpp>
-
-#if defined(WIN32) && (!defined(BOOST_INTERPROCESS_HAS_WINDOWS_KERNEL_BOOTTIME) || !defined(BOOST_INTERPROCESS_HAS_KERNEL_BOOTTIME))
-#warning Compiling without BOOST_INTERPROCESS_HAS_WINDOWS_KERNEL_BOOTTIME and BOOST_INTERPROCESS_HAS_KERNEL_BOOTTIME uncommented in boost/interprocess/detail/tmp_dir_helpers.hpp may have unintended results see svn.boost.org/trac/boost/ticket/5392
-#endif
 
 using namespace boost;
 using namespace boost::interprocess;
@@ -24,9 +23,29 @@ using namespace boost::posix_time;
 // URI handling not implemented on OSX yet
 
 void ipcScanRelay(int argc, char *argv[]) { }
-void ipcInit(int argc, char *argv[]) { }
+void ipcInit(int argc, char *argv[], std::function<void(const std::string&)> uri_handler) { }
+void ipcShutdown() { }
 
 #else
+
+//! GUI-process-local stop flag for the URI-listener thread (grc-gui-ipc). Set by
+//! ipcShutdown() when the GUI event loop returns; the thread polls it once per
+//! 100 ms receive timeout. Replaces the former read of the core fShutdown global
+//! -- the URI server is owned by this GUI process, so its exit is gated on the
+//! GUI quitting, never on core teardown state.
+static std::atomic<bool> g_ipc_shutdown{false};
+
+//! GUI-supplied handler invoked with each received "gridcoin:" URI. Set by
+//! ipcInit() before the listener thread starts and only read afterwards (the
+//! thread is joined via g_ipc_shutdown before the GUI tears down), so no
+//! additional synchronization is needed. Replaces the former
+//! uiInterface.ThreadSafeHandleURI signal dispatch.
+static std::function<void(const std::string&)> g_uri_handler;
+
+void ipcShutdown()
+{
+    g_ipc_shutdown = true;
+}
 
 static void ipcThread2(void* pArg);
 
@@ -80,12 +99,12 @@ static void ipcThread(void* pArg)
     } catch (...) {
         PrintExceptionContinue(nullptr, "ipcThread()");
     }
-    LogPrintf("ipcThread exited");
+    GUILogPrintf("ipcThread exited");
 }
 
 static void ipcThread2(void* pArg)
 {
-    LogPrint(BCLog::LogFlags::VERBOSE, "ipcThread started");
+    GUILogPrint(GUILogCategory::VERBOSE, "ipcThread started");
 
     message_queue* mq = (message_queue*)pArg;
     char buffer[MAX_URI_LENGTH + 1] = "";
@@ -97,11 +116,12 @@ static void ipcThread2(void* pArg)
         ptime d = boost::posix_time::microsec_clock::universal_time() + millisec(100);
         if (mq->timed_receive(&buffer, sizeof(buffer), nSize, nPriority, d))
         {
-            uiInterface.ThreadSafeHandleURI(std::string(buffer, nSize));
+            if (g_uri_handler)
+                g_uri_handler(std::string(buffer, nSize));
             UninterruptibleSleep(std::chrono::seconds{1});
         }
 
-        if (fShutdown)
+        if (g_ipc_shutdown)
             break;
     }
 
@@ -111,8 +131,10 @@ static void ipcThread2(void* pArg)
     delete mq;
 }
 
-void ipcInit(int argc, char *argv[])
+void ipcInit(int argc, char *argv[], std::function<void(const std::string&)> uri_handler)
 {
+    g_uri_handler = std::move(uri_handler);
+
     message_queue* mq = nullptr;
     char buffer[MAX_URI_LENGTH + 1] = "";
     size_t nSize = 0;
@@ -127,7 +149,8 @@ void ipcInit(int argc, char *argv[])
             ptime d = boost::posix_time::microsec_clock::universal_time() + millisec(1);
             if (mq->timed_receive(&buffer, sizeof(buffer), nSize, nPriority, d))
             {
-                uiInterface.ThreadSafeHandleURI(std::string(buffer, nSize));
+                if (g_uri_handler)
+                    g_uri_handler(std::string(buffer, nSize));
             }
             else
                 break;
@@ -140,7 +163,7 @@ void ipcInit(int argc, char *argv[])
         mq = new message_queue(open_or_create, BITCOINURI_QUEUE_NAME, 2, MAX_URI_LENGTH);
     }
     catch (interprocess_exception &ex) {
-        LogPrintf("ipcInit() - boost interprocess exception #%d: %s", ex.get_error_code(), ex.what());
+        GUILogPrintf("ipcInit() - boost interprocess exception #%d: %s", ex.get_error_code(), ex.what());
         return;
     }
 

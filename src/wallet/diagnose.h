@@ -10,7 +10,6 @@
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/upgrade.h"
-#include "main.h"
 #include "net.h"
 #include "util.h"
 #include <atomic>
@@ -243,15 +242,10 @@ public:
         m_results_string_arg.clear();
         m_results_tip_arg.clear();
 
-        int outbound_connections = 0;
-
-        {
-            LOCK(cs_vNodes);
-
-            for (const auto& vnodes : vNodes) {
-                if (!vnodes->fInbound) ++outbound_connections;
-            }
-        }
+        // Outbound peer count via the CConnman node-access API (issue #2558
+        // PR 9a); GetNodeCount(CONNECTIONS_OUT) counts the non-inbound nodes.
+        int outbound_connections = g_connman
+            ? (int)g_connman->GetNodeCount(CConnman::CONNECTIONS_OUT) : 0;
 
         if (outbound_connections < 1) {
             m_results_tip = _("Your outbound connection count is critically low. Please check your the config file and "
@@ -297,12 +291,10 @@ public:
         m_results_string_arg.clear();
         m_results_tip_arg.clear();
 
-        {
-            LOCK(cs_vNodes);
-            m_connections = vNodes.size();
-        }
+        // Total peer count via the CConnman node-access API (issue #2558 PR 9a).
+        m_connections = g_connman ? g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
 
-        size_t minimum_connections_to_stake = fTestNet ? 1 : 3;
+        size_t minimum_connections_to_stake = OnTestnet() ? 1 : 3;
         std::string s_connections = ToString(m_connections);
 
         if (m_connections <= 7 && m_connections >= minimum_connections_to_stake) {
@@ -363,6 +355,15 @@ public:
     ~VerifyClock() {}
     void runCheck()
     {
+        // A regtest node has no business contacting outside hosts, and its clock
+        // is not compared with anyone's. Reported as not run rather than passed.
+        if (Params().IsMockableChain()) {
+            m_results = Diagnose::NONE;
+            m_results_string = _("Not run on regtest: this check queries public NTP servers.");
+            m_results_tip = "";
+            return;
+        }
+
         class CheckConnectionCount* CheckConnectionCount_Test =
                 static_cast<class CheckConnectionCount*>(getTest(Diagnose::CheckConnectionCount));
 
@@ -533,6 +534,8 @@ public:
          * find if there is Active beacon
          */
 
+        LOCK(cs_main);
+
         const GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
         if (const GRC::CpidOption cpid = GRC::Researcher::Get()->Id().TryCpid()) {
             if (const GRC::BeaconOption beacon = beacons.Try(*cpid)) {
@@ -636,12 +639,21 @@ class VerifyTCPPort : public Diagnose
 {
 private:
     boost::asio::ip::tcp::socket m_tcpSocket;
+    const std::string m_host;
+    const boost::asio::ip::resolver_base::flags m_resolve_flags;
     void handle_connect(const boost::system::error_code& err);
 
     void TCPFinished();
 
 public:
-    VerifyTCPPort() : Diagnose {Diagnose::VerifyTCPPort}, m_tcpSocket(s_ioService)
+    //! \param host The port test site to connect to. Only tests pass anything else.
+    //! \param resolve_flags Passed to the resolver. The default is what the plain
+    //! resolve() call passes; a test passes numeric_host, which refuses a name
+    //! without asking a resolver, to reach the failure path offline.
+    explicit VerifyTCPPort(std::string host = "portquiz.net",
+                           boost::asio::ip::resolver_base::flags resolve_flags = boost::asio::ip::resolver_base::flags())
+        : Diagnose {Diagnose::VerifyTCPPort}, m_tcpSocket(s_ioService), m_host(std::move(host)),
+          m_resolve_flags(resolve_flags)
     {
     }
     ~VerifyTCPPort() {}
@@ -652,6 +664,14 @@ public:
         m_results_string_arg.clear();
         m_results_tip_arg.clear();
 
+        // As VerifyClock: nothing on regtest should reach an outside host.
+        if (Params().IsMockableChain()) {
+            m_results = Diagnose::NONE;
+            m_results_string = _("Not run on regtest: this check connects to an outside port test site.");
+            m_results_tip = "";
+            return;
+        }
+
         auto CheckConnectionCount_Test = getTest(Diagnose::CheckConnectionCount);
         if (CheckConnectionCount_Test && CheckConnectionCount_Test->getResults() != Diagnose::NONE
                 && CheckConnectionCount_Test->getResults() != Diagnose::FAIL) {
@@ -659,8 +679,19 @@ public:
             return;
         }
 
+        // The error_code overload: a host without working DNS is a failed check,
+        // reported the same way as an unreachable site, not an exception out of
+        // walletdiagnose or the Diagnostics dialog.
         boost::asio::ip::tcp::resolver resolver(s_ioService);
-        auto resolved = resolver.resolve("portquiz.net", "http");
+        boost::system::error_code resolve_error;
+        auto resolved = resolver.resolve(m_host, "http", m_resolve_flags, resolve_error);
+
+        if (resolve_error) {
+            // The check reports only that the site cannot be reached; the log keeps the cause.
+            LogPrintf("WARNING: VerifyTCPPort: cannot resolve %s: %s", m_host, resolve_error.message());
+            handle_connect(boost::asio::error::host_unreachable);
+            return;
+        }
 
         // FIXME(div72): This whole portion was/is a BLOCKING asynchronous segment, what the hell.
         boost::asio::async_connect(m_tcpSocket, resolved, boost::bind(&VerifyTCPPort::handle_connect, this, boost::asio::placeholders::error));
@@ -689,7 +720,7 @@ public:
         {
             LOCK(cs_main);
 
-            scale_factor = fTestNet ? 0.1 : 1.0;
+            scale_factor = OnTestnet() ? 0.1 : 1.0;
 
             diff = GRC::GetAverageDifficulty(80);
         }

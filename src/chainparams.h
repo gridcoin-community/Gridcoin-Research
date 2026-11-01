@@ -11,6 +11,7 @@
 #include "consensus/params.h"
 #include "protocol.h"
 
+#include <array>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -18,10 +19,30 @@
 typedef std::map<int, uint256> MapCheckpoints;
 typedef std::map<int, std::vector<unsigned char>> MapMasterKeys;
 
+class CBlock;
+
+// Genesis block hashes (moved from main.h; issue #3125, workstream C5).
+
+//Genesis - MainNet - Production Genesis: as of 10-20-2014:
+static const uint256 hashGenesisBlock = uint256S("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
+
+//TestNet Genesis:
+static const uint256 hashGenesisBlockTestNet = uint256S("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
+
+//RegTest Genesis (deterministic; computed from the regtest premine
+//coinbase + nTime=1296688602 + nNonce=0 + nVersion=14 under trivial powLimit):
+static const uint256 hashGenesisBlockRegTest = uint256S("0x4692b9564c585f76f41e02e304767b2ad16f1d18f72efcf0a724efe01e065371");
+
+//! Construct (and hash-assert) the genesis block for the active network,
+//! including the regtest premine coinbase. Moved out of LoadBlockIndex
+//! (issue #3125, workstream C5); the body lives in chainparams.cpp.
+CBlock CreateGenesisBlock();
+
 struct CCheckpointData {
     MapCheckpoints mapCheckpoints;
 
     int GetHeight() const {
+        if (mapCheckpoints.empty()) return 0;
         const auto& final_checkpoint = mapCheckpoints.rbegin();
         return final_checkpoint->first /* height */;
     }
@@ -99,6 +120,71 @@ std::unique_ptr<const CChainParams> CreateChainParams(const std::string& chain);
 const CChainParams &Params();
 
 /**
+ * Whether the currently selected chain is the test network. Derived from the
+ * active chain params -- the single source of network identity, selected once
+ * via SelectParams() from the -testnet/-chain arg, before AppInit2 runs. This
+ * replaces the former fTestNet global: core code queries the network through
+ * this, and the GUI queries it through interfaces::Node::isTestNet(), whose
+ * implementation also calls this.
+ */
+inline bool OnTestnet()
+{
+    return Params().NetworkIDString() == CBaseChainParams::TESTNET;
+}
+
+/**
+ * Whether the currently selected chain is the main network. Derived the same
+ * way as OnTestnet(), and the correct test for anything that is meaningful
+ * only on mainnet -- hardcoded mainnet peer addresses, for instance.
+ *
+ * !OnTestnet() is not that test. There are three networks, so it is true on
+ * regtest as well, and code written when there were only two reads as if it
+ * meant mainnet when it does not. See the seed handling in net.cpp for what
+ * that cost, and validation.cpp's mainnet address decode for the same trap
+ * caught earlier.
+ */
+inline bool OnMainnet()
+{
+    return Params().NetworkIDString() == CBaseChainParams::MAIN;
+}
+
+//! The hidden consensus-override arguments that ConsensusOverridesAllowed()
+//! governs. Each is read through GetConsensusOverride().
+inline constexpr std::array<const char*, 7> CONSENSUS_OVERRIDE_ARGS {
+    "-blockv15height",
+    "-messagecontractdisableheight",
+    "-pendingpoolretention",
+    "-pollmultiaddressheight",
+    "-autogreylistdeepcopyheight",
+    "-autogreylisttotalcreditfixheight",
+    "-autogreylistredesignheight",
+};
+
+//! Set only by the unit-test fixture (src/test/test_gridcoin.cpp), whose
+//! suites run on mainnet params and drive the overrides above. No
+//! configuration or command-line argument reaches it.
+extern bool g_unit_test_consensus_overrides;
+
+/**
+ * Whether the hidden consensus-override arguments are honoured. They exist for
+ * testing on regtest and on isolated test networks such as the mesh, before
+ * the real heights are set in chainparams, and are never honoured on mainnet.
+ * Testnet stays in the condition until its heights are set in chainparams;
+ * after that this becomes regtest only.
+ */
+inline bool ConsensusOverridesAllowed()
+{
+    return Params().IsMockableChain() || OnTestnet() || g_unit_test_consensus_overrides;
+}
+
+//! The value of the hidden consensus-override argument \p arg where
+//! ConsensusOverridesAllowed(), otherwise \p chainparams_value.
+inline int64_t GetConsensusOverride(const std::string& arg, int64_t chainparams_value)
+{
+    return ConsensusOverridesAllowed() ? gArgs.GetArg(arg, chainparams_value) : chainparams_value;
+}
+
+/**
  * Sets the params returned by Params() to those for the given chain name.
  * @throws std::runtime_error when the chain is not supported.
  */
@@ -164,9 +250,37 @@ inline bool IsProjectV2Enabled(int nHeight)
     return nHeight >= Params().GetConsensus().ProjectV2Height;
 }
 
+inline bool IsPollMultiAddressEnabled(int nHeight)
+{
+    // The argument-driven override is temporary, to facilitate testing on the
+    // isolated testnet before the activation height is set in chainparams.
+    return nHeight >= GetConsensusOverride("-pollmultiaddressheight", Params().GetConsensus().PollMultiAddressHeight);
+}
+
 inline bool IsAutoGreylistAuditEnabled(int nHeight)
 {
     return nHeight >= Params().GetConsensus().AutoGreylistAuditHeight;
+}
+
+inline bool IsAutoGreylistDeepCopyEnabled(int nHeight)
+{
+    // The argument-driven override is temporary, to facilitate testing on isolated
+    // test networks ahead of the v15 activation height (see ConsensusOverridesAllowed()).
+    return nHeight >= GetConsensusOverride("-autogreylistdeepcopyheight", Params().GetConsensus().AutoGreylistDeepCopyHeight);
+}
+
+inline bool IsAutoGreylistTotalCreditFixEnabled(int nHeight)
+{
+    // The argument-driven override is temporary, to facilitate testing on isolated
+    // test networks ahead of the v15 activation height (see ConsensusOverridesAllowed()).
+    return nHeight >= GetConsensusOverride("-autogreylisttotalcreditfixheight", Params().GetConsensus().AutoGreylistTotalCreditFixHeight);
+}
+
+inline bool IsAutoGreylistRedesignEnabled(int nHeight)
+{
+    // The argument-driven override is temporary, to facilitate testing on isolated
+    // test networks ahead of the v15 activation height (see ConsensusOverridesAllowed()).
+    return nHeight >= GetConsensusOverride("-autogreylistredesignheight", Params().GetConsensus().AutoGreylistRedesignHeight);
 }
 
 inline bool IsSuperblockV3Enabled(int nHeight)
@@ -179,6 +293,46 @@ inline bool IsV14Enabled(int nHeight)
     return nHeight >= Params().GetConsensus().BlockV14Height;
 }
 
+//!
+//! \brief Effective V15 activation height. Returns the value passed via the
+//! hidden `-blockv15height` arg if present (used by isolated-testnet / regtest
+//! runs to activate POOL contracts at a low height), otherwise the consensus
+//! value from chainparams (which defaults to std::numeric_limits<int>::max()
+//! until pinned by a follow-up release). Out-of-line so gArgs / util/system.h
+//! doesn't have to be pulled into this header.
+//!
+int GetBlockV15Height();
+
+inline bool IsV15Enabled(int nHeight)
+{
+    return nHeight >= GetBlockV15Height();
+}
+
+//!
+//! \brief GetMessageContractDisableHeight. The block height at which transaction MESSAGE
+//! contracts are no longer allowed. Returns the value passed via the hidden
+//! `-messagecontractdisableheight` arg if present. Out-of-line so gArgs/ util/system.h
+//! doesn't have to be pulled into this header.
+//! \return
+//!
+int GetMessageContractDisableHeight();
+
+inline bool IsMessageContractEnabled(int nHeight)
+{
+    return nHeight < GetMessageContractDisableHeight();
+}
+
+//!
+//! \brief Effective PENDING / OPEN expiration window in blocks for POOL
+//! contracts (issue #1783). Returns the value passed via the hidden
+//! `-pendingpoolretention` arg if present (isolated-testnet / regtest only),
+//! otherwise the consensus value from chainparams (28800 by default).
+//! Consensus-affecting; see init.cpp warning and doc/consensus.md §11.
+//! Out-of-line so gArgs / util/system.h doesn't have to be pulled into this
+//! header.
+//!
+int GetPendingPoolRetention();
+
 inline bool IsProjectV4Enabled(int nHeight)
 {
     return nHeight >= Params().GetConsensus().ProjectV4Height;
@@ -186,18 +340,18 @@ inline bool IsProjectV4Enabled(int nHeight)
 
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
-    return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
+    return (OnTestnet() ? 86400 : (nHeight > 364500) ? 86400 : 43200);
 }
 
 inline int GetOrigNewbieSnapshotFixHeight()
 {
     // This is the original hard fork point for the newbie accrual fix that didn't work.
-    return fTestNet ? 1393000 : 2104000;
+    return OnTestnet() ? 1393000 : 2104000;
 }
 
 inline int GetNewbieSnapshotFixHeight()
 {
-    return fTestNet ? 1480000 : 2197000;
+    return OnTestnet() ? 1480000 : 2197000;
 }
 
 #endif // BITCOIN_CHAINPARAMS_H

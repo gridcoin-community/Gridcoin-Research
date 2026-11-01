@@ -3,19 +3,47 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/protocol.h"
-#include "main.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/boinc.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/project.h"
 #include "gridcoin/researcher.h"
+#include "node/ui_interface.h"
 #include "util.h"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
 #include <iostream>
+#include <optional>
 #include <vector>
 
 extern leveldb::DB *txdb;
+
+namespace {
+
+//!
+//! \brief RAII helper retained for fixture-using tests. After the V15
+//! rework grandfathered the 5 legacy pools into PoolRegistry's
+//! constructor (plan §3), this fixture is largely a no-op — the
+//! grcpool.com entry it used to seed manually is now present from boot.
+//! The destructor calls ClearForTests() which re-seeds the builtins, so
+//! subsequent tests still see the canonical registry shape. Kept so
+//! existing BOOST_FIXTURE_TEST_CASEs continue to compile.
+//!
+struct PoolRegistryTestFixture
+{
+    PoolRegistryTestFixture() = default;
+
+    ~PoolRegistryTestFixture()
+    {
+        GRC::GetPoolRegistry().ClearForTests();
+    }
+};
+
+} // anonymous namespace
 
 namespace {
 
@@ -68,7 +96,7 @@ int64_t nBeaconCount = 0;
 //!
 //! \param cpid External CPID used in the test.
 //!
-void AddTestBeacon(const GRC::Cpid cpid)
+void AddTestBeacon(const GRC::Cpid cpid) NO_THREAD_SAFETY_ANALYSIS
 {
     // TODO: mock the beacon registry
     CPubKey public_key = CPubKey(ParseHex(
@@ -80,15 +108,16 @@ void AddTestBeacon(const GRC::Cpid cpid)
 
 
     // Dummy transaction for the contract handler API:
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nTime = now;
+    CTransaction ctx_tx(tx);
 
     GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
         GRC::ContractAction::ADD,
         cpid,
         std::move(public_key));
 
-    GRC::GetBeaconRegistry().Add({ contract, tx, nullptr });
+    GRC::GetBeaconRegistry().Add({ contract, ctx_tx, nullptr });
     GRC::GetBeaconRegistry().ActivatePending({ key_id }, now, uint256(), -1);
 }
 
@@ -97,7 +126,7 @@ void AddTestBeacon(const GRC::Cpid cpid)
 //!
 //! \param cpid External CPID used in the test.
 //!
-void AddExpiredTestBeacon(const GRC::Cpid cpid)
+void AddExpiredTestBeacon(const GRC::Cpid cpid) NO_THREAD_SAFETY_ANALYSIS
 {
     // TODO: mock the beacon registry
     CPubKey public_key = CPubKey(ParseHex(
@@ -106,16 +135,17 @@ void AddExpiredTestBeacon(const GRC::Cpid cpid)
     const CKeyID key_id = public_key.GetID();
 
     // Dummy transaction for the contract handler API:
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nTime = nBeaconCount;
     nBeaconCount++;
+    CTransaction ctx_tx(tx);
 
     GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
         GRC::ContractAction::ADD,
         cpid,
         std::move(public_key));
 
-    GRC::GetBeaconRegistry().Add({ contract, tx, nullptr });
+    GRC::GetBeaconRegistry().Add({ contract, ctx_tx, nullptr });
     GRC::GetBeaconRegistry().ActivatePending({ key_id }, 0, uint256(), -1);
 }
 
@@ -124,15 +154,16 @@ void AddExpiredTestBeacon(const GRC::Cpid cpid)
 //!
 //! \param cpid External CPID used in the test.
 //!
-void RemoveTestBeacon(const GRC::Cpid cpid)
+void RemoveTestBeacon(const GRC::Cpid cpid) NO_THREAD_SAFETY_ANALYSIS
 {
     // TODO: mock the beacon registry
     CPubKey public_key = CPubKey(ParseHex(
         "111111111111111111111111111111111111111111111111111111111111111111"));
 
     // Dummy transaction for the contract handler API:
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nTime = 0;
+    CTransaction ctx_tx(tx);
 
     uint256 mock_superblock_hash = uint256();
 
@@ -142,18 +173,18 @@ void RemoveTestBeacon(const GRC::Cpid cpid)
         std::move(public_key));
 
     GRC::GetBeaconRegistry().Deactivate(mock_superblock_hash);
-    GRC::GetBeaconRegistry().Delete({ contract, tx, nullptr });
+    GRC::GetBeaconRegistry().Delete({ contract, ctx_tx, nullptr });
 }
 
 void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, const std::string& value,
-                      const int& height, const bool& reset_registry = false)
+                      const int& height, const bool& reset_registry = false) NO_THREAD_SAFETY_ANALYSIS
 {
     GRC::ProtocolRegistry& registry = GRC::GetProtocolRegistry();
 
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index = CBlockIndex {};
     dummy_index.nHeight = height;
 
@@ -181,7 +212,8 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, &dummy_index});
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
 }
 } // anonymous namespace
 
@@ -189,7 +221,9 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
 // MiningProject
 // -----------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_SUITE(MiningProject)
+// Suite-level guard: cases force email / forcecpid / noncruncher /
+// pooloperator and restore them by hand to values, not to absent.
+BOOST_AUTO_TEST_SUITE(MiningProject, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_project_data)
 {
@@ -307,7 +341,7 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_eligible)
     BOOST_CHECK(project.Eligible() == false);
 }
 
-BOOST_AUTO_TEST_CASE(it_detects_projects_with_pool_cpids)
+BOOST_FIXTURE_TEST_CASE(it_detects_projects_with_pool_cpids, PoolRegistryTestFixture)
 {
     // The XML string contains a subset of data found within a <project> element
     // from BOINC's client_state.xml file:
@@ -326,7 +360,7 @@ BOOST_AUTO_TEST_CASE(it_detects_projects_with_pool_cpids)
     BOOST_CHECK(project.m_error == GRC::MiningProject::Error::POOL);
 }
 
-BOOST_AUTO_TEST_CASE(it_detects_projects_with_pool_usernames)
+BOOST_FIXTURE_TEST_CASE(it_detects_projects_with_pool_usernames, PoolRegistryTestFixture)
 {
     // The XML string contains a subset of data found within a <project> element
     // from BOINC's client_state.xml file. For this test case, we want to verify
@@ -422,7 +456,9 @@ BOOST_AUTO_TEST_SUITE_END()
 // MiningProjectMap
 // -----------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_SUITE(MiningProjectMap)
+// Suite-level guard: cases force email / forcecpid / noncruncher /
+// pooloperator and restore them by hand to values, not to absent.
+BOOST_AUTO_TEST_SUITE(MiningProjectMap, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_collection)
 {
@@ -509,7 +545,15 @@ BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
 
     // Clean up:
     gArgs.ForceSetArg("email", "");
+    // Reload requires cs_main but the test fixture is single-threaded.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
     GRC::Researcher::Reload(GRC::MiningProjectMap());
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 }
 
 BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
@@ -703,7 +747,19 @@ BOOST_AUTO_TEST_SUITE_END()
 // Researcher
 // -----------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_SUITE(Researcher)
+// Suite-level guard: cases force email / forcecpid / noncruncher /
+// pooloperator and restore them by hand to values, not to absent.
+BOOST_AUTO_TEST_SUITE(Researcher,
+                      *boost::unit_test::fixture<grc_test::StateGuard>()
+                      * boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::PROTOCOL>>())
+
+// Researcher::Reload/Refresh are EXCLUSIVE_LOCKS_REQUIRED(cs_main). Tests
+// invoke them directly on the single-threaded test fixture without acquiring
+// cs_main. Suppress thread-safety warnings for the suite.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_noncruncher)
 {
@@ -734,6 +790,381 @@ BOOST_AUTO_TEST_CASE(it_converts_a_configured_email_address_to_lowercase)
 
     // Clean up:
     gArgs.ForceSetArg("email", "");
+}
+
+BOOST_AUTO_TEST_CASE(the_auto_refresh_reload_honors_noncruncher_mode)
+{
+    // Regression: the per-block auto-refresh path (Refresh() -> the 2-arg Reload)
+    // must honor non-cruncher mode, not just the no-arg Reload() used at startup /
+    // by resetcpids / switchMode. Otherwise a non-cruncher wallet re-detects a CPID
+    // it opted out of on the next block; on a long-lived -multiprocess daemon that
+    // stale CPID then persists until a core restart or resetcpids (a fresh monolith
+    // process self-heals via Initialize() -> the no-arg Reload()).
+    gArgs.ForceSetArg("forcecpid", "f5d8234352e5a5ae3915debba7258294");
+
+    // Sanity: with non-cruncher mode OFF, the 2-arg Reload adopts the forced CPID.
+    // This proves the fixture really forces a CPID, so the check below is meaningful
+    // rather than passing trivially.
+    gArgs.ForceSetArg("noncruncher", "0");
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
+    BOOST_CHECK(GRC::Researcher::Get()->Id().Which() == GRC::MiningId::Kind::CPID);
+
+    // With non-cruncher mode ON, the same 2-arg Reload must resolve to NONCRUNCHER.
+    gArgs.ForceSetArg("noncruncher", "1");
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
+    BOOST_CHECK(GRC::Researcher::Get()->Id() == GRC::MiningId::ForNoncruncher());
+
+    // Clean up: the researcher is already NONCRUNCHER from the check above; clear
+    // the test args without another Reload (which would parse the now-empty
+    // -forcecpid and log a benign "invalid CPID" error).
+    gArgs.ForceSetArg("forcecpid", "");
+    gArgs.ForceSetArg("noncruncher", "0");
+}
+
+//!
+//! \brief Setup shared by the mode-change cases. Researcher::ChangeMode()
+//! writes the read-write settings file, forces -email and -noncruncher, and
+//! reloads the researcher context, which probes for BOINC. The fixture gives it
+//! a data directory to write to and an empty BOINC directory to probe, so the
+//! reload never reads the host's BOINC install. It restores every settings map,
+//! the config-file layer included, when the case ends, even when an assertion
+//! aborts the case, and then reloads the researcher context from the restored
+//! settings. It does not restore the settings file on disk; every successful
+//! write rewrites that file from the in-memory settings.
+//!
+struct ResearcherModeChangeFixture
+{
+    const std::string m_email{"researcher@example.com"};
+    std::optional<grc_test::StateGuard> m_state;
+    fs::path m_datadir;
+    fs::path m_boinc_dir;
+
+    ResearcherModeChangeFixture()
+    {
+        m_state.emplace();
+
+        // TestingSetup points -datadir at a temp path but never creates it.
+        m_datadir = gArgs.GetArg("-datadir", "");
+        BOOST_REQUIRE(!m_datadir.empty());
+        fs::create_directories(m_datadir);
+        gArgs.ClearPathCache();
+
+        m_boinc_dir = m_datadir / "boinc";
+        fs::create_directories(m_boinc_dir);
+        // An empty client_state.xml: the reload logs that BOINC is attached to no
+        // projects and loads nothing. Without the file it would also raise the
+        // message box for an unreadable BOINC directory.
+        { fsbridge::ofstream create_empty(m_boinc_dir / "client_state.xml"); }
+
+        // Start from the values this suite's cases leave behind, whatever ran before.
+        gArgs.ForceSetArg("-boincdatadir", m_boinc_dir.string());
+        gArgs.ForceSetArg("-email", "");
+        gArgs.ForceSetArg("-noncruncher", "0");
+    }
+
+    ~ResearcherModeChangeFixture()
+    {
+        // Restore the settings first, so the reload below reads them.
+        m_state.reset();
+        GRC::ResetBoincDataDirCache();
+        GRC::Researcher::Reload(GRC::MiningProjectMap());
+
+        BOOST_CHECK(!gArgs.GetBoolArg("-investor", false));
+        BOOST_CHECK(GRC::Researcher::Get()->Id() == GRC::MiningId::ForNoncruncher());
+    }
+
+    static std::string Forced(const std::string& key)
+    {
+        std::string value{"<absent>"};
+        gArgs.LockSettings([&](util::Settings& settings) {
+            const auto it = settings.forced_settings.find(key);
+            if (it != settings.forced_settings.end()) {
+                value = it->second.isStr() ? it->second.get_str() : it->second.write();
+            }
+        });
+        return value;
+    }
+
+    static std::string Rw(const std::string& key)
+    {
+        const util::SettingsValue v = getRwSetting(key);
+        if (v.isNull()) return "<absent>";
+        return v.isStr() ? v.get_str() : v.write();
+    }
+
+    static void SetConfigFileValue(const std::string& key, const std::string& value)
+    {
+        // What ReadConfigStream() stores for key=value in the default section of the config file.
+        gArgs.LockSettings([&](util::Settings& s) { s.ro_config[""][key] = {util::SettingsValue{value}}; });
+    }
+};
+
+BOOST_FIXTURE_TEST_CASE(a_mode_change_clears_a_forced_legacy_investor_flag, ResearcherModeChangeFixture)
+{
+    // What changesettings investor=1 leaves behind: the value stored in the
+    // read-write settings and forced into the running args.
+    BOOST_REQUIRE(updateRwSetting("investor", util::SettingsValue{"1"}));
+    grc_test::ForcedArgGuard forced_investor("investor", "1");
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_REQUIRE(GRC::Researcher::Email().empty());
+
+    // Email() is empty under the forced flag, so the early return is skipped.
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::SOLO, m_email));
+
+    BOOST_CHECK_EQUAL(Forced("investor"), "<absent>");
+    BOOST_CHECK_EQUAL(Forced("email"), m_email);
+    BOOST_CHECK_EQUAL(Forced("noncruncher"), "0");
+    BOOST_CHECK_EQUAL(Rw("email"), m_email);
+    BOOST_CHECK_EQUAL(Rw("noncruncher"), "0");
+
+    // What the user of the researcher wizard sees.
+    BOOST_CHECK_EQUAL(GRC::Researcher::Email(), m_email);
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+
+    // Fixture sanity checks: the forced BOINC directory and the empty
+    // client_state.xml are what the reload read.
+    BOOST_CHECK(GRC::GetBoincDataDir() == m_boinc_dir);
+    BOOST_CHECK(GRC::Researcher::Get()->Projects().empty());
+}
+
+BOOST_FIXTURE_TEST_CASE(a_failed_mode_change_keeps_a_forced_legacy_investor_flag, ResearcherModeChangeFixture)
+{
+    // What changesettings investor=1 leaves behind: the value stored in the
+    // read-write settings and forced into the running args.
+    BOOST_REQUIRE(updateRwSetting("investor", util::SettingsValue{"1"}));
+    grc_test::ForcedArgGuard forced_investor("investor", "1");
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_REQUIRE(GRC::Researcher::Email().empty());
+    BOOST_REQUIRE_EQUAL(Rw("email"), "<absent>");
+
+    BOOST_REQUIRE(!fs::exists(m_datadir / "missing_subdir"));
+    {
+        // No directory of that name exists under the data directory, so the
+        // settings write cannot open its temporary file and fails without throwing.
+        grc_test::ForcedArgGuard broken_settings_path("settings", "missing_subdir/gridcoinsettings.json");
+
+        BOOST_CHECK(!GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::SOLO, m_email));
+        BOOST_CHECK_EQUAL(Forced("investor"), "1");
+        BOOST_CHECK_EQUAL(Forced("email"), "");
+        BOOST_CHECK_EQUAL(Forced("noncruncher"), "0");
+        BOOST_CHECK(GRC::Researcher::Email().empty());
+        BOOST_CHECK(GRC::Researcher::ConfiguredForNoncruncherMode());
+
+        // The failed write restored the read-write settings, so the new email
+        // is not in memory either.
+        BOOST_CHECK_EQUAL(Rw("email"), "<absent>");
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(a_solo_mode_change_outranks_a_config_file_investor_flag, ResearcherModeChangeFixture)
+{
+    SetConfigFileValue("investor", "1");
+    BOOST_REQUIRE_EQUAL(Rw("investor"), "<absent>");
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_REQUIRE(GRC::Researcher::Email().empty());
+
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::SOLO, m_email));
+
+    BOOST_CHECK_EQUAL(Rw("investor"), "0");
+    BOOST_CHECK_EQUAL(GRC::Researcher::Email(), m_email);
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+
+    // Fixture sanity checks: the forced BOINC directory and the empty
+    // client_state.xml are what the reload read.
+    BOOST_CHECK(GRC::GetBoincDataDir() == m_boinc_dir);
+    BOOST_CHECK(GRC::Researcher::Get()->Projects().empty());
+
+    // Model a restart started the same way: forced values do not survive one,
+    // and the read-write settings come from the file. The ClearForcedArg calls
+    // carry the model; ReadSettingsFile() only round-trips the file just written.
+    gArgs.ClearForcedArg("-investor");
+    gArgs.ClearForcedArg("-email");
+    gArgs.ClearForcedArg("-noncruncher");
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_CHECK_EQUAL(Rw("investor"), "0");
+    BOOST_CHECK_EQUAL(GRC::Researcher::Email(), m_email);
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+}
+
+BOOST_FIXTURE_TEST_CASE(a_pool_mode_change_outranks_a_config_file_investor_flag, ResearcherModeChangeFixture)
+{
+    SetConfigFileValue("investor", "1");
+    BOOST_REQUIRE_EQUAL(Rw("investor"), "<absent>");
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_REQUIRE(GRC::Researcher::Email().empty());
+    // No mode change has written either key yet.
+    BOOST_REQUIRE_EQUAL(Rw("email"), "<absent>");
+    BOOST_REQUIRE_EQUAL(Rw("noncruncher"), "<absent>");
+
+    // POOL has no early return.
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::POOL, std::string()));
+
+    BOOST_CHECK_EQUAL(Rw("investor"), "0");
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_CHECK(GRC::Researcher::Email().empty());
+
+    // Model a restart started the same way: forced values do not survive one,
+    // and the read-write settings come from the file. The ClearForcedArg calls
+    // carry the model; ReadSettingsFile() only round-trips the file just written.
+    gArgs.ClearForcedArg("-investor");
+    gArgs.ClearForcedArg("-email");
+    gArgs.ClearForcedArg("-noncruncher");
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_CHECK_EQUAL(Rw("investor"), "0");
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+}
+
+BOOST_FIXTURE_TEST_CASE(a_pool_mode_change_after_noncruncher_mode_survives_a_restart, ResearcherModeChangeFixture)
+{
+    // What a switch to non-cruncher mode leaves in the read-write settings.
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::NONCRUNCHER, std::string()));
+    BOOST_REQUIRE_EQUAL(Rw("noncruncher"), "1");
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::POOL, std::string()));
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+
+    // Model a restart started the same way: forced values do not survive one,
+    // and the read-write settings come from the file.
+    gArgs.ClearForcedArg("-investor");
+    gArgs.ClearForcedArg("-email");
+    gArgs.ClearForcedArg("-noncruncher");
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_CHECK_EQUAL(Rw("noncruncher"), "0");
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+}
+
+BOOST_FIXTURE_TEST_CASE(a_pool_mode_change_after_solo_mode_survives_a_restart, ResearcherModeChangeFixture)
+{
+    // What a switch to solo mode leaves in the read-write settings.
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::SOLO, m_email));
+    BOOST_REQUIRE_EQUAL(Rw("email"), m_email);
+
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::POOL, std::string()));
+    BOOST_CHECK(GRC::Researcher::Email().empty());
+
+    // Model a restart, as in the case above.
+    gArgs.ClearForcedArg("-investor");
+    gArgs.ClearForcedArg("-email");
+    gArgs.ClearForcedArg("-noncruncher");
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_CHECK_EQUAL(Rw("email"), "");
+    BOOST_CHECK(GRC::Researcher::Email().empty());
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+}
+
+BOOST_FIXTURE_TEST_CASE(a_pool_mode_change_outranks_a_config_file_email, ResearcherModeChangeFixture)
+{
+    // A pool mode change stores an empty email rather than erasing the key:
+    // erased, a config-file email would apply again after a restart.
+    SetConfigFileValue("email", m_email);
+    // The fixture forces an empty email, which would outrank the config file.
+    gArgs.ClearForcedArg("-email");
+    BOOST_REQUIRE_EQUAL(Rw("email"), "<absent>");
+    BOOST_REQUIRE_EQUAL(GRC::Researcher::Email(), m_email);
+
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::POOL, std::string()));
+    BOOST_CHECK(GRC::Researcher::Email().empty());
+
+    // Model a restart, as in the cases above.
+    gArgs.ClearForcedArg("-investor");
+    gArgs.ClearForcedArg("-email");
+    gArgs.ClearForcedArg("-noncruncher");
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_CHECK_EQUAL(Rw("email"), "");
+    BOOST_CHECK(GRC::Researcher::Email().empty());
+}
+
+BOOST_FIXTURE_TEST_CASE(a_mode_change_keeps_a_changesettings_override_of_a_config_file_investor_flag, ResearcherModeChangeFixture)
+{
+    // Guards the in-session override that already works against a change that
+    // clears the forced value without also storing "0".
+    SetConfigFileValue("investor", "1");
+    // What changesettings investor=0 leaves behind: the value stored in the
+    // read-write settings and forced into the running args.
+    BOOST_REQUIRE(updateRwSetting("investor", util::SettingsValue{"0"}));
+    grc_test::ForcedArgGuard forced_investor("investor", "0");
+    BOOST_REQUIRE(!GRC::Researcher::ConfiguredForNoncruncherMode());
+    BOOST_REQUIRE(GRC::Researcher::Email().empty());
+
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::SOLO, m_email));
+
+    BOOST_CHECK_EQUAL(GRC::Researcher::Email(), m_email);
+    BOOST_CHECK(!GRC::Researcher::ConfiguredForNoncruncherMode());
+}
+
+//!
+//! \brief A changesettings that lands inside a mode change, after its settings
+//! write, must keep the value it stored, in the read-write settings and in the
+//! running args alike. The listener runs inside the mode change's
+//! RwSettingsUpdated emission, which is the point where another writer could
+//! get in: it stores the key as changesettings does, applied to the running
+//! args in the same step. The mode change must not touch the key after that.
+//!
+BOOST_FIXTURE_TEST_CASE(a_changesettings_email_during_a_mode_change_keeps_its_value, ResearcherModeChangeFixture)
+{
+    const std::string other{"other@example.com"};
+    bool stored = false;
+    boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect([&] {
+        if (stored) return; // the listener's own write emits again
+        stored = true;
+        BOOST_CHECK(updateRwSetting("email", util::SettingsValue{other}, /*apply_to_running_args=*/true));
+    })};
+
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::SOLO, m_email));
+    conn.disconnect();
+
+    BOOST_REQUIRE(stored);
+    BOOST_CHECK_EQUAL(Rw("email"), other);
+    BOOST_CHECK_EQUAL(Forced("email"), other);
+    BOOST_CHECK_EQUAL(GRC::Researcher::Email(), other);
+}
+
+//! The same for the legacy investor flag, whose forced value the mode change clears.
+BOOST_FIXTURE_TEST_CASE(a_changesettings_investor_during_a_mode_change_keeps_its_value, ResearcherModeChangeFixture)
+{
+    bool stored = false;
+    boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect([&] {
+        if (stored) return; // the listener's own write emits again
+        stored = true;
+        BOOST_CHECK(updateRwSetting("investor", util::SettingsValue{"1"}, /*apply_to_running_args=*/true));
+    })};
+
+    BOOST_REQUIRE(GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::SOLO, m_email));
+    conn.disconnect();
+
+    BOOST_REQUIRE(stored);
+    BOOST_CHECK_EQUAL(Rw("investor"), "1");
+    BOOST_CHECK_EQUAL(Forced("investor"), "1");
+    BOOST_CHECK(GRC::Researcher::ConfiguredForNoncruncherMode());
+}
+
+BOOST_FIXTURE_TEST_CASE(a_failed_mode_change_leaves_a_config_investor_flag_in_force, ResearcherModeChangeFixture)
+{
+    // A failed settings write restores the read-write settings, including the
+    // investor "0" a mode change now writes, so a config-file investor=1 stays
+    // in force and no investor value is left forced.
+    SetConfigFileValue("investor", "1");
+    BOOST_REQUIRE_EQUAL(Rw("investor"), "<absent>");
+    BOOST_REQUIRE(GRC::Researcher::ConfiguredForNoncruncherMode());
+
+    BOOST_REQUIRE(!fs::exists(m_datadir / "missing_subdir"));
+    {
+        // No directory of that name exists under the data directory, so the
+        // settings write cannot open its temporary file and fails without throwing.
+        grc_test::ForcedArgGuard broken_settings_path("settings", "missing_subdir/gridcoinsettings.json");
+
+        BOOST_CHECK(!GRC::Researcher::Get()->ChangeMode(GRC::ResearcherMode::SOLO, m_email));
+        BOOST_CHECK_EQUAL(Rw("investor"), "<absent>");
+        BOOST_CHECK(GRC::Researcher::ConfiguredForNoncruncherMode());
+
+        BOOST_CHECK_EQUAL(Forced("investor"), "<absent>");
+    }
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_access_to_a_global_researcher_singleton)
@@ -929,7 +1360,7 @@ BOOST_AUTO_TEST_CASE(it_resets_to_noncruncher_mode_when_parsing_no_projects)
     BOOST_CHECK(GRC::Researcher::Get()->Projects().empty() == true);
 }
 
-BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
+BOOST_FIXTURE_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml, PoolRegistryTestFixture)
 {
     // Simulate a protocol control directive that enables the team requirement. Resetting
     // the protocol registry defaults the team whitelist to just Gridcoin.
@@ -1711,7 +2142,7 @@ BOOST_AUTO_TEST_CASE(client_state_stub_exists)
     }
 }
 
-BOOST_AUTO_TEST_CASE(it_resets_to_noncruncher_when_it_only_finds_pool_projects)
+BOOST_FIXTURE_TEST_CASE(it_resets_to_noncruncher_when_it_only_finds_pool_projects, PoolRegistryTestFixture)
 {
     const GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
     gArgs.ForceSetArg("email", "researcher@example.com");
@@ -1799,7 +2230,7 @@ BOOST_AUTO_TEST_CASE(it_resets_to_noncruncher_when_it_only_finds_pool_projects)
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
-BOOST_AUTO_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids)
+BOOST_FIXTURE_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids, PoolRegistryTestFixture)
 {
     gArgs.ForceSetArg("pooloperator", "1");
 
@@ -1825,5 +2256,9 @@ BOOST_AUTO_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids)
     gArgs.ForceSetArg("pooloperator", "0");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()

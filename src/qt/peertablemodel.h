@@ -5,7 +5,7 @@
 #ifndef BITCOIN_QT_PEERTABLEMODEL_H
 #define BITCOIN_QT_PEERTABLEMODEL_H
 
-#include <net.h>
+#include <interfaces/node.h>
 
 #include <memory>
 
@@ -19,19 +19,12 @@ QT_BEGIN_NAMESPACE
 class QTimer;
 QT_END_NAMESPACE
 
-struct CNodeCombinedStats {
-    CNodeStats nodeStats;
-    // This is in modern Bitcoin... future port for Gridcoin.
-    // CNodeStateStats nodeStateStats;
-    bool fNodeStateStatsAvailable;
-};
-
 class NodeLessThan
 {
 public:
     NodeLessThan(int nColumn, Qt::SortOrder fOrder) :
         column(nColumn), order(fOrder) {}
-    bool operator()(const CNodeCombinedStats &left, const CNodeCombinedStats &right) const;
+    bool operator()(const interfaces::PeerInfo &left, const interfaces::PeerInfo &right) const;
 
 private:
     int column;
@@ -49,8 +42,8 @@ class PeerTableModel : public QAbstractTableModel
 public:
     explicit PeerTableModel(ClientModel *parent = nullptr);
     ~PeerTableModel();
-    const CNodeCombinedStats *getNodeStats(int idx);
-    int getRowByNodeId(NodeId nodeid);
+    const interfaces::PeerInfo *getNodeStats(int idx);
+    int getRowByNodeId(int64_t nodeid);
     void startAutoRefresh();
     void stopAutoRefresh();
 

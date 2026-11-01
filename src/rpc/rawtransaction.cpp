@@ -5,12 +5,14 @@
 
 #include "chainparams.h"
 #include "init.h"
-#include "main.h"
+#include "miner.h"
+#include "net_processing.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/project.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/sidestake.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
@@ -18,15 +20,19 @@
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
 #include "htlc.h"
+#include "txmempool.h"
 #include <key_io.h>
+#include "merkleblock.h"
 #include "node/blockstorage.h"
 #include "policy/policy.h"
 #include "policy/fees.h"
 #include "primitives/transaction.h"
 #include "protocol.h"
+#include "rpc/util.h"
 #include "server.h"
 #include "streams.h"
 #include "txdb.h"
+#include <util/strencodings.h>
 #include <util/string.h>
 #include "validation.h"
 #include "wallet/coincontrol.h"
@@ -42,6 +48,7 @@ using namespace std;
 UniValue MRCToJson(const GRC::MRC& mrc);
 
 std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!(mtx.IsCoinStake() || mtx.IsCoinBase())) {
         throw runtime_error("GetTxStakeBoincHashInfo: transaction is not a coinstake or coinbase");
@@ -262,6 +269,42 @@ UniValue SideStakePayloadToJson (const GRC::ContractPayload& payload)
     return out;
 }
 
+UniValue PoolRegisterPayloadToJson(const GRC::ContractPayload& payload)
+{
+    const auto& pool = payload.As<GRC::PoolRegisterPayload>();
+
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("cpid", pool.m_cpid.ToString());
+    out.pushKV("name", pool.m_name);
+    out.pushKV("url", pool.m_url);
+    out.pushKV("operator_pubkey", pool.m_operator_key.IsValid()
+                                      ? HexStr(pool.m_operator_key)
+                                      : std::string{});
+    out.pushKV("signature", HexStr(pool.m_signature));
+
+    return out;
+}
+
+UniValue PoolApprovePayloadToJson(const GRC::ContractPayload& payload)
+{
+    const auto& approve = payload.As<GRC::PoolApprovePayload>();
+
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("cpid", approve.m_cpid.ToString());
+
+    // The authorized-operator-key field is only meaningful for OPEN
+    // payloads; ADD/REMOVE serialize 20 bytes without it. Emit only
+    // when valid so JSON output isn't cluttered with empty hex strings
+    // for the common ADD/REMOVE paths.
+    if (approve.m_authorized_operator_key.IsValid()) {
+        out.pushKV("authorized_operator_pubkey", HexStr(approve.m_authorized_operator_key));
+    }
+
+    return out;
+}
+
 UniValue LegacyVotePayloadToJson(const GRC::ContractPayload& payload)
 {
     const auto& vote = payload.As<GRC::LegacyVote>();
@@ -315,6 +358,12 @@ UniValue ContractToJson(const GRC::Contract& contract)
         case GRC::ContractType::SIDESTAKE:
             out.pushKV("body", SideStakePayloadToJson(contract.SharePayload()));
             break;
+        case GRC::ContractType::POOL_REGISTER:
+            out.pushKV("body", PoolRegisterPayloadToJson(contract.SharePayload()));
+            break;
+        case GRC::ContractType::POOL_APPROVE:
+            out.pushKV("body", PoolApprovePayloadToJson(contract.SharePayload()));
+            break;
         default:
             out.pushKV("body", LegacyContractPayloadToJson(contract.SharePayload()));
             break;
@@ -323,7 +372,7 @@ UniValue ContractToJson(const GRC::Contract& contract)
     return out;
 }
 
-void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
+void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     entry.pushKV("txid", tx.GetHash().GetHex());
     entry.pushKV("version", tx.nVersion);
@@ -394,17 +443,36 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
     }
 }
 
-UniValue getrawtransaction(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getrawtransaction <txid> [verbose=bool]\n"
-                "\n"
-                "If verbose is false, returns a string that is\n"
-                "serialized, hex-encoded data for <txid>.\n"
-                "If verbose is true, returns an Object\n"
-                "with information about <txid>\n");
+static const RPCHelpMan getrawtransaction_help{
+    "getrawtransaction",
+    "Return raw transaction data.\n"
+    "\n"
+    "If verbose is false, returns a serialized, hex-encoded string for <txid>.\n"
+    "If verbose is true, returns an object with information about <txid>.",
+    {
+        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
+        {"verbose", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, return an object instead of a hex string. Numeric values are also accepted "
+            "(any non-zero number is treated as true). Default: false."},
+    },
+    RPCResults{
+        RPCResult{RPCResult::Type::STR_HEX, "",
+            "Hex-encoded serialized transaction (verbose=false)."},
+        RPCResult{RPCResult::Type::OBJ, "", "Decoded transaction (verbose=true).",
+            {
+                {RPCResult::Type::STR_HEX, "hex", "Serialized hex of the transaction."},
+                {RPCResult::Type::ELISION, "", "Remaining fields match TxToJSON's shape."},
+            }},
+    },
+    RPCExamples{
+        HelpExampleCli("getrawtransaction", "\"<txid>\"") +
+        HelpExampleCli("getrawtransaction", "\"<txid>\" true") +
+        HelpExampleRpc("getrawtransaction", "\"<txid>\", true")},
+};
+const RPCHelpMan& getrawtransaction_helpman() { return getrawtransaction_help; }
 
+UniValue getrawtransaction(const UniValue& params)
+{
     uint256 hash;
     hash.SetHex(params[0].get_str());
 
@@ -435,18 +503,206 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp)
     return result;
 }
 
-UniValue listunspent(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 3)
-        throw runtime_error(
-                "listunspent [minconf=1] [maxconf=9999999]  [\"address\",...]\n"
-                "\n"
-                "Returns array of unspent transaction outputs\n"
-                "with between minconf and maxconf (inclusive) confirmations.\n"
-                "Optionally filtered to only include txouts paid to specified addresses.\n"
-                "Results are an array of Objects, each of which has:\n"
-                "{txid, vout, scriptPubKey, amount, confirmations}\n");
+static const RPCHelpMan gettxoutproof_help{
+    "gettxoutproof",
+    "Returns a hex-encoded proof that one or more transactions were included in a block.\n"
+    "\n"
+    "NOTE: Gridcoin always maintains a full transaction index, so this works for\n"
+    "any confirmed transaction. A blockhash may be supplied to look in a specific\n"
+    "block instead of resolving the containing block automatically.",
+    {
+        {"txids", RPCArg::Type::ARR, RPCArg::Optional::NO, "The txids to filter.",
+            {
+                {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED, "A transaction hash."},
+            }},
+        {"blockhash", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
+            "If specified, looks for txid in the block with this hash."},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "",
+        "A serialized, hex-encoded proof."},
+    RPCExamples{
+        HelpExampleCli("gettxoutproof", "'[\"<txid>\"]'") +
+        HelpExampleCli("gettxoutproof", "'[\"<txid>\"]' \"<blockhash>\"") +
+        HelpExampleRpc("gettxoutproof", "[\"<txid>\"], \"<blockhash>\"")},
+};
+const RPCHelpMan& gettxoutproof_helpman() { return gettxoutproof_help; }
 
+UniValue gettxoutproof(const UniValue& params)
+{
+    RPCTypeCheck(params, { UniValue::VARR, UniValue::VSTR }, true);
+
+    // allow_null above is for the optional blockhash; txids is required, so
+    // reject an explicit null with a proper RPC_INVALID_PARAMETER rather than
+    // letting get_array() throw a generic RPC_MISC_ERROR.
+    if (params[0].isNull())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Parameter 'txids' is required");
+
+    UniValue txids = params[0].get_array();
+    if (txids.empty())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Parameter 'txids' cannot be empty");
+
+    std::set<uint256> setTxids;
+    for (unsigned int idx = 0; idx < txids.size(); idx++) {
+        const UniValue& utxid = txids[idx];
+        uint256 hash = ParseHashV(utxid, "txid");
+        if (setTxids.count(hash))
+            throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated txid: ") + utxid.get_str());
+        setTxids.insert(hash);
+    }
+
+    LOCK(cs_main);
+
+    CBlockIndex* pblockindex = nullptr;
+
+    if (!params[1].isNull()) {
+        uint256 hashBlock = ParseHashV(params[1], "blockhash");
+        BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
+        if (mi == mapBlockIndex.end() || !mi->second)
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+        pblockindex = mi->second;
+    } else {
+        // Resolve the containing block from the FIRST provided txid, so the
+        // chosen block is deterministic and depends on caller input order rather
+        // than the sorted-set ordering of the txids.
+        uint256 firstTxid = ParseHashV(txids[0], "txid");
+        CTransaction tx;
+        uint256 hashBlock;
+        if (GetTransaction(firstTxid, tx, hashBlock) && !hashBlock.IsNull()) {
+            BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
+            if (mi != mapBlockIndex.end() && mi->second)
+                pblockindex = mi->second;
+        }
+    }
+
+    if (!pblockindex)
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+            "Transaction not yet in block, or in a block that is not in the main chain");
+
+    // Reject non-main-chain blocks from BOTH the explicit-blockhash and the
+    // auto-resolution (GetTransaction) paths: a proof for a side-chain block
+    // would always be rejected by verifytxoutproof, so don't emit one.
+    if (!pblockindex->IsInMainChain())
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block is not in the main chain");
+
+    CBlock block;
+    if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't read block from disk");
+
+    unsigned int ntxFound = 0;
+    for (const CTransaction& tx : block.vtx)
+        if (setTxids.count(tx.GetHash()))
+            ntxFound++;
+    if (ntxFound != setTxids.size())
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+            "Not all transactions found in specified or retrieved block");
+
+    CDataStream ssMB(SER_NETWORK, PROTOCOL_VERSION);
+    CMerkleBlock mb(block, setTxids);
+    ssMB << mb;
+
+    return HexStr(ssMB);
+}
+
+static const RPCHelpMan verifytxoutproof_help{
+    "verifytxoutproof",
+    "Verifies that a proof points to transactions in a block, returning the transaction(s) it\n"
+    "commits to, or an empty array if the proof is invalid, and throwing an RPC error if the\n"
+    "block is not in our best chain.",
+    {
+        {"proof", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "The hex-encoded proof generated by gettxoutproof."},
+    },
+    RPCResult{RPCResult::Type::ARR, "",
+        "The txid(s) which the proof commits to, or empty array if the proof cannot be validated.",
+        {
+            {RPCResult::Type::STR_HEX, "", "A committed transaction hash."},
+        }},
+    RPCExamples{
+        HelpExampleCli("verifytxoutproof", "\"<proof>\"") +
+        HelpExampleRpc("verifytxoutproof", "\"<proof>\"")},
+};
+const RPCHelpMan& verifytxoutproof_helpman() { return verifytxoutproof_help; }
+
+UniValue verifytxoutproof(const UniValue& params)
+{
+    RPCTypeCheck(params, { UniValue::VSTR });
+
+    CMerkleBlock merkleBlock;
+
+    try {
+        CDataStream ssMB(ParseHex(params[0].get_str()), SER_NETWORK, PROTOCOL_VERSION);
+        ssMB >> merkleBlock;
+    } catch (const std::exception&) {
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Proof could not be deserialized");
+    }
+
+    UniValue res(UniValue::VARR);
+
+    std::vector<uint256> vMatch;
+    std::vector<unsigned int> vIndex;
+    if (merkleBlock.txn.ExtractMatches(vMatch, vIndex) != merkleBlock.header.hashMerkleRoot)
+        return res;
+
+    LOCK(cs_main);
+
+    BlockMap::iterator mi = mapBlockIndex.find(merkleBlock.header.GetHash());
+    if (mi == mapBlockIndex.end() || !mi->second || !mi->second->IsInMainChain())
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found in chain");
+    CBlockIndex* const pindex = mi->second;
+
+    // Bind the proof's tree SHAPE to the real block. A partial merkle tree's
+    // nTransactions fixes its width/height; without checking it against the real
+    // block's transaction count an attacker can craft a proof (e.g.
+    // nTransactions=1, vBits=[true], vHash=[merkleRoot]) whose ExtractMatches
+    // returns an INTERNAL node as both the computed root and a "matched txid",
+    // forging an inclusion claim. (Bitcoin Core commit ed82f17000.)
+    CBlock block;
+    if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to read block from disk");
+    if (block.vtx.size() != merkleBlock.txn.GetNumTransactions())
+        return res; // proof shape does not match the real block -> reject
+
+    for (const uint256& hash : vMatch)
+        res.push_back(hash.GetHex());
+
+    return res;
+}
+
+static const RPCHelpMan listunspent_help{
+    "listunspent",
+    "Returns array of unspent transaction outputs with between minconf and maxconf (inclusive) confirmations.\n"
+    "Optionally filtered to only include txouts paid to specified addresses.",
+    {
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "The minimum confirmations to filter (default: 1)."},
+        {"maxconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "The maximum confirmations to filter (default: 9999999)."},
+        {"addresses", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "Filter to only include UTXOs paid to these addresses.",
+            {
+                {"address", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "An address."},
+            }},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::STR_HEX, "txid", "Transaction id."},
+                    {RPCResult::Type::NUM, "vout", "Output index."},
+                    {RPCResult::Type::STR_HEX, "scriptPubKey", "Output script (hex)."},
+                    {RPCResult::Type::STR_AMOUNT, "amount", "Output amount."},
+                    {RPCResult::Type::NUM, "confirmations", "Confirmation count."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listunspent", "") +
+        HelpExampleCli("listunspent", "6 9999999 \"[\\\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\\\"]\"") +
+        HelpExampleRpc("listunspent", "6, 9999999, [\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\"]")},
+};
+const RPCHelpMan& listunspent_helpman() { return listunspent_help; }
+
+UniValue listunspent(const UniValue& params)
+{
     RPCTypeCheck(params, { UniValue::VNUM, UniValue::VNUM, UniValue::VARR });
 
     int nMinDepth = 1;
@@ -509,10 +765,10 @@ UniValue listunspent(const UniValue& params, bool fHelp)
 
             if (item != pwalletMain->mapAddressBook.end())
             {
-                entry.pushKV("label", item->second);
+                entry.pushKV("label", item->second.name);
 
                 if (gArgs.GetBoolArg("-enableaccounts", false))
-                    entry.pushKV("account", item->second);
+                    entry.pushKV("account", item->second.name);
             }
         }
         entry.pushKV("scriptPubKey", HexStr(pk));
@@ -525,46 +781,43 @@ UniValue listunspent(const UniValue& params, bool fHelp)
 }
 
 
-UniValue consolidateunspent(const UniValue& params, bool fHelp)
+static const RPCHelpMan consolidateunspent_help{
+    "consolidateunspent",
+    "Performs a single transaction to consolidate UTXOs to/on a given address.\n"
+    "\n"
+    "The optional UTXO-size parameter results in consolidating UTXOs to generate the largest output possible\n"
+    "less than that size, or the total value of the specified maximum number of smallest inputs, whichever is less.\n"
+    "\n"
+    "The script is designed to be run repeatedly and will become a no-op once no UTXOs meet the criteria, making\n"
+    "it ideal for automated periodic scripting.\n"
+    "\n"
+    "The address MUST exist in your wallet beforehand. To consolidate the entire wallet to one address, run\n"
+    "consolidateunspent <addr> <amount-equal-or-larger-than-balance> 200 true repeatedly.",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The Gridcoin address target for consolidation. Must exist in the wallet."},
+        {"utxo_size", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+            "Target consolidation output size. Omit or pass null for no size limit."},
+        {"max_inputs", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Defaults and is clamped to the value returned by GetMaxInputsForConsolidationTxn() to prevent "
+            "transaction failures. Must not be negative (omit or pass null for the default maximum). "
+            "0 or 1 selects fewer than two inputs, so the call does nothing."},
+        {"sweep_all_addresses", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, source inputs from all wallet addresses (output still goes to <address>). "
+            "Otherwise only the source address contributes inputs."},
+        {"sweep_change", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, consolidate change associated with the address. Forced true when sweep_all_addresses is true."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Consolidation result detail; see source for the exact shape."}}},
+    RPCExamples{
+        HelpExampleCli("consolidateunspent", "\"<address>\" 10000 200 false false") +
+        HelpExampleRpc("consolidateunspent", "\"<address>\", 10000, 200, false, false")},
+};
+const RPCHelpMan& consolidateunspent_helpman() { return consolidateunspent_help; }
+
+UniValue consolidateunspent(const UniValue& params)
 {
-    std::stringstream error_strm;
-
-    error_strm << "consolidateunspent <address> [UTXO size] [maximum number of inputs] [sweep all addresses] [sweep change]\n"
-                  "\n"
-                  "<address>:                  The Gridcoin address target for consolidation.\n"
-                  "\n"
-                  "[UTXO size]:                Optional parameter for target consolidation output size.\n"
-                  "\n"
-                  "[maximum number of inputs]: Defaults and clamped to "
-               << ToString(GetMaxInputsForConsolidationTxn())
-               << " maximum to prevent transaction failures.\n"
-                  "\n"
-                  "[sweep all addresses]:      Boolean to indicate whether all addresses should be used for inputs to the\n"
-                  "                            consolidation. If true, the source of the consolidation is all addresses and\n"
-                  "                            the output will be to the specified address, otherwise inputs will only be\n"
-                  "                            sourced from the same address.\n"
-                  "\n"
-                  "[sweep change]:             Boolean to indicate whether change associated with the address should be\n"
-                  "                            consolidated. If [sweep all addresses] is true then this is also forced true.\n"
-                  "\n"
-                  "consolidateunspent performs a single transaction to consolidate UTXOs to/on a given address. The optional\n"
-                  "parameter of UTXO size will result in consolidating UTXOs to generate the largest output possible less\n"
-                  "than that size or the total value of the specified maximum number of smallest inputs, whichever is less.\n"
-                  "\n"
-                  "The script is designed to be run repeatedly and will become a no-op if the UTXO's are consolidated such\n"
-                  "that no more meet the specified criteria. This is ideal for automated periodic scripting.\n"
-                  "\n"
-                  "To consolidate the entire wallet to one address do something like:\n"
-                  "\n"
-                  "consolidateunspent <address> <amount equal or larger than balance> 200 true repeatedly until there are\n"
-                  "no more UTXOs to consolidate.\n"
-                  "\n"
-                  "In all cases the address MUST exist in your wallet beforehand. If doing this for the purpose of creating\n"
-                  "a new smaller wallet, create a new address beforehand to serve as the target of the consolidation.\n";
-
-    if (fHelp || params.size() < 1 || params.size() > 5)
-        throw runtime_error(error_strm.str());
-
     UniValue result(UniValue::VOBJ);
 
     std::string sAddress = params[0].get_str();
@@ -578,13 +831,25 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     // Note this value is ignored if sweep_all_addresses is set to true.
     bool sweep_change = false;
 
-    if (params.size() > 1) nConsolidateLimit = AmountFromValue(params[1]);
+    if (params.size() > 1 && !params[1].isNull()) nConsolidateLimit = AmountFromValue(params[1]);
 
-    if (params.size() > 2) nInputNumberLimit = params[2].get_int();
+    // A wrong type is RPC_TYPE_ERROR rather than get_int()'s generic RPC_MISC_ERROR, and a negative is rejected
+    // instead of wrapping to UINT_MAX on assignment to nInputNumberLimit and being clamped to the maximum below.
+    if (params.size() > 2 && !params[2].isNull())
+    {
+        int32_t nParsedLimit = 0;
+        if (!params[2].isNum() || !ParseInt32(params[2].getValStr(), &nParsedLimit)) {
+            throw JSONRPCError(RPC_TYPE_ERROR, "max_inputs must be a JSON integer in the 32-bit range.");
+        }
+        if (nParsedLimit < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "max_inputs cannot be negative.");
+        }
+        nInputNumberLimit = static_cast<unsigned int>(nParsedLimit);
+    }
 
-    if (params.size() > 3) sweep_all_addresses = params[3].get_bool();
+    if (params.size() > 3 && !params[3].isNull()) sweep_all_addresses = params[3].get_bool();
 
-    if (params.size() > 4 && !sweep_all_addresses) sweep_change = params[4].get_bool();
+    if (params.size() > 4 && !params[4].isNull() && !sweep_all_addresses) sweep_change = params[4].get_bool();
 
     // Clamp InputNumberLimit to GetMaxInputsForConsolidationTxn(). Above that number of inputs risks an invalid transaction
     // due to the size.
@@ -603,13 +868,19 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 
     // A convenient way to do a sort without the bother of writing a comparison operator.
     // The map does it for us! It must be a multimap, because it is highly likely one or
-    // more UTXO's will have the same nValue.
+    // more UTXOs will have the same nValue.
     std::multimap<int64_t, COutput> mInputs;
+
+    // Announced after this scope unlocks: the relay path reached from
+    // CommitTransaction takes a peer's cs_inventory, and SendMessages takes
+    // cs_inventory and then cs_wallet (#3391). Declared before the guard so it
+    // outlives it.
+    DeferredRelay relay;
 
     // Have to lock both main and wallet.
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    // Get the current UTXO's.
+    // Get the current UTXOs.
     pwalletMain->AvailableCoins(vecInputs, false, nullptr, false);
 
     // Filter outputs in the wallet that are the candidate inputs by matching address and insert into sorted multimap.
@@ -710,7 +981,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 
     // Construct the inputs to the consolidation transaction. Either all of the inputs from above, or 200,
     // or when the total reaches/exceeds nConsolidateLimit, whichever is more limiting. The map allows us
-    // to elegantly select the UTXO's from the smallest upwards.
+    // to elegantly select the UTXOs from the smallest upwards.
     for (auto const& out : mInputs)
     {
         int64_t nUTXOValue = out.second.tx->vout[out.second.i].nValue;
@@ -718,7 +989,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
         if (iInputCount == nInputNumberLimit || ((nAmount + nUTXOValue) > nConsolidateLimit && nConsolidateLimit != 0)) break;
 
         // This has been moved after the break to change the behavior so that the
-        // consolidation is limited to the set of UTXO's SMALLER than the nConsolidateLimit
+        // consolidation is limited to the set of UTXOs SMALLER than the nConsolidateLimit
         // in the case that the next UTXO would go OVER the limit. The prior behavior
         // would include that next UTXO and produce a UTXO larger than desired.
         // Both methods have undesirable corner cases:
@@ -728,7 +999,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
         // New behavior corner case... UTXO 1 to n are all very small and total value
         // adds up to a small fraction of nConsolidateLimit. Next UTXO is similar to
         // nConsolidateLimit, but is not included, which means the output UTXO is limited
-        // to the consolidation of the smaller UTXO's and produces a UTXO that is much
+        // to the consolidation of the smaller UTXOs and produces a UTXO that is much
         // smaller than desired. To consolidate the next UTXO would require changing the
         // input parameters to the function.
         // Feedback from users indicate the latter is preferable to the former. The only way
@@ -802,7 +1073,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
         return strError;
     }
 
-    if (fWalletUnlockStakingOnly)
+    if (pwalletMain->IsUnlockedForStakingOnly())
     {
         string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
         LogPrintf("consolidateunspent: %s", strError);
@@ -833,7 +1104,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
         return strError;
     }
 
-    if (!pwalletMain->CommitTransaction(wtxNew, reservekey))
+    if (!pwalletMain->CommitTransaction(wtxNew, reservekey, &relay))
         return _("Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already"
                  " spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent"
                  " here.");
@@ -841,6 +1112,384 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     result.pushKV("result", true);
     result.pushKV("utxos_consolidated", (uint64_t) iInputCount);
     result.pushKV("output_utxo_value", FormatMoney(nAmount - nFeeRequired));
+    result.pushKV("fee", FormatMoney(nFeeRequired));
+    result.pushKV("txid", wtxNew.GetHash().GetHex());
+
+    return result;
+}
+
+static const RPCHelpMan splitunspent_help{
+    "splitunspent",
+    "Performs a single transaction to split all spendable UTXOs on a given address into uniform pieces\n"
+    "sent back to the same address. Any remainder is returned to the same address as change, so the\n"
+    "entire balance stays on the address. This is the inverse of consolidateunspent.\n"
+    "\n"
+    "At most one of piece_size and piece_count may be provided (nonzero); for the one not used\n"
+    "pass 0 or null, or omit it. piece_size reads its token with the amount grammar, so any number\n"
+    "or string an amount parse reads as exactly zero (\"0\", \"0.0\", \"-0\") is the unset sentinel;\n"
+    "piece_count accepts only a JSON integer or null.\n"
+    "With piece_size, the balance is split into as many pieces of that value as fit after the fee.\n"
+    "With piece_count, the balance less the fee is divided into that many equal pieces. With neither,\n"
+    "pieces are sized to the efficiency-optimal stake output value for the current network difficulty,\n"
+    "the same size stake splitting (-enablestakesplit) would produce. In all modes a small additional\n"
+    "change UTXO may be created holding the remainder.\n"
+    "\n"
+    "Pieces must be at least the stake-split minimum: the greater of -minstakesplitvalue and 800 GRC,\n"
+    "applied whether or not stake splitting is enabled. The staker never splits below this size, so\n"
+    "smaller pieces only bloat the UTXO set. The fee is the greater of the normal size-based fee and\n"
+    "one transaction fee (-paytxfee, default 0.001 GRC) per piece, the same total as splitting the\n"
+    "pieces off one at a time; it is taken from the remainder, never from the pieces. At most 599\n"
+    "pieces are created per call, one less than the consolidation input limit, so a split plus its\n"
+    "change output remains reversible by a single consolidateunspent. The address must hold no more\n"
+    "UTXOs than the single-transaction input limit (see consolidateunspent to reduce the UTXO count\n"
+    "first).",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The Gridcoin address whose UTXOs will be split. Pieces and change return to this address."},
+        {"piece_size", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+            "Target value of each piece. 0, null or omitted means unset; use piece_count or the "
+            "optimal-size default."},
+        {"piece_count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Number of pieces to create, as a JSON integer (strings are not accepted). 0, null or "
+            "omitted means unset; use piece_size or the optimal-size default."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "result", "True if a split transaction was created; false with only "
+                                              "utxos_swept when there is nothing to split."},
+            {RPCResult::Type::NUM, "utxos_swept", "Number of UTXOs consumed as inputs."},
+            {RPCResult::Type::NUM, "pieces_created", /*optional=*/true, "Number of uniform pieces created."},
+            {RPCResult::Type::STR_AMOUNT, "piece_value", /*optional=*/true, "Value of each piece."},
+            {RPCResult::Type::STR_AMOUNT, "change_value", /*optional=*/true, "Remainder returned to the address as change."},
+            {RPCResult::Type::STR_AMOUNT, "fee", /*optional=*/true, "Fee paid for the whole transaction."},
+            {RPCResult::Type::STR_HEX, "txid", /*optional=*/true, "Transaction id."},
+        }},
+    RPCExamples{
+        HelpExampleCli("splitunspent", "\"<address>\"") +
+        HelpExampleCli("splitunspent", "\"<address>\" 1000") +
+        HelpExampleCli("splitunspent", "\"<address>\" 0 10") +
+        HelpExampleRpc("splitunspent", "\"<address>\", 0, 10")},
+};
+const RPCHelpMan& splitunspent_helpman() { return splitunspent_help; }
+
+UniValue splitunspent(const UniValue& params)
+{
+    UniValue result(UniValue::VOBJ);
+
+    std::string sAddress = params[0].get_str();
+    CTxDestination SplitAddress = DecodeDestination(sAddress);
+
+    if (!IsValidDestination(SplitAddress))
+    {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ") + sAddress);
+    }
+
+    int64_t nPieceSize = 0;
+    int nPieceCount = 0;
+
+    // 0 is the unset sentinel and must be handled before conversion, because AmountFromValue
+    // throws on any value <= 0. Read the token the same way AmountFromValue reads it, so the
+    // sentinel is honored in either JSON form: 0 and "0" both mean unset.
+    if (params.size() > 1 && !params[1].isNull())
+    {
+        int64_t nParsed = 0;
+
+        if (!((params[1].isNum() || params[1].isStr())
+              && ParseFixedPoint(params[1].getValStr(), 8, &nParsed) && nParsed == 0))
+        {
+            nPieceSize = AmountFromValue(params[1]);
+        }
+    }
+
+    // piece_count is a JSON integer or null only (see the help). Check it here rather than letting
+    // get_int() throw, so a wrong type is RPC_TYPE_ERROR -- the family piece_size's AmountFromValue
+    // uses -- instead of a generic RPC_MISC_ERROR. ParseInt32 also rejects a number that is not an
+    // integer (2.5, 10.0), which get_int() reported as "out of range".
+    if (params.size() > 2 && !params[2].isNull())
+    {
+        int32_t nParsedCount = 0;
+        if (!params[2].isNum() || !ParseInt32(params[2].getValStr(), &nParsedCount)) {
+            throw JSONRPCError(RPC_TYPE_ERROR, "piece_count must be a JSON integer in the 32-bit range.");
+        }
+        nPieceCount = nParsedCount;
+    }
+
+    if (nPieceCount < 0)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "piece_count cannot be negative.");
+    }
+
+    if (nPieceSize != 0 && nPieceCount != 0)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           "At most one of piece_size and piece_count may be provided (nonzero).");
+    }
+
+    CScript scriptDestPubKey;
+    scriptDestPubKey.SetDestination(SplitAddress);
+
+    std::vector<COutput> vecInputs;
+
+    // Announced after this scope unlocks: the relay path reached from
+    // CommitTransaction takes a peer's cs_inventory, and SendMessages takes
+    // cs_inventory and then cs_wallet (#3391). Declared before the guard so it
+    // outlives it.
+    DeferredRelay relay;
+
+    // Have to lock both main and wallet.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // The stake-split minimum and the efficiency-optimal stake output size for current network
+    // conditions. These honor -minstakesplitvalue and -stakingefficiency (with their floors and
+    // clamps) whether or not stake splitting is enabled.
+    int64_t nMinPieceSize = 0;
+    double dEfficiency = 0;
+    const int64_t nOptimalPieceSize = GetOptimalStakeSplitValue(nMinPieceSize, dEfficiency);
+
+    // With neither piece_size nor piece_count given, split at the optimal size.
+    const bool fOptimalSizeMode = (nPieceSize == 0 && nPieceCount == 0);
+
+    if (fOptimalSizeMode)
+    {
+        nPieceSize = nOptimalPieceSize;
+    }
+    else if (nPieceSize != 0 && nPieceSize < nMinPieceSize)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           strprintf("piece_size must be at least %s GRC, the greater of -minstakesplitvalue and "
+                                     "the stake-split minimum of %s GRC. The staker never splits UTXOs below this "
+                                     "size; smaller pieces only bloat the UTXO set. Omit both piece_size and "
+                                     "piece_count to split at the current efficiency-optimal size of %s GRC.",
+                                     FormatMoney(nMinPieceSize), FormatMoney(MIN_STAKE_SPLIT_VALUE_GRC * COIN),
+                                     FormatMoney(nOptimalPieceSize)));
+    }
+
+    // Get the current UTXOs. Only fOnlyConfirmed departs from the defaults, and it gates on
+    // CWalletTx::IsTrusted() rather than on confirmation count alone: IsTrusted demands three
+    // confirmations for anything not from this wallet, so passing false admits shallow incoming
+    // payments as well as unconfirmed ones. This matches consolidateunspent. Immature
+    // coinbase/coinstake outputs, non-final transactions and conflicts are excluded regardless.
+    pwalletMain->AvailableCoins(vecInputs, /*fOnlyConfirmed=*/false, /*coinControl=*/nullptr,
+                                /*fIncludeStakingCoins=*/false);
+
+    CWalletTx wtxNew;
+
+    set<pair<const CWalletTx*,unsigned int>> setCoins;
+
+    unsigned int iInputCount = 0;
+    CAmount nAmount = 0;
+    unsigned int nBytesInputs = 0;
+
+    // Sweep ALL spendable UTXOs whose destination matches the split address.
+    for (auto const& out : vecInputs)
+    {
+        CTxDestination out_address;
+
+        if (!ExtractDestination(out.tx->vout[out.i].scriptPubKey, out_address)) continue;
+
+        if (out_address != SplitAddress) continue;
+
+        nAmount += out.tx->vout[out.i].nValue;
+
+        setCoins.insert(make_pair(out.tx, out.i));
+
+        ++iInputCount;
+
+        // For fee calculation. This is similar to the calculation in coincontroldialog.cpp.
+        CPubKey pubkey;
+        try {
+            if (pwalletMain->GetPubKey(std::get<CKeyID>(out_address), pubkey))
+            {
+                nBytesInputs += (pubkey.IsCompressed() ? 148 : 180);
+            }
+            // in all error cases, simply assume 148 here
+            else
+            {
+                nBytesInputs += 148;
+            }
+        } catch (const std::bad_variant_access&) {
+            nBytesInputs += 148;
+        }
+    }
+
+    // Nothing to split. Note that unlike consolidateunspent, a single input is a valid split source.
+    if (iInputCount == 0)
+    {
+        result.pushKV("result", false);
+        result.pushKV("utxos_swept", (uint64_t) 0);
+
+        return result;
+    }
+
+    if (iInputCount > GetMaxInputsForConsolidationTxn())
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           strprintf("Address has %u spendable UTXOs, which exceeds the maximum of %u inputs for a "
+                                     "single transaction. Run consolidateunspent on the address first.",
+                                     iInputCount, GetMaxInputsForConsolidationTxn()));
+    }
+
+    if (pwalletMain->IsLocked())
+    {
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet locked, unable to create transaction.");
+    }
+
+    if (pwalletMain->IsUnlockedForStakingOnly())
+    {
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED,
+                           "Error: Wallet unlocked for staking only, unable to create transaction.");
+    }
+
+    // Base serialized overhead of a Gridcoin v2 transaction: nVersion (4) + nTime (4) + vin count varint
+    // + vout count varint + nLockTime (4) + empty contract vector (1) = 15 bytes minimum, padded to 25
+    // to cover compact-size growth when the output count reaches 253.
+    const int64_t nBaseOverhead = 25;
+    const int64_t nBytesPerOutput = 34;
+
+    // The maximum number of pieces that fit in a standard transaction, holding back a 5000 byte safety
+    // margin and one output slot for the change output, and capped at one less than the consolidation
+    // input limit so that the pieces plus the change output remain reversible by a single
+    // consolidateunspent.
+    const int64_t nMaxPieces =
+        std::min(((int64_t) MAX_STANDARD_TX_SIZE - 5000 - nBaseOverhead - (int64_t) nBytesInputs) / nBytesPerOutput - 1,
+                 (int64_t) GetMaxInputsForConsolidationTxn() - 1);
+
+    if (nMaxPieces < 1)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           "The inputs leave no room for outputs in a standard transaction. Run consolidateunspent "
+                           "on the address first.");
+    }
+
+    CTransaction txDummy;
+
+    // Fee for a transaction with the swept inputs, nOutputs pieces, and one change output.
+    const auto FeeForOutputs = [&](int64_t nOutputs) {
+        int64_t nBytes = nBytesInputs + nBytesPerOutput * (nOutputs + 1) + nBaseOverhead;
+
+        int64_t nMinFee = GetMinFee(txDummy, 1000, GMF_SEND, nBytes);
+
+        int64_t nFee = nTransactionFee * (1 + nBytes / 1000);
+
+        return std::max(nMinFee, nFee);
+    };
+
+    // Fee for a split into nOutputs pieces: the greater of the size-based fee for the whole transaction
+    // and one transaction fee per piece, the same total fee as splitting each piece off with its own
+    // transaction, so batching carries no fee discount.
+    const auto FeeForPieces = [&](int64_t nOutputs) {
+        return std::max(FeeForOutputs(nOutputs), nOutputs * nTransactionFee);
+    };
+
+    // One extra fee tier is deliberately left in the change so that if CreateTransaction internally
+    // raises the fee by a tier, the change absorbs it rather than going negative and aborting.
+    const int64_t nFeeSlack = nTransactionFee;
+
+    int64_t nPieces = 0;
+    int64_t nFeeRequired = 0;
+
+    if (nPieceSize != 0)
+    {
+        // Size mode: as many pieces of nPieceSize as fit after the fee and slack. The nMaxPieces
+        // clamp must be applied in BOTH passes.
+        nPieces = std::min(nAmount / nPieceSize, nMaxPieces);
+
+        nFeeRequired = FeeForPieces(nPieces);
+
+        nPieces = std::min((nAmount - nFeeRequired - nFeeSlack) / nPieceSize, nMaxPieces);
+
+        if (nPieces < 1)
+        {
+            if (fOptimalSizeMode)
+            {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                                   strprintf("The spendable balance on the address (%s) is already at or below the "
+                                             "efficiency-optimal UTXO size of %s GRC for current network conditions. "
+                                             "There is nothing to split.",
+                                             FormatMoney(nAmount), FormatMoney(nPieceSize)));
+            }
+
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               strprintf("The spendable balance on the address (%s) is too small to create one piece "
+                                         "of %s after the fee.", FormatMoney(nAmount), FormatMoney(nPieceSize)));
+        }
+
+        // Recompute with the final (equal or smaller) piece count. The fee only shrinks here.
+        nFeeRequired = FeeForPieces(nPieces);
+    }
+    else
+    {
+        // Count mode: divide the balance less the fee and slack into nPieceCount equal pieces.
+        nPieces = nPieceCount;
+
+        if (nPieces > nMaxPieces)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               strprintf("piece_count %" PRId64 " exceeds the maximum of %" PRId64 " pieces for a "
+                                         "single split with these inputs. The count is limited by the standard "
+                                         "transaction size and capped at one less than the consolidation input "
+                                         "limit, so that the pieces plus the change output remain reversible by a "
+                                         "single consolidateunspent.", nPieces, nMaxPieces));
+        }
+
+        nFeeRequired = FeeForPieces(nPieces);
+
+        if (nAmount <= nFeeRequired + nFeeSlack)
+        {
+            throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS,
+                               strprintf("The spendable balance on the address (%s) does not cover the transaction "
+                                         "fee (%s).", FormatMoney(nAmount), FormatMoney(nFeeRequired + nFeeSlack)));
+        }
+
+        nPieceSize = (nAmount - nFeeRequired - nFeeSlack) / nPieces;
+
+        if (nPieceSize < nMinPieceSize)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               strprintf("Splitting the spendable balance on the address (%s) into %" PRId64 " pieces "
+                                         "results in pieces below the minimum piece size of %s GRC. The largest "
+                                         "viable piece_count is %" PRId64 ".",
+                                         FormatMoney(nAmount), nPieces, FormatMoney(nMinPieceSize),
+                                         (nAmount - nFeeRequired - nFeeSlack) / nMinPieceSize));
+        }
+    }
+
+    CReserveKey reservekey(pwalletMain);
+
+    vector<pair<CScript, int64_t> > vecSend;
+
+    for (int64_t i = 0; i < nPieces; ++i)
+    {
+        vecSend.push_back(std::make_pair(scriptDestPubKey, nPieceSize));
+    }
+
+    CCoinControl coinControl;
+
+    // Send the change (remainder plus fee slack) back to the same address.
+    coinControl.destChange = SplitAddress;
+
+    // The per-piece fee is enforced as a fee floor; CreateTransaction can still raise the fee
+    // above it if the size-based fee requires, with the slack left in the change absorbing it.
+    if (!pwalletMain->CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRequired, &coinControl,
+                                        /*change_back_to_input_address=*/false,
+                                        /*nEnforcedMinFee=*/nPieces * nTransactionFee))
+    {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Error: Transaction creation failed.");
+    }
+
+    if (!pwalletMain->CommitTransaction(wtxNew, reservekey, &relay))
+    {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+                           "Error: The transaction was rejected. This might happen if some of the coins in your "
+                           "wallet were already spent, such as if you used a copy of wallet.dat and coins were "
+                           "spent in the copy but not marked as spent here.");
+    }
+
+    result.pushKV("result", true);
+    result.pushKV("utxos_swept", (uint64_t) iInputCount);
+    result.pushKV("pieces_created", (uint64_t) nPieces);
+    result.pushKV("piece_value", FormatMoney(nPieceSize));
+    result.pushKV("change_value", FormatMoney(nAmount - nPieces * nPieceSize - nFeeRequired));
     result.pushKV("fee", FormatMoney(nFeeRequired));
     result.pushKV("txid", wtxNew.GetHash().GetHex());
 
@@ -950,24 +1599,32 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
  * We will round up since we will be within the 32766 comfortably
  * 51 = X = max inputs
 */
-UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() < 3 || params.size() > 5)
-        throw runtime_error(
-                "consolidatemsunspent <address> <block-start> <block-end> [max-grc] [max-inputs]\n"
-                "\n"
-                "Searches a block range for a multisig address with unspent utxos\n"
-                "and consolidates them into a transaction ready for signing to\n"
-                "return to the same address in an consolidated amount.\n"
-                "consolidatemsunspent will also determine multi-sig type and ensure\n"
-                "the transaction does not exceed any size limits due to inputs.\n"
-                "\n"
-                "<address> ------------> Multi-signature address\n"
-                "<block-start> --------> Block number to start search from\n"
-                "<block-end> ----------> Block number to end search on\n"
-                "[max-grc] ------------> Highest uxto value to include in search results in halfords (0 is default)\n"
-                "[max-inputs] ---------> Maximum inputs desired. (If the calculated max inputs is less than defined here; argument is overridden)\n");
+static const RPCHelpMan consolidatemsunspent_help{
+    "consolidatemsunspent",
+    "Search a block range for a multisig address with unspent UTXOs and consolidate them into a transaction\n"
+    "ready for signing, returning to the same address in a consolidated amount. The command determines the\n"
+    "multisig type and ensures the transaction does not exceed any size limits due to inputs.",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "Multi-signature address."},
+        {"block_start", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to start search from."},
+        {"block_end", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to end search on."},
+        {"max_grc", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Highest UTXO value to include in search results, in halfords (default: 0 = unlimited)."},
+        {"max_inputs", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Maximum inputs desired. If the calculated max inputs is less than this argument, it is overridden. "
+            "Must not be negative; 0 means the calculated maximum."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "",
+            "Consolidation result detail including the unsigned transaction; see source for shape."}}},
+    RPCExamples{
+        HelpExampleCli("consolidatemsunspent", "\"<ms_address>\" 1000000 1100000 0 50") +
+        HelpExampleRpc("consolidatemsunspent", "\"<ms_address>\", 1000000, 1100000, 0, 50")},
+};
+const RPCHelpMan& consolidatemsunspent_helpman() { return consolidatemsunspent_help; }
 
+UniValue consolidatemsunspent(const UniValue& params)
+{
     UniValue result(UniValue::VOBJ);
 
     // Variables & Parameters
@@ -990,12 +1647,19 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     if (params.size() > 4)
         nMaxInputs = params[4].get_int();
 
-    // Parameter Sanity Check
-    if (nBlockStart < 1 || nBlockStart > nBestHeight || nBlockStart > nBlockEnd)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-start");
+    // A negative survives the nEqMaxInputs rewrite below and disables the fill loop's input cap.
+    if (nMaxInputs < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "max_inputs cannot be negative.");
 
-    if (nBlockEnd < 1 || nBlockEnd > nBestHeight || nBlockEnd <= nBlockStart)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
+    // Parameter Sanity Check
+    {
+        LOCK(cs_main);
+        if (nBlockStart < 1 || nBlockStart > nBestHeight || nBlockStart > nBlockEnd)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-start");
+
+        if (nBlockEnd < 1 || nBlockEnd > nBestHeight || nBlockEnd <= nBlockStart)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
+    }
 
     if (nMaxValue < 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Value must not be less than 0");
@@ -1179,7 +1843,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_REQUEST, "Search resulted in no results");
 
     // Parse the inputs and make a raw transaction
-    CTransaction rawtx;
+    CMutableTransaction rawtx;
     CAmount nTotal = 0;
 
     // Inputs
@@ -1199,7 +1863,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     int64_t nInputs = umultimapInputs.size();
     // Add vout to the nBase amount
     int64_t nBytes = (nBase * nInputs) + 37;
-    nMinFee = GetMinFee(rawtx, 1000, GMF_SEND, nBytes);
+    nMinFee = GetMinFee(CTransaction(rawtx), 1000, GMF_SEND, nBytes);
     nFee = nTransactionFee * (1 + nBytes / 1000);
     nTxFee = std::max(nMinFee, nFee);
     nOutput = nTotal - nTxFee;
@@ -1240,24 +1904,37 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     return result;
 }
 
-UniValue scanforunspent(const UniValue& params, bool fHelp)
+static const RPCHelpMan scanforunspent_help{
+    "scanforunspent",
+    "Search a block range for a specified address with unspent UTXOs and display them as JSON,\n"
+    "with the option of exporting to a file.\n"
+    "\n"
+    "The export and type arguments must be supplied together (4-argument form is rejected).",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "Multi-signature address."},
+        {"block_start", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to start search from."},
+        {"block_end", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to end search on."},
+        {"export", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, export results to a file in backup-dir/rpc as multisigaddress-datetime.<type>."},
+        {"type", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Export file type: \"xml\", \"txt\", or \"json\". Required when export is true."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Scan result detail; see source for the exact shape."}}},
+    RPCExamples{
+        HelpExampleCli("scanforunspent", "\"<ms_address>\" 1000000 1100000") +
+        HelpExampleCli("scanforunspent", "\"<ms_address>\" 1000000 1100000 true json") +
+        HelpExampleRpc("scanforunspent", "\"<ms_address>\", 1000000, 1100000, true, \"json\"")},
+};
+const RPCHelpMan& scanforunspent_helpman() { return scanforunspent_help; }
+
+UniValue scanforunspent(const UniValue& params)
 {
-    if (fHelp || params.size() < 3 || params.size() > 5 || params.size() == 4)
-        throw runtime_error(
-                "scanforunspent <address> <block-start> <block-end> [bool:export] [export-type]\n"
-                "\n"
-                "Searches a block range for a specified address with unspent utxos\n"
-                "and displays them in a json response with the option of exporting\n"
-                "to file\n"
-                "\n"
-                "Parameters required:\n"
-                "<address> --------> Multi-signature address\n"
-                "<block-start> ----> Block number to start search from\n"
-                "<block-end> ------> Block number to end search on\n"
-                "\n"
-                "Optional:\n"
-                "[export] ---------> Exports to a file in backup-dir/rpc in format of multisigaddress-datetime.type\n"
-                "[type] -----------> Export to a file with file type (xml, txt or json -- Required if export true)");
+    // Preserve the legacy "either 3 or 5 args (4 rejected)" pattern: the dispatcher's
+    // IsValidNumArgs check allows 3..5 (declared in the helpman), and a body-level check
+    // rejects size==4 since params[4] is read whenever params.size() > 3.
+    if (params.size() == 4)
+        throw runtime_error(scanforunspent_helpman().ToString());
 
     // Parameters
     bool fExport = false;
@@ -1285,11 +1962,14 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
     }
 
     // Parameter Sanity Check
-    if (nBlockStart < 1 || nBlockStart > nBestHeight || nBlockStart > nBlockEnd)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-start");
+    {
+        LOCK(cs_main);
+        if (nBlockStart < 1 || nBlockStart > nBestHeight || nBlockStart > nBlockEnd)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-start");
 
-    if (nBlockEnd < 1 || nBlockEnd > nBestHeight || nBlockEnd <= nBlockStart)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
+        if (nBlockEnd < 1 || nBlockEnd > nBestHeight || nBlockEnd <= nBlockStart)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
+    }
 
     CTxDestination Address = DecodeDestination(sAddress);
 
@@ -1484,46 +2164,47 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
     return result;
 }
 
-UniValue createrawtransaction(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 2)
-        throw runtime_error(
-                "createrawtransaction [{\"txid\":\"id\",\"vout\":n},...] {\"address\":amount,\"data\":\"hex\",...}\n"
-                "\nCreate a transaction spending the given inputs and creating new outputs.\n"
-                "Outputs can be addresses or data.\n"
-                "Returns hex-encoded raw transaction.\n"
-                "Note that the transaction's inputs are not signed, and\n"
-                "it is not stored in the wallet or transmitted to the network.\n"
-                "\nArguments:\n"
-                "1. \"transactions\"        (string, required) A json array of json objects\n"
-                "     [\n"
-                "       {\n"
-                "         \"txid\":\"id\",    (string, required) The transaction id\n"
-                "         \"vout\":n        (numeric, required) The output number\n"
-                "       }\n"
-                "       ,...\n"
-                "     ]\n"
-                "2. \"outputs\"             (string, required) a json object with outputs\n"
-                "    {\n"
-                "      \"address\": x.xxx   (numeric, required) The key is the bitcoin address, the value is the CURRENCY_UNIT amount\n"
-                "      \"data\": \"hex\",     (string, required) The key is \"data\", the value is hex encoded data\n"
-                "      ...\n"
-                "    }\n"
-                "\nResult:\n"
-                "\"transaction\"            (string) hex string of the transaction\n"
-                "\nExamples\n"
-                "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"address\\\":0.01} "
-                "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"data\\\":\\\"00010203\\\"} "
-                "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"address\\\":0.01} "
-                "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"data\\\":\\\"00010203\\\"} \n"
-                );
+static const RPCHelpMan createrawtransaction_help{
+    "createrawtransaction",
+    "Create a transaction spending the given inputs and creating new outputs.\n"
+    "Outputs can be addresses or data. Returns hex-encoded raw transaction.\n"
+    "Note that the transaction's inputs are not signed, and it is not stored in the wallet\n"
+    "or transmitted to the network.",
+    {
+        {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
+            "A JSON array of input objects.",
+            {
+                {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "An input",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id."},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number."},
+                    }},
+            }},
+        {"outputs", RPCArg::Type::OBJ, RPCArg::Optional::NO,
+            "A JSON object whose keys are Gridcoin addresses (values: GRC amount) or the special key \"data\" "
+            "with a hex-encoded value.",
+            {
+                {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED, "GRC amount to send to this address."},
+                {"data", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED, "Hex-encoded data for an OP_RETURN output."},
+            }},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "", "Hex-encoded serialized raw transaction."},
+    RPCExamples{
+        HelpExampleCli("createrawtransaction",
+            "\"[{\\\"txid\\\":\\\"<txid>\\\",\\\"vout\\\":0}]\" \"{\\\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\\\":0.01}\"") +
+        HelpExampleRpc("createrawtransaction",
+            "[{\"txid\":\"<txid>\",\"vout\":0}], {\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\":0.01}")},
+};
+const RPCHelpMan& createrawtransaction_helpman() { return createrawtransaction_help; }
 
+UniValue createrawtransaction(const UniValue& params)
+{
     RPCTypeCheck(params, { UniValue::VARR, UniValue::VOBJ });
 
     UniValue inputs = params[0].get_array();
     UniValue sendTo = params[1].get_obj();
 
-    CTransaction rawTx;
+    CMutableTransaction rawTx;
 
     for (unsigned int idx = 0; idx<inputs.size(); idx++)
     {
@@ -1552,7 +2233,6 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
     vector<string> addrList = sendTo.getKeys();
     for (auto const& name_: addrList)
     {
-        CTxDestination address = DecodeDestination(name_);
         if (name_ == "data")
         {
             std::vector<unsigned char> data = ParseHexV(sendTo[name_],"Data");
@@ -1583,14 +2263,153 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
     return HexStr(ss);
 }
 
-UniValue decoderawtransaction(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "decoderawtransaction <hex string>\n"
-                "\n"
-                "Return a JSON object representing the serialized, hex-encoded transaction\n");
+static const RPCHelpMan fundrawtransaction_help{
+    "fundrawtransaction",
+    "Add inputs to a transaction until it has enough in value to meet its out value.\n"
+    "This will not modify existing inputs, and will add one change output to the outputs.\n"
+    "The inputs added will not be signed; use signrawtransaction for that.\n"
+    "\n"
+    "Note: The transaction must have no existing inputs. Unlike Bitcoin Core's fundrawtransaction,\n"
+    "this command does not yet support adding funds to a transaction that already has inputs.\n"
+    "\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex string of the raw transaction."},
+        {"options", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+            {
+                {"changeAddress", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Address to receive the change."},
+                {"changePosition", RPCArg::Type::NUM, RPCArg::Optional::OMITTED, "Index of the change output."},
+                {"includeWatching", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                    "Also select inputs which are watch-only. Default: false."},
+            }},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "hex", "The resulting raw transaction."},
+            {RPCResult::Type::STR_AMOUNT, "fee", "Fee in GRC the resulting transaction pays."},
+            {RPCResult::Type::NUM, "changepos", "Position of the added change output, or -1."},
+        }},
+    RPCExamples{
+        HelpExampleCli("fundrawtransaction", "\"<hex>\"") +
+        HelpExampleRpc("fundrawtransaction", "\"<hex>\"")},
+};
+const RPCHelpMan& fundrawtransaction_helpman() { return fundrawtransaction_help; }
 
+UniValue fundrawtransaction(const UniValue& params)
+{
+    RPCTypeCheck(params, { UniValue::VSTR });
+
+    // parse hex string from parameter
+    vector<unsigned char> txData(ParseHex(params[0].get_str()));
+    CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
+    CTransaction tx;
+    try {
+        ssData >> tx;
+    }
+    catch (std::exception& e) {
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
+    }
+
+    if (tx.vout.size() == 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "TX must have at least one output");
+
+    // Unlike Bitcoin Core, we don't yet support funding transactions that
+    // already have inputs, since computing their value requires UTXO lookups.
+    if (tx.vin.size() > 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "fundrawtransaction does not yet support transactions with existing inputs. "
+            "Use createrawtransaction with outputs only.");
+
+    // Parse options
+    CCoinControl coinControl;
+    int changePosition = -1;
+    bool includeWatching = false;
+
+    if (params.size() > 1 && !params[1].isNull())
+    {
+        RPCTypeCheck({ params[1] }, { UniValue::VOBJ });
+        UniValue options = params[1].get_obj();
+
+        UniValue changeAddressValue = find_value(options, "changeAddress");
+        if (!changeAddressValue.isNull())
+        {
+            CTxDestination dest = DecodeDestination(changeAddressValue.get_str());
+            if (!IsValidDestination(dest))
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "changeAddress must be a valid Gridcoin address");
+            coinControl.destChange = dest;
+        }
+
+        UniValue changePosValue = find_value(options, "changePosition");
+        if (!changePosValue.isNull())
+        {
+            changePosition = changePosValue.get_int();
+            if (changePosition < 0)
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "changePosition must be >= 0");
+        }
+
+        UniValue includeWatchingValue = find_value(options, "includeWatching");
+        if (!includeWatchingValue.isNull())
+        {
+            if (!includeWatchingValue.isBool())
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "includeWatching must be a boolean");
+            includeWatching = includeWatchingValue.get_bool();
+        }
+    }
+
+    coinControl.fAllowWatchOnly = includeWatching;
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
+
+    int64_t nFeeOut = 0;
+    int nChangePosOut = -1;
+    string strFailReason;
+
+    if (!pwalletMain->FundTransaction(tx, nFeeOut, nChangePosOut, strFailReason, &coinControl))
+        throw JSONRPCError(RPC_WALLET_ERROR, strFailReason);
+
+    // If user requested a specific change position, move change output there.
+    // Post-F3 CTransaction fields are const, so operate on a CMutableTransaction
+    // copy and reassign.
+    if (changePosition >= 0 && nChangePosOut >= 0 && changePosition != nChangePosOut)
+    {
+        if (changePosition >= (int)tx.vout.size())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "changePosition out of bounds");
+
+        CMutableTransaction mtx(tx);
+        CTxOut changeOut = mtx.vout[nChangePosOut];
+        mtx.vout.erase(mtx.vout.begin() + nChangePosOut);
+        mtx.vout.insert(mtx.vout.begin() + changePosition, changeOut);
+        tx = CTransaction(std::move(mtx));
+        nChangePosOut = changePosition;
+    }
+
+    UniValue result(UniValue::VOBJ);
+    CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
+    ssTx << tx;
+    result.pushKV("hex", HexStr(ssTx));
+    result.pushKV("fee", ValueFromAmount(nFeeOut));
+    result.pushKV("changepos", nChangePosOut);
+
+    return result;
+}
+
+static const RPCHelpMan decoderawtransaction_help{
+    "decoderawtransaction",
+    "Return a JSON object representing the serialized, hex-encoded transaction.",
+    {
+        {"hex_string", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded transaction data."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Decoded transaction detail; same shape as TxToJSON."}}},
+    RPCExamples{
+        HelpExampleCli("decoderawtransaction", "\"<hex>\"") +
+        HelpExampleRpc("decoderawtransaction", "\"<hex>\"")},
+};
+const RPCHelpMan& decoderawtransaction_helpman() { return decoderawtransaction_help; }
+
+UniValue decoderawtransaction(const UniValue& params)
+{
     RPCTypeCheck(params, { UniValue::VSTR });
 
     vector<unsigned char> txData(ParseHex(params[0].get_str()));
@@ -1612,14 +2431,22 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp)
     return result;
 }
 
-UniValue decodescript(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "decodescript <hex string>\n"
-                "\n"
-                "Decode a hex-encoded script.\n");
+static const RPCHelpMan decodescript_help{
+    "decodescript",
+    "Decode a hex-encoded script.",
+    {
+        {"hex_string", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script data (empty is allowed)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Script detail and (when applicable) HTLC analysis; see source."}}},
+    RPCExamples{
+        HelpExampleCli("decodescript", "\"<hex>\"") +
+        HelpExampleRpc("decodescript", "\"<hex>\"")},
+};
+const RPCHelpMan& decodescript_helpman() { return decodescript_help; }
 
+UniValue decodescript(const UniValue& params)
+{
     RPCTypeCheck(params, { UniValue::VSTR });
 
     UniValue r(UniValue::VOBJ);
@@ -1649,29 +2476,14 @@ UniValue decodescript(const UniValue& params, bool fHelp)
     return r;
 }
 
-UniValue signrawtransaction(const UniValue& params, bool fHelp)
+// Shared helper for signrawtransactionwithkey, signrawtransactionwithwallet,
+// and the deprecated signrawtransaction.
+static UniValue SignRawTransactionHelper(const string& hexTx,
+                                         const UniValue& prevTxsUnival,
+                                         const CKeyStore& keystore,
+                                         const string& strHashType)
 {
-    if (fHelp || params.size() < 1 || params.size() > 4)
-        throw runtime_error(
-                "signrawtransaction <hex string> [{\"txid\":txid,\"vout\":n,\"scriptPubKey\":hex},...] [<privatekey1>,...] [sighashtype=\"ALL\"]\n"
-                "\n"
-                "Sign inputs for raw transaction (serialized, hex-encoded).\n"
-                "Second optional argument (may be null) is an array of previous transaction outputs that\n"
-                "this transaction depends on but may not yet be in the blockchain.\n"
-                "Third optional argument (may be null) is an array of base58-encoded private\n"
-                "keys that, if given, will be the only keys used to sign the transaction.\n"
-                "Fourth optional argument is a string that is one of six values; ALL, NONE, SINGLE or\n"
-                "ALL|ANYONECANPAY, NONE|ANYONECANPAY, SINGLE|ANYONECANPAY.\n"
-                "Returns json object with keys:\n"
-                "  hex : raw transaction with signature(s) (hex-encoded string)\n"
-                "  complete : 1 if transaction has a complete set of signature (0 if not)\n"
-                + HelpRequiringPassphrase());
-
-    RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VARR, UniValue::VSTR }, true);
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    vector<unsigned char> txData(ParseHex(params[0].get_str()));
+    vector<unsigned char> txData(ParseHex(hexTx));
     CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
     vector<CTransaction> txVariants;
     while (!ssData.empty())
@@ -1691,14 +2503,14 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
 
     // mergedTx will end up with all the signatures; it
     // starts as a clone of the rawtx:
-    CTransaction mergedTx(txVariants[0]);
+    CMutableTransaction mergedTx(txVariants[0]);
     bool fComplete = true;
 
     // Fetch previous transactions (inputs):
     map<COutPoint, CScript> mapPrevOut;
     for (unsigned int i = 0; i < mergedTx.vin.size(); i++)
     {
-        CTransaction tempTx;
+        CMutableTransaction tempTx;
         MapPrevTx mapPrevTx;
         CTxDB txdb("r");
         map<uint256, CTxIndex> unused;
@@ -1706,7 +2518,9 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
 
         // FetchInputs aborts on failure, so we go one at a time.
         tempTx.vin.push_back(mergedTx.vin[i]);
-        FetchInputs(tempTx, txdb, unused, false, false, mapPrevTx, fInvalid);
+        CValidationState fetch_state;
+        CTransaction tempTxConst(tempTx);
+        FetchInputs(tempTxConst, fetch_state, txdb, unused, false, false, mapPrevTx, fInvalid);
 
         // Copy results into mapPrevOut:
         for (auto const& txin : tempTx.vin)
@@ -1718,9 +2532,9 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
     }
 
     // Add previous txouts given in the RPC call:
-    if (params.size() > 1 && !params[1].isNull())
+    if (!prevTxsUnival.isNull())
     {
-        UniValue prevTxs = params[1].get_array();
+        UniValue prevTxs = prevTxsUnival.get_array();
         for (unsigned int idx = 0; idx < prevTxs.size(); idx++)
         {
             const UniValue&p = prevTxs[idx];
@@ -1768,29 +2582,9 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
         }
     }
 
-    bool fGivenKeys = false;
-    CBasicKeyStore tempKeystore;
-    if (params.size() > 2 && !params[2].isNull())
-    {
-        fGivenKeys = true;
-        UniValue keys = params[2].get_array();
-        for (unsigned int idx = 0; idx < keys.size(); idx++)
-        {
-            UniValue k = keys[idx];
-            CKey key = DecodeSecret(k.get_str());
-            if (!key.IsValid()) {
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
-            }
-            tempKeystore.AddKey(key);
-        }
-    }
-    else
-        EnsureWalletIsUnlocked();
-
-    const CKeyStore& keystore = (fGivenKeys ? tempKeystore : *pwalletMain);
-
+    // Parse sighash type
     int nHashType = SIGHASH_ALL;
-    if (params.size() > 3 && !params[3].isNull())
+    if (!strHashType.empty())
     {
         static std::map<std::string, int> mapSigHashValues = {
             { "ALL"                , SIGHASH_ALL                           },
@@ -1801,7 +2595,6 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
             { "SINGLE|ANYONECANPAY", SIGHASH_SINGLE | SIGHASH_ANYONECANPAY },
         };
 
-        string strHashType = params[3].get_str();
         if (mapSigHashValues.count(strHashType))
             nHashType = mapSigHashValues[strHashType];
         else
@@ -1822,9 +2615,14 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
         const CScript& prevPubKey = mapPrevOut[txin.prevout];
 
         txin.scriptSig.clear();
+        SignatureData sigdata;
         // Only sign SIGHASH_SINGLE if there's a corresponding output:
         if (!fHashSingle || (i < mergedTx.vout.size()))
-            SignSignature(keystore, prevPubKey, mergedTx, i, nHashType);
+        {
+            MutableTransactionSignatureCreator creator(mergedTx, i, nHashType);
+            ProduceSignature(keystore, creator, prevPubKey, sigdata);
+        }
+        UpdateInput(txin, sigdata);
 
         // ... and merge in other signatures:
         for (auto const& txv : txVariants)
@@ -1844,17 +2642,210 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
     return result;
 }
 
-UniValue sendrawtransaction(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() < 1 || params.size() > 1)
-        throw runtime_error(
-                "sendrawtransaction <hex string>\n"
-                "\n"
-                "Submits raw transaction (serialized, hex-encoded) to local node and network\n");
+static const RPCHelpMan signrawtransactionwithkey_help{
+    "signrawtransactionwithkey",
+    "Sign inputs for a raw (serialized, hex-encoded) transaction using the provided private keys.\n"
+    "The second argument is an array of base58-encoded private keys that will be the only keys used to sign.",
+    {
+        {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
+        {"privkeys", RPCArg::Type::ARR, RPCArg::Optional::NO,
+            "A JSON array of base58-encoded private keys for signing.",
+            {{"privatekey", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A private key."}}},
+        {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "JSON array of previous dependent transaction outputs.",
+            {
+                {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output number."},
+                        {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script."},
+                    }},
+            }},
+        {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Signature hash type. One of: ALL, NONE, SINGLE, ALL|ANYONECANPAY, NONE|ANYONECANPAY, "
+            "SINGLE|ANYONECANPAY (default: ALL)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "hex", "Hex-encoded raw transaction with signature(s)."},
+            {RPCResult::Type::BOOL, "complete", "True if the transaction has a complete set of signatures."},
+        }},
+    RPCExamples{
+        HelpExampleCli("signrawtransactionwithkey", "\"<hex>\" \"[\\\"<wif>\\\"]\"") +
+        HelpExampleRpc("signrawtransactionwithkey", "\"<hex>\", [\"<wif>\"]")},
+};
+const RPCHelpMan& signrawtransactionwithkey_helpman() { return signrawtransactionwithkey_help; }
 
-    RPCTypeCheck(params, { UniValue::VSTR });
+UniValue signrawtransactionwithkey(const UniValue& params)
+{
+    RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VARR, UniValue::VSTR }, true);
+
+    LOCK(cs_main);
+
+    // Build temporary keystore from provided private keys
+    CBasicKeyStore tempKeystore;
+    UniValue keys = params[1].get_array();
+    for (unsigned int idx = 0; idx < keys.size(); idx++)
+    {
+        UniValue k = keys[idx];
+        CKey key = DecodeSecret(k.get_str());
+        if (!key.IsValid()) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+        }
+        tempKeystore.AddKey(key);
+    }
+
+    UniValue prevTxs = (params.size() > 2 && !params[2].isNull()) ? params[2] : UniValue();
+    string strHashType = (params.size() > 3 && !params[3].isNull()) ? params[3].get_str() : "";
+
+    return SignRawTransactionHelper(params[0].get_str(), prevTxs, tempKeystore, strHashType);
+}
+
+static const RPCHelpMan signrawtransactionwithwallet_help{
+    "signrawtransactionwithwallet",
+    "Sign inputs for a raw (serialized, hex-encoded) transaction using wallet keys.\n"
+    "\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
+        {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "JSON array of previous dependent transaction outputs.",
+            {
+                {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output number."},
+                        {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script."},
+                    }},
+            }},
+        {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Signature hash type. One of: ALL, NONE, SINGLE, ALL|ANYONECANPAY, NONE|ANYONECANPAY, "
+            "SINGLE|ANYONECANPAY (default: ALL)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "hex", "Hex-encoded raw transaction with signature(s)."},
+            {RPCResult::Type::BOOL, "complete", "True if the transaction has a complete set of signatures."},
+        }},
+    RPCExamples{
+        HelpExampleCli("signrawtransactionwithwallet", "\"<hex>\"") +
+        HelpExampleRpc("signrawtransactionwithwallet", "\"<hex>\"")},
+};
+const RPCHelpMan& signrawtransactionwithwallet_helpman() { return signrawtransactionwithwallet_help; }
+
+UniValue signrawtransactionwithwallet(const UniValue& params)
+{
+    RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VSTR }, true);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
+
+    UniValue prevTxs = (params.size() > 1 && !params[1].isNull()) ? params[1] : UniValue();
+    string strHashType = (params.size() > 2 && !params[2].isNull()) ? params[2].get_str() : "";
+
+    return SignRawTransactionHelper(params[0].get_str(), prevTxs, *pwalletMain, strHashType);
+}
+
+static const RPCHelpMan signrawtransaction_help{
+    "signrawtransaction",
+    "DEPRECATED. Sign inputs for a raw (serialized, hex-encoded) transaction.\n"
+    "Use signrawtransactionwithkey or signrawtransactionwithwallet instead.\n"
+    "\n"
+    "If the optional private-keys array is provided, those are the only keys used to sign;\n"
+    "otherwise the wallet's keys are used.\n"
+    "\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
+        {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "JSON array of previous dependent transaction outputs (may be null).",
+            {
+                {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output number."},
+                        {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script."},
+                    }},
+            }},
+        {"privkeys", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "JSON array of base58-encoded private keys for signing (may be null).",
+            {{"privatekey", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A private key."}}},
+        {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Signature hash type. One of: ALL, NONE, SINGLE, ALL|ANYONECANPAY, NONE|ANYONECANPAY, "
+            "SINGLE|ANYONECANPAY (default: ALL)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "hex", "Hex-encoded raw transaction with signature(s)."},
+            {RPCResult::Type::BOOL, "complete", "True if the transaction has a complete set of signatures."},
+        }},
+    RPCExamples{
+        HelpExampleCli("signrawtransaction", "\"<hex>\"") +
+        HelpExampleRpc("signrawtransaction", "\"<hex>\"")},
+};
+const RPCHelpMan& signrawtransaction_helpman() { return signrawtransaction_help; }
+
+UniValue signrawtransaction(const UniValue& params)
+{
+    RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VARR, UniValue::VSTR }, true);
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // Determine keystore: explicit keys or wallet
+    UniValue prevTxs = (params.size() > 1 && !params[1].isNull()) ? params[1] : UniValue();
+    string strHashType = (params.size() > 3 && !params[3].isNull()) ? params[3].get_str() : "";
+
+    if (params.size() > 2 && !params[2].isNull())
+    {
+        CBasicKeyStore tempKeystore;
+        UniValue keys = params[2].get_array();
+        for (unsigned int idx = 0; idx < keys.size(); idx++)
+        {
+            UniValue k = keys[idx];
+            CKey key = DecodeSecret(k.get_str());
+            if (!key.IsValid()) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+            }
+            tempKeystore.AddKey(key);
+        }
+        return SignRawTransactionHelper(params[0].get_str(), prevTxs, tempKeystore, strHashType);
+    }
+    else
+    {
+        EnsureWalletIsUnlocked();
+        return SignRawTransactionHelper(params[0].get_str(), prevTxs, *pwalletMain, strHashType);
+    }
+}
+
+static const RPCHelpMan sendrawtransaction_help{
+    "sendrawtransaction",
+    "Submit a raw (serialized, hex-encoded) transaction to the local node and network.",
+    {
+        {"hex_string", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded transaction data."},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "", "The transaction id."},
+    RPCExamples{
+        HelpExampleCli("sendrawtransaction", "\"<hex>\"") +
+        HelpExampleRpc("sendrawtransaction", "\"<hex>\"")},
+};
+const RPCHelpMan& sendrawtransaction_helpman() { return sendrawtransaction_help; }
+
+UniValue sendrawtransaction(const UniValue& params)
+{
+    RPCTypeCheck(params, { UniValue::VSTR });
+
+    // Canonical lock order: cs_main -> cs_wallet, acquired as sequenced LOCKs
+    // (rather than a LOCK2) so the analyzer sees the order at acquisition time.
+    // cs_wallet is held for this RPC's own wallet work; AcceptToMemoryPool's
+    // synchronous signal dispatch also takes cs_wallet recursively under
+    // cs_main. The legacy cs_setpwalletRegistered hop is gone (issue #3030).
+    // Declared before the guard so it announces after that guard releases: the
+    // relay path takes a peer's cs_inventory, and SendMessages takes
+    // cs_inventory and then cs_wallet (#3391).
+    DeferredRelay relay;
+
+    LOCK(cs_main);
+    LOCK(pwalletMain->cs_wallet);
 
     // parse hex string from parameter
     vector<unsigned char> txData(ParseHex(params[0].get_str()));
@@ -1884,12 +2875,15 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp)
     else
     {
         // push to local node
-        if (!AcceptToMemoryPool(mempool, tx, nullptr))
+        CValidationState state;
+        if (!AcceptToMemoryPool(mempool, tx, state, nullptr))
             throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX rejected");
-
-        SyncWithWallets(tx, nullptr, true);
     }
-    RelayTransaction(tx, hashTx);
+    relay.AddTransaction(tx, hashTx);
+
+    // Locally originated via RPC: register for rebroadcast / restart persistence
+    // (no-op if it did not enter the pool). See CTxMemPool::m_unbroadcast.
+    mempool.AddUnbroadcast(hashTx);
 
     return hashTx.GetHex();
 }

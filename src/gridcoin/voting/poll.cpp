@@ -3,7 +3,6 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/protocol.h"
-#include "main.h"
 #include "gridcoin/support/xml.h"
 #include "gridcoin/voting/poll.h"
 #include "span.h"
@@ -215,7 +214,7 @@ int64_t Poll::Expiration() const
     return m_timestamp + (m_duration_days * 86400);
 }
 
-Fraction Poll::ResolveMagnitudeWeightFactor(const CBlockIndex* index) const
+Fraction Poll::ResolveMagnitudeWeightFactor(const CBlockIndex* index, const int64_t timestamp)
 {
     if (index == nullptr) {
         return Fraction();
@@ -229,10 +228,12 @@ Fraction Poll::ResolveMagnitudeWeightFactor(const CBlockIndex* index) const
     }
 
     // Find the current protocol entry value for Magnitude Weight Factor, if it exists.
-    ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeweightfactor", m_timestamp);
+    ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeweightfactor", timestamp);
 
     // If their is an entry prior or equal in timestamp to the start of the poll and it is active then set the magnitude weight
-    // factor to that value. If the last entry is not active (i.e. deleted), then leave at the default.
+    // factor to that value. If the last entry is not active (i.e. deleted), then leave at the default. From block version 15
+    // the entry's reduced terms are at most MAX_MAGNITUDE_ENTRY_TERM (protocol.h), which keeps the clamp and the vote
+    // weight in range.
     if (protocol_entry != nullptr && protocol_entry->m_status == ProtocolEntryStatus::ACTIVE) {
         magnitude_weight_factor = Fraction::FromString(protocol_entry->m_value);
     }

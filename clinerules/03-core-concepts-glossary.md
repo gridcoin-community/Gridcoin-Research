@@ -142,7 +142,7 @@ This glossary provides definitions for Gridcoin-specific terminology. Understand
   - Creates signed manifest
   - Publishes for network convergence
 - **Independence**: Multiple scrapers operate independently
-- **Location**: `src/scraper/`
+- **Location**: `src/gridcoin/scraper/`
 
 ### Manifest
 - **Definition**: Signed package of scraped BOINC statistics
@@ -334,7 +334,7 @@ This glossary provides definitions for Gridcoin-specific terminology. Understand
 - **Status**: Discontinued - snapshot servers disabled
 - **Reason**: Security - full sync from genesis eliminates trust requirements
 - **Sync Time**: Complete sync now takes < 5 hours on modern hardware with good connection
-- **Note**: Snapshot functionality still exists in code but is no longer recommended or supported
+- **Note**: The snapshot download code has been removed; a full sync from genesis is the only path
 
 ### Checkpoint
 - **Definition**: Hardcoded block hash at specific height
@@ -403,7 +403,7 @@ This glossary provides definitions for Gridcoin-specific terminology. Understand
 ### Lock Order
 - **Definition**: Sequence in which mutexes must be acquired
 - **Critical**: Prevents deadlocks in multi-threaded code
-- **Debug**: `-DDEBUG_LOCKORDER` flag detects violations
+- **Debug**: the `-DENABLE_DEBUG_LOCKORDER=ON` CMake option detects violations
 - **Standard**: `cs_main` before `cs_wallet`
 
 ---

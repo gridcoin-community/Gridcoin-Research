@@ -13,6 +13,13 @@
 #include <cstring>
 #include <optional>
 
+#ifdef WIN32
+#include <compat.h>
+
+#include <limits>
+#include <stdexcept>
+#endif
+
 static const std::string CHARS_ALPHA_NUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
 static const std::string SAFE_CHARS[] =
@@ -543,3 +550,57 @@ std::string HexStr(const Span<const uint8_t> s)
     return rv;
 }
 
+#ifdef WIN32
+// MB_ERR_INVALID_CHARS and WC_ERR_INVALID_CHARS make the conversions fail on
+// malformed input rather than substitute U+FFFD for it. Each conversion runs
+// twice: once with no output buffer, to get the length, and once to convert.
+
+std::wstring Utf8ToWide(std::string_view utf8)
+{
+    if (utf8.empty()) return {};
+
+    // The Win32 calls take an int length. sign-compare checked: size() is size_t;
+    // the int maximum is positive, so the cast keeps its value and both sides are
+    // unsigned.
+    if (utf8.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+        throw std::range_error("Utf8ToWide: input too long");
+    }
+    const int in_len = static_cast<int>(utf8.size());
+
+    const int out_len = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.data(), in_len, nullptr, 0);
+    if (out_len <= 0) {
+        throw std::range_error("Utf8ToWide: invalid UTF-8");
+    }
+
+    // out_len is positive here, so the cast keeps its value.
+    std::wstring wide(static_cast<size_t>(out_len), L'\0');
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.data(), in_len, wide.data(), out_len) != out_len) {
+        throw std::range_error("Utf8ToWide: invalid UTF-8");
+    }
+    return wide;
+}
+
+std::string WideToUtf8(std::wstring_view wide)
+{
+    if (wide.empty()) return {};
+
+    // sign-compare checked: size() is size_t; the int maximum is positive, so the
+    // cast keeps its value and both sides are unsigned.
+    if (wide.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+        throw std::range_error("WideToUtf8: input too long");
+    }
+    const int in_len = static_cast<int>(wide.size());
+
+    const int out_len = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), in_len, nullptr, 0, nullptr, nullptr);
+    if (out_len <= 0) {
+        throw std::range_error("WideToUtf8: invalid UTF-16");
+    }
+
+    // out_len is positive here, so the cast keeps its value.
+    std::string utf8(static_cast<size_t>(out_len), '\0');
+    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), in_len, utf8.data(), out_len, nullptr, nullptr) != out_len) {
+        throw std::range_error("WideToUtf8: invalid UTF-16");
+    }
+    return utf8;
+}
+#endif // WIN32

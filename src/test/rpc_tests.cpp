@@ -7,6 +7,7 @@
 #include <rpc/client.h>
 #include <rpc/protocol.h>
 #include <rpc/server.h>
+#include <net.h>
 
 #include <univalue.h>
 
@@ -38,30 +39,30 @@ BOOST_AUTO_TEST_CASE(rpc_addmultisig)
     const char address2Hex[] = "0388c2037017c62240b6b72ac1a2a5f94da790596ebd06177c8572752922165cb4";
 
     UniValue v;
-    BOOST_CHECK_NO_THROW(v = addmultisig(createArgs(1, address1Hex), false));
+    BOOST_CHECK_NO_THROW(v = addmultisig(createArgs(1, address1Hex)));
     CTxDestination address = DecodeDestination(v.get_str());
     BOOST_CHECK(std::holds_alternative<CScriptID>(address));
 
-    BOOST_CHECK_NO_THROW(v = addmultisig(createArgs(1, address1Hex, address2Hex), false));
+    BOOST_CHECK_NO_THROW(v = addmultisig(createArgs(1, address1Hex, address2Hex)));
     address = DecodeDestination(v.get_str());
     BOOST_CHECK(std::holds_alternative<CScriptID>(address));
 
-    BOOST_CHECK_NO_THROW(v = addmultisig(createArgs(2, address1Hex, address2Hex), false));
+    BOOST_CHECK_NO_THROW(v = addmultisig(createArgs(2, address1Hex, address2Hex)));
     address = DecodeDestination(v.get_str());
     BOOST_CHECK(std::holds_alternative<CScriptID>(address));
 
-    BOOST_CHECK_THROW(addmultisig(createArgs(0), false), runtime_error);
-    BOOST_CHECK_THROW(addmultisig(createArgs(1), false), runtime_error);
-    BOOST_CHECK_THROW(addmultisig(createArgs(2, address1Hex), false), runtime_error);
+    BOOST_CHECK_THROW(addmultisig(createArgs(0)), runtime_error);
+    BOOST_CHECK_THROW(addmultisig(createArgs(1)), runtime_error);
+    BOOST_CHECK_THROW(addmultisig(createArgs(2, address1Hex)), runtime_error);
 
-    BOOST_CHECK_THROW(addmultisig(createArgs(1, ""), false), runtime_error);
-    BOOST_CHECK_THROW(addmultisig(createArgs(1, "NotAValidPubkey"), false), runtime_error);
+    BOOST_CHECK_THROW(addmultisig(createArgs(1, "")), runtime_error);
+    BOOST_CHECK_THROW(addmultisig(createArgs(1, "NotAValidPubkey")), runtime_error);
 
     string short1(address1Hex, address1Hex+sizeof(address1Hex)-2); // last byte missing
-    BOOST_CHECK_THROW(addmultisig(createArgs(2, short1.c_str()), false), runtime_error);
+    BOOST_CHECK_THROW(addmultisig(createArgs(2, short1.c_str())), runtime_error);
 
     string short2(address1Hex+1, address1Hex+sizeof(address1Hex)); // first byte missing
-    BOOST_CHECK_THROW(addmultisig(createArgs(2, short2.c_str()), false), runtime_error);
+    BOOST_CHECK_THROW(addmultisig(createArgs(2, short2.c_str())), runtime_error);
 }
 
 BOOST_AUTO_TEST_CASE(rpc_format_monetary_values)
@@ -116,6 +117,108 @@ BOOST_AUTO_TEST_CASE(rpc_parse_monetary_values)
     BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("1.00000000")), 100000000LL);
     BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("20999999.9999999")), 2099999999999990LL);
     BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("20999999.99999999")), 2099999999999999LL);
+
+    // A JSON string amount parses identically to the numeric form. Before the
+    // ParseFixedPoint conversion, AmountFromValue called value.get_real() and
+    // threw on any string-typed amount; now it accepts either representation.
+    BOOST_CHECK_EQUAL(AmountFromValue(UniValue(UniValue::VSTR, "0.5")), 50000000LL);
+    BOOST_CHECK_EQUAL(AmountFromValue(UniValue(UniValue::VSTR, "1.00000000")), 100000000LL);
+
+    // Exact parsing at the top of the money range (a double would lose the low
+    // digits here): MAX_MONEY = 2000000000 * COIN.
+    BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("2000000000.00000000")), 200000000000000000LL);
+
+    // Rejections. JSONRPCError throws a UniValue.
+    BOOST_CHECK_THROW(AmountFromValue(ValueFromString("0")), UniValue);            // zero (Gridcoin rejects <= 0)
+    BOOST_CHECK_THROW(AmountFromValue(ValueFromString("0.00000000")), UniValue);   // zero, written out
+    BOOST_CHECK_THROW(AmountFromValue(ValueFromString("-1")), UniValue);           // negative
+    BOOST_CHECK_THROW(AmountFromValue(ValueFromString("-0.00000001")), UniValue);  // negative sub-satoshi
+    BOOST_CHECK_THROW(AmountFromValue(ValueFromString("0.000000001")), UniValue);  // more than 8 decimals (was silently rounded)
+    BOOST_CHECK_THROW(AmountFromValue(ValueFromString("2000000000.00000001")), UniValue); // just past MAX_MONEY
+    BOOST_CHECK_THROW(AmountFromValue(UniValue(UniValue::VSTR, "")), UniValue);    // empty string
+    BOOST_CHECK_THROW(AmountFromValue(UniValue(UniValue::VSTR, "1.2.3")), UniValue);   // not a fixed-point number
+    BOOST_CHECK_THROW(AmountFromValue(UniValue(UniValue::VSTR, "1a")), UniValue);      // trailing junk
+    BOOST_CHECK_THROW(AmountFromValue(UniValue(true)), UniValue);                      // neither number nor string
+}
+
+// Regression guard: getaddednodeinfo dns=true must return an ARRAY of per-node
+// objects. It previously built a UniValue object and populated it with
+// push_back (a no-op on objects), so it always returned {}. g_connman is
+// provided by the global TestingSetup fixture.
+BOOST_AUTO_TEST_CASE(getaddednodeinfo_dns_true_returns_array)
+{
+    BOOST_REQUIRE(g_connman);
+    const std::string node = "192.0.2.10:32749"; // TEST-NET-1, never a live peer
+    BOOST_REQUIRE(g_connman->AddNode(node));
+
+    UniValue params(UniValue::VARR);
+    params.push_back(true); // dns=true
+    UniValue r = tableRPC["getaddednodeinfo"]->actor(params);
+
+    BOOST_CHECK(r.isArray());
+    BOOST_CHECK_EQUAL(r.size(), 1u);
+    BOOST_CHECK_EQUAL(r[0]["addednode"].get_str(), node);
+    BOOST_CHECK_EQUAL(r[0]["connected"].get_bool(), false);
+
+    g_connman->RemoveAddedNode(node); // vAddedNodes is process-global; clean up
+}
+
+//! The HTTP header parse is reachable BEFORE any authentication check, so its
+//! bounds are what an unauthenticated client is limited to. Each returns a
+//! negative length, which ReadHTTPMessage rejects -- not a status code, which it
+//! would read as a body size.
+BOOST_AUTO_TEST_CASE(http_headers_bounded)
+{
+    std::map<std::string, std::string> headers;
+
+    // A normal request parses, and yields its content length.
+    {
+        std::istringstream in("content-length: 42\r\nconnection: close\r\n\r\n");
+        BOOST_CHECK_EQUAL(ReadHTTPHeaders(in, headers), 42);
+    }
+
+    // Too many headers.
+    {
+        std::string raw;
+        for (int i = 0; i < 101; ++i) raw += "x-pad-" + ToString(i) + ": v\r\n";
+        raw += "\r\n";
+        std::istringstream in(raw);
+        BOOST_CHECK(ReadHTTPHeaders(in, headers) < 0);
+    }
+
+    // One header longer than the per-line bound, with no newline to end it --
+    // the shape std::getline would have buffered without limit.
+    {
+        std::istringstream in("x-pad: " + std::string(9000, 'A'));
+        BOOST_CHECK(ReadHTTPHeaders(in, headers) < 0);
+    }
+
+    // Within the count and line bounds, but past the aggregate.
+    {
+        std::string raw;
+        for (int i = 0; i < 20; ++i) raw += "x-pad-" + ToString(i) + ": " + std::string(4000, 'A') + "\r\n";
+        raw += "\r\n";
+        std::istringstream in(raw);
+        BOOST_CHECK(ReadHTTPHeaders(in, headers) < 0);
+    }
+
+    // A malformed content-length returns rather than throwing: ServiceConnection
+    // has no try/catch around this call.
+    {
+        std::istringstream in("content-length: notanumber\r\n\r\n");
+        BOOST_CHECK_NO_THROW(BOOST_CHECK(ReadHTTPHeaders(in, headers) < 0));
+    }
+}
+
+//! "GET / " splits into three words whose third is empty, and pop_back() on an
+//! empty string is undefined. Reachable before authentication.
+BOOST_AUTO_TEST_CASE(http_request_line_empty_proto)
+{
+    std::istringstream in("GET / \r\n");
+    int proto = 0;
+    std::string method, uri;
+
+    BOOST_CHECK_NO_THROW((void)ReadHTTPRequestLine(in, proto, method, uri));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

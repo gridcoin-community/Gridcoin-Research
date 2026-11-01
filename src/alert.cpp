@@ -3,16 +3,14 @@
 //
 
 #include <algorithm>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
 #include <map>
+#include <util/string.h>
 
 #include "alert.h"
 #include "chainparams.h"
 #include "clientversion.h"
 #include "key.h"
-#include "main.h"
 #include "net.h"
 #include "streams.h"
 #include "sync.h"
@@ -21,8 +19,8 @@
 
 using namespace std;
 
-map<uint256, CAlert> mapAlerts;
 CCriticalSection cs_mapAlerts;
+map<uint256, CAlert> mapAlerts GUARDED_BY(cs_mapAlerts);
 
 void CUnsignedAlert::SetNull()
 {
@@ -133,7 +131,7 @@ bool CAlert::RelayTo(CNode* pnode) const
     // returns true if wasn't already contained in the set
     if (pnode->setKnown.insert(GetHash()).second)
     {
-        if (AppliesTo(pnode->nVersion, pnode->strSubVer) ||
+        if (AppliesTo(pnode->nVersion, pnode->GetSubVer()) ||
             AppliesToMe() ||
             GetAdjustedTime() < nRelayUntil)
         {
@@ -276,7 +274,7 @@ bool CAlert::ProcessAlert(bool fThread)
                         safeStatus.push_back(strStatusBar[i]);
                 }
                 safeStatus = singleQuote+safeStatus+singleQuote;
-                boost::replace_all(strCmd, "%s", safeStatus);
+                ReplaceAll(strCmd, "%s", safeStatus);
 
                 if (fThread)
                     boost::thread t(runCommand, strCmd); // thread runs free
@@ -289,4 +287,48 @@ bool CAlert::ProcessAlert(bool fThread)
 
     LogPrint(BCLog::LogFlags::VERBOSE, "accepted alert %d, AppliesToMe()=%d", nID, AppliesToMe());
     return true;
+}
+
+// Aggregate the highest-priority warning for the status bar / RPC "errors"
+// field: misc warnings (out of disk space, wrong clock) plus any applicable
+// alerts. Moved from main.cpp next to the alert storage it reads (issue #3125,
+// workstream C6).
+string GetWarnings(string strFor)
+{
+    int nPriority = 0;
+    string strStatusBar;
+
+    // Misc warnings like out of disk space and clock is wrong
+    if (strMiscWarning != "")
+    {
+        nPriority = 1000;
+        strStatusBar = strMiscWarning;
+    }
+    else if (const std::string clock_warning = GetCurrentClockWarning(); !clock_warning.empty())
+    {
+        nPriority = 1000;
+        strStatusBar = clock_warning;
+    }
+
+    // Alerts
+    {
+        LOCK(cs_mapAlerts);
+        for (auto const& item : mapAlerts)
+        {
+            const CAlert& alert = item.second;
+            if (alert.AppliesToMe() && alert.nPriority > nPriority)
+            {
+                nPriority = alert.nPriority;
+                strStatusBar = alert.strStatusBar;
+            }
+        }
+    }
+
+    if (strFor == "statusbar")
+    {
+        return strStatusBar;
+    }
+
+    assert(!"GetWarnings() : invalid parameter");
+    return "error";
 }

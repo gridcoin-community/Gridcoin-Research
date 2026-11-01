@@ -28,92 +28,161 @@ This guide provides step-by-step workflows for common development scenarios in t
 ### Scenario
 You want to add a new RPC command for users to query or modify wallet/blockchain state.
 
+### Convention notes (post-#2922)
+
+Every RPC in this codebase follows the `RPCHelpMan` pattern as of issue #2922
+(completed June 2026). Help text is a declarative file-scope `RPCHelpMan`
+object, not a runtime-thrown string. The dispatcher (`CRPCTable::execute` in
+`src/rpc/server.cpp`) renders help via `pcmd->helpman().ToString()` directly
+and pre-checks `IsValidNumArgs(n)` before invoking the body, so bodies do not
+contain `if (fHelp || …) throw runtime_error(…)` gates. The actor signature is
+`UniValue <name>(const UniValue& params)` — no `bool fHelp` parameter.
+
+A few commands opt out of the dispatcher's upper-bound arity pre-check via
+`RPCHelpMan::MarkVariadic()` because they accept a variable number of arguments
+(`changesettings`, `votebyid`, `sendalert`, `parselegacysb`); `addpoll`
+additionally uses a *dynamic* helpman accessor whose `RPCHelpMan` varies by
+poll-payload version. Both mechanisms live in `src/rpc/util.h`. New commands
+should not need either unless they truly take variable arity. (Commands that
+take a fixed arity but want a custom error — e.g. `scanforunspent`'s body-side
+`params.size()` check — are ordinary non-variadic helpmans, not exceptions.)
+
 ### Steps
 
 #### 1.1 Choose the Appropriate File
-Determine which category your command belongs to:
-- **Blockchain queries**: `src/rpc/blockchain.cpp`
-- **Wallet operations**: `src/rpc/wallet.cpp`
-- **Network info**: `src/rpc/net.cpp`
-- **Research/BOINC**: `src/rpc/researcher.cpp`
-- **Staking**: `src/rpc/mining.cpp`
-- **Contracts**: `src/rpc/contract.cpp`
+Determine which category your command belongs to (these are the actual
+`src/rpc/*.cpp` files; wallet RPCs live under `src/wallet/`):
 
-#### 1.2 Implement the Command Function
+- **Blockchain queries / projects / researcher / beacon / MRC**: `src/rpc/blockchain.cpp`
+- **Wallet operations**: `src/wallet/rpcwallet.cpp`
+- **Wallet key dump/import**: `src/wallet/rpcdump.cpp`
+- **Network / peers / banlist**: `src/rpc/net.cpp`
+- **Staking / mining info / accrual**: `src/rpc/mining.cpp`
+- **Voting / polls**: `src/rpc/voting.cpp`
+- **Scrapers / manifests / convergence**: `src/rpc/dataacq.cpp` (some in `src/gridcoin/scraper/scraper.cpp`)
+- **Raw transactions / signing**: `src/rpc/rawtransaction.cpp`
+- **HTLC**: `src/rpc/htlc.cpp`
+- **PSGT (Partially Signed Gridcoin Transactions)**: `src/rpc/psgt.cpp`
+- **Server / misc / control**: `src/rpc/server.cpp` or `src/rpc/misc.cpp`
+
+#### 1.2 Declare the file-scope RPCHelpMan and accessor
+
 ```cpp
-// Example: src/rpc/researcher.cpp
+// Example: src/rpc/blockchain.cpp
 
-UniValue mycommand(const JSONRPCRequest& request)
+static const RPCHelpMan mycommand_help{
+    "mycommand",
+    "Description of what the command does.",
+    {
+        {"param", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Description of the required string parameter."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "result", "Description of the returned string field."},
+        }},
+    RPCExamples{
+        HelpExampleCli("mycommand", "\"example_value\"")
+      + HelpExampleRpc("mycommand", "\"example_value\"")},
+};
+const RPCHelpMan& mycommand_helpman() { return mycommand_help; }
+```
+
+`RPCArg::Optional` values: `NO` (required), `OMITTED` (optional, may be absent).
+`RPCResult::Type` values include `STR`, `STR_HEX`, `NUM`, `BOOL`, `OBJ`, `OBJ_DYN`, `ARR`, `NONE`,
+`ELISION`. See `src/rpc/util.h` for the full vocabulary.
+
+#### 1.3 Implement the Command Body
+
+```cpp
+UniValue mycommand(const UniValue& params)
 {
-    // 1. Define help text
-    if (request.fHelp || request.params.size() != 1) {
-        throw std::runtime_error(
-            "mycommand \"param\"\n"
-            "\nDescription of what the command does.\n"
-            "\nArguments:\n"
-            "1. param    (string, required) Description of parameter\n"
-            "\nResult:\n"
-            "{\n"
-            "  \"result\": \"value\"    (string) Description of result\n"
-            "}\n"
-            "\nExamples:\n"
-            + HelpExampleCli("mycommand", "\"example_value\"")
-            + HelpExampleRpc("mycommand", "\"example_value\"")
-        );
-    }
+    // 1. Parse parameters — arity has already been checked by the
+    //    dispatcher; params[N] is guaranteed in-bounds.
+    const std::string param = params[0].get_str();
 
-    // 2. Parse parameters
-    std::string param = request.params[0].get_str();
+    // 2. Acquire locks if needed (see doc/developer-notes.md for ordering).
+    LOCK(cs_main);
+    // LOCK2(cs_main, pwalletMain->cs_wallet);  // for wallet state
 
-    // 3. Acquire locks if needed
-    LOCK(cs_main);  // For blockchain state
-    // LOCK2(cs_main, pwalletMain->cs_wallet);  // For wallet state
+    // 3. Perform operation
+    const std::string result = PerformOperation(param);
 
-    // 4. Perform operation
-    std::string result = PerformOperation(param);
-
-    // 5. Build JSON response
+    // 4. Build JSON response
     UniValue response(UniValue::VOBJ);
     response.pushKV("result", result);
-
     return response;
 }
 ```
 
-#### 1.3 Register the Command
-In the same file, add to the `CRPCCommand` array:
+#### 1.4 Forward-declare both in `src/rpc/server.h`
+
+Add an `extern` for the actor and an `extern` for the helpman accessor in
+the alphabetical block matching the rpccategory the command belongs to:
+
 ```cpp
-static const CRPCCommand commands[] = {
-    // ... existing commands ...
-    { "category", "mycommand", &mycommand, {"param"} },
-};
+// Wallet (or whichever category)
+extern UniValue mycommand(const UniValue& params);
+// ...alphabetical helpman block...
+extern const RPCHelpMan& mycommand_helpman();
 ```
 
-Categories: `"blockchain"`, `"wallet"`, `"network"`, `"mining"`, `"research"`, `"contract"`, `"util"`
+#### 1.5 Register the Command
 
-#### 1.4 Test the Command
+In `src/rpc/server.cpp`, add a row to the `vRPCCommands[]` table in the
+correct category section (alphabetical within section). The four fields are
+`{ name, actor, category, helpman }`:
+
+```cpp
+{ "mycommand",  &mycommand,  cat_wallet,  &mycommand_helpman  },
+```
+
+Valid `rpccategory` enum values (`src/rpc/server.h`): `cat_wallet`,
+`cat_staking`, `cat_developer`, `cat_network`, `cat_voting`. `cat_null`
+is used for internal entries and excludes the command from the
+categorized `help` output.
+
+#### 1.6 Add a help-render test
+
+Every dispatched RPC should have help-render coverage. The standard pattern
+in `src/test/rpchelpman_tests.cpp` is to add an entry to the appropriate
+tier-level `check_help_renders({...})` block:
+
+```cpp
+// In whichever tier-level BOOST_AUTO_TEST_CASE the command belongs to:
+{"mycommand",            &mycommand_helpman},
+```
+
+For a one-off command not fitting any tier, write a dedicated
+`BOOST_AUTO_TEST_CASE(mycommand_help_renders)` that calls
+`mycommand_helpman().ToString()` and asserts on the rendered string.
+
+#### 1.7 Build and test the command
+
 ```bash
-# Start the wallet in testnet mode
-./gridcoinresearchd -testnet -daemon
+cmake --build build -j $(nproc)
 
-# Test the command
-./gridcoinresearch-cli -testnet mycommand "test_value"
+# Run the help-render test
+./build/src/test/test_gridcoin --run_test=rpchelpman_tests/mycommand_help_renders
+
+# Or smoke test against a live testnet daemon. The daemon (built to build/bin/)
+# doubles as the RPC client when given a command — there is no separate -cli
+# binary, and the Qt GUI binary (build/bin/gridcoinresearch, built only with
+# -DENABLE_GUI=ON) is not a CLI.
+./build/bin/gridcoinresearchd -testnet -daemon
+./build/bin/gridcoinresearchd -testnet help mycommand
+./build/bin/gridcoinresearchd -testnet mycommand "test_value"
 
 # Check debug.log for errors
 tail -f ~/.GridcoinResearch/testnet/debug.log
 ```
-
-#### 1.5 Add Documentation
-Update relevant documentation:
-- Add to `src/rpc/server.h` if it needs external declaration
-- Document in user guides if public-facing
 
 ### Common Patterns
 
 **Reading Blockchain State**:
 ```cpp
 LOCK(cs_main);
-CBlockIndex* pindex = chainActive.Tip();
+CBlockIndex* pindex = pindexBest;  // chain.h; Gridcoin has no chainActive
 int height = pindex->nHeight;
 ```
 
@@ -143,35 +212,66 @@ You need to add a new type of blockchain contract for governance or state manage
 ### Steps
 
 #### 2.1 Define the Contract Type
-Edit `src/gridcoin/contract/contract.h`:
+Edit `src/gridcoin/contract/payload.h`. Its comment says: "CONSENSUS: Do not remove or reorder items in this
+enumeration except for OUT_OF_BOUND which must remain at the end." Add the new value just before `OUT_OF_BOUND`,
+and add it to `CONTRACT_TYPES[]` in the same place:
 ```cpp
-enum class ContractType : uint32_t {
-    UNKNOWN,
-    BEACON,
+enum class ContractType
+{
+    UNKNOWN,       //!< An invalid, non-standard, or empty contract type.
+    BEACON,        //!< Beacon advertisement or deletion.
     // ... existing types ...
-    MYNEWTYPE,  // Add your type
+    POOL_APPROVE,  //!< Master-key-signed pool approval/de-list (PENDING -> ACTIVE / -> DELETED).
+    MYNEWTYPE,     //!< Add your type here, before OUT_OF_BOUND.
+    OUT_OF_BOUND,  //!< Marker value for the end of the valid range.
+};
+
+static constexpr GRC::ContractType CONTRACT_TYPES[] = {
+    // ... existing types ...
+    ContractType::POOL_APPROVE,
+    ContractType::MYNEWTYPE,
+    ContractType::OUT_OF_BOUND
 };
 ```
 
-Update the type mapping functions in `src/gridcoin/contract/contract.cpp`:
+Then update `Contract::Type` in `src/gridcoin/contract/contract.cpp`: add the string to `Parse()` and a case to
+each of the three switches, `ToString() const`, `ToString(ContractType)` and `ToTranslatedString(ContractType)`
+(the last wraps the string in `_()`). Do not add it to `ParseLegacy()`, which parses historical contracts only.
 ```cpp
-ContractType ContractType::Parse(std::string input) {
+Contract::Type Contract::Type::Parse(std::string input)
+{
     // ... existing mappings ...
-    if (input == "mynewtype") return ContractType::MYNEWTYPE;
+    if (input == "mynewtype")      return ContractType::MYNEWTYPE;
+
     return ContractType::UNKNOWN;
 }
 
-std::string ContractType::ToString(ContractType type) {
-    // ... existing cases ...
-    case ContractType::MYNEWTYPE: return "mynewtype";
-    default: return "unknown";
+std::string Contract::Type::ToString() const
+{
+    switch (m_value) {
+        // ... existing cases ...
+        case ContractType::MYNEWTYPE:  return "mynewtype";
+        default:                       return "";
+    }
 }
 ```
+
+In the same file, `Contract::Body::ResetType()` must construct the new payload
+(`m_payload.Reset(new MyNewTypePayload());`). `Contract::Body::ConvertFromLegacy()` needs a case too: its switch
+has no `default`, and a new type has no legacy form (`ParseLegacy()` never returns it). The `POOL_REGISTER` and
+`POOL_APPROVE` cases there are bare `assert(false && ...)` lines that predate the added-assert rule (#3321) in
+`test/lint/lint-assertions.sh`. That lint fails any newly added bare `assert(` unless the same line carries
+`// LINT-OK-ASSERT: <reason>`, so do
+not copy those lines as they are; the lint's own message lists what to use instead.
+`git grep -n 'ContractType::POOL_APPROVE' -- src` lists every other place that enumerates the types.
 
 #### 2.2 Create the Payload Class
 Create `src/gridcoin/mynewtype.h`:
 ```cpp
 namespace GRC {
+
+// Entry status. OUT_OF_BOUND must stay last: EnumByte reads it as the upper bound of the range.
+enum class MyNewTypeEntryStatus { UNKNOWN, DELETED, ACTIVE, OUT_OF_BOUND };
 
 // Entry structure (what gets stored)
 class MyNewTypeEntry {
@@ -180,15 +280,17 @@ public:
     std::string m_value;
     int64_t m_timestamp;
     uint256 m_hash;
+    uint256 m_previous_hash;
 
     // Status tracking
-    enum class Status { ACTIVE, DELETED, PENDING };
+    using Status = EnumByte<MyNewTypeEntryStatus>;
     Status m_status;
 
     // Required methods
     bool WellFormed() const;
     std::string Key() const { return m_key; }
     std::pair<std::string, std::string> KeyValueToString() const;
+    std::string StatusToString() const;
 
     // Serialization
     ADD_SERIALIZE_METHODS;
@@ -198,6 +300,8 @@ public:
         READWRITE(m_value);
         READWRITE(m_timestamp);
         READWRITE(m_hash);
+        READWRITE(m_previous_hash);
+        READWRITE(m_status);
     }
 };
 
@@ -227,9 +331,13 @@ public:
         return 0.5 * COIN;  // Set appropriate burn fee
     }
 
-    ADD_SERIALIZE_METHODS;
+    // Not ADD_SERIALIZE_METHODS: IContractPayload declares Serialize/Unserialize overloads
+    // that take a ContractAction, and this macro implements them (see payload.h).
+    ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
+
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action) {
+    inline void SerializationOp(Stream& s, Operation ser_action, const ContractAction contract_action)
+    {
         READWRITE(m_entry);
     }
 };
@@ -262,7 +370,7 @@ MyNewTypeRegistry& GetMyNewTypeRegistry();
 Create `src/gridcoin/mynewtype.cpp`:
 ```cpp
 #include "gridcoin/mynewtype.h"
-#include "main.h"  // For cs_main
+#include "chain.h"  // For cs_main
 
 using namespace GRC;
 
@@ -279,9 +387,9 @@ bool MyNewTypeEntry::WellFormed() const {
 }
 
 bool MyNewTypeRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const {
-    const auto payload = contract.SharePayload<MyNewTypePayload>();
+    const auto payload = contract.SharePayloadAs<MyNewTypePayload>();
 
-    if (!payload->WellFormed(contract.m_action)) {
+    if (!payload->WellFormed(contract.m_action.Value())) {
         DoS = 25;
         return false;
     }
@@ -291,10 +399,10 @@ bool MyNewTypeRegistry::Validate(const Contract& contract, const CTransaction& t
 }
 
 void MyNewTypeRegistry::Add(const ContractContext& ctx) {
-    const auto payload = ctx.m_contract.SharePayload<MyNewTypePayload>();
+    const auto payload = ctx.m_contract.SharePayloadAs<MyNewTypePayload>();
     auto entry = std::make_shared<MyNewTypeEntry>(payload->m_entry);
-    entry->m_status = MyNewTypeEntry::Status::ACTIVE;
-    entry->m_timestamp = ctx.m_pindex->nTime;
+    entry->m_status = MyNewTypeEntryStatus::ACTIVE;
+    entry->m_timestamp = ctx.m_tx.nTime;
 
     m_entries[entry->Key()] = entry;
 }
@@ -308,75 +416,142 @@ If your registry needs persistent storage, leverage the `registry_db.h` template
 
 **Key Concept**: The `registry_db.h` template provides a standardized way to persist registry state to LevelDB with automatic serialization/deserialization.
 
-**Setup Pattern**:
+**Setup Pattern** (modelled on `ProtocolRegistry` in `src/gridcoin/protocol.{h,cpp}`; where they differ, that code is right):
 ```cpp
 // In mynewtype.h
 #include "gridcoin/contract/registry_db.h"
 
 class MyNewTypeRegistry : public IContractHandler {
-private:
-    RegistryDB<MyNewTypeEntry> m_db;  // Template handles persistence
-
 public:
     MyNewTypeRegistry()
-        : m_db("mynewtype")  // Database filename prefix
+        : m_db(1)  // DB version: increment it when the stored entry format changes
     {
     }
 
-    // Database operations
-    void StoreToDB(const MyNewTypeEntry& entry) {
-        m_db.Store(entry.Key(), entry);
-    }
+    typedef std::map<std::string, std::shared_ptr<MyNewTypeEntry>> MyNewTypeEntryMap;
+    typedef std::map<uint256, std::shared_ptr<MyNewTypeEntry>> HistoricalMyNewTypeEntryMap;
 
-    std::shared_ptr<MyNewTypeEntry> LoadFromDB(const std::string& key) {
-        return m_db.Load(key);
-    }
+    // Seven parameters: entry, storage entry, status enum, current map, pending map,
+    // expired-pending type, historical map.
+    typedef RegistryDB<MyNewTypeEntry,
+                       MyNewTypeEntry,
+                       MyNewTypeEntryStatus,
+                       MyNewTypeEntryMap,
+                       MyNewTypeEntryMap,
+                       std::set<MyNewTypeEntry>,
+                       HistoricalMyNewTypeEntryMap> MyNewTypeDB;
 
-    void EraseFromDB(const std::string& key) {
-        m_db.Erase(key);
-    }
+    // The IContractHandler DB hooks. Their defaults return 0 or do nothing.
+    int Initialize() override;
+    int GetDBHeight() override;
+    void SetDBHeight(int& height) override;
+    uint64_t PassivateDB() override;
+
+private:
+    MyNewTypeEntryMap m_entries;
+    MyNewTypeEntryMap m_pending_entries;        //!< Not used. Only to satisfy the template.
+    std::set<MyNewTypeEntry> m_expired_entries;  //!< Not used. Only to satisfy the template.
+    MyNewTypeEntryMap m_first_entries;          //!< Not used. Only to satisfy the template.
+    MyNewTypeDB m_db;
 };
 ```
 
-**Benefits**:
-- Automatic serialization using entry's `SerializationOp`
-- Consistent error handling
-- Transaction support for atomic updates
-- Iterator support for full registry scans
+```cpp
+// In mynewtype.cpp: the LevelDB key prefix for this registry's records.
+template<> const std::string MyNewTypeRegistry::MyNewTypeDB::KeyType()
+{
+    return std::string("mynewtype");
+}
 
-**Example Registries Using This Pattern**:
-- `BeaconRegistry` → `beacon.dat`
-- `Whitelist` → `project.dat`
-- `ProtocolRegistry` → `protocol.dat`
+// In Add(), as ProtocolRegistry::AddDelete does. insert() stores the entry as given, so fill in
+// the transaction fields and the link to this key's previous entry first.
+int height = -1;
+if (ctx.m_pindex) height = ctx.m_pindex->nHeight;  // every RegistryDB registry guards a null pindex
 
-**Note**: For stateless handlers (like MRCRegistry) or memory-only registries, skip the database template and manage state directly.
+MyNewTypePayload payload = ctx->CopyPayloadAs<MyNewTypePayload>();
+MyNewTypeEntry& entry = payload.m_entry;
+entry.m_hash = ctx.m_tx.GetHash();
+entry.m_timestamp = ctx.m_tx.nTime;
+entry.m_status = MyNewTypeEntryStatus::ACTIVE;  // as in 2.3: a default EnumByte is UNKNOWN, which Initialize() skips
+auto current = m_entries.find(entry.Key());
+entry.m_previous_hash = current != m_entries.end() ? current->second->m_hash : uint256 {};
+
+if (!m_db.insert(ctx.m_tx.GetHash(), height, entry)) {
+    // Already stored (expected when contracts are replayed at startup), or the LevelDB write failed.
+}
+m_entries[entry.Key()] = m_db.find(ctx.m_tx.GetHash())->second;
+
+// In Revert(): m_db.erase(ctx.m_tx.GetHash()), then restore the entry that m_previous_hash names
+// with m_db.find(entry.m_previous_hash).
+```
+
+With `RegistryDB`, this replaces the `Add()` body of 2.3.
+
+`Store()`, `Load()` and `Delete()` are private; a registry uses `insert()`, `erase()` and `find()`. The entry
+type must provide `Key()`, `KeyValueToString()`, `StatusToString()`, `m_timestamp`, `m_hash`, `m_previous_hash`
+and `m_status`, and its status enum must have `UNKNOWN` and `OUT_OF_BOUND`, which the startup replay skips.
+
+The template's startup, bookmark and passivation code runs only if the registry forwards to it, as
+`ProtocolRegistry` does in `src/gridcoin/protocol.cpp`. Override `Initialize()` to return
+`m_db.Initialize(m_entries, m_pending_entries, m_expired_entries, m_first_entries, false)`, and pass `true` last
+only if the registry keeps a first-entry map, as `Whitelist` does. Override `GetDBHeight()` to pass a local `int`
+to `m_db.LoadDBHeight()` and return it, `SetDBHeight()` to call `m_db.StoreDBHeight()`, and `PassivateDB()` to
+return `m_db.passivate_db()`. Have `Reset()` clear the maps and call `m_db.clear()`. The `IContractHandler`
+defaults return 0 or do nothing. A registry listed in `CONTRACT_TYPES_WITH_REG_DB` without these overrides loads
+no stored history and keeps a DB height of 0, which pulls the start of the startup contract replay down to
+`V11_height` or the lookback window, whichever is lower (the clamp in `InitializeContracts()`). It is also never
+passivated, and unless its `Reset()` calls `m_db.clear()`, its LevelDB records survive `-clear<type>history`,
+which `InitializeContracts()` handles by calling `Reset()`.
+
+**What the template provides once the registry forwards to it**:
+- Replay of the stored records into the registry's maps at startup (`RegistryDB::Initialize()`, called from the
+  registry's own `Initialize()` override)
+- A history keyed by txid (`insert()`) and rebuilt at startup from each stored record's `m_hash`
+  (`Initialize()`), so `Add()` must set `m_hash`, `m_timestamp` and `m_previous_hash` itself, as
+  `ProtocolRegistry::AddDelete` does. The registry's own `Revert()` walks `m_previous_hash` back with `find()`.
+- A block-height bookmark (`StoreDBHeight()` / `LoadDBHeight()`)
+- Removal of superseded history from memory (`passivate_db()`)
+
+**Example Registries Using This Pattern** (all in the node's single LevelDB, `txleveldb/` in the data
+directory, under the prefix their `KeyType()` returns):
+- `BeaconRegistry::BeaconDB` → `"beacon"`
+- `Whitelist::ProjectEntryDB` → `"project"`
+- `ProtocolRegistry::ProtocolEntryDB` → `"protocol"`
+
+**Note**: For stateless handlers (like `MRCContractHandler` in `src/gridcoin/mrc.h`) or memory-only registries,
+skip the database template and manage state directly.
 
 #### 2.4 Register with Dispatcher
-Edit `src/gridcoin/contract/contract.cpp`:
+Edit `class Dispatcher` in `src/gridcoin/contract/contract.cpp`; `GetHandler()` is defined inside the class:
 ```cpp
-IContractHandler& Dispatcher::GetHandler(const ContractType type) {
-    switch (type) {
-        // ... existing cases ...
-        case ContractType::MYNEWTYPE:
-            return GetMyNewTypeRegistry();
-        default:
-            return s_unknown_handler;
+    IContractHandler& GetHandler(const ContractType type)
+    {
+        switch (type) {
+            // ... existing cases ...
+            case ContractType::MYNEWTYPE:     return GetMyNewTypeRegistry();
+            default:                          return m_unknown_handler;
+        }
     }
-}
 ```
+
+If the registry uses `RegistryDB` (2.3.1), also add the type to `RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB`
+in `src/gridcoin/contract/registry.cpp` and a case to `RegistryBookmarks::GetRegistryWithDB()` in
+`src/gridcoin/contract/registry.h`; `InitializeContracts()` in `src/gridcoin/gridcoin.cpp` calls `Initialize()`
+on every registry in that list at startup (the override in 2.3.1). If it implements `Revert()`, do the same with
+`CONTRACT_TYPES_SUPPORTING_REVERT` and `GetRegistryWithRevert()`.
 
 #### 2.5 Add to Build System
 Edit `src/CMakeLists.txt`:
 ```cmake
-# CMakeLists.txt
-set(GRIDCOIN_SOURCES
+# src/CMakeLists.txt
+add_library(gridcoin_util STATIC
     # ... existing files ...
     gridcoin/mynewtype.cpp
 )
 ```
 
 #### 2.6 Create RPC Commands
-Add commands in `src/rpc/contract.cpp` or create new file for managing your contract type.
+Add commands next to the existing contract RPCs (`advertisebeacon`, `beaconstatus`, `superblocks` in `src/rpc/blockchain.cpp`), or create a new file for managing your contract type. Every new `vRPCCommands[]` row in `src/rpc/server.cpp` needs a heritage classification; see the RPC Heritage Ledger section of `CLAUDE.md`.
 
 #### 2.7 Add Tests
 Create `src/test/gridcoin/mynewtype_tests.cpp`:
@@ -398,6 +573,8 @@ BOOST_AUTO_TEST_CASE(it_validates_well_formed_entries)
 BOOST_AUTO_TEST_SUITE_END()
 ```
 
+Add the file to `add_executable(test_gridcoin ...)` in `src/test/CMakeLists.txt`.
+
 ---
 
 ## 3. Modifying Consensus Rules
@@ -416,10 +593,10 @@ Consensus changes require:
 
 #### 3.1 Identify the Change Location
 Common consensus locations:
-- **Block validation**: `src/main.cpp` → `CheckBlock()`, `AcceptBlock()`
-- **Transaction validation**: `src/main.cpp` → `CheckTransaction()`
-- **Reward calculation**: `src/miner.cpp` → Reward functions
-- **Difficulty adjustment**: `src/main.cpp` → `GetNextTargetRequired()`
+- **Block validation**: `src/validation.cpp` → `CheckBlock()`, `AcceptBlock()`, `ConnectBlock()`
+- **Transaction validation**: `src/validation.cpp` → `CheckTransaction()`, `ConnectInputs()`
+- **Reward calculation**: `src/gridcoin/staking/reward.cpp` → `GetProofOfStakeReward()`; `src/miner.cpp` → `CreateGridcoinReward()` adds the reward to the coinstake (`CreateMRCRewards()` and stake splitting / sidestaking add the extra outputs)
+- **Difficulty adjustment**: `src/gridcoin/staking/difficulty.cpp` → `GRC::GetNextTargetRequired()`
 
 #### 3.2 Add Version/Height Gating
 Always gate consensus changes by block height or version:
@@ -454,7 +631,7 @@ If adding substantial changes:
 // src/primitives/block.h
 static const int32_t CURRENT_VERSION = 12;  // Increment
 
-// src/main.cpp - Check version
+// src/validation.cpp - Check version
 if (block.nVersion < MINIMUM_VERSION) {
     return state.DoS(100, error("version too old"));
 }
@@ -466,7 +643,7 @@ if (block.nVersion < MINIMUM_VERSION) {
 cmake --build . --target gridcoinresearchd
 
 # Run testnet node
-./gridcoinresearchd -testnet -daemon
+./bin/gridcoinresearchd -testnet -daemon
 
 # Monitor for issues
 tail -f ~/.GridcoinResearch/testnet/debug.log
@@ -493,7 +670,7 @@ CAmount GetBlockSubsidy(int nHeight) {
 
 **Adding New Validation**:
 ```cpp
-// src/main.cpp in block validation
+// src/validation.cpp in block validation
 if (pindex->nHeight >= NEW_RULE_HEIGHT) {
     if (!ValidateNewRule(block, pindex)) {
         return state.DoS(100, error("new rule violation"));
@@ -640,31 +817,29 @@ someMenu->addAction(myNewAction);
 // Add slot method
 void BitcoinGUI::showMyNewDialog()
 {
-    if (!walletFrame) return;
+    if (!walletModel) return;
     MyNewDialog dialog(this);
-    dialog.setModel(walletFrame->currentWalletModel());
+    dialog.setModel(walletModel);
     dialog.exec();
 }
 ```
 
 #### 4.5 Register with Build System
-Edit `src/qt/CMakeLists.txt` or `src/Makefile.qt.include`:
+Edit `src/qt/CMakeLists.txt` and add the source file to `add_library(gridcoinqt STATIC ...)`:
 ```cmake
-set(QT_FORMS_UI
-    # ... existing forms ...
-    forms/mynewdialog.ui
-)
-
-set(QT_MOC_CPP
-    # ... existing mocs ...
-    moc_mynewdialog.cpp
+add_library(gridcoinqt STATIC
+    # ... existing files ...
+    mynewdialog.cpp
 )
 ```
+List only the `.cpp`, as `aboutdialog.cpp` is: the target turns `AUTOMOC`, `AUTOUIC` and `AUTORCC` on, and its
+`AUTOUIC_SEARCH_PATHS` includes `src/qt/forms`, so `#include "ui_mynewdialog.h"` is generated from
+`forms/mynewdialog.ui`.
 
 #### 4.6 Test the GUI
 ```bash
-cmake --build . --target gridcoinresearch-qt
-./gridcoinresearch-qt -testnet
+cmake --build . --target gridcoinresearch
+./bin/gridcoinresearch -testnet
 ```
 
 ---
@@ -679,7 +854,7 @@ A user reports incorrect research rewards, zero magnitude, or beacon problems.
 #### 5.1 Check Researcher Status
 ```bash
 # RPC command
-./gridcoinresearch-cli getstakinginfo
+./gridcoinresearchd getstakinginfo
 
 # Look for:
 # - "researcher_status": Should be "active"
@@ -689,7 +864,7 @@ A user reports incorrect research rewards, zero magnitude, or beacon problems.
 
 #### 5.2 Verify Beacon Status
 ```bash
-./gridcoinresearch-cli beaconstatus
+./gridcoinresearchd beaconstatus
 
 # Check:
 # - Beacon age (should be < 6 months)
@@ -699,7 +874,7 @@ A user reports incorrect research rewards, zero magnitude, or beacon problems.
 
 #### 5.3 Check BOINC Detection
 ```bash
-./gridcoinresearch-cli listprojects
+./gridcoinresearchd listprojects
 
 # Verify:
 # - Projects are detected
@@ -710,17 +885,17 @@ A user reports incorrect research rewards, zero magnitude, or beacon problems.
 #### 5.4 Examine Current Superblock
 ```bash
 # Get current superblock
-./gridcoinresearch-cli superblocks
+./gridcoinresearchd superblocks
 
 # Check specific CPID magnitude
-./gridcoinresearch-cli magnitude <cpid>
+./gridcoinresearchd magnitude <cpid>
 ```
 
 #### 5.5 Check Accrual
 ```bash
-./gridcoinresearch-cli getaccrual <cpid>
+./gridcoinresearchd magnitude <cpid>
 
-# Returns pending research rewards
+# Pending research rewards are the "Owed" field
 ```
 
 #### 5.6 Debug Logging
@@ -764,17 +939,19 @@ You need to add tests or debug failing tests.
 ### Running Tests
 
 ```bash
+# Run these from inside the build directory (e.g. build/)
+
 # Build tests
-cmake --build . --target test_gridcoinresearch
+cmake --build . --target test_gridcoin
 
 # Run all tests
-./src/test/test_gridcoinresearch
+./src/test/test_gridcoin
 
 # Run specific test suite
-./src/test/test_gridcoinresearch --run_test=beacon_tests
+./src/test/test_gridcoin --run_test=beacon_tests
 
 # Run with verbose output
-./src/test/test_gridcoinresearch --log_level=all
+./src/test/test_gridcoin --log_level=all
 ```
 
 ### Writing Unit Tests
@@ -810,22 +987,27 @@ BOOST_AUTO_TEST_SUITE_END()
 ```
 
 ### Test Fixtures
-For tests requiring blockchain state:
+For tests requiring blockchain state, use `grc_test::RegtestChainSetup` (`src/test/chain_setup.h`). It builds the regtest genesis with spendable premine outputs (`SpendablePremineOutputs()`, `PremineKey()`). Attach it once per suite with the decorator, never as the fixture argument of `BOOST_FIXTURE_TEST_SUITE`, which would rebuild it for every case. The header comment explains why, and shows how to add a light per-case fixture such as `grc_test::WalletTxScope` alongside the decorator:
 ```cpp
-#include "test/test_gridcoin.h"  // Provides TestChain100Setup
+#include "chain.h"
+#include "sync.h"
+#include "test/chain_setup.h"
 
-BOOST_FIXTURE_TEST_SUITE(myfeature_tests, TestChain100Setup)
+BOOST_AUTO_TEST_SUITE(myfeature_tests,
+                      *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
 
 BOOST_AUTO_TEST_CASE(it_works_with_blockchain)
 {
-    // You have a 100-block chain available
-    BOOST_CHECK(chainActive.Height() == 100);
+    LOCK(cs_main);
+    // The chain holds only the regtest genesis block
+    BOOST_CHECK_EQUAL(nBestHeight, 0);
 
     // Test code
 }
 
 BOOST_AUTO_TEST_SUITE_END()
 ```
+There is no `TestChain100Setup` in this tree. For tests that only need `CBlockIndex` entries, use `GRC::MockBlockIndex::InsertBlockIndex(...)` instead.
 
 ---
 
@@ -838,22 +1020,22 @@ Node is stuck, forked, or showing unexpected behavior.
 
 ```bash
 # Check sync status
-./gridcoinresearch-cli getblockchaininfo
+./gridcoinresearchd getblockchaininfo
 
 # Get current best block
-./gridcoinresearch-cli getbestblockhash
+./gridcoinresearchd getbestblockhash
 
 # Check specific block
-./gridcoinresearch-cli getblock <hash>
+./gridcoinresearchd getblock <hash>
 
 # View mempool
-./gridcoinresearch-cli getrawmempool
+./gridcoinresearchd getrawmempool
 
 # Check peers
-./gridcoinresearch-cli getpeerinfo
+./gridcoinresearchd getpeerinfo
 
 # Examine connections
-./gridcoinresearch-cli getnetworkinfo
+./gridcoinresearchd getnetworkinfo
 ```
 
 ### Common Fixes
@@ -861,7 +1043,7 @@ Node is stuck, forked, or showing unexpected behavior.
 **Node Stuck Syncing**:
 ```bash
 # Restart with fresh peers
-./gridcoinresearch-cli stop
+./gridcoinresearchd stop
 rm ~/.GridcoinResearch/peers.dat
 ./gridcoinresearchd -daemon
 ```
@@ -869,19 +1051,18 @@ rm ~/.GridcoinResearch/peers.dat
 **Potential Fork**:
 ```bash
 # Compare block hash with explorer
-./gridcoinresearch-cli getblockhash <height>
+./gridcoinresearchd getblockhash <height>
 
 # If forked, may need to resync
-./gridcoinresearch-cli stop
+./gridcoinresearchd stop
 # Backup wallet first!
-rm -rf ~/.GridcoinResearch/blocks ~/.GridcoinResearch/chainstate
-./gridcoinresearchd -daemon
+./gridcoinresearchd -resetblockchaindata -daemon
 ```
 
 **Debug Validation Failures**:
 ```bash
 # Enable verbose validation logging
-./gridcoinresearchd -debug=validation -printtoconsole
+./gridcoinresearchd -debug=verbose -printtoconsole
 ```
 
 ---
@@ -892,13 +1073,13 @@ rm -rf ~/.GridcoinResearch/blocks ~/.GridcoinResearch/chainstate
 You need to change how statistics are collected or processed.
 
 ### Key Files
-- `src/scraper/scraper.cpp`: Main scraper logic
-- `src/scraper/http.cpp`: HTTP downloading
+- `src/gridcoin/scraper/scraper.cpp`: Main scraper logic
+- `src/gridcoin/scraper/http.cpp`: HTTP downloading
 - `src/gridcoin/quorum.cpp`: Convergence algorithm
 
 ### Example: Adding Project Validation
 
-Edit `src/scraper/scraper.cpp`:
+Edit `src/gridcoin/scraper/scraper.cpp`:
 ```cpp
 bool ValidateProjectStats(const ProjectStats& stats) {
     // Add custom validation
@@ -922,7 +1103,7 @@ bool ValidateProjectStats(const ProjectStats& stats) {
 tail -f ~/.GridcoinResearch/debug.log | grep -i scraper
 
 # Check manifest generation
-./gridcoinresearch-cli getscrapermanifest
+./gridcoinresearchd listmanifests
 ```
 
 ---
@@ -942,12 +1123,10 @@ Need to modify protocol parameters (stake age, superblock interval, etc.)
 
 Edit consensus parameters:
 ```cpp
-// src/gridcoin/quorum.cpp
-int64_t GetSuperblockInterval() {
-    if (nBestHeight >= FORK_HEIGHT) {
-        return NEW_INTERVAL;
-    }
-    return OLD_INTERVAL;
+// src/chainparams.h -- a real height-gated parameter (superblock spacing)
+inline int GetSuperblockAgeSpacing(int nHeight)
+{
+    return (OnTestnet() ? 86400 : (nHeight > 364500) ? 86400 : 43200);
 }
 ```
 
@@ -963,7 +1142,7 @@ cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
 cmake --build .
 
 # Run with profiler
-valgrind --tool=callgrind ./gridcoinresearchd
+valgrind --tool=callgrind ./bin/gridcoinresearchd
 
 # Analyze
 kcachegrind callgrind.out.*
@@ -1213,7 +1392,7 @@ Validate a specific Linux distro:
 
 **Common Issues**:
 - **Lint failures**: Run `test/lint/lint-all.sh` locally first
-- **Test failures**: Run `./src/test/test_gridcoinresearch --log_level=all` for verbose output
+- **Test failures**: Run `./build/src/test/test_gridcoin --log_level=all` for verbose output
 - **Sanitizer errors**: Run with ASan locally: `./contrib/devtools/run-local-ci.sh workflow=.github/workflows/cmake_quality.yml job=sanitizers`
 
 #### Understanding Workflow Structure
@@ -1238,11 +1417,14 @@ cmake_production.yml
 
 When a tag is pushed (e.g., `v5.4.9.99`):
 
-1. All Production builds complete
+1. All Production builds complete -- every artifact-producing job must be in the `deploy`
+   job's `needs:` list, or it races the release and its asset is silently dropped
 2. `deploy` job activates
 3. Downloads all artifacts (Linux `.tar.gz`, Windows `.exe`, macOS `.dmg`)
-4. Generates `SHA256SUMS.txt`
-5. Creates **Draft Release** on GitHub with binaries attached
+4. Creates **Draft Release** on GitHub with binaries attached
+
+Checksums are not generated: the GitHub release page already publishes a SHA-256 digest for
+every attached asset.
 
 **Manual steps** (maintainer only):
 - Review draft release
@@ -1253,7 +1435,7 @@ When a tag is pushed (e.g., `v5.4.9.99`):
 
 **Pre-Push Checklist**:
 - [ ] Run linters locally (`test/lint/lint-all.sh`)
-- [ ] Run unit tests (`./src/test/test_gridcoinresearch`)
+- [ ] Run unit tests (`./build/src/test/test_gridcoin`)
 - [ ] Test CI job for your platform if making build system changes
 - [ ] Check that code follows `01-coding.md` style guide
 
@@ -1276,7 +1458,7 @@ For complete documentation on:
 - Distro isolation strategies
 - Caching and optimization
 
-**See**: `Gridcoin-Research/doc/ci_cd.md`
+**See**: `doc/ci_cd.md`
 
 ---
 
@@ -1286,6 +1468,6 @@ For complete documentation on:
 - **Glossary**: `03-core-concepts-glossary.md`
 - **Components**: `04-component-guide.md`
 - **Coding Style**: `01-coding.md`
-- **CI/CD Technical Details**: `Gridcoin-Research/doc/ci_cd.md`
+- **CI/CD Technical Details**: `doc/ci_cd.md`
 
 This guide provides practical workflows for common tasks. Always take Baby Steps™ - make one focused change at a time, test thoroughly, and document your work. **The process is the product.**

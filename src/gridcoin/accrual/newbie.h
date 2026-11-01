@@ -9,8 +9,7 @@
 #include "gridcoin/accrual/computer.h"
 #include "gridcoin/beacon.h"
 
-namespace {
-using namespace GRC;
+namespace GRC {
 
 //!
 //! \brief An accrual calculator for a CPID that never earned a research reward
@@ -55,7 +54,7 @@ public:
         return m_magnitude_unit;
     }
 
-    int64_t AccrualAge() const override
+    int64_t AccrualAge() const override EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (const BeaconOption beacon = GetBeaconRegistry().Try(m_cpid)) {
             return m_payment_time - beacon->m_timestamp;
@@ -64,7 +63,7 @@ public:
         return 0;
     }
 
-    double AccrualDays() const override
+    double AccrualDays() const override EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return AccrualAge() / 86400.0;
     }
@@ -94,7 +93,7 @@ public:
         return threshold;
     }
 
-    bool ExceededRecentPayments() const override
+    bool ExceededRecentPayments() const override EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return RawAccrual() > PaymentPerDayLimit();
     }
@@ -104,12 +103,12 @@ public:
         return m_magnitude * m_magnitude_unit * COIN;
     }
 
-    CAmount RawAccrual() const override
+    CAmount RawAccrual() const override EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return AccrualDays() * ExpectedDaily();
     }
 
-    CAmount Accrual() const override
+    CAmount Accrual() const override EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (m_magnitude <= 0) {
             return 0;
@@ -145,6 +144,6 @@ private:
     const double m_magnitude_unit; //!< Network magnitude unit to factor in.
     const double m_magnitude;      //!< CPID's magnitude in the last superblock.
 }; // NewbieAccrualComputer
-} // anonymous namespace
+} // namespace GRC
 
 #endif // GRIDCOIN_ACCRUAL_NEWBIE_H

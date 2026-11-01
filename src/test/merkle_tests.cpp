@@ -182,9 +182,9 @@ BOOST_AUTO_TEST_CASE(merkle_test)
             CBlock block;
             block.vtx.resize(ntx);
             for (int j = 0; j < ntx; j++) {
-                CTransaction tx;
+                CMutableTransaction tx;
                 tx.nLockTime = j;
-                block.vtx[j] = tx;
+                block.vtx[j] = CTransaction(tx);
             }
             // Compute the root of the block before mutating it.
             bool unmutatedMutated = false;
@@ -232,9 +232,9 @@ BOOST_AUTO_TEST_CASE(merkle_test_oneTx_block)
     CBlock block;
 
     block.vtx.resize(1);
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nLockTime = 0;
-    block.vtx[0] = tx;
+    block.vtx[0] = CTransaction(tx);
     uint256 root = BlockMerkleRoot(block, &mutated);
     BOOST_CHECK(root == block.vtx[0].GetHash());
     BOOST_CHECK_EQUAL(mutated, false);
@@ -248,9 +248,9 @@ BOOST_AUTO_TEST_CASE(merkle_test_OddTxWithRepeatedLastTx_block)
     block.vtx.resize(3);
 
     for (std::size_t pos = 0; pos < block.vtx.size(); pos++) {
-        CTransaction tx;
+        CMutableTransaction tx;
         tx.nLockTime = pos;
-        block.vtx[pos] = tx;
+        block.vtx[pos] = CTransaction(tx);
     }
 
     blockWithRepeatedLastTx = block;
@@ -271,9 +271,9 @@ BOOST_AUTO_TEST_CASE(merkle_test_LeftSubtreeRightSubtree)
     block.vtx.resize(4);
     std::size_t pos;
     for (pos = 0; pos < block.vtx.size(); pos++) {
-        CTransaction tx;
+        CMutableTransaction tx;
         tx.nLockTime = pos;
-        block.vtx[pos] = tx;
+        block.vtx[pos] = CTransaction(tx);
     }
 
     for (pos = 0; pos < block.vtx.size() / 2; pos++)

@@ -12,8 +12,6 @@ using namespace GRC;
 using SearchReport = MinerStatus::SearchReport;
 using EfficiencyReport = MinerStatus::EfficiencyReport;
 
-extern bool fQtActive;
-
 // -----------------------------------------------------------------------------
 // Global Variables
 // -----------------------------------------------------------------------------
@@ -165,11 +163,9 @@ void MinerStatus::UpdateCurrentErrors(ErrorFlags error_flags)
     ClearErrors();
     AddError(error_flags);
 
-    // Avoid the lock on headless nodes:
-    if (fQtActive) {
-        LOCK(m_cs);
-        uiInterface.MinerStatusChanged(StakingActive(), m_search.CoinWeight());
-    }
+    LOCK(m_cs);
+
+    uiInterface.MinerStatusChanged(StakingActive(), m_search.CoinWeight());
 }
 
 void MinerStatus::IncrementBlocksCreated()
@@ -184,7 +180,6 @@ void MinerStatus::UpdateLastSearch(
     int64_t search_timestamp,
     int block_version,
     uint64_t weight_sum,
-    double value_sum,
     uint64_t weight_min,
     uint64_t weight_max,
     int64_t balance_weight)
@@ -197,7 +192,6 @@ void MinerStatus::UpdateLastSearch(
 
     m_search.m_block_version = block_version;
     m_search.m_weight_sum = weight_sum;
-    m_search.m_value_sum = value_sum;
     m_search.m_weight_min = weight_min;
     m_search.m_weight_max = weight_max;
 
@@ -233,7 +227,6 @@ void MinerStatus::ClearLastSearch()
 
     m_search.m_block_version = 0;
     m_search.m_weight_sum = 0;
-    m_search.m_value_sum = 0;
     m_search.m_weight_min = 0;
     m_search.m_weight_max = 0;
     m_search.m_timestamp = 0;
@@ -259,7 +252,7 @@ void MinerStatus::ClearErrors()
 
 double SearchReport::CoinWeight() const
 {
-    return m_weight_sum / 80.0;
+    return m_weight_sum / static_cast<double>(STAKE_WEIGHT_UNITS_PER_COIN);
 }
 
 size_t SearchReport::KernelsRejected() const

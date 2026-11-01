@@ -52,33 +52,6 @@ namespace fsbridge {
 #endif
     };
 
-    std::string get_filesystem_error_message(const fs::filesystem_error& e);
-
-    /** Check if a path contains characters not representable in the system code page.
-     *
-     * On Windows, fs::path::string() converts to the system code page, which silently
-     * corrupts characters outside that code page. This function detects such paths so
-     * callers can engage appropriate workarounds.
-     *
-     * Always returns false on non-Windows platforms (UTF-8 is the native encoding).
-     */
-    bool PathHasNonCodepageChars(const fs::path& path);
-
-    /** Return a narrow string safe for BDB's DbEnv::open() and gArgs storage.
-     *
-     * BDB only accepts narrow (const char*) paths, and gArgs stores narrow strings. On Windows,
-     * fs::path::string() converts to the system code page, which corrupts characters outside that
-     * code page. This function converts to the Windows short (8.3) form via GetShortPathNameW()
-     * only when the path contains non-codepage characters. 8.3 names are ASCII-safe and work as
-     * valid aliases for the original Unicode path.
-     *
-     * If the path is representable in the system code page, returns path.string() unchanged.
-     * Returns an empty string if conversion is needed but 8.3 names are unavailable on the volume.
-     *
-     * On non-Windows platforms, simply returns path.string().
-     */
-    std::string ShortPathString(const fs::path& path);
-
     /** Return a UTF-8 display string, converting from Windows 8.3 short form if needed.
      *
      * On Windows, converts from 8.3 short form back to the original long (Unicode) path via
@@ -90,19 +63,17 @@ namespace fsbridge {
      */
     std::string LongPathString(const fs::path& path);
 
-    /** Return a UTF-8 narrow string safe for LevelDB's leveldb::DB::Open().
+    /**
+     * True when path is on a filesystem whose contents do not survive the process
+     * exiting or the machine rebooting -- tmpfs or ramfs.
      *
-     * LevelDB's Windows port (env_windows.cc) internally converts paths from UTF-8 to UTF-16
-     * via MultiByteToWideChar(CP_UTF8). But fs::path::string() produces system code page bytes,
-     * not UTF-8, which causes LevelDB's conversion to produce garbled wide strings. This function
-     * provides proper UTF-8 encoding only when the path contains non-codepage characters.
-     *
-     * If the path is representable in the system code page, returns path.string() unchanged
-     * (code page and UTF-8 are identical for ASCII characters).
-     *
-     * On non-Windows platforms, simply returns path.string() (already UTF-8).
+     * A data directory there accepts every write and loses the chain, the wallet
+     * and debug.log on exit, with no error at any point. Linux only: elsewhere
+     * this returns false, since there is no equivalent test. It also returns
+     * false when the filesystem cannot be determined, so an unreadable path is
+     * never called volatile on the strength of a failed syscall.
      */
-    std::string Utf8PathString(const fs::path& path);
+    bool IsVolatileFilesystem(const fs::path& path);
 
     // GNU libstdc++ specific workaround for opening UTF-8 paths on Windows.
     //

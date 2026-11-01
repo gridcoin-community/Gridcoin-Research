@@ -1,8 +1,36 @@
+#include "random.h"
+#include "scheduler.h"
+#include <thread>
+#include <memory>
 #include <boost/test/unit_test.hpp>
 
+#include "gridcoin/mnemonics.h"
+#include "gridcoin/contract/contract.h"
+#include "gridcoin/contract/message.h"
 #include "gridcoin/sidestake.h"
-#include "main.h"
+#include "gridcoin/tx_message.h"
+#include "gridcoin/voting/builders.h"
+#include "gridcoin/voting/poll.h"
+#include "init.h"
 #include "wallet/wallet.h"
+#include "net_processing.h"
+#include "wallet/walletdb.h"
+#include "key_io.h"
+#include "rpc/protocol.h"
+#include "rpc/server.h"
+#include "txdb.h"
+#include "script/sign.h"
+#include "test/state_guard.h"
+#include "rpc/blockchain.h"
+#include "txmempool.h"
+
+#include <algorithm>
+
+// Stream operator for uint256 to support Boost Test output.
+// Defined in global namespace (not std) to avoid undefined behavior per [namespace.std].
+inline std::ostream& operator<<(std::ostream& os, const uint256& hash) {
+    return os << hash.ToString();
+}
 
 // how many times to run all the tests to have a chance to catch errors that only show up with particular random shuffles
 #define RUN_TESTS 100
@@ -25,17 +53,20 @@ static vector<COutput> vCoins;
 static void add_coin(int64_t nValue, int nAge = 6*24, bool fIsFromMe = false, int nInput=0)
 {
     static int i;
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nLockTime = i++;        // so all transactions get different hashes
     tx.nTime = 0;
     tx.vout.resize(nInput+1);
     tx.vout[nInput].nValue = nValue;
-    std::unique_ptr<CWalletTx> wtx(new CWalletTx(&wallet, tx));
     if (fIsFromMe)
     {
         // IsFromMe() returns (GetDebit() > 0), and GetDebit() is 0 if vin.empty(),
         // so stop vin being empty, and cache a non-zero Debit to fake out IsFromMe()
-        wtx->vin.resize(1);
+        tx.vin.resize(1);
+    }
+    std::unique_ptr<CWalletTx> wtx(new CWalletTx(&wallet, CTransaction(tx)));
+    if (fIsFromMe)
+    {
         wtx->fDebitCached = true;
         wtx->nDebitCached = 1;
     }
@@ -300,6 +331,4818 @@ BOOST_AUTO_TEST_CASE(coin_selection_tests)
         }
     }
     empty_wallet();
+}
+
+// Regression for issue #3120: on a fragmented wallet a contract's burn must not
+// drag in thousands of dust inputs (which would push the tx past
+// MAX_STANDARD_TX_SIZE and get it rejected with "tx size ... greater than
+// standard"). SelectContractCoins prefers the smallest UTXOs (dust
+// consolidation) but falls back to normal target-based selection when the
+// smallest-first set would blow the standard-tx input budget.
+BOOST_AUTO_TEST_CASE(contract_coin_selection_bounds_fragmented_wallet)
+{
+    CoinSet setCoinsRet;
+    int64_t nValueRet = 0;
+    const int64_t spendTime = GetTime();
+
+    empty_wallet();
+
+    // A heavily-fragmented wallet: 450 dust UTXOs (0.01 GRC each) plus two large
+    // consolidated coins. The dust alone (4.5 GRC) cannot fund a 6 GRC burn, so
+    // smallest-first must reach past every dust output into a large coin, i.e.
+    // > 450 inputs -- over the standard-tx input budget bound
+    // (MAX_CONTRACT_TX_SMALLEST_COIN_INPUTS, currently 400 in wallet.cpp). The
+    // dust count is chosen to exceed that bound; if the bound is ever retuned
+    // above ~450, raise the dust count here so the fallback still triggers.
+    for (int i = 0; i < 450; ++i) {
+        add_coin(CENT);            // 0.01 GRC dust
+    }
+    add_coin(100 * COIN);          // large consolidated coins
+    add_coin(100 * COIN);
+
+    const int64_t target = 6 * COIN;
+
+    // Witness the pathology: raw smallest-first sweeps every dust UTXO (plus a
+    // large coin to close the gap) -> a non-standard input count.
+    CoinSet smallestSet;
+    int64_t smallestValue = 0;
+    BOOST_REQUIRE(wallet.SelectSmallestCoins(target, spendTime, 1, 1, vCoins, smallestSet, smallestValue));
+    BOOST_CHECK_GT(smallestSet.size(), 450u);
+
+    // The fix: SelectContractCoins detects the oversized smallest-first set and
+    // falls back to target-based selection, funding the burn from a single large
+    // coin -- a standard-sized transaction.
+    BOOST_REQUIRE(wallet.SelectContractCoins(target, spendTime, vCoins, setCoinsRet, nValueRet));
+    BOOST_CHECK_EQUAL(setCoinsRet.size(), 1u);
+    BOOST_CHECK_EQUAL(nValueRet, 100 * COIN);
+
+    // A small burn the dust CAN cover within the budget still uses the
+    // smallest-first path -- dust consolidation is preserved for the common case.
+    CoinSet smallBurnSet;
+    int64_t smallBurnValue = 0;
+    BOOST_REQUIRE(wallet.SelectContractCoins(3 * CENT, spendTime, vCoins, smallBurnSet, smallBurnValue));
+    BOOST_CHECK_EQUAL(smallBurnSet.size(), 3u);   // three 0.01 GRC dust coins
+    BOOST_CHECK_EQUAL(smallBurnValue, 3 * CENT);
+
+    empty_wallet();
+}
+
+// ---------------------------------------------------------------------------
+// SyncLegacyFromState — derives hashBlock/nIndex from m_state
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(sync_legacy_from_state_confirmed)
+{
+    CWalletTx wtx;
+    uint256 bh = uint256S("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    wtx.SetTxState(TxStateConfirmed(bh, 7));
+
+    BOOST_CHECK_EQUAL(wtx.hashBlock, bh);
+    BOOST_CHECK_EQUAL(wtx.nIndex, 7);
+}
+
+BOOST_AUTO_TEST_CASE(sync_legacy_from_state_abandoned)
+{
+    CWalletTx wtx;
+    wtx.SetTxState(TxStateInactive{true});
+
+    BOOST_CHECK_EQUAL(wtx.hashBlock, ABANDONED_HASH_SENTINEL);
+    BOOST_CHECK_EQUAL(wtx.nIndex, -1);
+}
+
+BOOST_AUTO_TEST_CASE(sync_legacy_from_state_conflicted)
+{
+    CWalletTx wtx;
+    wtx.SetTxState(TxStateInactive{false});
+
+    BOOST_CHECK_EQUAL(wtx.hashBlock, CONFLICTED_HASH_SENTINEL);
+    BOOST_CHECK_EQUAL(wtx.nIndex, -1);
+}
+
+BOOST_AUTO_TEST_CASE(sync_legacy_from_state_mempool)
+{
+    CWalletTx wtx;
+    wtx.SetTxState(TxStateInMempool{});
+
+    BOOST_CHECK(wtx.hashBlock.IsNull());
+    BOOST_CHECK_EQUAL(wtx.nIndex, -1);
+}
+
+BOOST_AUTO_TEST_CASE(sync_legacy_from_state_unrecognized)
+{
+    CWalletTx wtx;
+    wtx.SetTxState(TxStateUnrecognized{});
+
+    BOOST_CHECK(wtx.hashBlock.IsNull());
+    BOOST_CHECK_EQUAL(wtx.nIndex, -1);
+}
+
+BOOST_AUTO_TEST_CASE(seed_phrase_record_roundtrip)
+{
+    CWallet test_wallet; // in-memory, not file-backed
+
+    // Build a record from a freshly generated phrase.
+    CKey master_key;
+    const SecureString password; // empty phrase password
+    const SecureString phrase = GRC::Mnemonics::GenerateSeedPhrase(password, master_key);
+    BOOST_REQUIRE(master_key.IsValid());
+
+    CSeedPhraseData data;
+    data.vchBlob.resize(GRC::Mnemonics::ENCIPHERED_LENGTH);
+    BOOST_REQUIRE(GRC::Mnemonics::DecodeSeedPhrase(phrase, MakeWritableByteSpan(data.vchBlob)));
+
+    CKey parsed_key;
+    BOOST_REQUIRE(GRC::Mnemonics::ParseSeedPhrase(phrase, password, parsed_key, &data.nBirthday));
+    data.masterKeyID = master_key.GetPubKey().GetID();
+
+    // The record's serialization round-trips (wallet.dat record shape).
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << data;
+    CSeedPhraseData data2;
+    ss >> data2;
+    BOOST_CHECK(data2.vchBlob == data.vchBlob);
+    BOOST_CHECK(data2.masterKeyID == data.masterKeyID);
+    BOOST_CHECK_EQUAL(data2.nBirthday, data.nBirthday);
+
+    // Set/get on an unencrypted wallet stores the plaintext blob.
+    LOCK(test_wallet.cs_wallet);
+    BOOST_CHECK(!test_wallet.HasSeedPhrase());
+    BOOST_REQUIRE(test_wallet.SetSeedPhraseData(data));
+    BOOST_CHECK(test_wallet.HasSeedPhrase());
+    BOOST_CHECK(!test_wallet.SeedPhraseBlobCrypted());
+
+    CKeyingMaterial blob;
+    BOOST_REQUIRE(test_wallet.GetSeedPhraseBlob(blob));
+    BOOST_REQUIRE_EQUAL(blob.size(), data.vchBlob.size());
+    BOOST_CHECK(std::equal(blob.begin(), blob.end(), data.vchBlob.begin()));
+
+    // Re-encoding the stored blob reproduces the phrase verbatim.
+    BOOST_CHECK(GRC::Mnemonics::EncodeSeedPhrase(MakeByteSpan(blob)) == phrase);
+
+    // The phrase birthday clamps the scanner's first-key bound.
+    BOOST_CHECK_EQUAL(test_wallet.nTimeFirstKey, data.nBirthday);
+}
+
+BOOST_AUTO_TEST_CASE(seed_phrase_crypted_blob_requires_unlock)
+{
+    CWallet test_wallet;
+
+    CSeedPhraseData data;
+    data.vchBlob.assign(GRC::Mnemonics::ENCIPHERED_LENGTH, 0x42);
+    data.nBirthday = GRC::Mnemonics::BIRTHDAY_EPOCH;
+
+    // A blob loaded from a "cseedphrase" record must be unrecoverable while
+    // the wallet's keying material is unavailable, not returned as raw
+    // ciphertext.
+    LOCK(test_wallet.cs_wallet);
+    BOOST_REQUIRE(test_wallet.LoadSeedPhraseData(data, /*crypted=*/true));
+    BOOST_CHECK(test_wallet.HasSeedPhrase());
+    BOOST_CHECK(test_wallet.SeedPhraseBlobCrypted());
+
+    CKeyingMaterial blob;
+    BOOST_CHECK(!test_wallet.GetSeedPhraseBlob(blob));
+
+    // Defense in depth: a stale plaintext record must not shadow an already
+    // loaded crypted record, whatever order the db cursor yields them in.
+    CSeedPhraseData plaintext_data;
+    plaintext_data.vchBlob.assign(GRC::Mnemonics::ENCIPHERED_LENGTH, 0x24);
+    plaintext_data.nBirthday = GRC::Mnemonics::BIRTHDAY_EPOCH;
+
+    BOOST_REQUIRE(test_wallet.LoadSeedPhraseData(plaintext_data, /*crypted=*/false));
+    BOOST_CHECK(test_wallet.SeedPhraseBlobCrypted());
+    BOOST_CHECK(test_wallet.GetSeedPhraseData().vchBlob == data.vchBlob);
+}
+
+BOOST_AUTO_TEST_CASE(seed_phrase_key_classification)
+{
+    CWallet test_wallet;
+    LOCK(test_wallet.cs_wallet);
+
+    CKey master_key;
+    master_key.MakeNewKey(true);
+    const CKeyID master_id = master_key.GetPubKey().GetID();
+
+    CSeedPhraseData data;
+    data.vchBlob.assign(GRC::Mnemonics::ENCIPHERED_LENGTH, 0x11);
+    data.masterKeyID = master_id;
+    data.nBirthday = GRC::Mnemonics::BIRTHDAY_EPOCH;
+    BOOST_REQUIRE(test_wallet.SetSeedPhraseData(data));
+
+    // The phrase master itself is covered.
+    BOOST_CHECK(test_wallet.ClassifySeedPhraseKey(master_id)
+                == CWallet::SeedPhraseKeyClass::COVERED);
+
+    // A key whose metadata descends from the phrase master is covered.
+    CKey child;
+    child.MakeNewKey(true);
+    const CKeyID child_id = child.GetPubKey().GetID();
+    CKeyMetadata child_meta(1);
+    child_meta.hdKeypath = "m/0'/0'/0'";
+    child_meta.hdMasterKeyID = master_id;
+    test_wallet.mapKeyMetadata[child_id] = child_meta;
+    BOOST_CHECK(test_wallet.ClassifySeedPhraseKey(child_id)
+                == CWallet::SeedPhraseKeyClass::COVERED);
+
+    // A key derived from a different (retired) master is prior-HD.
+    CKey other_master;
+    other_master.MakeNewKey(true);
+    CKey prior;
+    prior.MakeNewKey(true);
+    const CKeyID prior_id = prior.GetPubKey().GetID();
+    CKeyMetadata prior_meta(1);
+    prior_meta.hdKeypath = "m/0'/0'/1'";
+    prior_meta.hdMasterKeyID = other_master.GetPubKey().GetID();
+    test_wallet.mapKeyMetadata[prior_id] = prior_meta;
+    BOOST_CHECK(test_wallet.ClassifySeedPhraseKey(prior_id)
+                == CWallet::SeedPhraseKeyClass::PRIOR_HD);
+
+    // No metadata at all is legacy.
+    CKey legacy;
+    legacy.MakeNewKey(true);
+    BOOST_CHECK(test_wallet.ClassifySeedPhraseKey(legacy.GetPubKey().GetID())
+                == CWallet::SeedPhraseKeyClass::LEGACY);
+
+    // Metadata with an empty keypath (a pre-HD key) is also legacy.
+    CKey legacy_meta_key;
+    legacy_meta_key.MakeNewKey(true);
+    const CKeyID legacy_meta_id = legacy_meta_key.GetPubKey().GetID();
+    test_wallet.mapKeyMetadata[legacy_meta_id] = CKeyMetadata(1);
+    BOOST_CHECK(test_wallet.ClassifySeedPhraseKey(legacy_meta_id)
+                == CWallet::SeedPhraseKeyClass::LEGACY);
+}
+
+BOOST_AUTO_TEST_CASE(sweep_swap_count_selection_math)
+{
+    // Values sorted ascending, as SweepSwapCount requires.
+
+    // Plenty of value in the smallest-first batch: no swaps.
+    BOOST_CHECK_EQUAL(SweepSwapCount({100, 200, 300, 400}, 2, 250), 0U);
+
+    // The dust-wedge case: the two smallest cannot pay the fee, but swapping
+    // the largest candidate in for the smallest selected one can.
+    BOOST_CHECK_EQUAL(SweepSwapCount({1, 2, 3, 1000}, 2, 10), 1U);
+
+    // Two swaps needed.
+    BOOST_CHECK_EQUAL(SweepSwapCount({1, 1, 1, 500, 600}, 3, 700), 2U);
+
+    // All candidates selected: swapping is meaningless, zero swaps even
+    // though the batch cannot pay the fee (caller reports dust-only).
+    BOOST_CHECK_EQUAL(SweepSwapCount({1, 2, 3}, 3, 100), 0U);
+
+    // Swaps exhaust the unselected pool without reaching the ceiling: the
+    // loop stops at the overlap bound.
+    BOOST_CHECK_EQUAL(SweepSwapCount({1, 1, 1, 2}, 3, 100), 1U);
+
+    // Degenerate inputs.
+    BOOST_CHECK_EQUAL(SweepSwapCount({}, 5, 100), 0U);
+    BOOST_CHECK_EQUAL(SweepSwapCount({50}, 1, 10), 0U);
+
+    // select_count larger than the candidate list clamps.
+    BOOST_CHECK_EQUAL(SweepSwapCount({1, 2}, 10, 100), 0U);
+}
+
+// CWalletTx::GetAmounts rolls an owned coinstake up into one received entry of
+// (all outputs - staked principal). The principal comes from GetDebit(), which resolves the
+// staked input through mapWallet, so a wallet that does not have the funding transaction -- one
+// restored without a full rescan, or a key imported after the fact -- reports 0 while
+// IsMine(vout[1]) stays true. Netting against 0 would report the WHOLE staked principal as a
+// received amount in listtransactions/gettransaction/listsinceblock, so the rollup is omitted.
+BOOST_AUTO_TEST_CASE(getamounts_omits_coinstake_rollup_when_staked_input_is_unknown)
+{
+    CWallet w("wallet_getamounts.dat");
+
+    CKey key;
+    key.MakeNewKey(false);
+    {
+        LOCK(w.cs_wallet);
+        BOOST_REQUIRE(w.AddKey(key));
+    }
+
+    // The script CreateCoinStake actually emits: a bare public key.
+    CScript coinstake_script;
+    coinstake_script << key.GetPubKey() << OP_CHECKSIG;
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);   // deliberately NOT in mapWallet
+
+    CTxOut empty;
+    empty.SetEmpty();
+    mtx.vout.push_back(empty);
+    mtx.vout.push_back(CTxOut(110 * COIN, coinstake_script));
+
+    CTransaction tx(mtx);
+    BOOST_REQUIRE(tx.IsCoinStake());
+
+    CWalletTx wtx(&w, tx);
+
+    std::list<COutputEntry> listReceived;
+    std::list<COutputEntry> listSent;
+    int64_t nFee = 0;
+    std::string strSentAccount;
+
+    {
+        LOCK(w.cs_wallet);
+        wtx.GetAmounts(listReceived, listSent, nFee, strSentAccount);
+    }
+
+    // The staked input is unknown, so GetDebit() is 0. Nothing may be reported as received --
+    // in particular not the 110 GRC, which is principal plus reward and mostly not income.
+    for (auto const& r : listReceived) {
+        BOOST_CHECK_MESSAGE(r.amount != 110 * COIN,
+                            "the whole staked principal was reported as a received amount");
+    }
+    BOOST_CHECK(listReceived.empty());
+}
+
+
+// WalletUpdateSpent must write and notify once per affected TRANSACTION, not
+// once per spent OUTPUT. Doing it per output made a consolidation quadratic:
+// 600 inputs drawn from three parents emitted 1152 notifications and 549
+// WriteToDisk calls, backlogging the GUI transaction queue badly enough to
+// leave the table sluggish and a confirmed transaction rendering as pending.
+// This also pins the calls OUT of the per-output loops, so moving them back
+// fails here rather than in the field.
+BOOST_AUTO_TEST_CASE(wallet_update_spent_notifies_once_per_parent)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CKey key;
+    key.MakeNewKey(true);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));
+
+    // One parent carrying FOUR outputs to us -- the shape a consolidation
+    // draws from, and the shape that made the old code repeat itself.
+    CMutableTransaction parent;
+    parent.vin.resize(1);
+    parent.vin[0].prevout = COutPoint(
+        uint256S("0x4444444444444444444444444444444444444444444444444444444444444444"), 0);
+    parent.vout.resize(4);
+    for (unsigned int i = 0; i < 4; ++i) {
+        parent.vout[i].nValue = COIN;
+        parent.vout[i].scriptPubKey.SetDestination(CTxDestination(key.GetPubKey().GetID()));
+    }
+    const CTransaction parent_tx(parent);
+    const uint256 parent_hash = parent_tx.GetHash();
+
+    // Insert directly rather than through AddToWallet, which fires its own
+    // notification for the inserted transaction and would muddy the count.
+    CWalletTx parent_wtx(pwalletMain, parent_tx);
+    parent_wtx.SetTxState(TxStateInMempool{});
+    pwalletMain->mapWallet[parent_hash] = parent_wtx;
+
+    // A child spending THREE of that one parent's outputs.
+    CKey external_key;
+    external_key.MakeNewKey(true);
+    CMutableTransaction child;
+    child.vin.resize(3);
+    for (unsigned int i = 0; i < 3; ++i) {
+        child.vin[i].prevout = COutPoint(parent_hash, i);
+    }
+    child.vout.resize(1);
+    child.vout[0].nValue = 2 * COIN;
+    child.vout[0].scriptPubKey.SetDestination(CTxDestination(external_key.GetPubKey().GetID()));
+    const CTransaction child_tx(child);
+
+    std::map<uint256, int> notifies;
+    boost::signals2::scoped_connection conn(
+        pwalletMain->NotifyTransactionChanged.connect(
+            [&notifies](CWallet*, const uint256& h, ChangeType) { notifies[h] += 1; }));
+
+    CWalletDB walletdb(pwalletMain->strWalletFile);
+    pwalletMain->WalletUpdateSpent(child_tx, /*fBlock=*/false, &walletdb);
+
+    // Three outputs of ONE parent changed, so exactly one notification. The
+    // per-output form emitted three.
+    BOOST_CHECK_EQUAL(notifies[parent_hash], 1);
+
+    // ...and the coalescing did not cost correctness: every spent output is
+    // still marked, and the untouched fourth is not.
+    const auto it = pwalletMain->mapWallet.find(parent_hash);
+    BOOST_REQUIRE(it != pwalletMain->mapWallet.end());
+    BOOST_CHECK(it->second.IsSpent(0));
+    BOOST_CHECK(it->second.IsSpent(1));
+    BOOST_CHECK(it->second.IsSpent(2));
+    BOOST_CHECK(!it->second.IsSpent(3));
+
+    pwalletMain->EraseFromWallet(parent_hash);
+}
+
+// The fBlock branch must NOT notify the transaction being processed. The sole
+// caller, AddToWallet, unconditionally fires CT_NEW/CT_UPDATED for that same
+// hash on the next statement, so a notification here is a guaranteed duplicate
+// for every subscriber.
+BOOST_AUTO_TEST_CASE(wallet_update_spent_does_not_notify_the_transaction_itself)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CKey key;
+    key.MakeNewKey(true);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(
+        uint256S("0x5555555555555555555555555555555555555555555555555555555555555555"), 0);
+    mtx.vout.resize(2);
+    for (unsigned int i = 0; i < 2; ++i) {
+        mtx.vout[i].nValue = COIN;
+        mtx.vout[i].scriptPubKey.SetDestination(CTxDestination(key.GetPubKey().GetID()));
+    }
+    const CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+
+    CWalletTx wtx(pwalletMain, tx);
+    wtx.SetTxState(TxStateInMempool{});
+    // Seed both outputs SPENT. Inserting with the default (unspent) flags would
+    // make the !IsSpent() assertions below pass even if the MarkUnspent loop were
+    // deleted outright -- they would be asserting the initial state, not the
+    // transition.
+    wtx.MarkSpent(0);
+    wtx.MarkSpent(1);
+    BOOST_REQUIRE(wtx.IsSpent(0));
+    BOOST_REQUIRE(wtx.IsSpent(1));
+    pwalletMain->mapWallet[hash] = wtx;
+
+    std::map<uint256, int> notifies;
+    boost::signals2::scoped_connection conn(
+        pwalletMain->NotifyTransactionChanged.connect(
+            [&notifies](CWallet*, const uint256& h, ChangeType) { notifies[h] += 1; }));
+
+    CWalletDB walletdb(pwalletMain->strWalletFile);
+    pwalletMain->WalletUpdateSpent(tx, /*fBlock=*/true, &walletdb);
+
+    // Both owned outputs were marked unspent, and neither produced an event.
+    BOOST_CHECK_EQUAL(notifies[hash], 0);
+
+    const auto it = pwalletMain->mapWallet.find(hash);
+    BOOST_REQUIRE(it != pwalletMain->mapWallet.end());
+    BOOST_CHECK(!it->second.IsSpent(0));
+    BOOST_CHECK(!it->second.IsSpent(1));
+
+    pwalletMain->EraseFromWallet(hash);
+}
+
+//!
+//! \brief CWallet::AddCScript must be idempotent.
+//!
+//! Regression for the non-idempotency shared by addmultisigaddress, addredeemscript and
+//! createhtlc. CCryptoKeyStore::AddCScript assigns into mapScripts unconditionally, so a
+//! repeat add always succeeds in memory; the failure came from CWalletDB::WriteCScript
+//! writing with fOverwrite=false, which makes BDB return DB_KEYEXIST on the duplicate key.
+//! AddCScript then returned false and the RPCs threw "AddCScript() failed" -- even though
+//! the wallet held the script and could sign with it.
+//!
+//! This exercises the real path: the fixture's wallet is file-backed (CWallet("wallet.dat")
+//! over bitdb.MakeMock()), so WriteCScript is actually reached. A wallet with
+//! fFileBacked == false would return true early and the test would pass vacuously.
+//!
+BOOST_AUTO_TEST_CASE(addcscript_is_idempotent)
+{
+    BOOST_REQUIRE(pwalletMain != nullptr);
+
+    // A distinctive, valid redeem script. Content does not matter, only that it is stable
+    // so every add hashes to the same key.
+    CScript redeem_script = CScript() << OP_1 << OP_DROP << OP_TRUE;
+    const CScriptID script_id{redeem_script};
+
+    // Deliberately NOT asserting initial absence. pwalletMain is a shared
+    // BOOST_GLOBAL_FIXTURE, so asserting the script is missing would make this case
+    // order-dependent if any other test ever adds the same script id. It would also add
+    // no coverage: if the script were already present, every add below is a duplicate
+    // add, which is precisely the path under test. Seed it, then repeat.
+    BOOST_CHECK(pwalletMain->AddCScript(redeem_script));
+    BOOST_CHECK(pwalletMain->HaveCScript(script_id));
+
+    // Second add of the IDENTICAL script must also succeed. This is the regression: it
+    // previously returned false because the duplicate BDB write was rejected.
+    BOOST_CHECK(pwalletMain->AddCScript(redeem_script));
+
+    // ...and a third, to show it is not a one-shot tolerance.
+    BOOST_CHECK(pwalletMain->AddCScript(redeem_script));
+
+    // The script is still retrievable and unchanged after the repeat adds.
+    BOOST_CHECK(pwalletMain->HaveCScript(script_id));
+    CScript fetched;
+    BOOST_CHECK(pwalletMain->GetCScript(script_id, fetched));
+    BOOST_CHECK(fetched == redeem_script);
+}
+
+BOOST_AUTO_TEST_CASE(importprivkey_requires_an_unlocked_wallet)
+{
+    // importprivkey works on the process-global wallet, and regtest cannot
+    // reach a locked one (the functional framework rebuilds the wallet on
+    // every start), so an encrypted, locked wallet is swapped in for this case.
+    // In-memory rather than file-backed: EncryptWallet on a file-backed wallet
+    // rewrites wallet.dat, which the mocked Berkeley DB of this binary refuses,
+    // and the RPC only touches the database when the wallet is file-backed.
+    CWallet locked;
+    struct SwapWallet {
+        CWallet* m_saved;
+        explicit SwapWallet(CWallet* replacement) : m_saved(pwalletMain) { pwalletMain = replacement; }
+        ~SwapWallet() { pwalletMain = m_saved; }
+    } swap(&locked);
+
+    // One key before encryption: Unlock() proves the passphrase by decrypting
+    // a crypted key, so an empty wallet can never be unlocked again.
+    {
+        CKey seed;
+        seed.MakeNewKey(true);
+        LOCK(locked.cs_wallet);
+        BOOST_REQUIRE(locked.AddKey(seed));
+    }
+    const SecureString passphrase("importprivkey-test");
+    BOOST_REQUIRE(locked.EncryptWallet(passphrase));
+    locked.Lock();
+    BOOST_REQUIRE(locked.IsCrypted());
+    BOOST_REQUIRE(locked.IsLocked());
+
+    CKey key;
+    key.MakeNewKey(true);
+    const CKeyID id = key.GetPubKey().GetID();
+
+    UniValue params(UniValue::VARR);
+    params.push_back(EncodeSecret(key));
+    params.push_back("");
+    params.push_back(false); // no rescan: there is no chain in this binary
+
+    auto expect_unlock_needed = [&](const char* what) {
+        try {
+            importprivkey(params);
+            BOOST_FAIL(std::string(what) + ": importprivkey did not throw on a locked wallet");
+        } catch (const UniValue& err) {
+            BOOST_CHECK_EQUAL(find_value(err, "code").get_int(), RPC_WALLET_UNLOCK_NEEDED);
+        }
+    };
+
+    // Locked: refused with the unlock code, and nothing is left behind.
+    expect_unlock_needed("first import");
+    {
+        LOCK(locked.cs_wallet);
+        BOOST_CHECK(!locked.HaveKey(id));
+        BOOST_CHECK_EQUAL(locked.mapKeyMetadata.count(id), 0u);
+    }
+
+    // Unlocked: the same call imports.
+    BOOST_REQUIRE(locked.Unlock(passphrase));
+    importprivkey(params);
+    {
+        LOCK(locked.cs_wallet);
+        BOOST_CHECK(locked.HaveKey(id));
+    }
+
+    // Locked again, re-importing a key the wallet already holds: this is the
+    // call that used to return success without consulting the lock, and the
+    // behaviour change reviewed on its own. It is refused like any other.
+    locked.Lock();
+    BOOST_REQUIRE(locked.IsLocked());
+    expect_unlock_needed("re-import of a held key");
+}
+
+//!
+//! The staking-only restriction is enforced in the transaction builder every
+//! spend funnels through, not only at the entry points that remember to ask.
+//!
+//! Discriminates on nFeeRet, which CreateTransaction overwrites once it starts
+//! building. A staking-only wallet must return before that, so the caller's
+//! sentinel survives; a fully unlocked one must get past the check and clobber
+//! it, even though this coinless wallet then fails to fund. Asserting only the
+//! bool would prove nothing, since both cases return false.
+//!
+//! This is the regression test for a graphical send while unlocked for staking
+//! only: that path reaches the wallet through interfaces::Wallet, which had no
+//! check of its own, so the transaction was built, signed and committed.
+//!
+BOOST_AUTO_TEST_CASE(the_transaction_builder_refuses_a_staking_only_wallet)
+{
+    CWallet staking;
+    struct SwapWallet {
+        CWallet* m_saved;
+        explicit SwapWallet(CWallet* replacement) : m_saved(pwalletMain) { pwalletMain = replacement; }
+        ~SwapWallet() { pwalletMain = m_saved; }
+    } swap(&staking);
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(staking.cs_wallet);
+        BOOST_REQUIRE(staking.AddKey(key));
+    }
+
+    const SecureString passphrase("builder-scope-test");
+    BOOST_REQUIRE(staking.EncryptWallet(passphrase));
+    staking.Lock();
+
+    CScript destination;
+    destination.SetDestination(key.GetPubKey().GetID());
+    const std::vector<std::pair<CScript, int64_t>> recipients{{destination, CENT}};
+
+    constexpr int64_t sentinel = -987654321;
+
+    {
+        BOOST_REQUIRE(staking.Unlock(passphrase, UnlockScope::StakingOnly));
+        BOOST_REQUIRE(staking.IsUnlockedForStakingOnly());
+
+        CWalletTx wtx;
+        CReserveKey reservekey(&staking);
+        int64_t fee = sentinel;
+        BOOST_CHECK(!staking.CreateTransaction(recipients, wtx, reservekey, fee));
+        BOOST_CHECK_EQUAL(fee, sentinel); // returned before building
+    }
+
+    {
+        staking.Lock();
+        BOOST_REQUIRE(staking.Unlock(passphrase, UnlockScope::Full));
+        BOOST_REQUIRE(!staking.IsUnlockedForStakingOnly());
+
+        CWalletTx wtx;
+        CReserveKey reservekey(&staking);
+        int64_t fee = sentinel;
+        // Still false, because the wallet has no coins -- but it got far enough
+        // to set the fee, which the staking-only case never reaches.
+        BOOST_CHECK(!staking.CreateTransaction(recipients, wtx, reservekey, fee));
+        BOOST_CHECK(fee != sentinel);
+    }
+
+    staking.Lock();
+}
+
+//!
+//! A narrowing that lands while a send is waiting to start is seen by that
+//! send's own scope check (#3389).
+//!
+//! SendMoney holds cs_main and cs_wallet from its scope checks through
+//! CommitTransaction, so RestrictToStakingOnly, which takes cs_wallet, cannot
+//! land between building and committing a send. This case pins the observable
+//! half of that: the send is held off before it starts, the wallet is narrowed
+//! meanwhile, and the send must then refuse with its own staking-only message.
+//!
+//! Before #3389 the scope checks ran outside the lock: the send passed them on
+//! the full unlock, waited inside the builder, and failed there instead, with
+//! the builder's message. Discriminates on the message for that reason. The
+//! sleep only gives that older code time to pass its checks; the fixed code
+//! refuses the same way whatever the timing.
+//!
+BOOST_AUTO_TEST_CASE(a_send_held_off_by_a_narrowing_refuses_on_its_own_scope_check)
+{
+    CWallet staking;
+    struct SwapWallet {
+        CWallet* m_saved;
+        explicit SwapWallet(CWallet* replacement) : m_saved(pwalletMain) { pwalletMain = replacement; }
+        ~SwapWallet() { pwalletMain = m_saved; }
+    } swap(&staking);
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(staking.cs_wallet);
+        BOOST_REQUIRE(staking.AddKey(key));
+    }
+
+    const SecureString passphrase("send-scope-test");
+    BOOST_REQUIRE(staking.EncryptWallet(passphrase));
+    staking.Lock();
+    BOOST_REQUIRE(staking.Unlock(passphrase, UnlockScope::Full));
+    BOOST_REQUIRE(!staking.IsUnlockedForStakingOnly());
+
+    CScript destination;
+    destination.SetDestination(key.GetPubKey().GetID());
+
+    std::string result;
+    std::thread sender;
+    // Joins on every exit. A failed BOOST_REQUIRE in the block below throws past
+    // sender.join(), and destroying a joinable std::thread calls std::terminate,
+    // which would take the whole test binary down. Declared after sender, so it
+    // runs first on unwind -- and after the block's locks are released, so the
+    // sender can finish.
+    struct JoinOnExit {
+        std::thread& m_thread;
+        ~JoinOnExit() { if (m_thread.joinable()) m_thread.join(); }
+    } join_on_exit{sender};
+    {
+        // Stands in for an operation already holding the wallet.
+        LOCK2(cs_main, staking.cs_wallet);
+
+        sender = std::thread([&] {
+            CWalletTx wtx;
+            result = staking.SendMoney(destination, CENT, wtx);
+        });
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        BOOST_REQUIRE(staking.RestrictToStakingOnly());
+        BOOST_REQUIRE(staking.IsUnlockedForStakingOnly());
+    }
+    sender.join();
+
+    BOOST_CHECK_EQUAL(result, _("Error: Wallet unlocked for staking only, unable to create transaction."));
+
+    staking.Lock();
+}
+
+//!
+//! Building a poll or a vote needs the wallet fully unlocked. A locked wallet
+//! and one unlocked for staking only are each refused with the reason, before
+//! the builder signs anything.
+//!
+BOOST_AUTO_TEST_CASE(a_poll_or_vote_build_refuses_a_wallet_not_fully_unlocked)
+{
+    CWallet wallet;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("voting-scope-test");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    const GRC::Poll poll(
+        GRC::PollType::SURVEY,
+        GRC::PollWeightType::BALANCE,
+        GRC::PollResponseType::YES_NO_ABSTAIN,
+        7,
+        "Title",
+        "https://gridcoin.us",
+        "Question?",
+        GRC::Poll::ChoiceList(),
+        GetAdjustedTime(),
+        Fraction());
+
+    const auto build_error = [&](const bool vote) {
+        try {
+            LOCK(cs_main);
+
+            if (vote) {
+                GRC::VoteBuilder::ForPoll(poll, uint256::ONE).AddResponse(uint8_t {0}).BuildContractTx(&wallet, 2);
+            } else {
+                GRC::PollBuilder().BuildContractTx(&wallet, 2);
+            }
+        } catch (const GRC::VotingError& e) {
+            return std::string(e.what());
+        }
+
+        return std::string();
+    };
+
+    const std::string locked = _("Error: Wallet locked, unable to create transaction.");
+    const std::string staking_only = _("Error: Wallet unlocked for staking only, unable to create transaction.");
+
+    BOOST_CHECK_EQUAL(build_error(true), locked);
+    BOOST_CHECK_EQUAL(build_error(false), locked);
+
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::StakingOnly));
+    BOOST_REQUIRE(wallet.IsUnlockedForStakingOnly());
+
+    BOOST_CHECK_EQUAL(build_error(true), staking_only);
+    BOOST_CHECK_EQUAL(build_error(false), staking_only);
+
+    wallet.Lock();
+}
+
+//!
+//! The same for a contract send (#3389): SendContractTx holds cs_wallet from
+//! its scope check through CommitTransaction, so a narrowing that lands while
+//! the send waits for the wallet is seen by that send's own check.
+//!
+//! Before #3389 SendContractTx took no wallet lock: the send passed its scope
+//! check on the full unlock, then waited in GetBalance and failed on the empty
+//! wallet's balance instead. Discriminates on the message for that reason. The
+//! sleep only gives that older code time to pass its check, as above.
+//!
+BOOST_AUTO_TEST_CASE(a_contract_send_held_off_by_a_narrowing_refuses_on_its_own_scope_check)
+{
+    CWallet staking;
+    struct SwapWallet {
+        CWallet* m_saved;
+        explicit SwapWallet(CWallet* replacement) : m_saved(pwalletMain) { pwalletMain = replacement; }
+        ~SwapWallet() { pwalletMain = m_saved; }
+    } swap(&staking);
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(staking.cs_wallet);
+        BOOST_REQUIRE(staking.AddKey(key));
+    }
+
+    const SecureString passphrase("contract-scope-test");
+    BOOST_REQUIRE(staking.EncryptWallet(passphrase));
+    staking.Lock();
+    BOOST_REQUIRE(staking.Unlock(passphrase, UnlockScope::Full));
+    BOOST_REQUIRE(!staking.IsUnlockedForStakingOnly());
+
+    // Never built: the send refuses before the builder in both outcomes.
+    const auto make_contract = [] {
+        return GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, "contract-scope-test");
+    };
+
+    std::string result;
+    std::thread sender;
+    // Joins on every exit, as in the SendMoney case above.
+    struct JoinOnExit {
+        std::thread& m_thread;
+        ~JoinOnExit() { if (m_thread.joinable()) m_thread.join(); }
+    } join_on_exit{sender};
+    {
+        // Stands in for an operation already holding the wallet. cs_wallet
+        // only: the sender takes cs_main first, as SendContract requires, and
+        // then waits here, which keeps the canonical order.
+        LOCK(staking.cs_wallet);
+
+        sender = std::thread([&] {
+            LOCK(cs_main);
+            result = GRC::SendContract(make_contract()).second;
+        });
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        BOOST_REQUIRE(staking.RestrictToStakingOnly());
+        BOOST_REQUIRE(staking.IsUnlockedForStakingOnly());
+    }
+    sender.join();
+
+    BOOST_CHECK_EQUAL(result, _("Error: Wallet unlocked for staking only, unable to create transaction."));
+
+    // The automated beacon renewal's exemption still passes the check: it goes
+    // on to the balance check, which the empty wallet fails.
+    {
+        LOCK(cs_main);
+        BOOST_CHECK_EQUAL(GRC::SendContract(make_contract(), /*permitted_while_staking_only=*/true).second,
+                          _("Balance too low to create a contract."));
+    }
+
+    staking.Lock();
+}
+
+//! Stand up a running scheduler for the duration of a case and put the previous
+//! one back however the case exits, so a failed assertion cannot strand the
+//! rest of the binary without one.
+//!
+//! The handle is published as soon as the object exists and does NOT wait for
+//! the service thread to enter serviceQueue. It does not need to: arming asks
+//! only whether the scheduler has been told to stop, so a task enqueued before
+//! the thread comes up is run when it gets there. Waiting on
+//! AreThreadsServicingQueue() here would be the racy version of this.
+//!
+//! Declare it AFTER the wallet its tasks touch, so it is destroyed first: its
+//! destructor joins the service thread, which may still be inside a relock. A
+//! case sees the relock through IsLocked(), and LockIfCurrent() locks before it
+//! raises NotifyStatusChanged, so a wallet destroyed first is destroyed under
+//! that call (ThreadSanitizer reported it as a race on the signal's mutex).
+struct SchedulerForThisCase {
+    std::unique_ptr<CScheduler> m_saved;
+    CScheduler* m_saved_handle;
+    std::thread m_service;
+
+    SchedulerForThisCase()
+        : m_saved(std::move(g_scheduler))
+        , m_saved_handle(g_scheduler_handle.load(std::memory_order_acquire))
+    {
+        g_scheduler = std::make_unique<CScheduler>();
+        g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
+        m_service = std::thread([] { g_scheduler->serviceQueue(); });
+    }
+
+    ~SchedulerForThisCase()
+    {
+        g_scheduler_handle.store(m_saved_handle, std::memory_order_release);
+        g_scheduler->stop();
+        if (m_service.joinable()) m_service.join();
+        g_scheduler = std::move(m_saved);
+    }
+};
+
+//! Spin until the scheduled relock has run, or give up. The service thread runs
+//! the task, so the wait is for another thread rather than for time.
+static void WaitForRelock(const CWallet& wallet)
+{
+    for (int i = 0; i < 200 && !wallet.IsLocked(); ++i) {
+        UninterruptibleSleep(std::chrono::milliseconds(10));
+    }
+}
+
+//!
+//! A timed unlock locks itself when its deadline arrives, and a relock armed
+//! for an unlock that has since been superseded does NOTHING.
+//!
+//! The second half is the one that matters. CScheduler cannot cancel a task, so
+//! a relock armed for an earlier unlock always arrives; without the epoch check
+//! it would lock a wallet that a later, longer unlock owns. Discriminates by
+//! bringing ONLY the stale task due and asserting the wallet stays unlocked --
+//! were the epoch ignored, it would be locked instead.
+//!
+BOOST_AUTO_TEST_CASE(a_superseded_scheduled_relock_does_nothing)
+{
+    CWallet wallet;
+    SchedulerForThisCase scheduler;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("scheduled-relock");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    // The unlock that will be superseded, and the relock armed for it.
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+    BOOST_REQUIRE(!wallet.IsLocked());
+
+    // Supersede it: a manual lock ends that unlock, and a second unlock begins
+    // a new one with a deadline far enough out that bringing the first task due
+    // does not bring the second one due as well.
+    wallet.Lock();
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(3000)));
+    BOOST_REQUIRE(!wallet.IsLocked());
+
+    // Bring the stale task due and let the service thread run it.
+    g_scheduler->MockForward(std::chrono::seconds(61));
+    WaitForRelock(wallet);
+
+    // Still unlocked: the stale relock recognised itself as superseded.
+    BOOST_CHECK(!wallet.IsLocked());
+    BOOST_CHECK(wallet.GetUnlockDeadline().has_value());
+
+    wallet.Lock();
+}
+
+//!
+//! A timed unlock refuses outright when there is no scheduler to arm its
+//! relock, rather than quietly granting an unlock that never expires.
+//!
+BOOST_AUTO_TEST_CASE(a_timed_unlock_without_a_scheduler_is_refused)
+{
+    // Take the scheduler away for the duration of the case and put it back
+    // however this case exits. Restoring only on the last line means a failed
+    // BOOST_REQUIRE or a throw leaves every later case in the binary without
+    // one, turning a single failure into a cascade.
+    struct NoSchedulerForThisCase {
+        std::unique_ptr<CScheduler> m_saved;
+        CScheduler* m_saved_handle;
+
+        NoSchedulerForThisCase()
+            : m_saved(std::move(g_scheduler))
+            , m_saved_handle(g_scheduler_handle.exchange(nullptr, std::memory_order_acq_rel))
+        {
+        }
+
+        ~NoSchedulerForThisCase()
+        {
+            g_scheduler = std::move(m_saved);
+            g_scheduler_handle.store(m_saved_handle, std::memory_order_release);
+        }
+    } no_scheduler;
+
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("no-scheduler");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+    BOOST_CHECK(wallet.IsLocked());
+
+    // An unlock with no deadline arms nothing and is unaffected.
+    BOOST_CHECK(wallet.Unlock(passphrase, UnlockScope::Full, std::nullopt));
+    BOOST_CHECK(!wallet.IsLocked());
+    BOOST_CHECK(!wallet.GetUnlockDeadline().has_value());
+
+    wallet.Lock();
+}
+
+//!
+//! A timed unlock whose relock cannot be armed leaves the wallet LOCKED.
+//!
+//! The early check and the arming are not the same moment: the key derivation
+//! between them takes a calibrated few hundred milliseconds, and shutdown
+//! unpublishes the handle before stopping the scheduler. So a published
+//! scheduler that has been told to stop is a real state, and the only safe
+//! answer is to refuse -- nothing else would ever end that unlock.
+//!
+BOOST_AUTO_TEST_CASE(a_timed_unlock_whose_relock_cannot_be_armed_locks_the_wallet)
+{
+    // Published, so the early check passes, but stopped, so the arming refuses.
+    // That is the shutdown window: the pointer answers, the queue does not.
+    struct StoppedSchedulerForThisCase {
+        std::unique_ptr<CScheduler> m_saved;
+        CScheduler* m_saved_handle;
+
+        StoppedSchedulerForThisCase()
+            : m_saved(std::move(g_scheduler))
+            , m_saved_handle(g_scheduler_handle.load(std::memory_order_acquire))
+        {
+            g_scheduler = std::make_unique<CScheduler>();
+            g_scheduler->stop();
+            g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
+        }
+
+        ~StoppedSchedulerForThisCase()
+        {
+            g_scheduler_handle.store(m_saved_handle, std::memory_order_release);
+            g_scheduler = std::move(m_saved);
+        }
+    } stopped;
+
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("relock-cannot-be-armed");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    // Reaches the arming, because the handle is published, and the arming is
+    // what refuses.
+    CWallet::UnlockFailure failure = CWallet::UnlockFailure::None;
+    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::Full, std::chrono::seconds(60), &failure));
+
+    // Fail CLOSED. The passphrase was right, so the key WAS installed for a
+    // moment; what matters is that it is gone again and nothing was left behind.
+    BOOST_CHECK(wallet.IsLocked());
+    BOOST_CHECK(!wallet.GetUnlockDeadline().has_value());
+
+    // And the caller is told WHY. Reporting this as a bad passphrase would send
+    // the user after a problem they do not have -- theirs was accepted.
+    BOOST_CHECK(failure == CWallet::UnlockFailure::RelockUnavailable);
+
+    // A genuinely wrong passphrase still reads as one, so the distinction is
+    // not simply "any timed unlock failure".
+    failure = CWallet::UnlockFailure::None;
+    BOOST_CHECK(!wallet.Unlock(SecureString("wrong"), UnlockScope::Full,
+                               std::chrono::seconds(60), &failure));
+    BOOST_CHECK(failure == CWallet::UnlockFailure::Passphrase);
+}
+
+//!
+//! An elevation WIDENS the unlock in progress; it does not replace it. The
+//! deadline and the relock armed for it both survive, so a wallet unlocked for
+//! a fixed time still locks on time after an action elevates it.
+//!
+//! This is the discriminating case for the relock dance the GUI used to do.
+//! Locking first and unlocking again threw the deadline away and retired the
+//! armed relock, and the re-unlock carried no duration of its own -- so the
+//! wallet stayed unlocked forever. Under that behaviour the final assertion
+//! fails: nothing is left to lock the wallet.
+//!
+BOOST_AUTO_TEST_CASE(an_elevation_keeps_the_unlock_and_its_relock)
+{
+    CWallet wallet;
+    SchedulerForThisCase scheduler;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("elevation-keeps-deadline");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    // What walletpassphrase "pw" 60 true does.
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::StakingOnly, std::chrono::seconds(60)));
+
+    const std::optional<int64_t> deadline = wallet.GetUnlockDeadline();
+    const uint64_t epoch = wallet.GetUnlockEpoch();
+    BOOST_REQUIRE(deadline.has_value());
+
+    // Elevate for one operation, as a GUI send, vote or claim does.
+    BOOST_REQUIRE(wallet.ElevateToFull(passphrase));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    // The unlock did not restart. Same deadline, and the same epoch -- so the
+    // relock already armed is still the current one and is still going to fire.
+    BOOST_CHECK(wallet.GetUnlockDeadline() == deadline);
+    BOOST_CHECK_EQUAL(wallet.GetUnlockEpoch(), epoch);
+
+    // Hand the elevation back, as ~UnlockContext does.
+    BOOST_REQUIRE(wallet.RestrictToStakingOnly());
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+    BOOST_CHECK(wallet.GetUnlockDeadline() == deadline);
+
+    // And it still locks when the unlock the user asked for runs out.
+    g_scheduler->MockForward(std::chrono::seconds(61));
+    WaitForRelock(wallet);
+
+    BOOST_CHECK(wallet.IsLocked());
+}
+
+//!
+//! An elevation adds permission, so it demands the passphrase, and it needs an
+//! unlock to widen -- on a locked wallet there is nothing to widen and no
+//! deadline to preserve, which is Unlock()'s job.
+//!
+BOOST_AUTO_TEST_CASE(an_elevation_demands_the_passphrase_and_an_unlock_to_widen)
+{
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("elevation-preconditions");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    // Locked: refused even with the right passphrase.
+    BOOST_CHECK(!wallet.ElevateToFull(passphrase));
+    BOOST_CHECK(wallet.IsLocked());
+
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::StakingOnly));
+
+    // Wrong passphrase widens nothing, and moves nothing.
+    BOOST_CHECK(!wallet.ElevateToFull(SecureString("wrong")));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+
+    BOOST_REQUIRE(wallet.ElevateToFull(passphrase));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    // Already as wide as it goes: a no-op that still succeeds, so a nested
+    // elevation on an already-elevated wallet is not an error.
+    BOOST_CHECK(wallet.ElevateToFull(passphrase));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    wallet.Lock();
+}
+
+//!
+//! A lock reports the unlock it ended, read under the acquisition that clears
+//! it. This is what lets a caller that has to lock and restore -- the passphrase
+//! change -- put back exactly what was there without a gap the scheduled relock
+//! can land in.
+//!
+BOOST_AUTO_TEST_CASE(locking_reports_the_unlock_it_ended)
+{
+    CWallet wallet;
+    SchedulerForThisCase scheduler;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString passphrase("lock-and-capture");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    wallet.Lock();
+
+    // Already locked: there was no unlock, so there is nothing to report.
+    std::optional<CCryptoKeyStore::UnlockState> prior = wallet.LockAndCapture();
+    BOOST_REQUIRE(prior.has_value());
+    BOOST_CHECK(prior->scope == UnlockScope::Locked);
+    BOOST_CHECK(!prior->deadline.has_value());
+
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::StakingOnly, std::chrono::seconds(60)));
+    const std::optional<int64_t> deadline = wallet.GetUnlockDeadline();
+    BOOST_REQUIRE(deadline.has_value());
+
+    prior = wallet.LockAndCapture();
+    BOOST_REQUIRE(prior.has_value());
+    BOOST_CHECK(prior->scope == UnlockScope::StakingOnly);
+    BOOST_CHECK(prior->deadline == deadline);
+    BOOST_CHECK(wallet.IsLocked());
+}
+
+//!
+//! A passphrase change restores the unlock it interrupted, deadline included,
+//! and re-arms the relock for it. Changing the passphrase must not turn a wallet
+//! unlocked for a minute into one unlocked indefinitely.
+//!
+BOOST_AUTO_TEST_CASE(a_passphrase_change_keeps_the_unlock_deadline)
+{
+    CWallet wallet;
+    SchedulerForThisCase scheduler;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString old_passphrase("change-keeps-deadline-old");
+    const SecureString new_passphrase("change-keeps-deadline-new");
+    BOOST_REQUIRE(wallet.EncryptWallet(old_passphrase));
+    wallet.Lock();
+
+    BOOST_REQUIRE(wallet.Unlock(old_passphrase, UnlockScope::StakingOnly, std::chrono::seconds(60)));
+    const std::optional<int64_t> deadline = wallet.GetUnlockDeadline();
+    BOOST_REQUIRE(deadline.has_value());
+
+    BOOST_REQUIRE(wallet.ChangeWalletPassphrase(old_passphrase, new_passphrase));
+
+    // The scope came back, and so did the deadline it was unlocked with.
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+    BOOST_REQUIRE(wallet.GetUnlockDeadline().has_value());
+    BOOST_CHECK_EQUAL(*wallet.GetUnlockDeadline(), *deadline);
+
+    // And a relock was armed against the restored unlock, so it still expires.
+    g_scheduler->MockForward(std::chrono::seconds(61));
+    WaitForRelock(wallet);
+
+    BOOST_CHECK(wallet.IsLocked());
+}
+
+//!
+//! A wallet that was locked when its passphrase changed is locked when the
+//! change returns, and from then on the new passphrase opens it and the old one
+//! does not.
+//!
+BOOST_AUTO_TEST_CASE(a_passphrase_change_leaves_a_locked_wallet_locked)
+{
+    CWallet wallet;
+    SchedulerForThisCase scheduler;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString old_passphrase("change-locked-old");
+    const SecureString new_passphrase("change-locked-new");
+    BOOST_REQUIRE(wallet.EncryptWallet(old_passphrase));
+    wallet.Lock();
+
+    BOOST_REQUIRE(wallet.ChangeWalletPassphrase(old_passphrase, new_passphrase));
+    BOOST_CHECK(wallet.IsLocked());
+
+    BOOST_CHECK(!wallet.Unlock(old_passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+    BOOST_CHECK(wallet.IsLocked());
+    BOOST_CHECK(wallet.Unlock(new_passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+
+    wallet.Lock();
+}
+
+//!
+//! A change refused for the old passphrase changes nothing: the old passphrase
+//! still opens the wallet and the new one does not.
+//!
+BOOST_AUTO_TEST_CASE(a_refused_passphrase_change_keeps_the_old_passphrase)
+{
+    CWallet wallet;
+    SchedulerForThisCase scheduler;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString old_passphrase("change-refused-old");
+    const SecureString new_passphrase("change-refused-new");
+    BOOST_REQUIRE(wallet.EncryptWallet(old_passphrase));
+    wallet.Lock();
+
+    BOOST_CHECK(!wallet.ChangeWalletPassphrase(SecureString("change-refused-wrong"), new_passphrase));
+    BOOST_CHECK(wallet.IsLocked());
+
+    BOOST_CHECK(!wallet.Unlock(new_passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+    BOOST_CHECK(wallet.Unlock(old_passphrase, UnlockScope::Full, std::chrono::seconds(60)));
+
+    wallet.Lock();
+}
+
+//!
+//! Lock and restriction are one value, so no reader can see an unlocked wallet
+//! carrying the previous unlock's restriction. Pins each transition, including
+//! that a lock clears the restriction and a failed unlock moves nothing.
+//!
+BOOST_AUTO_TEST_CASE(the_unlock_scope_is_set_and_cleared_with_the_key)
+{
+    CWallet wallet;
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    // Unencrypted: nothing to restrict.
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+    BOOST_CHECK(!wallet.IsLocked());
+
+    const SecureString passphrase("scope-transitions");
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+
+    wallet.Lock();
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Locked);
+    BOOST_CHECK(wallet.IsLocked());
+    BOOST_CHECK(!wallet.IsUnlockedForStakingOnly());
+
+    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::StakingOnly));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+    BOOST_CHECK(!wallet.IsLocked());
+    BOOST_CHECK(wallet.IsUnlockedForStakingOnly());
+
+    // A lock clears the restriction along with the key: the two cannot drift.
+    wallet.Lock();
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Locked);
+    BOOST_CHECK(!wallet.IsUnlockedForStakingOnly());
+
+    // No scope stated means Full, matching walletpassphrase without its third
+    // argument.
+    BOOST_REQUIRE(wallet.Unlock(passphrase));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    // A failed unlock moves nothing. Unlocking an already-unlocked wallet fails.
+    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::StakingOnly));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    // And it is reported as already unlocked, not as a bad passphrase: the
+    // passphrase used here is the right one.
+    CWallet::UnlockFailure failure = CWallet::UnlockFailure::None;
+    BOOST_CHECK(!wallet.Unlock(passphrase, UnlockScope::StakingOnly, std::nullopt, &failure));
+    BOOST_CHECK(failure == CWallet::UnlockFailure::AlreadyUnlocked);
+
+    wallet.Lock();
+    BOOST_CHECK(!wallet.Unlock(SecureString("wrong"), UnlockScope::Full));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Locked);
+}
+
+BOOST_AUTO_TEST_CASE(dumpprivkey_staking_only_unlock_is_refused_by_the_shared_check)
+{
+    // Same in-memory encrypted wallet as the case above. dumpprivkey used to
+    // carry its own staking-only check below the address parsing;
+    // EnsureWalletIsUnlocked(), its first statement, already throws for that
+    // state, so the second check could not be reached. This case pins that the
+    // refusal comes from the shared helper, message and all, and that the
+    // ordinary unlock exports the key.
+    CWallet locked;
+    struct SwapWallet {
+        CWallet* m_saved;
+        explicit SwapWallet(CWallet* replacement) : m_saved(pwalletMain) { pwalletMain = replacement; }
+        ~SwapWallet() { pwalletMain = m_saved; }
+    } swap(&locked);
+
+    CKey key;
+    key.MakeNewKey(true);
+    const CKeyID id = key.GetPubKey().GetID();
+    {
+        LOCK(locked.cs_wallet);
+        BOOST_REQUIRE(locked.AddKey(key));
+    }
+    const SecureString passphrase("dumpprivkey-test");
+    BOOST_REQUIRE(locked.EncryptWallet(passphrase));
+    locked.Lock();
+
+    // Unlock for staking only, which is now one call rather than an unlock
+    // followed by a separate global write.
+    BOOST_REQUIRE(locked.Unlock(passphrase, UnlockScope::StakingOnly));
+    BOOST_REQUIRE(locked.IsUnlockedForStakingOnly());
+
+    UniValue params(UniValue::VARR);
+    params.push_back(EncodeDestination(id));
+
+    try {
+        dumpprivkey(params);
+        BOOST_FAIL("dumpprivkey did not throw on a staking-only unlock");
+    } catch (const UniValue& err) {
+        BOOST_CHECK_EQUAL(find_value(err, "code").get_int(), RPC_WALLET_UNLOCK_NEEDED);
+        // EnsureWalletIsUnlocked()'s wording, not the RPC's former own one.
+        BOOST_CHECK_EQUAL(find_value(err, "message").get_str(), "Error: Wallet is unlocked for staking only.");
+    }
+
+    // A full unlock exports the key. Re-unlocking requires a lock first, which
+    // is what clears the scope.
+    locked.Lock();
+    BOOST_REQUIRE(locked.Unlock(passphrase, UnlockScope::Full));
+    BOOST_CHECK_EQUAL(dumpprivkey(params).get_str(), EncodeSecret(key));
+}
+
+//! QueueRelay is the decision half of the old RelayWalletTransaction, split out
+//! so a caller holding cs_wallet can decide under the lock and announce after
+//! releasing it (#3391). The refusal it inherits is the one that matters: an
+//! inactive transaction -- abandoned or conflicted -- must not be announced, and
+//! must not be counted as relayed by ResendWalletTransactions.
+BOOST_AUTO_TEST_CASE(queue_relay_refuses_an_inactive_transaction)
+{
+    CWalletTx wtx;
+    wtx.SetTxState(TxStateInactive{false});
+
+    CTxDB txdb("r");
+    DeferredRelay relay;
+
+    BOOST_CHECK(!wtx.QueueRelay(txdb, relay));
+    BOOST_CHECK(relay.empty());
+}
+
+//! And the converse, so the refusal above is not vacuously true: an ordinary
+//! unconfirmed transaction the index has never seen queues itself.
+BOOST_AUTO_TEST_CASE(queue_relay_queues_an_active_transaction)
+{
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("0x0a"), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+
+    CWalletTx wtx(nullptr, CTransaction(mtx));
+    wtx.SetTxState(TxStateInMempool{});
+
+    // Neither a coinbase nor a coinstake, so the self-announcement arm applies.
+    BOOST_REQUIRE(!wtx.IsCoinBase());
+    BOOST_REQUIRE(!wtx.IsCoinStake());
+
+    CTxDB txdb("r");
+    DeferredRelay relay;
+
+    BOOST_CHECK(wtx.QueueRelay(txdb, relay));
+    BOOST_CHECK(!relay.empty());
+
+    relay.Flush();
+    BOOST_CHECK(relay.empty());
+
+    // Flush() caches the serialized transaction in the process-global mapRelay;
+    // drop it so it cannot be served to a later getdata case in this binary.
+    RemoveFromRelayMemory(wtx.GetHash());
+}
+
+// GetBalances() is the four balance getters folded into one pass with one depth
+// lookup per transaction. The getters stay the reference: this checks that the
+// fold agrees with them, and with hand-computed totals, over a wallet holding a
+// transaction for every branch of their conditions. Each transaction carries a
+// distinct power-of-two amount, so a wrong total names the transaction that
+// was miscounted.
+BOOST_AUTO_TEST_CASE(get_balances_matches_the_four_getters)
+{
+    grc_test::StateGuard guard;
+
+    // Generated outputs mature at depth nCoinbaseMaturity + 10 = 20. The guard
+    // restores the maturity and the tip globals, and erases the mock indexes.
+    nCoinbaseMaturity = 10;
+    const int tip_height = 30;
+
+    std::vector<CBlockIndex*> chain;
+    {
+        LOCK(cs_main);
+        CBlockIndex* prev = nullptr;
+        for (int height = 0; height <= tip_height; ++height) {
+            CBlockIndex* pindex = GRC::MockBlockIndex::InsertBlockIndex(GetRandHash());
+            pindex->nHeight = height;
+            pindex->nVersion = 12;
+            pindex->pprev = prev;
+            if (prev) prev->pnext = pindex;
+            chain.push_back(pindex);
+            prev = pindex;
+        }
+        pindexBest = chain.back();
+        nBestHeight = tip_height;
+    }
+
+    // The block a transaction confirmed in, for a depth of `depth` at the tip.
+    const auto block_at_depth = [&](int depth) { return chain[tip_height - depth + 1]->GetBlockHash(); };
+
+    CWallet wallet;
+    CKey ours;
+    ours.MakeNewKey(true);
+    CKey theirs;
+    theirs.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(ours));
+    }
+    const CScript to_us = CScript() << ours.GetPubKey() << OP_CHECKSIG;
+    const CScript to_them = CScript() << theirs.GetPubKey() << OP_CHECKSIG;
+
+    const auto make_tx = [&](CAmount value, const CScript& script) {
+        CMutableTransaction mtx;
+        mtx.vin.resize(1);
+        mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = value;
+        mtx.vout[0].scriptPubKey = script;
+        return mtx;
+    };
+    const auto make_coinstake = [&](CAmount value) {
+        CMutableTransaction mtx = make_tx(value, to_us);
+        mtx.vout.insert(mtx.vout.begin(), CTxOut());
+        mtx.vout[0].SetEmpty();
+        return mtx;
+    };
+    const auto make_coinbase = [&](CAmount value) {
+        CMutableTransaction mtx = make_tx(value, to_us);
+        mtx.vin[0].prevout.SetNull();
+        return mtx;
+    };
+    const auto add = [&](const CMutableTransaction& mtx, const TxState& state, bool from_me = false,
+                         std::vector<unsigned int> spent = {}) {
+        CWalletTx wtx(&wallet, CTransaction(mtx));
+        wtx.SetTxState(state);
+        wtx.fFromMe = from_me;
+        for (const unsigned int n : spent) wtx.MarkSpent(n);
+        LOCK(wallet.cs_wallet);
+        const uint256 hash = wtx.GetHash();
+        wallet.mapWallet[hash] = wtx;
+        return hash;
+    };
+
+    // Ordinary transactions.
+    add(make_tx(1 * COIN, to_us), TxStateConfirmed(block_at_depth(15), 0));       // confirmed: balance
+    add(make_tx(2 * COIN, to_us), TxStateConfirmed(block_at_depth(5), 0));        // trusted, not confirmed: unconfirmed
+    add(make_tx(4 * COIN, to_us), TxStateConfirmed(block_at_depth(1), 0));        // untrusted: unconfirmed
+    add(make_tx(8 * COIN, to_us), TxStateConfirmed(block_at_depth(5), 0), true);  // from me, trusted: balance
+
+    // A parent with one output spent by an unconfirmed child of ours in the
+    // pool, which is trusted through AreDependenciesConfirmed(): the child's
+    // change and the parent's unspent output are balance.
+    CMutableTransaction parent_mtx = make_tx(32 * COIN, to_us);
+    parent_mtx.vout.emplace_back(64 * COIN, to_us);
+    const uint256 parent_hash = add(parent_mtx, TxStateConfirmed(block_at_depth(15), 0), false, {0});
+    CMutableTransaction child_mtx = make_tx(16 * COIN, to_us);
+    child_mtx.vin[0].prevout = COutPoint(parent_hash, 0);
+    const CTransaction child_tx(child_mtx);
+    {
+        CWalletTx child(&wallet, child_tx);
+        child.SetTxState(TxStateInMempool{});
+        child.fFromMe = true;
+        CMerkleTx parent_merkle{CTransaction(parent_mtx)};
+        parent_merkle.hashBlock = block_at_depth(15);
+        parent_merkle.nIndex = 0;
+        child.vtxPrev.push_back(parent_merkle);
+        LOCK(wallet.cs_wallet);
+        wallet.mapWallet[child.GetHash()] = child;
+    }
+    {
+        LOCK(cs_main);
+        mempool.addUnchecked(child_tx.GetHash(), CTxMemPoolEntry(
+            child_tx, /*fee=*/0, /*time=*/0, /*height=*/0,
+            ::GetSerializeSize(child_tx, SER_NETWORK, PROTOCOL_VERSION)));
+    }
+
+    // Generated transactions.
+    add(make_coinstake(128 * COIN), TxStateConfirmed(block_at_depth(5), 1));       // immature: stake
+    add(make_coinstake(256 * COIN), TxStateConfirmed(block_at_depth(25), 1));      // mature: balance
+    add(make_coinbase(512 * COIN), TxStateConfirmed(block_at_depth(5), 0));        // immature: immature
+    add(make_coinstake(1024 * COIN), TxStateConfirmed(GetRandHash(), 1));          // orphaned: nothing
+
+    // Non-final: unconfirmed whatever its depth.
+    CMutableTransaction non_final = make_tx(2048 * COIN, to_us);
+    non_final.nLockTime = tip_height + 1000;
+    non_final.vin[0].nSequence = 0;
+    add(non_final, TxStateInactive{});
+
+    // Nothing of ours left, the cases the pass skips before the depth lookup.
+    add(make_tx(4096 * COIN, to_us), TxStateConfirmed(block_at_depth(15), 0), false, {0});  // spent
+    add(make_tx(8192 * COIN, to_them), TxStateConfirmed(block_at_depth(15), 0), true);      // a send
+
+    // A mature coinstake spent counts nowhere; an immature one spent still
+    // counts as stake, which GetCredit() takes whether spent or not.
+    add(make_coinstake(16384 * COIN), TxStateConfirmed(block_at_depth(25), 1), false, {1});
+    add(make_coinstake(32768 * COIN), TxStateConfirmed(block_at_depth(3), 1), false, {1});
+
+    // In the pool but not ours to trust: nowhere.
+    {
+        const CMutableTransaction mtx = make_tx(65536 * COIN, to_us);
+        add(mtx, TxStateInMempool{});
+        const CTransaction tx(mtx);
+        LOCK(cs_main);
+        mempool.addUnchecked(tx.GetHash(), CTxMemPoolEntry(
+            tx, /*fee=*/0, /*time=*/0, /*height=*/0, ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION)));
+    }
+
+    const CWallet::Balances totals = wallet.GetBalances();
+
+    BOOST_CHECK_EQUAL(totals.balance, wallet.GetBalance());
+    BOOST_CHECK_EQUAL(totals.stake, wallet.GetStake());
+    BOOST_CHECK_EQUAL(totals.unconfirmed, wallet.GetUnconfirmedBalance());
+    BOOST_CHECK_EQUAL(totals.immature, wallet.GetImmatureBalance());
+
+    BOOST_CHECK_EQUAL(totals.balance, (1 + 8 + 16 + 64 + 256) * COIN);
+    BOOST_CHECK_EQUAL(totals.stake, (128 + 32768) * COIN);
+    BOOST_CHECK_EQUAL(totals.unconfirmed, (2 + 4 + 2048) * COIN);
+    BOOST_CHECK_EQUAL(totals.immature, 512 * COIN);
+
+    {
+        LOCK2(cs_main, wallet.cs_wallet);
+        for (const auto& entry : wallet.mapWallet) {
+            mempool.remove(entry.second, /*fRecursive=*/false);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(wallet_integration_tests)
+
+BOOST_AUTO_TEST_CASE(state_transition_mempool_to_confirmed)
+{
+    // Test state transition from mempool to confirmed
+    CWallet test_wallet;
+
+    // Create a transaction
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+    CTransactionRef ptx = MakeTransactionRef(tx);
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Start in mempool state
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[hash] = wtx;
+
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+
+        // Transition to confirmed
+        uint256 block_hash = uint256S("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        TxState confirmed_state = TxStateConfirmed(block_hash, 5);
+
+        // Manually update state (simulating what SyncTransaction does)
+        test_wallet.mapWallet[hash].SetTxState(confirmed_state);
+
+        // Verify transition
+        BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
+        BOOST_CHECK(!test_wallet.mapWallet[hash].isInMempool());
+
+        auto* conf = test_wallet.mapWallet[hash].state<TxStateConfirmed>();
+        BOOST_CHECK(conf != nullptr);
+        BOOST_CHECK(conf->m_confirmed_block_hash == block_hash);
+        BOOST_CHECK_EQUAL(conf->m_position_in_block, 5);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(state_transition_confirmed_to_inactive_reorg)
+{
+    // Test reorg scenario: confirmed -> inactive
+    CWallet test_wallet;
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 75 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Start confirmed
+        CWalletTx wtx(&test_wallet, tx);
+        uint256 block_hash = uint256S("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+        wtx.SetTxState(TxStateConfirmed(block_hash, 3));
+        test_wallet.mapWallet[hash] = wtx;
+
+        BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
+
+        // Simulate reorg: block disconnected, tx becomes inactive
+        test_wallet.mapWallet[hash].SetTxState(TxStateInactive{false});
+
+        // Verify transition
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
+        BOOST_CHECK(!test_wallet.mapWallet[hash].isConfirmed());
+
+        auto* inactive = test_wallet.mapWallet[hash].state<TxStateInactive>();
+        BOOST_CHECK(inactive != nullptr);
+        BOOST_CHECK_EQUAL(inactive->m_abandoned, false);  // Not abandoned, just orphaned
+    }
+}
+
+BOOST_AUTO_TEST_CASE(spent_tracking_on_confirmation)
+{
+    // Test that parent outputs are marked spent when child tx confirms
+    CWallet test_wallet;
+
+    // Create parent transaction
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(2);
+    parent_mtx.vout[0].nValue = 100 * COIN;
+    parent_mtx.vout[1].nValue = 50 * COIN;
+    CTransaction parent_tx(parent_mtx);
+    uint256 parent_hash = parent_tx.GetHash();
+
+    // Create child transaction spending parent output 0
+    CMutableTransaction child_mtx;
+    child_mtx.vin.resize(1);
+    child_mtx.vin[0].prevout = COutPoint(parent_hash, 0);
+    child_mtx.vout.resize(1);
+    child_mtx.vout[0].nValue = 99 * COIN;  // 1 COIN fee
+    CTransaction child_tx(child_mtx);
+    uint256 child_hash = child_tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Add parent to wallet (confirmed)
+        CWalletTx parent_wtx(&test_wallet, parent_tx);
+        parent_wtx.SetTxState(TxStateConfirmed(uint256S("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"), 1));
+        parent_wtx.vfSpent.resize(2, false);  // Both outputs unspent initially
+        test_wallet.mapWallet[parent_hash] = parent_wtx;
+
+        // Add child to wallet (mempool initially)
+        CWalletTx child_wtx(&test_wallet, child_tx);
+        child_wtx.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[child_hash] = child_wtx;
+
+        // Verify parent output 0 is unspent
+        BOOST_CHECK(!test_wallet.mapWallet[parent_hash].IsSpent(0));
+        BOOST_CHECK(!test_wallet.mapWallet[parent_hash].IsSpent(1));
+
+        // Mark parent output as spent (simulating what SyncTransaction does)
+        test_wallet.mapWallet[parent_hash].MarkSpent(0);
+
+        // Verify parent output 0 is now spent
+        BOOST_CHECK(test_wallet.mapWallet[parent_hash].IsSpent(0));
+        BOOST_CHECK(!test_wallet.mapWallet[parent_hash].IsSpent(1));  // Output 1 still unspent
+    }
+}
+
+BOOST_AUTO_TEST_CASE(reorg_unmarks_parent_spent)
+{
+    // Test that reorg correctly unmarks parent outputs as unspent
+    CWallet test_wallet;
+
+    // Create parent and child transactions
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(1);
+    parent_mtx.vout[0].nValue = 100 * COIN;
+    CTransaction parent_tx(parent_mtx);
+    uint256 parent_hash = parent_tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Add parent (confirmed, output spent)
+        CWalletTx parent_wtx(&test_wallet, parent_tx);
+        parent_wtx.SetTxState(TxStateConfirmed(uint256S("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"), 2));
+        parent_wtx.vfSpent.resize(1, true);  // Output 0 is spent
+        test_wallet.mapWallet[parent_hash] = parent_wtx;
+
+        // Verify output is spent
+        BOOST_CHECK(test_wallet.mapWallet[parent_hash].IsSpent(0));
+
+        // Simulate reorg: unmark parent output as spent
+        test_wallet.mapWallet[parent_hash].MarkUnspent(0);
+
+        // Verify output is now unspent
+        BOOST_CHECK(!test_wallet.mapWallet[parent_hash].IsSpent(0));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(abandon_then_reconfirm_workflow)
+{
+    // Test full abandon lifecycle including edge case reconfirmation
+    CWallet test_wallet;
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 60 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK2(cs_main, test_wallet.cs_wallet);
+
+        // 1. Transaction starts in mempool
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[hash] = wtx;
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+
+        // 2. Transaction removed/conflicted (not abandoned yet)
+        test_wallet.mapWallet[hash].SetTxState(TxStateInactive{false});
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+
+        // 3. User explicitly abandons
+        bool abandoned_ok = test_wallet.AbandonTransaction(hash);
+        BOOST_CHECK(abandoned_ok);
+        BOOST_CHECK(test_wallet.IsAbandoned(hash));
+
+        auto* inactive = test_wallet.mapWallet[hash].state<TxStateInactive>();
+        BOOST_CHECK(inactive != nullptr);
+        BOOST_CHECK_EQUAL(inactive->m_abandoned, true);
+
+        // 4. Edge case: abandoned tx appears in a block (should re-activate)
+        uint256 block_hash = uint256S("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        test_wallet.mapWallet[hash].SetTxState(TxStateConfirmed(block_hash, 4));
+
+        // Verify it's now confirmed (abandoned flag overridden)
+        BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
+        BOOST_CHECK(!test_wallet.mapWallet[hash].isInactive());
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(inactive_conflicted_vs_abandoned)
+{
+    // Test distinction between conflicted (abandoned=false) and abandoned (abandoned=true)
+    CWallet test_wallet;
+
+    // Transaction 1: conflicted
+    CMutableTransaction mtx1;
+    mtx1.vout.resize(1);
+    mtx1.vout[0].nValue = 40 * COIN;
+    CTransaction tx1(mtx1);
+    uint256 hash1 = tx1.GetHash();
+
+    // Transaction 2: abandoned
+    CMutableTransaction mtx2;
+    mtx2.vout.resize(1);
+    mtx2.vout[0].nValue = 30 * COIN;
+    CTransaction tx2(mtx2);
+    uint256 hash2 = tx2.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Add conflicted transaction
+        CWalletTx wtx1(&test_wallet, tx1);
+        wtx1.SetTxState(TxStateInactive{false});  // conflicted, not abandoned
+        test_wallet.mapWallet[hash1] = wtx1;
+
+        // Add abandoned transaction
+        CWalletTx wtx2(&test_wallet, tx2);
+        wtx2.SetTxState(TxStateInactive{true});  // abandoned
+        test_wallet.mapWallet[hash2] = wtx2;
+
+        // Verify both are inactive
+        BOOST_CHECK(test_wallet.mapWallet[hash1].isInactive());
+        BOOST_CHECK(test_wallet.mapWallet[hash2].isInactive());
+
+        // But only tx2 is abandoned
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash1));
+        BOOST_CHECK(test_wallet.IsAbandoned(hash2));
+
+        // Verify the abandoned flags
+        auto* inactive1 = test_wallet.mapWallet[hash1].state<TxStateInactive>();
+        auto* inactive2 = test_wallet.mapWallet[hash2].state<TxStateInactive>();
+
+        BOOST_CHECK(inactive1 != nullptr);
+        BOOST_CHECK(inactive2 != nullptr);
+        BOOST_CHECK_EQUAL(inactive1->m_abandoned, false);
+        BOOST_CHECK_EQUAL(inactive2->m_abandoned, true);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(unrecognized_migration_with_hashblock)
+{
+    // Test migration of unrecognized transactions with hashBlock set
+    // This tests the consolidated migration path (Fix 1)
+    CWallet test_wallet;
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 80 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Create transaction with unrecognized state but block hash known
+        // (simulates old wallet format being loaded — ResolveUnrecognizedTx path)
+        CWalletTx wtx(&test_wallet, tx);
+        uint256 block_hash = uint256S("1111111122222222333333334444444455555555666666667777777788888888");
+        TxStateUnrecognized unrec;
+        unrec.m_block_hash = block_hash;
+        unrec.m_index = 7;
+        wtx.SetTxState(unrec);
+        test_wallet.mapWallet[hash] = wtx;
+
+        BOOST_CHECK(test_wallet.mapWallet[hash].isUnrecognized());
+
+        // Simulate migration: if m_block_hash is set, migrate to confirmed state
+        // (This is what ResolveUnrecognizedTx does)
+        auto* unrec_state = test_wallet.mapWallet[hash].state<TxStateUnrecognized>();
+        if (unrec_state && !unrec_state->m_block_hash.IsNull()) {
+            test_wallet.mapWallet[hash].SetTxState(TxStateConfirmed(
+                unrec_state->m_block_hash,
+                unrec_state->m_index
+            ));
+        }
+
+        // Verify migration succeeded
+        BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
+        BOOST_CHECK(!test_wallet.mapWallet[hash].isUnrecognized());
+
+        auto* conf = test_wallet.mapWallet[hash].state<TxStateConfirmed>();
+        BOOST_CHECK(conf != nullptr);
+        BOOST_CHECK(conf->m_confirmed_block_hash == block_hash);
+        BOOST_CHECK_EQUAL(conf->m_position_in_block, 7);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(unrecognized_migration_without_hashblock)
+{
+    // Test migration of unrecognized transactions without hashBlock
+    // These should become inactive (not found)
+    CWallet test_wallet;
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 90 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Create transaction with unrecognized state and no block hash
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateUnrecognized{});  // m_block_hash is null by default
+        test_wallet.mapWallet[hash] = wtx;
+
+        BOOST_CHECK(test_wallet.mapWallet[hash].isUnrecognized());
+
+        // Simulate migration: no m_block_hash, not in mempool/txdb -> inactive
+        auto* unrec_state = test_wallet.mapWallet[hash].state<TxStateUnrecognized>();
+        if (unrec_state && unrec_state->m_block_hash.IsNull()) {
+            test_wallet.mapWallet[hash].SetTxState(TxStateInactive{false});
+        }
+
+        // Verify migration to inactive
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
+        BOOST_CHECK(!test_wallet.mapWallet[hash].isUnrecognized());
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));  // Not abandoned, just not found
+    }
+}
+
+BOOST_AUTO_TEST_CASE(multiple_state_transitions)
+{
+    // Test multiple state transitions in sequence
+    CWallet test_wallet;
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 110 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // 1. Start: Unrecognized (loaded from old wallet)
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateUnrecognized{});
+        test_wallet.mapWallet[hash] = wtx;
+        BOOST_CHECK(test_wallet.mapWallet[hash].isUnrecognized());
+
+        // 2. Migrate to Mempool (found in mempool during ReacceptWalletTransactions)
+        test_wallet.mapWallet[hash].SetTxState(TxStateInMempool{});
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+
+        // 3. Confirm (block connected)
+        uint256 block_hash = uint256S("9999999999999999999999999999999999999999999999999999999999999999");
+        test_wallet.mapWallet[hash].SetTxState(TxStateConfirmed(block_hash, 8));
+        BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
+
+        // 4. Reorg back to Inactive (block disconnected)
+        test_wallet.mapWallet[hash].SetTxState(TxStateInactive{false});
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
+
+        // 5. Return to Mempool (transaction still valid)
+        test_wallet.mapWallet[hash].SetTxState(TxStateInMempool{});
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+
+        // 6. Re-confirm in new chain
+        uint256 new_block_hash = uint256S("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        test_wallet.mapWallet[hash].SetTxState(TxStateConfirmed(new_block_hash, 2));
+        BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
+
+        auto* final_conf = test_wallet.mapWallet[hash].state<TxStateConfirmed>();
+        BOOST_CHECK(final_conf != nullptr);
+        BOOST_CHECK(final_conf->m_confirmed_block_hash == new_block_hash);
+    }
+}
+
+// Single-threaded test that drives CWallet::transactionAddedToMempool
+// directly; that method is EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+// LOCKS_EXCLUDED(cs_wallet). The test holds cs_wallet but not cs_main,
+// which mirrors the wallet-internal callback shape we're pinning here.
+// Suppress the analyzer for this test case.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
+BOOST_AUTO_TEST_CASE(transaction_added_to_mempool_preserves_inmempool_state)
+{
+    // Pins the invariant CommitTransaction relies on at wallet.cpp:3324:
+    // a wtx that enters mapWallet with TxStateInMempool must remain in
+    // TxStateInMempool after AcceptToMemoryPool fires the
+    // transactionAddedToMempool callback (main.cpp:576) for the originating
+    // wallet. The callback path goes through SyncTransaction ->
+    // AddToWalletIfInvolvingMe with fUpdate=false on an existing entry, so
+    // the state-assignment branch at line 1171 is skipped and the state set
+    // at CommitTransaction:3324 must survive untouched.
+
+    CWallet test_wallet;
+
+    // Add a key so the tx's output is IsMine -- otherwise
+    // AddToWalletIfInvolvingMe short-circuits at the fIsMine==false check
+    // (wallet.cpp:1121) and never reaches the branch under test.
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_REQUIRE(test_wallet.AddKey(key));
+    }
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+    CTransactionRef ptx = MakeTransactionRef(tx);
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Mirror CommitTransaction:3324 then the AddToWallet insertion at
+        // wallet.cpp:3328 -- we insert directly rather than calling
+        // AddToWallet to avoid the cs_main / CWalletDB scaffolding it
+        // requires, which isn't what's under test.
+        CWalletTx wtxNew(&test_wallet, tx);
+        wtxNew.SetTxState(TxStateInMempool{});
+        BOOST_REQUIRE(wtxNew.isInMempool());
+
+        test_wallet.mapWallet[hash] = wtxNew;
+        BOOST_REQUIRE(test_wallet.mapWallet[hash].isInMempool());
+        BOOST_REQUIRE(test_wallet.IsMine(tx) != ISMINE_NO);
+
+        // The callback that AcceptToMemoryPool fires via GetMainSignals().
+        test_wallet.TransactionAddedToMempool(ptx);
+
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+        BOOST_CHECK(test_wallet.mapWallet[hash].state<TxStateInMempool>() != nullptr);
+        BOOST_CHECK(test_wallet.mapWallet[hash].state<TxStateUnrecognized>() == nullptr);
+        BOOST_CHECK(test_wallet.mapWallet[hash].state<TxStateConfirmed>() == nullptr);
+        BOOST_CHECK(test_wallet.mapWallet[hash].state<TxStateInactive>() == nullptr);
+    }
+}
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(wallet_state_tests)
+
+BOOST_AUTO_TEST_CASE(state_type_creation)
+{
+    // Test creating each state type
+    TxStateInMempool mempool_state;
+    BOOST_CHECK(std::holds_alternative<TxStateInMempool>(
+        TxState{mempool_state}));
+
+    TxStateConfirmed conf_state(uint256S("00"), 0);
+    BOOST_CHECK_EQUAL(conf_state.m_position_in_block, 0);
+
+    TxStateInactive inactive_state(true);
+    BOOST_CHECK_EQUAL(inactive_state.m_abandoned, true);
+
+    TxStateUnrecognized unrec_state;
+    BOOST_CHECK_EQUAL(unrec_state.m_index, -1);
+}
+
+BOOST_AUTO_TEST_CASE(state_serialization)
+{
+    // Test each state type round-trips through CWalletTx sentinel-based serialization.
+    // SyncLegacyFromState -> CMerkleTx -> deserialize -> MigrateFromLegacyHashBlock -> state.
+
+    {
+        // Confirmed state
+        CWalletTx original;
+        original.SetTxState(TxStateConfirmed(uint256S("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"), 7));
+
+        CDataStream ss(SER_DISK, CLIENT_VERSION);
+        ss << original;
+
+        CWalletTx restored;
+        ss >> restored;
+
+        BOOST_CHECK(restored.isConfirmed());
+        auto* conf = restored.state<TxStateConfirmed>();
+        BOOST_CHECK(conf != nullptr);
+        BOOST_CHECK(conf->m_confirmed_block_hash == uint256S("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+        // Block height is not serialized in CMerkleTx, so it reconstructs as -1
+        BOOST_CHECK_EQUAL(conf->m_position_in_block, 7);
+    }
+
+    {
+        // Inactive (abandoned) state — serializes as ABANDONED_HASH_SENTINEL
+        CWalletTx original;
+        original.SetTxState(TxStateInactive(true));
+
+        CDataStream ss(SER_DISK, CLIENT_VERSION);
+        ss << original;
+
+        CWalletTx restored;
+        ss >> restored;
+
+        BOOST_CHECK(restored.isInactive());
+        auto* inactive = restored.state<TxStateInactive>();
+        BOOST_CHECK(inactive != nullptr);
+        BOOST_CHECK_EQUAL(inactive->m_abandoned, true);
+    }
+
+    {
+        // Inactive (conflicted) state — serializes as CONFLICTED_HASH_SENTINEL
+        CWalletTx original;
+        original.SetTxState(TxStateInactive(false));
+
+        CDataStream ss(SER_DISK, CLIENT_VERSION);
+        ss << original;
+
+        CWalletTx restored;
+        ss >> restored;
+
+        BOOST_CHECK(restored.isInactive());
+        auto* inactive = restored.state<TxStateInactive>();
+        BOOST_CHECK(inactive != nullptr);
+        BOOST_CHECK_EQUAL(inactive->m_abandoned, false);
+    }
+
+    {
+        // InMempool state has no persistent representation;
+        // serializes as null hashBlock -> deserializes as Unrecognized
+        CWalletTx original;
+        original.SetTxState(TxStateInMempool{});
+
+        CDataStream ss(SER_DISK, CLIENT_VERSION);
+        ss << original;
+
+        CWalletTx restored;
+        ss >> restored;
+
+        BOOST_CHECK(restored.isUnrecognized());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(wallet_tx_state_helpers)
+{
+    CWalletTx wtx;
+
+    // Test mempool state
+    wtx.SetTxState(TxStateInMempool{});
+    BOOST_CHECK(wtx.isInMempool());
+    BOOST_CHECK(!wtx.isConfirmed());
+    BOOST_CHECK(!wtx.isInactive());
+    BOOST_CHECK(!wtx.isUnrecognized());
+
+    // Test confirmed state
+    wtx.SetTxState(TxStateConfirmed(uint256S("00"), 0));
+    BOOST_CHECK(!wtx.isInMempool());
+    BOOST_CHECK(wtx.isConfirmed());
+    BOOST_CHECK(!wtx.isInactive());
+    BOOST_CHECK(!wtx.isUnrecognized());
+
+    auto* conf = wtx.state<TxStateConfirmed>();
+    BOOST_CHECK(conf != nullptr);
+
+    // Test inactive state
+    wtx.SetTxState(TxStateInactive(true));
+    BOOST_CHECK(!wtx.isInMempool());
+    BOOST_CHECK(!wtx.isConfirmed());
+    BOOST_CHECK(wtx.isInactive());
+    BOOST_CHECK(!wtx.isUnrecognized());
+
+    auto* inactive = wtx.state<TxStateInactive>();
+    BOOST_CHECK(inactive != nullptr);
+    BOOST_CHECK_EQUAL(inactive->m_abandoned, true);
+
+    // Test unrecognized state
+    wtx.SetTxState(TxStateUnrecognized{});
+    BOOST_CHECK(!wtx.isInMempool());
+    BOOST_CHECK(!wtx.isConfirmed());
+    BOOST_CHECK(!wtx.isInactive());
+    BOOST_CHECK(wtx.isUnrecognized());
+}
+
+BOOST_AUTO_TEST_CASE(wallet_tx_serialization_with_state)
+{
+    // Test that CWalletTx with state serializes correctly
+    CWalletTx original;
+    original.SetTxState(TxStateConfirmed(uint256S("abc123"), 3));
+
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << original;
+
+    CWalletTx restored;
+    ss >> restored;
+
+    BOOST_CHECK(restored.isConfirmed());
+    auto* conf = restored.state<TxStateConfirmed>();
+    BOOST_CHECK(conf != nullptr);
+    BOOST_CHECK(conf->m_confirmed_block_hash == uint256S("abc123"));
+    // Block height is not stored in CMerkleTx, so it's -1 after deserialization
+    BOOST_CHECK_EQUAL(conf->m_position_in_block, 3);
+}
+
+BOOST_AUTO_TEST_CASE(old_wallet_migration)
+{
+    // Test that old wallet format entries (direct hashBlock/nIndex in CMerkleTx,
+    // no state system) deserialize correctly via MigrateFromLegacyHashBlock.
+    // With sentinel-based serialization, old and new formats are identical —
+    // the read path always reconstructs m_state from hashBlock/nIndex.
+
+    // Simulate an old confirmed entry
+    CWalletTx oldFormat;
+    oldFormat.SetTxState(TxStateConfirmed(uint256S("def456"), 5));
+
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << oldFormat;
+
+    CWalletTx newFormat;
+    ss >> newFormat;
+
+    // MigrateFromLegacyHashBlock should reconstruct confirmed state
+    BOOST_CHECK(newFormat.isConfirmed());
+    auto* conf = newFormat.state<TxStateConfirmed>();
+    BOOST_CHECK(conf != nullptr);
+    BOOST_CHECK(conf->m_confirmed_block_hash == uint256S("def456"));
+    BOOST_CHECK_EQUAL(conf->m_position_in_block, 5);
+}
+
+BOOST_AUTO_TEST_CASE(state_template_methods)
+{
+    CWalletTx wtx;
+
+    // Test template state retrieval
+    wtx.SetTxState(TxStateConfirmed(uint256S("test"), 1));
+
+    // Test const version
+    const CWalletTx& const_wtx = wtx;
+    const TxStateConfirmed* const_conf = const_wtx.state<TxStateConfirmed>();
+    BOOST_CHECK(const_conf != nullptr);
+    BOOST_CHECK_EQUAL(const_conf->m_position_in_block, 1);
+
+    // Test non-const version (mutate through the pointer)
+    TxStateConfirmed* conf = wtx.state<TxStateConfirmed>();
+    BOOST_CHECK(conf != nullptr);
+    conf->m_position_in_block = 456;
+    BOOST_CHECK_EQUAL(conf->m_position_in_block, 456);
+
+    // Test retrieval of wrong type returns nullptr
+    const TxStateInMempool* mempool_ptr = const_wtx.state<TxStateInMempool>();
+    BOOST_CHECK(mempool_ptr == nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(get_conflicts_no_conflicts)
+{
+    // Test GetConflicts with no conflicting transactions
+    CWallet test_wallet;
+
+    // Create a simple transaction
+    CMutableTransaction mtx1;
+    mtx1.vin.resize(1);
+    mtx1.vin[0].prevout = COutPoint(uint256S("1111111111111111111111111111111111111111111111111111111111111111"), 0);
+    mtx1.vout.resize(1);
+    mtx1.vout[0].nValue = 100 * COIN;
+    CTransaction tx1(mtx1);
+
+    uint256 hash1 = tx1.GetHash();
+
+    // Add to wallet
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx1(&test_wallet, tx1);
+        wtx1.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[hash1] = wtx1;
+
+        // Populate mapTxSpends
+        for (const auto& txin : tx1.vin) {
+            test_wallet.mapTxSpends.insert(std::make_pair(txin.prevout, hash1));
+        }
+    }
+
+    // Should have no conflicts
+    {
+        LOCK(test_wallet.cs_wallet);
+        std::set<uint256> conflicts = test_wallet.GetConflicts(hash1);
+        BOOST_CHECK(conflicts.empty());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(get_conflicts_with_conflicts)
+{
+    // Test GetConflicts with conflicting transactions (double-spend)
+    CWallet test_wallet;
+
+    // Create two transactions that spend the same output
+    COutPoint shared_outpoint(uint256S("2222222222222222222222222222222222222222222222222222222222222222"), 0);
+
+    CMutableTransaction mtx1;
+    mtx1.vin.resize(1);
+    mtx1.vin[0].prevout = shared_outpoint;
+    mtx1.vout.resize(1);
+    mtx1.vout[0].nValue = 100 * COIN;
+    CTransaction tx1(mtx1);
+    uint256 hash1 = tx1.GetHash();
+
+    CMutableTransaction mtx2;
+    mtx2.vin.resize(1);
+    mtx2.vin[0].prevout = shared_outpoint;  // Same input!
+    mtx2.vout.resize(1);
+    mtx2.vout[0].nValue = 99 * COIN;  // Different output
+    CTransaction tx2(mtx2);
+    uint256 hash2 = tx2.GetHash();
+
+    // Add both to wallet
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        CWalletTx wtx1(&test_wallet, tx1);
+        wtx1.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[hash1] = wtx1;
+
+        CWalletTx wtx2(&test_wallet, tx2);
+        wtx2.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[hash2] = wtx2;
+
+        // Populate mapTxSpends for both
+        test_wallet.mapTxSpends.insert(std::make_pair(shared_outpoint, hash1));
+        test_wallet.mapTxSpends.insert(std::make_pair(shared_outpoint, hash2));
+    }
+
+    // tx1 should conflict with tx2
+    {
+        LOCK(test_wallet.cs_wallet);
+        std::set<uint256> conflicts1 = test_wallet.GetConflicts(hash1);
+        BOOST_CHECK_EQUAL(conflicts1.size(), 1u);
+        BOOST_CHECK(conflicts1.count(hash2) == 1);
+
+        // tx2 should conflict with tx1
+        std::set<uint256> conflicts2 = test_wallet.GetConflicts(hash2);
+        BOOST_CHECK_EQUAL(conflicts2.size(), 1u);
+        BOOST_CHECK(conflicts2.count(hash1) == 1);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(get_conflicts_multiple_conflicts)
+{
+    // Test GetConflicts with multiple conflicting transactions
+    CWallet test_wallet;
+
+    COutPoint shared_outpoint(uint256S("3333333333333333333333333333333333333333333333333333333333333333"), 5);
+
+    // Create three transactions that all spend the same output
+    std::vector<uint256> hashes;
+    for (int i = 0; i < 3; i++) {
+        CMutableTransaction mtx;
+        mtx.vin.resize(1);
+        mtx.vin[0].prevout = shared_outpoint;
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = (100 - i) * COIN;
+        CTransaction tx(mtx);
+
+        uint256 hash = tx.GetHash();
+        hashes.push_back(hash);
+
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[hash] = wtx;
+        test_wallet.mapTxSpends.insert(std::make_pair(shared_outpoint, hash));
+    }
+
+    // Each transaction should conflict with the other two
+    {
+        LOCK(test_wallet.cs_wallet);
+        for (size_t i = 0; i < hashes.size(); i++) {
+            std::set<uint256> conflicts = test_wallet.GetConflicts(hashes[i]);
+            BOOST_CHECK_EQUAL(conflicts.size(), 2u);
+
+            for (size_t j = 0; j < hashes.size(); j++) {
+                if (i != j) {
+                    BOOST_CHECK(conflicts.count(hashes[j]) == 1);
+                }
+            }
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(is_abandoned_not_abandoned)
+{
+    // Test IsAbandoned with non-abandoned transaction
+    CWallet test_wallet;
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[hash] = wtx;
+    }
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(is_abandoned_with_abandoned_tx)
+{
+    // Test IsAbandoned with abandoned transaction
+    CWallet test_wallet;
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateInactive{true});  // abandoned = true
+        test_wallet.mapWallet[hash] = wtx;
+    }
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(test_wallet.IsAbandoned(hash));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(is_abandoned_inactive_not_abandoned)
+{
+    // Test IsAbandoned with inactive but not abandoned transaction
+    CWallet test_wallet;
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateInactive{false});  // abandoned = false
+        test_wallet.mapWallet[hash] = wtx;
+    }
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(is_abandoned_nonexistent_tx)
+{
+    // Test IsAbandoned with transaction not in wallet
+    CWallet test_wallet;
+
+    uint256 nonexistent_hash = uint256S("4444444444444444444444444444444444444444444444444444444444444444");
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(!test_wallet.IsAbandoned(nonexistent_hash));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_unconfirmed_tx)
+{
+    // Test AbandonTransaction with unconfirmed transaction (not in mempool)
+    CWallet test_wallet;
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 75 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        // Use Unrecognized state - transaction not in mempool, not confirmed
+        wtx.SetTxState(TxStateUnrecognized{});
+        test_wallet.mapWallet[hash] = wtx;
+    }
+
+    // Should be able to abandon unconfirmed transaction not in mempool
+    {
+        LOCK(cs_main);
+        BOOST_CHECK(test_wallet.AbandonTransaction(hash));
+    }
+
+    // Should now be marked as abandoned
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(test_wallet.IsAbandoned(hash));
+    }
+
+    // Verify state changed to inactive with abandoned=true
+    {
+        LOCK(test_wallet.cs_wallet);
+        auto it = test_wallet.mapWallet.find(hash);
+        BOOST_CHECK(it != test_wallet.mapWallet.end());
+        BOOST_CHECK(it->second.isInactive());
+
+        auto* inactive_state = it->second.state<TxStateInactive>();
+        BOOST_CHECK(inactive_state != nullptr);
+        BOOST_CHECK_EQUAL(inactive_state->m_abandoned, true);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_confirmed_tx_fails)
+{
+    // Test that AbandonTransaction fails with confirmed transaction
+    CWallet test_wallet;
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 75 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateConfirmed(uint256S("5555555555555555555555555555555555555555555555555555555555555555"), 0));
+        test_wallet.mapWallet[hash] = wtx;
+    }
+
+    // Should NOT be able to abandon confirmed transaction
+    {
+        LOCK(cs_main);
+        BOOST_CHECK(!test_wallet.AbandonTransaction(hash));
+    }
+
+    // Should still be confirmed, not abandoned
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+
+        auto it = test_wallet.mapWallet.find(hash);
+        BOOST_CHECK(it != test_wallet.mapWallet.end());
+        BOOST_CHECK(it->second.isConfirmed());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_nonexistent_tx_fails)
+{
+    // Test that AbandonTransaction fails with nonexistent transaction
+    CWallet test_wallet;
+
+    uint256 nonexistent_hash = uint256S("6666666666666666666666666666666666666666666666666666666666666666");
+
+    // Should fail gracefully
+    {
+        LOCK(cs_main);
+        BOOST_CHECK(!test_wallet.AbandonTransaction(nonexistent_hash));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(maptxspends_cleanup_on_erase)
+{
+    // Test that mapTxSpends is cleaned up when transaction is erased
+    CWallet test_wallet;
+
+    // Create a transaction with multiple inputs
+    CMutableTransaction mtx;
+    mtx.vin.resize(3);
+    mtx.vin[0].prevout = COutPoint(uint256S("7777777777777777777777777777777777777777777777777777777777777777"), 0);
+    mtx.vin[1].prevout = COutPoint(uint256S("8888888888888888888888888888888888888888888888888888888888888888"), 1);
+    mtx.vin[2].prevout = COutPoint(uint256S("9999999999999999999999999999999999999999999999999999999999999999"), 2);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 100 * COIN;
+    CTransaction tx(mtx);
+
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[hash] = wtx;
+
+        // Populate mapTxSpends
+        for (const auto& txin : tx.vin) {
+            test_wallet.mapTxSpends.insert(std::make_pair(txin.prevout, hash));
+        }
+
+        // Verify entries exist
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[0].prevout), 1u);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[1].prevout), 1u);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[2].prevout), 1u);
+
+        // Erase the transaction
+        test_wallet.EraseFromWallet(hash);
+
+        // mapTxSpends entries should be cleaned up
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[0].prevout), 0u);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[1].prevout), 0u);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[2].prevout), 0u);
+
+        // Transaction should be gone from mapWallet
+        BOOST_CHECK(test_wallet.mapWallet.find(hash) == test_wallet.mapWallet.end());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TransactionRemovedFromMempool, one case per MemPoolRemovalReason
+//
+// Each case hands the handler an own in-mempool transaction and checks what
+// it did: the state it left, and whether it told the GUI. The wallet holds
+// the key the transaction pays to, because the arms that change state go
+// through SyncTransaction, and AddToWalletIfInvolvingMe drops a transaction
+// the wallet does not recognise before it looks at the state.
+// ---------------------------------------------------------------------------
+
+namespace {
+//! An in-memory wallet with one key and one own transaction tagged
+//! in-mempool, plus a count of the change notifications the handler emits
+//! for it.
+struct RemovalCase
+{
+    CWallet wallet;
+    CTransactionRef tx;
+    uint256 hash;
+    int notified = 0;
+    int updated = 0;
+
+    RemovalCase()
+    {
+        CKey key;
+        key.MakeNewKey(true);
+        {
+            LOCK(wallet.cs_wallet);
+            BOOST_REQUIRE(wallet.AddKey(key));
+        }
+
+        CMutableTransaction mtx;
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = 50 * COIN;
+        mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+        tx = MakeTransactionRef(CTransaction(mtx));
+        hash = tx->GetHash();
+
+        {
+            LOCK(wallet.cs_wallet);
+            CWalletTx wtx(&wallet, *tx);
+            wtx.SetTxState(TxStateInMempool{});
+            wallet.mapWallet[hash] = wtx;
+        }
+
+        wallet.NotifyTransactionChanged.connect([this](CWallet*, const uint256& changed, ChangeType status) {
+            if (changed != hash) {
+                return;
+            }
+            ++notified;
+            if (status == CT_UPDATED) {
+                ++updated;
+            }
+        });
+    }
+
+    void Remove(MemPoolRemovalReason reason)
+    {
+        LOCK(cs_main);
+        wallet.TransactionRemovedFromMempool(tx, reason);
+    }
+
+    bool InMempool()
+    {
+        LOCK(wallet.cs_wallet);
+        return wallet.mapWallet.at(hash).isInMempool();
+    }
+
+    bool ConflictedNotAbandoned()
+    {
+        LOCK(wallet.cs_wallet);
+        const CWalletTx& wtx = wallet.mapWallet.at(hash);
+        const auto* inactive = wtx.state<TxStateInactive>();
+        return wtx.isInactive() && inactive != nullptr && !inactive->m_abandoned && !wallet.IsAbandoned(hash);
+    }
+};
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(mempool_removal_block_reason_no_state_change)
+{
+    // BLOCK: the handler returns before touching the wallet; BlockConnected
+    // owns that transition and emits its own notification.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::BLOCK);
+    BOOST_CHECK(c.InMempool());
+    BOOST_CHECK_EQUAL(c.notified, 0);
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_conflict_marks_inactive)
+{
+    // CONFLICT: inactive, not abandoned (only AbandonTransaction sets that),
+    // and the GUI hears about it through SyncTransaction.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::CONFLICT);
+    BOOST_CHECK(c.ConflictedNotAbandoned());
+    BOOST_CHECK_EQUAL(c.updated, 1);
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_replaced_marks_inactive)
+{
+    // REPLACED: same arm as CONFLICT.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::REPLACED);
+    BOOST_CHECK(c.ConflictedNotAbandoned());
+    BOOST_CHECK_EQUAL(c.updated, 1);
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_expiry_preserves_mempool_state)
+{
+    // EXPIRY: still valid, just evicted. The tag stays in-mempool so the
+    // scheduled resend picks it up (depth reads -1 live), and the GUI is
+    // told once so an aged row is re-derived rather than left Offline.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::EXPIRY);
+    BOOST_CHECK(c.InMempool());
+    BOOST_CHECK_EQUAL(c.updated, 1);
+    BOOST_CHECK_EQUAL(c.notified, 1);
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_sizelimit_preserves_mempool_state)
+{
+    // SIZELIMIT: the arm the mempool actually reaches (TrimToSize); same
+    // contract as EXPIRY.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::SIZELIMIT);
+    BOOST_CHECK(c.InMempool());
+    BOOST_CHECK_EQUAL(c.updated, 1);
+    BOOST_CHECK_EQUAL(c.notified, 1);
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_reorg_defers_to_block_disconnected)
+{
+    // REORG: BlockDisconnected owns the transition; the handler only logs.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::REORG);
+    BOOST_CHECK(c.InMempool());
+    BOOST_CHECK_EQUAL(c.notified, 0);
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_unknown_marks_inactive)
+{
+    // UNKNOWN: conservatively inactive, like CONFLICT.
+    RemovalCase c;
+    c.Remove(MemPoolRemovalReason::UNKNOWN);
+    BOOST_CHECK(c.ConflictedNotAbandoned());
+    BOOST_CHECK_EQUAL(c.updated, 1);
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_not_in_wallet_no_crash)
+{
+    // A transaction the wallet has never seen: the handler returns at the
+    // mapWallet lookup, adds nothing and notifies nobody, for the arm that
+    // would otherwise sync.
+    RemovalCase c;
+    {
+        LOCK(c.wallet.cs_wallet);
+        c.wallet.mapWallet.erase(c.hash);
+    }
+    c.Remove(MemPoolRemovalReason::CONFLICT);
+    {
+        LOCK(c.wallet.cs_wallet);
+        BOOST_CHECK_EQUAL(c.wallet.mapWallet.count(c.hash), 0u);
+    }
+    BOOST_CHECK_EQUAL(c.notified, 0);
+}
+
+BOOST_AUTO_TEST_CASE(reaccept_keeps_own_unconfirmed_tx_rebroadcastable)
+{
+    // An own transaction still tagged in-mempool but absent from the pool is
+    // what an EXPIRY or SIZELIMIT eviction leaves behind (both keep the tag),
+    // and the import/rescan RPCs run ReacceptWalletTransactions() afterwards.
+    // Unconfirmed and not in the mempool is exactly the state
+    // ResendWalletTransactions() handles (depth -1). If re-accept declares it
+    // conflicted on the strength of the empty pool, RelayWalletTransaction()
+    // refuses it from then on and nothing ever rebroadcasts it. The input's
+    // parent is indexed with its output unspent, so the chain-spent guard
+    // evaluates a real slot rather than passing on an empty vin. Uses the
+    // global TestingSetup wallet because re-accept writes any state change
+    // back through CWalletDB.
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key));
+    }
+
+    // A fabricated confirmed parent whose only output nobody has spent (a
+    // null vSpent slot); the wtx below spends it.
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(1);
+    parent_mtx.vout[0].nValue = 2 * COIN;
+    parent_mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction parent(parent_mtx);
+    {
+        CTxIndex parent_index(CDiskTxPos(1, 1, 1), 1);
+        CTxDB txdb("r+");
+        BOOST_REQUIRE(txdb.TxnBegin());
+        BOOST_REQUIRE(txdb.UpdateTxIndex(parent.GetHash(), parent_index));
+        BOOST_REQUIRE(txdb.TxnCommit());
+    }
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(parent.GetHash(), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        wtx.fFromMe = true;
+        pwalletMain->mapWallet[hash] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+
+    pwalletMain->ReacceptWalletTransactions();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        const CWalletTx& wtx = pwalletMain->mapWallet[hash];
+        BOOST_CHECK_MESSAGE(!wtx.isInactive(),
+            "re-accept marked an own unconfirmed tx conflicted against an empty mempool");
+        BOOST_CHECK(wtx.isInMempool());
+    }
+    // Drop the entry from mapWallet and from the wallet DB in one call:
+    // re-accept writes a state change through CWalletDB, so erasing the map
+    // alone would leave the record on disk for whatever loads it next.
+    BOOST_REQUIRE(pwalletMain->EraseFromWallet(hash));
+    {
+        CTxDB txdb("r+");
+        BOOST_REQUIRE(txdb.TxnBegin());
+        BOOST_REQUIRE(txdb.EraseTxIndex(parent));
+        BOOST_REQUIRE(txdb.TxnCommit());
+    }
+}
+
+namespace {
+//! Plant a confirmed parent in the tx index whose single output is either
+//! unspent (a null vSpent slot) or already spent by some other confirmed
+//! transaction. The chain-spent guard reads exactly that slot, so the two
+//! shapes are what separate "unconfirmed" from "conflicted". Caller erases the
+//! entry with txdb.EraseTxIndex(parent).
+CTransaction PlantIndexedParent(const CKey& key, CAmount value, bool output_already_spent)
+{
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(1);
+    parent_mtx.vout[0].nValue = value;
+    parent_mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction parent(parent_mtx);
+
+    CTxIndex parent_index(CDiskTxPos(1, 1, 1), 1);
+    if (output_already_spent) parent_index.vSpent[0] = CDiskTxPos(2, 2, 2);
+
+    CTxDB txdb("r+");
+    BOOST_REQUIRE(txdb.TxnBegin());
+    BOOST_REQUIRE(txdb.UpdateTxIndex(parent.GetHash(), parent_index));
+    BOOST_REQUIRE(txdb.TxnCommit());
+    return parent;
+}
+
+//! Drop the entry from mapWallet and the wallet DB together, and the parent
+//! from the tx index: re-accept writes state changes through CWalletDB, so
+//! erasing the map alone would leave the record for whatever loads it next.
+void EraseWalletTxAndParent(const uint256& hash, const CTransaction& parent)
+{
+    BOOST_REQUIRE(pwalletMain->EraseFromWallet(hash));
+    CTxDB txdb("r+");
+    BOOST_REQUIRE(txdb.TxnBegin());
+    BOOST_REQUIRE(txdb.EraseTxIndex(parent));
+    BOOST_REQUIRE(txdb.TxnCommit());
+}
+} // namespace
+
+// ---------------------------------------------------------------------------
+// The startup half: a reloaded own unconfirmed transaction
+// ---------------------------------------------------------------------------
+
+// An own unconfirmed transaction does not come back from wallet.dat tagged
+// in-mempool -- that tag serializes as the null block-hash sentinel and reloads
+// as unrecognized -- so on restart ResolveUnrecognizedTx's last-resort branch is
+// what decides its state. ValidateMempoolTx then sees it too, on the same pass:
+// the dispatch in ReacceptWalletTransactions does not skip the state chain after
+// the resolver has run, so the tag the resolver just wrote is read immediately
+// below it. The second look repeats the same index reads and reaches the same
+// answer. Absence from the pool is the ordinary state of a healthy unconfirmed
+// send at that point, not a conflict. Resolving it to inactive ends its
+// rebroadcast for good, because RelayWalletTransaction refuses inactive
+// transactions, and hands its inputs back to coin selection, because
+// ReleaseSpendsNotInActiveChain releases the spends of anything not tagged
+// in-mempool.
+//
+// The validation signals are deliberately left unregistered, which is what
+// startup actually looks like: AppInit2 runs this pass before it wires the
+// signal layer, so nothing observes the re-pool and repairs the state behind
+// the resolver. Registering them would let this pass on the unfixed tree.
+BOOST_AUTO_TEST_CASE(reaccept_reloaded_own_unconfirmed_tx_stays_rebroadcastable)
+{
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key));
+    }
+
+    const CTransaction parent = PlantIndexedParent(key, 2 * COIN, /*output_already_spent=*/false);
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(parent.GetHash(), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx);
+        wtx.SetTxState(TxStateUnrecognized{});  // what a wallet.dat load produces
+        wtx.fFromMe = true;
+        pwalletMain->mapWallet[hash] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+
+    pwalletMain->ReacceptWalletTransactions();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        const CWalletTx& wtx = pwalletMain->mapWallet[hash];
+        BOOST_CHECK_MESSAGE(!wtx.isInactive(),
+            "startup re-accept marked a reloaded own unconfirmed tx conflicted "
+            "against an empty mempool");
+        BOOST_CHECK(wtx.isInMempool());
+        BOOST_CHECK(!pwalletMain->IsAbandoned(hash));
+    }
+    // Pin which arm this covers. The fabricated parent exists only as an index
+    // entry, so AcceptToMemoryPool cannot fetch the inputs and the re-pool does
+    // not succeed: this is the "neither pooled nor chain-spent" arm, the one
+    // that has to resolve to in-mempool anyway so the transaction stays
+    // relayable. Asserting it keeps the case from silently becoming the other
+    // arm if the fixture ever gains real inputs.
+    {
+        LOCK(cs_main);
+        BOOST_CHECK(!mempool.exists(hash));
+    }
+
+    EraseWalletTxAndParent(hash, parent);
+}
+
+// A generated transaction is only valid inside a block: AcceptToMemoryPool
+// rejects one outright and RelayWalletTransaction skips it, so there is nothing
+// to re-pool and nothing to rebroadcast. Inactive stays the honest answer, and
+// this is the arm that keeps ReleaseSpendsNotInActiveChain free to release its
+// inputs.
+BOOST_AUTO_TEST_CASE(reaccept_reloaded_generated_tx_stays_inactive)
+{
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key));
+    }
+
+    // A coinbase: a single null prevout input.
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout.SetNull();
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 3 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+    BOOST_REQUIRE(tx.IsCoinBase());
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx);
+        wtx.SetTxState(TxStateUnrecognized{});
+        pwalletMain->mapWallet[hash] = wtx;
+    }
+
+    pwalletMain->ReacceptWalletTransactions();
+
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        BOOST_CHECK_MESSAGE(pwalletMain->mapWallet[hash].isInactive(),
+            "a generated transaction that resolved to nothing was left relayable");
+        BOOST_CHECK(!mempool.exists(hash));
+    }
+
+    BOOST_REQUIRE(pwalletMain->EraseFromWallet(hash));
+}
+
+// The arm where the re-pool SUCCEEDS. Every case above fabricates a parent that
+// AcceptToMemoryPool cannot fetch, so `pooled` is false in each and the branch
+// that reads a genuine re-pool off the pool is never exercised.
+//
+// Two things have to be true for acceptance to be reachable here. FetchInputs
+// resolves the parent through mempool.lookup(), because PlantIndexedParent
+// writes the index entry with the CDiskTxPos(1,1,1) sentinel and FetchInputs
+// treats that exactly like a missing entry -- so putting the parent in the pool
+// is enough for the child's inputs to resolve. And AcceptToMemoryPool goes on to
+// use pindexBest unconditionally in ConnectInputs, which TestingSetup leaves
+// null, so the case has to stand a tip up first. The tip is kept at height 1 so
+// the V14 sequence-lock branch stays inert; this case is about the re-pool, not
+// about BIP68.
+//
+// StateGuard restores the tip globals and erases the index entry on the way out,
+// and the two transactions this case puts in the pool are removed by hash --
+// clearing the pool wholesale would discard entries belonging to other suites.
+BOOST_AUTO_TEST_CASE(reaccept_reloaded_own_unconfirmed_tx_repooled_when_accepted)
+{
+    grc_test::StateGuard guard;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key));
+    }
+
+    // A tip for ConnectInputs. Pool-allocated, and its phashBlock is the map
+    // key; StateGuard erases the entry.
+    {
+        LOCK(cs_main);
+        CBlockIndex* tip = GRC::MockBlockIndex::InsertBlockIndex(GetRandHash());
+        tip->nHeight = 1;
+        tip->nTime = GetAdjustedTime();
+        tip->nVersion = 12;
+        pindexBest = tip;
+        nBestHeight = tip->nHeight;
+    }
+
+    const CTransaction parent = PlantIndexedParent(key, 2 * COIN, /*output_already_spent=*/false);
+    {
+        LOCK(cs_main);
+        mempool.addUnchecked(parent.GetHash(), CTxMemPoolEntry(
+            parent, /*fee=*/0, /*time=*/0, /*height=*/0,
+            ::GetSerializeSize(parent, SER_NETWORK, PROTOCOL_VERSION)));
+    }
+    BOOST_REQUIRE(mempool.exists(parent.GetHash()));
+
+    CMutableTransaction mtx;
+    mtx.nTime = parent.nTime;  // a child may not predate its parent
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(parent.GetHash(), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    BOOST_REQUIRE(SignSignature(*pwalletMain, parent, mtx, 0));
+
+    const CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx);
+        wtx.SetTxState(TxStateUnrecognized{});  // what a wallet.dat load produces
+        wtx.fFromMe = true;
+        pwalletMain->mapWallet[hash] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+
+    pwalletMain->ReacceptWalletTransactions();
+
+    {
+        LOCK(cs_main);
+        BOOST_CHECK_MESSAGE(mempool.exists(hash),
+            "startup re-accept did not put a valid own unconfirmed tx back in the pool");
+    }
+    {
+        LOCK(pwalletMain->cs_wallet);
+        const CWalletTx& wtx = pwalletMain->mapWallet[hash];
+        BOOST_CHECK(wtx.isInMempool());
+        BOOST_CHECK(!wtx.isInactive());
+        BOOST_CHECK(!pwalletMain->IsAbandoned(hash));
+    }
+
+    {
+        LOCK(cs_main);
+        mempool.remove(tx, /*fRecursive=*/true);
+        mempool.remove(parent, /*fRecursive=*/true);
+        BOOST_CHECK(!mempool.exists(hash));
+        BOOST_CHECK(!mempool.exists(parent.GetHash()));
+    }
+    EraseWalletTxAndParent(hash, parent);
+}
+
+// The control for the case above: the same reload, but an input this
+// transaction spends has since been spent by a confirmed transaction. That is a
+// real conflict, and the chain-spent guard has to keep saying so -- this is the
+// case that actually exercises HasChainSpentInput, which a generated
+// transaction cannot, its prevout being null.
+BOOST_AUTO_TEST_CASE(reaccept_reloaded_own_unconfirmed_tx_conflicted_when_input_spent_in_chain)
+{
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key));
+    }
+
+    const CTransaction parent = PlantIndexedParent(key, 2 * COIN, /*output_already_spent=*/true);
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(parent.GetHash(), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx);
+        wtx.SetTxState(TxStateUnrecognized{});
+        wtx.fFromMe = true;
+        pwalletMain->mapWallet[hash] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+
+    pwalletMain->ReacceptWalletTransactions();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        const CWalletTx& wtx = pwalletMain->mapWallet[hash];
+        BOOST_CHECK_MESSAGE(wtx.isInactive(),
+            "startup re-accept left a genuinely conflicted tx rebroadcastable");
+    }
+
+    EraseWalletTxAndParent(hash, parent);
+}
+
+BOOST_AUTO_TEST_CASE(reaccept_marks_own_unconfirmed_tx_conflicted_when_input_spent_in_chain)
+{
+    // Control for the case above: absence from the mempool is not a conflict,
+    // but an input that the tx index records as spent by another confirmed
+    // transaction is, and re-accept must still mark that inactive.
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key));
+    }
+
+    // A fabricated confirmed parent whose only output is already spent by
+    // someone else (a non-null vSpent slot); the wtx below spends it too.
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(1);
+    parent_mtx.vout[0].nValue = 3 * COIN;
+    parent_mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction parent(parent_mtx);
+    {
+        CTxIndex parent_index(CDiskTxPos(1, 1, 1), 1);
+        parent_index.vSpent[0] = CDiskTxPos(2, 2, 2);
+        CTxDB txdb("r+");
+        BOOST_REQUIRE(txdb.TxnBegin());
+        BOOST_REQUIRE(txdb.UpdateTxIndex(parent.GetHash(), parent_index));
+        BOOST_REQUIRE(txdb.TxnCommit());
+    }
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(parent.GetHash(), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        wtx.fFromMe = true;
+        pwalletMain->mapWallet[hash] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+
+    pwalletMain->ReacceptWalletTransactions();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        const CWalletTx& wtx = pwalletMain->mapWallet[hash];
+        BOOST_CHECK(wtx.isInactive());
+        BOOST_CHECK(!pwalletMain->IsAbandoned(hash));
+    }
+    // Drop the entry from mapWallet and from the wallet DB in one call:
+    // re-accept writes a state change through CWalletDB, so erasing the map
+    // alone would leave the record on disk for whatever loads it next.
+    BOOST_REQUIRE(pwalletMain->EraseFromWallet(hash));
+    {
+        CTxDB txdb("r+");
+        BOOST_REQUIRE(txdb.TxnBegin());
+        BOOST_REQUIRE(txdb.EraseTxIndex(parent));
+        BOOST_REQUIRE(txdb.TxnCommit());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(reaccept_log_lines_carry_no_extra_newline)
+{
+    // LogPrint and LogPrintf append the line's newline themselves, so a format
+    // string that also ends in "\n" writes a blank line after the message.
+    // Builds the two scenarios of the cases above -- an own tx left
+    // unconfirmed for rebroadcast, and one marked inactive because its input
+    // is spent in the chain -- and requires every re-accept line logged while
+    // processing them to end in exactly one newline.
+    std::vector<std::string> lines;
+
+    //! Captures log output through a print callback with VERBOSE enabled, and
+    //! on destruction removes the callback and restores VERBOSE as it found
+    //! it, so neither leaks into later cases.
+    struct VerboseLogCapture {
+        const bool was;
+        std::list<std::function<void(const std::string&)>>::iterator it;
+
+        explicit VerboseLogCapture(std::vector<std::string>& out)
+            : was(LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
+        {
+            LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
+            it = LogInstance().PushBackCallback([&out](const std::string& s) { out.push_back(s); });
+        }
+        ~VerboseLogCapture()
+        {
+            LogInstance().DeleteCallback(it);
+            if (!was) LogInstance().DisableCategory(BCLog::LogFlags::VERBOSE);
+        }
+        VerboseLogCapture(const VerboseLogCapture&) = delete;
+        VerboseLogCapture& operator=(const VerboseLogCapture&) = delete;
+    };
+
+    // Scenario 1, as in reaccept_keeps_own_unconfirmed_tx_rebroadcastable: the
+    // input's parent is indexed with its output unspent, so re-accept leaves
+    // the tx unconfirmed for rebroadcast.
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key));
+    }
+
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(1);
+    parent_mtx.vout[0].nValue = 2 * COIN;
+    parent_mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction parent(parent_mtx);
+    {
+        CTxIndex parent_index(CDiskTxPos(1, 1, 1), 1);
+        CTxDB txdb("r+");
+        BOOST_REQUIRE(txdb.TxnBegin());
+        BOOST_REQUIRE(txdb.UpdateTxIndex(parent.GetHash(), parent_index));
+        BOOST_REQUIRE(txdb.TxnCommit());
+    }
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(parent.GetHash(), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        wtx.fFromMe = true;
+        pwalletMain->mapWallet[hash] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+
+    // Scenario 2, as in
+    // reaccept_marks_own_unconfirmed_tx_conflicted_when_input_spent_in_chain:
+    // the parent's only output is already spent by someone else, so re-accept
+    // marks the tx inactive and writes the update.
+    CKey key2;
+    key2.MakeNewKey(true);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->AddKey(key2));
+    }
+
+    CMutableTransaction parent2_mtx;
+    parent2_mtx.vout.resize(1);
+    parent2_mtx.vout[0].nValue = 3 * COIN;
+    parent2_mtx.vout[0].scriptPubKey = CScript() << key2.GetPubKey() << OP_CHECKSIG;
+    const CTransaction parent2(parent2_mtx);
+    {
+        CTxIndex parent_index(CDiskTxPos(1, 1, 1), 1);
+        parent_index.vSpent[0] = CDiskTxPos(2, 2, 2);
+        CTxDB txdb("r+");
+        BOOST_REQUIRE(txdb.TxnBegin());
+        BOOST_REQUIRE(txdb.UpdateTxIndex(parent2.GetHash(), parent_index));
+        BOOST_REQUIRE(txdb.TxnCommit());
+    }
+
+    CMutableTransaction mtx2;
+    mtx2.vin.resize(1);
+    mtx2.vin[0].prevout = COutPoint(parent2.GetHash(), 0);
+    mtx2.vout.resize(1);
+    mtx2.vout[0].nValue = 1 * COIN;
+    mtx2.vout[0].scriptPubKey = CScript() << key2.GetPubKey() << OP_CHECKSIG;
+    CTransaction tx2(mtx2);
+    const uint256 hash2 = tx2.GetHash();
+
+    {
+        LOCK(pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx2);
+        wtx.SetTxState(TxStateInMempool{});
+        wtx.fFromMe = true;
+        pwalletMain->mapWallet[hash2] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash2));
+
+    {
+        VerboseLogCapture capture(lines);
+        pwalletMain->ReacceptWalletTransactions();
+    }
+
+    // Clean up before checking, so a failed check leaves nothing behind.
+    // EraseFromWallet drops each entry from mapWallet and from the wallet DB,
+    // as re-accept may have written a state change through CWalletDB.
+    BOOST_REQUIRE(pwalletMain->EraseFromWallet(hash));
+    BOOST_REQUIRE(pwalletMain->EraseFromWallet(hash2));
+    {
+        CTxDB txdb("r+");
+        BOOST_REQUIRE(txdb.TxnBegin());
+        BOOST_REQUIRE(txdb.EraseTxIndex(parent));
+        BOOST_REQUIRE(txdb.EraseTxIndex(parent2));
+        BOOST_REQUIRE(txdb.TxnCommit());
+    }
+
+    BOOST_REQUIRE(std::any_of(lines.begin(), lines.end(), [](const std::string& line) {
+        return line.find("ReacceptWalletTransactions:") != std::string::npos;
+    }));
+    for (const std::string& line : lines) {
+        if (line.find("ReacceptWalletTransactions") == std::string::npos) continue;
+        BOOST_CHECK_MESSAGE(!line.empty() && line.back() == '\n', line);
+        BOOST_CHECK_MESSAGE(!(line.size() >= 2 && line.compare(line.size() - 2, 2, "\n\n") == 0), line);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MigrateFromLegacyHashBlock tests — all 4 branches
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(migrate_legacy_abandoned_sentinel)
+{
+    // ABANDONED_HASH_SENTINEL → TxStateInactive{true}
+    TxState state = MigrateFromLegacyHashBlock(ABANDONED_HASH_SENTINEL, -1);
+    BOOST_CHECK(std::holds_alternative<TxStateInactive>(state));
+    auto* inactive = std::get_if<TxStateInactive>(&state);
+    BOOST_CHECK(inactive != nullptr);
+    BOOST_CHECK_EQUAL(inactive->m_abandoned, true);
+}
+
+BOOST_AUTO_TEST_CASE(migrate_legacy_conflicted_sentinel)
+{
+    // CONFLICTED_HASH_SENTINEL → TxStateInactive{false}
+    TxState state = MigrateFromLegacyHashBlock(CONFLICTED_HASH_SENTINEL, -1);
+    BOOST_CHECK(std::holds_alternative<TxStateInactive>(state));
+    auto* inactive = std::get_if<TxStateInactive>(&state);
+    BOOST_CHECK(inactive != nullptr);
+    BOOST_CHECK_EQUAL(inactive->m_abandoned, false);
+}
+
+BOOST_AUTO_TEST_CASE(migrate_legacy_confirmed)
+{
+    // Non-null hash → TxStateConfirmed with height=-1 (resolved later)
+    uint256 block_hash = uint256S("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789");
+    TxState state = MigrateFromLegacyHashBlock(block_hash, 5);
+    BOOST_CHECK(std::holds_alternative<TxStateConfirmed>(state));
+    auto* conf = std::get_if<TxStateConfirmed>(&state);
+    BOOST_CHECK(conf != nullptr);
+    BOOST_CHECK(conf->m_confirmed_block_hash == block_hash);
+    BOOST_CHECK_EQUAL(conf->m_position_in_block, 5);
+}
+
+BOOST_AUTO_TEST_CASE(migrate_legacy_null_hash)
+{
+    // Null hash → TxStateUnrecognized
+    TxState state = MigrateFromLegacyHashBlock(uint256(), -1);
+    BOOST_CHECK(std::holds_alternative<TxStateUnrecognized>(state));
+}
+
+// ---------------------------------------------------------------------------
+// CWalletTx state round-trip via sentinel serialization
+// (State is persisted through CMerkleTx hashBlock/nIndex fields with sentinels.
+//  Replaces variant-level serialization tests now that TxState structs are not
+//  individually serializable.)
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(wallet_tx_roundtrip_mempool)
+{
+    // InMempool has no on-disk representation; serializes as null hashBlock
+    CWalletTx original;
+    original.SetTxState(TxStateInMempool{});
+
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << original;
+
+    CWalletTx restored;
+    ss >> restored;
+
+    // Null hash -> MigrateFromLegacyHashBlock -> Unrecognized
+    BOOST_CHECK(restored.isUnrecognized());
+}
+
+BOOST_AUTO_TEST_CASE(wallet_tx_roundtrip_confirmed)
+{
+    uint256 bh = uint256S("fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210");
+    CWalletTx original;
+    original.SetTxState(TxStateConfirmed(bh, 42));
+
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << original;
+
+    CWalletTx restored;
+    ss >> restored;
+
+    BOOST_CHECK(restored.isConfirmed());
+    auto* conf = restored.state<TxStateConfirmed>();
+    BOOST_CHECK(conf != nullptr);
+    BOOST_CHECK(conf->m_confirmed_block_hash == bh);
+    // Block height is not serialized in CMerkleTx
+    BOOST_CHECK_EQUAL(conf->m_position_in_block, 42);
+}
+
+BOOST_AUTO_TEST_CASE(wallet_tx_roundtrip_inactive_abandoned)
+{
+    CWalletTx original;
+    original.SetTxState(TxStateInactive{true});
+
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << original;
+
+    CWalletTx restored;
+    ss >> restored;
+
+    BOOST_CHECK(restored.isInactive());
+    auto* inactive = restored.state<TxStateInactive>();
+    BOOST_CHECK(inactive != nullptr);
+    BOOST_CHECK_EQUAL(inactive->m_abandoned, true);
+}
+
+BOOST_AUTO_TEST_CASE(wallet_tx_roundtrip_inactive_conflicted)
+{
+    CWalletTx original;
+    original.SetTxState(TxStateInactive{false});
+
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << original;
+
+    CWalletTx restored;
+    ss >> restored;
+
+    BOOST_CHECK(restored.isInactive());
+    auto* inactive = restored.state<TxStateInactive>();
+    BOOST_CHECK(inactive != nullptr);
+    BOOST_CHECK_EQUAL(inactive->m_abandoned, false);
+}
+
+BOOST_AUTO_TEST_CASE(wallet_tx_roundtrip_unrecognized)
+{
+    // Unrecognized is a transient state; serializes as null hashBlock
+    CWalletTx original;
+    original.SetTxState(TxStateUnrecognized{});
+
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << original;
+
+    CWalletTx restored;
+    ss >> restored;
+
+    // Null hash -> MigrateFromLegacyHashBlock -> Unrecognized
+    BOOST_CHECK(restored.isUnrecognized());
+}
+
+// ---------------------------------------------------------------------------
+// Sentinel-based serialization helpers — unit tests
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(txstate_serialized_block_hash_helpers)
+{
+    // Verify the helpers produce the correct hashBlock/nIndex for each state
+
+    // Confirmed
+    uint256 bh = uint256S("abcd");
+    TxState confirmed = TxStateConfirmed(bh, 5);
+    BOOST_CHECK(TxStateSerializedBlockHash(confirmed) == bh);
+    BOOST_CHECK_EQUAL(TxStateSerializedIndex(confirmed), 5);
+
+    // Inactive (abandoned)
+    TxState abandoned = TxStateInactive{true};
+    BOOST_CHECK(TxStateSerializedBlockHash(abandoned) == ABANDONED_HASH_SENTINEL);
+    BOOST_CHECK_EQUAL(TxStateSerializedIndex(abandoned), -1);
+
+    // Inactive (conflicted)
+    TxState conflicted = TxStateInactive{false};
+    BOOST_CHECK(TxStateSerializedBlockHash(conflicted) == CONFLICTED_HASH_SENTINEL);
+    BOOST_CHECK_EQUAL(TxStateSerializedIndex(conflicted), -1);
+
+    // InMempool
+    TxState mempool = TxStateInMempool{};
+    BOOST_CHECK(TxStateSerializedBlockHash(mempool).IsNull());
+    BOOST_CHECK_EQUAL(TxStateSerializedIndex(mempool), -1);
+
+    // Unrecognized
+    TxState unrecognized = TxStateUnrecognized{};
+    BOOST_CHECK(TxStateSerializedBlockHash(unrecognized).IsNull());
+    BOOST_CHECK_EQUAL(TxStateSerializedIndex(unrecognized), -1);
+}
+
+// ---------------------------------------------------------------------------
+// AbandonTransaction: releasing the inputs of the abandoned transaction
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_releases_inputs)
+{
+    // Abandoning is supposed to "allow their inputs to be respent", but clearing
+    // mapTxSpends alone does not do that: coin selection reads the PARENT's vfSpent
+    // bits (AvailableCoins -> CWalletTx::IsSpent), so leaving them set keeps the
+    // coins unspendable and the balance depressed until FixSpentCoins runs at
+    // startup or via repairwallet.
+    CWallet test_wallet;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_REQUIRE(test_wallet.AddKey(key));
+    }
+
+    // Parent pays us on output 0; output 1 is not ours.
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(2);
+    parent_mtx.vout[0].nValue = 50 * COIN;
+    parent_mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    parent_mtx.vout[1].nValue = 30 * COIN;
+    const CTransaction parent_tx(parent_mtx);
+    const uint256 parent_hash = parent_tx.GetHash();
+
+    // Spender consumes both, so the "not ours" input is exercised alongside ours.
+    CMutableTransaction spend_mtx;
+    spend_mtx.vin.resize(2);
+    spend_mtx.vin[0].prevout = COutPoint(parent_hash, 0);
+    spend_mtx.vin[1].prevout = COutPoint(parent_hash, 1);
+    spend_mtx.vout.resize(1);
+    spend_mtx.vout[0].nValue = 79 * COIN;
+    const CTransaction spend_tx(spend_mtx);
+    const uint256 spend_hash = spend_tx.GetHash();
+
+    {
+        LOCK2(cs_main, test_wallet.cs_wallet);
+
+        CWalletTx parent_wtx(&test_wallet, parent_tx);
+        parent_wtx.SetTxState(TxStateConfirmed(uint256S("0xbeef"), 2));
+        parent_wtx.vfSpent.resize(2, true);       // both outputs consumed by spend_tx
+        test_wallet.mapWallet[parent_hash] = parent_wtx;
+
+        CWalletTx spend_wtx(&test_wallet, spend_tx);
+        spend_wtx.SetTxState(TxStateInactive{false});
+        test_wallet.mapWallet[spend_hash] = spend_wtx;
+
+        test_wallet.mapTxSpends.insert(std::make_pair(COutPoint(parent_hash, 0), spend_hash));
+        test_wallet.mapTxSpends.insert(std::make_pair(COutPoint(parent_hash, 1), spend_hash));
+
+        BOOST_REQUIRE(test_wallet.mapWallet[parent_hash].IsSpent(0));
+        BOOST_REQUIRE(test_wallet.mapWallet[parent_hash].IsSpent(1));
+
+        unsigned int released = 0;
+        BOOST_CHECK(test_wallet.AbandonTransaction(spend_hash, &released));
+
+        // Our output is spendable again; the count reports only outputs that were
+        // both ours and actually marked spent, so output 1 is excluded.
+        BOOST_CHECK(!test_wallet.mapWallet[parent_hash].IsSpent(0));
+        BOOST_CHECK_EQUAL(released, 1U);
+
+        // Abandoning again releases nothing further -- it is already abandoned, and
+        // the count must not accumulate on a repeat call.
+        unsigned int again = 99;
+        BOOST_CHECK(test_wallet.AbandonTransaction(spend_hash, &again));
+        BOOST_CHECK_EQUAL(again, 0U);
+
+        // The out-parameter is optional; the one-argument form still compiles and
+        // runs for every existing caller.
+        BOOST_CHECK(test_wallet.AbandonTransaction(spend_hash));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AbandonTransaction: cascading to child transactions
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_cascades_to_children)
+{
+    CWallet test_wallet;
+
+    // Parent tx
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(2);
+    parent_mtx.vout[0].nValue = 50 * COIN;
+    parent_mtx.vout[1].nValue = 30 * COIN;
+    CTransaction parent_tx(parent_mtx);
+    uint256 parent_hash = parent_tx.GetHash();
+
+    // Child tx spending parent output 0
+    CMutableTransaction child_mtx;
+    child_mtx.vin.resize(1);
+    child_mtx.vin[0].prevout = COutPoint(parent_hash, 0);
+    child_mtx.vout.resize(1);
+    child_mtx.vout[0].nValue = 49 * COIN;
+    CTransaction child_tx(child_mtx);
+    uint256 child_hash = child_tx.GetHash();
+
+    {
+        LOCK2(cs_main, test_wallet.cs_wallet);
+
+        // Add parent (inactive/unconfirmed, not in mempool)
+        CWalletTx parent_wtx(&test_wallet, parent_tx);
+        parent_wtx.SetTxState(TxStateInactive{false});
+        test_wallet.mapWallet[parent_hash] = parent_wtx;
+
+        // Add child (inactive/unconfirmed, not in mempool)
+        CWalletTx child_wtx(&test_wallet, child_tx);
+        child_wtx.SetTxState(TxStateInactive{false});
+        test_wallet.mapWallet[child_hash] = child_wtx;
+
+        // Wire up mapTxSpends so AbandonTransaction can find the child
+        test_wallet.mapTxSpends.insert(std::make_pair(COutPoint(parent_hash, 0), child_hash));
+
+        // Neither should be abandoned yet
+        BOOST_CHECK(!test_wallet.IsAbandoned(parent_hash));
+        BOOST_CHECK(!test_wallet.IsAbandoned(child_hash));
+
+        // Abandon the parent
+        bool ok = test_wallet.AbandonTransaction(parent_hash);
+        BOOST_CHECK(ok);
+
+        // Both parent AND child should now be abandoned
+        BOOST_CHECK(test_wallet.IsAbandoned(parent_hash));
+        BOOST_CHECK(test_wallet.IsAbandoned(child_hash));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// mapTxSpends is rebuilt from what the wallet loads, so the abandon cascade
+// reaches descendants after a restart
+// ---------------------------------------------------------------------------
+
+namespace {
+// The mock BDB env backs every wallet file name with one shared in-memory database, so a case
+// that reloads a wallet sees every record any earlier case wrote (and an earlier case's vin-less
+// records make LoadWallet fail). This moves those records aside for the life of the scope and puts
+// them back afterwards, in both directions: the case's own records are deleted again before the
+// put-back. The restore-pin case pins the second direction.
+class MockWalletDbScope : private CDB
+{
+public:
+    explicit MockWalletDbScope(const std::string& file) : CDB(file, "cr+")
+    {
+        BOOST_REQUIRE(bitdb.IsMock());
+        BOOST_REQUIRE(pdb != nullptr);
+
+        BOOST_REQUIRE(Walk(m_saved));
+
+        // From the first del on, nothing below may throw.
+        bool all_deleted = true;
+        for (const CDBEnv::KeyValPair& kv : m_saved) {
+            if (Del(kv) != 0) all_deleted = false;
+        }
+
+        std::vector<CDBEnv::KeyValPair> left;
+        const bool walked = Walk(left);
+        m_isolated = all_deleted && walked && left.empty();
+    }
+
+    ~MockWalletDbScope()
+    {
+        std::vector<CDBEnv::KeyValPair> present;
+        if (!Walk(present)) BOOST_ERROR("MockWalletDbScope: cannot walk the database to restore it");
+        for (const CDBEnv::KeyValPair& kv : present) {
+            if (Del(kv) != 0) BOOST_ERROR("MockWalletDbScope: cannot delete a case record");
+        }
+        for (const CDBEnv::KeyValPair& kv : m_saved) {
+            Dbt k(const_cast<unsigned char*>(kv.first.data()), kv.first.size());
+            Dbt v(const_cast<unsigned char*>(kv.second.data()), kv.second.size());
+            if (pdb->put(nullptr, &k, &v, 0) != 0) BOOST_ERROR("MockWalletDbScope: cannot restore a record");
+        }
+    }
+
+    bool isolated() const { return m_isolated; }
+
+private:
+    // Reads every record; the cursor is closed before returning so the caller may del and put.
+    bool Walk(std::vector<CDBEnv::KeyValPair>& out)
+    {
+        out.clear();
+        Dbc* pcursor = GetCursor();
+        if (!pcursor) return false;
+        bool ok = true;
+        while (true) {
+            CDataStream ss_key(SER_DISK, CLIENT_VERSION);
+            CDataStream ss_value(SER_DISK, CLIENT_VERSION);
+            const int ret = ReadAtCursor(pcursor, ss_key, ss_value, DB_NEXT);
+            if (ret == DB_NOTFOUND) break;
+            if (ret != 0) {
+                ok = false;
+                break;
+            }
+            out.emplace_back(std::vector<unsigned char>{UCharCast(ss_key.data()), UCharCast(ss_key.data()) + ss_key.size()},
+                             std::vector<unsigned char>{UCharCast(ss_value.data()), UCharCast(ss_value.data()) + ss_value.size()});
+        }
+        pcursor->close();
+        return ok;
+    }
+
+    int Del(const CDBEnv::KeyValPair& kv)
+    {
+        Dbt k(const_cast<unsigned char*>(kv.first.data()), kv.first.size());
+        return pdb->del(nullptr, &k, 0);
+    }
+
+    std::vector<CDBEnv::KeyValPair> m_saved;
+    bool m_isolated{false};
+};
+} // namespace
+
+// Passes on the unfixed build too: it pins the guard, not the production change.
+BOOST_AUTO_TEST_CASE(mock_wallet_db_scope_restores_prior_records)
+{
+    const std::string file = "wallet_g30_scope.dat";
+    const int64_t sentinel = 987654321;
+
+    CKey sentinel_key;
+    sentinel_key.MakeNewKey(true);
+    const CKeyPool written(sentinel_key.GetPubKey());
+
+    CKey case_key;
+    case_key.MakeNewKey(true);
+
+    // A record written before any scope, as an earlier case would leave it.
+    BOOST_REQUIRE(CWalletDB(file, "cr+").WritePool(sentinel, written));
+
+    {
+        MockWalletDbScope db_scope(file);
+        BOOST_REQUIRE(db_scope.isolated());
+
+        CKeyPool tmp;
+        BOOST_CHECK(!CWalletDB(file).ReadPool(sentinel, tmp));
+
+        BOOST_REQUIRE(CWalletDB(file).WritePool(sentinel + 1, CKeyPool(case_key.GetPubKey())));
+    }
+
+    CKeyPool back;
+    BOOST_CHECK(CWalletDB(file).ReadPool(sentinel, back));
+    BOOST_CHECK(back.vchPubKey == written.vchPubKey);
+    BOOST_CHECK_EQUAL(back.nTime, written.nTime);
+
+    CKeyPool gone;
+    BOOST_CHECK(!CWalletDB(file).ReadPool(sentinel + 1, gone));
+
+    BOOST_CHECK(CWalletDB(file).ErasePool(sentinel));
+}
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_cascades_to_children_after_reload)
+{
+    MockWalletDbScope db_scope("wallet_g30_reload.dat");
+    BOOST_REQUIRE(db_scope.isolated());
+
+    // A bad record on load would soft-set -rescan for the rest of the process.
+    grc_test::StateGuard guard;
+
+    const std::string file = "wallet_g30_reload.dat";
+    bool first = false;
+
+    CWallet w(file);
+    BOOST_REQUIRE_EQUAL(w.LoadWallet(first), DB_LOAD_OK);
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(w.cs_wallet);
+        BOOST_REQUIRE(w.AddKey(key));
+    }
+    const CScript pay_key = CScript() << key.GetPubKey() << OP_CHECKSIG;
+
+    // U: the co-input, spent by C.
+    CMutableTransaction u_mtx;
+    u_mtx.vin.resize(1);
+    u_mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+    u_mtx.vout.resize(1);
+    u_mtx.vout[0].nValue = 10 * COIN;
+    u_mtx.vout[0].scriptPubKey = pay_key;
+    const CTransaction u_tx(u_mtx);
+    const uint256 u_hash = u_tx.GetHash();
+
+    // P: the parent, three outputs, each spent by a different child.
+    CMutableTransaction p_mtx;
+    p_mtx.vin.resize(1);
+    p_mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+    p_mtx.vout.resize(3);
+    p_mtx.vout[0].nValue = 5 * COIN;
+    p_mtx.vout[1].nValue = 4 * COIN;
+    p_mtx.vout[2].nValue = 1 * COIN;
+    for (auto& out : p_mtx.vout) out.scriptPubKey = pay_key;
+    const CTransaction p_tx(p_mtx);
+    const uint256 p_hash = p_tx.GetHash();
+
+    // C: spends P:0 and the co-input U:0.
+    CMutableTransaction c_mtx;
+    c_mtx.vin.resize(2);
+    c_mtx.vin[0].prevout = COutPoint(p_hash, 0);
+    c_mtx.vin[1].prevout = COutPoint(u_hash, 0);
+    c_mtx.vout.resize(1);
+    c_mtx.vout[0].nValue = 14 * COIN;
+    c_mtx.vout[0].scriptPubKey = pay_key;
+    const CTransaction c_tx(c_mtx);
+    const uint256 c_hash = c_tx.GetHash();
+
+    // D: already abandoned before the restart; spends P:1.
+    CMutableTransaction d_mtx;
+    d_mtx.vin.resize(1);
+    d_mtx.vin[0].prevout = COutPoint(p_hash, 1);
+    d_mtx.vout.resize(1);
+    d_mtx.vout[0].nValue = 3 * COIN;
+    d_mtx.vout[0].scriptPubKey = pay_key;
+    const CTransaction d_tx(d_mtx);
+    const uint256 d_hash = d_tx.GetHash();
+
+    // E: inactive but not abandoned (this tree's single "conflicted" state); spends P:2.
+    CMutableTransaction e_mtx;
+    e_mtx.vin.resize(1);
+    e_mtx.vin[0].prevout = COutPoint(p_hash, 2);
+    e_mtx.vout.resize(1);
+    e_mtx.vout[0].nValue = COIN / 2;
+    e_mtx.vout[0].scriptPubKey = pay_key;
+    const CTransaction e_tx(e_mtx);
+    const uint256 e_hash = e_tx.GetHash();
+
+    // Everything is written straight to the mock wallet DB and NOT put in w.mapWallet, so the
+    // only way mapTxSpends can hold a row afterwards is the load path. The default state is
+    // used because TxStateInMempool has no on-disk form: these load as Unrecognized.
+    {
+        CWalletDB db(file);
+
+        CWalletTx u_wtx(&w, u_tx);
+        u_wtx.vfSpent = {true};
+        BOOST_REQUIRE(db.WriteTx(u_hash, u_wtx));
+
+        CWalletTx p_wtx(&w, p_tx);
+        p_wtx.vfSpent = {true, false, true};
+        BOOST_REQUIRE(db.WriteTx(p_hash, p_wtx));
+
+        CWalletTx c_wtx(&w, c_tx);
+        BOOST_REQUIRE(db.WriteTx(c_hash, c_wtx));
+
+        CWalletTx d_wtx(&w, d_tx);
+        d_wtx.SetTxState(TxStateInactive{true});
+        BOOST_REQUIRE(db.WriteTx(d_hash, d_wtx));
+
+        CWalletTx e_wtx(&w, e_tx);
+        e_wtx.SetTxState(TxStateInactive{false});
+        BOOST_REQUIRE(db.WriteTx(e_hash, e_wtx));
+    }
+
+    CWallet w2(file);
+    BOOST_REQUIRE_EQUAL(w2.LoadWallet(first), DB_LOAD_OK);
+
+    LOCK2(cs_main, w2.cs_wallet);
+
+    // Non-vacuity: everything was loaded, in the shape the checks below assume.
+    for (const uint256& h : {u_hash, p_hash, c_hash, d_hash, e_hash}) {
+        BOOST_REQUIRE_EQUAL(w2.mapWallet.count(h), 1u);
+    }
+    BOOST_REQUIRE(w2.HaveKey(key.GetPubKey().GetID()));
+    BOOST_REQUIRE(w2.mapWallet[u_hash].IsSpent(0));
+    BOOST_REQUIRE(w2.mapWallet[p_hash].IsSpent(0));
+    BOOST_REQUIRE(w2.mapWallet[p_hash].IsSpent(2));
+    BOOST_REQUIRE(!mempool.exists(p_hash));
+    BOOST_REQUIRE(!mempool.exists(c_hash));
+    BOOST_REQUIRE(w2.mapWallet[p_hash].isUnrecognized() && w2.mapWallet[c_hash].isUnrecognized());
+    BOOST_REQUIRE(w2.mapWallet[e_hash].isInactive() && !w2.IsAbandoned(e_hash));
+
+    // 1. C's row on P:0 was recorded at load.
+    BOOST_CHECK_EQUAL(w2.mapTxSpends.count(COutPoint(p_hash, 0)), 1u);
+    // 2. D is abandoned: AbandonTransaction erased its rows, and the load must not restore them.
+    BOOST_CHECK_EQUAL(w2.mapTxSpends.count(COutPoint(p_hash, 1)), 0u);
+    // 2b. E is conflicted but not abandoned, so it does get a row.
+    BOOST_CHECK_EQUAL(w2.mapTxSpends.count(COutPoint(p_hash, 2)), 1u);
+
+    // 3. The cascade.
+    unsigned int released = 0;
+    BOOST_REQUIRE(w2.AbandonTransaction(p_hash, &released));
+
+    // 4. It reached both unpooled descendants.
+    BOOST_CHECK(w2.IsAbandoned(p_hash));
+    BOOST_CHECK(w2.IsAbandoned(c_hash));
+    BOOST_CHECK(w2.IsAbandoned(e_hash));
+
+    // 5. C's co-input is spendable again.
+    BOOST_CHECK(!w2.mapWallet[u_hash].IsSpent(0));
+
+    // 6. P:0 and U:0 released by C's step, P:2 by E's; P's own input is not in the wallet.
+    BOOST_CHECK_EQUAL(released, 3u);
+}
+
+BOOST_AUTO_TEST_CASE(add_to_wallet_records_the_spends)
+{
+    // AddToWallet is where a self-originated transaction (CommitTransaction) enters mapWallet.
+    MockWalletDbScope db_scope("wallet_g30_addtowallet.dat");
+    BOOST_REQUIRE(db_scope.isolated());
+
+    grc_test::StateGuard guard;
+
+    const std::string file = "wallet_g30_addtowallet.dat";
+    bool first = false;
+
+    CWallet w(file);
+    BOOST_REQUIRE_EQUAL(w.LoadWallet(first), DB_LOAD_OK);
+    CWalletDB db(file);
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(2);
+    mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+    mtx.vin[1].prevout = COutPoint(GetRandHash(), 1);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    const CTransaction tx(mtx);
+
+    CWalletTx wtx(&w, tx);
+    wtx.SetTxState(TxStateInMempool{});
+
+    LOCK2(cs_main, w.cs_wallet);
+
+    BOOST_REQUIRE(w.AddToWallet(wtx, &db));
+    BOOST_CHECK_EQUAL(w.mapTxSpends.count(tx.vin[0].prevout), 1u);
+    BOOST_CHECK_EQUAL(w.mapTxSpends.count(tx.vin[1].prevout), 1u);
+
+    // A repeat is a no-op, not a duplicate row.
+    BOOST_REQUIRE(w.AddToWallet(wtx, &db));
+    BOOST_CHECK_EQUAL(w.mapTxSpends.count(tx.vin[0].prevout), 1u);
+    BOOST_CHECK_EQUAL(w.mapTxSpends.count(tx.vin[1].prevout), 1u);
+}
+
+BOOST_AUTO_TEST_CASE(a_coinbase_records_no_spends)
+{
+    // A coinbase's null prevout is not a spend of anything. A row for it would make every held
+    // coinbase appear to conflict with every other (they all share the null prevout).
+    CWallet test_wallet;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_REQUIRE(test_wallet.AddKey(key));
+    }
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout.SetNull();
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 10 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    const CTransaction tx(mtx);
+    BOOST_REQUIRE(tx.IsCoinBase());
+
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(test_wallet.AddToWalletIfInvolvingMe(tx, nullptr, true, false));
+    }
+    LOCK(test_wallet.cs_wallet);
+    BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(COutPoint()), 0u);
+}
+
+BOOST_AUTO_TEST_CASE(a_live_sighting_records_the_spends)
+{
+    // Pins the live site (AddToWalletIfInvolvingMe) so moving the row-recording out of it is
+    // caught. Green on the unfixed tree by design.
+    CWallet test_wallet;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_REQUIRE(test_wallet.AddKey(key));
+    }
+    const CScript pay_key = CScript() << key.GetPubKey() << OP_CHECKSIG;
+
+    // (i) A new entry.
+    {
+        CMutableTransaction mtx;
+        mtx.vin.resize(2);
+        mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+        mtx.vin[1].prevout = COutPoint(GetRandHash(), 0);
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = 1 * COIN;
+        mtx.vout[0].scriptPubKey = pay_key;
+        const CTransaction tx(mtx);
+        BOOST_REQUIRE(!tx.IsCoinBase());
+
+        {
+            LOCK(cs_main);
+            BOOST_REQUIRE(test_wallet.AddToWalletIfInvolvingMe(tx, nullptr, true, false));
+        }
+        {
+            LOCK(test_wallet.cs_wallet);
+            BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[0].prevout), 1u);
+            BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[1].prevout), 1u);
+        }
+        {
+            LOCK(cs_main);
+            BOOST_REQUIRE(test_wallet.AddToWalletIfInvolvingMe(tx, nullptr, true, false));
+        }
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[0].prevout), 1u);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[1].prevout), 1u);
+    }
+
+    // (ii) An entry already in mapWallet without rows: a later sighting adds them.
+    {
+        CMutableTransaction mtx;
+        mtx.vin.resize(2);
+        mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+        mtx.vin[1].prevout = COutPoint(GetRandHash(), 0);
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = 1 * COIN;
+        mtx.vout[0].scriptPubKey = pay_key;
+        const CTransaction tx2(mtx);
+
+        {
+            LOCK(test_wallet.cs_wallet);
+            CWalletTx planted(&test_wallet, tx2);
+            planted.SetTxState(TxStateInMempool{});
+            test_wallet.mapWallet[tx2.GetHash()] = planted;
+            BOOST_REQUIRE_EQUAL(test_wallet.mapTxSpends.count(tx2.vin[0].prevout), 0u);
+            BOOST_REQUIRE_EQUAL(test_wallet.mapTxSpends.count(tx2.vin[1].prevout), 0u);
+        }
+        {
+            LOCK(cs_main);
+            BOOST_REQUIRE(test_wallet.AddToWalletIfInvolvingMe(tx2, nullptr, true, false));
+        }
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx2.vin[0].prevout), 1u);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx2.vin[1].prevout), 1u);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AbandonTransaction: hashBlock sentinel verification (Fix B)
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_sets_sentinel_hash)
+{
+    CWallet test_wallet;
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 25 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK2(cs_main, test_wallet.cs_wallet);
+
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateInactive{false});  // Not yet abandoned
+        wtx.SyncLegacyFromState();
+        test_wallet.mapWallet[hash] = wtx;
+
+        // Abandon
+        bool ok = test_wallet.AbandonTransaction(hash);
+        BOOST_CHECK(ok);
+
+        // Verify hashBlock is set to ABANDONED_HASH_SENTINEL (not null)
+        BOOST_CHECK(test_wallet.mapWallet[hash].hashBlock == ABANDONED_HASH_SENTINEL);
+        BOOST_CHECK(!test_wallet.mapWallet[hash].hashBlock.IsNull());
+
+        // And nIndex should be -1
+        BOOST_CHECK_EQUAL(test_wallet.mapWallet[hash].nIndex, -1);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AbandonTransaction: double-abandon idempotency
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Variant index stability — serialization compatibility guard
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(txstate_variant_index_stability)
+{
+    // The variant index is written to disk. If anyone reorders the variant
+    // alternatives, old wallet.dat files will silently deserialize to the
+    // wrong type. This test locks the indices.
+    TxState s0 = TxStateInMempool{};
+    TxState s1 = TxStateConfirmed{};
+    TxState s2 = TxStateInactive{};
+    TxState s3 = TxStateUnrecognized{};
+
+    BOOST_CHECK_EQUAL(s0.index(), 0u);  // InMempool must be index 0
+    BOOST_CHECK_EQUAL(s1.index(), 1u);  // Confirmed must be index 1
+    BOOST_CHECK_EQUAL(s2.index(), 2u);  // Inactive must be index 2
+    BOOST_CHECK_EQUAL(s3.index(), 3u);  // Unrecognized must be index 3
+}
+
+// ---------------------------------------------------------------------------
+// Default constructor invariants
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(txstate_default_constructor_invariants)
+{
+    // Guard against someone changing default field values
+    TxStateConfirmed conf;
+    BOOST_CHECK(conf.m_confirmed_block_hash.IsNull());
+    BOOST_CHECK_EQUAL(conf.m_position_in_block, -1);
+
+    TxStateInactive inactive;
+    BOOST_CHECK_EQUAL(inactive.m_abandoned, false);
+
+    TxStateUnrecognized unrec;
+    BOOST_CHECK(unrec.m_block_hash.IsNull());
+    BOOST_CHECK_EQUAL(unrec.m_index, -1);
+}
+
+// ---------------------------------------------------------------------------
+// AbandonTransaction: pool membership, not the state tag
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// AbandonTransaction: pool membership, not the state tag
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_mempool_tx_fails)
+{
+    // The transaction is put in the real mempool, not merely tagged. The tag on
+    // its own is not the question the gate asks any more, and a test that only
+    // set it would pass whatever the gate did.
+    CWallet test_wallet;
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 20 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[hash] = wtx;
+    }
+    {
+        LOCK(cs_main);
+        mempool.addUnchecked(hash, CTxMemPoolEntry(
+            tx, /*fee=*/0, /*time=*/0, /*height=*/0,
+            ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION)));
+    }
+    BOOST_REQUIRE(mempool.exists(hash));
+
+    // Should NOT be able to abandon a transaction the pool actually holds
+    {
+        LOCK(cs_main);
+        BOOST_CHECK(!test_wallet.AbandonTransaction(hash));
+    }
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+    }
+
+    {
+        LOCK2(cs_main, test_wallet.cs_wallet);
+        mempool.remove(tx);
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+}
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_evicted_tx_succeeds)
+{
+    // The eviction case, which the gate used to refuse. An EXPIRY or SIZELIMIT
+    // eviction keeps the in-mempool tag (TransactionRemovedFromMempool says so
+    // in as many words), and a restarted own unconfirmed transaction now
+    // resolves to the same tag. Gating on the tag would make both permanently
+    // un-abandonable: the pool does not hold them, so nothing would ever clear
+    // the tag, and the inputs would stay committed with no way to release them.
+    CWallet test_wallet;
+
+    // A distinct value from the case above: these two would otherwise build the
+    // same transaction, share a txid, and contend over the global mempool.
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 21 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[hash] = wtx;
+    }
+    BOOST_REQUIRE(!mempool.exists(hash));
+
+    {
+        LOCK(cs_main);
+        BOOST_CHECK_MESSAGE(test_wallet.AbandonTransaction(hash),
+            "abandon refused a transaction tagged in-mempool that the pool does not hold");
+    }
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(test_wallet.IsAbandoned(hash));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_double_abandon_is_idempotent)
+{
+    CWallet test_wallet;
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 15 * COIN;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK2(cs_main, test_wallet.cs_wallet);
+
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.SetTxState(TxStateUnrecognized{});  // Can be abandoned
+        test_wallet.mapWallet[hash] = wtx;
+
+        // First abandon
+        bool ok1 = test_wallet.AbandonTransaction(hash);
+        BOOST_CHECK(ok1);
+        BOOST_CHECK(test_wallet.IsAbandoned(hash));
+
+        // Second abandon — should return true without error
+        bool ok2 = test_wallet.AbandonTransaction(hash);
+        BOOST_CHECK(ok2);
+        BOOST_CHECK(test_wallet.IsAbandoned(hash));
+
+        // State should still be inactive/abandoned (unchanged)
+        auto* inactive = test_wallet.mapWallet[hash].state<TxStateInactive>();
+        BOOST_CHECK(inactive != nullptr);
+        BOOST_CHECK_EQUAL(inactive->m_abandoned, true);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(maptxspends_cleanup_preserves_other_conflicts)
+{
+    // Test that erasing one conflicting tx doesn't remove other conflicts
+    CWallet test_wallet;
+
+    COutPoint shared_outpoint(uint256S("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), 0);
+
+    // Create two conflicting transactions
+    CMutableTransaction mtx1;
+    mtx1.vin.resize(1);
+    mtx1.vin[0].prevout = shared_outpoint;
+    mtx1.vout.resize(1);
+    mtx1.vout[0].nValue = 100 * COIN;
+    CTransaction tx1(mtx1);
+    uint256 hash1 = tx1.GetHash();
+
+    CMutableTransaction mtx2;
+    mtx2.vin.resize(1);
+    mtx2.vin[0].prevout = shared_outpoint;
+    mtx2.vout.resize(1);
+    mtx2.vout[0].nValue = 99 * COIN;
+    CTransaction tx2(mtx2);
+    uint256 hash2 = tx2.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Add both transactions
+        CWalletTx wtx1(&test_wallet, tx1);
+        wtx1.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[hash1] = wtx1;
+
+        CWalletTx wtx2(&test_wallet, tx2);
+        wtx2.SetTxState(TxStateInMempool{});
+        test_wallet.mapWallet[hash2] = wtx2;
+
+        // Populate mapTxSpends
+        test_wallet.mapTxSpends.insert(std::make_pair(shared_outpoint, hash1));
+        test_wallet.mapTxSpends.insert(std::make_pair(shared_outpoint, hash2));
+
+        // Both entries should exist
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(shared_outpoint), 2u);
+
+        // Erase first transaction
+        test_wallet.EraseFromWallet(hash1);
+
+        // Second transaction's entry should still exist
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(shared_outpoint), 1u);
+
+        // Verify it's the correct entry
+        auto range = test_wallet.mapTxSpends.equal_range(shared_outpoint);
+        BOOST_CHECK(range.first != range.second);
+        BOOST_CHECK_EQUAL(range.first->second, hash2);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(incoming_tx_gets_order_position)
+{
+    // Regression test for the #2839 state-machine rewrite: incoming
+    // transactions inserted through SyncTransaction/AddToWalletIfInvolvingMe
+    // kept the default nOrderPos of -1, so OrderedTxItems (and therefore
+    // listtransactions) sorted every new receive/stake as the OLDEST entry
+    // until ReorderTransactions repaired the sentinel at the next wallet
+    // load. Locally created sends were unaffected (CommitTransaction goes
+    // through AddToWallet, which assigns the position).
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CKey key;
+    key.MakeNewKey(true);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));
+
+    // A payment to an owned key funded by an outpoint this wallet does not
+    // know: the shape of an external receive. GetDebit finds no prevout in
+    // mapWallet, so IsFromMe is false, and the non-null prevout keeps the
+    // transaction structurally valid (and distinct from a coinbase).
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("0x1111111111111111111111111111111111111111111111111111111111111111"), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 5 * COIN;
+    mtx.vout[0].scriptPubKey.SetDestination(CTxDestination(key.GetPubKey().GetID()));
+    const CTransaction tx1(mtx);
+
+    mtx.vout[0].nValue = 6 * COIN; // distinct hash
+    const CTransaction tx2(mtx);
+
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(tx1), TxStateInMempool{}));
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(tx2), TxStateInMempool{}));
+
+    const auto it1 = pwalletMain->mapWallet.find(tx1.GetHash());
+    const auto it2 = pwalletMain->mapWallet.find(tx2.GetHash());
+    BOOST_REQUIRE(it1 != pwalletMain->mapWallet.end());
+    BOOST_REQUIRE(it2 != pwalletMain->mapWallet.end());
+
+    // Both entries carry real, strictly increasing order positions.
+    BOOST_CHECK(it1->second.nOrderPos >= 0);
+    BOOST_CHECK(it2->second.nOrderPos > it1->second.nOrderPos);
+
+    // Clean up so later cases see the wallet they expect.
+    pwalletMain->EraseFromWallet(tx1.GetHash());
+    pwalletMain->EraseFromWallet(tx2.GetHash());
+}
+
+// SyncTransaction must write and notify once per affected PARENT, not once per
+// consumed output. This is the second site of the amplification fixed in the
+// WalletUpdateSpent path: a consolidation consumes many outputs of the same
+// parent, and MarkSpent/MarkDirty are in-memory, so N consumed outputs need one
+// write and one notification -- not N of each. Measured on an isolated-testnet
+// consolidation of 427 inputs drawing 7 outputs from each of 61 parents: 427
+// notifications and 427 WriteToDisk calls where 61 of each is the whole content.
+BOOST_AUTO_TEST_CASE(sync_transaction_notifies_once_per_parent)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CKey key;
+    key.MakeNewKey(true);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));
+
+    // One parent with FOUR outputs to us -- the shape a consolidation draws
+    // from, and the shape that made the per-output form repeat itself.
+    CMutableTransaction parent;
+    parent.vin.resize(1);
+    parent.vin[0].prevout = COutPoint(
+        uint256S("0x6666666666666666666666666666666666666666666666666666666666666666"), 0);
+    parent.vout.resize(4);
+    for (unsigned int i = 0; i < 4; ++i) {
+        parent.vout[i].nValue = COIN;
+        parent.vout[i].scriptPubKey.SetDestination(CTxDestination(key.GetPubKey().GetID()));
+    }
+    const CTransaction parent_tx(parent);
+    const uint256 parent_hash = parent_tx.GetHash();
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(parent_tx), TxStateInMempool{}));
+
+    // A child consuming THREE of that one parent's outputs.
+    CKey external_key;
+    external_key.MakeNewKey(true);
+    CMutableTransaction child;
+    child.vin.resize(3);
+    for (unsigned int i = 0; i < 3; ++i) {
+        child.vin[i].prevout = COutPoint(parent_hash, i);
+    }
+    child.vout.resize(1);
+    child.vout[0].nValue = 2 * COIN;
+    child.vout[0].scriptPubKey.SetDestination(CTxDestination(external_key.GetPubKey().GetID()));
+    const CTransaction child_tx(child);
+
+    // Count only AFTER the parent is established, so its own sync is excluded.
+    std::map<uint256, int> notifies;
+    boost::signals2::scoped_connection conn(
+        pwalletMain->NotifyTransactionChanged.connect(
+            [&notifies](CWallet*, const uint256& h, ChangeType) { notifies[h] += 1; }));
+
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(child_tx), TxStateInMempool{}));
+
+    // Three outputs of ONE parent were consumed, so exactly one notification for
+    // it. The per-output form emitted three.
+    BOOST_CHECK_EQUAL(notifies[parent_hash], 1);
+
+    // ...and the coalescing did not cost correctness: every consumed output is
+    // still marked, and the untouched fourth is not.
+    const auto it = pwalletMain->mapWallet.find(parent_hash);
+    BOOST_REQUIRE(it != pwalletMain->mapWallet.end());
+    BOOST_CHECK(it->second.IsSpent(0));
+    BOOST_CHECK(it->second.IsSpent(1));
+    BOOST_CHECK(it->second.IsSpent(2));
+    BOOST_CHECK(!it->second.IsSpent(3));
+
+    pwalletMain->EraseFromWallet(child_tx.GetHash());
+    pwalletMain->EraseFromWallet(parent_hash);
+}
+
+BOOST_AUTO_TEST_CASE(mempool_spend_marks_parent_output_spent)
+{
+    // Legacy WalletUpdateSpent parity restored on the SyncTransaction path:
+    // a spend of our output observed in the MEMPOOL already marks the parent
+    // output spent; before the fix only a confirmed sighting did.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CKey key;
+    key.MakeNewKey(true);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));
+
+    CMutableTransaction parent;
+    parent.vin.resize(1);
+    parent.vin[0].prevout = COutPoint(uint256S("0x3333333333333333333333333333333333333333333333333333333333333333"), 0);
+    parent.vout.resize(1);
+    parent.vout[0].nValue = 2 * COIN;
+    parent.vout[0].scriptPubKey.SetDestination(CTxDestination(key.GetPubKey().GetID()));
+    const CTransaction parent_tx(parent);
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(parent_tx), TxStateInMempool{}));
+
+    // Child spends our parent output, paying a key we do not own (from-me).
+    CKey external_key;
+    external_key.MakeNewKey(true);
+    CMutableTransaction child;
+    child.vin.resize(1);
+    child.vin[0].prevout = COutPoint(parent_tx.GetHash(), 0);
+    child.vout.resize(1);
+    child.vout[0].nValue = 1 * COIN;
+    child.vout[0].scriptPubKey.SetDestination(CTxDestination(external_key.GetPubKey().GetID()));
+    const CTransaction child_tx(child);
+
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(child_tx), TxStateInMempool{}));
+
+    const auto it = pwalletMain->mapWallet.find(parent_tx.GetHash());
+    BOOST_REQUIRE(it != pwalletMain->mapWallet.end());
+    BOOST_CHECK(it->second.IsSpent(0));
+
+    pwalletMain->EraseFromWallet(child_tx.GetHash());
+    pwalletMain->EraseFromWallet(parent_tx.GetHash());
+}
+
+BOOST_AUTO_TEST_CASE(incoming_payment_rotates_default_key)
+{
+    // Legacy AddToWallet parity restored on the SyncTransaction path: a
+    // payment to the default receiving address rotates it to a fresh key
+    // (daemon mode; the Qt GUI manages its own receiving addresses).
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    if (!pwalletMain->vchDefaultKey.IsValid()) {
+        CPubKey bootstrap_default;
+        BOOST_REQUIRE(pwalletMain->GetKeyFromPool(bootstrap_default, false));
+        BOOST_REQUIRE(pwalletMain->SetDefaultKey(bootstrap_default));
+    }
+
+    const CPubKey old_default = pwalletMain->vchDefaultKey;
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("0x4444444444444444444444444444444444444444444444444444444444444444"), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey.SetDestination(CTxDestination(old_default.GetID()));
+    const CTransaction tx(mtx);
+
+    BOOST_REQUIRE(pwalletMain->SyncTransaction(MakeTransactionRef(tx), TxStateInMempool{}));
+
+    // Rotated away from the paid key; the fresh default is booked with the
+    // empty label so it surfaces as a receiving address.
+    BOOST_CHECK(pwalletMain->vchDefaultKey.IsValid());
+    BOOST_CHECK(pwalletMain->vchDefaultKey != old_default);
+    BOOST_CHECK(pwalletMain->mapAddressBook.count(
+        CTxDestination(pwalletMain->vchDefaultKey.GetID())));
+
+    pwalletMain->EraseFromWallet(tx.GetHash());
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+// ===========================================================================
+// PSGT-readiness regression tests
+//
+// Locks in the contracts a future PSGT (Partially Signed Gridcoin Transaction)
+// layer will depend on, identified by the PSGT-readiness gap analysis:
+//
+//   1. Unknown reserved sentinels must round-trip as Unrecognized, not
+//      Confirmed — so a future state addition (e.g. TxStateBlockConflicted,
+//      TxStatePsgt) stays downgrade-safe with no wallet-format bump.
+//   2. The import -> mempool -> confirm -> reorg lifecycle of an externally-
+//      signed tx must traverse the state machine without data carryover.
+//   3. The TxState variant alternative order is part of the on-disk format and
+//      must remain stable. Future states must be appended, never reordered.
+// ===========================================================================
+
+BOOST_AUTO_TEST_SUITE(psgt_readiness_tests)
+
+BOOST_AUTO_TEST_CASE(psgt_unknown_sentinel_round_trips_as_unrecognized)
+{
+    // A future reserved sentinel (e.g. 0x...03) must NOT be interpreted as a
+    // real block hash. Guards against an older client mis-reporting a future
+    // PSGT/BlockConflicted-tagged tx as "confirmed in a non-existent block".
+    uint256 future_sentinel =
+        uint256S("0000000000000000000000000000000000000000000000000000000000000003");
+
+    TxState state = MigrateFromLegacyHashBlock(future_sentinel, -1);
+    BOOST_CHECK(std::holds_alternative<TxStateUnrecognized>(state));
+
+    // Every value in the reserved low range maps the same way.
+    for (uint8_t b : {uint8_t{0x03}, uint8_t{0x10}, uint8_t{0x7f}, uint8_t{0xff}}) {
+        uint256 s;
+        s.data()[0] = b;
+        BOOST_CHECK(std::holds_alternative<TxStateUnrecognized>(
+            MigrateFromLegacyHashBlock(s, -1)));
+    }
+
+    // Sanity: known sentinels still resolve to Inactive (unchanged behavior).
+    BOOST_CHECK(std::holds_alternative<TxStateInactive>(
+        MigrateFromLegacyHashBlock(ABANDONED_HASH_SENTINEL, -1)));
+    BOOST_CHECK(std::holds_alternative<TxStateInactive>(
+        MigrateFromLegacyHashBlock(CONFLICTED_HASH_SENTINEL, -1)));
+
+    // Sanity: a normal block hash still resolves to Confirmed.
+    uint256 real_block =
+        uint256S("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789");
+    BOOST_CHECK(std::holds_alternative<TxStateConfirmed>(
+        MigrateFromLegacyHashBlock(real_block, 5)));
+}
+
+BOOST_AUTO_TEST_CASE(psgt_imported_inactive_tx_promotes_to_mempool)
+{
+    // Import path: external/PSGT-signed tx enters wallet in Inactive{false}
+    // (the "known but not broadcast" ingestion state).
+    CWalletTx imported;
+    imported.SetTxState(TxStateInactive{false});
+    BOOST_CHECK(imported.isInactive());
+    BOOST_CHECK_EQUAL(imported.state<TxStateInactive>()->m_abandoned, false);
+
+    // Round-trip through disk format: imported state must survive load. This
+    // is what distinguishes the import path from "tx I never saw" — on next
+    // wallet load it must come back as Inactive, not Unrecognized.
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << imported;
+    CWalletTx loaded;
+    ss >> loaded;
+    BOOST_CHECK(loaded.isInactive());
+    BOOST_CHECK_EQUAL(loaded.state<TxStateInactive>()->m_abandoned, false);
+
+    // Broadcast path: the transition the production transactionAddedToMempool
+    // callback drives. After it, the variant truly holds InMempool — the
+    // Inactive payload must not leak.
+    loaded.SetTxState(TxStateInMempool{});
+    BOOST_CHECK(loaded.isInMempool());
+    BOOST_CHECK(loaded.state<TxStateInactive>() == nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(psgt_imported_tx_confirm_then_reorg)
+{
+    // Full post-import lifecycle:
+    //   Inactive{false}  (imported, not yet broadcast)
+    //   -> InMempool     (transactionAddedToMempool)
+    //   -> Confirmed     (blockConnected)
+    //   -> Inactive{false} (blockDisconnected and not re-accepted to mempool)
+    CWalletTx wtx;
+
+    wtx.SetTxState(TxStateInactive{false});
+    BOOST_CHECK(wtx.isInactive());
+
+    wtx.SetTxState(TxStateInMempool{});
+    BOOST_CHECK(wtx.isInMempool());
+
+    uint256 bh =
+        uint256S("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff");
+    wtx.SetTxState(TxStateConfirmed(bh, 7));
+    BOOST_CHECK(wtx.isConfirmed());
+    BOOST_CHECK(wtx.state<TxStateConfirmed>()->m_confirmed_block_hash == bh);
+    BOOST_CHECK_EQUAL(wtx.state<TxStateConfirmed>()->m_position_in_block, 7);
+
+    // Reorg: blockDisconnected. The wallet drops back to InMempool if the tx
+    // is re-accepted there, otherwise Inactive{false}. We simulate the latter.
+    wtx.SetTxState(TxStateInactive{false});
+    BOOST_CHECK(wtx.isInactive());
+    BOOST_CHECK_EQUAL(wtx.state<TxStateInactive>()->m_abandoned, false);
+
+    // Confirmed payload must not leak across the transition.
+    BOOST_CHECK(wtx.state<TxStateConfirmed>() == nullptr);
+    BOOST_CHECK(wtx.state<TxStateInMempool>() == nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(txstate_variant_index_stability_extended)
+{
+    // The TxState variant index order is part of the on-disk format and the
+    // sentinel-mapping scheme. Reordering alternatives would silently change
+    // how existing wallets deserialize. Pinned as static_assert so a reorder
+    // fails to compile, not at runtime.
+    static_assert(std::is_same_v<std::variant_alternative_t<0, TxState>, TxStateInMempool>,
+                  "TxState index 0 must remain TxStateInMempool");
+    static_assert(std::is_same_v<std::variant_alternative_t<1, TxState>, TxStateConfirmed>,
+                  "TxState index 1 must remain TxStateConfirmed");
+    static_assert(std::is_same_v<std::variant_alternative_t<2, TxState>, TxStateInactive>,
+                  "TxState index 2 must remain TxStateInactive");
+    static_assert(std::is_same_v<std::variant_alternative_t<3, TxState>, TxStateUnrecognized>,
+                  "TxState index 3 must remain TxStateUnrecognized");
+    static_assert(std::variant_size_v<TxState> == 4,
+                  "Adding a TxState alternative is OK, but it MUST be appended "
+                  "(index 4+). When you add one, bump this size assertion and "
+                  "add a matching alternative-type check above.");
+
+    // Runtime mirror of the same property.
+    TxState s0 = TxStateInMempool{};
+    TxState s1 = TxStateConfirmed{};
+    TxState s2 = TxStateInactive{false};
+    TxState s3 = TxStateUnrecognized{};
+    BOOST_CHECK_EQUAL(s0.index(), 0u);
+    BOOST_CHECK_EQUAL(s1.index(), 1u);
+    BOOST_CHECK_EQUAL(s2.index(), 2u);
+    BOOST_CHECK_EQUAL(s3.index(), 3u);
+}
+
+
+
+
+
+
+BOOST_AUTO_TEST_SUITE_END()
+
+// ---------------------------------------------------------------------------
+// The block-conflict record: RecordConflictedBy / TakeConflictedBy
+//
+// The functional test (feature_reorg_conflicted.py) reaches the record only
+// through a real connect and disconnect, where three of TakeConflictedBy's
+// four filters are unreachable: a recorded transaction cannot be pooled or
+// confirmed while its displacing block is connected. These cases drive the
+// two methods directly on an in-memory wallet. TakeConflictedBy consults the
+// process-global mempool, so the suite runs under MempoolStateGuard.
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_SUITE(wallet_conflict_record_tests, *boost::unit_test::fixture<grc_test::MempoolStateGuard>())
+
+namespace {
+//! A distinct transaction paying \p value to nobody in particular.
+CTransaction DistinctTx(CAmount value)
+{
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = value;
+    mtx.vout[0].scriptPubKey = CScript() << OP_TRUE;
+    return CTransaction(mtx);
+}
+
+//! Add \p tx to \p wallet in \p state and return its hash.
+uint256 Hold(CWallet& wallet, const CTransaction& tx, const TxState& state)
+{
+    LOCK(wallet.cs_wallet);
+    CWalletTx wtx(&wallet, tx);
+    wtx.SetTxState(state);
+    wallet.mapWallet[tx.GetHash()] = wtx;
+    return tx.GetHash();
+}
+
+size_t RecordCount(CWallet& wallet)
+{
+    LOCK(wallet.cs_wallet);
+    return wallet.m_conflicting_block.size();
+}
+
+std::set<uint256> Hashes(const std::vector<CTransaction>& txs)
+{
+    std::set<uint256> out;
+    for (const auto& tx : txs) out.insert(tx.GetHash());
+    return out;
+}
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(record_keeps_only_wallet_hashes_and_overwrites_a_repeat)
+{
+    CWallet wallet;
+    const uint256 own = Hold(wallet, DistinctTx(1 * COIN), TxStateInMempool{});
+    const uint256 foreign = DistinctTx(2 * COIN).GetHash();
+    const uint256 block_b = GetRandHash();
+    const uint256 block_c = GetRandHash();
+
+    wallet.RecordConflictedBy({own, foreign}, block_b);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_CHECK_EQUAL(wallet.m_conflicting_block.size(), 1u);
+        BOOST_CHECK(wallet.m_conflicting_block.at(own) == block_b);
+        BOOST_CHECK_EQUAL(wallet.m_conflicting_block.count(foreign), 0u);
+    }
+
+    // Displaced again after a re-pool: the later block replaces the earlier.
+    wallet.RecordConflictedBy({own}, block_c);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_CHECK_EQUAL(wallet.m_conflicting_block.size(), 1u);
+        BOOST_CHECK(wallet.m_conflicting_block.at(own) == block_c);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(take_returns_and_erases_only_the_named_blocks_records)
+{
+    CWallet wallet;
+    const uint256 by_b = Hold(wallet, DistinctTx(1 * COIN), TxStateInMempool{});
+    const uint256 by_c = Hold(wallet, DistinctTx(2 * COIN), TxStateInMempool{});
+    const uint256 block_b = GetRandHash();
+    const uint256 block_c = GetRandHash();
+    wallet.RecordConflictedBy({by_b}, block_b);
+    wallet.RecordConflictedBy({by_c}, block_c);
+    BOOST_REQUIRE_EQUAL(RecordCount(wallet), 2u);
+
+    const std::vector<CTransaction> taken_b = wallet.TakeConflictedBy(block_b);
+    BOOST_CHECK(Hashes(taken_b) == std::set<uint256>{by_b});
+    BOOST_CHECK_EQUAL(RecordCount(wallet), 1u);
+
+    // The record is gone with the take: a second disconnect of B finds nothing.
+    BOOST_CHECK(wallet.TakeConflictedBy(block_b).empty());
+    BOOST_CHECK_EQUAL(RecordCount(wallet), 1u);
+
+    const std::vector<CTransaction> taken_c = wallet.TakeConflictedBy(block_c);
+    BOOST_CHECK(Hashes(taken_c) == std::set<uint256>{by_c});
+    BOOST_CHECK_EQUAL(RecordCount(wallet), 0u);
+}
+
+BOOST_AUTO_TEST_CASE(take_returns_only_what_is_still_unconfirmed_unpooled_and_not_abandoned)
+{
+    CWallet wallet;
+    const uint256 block_b = GetRandHash();
+
+    // Returned: still tagged in-mempool but not pooled, and conflicted (not
+    // abandoned) the way a restart-time resolution leaves it.
+    const uint256 pending = Hold(wallet, DistinctTx(1 * COIN), TxStateInMempool{});
+    const uint256 inactive = Hold(wallet, DistinctTx(2 * COIN), TxStateInactive{false});
+
+    // Not returned: resolved by another path.
+    const CTransaction pooled_tx = DistinctTx(3 * COIN);
+    const uint256 pooled = Hold(wallet, pooled_tx, TxStateInMempool{});
+    BOOST_REQUIRE(mempool.addUnchecked(pooled, CTxMemPoolEntry(
+        pooled_tx, /*fee=*/0, /*time=*/0, /*height=*/0,
+        ::GetSerializeSize(pooled_tx, SER_NETWORK, PROTOCOL_VERSION))));
+    const uint256 confirmed = Hold(wallet, DistinctTx(4 * COIN), TxStateConfirmed(GetRandHash(), 1));
+    const uint256 abandoned = Hold(wallet, DistinctTx(5 * COIN), TxStateInactive{true});
+    const uint256 erased = Hold(wallet, DistinctTx(6 * COIN), TxStateInMempool{});
+
+    wallet.RecordConflictedBy({pending, inactive, pooled, confirmed, abandoned, erased}, block_b);
+    BOOST_REQUIRE_EQUAL(RecordCount(wallet), 6u);
+    {
+        LOCK(wallet.cs_wallet);
+        wallet.mapWallet.erase(erased);
+    }
+
+    const std::vector<CTransaction> taken = wallet.TakeConflictedBy(block_b);
+    BOOST_CHECK(Hashes(taken) == (std::set<uint256>{pending, inactive}));
+
+    // Every record for the block leaves, returned or not.
+    BOOST_CHECK_EQUAL(RecordCount(wallet), 0u);
+
+    mempool.clear();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

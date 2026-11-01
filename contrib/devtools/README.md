@@ -89,10 +89,31 @@ example:
 BUILDDIR=$PWD/build contrib/devtools/gen-manpages.sh
 ```
 
-security-check.py and test-security-check.py
-============================================
+security-check.py
+=================
 
-Perform basic security checks on a series of executables.
+Checks that built executables carry the exploit mitigations the build asks for:
+PIE/ASLR, a stack canary, `_FORTIFY_SOURCE`, full RELRO and a non-executable
+stack, per format (ELF, PE, Mach-O). Requires `lief`; the release workflow pins
+the version it installs.
+
+Indirect-branch protection is verified only where a check exists for it: CET
+(`endbr64`) on ELF and PE x86_64, and on Mach-O x86_64. It is **not** verified on
+ELF AArch64, so a Linux arm64 build could lose `-mbranch-protection=standard`
+without this gate noticing -- see the CAVEATS section in the script. On Mach-O
+AArch64 there is deliberately nothing to verify: the flag is withheld there
+because its pointer-authentication codegen breaks unwinding on plain arm64.
+
+Run it against the binaries in a build tree:
+
+```bash
+python3 contrib/devtools/security-check.py build/bin/gridcoinresearchd build/bin/gridcoinresearch
+```
+
+It exits non-zero and names the failing property per binary, which is what makes
+it usable as a release gate. Note this checks the artifact, not the build flags:
+a hardening option that is set but does not reach the linker fails here, which is
+the case it exists to catch.
 
 symbol-check.py
 ===============

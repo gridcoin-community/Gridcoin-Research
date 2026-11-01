@@ -6,6 +6,28 @@
 /* Milliseconds between model updates */
 static const int MODEL_UPDATE_DELAY = 4000;
 
+/* Milliseconds between WalletEventQueue drains. The producer→GUI event channel
+ * for transaction-list updates is drained on this cadence; 500ms is
+ * imperceptible to users while keeping each drain batch sized for efficient
+ * Qt model mutation. */
+static const int MODEL_EVENT_DRAIN_INTERVAL = 500;
+
+/* Maximum WalletEventQueue events applied to the model in a single drain tick.
+ * Bounds the Qt main-thread work per tick so a large backlog (reorg flood, IBD
+ * catch-up) cannot freeze the GUI in one apply pass. When a drain hits this
+ * cap the consumer re-arms itself immediately (0ms) rather than waiting for
+ * the next periodic tick, so a backlog still drains promptly while yielding to
+ * the Qt event loop between batches. */
+static const int MODEL_EVENT_DRAIN_MAX_BATCH = 1024;
+
+/* Consecutive non-disconnect failures of the wallet event drain before the
+ * periodic pump gives up. That pump is the sole feed for BOTH windowed
+ * transaction views and the balance refresh, and nothing in the tree restarts
+ * it, so a transient throw must not be fatal to it -- but a hard-looping fault
+ * must not spin forever either. A node-disconnect exception still stops it
+ * immediately; only other exceptions are counted here. */
+static const int MODEL_EVENT_DRAIN_MAX_FAILURES = 10;
+
 /* AskPassphraseDialog -- Maximum passphrase length */
 static const int MAX_PASSPHRASE_SIZE = 1024;
 

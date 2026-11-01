@@ -4,10 +4,57 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <util.h>
-#include <gridcoin/sidestake.h>
+#include "test/state_guard.h"
 
-BOOST_AUTO_TEST_SUITE(sidestake_tests)
+#include <chain.h>
+#include <util.h>
+#include <gridcoin/contract/contract.h>
+#include <gridcoin/sidestake.h>
+#include <interfaces/sidestake.h>
+#include <key_io.h>
+#include <node/ui_interface.h>
+#include <streams.h>
+#include <sync.h>
+#include <version.h>
+
+#include <boost/signals2/connection.hpp>
+
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace {
+//! Makes settings-file writes fail while it is alive. WriteSettingsFile() writes
+//! the temporary file first, and a directory at that path cannot be opened as a
+//! file, also as root and on Windows. Create it only after a successful write, so
+//! no temporary file is in the way. The directory is removed on destruction.
+class SettingsWriteBlocker
+{
+public:
+    SettingsWriteBlocker()
+    {
+        BOOST_REQUIRE(gArgs.GetSettingsPath(&m_path, /*temp=*/true));
+        fs::create_directories(m_path);
+        BOOST_REQUIRE(fs::is_directory(m_path));
+    }
+    ~SettingsWriteBlocker()
+    {
+        try {
+            fs::remove(m_path);
+        } catch (...) {
+        }
+    }
+
+private:
+    fs::path m_path;
+};
+} // namespace
+
+// Suite-level guard: the sidestake editors write read-write settings
+// (sidestakeaddresses / allocations / descriptions) that nothing removes.
+BOOST_AUTO_TEST_SUITE(sidestake_tests, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 BOOST_AUTO_TEST_CASE(sidestake_Allocation_Initialization_trivial)
 {
@@ -142,6 +189,650 @@ BOOST_AUTO_TEST_CASE(sidestake_Allocation_multiplication_and_derivation_of_alloc
 
     CAmount actual_output = (allocation * max_accrual).ToCAmount();
     BOOST_CHECK_EQUAL(actual_output, int64_t {1638236160000});
+}
+
+// Single-field edits must leave the other fields exactly as STORED, not as the
+// caller last observed them.
+//
+// The bug these guard against is silent: setAllocation/setDescription used to read
+// the whole entry, rebuild it, and write it back through NonContractAdd(). The read
+// and the write were separate acquisitions of the registry lock, so a
+// LoadLocalSideStakesFromConfig() in between (RwSettingsUpdated, e.g. from the
+// changesettings RPC) was reverted by the fields the caller never meant to touch --
+// editing a description would quietly restore the old allocation. Nothing failed;
+// the value just reappeared.
+//
+// WHAT THESE DO AND DO NOT COVER -- read this before trusting them.
+//
+// They pin the API contract: a single-field write leaves the other fields at their
+// stored values, and reports false rather than creating an entry that is not there.
+//
+// They do NOT pin the property that actually closes the race, and neither does any
+// other test in the tree. The fix is that the surviving fields are read inside the
+// SAME cs_lock acquisition as the write; the bug was reading them in an earlier
+// acquisition (FindLocal) and writing them back through NonContractAdd(). Those two
+// implementations are indistinguishable to any single-threaded test, because they
+// differ only in what they observe when something mutates the entry BETWEEN the read
+// and the write. Reverting the fix leaves every one of these green.
+//
+// Closing that gap needs an injection point -- a test-only hook fired under cs_lock
+// between the lookup and the write, so a test can simulate a
+// LoadLocalSideStakesFromConfig() landing in the window. That was considered and
+// deliberately rejected (2026-08-10): it means a std::function on a production
+// registry, live in every build, that exists solely for one test. The race is a lost
+// update on a hand-edit that collides with a concurrent changesettings, not a
+// correctness or consensus issue, and the protection is a two-line locking property
+// that is easy to read and hard to regress accidentally.
+//
+// So: if you are changing NonContractSetAllocation / NonContractSetDescription, note
+// that the tests will NOT stop you reintroducing the race. Keep the surviving-field
+// read inside the lock.
+BOOST_AUTO_TEST_CASE(sidestake_NonContractSetAllocation_preserves_other_fields)
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+    // Built directly rather than decoded from a literal address (same idiom as
+    // block_rewards_tests.cpp): these tests are about registry bookkeeping, not
+    // address encoding, and a literal would bind them to whichever chain params
+    // the test fixture happens to select.
+    uint160 hash;
+    *(hash.begin()) = 0x5a;
+    const CTxDestination dest = CKeyID(hash);
+
+    registry.NonContractAdd(GRC::LocalSideStake(dest,
+                                                GRC::Allocation(0.10),
+                                                "original description",
+                                                GRC::LocalSideStake::LocalSideStakeStatus::ACTIVE),
+                            /*save_to_file=*/false);
+
+    BOOST_REQUIRE(registry.NonContractSetAllocation(dest, GRC::Allocation(0.25), /*save_to_file=*/false));
+
+    const auto entries = registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL);
+    BOOST_REQUIRE_EQUAL(entries.size(), 1u);
+    BOOST_CHECK_EQUAL(entries.front()->GetAllocation().ToPercent(), 25.0);
+    BOOST_CHECK_EQUAL(entries.front()->GetDescription(), "original description");
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false);
+}
+
+BOOST_AUTO_TEST_CASE(sidestake_NonContractSetDescription_preserves_other_fields)
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+    // Built directly rather than decoded from a literal address (same idiom as
+    // block_rewards_tests.cpp): these tests are about registry bookkeeping, not
+    // address encoding, and a literal would bind them to whichever chain params
+    // the test fixture happens to select.
+    uint160 hash;
+    *(hash.begin()) = 0x5a;
+    const CTxDestination dest = CKeyID(hash);
+
+    registry.NonContractAdd(GRC::LocalSideStake(dest,
+                                                GRC::Allocation(0.35),
+                                                "before",
+                                                GRC::LocalSideStake::LocalSideStakeStatus::ACTIVE),
+                            /*save_to_file=*/false);
+
+    BOOST_REQUIRE(registry.NonContractSetDescription(dest, "after", /*save_to_file=*/false));
+
+    const auto entries = registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL);
+    BOOST_REQUIRE_EQUAL(entries.size(), 1u);
+    BOOST_CHECK_EQUAL(entries.front()->GetDescription(), "after");
+    // The allocation must survive a description edit untouched.
+    BOOST_CHECK_EQUAL(entries.front()->GetAllocation().ToPercent(), 35.0);
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false);
+}
+
+// Both setters report "no such entry" rather than creating one, so a caller whose
+// lookup raced a delete gets INVALID_ADDRESS instead of silently resurrecting it.
+BOOST_AUTO_TEST_CASE(sidestake_NonContractSet_returns_false_for_missing_entry)
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+    // Built directly rather than decoded from a literal address (same idiom as
+    // block_rewards_tests.cpp): these tests are about registry bookkeeping, not
+    // address encoding, and a literal would bind them to whichever chain params
+    // the test fixture happens to select.
+    uint160 hash;
+    *(hash.begin()) = 0x5a;
+    const CTxDestination dest = CKeyID(hash);
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false); // ensure absent
+
+    BOOST_CHECK(!registry.NonContractSetAllocation(dest, GRC::Allocation(0.5), /*save_to_file=*/false));
+    BOOST_CHECK(!registry.NonContractSetDescription(dest, "x", /*save_to_file=*/false));
+    BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+}
+
+// Editor-level behaviour: a single-field edit through the interface must leave the
+// other field intact.
+//
+// WHAT THIS DOES NOT COVER, verified by experiment rather than assumed: it does NOT
+// fail if setAllocation/setDescription regress to reading the entry and writing it
+// back through NonContractAdd(). Those two implementations are observationally
+// identical in a single thread -- the stale read only loses data when something
+// mutates the entry BETWEEN the read and the write, and there is no injection point
+// to force that interleaving here. Reverting the fix and re-running this case leaves
+// it green.
+//
+// It still earns its place: it pins the end-state contract of the editors (a
+// description edit does not disturb the allocation, and vice versa), which catches a
+// regression that writes a wrong or default value for the untouched field. The
+// read-under-lock property that actually closes the race is pinned by the
+// registry-level cases above.
+BOOST_AUTO_TEST_CASE(sidestake_editors_do_not_revert_the_field_not_being_edited)
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+    uint160 hash;
+    *(hash.begin()) = 0x5b;
+    const CTxDestination dest = CKeyID(hash);
+    const std::string address = EncodeDestination(dest);
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false); // start clean
+
+    // The editors persist through SaveLocalSideStakesToConfig(), which needs a real
+    // data directory, or GetDataDir() is empty and the settings write asserts.
+    // TestingSetup creates -datadir; this makes sure of it rather than relying on
+    // the shared fixture.
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    std::unique_ptr<interfaces::SideStakeManager> manager = interfaces::MakeSideStakeManager();
+    BOOST_REQUIRE(manager != nullptr);
+
+    BOOST_REQUIRE(manager->addLocal(address, 10.0, "first description").status
+                  == interfaces::SideStakeEditStatus::OK);
+
+    // Editing the description must not disturb the allocation.
+    BOOST_REQUIRE(manager->setDescription(address, "second description").status
+                  == interfaces::SideStakeEditStatus::OK);
+    {
+        const auto entries = registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL);
+        BOOST_REQUIRE_EQUAL(entries.size(), 1u);
+        BOOST_CHECK_EQUAL(entries.front()->GetDescription(), "second description");
+        BOOST_CHECK_CLOSE(entries.front()->GetAllocation().ToPercent(), 10.0, 1e-6);
+    }
+
+    // Editing the allocation must not disturb the description.
+    BOOST_REQUIRE(manager->setAllocation(address, 20.0).status
+                  == interfaces::SideStakeEditStatus::OK);
+    {
+        const auto entries = registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL);
+        BOOST_REQUIRE_EQUAL(entries.size(), 1u);
+        BOOST_CHECK_CLOSE(entries.front()->GetAllocation().ToPercent(), 20.0, 1e-6);
+        BOOST_CHECK_EQUAL(entries.front()->GetDescription(), "second description");
+    }
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false);
+}
+
+// SaveLocalSideStakesToConfig() arms a flag so that LoadLocalSideStakesFromConfig()
+// skips the reload its own settings write triggers. RwSettingsUpdated is emitted
+// synchronously from inside updateRwSettings(), so the flag has to be armed before
+// that call. Armed after it, the save's own signal has already gone by, and the
+// flag swallows the NEXT RwSettingsUpdated from any source instead: a
+// changesettings of the sidestake keys made after a GUI edit is not reloaded.
+//
+// The registry is never subscribed in this binary (SubscribeToCoreSignals() runs
+// from Initialize(), and UnsubscribeFromCoreSignals() is a no-op, so subscribing
+// here would leak a slot into every later suite). A scoped connection stands in
+// for that subscription.
+BOOST_AUTO_TEST_CASE(sidestake_save_does_not_swallow_the_next_settings_reload)
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+    uint160 hash;
+    *(hash.begin()) = 0x5c;
+    const CTxDestination dest = CKeyID(hash);
+    const std::string address = EncodeDestination(dest);
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false); // start clean
+
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    // Clear the sidestake keys an earlier case left in the read-write settings, so
+    // the reloads below cannot bring its entries back. Nothing is connected yet.
+    const std::vector<std::pair<std::string, util::SettingsValue>> clear_keys{
+        {"sidestakeaddresses", util::SettingsValue{}},
+        {"sidestakeallocations", util::SettingsValue{}},
+        {"sidestakedescriptions", util::SettingsValue{}},
+        {"sidestake_reload_probe", util::SettingsValue{}},
+    };
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+
+    {
+        boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect(
+            [&registry] { registry.LoadLocalSideStakesFromConfig(); })};
+
+        // A save made with nothing connected (the case above) leaves the flag armed.
+        // Consume it, so the steps below start from a cleared flag.
+        BOOST_REQUIRE(updateRwSetting("sidestake_reload_probe", util::SettingsValue{"0"}));
+
+        std::unique_ptr<interfaces::SideStakeManager> manager = interfaces::MakeSideStakeManager();
+        BOOST_REQUIRE(manager != nullptr);
+        BOOST_REQUIRE(manager->addLocal(address, 10.0, "reload probe").status == interfaces::SideStakeEditStatus::OK);
+
+        // The save's own signal has passed. The next one, here the updateRwSetting()
+        // emission changesettings uses, must reload the registry.
+        const uint64_t before = registry.GetLocalSideStakeRevision();
+        BOOST_REQUIRE(updateRwSetting("sidestake_reload_probe", util::SettingsValue{"1"}));
+        BOOST_CHECK_GT(registry.GetLocalSideStakeRevision(), before);
+    }
+
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+    registry.NonContractDelete(dest, /*save_to_file=*/false);
+
+    BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+    BOOST_CHECK(getRwSetting("sidestake_reload_probe").isNull());
+}
+
+// A side-stake edit whose save fails must not stay in effect. The settings
+// write restores the read-write settings, and the save's own RwSettingsUpdated
+// emission is consumed by the skip-flag the save arms, so the registry must
+// reload itself from the restored settings. The editor still reports OK: the
+// interface has no storage-failure status. As in the case above, a scoped
+// connection stands in for the registry's subscription.
+BOOST_AUTO_TEST_CASE(sidestake_failed_save_leaves_no_active_entry)
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+    uint160 hash;
+    *(hash.begin()) = 0x5d;
+    const CTxDestination dest = CKeyID(hash);
+    const std::string address = EncodeDestination(dest);
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false); // start clean
+
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    const std::vector<std::pair<std::string, util::SettingsValue>> clear_keys{
+        {"sidestakeaddresses", util::SettingsValue{}},
+        {"sidestakeallocations", util::SettingsValue{}},
+        {"sidestakedescriptions", util::SettingsValue{}},
+        {"sidestake_reload_probe", util::SettingsValue{}},
+    };
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+
+    {
+        boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect(
+            [&registry] { registry.LoadLocalSideStakesFromConfig(); })};
+
+        // Consume a flag an earlier save made with nothing connected left armed.
+        BOOST_REQUIRE(updateRwSetting("sidestake_reload_probe", util::SettingsValue{"0"}));
+
+        std::unique_ptr<interfaces::SideStakeManager> manager = interfaces::MakeSideStakeManager();
+        BOOST_REQUIRE(manager != nullptr);
+
+        {
+            SettingsWriteBlocker block;
+            BOOST_CHECK(manager->addLocal(address, 10.0, "fail probe").status == interfaces::SideStakeEditStatus::OK);
+            BOOST_CHECK(getRwSetting("sidestakeaddresses").isNull());
+            BOOST_CHECK(registry.TryActive(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+        }
+
+        // The failed save leaves no skip-flag armed: the next emission reloads.
+        const uint64_t before = registry.GetLocalSideStakeRevision();
+        BOOST_REQUIRE(updateRwSetting("sidestake_reload_probe", util::SettingsValue{"1"}));
+        BOOST_CHECK_GT(registry.GetLocalSideStakeRevision(), before);
+    }
+
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+    registry.NonContractDelete(dest, /*save_to_file=*/false);
+
+    BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+    BOOST_CHECK(getRwSetting("sidestake_reload_probe").isNull());
+}
+
+// The same failing save with nothing connected to RwSettingsUpdated, as in a
+// run where the registry has not subscribed. The save must clear the skip-flag
+// it armed before it reloads: otherwise the reload consumes the flag and returns,
+// and the edit stays in effect.
+BOOST_AUTO_TEST_CASE(sidestake_failed_save_without_reload_slot_clears_the_flag)
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+    uint160 hash;
+    *(hash.begin()) = 0x5e;
+    const CTxDestination dest = CKeyID(hash);
+    const std::string address = EncodeDestination(dest);
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false); // start clean
+
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    const std::vector<std::pair<std::string, util::SettingsValue>> clear_keys{
+        {"sidestakeaddresses", util::SettingsValue{}},
+        {"sidestakeallocations", util::SettingsValue{}},
+        {"sidestakedescriptions", util::SettingsValue{}},
+        {"sidestake_reload_probe", util::SettingsValue{}},
+    };
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+
+    std::unique_ptr<interfaces::SideStakeManager> manager = interfaces::MakeSideStakeManager();
+    BOOST_REQUIRE(manager != nullptr);
+
+    // Nothing is connected, so only the save itself can clear the flag it arms.
+    {
+        SettingsWriteBlocker block;
+        BOOST_CHECK(manager->addLocal(address, 10.0, "no slot probe").status == interfaces::SideStakeEditStatus::OK);
+        BOOST_CHECK(getRwSetting("sidestakeaddresses").isNull());
+        BOOST_CHECK(registry.TryActive(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+    }
+
+    {
+        boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect(
+            [&registry] { registry.LoadLocalSideStakesFromConfig(); })};
+
+        // No flag is left armed, so the first emission after connecting reloads.
+        const uint64_t before = registry.GetLocalSideStakeRevision();
+        BOOST_REQUIRE(updateRwSetting("sidestake_reload_probe", util::SettingsValue{"1"}));
+        BOOST_CHECK_GT(registry.GetLocalSideStakeRevision(), before);
+    }
+
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+    registry.NonContractDelete(dest, /*save_to_file=*/false);
+
+    BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+    BOOST_CHECK(getRwSetting("sidestake_reload_probe").isNull());
+}
+
+// A side-stake save that throws (dynamic settings disabled) must not leave the
+// edit in effect either. The exception still reaches the caller, and with
+// nothing connected to RwSettingsUpdated the save must clear the skip-flag it
+// armed before it reloads.
+BOOST_AUTO_TEST_CASE(sidestake_throwing_save_rolls_back_and_clears_the_flag)
+{
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+    uint160 hash;
+    *(hash.begin()) = 0x5f;
+    const CTxDestination dest = CKeyID(hash);
+    const std::string address = EncodeDestination(dest);
+
+    registry.NonContractDelete(dest, /*save_to_file=*/false); // start clean
+
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+
+    const std::vector<std::pair<std::string, util::SettingsValue>> clear_keys{
+        {"sidestakeaddresses", util::SettingsValue{}},
+        {"sidestakeallocations", util::SettingsValue{}},
+        {"sidestakedescriptions", util::SettingsValue{}},
+        {"sidestake_reload_probe", util::SettingsValue{}},
+    };
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+
+    std::unique_ptr<interfaces::SideStakeManager> manager = interfaces::MakeSideStakeManager();
+    BOOST_REQUIRE(manager != nullptr);
+
+    {
+        // WriteSettingsFile() throws when GetSettingsPath() reads the settings
+        // file as disabled, which takes a boolean false "settings" value. Set the
+        // forced value directly, and erase it on every exit from this scope.
+        bool had_forced = true;
+        gArgs.LockSettings([&](util::Settings& s) { had_forced = s.forced_settings.count("settings") != 0; });
+        BOOST_REQUIRE(!had_forced);
+        struct ForcedSettingsEraser {
+            ~ForcedSettingsEraser()
+            {
+                gArgs.LockSettings([](util::Settings& s) { s.forced_settings.erase("settings"); });
+            }
+        } eraser;
+        gArgs.LockSettings([](util::Settings& s) { s.forced_settings["settings"] = false; });
+        BOOST_REQUIRE(!gArgs.GetSettingsPath());
+
+        // Nothing is connected, so only the save itself can clear the flag it arms.
+        BOOST_CHECK_THROW(manager->addLocal(address, 10.0, "throw probe"), std::logic_error);
+        BOOST_CHECK(getRwSetting("sidestakeaddresses").isNull());
+        BOOST_CHECK(registry.TryActive(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+    }
+
+    // The forced value is erased now, so settings writes succeed again.
+    {
+        boost::signals2::scoped_connection conn{uiInterface.RwSettingsUpdated_connect(
+            [&registry] { registry.LoadLocalSideStakesFromConfig(); })};
+
+        // No flag is left armed, so the first emission after connecting reloads.
+        const uint64_t before = registry.GetLocalSideStakeRevision();
+        BOOST_REQUIRE(updateRwSetting("sidestake_reload_probe", util::SettingsValue{"1"}));
+        BOOST_CHECK_GT(registry.GetLocalSideStakeRevision(), before);
+    }
+
+    BOOST_REQUIRE(updateRwSettings(clear_keys));
+    registry.NonContractDelete(dest, /*save_to_file=*/false);
+
+    BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+    BOOST_CHECK(getRwSetting("sidestake_reload_probe").isNull());
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+namespace {
+//! A mandatory sidestake contract in the form addkey builds: contract v3, payload v1.
+GRC::Contract MakeSideStakeContract(const GRC::ContractAction action,
+                                    const CTxDestination& destination,
+                                    const GRC::Allocation& allocation)
+{
+    return GRC::MakeContract<GRC::SideStakePayload>(
+                uint32_t {3},
+                action,
+                uint32_t {1},
+                destination,
+                allocation,
+                std::string {},
+                GRC::MandatorySideStake::MandatorySideStakeStatus::MANDATORY);
+}
+
+//! A destination built from a hash rather than a literal address, so the test does not depend on chain params.
+CTxDestination SideStakeDestination(const unsigned char first_byte)
+{
+    uint160 hash;
+    *(hash.begin()) = first_byte;
+    return CKeyID(hash);
+}
+
+//! The registry's verdict on a contract that would be mined at \p height, through the mempool path (which judges
+//! at nBestHeight + 1) and through the block path.
+struct SideStakeVerdict
+{
+    bool mempool = false;
+    int mempool_dos = 0;
+    bool block = false;
+    int block_dos = 0;
+};
+
+SideStakeVerdict JudgeSideStakeAt(const GRC::Contract& contract, const int height)
+{
+    LOCK(cs_main);
+
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+    CMutableTransaction mtx;
+    mtx.vContracts.push_back(contract);
+    const CTransaction tx(mtx);
+
+    SideStakeVerdict verdict;
+
+    nBestHeight = height - 1;
+    verdict.mempool = registry.Validate(contract, tx, verdict.mempool_dos);
+
+    CBlockIndex index {};
+    index.nHeight = height;
+    verdict.block = registry.BlockValidate({contract, tx, &index}, verdict.block_dos);
+
+    return verdict;
+}
+
+//! Commit a mandatory sidestake to the registry as connecting a block at \p height would.
+void CommitSideStake(const CTxDestination& destination, const GRC::Allocation& allocation, const int height)
+{
+    LOCK(cs_main);
+
+    const GRC::Contract contract = MakeSideStakeContract(GRC::ContractAction::ADD, destination, allocation);
+
+    CMutableTransaction mtx;
+    mtx.vContracts.push_back(contract);
+    const CTransaction tx(mtx);
+
+    CBlockIndex index {};
+    index.nHeight = height;
+
+    GRC::GetSideStakeRegistry().Add({contract, tx, &index});
+}
+
+//! Check the verdict on both paths: a pass on both, or a refusal with DoS 25 on both.
+void ExpectSideStakeVerdict(const GRC::Contract& contract, const int height, const bool pass, const std::string& what)
+{
+    const SideStakeVerdict verdict = JudgeSideStakeAt(contract, height);
+
+    if (pass) {
+        BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, what);
+    } else {
+        BOOST_CHECK_MESSAGE(!verdict.mempool && verdict.mempool_dos == 25, what << " (mempool)");
+        BOOST_CHECK_MESSAGE(!verdict.block && verdict.block_dos == 25, what << " (block)");
+    }
+}
+
+// Heights above BlockV13Height (the unit tests run on main params), which the sidestake block path requires.
+constexpr int V15_TEST_HEIGHT = 4'200'000;
+constexpr int BELOW_V15 = V15_TEST_HEIGHT - 1;
+} // namespace
+
+BOOST_AUTO_TEST_SUITE(sidestake_v15_validation_tests,
+                      *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::SIDESTAKE>>())
+
+// From v15 a mandatory sidestake ADD needs a positive allocation whose reduced denominator divides 10000, which is
+// what Allocation(double) builds. The same contracts pass below v15, a REMOVE is unaffected, and the reduction is
+// computed from the pair rather than taken from the simplified flag the wire carries.
+BOOST_AUTO_TEST_CASE(sidestake_v15_allocation_rules)
+{
+    grc_test::StateGuard state_guard; // nBestHeight
+    grc_test::V15HeightGuard v15(V15_TEST_HEIGHT);
+
+    const CTxDestination destination = SideStakeDestination(0x31);
+
+    for (const auto& [num, den] : std::vector<std::pair<int64_t, int64_t>> {{1, 7}, {1, 9}, {0, 1}}) {
+        const GRC::Contract contract = MakeSideStakeContract(GRC::ContractAction::ADD, destination, GRC::Allocation(num, den));
+
+        const SideStakeVerdict before = JudgeSideStakeAt(contract, BELOW_V15);
+        BOOST_CHECK_MESSAGE(before.mempool && before.block, "ADD " << num << "/" << den << " below v15");
+
+        const SideStakeVerdict after = JudgeSideStakeAt(contract, V15_TEST_HEIGHT);
+        BOOST_CHECK_MESSAGE(!after.mempool && after.mempool_dos == 25, "ADD " << num << "/" << den << " mempool at v15");
+        BOOST_CHECK_MESSAGE(!after.block && after.block_dos == 25, "ADD " << num << "/" << den << " block at v15");
+    }
+
+    for (const auto& [num, den] : std::vector<std::pair<int64_t, int64_t>> {{1, 10}, {25, 10000}, {2, 20}}) {
+        const GRC::Contract contract = MakeSideStakeContract(GRC::ContractAction::ADD, destination, GRC::Allocation(num, den));
+
+        for (const int height : {BELOW_V15, V15_TEST_HEIGHT}) {
+            const SideStakeVerdict verdict = JudgeSideStakeAt(contract, height);
+            BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, "ADD " << num << "/" << den << " at " << height);
+        }
+    }
+
+    const GRC::Contract remove = MakeSideStakeContract(GRC::ContractAction::REMOVE, destination, GRC::Allocation(0, 1));
+
+    for (const int height : {BELOW_V15, V15_TEST_HEIGHT}) {
+        const SideStakeVerdict verdict = JudgeSideStakeAt(remove, height);
+        BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, "REMOVE 0/1 at " << height);
+    }
+
+    // 2/20000 with the simplified flag set: a pair whose own denominator does not divide 10000 but whose reduced
+    // one does. Read from bytes, because no constructor sets the flag against the pair.
+    CDataStream wire(SER_NETWORK, PROTOCOL_VERSION);
+    wire << int64_t {2} << int64_t {20000} << true;
+    GRC::Allocation lying_flag;
+    wire >> lying_flag;
+    BOOST_REQUIRE(lying_flag.IsSimplified());
+
+    const SideStakeVerdict verdict = JudgeSideStakeAt(
+        MakeSideStakeContract(GRC::ContractAction::ADD, destination, lying_flag), V15_TEST_HEIGHT);
+    BOOST_CHECK_MESSAGE(verdict.mempool && verdict.block, "ADD 2/20000 with the flag set at v15");
+}
+
+
+// The total check counts each destination once from v15: an ADD for a destination that already has an active
+// allocation is judged on the total it would leave, and a REMOVE never raises the total. Below v15 the old check
+// stands, which adds the contract's allocation to the active total whatever the action or destination.
+BOOST_AUTO_TEST_CASE(sidestake_v15_total_counts_destination_once)
+{
+    grc_test::StateGuard state_guard; // nBestHeight
+    grc_test::V15HeightGuard v15(V15_TEST_HEIGHT);
+
+    const CTxDestination a = SideStakeDestination(0x41);
+    const CTxDestination b = SideStakeDestination(0x42);
+    const CTxDestination c = SideStakeDestination(0x43);
+    const int committed_at = 4'000'000;
+
+    {
+        // Active: A 1/10.
+        grc_test::RegistryReset reset({GRC::ContractType::SIDESTAKE});
+        CommitSideStake(a, GRC::Allocation(1, 10), committed_at);
+
+        const GRC::Contract raise_a = MakeSideStakeContract(GRC::ContractAction::ADD, a, GRC::Allocation(1, 5));
+        ExpectSideStakeVerdict(raise_a, BELOW_V15, false, "raise A to 1/5 below v15 (counts 3/10)");
+        ExpectSideStakeVerdict(raise_a, V15_TEST_HEIGHT, true, "raise A to 1/5 at v15 (leaves 1/5)");
+
+        const GRC::Contract add_b = MakeSideStakeContract(GRC::ContractAction::ADD, b, GRC::Allocation(1, 5));
+        ExpectSideStakeVerdict(add_b, BELOW_V15, false, "add B 1/5 below v15 (3/10)");
+        ExpectSideStakeVerdict(add_b, V15_TEST_HEIGHT, false, "add B 1/5 at v15 (3/10)");
+
+        // Landing exactly on the 1/4 ceiling is allowed.
+        const GRC::Contract add_b_to_ceiling = MakeSideStakeContract(GRC::ContractAction::ADD, b, GRC::Allocation(3, 20));
+        ExpectSideStakeVerdict(add_b_to_ceiling, BELOW_V15, true, "add B 3/20 below v15 (exactly 1/4)");
+        ExpectSideStakeVerdict(add_b_to_ceiling, V15_TEST_HEIGHT, true, "add B 3/20 at v15 (exactly 1/4)");
+
+        const GRC::Contract raise_a_to_ceiling = MakeSideStakeContract(GRC::ContractAction::ADD, a, GRC::Allocation(1, 4));
+        ExpectSideStakeVerdict(raise_a_to_ceiling, BELOW_V15, false, "raise A to 1/4 below v15 (counts 7/20)");
+        ExpectSideStakeVerdict(raise_a_to_ceiling, V15_TEST_HEIGHT, true, "raise A to 1/4 at v15 (leaves exactly 1/4)");
+    }
+
+    {
+        // Active: A 1/10, B 1/10.
+        grc_test::RegistryReset reset({GRC::ContractType::SIDESTAKE});
+        CommitSideStake(a, GRC::Allocation(1, 10), committed_at);
+        CommitSideStake(b, GRC::Allocation(1, 10), committed_at);
+
+        const GRC::Contract remove_a_carrying = MakeSideStakeContract(GRC::ContractAction::REMOVE, a, GRC::Allocation(1, 10));
+        ExpectSideStakeVerdict(remove_a_carrying, BELOW_V15, false, "remove A carrying 1/10 below v15 (counts 3/10)");
+        ExpectSideStakeVerdict(remove_a_carrying, V15_TEST_HEIGHT, true, "remove A carrying 1/10 at v15");
+
+        const GRC::Contract remove_a = MakeSideStakeContract(GRC::ContractAction::REMOVE, a, GRC::Allocation(0, 1));
+        ExpectSideStakeVerdict(remove_a, BELOW_V15, true, "remove A with 0 below v15");
+        ExpectSideStakeVerdict(remove_a, V15_TEST_HEIGHT, true, "remove A with 0 at v15");
+    }
+
+    {
+        // Active: A 1/10, B 3/20, exactly the 1/4 ceiling.
+        grc_test::RegistryReset reset({GRC::ContractType::SIDESTAKE});
+        CommitSideStake(a, GRC::Allocation(1, 10), committed_at);
+        CommitSideStake(b, GRC::Allocation(3, 20), committed_at);
+
+        const GRC::Contract remove_a = MakeSideStakeContract(GRC::ContractAction::REMOVE, a, GRC::Allocation(0, 1));
+        ExpectSideStakeVerdict(remove_a, V15_TEST_HEIGHT, true, "remove A with 0 at the ceiling at v15");
+
+        // addkey puts whatever allocation it is given on a REMOVE. Not judged on the total from v15.
+        const GRC::Contract remove_a_large = MakeSideStakeContract(GRC::ContractAction::REMOVE, a, GRC::Allocation(1, 5));
+        ExpectSideStakeVerdict(remove_a_large, BELOW_V15, false, "remove A carrying 1/5 at the ceiling below v15");
+        ExpectSideStakeVerdict(remove_a_large, V15_TEST_HEIGHT, true, "remove A carrying 1/5 at the ceiling at v15");
+
+        const GRC::Contract add_c = MakeSideStakeContract(GRC::ContractAction::ADD, c, GRC::Allocation(1, 10000));
+        ExpectSideStakeVerdict(add_c, BELOW_V15, false, "add C 1/10000 at the ceiling below v15");
+        ExpectSideStakeVerdict(add_c, V15_TEST_HEIGHT, false, "add C 1/10000 at the ceiling at v15");
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

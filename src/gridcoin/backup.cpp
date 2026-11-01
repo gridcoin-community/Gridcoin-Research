@@ -10,7 +10,7 @@
 #include "util/time.h"
 #include <filesystem>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/version.hpp>
 
 #include <string>
 
@@ -79,6 +79,7 @@ void GRC::RunBackupJob()
 
     backup_file_type.push_back("wallet.dat");
     backup_file_type.push_back("gridcoinresearch.conf");
+    backup_file_type.push_back("gridcoinsettings.json");
 
     std::vector<std::string> files_removed;
 
@@ -97,46 +98,89 @@ void GRC::RunBackupJob()
 
     const bool wallet_result = BackupWallet(*pwalletMain, GetBackupFilename(backup_file_type[0]));
     const bool config_result = BackupConfigFile(GetBackupFilename(backup_file_type[1]));
+    const bool settings_result = BackupSettingsFile(GetBackupFilename(backup_file_type[2]));
     const bool maintain_backups_result = MaintainBackups(GetBackupPath(), backup_file_type, 0, 0, files_removed);
 
-    LogPrintf("%s: Scheduled backup results: Wallet: %s; Config: %s; History Maintenance: %s, %d files removed",
+    LogPrintf("%s: Scheduled backup results: Wallet: %s; Config: %s; Settings: %s; History Maintenance: %s, %d files removed",
         __func__,
         (wallet_result ? "succeeded" : "failed"),
         (config_result ? "succeeded" : "failed"),
+        (settings_result ? "succeeded" : "failed"),
         (maintain_backups_result ? "succeeded" : "failed"),
         files_removed.size());
 
     last_backup_time = now;
 }
 
+namespace {
+//! Shared implementation of the file-copy logic used by BackupConfigFile and
+//! BackupSettingsFile. Encapsulates the Boost 1.74 symlink-target workaround
+//! so callers only have to provide the source path, the destination string,
+//! and a label for logging.
+bool BackupPlainFile(const fs::path& source, const std::string& strDest, const char* label)
+{
+    fs::path target = strDest;
+    try
+    {
+        fs::create_directories(target.parent_path());
+#if BOOST_VERSION > 107400
+        fs::copy_file(source, target, fs::copy_options::overwrite_existing);
+#elif BOOST_VERSION == 107400
+        // Workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
+        // The std paths are built from the native strings as they are. Going through wstring()
+        // converts with the locale, and a non-ASCII path fails: Boost throws
+        // boost::system::system_error under the C locale, and std::filesystem refuses the wide
+        // string under a UTF-8 one.
+        std::filesystem::path StdSource = source.native();
+        std::filesystem::path StdTarget = target.native();
+        std::filesystem::copy_file(StdSource, StdTarget, std::filesystem::copy_options::overwrite_existing);
+#else
+        fs::copy_file(source, target, fs::copy_option::overwrite_if_exists);
+#endif
+        LogPrintf("%s: Copied %s to %s", __func__, label, target.string());
+        return true;
+    }
+    catch (const fs::filesystem_error& e)
+    {
+        LogPrintf("%s: Error copying %s to %s - %s", __func__, label, target.string(), e.what());
+        return false;
+    }
+#if BOOST_VERSION == 107400
+    // The Boost 1.74 workaround copies with std::filesystem, which throws its own type. It is
+    // named only here, with the code that throws it: libc++ makes the type unavailable before
+    // macOS 10.15.
+    catch (const std::filesystem::filesystem_error& e)
+    {
+        LogPrintf("%s: Error copying %s to %s - %s", __func__, label, target.string(), e.what());
+        return false;
+    }
+#endif
+}
+} // anonymous namespace
+
 bool GRC::BackupConfigFile(const std::string& strDest)
 {
     // Check to see if there is a parent_path in strDest to support custom locations by ui - bug fix
+    return BackupPlainFile(GetConfigFile(), strDest, "gridcoinresearch.conf");
+}
 
-    fs::path ConfigSource = GetConfigFile();
-    fs::path ConfigTarget = strDest;
-    fs::create_directories(ConfigTarget.parent_path());
-    try
-    {
-#if BOOST_VERSION > 107400
-        fs::copy_file(ConfigSource, ConfigTarget, fs::copy_options::overwrite_existing);
-#elif BOOST_VERSION == 107400
-        // This is a workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
-        std::filesystem::path StdConfigSource = ConfigSource.wstring();
-        std::filesystem::path StdConfigTarget = strDest;
-        std::filesystem::copy_file(StdConfigSource, StdConfigTarget, std::filesystem::copy_options::overwrite_existing);
-#else
-        fs::copy_file(ConfigSource, ConfigTarget, fs::copy_option::overwrite_if_exists);
-#endif
-        LogPrintf("BackupConfigFile: Copied gridcoinresearch.conf to %s", ConfigTarget.string());
+bool GRC::BackupSettingsFile(const std::string& strDest)
+{
+    // The settings file path is resolved via ArgsManager so that the -settings
+    // override is honored. If settings are disabled (-nosettings), or the file
+    // has not been created yet (no rw settings have ever been written), there
+    // is nothing to back up; treat that as success so the surrounding backup
+    // job does not report a spurious failure.
+    fs::path source;
+    if (!gArgs.GetSettingsPath(&source, /* temp= */ false)) {
+        LogPrintf("%s: Settings file disabled via -nosettings, skipping.", __func__);
         return true;
     }
-    catch(const fs::filesystem_error &e)
-    {
-        LogPrintf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s", ConfigTarget.string(), e.what());
-        return false;
+    if (!fs::exists(source)) {
+        LogPrintf("%s: Settings file %s does not exist yet, skipping.", __func__, source.string());
+        return true;
     }
-    return false;
+    return BackupPlainFile(source, strDest, "gridcoinsettings.json");
 }
 
 bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
@@ -157,17 +201,19 @@ bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
         // Copy wallet.dat
         fs::path WalletSource = GetDataDir() / wallet.strWalletFile;
         fs::path WalletTarget = strDest;
-        fs::create_directories(WalletTarget.parent_path());
-        if (fs::is_directory(WalletTarget))
-            WalletTarget /= wallet.strWalletFile;
         try
         {
+            fs::create_directories(WalletTarget.parent_path());
+            if (fs::is_directory(WalletTarget))
+                WalletTarget /= wallet.strWalletFile;
 #if BOOST_VERSION > 107400
             fs::copy_file(WalletSource, WalletTarget, fs::copy_options::overwrite_existing);
 #elif BOOST_VERSION == 107400
             // This is a workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
-            std::filesystem::path StdWalletSource = WalletSource.wstring();
-            std::filesystem::path StdWalletTarget = strDest;
+            // Native strings, as in BackupPlainFile above. The target is WalletTarget, so a directory
+            // gets the wallet file name appended here as it does in the Boost branch.
+            std::filesystem::path StdWalletSource = WalletSource.native();
+            std::filesystem::path StdWalletTarget = WalletTarget.native();
             std::filesystem::copy_file(StdWalletSource, StdWalletTarget, std::filesystem::copy_options::overwrite_existing);
 #else
             fs::copy_file(WalletSource, WalletTarget, fs::copy_option::overwrite_if_exists);
@@ -178,6 +224,13 @@ bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
             LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s", WalletTarget.string(), e.what());
             return false;
         }
+#if BOOST_VERSION == 107400
+        // The Boost 1.74 workaround copies with std::filesystem; see BackupPlainFile above.
+        catch(const std::filesystem::filesystem_error &e) {
+            LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s", WalletTarget.string(), e.what());
+            return false;
+        }
+#endif
 
         return true;
     }

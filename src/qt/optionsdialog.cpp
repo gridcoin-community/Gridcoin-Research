@@ -1,4 +1,5 @@
 #include "optionsdialog.h"
+#include "qt/guilog.h"
 #include "qevent.h"
 #include "ui_optionsdialog.h"
 
@@ -7,11 +8,9 @@
 #include "monitoreddatamapper.h"
 #include "optionsmodel.h"
 #include "qt/decoration.h"
-#include "init.h"
-#include "miner.h"
+#include "amount.h" // For MIN_STAKE_SPLIT_VALUE_GRC.
 #include "sidestaketablemodel.h"
 #include "editsidestakedialog.h"
-#include "logging.h"
 
 #include <QSortFilterProxyModel>
 #include <QDir>
@@ -57,7 +56,7 @@ OptionsDialog::OptionsDialog(QWidget* parent)
     ui->pollExpireNotifyLineEdit->installEventFilter(this);
 
     /* Window elements init */
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     /* hide launch at startup option on macOS */
     ui->gridcoinAtStartup->setVisible(false);
     ui->gridcoinAtStartupMinimised->setVisible(false);
@@ -125,8 +124,6 @@ OptionsDialog::OptionsDialog(QWidget* parent)
     /** setup/change UI elements when poll expiry notification time window is valid/invalid */
     connect(this, &OptionsDialog::pollExpireNotifyValid, this, &OptionsDialog::handlePollExpireNotifyValid);
 
-    if (fTestNet) ui->disableUpdateCheck->setHidden(true);
-
     ui->gridcoinAtStartupMinimised->setHidden(!ui->gridcoinAtStartup->isChecked());
     ui->limitTxnDisplayDateEdit->setHidden(!ui->limitTxnDisplayCheckBox->isChecked());
 
@@ -162,6 +159,28 @@ void OptionsDialog::setModel(OptionsModel *model)
     if(model)
     {
         connect(model, &OptionsModel::displayUnitChanged, this, &OptionsDialog::updateDisplayUnit);
+
+        // Hide the update-check option wherever the check does not run, which
+        // is everywhere but mainnet. Read network identity through the model's
+        // node interface (never the raw fTestNet global), and do it here rather
+        // than in the constructor because the model -- and thus the node -- is
+        // only available once it is set.
+        //
+        // isMainNet() rather than isTestNet(): the latter is false on regtest,
+        // which would leave the option on offer for a check that never runs.
+        if (!model->isMainNet()) {
+            ui->disableUpdateCheck->setHidden(true);
+        }
+
+        // Hide the login-item options off mainnet and testnet, where
+        // GUIUtil::SetStartOnSystemStartup does nothing. On regtest the value
+        // shown would be mainnet's anyway: the two share one flat setting.
+        // Done before the mapper loads that value, and hideStartMinimized()
+        // keeps the minimised box hidden once it does.
+        if (!model->isMainNet() && !model->isTestNet()) {
+            ui->gridcoinAtStartup->setHidden(true);
+            ui->gridcoinAtStartupMinimised->setHidden(true);
+        }
 
         mapper->setModel(model);
         setMapper();
@@ -257,7 +276,7 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->disableTransactionNotifications, OptionsModel::DisableTrxNotifications);
     mapper->addMapping(ui->disablePollNotifications, OptionsModel::DisablePollNotifications);
     mapper->addMapping(ui->pollExpireNotifyLineEdit, OptionsModel::PollExpireNotification);
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     if (QSystemTrayIcon::isSystemTrayAvailable()) {
         mapper->addMapping(ui->minimizeToTray, OptionsModel::MinimizeToTray);
         mapper->addMapping(ui->minimizeOnClose, OptionsModel::MinimizeOnClose);
@@ -421,7 +440,11 @@ void OptionsDialog::hideStartMinimized()
 {
     if (model)
     {
-        ui->gridcoinAtStartupMinimised->setHidden(!ui->gridcoinAtStartup->isChecked());
+        // Follows the autostart box, and stays hidden wherever that box is
+        // hidden (macOS, regtest): loading a checked value must not show the
+        // minimised box on its own.
+        ui->gridcoinAtStartupMinimised->setHidden(ui->gridcoinAtStartup->isHidden()
+                                                  || !ui->gridcoinAtStartup->isChecked());
     }
 }
 
@@ -658,7 +681,7 @@ void OptionsDialog::sidestakeSelectionChanged()
         if (indexes.size() > 1) {
             ui->pushButtonEditSideStake->setEnabled(false);
             ui->pushButtonDeleteSideStake->setEnabled(false);
-        } else if (static_cast<GRC::SideStake*>(indexes.at(0).internalPointer())->IsMandatory()) {
+        } else if (model->getSideStakeTableModel()->isMandatory(indexes.at(0).row())) {
             ui->pushButtonEditSideStake->setEnabled(false);
             ui->pushButtonDeleteSideStake->setEnabled(false);
         } else {
@@ -712,12 +735,12 @@ void OptionsDialog::resizeSideStakeTableColumns(const bool& neighbor_pair_adjust
             ui->sidestakingTableView->horizontalHeader()->resizeSection(i, m_table_column_sizes[i]);
 
 
-            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: section size = %i",
+            GUILogPrint(GUILogCategory::VERBOSE, "INFO: %s: section size = %i",
                      __func__,
                      ui->sidestakingTableView->horizontalHeader()->sectionSize(i));
         }
 
-        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: header width = %i",
+        GUILogPrint(GUILogCategory::VERBOSE, "INFO: %s: header width = %i",
                  __func__,
                  ui->sidestakingTableView->horizontalHeader()->width()
                  );

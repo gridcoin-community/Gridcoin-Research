@@ -30,6 +30,16 @@ ResearcherWizardModeDetailPage::~ResearcherWizardModeDetailPage()
 void ResearcherWizardModeDetailPage::setModel(ResearcherModel *model)
 {
     this->m_researcher_model = model;
+
+    // Connected once here, not in initializePage(), which runs on every entry
+    // into the page (#3349).
+    #if (QT_VERSION >= QT_VERSION_CHECK(5, 15, 0))
+        connect(ui->modeButtonGroup, static_cast<void (QButtonGroup::*)(int)>(&QButtonGroup::idClicked),
+            this, &ResearcherWizardModeDetailPage::onModeChange);
+    #else
+        connect(ui->modeButtonGroup, static_cast<void (QButtonGroup::*)(int)>(&QButtonGroup::buttonClicked),
+            this, &ResearcherWizardModeDetailPage::onModeChange);
+    #endif
 }
 
 void ResearcherWizardModeDetailPage::initializePage()
@@ -41,14 +51,6 @@ void ResearcherWizardModeDetailPage::initializePage()
     ui->modeButtonGroup->setId(ui->soloRadioButton, ResearcherWizard::ModeSolo);
     ui->modeButtonGroup->setId(ui->poolRadioButton, ResearcherWizard::ModePool);
     ui->modeButtonGroup->setId(ui->noncruncherRadioButton, ResearcherWizard::ModeNoncruncher);
-
-    #if (QT_VERSION >= QT_VERSION_CHECK(5, 15, 0))
-        connect(ui->modeButtonGroup, static_cast<void (QButtonGroup::*)(int)>(&QButtonGroup::idClicked),
-            this, &ResearcherWizardModeDetailPage::onModeChange);
-    #else
-        connect(ui->modeButtonGroup, static_cast<void (QButtonGroup::*)(int)>(&QButtonGroup::buttonClicked),
-            this, &ResearcherWizardModeDetailPage::onModeChange);
-    #endif
 
     if (m_researcher_model->configuredForNoncruncherMode()) {
         ui->noncruncherRadioButton->setChecked(true);

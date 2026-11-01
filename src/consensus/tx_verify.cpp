@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chain.h"
 #include <consensus/tx_verify.h>
 
 #include <node/blockstorage.h>
@@ -140,7 +141,7 @@ bool EvaluateSequenceLocks(const CBlockIndex& block,
  * transaction), find the height of the block that contains it.
  * Returns 0 on failure.
  */
-static int GetHeightForTxIndex(const CTxIndex& txindex)
+static int GetHeightForTxIndex(const CTxIndex& txindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CBlock block;
     if (!ReadBlockFromDisk(block, txindex.pos.nFile, txindex.pos.nBlockPos,

@@ -5,8 +5,6 @@
 #ifndef BITCOIN_QT_RECEIVECOINSPAGE_H
 #define BITCOIN_QT_RECEIVECOINSPAGE_H
 
-#include "walletmodel.h"
-
 #include <QWidget>
 
 namespace Ui {

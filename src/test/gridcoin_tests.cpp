@@ -6,42 +6,31 @@
 #include "uint256.h"
 #include "gridcoin/protocol.h"
 #include "util.h"
-#include "main.h"
 #include "gridcoin/staking/reward.h"
 
 #include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
 #include <boost/algorithm/hex.hpp>
 #include <map>
 #include <string>
 
-extern bool fTestNet;
 extern leveldb::DB *txdb;
 
 namespace {
 // Arbitrary random characters generated with Python UUID.
 const std::string TEST_CPID("17c65330c0924259b2f93c31d25b03ac");
 
-struct GridcoinTestsConfig
-{
-    GridcoinTestsConfig()
-    {
-    }
-
-    ~GridcoinTestsConfig()
-    {
-    }
-};
-
 void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, const std::string& value,
-                      const CBlockIndex index, const bool& reset_registry = false)
+                      const CBlockIndex index, const bool& reset_registry = false) NO_THREAD_SAFETY_ANALYSIS
 {
     GRC::ProtocolRegistry& registry = GRC::GetProtocolRegistry();
 
            // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
-    dummy_tx.nTime = index.nTime;
+    CMutableTransaction mtx;
+    mtx.nTime = index.nTime;
 
     GRC::Contract contract;
 
@@ -61,40 +50,111 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
             GRC::ProtocolEntryStatus::ACTIVE);
     }
 
-    dummy_tx.vContracts.push_back(contract);
+    mtx.vContracts.push_back(contract);
 
+    CTransaction dummy_tx(mtx);
     registry.Add({contract, dummy_tx, &index});
 }
 
 } // anonymous namespace
 
-BOOST_GLOBAL_FIXTURE(GridcoinTestsConfig);
-
 BOOST_AUTO_TEST_SUITE(gridcoin_tests)
 
 BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock1010000InProduction)
 {
-    bool was_testnet = fTestNet;
-    fTestNet = false;
     SelectParams(CBaseChainParams::MAIN);
     BOOST_CHECK(IsV8Enabled(1009999) == false);
     BOOST_CHECK(IsV8Enabled(1010000) == false);
     BOOST_CHECK(IsV8Enabled(1010001) == true);
-    fTestNet = was_testnet;
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock312000InTestnet)
 {
-    bool was_testnet = fTestNet;
-    fTestNet = true;
+    // Puts the network back even if a check below throws; the trailing
+    // SelectParams(MAIN) this replaces only ran on the happy path.
+    grc_test::StateGuard guard;
+
     SelectParams(CBaseChainParams::TESTNET);
     // With testnet block 312000 was created as the first V8 block,
     // hence the difference in testing setup compared to the production
     // tests.
     BOOST_CHECK(IsV8Enabled(311999) == false);
     BOOST_CHECK(IsV8Enabled(312000) == true);
-    fTestNet = was_testnet;
+}
+
+namespace {
+//! Clears the unit-test opt-in for one case, so ConsensusOverridesAllowed()
+//! answers as it does in a node, and puts it back afterwards.
+class NodeOverrideRules
+{
+public:
+    NodeOverrideRules() : m_saved(g_unit_test_consensus_overrides) { g_unit_test_consensus_overrides = false; }
+    ~NodeOverrideRules() { g_unit_test_consensus_overrides = m_saved; }
+
+private:
+    bool m_saved;
+};
+
+//! Sets every consensus override to 5, a value no network's chainparams uses
+//! for any of them.
+void SetConsensusOverrides()
+{
+    for (const char* arg : CONSENSUS_OVERRIDE_ARGS) {
+        gArgs.ForceSetArg(arg, "5");
+    }
+}
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(gridcoin_consensus_overrides_are_ignored_on_mainnet)
+{
+    // Restores the network and the forced settings.
+    grc_test::StateGuard guard;
+    NodeOverrideRules node_rules;
+
     SelectParams(CBaseChainParams::MAIN);
+    SetConsensusOverrides();
+    const Consensus::Params& consensus = Params().GetConsensus();
+
+    BOOST_CHECK(!ConsensusOverridesAllowed());
+    BOOST_CHECK_EQUAL(GetBlockV15Height(), consensus.BlockV15Height);
+    BOOST_CHECK_EQUAL(GetMessageContractDisableHeight(), consensus.MessageContractDisableHeight);
+    BOOST_CHECK_EQUAL(GetPendingPoolRetention(), consensus.PendingPoolRetention);
+    BOOST_CHECK_EQUAL(IsPollMultiAddressEnabled(5), 5 >= consensus.PollMultiAddressHeight);
+    BOOST_CHECK_EQUAL(IsAutoGreylistDeepCopyEnabled(5), 5 >= consensus.AutoGreylistDeepCopyHeight);
+    BOOST_CHECK_EQUAL(IsAutoGreylistTotalCreditFixEnabled(5), 5 >= consensus.AutoGreylistTotalCreditFixHeight);
+    BOOST_CHECK_EQUAL(IsAutoGreylistRedesignEnabled(5), 5 >= consensus.AutoGreylistRedesignHeight);
+
+    // The unit-test opt-in is what lets the suites drive them on mainnet params.
+    g_unit_test_consensus_overrides = true;
+    BOOST_CHECK(ConsensusOverridesAllowed());
+    BOOST_CHECK_EQUAL(GetBlockV15Height(), 5);
+}
+
+BOOST_AUTO_TEST_CASE(gridcoin_consensus_overrides_apply_on_testnet_and_regtest)
+{
+    grc_test::StateGuard guard;
+    NodeOverrideRules node_rules;
+
+    for (const std::string& chain : {CBaseChainParams::TESTNET, CBaseChainParams::REGTEST}) {
+        BOOST_TEST_MESSAGE("chain " << chain);
+        SelectParams(chain);
+        SetConsensusOverrides();
+
+        BOOST_CHECK(ConsensusOverridesAllowed());
+        BOOST_CHECK_EQUAL(GetBlockV15Height(), 5);
+        BOOST_CHECK_EQUAL(GetMessageContractDisableHeight(), 5);
+        BOOST_CHECK_EQUAL(GetPendingPoolRetention(), 5);
+        // Each gate opens at the override height, not the chainparams one
+        // (0 on regtest, unscheduled on testnet).
+        BOOST_CHECK(!IsPollMultiAddressEnabled(4));
+        BOOST_CHECK(IsPollMultiAddressEnabled(5));
+        BOOST_CHECK(!IsAutoGreylistDeepCopyEnabled(4));
+        BOOST_CHECK(IsAutoGreylistDeepCopyEnabled(5));
+        BOOST_CHECK(!IsAutoGreylistTotalCreditFixEnabled(4));
+        BOOST_CHECK(IsAutoGreylistTotalCreditFixEnabled(5));
+        BOOST_CHECK(!IsAutoGreylistRedesignEnabled(4));
+        BOOST_CHECK(IsAutoGreylistRedesignEnabled(5));
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -103,7 +163,19 @@ BOOST_AUTO_TEST_SUITE_END()
 // CBR tests
 //
 
-BOOST_AUTO_TEST_SUITE(gridcoin_cbr_tests)
+// Tests drive the ProtocolRegistry contract handler directly (Reset,
+// AddProtocolEntry helper above which calls Add). The handler is
+// EXCLUSIVE_LOCKS_REQUIRED(cs_main); suppress the analyzer for these
+// single-threaded tests rather than take a lock they do not need.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
+
+// Symmetric reset: the cases reset the protocol registry on entry only, and
+// the ACTIVE blockreward1 entry the last case leaves behind changes the
+// reward every later suite that mines a block is paid.
+BOOST_AUTO_TEST_SUITE(gridcoin_cbr_tests, *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::PROTOCOL>>())
 
 BOOST_AUTO_TEST_CASE(gridcoin_DefaultCBRShouldBe10PreV13)
 {
@@ -364,3 +436,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_PriorObsoleteConfigurableCBRShouldNotResortToDefau
 
 
 BOOST_AUTO_TEST_SUITE_END()
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif

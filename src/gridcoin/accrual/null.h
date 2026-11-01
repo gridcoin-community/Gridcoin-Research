@@ -8,8 +8,7 @@
 #include "amount.h"
 #include "gridcoin/accrual/computer.h"
 
-namespace {
-using namespace GRC;
+namespace GRC {
 
 //!
 //! \brief An implementation of IAccrualComputer that always returns zeros.
@@ -82,6 +81,6 @@ public:
         return 0;
     }
 }; // NullAccrualComputer
-} // anonymous namespace
+} // namespace GRC
 
 #endif // GRIDCOIN_ACCRUAL_NULL_H

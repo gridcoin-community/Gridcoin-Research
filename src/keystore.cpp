@@ -76,22 +76,49 @@ bool CCryptoKeyStore::SetCrypted()
     return true;
 }
 
-bool CCryptoKeyStore::Lock()
+std::optional<CCryptoKeyStore::UnlockState> CCryptoKeyStore::LockAndCapture()
 {
     if (!SetCrypted())
-        return false;
+        return std::nullopt;
+
+    UnlockState prior;
 
     {
         LOCK(cs_KeyStore);
+
+        // Read under the acquisition that clears them, so what is reported is
+        // exactly the unlock this call ended and not one a concurrent relock
+        // had already replaced.
+        prior.scope = m_unlock_scope;
+        prior.deadline = m_unlock_deadline;
+
         vMasterKey.clear();
+        m_unlock_scope = UnlockScope::Locked;
+        m_unlock_deadline.reset();
+
+        // Ends the current unlock, so any relock armed for it is now stale.
+        ++m_unlock_epoch;
     }
 
     NotifyStatusChanged(this);
-    return true;
+    return prior;
 }
 
-bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
+bool CCryptoKeyStore::Lock()
 {
+    return LockAndCapture().has_value();
+}
+
+bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope scope,
+                            std::optional<int64_t> deadline, uint64_t* epoch_out)
+{
+    // Asking to unlock "to Locked" is not a thing. Fail closed rather than pick
+    // a scope for the caller: silently widening it to Full would hand a future
+    // caller that read a scope back off a locked wallet a full unlock.
+    if (scope == UnlockScope::Locked) {
+        return error("%s: refusing to unlock with a Locked scope", __func__);
+    }
+
     {
         LOCK(cs_KeyStore);
         if (!SetCrypted())
@@ -127,9 +154,62 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
         if (keyPass) std::memset(&keyPass, 1, sizeof(bool));
         if (keyFail || !keyPass)
             return false;
+        // The key, what it permits, and when it expires, set together under one
+        // lock. A reader between two separate writes is the defect this
+        // replaces, and the deadline now belongs to this unlock rather than to
+        // a process-wide global no unlock owned.
         vMasterKey = vMasterKeyIn;
+        m_unlock_scope = scope;
+        m_unlock_deadline = deadline;
+
+        // Begins a new unlock, so a relock armed for the previous one is stale.
+        ++m_unlock_epoch;
+
+        // Reported from inside the same acquisition that installed it. Reading
+        // it back afterwards is a second acquisition, and the unlock it names
+        // may not be this one by the time the caller arms a relock against it.
+        if (epoch_out) *epoch_out = m_unlock_epoch;
+
         fDecryptionThoroughlyChecked = true;
     }
+    NotifyStatusChanged(this);
+    return true;
+}
+
+bool CCryptoKeyStore::Elevate(const CKeyingMaterial& vMasterKeyIn)
+{
+    if (!IsCrypted())
+        return false;
+
+    {
+        LOCK(cs_KeyStore);
+
+        // There is no unlock to widen, and so no deadline to preserve. The
+        // caller wants Unlock(), which begins one.
+        if (m_unlock_scope == UnlockScope::Locked)
+            return false;
+
+        // The passphrase is what authorises the added permission, and this
+        // comparison is where it is checked: a caller that derived the key from
+        // a wrong passphrase must not widen the scope. A plain compare is
+        // enough here -- Elevate() is protected and the only caller derives the
+        // operand from a passphrase through the KDF, so there is no path that
+        // can feed it chosen bytes and read a timing answer.
+        if (vMasterKeyIn.size() != vMasterKey.size()
+                || std::memcmp(vMasterKeyIn.data(), vMasterKey.data(), vMasterKey.size()) != 0) {
+            return false;
+        }
+
+        // Already as wide as it goes. Nothing changed, so nothing is announced.
+        if (m_unlock_scope == UnlockScope::Full)
+            return true;
+
+        // Scope only. The key stays installed, and the deadline and the epoch
+        // belong to the unlock in progress, which this does not end -- so the
+        // relock armed for it still fires, on time.
+        m_unlock_scope = UnlockScope::Full;
+    }
+
     NotifyStatusChanged(this);
     return true;
 }
@@ -233,7 +313,31 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
     return true;
 }
 
-bool HaveKey(const CKeyStore& store, const CKey& key)
+bool CCryptoKeyStore::EncryptSecretWithMasterKey(const CKeyingMaterial& plaintext, const uint256& iv,
+                                                 std::vector<unsigned char>& ciphertext_out) const
+{
+    LOCK(cs_KeyStore);
+
+    if (!IsCrypted() || vMasterKey.empty()) {
+        return false;
+    }
+
+    return EncryptSecret(vMasterKey, plaintext, iv, ciphertext_out);
+}
+
+bool CCryptoKeyStore::DecryptSecretWithMasterKey(const std::vector<unsigned char>& ciphertext, const uint256& iv,
+                                                 CKeyingMaterial& plaintext_out) const
+{
+    LOCK(cs_KeyStore);
+
+    if (!IsCrypted() || vMasterKey.empty()) {
+        return false;
+    }
+
+    return DecryptSecret(vMasterKey, ciphertext, iv, plaintext_out);
+}
+
+bool HaveKey(const SigningProvider& store, const CKey& key)
 {
     CKey key2;
     key2.Set(key.begin(), key.end(), !key.IsCompressed());

@@ -14,9 +14,12 @@
 #include "chainparams.h"
 #include "clientversion.h"
 #include "gridcoin/staking/kernel.h"
+#include "index/txindex.h"
+#include "node/coherence.h"  // GRC::PackBlockFilePos
 #include "txdb.h"
-#include "main.h"
+#include "node/shutdown.h"
 #include "node/blockstorage.h"
+#include "node/chainman.h"
 #include "node/ui_interface.h"
 #include "util.h"
 #include "validation.h"
@@ -27,6 +30,12 @@ using namespace boost;
 extern bool fQtActive;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
+
+// The block cache and filter policy txdb was opened with. LevelDB does not take
+// ownership of either, and every CTxDB after the first shares txdb without
+// options of its own, so CTxDB::Close() frees these rather than its own copy.
+static leveldb::Cache* txdb_block_cache = nullptr;
+static const leveldb::FilterPolicy* txdb_filter_policy = nullptr;
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
@@ -62,11 +71,9 @@ void init_blockindex(leveldb::Options& options, bool fRemoveOld = false) {
 
     fs::create_directory(directory);
     LogPrintf("Opening LevelDB in %s", directory.string());
-    // LevelDB's Windows port internally converts paths from UTF-8 to UTF-16 via
-    // MultiByteToWideChar(CP_UTF8). But fs::path::string() produces code page bytes, not UTF-8.
-    // Utf8PathString provides proper UTF-8 encoding when the path contains non-codepage characters.
-    // For codepage-safe paths, it returns path.string() unchanged. See #2736.
-    leveldb::Status status = leveldb::DB::Open(options, fsbridge::Utf8PathString(directory), &txdb);
+    // LevelDB's Windows port reads the path as UTF-8 (MultiByteToWideChar(CP_UTF8)), which is
+    // what fs::path::string() returns there: SetupEnvironment() makes it UTF-8.
+    leveldb::Status status = leveldb::DB::Open(options, directory.string(), &txdb);
     if (!status.ok()) {
         throw runtime_error(strprintf("init_blockindex(): error opening database environment %s", status.ToString()));
     }
@@ -89,7 +96,8 @@ CTxDB::CTxDB(const char* pszMode)
 
     options = GetOptions();
     options.create_if_missing = fCreate;
-    options.filter_policy = leveldb::NewBloomFilterPolicy(10);
+    txdb_block_cache = options.block_cache;
+    txdb_filter_policy = options.filter_policy;
 
     init_blockindex(options); // Init directory
     pdb = txdb;
@@ -133,9 +141,11 @@ void CTxDB::Close()
 {
     delete txdb;
     txdb = pdb = nullptr;
-    delete options.filter_policy;
+    delete txdb_filter_policy;
+    txdb_filter_policy = nullptr;
+    delete txdb_block_cache;
+    txdb_block_cache = nullptr;
     options.filter_policy = nullptr;
-    delete options.block_cache;
     options.block_cache = nullptr;
     delete activeBatch;
     activeBatch = nullptr;
@@ -156,6 +166,22 @@ bool CTxDB::TxnCommit()
     activeBatch = nullptr;
     if (!status.ok()) {
         LogPrintf("LevelDB batch commit failure: %s", status.ToString());
+        return false;
+    }
+    return true;
+}
+
+bool CTxDB::Sync()
+{
+    if (fReadOnly) {
+        return true;
+    }
+    leveldb::WriteOptions opts;
+    opts.sync = true;
+    leveldb::WriteBatch empty_batch;
+    leveldb::Status status = pdb->Write(opts, &empty_batch);
+    if (!status.ok()) {
+        LogPrintf("LevelDB Sync failure: %s", status.ToString());
         return false;
     }
     return true;
@@ -231,6 +257,165 @@ bool CTxDB::EraseTxIndex(const CTransaction& tx)
     return Erase(make_pair(string("tx"), hash));
 }
 
+bool CTxDB::CleanAbandonedRange(const std::unordered_set<uint64_t>& abandoned_positions,
+                                uint64_t* out_entries_deleted,
+                                uint64_t* out_vspent_cleared,
+                                uint64_t* out_entries_scanned)
+{
+    // Initialize out-params defensively. The cleanup itself runs even if
+    // abandoned_positions is empty (it's a no-op scan); the early-return
+    // below just spares us the iterator setup cost.
+    if (out_entries_deleted) *out_entries_deleted = 0;
+    if (out_vspent_cleared)  *out_vspent_cleared  = 0;
+    if (out_entries_scanned) *out_entries_scanned = 0;
+
+    if (abandoned_positions.empty()) {
+        return true;
+    }
+
+    const int64_t nStart = GetTimeMillis();
+
+    // Pass 1: scan all ("tx", *) entries with a read-only iterator and
+    // collect the mutations we want to apply. We can't safely mutate via
+    // Erase/Write while a snapshot-based iterator is alive on the same
+    // pdb, and we want a single atomic commit at the end -- so build the
+    // mutation list in memory first.
+    //
+    // Per-entry cost is dominated by deserializing CTxIndex (~100 bytes
+    // typical). On mainnet (~10M tx index entries) this is a one-shot scan
+    // measured in 1-30 seconds on SSD, 10-60 seconds on HDD. It runs only
+    // when the Phase 2 walk-back detected real corruption -- the common
+    // (no-corruption) path never hits this function because the caller
+    // short-circuits when abandoned_positions is empty.
+    std::vector<uint256> to_erase;
+    std::vector<std::pair<uint256, CTxIndex>> to_rewrite;
+    uint64_t scanned = 0;
+
+    {
+        leveldb::Iterator* iterator = pdb->NewIterator(leveldb::ReadOptions());
+
+        CDataStream ssStartKey(SER_DISK, CLIENT_VERSION);
+        ssStartKey << make_pair(string("tx"), uint256());
+        iterator->Seek(ssStartKey.str());
+
+        bool scan_error = false;
+
+        while (iterator->Valid()) {
+            try {
+                CDataStream ssKey(SER_DISK, CLIENT_VERSION);
+                ssKey.write(MakeByteSpan(iterator->key()));
+
+                string strType;
+                ssKey >> strType;
+                if (strType != "tx") break;  // walked past the ("tx", *) range
+
+                uint256 hashTx;
+                ssKey >> hashTx;
+
+                CDataStream ssValue(SER_DISK, CLIENT_VERSION);
+                ssValue.write(MakeByteSpan(iterator->value()));
+
+                CTxIndex txindex;
+                ssValue >> txindex;
+
+                ++scanned;
+
+                const uint64_t tx_pos_key = GRC::PackBlockFilePos(txindex.pos.nFile, txindex.pos.nBlockPos);
+
+                if (abandoned_positions.count(tx_pos_key)) {
+                    // This tx was created by ConnectBlock in an abandoned
+                    // block. Delete its CTxIndex outright. No need to also
+                    // sweep its vSpent because by definition no later tx
+                    // in a non-abandoned block could have spent it (the
+                    // abandoned block was the tip of the chain).
+                    //
+                    // NOTE: do NOT `continue` here. `iterator->Next()` is
+                    // outside the try/catch, and `continue` would skip past
+                    // it, leaving the iterator parked on the same entry and
+                    // re-entering the body forever. (Hit this in the
+                    // 2026-05-16 isolated-testnet Tier 3 run -- 11 min spin
+                    // pushing the same hashTx until bad_alloc.) Fall
+                    // through to the end of the try body and let the
+                    // post-try iterator->Next() advance.
+                    to_erase.push_back(hashTx);
+                } else {
+                    // The tx itself was confirmed in a kept block, but one
+                    // or more of its outputs may carry a vSpent[i] marker
+                    // pointing into an abandoned block (a child tx in that
+                    // block spent the output). Clear those specific
+                    // entries; rewrite the CTxIndex only if at least one
+                    // slot changed.
+                    bool modified = false;
+                    for (CDiskTxPos& spent : txindex.vSpent) {
+                        if (spent.IsNull()) continue;
+                        const uint64_t spent_key = GRC::PackBlockFilePos(spent.nFile, spent.nBlockPos);
+                        if (abandoned_positions.count(spent_key)) {
+                            spent.SetNull();
+                            modified = true;
+                            if (out_vspent_cleared) ++(*out_vspent_cleared);
+                        }
+                    }
+                    if (modified) {
+                        to_rewrite.emplace_back(hashTx, std::move(txindex));
+                    }
+                }
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: %s: deserialize error during ('tx', *) scan: %s", __func__, e.what());
+                scan_error = true;
+                break;
+            }
+
+            iterator->Next();
+        }
+
+        delete iterator;
+
+        if (scan_error) {
+            return false;
+        }
+    }
+
+    if (out_entries_scanned) *out_entries_scanned = scanned;
+
+    LogPrintf("INFO: %s: scanned %u CTxIndex entries in %" PRId64 "ms; %u entries to delete, %u entries to rewrite "
+              "(%u vSpent slot(s) cleared total).", __func__, (unsigned) scanned, GetTimeMillis() - nStart,
+              (unsigned) to_erase.size(), (unsigned) to_rewrite.size(),
+              (unsigned) (out_vspent_cleared ? *out_vspent_cleared : 0));
+
+    if (to_erase.empty() && to_rewrite.empty()) {
+        return true;
+    }
+
+    // Pass 2: apply mutations atomically.
+    if (!TxnBegin()) {
+        return error("%s: TxnBegin failed", __func__);
+    }
+
+    for (const uint256& hashTx : to_erase) {
+        if (!Erase(make_pair(string("tx"), hashTx))) {
+            TxnAbort();
+            return error("%s: Erase(tx, %s) failed", __func__, hashTx.GetHex());
+        }
+    }
+    if (out_entries_deleted) *out_entries_deleted = to_erase.size();
+
+    for (const auto& [hashTx, txindex] : to_rewrite) {
+        if (!Write(make_pair(string("tx"), hashTx), txindex)) {
+            TxnAbort();
+            return error("%s: Write(tx, %s) for vSpent clear failed", __func__, hashTx.GetHex());
+        }
+    }
+
+    if (!TxnCommit()) {
+        return error("%s: TxnCommit failed", __func__);
+    }
+    if (!Sync()) {
+        return error("%s: CTxDB::Sync failed after CleanAbandonedRange commit", __func__);
+    }
+
+    return true;
+}
+
 bool CTxDB::ContainsTx(uint256 hash)
 {
     return Exists(make_pair(string("tx"), hash));
@@ -238,7 +423,6 @@ bool CTxDB::ContainsTx(uint256 hash)
 
 bool CTxDB::ReadDiskTx(uint256 hash, CTransaction& tx, CTxIndex& txindex)
 {
-    tx.SetNull();
     if (!ReadTxIndex(hash, txindex))
         return false;
     return ReadTxFromDisk(tx, txindex.pos);
@@ -271,6 +455,11 @@ bool CTxDB::WriteBlockIndex(const CDiskBlockIndex& blockindex)
     return Write(make_pair(string("blockindex"), blockindex.GetBlockHash()), blockindex);
 }
 
+bool CTxDB::EraseBlockIndex(uint256 hash)
+{
+    return Erase(make_pair(string("blockindex"), hash));
+}
+
 bool CTxDB::ReadHashBestChain(uint256& hashBestChain)
 {
     return Read(string("hashBestChain"), hashBestChain);
@@ -291,7 +480,7 @@ bool CTxDB::WriteGenericData(const std::string& strKey,const std::string& strDat
     return Write(string(strKey), strData);
 }
 
-static CBlockIndex *InsertBlockIndex(const uint256& hash)
+static CBlockIndex *InsertBlockIndex(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (hash.IsNull())
         return nullptr;
@@ -328,7 +517,7 @@ bool ReadBlockHeight(CTxDB& txdb, const uint256 hash, int& height)
 }
 } // anonymous namespace
 
-bool CTxDB::LoadBlockIndex()
+bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Load hashBestChain pointer to end of best chain
     if (!ReadHashBestChain(hashBestChain)) {
@@ -379,7 +568,7 @@ bool CTxDB::LoadBlockIndex()
         string strType;
         ssKey >> strType;
         // Did we reach the end of the data to read?
-        if (fRequestShutdown || strType != "blockindex")
+        if (ShutdownRequested() || strType != "blockindex")
             break;
         CDiskBlockIndex diskindex;
         ssValue >> diskindex;
@@ -407,7 +596,7 @@ bool CTxDB::LoadBlockIndex()
 
         nBlockCount++;
         // Watch for genesis block
-        if (pindexGenesisBlock == nullptr && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
+        if (pindexGenesisBlock == nullptr && blockHash == (Params().IsMockableChain() ? hashGenesisBlockRegTest : !OnTestnet() ? hashGenesisBlock : hashGenesisBlockTestNet))
             pindexGenesisBlock = pindexNew;
 
         if(fQtActive)
@@ -459,16 +648,43 @@ bool CTxDB::LoadBlockIndex()
     int nCheckDepth = gArgs.GetArg( "-checkblocks", 1000);
 
     LogPrintf("Verifying last %i blocks at level %i", nCheckDepth, nCheckLevel);
-    CBlockIndex* pindexFork = nullptr;
+    int nInconsistencies = 0;
     map<pair<unsigned int, unsigned int>, CBlockIndex*> mapBlockPos;
     for (CBlockIndex* pindex = pindexBest; pindex && pindex->pprev; pindex = pindex->pprev)
     {
         int nCurrentDepth = nBestHeight - pindex->nHeight + 1;
-        if (fRequestShutdown || nCurrentDepth > nCheckDepth)
+        if (ShutdownRequested() || nCurrentDepth > nCheckDepth)
             break;
         CBlock block;
         if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
-            return error("LoadBlockIndex() : block.ReadFromDisk failed");
+        {
+            // Soft-fail rather than hard-fail. A read failure here means the
+            // on-disk block at this index entry's (nFile, nBlockPos) is
+            // unreadable -- exactly the Scenario C corruption from issue
+            // #2865 that the Phase 2 startup coherence-recovery hook
+            // (GRC::RunStartupCoherenceRecovery in src/node/coherence.cpp,
+            // called from init.cpp right after this function returns) is
+            // designed to detect and recover from.
+            //
+            // The legacy behaviour was to return error() here, which
+            // propagates up to init.cpp:1330 and surfaces the modal
+            // "Error loading blkindex.dat" -- aborting init BEFORE the
+            // Phase 2 hook gets a chance to run. That made Phase 2 a no-op
+            // for the very condition it was designed to handle.
+            //
+            // Break out of the verification loop and leave the tip alone.
+            // Phase 2 walks back from pindexBest, identifies the last coherent
+            // block, AbandonChainTo's there, then CleanAbandonedRange wipes the
+            // stale CTxIndex / vSpent entries surgically -- which the legacy
+            // rewind that used to live below this loop did not do (it used
+            // SetBestChain, leaving those markers in place). That rewind has
+            // since been removed outright; see the note where it was.
+            LogPrintf("WARN: LoadBlockIndex() : block.ReadFromDisk failed at height %d (hash %s); "
+                      "leaving corruption recovery to Phase 2 startup hook (issue #2865). "
+                      "Skipping rest of verification pass.",
+                      pindex->nHeight, pindex->GetBlockHash().ToString());
+            break;
+        }
         // check level 1: verify block validity
         // check level 7: verify block signature too
 
@@ -480,10 +696,11 @@ bool CTxDB::LoadBlockIndex()
             }
         }
 
-        if (nCheckLevel>0 && !CheckBlock(block, pindex->nHeight, true, true, (nCheckLevel>6), true))
+        CValidationState check_state;
+        if (nCheckLevel>0 && !CheckBlock(block, check_state, pindex->nHeight, true, true, (nCheckLevel>6), true))
         {
             LogPrintf("LoadBlockIndex() : *** found bad block at %d, hash=%s", pindex->nHeight, pindex->GetBlockHash().ToString());
-            pindexFork = pindex->pprev;
+            ++nInconsistencies;
         }
         // check level 2: verify transaction index validity
         if (nCheckLevel>1)
@@ -504,13 +721,13 @@ bool CTxDB::LoadBlockIndex()
                         if (!ReadTxFromDisk(txFound, txindex.pos))
                         {
                             LogPrintf("LoadBlockIndex() : *** cannot read mislocated transaction %s", hashTx.ToString());
-                            pindexFork = pindex->pprev;
+                            ++nInconsistencies;
                         }
                         else
                             if (txFound.GetHash() != hashTx) // not a duplicate tx
                             {
                                 LogPrintf("LoadBlockIndex(): *** invalid tx position for %s", hashTx.ToString());
-                                pindexFork = pindex->pprev;
+                                ++nInconsistencies;
                             }
                     }
                     // check level 4: check whether spent txouts were spent within the main chain
@@ -525,7 +742,7 @@ bool CTxDB::LoadBlockIndex()
                                 if (!mapBlockPos.count(posFind))
                                 {
                                     LogPrintf("LoadBlockIndex(): *** found bad spend at %d, hashBlock=%s, hashTx=%s", pindex->nHeight, pindex->GetBlockHash().ToString(), hashTx.ToString());
-                                    pindexFork = pindex->pprev;
+                                    ++nInconsistencies;
                                 }
                                 // check level 6: check whether spent txouts were spent by a valid transaction that consume them
                                 if (nCheckLevel>5)
@@ -534,12 +751,12 @@ bool CTxDB::LoadBlockIndex()
                                     if (!ReadTxFromDisk(txSpend, txpos))
                                     {
                                         LogPrintf("LoadBlockIndex(): *** cannot read spending transaction of %s:%i from disk", hashTx.ToString(), nOutput);
-                                        pindexFork = pindex->pprev;
+                                        ++nInconsistencies;
                                     }
-                                    else if (!CheckTransaction(txSpend))
+                                    else if (CValidationState spend_state; !CheckTransaction(txSpend, spend_state))
                                     {
                                         LogPrintf("LoadBlockIndex(): *** spending transaction of %s:%i is invalid", hashTx.ToString(), nOutput);
-                                        pindexFork = pindex->pprev;
+                                        ++nInconsistencies;
                                     }
                                     else
                                     {
@@ -550,7 +767,7 @@ bool CTxDB::LoadBlockIndex()
                                         if (!fFound)
                                         {
                                             LogPrintf("LoadBlockIndex(): *** spending transaction of %s:%i does not spend it", hashTx.ToString(), nOutput);
-                                            pindexFork = pindex->pprev;
+                                            ++nInconsistencies;
                                         }
                                     }
                                 }
@@ -569,7 +786,7 @@ bool CTxDB::LoadBlockIndex()
                             if (txindex.vSpent.size()-1 < txin.prevout.n || txindex.vSpent[txin.prevout.n].IsNull())
                             {
                                 LogPrintf("LoadBlockIndex(): *** found unspent prevout %s:%i in %s", txin.prevout.hash.ToString(), txin.prevout.n, hashTx.ToString());
-                                pindexFork = pindex->pprev;
+                                ++nInconsistencies;
                             }
                     }
                 }
@@ -581,15 +798,38 @@ bool CTxDB::LoadBlockIndex()
 
     LogPrintf("Time to Verify Blocks %15" PRId64 "ms", GetTimeMillis() - nStart);
 
-    if (pindexFork && !fRequestShutdown)
+    // What the checks above find is reported, not repaired.
+    //
+    // Until this was removed, an inconsistency armed a rewind to the fork point
+    // through SetBestChain(). That could never have completed. LoadBlockIndex()
+    // runs in AppInit2 step 7 and pwalletMain is not constructed until step 8
+    // (a zero-initialized global, so provably null here), while SetBestChain()
+    // -> ReorganizeChain() dereferences pwalletMain the moment it disconnects
+    // anything: the FixSpentCoins call in ReorganizeChain's disconnect branch
+    // (node/chainman.cpp) fires on every disconnect with no null check. (The
+    // connect-side dereferences in the same function are gated on stale
+    // mempool MRCs and cannot fire during startup.) A rewind to an ancestor
+    // always disconnects, since pcommon is the fork point and therefore never
+    // pindexBest.
+    // So the repair path could only ever segfault a node that reached it. It has
+    // been that way since the rewind was introduced: in that same tree init.cpp
+    // already loaded the block index before constructing the wallet.
+    //
+    // Removing it also makes the two Phase 2 fallthroughs above honest -- they
+    // described deferring to Phase 2 "rather than" a rewind that would have
+    // crashed -- and leaves SetBestChain() with exactly one caller
+    // (validation.cpp), which runs long after the wallet exists.
+    //
+    // Corruption that Phase 2 does cover -- a block that is unreadable or whose
+    // on-disk contents no longer hash to its index entry -- is still recovered
+    // automatically by GRC::RunStartupCoherenceRecovery, which init.cpp calls
+    // immediately after this function returns (issue #2865).
+    if (nInconsistencies > 0)
     {
-        // Reorg back to the fork
-        LogPrintf("LoadBlockIndex() : *** moving best chain pointer back to block %d", pindexFork->nHeight);
-        CBlock block;
-        if (!ReadBlockFromDisk(block, pindexFork, Params().GetConsensus()))
-            return error("LoadBlockIndex() : block.ReadFromDisk failed");
-        CTxDB txdb;
-        SetBestChain(txdb, block, pindexFork);
+        LogPrintf("WARN: LoadBlockIndex() : verification found %d %s, listed above. The tip "
+                  "has not been moved. Startup coherence recovery handles unreadable or mis-hashed blocks; "
+                  "start with -reindex if the chain does not recover.",
+                  nInconsistencies, nInconsistencies == 1 ? "inconsistency" : "inconsistencies");
     }
 
     return true;

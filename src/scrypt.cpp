@@ -29,7 +29,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include <vector>
+#include <memory>
 
 #include "util.h"
 #include "scrypt.h"
@@ -41,7 +41,9 @@
 #define SCRYPT_BUFFER_SIZE (131072 + 63)
 
 #if defined(USE_ASM_SCRYPT) && (defined(__x86_64__) || defined(__i386__))
-extern "C" void scrypt_core(unsigned int *X, unsigned int *V, int N);
+// N is unsigned here as in the generic version below. Either type reaches the
+// assembly as the same 32 bits, so the declaration changes nothing it reads.
+extern "C" void scrypt_core(unsigned int *X, unsigned int *V, unsigned int N);
 #else
 // Generic scrypt_core implementation
 
@@ -113,7 +115,11 @@ static inline void xor_salsa8(unsigned int B[16], const unsigned int Bx[16])
     B[15] += x15;
 }
 
-static inline void scrypt_core(unsigned int *X, unsigned int *V, int N)
+// N is an iteration count and cannot be negative, so it is unsigned like the loop
+// counters it bounds: both i < N comparisons are unsigned on both sides. Both callers
+// pass 1024, and the second loop's mask (& 1023) assumes exactly that value, so this
+// version is correct for N == 1024 only. Both assembly versions mask with N - 1.
+static inline void scrypt_core(unsigned int *X, unsigned int *V, unsigned int N)
 {
     unsigned int i, j, k;
 
@@ -166,26 +172,41 @@ uint256 scrypt(const void* data, size_t datalen, const void* salt, size_t saltle
     return result;
 }
 
+// The scratchpads are per call. They used to be static thread_local vectors, but a
+// thread_local must be trivially destructible: MinGW's emulated TLS frees the storage
+// before the C runtime runs the destructor at thread exit (test/lint/lint-thread-local.sh).
+// A thread_local array would avoid the allocation but put 128 KiB of static TLS in every
+// thread on Linux and macOS. The allocation is cheap instead: about 0.1 us against about
+// 120 us for the hash, because the buffer is left uninitialised -- scrypt_core writes all
+// of V before it reads any of it, and nothing outside V is read. scrypt_blockhash runs for
+// every header with nVersion < 7 (CBlockHeader::ComputeHash), so that matters. The
+// multiround hash reuses one scratchpad for all of its rounds.
+static std::unique_ptr<unsigned char[]> NewScratchpad()
+{
+    return std::unique_ptr<unsigned char[]>(new unsigned char[SCRYPT_BUFFER_SIZE]);
+}
+
 uint256 scrypt_hash(const void* input, size_t inputlen)
 {
-    static thread_local std::vector<unsigned char> scratchpad(SCRYPT_BUFFER_SIZE);
-    return scrypt_nosalt(input, inputlen, scratchpad.data());
+    const auto scratchpad = NewScratchpad();
+    return scrypt_nosalt(input, inputlen, scratchpad.get());
 }
 
 uint256 scrypt_salted_hash(const void* input, size_t inputlen, const void* salt, size_t saltlen)
 {
-    static thread_local std::vector<unsigned char> scratchpad(SCRYPT_BUFFER_SIZE);
-    return scrypt(input, inputlen, salt, saltlen, scratchpad.data());
+    const auto scratchpad = NewScratchpad();
+    return scrypt(input, inputlen, salt, saltlen, scratchpad.get());
 }
 
 uint256 scrypt_salted_multiround_hash(const void* input, size_t inputlen, const void* salt, size_t saltlen, const unsigned int nRounds)
 {
-    uint256 resultHash = scrypt_salted_hash(input, inputlen, salt, saltlen);
+    const auto scratchpad = NewScratchpad();
+    uint256 resultHash = scrypt(input, inputlen, salt, saltlen, scratchpad.get());
     uint256 transitionalHash = resultHash;
 
     for(unsigned int i = 1; i < nRounds; i++)
     {
-        resultHash = scrypt_salted_hash(input, inputlen, (const void*)&transitionalHash, 32);
+        resultHash = scrypt(input, inputlen, (const void*)&transitionalHash, 32, scratchpad.get());
         transitionalHash = resultHash;
     }
 
@@ -194,6 +215,6 @@ uint256 scrypt_salted_multiround_hash(const void* input, size_t inputlen, const 
 
 uint256 scrypt_blockhash(const void* input)
 {
-    static thread_local std::vector<unsigned char> scratchpad(SCRYPT_BUFFER_SIZE);
-    return scrypt_nosalt(input, 80, scratchpad.data());
+    const auto scratchpad = NewScratchpad();
+    return scrypt_nosalt(input, 80, scratchpad.get());
 }

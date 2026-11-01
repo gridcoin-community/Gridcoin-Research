@@ -4,9 +4,9 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "wallet/db.h"
+#include "node/shutdown.h"
 #include "dbwrapper.h"
 #include "net.h"
-#include "main.h"
 #include "node/ui_interface.h"
 #include "util.h"
 
@@ -19,7 +19,7 @@
 
 using namespace std;
 
-unsigned int nWalletDBUpdated;
+std::atomic<unsigned int> nWalletDBUpdated{0};
 
 //
 // CDB
@@ -61,16 +61,15 @@ bool CDBEnv::Open(fs::path pathEnv_)
     if (fDbEnvInit)
         return true;
 
-    if (fShutdown)
+    if (ShutdownInProgress())
         return false;
 
     pathEnv = pathEnv_;
     fs::path pathDataDir = pathEnv;
-    // BDB's DbEnv::open() only accepts narrow (const char*) paths. On Windows, fs::path::string()
-    // converts via the system code page, which corrupts characters outside that code page (e.g. Chinese
-    // on a Western locale). ShortPathString converts to 8.3 short names when needed, which are ASCII-safe.
-    // For codepage-safe paths, it returns path.string() unchanged. See #2736.
-    strPath = fsbridge::ShortPathString(pathDataDir);
+    // Berkeley DB takes narrow paths, and file names relative to them. The bundled copy is built
+    // with UNICODE on Windows (src/bdb53/CMakeLists.txt), so it reads them as UTF-8 there, which
+    // is what fs::path::string() returns.
+    strPath = pathDataDir.string();
     fs::path pathLogDir = pathDataDir / "database";
     fs::create_directory(pathLogDir);
     fs::path pathErrorFile = pathDataDir / "db.log";
@@ -81,7 +80,7 @@ bool CDBEnv::Open(fs::path pathEnv_)
         nEnvFlags |= DB_PRIVATE;
 
     int nDbCache = std::clamp<int>(gArgs.GetArg("-dbcache", nDefaultDbCache), nMinDbCache, nMaxDbCache);
-    dbenv.set_lg_dir(fsbridge::ShortPathString(pathLogDir).c_str());
+    dbenv.set_lg_dir(pathLogDir.string().c_str());
     dbenv.set_cachesize(nDbCache / 1024, (nDbCache % 1024)*1048576, 1);
     dbenv.set_lg_bsize(1048576);
     dbenv.set_lg_max(10485760);
@@ -118,12 +117,23 @@ bool CDBEnv::Open(fs::path pathEnv_)
     return true;
 }
 
+// Route BerkeleyDB error text for the mock (regtest) environment to the debug
+// log. The on-disk Open() path sets an errfile; MakeMock() historically left the
+// error stream at libdb's default (stderr), so benign mock-env messages (e.g.
+// "wallet.dat: No such file or directory" during a shutdown flush) leaked to
+// stderr and intermittently tripped the functional framework's clean-shutdown
+// stderr check. Regtest-only (MakeMock is the mock-wallet path).
+static void MockDbErrcall(const DbEnv*, const char* errpfx, const char* msg)
+{
+    LogPrintf("BerkeleyDB(mock): %s%s", errpfx ? errpfx : "", msg ? msg : "");
+}
+
 void CDBEnv::MakeMock()
 {
     if (fDbEnvInit)
         throw runtime_error("CDBEnv::MakeMock(): already initialized");
 
-    if (fShutdown)
+    if (ShutdownInProgress())
         throw runtime_error("CDBEnv::MakeMock(): during shutdown");
 
     LogPrint(BCLog::LogFlags::WALLETDB, "CDBEnv::MakeMock()");
@@ -134,6 +144,7 @@ void CDBEnv::MakeMock()
     dbenv.set_lk_max_locks(10000);
     dbenv.set_lk_max_objects(10000);
     dbenv.set_flags(DB_AUTO_COMMIT, 1);
+    dbenv.set_errcall(MockDbErrcall);
 #ifdef DB_LOG_IN_MEMORY
     dbenv.log_set_config(DB_LOG_IN_MEMORY, 1);
 #endif
@@ -146,8 +157,18 @@ void CDBEnv::MakeMock()
                              DB_THREAD |
                              DB_PRIVATE,
                          S_IRUSR | S_IWUSR);
-    if (ret > 0)
-        throw runtime_error(strprintf("CDBEnv::MakeMock(): error %d opening database environment", ret));
+    // ret != 0, not ret > 0. Berkeley DB returns a positive errno for system
+    // errors but a NEGATIVE code for its own (DB_RUNRECOVERY -30973,
+    // DB_NOTFOUND -30988, ...), so a > 0 test silently accepted every
+    // BDB-level failure -- the panic return included -- and then set
+    // fDbEnvInit/fMockDb anyway, leaving the whole test suite running against
+    // an environment that had failed to open. Close the handle and decode the
+    // code the same way CDBEnv::Open() above does.
+    if (ret != 0) {
+        dbenv.close(0);
+        throw runtime_error(strprintf("CDBEnv::MakeMock(): error %s (%d) opening database environment",
+                                      DbEnv::strerror(ret), ret));
+    }
 
     fDbEnvInit = true;
     fMockDb = true;
@@ -238,6 +259,13 @@ void CDBEnv::CheckpointLSN(std::string strFile)
 
 void CDBEnv::lsn_reset(const std::string& strFile)
 {
+    // A mock environment keeps its databases in memory and has no home
+    // directory, so the name would resolve against the process's working
+    // directory and reset a file there that this environment never opened.
+    // Flush() and CheckpointLSN() skip it under a mock for the same reason.
+    if (fMockDb)
+        return;
+
     dbenv.lsn_reset(strFile.c_str(),0);
 }
 
@@ -360,7 +388,7 @@ bool CDBEnv::RemoveDb(const string& strFile)
 
 bool CDB::Rewrite(const string& strFile, const char* pszSkip)
 {
-    while (!fShutdown)
+    while (!ShutdownInProgress())
     {
         {
             LOCK(bitdb.cs_db);

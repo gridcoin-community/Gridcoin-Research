@@ -24,8 +24,14 @@ env:
 
 jobs:
   # ----------------------------------------------------------------------
-  # JOB 1: Sanitizers (ASan + UBSan + LSan)
+  # JOB 1: Sanitizers (ASan + LSan + UBSan)
   # Replaces: native_asan
+  #
+  # Every test binary the tree has, built with what Bitcoin Core's ASan job
+  # builds with: test_gridcoin, test_gridcoin-qt (ENABLE_GUI) and
+  # libmultiprocess's mptest plus the IPC unit tests (ENABLE_MULTIPROCESS), and
+  # the functional suite against the sanitized daemon. Before, GUI and
+  # multiprocess were both off here, so no Qt or IPC code ran under a sanitizer.
   # ----------------------------------------------------------------------
   sanitizers:
     name: Sanitizers (Clang)
@@ -38,8 +44,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang cmake build-essential libboost-all-dev \
             libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
-            qt6-base-dev qt6-tools-dev qt6-l10n-tools libcurl4-openssl-dev \
-            libzip-dev zipcmp zipmerge ziptool ccache
+            capnproto libcapnp-dev \
+            qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
+            libqt6svg6-dev libxkbcommon-dev libcurl4-openssl-dev \
+            zlib1g-dev ccache
 
       - name: Restore Ccache
         uses: actions/cache@v5
@@ -60,33 +68,288 @@ jobs:
 
       - name: Configure (Sanitizers)
         run: |
-          # -fsanitize=address includes LSan (LeakSanitizer)
-          # -fsanitize=undefined catches UB (integer overflow, null deref, etc)
+          # The sanitizers Bitcoin Core's ASan job builds with:
+          #   * address, which includes LeakSanitizer;
+          #   * undefined, for undefined behaviour;
+          #   * integer, for unsigned wrap-around and implicit conversions that
+          #     change a value. These are defined behaviour, so the places that
+          #     mean them are listed in test/sanitizer_suppressions/ubsan;
+          #   * float-divide-by-zero, which undefined leaves out.
+          # They apply to the C code (secp256k1, md5) as well as the C++.
+          #
+          # -ftrivial-auto-var-init=pattern fills every uninitialised local
+          # with a fixed garbage pattern, so code that reads one fails the same
+          # way on every run instead of depending on what was on the stack.
+          #
+          # ARENA_DEBUG adds the locked-pool arena checks allocator_tests
+          # exercises.
+          #
+          # FUNCTIONAL_TEST_ATTEMPTS=1: no retries. A node a sanitizer halts can
+          # fail its test with one of the timeouts test_runner.py retries, and a
+          # retry that passes would hide the report.
+          #
+          # The Debug build type defines DEBUG_LOCKORDER (and
+          # ABORT_ON_FAILED_ASSUME); ENABLE_DEBUG_LOCKORDER is spelled out
+          # because this is the only job whose tests run with it. It turns on
+          # two runtime lock checks that every other job compiles away:
+          #
+          #   * AssertLockHeld / AssertLockNotHeld. Without it
+          #     AssertLockHeldInternal is an empty inline (src/sync.h), so a
+          #     function annotated EXCLUSIVE_LOCKS_REQUIRED can be called with
+          #     no lock held and nothing notices. These abort, so they fail the
+          #     ctest step on their own.
+          #   * Lock-order tracking, which reports a pair of locks taken in two
+          #     different orders. This one reports and continues by design, so
+          #     it is gated by the step after the tests rather than by ctest.
+          #
+          # Both are runtime checks, which is why they live here and not on the
+          # Thread Safety job: that one is compile-only and would gain nothing.
+          # They stay out of the ThreadSanitizer job: the checker serialises
+          # every lock acquisition through one mutex, which orders them and
+          # would hide the races that job is there to find.
+          SAN="-fsanitize=address,float-divide-by-zero,integer,undefined -fno-omit-frame-pointer -ftrivial-auto-var-init=pattern"
           cmake -B build_asan \
-            -DENABLE_GUI=OFF \
+            -DENABLE_GUI=ON \
             -DENABLE_TESTS=ON \
+            -DENABLE_MULTIPROCESS=ON \
+            -DENABLE_DEBUG_LOCKORDER=ON \
             -DUSE_QT6=ON \
             -DUSE_ASM=OFF \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DCMAKE_C_FLAGS="$SAN" \
+            -DCMAKE_CXX_FLAGS="$SAN -DARENA_DEBUG" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,float-divide-by-zero,integer,undefined" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,float-divide-by-zero,integer,undefined" \
+            -DFUNCTIONAL_TEST_ATTEMPTS=1 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      # check-build-warnings.sh fails the step on any compiler or linker warning in
+      # the tree's own build. Every build of the tree in these workflows goes
+      # through it.
+      - name: Build
+        # Removed explicit --parallel flag; CMake reads the env var automatically
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_asan
+
+      - name: Test (With Sanitizers)
+        env:
+          # test_gridcoin-qt defaults to this itself; set here so nothing in
+          # the run depends on a display.
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          # with_sanitizer_env.py supplies the runtime options and suppression
+          # files, the same ones a local run gets (doc/developer-notes.md), so
+          # CI and a developer's machine cannot drift apart. They are Bitcoin
+          # Core's: LeakSanitizer on, detect_stack_use_after_return,
+          # strict_init_order, and every UBSan report fatal.
+          #
+          # -V so the suite's own output is captured even for tests that pass:
+          # the lock-order checker reports through the log, and
+          # --output-on-failure alone shows nothing for a passing test.
+          #
+          # A 512 KiB stack, as in Core's sanitizer jobs. glibc also takes the
+          # default stack of every thread it creates from this limit, so code
+          # that needs more stack than it asks for fails here rather than on
+          # a platform with small default stacks (musl's is 128 KiB).
+          set -o pipefail
+          ulimit -s 512
+          python3 build_asan/test/with_sanitizer_env.py \
+            ctest --test-dir build_asan -V 2>&1 | tee ctest_asan.log
+
+      - name: Check for lock-order inversions
+        run: |
+          # The checker reports and continues rather than aborting, on purpose:
+          # a single run surfaces every inversion instead of stopping at the
+          # first, so one pass shows the whole picture instead of forcing a
+          # fix-and-rerun cycle per inversion. That also means the suite can
+          # pass while having reported one, so the gate belongs here.
+          #
+          # sync_tests drives the checker deliberately with its own
+          # mutex1/mutex2 fixture and asserts on the message it throws. That
+          # report is expected; any other is not.
+          if ! grep -q "POTENTIAL DEADLOCK DETECTED" ctest_asan.log; then
+            echo "No lock-order reports."
+            exit 0
+          fi
+
+          unexpected=$(grep -A3 "POTENTIAL DEADLOCK DETECTED" ctest_asan.log \
+            | grep "Conflict:" | grep -v "'mutex1'" | grep -v "'mutex2'" || true)
+
+          if [ -n "$unexpected" ]; then
+            echo "::error::The unit suite reported a lock-order inversion."
+            echo "$unexpected"
+            echo
+            echo "Full reports, each with the historical and current lock stacks:"
+            # Print whole blocks rather than a fixed window. A report runs from
+            # the banner to the "potential deadlock detected: a -> b -> a" line
+            # and grows with the depth of the two lock stacks; real ones already
+            # run 29 lines, so a fixed -A window is one frame from truncating
+            # the part worth reading. The cap is a backstop, not the mechanism:
+            # a report thrown rather than logged (sync_tests sets throw mode)
+            # never prints that closing line, so without it the block would run
+            # to the end of the log.
+            awk '/POTENTIAL DEADLOCK DETECTED/            {p = 1; n = 0}
+                 p                                       {print; n++}
+                 /potential deadlock detected:/           {p = 0}
+                 p && n >= 80 {print "  ... truncated at 80 lines ..."; p = 0}' ctest_asan.log
+            exit 1
+          fi
+
+          echo "Only sync_tests' deliberate mutex1/mutex2 report present."
+
+  # ----------------------------------------------------------------------
+  # JOB 1b: ThreadSanitizer
+  # Data races and lock-order inversions as TSan sees them: the unit suite,
+  # mptest and the functional suite against a TSan daemon. Until this job
+  # nothing in CI looked for races at run time; the Thread Safety job checks
+  # the lock annotations at compile time only.
+  #
+  # RelWithDebInfo, and no ENABLE_DEBUG_LOCKORDER: Debug would define
+  # DEBUG_LOCKORDER, and the checker records every lock acquisition under one
+  # global mutex, which orders any two threads that take a lock and hides
+  # their races from TSan. GUI off, as in Bitcoin Core's TSan job: Qt is not
+  # instrumented.
+  # ----------------------------------------------------------------------
+  tsan:
+    name: ThreadSanitizer (Clang)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install System Deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake build-essential libboost-all-dev \
+            libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
+            capnproto libcapnp-dev \
+            libcurl4-openssl-dev zlib1g-dev ccache
+
+      - name: Restore Ccache
+        uses: actions/cache@v5
+        with:
+          path: /home/runner/.ccache
+          key: ccache-tsan-${{ github.sha }}
+          restore-keys: ccache-tsan-
+
+      - name: Setup Concurrency
+        run: |
+          if [ -z "$CMAKE_BUILD_PARALLEL_LEVEL" ]; then
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "CTEST_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "Concurrency: Auto-detected $(nproc) cores."
+          else
+            echo "Concurrency: Limit set externally to $CMAKE_BUILD_PARALLEL_LEVEL."
+          fi
+
+      - name: Configure (ThreadSanitizer)
+        run: |
+          # FUNCTIONAL_TEST_ATTEMPTS=1: no retries, so a race that halts a node
+          # and fails its test with a timeout is not hidden by a passing retry.
+          SAN="-fsanitize=thread -fno-omit-frame-pointer"
+          cmake -B build_tsan \
+            -DENABLE_GUI=OFF \
+            -DENABLE_TESTS=ON \
+            -DENABLE_MULTIPROCESS=ON \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_FLAGS="$SAN" \
+            -DCMAKE_CXX_FLAGS="$SAN" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread" \
+            -DFUNCTIONAL_TEST_ATTEMPTS=1 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        # Removed explicit --parallel flag; CMake reads the env var automatically
-        run: cmake --build build_asan
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_tsan
 
-      - name: Test (With Sanitizers)
-        env:
-          # ASAN options to prevent false positives or known minor issues from failing the build
-          LSAN_OPTIONS: suppressions=${{ github.workspace }}/test/sanitizer_suppressions/lsan
-          TSAN_OPTIONS: suppressions=${{ github.workspace }}/test/sanitizer_suppressions/tsan
-          UBSAN_OPTIONS: suppressions=${{ github.workspace }}/test/sanitizer_suppressions/ubsan:print_stacktrace=1:halt_on_error=1
-          ASAN_OPTIONS: malloc_context_size=0:check_initialization_order=1
+      - name: Test (With ThreadSanitizer)
         run: |
-          # We exclude the Qt tests here if they trigger false positives in GUI libs
-          ctest --test-dir build_asan --output-on-failure
+          # halt_on_error=1 (from with_sanitizer_env.py): the first race fails
+          # the binary that hit it, so a unit case fails ctest and a daemon's
+          # report fails the functional test that ran it.
+          #
+          # A 512 KiB stack, as in Core's sanitizer jobs: glibc takes every
+          # new thread's default stack from this limit too, so code that needs
+          # more stack than it asks for fails here.
+          set -o pipefail
+          ulimit -s 512
+          python3 build_tsan/test/with_sanitizer_env.py \
+            ctest --test-dir build_tsan --output-on-failure 2>&1 | tee ctest_tsan.log
+
+  # ----------------------------------------------------------------------
+  # JOB 1c: Valgrind (memcheck)
+  # Reads of uninitialised memory, which neither ASan nor TSan reports.
+  # Bitcoin Core covers them with MSan and Valgrind jobs; MSan needs every
+  # dependency, the C++ standard library included, built with it, so this is
+  # the Valgrind half: an uninstrumented build with the unit suite and the
+  # functional suite (--valgrind, which runs each node under memcheck and
+  # stops it at its first error) run under it.
+  #
+  # Clang, as in Core's job; Core's suppression file notes that a GCC build
+  # passes under Valgrind only at -O1 (https://bugs.kde.org/show_bug.cgi?id=472329).
+  # contrib/valgrind.supp holds the dependency warnings, Berkeley DB's among
+  # them.
+  # ----------------------------------------------------------------------
+  valgrind:
+    name: Valgrind (memcheck)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install System Deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake build-essential libboost-all-dev \
+            libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
+            libcurl4-openssl-dev zlib1g-dev ccache \
+            valgrind
+
+      - name: Restore Ccache
+        uses: actions/cache@v5
+        with:
+          path: /home/runner/.ccache
+          key: ccache-valgrind-${{ github.sha }}
+          restore-keys: ccache-valgrind-
+
+      - name: Setup Concurrency
+        run: |
+          if [ -z "$CMAKE_BUILD_PARALLEL_LEVEL" ]; then
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "Concurrency: Auto-detected $(nproc) cores."
+          else
+            echo "Concurrency: Limit set externally to $CMAKE_BUILD_PARALLEL_LEVEL."
+          fi
+
+      - name: Configure
+        run: |
+          cmake -B build_valgrind \
+            -DENABLE_GUI=OFF \
+            -DENABLE_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_valgrind
+
+      - name: Unit suite under Valgrind
+        run: |
+          valgrind --suppressions=contrib/valgrind.supp --gen-suppressions=all \
+            --error-exitcode=1 --quiet \
+            build_valgrind/src/test/test_gridcoin
+
+      - name: Functional suite under Valgrind
+        env:
+          GRIDCOIND: ${{ github.workspace }}/build_valgrind/bin/gridcoinresearchd
+          GRIDCOINCLI: ${{ github.workspace }}/build_valgrind/bin/gridcoinresearchd
+        run: |
+          # --timeout-factor because a node under memcheck runs several times
+          # slower; --valgrind makes each node exit on its first error, which
+          # fails the test that started it.
+          python3 test/functional/test_runner.py \
+            --configfile=${{ github.workspace }}/build_valgrind/test/config.ini \
+            --ci --quiet --combinedlogslen=4000 \
+            --valgrind --timeout-factor=10
 
   # ----------------------------------------------------------------------
   # JOB 2: Linter
@@ -151,3 +414,178 @@ jobs:
              echo "Error: lint-all.sh not found."
              exit 1
           fi
+
+  # ----------------------------------------------------------------------
+  # JOB 3: Clang Thread Safety Analysis
+  # Compile-only gate. Clang's -Wthread-safety statically checks the
+  # GUARDED_BY / EXCLUSIVE_LOCKS_REQUIRED annotations (issue #2869); gcc
+  # ignores them entirely. WERROR_THREAD_SAFETY=ON promotes a stale or
+  # missing annotation to a build error. GUI is built here (ENABLE_GUI=ON)
+  # because the analysis is per translation unit: the Qt wallet code has to be
+  # compiled in this job, with WERROR_THREAD_SAFETY, for an annotation failure
+  # in it to fail the build.
+  #
+  # ENABLE_MULTIPROCESS=ON for the same reason: without it the IPC transport,
+  # the serving interfaces and the generated capnp proxies compile in no CI job
+  # that runs the analyzer, so annotations on the code that most needs
+  # them — the GUI/node seam, where notifications cross threads and processes —
+  # were never checked. That needs capnproto + libcapnp-dev below. (The
+  # cmake_multiprocess workflow builds the same surface, but with gcc, which
+  # ignores the annotations entirely.)
+  #
+  # ENABLE_TESTS=ON, and the test targets on the build line, because the
+  # analysis is per-translation-unit: a TU that is never compiled is never
+  # analysed. While the tests were excluded their annotation failures were
+  # invisible and accumulated (issue #3344 -- seven of them, across three
+  # files). Tests call the same annotated production API as everything else,
+  # and calling a function that requires cs_main without holding it is the
+  # same defect wherever it is written.
+  # ----------------------------------------------------------------------
+  thread-safety:
+    name: Thread Safety (Clang)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install System Deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake build-essential libboost-all-dev \
+            libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
+            capnproto libcapnp-dev \
+            qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
+            libqt6svg6-dev \
+            libxkbcommon-dev libcurl4-openssl-dev zlib1g-dev ccache
+
+      - name: Restore Ccache
+        uses: actions/cache@v5
+        with:
+          path: /home/runner/.ccache
+          key: ccache-tsa-${{ github.sha }}
+          restore-keys: ccache-tsa-
+
+      - name: Setup Concurrency
+        run: |
+          if [ -z "$CMAKE_BUILD_PARALLEL_LEVEL" ]; then
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "Concurrency: Auto-detected $(nproc) cores."
+          else
+            echo "Concurrency: Limit set externally to $CMAKE_BUILD_PARALLEL_LEVEL."
+          fi
+
+      - name: Configure (Thread Safety Analysis)
+        run: |
+          cmake -B build_tsa \
+            -DENABLE_GUI=ON \
+            -DENABLE_TESTS=ON \
+            -DUSE_QT6=ON \
+            -DENABLE_MULTIPROCESS=ON \
+            -DWERROR_THREAD_SAFETY=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build (compile-only — analysis runs at compile time)
+        # -k so one run reports every annotation failure. Without it the build
+        # stops at the first, and finding the rest takes a fix-and-rerun cycle:
+        # the run that motivated adding the test targets stopped after 63 of 92
+        # test TUs and never reached one of the three files at fault.
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_tsa --target gridcoinresearch gridcoinresearchd test_gridcoin test_gridcoin-qt -- -k
+
+  # ----------------------------------------------------------------------
+  # JOB 4: Unit suites in isolation, and one shuffled run
+  # test_gridcoin runs every suite in one process on one global fixture, so
+  # a suite that leaves process state behind can break -- or prop up -- the
+  # suite that links after it, and which one that is differs by platform
+  # (src/test/README.md, "Process state, and what a suite must put back").
+  # The in-binary detector fails a suite that leaks; this job catches the
+  # other half, a
+  # suite that only passes because of what an earlier one left behind, by
+  # running each suite in its own process. The shuffled run is the same
+  # check from the other direction and is informational: it is reported as
+  # a warning annotation with the seed to reproduce it, not as a failure,
+  # because one seed per run is a sample, not a gate.
+  # ----------------------------------------------------------------------
+  suite-isolation:
+    name: Unit Suite Isolation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install System Deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake build-essential libboost-all-dev \
+            libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
+            libcurl4-openssl-dev zlib1g-dev ccache
+
+      - name: Restore Ccache
+        uses: actions/cache@v5
+        with:
+          path: /home/runner/.ccache
+          key: ccache-isolation-${{ github.sha }}
+          restore-keys: ccache-isolation-
+
+      - name: Setup Concurrency
+        run: |
+          if [ -z "$CMAKE_BUILD_PARALLEL_LEVEL" ]; then
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "Concurrency: Auto-detected $(nproc) cores."
+          else
+            echo "Concurrency: Limit set externally to $CMAKE_BUILD_PARALLEL_LEVEL."
+          fi
+
+      - name: Configure
+        run: |
+          cmake -B build_isolation \
+            -DENABLE_GUI=OFF \
+            -DENABLE_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build test_gridcoin
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_isolation --target test_gridcoin
+
+      - name: Run every suite alone
+        run: contrib/devtools/run-unit-suites-isolated.sh build_isolation/src/test/test_gridcoin
+
+      - name: Run the whole binary in shuffled order (informational)
+        id: shuffled
+        # The seed is the run number, so every run samples a new order and a
+        # failure names the seed that reproduces it. Non-gating: see the job
+        # comment. The step after this one turns a failure into a warning
+        # annotation on the run and the PR, so it is seen rather than
+        # swallowed.
+        continue-on-error: true
+        run: |
+          seed=$(( ${{ github.run_number }} % 100000 + 1 ))
+          echo "seed=$seed" >> "$GITHUB_OUTPUT"
+          set -o pipefail
+          contrib/devtools/run-unit-suites-isolated.sh --random "$seed" \
+            build_isolation/src/test/test_gridcoin 2>&1 | tee shuffled.log
+
+      - name: Report a shuffled-order failure
+        if: steps.shuffled.outcome == 'failure'
+        run: |
+          seed="${{ steps.shuffled.outputs.seed }}"
+          echo "::warning title=Unit suite failed in shuffled order::test_gridcoin --random=$seed failed on this commit; the log is in the shuffled-order artifact. This does not fail the job."
+          {
+            echo "### Unit suite failed in shuffled order"
+            echo
+            echo "Reproduce with \`test_gridcoin --random=$seed\` (or \`contrib/devtools/run-unit-suites-isolated.sh --random $seed <binary>\`)."
+            echo
+            echo '```'
+            # Best effort: a crash may leave a log that matches nothing, and
+            # an empty excerpt must not fail this step (the job runs with
+            # pipefail) or skip the artifact upload after it.
+            grep -E "error|fail|leak" shuffled.log | tail -n 40 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the shuffled-order log
+        if: steps.shuffled.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: shuffled-order-unit-log
+          path: shuffled.log

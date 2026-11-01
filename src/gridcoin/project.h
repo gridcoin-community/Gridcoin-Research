@@ -17,6 +17,8 @@
 #include "sync.h"
 #include "node/ui_interface.h"
 
+#include <boost/signals2/signal.hpp>
+
 #include <memory>
 #include <vector>
 #include <string>
@@ -818,6 +820,16 @@ public:
     bool Contains(const std::string& name, const bool& only_auto_greylisted = true) const;
 
     //!
+    //! \brief Whether the non-mutating deep-copy overlay is active at the height of the superblock
+    //! the greylist was last refreshed against. Whitelist::Snapshot gates its overlay path on this:
+    //! pre-gate it applies the legacy in-place overlay; post-gate it deep-copies each entry first so
+    //! the registry is never mutated. Driven by AutoGreylistDeepCopyHeight (with -autogreylistdeepcopyheight override).
+    //!
+    //! \return \c true if the deep-copy overlay is active.
+    //!
+    bool IsDeepCopyActive() const;
+
+    //!
     //! \brief This refreshes the AutoGreylist object from the last superblock in the chain.
     //!
     void Refresh();
@@ -842,7 +854,10 @@ public:
     //! with the current head of the chain. This mode is used in the scraper during the construction of the superblock contract.
     //!
     //! Note that the AutoGreylist object refreshed this way will also be used to update the referenced superblock
-    //! object
+    //! object. Once that is done, the object is refreshed again against the committed superblock, so later readers
+    //! (including the next convergence) see the committed superblock's greylist, not the candidate's. While the deep
+    //! copy is inactive, the in-place overlay of the stamp has already written the candidate's greylist into the
+    //! registry entries.
     //!
     //! \param superblock The superblock with which to refresh the automatic greylist. This will generally be a candidate superblock
     //! from a scraper convergence, and is used in the call chain from the miner loop. The superblock object project status
@@ -860,7 +875,33 @@ private:
 
     GreylistPtr m_greylist_ptr;
     QuorumHash m_superblock_hash;
+    //! Set from the refresh superblock's height; gates Whitelist::Snapshot's overlay (deep copy vs legacy in-place).
+    //! All reads/writes go through methods that hold autogreylist_lock (IsDeepCopyActive,
+    //! RefreshWithSuperblock, Reset); annotated GUARDED_BY so Clang thread-safety enforces it.
+    bool m_deep_copy_active GUARDED_BY(autogreylist_lock);
 };
+
+//!
+//! \brief Selects which greylist overlay a whitelist snapshot is computed against.
+//!
+//! REQUIRED at every Snapshot() call site -- deliberately not defaulted, so a new call site
+//! does not compile until its author has decided which question it is asking. The
+//! classification rule is mechanical: match the DATA SOURCE, not the caller's purpose.
+//! Convergence-derived data -> PENDING; superblock/registry-derived data -> AUTHORITATIVE;
+//! data that never reads greylist status -> NONE.
+//! (~/GridcoinDev/autogreylist_state_separation/DESIGN.md section 10.7.)
+//!
+//! Below AutoGreylistRedesignHeight the AUTHORITATIVE and PENDING selectors are degenerate:
+//! both resolve to the single V1 greylist cache, so selecting between them carries no
+//! behavioral risk pre-gate.
+//!
+enum class GreylistState : uint8_t {
+    NONE,           //!< No overlay applied (replaces the old include_override = false).
+    AUTHORITATIVE,  //!< Overlay from the committed superblock's greylist state.
+    PENDING,        //!< Overlay matching the current scraper convergence.
+};
+
+class AutoGreylistService; // Facade over the V1/V2 greylist implementations (autogreylist.h).
 
 //!
 //! \brief Registry that manages the collection of BOINC projects in the Gridcoin whitelist.
@@ -877,14 +918,9 @@ public:
     //! Version 0: <= 5.4.5.0 where there was no backing db.
     //! Version 1: >= 5.4.6.0.
     //!
-    Whitelist()
-        : m_project_entries()
-        , m_pending_project_entries()
-        , m_expired_project_entries()
-        , m_project_first_actives()
-        , m_project_db(1)
-        , m_auto_greylist(std::make_shared<AutoGreylist>())
-    {}
+    //! Defined out-of-line (project.cpp): constructing m_auto_greylist requires the complete
+    //! AutoGreylistService type, which this header only forward-declares.
+    Whitelist();
 
     //!
     //! \brief The type that keys project entries by their key strings. Note that the entries
@@ -908,17 +944,32 @@ public:
 
     //!
     //! \brief Get a read-only view of the projects in the whitelist. The default filter is ACTIVE, which
-    //! provides the original ACTIVE project only view. The refresh_greylist filter is used to refresh
-    //! the AutoGreylist as part of taking the snapshot.
+    //! provides the original ACTIVE project only view. The auto-greylist overlay (selected by GreylistState)
+    //! is computed from the current AutoGreylist cache; the cache is refreshed explicitly at the chain handler
+    //! points (Quorum::PushSuperblock for v2+ activation, Quorum::PopSuperblock on reorg,
+    //! Quorum::LoadSuperblockIndex on startup, repeated by GRC::Initialize once the contract registries
+    //! have loaded) and additionally via Superblock::FromConvergence's
+    //! RefreshWithAndUpdateSuperblock when scrapers/subscribers build a candidate superblock (only for
+    //! superblock version > 2; the call is gated at superblock.cpp; below the redesign gate it refreshes
+    //! the cache back to the committed superblock when it is done). Snapshot() itself does NOT trigger
+    //! a refresh -- it is a cs_lock leaf in lock ordering. NOTE: pre-gate (m_deep_copy_active=false)
+    //! the override loop still mutates m_project_entries via shallow-copied shared_ptrs; that is the
+    //! legacy behavior the deep-copy gate is designed to neutralize, not a contract Snapshot() honors
+    //! pre-gate.
     //!
-    WhitelistSnapshot Snapshot(const ProjectEntry::ProjectFilterFlag& filter = ProjectEntry::ProjectFilterFlag::ACTIVE,
-                               const bool& refresh_greylist = true, const bool &include_override = true) const;
+    //! \param state REQUIRED greylist state selector -- see GreylistState. GreylistState::NONE
+    //! replaces the old include_override = false form; the other two select which computed
+    //! greylist the overlay is applied from (degenerate below the redesign gate).
+    //! \param filter Project status filter; the default preserves the original ACTIVE view.
+    //!
+    WhitelistSnapshot Snapshot(GreylistState state,
+                               const ProjectEntry::ProjectFilterFlag& filter = ProjectEntry::ProjectFilterFlag::ACTIVE) const;
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical
     //! contract replay.
     //!
-    void Reset() override;
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Perform contextual validation for the provided contract.
@@ -929,7 +980,7 @@ public:
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Perform contextual validation for the provided contract including block context. This is used
@@ -940,21 +991,21 @@ public:
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Add a project to the whitelist from contract data.
     //!
     //! \param ctx References the project contract and associated context.
     //!
-    void Add(const ContractContext& ctx) override;
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Remove the specified project from the whitelist.
     //!
     //! \param ctx References the project contract and associated context.
     //!
-    void Delete(const ContractContext& ctx) override;
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Revert the registry state for the project entry to the state prior
@@ -963,7 +1014,7 @@ public:
     //!
     //! \param ctx References the project entry contract and associated context.
     //!
-    void Revert(const ContractContext& ctx) override;
+    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Initialize the Project Whitelist (registry), which now includes restoring the state of the whitelist from
@@ -1000,6 +1051,13 @@ public:
     void ResetInMemoryOnly();
 
     //!
+    //! \brief Rebuild the in-memory registry cache from LevelDB (the ground truth), preserving the
+    //! LevelDB store. Used at the AutoGreylistDeepCopyHeight gate crossing to discard any pre-gate
+    //! in-place overlay corruption before the post-gate non-mutating overlay takes over. NOT a Reset().
+    //!
+    void ReinitFromDisk() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
     //! \brief Passivates the elements in the project db, which means remove from memory elements in the
     //! historical map that are not referenced by m_projects. The backing store of the element removed
     //! from memory is retained and will be transparently restored if find() is called on the hash key
@@ -1010,19 +1068,31 @@ public:
     uint64_t PassivateDB() override;
 
     //!
-    //! \brief This returns m_project_first_actives. Note that unlike other methods here, this does not take the cs_lock
-    //! internally but rather requires it. The reason for this is that this function is used by the AutoGreylist class update
-    //! where the cs_lock is already taken before, and the AutoGreylist class has its own lock. If cs_lock is then taken again,
-    //! a potential deadlock can result.
+    //! \brief Returns a by-value snapshot of m_project_first_actives. Takes cs_lock internally; safe to call from any
+    //! thread holding only cs_main (or no lock). cs_lock is recursive, so a caller that already holds it re-enters
+    //! harmlessly. The post-PR-2997 chain-handler refresh path runs without cs_lock, so internal locking is required
+    //! here for thread-safety against contract-handler writes (AddDelete -> Store under cs_lock).
     //!
     const ProjectEntryMap GetProjectsFirstActive() const;
+
+    //!
+    //! \brief Returns the CURRENT project entries read DIRECTLY from LevelDB -- the persisted, contract-applied status --
+    //! bypassing the in-memory entry map. The AutoGreylist overlay rewrites in-memory project status in place while
+    //! building whitelist snapshots, so once a project meets greylisting criteria, Snapshot() (and therefore listprojects)
+    //! reports AUTO_GREYLISTED regardless of whether the underlying contract status is ACTIVE, MAN_GREYLISTED, or
+    //! AUTO_GREYLIST_OVERRIDE. This accessor exposes the raw contract status for diagnostics and verification (see the
+    //! getrawprojectstatus RPC). Takes cs_lock internally and returns a by-value snapshot.
+    //!
+    //! \return Map of current project entries carrying their raw contract status.
+    //!
+    ProjectEntryMap GetProjectsFromDisk();
 
     //!
     //! \brief Method to provide the shared pointer to the global auto greylist cache object.
     //!
     //! \return shared pointer to the auto greylist global cache object.
     //!
-    std::shared_ptr<AutoGreylist> GetAutoGreylist();
+    std::shared_ptr<AutoGreylistService> GetAutoGreylist();
 
     //!
     //! \brief Specializes the template RegistryDB for the ScraperEntry class. Note that std::set<ProjectEntry> is not
@@ -1055,17 +1125,21 @@ private:
     //!
     void AddDelete(const ContractContext& ctx);
 
-    ProjectEntryMap m_project_entries;                   //!< The set of whitelisted projects.
+    ProjectEntryMap m_project_entries GUARDED_BY(cs_lock);                   //!< The set of whitelisted projects.
 
-    PendingProjectEntryMap m_pending_project_entries;    //!< Not actually used. Only to satisfy the template.
+    PendingProjectEntryMap m_pending_project_entries GUARDED_BY(cs_lock);    //!< Not actually used. Only to satisfy the template.
 
-    std::set<ProjectEntry> m_expired_project_entries;    //!< Not actually used. Only to satisfy the template.
+    std::set<ProjectEntry> m_expired_project_entries GUARDED_BY(cs_lock);    //!< Not actually used. Only to satisfy the template.
 
-    ProjectEntryMap m_project_first_actives;             //!< Tracks when projects were first activated for auto greylisting purposes.
+    ProjectEntryMap m_project_first_actives GUARDED_BY(cs_lock);             //!< Tracks when projects were first activated for auto greylisting purposes.
 
+    //! \note No GUARDED_BY: m_project_db is set once in the ctor and never reassigned; only its internal state
+    //! is modified, by member functions that are themselves invoked under cs_lock in the Whitelist methods.
     ProjectEntryDB m_project_db;                         //!< The project db member
 
-    std::shared_ptr<AutoGreylist> m_auto_greylist;       //!< Smart shared pointer to the AutoGreylist cache object
+    //! \note No GUARDED_BY: m_auto_greylist (the shared_ptr) is set once in the ctor and never replaced;
+    //! only the pointed-to service's internal state changes, guarded by its own internal locks.
+    std::shared_ptr<AutoGreylistService> m_auto_greylist; //!< Facade over the V1/V2 greylist implementations.
 public:
 
     ProjectEntryDB& GetProjectDB();
@@ -1084,7 +1158,7 @@ Whitelist& GetWhitelist();
 //!
 //! \return shared pointer to the auto greylist global cache object.
 //!
-std::shared_ptr<AutoGreylist> GetAutoGreylistCache();
+std::shared_ptr<AutoGreylistService> GetAutoGreylistCache();
 
 } // namespace GRC
 

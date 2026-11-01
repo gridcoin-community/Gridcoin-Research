@@ -7,7 +7,6 @@
 #include <string>
 #include <boost/test/unit_test.hpp>
 
-#include <main.h>
 #include <streams.h>
 #include <wallet/wallet.h>
 #include <policy/policy.h>
@@ -74,23 +73,19 @@ struct CMutableBitcoinTransaction
         READWRITE(nLockTime);
     }
 
-    uint256 GetHash() const
-    {
-        return SerializeHash(*this);
-    }
 };
 
 CTransaction ConvertFromMutableBitcoinTransaction(CMutableBitcoinTransaction& btx)
 {
-    CTransaction tx;
+    CMutableTransaction mtx;
 
-    tx.nVersion = btx.nVersion;
-    tx.nTime = 0;
-    tx.vin = btx.vin;
-    tx.vout = btx.vout;
-    tx.nLockTime = btx.nLockTime;
+    mtx.nVersion = btx.nVersion;
+    mtx.nTime = 0;
+    mtx.vin = btx.vin;
+    mtx.vout = btx.vout;
+    mtx.nLockTime = btx.nLockTime;
 
-    return tx;
+    return CTransaction(std::move(mtx));
 }
 } // anonymous namespace
 
@@ -152,7 +147,8 @@ BOOST_AUTO_TEST_CASE(tx_valid)
             stream >> btx;
             CTransaction tx = ConvertFromMutableBitcoinTransaction(btx);
 
-            BOOST_CHECK_MESSAGE(CheckTransaction(tx), strTest);
+            CValidationState valid_state;
+            BOOST_CHECK_MESSAGE(CheckTransaction(tx, valid_state), strTest);
 
             for (unsigned int i = 0; i < tx.vin.size(); i++)
             {
@@ -164,7 +160,8 @@ BOOST_AUTO_TEST_CASE(tx_valid)
 
                 // Support both old format (bool enforceP2SH) and new format (string flags)
                 unsigned int verify_flags = test[2].isBool()
-                    ? (test[2].get_bool() ? SCRIPT_VERIFY_P2SH : SCRIPT_VERIFY_NONE)
+                    ? static_cast<unsigned int>(test[2].get_bool() ? SCRIPT_VERIFY_P2SH
+                                                                   : SCRIPT_VERIFY_NONE)
                     : ParseScriptFlags(test[2].get_str());
                 BOOST_CHECK_MESSAGE(VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout], verify_flags, tx, i),
                         strTest);
@@ -225,7 +222,8 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
             stream >> btx;
             CTransaction tx = ConvertFromMutableBitcoinTransaction(btx);
 
-            fValid = CheckTransaction(tx);
+            CValidationState invalid_state;
+            fValid = CheckTransaction(tx, invalid_state);
 
             for (unsigned int i = 0; i < tx.vin.size() && fValid; i++)
             {
@@ -237,7 +235,8 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
 
                 // Support both old format (bool enforceP2SH) and new format (string flags)
                 unsigned int verify_flags = test[2].isBool()
-                    ? (test[2].get_bool() ? SCRIPT_VERIFY_P2SH : SCRIPT_VERIFY_NONE)
+                    ? static_cast<unsigned int>(test[2].get_bool() ? SCRIPT_VERIFY_P2SH
+                                                                   : SCRIPT_VERIFY_NONE)
                     : ParseScriptFlags(test[2].get_str());
                 fValid = VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout], verify_flags, tx, i);
             }
@@ -277,11 +276,14 @@ BOOST_AUTO_TEST_CASE(basic_transaction_tests)
     CMutableBitcoinTransaction btx;
     stream >> btx;
     CTransaction tx = ConvertFromMutableBitcoinTransaction(btx);
-    BOOST_CHECK_MESSAGE(CheckTransaction(tx), "Simple deserialized transaction should be valid.");
+    CValidationState deser_state;
+    BOOST_CHECK_MESSAGE(CheckTransaction(tx, deser_state), "Simple deserialized transaction should be valid.");
 
     // Check that duplicate txins fail
-    tx.vin.push_back(tx.vin[0]);
-    BOOST_CHECK_MESSAGE(!CheckTransaction(tx), "Transaction with duplicate txins should be invalid.");
+    CMutableTransaction mtxDup(tx);
+    mtxDup.vin.push_back(mtxDup.vin[0]);
+    CValidationState dup_state;
+    BOOST_CHECK_MESSAGE(!CheckTransaction(CTransaction(mtxDup), dup_state), "Transaction with duplicate txins should be invalid.");
 }
 
 //
@@ -294,7 +296,6 @@ static std::vector<CTransaction>
 SetupDummyInputs(CBasicKeyStore& keystoreRet, MapPrevTx& inputsRet)
 {
     std::vector<CTransaction> dummyTransactions;
-    dummyTransactions.resize(2);
 
     // Add some keys to the keystore:
     CKey key[4];
@@ -305,18 +306,22 @@ SetupDummyInputs(CBasicKeyStore& keystoreRet, MapPrevTx& inputsRet)
     }
 
     // Create some dummy input transactions
-    dummyTransactions[0].vout.resize(2);
-    dummyTransactions[0].vout[0].nValue = 11*CENT;
-    dummyTransactions[0].vout[0].scriptPubKey << key[0].GetPubKey() << OP_CHECKSIG;
-    dummyTransactions[0].vout[1].nValue = 50*CENT;
-    dummyTransactions[0].vout[1].scriptPubKey << key[1].GetPubKey() << OP_CHECKSIG;
+    CMutableTransaction mtx0;
+    mtx0.vout.resize(2);
+    mtx0.vout[0].nValue = 11*CENT;
+    mtx0.vout[0].scriptPubKey << key[0].GetPubKey() << OP_CHECKSIG;
+    mtx0.vout[1].nValue = 50*CENT;
+    mtx0.vout[1].scriptPubKey << key[1].GetPubKey() << OP_CHECKSIG;
+    dummyTransactions.push_back(CTransaction(std::move(mtx0)));
     inputsRet[dummyTransactions[0].GetHash()] = make_pair(CTxIndex(), dummyTransactions[0]);
 
-    dummyTransactions[1].vout.resize(2);
-    dummyTransactions[1].vout[0].nValue = 21*CENT;
-    dummyTransactions[1].vout[0].scriptPubKey.SetDestination(key[2].GetPubKey().GetID());
-    dummyTransactions[1].vout[1].nValue = 22*CENT;
-    dummyTransactions[1].vout[1].scriptPubKey.SetDestination(key[3].GetPubKey().GetID());
+    CMutableTransaction mtx1;
+    mtx1.vout.resize(2);
+    mtx1.vout[0].nValue = 21*CENT;
+    mtx1.vout[0].scriptPubKey.SetDestination(key[2].GetPubKey().GetID());
+    mtx1.vout[1].nValue = 22*CENT;
+    mtx1.vout[1].scriptPubKey.SetDestination(key[3].GetPubKey().GetID());
+    dummyTransactions.push_back(CTransaction(std::move(mtx1)));
     inputsRet[dummyTransactions[1].GetHash()] = make_pair(CTxIndex(), dummyTransactions[1]);
 
     return dummyTransactions;
@@ -328,30 +333,30 @@ BOOST_AUTO_TEST_CASE(test_Get)
     MapPrevTx dummyInputs;
     std::vector<CTransaction> dummyTransactions = SetupDummyInputs(keystore, dummyInputs);
 
-    CTransaction t1;
-    t1.vin.resize(3);
-    t1.vin[0].prevout.hash = dummyTransactions[0].GetHash();
-    t1.vin[0].prevout.n = 1;
-    t1.vin[0].scriptSig << std::vector<unsigned char>(65, 0);
-    t1.vin[1].prevout.hash = dummyTransactions[1].GetHash();
-    t1.vin[1].prevout.n = 0;
-    t1.vin[1].scriptSig << std::vector<unsigned char>(65, 0) << std::vector<unsigned char>(33, 4);
-    t1.vin[2].prevout.hash = dummyTransactions[1].GetHash();
-    t1.vin[2].prevout.n = 1;
-    t1.vin[2].scriptSig << std::vector<unsigned char>(65, 0) << std::vector<unsigned char>(33, 4);
-    t1.vout.resize(2);
-    t1.vout[0].nValue = 90*CENT;
-    t1.vout[0].scriptPubKey << OP_1;
+    CMutableTransaction mt1;
+    mt1.vin.resize(3);
+    mt1.vin[0].prevout.hash = dummyTransactions[0].GetHash();
+    mt1.vin[0].prevout.n = 1;
+    mt1.vin[0].scriptSig << std::vector<unsigned char>(65, 0);
+    mt1.vin[1].prevout.hash = dummyTransactions[1].GetHash();
+    mt1.vin[1].prevout.n = 0;
+    mt1.vin[1].scriptSig << std::vector<unsigned char>(65, 0) << std::vector<unsigned char>(33, 4);
+    mt1.vin[2].prevout.hash = dummyTransactions[1].GetHash();
+    mt1.vin[2].prevout.n = 1;
+    mt1.vin[2].scriptSig << std::vector<unsigned char>(65, 0) << std::vector<unsigned char>(33, 4);
+    mt1.vout.resize(2);
+    mt1.vout[0].nValue = 90*CENT;
+    mt1.vout[0].scriptPubKey << OP_1;
 
-    BOOST_CHECK(AreInputsStandard(t1, dummyInputs));
+    BOOST_CHECK(AreInputsStandard(CTransaction(mt1), dummyInputs));
 
     // Adding extra junk to the scriptSig should make it non-standard:
-    t1.vin[0].scriptSig << OP_11;
-    BOOST_CHECK(!AreInputsStandard(t1, dummyInputs));
+    mt1.vin[0].scriptSig << OP_11;
+    BOOST_CHECK(!AreInputsStandard(CTransaction(mt1), dummyInputs));
 
     // ... as should not having enough:
-    t1.vin[0].scriptSig = CScript();
-    BOOST_CHECK(!AreInputsStandard(t1, dummyInputs));
+    mt1.vin[0].scriptSig = CScript();
+    BOOST_CHECK(!AreInputsStandard(CTransaction(mt1), dummyInputs));
 }
 
 BOOST_AUTO_TEST_CASE(test_GetThrow)
@@ -362,19 +367,19 @@ BOOST_AUTO_TEST_CASE(test_GetThrow)
 
     MapPrevTx missingInputs;
 
-    CTransaction t1;
-    t1.vin.resize(3);
-    t1.vin[0].prevout.hash = dummyTransactions[0].GetHash();
-    t1.vin[0].prevout.n = 0;
-    t1.vin[1].prevout.hash = dummyTransactions[1].GetHash();;
-    t1.vin[1].prevout.n = 0;
-    t1.vin[2].prevout.hash = dummyTransactions[1].GetHash();;
-    t1.vin[2].prevout.n = 1;
-    t1.vout.resize(2);
-    t1.vout[0].nValue = 90*CENT;
-    t1.vout[0].scriptPubKey << OP_1;
+    CMutableTransaction mt1;
+    mt1.vin.resize(3);
+    mt1.vin[0].prevout.hash = dummyTransactions[0].GetHash();
+    mt1.vin[0].prevout.n = 0;
+    mt1.vin[1].prevout.hash = dummyTransactions[1].GetHash();;
+    mt1.vin[1].prevout.n = 0;
+    mt1.vin[2].prevout.hash = dummyTransactions[1].GetHash();;
+    mt1.vin[2].prevout.n = 1;
+    mt1.vout.resize(2);
+    mt1.vout[0].nValue = 90*CENT;
+    mt1.vout[0].scriptPubKey << OP_1;
 
-    BOOST_CHECK_THROW(AreInputsStandard(t1, missingInputs), runtime_error);
+    BOOST_CHECK_THROW(AreInputsStandard(CTransaction(mt1), missingInputs), runtime_error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

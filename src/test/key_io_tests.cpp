@@ -5,6 +5,7 @@
 #include <test/data/key_io_invalid.json.h>
 #include <test/data/key_io_valid.json.h>
 
+#include <chainparams.h>
 #include <key.h>
 #include <key_io.h>
 #include <script.h>
@@ -16,7 +17,28 @@
 
 UniValue read_json(const std::string& jsondata);
 
-BOOST_AUTO_TEST_SUITE(key_io_tests)
+namespace {
+//! Restores the selected chain when a case exits, however it exits.
+//!
+//! These cases switch chain params per vector, and the params are a process
+//! global that the module fixture sets once (BOOST_GLOBAL_FIXTURE, not
+//! per-case). This suite runs near the head of the binary, so whatever it
+//! leaves selected is what nearly every later suite sees, and plenty of those
+//! read Params() without selecting first. The cases used to end with an
+//! explicit SelectParams(MAIN), which any throw skips -- get_str() on a
+//! malformed vector, for one. Scope-based restoration cannot be skipped.
+//!
+//! Attached with BOOST_FIXTURE_TEST_SUITE rather than declared per case, so a
+//! case added later is covered without anyone having to remember.
+struct ChainParamsRestorer
+{
+    const std::string m_original{Params().NetworkIDString()};
+
+    ~ChainParamsRestorer() { SelectParams(m_original); }
+};
+} // namespace
+
+BOOST_FIXTURE_TEST_SUITE(key_io_tests, ChainParamsRestorer)
 
 // Goal: check that parsed keys match test payload
 BOOST_AUTO_TEST_CASE(key_io_valid_parse)
@@ -78,8 +100,6 @@ BOOST_AUTO_TEST_CASE(key_io_valid_parse)
             BOOST_CHECK_MESSAGE(!privkey.IsValid(), "IsValid pubkey as privkey:" + strTest);
         }
     }
-
-    SelectParams(CBaseChainParams::MAIN);
 }
 
 // Goal: check that generated keys match test vectors
@@ -115,8 +135,6 @@ BOOST_AUTO_TEST_CASE(key_io_valid_gen)
             BOOST_CHECK_EQUAL(address, exp_base58string);
         }
     }
-
-    SelectParams(CBaseChainParams::MAIN);
 }
 
 
@@ -146,8 +164,18 @@ BOOST_AUTO_TEST_CASE(key_io_invalid)
             BOOST_CHECK_MESSAGE(!privkey.IsValid(), "IsValid privkey in mainnet:" + strTest);
         }
     }
+}
 
-    SelectParams(CBaseChainParams::MAIN);
+// Goal: a direct regression test on the restorer above.
+//
+// The suite fixture restores the chain around every case, so correctness no
+// longer depends on where this sits. It is declared last only because it can
+// only observe a leak from a case that ran before it: with the restorer
+// neutered, key_io_invalid ends its loop on testnet and this fails
+// "test != main".
+BOOST_AUTO_TEST_CASE(key_io_leaves_chain_params_unchanged)
+{
+    BOOST_CHECK_EQUAL(Params().NetworkIDString(), CBaseChainParams::MAIN);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

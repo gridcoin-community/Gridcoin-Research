@@ -6,7 +6,6 @@
 #include <key_io.h>
 #include "chainparams.h"
 #include "logging.h"
-#include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/researcher.h"
@@ -18,8 +17,6 @@
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
-
-extern int64_t g_v11_timestamp;
 
 namespace {
 BeaconRegistry g_beacons;
@@ -473,6 +470,63 @@ bool BeaconRegistry::TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, con
     return true;
 }
 
+std::optional<OwnershipProof> GRC::GetOwnershipProofFromTx(const CTransaction& tx, const CKeyID& beacon_id)
+{
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type != ContractType::BEACON
+                || contract.m_action != ContractAction::ADD
+                || contract.m_version < 2) {
+            continue;
+        }
+
+        const auto payload = contract.SharePayloadAs<BeaconPayload>();
+
+        if (payload->m_version >= 3
+                && !payload->m_ownership_proof.Empty()
+                && payload->m_beacon.GetId() == beacon_id) {
+            return payload->m_ownership_proof;
+        }
+    }
+
+    return std::nullopt;
+}
+
+bool BeaconRegistry::RestoreOwnershipProof(const Beacon_ptr& pending_beacon)
+{
+    const CKeyID beacon_id = pending_beacon->GetId();
+
+    // The proof, if any, comes from this pending beacon's own advertisement.
+    m_pending_ownership_proofs.erase(beacon_id);
+
+    CTransaction tx;
+
+    if (!CTxDB("r").ReadDiskTx(pending_beacon->m_hash, tx)) {
+        LogPrintf("WARNING: %s: Unable to read the advertisement transaction %s of the pending beacon for cpid %s, "
+                  "address %s.",
+                  __func__,
+                  pending_beacon->m_hash.GetHex(),
+                  pending_beacon->m_cpid.ToString(),
+                  EncodeDestination(pending_beacon->GetAddress()));
+
+        return false;
+    }
+
+    std::optional<OwnershipProof> proof = GetOwnershipProofFromTx(tx, beacon_id);
+
+    if (!proof) {
+        return false;
+    }
+
+    m_pending_ownership_proofs[beacon_id] = std::move(*proof);
+
+    LogPrint(LogFlags::BEACON, "INFO: %s: Restored ownership proof of pending beacon for cpid %s, address %s.",
+             __func__,
+             pending_beacon->m_cpid.ToString(),
+             EncodeDestination(pending_beacon->GetAddress()));
+
+    return true;
+}
+
 void BeaconRegistry::Add(const ContractContext& ctx)
 {
     // Poor man's mock. This is to prevent the tests from polluting the LevelDB database
@@ -569,8 +623,12 @@ void BeaconRegistry::Add(const ContractContext& ctx)
     // For v3 payloads, store the ownership proof in the side map keyed by
     // the pending beacon's key ID. The proof data is still valid in the
     // payload even though m_beacon was moved (m_ownership_proof wasn't).
+    // An advertisement without a proof replaces any proof an earlier one
+    // left under the same key.
     if (payload.m_version >= 3 && !payload.m_ownership_proof.Empty()) {
         m_pending_ownership_proofs[pending.GetId()] = std::move(payload.m_ownership_proof);
+    } else {
+        m_pending_ownership_proofs.erase(pending.GetId());
     }
 }
 
@@ -805,6 +863,7 @@ void BeaconRegistry::Revert(const ContractContext& ctx)
                 else if (beacon_to_restore_ptr->m_status == BeaconStatusForStorage::PENDING)
                 {
                     m_pending[beacon_to_restore_ptr->GetId()] = beacon_to_restore_ptr;
+                    RestoreOwnershipProof(beacon_to_restore_ptr);
                 }
                 else
                 {
@@ -845,8 +904,12 @@ int BeaconRegistry::GetDBHeight()
 Beacon_ptr BeaconRegistry::GetBeaconChainletRoot(Beacon_ptr beacon,
                                                  std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out)
 {
-    const auto ChainletErrorHandle = [this](unsigned int i, Beacon_ptr beacon, std::string error_message) {
-        error("%s: Beacon chainlet is corrupted at link %u for cpid %s: timestamp = %s" PRId64 ", ctx_hash = %s,"
+    // NO_THREAD_SAFETY_ANALYSIS: lambda captures `this` and calls Reset()
+    // which requires cs_main. The enclosing GetBeaconChainletRoot is
+    // annotated EXCLUSIVE_LOCKS_REQUIRED(cs_main); the analyzer cannot see
+    // hold-state through the lambda capture.
+    const auto ChainletErrorHandle = [this](unsigned int i, Beacon_ptr beacon, std::string error_message) NO_THREAD_SAFETY_ANALYSIS {
+        error("%s: Beacon chainlet is corrupted at link %u for cpid %s: timestamp = %" PRId64 ", ctx_hash = %s,"
               "prev_beacon_ctx_hash = %s, status = %s: %s.",
               __func__,
               i,
@@ -857,7 +920,7 @@ Beacon_ptr BeaconRegistry::GetBeaconChainletRoot(Beacon_ptr beacon,
               beacon->StatusToString(),
               error_message);
 
-        std::string str_error = strprintf("ERROR: %s: Beacon chainlet is corrupted at link %u for cpid %s: timestamp = %s"
+        std::string str_error = strprintf("ERROR: %s: Beacon chainlet is corrupted at link %u for cpid %s: timestamp = %"
                                           PRId64 ", ctx_hash = %s, prev_beacon_ctx_hash = %s, status = %s: %s.",
                                           __func__,
                                           i,
@@ -1216,12 +1279,14 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
                       __func__,
                       superblock_hash.GetHex(),
                       cpid.ToString());
+                ++iter;
                 continue;
             }
 
             // Resurrect the pending record prior to the activation. This points to the pending record still in the db.
             m_pending[static_cast<PendingBeacon>(*pending_beacon_entry->second).GetId()] =
                     pending_beacon_entry->second;
+            RestoreOwnershipProof(pending_beacon_entry->second);
 
             // Erase the entry from the active beacons map. This also increments the iterator.
             iter = m_beacons.erase(iter);
@@ -1244,6 +1309,16 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
         // Get the pending beacon entry that is the antecedent of the expired entry.
         auto pending_beacon_entry = m_beacon_db.find(iter->m_previous_hash);
 
+        if (pending_beacon_entry == m_beacon_db.end()) {
+            error("%s: Superblock hash %s: No pending beacon found to resurrect for expired pending beacon hash %s, "
+                  "cpid %s.",
+                  __func__,
+                  superblock_hash.GetHex(),
+                  iter->m_hash.GetHex(),
+                  iter->m_cpid.ToString());
+            continue;
+        }
+
         // Resurrect pending beacon entry
         if (!m_pending.insert(std::make_pair(pending_beacon_entry->second->GetId(), pending_beacon_entry->second)).second) {
             LogPrintf("WARN: %s: Resurrected pending beacon entry, hash %s, from expired pending beacon for cpid %s during deactivation "
@@ -1254,6 +1329,8 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
                       superblock_hash.GetHex(),
                       EncodeDestination(pending_beacon_entry->second->GetAddress())
                       );
+        } else {
+            RestoreOwnershipProof(pending_beacon_entry->second);
         }
     }
 
@@ -1429,6 +1506,17 @@ int BeaconRegistry::Initialize()
 
     LogPrint(LogFlags::BEACON, "INFO: %s: m_beacon_db size after load: %u", __func__, m_beacon_db.size());
     LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons size after load: %u", __func__, m_beacons.size());
+
+    // The contract replay that follows skips the beacon contracts the db already covers, so it does not bring back
+    // the ownership proofs of the pending beacons loaded here.
+    unsigned int proofs_restored = 0;
+
+    for (const auto& pending : m_pending) {
+        if (RestoreOwnershipProof(pending.second)) ++proofs_restored;
+    }
+
+    LogPrint(LogFlags::BEACON, "INFO: %s: Restored ownership proofs for %u of %u pending beacons.",
+             __func__, proofs_restored, m_pending.size());
 
     return height;
 }

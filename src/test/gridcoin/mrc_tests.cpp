@@ -4,7 +4,6 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <main.h>
 #include <gridcoin/account.h>
 #include <gridcoin/beacon.h>
 #include <gridcoin/cpid.h>
@@ -14,10 +13,17 @@
 #include <miner.h>
 #include <primitives/transaction.h>
 #include <rpc/blockchain.h>
+#include <test/state_guard.h>
 #include <test/test_gridcoin.h>
 
 namespace {
 struct Setup {
+    // First member: restores the tip globals, mock time and the arguments
+    // this fixture forces, after the members below are gone. The destructor
+    // used to leave pindexGenesisBlock pointing at the index it had just
+    // freed and to write empty strings where the arguments were absent.
+    grc_test::StateGuard guard;
+
     CBlockIndex* pindex{nullptr};
     GRC::Cpid cpid = GRC::Cpid(InsecureRandBytes(16));
     GRC::ResearchAccount& account = GRC::Tally::CreateAccount(cpid);
@@ -58,14 +64,22 @@ struct Setup {
         assert(pindex->nHeight >= 7);
         assert(pindex->nHeight < 179);
 
-        CTransaction tx;
+        CMutableTransaction tx;
         tx.nTime = pindexGenesisBlock->nTime;
+        CTransaction ctx_tx(tx);
 
         key.MakeNewKey(false);
 
-        LOCK(wallet->cs_wallet);
-
-        wallet->AddKey(key);
+        // Scoped to the key insertion alone. Everything below reaches cs_main
+        // -- the beacon registry calls, and Researcher::Reload by way of
+        // StoreResearcher -- so holding cs_wallet across them registers
+        // wallet->cs_wallet -> cs_main, inverting the canonical
+        // cs_main -> cs_wallet order that the test bodies below take with
+        // LOCK2. Nothing after this needs the wallet lock.
+        {
+            LOCK(wallet->cs_wallet);
+            BOOST_REQUIRE(wallet->AddKey(key));
+        }
 
         GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
                 GRC::ContractAction::ADD,
@@ -76,7 +90,7 @@ struct Setup {
         account.m_first_block_ptr = pindexGenesisBlock;
         account.m_last_block_ptr = pindexGenesisBlock;
 
-        GRC::GetBeaconRegistry().Add({contract, tx, pindexGenesisBlock});
+        GRC::GetBeaconRegistry().Add({contract, ctx_tx, pindexGenesisBlock});
         GRC::GetBeaconRegistry().ActivatePending({key.GetPubKey().GetID()}, tx.nTime, uint256(), 0);
         beacon = *GRC::GetBeaconRegistry().TryActive(cpid, pindex->nTime);
 
@@ -94,8 +108,8 @@ struct Setup {
         gArgs.ForceSetArg("email", "");
         GRC::Tally::RemoveAccount(cpid);
 
-        SetMockTime(0);
-
+        // Mock time and the tip pointers are restored by `guard` once this
+        // destructor has freed the mock chain.
         for (CBlockIndex* tip = pindex; tip->pprev; tip = tip->pprev) {
             mapBlockIndex.erase(tip->GetBlockHash());
             delete tip->phashBlock;
@@ -117,10 +131,22 @@ BOOST_AUTO_TEST_CASE(it_properly_records_blocks)
     pindex->pprev->pprev->pprev->pprev->AddMRCResearcherContext(cpid, 72, 0.0);
     pindex->pprev->pprev->pprev->pprev->pprev->pprev->SetResearcherContext(cpid, 72, 0.0);
 
-    CBlockIndex* index{pindexGenesisBlock};
-    while (index) {
-        GRC::Tally::RecordRewardBlock(index);
-        index = index->pnext;
+    {
+        // Test runs single-threaded; pindexGenesisBlock is a Setup-fixture-
+        // owned pointer, not the production global. Suppress the analyzer
+        // warning rather than introducing a cs_main lock the test doesn't need.
+        #if defined(__clang__)
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wthread-safety-analysis"
+        #endif
+        CBlockIndex* index{pindexGenesisBlock};
+        while (index) {
+            GRC::Tally::RecordRewardBlock(index);
+            index = index->pnext;
+        }
+        #if defined(__clang__)
+        #pragma clang diagnostic pop
+        #endif
     }
 
     BOOST_CHECK(account.m_last_block_ptr == pindex->pprev);
@@ -141,6 +167,8 @@ BOOST_AUTO_TEST_CASE(it_has_proper_fees_for_newbies)
     GRC::MRC mrc;
     mrc.m_mining_id = cpid;
     mrc.m_research_subsidy = 72;
+
+    LOCK(cs_main);
 
     // Before:
     mrc.m_last_block_hash = pindex->pprev->pprev->GetBlockHash();
@@ -240,8 +268,10 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
 {
     CBlock block;
     block.vtx.resize(2);
-    block.vtx[1].vin.resize(1);
-    block.vtx[1].vout.resize(2);
+    CMutableTransaction mtxCoinstake;
+    mtxCoinstake.vin.resize(1);
+    mtxCoinstake.vout.resize(2);
+    CMutableTransaction mtxCoinbase;
     std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>> mrc_map;
     std::map<GRC::Cpid, uint256> mrc_tx_map;
 
@@ -251,7 +281,7 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
 
     pindex->pprev->AddMRCResearcherContext(cpid, 72, 0.0);
 
-    BOOST_CHECK(CreateRestOfTheBlock(block, pindex->pprev, mrc_map));
+    BOOST_CHECK(CreateRestOfTheBlock(block, mtxCoinbase, mtxCoinstake, pindex->pprev, mrc_map));
 
     GRC::MRC mrc;
     CAmount reward{0}, fee{0};
@@ -262,9 +292,9 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
 
     uint32_t claim_contract_version = 2;
 
-    BOOST_CHECK(CreateGridcoinReward(block, pindex->pprev, reward, claim));
+    BOOST_CHECK(CreateGridcoinReward(mtxCoinbase, mtxCoinstake, block, pindex->pprev, reward, claim));
 
-    BOOST_CHECK(CreateMRCRewards(block, mrc_map, mrc_tx_map, reward, claim_contract_version, claim, wallet));
+    BOOST_CHECK(CreateMRCRewards(mtxCoinbase, mtxCoinstake, block, mrc_map, mrc_tx_map, reward, claim_contract_version, claim, wallet));
 
     // TODO(div72): Separate this test into pieces and actually have it do
     // some useful testing by testing the validation logic against it.

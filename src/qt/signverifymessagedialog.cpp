@@ -4,13 +4,9 @@
 #include "addressbookpage.h"
 #include <key_io.h>
 #include "guiutil.h"
-#include "init.h"
-#include "main.h"
 #include "optionsmodel.h"
 #include "qt/decoration.h"
-#include "streams.h"
 #include "walletmodel.h"
-#include "wallet/wallet.h"
 
 #include <string>
 #include <vector>
@@ -127,30 +123,32 @@ void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
         return;
     }
 
-    CKey key;
-    if (!pwalletMain->GetKey(*keyID, key))
-    {
+    // The wallet is unlocked (UnlockContext above); signing -- including the
+    // private-key access -- happens node-side, the key never crosses the
+    // boundary. The signature comes back base64-encoded.
+    std::string signature;
+    const interfaces::MessageSignStatus status = model->wallet().signMessage(
+        ui->addressInEdit_SM->text().toStdString(),
+        ui->messageInEdit_SM->document()->toPlainText().toStdString(),
+        signature);
+
+    switch (status) {
+    case interfaces::MessageSignStatus::KeyNotAvailable:
         ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_SM->setText(tr("Private key for the entered address is not available."));
         return;
-    }
-
-    CDataStream ss(SER_GETHASH, 0);
-    ss << strMessageMagic;
-    ss << ui->messageInEdit_SM->document()->toPlainText().toStdString();
-
-    std::vector<unsigned char> vchSig;
-    if (!key.SignCompact(Hash(ss), vchSig))
-    {
+    case interfaces::MessageSignStatus::SigningFailed:
         ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_SM->setText(QString("<nobr>") + tr("Message signing failed.") + QString("</nobr>"));
         return;
+    case interfaces::MessageSignStatus::OK:
+        break;
     }
 
     ui->statusLabel_SM->setStyleSheet("QLabel { color: green; }");
     ui->statusLabel_SM->setText(QString("<nobr>") + tr("Message signed.") + QString("</nobr>"));
 
-    ui->signatureOutEdit_SM->setText(QString::fromStdString(EncodeBase64(&vchSig[0], vchSig.size())));
+    ui->signatureOutEdit_SM->setText(QString::fromStdString(signature));
 }
 
 void SignVerifyMessageDialog::on_copySignatureButton_SM_clicked()
@@ -213,12 +211,15 @@ void SignVerifyMessageDialog::on_verifyMessageButton_VM_clicked()
         return;
     }
 
-    CDataStream ss(SER_GETHASH, 0);
-    ss << strMessageMagic;
-    ss << ui->messageInEdit_VM->document()->toPlainText().toStdString();
+    // Recovering the signer's public key and comparing it to the address is
+    // pure crypto but runs behind the interface so the GUI needs no core
+    // message-magic/recover headers.
+    const interfaces::MessageVerifyStatus status = model->wallet().verifyMessage(
+        ui->addressInEdit_VM->text().toStdString(),
+        ui->messageInEdit_VM->document()->toPlainText().toStdString(),
+        vchSig);
 
-    CPubKey pubkey;
-    if (!pubkey.RecoverCompact(Hash(ss), vchSig))
+    if (status == interfaces::MessageVerifyStatus::RecoverFailed)
     {
         ui->signatureInEdit_VM->setValid(false);
         ui->statusLabel_VM->setStyleSheet("QLabel { color: red; }");
@@ -226,7 +227,7 @@ void SignVerifyMessageDialog::on_verifyMessageButton_VM_clicked()
         return;
     }
 
-    if (!(CTxDestination(pubkey.GetID()) == addr))
+    if (status == interfaces::MessageVerifyStatus::AddressMismatch)
     {
         ui->statusLabel_VM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_VM->setText(QString("<nobr>") + tr("Message verification failed.") + QString("</nobr>"));

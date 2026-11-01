@@ -2,12 +2,25 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "main.h"
 #include "gridcoin/support/block_finder.h"
+#include "chain.h"
+#include "primitives/block.h"
 
 #include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
 #include <array>
 #include <cstdint>
+
+// Tests run single-threaded and directly manipulate the chain-state globals
+// pindexBest / pindexGenesisBlock / nBestHeight (see BlockChain fixture
+// below). BlockFinder::* are EXCLUSIVE_LOCKS_REQUIRED(cs_main) under
+// Phase 2 of issue #2869; suppress the analyzer for this file rather than
+// take a lock the tests do not need.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 
 namespace
 {
@@ -15,6 +28,12 @@ namespace
     class BlockChain
     {
     public:
+        // First member, so it captures the tip globals before the constructor
+        // points them at `blocks` and restores them after `blocks` is gone.
+        // Without it every case left pindexBest / pindexGenesisBlock /
+        // nBestHeight aimed at a dead stack frame.
+        grc_test::StateGuard guard;
+
         BlockChain()
         {
             // Initialize block link.
@@ -84,3 +103,7 @@ BOOST_AUTO_TEST_CASE(FindBlockByTimeShouldReturnLastBlockIfOlderThanTime)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif

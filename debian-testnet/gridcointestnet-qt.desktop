@@ -1,0 +1,18 @@
+[Desktop Entry]
+Name=gridcointestnet-qt
+GenericName=Cryptocurrency rewarding BOINC computation
+GenericName[de]=Kryptowährung, die BOINC-Berechnung belohnt
+GenericName[sv]=Kryptovaluta som belönar beräkningar genom BOINC
+Comment=Launches TESTNET version of gridcoin gui
+Categories=Office;Finance;P2P;Network;Qt;
+Keywords=crypto;cryptocurrency;cryptocoin;bitcoin;altcoin;boinc;
+Exec=sh -c "/usr/bin/gridcointestnet -testnet"
+Terminal=false
+Type=Application
+StartupWMClass=gridcointestnet
+Icon=/usr/share/icons/hicolor/48x48/apps/gridcointestnet-qt.png
+Actions=Testnet;
+
+[Desktop Action Testnet]
+Name=Testnet
+Exec=sh -c "/usr/bin/gridcointestnet -testnet"

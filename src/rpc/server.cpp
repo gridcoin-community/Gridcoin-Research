@@ -7,6 +7,7 @@
 #include "amount.h"
 #include <base58.h>
 #include "init.h"
+#include "node/shutdown.h"
 #include "sync.h"
 #include <key_io.h>
 #include "node/ui_interface.h"
@@ -15,7 +16,9 @@
 #include "protocol.h"
 #include "random.h"
 #include "wallet/db.h"
-#include "util.h"
+#include <rpc/util.h>
+#include <util.h>
+#include <util/strencodings.h>
 
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
@@ -23,13 +26,15 @@
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/asio/ssl.hpp>
 #include <boost/shared_ptr.hpp>
 #include <list>
 #include <algorithm>
 #include <stdexcept>
 
 #include <memory>
+#include <mutex>
+#include <set>
+#include <vector>
 
 using namespace std;
 using namespace boost;
@@ -41,8 +46,105 @@ static std::string strRPCUserColonPass;
 
 // These are created by StartRPCThreads, destroyed in StopRPCThreads
 static ioContext* rpc_io_service = nullptr;
-static ssl::context* rpc_ssl_context = nullptr;
 static boost::thread_group* rpc_worker_group = nullptr;
+// Acceptors created by StartRPCThreads. Retained so (a) startup can log the
+// bound endpoints and (b) StopRPCThreads can close() them before tearing down
+// the io_service, which prevents the shutdown hang on an open keep-alive socket
+// that authproxy.py works around on the client side.
+static std::vector<boost::shared_ptr<boost::asio::ip::tcp::acceptor>> rpc_acceptors;
+
+// Live connections currently being serviced (a worker parked in
+// ServiceConnection()). Closing the acceptors stops *new* connections, but an
+// already-established keep-alive client leaves its worker blocked in a
+// synchronous read; StopRPCThreads() must interrupt those sockets or
+// join_all() hangs forever (issue #3123). This registry is the leaf-most lock
+// in the process -- it guards only the set below and never calls back into any
+// subsystem while held, so it has no ordering relationship with cs_main et al.
+static std::mutex g_rpc_connections_mutex;
+static std::set<AcceptedConnection*> g_rpc_connections;
+// Set once StopRPCThreads() has begun tearing down. A connection that is
+// accepted after this point must not park in ServiceConnection(), or it would
+// re-introduce the very hang we are closing this window against.
+static bool g_rpc_connections_stopped = false;
+
+//! Register a just-accepted connection so StopRPCThreads() can interrupt it.
+//! Returns false if the server is already shutting down, in which case the
+//! caller must not service the connection (there is no worker-drain left to
+//! wake it).
+//!
+//! Deliberately no connection ceiling here. It would be unreachable: this runs
+//! from RPCAcceptHandler, which is an asio completion handler dispatched by the
+//! workers' io_context::run() and which calls ServiceConnection() synchronously,
+//! so a worker is occupied from accept through service and the size of this set
+//! can never exceed -rpcthreads. A cap above that number can never be hit, and a
+//! cap below it is just a smaller thread count. What actually bounds a hostile
+//! client is the socket deadline applied before servicing; further connections
+//! wait in the kernel accept backlog, not here.
+static bool RegisterRPCConnection(AcceptedConnection* conn)
+{
+    std::lock_guard<std::mutex> lock(g_rpc_connections_mutex);
+    if (g_rpc_connections_stopped) return false;
+    g_rpc_connections.insert(conn);
+    return true;
+}
+
+//! Remove a connection from the registry once its worker is done servicing it
+//! (before the connection is closed and deleted).
+static void UnregisterRPCConnection(AcceptedConnection* conn)
+{
+    std::lock_guard<std::mutex> lock(g_rpc_connections_mutex);
+    g_rpc_connections.erase(conn);
+}
+
+//! Put a receive and send deadline on an accepted RPC socket.
+//!
+//! The servicing model is one blocking read per worker thread, so the deadline
+//! has to live on the socket rather than in an asio timer: there is no event
+//! loop watching a worker that is parked inside read(). SO_RCVTIMEO makes that
+//! read return an error instead of waiting forever, which the stream device
+//! already reports as end of sequence, so the worker closes the connection and
+//! moves on with no further plumbing.
+static void SetRPCSocketTimeouts(boost::asio::ip::tcp::socket& socket)
+{
+    // Blocking mode first, and unconditionally.
+    //
+    // Asio may have left the accepted descriptor non-blocking. The stream device
+    // reads with recv(2) directly and treats EAGAIN as end of sequence -- correct
+    // for a deadline expiring, fatal on a non-blocking socket, where EAGAIN just
+    // means the client has not sent yet. That would close every connection before
+    // its first request.
+    //
+    // So this is a requirement of the device, not part of the deadline, and it
+    // has to happen even when the deadline is switched off. Setting it before the
+    // early return below is the whole point: -rpcservertimeout=0 is documented as
+    // "no timeout", not "no RPC".
+    boost::system::error_code ec;
+    socket.non_blocking(false, ec);
+    socket.native_non_blocking(false, ec);
+
+    const int seconds = gArgs.GetArg("-rpcservertimeout", DEFAULT_RPC_SERVER_TIMEOUT);
+    if (seconds <= 0) return;  // deadline explicitly disabled; socket stays blocking
+
+    const auto fd = socket.native_handle();
+
+#ifdef WIN32
+    DWORD tv = static_cast<DWORD>(seconds) * 1000;
+    const char* val = reinterpret_cast<const char*>(&tv);
+    const int len = sizeof(tv);
+#else
+    struct timeval tv;
+    tv.tv_sec = seconds;
+    tv.tv_usec = 0;
+    const void* val = &tv;
+    const socklen_t len = sizeof(tv);
+#endif
+
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, val, len) != 0
+        || setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, val, len) != 0) {
+        // Not fatal: the connection still works, it just has no deadline.
+        LogPrintf("RPC: WARNING - could not set a %ds timeout on an accepted connection\n", seconds);
+    }
+}
 
 const UniValue emptyobj(UniValue::VOBJ);
 
@@ -104,11 +206,25 @@ bool HTTPAuthorized(map<string, string>& mapHeaders)
 
 int64_t AmountFromValue(const UniValue& value)
 {
-    double dAmount = value.get_real();
-    if (dAmount <= 0.0 || dAmount > MAX_MONEY)
+    // Parse the amount exactly from its decimal string representation rather
+    // than routing it through a double. get_real() loses precision for large
+    // amounts (a double carries ~15-16 significant digits, but MAX_MONEY in
+    // satoshis is ~2e17) and rounds inputs with more than 8 decimal places
+    // instead of rejecting them. ParseFixedPoint converts the string directly
+    // to an int64_t satoshi count with 8 implied decimals, so the amount the
+    // RPC acts on is exactly the value the user typed. It also accepts either a
+    // JSON number or a JSON string (getValStr() yields the original token for
+    // both), which fixes string-typed amounts being rejected outright.
+    if (!value.isNum() && !value.isStr())
+        throw JSONRPCError(RPC_TYPE_ERROR, "Amount is not a number or string");
+    int64_t nAmount;
+    if (!ParseFixedPoint(value.getValStr(), 8, &nAmount))
         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
-    int64_t nAmount = roundint64(dAmount * COIN);
-    if (!MoneyRange(nAmount))
+    // Preserve Gridcoin's historical contract of strictly-positive amounts:
+    // zero and negative are rejected. MoneyRange already excludes negatives and
+    // the out-of-range high end; the explicit > 0 keeps zero rejected as the
+    // get_real()-based implementation did (Bitcoin Core's MoneyRange admits 0).
+    if (nAmount <= 0 || !MoneyRange(nAmount))
         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
     return nAmount;
 }
@@ -184,22 +300,19 @@ string CRPCTable::help(string strCommand, rpccategory category) const
         if (!strCommand.empty() && pcmd->name != strCommand)
             continue;
 
-        try
-        {
-            UniValue params(UniValue::VARR);
-            rpcfn_type pfn = pcmd->actor;
-            if (setDone.insert(pfn).second)
-                (*pfn)(params, true);
-        }
-        catch (std::exception& e)
-        {
-            // Help text is returned in an exception
-            string strHelp = string(e.what());
-            if (strCommand.empty())
-                if (strHelp.find('\n') != string::npos)
-                    strHelp = strHelp.substr(0, strHelp.find('\n'));
-            strRet += strHelp + "\n";
-        }
+        // Dedupe aliases (e.g. getmininginfo -> getstakinginfo) by actor pointer:
+        // both rows share the same actor and helpman, so only render once.
+        if (!setDone.insert(pcmd->actor).second)
+            continue;
+
+        // Every command now has a helpman accessor (addpoll's was lifted in PR M3);
+        // pull help text directly from it without invoking the command body or
+        // using throw-as-control-flow.
+        string strHelp = pcmd->helpman().ToString();
+        if (strCommand.empty())
+            if (strHelp.find('\n') != string::npos)
+                strHelp = strHelp.substr(0, strHelp.find('\n'));
+        strRet += strHelp + "\n";
     }
     if (strRet.empty())
         strRet = strprintf("help: unknown command: %s\n", strCommand);
@@ -207,30 +320,48 @@ string CRPCTable::help(string strCommand, rpccategory category) const
     return strRet;
 }
 
-UniValue help(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() == 0 || params.size() > 1)
-        return
-            "help [command/category]\n"
-            "Returns help on a specific command or category you request\n"
-            "\n"
-            "help command --> Returns help for specified command; ex. help backupwallet\n"
-            "\n"
-            "Categories:\n"
-            "wallet --------> Returns help for blockchain related commands\n"
-            "staking -------> Returns help for staking/cpid/beacon related commands\n"
-            "developer -----> Returns help for developer commands\n"
-            "network -------> Returns help for network related commands\n"
-            "voting --------> Returns help for voting related commands\n"
-            "\n"
-            "You can support the development of Gridcoin by donating GRC to the\n"
-            "Gridcoin Foundation at this address: bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2\n";
+static const RPCHelpMan help_help{
+    "help",
+    "List commands, or get help for a specified command or category.\n"
+    "\n"
+    "Categories:\n"
+    "  wallet    - blockchain/wallet related commands\n"
+    "  staking   - staking/cpid/beacon related commands (alias: mining)\n"
+    "  developer - developer commands\n"
+    "  network   - network related commands\n"
+    "  voting    - voting related commands\n"
+    "\n"
+    "You can support the development of Gridcoin by donating GRC to the\n"
+    "Gridcoin Foundation at this address: bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2",
+    {
+        {"command", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "The command name or category to look up. If omitted, an overview of all categories is returned."},
+    },
+    RPCResult{RPCResult::Type::STR, "", "The help text"},
+    RPCExamples{
+        HelpExampleCli("help", "") +
+        HelpExampleCli("help", "getinfo") +
+        HelpExampleCli("help", "wallet") +
+        HelpExampleRpc("help", "\"getinfo\"")},
+};
+const RPCHelpMan& help_helpman() { return help_help; }
 
-    // Allow to process through if params size is > 0
+UniValue help(const UniValue& params)
+{
+    // Arity is pre-checked by the dispatcher via help_helpman()->IsValidNumArgs;
+    // by the time we get here, params.size() is in range.
     string strCommand;
 
     if (params.size() > 0)
         strCommand = params[0].get_str();
+
+    // With no command argument, return the structured help for `help` itself
+    // (description + categories + arguments + examples). Without this early
+    // return, an empty strCommand would fall through to the lookup loop below
+    // and yield "help: unknown command:" — a regression vs. the pre-RPCHelpMan
+    // behavior where `help` (no args) printed the category overview.
+    if (strCommand.empty())
+        return help_helpman().ToString();
 
     // Subcategory help area
     // Blockchain related commands
@@ -260,12 +391,19 @@ UniValue help(const UniValue& params, bool fHelp)
     return tableRPC.help(strCommand, category);
 }
 
-UniValue stop(const UniValue& params, bool fHelp)
+static const RPCHelpMan stop_help{
+    "stop",
+    "Stop Gridcoin server.",
+    {},
+    RPCResult{RPCResult::Type::STR, "", "A confirmation string."},
+    RPCExamples{
+        HelpExampleCli("stop", "") +
+        HelpExampleRpc("stop", "")},
+};
+const RPCHelpMan& stop_helpman() { return stop_help; }
+
+UniValue stop(const UniValue& params)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-            "stop\n"
-            "Stop Gridcoin server.");
     // Shutdown will take long enough that the response should get back
     LogPrintf("Stopping...");
     StartShutdown();
@@ -285,183 +423,238 @@ UniValue stop(const UniValue& params, bool fHelp)
 static const CRPCCommand vRPCCommands[] =
 { //  name                      function                 category
   //  ------------------------  -----------------------  -----------------
-    { "help",                    &help,                    cat_null          },
+    { "help",                    &help,                    cat_null, &help_helpman, heritage_mixed, "4ce89ec7b45f" },
 
   // Wallet commands
-    { "addmultisigaddress",      &addmultisigaddress,      cat_wallet        },
-    { "addredeemscript",         &addredeemscript,         cat_wallet        },
-    { "backupwallet",            &backupwallet,            cat_wallet        },
-    { "burn",                    &burn,                    cat_wallet        },
-    { "checkwallet",             &checkwallet,             cat_wallet        },
-    { "claimhtlc",              &claimhtlc,               cat_wallet        },
-    { "createhtlc",             &createhtlc,              cat_wallet        },
-    { "createrawtransaction",    &createrawtransaction,    cat_wallet        },
-    { "consolidatemsunspent",    &consolidatemsunspent,    cat_wallet        },
-    { "decoderawtransaction",    &decoderawtransaction,    cat_wallet        },
-    { "decodescript",            &decodescript,            cat_wallet        },
-    { "dumpprivkey",             &dumpprivkey,             cat_wallet        },
-    { "dumpwallet",              &dumpwallet,              cat_wallet        },
-    { "encryptwallet",           &encryptwallet,           cat_wallet        },
-    { "getaccount",              &getaccount,              cat_wallet        },
-    { "getaccountaddress",       &getaccountaddress,       cat_wallet        },
-    { "getaddressesbyaccount",   &getaddressesbyaccount,   cat_wallet        },
-    { "getbalance",              &getbalance,              cat_wallet        },
-    { "getbalancedetail",        &getbalancedetail,        cat_wallet        },
-    { "getnewaddress",           &getnewaddress,           cat_wallet        },
-    { "getnewpubkey",            &getnewpubkey,            cat_wallet        },
-    { "getrawtransaction",       &getrawtransaction,       cat_wallet        },
-    { "getrawwallettransaction", &getrawwallettransaction, cat_wallet        },
-    { "getreceivedbyaccount",    &getreceivedbyaccount,    cat_wallet        },
-    { "getreceivedbyaddress",    &getreceivedbyaddress,    cat_wallet        },
-    { "gettransaction",          &gettransaction,          cat_wallet        },
-    { "getunconfirmedbalance",   &getunconfirmedbalance,   cat_wallet        },
-    { "getwalletinfo",           &getwalletinfo,           cat_wallet        },
-    { "importprivkey",           &importprivkey,           cat_wallet        },
-    { "importwallet",            &importwallet,            cat_wallet        },
-    { "keypoolrefill",           &keypoolrefill,           cat_wallet        },
-    { "listaccounts",            &listaccounts,            cat_wallet        },
-    { "listaddressgroupings",    &listaddressgroupings,    cat_wallet        },
-    { "listreceivedbyaccount",   &listreceivedbyaccount,   cat_wallet        },
-    { "listreceivedbyaddress",   &listreceivedbyaddress,   cat_wallet        },
-    { "listsinceblock",          &listsinceblock,          cat_wallet        },
-    { "liststakes",              &liststakes,              cat_wallet        },
-    { "listtransactions",        &listtransactions,        cat_wallet        },
-    { "listunspent",             &listunspent,             cat_wallet        },
-    { "consolidateunspent",      &consolidateunspent,      cat_wallet        },
-    { "makekeypair",             &makekeypair,             cat_wallet        },
-    { "maintainbackups",         &maintainbackups,         cat_wallet        },
-    { "move",                    &movecmd,                 cat_wallet        },
-    { "rainbymagnitude",         &rainbymagnitude,         cat_wallet        },
-    { "refundhtlc",             &refundhtlc,              cat_wallet        },
-    { "repairwallet",            &repairwallet,            cat_wallet        },
-    { "resendtx",                &resendtx,                cat_wallet        },
-    { "reservebalance",          &reservebalance,          cat_wallet        },
-    { "scanforunspent",          &scanforunspent,          cat_wallet        },
-    { "sendfrom",                &sendfrom,                cat_wallet        },
-    { "sendmany",                &sendmany,                cat_wallet        },
-    { "sendrawtransaction",      &sendrawtransaction,      cat_wallet        },
-    { "sendtoaddress",           &sendtoaddress,           cat_wallet        },
-    { "setaccount",              &setaccount,              cat_wallet        },
-    { "sethdseed",               &sethdseed,               cat_wallet        },
-    { "settxfee",                &settxfee,                cat_wallet        },
-    { "signmessage",             &signmessage,             cat_wallet        },
-    { "signrawtransaction",      &signrawtransaction,      cat_wallet        },
-    { "upgradewallet",           &upgradewallet,           cat_wallet        },
-    { "validateaddress",         &validateaddress,         cat_wallet        },
-    { "validatepubkey",          &validatepubkey,          cat_wallet        },
-    { "verifymessage",           &verifymessage,           cat_wallet        },
-    { "walletlock",              &walletlock,              cat_wallet        },
-    { "walletpassphrase",        &walletpassphrase,        cat_wallet        },
-    { "walletpassphrasechange",  &walletpassphrasechange,  cat_wallet        },
-    { "walletdiagnose",          &walletdiagnose,          cat_wallet        },
+    { "addmultisigaddress",      &addmultisigaddress,      cat_wallet, &addmultisigaddress_helpman, heritage_removed_upstream, "b0bd7231da33" },
+    { "addredeemscript",         &addredeemscript,         cat_wallet, &addredeemscript_helpman, heritage_removed_upstream, "c9e4350b4a75" },
+    { "backupwallet",            &backupwallet,            cat_wallet, &backupwallet_helpman, heritage_mixed, "658099c7930f" },
+    { "burn",                    &burn,                    cat_wallet, &burn_helpman, heritage_pure_gridcoin, "" },
+    { "cancelunbroadcasttransaction", &cancelunbroadcasttransaction, cat_wallet, &cancelunbroadcasttransaction_helpman, heritage_pure_gridcoin, "" },
+    { "checkwallet",             &checkwallet,             cat_wallet, &checkwallet_helpman, heritage_pure_gridcoin, "" },
+    { "claimhtlc",              &claimhtlc,               cat_wallet, &claimhtlc_helpman, heritage_pure_gridcoin, "" },
+    { "createhtlc",             &createhtlc,              cat_wallet, &createhtlc_helpman, heritage_pure_gridcoin, "" },
+    { "createrawtransaction",    &createrawtransaction,    cat_wallet, &createrawtransaction_helpman, heritage_mixed, "50b21e94ef71" },
+    { "consolidatemsunspent",    &consolidatemsunspent,    cat_wallet, &consolidatemsunspent_helpman, heritage_pure_gridcoin, "" },
+    { "decoderawtransaction",    &decoderawtransaction,    cat_wallet, &decoderawtransaction_helpman, heritage_mixed, "ee4cdec04193" },
+    { "decodescript",            &decodescript,            cat_wallet, &decodescript_helpman, heritage_mixed, "ca2d8ef9d7fb" },
+    { "dumpprivkey",             &dumpprivkey,             cat_wallet, &dumpprivkey_helpman, heritage_removed_upstream, "96d3ee80fb58" },
+    { "dumpseedphrase",          &dumpseedphrase,          cat_wallet, &dumpseedphrase_helpman, heritage_pure_gridcoin, "" },
+    { "fundrawtransaction",      &fundrawtransaction,      cat_wallet, &fundrawtransaction_helpman, heritage_mixed, "5373087fac94" },
+    { "dumpwallet",              &dumpwallet,              cat_wallet, &dumpwallet_helpman, heritage_removed_upstream, "eaad3c94f6a6" },
+    { "encryptwallet",           &encryptwallet,           cat_wallet, &encryptwallet_helpman, heritage_mixed, "7b0696269744" },
+    { "getaccount",              &getaccount,              cat_wallet, &getaccount_helpman, heritage_pure_gridcoin, "" },
+    { "getaccountaddress",       &getaccountaddress,       cat_wallet, &getaccountaddress_helpman, heritage_pure_gridcoin, "" },
+    { "getaddressesbyaccount",   &getaddressesbyaccount,   cat_wallet, &getaddressesbyaccount_helpman, heritage_pure_gridcoin, "" },
+    { "getaddressesbylabel", &getaddressesbylabel, cat_wallet, &getaddressesbylabel_helpman, heritage_mixed, "5058a857a5e1" },
+    { "getbalance",              &getbalance,              cat_wallet, &getbalance_helpman, heritage_mixed, "4bbd03d840d3" },
+    { "getbalancedetail",        &getbalancedetail,        cat_wallet, &getbalancedetail_helpman, heritage_pure_gridcoin, "" },
+    { "getnewaddress",           &getnewaddress,           cat_wallet, &getnewaddress_helpman, heritage_mixed, "e503f05f1459" },
+    { "getnewpubkey",            &getnewpubkey,            cat_wallet, &getnewpubkey_helpman, heritage_pure_gridcoin, "" },
+    { "getrawtransaction",       &getrawtransaction,       cat_wallet, &getrawtransaction_helpman, heritage_mixed, "0da7a920386c" },
+    { "getrawwallettransaction", &getrawwallettransaction, cat_wallet, &getrawwallettransaction_helpman, heritage_pure_gridcoin, "" },
+    { "gettxoutproof", &gettxoutproof, cat_wallet, &gettxoutproof_helpman, heritage_mixed, "0a9a9c33566c" },
+    { "verifytxoutproof", &verifytxoutproof, cat_wallet, &verifytxoutproof_helpman, heritage_pure_upstream, "manual" },
+    { "getreceivedbyaccount",    &getreceivedbyaccount,    cat_wallet, &getreceivedbyaccount_helpman, heritage_pure_gridcoin, "" },
+    { "getseedphraseinfo",       &getseedphraseinfo,       cat_wallet, &getseedphraseinfo_helpman, heritage_pure_gridcoin, "" },
+    { "getreceivedbyaddress",    &getreceivedbyaddress,    cat_wallet, &getreceivedbyaddress_helpman, heritage_mixed, "abf78a6d1f07" },
+    { "getreceivedbylabel",      &getreceivedbylabel,      cat_wallet, &getreceivedbylabel_helpman, heritage_mixed, "7c0f5e283380" },
+    { "gettransaction",          &gettransaction,          cat_wallet, &gettransaction_helpman, heritage_mixed, "b82e0de9cd38" },
+    { "abandontransaction",      &abandontransaction,      cat_wallet, &abandontransaction_helpman, heritage_pure_upstream, "8a15aece8d9f" },
+    { "getunconfirmedbalance",   &getunconfirmedbalance,   cat_wallet, &getunconfirmedbalance_helpman, heritage_removed_upstream, "e169db2f48c0" },
+    { "getwalletinfo",           &getwalletinfo,           cat_wallet, &getwalletinfo_helpman, heritage_mixed, "693ce305655c" },
+    { "importprivkey",           &importprivkey,           cat_wallet, &importprivkey_helpman, heritage_removed_upstream, "907321bb2292" },
+    { "importwallet",            &importwallet,            cat_wallet, &importwallet_helpman, heritage_removed_upstream, "eaad3c94f6a6" },
+    { "inspectwalletstate",      &inspectwalletstate,      cat_wallet, &inspectwalletstate_helpman, heritage_pure_gridcoin, "" },
+    { "keypoolrefill",           &keypoolrefill,           cat_wallet, &keypoolrefill_helpman, heritage_pure_upstream, "90973fb49630" },
+    { "listaccounts",            &listaccounts,            cat_wallet, &listaccounts_helpman, heritage_pure_gridcoin, "" },
+    { "listaddressgroupings",    &listaddressgroupings,    cat_wallet, &listaddressgroupings_helpman, heritage_mixed, "manual" },
+    { "listlabels", &listlabels, cat_wallet, &listlabels_helpman, heritage_mixed, "manual" },
+    { "listreceivedbyaccount",   &listreceivedbyaccount,   cat_wallet, &listreceivedbyaccount_helpman, heritage_pure_gridcoin, "" },
+    { "listreceivedbyaddress",   &listreceivedbyaddress,   cat_wallet, &listreceivedbyaddress_helpman, heritage_mixed, "4b8fb0ed2cee" },
+    { "listreceivedbylabel",     &listreceivedbylabel,     cat_wallet, &listreceivedbylabel_helpman, heritage_mixed, "4b8fb0ed2cee" },
+    { "listsinceblock",          &listsinceblock,          cat_wallet, &listsinceblock_helpman, heritage_mixed, "4ac802bc4b7c" },
+    { "liststakes",              &liststakes,              cat_wallet, &liststakes_helpman, heritage_pure_gridcoin, "" },
+    { "listtransactions",        &listtransactions,        cat_wallet, &listtransactions_helpman, heritage_mixed, "60208a325cb1" },
+    { "listunspent",             &listunspent,             cat_wallet, &listunspent_helpman, heritage_mixed, "55713032beff" },
+    { "consolidateunspent",      &consolidateunspent,      cat_wallet, &consolidateunspent_helpman, heritage_pure_gridcoin, "" },
+    { "makekeypair",             &makekeypair,             cat_wallet, &makekeypair_helpman, heritage_pure_gridcoin, "" },
+    { "makeseedphrase",          &makeseedphrase,          cat_wallet, &makeseedphrase_helpman, heritage_pure_gridcoin, "" },
+    { "maintainbackups",         &maintainbackups,         cat_wallet, &maintainbackups_helpman, heritage_pure_gridcoin, "" },
+    { "migratelabels", &migratelabels, cat_wallet, &migratelabels_helpman, heritage_pure_gridcoin, "" },
+    { "move",                    &movecmd,                 cat_wallet, &movecmd_helpman, heritage_pure_gridcoin, "" },
+    { "rainbymagnitude",         &rainbymagnitude,         cat_wallet, &rainbymagnitude_helpman, heritage_pure_gridcoin, "" },
+    { "refundhtlc",             &refundhtlc,              cat_wallet, &refundhtlc_helpman, heritage_pure_gridcoin, "" },
+    { "repairwallet",            &repairwallet,            cat_wallet, &repairwallet_helpman, heritage_pure_gridcoin, "" },
+    { "resendtx",                &resendtx,                cat_wallet, &resendtx_helpman, heritage_removed_upstream, "e169db2f48c0" },
+    { "reservebalance",          &reservebalance,          cat_wallet, &reservebalance_helpman, heritage_pure_gridcoin, "" },
+    { "restoreseedphrase",       &restoreseedphrase,       cat_wallet, &restoreseedphrase_helpman, heritage_pure_gridcoin, "" },
+    { "scanforunspent",          &scanforunspent,          cat_wallet, &scanforunspent_helpman, heritage_pure_gridcoin, "" },
+    { "sendfrom",                &sendfrom,                cat_wallet, &sendfrom_helpman, heritage_pure_gridcoin, "" },
+    { "sendmany",                &sendmany,                cat_wallet, &sendmany_helpman, heritage_mixed, "c48e33af5e40" },
+    { "sendrawtransaction",      &sendrawtransaction,      cat_wallet, &sendrawtransaction_helpman, heritage_mixed, "52fce61c2242" },
+    { "sendtoaddress",           &sendtoaddress,           cat_wallet, &sendtoaddress_helpman, heritage_mixed, "ce89abdb7a10" },
+    { "setaccount",              &setaccount,              cat_wallet, &setaccount_helpman, heritage_pure_gridcoin, "" },
+    { "setlabel", &setlabel, cat_wallet, &setlabel_helpman, heritage_pure_upstream, "737f242a3755" },
+    { "sethdseed",               &sethdseed,               cat_wallet, &sethdseed_helpman, heritage_removed_upstream, "dab6675cb642" },
+    { "settxfee",                &settxfee,                cat_wallet, &settxfee_helpman, heritage_removed_upstream, "468a6a9ff691" },
+    { "splitunspent",            &splitunspent,            cat_wallet, &splitunspent_helpman, heritage_pure_gridcoin, "" },
+    { "stakelimit",              &stakelimit,              cat_wallet, &stakelimit_helpman, heritage_pure_gridcoin, "" },
+    { "signmessage",             &signmessage,             cat_wallet, &signmessage_helpman, heritage_mixed, "6b1488c62c48" },
+    { "signrawtransaction",      &signrawtransaction,      cat_wallet, &signrawtransaction_helpman, heritage_removed_upstream, "d75693d24eec" },
+    { "signrawtransactionwithkey",    &signrawtransactionwithkey,    cat_wallet, &signrawtransactionwithkey_helpman, heritage_mixed, "6aca6f6eb6c9" },
+    { "signrawtransactionwithwallet", &signrawtransactionwithwallet, cat_wallet, &signrawtransactionwithwallet_helpman, heritage_mixed, "1d9359847326" },
+    { "sweepuncoveredcoins",     &sweepuncoveredcoins,     cat_wallet, &sweepuncoveredcoins_helpman, heritage_pure_gridcoin, "" },
+    { "upgradewallet",           &upgradewallet,           cat_wallet, &upgradewallet_helpman, heritage_removed_upstream, "2b104a7e47cc" },
+    { "validateaddress",         &validateaddress,         cat_wallet, &validateaddress_helpman, heritage_mixed, "97873d91c025" },
+    { "validatepubkey",          &validatepubkey,          cat_wallet, &validatepubkey_helpman, heritage_pure_gridcoin, "" },
+    { "verifymessage",           &verifymessage,           cat_wallet, &verifymessage_helpman, heritage_mixed, "c9cdde03d99c" },
+    { "walletlock",              &walletlock,              cat_wallet, &walletlock_helpman, heritage_pure_upstream, "e169db2f48c0" },
+    { "walletpassphrase",        &walletpassphrase,        cat_wallet, &walletpassphrase_helpman, heritage_mixed, "2c3e2b290e76" },
+    { "walletpassphrasechange",  &walletpassphrasechange,  cat_wallet, &walletpassphrasechange_helpman, heritage_pure_upstream, "ab947140d4c5" },
+    { "walletdiagnose",          &walletdiagnose,          cat_wallet, &walletdiagnose_helpman, heritage_pure_gridcoin, "" },
+
+  // PSGT commands
+    { "analyzepsgt",             &analyzepsgt,             cat_wallet, &analyzepsgt_helpman, heritage_mixed, "96a51f778705" },
+    { "createpsgt",              &createpsgt,              cat_wallet, &createpsgt_helpman, heritage_mixed, "d834d7a48b91" },
+    { "decodepsgt",              &decodepsgt,              cat_wallet, &decodepsgt_helpman, heritage_mixed, "b20178d7ef4b" },
+    { "combinepsgt",             &combinepsgt,             cat_wallet, &combinepsgt_helpman, heritage_mixed, "b8c2d95892e8" },
+    { "finalizepsgt",            &finalizepsgt,            cat_wallet, &finalizepsgt_helpman, heritage_mixed, "bc3c28ffc9eb" },
+    { "walletprocesspsgt",       &walletprocesspsgt,       cat_wallet, &walletprocesspsgt_helpman, heritage_mixed, "07d707e85e80" },
+    { "utxoupdatepsgt",          &utxoupdatepsgt,          cat_wallet, &utxoupdatepsgt_helpman, heritage_mixed, "bcc738b59c8b" },
+    { "converttopsgt",           &converttopsgt,           cat_wallet, &converttopsgt_helpman, heritage_mixed, "633cdf5f2833" },
+    { "walletcreatefundedpsgt",  &walletcreatefundedpsgt,  cat_wallet, &walletcreatefundedpsgt_helpman, heritage_mixed, "d2f84eca950d" },
+
+  // PSGT pool commands (#2910 Phase II)
+    { "submitpsgt",              &submitpsgt,              cat_wallet, &submitpsgt_helpman, heritage_pure_gridcoin, "" },
+    { "listpsgtpool",            &listpsgtpool,            cat_wallet, &listpsgtpool_helpman, heritage_pure_gridcoin, "" },
+    { "signpsgtinpool",          &signpsgtinpool,          cat_wallet, &signpsgtinpool_helpman, heritage_pure_gridcoin, "" },
+    { "removepsgtfrompool",      &removepsgtfrompool,      cat_wallet, &removepsgtfrompool_helpman, heritage_pure_gridcoin, "" },
+    { "getpsgtpoolinfo",         &getpsgtpoolinfo,         cat_wallet, &getpsgtpoolinfo_helpman, heritage_pure_gridcoin, "" },
 
   // Staking commands
-    { "advertisebeacon",         &advertisebeacon,         cat_staking        },
-    { "advertisebeaconv3",       &advertisebeaconv3,       cat_staking        },
-    { "beaconauth",              &beaconauth,              cat_staking        },
-    { "beaconconvergence",       &beaconconvergence,       cat_staking        },
-    { "beaconreport",            &beaconreport,            cat_staking        },
-    { "beaconstatus",            &beaconstatus,            cat_staking        },
-    { "createmrcrequest",        &createmrcrequest,        cat_staking        },
-    { "explainmagnitude",        &explainmagnitude,        cat_staking        },
-    { "getlaststake",            &getlaststake,            cat_staking        },
-    { "getmrcinfo",              &getmrcinfo,              cat_staking        },
-    { "getstakinginfo",          &getstakinginfo,          cat_staking        },
-    { "getmininginfo",           &getstakinginfo,          cat_staking        }, //alias for getstakinginfo (compatibility)
-    { "lifetime",                &lifetime,                cat_staking        },
-    { "magnitude",               &magnitude,               cat_staking        },
-    { "pendingbeaconreport",     &pendingbeaconreport,     cat_staking        },
-    { "resetcpids",              &resetcpids,              cat_staking        },
-    { "revokebeacon",            &revokebeacon,            cat_staking        },
-    { "superblockage",           &superblockage,           cat_staking        },
-    { "superblocks",             &superblocks,             cat_staking        },
+    { "advertisebeacon",         &advertisebeacon,         cat_staking, &advertisebeacon_helpman, heritage_pure_gridcoin, "" },
+    { "advertisebeaconv3",       &advertisebeaconv3,       cat_staking, &advertisebeaconv3_helpman, heritage_pure_gridcoin, "" },
+    { "beaconauth",              &beaconauth,              cat_staking, &beaconauth_helpman, heritage_pure_gridcoin, "" },
+    { "beaconconvergence",       &beaconconvergence,       cat_staking, &beaconconvergence_helpman, heritage_pure_gridcoin, "" },
+    { "beaconreport",            &beaconreport,            cat_staking, &beaconreport_helpman, heritage_pure_gridcoin, "" },
+    { "beaconstatus",            &beaconstatus,            cat_staking, &beaconstatus_helpman, heritage_pure_gridcoin, "" },
+    { "createmrcrequest",        &createmrcrequest,        cat_staking, &createmrcrequest_helpman, heritage_pure_gridcoin, "" },
+    { "explainmagnitude",        &explainmagnitude,        cat_staking, &explainmagnitude_helpman, heritage_pure_gridcoin, "" },
+    { "generate",                &generate,                cat_staking, &generate_helpman, heritage_pure_gridcoin, "" },
+    { "generatetoaddress",       &generatetoaddress,       cat_staking, &generatetoaddress_helpman, heritage_mixed, "manual" },
+    { "generatesuperblock",      &generatesuperblock,      cat_staking, &generatesuperblock_helpman, heritage_pure_gridcoin, "" },
+    { "getlaststake",            &getlaststake,            cat_staking, &getlaststake_helpman, heritage_pure_gridcoin, "" },
+    { "getmrcinfo",              &getmrcinfo,              cat_staking, &getmrcinfo_helpman, heritage_pure_gridcoin, "" },
+    { "getstakinginfo",          &getstakinginfo,          cat_staking, &getstakinginfo_helpman, heritage_pure_gridcoin, "" },
+    { "getmininginfo",           &getstakinginfo,          cat_staking, &getstakinginfo_helpman, heritage_pure_gridcoin, "" }, //alias for getstakinginfo (compatibility)
+    { "lifetime",                &lifetime,                cat_staking, &lifetime_helpman, heritage_pure_gridcoin, "" },
+    { "magnitude",               &magnitude,               cat_staking, &magnitude_helpman, heritage_pure_gridcoin, "" },
+    { "pendingbeaconreport",     &pendingbeaconreport,     cat_staking, &pendingbeaconreport_helpman, heritage_pure_gridcoin, "" },
+    { "resetcpids",              &resetcpids,              cat_staking, &resetcpids_helpman, heritage_pure_gridcoin, "" },
+    { "revokebeacon",            &revokebeacon,            cat_staking, &revokebeacon_helpman, heritage_pure_gridcoin, "" },
+    { "superblockage",           &superblockage,           cat_staking, &superblockage_helpman, heritage_pure_gridcoin, "" },
+    { "superblocks",             &superblocks,             cat_staking, &superblocks_helpman, heritage_pure_gridcoin, "" },
 
   // Developer commands
-    { "auditsnapshotaccrual",    &auditsnapshotaccrual,    cat_developer     },
-    { "auditsnapshotaccruals",   &auditsnapshotaccruals,   cat_developer     },
-    { "addkey",                  &addkey,                  cat_developer     },
-    { "beaconaudit",             &beaconaudit,             cat_developer     },
-    { "changesettings",          &changesettings,          cat_developer     },
-    { "currentcontractaverage",  &currentcontractaverage,  cat_developer     },
-    { "debug",                   &debug,                   cat_developer     },
-    { "dumpcontracts",           &dumpcontracts,           cat_developer     },
-    { "exportstats1",            &rpc_exportstats,         cat_developer     },
-    { "getblockstats",           &rpc_getblockstats,       cat_developer     },
-    { "getrecentblocks",         &rpc_getrecentblocks,     cat_developer     },
-    { "inspectaccrualsnapshot",  &inspectaccrualsnapshot,  cat_developer     },
-    { "listalerts",              &listalerts,              cat_developer     },
-    { "listprojects",            &listprojects,            cat_developer     },
-    { "getautogreylist",         &getautogreylist,         cat_developer     },
-    { "listprotocolentries",     &listprotocolentries,     cat_developer     },
-    { "listresearcheraccounts",  &listresearcheraccounts,  cat_developer     },
-    { "listscrapers",            &listscrapers,            cat_developer     },
-    { "listsidestakes",          &listsidestakes,           cat_developer     },
-    { "listmandatorysidestakes", &listmandatorysidestakes, cat_developer     },
-    { "listsettings",            &listsettings,            cat_developer     },
-    { "logging",                 &logging,                 cat_developer     },
-    { "network",                 &network,                 cat_developer     },
-    { "parseaccrualsnapshotfile",&parseaccrualsnapshotfile,cat_developer     },
-    { "parselegacysb",           &parselegacysb,           cat_developer     },
-    { "projects",                &projects,                cat_developer     },
-    { "readdata",                &readdata,                cat_developer     },
-    { "reorganize",              &rpc_reorganize,          cat_developer     },
-    { "sendalert",               &sendalert,               cat_developer     },
-    { "sendalert2",              &sendalert2,              cat_developer     },
-    { "sendblock",               &sendblock,               cat_developer     },
-    { "superblockaverage",       &superblockaverage,       cat_developer     },
-    { "versionreport",           &versionreport,           cat_developer     },
-    { "writedata",               &writedata,               cat_developer     },
+    { "auditsnapshotaccrual",    &auditsnapshotaccrual,    cat_developer, &auditsnapshotaccrual_helpman, heritage_pure_gridcoin, "" },
+    { "auditsnapshotaccruals",   &auditsnapshotaccruals,   cat_developer, &auditsnapshotaccruals_helpman, heritage_pure_gridcoin, "" },
+    { "addkey",                  &addkey,                  cat_developer, &addkey_helpman, heritage_pure_gridcoin, "" },
+    { "registerpool", &registerpool, cat_staking, &registerpool_helpman, heritage_pure_gridcoin, "" },
+    { "withdrawpool", &withdrawpool, cat_staking, &withdrawpool_helpman, heritage_pure_gridcoin, "" },
+    { "approvepool", &approvepool, cat_developer, &approvepool_helpman, heritage_pure_gridcoin, "" },
+    { "authorizepool", &authorizepool, cat_developer, &authorizepool_helpman, heritage_pure_gridcoin, "" },
+    { "removepool", &removepool, cat_developer, &removepool_helpman, heritage_pure_gridcoin, "" },
+    { "listpools", &listpools, cat_developer, &listpools_helpman, heritage_pure_gridcoin, "" },
+    { "beaconaudit",             &beaconaudit,             cat_developer, &beaconaudit_helpman, heritage_pure_gridcoin, "" },
+    { "changesettings",          &changesettings,          cat_developer, &changesettings_helpman, heritage_pure_gridcoin, "" },
+    { "currentcontractaverage",  &currentcontractaverage,  cat_developer, &currentcontractaverage_helpman, heritage_pure_gridcoin, "" },
+    { "debug",                   &debug,                   cat_developer, &debug_helpman, heritage_pure_gridcoin, "" },
+    { "dumpcontracts",           &dumpcontracts,           cat_developer, &dumpcontracts_helpman, heritage_pure_gridcoin, "" },
+    { "exportstats1",            &rpc_exportstats,         cat_developer, &rpc_exportstats_helpman, heritage_pure_gridcoin, "" },
+    { "getblockstats",           &rpc_getblockstats,       cat_developer, &rpc_getblockstats_helpman, heritage_pure_gridcoin, "" },
+    { "getrecentblocks",         &rpc_getrecentblocks,     cat_developer, &rpc_getrecentblocks_helpman, heritage_pure_gridcoin, "" },
+    { "getrawprojectstatus",     &getrawprojectstatus,     cat_developer, &getrawprojectstatus_helpman, heritage_pure_gridcoin, "" },
+    { "inspectaccrualsnapshot",  &inspectaccrualsnapshot,  cat_developer, &inspectaccrualsnapshot_helpman, heritage_pure_gridcoin, "" },
+    { "listalerts",              &listalerts,              cat_developer, &listalerts_helpman, heritage_removed_upstream, "1b838be933d7" },
+    { "listprojects",            &listprojects,            cat_developer, &listprojects_helpman, heritage_pure_gridcoin, "" },
+    { "getautogreylist",         &getautogreylist,         cat_developer, &getautogreylist_helpman, heritage_pure_gridcoin, "" },
+    { "listprotocolentries",     &listprotocolentries,     cat_developer, &listprotocolentries_helpman, heritage_pure_gridcoin, "" },
+    { "listresearcheraccounts",  &listresearcheraccounts,  cat_developer, &listresearcheraccounts_helpman, heritage_pure_gridcoin, "" },
+    { "listscrapers",            &listscrapers,            cat_developer, &listscrapers_helpman, heritage_pure_gridcoin, "" },
+    { "listsidestakes",          &listsidestakes,           cat_developer, &listsidestakes_helpman, heritage_pure_gridcoin, "" },
+    { "listmandatorysidestakes", &listmandatorysidestakes, cat_developer, &listmandatorysidestakes_helpman, heritage_pure_gridcoin, "" },
+    { "listsettings",            &listsettings,            cat_developer, &listsettings_helpman, heritage_pure_gridcoin, "" },
+    { "logging",                 &logging,                 cat_developer, &logging_helpman, heritage_pure_upstream, "manual" },
+    { "network",                 &network,                 cat_developer, &network_helpman, heritage_pure_gridcoin, "" },
+    { "parseaccrualsnapshotfile",&parseaccrualsnapshotfile,cat_developer, &parseaccrualsnapshotfile_helpman, heritage_pure_gridcoin, "" },
+    { "parselegacysb",           &parselegacysb,           cat_developer, &parselegacysb_helpman, heritage_pure_gridcoin, "" },
+    { "projects",                &projects,                cat_developer, &projects_helpman, heritage_pure_gridcoin, "" },
+    { "readdata",                &readdata,                cat_developer, &readdata_helpman, heritage_pure_gridcoin, "" },
+    { "reorganize",              &rpc_reorganize,          cat_developer, &rpc_reorganize_helpman, heritage_pure_gridcoin, "" },
+    { "sendalert",               &sendalert,               cat_developer, &sendalert_helpman, heritage_removed_upstream, "23feaca9b1f5" },
+    { "sendalert2",              &sendalert2,              cat_developer, &sendalert2_helpman, heritage_removed_upstream, "088679c27b11" },
+    { "sendblock",               &sendblock,               cat_developer, &sendblock_helpman, heritage_pure_gridcoin, "" },
+    { "superblockaverage",       &superblockaverage,       cat_developer, &superblockaverage_helpman, heritage_pure_gridcoin, "" },
+    { "versionreport",           &versionreport,           cat_developer, &versionreport_helpman, heritage_pure_gridcoin, "" },
+    { "writedata",               &writedata,               cat_developer, &writedata_helpman, heritage_pure_gridcoin, "" },
 
-    { "listmanifests",           &listmanifests,           cat_developer     },
-    { "getmpart",                &getmpart,                cat_developer     },
-    { "sendscraperfilemanifest", &sendscraperfilemanifest, cat_developer     },
-    { "savescraperfilemanifest", &savescraperfilemanifest, cat_developer     },
-    { "deletecscrapermanifest",  &deletecscrapermanifest,  cat_developer     },
-    { "archivelog",              &archivelog,              cat_developer     },
-    { "testnewsb",               &testnewsb,               cat_developer     },
-    { "convergencereport",       &convergencereport,       cat_developer     },
-    { "scraperreport",           &scraperreport,           cat_developer     },
+    { "listmanifests",           &listmanifests,           cat_developer, &listmanifests_helpman, heritage_pure_gridcoin, "" },
+    { "getmpart",                &getmpart,                cat_developer, &getmpart_helpman, heritage_pure_gridcoin, "" },
+    { "sendscraperfilemanifest", &sendscraperfilemanifest, cat_developer, &sendscraperfilemanifest_helpman, heritage_pure_gridcoin, "" },
+    { "savescraperfilemanifest", &savescraperfilemanifest, cat_developer, &savescraperfilemanifest_helpman, heritage_pure_gridcoin, "" },
+    { "deletecscrapermanifest",  &deletecscrapermanifest,  cat_developer, &deletecscrapermanifest_helpman, heritage_pure_gridcoin, "" },
+    { "archivelog",              &archivelog,              cat_developer, &archivelog_helpman, heritage_pure_gridcoin, "" },
+    { "testnewsb",               &testnewsb,               cat_developer, &testnewsb_helpman, heritage_pure_gridcoin, "" },
+    { "convergencereport",       &convergencereport,       cat_developer, &convergencereport_helpman, heritage_pure_gridcoin, "" },
+    { "scraperreport",           &scraperreport,           cat_developer, &scraperreport_helpman, heritage_pure_gridcoin, "" },
 
   // Network commands
-    { "addnode",                 &addnode,                 cat_network       },
-    { "askforoutstandingblocks", &askforoutstandingblocks, cat_network       },
-    { "getblockchaininfo",       &getblockchaininfo,       cat_network       },
-    { "getnetworkinfo",          &getnetworkinfo,          cat_network       },
-    { "clearbanned",             &clearbanned,             cat_network       },
-    { "currenttime",             &currenttime,             cat_network       },
-    { "getaddednodeinfo",        &getaddednodeinfo,        cat_network       },
-    { "getnodeaddresses",        &getnodeaddresses,        cat_network       },
-    { "getbestblockhash",        &getbestblockhash,        cat_network       },
-    { "getblock",                &getblock,                cat_network       },
-    { "getblockbynumber",        &getblockbynumber,        cat_network       },
-    { "getblockbymintime",       &getblockbymintime,       cat_network       },
-    { "getblocksbatch",          &getblocksbatch,          cat_network       },
-    { "getblockcount",           &getblockcount,           cat_network       },
-    { "getblockhash",            &getblockhash,            cat_network       },
-    { "getburnreport",           &getburnreport,           cat_network       },
-    { "getcheckpoint",           &getcheckpoint,           cat_network       },
-    { "getconnectioncount",      &getconnectioncount,      cat_network       },
-    { "getdifficulty",           &getdifficulty,           cat_network       },
-    { "getinfo",                 &getinfo,                 cat_network       },
-    { "getnettotals",            &getnettotals,            cat_network       },
-    { "getpeerinfo",             &getpeerinfo,             cat_network       },
-    { "getrawmempool",           &getrawmempool,           cat_network       },
-    { "listbanned",              &listbanned,              cat_network       },
-    { "networktime",             &networktime,             cat_network       },
-    { "ping",                    &ping,                    cat_network       },
-    { "setban",                  &setban,                  cat_network       },
-    { "showblock",               &showblock,               cat_network       },
-    { "stop",                    &stop,                    cat_network       },
+    { "addnode",                 &addnode,                 cat_network, &addnode_helpman, heritage_mixed, "00f3ee2c1fd4" },
+    { "askforoutstandingblocks", &askforoutstandingblocks, cat_network, &askforoutstandingblocks_helpman, heritage_pure_gridcoin, "" },
+    { "getblockchaininfo",       &getblockchaininfo,       cat_network, &getblockchaininfo_helpman, heritage_mixed, "1d89fd23ddb0" },
+    { "getnetworkinfo",          &getnetworkinfo,          cat_network, &getnetworkinfo_helpman, heritage_mixed, "54255a461949" },
+    { "clearbanned",             &clearbanned,             cat_network, &clearbanned_helpman, heritage_pure_upstream, "e169db2f48c0" },
+    { "disconnectnode",          &disconnectnode,          cat_network, &disconnectnode_helpman, heritage_pure_upstream, "b194f6d2d2e2" },
+    { "currenttime",             &currenttime,             cat_network, &currenttime_helpman, heritage_pure_gridcoin, "" },
+    { "getaddednodeinfo",        &getaddednodeinfo,        cat_network, &getaddednodeinfo_helpman, heritage_mixed, "3825ee523156" },
+    { "getnodeaddresses",        &getnodeaddresses,        cat_network, &getnodeaddresses_helpman, heritage_mixed, "c696e3da4da2" },
+    { "getbestblockhash",        &getbestblockhash,        cat_network, &getbestblockhash_helpman, heritage_pure_upstream, "e169db2f48c0" },
+    { "getblock",                &getblock,                cat_network, &getblock_helpman, heritage_mixed, "ef9d1e297dba" },
+    { "getblockbynumber",        &getblockbynumber,        cat_network, &getblockbynumber_helpman, heritage_pure_gridcoin, "" },
+    { "getblockbymintime",       &getblockbymintime,       cat_network, &getblockbymintime_helpman, heritage_pure_gridcoin, "" },
+    { "getblocksbatch",          &getblocksbatch,          cat_network, &getblocksbatch_helpman, heritage_pure_gridcoin, "" },
+    { "getblockcount",           &getblockcount,           cat_network, &getblockcount_helpman, heritage_pure_upstream, "e169db2f48c0" },
+    { "setmocktime",             &setmocktime,             cat_developer, &setmocktime_helpman, heritage_mixed, "994b2dfc6e39" },
+    { "getblockhash",            &getblockhash,            cat_network, &getblockhash_helpman, heritage_pure_upstream, "bd157738fbdb" },
+    { "getburnreport",           &getburnreport,           cat_network, &getburnreport_helpman, heritage_pure_gridcoin, "" },
+    { "getcheckpoint",           &getcheckpoint,           cat_network, &getcheckpoint_helpman, heritage_pure_gridcoin, "" },
+    { "getclockstats",           &getclockstats,           cat_network, &getclockstats_helpman, heritage_pure_gridcoin, "" },
+    { "getconnectioncount",      &getconnectioncount,      cat_network, &getconnectioncount_helpman, heritage_pure_upstream, "e169db2f48c0" },
+    { "getdifficulty",           &getdifficulty,           cat_network, &getdifficulty_helpman, heritage_mixed, "400047400aac" },
+    { "getinfo",                 &getinfo,                 cat_network, &getinfo_helpman, heritage_removed_upstream, "1e5e3bf87281" },
+    { "getnettotals",            &getnettotals,            cat_network, &getnettotals_helpman, heritage_mixed, "ca8fae8b33d9" },
+    { "getpeerinfo",             &getpeerinfo,             cat_network, &getpeerinfo_helpman, heritage_mixed, "4720f2ba0e5d" },
+    { "getrawmempool",           &getrawmempool,           cat_network, &getrawmempool_helpman, heritage_mixed, "3c50ec109dbb" },
+    { "getmempoolentry", &getmempoolentry, cat_network, &getmempoolentry_helpman, heritage_mixed, "961d91ecced1" },
+    { "getmempoolinfo", &getmempoolinfo, cat_network, &getmempoolinfo_helpman, heritage_mixed, "218a7675dffa" },
+    { "testmempoolaccept", &testmempoolaccept, cat_network, &testmempoolaccept_helpman, heritage_mixed, "3119a888d278" },
+    { "listbanned",              &listbanned,              cat_network, &listbanned_helpman, heritage_mixed, "2c86549f9bbd" },
+    { "networktime",             &networktime,             cat_network, &networktime_helpman, heritage_pure_gridcoin, "" },
+    { "ping",                    &ping,                    cat_network, &ping_helpman, heritage_pure_upstream, "e169db2f48c0" },
+    { "setban",                  &setban,                  cat_network, &setban_helpman, heritage_mixed, "b5a439644c97" },
+    { "showblock",               &showblock,               cat_network, &showblock_helpman, heritage_pure_gridcoin, "" },
+    { "stop",                    &stop,                    cat_network, &stop_helpman, heritage_pure_upstream, "e169db2f48c0" },
 
   // Voting commands
-    { "addpoll",                 &addpoll,                 cat_voting        },
-    { "getpollresults",          &getpollresults,          cat_voting        },
-    { "getvotingclaim",          &getvotingclaim,          cat_voting        },
-    { "listpolls",               &listpolls,               cat_voting        },
-    { "testpollnotification",    &testpollnotification,    cat_voting        },
-    { "vote",                    &vote,                    cat_voting        },
-    { "votebyid",                &votebyid,                cat_voting        },
-    { "votedetails",             &votedetails,             cat_voting        },
+    { "addpoll",                 &addpoll,                 cat_voting, &addpoll_helpman, heritage_pure_gridcoin, "" },
+    { "getpollresults",          &getpollresults,          cat_voting, &getpollresults_helpman, heritage_pure_gridcoin, "" },
+    { "getvotingclaim",          &getvotingclaim,          cat_voting, &getvotingclaim_helpman, heritage_pure_gridcoin, "" },
+    { "listpolls",               &listpolls,               cat_voting, &listpolls_helpman, heritage_pure_gridcoin, "" },
+    { "testpollnotification",    &testpollnotification,    cat_voting, &testpollnotification_helpman, heritage_pure_gridcoin, "" },
+    { "vote",                    &vote,                    cat_voting, &vote_helpman, heritage_pure_gridcoin, "" },
+    { "votebyid",                &votebyid,                cat_voting, &votebyid_helpman, heritage_pure_gridcoin, "" },
+    { "votedetails",             &votedetails,             cat_voting, &votedetails_helpman, heritage_pure_gridcoin, "" },
 };
 
 static constexpr const char* DEPRECATED_RPCS[] {
@@ -474,6 +667,7 @@ static constexpr const char* DEPRECATED_RPCS[] {
         "listreceivedbyaccount",
         "move",
         "setaccount",
+        "signrawtransaction",
         "vote",
 };
 
@@ -505,6 +699,61 @@ void ErrorReply(std::ostream& stream, const UniValue& objError, const UniValue& 
     stream << HTTPReply(nStatus, strReply, false) << std::flush;
 }
 
+//! -rpcallowip, parsed once at RPC start.
+//!
+//! Two forms are kept because two forms are in the field. Anything
+//! LookupSubNet() accepts -- a CIDR prefix, an address/netmask pair, or a bare
+//! address, v4 or v6 -- becomes a CSubNet and is matched numerically. Anything
+//! else stays a string and is matched with WildcardMatch(), which is what this
+//! function did for every entry before, and is what makes forms like
+//! "192.168.1.*" keep working.
+//!
+//! Parsing every entry on every connection would be wasteful, but that is not
+//! the reason this is hoisted: LookupSubNet() reaches LookupHost(), and doing
+//! name resolution on the request path of an ACL is not something to leave
+//! available even with lookups disabled.
+struct RPCAllowEntry
+{
+    CSubNet subnet;         //!< valid when is_subnet
+    std::string pattern;    //!< used when !is_subnet
+    bool is_subnet{false};
+};
+
+static std::vector<RPCAllowEntry> g_rpc_allow_list;
+static bool g_rpc_allow_list_parsed{false};
+
+//! Parse -rpcallowip. Logs what each entry resolved to, because the failure
+//! this replaces was silent: an entry that matched nothing produced a listener
+//! that rejected everything, with nothing in the log to say why.
+void InitRPCAllowList(const std::vector<std::string>& entries)
+{
+    g_rpc_allow_list.clear();
+
+    for (const std::string& strAllow : entries) {
+        RPCAllowEntry entry;
+
+        CSubNet subnet;
+        if (LookupSubNet(strAllow.c_str(), subnet) && subnet.IsValid()) {
+            entry.subnet = subnet;
+            entry.is_subnet = true;
+            LogPrintf("RPC: -rpcallowip %s allows %s\n", strAllow, subnet.ToString());
+        } else {
+            entry.pattern = strAllow;
+            LogPrintf("RPC: -rpcallowip %s is not an address or subnet; matching it as a "
+                      "wildcard pattern against the peer address text\n", strAllow);
+        }
+
+        g_rpc_allow_list.push_back(entry);
+    }
+
+    g_rpc_allow_list_parsed = true;
+}
+
+void InitRPCAllowList()
+{
+    InitRPCAllowList(gArgs.GetArgs("-rpcallowip"));
+}
+
 bool ClientAllowed(const boost::asio::ip::address& address)
 {
     // Make sure that IPv4-compatible and IPv4-mapped IPv6 addresses are treated as IPv4 addresses
@@ -525,11 +774,27 @@ bool ClientAllowed(const boost::asio::ip::address& address)
       && (address.to_v4().to_bytes()[0] == 127)))
         return true;
 
+    // Fail closed if the list was somehow never parsed, rather than falling
+    // back to an unparsed read that would allow nothing anyway but silently.
+    if (!g_rpc_allow_list_parsed) {
+        LogPrintf("RPC: WARNING - allow list consulted before it was parsed; denying %s\n",
+                  address.to_string());
+        return false;
+    }
+
     const string strAddress = address.to_string();
-    const vector<string>& vAllow = gArgs.GetArgs("-rpcallowip");
-    for (auto const& strAllow : vAllow)
-        if (WildcardMatch(strAddress, strAllow))
+
+    CNetAddr netaddr;
+    const bool have_netaddr = LookupHost(strAddress.c_str(), netaddr, false);
+
+    for (const RPCAllowEntry& entry : g_rpc_allow_list) {
+        if (entry.is_subnet) {
+            if (have_netaddr && entry.subnet.Match(netaddr)) return true;
+        } else if (WildcardMatch(strAddress, entry.pattern)) {
             return true;
+        }
+    }
+
     return false;
 }
 
@@ -538,29 +803,26 @@ void ServiceConnection(AcceptedConnection *conn);
 // Forward declaration required for RPCListen
 template <typename Protocol>
 static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
-                             ssl::context& context,
-                             bool fUseSSL,
-                             AcceptedConnection* conn,
+                             std::shared_ptr<AcceptedConnection> conn,
                              const boost::system::error_code& error);
 
 /**
  * Sets up I/O resources to accept and handle a new connection.
  */
 template <typename Protocol>
-static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
-                      ssl::context& context,
-                      const bool fUseSSL)
+static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor)
 {
-    // Accept connection
-    AcceptedConnectionImpl<Protocol>* conn = new AcceptedConnectionImpl<Protocol>(GetIOServiceFromPtr(acceptor), context, fUseSSL);
+    // Accept connection. The pending handler owns the connection: when the
+    // accept is aborted at shutdown, StopRPCThreads() may stop the io_context
+    // before a worker runs that handler, and destroying the io_context then
+    // destroys the handler without calling it.
+    auto conn = std::make_shared<AcceptedConnectionImpl<Protocol>>(GetIOServiceFromPtr(acceptor));
 
     acceptor->async_accept(
-                conn->sslStream.lowest_layer(),
+                conn->socket,
                 conn->peer,
                 boost::bind(&RPCAcceptHandler<Protocol>,
                             acceptor,
-                            boost::ref(context),
-                            fUseSSL,
                             conn,
                             boost::asio::placeholders::error));
 }
@@ -570,14 +832,12 @@ static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > accep
  */
 template <typename Protocol>
 static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
-                             ssl::context& context,
-                             const bool fUseSSL,
-                             AcceptedConnection* conn,
+                             std::shared_ptr<AcceptedConnection> conn,
                              const boost::system::error_code& error)
 {
     // Immediately start accepting new connections, except when we're cancelled or our socket is closed.
     if (error != asio::error::operation_aborted && acceptor->is_open())
-        RPCListen(acceptor, context, fUseSSL);
+        RPCListen(acceptor);
 
     // TODO : Actually handle errors
     if (!error)
@@ -585,24 +845,140 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
         // Restrict callers by IP.  It is important to
         // do this before starting client thread, to filter out
         // certain DoS and misbehaving clients.
-        AcceptedConnectionImpl<ip::tcp>* tcp_conn = dynamic_cast< AcceptedConnectionImpl<ip::tcp>* >(conn);
+        AcceptedConnectionImpl<ip::tcp>* tcp_conn = dynamic_cast< AcceptedConnectionImpl<ip::tcp>* >(conn.get());
+
+        // Before the allow-list test, so it covers the rejection path too.
+        //
+        // Two things happen here: the socket is forced into blocking mode, which
+        // the stream device requires to tell a deadline from "nothing yet", and
+        // the read/write deadline is applied. Without the deadline a client that
+        // opens a connection and then sends nothing keeps this worker blocked in
+        // read() for as long as it cares to, and there are only -rpcthreads of
+        // them.
+        //
+        // The rejection path needs it just as much. Writing the 403 below is a
+        // blocking send: a client that stops reading -- letting its receive
+        // window close -- parks this worker there indefinitely. That one costs
+        // an attacker nothing at all, since failing the allow-list means it
+        // never had to present a credential.
+        if (tcp_conn) SetRPCSocketTimeouts(tcp_conn->socket);
+
         if (tcp_conn && !ClientAllowed(tcp_conn->peer.address()))
         {
-            // Only send a 403 if we're not using SSL to prevent a DoS during the SSL handshake.
-            if (!fUseSSL)
-                conn->stream() << HTTPReply(HTTP_FORBIDDEN, "", false) << std::flush;
+            // The 403 was previously suppressed when TLS was in use, to avoid
+            // replying inside a handshake that had not completed. With -rpcssl
+            // gone there is no handshake to be inside, so a rejected client is
+            // always told why rather than seeing an unexplained closed socket.
+            conn->stream() << HTTPReply(HTTP_FORBIDDEN, "", false) << std::flush;
         }
         else
-            ServiceConnection(conn);
+        {
+            // Register before servicing so a concurrent StopRPCThreads() can
+            // wake us out of the blocking read loop. If the server is already
+            // stopping we skip servicing entirely rather than park with no
+            // drain left to interrupt us (issue #3123).
+            if (RegisterRPCConnection(conn.get()))
+            {
+                ServiceConnection(conn.get());
+                UnregisterRPCConnection(conn.get());
+            }
+        }
 
         conn->close();
     }
+}
 
-    delete conn;
+//! Bind one acceptor per -rpcbind entry.
+//!
+//! Each entry is an address, optionally with a port ("10.0.0.5", "[::1]:1234").
+//! Unlike the implicit path this makes no wildcard decision of its own: the
+//! operator gets exactly the addresses they named. An entry that fails to bind
+//! is reported and skipped rather than aborting the rest, so one bad line in a
+//! config does not cost the node every other listener; the caller still treats
+//! "none bound at all" as fatal.
+static bool StartRPCListenersOn(const std::vector<std::string>& binds, std::string& strerr)
+{
+    using namespace boost::asio;
+
+    const int default_port = gArgs.GetArg("-rpcport", GetDefaultRPCPort());
+    bool any = false;
+
+    for (const std::string& spec : binds) {
+        int port = default_port;
+        std::string host;
+        SplitHostPort(spec, port, host);
+
+        if (host.empty()) {
+            strerr = strprintf("-rpcbind entry '%s' has no address", spec);
+            LogPrintf("ERROR: StartRPCThreads: %s\n", strerr);
+            continue;
+        }
+
+        boost::system::error_code ec;
+        const ip::address addr = ip::make_address(host, ec);
+        if (ec) {
+            strerr = strprintf("-rpcbind entry '%s' is not a numeric address: %s", spec, ec.message());
+            LogPrintf("ERROR: StartRPCThreads: %s\n", strerr);
+            continue;
+        }
+
+        try {
+            ip::tcp::endpoint endpoint(addr, static_cast<unsigned short>(port));
+            boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(*rpc_io_service));
+
+            acceptor->open(endpoint.protocol());
+            acceptor->set_option(ip::tcp::acceptor::reuse_address(true));
+
+            // One address per acceptor, so never dual-stack: a v6 entry binds v6
+            // only. Otherwise listing both "::" and "0.0.0.0" -- the natural way
+            // to ask for both families explicitly -- would collide on the second
+            // bind.
+            //
+            // Note this differs from the implicit path below, which sets
+            // v6_only(loopback) and so gives a dual-stack socket for the
+            // wildcard. Moving from -rpcallowip alone to -rpcbind=:: therefore
+            // drops IPv4 unless 0.0.0.0 is listed too; the help text says so.
+            if (addr.is_v6()) {
+                // Throwing overload on purpose: the help text promises an IPv6
+                // entry does NOT also accept IPv4, and on a platform where
+                // IPV6_V6ONLY cannot be set the socket may default to
+                // dual-stack. Swallowing that error would leave the listener
+                // quietly accepting IPv4 while the documentation says it does
+                // not -- worse than not binding, because the operator has no
+                // way to see it. Caught below and reported like any other bind
+                // failure, which skips this listener rather than misrepresenting
+                // it.
+                acceptor->set_option(ip::v6_only(true));
+            }
+
+            acceptor->bind(endpoint);
+            acceptor->listen(socket_base::max_listen_connections);
+
+            RPCListen(acceptor);
+            rpc_acceptors.push_back(acceptor);
+
+            LogPrintf("RPC: bound and listening on %s:%u (-rpcbind)\n",
+                      endpoint.address().to_string(), endpoint.port());
+            any = true;
+        } catch (boost::system::system_error& e) {
+            strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on %s: %s"),
+                               port, host, e.what());
+            LogPrintf("ERROR: StartRPCThreads: %s\n", strerr);
+        }
+    }
+
+    return any;
 }
 
 void StartRPCThreads()
 {
+    // Logged unconditionally: the absence of this line in a node's debug.log
+    // distinguishes "RPC server never started" from "started but not serving"
+    // when diagnosing functional-test RPC-startup timeouts.
+    LogPrintf("StartRPCThreads: entered\n");
+
+    InitRPCAllowList();
+
     strRPCUserColonPass = gArgs.GetArg("-rpcuser", "") + ":" + gArgs.GetArg("-rpcpassword", "");
 
     if ((gArgs.GetArg("-rpcpassword", "") == "" ||
@@ -633,32 +1009,87 @@ void StartRPCThreads()
         return;
     }
 
-    const bool fUseSSL = gArgs.GetBoolArg("-rpcssl");
+    // -rpcssl and its three companion options are gone. Warn rather than ignore:
+    // an operator who believed the RPC port was wrapped in TLS must find out
+    // from the log, not from a packet capture.
+    for (const char* removed : {"-rpcssl", "-rpcsslcertificatechainfile",
+                                "-rpcsslprivatekeyfile", "-rpcsslciphers"}) {
+        if (gArgs.IsArgSet(removed)) {
+            LogPrintf("RPC: WARNING - %s is no longer supported and is being ignored. The JSON-RPC "
+                      "port does not speak TLS. Restrict it with -rpcbind and -rpcallowip, and "
+                      "tunnel it if it must cross an untrusted network.\n", removed);
+        }
+    }
 
     assert(rpc_io_service == nullptr);
-    rpc_io_service = new ioContext();
-    rpc_ssl_context = new ssl::context(ssl::context::sslv23);
 
-    if (fUseSSL)
+    // Clear the shutdown latch so a same-process restart (stop then start) can
+    // service connections again; StopRPCThreads() sets it true (issue #3123).
+    // The set is already empty here (the prior StopRPCThreads()' join_all()
+    // guarantees every registered connection was unregistered), but clear it
+    // defensively so a future refactor that broke that invariant cannot leave a
+    // dangling pointer to be shutdown() on the next teardown.
     {
-        rpc_ssl_context->set_options(ssl::context::no_sslv2);
+        std::lock_guard<std::mutex> lock(g_rpc_connections_mutex);
+        g_rpc_connections_stopped = false;
+        g_rpc_connections.clear();
+    }
 
-        fs::path pathCertFile(gArgs.GetArg("-rpcsslcertificatechainfile", "server.cert"));
-        if (!pathCertFile.is_absolute()) pathCertFile = fs::path(GetDataDir()) / pathCertFile;
-        if (fs::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
-        else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
+    rpc_io_service = new ioContext();
 
-        fs::path pathPKFile(gArgs.GetArg("-rpcsslprivatekeyfile", "server.pem"));
-        if (!pathPKFile.is_absolute()) pathPKFile = fs::path(GetDataDir()) / pathPKFile;
-        if (fs::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
-        else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
+    // Where to listen.
+    //
+    // Historically this was implied by -rpcallowip: setting any allow entry at
+    // all moved the listener from loopback to the wildcard address, on every
+    // interface. That coupling is surprising in the dangerous direction -- an
+    // operator narrowing who may connect simultaneously widens where the socket
+    // is reachable -- and there was no way to say "listen here" independently.
+    //
+    // -rpcbind now says it explicitly. When it is not given the old behaviour is
+    // kept exactly, so no existing deployment changes on upgrade, but the
+    // implicit widening is logged as a warning rather than happening silently.
+    const bool bind_specified = gArgs.IsArgSet("-rpcbind");
+    const bool loopback = !bind_specified && !gArgs.IsArgSet("-rpcallowip");
 
-        string strCiphers = gArgs.GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
-        SSL_CTX_set_cipher_list(rpc_ssl_context->native_handle(), strCiphers.c_str());
+    if (!bind_specified && !loopback) {
+        LogPrintf("RPC: WARNING - -rpcallowip is set and -rpcbind is not, so the RPC port is "
+                  "being opened on ALL interfaces (%s), not just loopback. Only the allow list "
+                  "restricts who may connect. Set -rpcbind to choose the listening address "
+                  "explicitly.\n", "0.0.0.0 / ::");
+    }
+
+    // The mirror image, and the quieter failure of the two: binding somewhere
+    // reachable while the allow list is empty. Loopback is always permitted, so
+    // the socket comes up and local clients work, but every remote client is
+    // answered 403 -- the port is listening and refusing, which reads like a
+    // credential problem rather than a configuration one.
+    //
+    // Only warn if something non-loopback is actually being bound; -rpcbind
+    // pointed at 127.0.0.1 needs no allow list and should not be nagged about.
+    if (bind_specified && !gArgs.IsArgSet("-rpcallowip")) {
+        for (const std::string& spec : gArgs.GetArgs("-rpcbind")) {
+            int port = 0;
+            std::string host;
+            SplitHostPort(spec, port, host);
+            if (host.empty()) continue;
+
+            boost::system::error_code ec;
+            const boost::asio::ip::address addr = boost::asio::ip::make_address(host, ec);
+
+            // An unparseable entry is reported by StartRPCListenersOn; treating
+            // it as remote here would warn twice about one typo.
+            if (ec || addr.is_loopback()) continue;
+
+            LogPrintf("RPC: WARNING - -rpcbind is set to a non-loopback address (%s) but "
+                      "-rpcallowip is not set, so the allow list is empty and every remote "
+                      "client will be refused with 403 Forbidden. Only loopback can connect. "
+                      "Add -rpcallowip for the hosts or subnets that should reach this port.\n",
+                      host);
+            break;
+        }
     }
 
     // Try a dual IPv6/IPv4 socket, falling back to separate IPv4 and IPv6 sockets
-    const bool loopback = !gArgs.IsArgSet("-rpcallowip");
     asio::ip::address bindAddress = loopback ? asio::ip::address_v6::loopback() : asio::ip::address_v6::any();
     ip::tcp::endpoint endpoint(bindAddress, gArgs.GetArg("-rpcport", GetDefaultRPCPort()));
     boost::system::error_code v6_only_error;
@@ -666,6 +1097,14 @@ void StartRPCThreads()
 
     bool fListening = false;
     std::string strerr;
+
+    // Explicit -rpcbind replaces the implicit loopback/wildcard choice entirely.
+    // Both paths fall through to the shared "did anything bind?" check and the
+    // worker-thread startup below -- returning early here would leave the
+    // acceptors armed with nothing running io_context::run().
+    if (bind_specified) {
+        fListening = StartRPCListenersOn(gArgs.GetArgs("-rpcbind"), strerr);
+    } else {
     try
     {
         acceptor->open(endpoint.protocol());
@@ -677,13 +1116,20 @@ void StartRPCThreads()
         acceptor->bind(endpoint);
         acceptor->listen(socket_base::max_listen_connections);
 
-        RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
+        RPCListen(acceptor);
+        rpc_acceptors.push_back(acceptor);
+        LogPrintf("RPC: bound and listening on [%s]:%u\n", endpoint.address().to_string(), endpoint.port());
 
         fListening = true;
     }
     catch(boost::system::system_error &e)
     {
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s"), endpoint.port(), e.what());
+
+        // Not an error on its own: a host without IPv6 lands here on every start,
+        // and the IPv4 listener below is what serves it.
+        LogPrintf("INFO: StartRPCThreads: not listening on IPv6 [%s]:%u: %s",
+                  endpoint.address().to_string(), endpoint.port(), e.what());
     }
 
     try
@@ -700,7 +1146,9 @@ void StartRPCThreads()
             acceptor->bind(endpoint);
             acceptor->listen(socket_base::max_listen_connections);
 
-            RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
+            RPCListen(acceptor);
+            rpc_acceptors.push_back(acceptor);
+            LogPrintf("RPC: bound and listening on %s:%u\n", endpoint.address().to_string(), endpoint.port());
 
             fListening = true;
         }
@@ -708,18 +1156,61 @@ void StartRPCThreads()
     catch(boost::system::system_error &e)
     {
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv4: %s"), endpoint.port(), e.what());
+
+        // With the IPv6 listener up the node starts anyway, and this was the only
+        // trace of the failure -- strerr is read only when nothing bound. Say what
+        // it costs. On the loopback path the IPv6 socket is bound to ::1, which
+        // never serves 127.0.0.1, so IPv4 clients are refused while the node looks
+        // healthy. On the wildcard path this bind runs, with the IPv6 listener up,
+        // only because v6_only_error is set: turning IPV6_V6ONLY off failed, so the
+        // IPv6 socket may or may not already serve IPv4, and the warning says may.
+        // The wildcard bind address is not one a client connects to, so it is not
+        // named as one.
+        if (fListening) {
+            if (loopback) {
+                LogPrintf("WARNING: StartRPCThreads: not listening on IPv4 %s:%u: %s. RPC is reachable over "
+                          "IPv6 only; clients connecting to 127.0.0.1 will be refused.",
+                          endpoint.address().to_string(), endpoint.port(), e.what());
+            } else {
+                LogPrintf("WARNING: StartRPCThreads: not listening on IPv4 %s:%u: %s. The IPv6 listener could "
+                          "not be made dual-stack (%s), so it may not serve IPv4; IPv4 clients may be refused.",
+                          endpoint.address().to_string(), endpoint.port(), e.what(), v6_only_error.message());
+            }
+        }
     }
+    } // !bind_specified
 
     if (!fListening)
     {
+        // Log before the message box: ThreadSafeMessageBox has no UI in daemon
+        // mode, so without this the failure reason never reaches debug.log and
+        // the node exits (via StartShutdown) with no diagnosable cause.
+        LogPrintf("ERROR: StartRPCThreads: RPC server failed to listen: %s\n", strerr);
         uiInterface.ThreadSafeMessageBox(strerr, _("Error"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
     }
 
+    // Clamp to at least one worker. These threads are the only ones that run
+    // ioContext::run(), so -rpcthreads=0 installs the acceptors with nothing to
+    // service them: the port listens, no request is ever dispatched, and that
+    // includes the "stop" call an operator would use to recover -- the node has
+    // to be killed. -rpcthreads is registered ALLOW_ANY, so nothing else
+    // rejects the value.
+    const int nRPCThreadsArg = gArgs.GetArg("-rpcthreads", 4);
+    const int nRPCThreads = std::max(1, nRPCThreadsArg);
+
+    if (nRPCThreads != nRPCThreadsArg) {
+        LogPrintf("WARNING: StartRPCThreads: -rpcthreads=%d is below the minimum of 1; using %d.\n",
+                  nRPCThreadsArg, nRPCThreads);
+    }
+
     rpc_worker_group = new boost::thread_group();
-    for (int i = 0; i < gArgs.GetArg("-rpcthreads", 4); i++)
+    for (int i = 0; i < nRPCThreads; i++)
         rpc_worker_group->create_thread(boost::bind(&ioContext::run, rpc_io_service));
+
+    LogPrintf("RPC server started: %u acceptor(s), %d worker thread(s)\n",
+              static_cast<unsigned>(rpc_acceptors.size()), nRPCThreads);
 }
 
 void StopRPCThreads()
@@ -731,6 +1222,38 @@ void StopRPCThreads()
         return;
     }
 
+    // Close the listening acceptors before stopping the io_service. This makes
+    // any pending async_accept complete with operation_aborted, so no further
+    // connection is accepted: a worker that runs RPCAcceptHandler before the
+    // stop() below sees !is_open() and does not re-arm, and a handler still
+    // queued at stop() is destroyed with the io_service, freeing the connection
+    // it owns. This is necessary but not sufficient to unblock join_all() --
+    // connections already being serviced are handled by the interrupt loop
+    // below (issue #3123).
+    for (auto& acc : rpc_acceptors) {
+        if (acc && acc->is_open()) {
+            boost::system::error_code ec;
+            acc->close(ec);
+        }
+    }
+    rpc_acceptors.clear();
+
+    // Closing the acceptors above only stops *new* connections. An established
+    // keep-alive client leaves its worker blocked in a synchronous read inside
+    // ServiceConnection(), which io_service->stop() cannot interrupt (that
+    // worker is not in the io_service run loop -- it is parked in recv). Shut
+    // those sockets down so the reads fail and the workers return; otherwise
+    // join_all() below hangs forever (issue #3123). Setting the stopped flag
+    // under the same lock closes the race with a connection accepted just now:
+    // its RegisterRPCConnection() will observe the flag and decline to park.
+    {
+        std::lock_guard<std::mutex> lock(g_rpc_connections_mutex);
+        g_rpc_connections_stopped = true;
+        for (AcceptedConnection* conn : g_rpc_connections) {
+            conn->interrupt();
+        }
+    }
+
     rpc_io_service->stop();
     if (rpc_worker_group != nullptr) {
         rpc_worker_group->join_all();
@@ -738,8 +1261,6 @@ void StopRPCThreads()
 
     delete rpc_worker_group;
     rpc_worker_group = nullptr;
-    delete rpc_ssl_context;
-    rpc_ssl_context = nullptr;
     delete rpc_io_service;
     rpc_io_service = nullptr;
 }
@@ -822,7 +1343,7 @@ static string JSONRPCExecBatch(const UniValue& vReq)
 void ServiceConnection(AcceptedConnection *conn)
 {
     bool fRun = true;
-    while (fRun && !fShutdown)
+    while (fRun && !ShutdownInProgress())
     {
         int nProto = 0;
         map<string, string> mapHeaders;
@@ -832,8 +1353,20 @@ void ServiceConnection(AcceptedConnection *conn)
         if (!ReadHTTPRequestLine(conn->stream(), nProto, strMethod, strURI))
             break;
 
-        // Read HTTP message headers and body
-        ReadHTTPMessage(conn->stream(), mapHeaders, strRequest, nProto);
+        // Read HTTP message headers and body.
+        //
+        // The status matters. Discarding it made an over-long or malformed body
+        // fail only incidentally: the body was never read, strRequest stayed
+        // empty, and the JSON parse further down returned 500 -- so the bound
+        // above worked by accident and reported the wrong thing. Answer with the
+        // status the parser actually produced and close.
+        const int http_status = ReadHTTPMessage(conn->stream(), mapHeaders, strRequest, nProto,
+                                                MAX_RPC_BODY_SIZE);
+
+        if (http_status != HTTP_OK) {
+            conn->stream() << HTTPReply(http_status, "", false) << std::flush;
+            break;
+        }
 
         if (strURI != "/") {
             conn->stream() << HTTPReply(HTTP_NOT_FOUND, "", false) << std::flush;
@@ -852,7 +1385,14 @@ void ServiceConnection(AcceptedConnection *conn)
             /* Deter brute-forcing short passwords.
                If this results in a DOS the user really
                shouldn't have their RPC port exposed.*/
-            if (gArgs.GetArgs("-rpcpassword").size() < 20)
+            // GetArg, not GetArgs: the intent is the length of the configured
+            // password, but GetArgs returns one element per occurrence of the
+            // option, so .size() was the number of times -rpcpassword appeared.
+            // That is 0 or 1 in every real configuration, so the test was always
+            // true and the sleep always ran -- burning one of only nRPCThreads
+            // workers on each failed attempt, which is the denial of service the
+            // comment above is willing to accept only for short passwords.
+            if (gArgs.GetArg("-rpcpassword", "").size() < 20)
                 UninterruptibleSleep(std::chrono::milliseconds{250});
 
             conn->stream() << HTTPReply(HTTP_UNAUTHORIZED, "", false) << std::flush;
@@ -908,6 +1448,22 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     if (!pcmd)
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
 
+    // arity here and throw the help text on mismatch. PR M3 dropped the
+    // `bool fHelp` parameter entirely, so the dispatcher is now the sole
+    // arity-enforcement site for converted commands. Commands marked
+    // variadic via RPCHelpMan's MarkVariadic() opt out of the pre-check
+    // (their helpman declaration captures the typical shape but the body
+    // accepts an open-ended count); their body retains the arity gate
+    // appropriate to the actual semantics. addpoll's helpman is itself
+    // marked variadic so the `addpoll <type>` 1-arg wizard form reaches
+    // its body's hint logic.
+    if (pcmd->helpman != nullptr) {
+        const RPCHelpMan& help = pcmd->helpman();
+        if (!help.IsVariadic() && !help.IsValidNumArgs(params.size())) {
+            throw runtime_error(help.ToString());
+        }
+    }
+
     // Let's add an optional display if BCLog::LogFlags::RPC is set to show how long it takes
     // the rpc commands to be performed in milliseconds. We will do this only on successful
     // calls not exceptions.
@@ -920,12 +1476,12 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
             int64_t nRPCtimebegin;
             int64_t nRPCtimetotal;
             nRPCtimebegin = GetTimeMillis();
-            result = pcmd->actor(params, false);
+            result = pcmd->actor(params);
             nRPCtimetotal = GetTimeMillis() - nRPCtimebegin;
             LogPrintf("RPCTime : Command %s -> Totaltime %" PRId64 "ms", strMethod, nRPCtimetotal);
         }
         else
-            result = pcmd->actor(params, false);
+            result = pcmd->actor(params);
 
         return result;
     }
@@ -936,7 +1492,7 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
 }
 
 
-std::vector<std::string> CRPCTable::listCommands() const
+std::vector<std::string> CRPCTable::listCommands(bool include_deprecated) const
 {
     std::vector<std::string> commandList;
     typedef std::map<std::string, const CRPCCommand*> commandMap;
@@ -944,9 +1500,11 @@ std::vector<std::string> CRPCTable::listCommands() const
     std::transform( mapCommands.begin(), mapCommands.end(),
                     std::back_inserter(commandList),
                     boost::bind(&commandMap::value_type::first,boost::placeholders::_1) );
-    // remove deprecated commands from autocomplete
-    for(auto &command: DEPRECATED_RPCS) {
-        commandList.erase(std::remove(commandList.begin(), commandList.end(), command), commandList.end());
+    if (!include_deprecated) {
+        // remove deprecated commands from autocomplete
+        for(auto &command: DEPRECATED_RPCS) {
+            commandList.erase(std::remove(commandList.begin(), commandList.end(), command), commandList.end());
+        }
     }
     return commandList;
 }

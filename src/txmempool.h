@@ -1,0 +1,500 @@
+// Copyright (c) 2009-2010 Satoshi Nakamoto
+// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef BITCOIN_TXMEMPOOL_H
+#define BITCOIN_TXMEMPOOL_H
+
+#include "amount.h"
+#include "gridcoin/contract/payload.h"
+#include "gridcoin/cpid.h"
+#include "primitives/transaction.h"
+#include "sync.h"
+#include "uint256.h"
+
+#include <cstdint>
+#include <functional>
+#include <algorithm>
+#include <map>
+#include <optional>
+#include <set>
+#include <utility>
+#include <vector>
+
+//! \brief Why a pooled transaction is in the unbroadcast set.
+//!
+//! The set answers two different questions that coincide for a freshly created
+//! transaction and diverge after a reorg, so each entry records which one it is.
+enum class UnbroadcastReason : uint8_t {
+    //! This node originated it and no peer has ever asked for it. Cancelling is
+    //! meaningful: nobody else is holding it. A getdata clears the entry.
+    NeverSent,
+
+    //! Peers HAVE seen it -- it was in a block, or in their pools, and a reorg
+    //! took it out of them. It still wants announcing, but cancelling it here
+    //! would not cancel anything, so it must not open the cancel gate. A peer's
+    //! getdata does not clear it: a peer that still has the transaction never
+    //! asks, and one that does ask does not undo what the reorg showed. The
+    //! entry lives until the transaction confirms or leaves the pool, which
+    //! eraseIndexes handles.
+    Reannounce,
+};
+
+/** Reason why transaction was removed from mempool */
+enum class MemPoolRemovalReason {
+    UNKNOWN = 0,      //!< Manually removed or unknown reason
+    EXPIRY = 1,       //!< Expired from mempool
+    SIZELIMIT = 2,    //!< Removed due to size limit
+    REORG = 3,        //!< Removed for reorganization
+    BLOCK = 4,        //!< Removed because included in block
+    CONFLICT = 5,     //!< Removed due to conflict
+    REPLACED = 6      //!< Removed due to replacement (RBF)
+};
+
+//!
+//! \brief Ordering key for size-based eviction (#3029 Phase 4).
+//!
+//! The eviction set's first element is always the next victim. Gridcoin's flat,
+//! size-scaled fee makes feerate nearly identical across transactions, so the
+//! order is: non-contract transactions before contract transactions (contracts
+//! are evicted last so reward-bearing MRCs survive), then lowest feerate, then
+//! newest-first among ties, then hash for uniqueness.
+//!
+//! Caveat: eviction ranks by INDIVIDUAL transaction, not by ancestor/descendant
+//! package (this tree has no package-feerate accounting). When the chosen victim
+//! is removed recursively, an unconfirmed contract child spending a cheaper
+//! non-contract parent can be dropped as collateral, so the "contracts last"
+//! guarantee is best-effort for such chains. Acceptable given low tx volume and
+//! the non-consensus nature of the pool; revisit if package relay is added.
+//!
+struct CTxMemPoolEvictionKey
+{
+    bool is_contract;
+    CAmount feerate;
+    int64_t time;
+    uint256 hash;
+
+    bool operator<(const CTxMemPoolEvictionKey& other) const
+    {
+        if (is_contract != other.is_contract) return is_contract < other.is_contract;
+        if (feerate != other.feerate) return feerate < other.feerate;
+        if (time != other.time) return time > other.time;
+        return hash < other.hash;
+    }
+};
+
+//!
+//! \brief A transaction stored in the memory pool together with the metadata
+//! computed once when it was accepted.
+//!
+//! Phase 1 of the mempool modernization (#3029). The entry caches the fee, size,
+//! time, and entry height that callers previously recomputed, plus lightweight
+//! Gridcoin contract tags (contract type(s); the BEACON CPID; the MRC CPID, fee,
+//! and last-block-hash; the mandatory-sidestake flag) derived from a single pass
+//! over the transaction's
+//! contracts. The tags are populated here but not yet consumed -- the O(n)
+//! contract scans they will replace remain in place until Phase 2 swaps them for
+//! index lookups.
+//!
+class CTxMemPoolEntry
+{
+private:
+    CTransaction tx;
+    CAmount nFee;            //!< GetValueIn() - GetValueOut(), at accept time.
+    size_t nTxSize;          //!< Serialized size (SER_NETWORK, PROTOCOL_VERSION).
+    int64_t nTime;           //!< Adjusted time when accepted.
+    int entryHeight;         //!< Chain height when accepted.
+    unsigned int nSigOps;    //!< Legacy sig-op count.
+
+    // Gridcoin contract tags -- computed in the constructor (txmempool.cpp).
+    std::set<GRC::ContractType> m_contract_types;
+    bool m_has_mrc{false};
+    GRC::Cpid m_mrc_cpid;
+    CAmount m_mrc_fee{0};
+    uint256 m_mrc_last_block_hash;
+    bool m_has_beacon{false};
+    GRC::Cpid m_beacon_cpid;
+    bool m_has_mandatory_sidestake{false};
+    bool m_has_message{false};
+    bool m_has_pool_register{false};
+
+public:
+    CTxMemPoolEntry(const CTransaction& tx, CAmount fee, int64_t time,
+                    int height, size_t tx_size);
+
+    //! The stored transaction is exposed read-only: the cached fee/size/sigops/
+    //! contract-tag metadata this entry carries is computed once in the constructor and would
+    //! silently go stale if the transaction could be mutated in place.
+    const CTransaction& GetTx() const { return tx; }
+
+    CAmount GetFee() const { return nFee; }
+    size_t GetTxSize() const { return nTxSize; }
+    int64_t GetTime() const { return nTime; }
+    int GetHeight() const { return entryHeight; }
+    unsigned int GetSigOps() const { return nSigOps; }
+    //! Fee per 1000 bytes. No CFeeRate type exists in this tree; returns a plain
+    //! CAmount derived from the cached fee and size.
+    CAmount GetFeeRate() const { return nTxSize ? nFee * 1000 / (CAmount)nTxSize : 0; }
+
+    const std::set<GRC::ContractType>& GetContractTypes() const { return m_contract_types; }
+    bool HasMRC() const { return m_has_mrc; }
+    const GRC::Cpid& GetMRCCpid() const { return m_mrc_cpid; }
+    CAmount GetMRCFee() const { return m_mrc_fee; }
+    const uint256& GetMRCLastBlockHash() const { return m_mrc_last_block_hash; }
+    bool HasBeacon() const { return m_has_beacon; }
+    const GRC::Cpid& GetBeaconCpid() const { return m_beacon_cpid; }
+    bool HasMandatorySidestake() const { return m_has_mandatory_sidestake; }
+    bool HasMessageContract() const { return m_has_message; }
+    bool HasPoolRegister() const { return m_has_pool_register; }
+};
+
+//! Aggregate mempool statistics, collected under a single lock for getmempoolinfo.
+struct CTxMemPoolInfo
+{
+    size_t tx_count{0};
+    size_t bytes{0};
+    size_t usage{0};
+    size_t max_size{0};
+    size_t mrc_count{0};
+    size_t beacon_count{0};
+    size_t mandatory_sidestake_count{0};
+    //! Transactions this node originated that no peer has yet requested. A count
+    //! that stays non-zero across several blocks means the node's own traffic is
+    //! not reaching the network -- see the unbroadcast set below.
+    size_t unbroadcast_count{0};
+};
+
+class CTxMemPool
+{
+public:
+    mutable CCriticalSection cs;
+    std::map<uint256, CTxMemPoolEntry> mapTx;
+    std::map<COutPoint, CInPoint> mapNextTx;
+
+    // Secondary indexes maintained in the single add/remove/clear paths (#3029
+    // Phase 2). They replace the former O(n) full-pool contract scans. Keyed off
+    // the contract tags cached on CTxMemPoolEntry.
+    //! One MRC per CPID; value is the tx hash. Sound as a CPID-keyed map because
+    //! AcceptToMemoryPool DoS-rejects a second MRC for a CPID already in the pool,
+    //! so mapTx never holds two same-CPID MRCs.
+    std::map<GRC::Cpid, uint256> m_mrc_by_cpid;
+    //! Beacon contract transactions in the pool, counted by CPID. Unlike MRCs,
+    //! two beacons for one CPID are NOT rejected at acceptance: only the wallet's
+    //! own viability check refuses a second one, so a second can be pooled while
+    //! the first is still there. So this is a count, and a CPID leaves the map
+    //! only when its last beacon leaves the pool. HasBeaconForCpid() is that viability check, and a
+    //! CPID dropped while one of its beacons remained would let the wallet send a
+    //! second advertisement.
+    std::map<GRC::Cpid, size_t> m_beacon_by_cpid;
+    size_t m_mandatory_sidestake_count{0};         //!< Mandatory-sidestake txs in the pool.
+    //! MESSAGE-contract txs in the pool. Existence counter only, so the
+    //! disable-height sweep in ConnectBlock costs one integer compare per block
+    //! instead of a full-pool contract scan (#3029 Phase 2 retired those).
+    size_t m_message_contract_count{0};
+    //! POOL_REGISTER txs in the pool. Existence counter only, for the same
+    //! reason as the MESSAGE one: the expiry sweep in ConnectBlock costs one
+    //! integer compare per block instead of a full-pool contract scan.
+    size_t m_pool_register_count{0};
+    //! MRCs in fee-descending order, for the GUI/RPC queue ranking.
+    std::multimap<CAmount, GRC::Cpid, std::greater<CAmount>> m_mrc_by_fee;
+
+    // Size accounting + eviction (#3029 Phase 4).
+    size_t m_total_tx_size{0};                        //!< Running sum of entry serialized sizes.
+    std::set<CTxMemPoolEvictionKey> m_eviction_index; //!< Victim ordering; begin() is evicted first.
+    size_t m_max_size_bytes{300 * 1000 * 1000};       //!< -maxmempool cap in bytes (default 300 MB).
+
+    // Unbroadcast set (#3029 Phase 5). Transactions this node originated locally
+    // (wallet sends, sendrawtransaction) that we have not yet seen evidence of
+    // propagating. This -- not the whole pool -- is what is persisted across
+    // restart and periodically rebroadcast, so the node's own in-flight txs are
+    // not lost on shutdown. Entries are dropped when a peer requests the tx (it
+    // is propagating) or when it leaves the pool (confirmed/evicted/conflicted).
+    std::map<uint256, UnbroadcastReason> m_unbroadcast;
+
+    //! Estimated per-entry bookkeeping overhead (CTxMemPoolEntry + map/index nodes)
+    //! added on top of the serialized size in DynamicMemoryUsage(). This is an
+    //! optimistic floor, not a tight bound: the entry also stores a full in-memory
+    //! CTransaction copy whose heap footprint runs larger than its serialized size,
+    //! so real RSS exceeds the reported usage. Adequate for bounding a low-volume,
+    //! non-consensus pool; revisit if a tighter memory bound is ever needed.
+    static constexpr size_t PER_ENTRY_OVERHEAD = 256;
+
+    //! \brief Insert an already-validated transaction. Locks cs internally, like
+    //! every other mutator here; "unchecked" refers to transaction validation,
+    //! which the caller must have done (see AcceptToMemoryPool), not to locking.
+    bool addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry);
+    //! \p removed_out, when non-null, receives a copy of every transaction this
+    //! call erases -- the named transaction and, with \p fRecursive, its in-pool
+    //! descendants -- so callers that emit removal signals can cover the whole
+    //! set instead of only the entry they named.
+    bool remove(const CTransaction &tx, bool fRecursive = false,
+                MemPoolRemovalReason reason = MemPoolRemovalReason::UNKNOWN,
+                std::vector<CTransaction>* removed_out = nullptr);
+    //! Remove the pooled transactions that spend an input of \p tx.
+    //! \p removed_out, when given, collects the hash of every transaction
+    //! removed, the descendants that go with each conflict included, with a
+    //! parent before its descendants so a caller re-offering the set can
+    //! pool them in dependency order.
+    bool removeConflicts(const CTransaction &tx, std::vector<uint256>* removed_out = nullptr);
+    void clear();
+    void queryHashes(std::vector<uint256>& vtxid);
+
+    //! \brief Estimated dynamic memory used by the pool and its indexes.
+    size_t DynamicMemoryUsage() const
+    {
+        LOCK(cs);
+        return m_total_tx_size + mapTx.size() * PER_ENTRY_OVERHEAD;
+    }
+
+    //! \brief Evict transactions until DynamicMemoryUsage() is at or below \p limit,
+    //! lowest-priority first (see CTxMemPoolEvictionKey). Routes every eviction
+    //! through remove() so all indexes stay consistent.
+    //!
+    //! If \p protect is non-null, the transaction with that hash is never chosen as
+    //! a victim -- room is made by evicting other (lower-priority) entries instead.
+    //! AcceptToMemoryPool passes the just-accepted hash here so it is not immediately
+    //! self-evicted (which, given Gridcoin's flat feerate and the newest-first
+    //! tie-break, it otherwise always would be), while the pool still stays bounded.
+    //!
+    //! \p removed, when non-null, receives every transaction the trim erases:
+    //! the victims chosen here AND their in-pool descendants, which remove()
+    //! drops recursively -- a wallet child spending an evicted parent's change
+    //! must see the same removal signal as the parent.
+    void TrimToSize(size_t limit, std::vector<CTransaction>* removed = nullptr,
+                    const uint256* protect = nullptr);
+
+    size_t GetMaxSize() const { LOCK(cs); return m_max_size_bytes; }
+    void SetMaxSize(size_t bytes) { LOCK(cs); m_max_size_bytes = bytes; }
+
+    //! \brief Mark a pooled transaction as still wanting announcement.
+    //! No-op if the tx is not (or no longer) in the pool.
+    //!
+    //! \p reason defaults to NeverSent, which is what every ordinary submission
+    //! path wants. A caller that knows peers have already seen the transaction
+    //! must say Reannounce, so the cancel gate stays shut.
+    //!
+    //! An existing entry is never relaxed from Reannounce to NeverSent: the
+    //! restrictive answer wins, because "some peer may hold this" cannot be
+    //! un-learned by a later call that simply did not know.
+    void AddUnbroadcast(const uint256& hash, UnbroadcastReason reason = UnbroadcastReason::NeverSent)
+    {
+        LOCK(cs);
+        if (!mapTx.count(hash)) return;
+
+        auto [it, inserted] = m_unbroadcast.emplace(hash, reason);
+        if (!inserted && reason == UnbroadcastReason::Reannounce) {
+            it->second = UnbroadcastReason::Reannounce;
+        }
+    }
+
+    //! \brief Drop a transaction from the unbroadcast set (it propagated, or left
+    //! the pool). Safe to call for a hash that is not present.
+    void RemoveUnbroadcast(const uint256& hash) { LOCK(cs); m_unbroadcast.erase(hash); }
+
+    //! \brief A peer fetched \p hash: a NeverSent entry has been sent, so it
+    //! goes. A Reannounce entry stays until the transaction leaves the pool (see
+    //! UnbroadcastReason), so that the cancel gate and the beacon retirement keep
+    //! treating it as one peers had in a block. Safe for a hash not present.
+    void ClearUnbroadcastOnFetch(const uint256& hash)
+    {
+        LOCK(cs);
+        const auto it = m_unbroadcast.find(hash);
+        if (it != m_unbroadcast.end() && it->second == UnbroadcastReason::NeverSent) {
+            m_unbroadcast.erase(it);
+        }
+    }
+
+    //! \brief Snapshot of the transactions still wanting announcement, either
+    //! reason: the resend announces both kinds.
+    std::set<uint256> GetUnbroadcast() const
+    {
+        LOCK(cs);
+        std::set<uint256> hashes;
+        // m_unbroadcast is ordered by the same comparator as the result, so
+        // hinting at the end appends in amortised constant time per entry.
+        for (const auto& [hash, reason] : m_unbroadcast) hashes.emplace_hint(hashes.end(), hash);
+        return hashes;
+    }
+
+    //! \brief Whether \p hash is still awaiting initial broadcast -- i.e. this node
+    //! announced it but no peer has ever asked for it (net_processing drops the
+    //! entry the moment a getdata arrives). This is the only signal that
+    //! distinguishes "peers have not fetched my transaction" from "peers have it
+    //! and simply have not mined it", so it is worth answering per transaction and
+    //! not just as a count.
+    //!
+    //! Mirrors Core's CTxMemPool::IsUnbroadcastTx, with two deliberate differences:
+    //! the lock is taken internally, matching every other accessor in this file
+    //! (Core annotates EXCLUSIVE_LOCKS_REQUIRED because its pool members carry
+    //! GUARDED_BY; none here do), and membership uses count() rather than C++20
+    //! contains() because the project baseline is CMAKE_CXX_STANDARD 17.
+    bool IsUnbroadcastTx(const uint256& hash) const { LOCK(cs); return m_unbroadcast.count(hash) > 0; }
+
+    //! \brief Whether dropping \p hash locally would actually cancel it.
+    //!
+    //! True only for a NeverSent entry. A Reannounce entry is in the set because
+    //! peers demonstrably HAVE the transaction and a reorg took it out of their
+    //! pools, so removing it here cancels nothing and would strand the wallet:
+    //! the inputs come back as spendable while the network can still mine the
+    //! original. IsUnbroadcastTx deliberately stays true for those, because they
+    //! genuinely are awaiting announcement -- it is only cancellation that must
+    //! distinguish them.
+    bool IsCancellableUnbroadcast(const uint256& hash) const
+    {
+        return GetUnbroadcastReason(hash) == std::optional{UnbroadcastReason::NeverSent};
+    }
+
+    //! \brief Why \p hash is in the unbroadcast set, or nullopt if it is not.
+    //!
+    //! One lookup under one lock. A caller that needs to both refuse and explain
+    //! must not ask twice: the entry can change between two queries, and the
+    //! explanation would then not match the refusal that was already decided.
+    std::optional<UnbroadcastReason> GetUnbroadcastReason(const uint256& hash) const
+    {
+        LOCK(cs);
+        auto it = m_unbroadcast.find(hash);
+        if (it == m_unbroadcast.end()) return std::nullopt;
+        return it->second;
+    }
+
+    //! \brief Whether the pool already holds an MRC for \p cpid. When it does and
+    //! \p existing is non-null, the colliding transaction hash is written there.
+    bool HasMRCForCpid(const GRC::Cpid& cpid, uint256* existing = nullptr) const
+    {
+        LOCK(cs);
+        auto it = m_mrc_by_cpid.find(cpid);
+        if (it == m_mrc_by_cpid.end()) return false;
+        if (existing) *existing = it->second;
+        return true;
+    }
+
+    bool HasBeaconForCpid(const GRC::Cpid& cpid) const
+    {
+        LOCK(cs);
+        return m_beacon_by_cpid.count(cpid) != 0;
+    }
+
+    bool HasMandatorySidestake() const
+    {
+        LOCK(cs);
+        return m_mandatory_sidestake_count != 0;
+    }
+
+    //! \brief A fee-descending snapshot of the pooled MRCs as (fee, cpid) pairs.
+    std::vector<std::pair<CAmount, GRC::Cpid>> GetMRCQueue() const
+    {
+        LOCK(cs);
+        std::vector<std::pair<CAmount, GRC::Cpid>> queue;
+        queue.reserve(m_mrc_by_fee.size());
+        for (const auto& [fee, cpid] : m_mrc_by_fee) queue.emplace_back(fee, cpid);
+        return queue;
+    }
+
+    //! \brief Aggregate counts/size for getmempoolinfo, collected in one locked pass.
+    CTxMemPoolInfo GetMempoolInfo() const
+    {
+        LOCK(cs);
+        CTxMemPoolInfo info;
+        info.tx_count = mapTx.size();
+        info.bytes = m_total_tx_size;
+        info.usage = m_total_tx_size + mapTx.size() * PER_ENTRY_OVERHEAD;
+        info.max_size = m_max_size_bytes;
+        info.mrc_count = m_mrc_by_cpid.size();
+        info.beacon_count = m_beacon_by_cpid.size();
+        info.mandatory_sidestake_count = m_mandatory_sidestake_count;
+        // Only NeverSent: the documented meaning of this counter is "our own
+        // traffic is not reaching the network", and a Reannounce entry means the
+        // opposite -- peers had it and a reorg removed it. Counting those would
+        // make every reorg look like a propagation fault.
+        info.unbroadcast_count = std::count_if(
+            m_unbroadcast.begin(), m_unbroadcast.end(),
+            [](const auto& e) { return e.second == UnbroadcastReason::NeverSent; });
+        return info;
+    }
+
+    //! \brief Hashes of pooled MRCs whose anchor block is not \p best_block_hash.
+    std::vector<uint256> GetStaleMRCs(const uint256& best_block_hash) const
+    {
+        LOCK(cs);
+        std::vector<uint256> stale;
+        for (const auto& [cpid, hash] : m_mrc_by_cpid) {
+            auto it = mapTx.find(hash);
+            if (it != mapTx.end() && it->second.GetMRCLastBlockHash() != best_block_hash)
+                stale.push_back(hash);
+        }
+        return stale;
+    }
+
+    //! \brief Hashes of pooled transactions carrying a POOL_REGISTER contract.
+    //!
+    //! Guarded by m_pool_register_count so the caller is O(1) whenever the pool
+    //! holds none, which is almost always: a POOL_REGISTER is an occasional
+    //! administrative act, and there are five builtin pools.
+    std::vector<uint256> GetPoolRegisterTxs() const
+    {
+        LOCK(cs);
+        std::vector<uint256> found;
+        if (m_pool_register_count == 0) return found;
+
+        for (const auto& [hash, entry] : mapTx) {
+            if (entry.HasPoolRegister()) found.push_back(hash);
+        }
+        return found;
+    }
+
+    //! \brief Hashes of pooled transactions carrying a MESSAGE contract.
+    //!
+    //! No MESSAGE-keyed index exists because the only consumer is the one-shot
+    //! disable-height sweep in ConnectBlock. The m_message_contract_count guard
+    //! keeps that caller O(1) in the overwhelmingly common case of a pool holding
+    //! none, so the scan below runs only across the activation transition itself.
+    std::vector<uint256> GetMessageContractTxs() const
+    {
+        LOCK(cs);
+        std::vector<uint256> found;
+        if (m_message_contract_count == 0) return found;
+
+        for (const auto& [hash, entry] : mapTx) {
+            if (entry.HasMessageContract()) found.push_back(hash);
+        }
+        return found;
+    }
+
+    unsigned long size() const
+    {
+        LOCK(cs);
+        return mapTx.size();
+    }
+
+    bool exists(uint256 hash) const
+    {
+        LOCK(cs);
+        return (mapTx.count(hash) != 0);
+    }
+
+    bool lookup(uint256 hash, CTransaction& result) const
+    {
+        LOCK(cs);
+        auto i = mapTx.find(hash);
+        if (i == mapTx.end()) return false;
+        result = i->second.GetTx();
+        return true;
+    }
+
+private:
+    //! Remove an entry's contributions from the secondary indexes, the running
+    //! size total, and the eviction index.
+    void eraseIndexes(const CTxMemPoolEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs);
+
+    //! Build the eviction-ordering key for an entry.
+    static CTxMemPoolEvictionKey EvictionKeyFor(const CTxMemPoolEntry& entry)
+    {
+        return {!entry.GetContractTypes().empty(), entry.GetFeeRate(),
+                entry.GetTime(), entry.GetTx().GetHash()};
+    }
+};
+
+extern CTxMemPool mempool;
+
+#endif // BITCOIN_TXMEMPOOL_H

@@ -1,0 +1,1248 @@
+// Copyright (c) 2009-2010 Satoshi Nakamoto
+// Copyright (c) 2009-2021 The Bitcoin Core developers
+// Copyright (c) 2014-2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include "node/chainman.h"
+
+#include "chainparams.h"
+#include "checkpoints.h"
+#include "net.h"
+#include "net_processing.h"
+#include "txdb.h"
+#include "node/blockstorage.h"
+#include "node/orphan_blocks.h"
+#include "node/ui_interface.h"
+#include "validation.h"
+#include "validationinterface.h"
+#include "gridcoin/staking/spam.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/gridcoin.h"
+#include "gridcoin/mrc.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/tally.h"
+#include "gridcoin/contract/contract.h"
+#include "gridcoin/contract/registry.h"
+#include "gridcoin/staking/chain_trust.h"
+#include "util.h"
+#include "util/time.h"
+#include "wallet/wallet.h"
+#include "txmempool.h"
+
+#include <boost/range/adaptor/reversed.hpp>
+#include <boost/thread.hpp>
+
+#include <atomic>
+#include <list>
+#include <set>
+#include <string>
+
+using namespace std;
+
+// Globals defined elsewhere that the chain-management functions reference.
+// g_chain_trust, g_seen_stakes, and g_v11_timestamp now come from their
+// canonical headers (gridcoin/staking/chain_trust.h, spam.h, validation.h,
+// included above -- issue #3125 C9); the remaining ad-hoc extern covers:
+//   pwalletMain -> defined in init.cpp
+extern CWallet* pwalletMain;
+
+void UpdateSyncTime(const CBlockIndex* const pindexBest)
+{
+    if (pindexBest && pindexBest->pprev) {
+        g_previous_block_time.store(pindexBest->pprev->GetBlockTime());
+    } else {
+        g_previous_block_time.store(0);
+    }
+
+    if (!OutOfSyncByAge()) {
+        g_nTimeBestReceived.store(GetAdjustedTime());
+    }
+}
+
+void static InvalidChainFound(CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    arith_uint256 nBestInvalidBlockTrust = pindexNew->GetBlockTrust();
+    arith_uint256 nBestBlockTrust = pindexBest->GetBlockTrust();
+
+    LogPrintf("InvalidChainFound: invalid block=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s",
+      pindexNew->GetBlockHash().ToString().substr(0,20),
+      pindexNew->nHeight,
+      g_chain_trust.GetTrust(pindexNew).ToString(),
+      nBestInvalidBlockTrust.GetLow64(),
+      DateTimeStrFormat("%x %H:%M:%S", pindexNew->GetBlockTime()));
+    LogPrintf("InvalidChainFound:  current best=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s",
+      hashBestChain.ToString().substr(0,20),
+      nBestHeight,
+      g_chain_trust.Best().ToString(),
+      nBestBlockTrust.GetLow64(),
+      DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
+}
+
+//! \brief Did this wallet author \p tx, answered so that it cannot escape.
+//!
+//! Only the wallet's own transactions are worth re-announcing after a reorg, and
+//! only they may be exposed to the unbroadcast machinery at all: a transaction
+//! merely PAID TO us is in mapWallet too, and re-announcing someone else's
+//! spend, or listing it as ours, is not this node's business.
+//!
+//! IsFromMe sums a per-input debit and throws when the running total leaves
+//! MoneyRange (CWallet::GetDebit). The callers below run after TxnCommit inside
+//! a half-applied disconnect, where ReorganizeChain handles a false return but
+//! has no handler for a throw -- one would unwind past its fatal-error guard and
+//! leave the registries desynced from the tip. So an unanswerable question is
+//! answered "no", which costs at most one missed re-announcement.
+static bool AuthoredByWallet(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    if (!pwalletMain) return false;
+
+    try {
+        return pwalletMain->IsFromMe(tx);
+    } catch (const std::exception& e) {
+        LogPrintf("WARN: %s: cannot determine authorship of %s (%s); not re-announcing it",
+                  __func__, tx.GetHash().ToString(), e.what());
+        return false;
+    }
+}
+
+static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned& cnt_dis, CBlockIndex* pcommon) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    set<string> vRereadCPIDs;
+
+    // The wallet's own transactions the disconnected blocks had conflicted.
+    // Local to the batch: re-offered below like vResurrect, and re-armed for
+    // announcement when that succeeds, since their provenance is known.
+    list<CTransaction> vReconflicted;
+
+    GRC::RegistryBookmarks registries;
+
+    // Count superblocks crossed during this disconnect. BeaconRegistry::Deactivate
+    // is called per-SB below and is fidelity-correct for the SINGLE most recent SB
+    // (it uses m_expired_pending which only carries the latest SB's expired set --
+    // see beacon.cpp:1265-1273). When the disconnect crosses 2+ SBs, expired-pending
+    // beacons from the prior SBs are lost; the recovery is an in-line beacon
+    // registry rebuild after the disconnect loop completes (call site below at the
+    // sb_cross_count >= 2 check). The full rationale for in-line vs deferred
+    // rebuild and why single-SB reorgs are NOT rebuilt lives at that call site.
+    int sb_cross_count = 0;
+
+    while(pindexBest != pcommon)
+    {
+        if(!pindexBest->pprev)
+            return error("DisconnectBlocksBatch: attempt to reorganize beyond genesis"); /*fatal*/
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "DisconnectBlocksBatch: %s",pindexBest->GetBlockHash().GetHex());
+
+        CBlock block;
+        if (!ReadBlockFromDisk(block, pindexBest, Params().GetConsensus()))
+            return error("DisconnectBlocksBatch: ReadFromDisk for disconnect failed"); /*fatal*/
+        if (!DisconnectBlock(block, txdb, pindexBest))
+            return error("DisconnectBlocksBatch: DisconnectBlock %s failed", pindexBest->GetBlockHash().ToString().c_str()); /*fatal*/
+
+        // disconnect from memory
+        assert(!pindexBest->pnext);
+        if (pindexBest->pprev)
+            pindexBest->pprev->pnext = nullptr;
+
+        // Queue memory transactions to resurrect.
+        // We only do this for blocks after the last checkpoint (reorganisation before that
+        // point should only happen with -reindex/-loadblock, or a misbehaving peer).
+        for (auto const& tx : boost::adaptors::reverse(block.vtx))
+            if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Params().Checkpoints().GetHeight())
+                vResurrect.push_front(tx);
+
+        // Queue the wallet's own transactions this block's connect had
+        // conflicted. They are not in the block -- they lost the outpoint to
+        // something that is -- so the loop above never sees them, and
+        // nothing records which block displaced them, so nothing else can
+        // tell that the reason they are conflicted has just been disconnected.
+        if (pwalletMain) {
+            for (CTransaction& tx : pwalletMain->TakeConflictedBy(pindexBest->GetBlockHash())) {
+                vReconflicted.push_back(tx);
+            }
+        }
+
+        // TODO: Implement flag in CBlockIndex for mrcs?
+        if (pindexBest->IsUserCPID() || !pindexBest->m_mrc_researchers.empty()) {
+            // The user has no longer staked this block.
+            GRC::Tally::ForgetRewardBlock(pindexBest);
+        }
+
+        if (pindexBest->IsSuperblock()) {
+            // Revert beacon activations which were done by the superblock to revert and resurrect pending records
+            // for the reverted activations. This is safe to do before the transactional level reverts with beacon
+            // contracts, because any beacon that is activated CANNOT have been a new advertisement in the superblock
+            // itself. It would not be verified. AND if the beacon is a renewal, it would never be in the activation list
+            // for a superblock. We call GetBeaconRegistry directly here, because the IHandler class does not have
+            // a virtual method that corresponds to this call, as it is only relevant to beacons.
+            GRC::GetBeaconRegistry().Deactivate(pindexBest->GetBlockHash());
+
+            // Count it so we can decide after the loop whether to flag a beacon-registry rebuild
+            // for the next startup (the Deactivate-via-m_expired_pending path is only correct
+            // for one SB at a time; see the comment above the loop).
+            ++sb_cross_count;
+
+            GRC::Quorum::PopSuperblock(pindexBest);
+            GRC::Quorum::LoadSuperblockIndex(pindexBest->pprev);
+
+            if (pindexBest->nVersion >= 11 && !GRC::Tally::RevertSuperblock()) {
+                return false;
+            }
+        }
+
+        if (pindexBest->nHeight > nGrandfather && pindexBest->nVersion <= 10) {
+            GRC::Quorum::ForgetVote(pindexBest);
+        }
+
+        // Delete beacons, scraper entries, protocol entries, projects, polls and votes from contracts
+        // in disconnected blocks.
+        if (pindexBest->IsContract())
+        {
+            // Skip coinbase and coinstake transactions:
+            for (auto tx = std::next(block.vtx.begin(), 2), end = block.vtx.end();
+                tx != end;
+                ++tx)
+            {
+                // This reverts contracts for those contract types which have handlers that properly handle
+                // contract level reversions.
+                for (const auto& contract : tx->GetContracts())
+                {
+                    if (GRC::RegistryBookmarks::IsRegistryRevertCapable(contract.m_type.Value())) {
+                        const GRC::ContractContext contract_context(contract, *tx, pindexBest);
+
+                        GRC::RegistryBookmarks::GetRegistryWithRevert(contract.m_type.Value()).Revert(contract_context);
+                    }
+                }
+            }
+        }
+
+        // New best block
+        cnt_dis++;
+        pindexBest = pindexBest->pprev;
+        hashBestChain = pindexBest->GetBlockHash();
+        nBestHeight = pindexBest->nHeight;
+        g_chain_trust.SetBest(pindexBest);
+
+        UpdateSyncTime(pindexBest);
+
+        if (!txdb.WriteHashBestChain(pindexBest->GetBlockHash()))
+            return error("DisconnectBlocksBatch: WriteHashBestChain failed"); /*fatal*/
+
+    }
+
+    /* fix up after disconnecting, prepare for new blocks */
+    if (cnt_dis > 0)
+    {
+        if (!txdb.TxnCommit())
+            return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
+
+        // Resurrect memory transactions that were in the disconnected branch.
+        //
+        // This must run after the commit above. AcceptToMemoryPool opens its own
+        // read-only CTxDB, which sees only committed state: with the disconnect
+        // batch still pending, the transaction's own index entry is still on
+        // disk (so ContainsTx refuses it) and its inputs are still marked spent.
+        // Every resurrection was silently refused that way.
+        //
+        // A resurrected transaction left the peers' pools too when the block
+        // that carried it connected, so something has to offer it again, and
+        // the wallet's periodic resend does not announce a successful one.
+        // CWallet::BlockDisconnected has already run for every transaction in
+        // these blocks, above, and marked each one inactive, because the pool
+        // could not hold it before TxnCommit. A resurrection that SUCCEEDS is
+        // promoted back out of inactive by the mempool-added signal, and then
+        // sits at depth 0, which the resend skips because it selects only
+        // depth -1. So the unbroadcast entry is the only thing that announces a
+        // successful resurrection. One that FAILS stays inactive, which
+        // RelayWalletTransaction refuses outright; ResendWalletTransactions
+        // offers it back to the mempool on each pass instead (#3382), so a
+        // refusal that later clears does not strand it.
+        //
+        // Reannounce, not the default: peers have certainly seen these -- they
+        // were in a block -- so the entry must not open the cancel gate.
+        for( CTransaction& tx : vResurrect) {
+            CValidationState resurrect_state;
+            bool missing_inputs = false;
+
+            if (AcceptToMemoryPool(mempool, tx, resurrect_state, &missing_inputs)) {
+                if (AuthoredByWallet(tx)) {
+                    mempool.AddUnbroadcast(tx.GetHash(), UnbroadcastReason::Reannounce);
+                }
+            } else {
+                LogPrint(BCLog::LogFlags::MEMPOOL, "%s: transaction %s not resurrected%s%s",
+                         __func__, tx.GetHash().ToString(),
+                         missing_inputs ? ": missing inputs" : "",
+                         resurrect_state.GetRejectReason().empty() ? "" : ": " + resurrect_state.GetRejectReason());
+            }
+        }
+
+        // Re-evaluate the conflicts the disconnected blocks caused, after the
+        // resurrect loop so the transaction that won the outpoint gets it back
+        // first. It succeeds when whatever displaced it went with the block: a
+        // coinstake, which is never resurrected, or a transaction whose own
+        // inputs the block created.
+        //
+        // A refusal leaves the transaction out of THIS node's pool, and the log
+        // names which refusal it was rather than assuming. The expected one is
+        // txn-mempool-conflict: the displacing transaction is pooled again, so
+        // the conflict was real and still is. A full pool or a fee rule lands
+        // here too, and neither means the conflict survived.
+        //
+        // What a refusal does NOT do is strand the transaction. These never
+        // became inactive: removeConflicts reaches the pool through remove(),
+        // which emits no validation signal, so CWallet's CONFLICT arm never
+        // ran and the entry still carries its in-mempool state. It reads
+        // depth -1, RelayWalletTransaction does not skip it, and the wallet's
+        // periodic resend keeps announcing it. The cost of a refusal is that
+        // this node cannot mine it, since the miner builds from the pool.
+        //
+        // The set can hold a parent and its descendants (removeConflicts
+        // reports what went out with each conflict), and TakeConflictedBy hands
+        // them back in no particular order, so a refusal for missing inputs is
+        // retried while the pass before it pooled something: a child then
+        // follows its parent in.
+        bool pooled_any = true;
+        while (pooled_any && !vReconflicted.empty()) {
+            pooled_any = false;
+
+            for (auto it = vReconflicted.begin(); it != vReconflicted.end();) {
+                CValidationState reconflicted_state;
+                bool missing_inputs = false;
+
+                if (AcceptToMemoryPool(mempool, *it, reconflicted_state, &missing_inputs)) {
+                    LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s is pending again",
+                             __func__, it->GetHash().ToString());
+
+                    // Every peer dropped it too when the block connected, so the
+                    // unbroadcast entry (erased on any pool exit) is what puts it
+                    // back on the wire promptly. Reannounce, not the default:
+                    // peers held this one before the block displaced it, so
+                    // cancelling it locally would cancel nothing.
+                    //
+                    // Authorship, not mere membership: TakeConflictedBy draws from
+                    // mapWallet, which holds transactions merely PAID TO us as
+                    // well, and someone else's spend is not ours to re-announce.
+                    if (AuthoredByWallet(*it)) {
+                        mempool.AddUnbroadcast(it->GetHash(), UnbroadcastReason::Reannounce);
+                    }
+
+                    it = vReconflicted.erase(it);
+                    pooled_any = true;
+                } else if (missing_inputs) {
+                    ++it;
+                } else {
+                    LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s stays conflicted%s",
+                             __func__, it->GetHash().ToString(),
+                             reconflicted_state.GetRejectReason().empty() ? "" : ": " + reconflicted_state.GetRejectReason());
+                    it = vReconflicted.erase(it);
+                }
+            }
+        }
+
+        for (const CTransaction& tx : vReconflicted) {
+            LogPrint(BCLog::LogFlags::MEMPOOL, "%s: conflicted transaction %s stays conflicted: missing inputs",
+                     __func__, tx.GetHash().ToString());
+        }
+
+        // Record new best height (the common block) in the registries that have a backing DB. This is important
+        // to ensure that if the wallet is shutdown, on the next start, the contract replay (if any) is done from
+        // the correct height.
+        registries.UpdateRegistryBlockHeights(pindexBest->nHeight);
+
+        // Replaying contracts after a block disconnection is no longer needed, as all contract types that have handlers
+        // that operate at the tx/contract level have fully implemented reversion.
+        //GRC::ReplayContracts(pindexBest);
+
+        // Tally research averages.
+        if(IsV9Enabled_Tally(nBestHeight) && !IsV11Enabled(nBestHeight)) {
+            assert(GRC::Tally::IsLegacyTrigger(nBestHeight));
+            GRC::Tally::LegacyRecount(pindexBest);
+        }
+
+        // If the reorg crossed two or more superblock boundaries, the per-SB Deactivate calls
+        // above could not fully resurrect expired-pending beacons from the prior SBs
+        // (m_expired_pending only carries the most recent SB's set -- the limitation
+        // acknowledged at beacon.cpp:1265-1273). Rebuild the beacon registry in-line
+        // BEFORE returning to the reconnect side of ReorganizeChain: the rebuild walks
+        // from V11_height to the current (common-ancestor) tip, leaving the registry
+        // correctly reflecting that ancestor's state, and the subsequent per-block
+        // Activate() calls on the reconnect side then bring the registry up to the
+        // new tip.
+        //
+        // Doing this in-line (rather than deferring to a flag picked up on next
+        // startup) trades a few seconds of frozen-wallet time for closing the fork
+        // window: with the deferred approach, any block validated between this reorg
+        // and the next restart could consult the broken registry and diverge from
+        // healthy peers. In-line rebuild is bounded by the chain walk from V11 to
+        // tip, which is dominated by block-index iteration -- on SSD typically
+        // single-digit seconds. See doc/block_corruption_recovery_design.md.
+        //
+        // Single-SB reorgs are NOT rebuilt: the existing Deactivate path is
+        // fidelity-correct for that case and the rebuild would be wasted work on
+        // the most common case.
+        if (sb_cross_count >= 2) {
+            LogPrintf("WARN: %s: reorg disconnected %d superblock(s); beacon registry expired-pending "
+                      "fidelity is degraded for the prior SB(s). Rebuilding beacon registry in-line "
+                      "to maintain consensus.",
+                      __func__, sb_cross_count);
+            GRC::RebuildBeaconRegistry();
+        }
+    }
+
+    return true;
+}
+
+static bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew,
+                            const CBlockIndex** pfork_out = nullptr)
+EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    assert(pindexNew);
+    assert(pindexNew->GetBlockHash()==blockNew.GetHash(true));
+    /* note: it was already determined that this chain is better than current best */
+    /* assert(pindexNew->nChainTrust > nBestChainTrust); but may be overridden by command */
+    assert(!pindexGenesisBlock == !pindexBest);
+
+    list<CTransaction> vResurrect;
+    list<CBlockIndex*> vConnect;
+    set<string> vRereadCPIDs;
+
+    /* find fork point */
+    CBlockIndex* pcommon = nullptr;
+
+    // The interface fork point (last common ancestor of the old and new tips),
+    // captured before any legacy-tally rewind of pcommon below. Distinct from
+    // pcommon, which for pre-v11 reorgs is deliberately walked deeper to a tally
+    // trigger; those deeper blocks are identical on both chains (disconnected
+    // and reconnected as-is), so the true fork point is the pre-rewind ancestor.
+    const CBlockIndex* fork_point = nullptr;
+
+    if (pindexGenesisBlock) {
+        pcommon = pindexNew;
+        // The trivial reorg that most often happens here is where pcommon IS pindexBest, which
+        // means effectively we are simply adding a new block to the end of the current chain.
+        // Notice the logic of the while statement allows one traversal in that case... When
+        // pcommon = pindexNew then pcommon->pnext will be nullptr. It will also satisfy
+        // pcommon != pindexBest. Then the pointer moves back one block, which in the trivial
+        // case will be pindexBest and the while loop ends with pcommon = pindexBest.
+        while (pcommon->pnext == nullptr && pcommon != pindexBest) {
+            pcommon = pcommon->pprev;
+
+            if (!pcommon) {
+                return error("%s: unable to find fork root", __func__);
+            }
+        }
+
+        // pcommon is now the true last common ancestor; record it as the fork
+        // point before the legacy-tally rewind below can move it deeper.
+        fork_point = pcommon;
+
+        // Blocks version 11+ do not use the legacy tally system triggered by
+        // block height intervals:
+        //
+        if (pcommon->nVersion <= 10 && pcommon != pindexBest) {
+            pcommon = GRC::Tally::FindLegacyTrigger(pcommon);
+
+            if (!pcommon) {
+                return error("%s: unable to find fork root with tally point", __func__);
+            }
+        }
+
+        if (pcommon != pindexBest || pindexNew->pprev != pcommon) {
+            // This is set for the benefit of other threads, such as the GUI or rpc for the poll registry,
+            // that do work while not locking cs_main.
+            g_reorg_in_progress = true;
+
+            LogPrintf("INFO: %s: from {%s %d}, common {%s %d}, to {%s %d}, disconnecting %d, connecting %d blocks",
+                      __func__,
+                      pindexBest->GetBlockHash().GetHex().c_str(), pindexBest->nHeight,
+                      pcommon->GetBlockHash().GetHex().c_str(), pcommon->nHeight,
+                      pindexNew->GetBlockHash().GetHex().c_str(), pindexNew->nHeight,
+                      pindexBest->nHeight - pcommon->nHeight,
+                      pindexNew->nHeight - pcommon->nHeight);
+        }
+    }
+
+    // Publish the fork point (true last common ancestor, pre-tally-rewind) so
+    // SetBestChain can forward it to UpdatedBlockTip subscribers. It is the
+    // previous tip for a trivial single-block extension and the deeper common
+    // ancestor for a multi-block reorg; it is nullptr only when connecting the
+    // genesis block, where there is no fork point (issue #3104).
+    if (pfork_out) {
+        *pfork_out = fork_point;
+    }
+
+    /* disconnect blocks (in non-trivial condition) */
+    if (pcommon != pindexBest) {
+        if (!txdb.TxnBegin()) {
+            return error("%s: TxnBegin failed", __func__);
+        }
+        if (!DisconnectBlocksBatch(txdb, vResurrect, cnt_dis, pcommon)) {
+            error("%s: DisconnectBlocksBatch() failed. This is a fatal error. The chain index may be corrupt. Aborting. "
+                  "Please reindex the chain and restart.", __func__);
+            exit(1); //todo
+        }
+
+        int nMismatchSpent;
+        int64_t nBalanceInQuestion;
+        pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
+    }
+
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && cnt_dis > 0) {
+
+        LogPrintf("INFO: %s: disconnected %d blocks", __func__, cnt_dis);
+    }
+
+    for (CBlockIndex *p = pindexNew; p != pcommon; p=p->pprev) {
+        vConnect.push_front(p);
+    }
+
+    /* Connect blocks */
+    for (auto const pindex : vConnect) {
+        CBlock block_load;
+        CBlock &block = (pindex==pindexNew)? blockNew : block_load;
+
+        if (pindex != pindexNew) {
+            if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
+                return error("%s: ReadFromDisk for connect failed", __func__);
+            }
+
+            assert(pindex->GetBlockHash()==block.GetHash(true));
+        } else {
+            assert(pindex == pindexNew);
+            assert(pindexNew->GetBlockHash() == block.GetHash(true));
+            assert(pindexNew->GetBlockHash() == blockNew.GetHash(true));
+        }
+
+        uint256 hash = block.GetHash(true);
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: connect %s", __func__, hash.ToString());
+
+        if (!txdb.TxnBegin()) {
+            return error("%s: TxnBegin failed", __func__);
+        }
+
+        {
+            // This lock protects the time period between the GridcoinConnectBlock, which also connects validated transaction
+            // contracts and causes contract handlers to fire, and the committing of the txindex changes to disk. Any contract
+            // handlers that generate signals whose downstream handlers make use of transaction data on disk via leveldb (txdb)
+            // on another thread need to take this lock to ensure that the write to leveldb and the access of the transaction data
+            // by the signal handlers is appropriately serialized.
+            LOCK(cs_tx_val_commit_to_disk);
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk locked", __func__);
+
+            if (pindexGenesisBlock == nullptr) {
+                const uint256 expected_genesis = Params().IsMockableChain()
+                    ? (hashGenesisBlockRegTest.IsNull() ? hash : hashGenesisBlockRegTest)
+                    : (!OnTestnet() ? hashGenesisBlock : hashGenesisBlockTestNet);
+                if (hash != expected_genesis) {
+                    txdb.TxnAbort();
+                    return error("%s: genesis block hash does not match", __func__);
+                }
+
+                pindexGenesisBlock = pindex;
+            } else {
+                assert(pindex->GetBlockHash()==block.GetHash(true));
+                assert(pindex->pprev == pindexBest);
+
+                CValidationState connect_state;
+                if (!ConnectBlock(block, connect_state, txdb, pindex, false)) {
+                    txdb.TxnAbort();
+                    error("%s: ConnectBlock %s failed, Previous block %s",
+                          __func__,
+                          hash.ToString().c_str(),
+                          pindex->pprev->GetBlockHash().ToString());
+                    InvalidChainFound(pindex);
+                    return false;
+                }
+            }
+
+            // Delete redundant memory transactions
+            std::vector<uint256> displaced;
+
+            for (auto const& tx : block.vtx) {
+                mempool.remove(tx);
+                mempool.removeConflicts(tx, &displaced);
+            }
+
+            // Tell the wallet which of its transactions this block displaced.
+            // remove() emits no validation signal, so this is the only point at
+            // which the pairing of transaction and responsible block exists;
+            // without it a disconnect cannot tell that the reason one of its
+            // own transactions is being reported conflicted has just gone away.
+            if (pwalletMain && !displaced.empty()) {
+                pwalletMain->RecordConflictedBy(displaced, pindex->GetBlockHash());
+            }
+
+
+
+            if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
+                txdb.TxnAbort();
+                return error("%s: WriteHashBestChain failed", __func__);
+            }
+
+            // Make sure it's successfully written to disk before changing memory structure
+            if (!txdb.TxnCommit()) {
+                return error("%s: TxnCommit failed", __func__);
+            }
+
+            // Mempool retirement runs AFTER the commit, deliberately.
+            //
+            // Everything below removes transactions from the pool and writes the
+            // consequence to the wallet -- EraseFromWallet for a stale MRC,
+            // AbandonTransaction for a swept contract -- and both persist. Run
+            // before the commit, a failed WriteHashBestChain or TxnCommit would
+            // abort the block while leaving those transactions gone and the wallet
+            // change on disk: irreversible bookkeeping justified by a block that
+            // was then thrown away. Nothing here feeds the commit, so the ordering
+            // costs nothing.
+            //
+            // hashBestChain is what makes moving the MRC pass safe rather than a
+            // behaviour change: it is not assigned until after this whole scope
+            // closes, so GetStaleMRCs sees exactly the value it saw before the
+            // commit -- the pre-connect tip. to_be_erased still has to be declared
+            // ahead of the FixSpentCoins call below, which is gated on it.
+            //
+            // NOT moved: the "delete redundant memory transactions" loop above,
+            // which drops this block's own transactions from the pool. It touches
+            // no persisted state, so a failed commit costs at most a re-relay.
+            // Nor the wallet's block-conflict record beside it (RecordConflictedBy):
+            // in memory only, keyed by this block, and taken back only when this
+            // block is disconnected, which a block that never connected never is.
+
+            // Remove stale MRCs in the mempool that are not in this new block. Remember the MRCs were initially validated in
+            // AcceptToMemoryPool. Here we just need to do a staleness check.
+            std::vector<CTransaction> to_be_erased;
+
+            // Only the MRC entries are inspected (via the m_mrc_by_cpid index),
+            // not the entire pool. An MRC is stale when its anchor block is no
+            // longer the chain head.
+            for (const uint256& stale_hash : mempool.GetStaleMRCs(hashBestChain)) {
+                CTransaction stale_tx;
+                if (mempool.lookup(stale_hash, stale_tx)) {
+                    to_be_erased.push_back(stale_tx);
+                }
+            }
+
+            // TODO: Additional mempool removals for generic transactions based on txns...
+            // that satisfy lock time requirements,
+            // that are at least 30m old,
+            // that have been broadcast at least once min 5m ago,
+            // that had at least 45s to go in to the last block,
+            // and are still not in the txdb? (for the wallet itself, not mempool.)
+
+            for (const auto& tx : to_be_erased) {
+                LogPrintf("%s: Erasing stale transaction %s from mempool and wallet.", __func__, tx.GetHash().ToString());
+                mempool.remove(tx);
+                // If this transaction was in this wallet (i.e. erasure successful), then send signal for GUI.
+                if (pwalletMain->EraseFromWallet(tx.GetHash())) {
+                    pwalletMain->NotifyTransactionChanged(pwalletMain, tx.GetHash(), CT_DELETED);
+                }
+            }
+            // Retire MESSAGE contract transactions the chain has left behind.
+            //
+            // One accepted below the disable height never leaves the pool on its own
+            // once the chain crosses it. The pool has no time-based expiry (the EXPIRY
+            // removal reason has no producer); size eviction runs only from
+            // AcceptToMemoryPool over -maxmempool and ranks contract transactions last;
+            // and replacement is disabled in AcceptToMemoryPool, so its mapNextTx rows
+            // keep the inputs locked against every other spend. The wallet cannot
+            // retire it either: ResendWalletTransactions only revalidates transactions
+            // the pool does NOT hold. So without this the sender's coins stay
+            // unspendable, and the transaction stays unconfirmed, until the node is
+            // restarted -- with nothing saying why.
+            //
+            // Removal is recursive because a child spending one is equally unmineable.
+            // Each removed transaction is then abandoned rather than erased: that
+            // releases the parents' vfSpent bits, which -- not mapTxSpends -- are what
+            // gate coin selection, and it cascades to wallet descendants.
+            // AbandonTransaction refuses a transaction the pool still holds, so the
+            // removal has to come first. One that is not ours simply leaves the pool.
+            //
+            // The height is the block being built on top of this one, which is the
+            // same question AcceptToMemoryPool now asks when it admits a
+            // transaction (validation.h) -- so acceptance and retirement agree on
+            // which block a pooled transaction is measured against.
+            //
+            // That agreement is what this sweep exists to complete rather than
+            // duplicate. Acceptance can only refuse what is in front of it at the
+            // time: a MESSAGE transaction admitted while the tip was at
+            // disable_height - 2 was legitimately admitted, being valid for the
+            // very next block. If it is not mined into that block, nothing else
+            // ever revisits it -- the pool has no expiry, and
+            // ResendWalletTransactions only revalidates transactions the pool does
+            // NOT hold. Connecting that block is the moment it becomes permanently
+            // unmineable, and this is the only thing that notices.
+            //
+            // Inert until the height is scheduled: MessageContractDisableHeight is
+            // INT_MAX on every network (chainparams.cpp), so IsMessageContractEnabled()
+            // is always true and none of this runs. Only the hidden
+            // -messagecontractdisableheight arg lowers it, for isolated testnet and
+            // regtest exercise.
+            // Retirement is deliberately IRREVERSIBLE, and that is a choice
+            // rather than an oversight. If this block is later disconnected the
+            // swept transactions are valid again, but they were never mined so
+            // the disconnect cannot resurrect them, and being abandoned they are
+            // not rebroadcast either. Accepted because the coins are the thing
+            // that matters and they are freed, not stranded: AbandonTransaction
+            // releases the inputs, so the sender can simply send again. Making
+            // it reversible would mean tracking every swept transaction across
+            // reorganisations to re-admit it into a window that is about to
+            // close again permanently -- real machinery for a boundary the chain
+            // crosses once.
+            if (!IsMessageContractEnabled(pindex->nHeight + 1)) {
+                for (const uint256& message_hash : mempool.GetMessageContractTxs()) {
+                    CTransaction message_tx;
+
+                    // Already gone as a descendant of one removed earlier in this loop.
+                    if (!mempool.lookup(message_hash, message_tx)) continue;
+
+                    std::vector<CTransaction> removed;
+                    mempool.remove(message_tx, /*fRecursive=*/true,
+                                   MemPoolRemovalReason::UNKNOWN, &removed);
+
+                    for (const auto& tx : removed) {
+                        LogPrintf("%s: MESSAGE contracts are disabled from height %d. Removed "
+                                  "transaction %s from the mempool.",
+                                  __func__, GetMessageContractDisableHeight(), tx.GetHash().ToString());
+
+                        unsigned int inputs_released = 0;
+
+                        if (pwalletMain->AbandonTransaction(tx.GetHash(), &inputs_released)) {
+                            LogPrintf("%s: Abandoned wallet transaction %s, releasing %u input(s).",
+                                      __func__, tx.GetHash().ToString(), inputs_released);
+                        }
+                    }
+                }
+            }
+
+            // Retire POOL contracts the chain has left behind. Same problem and
+            // the same shape as the MESSAGE sweep above, with the boundary coming
+            // from registry state rather than a single network-wide height: a
+            // POOL_REGISTER admitted while the tip was below an expiry boundary
+            // was legitimately admitted -- it was valid for the next block -- but
+            // if it is not mined before the boundary nothing else retires it.
+            //
+            // PoolRegistry::IsStrandedAtHeight owns the question rather than this
+            // loop, because answering it needs the branch structure of
+            // VerifyRegisterAuth and the private validation helper. In particular
+            // "fails validation now" is NOT the test: IsPendingExpired GRANTS
+            // permission when it fires, so a contract can be refused today and
+            // acceptable later, and a sweep driven by failure alone would retire
+            // takeovers that are merely early.
+            //
+            // Inert until v15: BlockV15Height is INT_MAX on every network, so no
+            // POOL contract validates at all and none can be pooled.
+            {
+                const int next_height = pindex->nHeight + 1;
+
+                // Snapshot once. GetPoolRegisterTxs() takes the pool lock and
+                // builds a vector, and the empty case needs no guard of its own:
+                // the loop below simply does not run.
+                const std::vector<uint256> pool_register_txs = mempool.GetPoolRegisterTxs();
+
+                for (const uint256& pool_hash : pool_register_txs) {
+                    CTransaction pool_tx;
+
+                    if (!mempool.lookup(pool_hash, pool_tx)) continue;
+
+                    bool stranded = false;
+                    for (const auto& contract : pool_tx.GetContracts()) {
+                        if (GRC::GetPoolRegistry().IsStrandedAtHeight(contract, next_height)) {
+                            stranded = true;
+                            break;
+                        }
+                    }
+                    if (!stranded) continue;
+
+                    std::vector<CTransaction> removed;
+                    mempool.remove(pool_tx, /*fRecursive=*/true,
+                                   MemPoolRemovalReason::UNKNOWN, &removed);
+
+                    // removed carries the named transaction AND its in-pool
+                    // descendants. A descendant is stranded too -- it spends an
+                    // output that can never confirm -- but the expired
+                    // authorization is the parent's, so the line states the rule
+                    // that fired rather than attributing it to each transaction.
+                    for (const auto& tx : removed) {
+                        LogPrintf("%s: A POOL authorization expired at height %d. Removed "
+                                  "transaction %s from the mempool.",
+                                  __func__, next_height, tx.GetHash().ToString());
+
+                        unsigned int inputs_released = 0;
+
+                        if (pwalletMain->AbandonTransaction(tx.GetHash(), &inputs_released)) {
+                            LogPrintf("%s: Abandoned wallet transaction %s, releasing %u input(s).",
+                                      __func__, tx.GetHash().ToString(), inputs_released);
+                        }
+                    }
+                }
+            }
+
+            // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This
+            // is ugly and heavyweight and should be replaced when the upstream wallet code is ported. Unlike the
+            // repairwallet rpc, this is silent.
+            //
+            // After the commit, deliberately: FixSpentCoins reads the tx index through its own CTxDB, which sees
+            // only committed state. Run before the commit it would not see this block's spends and would hand
+            // back every wallet output the block just consumed.
+            if (!to_be_erased.empty()) {
+                int nMisMatchFound = 0;
+                CAmount nBalanceInQuestion = 0;
+
+                pwalletMain->FixSpentCoins(nMisMatchFound, nBalanceInQuestion);
+            }
+
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk unlocked", __func__);
+        }
+
+        // Add to current best branch
+        if (pindex->pprev) {
+            assert(!pindex->pprev->pnext);
+            pindex->pprev->pnext = pindex;
+        }
+
+        // update best block
+        hashBestChain = hash;
+        pindexBest = pindex;
+        nBestHeight = pindexBest->nHeight;
+        g_chain_trust.SetBest(pindexBest);
+        cnt_con++;
+
+        UpdateSyncTime(pindexBest);
+
+        if (IsV9Enabled_Tally(nBestHeight)
+            && !IsV11Enabled(nBestHeight)
+            && GRC::Tally::IsLegacyTrigger(nBestHeight)) {
+
+            GRC::Tally::LegacyRecount(pindexBest);
+        }
+    }
+
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && (cnt_dis > 0 || cnt_con > 1)) {
+        LogPrintf("INFO %s: Disconnected %d and connected %d blocks.",__func__, cnt_dis, cnt_con);
+    }
+
+    return true;
+}
+
+namespace {
+//!
+//! \brief RAII scope that clears g_reorg_in_progress when its holder exits --
+//! held by SetBestChain and ForceReorganizeToHash for their full extent.
+//!
+//! ReorganizeChain sets the flag, because only it can distinguish a non-trivial
+//! reorg from a trivial single-block extension, and the calling scope clears
+//! it, because ReorganizeChain can run twice within one SetBestChain call (the
+//! forward reorg and the trust-regression reorg-back).
+//!
+//! Clearing on the success path alone left the flag set on both of the failure
+//! returns below. A stuck flag wedges PollResultCache::BuildPollTable: its
+//! TraversalScope is open across the whole build, so PollRegistry::DetectReorg
+//! keeps re-arming reorg_occurred_during_reg_traversal, and the retry loop
+//! there waits on that flag at 1 Hz -- before this guard, with no way out
+//! until some later block connected successfully and cleared it.
+//!
+//! The explicit clear before the post-connect fix-up below is deliberately
+//! kept: it releases consumers at the point it always has. This scope only
+//! covers the exits that never reached it.
+//!
+class ReorgInProgressScope
+{
+public:
+    ReorgInProgressScope() = default;
+
+    ~ReorgInProgressScope() { g_reorg_in_progress = false; }
+
+    ReorgInProgressScope(const ReorgInProgressScope&) = delete;
+    ReorgInProgressScope& operator=(const ReorgInProgressScope&) = delete;
+};
+} // anonymous namespace
+
+bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    const ReorgInProgressScope reorg_scope;
+
+    unsigned cnt_dis = 0;
+    unsigned cnt_con = 0;
+    bool success = false;
+    const auto origBestIndex = pindexBest;
+    const arith_uint256 previous_chain_trust = g_chain_trust.Best();
+
+    // g_reorg_in_progress is set in ReorganizeChain, because ReorganizeChain determines whether this is a trivial
+    // reorg, where we are just adding a new block to the head of the current chain, in which case we do not
+    // want the flag to be set.
+    //
+    // pfork captures the fork point of this forward reorg to pindexNew, threaded
+    // out for the UpdatedBlockTip emission below (issue #3104). The reorg-back
+    // call, if it runs, leaves pfork untouched: the tip did not advance on that
+    // path, so the UpdatedBlockTip emission below is skipped entirely (see there)
+    // and pfork is never read.
+    const CBlockIndex* pfork = nullptr;
+    success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew, &pfork);
+
+    // Whether the forward reorg to pindexNew regressed chain trust and was rolled
+    // back to origBestIndex. On that path the externally visible tip is unchanged.
+    bool reorged_back = false;
+    if (previous_chain_trust > g_chain_trust.Best()) {
+        LogPrintf("INFO: %s: Reorganize caused lower chain trust than before. Reorganizing back.", __func__);
+
+        CBlock origBlock;
+
+        if (!ReadBlockFromDisk(origBlock, origBestIndex, Params().GetConsensus())) {
+            return error("%s: Fatal Error while reading original best block", __func__);
+        }
+
+        success = ReorganizeChain(txdb, cnt_dis, cnt_con, origBlock, origBestIndex);
+        reorged_back = true;
+    }
+
+    if (!success) {
+        return false;
+    }
+
+    // g_reorg_in_progress is set in ReorganizeChain, but cleared by the caller, because as above it can
+    // be called more than once as part of what is really a single reorg.
+    g_reorg_in_progress = false;
+
+    /* Fix up after block connecting */
+
+    // Update best block in wallet (so we can detect restored wallets)
+    bool fIsInitialDownload = IsInitialBlockDownload();
+
+    if (!fIsInitialDownload) {
+        // Build the locator from pindexBest, not pindexNew: after a
+        // trust-regression reorg-back the final tip is origBestIndex, and a
+        // locator built from the abandoned pindexNew would lead with
+        // off-main-chain hashes (issue #3145). On the normal path
+        // pindexBest == pindexNew, so this is equivalent.
+        const CBlockLocator locator(pindexBest);
+        // Persist the wallet best-block locator. Emitted synchronously under
+        // cs_main (held by SetBestChain), so the CValidationInterface subscriber
+        // (CWallet::ChainStateFlushed) runs in the canonical cs_main -> signals
+        // order -- replacing the legacy cs_setpwalletRegistered wrapper (issue
+        // #3030 setpwalletRegistered retirement).
+        GetMainSignals().ChainStateFlushed(locator);
+    }
+
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) {
+        LogPrintf("INFO: %s: new best block {%s %d}, trust=%s, date=%s",
+                  __func__,
+                  hashBestChain.ToString(), nBestHeight,
+                  g_chain_trust.Best().ToString(),
+                  DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
+    } else {
+        LogPrintf("INFO: %s: new best block {%s %d}",
+                  __func__,
+                  hashBestChain.ToString(),
+                  nBestHeight);
+    }
+
+    #if HAVE_SYSTEM
+    std::string strCmd = gArgs.GetArg("-blocknotify", "");
+    if (!fIsInitialDownload && !strCmd.empty())
+    {
+        ReplaceAll(strCmd, "%s", hashBestChain.GetHex());
+        boost::thread t(runCommand, strCmd); // thread runs free
+    }
+    #endif
+
+    // Notify the validation-signal layer that the chain tip advanced, but only
+    // when it actually did. Two subscribers consume this (issue #3030 B3): the UI
+    // bridge in init.cpp, which re-emits uiInterface.NotifyBlocksChanged() from
+    // the reported index's height/time for the Qt models; and the PeerManager
+    // (issue #3125 C8), which relays the new-tip inventory moved out of
+    // AcceptBlock.
+    //
+    // Report pindexBest, not pindexNew: after a trust-regression reorg-back the
+    // final tip is origBestIndex, and pindexNew would name the abandoned block --
+    // mis-reporting the GUI height and advertising a non-best block (issues #3145,
+    // #3125 C8). On the advance path pindexBest == pindexNew.
+    //
+    // Emit only when the tip advanced. On the reorg-back path the tip is
+    // unchanged, so there is no update to report: skipping the emission is what
+    // suppresses the PeerManager relay there (the behavior AcceptBlock's old
+    // best-chain gate provided) and spares the GUI a redundant notification.
+    //
+    // pfork is the true reorg fork point (the last common ancestor computed in
+    // ReorganizeChain, issue #3104): the previous tip for a trivial extension, the
+    // deeper common ancestor for a multi-block reorg. nullptr only when connecting
+    // the genesis block.
+    if (!reorged_back) {
+        GetMainSignals().UpdatedBlockTip(pindexBest, pfork, fIsInitialDownload);
+    }
+
+    return GridcoinServices();
+}
+
+bool ForceReorganizeToHash(uint256 NewHash)
+{
+    LOCK(cs_main);
+
+    // Same guard as SetBestChain: the flag clears on EVERY exit -- the two
+    // early failure returns below never set it (ReorganizeChain does), so
+    // clearing false there is a no-op, and the returns after ReorganizeChain
+    // are covered without a manual clear that an exception or a future early
+    // return could bypass.
+    const ReorgInProgressScope reorg_scope;
+
+    CTxDB txdb;
+
+    auto mapItem = mapBlockIndex.find(NewHash);
+    if (mapItem == mapBlockIndex.end()) {
+        return error("%s: failed to find requested block in block index", __func__);
+    }
+
+    CBlockIndex* pindexCur = pindexBest;
+    CBlockIndex* pindexNew = mapItem->second;
+    LogPrintf("INFO: %s: current best height %i hash %s "
+              " Target height %i hash %s",
+              __func__,
+              pindexCur->nHeight,pindexCur->GetBlockHash().GetHex(),
+              pindexNew->nHeight,pindexNew->GetBlockHash().GetHex());
+
+    CBlock blockNew;
+    if (!ReadBlockFromDisk(blockNew, pindexNew, Params().GetConsensus())) {
+        return error("%s: Fatal Error while reading new best block.", __func__);
+    }
+
+    const arith_uint256 previous_chain_trust = g_chain_trust.Best();
+    unsigned cnt_dis = 0;
+    unsigned cnt_con = 0;
+    bool success = false;
+
+    // g_reorg_in_progress is set in ReorganizeChain, because ReorganizeChain determines whether this is a trivial
+    // reorg, where we are just adding a new block to the head of the current chain, in which case we do not
+    // want the flag to be set.
+    success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
+
+    if (g_chain_trust.Best() < previous_chain_trust) {
+        LogPrintf("WARN: %s: Chain trust is now less than before!", __func__);
+    }
+
+    // The flag (set in ReorganizeChain) is cleared by the ReorgInProgressScope
+    // guard at every exit of this function -- unconditionally, and that is the
+    // decision rather than an oversight: once this function returns, no reorg
+    // is in progress, whatever the trust outcome above was.
+    if (!success) {
+        return error("%s: Fatal Error while setting best chain.", __func__);
+    }
+
+    AskForOutstandingBlocks(uint256());
+    LogPrintf("INFO %s: success! height %d hash %s",
+              __func__,
+              pindexBest->nHeight,
+              pindexBest->GetBlockHash().GetHex());
+
+    return true;
+}
+
+// Block-arrival orchestration moved out of main.cpp (issue #3125, workstream
+// C1): GridcoinServices, AskForOutstandingBlocks and ProcessBlock live next to
+// the chain-management functions above, which are their main collaborators.
+
+bool GridcoinServices() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    // Block version 9 tally transition:
+    //
+    // This block controls the switch to a new tallying system introduced with
+    // block version 9. Mainnet and testnet activate at different heights seen
+    // below.
+    //
+    if (!IsV9Enabled_Tally(nBestHeight)
+        && IsV9Enabled(nBestHeight + (OnTestnet() ? 200 : 40))
+        && nBestHeight % 20 == 0)
+    {
+        LogPrint(BCLog::LogFlags::TALLY,
+            "GridcoinServices: Priming tally system for v9 threshold.");
+
+        GRC::Tally::LegacyRecount(pindexBest);
+    }
+
+    // Block version 11 tally transition:
+    //
+    // Before the first version 11 block arrives, activate the snapshot accrual
+    // system by creating a baseline of the research rewards owed in historical
+    // superblocks so that we can validate the reward for the next block.
+    //
+    if (nBestHeight + 1 == Params().GetConsensus().BlockV11Height) {
+        LogPrint(BCLog::LogFlags::TALLY,
+            "GridcoinServices: Priming tally system for v11 threshold.");
+
+        if (!GRC::Tally::ActivateSnapshotAccrual(pindexBest)) {
+            return error("GridcoinServices: Failed to prepare tally for v11.");
+        }
+
+        // Set the timestamp for the block version 11 threshold. This
+        // is temporary. Remove this variable in a release that comes
+        // after the hard fork.
+        //
+        g_v11_timestamp = pindexBest->nTime;
+    }
+
+    // Fix ability for new CPIDs to accrue research rewards earlier than one
+    // superblock.
+    //
+    // A bug in the snapshot accrual system for block version 11+ requires a
+    // consensus change to fix. This activates the solution at the following
+    // height:
+    //
+
+    // This is actually broken. Commented out.
+    /*
+    if (nBestHeight + 1 == GetNewbieSnapshotFixHeight()) {
+        if (!GRC::Tally::FixNewbieSnapshotAccrual()) {
+            return error("%s: Failed to fix newbie snapshot accrual", __func__);
+        }
+    }
+    */
+
+    return true;
+}
+
+bool AskForOutstandingBlocks(uint256 hashStart)
+{
+    LOCK(cs_main);
+
+    // Resolve the start block index once under cs_main (issue #2558 PR 9c);
+    // it does not depend on the peer, so hoist it out of the per-node loop.
+    CBlockIndex* pindexStart = pindexBest;
+    if (hashStart != uint256())
+    {
+        const auto it = mapBlockIndex.find(hashStart);
+        if (it == mapBlockIndex.end() || !it->second)
+            return error("Unable to find block index %s", hashStart.ToString().c_str());
+        pindexStart = it->second;
+    }
+
+    // Read the cs_main-guarded height into a local so the iteration callback
+    // touches no cs_main-guarded state (keeps -Werror=thread-safety happy).
+    const int nBestHeightLocal = nBestHeight;
+    int iAsked = 0;
+    if (g_connman)
+    {
+        g_connman->ForEachNodeUnderLock([&](CNode* pNode) {
+            // Once 10 nodes have been asked, skip the rest. ForEachNodeUnderLock
+            // has no early-exit, so this keeps iterating (cheaply) rather than
+            // break-ing as the pre-API loop did -- same set of nodes asked.
+            if (iAsked >= 10) return;
+            if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeightLocal - 144)))
+            {
+                pNode->PushGetBlocks(pindexStart, uint256());
+                LogPrintf("Asked for blocks");
+                iAsked++;
+            }
+        });
+    }
+    return true;
+}
+
+bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    AssertLockHeld(cs_main);
+
+    // Check for duplicate
+    uint256 hash = pblock->GetHash(true);
+    if (mapBlockIndex.count(hash))
+        return error("ProcessBlock() : already have block %d %s", mapBlockIndex[hash]->nHeight, hash.ToString().c_str());
+    if (g_orphan_blocks.Contains(hash))
+        return error("ProcessBlock() : already have block (orphan) %s", hash.ToString().c_str());
+
+    if (pblock->hashPrevBlock != hashBestChain)
+    {
+        // Extra checks to prevent "fill up memory by spamming with bogus blocks"
+        const CBlockIndex* pcheckpoint = Checkpoints::GetLastCheckpoint(mapBlockIndex);
+        if (pcheckpoint != nullptr) {
+            int64_t deltaTime = pblock->GetBlockTime() - pcheckpoint->nTime;
+            if (deltaTime < 0)
+            {
+                if (pfrom)
+                    pfrom->Misbehaving(1);
+                return error("ProcessBlock() : block with timestamp before last checkpoint");
+            }
+        }
+    }
+
+    // Preliminary checks
+    if (!CheckBlock(*pblock, state, pindexBest->nHeight + 1))
+        return error("ProcessBlock() : CheckBlock FAILED");
+
+    // If don't already have its previous block, shunt it off to holding area until we get it
+    if (!pblock->hashPrevBlock.IsNull() && !mapBlockIndex.count(pblock->hashPrevBlock))
+    {
+        LogPrintf("ProcessBlock: ORPHAN BLOCK, prev=%s", pblock->hashPrevBlock.ToString());
+
+        // If we can't ask the node for the parent blocks, no need to keep it.
+        // This happens while loading a bootstrap file (-loadblock):
+        if (!pfrom) {
+            return true;
+        }
+
+        if (pblock->IsProofOfStake()) {
+            if (g_seen_stakes.ContainsOrphan(pblock->vtx[1])
+                && !g_orphan_blocks.HasChildrenOf(hash))
+            {
+                return error(
+                    "%s: ignored duplicate proof-of-stake for orphan %s",
+                    __func__,
+                    hash.ToString());
+            } else {
+                g_seen_stakes.RememberOrphan(pblock->vtx[1]);
+            }
+        }
+
+        if (!g_orphan_blocks.Add(hash, *pblock, GetTime())) {
+            return true;
+        }
+
+        // Ask this guy to fill in what we're missing
+        const CBlock* pblock_root = g_orphan_blocks.GetRootBlock(hash);
+
+        if (pblock_root) {
+            pfrom->PushGetBlocks(pindexBest, pblock_root->GetHash(true));
+            // ppcoin: getblocks may not obtain the ancestor block rejected
+            // earlier by duplicate-stake check so we ask for it again directly
+            if (!IsInitialBlockDownload())
+            {
+                const CInv ancestor_request(MSG_BLOCK, pblock_root->hashPrevBlock);
+
+                // Ensure that this request is not deferred. CNode::AskFor() bumps
+                // the earliest time for a message by two minutes for each call. A
+                // node with many connections can miss a parent block because this
+                // method can delay the queued request so far into the future that
+                // it never sends the request to download that block. We reset the
+                // request time first to guarantee that the node does not postpone
+                // the message:
+                // Zero is deliberate: AskFor() below takes
+                // max(nRequestTime + 2 minutes, now), so a stale future
+                // timestamp here would postpone the request. Note that a
+                // zero-valued entry is also limitedmap's first eviction
+                // candidate, which is harmless -- AskFor() raises it
+                // immediately, and losing it in between simply means AskFor
+                // inserts it fresh.
+                if (g_peerman) {
+                    g_peerman->ResetInventoryRequestBackoff(ancestor_request);
+                    g_peerman->AskFor(pfrom, ancestor_request);
+                }
+            }
+        }
+
+        return true;
+    }
+
+    // Store to disk
+    if (!AcceptBlock(*pblock, state, generated_by_me))
+        return error("ProcessBlock() : AcceptBlock FAILED");
+
+    // Recursively process any orphan blocks that depended on this one.
+    // ProcessQueue handles BFS traversal and SeenStakes cleanup internally.
+    // ProcessQueue is EXCLUSIVE_LOCKS_REQUIRED(cs_main) so the lambda runs
+    // with cs_main held, but TSA cannot propagate that into the lambda
+    // body — suppress the analyzer here rather than tag every chain-state
+    // access AcceptBlock makes downstream.
+    g_orphan_blocks.ProcessQueue(hash, [&](CBlock& orphan) NO_THREAD_SAFETY_ANALYSIS -> bool {
+        CValidationState orphan_state;
+        return AcceptBlock(orphan, orphan_state, generated_by_me);
+    });
+
+    return true;
+}

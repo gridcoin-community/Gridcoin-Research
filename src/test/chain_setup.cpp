@@ -1,0 +1,697 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include "test/chain_setup.h"
+
+#include "chainparams.h"
+#include "chainparamsbase.h"
+#include "consensus/consensus.h"
+#include "dbwrapper.h"
+#include "fs.h"
+#include "gridcoin/staking/kernel.h"
+#include "init.h"
+#include "gridcoin/staking/status.h"
+#include "miner.h"
+#include "net.h"
+#include "node/blockstorage.h"
+#include "node/chainman.h"
+#include "primitives/block.h"
+#include "script/sign.h"
+#include "test/psgt_test_helpers.h"
+#include "txmempool.h"
+#include "util/system.h"
+#include "util/time.h"
+#include "validation.h"
+#include "wallet/wallet.h"
+
+#include <boost/test/unit_test.hpp>
+
+#include <algorithm>
+#include <memory>
+#include <set>
+#include <string>
+
+namespace grc_test {
+
+namespace {
+
+//! Every fixture transaction carries this timestamp. Fixed rather than
+//! wall-clock so runs are reproducible, and comfortably after the regtest
+//! genesis timestamp (1296688602) because ConnectInputs rejects a transaction
+//! older than the input it spends.
+constexpr int64_t FIXTURE_TX_TIME = 1600000000;
+
+//! Where the fixture's mock clock starts until a fixture has mined. After
+//! FIXTURE_TX_TIME, so no block a fixture mines is stamped before a fixture
+//! transaction.
+constexpr int64_t FIXTURE_CLOCK_START = 1700000000;
+static_assert(FIXTURE_CLOCK_START > FIXTURE_TX_TIME, "the clock starts after the fixture transaction time");
+
+//! Where the next fixture's clock starts: FIXTURE_CLOCK_START, or the latest
+//! stake slot a fixture in this process has mined in or tried to. The clock
+//! therefore never goes back from one fixture to the next. An earlier
+//! fixture's blocks outlive it in the block index and in g_seen_stakes (see
+//! GLOBAL STATE in chain_setup.h), and a block mined in one of their slots
+//! could be refused as one already had, or as a duplicate stake.
+int64_t g_last_stake_slot = FIXTURE_CLOCK_START;
+
+//! Restores the process-wide chain parameters. The in-tree idiom
+//! (block_rewards_tests.cpp) calls SelectParams alone; the path cache must go
+//! with it, because the datadir is network-specific.
+struct ParamsRestorer
+{
+    std::string m_chain;
+
+    ParamsRestorer() : m_chain(Params().NetworkIDString()) {}
+
+    ~ParamsRestorer()
+    {
+        SelectParams(m_chain);
+        gArgs.ClearPathCache();
+    }
+};
+
+//! Restores the consensus globals LoadBlockIndex() overwrites for regtest.
+//! It writes them before its own failure return, so even a construction that
+//! goes on to throw has already mutated them.
+struct ConsensusGlobalsRestorer
+{
+    unsigned int m_stake_min_age;
+    int m_coinbase_maturity;
+    int m_grandfather;
+    int m_max_outbound;
+
+    ConsensusGlobalsRestorer()
+        : m_stake_min_age(nStakeMinAge)
+        , m_coinbase_maturity(nCoinbaseMaturity)
+        , m_grandfather(nGrandfather)
+        , m_max_outbound(MAX_OUTBOUND_CONNECTIONS)
+    {
+    }
+
+    ~ConsensusGlobalsRestorer()
+    {
+        nStakeMinAge = m_stake_min_age;
+        nCoinbaseMaturity = m_coinbase_maturity;
+        nGrandfather = m_grandfather;
+        MAX_OUTBOUND_CONNECTIONS = m_max_outbound;
+    }
+};
+
+//! Saves the chain tip globals and NULLS them, which is a precondition rather
+//! than tidiness: CTxDB::LoadBlockIndex returns "hashBestChain not found"
+//! whenever pindexGenesisBlock is non-null and the database holds no
+//! hashBestChain record, and LoadBlockIndex() then bails before it would create
+//! genesis. Suites that run earlier in this binary routinely leave that global
+//! non-null, and several leave it dangling (see project_tests.cpp's
+//! TestStateGuard, which records that a dangling pindexGenesisBlock is benign on
+//! Linux but a wild-pointer fault under the Windows cross-compile's Wine run).
+struct ChainTipRestorer
+{
+    CBlockIndex* m_pindex_best;
+    CBlockIndex* m_pindex_genesis;
+    uint256 m_hash_best;
+    int m_best_height;
+    //! Set by UpdateSyncTime on every connect and read by OutOfSyncByAge, which
+    //! gates the scraper's unauthenticated manifest path among others. A suite
+    //! that mines leaves it at a fresh block's time, and every later suite then
+    //! believes the node is in sync.
+    int64_t m_previous_block_time;
+    //! Whatever an earlier suite left in mapBlockIndex, held aside for the
+    //! fixture's lifetime. LoadBlockIndex() only creates genesis into an empty
+    //! map, and which suites leave entries behind depends on link order: the
+    //! Windows cross-compile leg runs a suite before this one that does. Moving
+    //! the map keeps every node where it is, which matters because each
+    //! CBlockIndex::phashBlock aliases its map key.
+    decltype(mapBlockIndex) m_preexisting_index;
+
+    ChainTipRestorer()
+    {
+        LOCK(cs_main);
+
+        m_pindex_best = pindexBest;
+        m_pindex_genesis = pindexGenesisBlock;
+        m_hash_best = hashBestChain;
+        m_best_height = nBestHeight;
+        m_previous_block_time = g_previous_block_time.load();
+        m_preexisting_index = std::move(mapBlockIndex);
+        mapBlockIndex.clear();
+
+        pindexBest = nullptr;
+        pindexGenesisBlock = nullptr;
+        hashBestChain = uint256();
+        nBestHeight = -1;
+    }
+
+    ~ChainTipRestorer()
+    {
+        LOCK(cs_main);
+
+        // The block index entries this fixture created are pool-allocated and
+        // never freed (BlockIndexPool), and phashBlock aliases the map key, so
+        // the map is erased and the objects are left behind. The map was
+        // emptied at construction, so everything in it now is ours; then the
+        // earlier suites' entries go back exactly as they were.
+        mapBlockIndex.clear();
+        mapBlockIndex = std::move(m_preexisting_index);
+
+        pindexBest = m_pindex_best;
+        pindexGenesisBlock = m_pindex_genesis;
+        hashBestChain = m_hash_best;
+        nBestHeight = m_best_height;
+        g_previous_block_time.store(m_previous_block_time);
+    }
+};
+
+//! Removes the CWalletTx entries the fixture added to the process-global
+//! wallet. The planted key is left behind -- leaking keys into pwalletMain is
+//! already precedented (addressbook_tests, qt_wallettxstore_chain_tests) -- but
+//! wallet transactions are not: accounting_tests pins absolute nOrderPosNext
+//! values that CWalletDB::ReorderTransactions recomputes over the whole
+//! mapWallet.
+struct WalletTxRestorer
+{
+    std::set<uint256> m_preexisting;
+
+    WalletTxRestorer()
+    {
+        if (!pwalletMain) return;
+
+        LOCK(pwalletMain->cs_wallet);
+
+        for (const auto& entry : pwalletMain->mapWallet) {
+            m_preexisting.insert(entry.first);
+        }
+    }
+
+    ~WalletTxRestorer()
+    {
+        if (!pwalletMain) return;
+
+        std::vector<uint256> added;
+
+        {
+            LOCK(pwalletMain->cs_wallet);
+
+            for (const auto& entry : pwalletMain->mapWallet) {
+                if (!m_preexisting.count(entry.first)) added.push_back(entry.first);
+            }
+        }
+
+        for (const uint256& hash : added) {
+            pwalletMain->EraseFromWallet(hash);
+        }
+    }
+};
+
+//! Restores the mock clock the fixture replaces with its own.
+struct ClockRestorer
+{
+    const std::chrono::seconds m_mock_time{GetMockTime()};
+
+    ~ClockRestorer() { SetMockTime(m_mock_time); }
+};
+
+//! The fixture's state. Members are declared so that every restorer is fully
+//! constructed before any mutation happens: a throw later in the constructor
+//! then unwinds them, which a destructor could not do for a partially
+//! constructed object.
+struct ChainState
+{
+    ParamsRestorer m_params;
+    ClockRestorer m_clock;
+    ConsensusGlobalsRestorer m_consensus;
+    WalletTxRestorer m_wallet;
+    ChainTipRestorer m_tip;
+
+    CKey m_key;
+    CBasicKeyStore m_keystore;
+    CTransaction m_premine_coinbase;
+
+    ChainState();
+    ~ChainState();
+};
+
+std::unique_ptr<ChainState> g_state;
+
+ChainState& State()
+{
+    BOOST_REQUIRE_MESSAGE(g_state, "no RegtestChainSetup is alive");
+    return *g_state;
+}
+
+ChainState::ChainState()
+{
+    // The fixture's clock; see the CLOCK note in chain_setup.h.
+    SetMockTime(g_last_stake_slot);
+
+    // Regtest, and the datadir must follow it: GetDataDir() appends a
+    // network-specific component. The block flat files are not mocked -- only
+    // LevelDB is -- so blk0001.dat and CheckDiskSpace both need a real
+    // directory.
+    SelectParams(CBaseChainParams::REGTEST);
+    gArgs.ClearPathCache();
+
+    const std::string datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE_MESSAGE(!datadir.empty(), "TestingSetup did not set -datadir");
+
+    // Create the network subdirectory too, not just the base. GetDataDir() appends
+    // BaseParams().DataDir() and hands the result to CreateOwnerOnlyDirectory, which
+    // restricts only a directory it created itself and leaves a pre-existing one
+    // alone. Creating it here therefore keeps the fixture out of that path -- which
+    // matters because it is not always available: under Wine, where the Windows
+    // cross-compile CI leg runs this suite, applying an owner-only DACL fails, the
+    // helper withdraws the directory it just made, and GetDataDir() resolves empty.
+    fs::create_directories(fs::path(datadir) / BaseParams().DataDir());
+    gArgs.ClearPathCache();
+    BOOST_REQUIRE_MESSAGE(!GetDataDir().empty(), "datadir still resolves empty");
+
+    {
+        LOCK(cs_main);
+        // ChainTipRestorer moved any earlier suite's entries aside; if this
+        // fires, a restorer was reordered after the mutating work.
+        BOOST_REQUIRE_MESSAGE(mapBlockIndex.empty(),
+            "mapBlockIndex is not empty after ChainTipRestorer set it aside");
+    }
+
+    // Takes cs_main itself, so it must not be held here.
+    BOOST_REQUIRE_MESSAGE(LoadBlockIndex(/*fAllowNew=*/true), "LoadBlockIndex failed");
+
+    {
+        LOCK(cs_main);
+        BOOST_REQUIRE(pindexGenesisBlock != nullptr);
+        BOOST_REQUIRE(pindexBest != nullptr);
+        BOOST_REQUIRE_EQUAL(nBestHeight, 0);
+    }
+
+    // The premine key, and the coins it owns. The genesis block is
+    // deterministic, so its coinbase can be recomputed rather than read back.
+    m_key = GetRegtestPremineKey();
+    BOOST_REQUIRE(m_key.IsValid());
+    m_keystore.AddKey(m_key);
+
+    const CBlock genesis = CreateGenesisBlock();
+    BOOST_REQUIRE(!genesis.vtx.empty());
+    m_premine_coinbase = genesis.vtx[0];
+    BOOST_REQUIRE_MESSAGE(!m_premine_coinbase.vout.empty(),
+                          "regtest genesis coinbase has no premine outputs");
+
+    // LoadBlockIndex writes this one index entry itself, because genesis
+    // bypasses ConnectBlock. Without it nothing can spend the premine, and the
+    // selection loop would never see a resolvable input.
+    {
+        LOCK(cs_main);
+        CTxDB txdb("r");
+        CTxIndex txindex;
+        BOOST_REQUIRE_MESSAGE(txdb.ReadTxIndex(m_premine_coinbase.GetHash(), txindex),
+                              "regtest genesis coinbase is not in the transaction index");
+    }
+
+    // Give the wallet the premine key and let it see the genesis outputs, so
+    // CreateAndProcessBlock() has something to stake.
+    //
+    // PlantRegtestPremineKey() rescans only when it adds the key. A second
+    // fixture in the same process finds the key already there, because keys are
+    // never erased, while WalletTxRestorer removed the coinbase entry the first
+    // fixture's rescan added. So rescan here unconditionally; the rescan inside
+    // PlantRegtestPremineKey(), when it runs, is repeated harmlessly. This is
+    // the fixture's own construction and is unrelated to how
+    // CreateAndProcessBlock() delivers a mined block to the wallet.
+    if (pwalletMain) {
+        PlantRegtestPremineKey(pwalletMain);
+
+        LOCK(cs_main);
+        pwalletMain->ScanForWalletTransactions(pindexGenesisBlock, /*fUpdate=*/true);
+    }
+}
+
+ChainState::~ChainState()
+{
+    // Put the committed chain back to genesis.
+    //
+    // ChainTipRestorer below restores the in-memory chain, but a case that
+    // drove real block connection has also committed its blocks: SetBestChain
+    // writes through CTxDB and WriteHashBestChain, and that index is a
+    // process-global handle opened once on the shared datadir. The next
+    // construction's LoadBlockIndex() reads whatever the last one committed, so
+    // its nBestHeight == 0 precondition fires on a chain this fixture left
+    // behind. Restoring memory is not enough for a fixture that commits.
+    //
+    // Rewinding through the same path that wrote it keeps the index consistent,
+    // and leaves the disk where the next construction expects it. Done here
+    // rather than by deleting the database: the handle is global and shared,
+    // and dropping it underneath the wallet is not this fixture's call.
+    {
+        LOCK(cs_main);
+
+        if (pindexGenesisBlock != nullptr && nBestHeight > 0) {
+            ForceReorganizeToHash(pindexGenesisBlock->GetBlockHash());
+        }
+    }
+
+    // AppendBlockFile caches a FILE* and the current block file number; both
+    // are process-global and must not outlive the datadir this fixture used.
+    {
+        LOCK(cs_main);
+        CloseBlockFile();
+    }
+
+    mempool.clear();
+
+    // CreateAndProcessBlock() drives the real miner, which records its kernel
+    // search in the process-global miner status; StakingActive() then answers
+    // true for the rest of the run, and interfaces_tests pins it false.
+    g_miner_status.ClearLastSearch();
+    g_miner_status.ClearLastStake();
+
+    // The restorers unwind in reverse declaration order from here.
+}
+
+} // anonymous namespace
+
+RegtestChainSetup::RegtestChainSetup()
+{
+    BOOST_REQUIRE_MESSAGE(!g_state,
+        "a RegtestChainSetup is already alive: it is a suite-level fixture "
+        "(*boost::unit_test::fixture<RegtestChainSetup>()), not a per-case one");
+
+    g_state = std::make_unique<ChainState>();
+}
+
+RegtestChainSetup::~RegtestChainSetup()
+{
+    g_state.reset();
+}
+
+WalletTxScope::WalletTxScope()
+{
+    if (!pwalletMain) return;
+
+    LOCK(pwalletMain->cs_wallet);
+
+    for (const auto& entry : pwalletMain->mapWallet) {
+        m_preexisting.insert(entry.first);
+    }
+}
+
+WalletTxScope::~WalletTxScope()
+{
+    if (!pwalletMain) return;
+
+    std::vector<uint256> added;
+
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        for (const auto& entry : pwalletMain->mapWallet) {
+            if (m_preexisting.count(entry.first)) continue;
+            // A confirmed entry is the chain's, not the case's; see the header.
+            if (entry.second.isConfirmed()) continue;
+            added.push_back(entry.first);
+        }
+    }
+
+    for (const uint256& hash : added) {
+        pwalletMain->EraseFromWallet(hash);
+    }
+
+    // Reconcile the wallet's spent flags against the chain. EraseFromWallet
+    // drops an entry and its own mapTxSpends rows but not the vfSpent bits it
+    // set on its parents, so a case that planted an unconfirmed spend of a
+    // premine output would otherwise leave that output unselectable for every
+    // case after it -- the stakeable set shrinks with each one and nothing
+    // gives it back. Releasing those bits blindly would be wrong the other
+    // way: the coinstake draws from the same premine outputs, so a fixture
+    // conflicted out of the pool can share an input with a confirmed spend.
+    // FixSpentCoins decides each bit from the transaction index, so it frees
+    // what only an erased entry held and keeps what the chain spent -- and its
+    // mempool guard keeps anything a still-pooled transaction spends.
+    int mismatch = 0;
+    CAmount in_question = 0;
+    pwalletMain->FixSpentCoins(mismatch, in_question);
+
+}
+
+const CKey& PremineKey() { return State().m_key; }
+
+const CBasicKeyStore& PremineKeystore() { return State().m_keystore; }
+
+const CTransaction& PremineCoinbase() { return State().m_premine_coinbase; }
+
+CScript PremineScript() { return psgt_test::P2PKH(PremineKey().GetPubKey().GetID()); }
+
+int64_t FixtureTxTime() { return FIXTURE_TX_TIME; }
+
+std::vector<COutPoint> SpendablePremineOutputs()
+{
+    const CTransaction& coinbase = PremineCoinbase();
+    const uint256 hash = coinbase.GetHash();
+
+    std::vector<COutPoint> out;
+
+    LOCK(cs_main);
+
+    CTxDB txdb("r");
+    CTxIndex txindex;
+
+    if (!txdb.ReadTxIndex(hash, txindex)) return out;
+
+    for (unsigned int i = 0; i < coinbase.vout.size(); ++i) {
+        if (i >= txindex.vSpent.size()) break;
+        if (!txindex.vSpent[i].IsNull()) continue;
+        if (coinbase.vout[i].IsEmpty()) continue;
+
+        out.emplace_back(hash, i);
+    }
+
+    return out;
+}
+
+CTransaction CreateSpendToScript(const CTransaction& txFrom, uint32_t n, CAmount fee,
+                                 const CScript& script_pub_key, int n_outputs, int64_t tx_time)
+{
+    BOOST_REQUIRE(n < txFrom.vout.size());
+    BOOST_REQUIRE(n_outputs >= 1);
+
+    const CAmount value_in = txFrom.vout[n].nValue;
+    const CAmount value_out = value_in - fee;
+    BOOST_REQUIRE_MESSAGE(value_out > 0, "fee exceeds the value of the input");
+
+    CMutableTransaction mtx;
+    mtx.nTime = static_cast<unsigned int>(tx_time != 0 ? tx_time : FIXTURE_TX_TIME);
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(txFrom.GetHash(), n);
+    mtx.vout.resize(n_outputs);
+
+    const CAmount each = value_out / n_outputs;
+    BOOST_REQUIRE_MESSAGE(each > 0, "too many outputs for the value being spent");
+
+    for (int i = 0; i < n_outputs; ++i) {
+        mtx.vout[i].nValue = each;
+        mtx.vout[i].scriptPubKey = script_pub_key;
+    }
+
+    // Any rounding remainder goes to the first output rather than to the fee,
+    // so the fee a test asks for is exactly the fee the miner will compute.
+    mtx.vout[0].nValue += value_out - each * n_outputs;
+
+    BOOST_REQUIRE_MESSAGE(SignSignature(PremineKeystore(), txFrom, mtx, 0),
+                          "failed to sign the fixture spend");
+
+    return CTransaction(mtx);
+}
+
+CTransaction CreateSpendWithContract(const CTransaction& txFrom, uint32_t n, CAmount fee,
+                                     const GRC::Contract& contract, int64_t tx_time,
+                                     CAmount burn)
+{
+    BOOST_REQUIRE(n < txFrom.vout.size());
+
+    const CAmount value_in = txFrom.vout[n].nValue;
+    const CAmount value_out = value_in - fee - burn;
+    BOOST_REQUIRE_MESSAGE(value_out > 0, "fee and burn exceed the value of the input");
+
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;  // vContracts is only serialized from version 2
+    mtx.nTime = static_cast<unsigned int>(tx_time != 0 ? tx_time : FIXTURE_TX_TIME);
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(txFrom.GetHash(), n);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = value_out;
+    mtx.vout[0].scriptPubKey = PremineScript();
+
+    // CheckContracts counts OP_RETURN outputs toward the contract's required
+    // burn. Added before signing with everything else.
+    if (burn > 0) {
+        CTxOut burn_out;
+        burn_out.nValue = burn;
+        burn_out.scriptPubKey = CScript() << OP_RETURN;
+        mtx.vout.push_back(burn_out);
+    }
+
+    // Before signing, deliberately: SignatureHash serializes the transaction and
+    // vContracts is part of that serialization at this version, so a contract
+    // attached afterwards would invalidate the signature.
+    mtx.vContracts.push_back(contract);
+
+    BOOST_REQUIRE_MESSAGE(SignSignature(PremineKeystore(), txFrom, mtx, 0),
+                          "failed to sign the fixture spend carrying a contract");
+
+    return CTransaction(mtx);
+}
+
+CTransaction CreateSpend(const CTransaction& txFrom, uint32_t n, CAmount fee, int n_outputs,
+                         int64_t tx_time)
+{
+    return CreateSpendToScript(txFrom, n, fee, PremineScript(), n_outputs, tx_time);
+}
+
+CTransaction CreateCoinstakeShaped(const CTransaction& txFrom, uint32_t n, CAmount fee)
+{
+    BOOST_REQUIRE(n < txFrom.vout.size());
+
+    const CAmount value_in = txFrom.vout[n].nValue;
+    BOOST_REQUIRE_MESSAGE(value_in > fee, "fee exceeds the value of the input");
+
+    CMutableTransaction mtx;
+    mtx.nTime = static_cast<unsigned int>(FIXTURE_TX_TIME);
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(txFrom.GetHash(), n);
+    mtx.vout.resize(2);
+    mtx.vout[0].SetEmpty();
+    mtx.vout[1].nValue = value_in - fee;
+    mtx.vout[1].scriptPubKey = PremineScript();
+
+    BOOST_REQUIRE_MESSAGE(SignSignature(PremineKeystore(), txFrom, mtx, 0),
+                          "failed to sign the fixture coinstake");
+
+    const CTransaction tx(mtx);
+    BOOST_REQUIRE_MESSAGE(tx.IsCoinStake(), "fixture coinstake is not shaped like one");
+
+    return tx;
+}
+
+void AddToMempool(const CTransaction& tx, CAmount fee)
+{
+    int height;
+    {
+        LOCK(cs_main);
+        height = nBestHeight;
+    }
+
+    // addUnchecked locks mempool.cs internally; a caller-side lock here would
+    // be the redundant pattern #3314 removed.
+    mempool.addUnchecked(
+        tx.GetHash(),
+        CTxMemPoolEntry(tx, fee, tx.nTime, height,
+                        ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION)));
+}
+
+void MakeBlockAndCoinstake(CBlock& block, CMutableTransaction& coinbase,
+                           CMutableTransaction& coinstake)
+{
+    block.SetNull();
+
+    // Regtest activates every fork at height 0 except V15, so this is the block
+    // version the chain actually runs, and it is >= 12, which is what makes
+    // CreateRestOfTheBlock compute the coinstake size reserve rather than
+    // starting from a flat 1000 bytes.
+    {
+        LOCK(cs_main);
+        block.nVersion = ComputeBlockVersion(nBestHeight + 1);
+    }
+    block.nTime = static_cast<unsigned int>(FIXTURE_TX_TIME + 1000);
+    block.vtx.resize(2);
+
+    coinbase = CMutableTransaction();
+    coinbase.nTime = block.nTime;
+
+    // The prologue reads vout[1] for its size reserve, and CreateCoinStake
+    // leaves exactly these two outputs before splitting and MRC binding.
+    coinstake = CMutableTransaction();
+    coinstake.nTime = block.nTime;
+    coinstake.vin.resize(1);
+    coinstake.vout.resize(2);
+    coinstake.vout[0].SetEmpty();
+    coinstake.vout[1].nValue = 0;
+    coinstake.vout[1].scriptPubKey = PremineScript();
+}
+
+bool CreateAndProcessBlock(CBlock& block_out, std::string& err)
+{
+    if (!pwalletMain) {
+        err = "no wallet";
+        return false;
+    }
+
+    if (!g_state) {
+        err = "no RegtestChainSetup is alive";
+        return false;
+    }
+
+    // A block mined while the clock is behind the tip could be stamped before
+    // its parent, or after the clock. Mock time 0, which turns the mock clock
+    // off, is behind it too.
+    {
+        LOCK(cs_main);
+
+        if (GetMockTime().count() < pindexBest->GetBlockTime()) {
+            err = strprintf("the fixture's clock (%d) is behind the chain tip (%d)",
+                            GetMockTime().count(), pindexBest->GetBlockTime());
+            return false;
+        }
+    }
+
+    // Cases read what a block did against the fixture's clock, so each attempt
+    // moves the clock to the start of the next stake slot and mines there. Every
+    // block is then stamped in a later slot than any block or attempt before it
+    // in this process, and never after the clock: an attempt cannot meet a stake
+    // proof or a block already seen in its slot, and a retry needs no stamp
+    // ahead of the clock. The kernel is evaluated at that one timestamp with no
+    // time search, so the new slot is also what rerolls it.
+    bool ok = false;
+
+    for (int attempt = 0; attempt < 5 && !ok; ++attempt) {
+        err.clear();
+        const int64_t slot = GRC::MaskStakeTime(GetMockTime().count()) + GRC::STAKE_TIMESTAMP_MASK + 1;
+        g_last_stake_slot = std::max(g_last_stake_slot, slot);
+        SetMockTime(slot);
+        ok = TryMineRegtestBlock(pwalletMain, block_out, err, /*stake_time_slot_offset=*/0);
+    }
+
+    if (!ok) return false;
+
+    // RegisterValidationInterface() is a silent no-op in this binary --
+    // registration is gated on a MainSignalsInstance that only
+    // RegisterBackgroundSignalScheduler creates, and TestingSetup builds no
+    // scheduler -- so nothing delivers the block to the wallet. Deliver it
+    // directly through the hook the signal layer would have called. It
+    // records the block's own transactions and marks the inputs they consumed
+    // spent, and that second part is what keeps a staked output out of the
+    // next mine's kernel search.
+    //
+    // A genesis rescan stood here before. It does not mark spends --
+    // AddToWalletIfInvolvingMe never calls WalletUpdateSpent, and a node does
+    // not need it to, because the signal path marks the inputs as each block
+    // arrives and startup follows its rescan with FixSpentCoins -- so every
+    // output a mined block staked stayed selectable, the next mine could draw
+    // it as the kernel, and that block was rejected as a double spend, or as
+    // a duplicate proof-of-stake when it landed in the same stake slot. Five
+    // attempts drawing badly in a row was the Arch failure of
+    // a_stale_mrc_is_removed_when_a_block_connects.
+    {
+        LOCK(cs_main);
+
+        if (!pindexBest || pindexBest->GetBlockHash() != block_out.GetHash()) {
+            err = "block accepted but it is not the chain tip, so the wallet was not told about it";
+            return false;
+        }
+
+        pwalletMain->BlockConnected(block_out, pindexBest->nHeight);
+    }
+
+    return true;
+}
+
+} // namespace grc_test

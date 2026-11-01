@@ -1,0 +1,2202 @@
+// Copyright (c) 2009-2010 Satoshi Nakamoto
+// Copyright (c) 2009-2012 The Bitcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include "net_processing.h"
+
+#include "amount.h"
+#include "chainparams.h"
+#include "consensus/merkle.h"
+#include "consensus/tx_verify.h"
+#include "gridcoin/voting/registry.h"
+#include "util.h"
+#include "node/shutdown.h"
+#include "net.h"
+#include "streams.h"
+#include "alert.h"
+#include "banman.h"
+#include "checkpoints.h"
+#include "txdb.h"
+#include "timedata.h"
+#include "init.h"
+#include "node/ui_interface.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/gridcoin.h"
+#include "gridcoin/mrc.h"
+#include "gridcoin/contract/contract.h"
+#include "gridcoin/contract/registry.h"
+#include "gridcoin/project.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/researcher.h"
+#include "gridcoin/scraper/scraper_net.h"
+#include "gridcoin/staking/chain_trust.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/exceptions.h"
+#include "gridcoin/staking/kernel.h"
+#include "gridcoin/staking/reward.h"
+#include "gridcoin/staking/spam.h"
+#include "gridcoin/superblock.h"
+#include "gridcoin/support/xml.h"
+#include "gridcoin/tally.h"
+#include "gridcoin/tx_message.h"
+#include "node/blockstorage.h"
+#include "node/chainman.h"
+#include "node/coherence.h"
+#include "node/orphan_blocks.h"
+#include "node/psgt_pool.h"
+#include "policy/fees.h"
+#include "scheduler.h"
+#include "policy/policy.h"
+#include "random.h"
+#include "validation.h"
+
+#include <boost/thread.hpp>
+#include <boost/range/adaptor/reversed.hpp>
+#include <ctime>
+#include <limits>
+#include <math.h>
+#include <typeinfo>
+#include "wallet/wallet.h"
+#include "txmempool.h"
+
+using namespace std;
+
+// mapAlerts / cs_mapAlerts are defined in alert.cpp and reached via the
+// same extern idiom rpc/net.cpp uses.
+extern CCriticalSection cs_mapAlerts;
+extern std::map<uint256, CAlert> mapAlerts GUARDED_BY(cs_mapAlerts);
+
+// cPeerBlockCounts stays in validation.cpp (read by GetNumBlocksOfPeers --
+// homing it here would mint a validation <-> net_processing cycle); the moved
+// VERSION handler feeds it peer-claimed heights, so declare it here.
+extern CMedianFilter<int> cPeerBlockCounts GUARDED_BY(cs_main);
+
+// Relay-message cache. Both accessors -- RelayTransaction (below) and the
+// getdata loop in SendMessages -- now live in this TU, so the map is file-local.
+static CCriticalSection cs_mapRelay;
+static map<CInv, CDataStream> mapRelay GUARDED_BY(cs_mapRelay);
+static deque<pair<int64_t, CInv> > vRelayExpiration GUARDED_BY(cs_mapRelay);
+
+// Per-inventory request times, backing the two-minute AskFor backoff. Moved out
+// of net.{h,cpp} together with CNode::AskFor (the #3028 deferral): this is
+// request tracking, which belongs to this layer.
+//
+// A dedicated leaf-level mutex rather than cs_main: the scraper PART path
+// (CSplitBlob::RecvPart) reaches it without holding cs_main, and hoisting
+// cs_main into that path to share a lock would be the wrong trade.
+//
+// Bounded at MAX_INV_SZ, the same ceiling upstream used, and the same number a
+// single peer can announce in one inv message. The map is shared, so without a
+// bound one peer announcing inventory it never serves grows state charged to
+// every peer: entries are only removed on receipt. limitedmap evicts the lowest
+// value first, and the value here is the request time, so the oldest unfulfilled
+// request is what goes.
+static CCriticalSection cs_mapAlreadyAskedFor;
+//! Monotonic tiebreaker for AskForInv's request-time priority keys. Guarded
+//! by the map mutex: every caller runs on ThreadMessageHandler today, but
+//! AskFor is public PeerManager surface and the counter's monotonicity must
+//! not depend on callers remembering that.
+static int64_t nAskForLastTime GUARDED_BY(cs_mapAlreadyAskedFor) = 0;
+static limitedmap<CInv, int64_t> mapAlreadyAskedFor GUARDED_BY(cs_mapAlreadyAskedFor){MAX_INV_SZ};
+
+size_t InventoryRequestMapCapacity()
+{
+    LOCK(cs_mapAlreadyAskedFor);
+    return mapAlreadyAskedFor.max_size();
+}
+
+//! Verbatim CNode::AskFor, less the CNode qualification. Kept as a file-local
+//! helper so callers in this TU do not pay a virtual dispatch through
+//! PeerManager to reach a map that is right here.
+static void AskForInv(CNode* pnode, const CInv& inv)
+{
+    // We are using mapAskFor as a priority queue,
+    // the key is the earliest time the request can be sent
+    if (pnode->mapAskFor.size() > 50000) return;
+
+    // Snapshot the current request time under the mutex; the logging and
+    // time formatting between the two locked blocks touch neither the map
+    // nor the tiebreaker and run unlocked.
+    // Absent means never asked, which is a request time of zero. Reading
+    // through find() rather than operator[] also stops the lookup itself
+    // from creating an entry: the write below is what should create it, and
+    // always runs, so the old insert-on-read was redundant as well as
+    // unbounded.
+    int64_t nRequestTime = 0;
+    {
+        LOCK(cs_mapAlreadyAskedFor);
+        const auto it = mapAlreadyAskedFor.find(inv);
+        if (it != mapAlreadyAskedFor.end()) nRequestTime = it->second;
+    }
+
+    LogPrint(BCLog::LogFlags::NET, "askfor %s   %" PRId64 " (%s)", inv.ToString(), nRequestTime, DateTimeStrFormat("%H:%M:%S", nRequestTime/1000000));
+
+    int64_t nNow = (GetAdjustedTime() - 1) * 1000000;
+    int64_t nNewRequestTime;
+    {
+        LOCK(cs_mapAlreadyAskedFor);
+
+        // Make sure not to reuse time indexes to keep things in the same order
+        ++nAskForLastTime;
+        nNow = std::max(nNow, nAskForLastTime);
+        nAskForLastTime = nNow;
+
+        // Each retry is 2 minutes after the last
+        nNewRequestTime = std::max(nRequestTime + 2 * 60 * 1000000, nNow);
+
+        const auto it = mapAlreadyAskedFor.find(inv);
+
+        if (it != mapAlreadyAskedFor.end()) {
+            mapAlreadyAskedFor.update(it, nNewRequestTime);
+        } else {
+            mapAlreadyAskedFor.insert(std::make_pair(inv, nNewRequestTime));
+        }
+    }
+    pnode->mapAskFor.insert(std::make_pair(nNewRequestTime, inv));
+}
+
+void RelayTransaction(const CTransaction& tx, const uint256& hash)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss.reserve(10000);
+    ss << tx;
+    RelayTransaction(tx, hash, ss);
+}
+
+void RemoveFromRelayMemory(const uint256& hash)
+{
+    LOCK(cs_mapRelay);
+
+    // The matching vRelayExpiration entry is deliberately left in place. It is a
+    // deque kept in expiry order, so erasing from the middle would be linear and
+    // buys nothing: when the entry falls due, the sweep in RelayTransaction erases
+    // an already-absent key, which is a harmless no-op.
+    mapRelay.erase(CInv(MSG_TX, hash));
+}
+
+void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataStream& ss)
+{
+    CInv inv(MSG_TX, hash);
+    {
+        // Callers may hold cs_wallet here (#3400), so nothing under cs_mapRelay
+        // may take cs_wallet, or a lock whose holder waits on it -- see the
+        // lock rule on CConnman::ForEachNode.
+        LOCK(cs_mapRelay);
+        // Expire old relay messages
+        while (!vRelayExpiration.empty() && vRelayExpiration.front().first < GetAdjustedTime())
+        {
+            mapRelay.erase(vRelayExpiration.front().second);
+            vRelayExpiration.pop_front();
+        }
+
+        // Save original serialized message so newer versions are preserved
+        mapRelay.insert(std::make_pair(inv, ss));
+        vRelayExpiration.push_back(std::make_pair(GetAdjustedTime() + 15 * 60, inv));
+    }
+
+    if (g_connman) g_connman->RelayInventory(inv);
+}
+
+void ResendUnbroadcastTransactions()
+{
+    // Re-announce the node's own transactions still awaiting initial broadcast.
+    // Run from g_scheduler (see AppInit2), NOT from SendMessages: RelayTransaction
+    // -> RelayInventory takes m_nodes_mutex, and the socket handler already takes
+    // m_nodes_mutex -> cs_vSend, so relaying while cs_vSend is held (as it is in
+    // SendMessages) would invert that order. The scheduler thread holds neither.
+    //
+    // Re-announcing by inv reaches peers that do not yet know the tx -- in
+    // particular all peers are fresh after a restart, which is the case this
+    // exists for. Peers then fetch it via getdata, which clears it from the set.
+    for (const uint256& hash : mempool.GetUnbroadcast()) {
+        CTransaction tx;
+        if (mempool.lookup(hash, tx)) {
+            RelayTransaction(tx, hash);
+        }
+    }
+}
+
+// Peer misbehavior tracking moved into PeerManagerImpl::m_misbehavior in PR 8b
+// (it was file-static here since PR 2c). See PeerManagerImpl at the end of this
+// translation unit; CNode::Misbehaving/GetMisbehavior forward to g_peerman.
+
+// Orphan transaction storage. All accesses occur under cs_main from
+// ProcessMessage / AddOrphanTx / EraseOrphanTx / LimitOrphanTxSize.
+//! \brief An orphan transaction plus when it arrived.
+//!
+//! The timestamp exists so the pool can be reclaimed on its own. The count limit
+//! below is enforced only when a new orphan is inserted, and an orphan is only
+//! erased when its parent turns up -- so an orphan whose parent never exists sits
+//! there indefinitely, and a peer that fills the pool and then goes SILENT leaves
+//! it full, because nothing else drives eviction.
+//! \brief How long an orphan transaction may sit before it is swept.
+//!
+//! 20 minutes, matching OrphanBlockManager::MAX_ORPHAN_AGE_SECONDS and
+//! PSGTPool::ORPHAN_EXPIRY_SECONDS -- the other two orphan pools in this tree --
+//! and upstream's ORPHAN_TX_EXPIRE_TIME.
+//!
+//! WHY SWEEPING THIS POOL IS SAFE, and why the same argument does NOT transfer to
+//! orphan BLOCKS. The obvious objection to any expiry here is that it trades a
+//! denial of service through orphan injection for an inability to converge, by
+//! discarding exactly the material a node needs while the network is forked.
+//! That objection is correct for orphan blocks -- a node reconnecting across a
+//! fork receives blocks out of order and must hold them until the parent arrives
+//! -- and OrphanBlockManager is where it applies. This is a different pool.
+//!
+//! mapOrphanTransactions is reachable only from net_processing: no part of
+//! validation consults it. It is a relay cache for transactions whose inputs we
+//! have not seen yet, not an input to consensus. A block containing a swept
+//! transaction validates identically, because ConnectBlock resolves inputs from
+//! the transaction database rather than from this map, and transactions from
+//! disconnected blocks return through the mempool, not through here.
+//!
+//! So the cost of sweeping too eagerly is a transaction that is not relayed
+//! promptly and is rebroadcast or mined regardless -- not a chain that cannot
+//! reorganise. Before extending expiry to any other orphan store, re-establish
+//! that property for that store; do not carry this conclusion across.
+
+map<uint256, COrphanTx> mapOrphanTransactions GUARDED_BY(cs_main);
+map<uint256, set<uint256> > mapOrphanTransactionsByPrev GUARDED_BY(cs_main);
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// mapOrphanTransactions
+//
+
+bool AddOrphanTx(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    uint256 hash = tx.GetHash();
+    if (mapOrphanTransactions.count(hash))
+        return false;
+
+    // Ignore big transactions, to avoid a
+    // send-big-orphans memory exhaustion attack. If a peer has a legitimate
+    // large transaction with a missing parent then we assume
+    // it will rebroadcast it later, after the parent transaction(s)
+    // have been mined or received.
+    // MAX_ORPHAN_TRANSACTIONS is MAX_BLOCK_SIZE/100 = 10,000, and each is at
+    // most 5,000 bytes, so the pool is bounded at ~50 MB -- not the 500 MB this
+    // comment claimed before, which was out by a factor of ten.
+
+    size_t nSize = GetSerializeSize(tx, SER_NETWORK, CTransaction::CURRENT_VERSION);
+
+    if (nSize > 5000)
+    {
+        LogPrint(BCLog::LogFlags::MEMPOOL, "ignoring large orphan tx (size: %" PRIszu ", hash: %s)", nSize, hash.ToString().substr(0,10));
+        return false;
+    }
+
+    mapOrphanTransactions[hash] = COrphanTx { tx, GetAdjustedTime() };
+    for (auto const& txin : tx.vin)
+        mapOrphanTransactionsByPrev[txin.prevout.hash].insert(hash);
+
+    LogPrint(BCLog::LogFlags::MEMPOOL, "stored orphan tx %s (mapsz %" PRIszu ")", hash.ToString().substr(0,10), mapOrphanTransactions.size());
+    return true;
+}
+
+void static EraseOrphanTx(uint256 hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    if (!mapOrphanTransactions.count(hash))
+        return;
+    const CTransaction& tx = mapOrphanTransactions[hash].tx;
+    for (auto const& txin : tx.vin)
+    {
+        mapOrphanTransactionsByPrev[txin.prevout.hash].erase(hash);
+        if (mapOrphanTransactionsByPrev[txin.prevout.hash].empty())
+            mapOrphanTransactionsByPrev.erase(txin.prevout.hash);
+    }
+    mapOrphanTransactions.erase(hash);
+}
+
+unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    unsigned int nEvicted = 0;
+    while (mapOrphanTransactions.size() > nMaxOrphans)
+    {
+        // Evict a random orphan:
+        uint256 randomhash = GetRandHash();
+        map<uint256, COrphanTx>::iterator it = mapOrphanTransactions.lower_bound(randomhash);
+        if (it == mapOrphanTransactions.end())
+            it = mapOrphanTransactions.begin();
+        EraseOrphanTx(it->first);
+        ++nEvicted;
+    }
+    return nEvicted;
+}
+
+unsigned int ExpireOrphanTransactions(const int64_t now)
+{
+    LOCK(cs_main);
+
+    unsigned int expired = 0;
+
+    for (auto it = mapOrphanTransactions.begin(); it != mapOrphanTransactions.end(); ) {
+        if (now - it->second.time_received > ORPHAN_TX_EXPIRE_SECONDS) {
+            const uint256 hash = it->first;
+
+            // EraseOrphanTx invalidates the iterator, so advance past it first.
+            ++it;
+            EraseOrphanTx(hash);
+            ++expired;
+        } else {
+            ++it;
+        }
+    }
+
+    if (expired > 0) {
+        LogPrint(BCLog::LogFlags::MEMPOOL, "ExpireOrphanTransactions: swept %u orphans, %" PRIszu " remaining",
+                 expired, mapOrphanTransactions.size());
+    }
+
+    return expired;
+}
+
+bool static AlreadyHave(CTxDB& txdb, const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    switch (inv.type)
+    {
+    case MSG_TX:
+        {
+        bool txInMap = false;
+        txInMap = mempool.exists(inv.hash);
+        return txInMap ||
+               mapOrphanTransactions.count(inv.hash) ||
+               txdb.ContainsTx(inv.hash);
+        }
+
+    case MSG_BLOCK:
+        return mapBlockIndex.count(inv.hash) ||
+               g_orphan_blocks.Contains(inv.hash);
+
+    case MSG_PSGT:
+        // Recently removed revisions read as "have": a completed, superseded
+        // or evicted PSGT must not be re-fetched from lagging peers (#2910).
+        return g_psgt_pool.HaveRevision(inv.hash);
+    }
+    // Don't know what it is, just say we already got one
+    return true;
+}
+
+//! Relay a pooled PSGT revision to peers that can handle it (#2910). Served
+//! from the PSGT pool in the getdata loop, NOT from mapRelay: pooled PSGTs
+//! live up to 7 days, far beyond mapRelay's 15-minute expiry.
+void RelayPSGT(const uint256& revision_hash)
+{
+    if (!g_connman) return;
+
+    g_connman->RelayInventory(CInv(MSG_PSGT, revision_hash), PSGT_PROTO_VERSION);
+}
+
+//! The 0.8-era trickle filter: three of every four transaction announcements
+//! wait for the peer's next trickle round, so an observer cannot assume the
+//! first peer to announce is the origin.
+//!
+//! Pure given the hash and the process-wide salt, which is what lets
+//! SendMessages evaluate it once outside cs_inventory to decide which hashes
+//! need a wallet answer, and again inside cs_inventory, and get the same result
+//! both times.
+//!
+//! The salt is a function-local static initialised on first use. It was
+//! previously a lazily-zero-checked static assigned in place; that is a data
+//! race if SendMessages is ever driven by more than one thread, whereas this
+//! form is guaranteed thread-safe initialisation.
+static bool TrickleWaitByHash(const uint256& hash)
+{
+    static const arith_uint256 hashSalt = UintToArith256(GetRandHash());
+
+    uint256 hashRand = ArithToUint256(UintToArith256(hash) ^ hashSalt);
+    hashRand = Hash(hashRand);
+
+    return (UintToArith256(hashRand) & 3) != 0;
+}
+
+void DeferredRelay::AddTransaction(const CTransaction& tx, const uint256& hash)
+{
+    m_txs.emplace_back(tx, hash);
+}
+
+void DeferredRelay::AddPSGT(const uint256& revision_hash)
+{
+    m_psgts.push_back(revision_hash);
+}
+
+void DeferredRelay::Flush()
+{
+    // Emptied before announcing, not after, so this is idempotent: a caller that
+    // flushes explicitly leaves nothing for the destructor to announce a second
+    // time, and a throw partway does not leave a half-sent queue behind.
+    std::vector<std::pair<CTransaction, uint256>> txs;
+    std::vector<uint256> psgts;
+    txs.swap(m_txs);
+    psgts.swap(m_psgts);
+
+    for (const auto& entry : txs) {
+        RelayTransaction(entry.first, entry.second);
+    }
+
+    for (const uint256& revision_hash : psgts) {
+        RelayPSGT(revision_hash);
+    }
+}
+
+DeferredRelay::~DeferredRelay()
+{
+    // This destructor does network-facing work and runs on error paths too,
+    // including stack unwinding from the JSONRPCError throws in the HTLC RPCs.
+    // Letting an exception escape during unwinding terminates the process, so it
+    // is swallowed -- but what that costs is NOT uniform across the callers, and
+    // the difference is worth knowing before relying on it:
+    //
+    //   - wallet transactions are re-offered by ResendWalletTransactions;
+    //   - the HTLC RPCs register with mempool.AddUnbroadcast, so
+    //     ResendUnbroadcastTransactions re-announces them;
+    //   - a pooled PSGT revision has NEITHER. Every RelayPSGT site is
+    //     event-driven, so a dropped revision announcement is not retried, and
+    //     SignAndAdvancePSGT would still report SIGNED_AND_RELAYED. The revision
+    //     stays pooled locally and peers learn of it only on the next event that
+    //     announces it.
+    //
+    // Reaching here at all takes an allocation failure inside the relay path, so
+    // this is a last-resort guard rather than an expected route.
+    try {
+        Flush();
+    } catch (const std::exception& e) {
+        LogPrintf("ERROR: %s: deferred relay failed: %s", __func__, e.what());
+    } catch (...) {
+        LogPrintf("ERROR: %s: deferred relay failed with a non-standard exception", __func__);
+    }
+}
+
+//! Handle an incoming "psgt" message (#2910): validate against the pool
+//! admission rules and, on acceptance, pool and relay the new revision.
+//!
+//! Misbehavior policy: rejects no compliant node would have relayed
+//! (undecodable, oversize, structural, invalid or missing signatures) score
+//! 20 -- a buggy peer survives a couple of slips, a flooder is banned at
+//! five. Policy rejects honest nodes can disagree on (UTXO races around
+//! confirmation, fee bounds, pool-full, replacement races, completeness)
+//! score 0. Before v15 the message is dropped unread and scores nothing.
+static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
+{
+    // Held to the end: the validation below needs it, and taking it first
+    // keeps the cs_main -> cs_mapAlreadyAskedFor order the TX and BLOCK
+    // handlers use.
+    LOCK(cs_main);
+
+    // Not active: ignore silently, before reading anything, as a pre-v15 node
+    // would ignore the unknown message.
+    if (!IsV15Enabled(nBestHeight)) return;
+
+    // Bounded at the read: an oversize length throws here instead of being
+    // copied in full and refused later by ValidatePSGTForPool.
+    std::vector<unsigned char> wire_bytes;
+    try {
+        vRecv >> LIMITED_VECTOR(wire_bytes, MAX_PSGT_WIRE_SIZE);
+    } catch (const std::exception&) {
+        pfrom->Misbehaving(20);
+        error("%s: undecodable psgt message from %s", __func__, pfrom->addr.ToString());
+        return;
+    }
+
+    // Identify the object by its CANONICAL revision hash (the hash of the
+    // SerializePSGT re-serialization) -- the identity we pool and relay -- not
+    // the raw wire-bytes hash, so inventory-known and mapAlreadyAskedFor
+    // bookkeeping match even when a peer sends a non-canonical encoding of the
+    // same content. Decoding here is cheap (no signature work); a decode failure
+    // falls back to the wire hash and is rejected during validation below.
+    uint256 obj_hash = Hash(wire_bytes);
+    {
+        PartiallySignedTransaction decoded;
+        std::string decode_err;
+        if (DecodePSGTBytes(decoded, wire_bytes, decode_err)) {
+            obj_hash = Hash(SerializePSGT(decoded));
+        }
+    }
+    const CInv inv(MSG_PSGT, obj_hash);
+
+    // The sender obviously has this revision: suppress the inv echo.
+    pfrom->AddInventoryKnown(inv);
+
+    // The request is satisfied (or abandoned); stop re-asking either way.
+    {
+        LOCK(cs_mapAlreadyAskedFor);
+        mapAlreadyAskedFor.erase(inv);
+    }
+
+    // Unable to validate against a current UTXO view yet: ignore silently.
+    // This stays after the bookkeeping above so an out-of-sync node still
+    // stops re-asking for the revision.
+    if (OutOfSyncByAge()) return;
+
+    PSGTPoolEntry entry;
+    std::string reason;
+    const PSGTPoolReject reject =
+        ValidatePSGTForPool(g_psgt_pool, wire_bytes, GetAdjustedTime(), entry, reason);
+
+    switch (reject) {
+    case PSGTPoolReject::NONE:
+        break;
+
+    // Rejects no compliant node would have relayed.
+    case PSGTPoolReject::TOO_LARGE:
+    case PSGTPoolReject::MALFORMED:
+    case PSGTPoolReject::STRUCTURAL:
+    case PSGTPoolReject::INVALID_SIG:
+    case PSGTPoolReject::NO_VALID_SIG:
+        pfrom->Misbehaving(20);
+        error("%s: invalid psgt from %s: %s (%s)", __func__,
+              pfrom->addr.ToString(), PSGTPoolRejectToString(reject), reason);
+        return;
+
+    // Policy rejects honest nodes can disagree on, plus the cheap pre-validation
+    // drops (unknown fields and already-known revisions): no penalty, no relay.
+    // HAS_UNKNOWN_FIELDS and DUPLICATE_REVISION are rejected before the
+    // expensive signature verification, so replaying them costs no ECDSA work
+    // and needs no DoS score; scoring them would also risk banning honest peers
+    // in ordinary gossip races or future protocol extensions.
+    // Funding not yet visible to this node -- the unconfirmed-funding relay
+    // race: a peer relayed the PSGT before its funding transaction reached our
+    // mempool. Hold it rather than drop it; PSGTPool::TransactionAddedToMempool /
+    // BlockConnected re-validate and pool+relay it once the funding arrives.
+    // ValidatePSGTForPool decoded entry.psgt before the UTXO check, so its input
+    // prevouts are available to key the orphan on.
+    case PSGTPoolReject::UTXO_MISSING: {
+        std::vector<COutPoint> prevouts;
+        prevouts.reserve(entry.psgt.tx.vin.size());
+        for (const CTxIn& txin : entry.psgt.tx.vin) prevouts.push_back(txin.prevout);
+        g_psgt_pool.AddOrphan(wire_bytes, obj_hash, prevouts, GetAdjustedTime());
+        LogPrint(BCLog::LogFlags::MEMPOOL, "%s: psgt from %s held pending funding: %s",
+                 __func__, pfrom->addr.ToString(), reason);
+        return;
+    }
+
+    case PSGTPoolReject::HAS_UNKNOWN_FIELDS:
+    case PSGTPoolReject::DUPLICATE_REVISION:
+    case PSGTPoolReject::COMPLETE:
+    case PSGTPoolReject::UTXO_SPENT:
+    case PSGTPoolReject::FEE_TOO_LOW:
+    case PSGTPoolReject::FEE_ABSURD:
+        LogPrint(BCLog::LogFlags::MEMPOOL, "%s: psgt from %s not accepted: %s (%s)",
+                 __func__, pfrom->addr.ToString(),
+                 PSGTPoolRejectToString(reject), reason);
+        return;
+    }
+
+    // The inv tracked at the top of this function is already keyed on the
+    // canonical revision hash (== entry.revision_hash), so the sender is marked
+    // as knowing this revision and we will not echo it back.
+    const uint256 revision_hash = entry.revision_hash;
+
+    std::string reject_reason;
+    const PSGTPoolAddResult result = g_psgt_pool.Add(std::move(entry), reject_reason);
+
+    switch (result) {
+    case PSGTPoolAddResult::ACCEPTED_NEW:
+    case PSGTPoolAddResult::ACCEPTED_REPLACEMENT:
+        RelayPSGT(revision_hash);
+        break;
+
+    case PSGTPoolAddResult::DUPLICATE:
+    case PSGTPoolAddResult::REJECTED_POOL_FULL:
+    case PSGTPoolAddResult::REJECTED_NOT_BETTER:
+    case PSGTPoolAddResult::REJECTED_NOT_INITIATOR:
+        // Normal gossip and replacement races.
+        LogPrint(BCLog::LogFlags::MEMPOOL, "%s: psgt %s from %s not pooled: %s",
+                 __func__, revision_hash.ToString(), pfrom->addr.ToString(),
+                 reject_reason);
+        break;
+    }
+}
+
+
+bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
+{
+    LogPrint(BCLog::LogFlags::NOISY, "received: %s from %s (%" PRIszu " bytes)", strCommand, pfrom->addrName, vRecv.size());
+
+    if (strCommand == NetMsgType::ARIES || strCommand == NetMsgType::VERSION)
+    {
+        // Each connection can only send one version message
+        if (pfrom->nVersion != 0)
+        {
+            pfrom->Misbehaving(10);
+            return false;
+        }
+
+        // The whole message is read into locals and validated before any of it
+        // is stored on the node: a negotiation that fails leaves the node as it
+        // was, and the fields reach the threads that read them (see the comment
+        // at CNode::nVersion) at one site below, nVersion last.
+        int nVersion;
+        uint64_t nServices;
+        int64_t nTime;
+        CAddress addrMe;
+        CAddress addrFrom;
+        uint64_t nNonce = 1;
+        std::string strSubVer;
+        int nStartingHeight = -1;
+
+        vRecv >> nVersion;
+
+        // In the version following 180324 (mandatory v5.0.0 - Fern), we can finally
+        // drop the garbage legacy fields added to the version message:
+        //
+        if (nVersion <= 180324) {
+            std::string legacy_dummy;
+            vRecv >> legacy_dummy      // pfrom->boinchashnonce
+                  >> legacy_dummy      // pfrom->boinchashpw
+                  >> legacy_dummy      // pfrom->cpid
+                  >> legacy_dummy      // pfrom->enccpid
+                  >> legacy_dummy;     // acid
+        }
+
+        vRecv >> nServices >> nTime >> addrMe;
+
+        LogPrint(BCLog::LogFlags::NOISY, "received aries version %i ...", nVersion);
+
+        // Never by signed subtraction: nTime is peer-supplied, and
+        // GetAdjustedTime() - nTime overflows (undefined behaviour) for extreme
+        // values. For nTime == GetAdjustedTime() + INT64_MIN it wraps to
+        // INT64_MIN, whose std::abs() is negative, and GCC builds let the peer
+        // through with an extreme time sample. WithinTimeDrift() is exact for
+        // every pair of times, a mocked clock near either end included.
+        const int64_t adjusted_now = GetAdjustedTime();
+
+        if (!WithinTimeDrift(nTime, adjusted_now, 8 * 60))
+        {
+            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting unauthorized peer with Network Time %" PRId64 " so far off our adjusted time %" PRId64 "!", nTime, adjusted_now);
+            pfrom->Misbehaving(100);
+            pfrom->fDisconnect = true;
+            return false;
+        }
+
+        // Disconnect peers older than MIN_PEER_PROTO_VERSION, the previous
+        // release's protocol version, at once. Peers on that previous version
+        // satisfy every fork before the one this PROTOCOL_VERSION carries, so
+        // they are disconnected only once the grace period past that fork's
+        // activation height has elapsed. The next fork's PROTOCOL_VERSION bump
+        // moves both bounds up by one, and fork_height below must move to that
+        // fork in the same change.
+        const int nLocalBestHeight = WITH_LOCK(cs_main, return pindexBest ? pindexBest->nHeight : 0);
+        // GetBlockV15Height() rather than the raw consensus field, so the
+        // -blockv15height override that activates v15 early on
+        // isolated-testnet/regtest also drives this disconnect.
+        const int fork_height = GetBlockV15Height();
+        // Skipped while the fork is unscheduled (height == INT_MAX). int64_t
+        // arithmetic: fork_height can come from a user-supplied -blockv15height
+        // near INT_MAX, where fork_height + grace would overflow signed int (UB).
+        const bool past_fork_grace = fork_height != std::numeric_limits<int>::max()
+            && nLocalBestHeight > (int64_t)fork_height + Params().GetConsensus().ProtocolVersionGracePeriod;
+        if (nVersion < MIN_PEER_PROTO_VERSION
+            || (DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD
+                && nVersion < PROTOCOL_VERSION
+                && past_fork_grace)
+            ) {
+            // disconnect from peers older than this proto version
+            LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting",
+                     pfrom->addr.ToString(), nVersion);
+
+            pfrom->fDisconnect = true;
+            return false;
+        }
+
+        if (!vRecv.empty())
+            vRecv >> addrFrom >> nNonce;
+
+        if (!vRecv.empty()) {
+            vRecv >> strSubVer;
+
+            if (strSubVer.size() > 256) {
+                strSubVer.resize(256);
+            }
+
+            // Stored, logged and shown as sanitized: nothing outside
+            // SanitizeString()'s safe set reaches a log line, getpeerinfo or the
+            // peer table. The check below still matches, since digits and dots
+            // are in the set.
+            strSubVer = SanitizeString(strSubVer);
+
+            // This handles the special disconnect for clients between the mandatory 5.4.0.0 and the 5.4.5.0 since
+            // 5.4.6.0 effectively became a mandatory due to the contract version error in TxMessage. The protocol version
+            // was not incremented since 5.4.6.0 was originally a leisure and so this is the only reasonable way to distinguish
+            // in this situation.
+            if (strSubVer.find("5.4.5") != std::string::npos
+                || strSubVer.find("5.4.4") != std::string::npos
+                || strSubVer.find("5.4.3") != std::string::npos
+                || strSubVer.find("5.4.2") != std::string::npos
+                || strSubVer.find("5.4.1") != std::string::npos
+                || strSubVer.find("5.4.0") != std::string::npos
+                ) {
+
+                pfrom->fDisconnect = true;
+                return false;
+            }
+        }
+
+        if (!vRecv.empty())
+            vRecv >> nStartingHeight;
+
+        // Allow newbies to connect easily with 0 blocks
+        if (gArgs.GetArg("-autoban", "true") == "true")
+        {
+
+                // Note: Hacking attempts start in this area
+
+                if (nStartingHeight < 1 && nServices == 0)
+                {
+                    pfrom->Misbehaving(100);
+                    LogPrint(BCLog::LogFlags::NET, "Disconnecting possible hacker node with no services.  Banned for 24 hours.");
+                    pfrom->fDisconnect=true;
+                    return false;
+                }
+        }
+
+
+
+        if (pfrom->fInbound && addrMe.IsRoutable())
+        {
+            SeenLocal(addrMe);
+        }
+
+        // Disconnect if we connected to ourself (issue #3067: the nonce is now
+        // per-connection; CheckIncomingNonce scans our outgoing handshakes).
+        if (g_connman && nNonce > 1 && !g_connman->CheckIncomingNonce(nNonce))
+        {
+            LogPrint(BCLog::LogFlags::NET, "connected to self at %s, disconnecting", pfrom->addr.ToString());
+            pfrom->fDisconnect = true;
+            return true;
+        }
+
+        // record my external IP reported by peer (issue #2558 PR 9d)
+        if (addrMe.IsRoutable() && g_connman) {
+            g_connman->SetAddrSeenByPeer(addrMe);
+        }
+
+        // Negotiated. Publish the message's fields for the other threads that
+        // read them, nVersion last, so that a reader which finds it set finds
+        // the rest set too. nStartingHeight follows fClient: the block-request
+        // paths test both without testing nVersion.
+        pfrom->nServices = nServices;
+        pfrom->fClient = !(nServices & NODE_NETWORK);
+        pfrom->SetSubVer(strSubVer);
+        pfrom->nTrust = 0;
+        pfrom->SetAddrLocal(addrMe);
+        // Moved from AddTimeData to here to follow bitcoin's approach.
+        const int64_t nOffsetSample = nTime - GetTime();
+        pfrom->nTimeOffset = nOffsetSample;
+        pfrom->nStartingHeight = nStartingHeight;
+        pfrom->nVersion = nVersion;
+
+        // Be shy and don't send version until we hear
+        if (pfrom->fInbound)
+            pfrom->PushVersion();
+
+        if (!pfrom->fInbound && gArgs.GetBoolArg("-synctime", true))
+            AddTimeData(pfrom->GetId(), pfrom->addr, nOffsetSample);
+
+        // Change version
+        pfrom->PushMessage(NetMsgType::VERACK);
+        {
+            LOCK(pfrom->cs_vSend);
+            pfrom->ssSend.SetVersion(min(nVersion, PROTOCOL_VERSION));
+        }
+
+
+        if (!pfrom->fInbound)
+        {
+            // Advertise our address
+            if (!IsListenDisabled() && !IsInitialBlockDownload())
+            {
+                AdvertiseLocal(pfrom);
+            }
+
+            // Get recent addresses
+            pfrom->PushMessage(NetMsgType::GETADDR);
+            pfrom->fGetAddr = true;
+            g_connman->GetAddrMan().Good(pfrom->addr);
+        }
+
+
+        // Ask the first connected node for block updates
+        static int nAskedForBlocks = 0;
+        size_t numNodes = g_connman ? g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
+        {
+            LOCK(cs_main);
+            if (!pfrom->fClient && !pfrom->fOneShot &&
+                (pfrom->nStartingHeight > (nBestHeight - 144)) &&
+                 (nAskedForBlocks < 1 || (numNodes <= 1 && nAskedForBlocks < 1)))
+            {
+                nAskedForBlocks++;
+                pfrom->PushGetBlocks(pindexBest, uint256());
+                LogPrint(BCLog::LogFlags::NET, "Asked For blocks.");
+            }
+            // cPeerBlockCounts is read by GetNumBlocksOfPeers / IsInitialBlockDownload
+            // under cs_main, so the input also belongs under cs_main.
+            cPeerBlockCounts.input(pfrom->nStartingHeight);
+        }
+
+        // Relay alerts
+        {
+            LOCK(cs_mapAlerts);
+            for (auto const& item : mapAlerts)
+                item.second.RelayTo(pfrom);
+        }
+
+        // Notify the peer about pooled PSGTs (#2910): only peers that
+        // understand MSG_PSGT, and only when the fork is active and this
+        // node is in sync enough to serve what it advertises.
+        if (pfrom->nVersion >= PSGT_PROTO_VERSION
+            && WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight) && !OutOfSyncByAge()))
+        {
+            for (const uint256& revision_hash : g_psgt_pool.GetAllRevisionHashes())
+            {
+                pfrom->PushInventory(CInv(MSG_PSGT, revision_hash));
+            }
+        }
+
+        /* Notify the peer about statsscraper blobs we have */
+        LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+
+        CScraperManifest::PushInvTo(pfrom);
+
+        pfrom->fSuccessfullyConnected = true;
+
+        LogPrint(BCLog::LogFlags::NOISY, "receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", nVersion,
+            nStartingHeight, addrMe.ToString(), addrFrom.ToString(), pfrom->addr.ToString());
+    }
+    else if (pfrom->nVersion == 0)
+    {
+        // Must have a version message before anything else 1-10-2015 Halford
+        LogPrintf("Hack attempt from %s - %s (banned) ", pfrom->addrName, pfrom->addr.ToString());
+        pfrom->Misbehaving(100);
+        pfrom->fDisconnect=true;
+        return false;
+    }
+    else if (strCommand == NetMsgType::VERACK)
+    {
+        LOCK(pfrom->cs_vRecvMsg);
+        pfrom->SetRecvVersion(min(pfrom->nVersion.load(), PROTOCOL_VERSION));
+    }
+    else if (strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::ADDR)
+    {
+        vector<CAddress> vAddr;
+        vRecv >> vAddr;
+
+        if (vAddr.size() > 1000)
+        {
+            pfrom->Misbehaving(10);
+            return error("message addr size() = %" PRIszu "", vAddr.size());
+        }
+
+        // Don't store the node address unless they have block height > 50%
+        if (pfrom->nStartingHeight < (WITH_LOCK(cs_main, return nBestHeight) * .5)) return true;
+
+        // Store the new addresses
+        vector<CAddress> vAddrOk;
+        int64_t nNow = GetAdjustedTime();
+        int64_t nSince = nNow - 10 * 60;
+        for (auto &addr : vAddr)
+        {
+            if (ShutdownInProgress())
+                return true;
+            if (addr.nTime <= 100000000 || addr.nTime > nNow + 10 * 60)
+                addr.nTime = nNow - 5 * 24 * 60 * 60;
+            pfrom->AddAddressKnown(addr);
+            bool fReachable = IsReachable(addr);
+
+            if (addr.nTime > nSince && !pfrom->fGetAddr && vAddr.size() <= 10 && addr.IsRoutable())
+            {
+                // Relay to a deterministic, limited subset of nodes (issue #2558
+                // PR 9c: the selection + relay logic moved into CConnman, which
+                // keeps it under m_nodes_mutex so the chosen CNode* stay valid).
+                if (g_connman) g_connman->RelayAddress(addr, fReachable);
+            }
+            // Do not store addresses outside our network
+            if (fReachable)
+                vAddrOk.push_back(addr);
+        }
+        g_connman->GetAddrMan().Add(vAddrOk, pfrom->addr, 2 * 60 * 60);
+        if (vAddr.size() < 1000)
+            pfrom->fGetAddr = false;
+        if (pfrom->fOneShot)
+            pfrom->fDisconnect = true;
+    }
+
+    else if (strCommand == NetMsgType::INV)
+    {
+        vector<CInv> vInv;
+        vRecv >> vInv;
+        if (vInv.size() > MAX_INV_SZ)
+        {
+            pfrom->Misbehaving(50);
+            return error("message inv size() = %" PRIszu "", vInv.size());
+        }
+
+        // find last block in inv vector
+        unsigned int nLastBlock = (unsigned int)(-1);
+        for (unsigned int nInv = 0; nInv < vInv.size(); nInv++) {
+            if (vInv[vInv.size() - 1 - nInv].type == MSG_BLOCK) {
+                nLastBlock = vInv.size() - 1 - nInv;
+                break;
+            }
+        }
+
+        for (unsigned int nInv = 0; nInv < vInv.size(); nInv++)
+        {
+            const CInv &inv = vInv[nInv];
+
+            if (ShutdownInProgress()) return true;
+
+            // cs_main lock here must be tightly scoped and not be concatenated outside the cs_mapManifest lock, because
+            // that will lead to a deadlock. In the original position above the for loop, cs_main is taken first here, then
+            // cs_mapManifest below, while in the scraper thread, ScraperCullAndBinCScraperManifests() first locks
+            // cs_mapManifest, then calls ScraperDeleteUnauthorizedCScraperManifests(), which calls IsManifestAuthorized(),
+            // which locks cs_main to read the AppCacheSection for authorized scrapers.
+            bool fAlreadyHave;
+            {
+                LOCK(cs_main);
+                CTxDB txdb("r");
+
+                pfrom->AddInventoryKnown(inv);
+                fAlreadyHave = AlreadyHave(txdb, inv);
+            }
+
+            // Check also the scraper data propagation system to see if it needs
+            // this inventory object:
+            if (fAlreadyHave)
+            {
+                LOCK(CScraperManifest::cs_mapManifest);
+                fAlreadyHave = CScraperManifest::AlreadyHave(pfrom, inv);
+            }
+
+            LogPrint(BCLog::LogFlags::NOISY, " got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");
+
+            // Relock cs_main after getting done with the CScraperManifest::AlreadyHave.
+            {
+                LOCK(cs_main);
+
+                // PSGTs (#2910) are only fetched once the v15 gate is active
+                // and this node is in sync -- validation needs a current UTXO
+                // view, and the pool does not operate pre-activation.
+                const bool skip_psgt = inv.type == MSG_PSGT
+                    && (!IsV15Enabled(nBestHeight) || OutOfSyncByAge());
+
+                if (!fAlreadyHave && !skip_psgt)
+                    AskForInv(pfrom, inv);
+                else if (inv.type == MSG_BLOCK && g_orphan_blocks.Contains(inv.hash)) {
+                    const CBlock* pblock_root = g_orphan_blocks.GetRootBlock(inv.hash);
+                    if (pblock_root) {
+                        pfrom->PushGetBlocks(pindexBest, pblock_root->GetHash(true));
+                    }
+                } else if (nInv == nLastBlock) {
+                    // In case we are on a very long side-chain, it is possible that we already have
+                    // the last block in an inv bundle sent in response to getblocks. Try to detect
+                    // this situation and push another getblocks to continue.
+                    pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256());
+                    LogPrint(BCLog::LogFlags::NOISY, "force getblock request: %s", inv.ToString());
+                }
+
+                // Track requests for our stuff
+                if (pwalletMain) pwalletMain->Inventory(inv.hash);
+
+            }
+        }
+    }
+
+
+    else if (strCommand == NetMsgType::GETDATA)
+    {
+        vector<CInv> vInv;
+        vRecv >> vInv;
+        if (vInv.size() > MAX_INV_SZ)
+        {
+            pfrom->Misbehaving(10);
+            return error("message getdata size() = %" PRIszu "", vInv.size());
+        }
+
+        if (vInv.size() != 1)
+        {
+            LogPrint(BCLog::LogFlags::NET, "received getdata (%" PRIszu " invsz)", vInv.size());
+        }
+
+        LOCK(cs_main);
+
+        // Bound the PSGT bytes served per getdata. The pool holds at most
+        // PSGTPool::MAX_ENTRIES distinct revisions, so any request for more than
+        // that many is necessarily redundant. This caps a getdata amplification
+        // where a peer packs MAX_INV_SZ (50000) MSG_PSGT entries all naming the
+        // same pooled revision (each up to MAX_PSGT_WIRE_SIZE) to force gigabytes
+        // of repeated sends under cs_main.
+        constexpr size_t MAX_PSGT_PER_GETDATA = PSGTPool::MAX_ENTRIES;
+        size_t psgt_served = 0;
+
+        for (auto const& inv : vInv)
+        {
+            if (ShutdownInProgress())
+                return true;
+            if (vInv.size() == 1)
+            {
+              LogPrint(BCLog::LogFlags::NET, "received getdata for: %s", inv.ToString());
+            }
+
+            if (inv.type == MSG_BLOCK)
+            {
+                // Send block from disk
+                BlockMap::iterator mi = mapBlockIndex.find(inv.hash);
+                if (mi != mapBlockIndex.end())
+                {
+                    CBlock block;
+                    ReadBlockFromDisk(block, mi->second, Params().GetConsensus());
+
+                    pfrom->PushMessage(NetMsgType::ENCRYPT, block);
+
+                    // Trigger them to send a getblocks request for the next batch of inventory
+                    if (inv.hash == pfrom->hashContinue)
+                    {
+                        // Bypass PushInventory, this must send even if redundant,
+                        // and we want it right after the last block so they don't
+                        // wait for other stuff first.
+                        vector<CInv> vInv;
+                        vInv.push_back(CInv(MSG_BLOCK, hashBestChain));
+                        pfrom->PushMessage(NetMsgType::INV, vInv);
+                        pfrom->hashContinue.SetNull();
+                    }
+                }
+            }
+            else if (inv.IsKnownType())
+            {
+                // Send stream from relay memory. The stream is copied out and
+                // pushed after cs_mapRelay is released: PushMessage takes the
+                // peer's cs_vSend, which the message handler holds across
+                // SendMessages while its wallet lookup waits for cs_wallet, and
+                // RelayTransaction takes cs_mapRelay under cs_wallet. Pushing
+                // under cs_mapRelay made cs_mapRelay -> cs_vSend -> cs_wallet ->
+                // cs_mapRelay a cycle, which could not deadlock only because
+                // the message handler is the one thread taking both of its
+                // first two edges (net_processing.h, the rule for announcing
+                // under cs_wallet).
+                bool pushed = false;
+                CDataStream relay_stream(SER_NETWORK, PROTOCOL_VERSION);
+                {
+                    LOCK(cs_mapRelay);
+                    map<CInv, CDataStream>::iterator mi = mapRelay.find(inv);
+                    if (mi != mapRelay.end()) {
+                        relay_stream = mi->second;
+                        pushed = true;
+                    }
+                }
+                if (pushed) {
+                    pfrom->PushMessage(inv.GetCommand(), std::move(relay_stream));
+                }
+                // A peer asking for one of our txs is evidence it is propagating,
+                // so stop tracking it for initial broadcast. Do this for the
+                // relay-memory hit above as well as the mempool-served path below
+                // -- freshly relayed txs live in mapRelay for ~15 min, so the
+                // common case is served from there, not from the mempool branch.
+                if (pushed && inv.type == MSG_TX) {
+                    mempool.ClearUnbroadcastOnFetch(inv.hash);
+                }
+                if (!pushed && inv.type == MSG_TX) {
+                    CTransaction tx;
+                    if (mempool.lookup(inv.hash, tx)) {
+                        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+                        ss.reserve(1000);
+                        ss << tx;
+                        pfrom->PushMessage(NetMsgType::TX, ss);
+                        // A peer asked for this tx, so it is propagating: stop
+                        // tracking it for initial broadcast.
+                        mempool.ClearUnbroadcastOnFetch(inv.hash);
+                    }
+                }
+                else if(!pushed && inv.type == MSG_PART) {
+                    LOCK(CSplitBlob::cs_mapParts);
+
+                    CSplitBlob::SendPartTo(pfrom, inv.hash);
+                }
+                else if (!pushed && inv.type == MSG_PSGT) {
+                    // Serve from the PSGT pool, not mapRelay: pooled PSGTs
+                    // live up to 7 days, far beyond mapRelay's 15-minute
+                    // expiry. Do not serve while out of sync (mirrors the
+                    // scraper manifest guard below). Bounded by the per-getdata
+                    // budget so a single getdata cannot force unbounded sends.
+                    if (!OutOfSyncByAge() && psgt_served < MAX_PSGT_PER_GETDATA)
+                    {
+                        if (const auto serialized = g_psgt_pool.GetSerializedByRevision(inv.hash))
+                        {
+                            ++psgt_served;
+                            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+                            ss.reserve(serialized->size() + 16);
+                            ss << *serialized;
+                            pfrom->PushMessage(NetMsgType::PSGT, ss);
+                        }
+                    }
+                }
+                else if(!pushed &&  inv.type == MSG_SCRAPERINDEX)
+                {
+                    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+
+                    // Do not send manifests while out of sync.
+                    if (!OutOfSyncByAge())
+                    {
+                        // Do not send unauthorized manifests. This check needs to be done here, because in the
+                        // case of a scraper deauthorization, a request from another node to forward the manifest
+                        // may come before the housekeeping loop has a chance to do the periodic culling. This could
+                        // result in unnecessary node banscore. This will suppress "this" node from sending any
+                        // unauthorized manifests.
+
+                        auto iter = CScraperManifest::mapManifest.find(inv.hash);
+                        if (iter != CScraperManifest::mapManifest.end())
+                        {
+                            CScraperManifest_shared_ptr manifest = iter->second;
+
+                            // We are not going to do anything with the banscore here, because this is the sending node,
+                            // but it is an out parameter of IsManifestAuthorized.
+                            unsigned int banscore_out = 0;
+
+                            // We have to copy out the nTime and pubkey from the selected manifest, because the
+                            // IsManifestAuthorized call chain traverses the map and locks the cs_manifests in turn,
+                            // which creates a deadlock potential if the cs_manifest lock is already held on one of
+                            // the manifests.
+                            int64_t nTime = 0;
+                            CPubKey pubkey;
+                            {
+                                LOCK(manifest->cs_manifest);
+
+                                nTime = manifest->nTime;
+                                pubkey = manifest->pubkey;
+                            }
+
+                            // Also don't send a manifest that is not current.
+                            if (CScraperManifest::IsManifestAuthorized(nTime, pubkey, banscore_out)
+                                    && WITH_LOCK(manifest->cs_manifest, return manifest->IsManifestCurrent()))
+                            {
+                                // SendManifestTo takes its own lock on the manifest. Note that the original form of
+                                // SendManifestTo took the inv.hash and did another lookup to find the actual
+                                // manifest in the mapManifest. This is unnecessary since we already have the manifest
+                                // identified above. The new form, which takes a smart shared pointer to the manifest
+                                // as an argument, sends the manifest directly using PushMessage, and avoids another
+                                // map find.
+                                CScraperManifest::SendManifestTo(pfrom, manifest);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Track requests for our stuff
+            if (pwalletMain) pwalletMain->Inventory(inv.hash);
+        }
+    }
+
+    else if (strCommand == NetMsgType::GETBLOCKS)
+    {
+        CBlockLocator locator;
+        uint256 hashStop;
+        vRecv >> locator >> hashStop;
+
+        LOCK(cs_main);
+
+        // Find the last block the caller has in the main chain
+        CBlockIndex* pindex = locator.GetBlockIndex();
+
+        // Send the rest of the chain
+        if (pindex)
+            pindex = pindex->pnext;
+        int nLimit = 500;
+
+        LogPrint(BCLog::LogFlags::NET, "getblocks %d to %s limit %d", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20), nLimit);
+        for (; pindex; pindex = pindex->pnext)
+        {
+            if (pindex->GetBlockHash() == hashStop)
+            {
+                LogPrint(BCLog::LogFlags::NET, "getblocks stopping at %d %s", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20));
+                // ppcoin: tell downloading node about the latest block if it's
+                // without risk being rejected due to stake connection check
+                if (hashStop != hashBestChain && pindex->GetBlockTime() + nStakeMinAge > pindexBest->GetBlockTime())
+                    pfrom->PushInventory(CInv(MSG_BLOCK, hashBestChain));
+                break;
+            }
+            pfrom->PushInventory(CInv(MSG_BLOCK, pindex->GetBlockHash()));
+            if (--nLimit <= 0)
+            {
+                // When this block is requested, we'll send an inv that'll make them
+                // getblocks the next batch of inventory.
+                LogPrint(BCLog::LogFlags::NET, "getblocks stopping at limit %d %s", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20));
+                pfrom->hashContinue = pindex->GetBlockHash();
+                break;
+            }
+        }
+    }
+    else if (strCommand == NetMsgType::GETHEADERS)
+    {
+        CBlockLocator locator;
+        uint256 hashStop;
+        vRecv >> locator >> hashStop;
+
+        LOCK(cs_main);
+
+        CBlockIndex* pindex = nullptr;
+        if (locator.IsNull())
+        {
+            // If locator is null, return the hashStop block
+            BlockMap::iterator mi = mapBlockIndex.find(hashStop);
+            if (mi == mapBlockIndex.end())
+                return true;
+            pindex = mi->second;
+        }
+        else
+        {
+            // Find the last block the caller has in the main chain
+            pindex = locator.GetBlockIndex();
+            if (pindex)
+                pindex = pindex->pnext;
+        }
+
+        vector<CBlockHeader> vHeaders;
+        int nLimit = 1000;
+        LogPrint(BCLog::LogFlags::NET, "getheaders %d to %s", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20));
+        for (; pindex; pindex = pindex->pnext)
+        {
+            vHeaders.push_back(pindex->GetBlockHeader());
+            if (--nLimit <= 0 || pindex->GetBlockHash() == hashStop)
+                break;
+        }
+        pfrom->PushMessage(NetMsgType::HEADERS, vHeaders);
+    }
+    else if (strCommand == NetMsgType::TX)
+    {
+        vector<uint256> vWorkQueue;
+        vector<uint256> vEraseQueue;
+        CTransaction tx;
+        vRecv >> tx;
+
+        CInv inv(MSG_TX, tx.GetHash());
+        pfrom->AddInventoryKnown(inv);
+
+        LOCK(cs_main);
+
+        CValidationState state;
+        bool fMissingInputs = false;
+        if (AcceptToMemoryPool(mempool, tx, state, &fMissingInputs))
+        {
+            RelayTransaction(tx, inv.hash);
+            {
+                LOCK(cs_mapAlreadyAskedFor);
+                mapAlreadyAskedFor.erase(inv);
+            }
+            vWorkQueue.push_back(inv.hash);
+            vEraseQueue.push_back(inv.hash);
+
+            // Recursively process any orphan transactions that depended on this one
+            for (unsigned int i = 0; i < vWorkQueue.size(); i++)
+            {
+                uint256 hashPrev = vWorkQueue[i];
+                // find(), not operator[]: a transaction with no orphan children
+                // must not leave an empty entry behind.
+                const auto by_prev = mapOrphanTransactionsByPrev.find(hashPrev);
+                if (by_prev == mapOrphanTransactionsByPrev.end()) continue;
+
+                for (set<uint256>::iterator mi = by_prev->second.begin();
+                     mi != by_prev->second.end();
+                     ++mi)
+                {
+                    const uint256& orphanTxHash = *mi;
+                    CTransaction& orphanTx = mapOrphanTransactions[orphanTxHash].tx;
+                    CValidationState orphan_state;
+                    bool fMissingInputs2 = false;
+
+                    if (AcceptToMemoryPool(mempool, orphanTx, orphan_state, &fMissingInputs2))
+                    {
+                        LogPrintf("   accepted orphan tx %s", orphanTxHash.ToString().substr(0,10));
+                        RelayTransaction(orphanTx, orphanTxHash);
+                        {
+                            LOCK(cs_mapAlreadyAskedFor);
+                            mapAlreadyAskedFor.erase(CInv(MSG_TX, orphanTxHash));
+                        }
+                        vWorkQueue.push_back(orphanTxHash);
+                        vEraseQueue.push_back(orphanTxHash);
+                        pfrom->nTrust++;
+                    }
+                    else if (!fMissingInputs2)
+                    {
+                        // invalid orphan
+                        vEraseQueue.push_back(orphanTxHash);
+                        LogPrintf("   removed invalid orphan tx %s", orphanTxHash.ToString().substr(0,10));
+                    }
+                }
+            }
+
+            for (auto const& hash : vEraseQueue)
+                EraseOrphanTx(hash);
+        }
+        else if (fMissingInputs)
+        {
+            AddOrphanTx(tx);
+
+            // DoS prevention: do not allow mapOrphanTransactions to grow unbounded (see CVE-2012-3789)
+            unsigned int nEvicted = LimitOrphanTxSize(MAX_ORPHAN_TRANSACTIONS);
+            if (nEvicted > 0)
+                LogPrintf("mapOrphan overflow, removed %u tx", nEvicted);
+        }
+        int nDoS = 0;
+        if (state.IsInvalid(nDoS) && nDoS > 0)
+            pfrom->Misbehaving(nDoS);
+    }
+
+
+    else if (strCommand == NetMsgType::ENCRYPT || strCommand == NetMsgType::BLOCK)
+    {
+        //Response from getblocks, message = block
+
+        CBlock block;
+        vRecv >> block;
+
+        uint256 hashBlock = block.GetHash(true);
+
+        LogPrint(BCLog::LogFlags::NET, " Received block %s; ", hashBlock.ToString());
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY)) block.print();
+
+        CInv inv(MSG_BLOCK, hashBlock);
+        pfrom->AddInventoryKnown(inv);
+
+        LOCK(cs_main);
+
+        CValidationState state;
+        if (ProcessBlock(pfrom, &block, false, state))
+        {
+            {
+                LOCK(cs_mapAlreadyAskedFor);
+                mapAlreadyAskedFor.erase(inv);
+            }
+            pfrom->nTrust++;
+        }
+        else if (state.GetRejectReason() == REJECT_TIME_TOO_NEW && pfrom->mapAskFor.size() <= 50000)
+        {
+            // From v15 a block 48-128 s ahead of this node's clock is rejected without penalty. Nothing else would
+            // ask for it again until a child block arrives, so ask the sender once this node's clock is within the
+            // future bound of the block's time. mapAskFor is keyed by the earliest send time in microseconds.
+            pfrom->mapAskFor.insert(std::make_pair((block.GetBlockTime() - GRC::V15_FUTURE_TIME_BOUND) * 1000000, inv));
+        }
+        int nDoS = 0;
+        if (state.IsInvalid(nDoS) && nDoS > 0)
+        {
+                pfrom->Misbehaving(nDoS);
+                pfrom->nTrust--;
+        }
+
+    }
+
+
+    else if (strCommand == NetMsgType::GETADDR)
+    {
+        // Don't return addresses older than nCutOff timestamp
+        int64_t nCutOff =  GetAdjustedTime() - (nNodeLifespan * 24 * 60 * 60);
+        pfrom->vAddrToSend.clear();
+        vector<CAddress> vAddr = g_connman->GetAddrMan().GetAddr();
+        for (auto const&addr : vAddr)
+            if(addr.nTime > nCutOff)
+                pfrom->PushAddress(addr);
+    }
+
+
+    else if (strCommand == NetMsgType::MEMPOOL)
+    {
+        // Not answered. No Gridcoin node sends mempool.
+        LogPrint(BCLog::LogFlags::NET, "mempool request from %s not answered", pfrom->addr.ToString());
+    }
+    else if (strCommand == NetMsgType::PING)
+    {
+        uint64_t nonce = 0;
+        vRecv >> nonce;
+
+        // Echo the message back with the nonce. This allows for two useful features:
+        //
+        // 1) A remote node can quickly check if the connection is operational
+        // 2) Remote nodes can measure the latency of the network thread. If this node
+        //    is overloaded it won't respond to pings quickly and the remote node can
+        //    avoid sending us more work, like chain download requests.
+        //
+        // The nonce stops the remote getting confused between different pings: without
+        // it, if the remote node sends a ping once per second and this node takes 5
+        // seconds to respond to each, the 5th ping the remote sends would appear to
+        // return very quickly.
+        pfrom->PushMessage(NetMsgType::PONG, nonce);
+    }
+    else if (strCommand == NetMsgType::PONG)
+    {
+        int64_t pingUsecEnd = GetTimeMicros();
+        uint64_t nonce = 0;
+        size_t nAvail = vRecv.in_avail();
+        bool bPingFinished = false;
+        std::string sProblem;
+
+        if (nAvail >= sizeof(nonce)) {
+            vRecv >> nonce;
+
+            // Only process pong message if there is an outstanding ping (old ping without nonce should never pong)
+            if (pfrom->nPingNonceSent != 0)
+            {
+                if (nonce == pfrom->nPingNonceSent)
+                {
+                    // Matching pong received, this ping is no longer outstanding
+                    bPingFinished = true;
+                    int64_t pingUsecTime = pingUsecEnd - pfrom->nPingUsecStart;
+                    if (pingUsecTime > 0) {
+                        // Successful ping time measurement, replace previous
+                        pfrom->nPingUsecTime = pingUsecTime;
+                        pfrom->nMinPingUsecTime = std::min(pfrom->nMinPingUsecTime.load(), pingUsecTime);
+                    } else {
+                        // This should never happen
+                        sProblem = "Timing mishap";
+                    }
+                } else {
+                    // Nonce mismatches are normal when pings are overlapping
+                    sProblem = "Nonce mismatch";
+                    if (nonce == 0) {
+                        // This is most likely a bug in another implementation somewhere, cancel this ping
+                        bPingFinished = true;
+                        sProblem = "Nonce zero";
+                    }
+                }
+            } else {
+                sProblem = "Unsolicited pong without ping";
+            }
+        } else {
+            // This is most likely a bug in another implementation somewhere, cancel this ping
+            bPingFinished = true;
+            sProblem = "Short payload";
+        }
+
+        if (!(sProblem.empty())) {
+            LogPrint(BCLog::LogFlags::NET, "pong %s %s: %s, %" PRIx64 " expected, %" PRIx64 " received, %" PRIu64 " bytes"
+                , pfrom->addr.ToString()
+                , pfrom->GetSubVer()
+                , sProblem, pfrom->nPingNonceSent, nonce, nAvail);
+        }
+        if (bPingFinished) {
+            pfrom->nPingNonceSent = 0;
+        }
+    }
+    else if (strCommand == NetMsgType::ALERT)
+    {
+        CAlert alert;
+        vRecv >> alert;
+
+        uint256 alertHash = alert.GetHash();
+        if (pfrom->setKnown.count(alertHash) == 0)
+        {
+            if (alert.ProcessAlert())
+            {
+                // Relay (issue #2558 PR 9c: iterate via the node-access API).
+                // RelayTo pushes a message, taking each peer's cs_vSend, so the
+                // fan-out holds cs_main -- see the lock rule on
+                // CConnman::ForEachNode.
+                pfrom->setKnown.insert(alertHash);
+                if (g_connman) {
+                    LOCK(cs_main);
+                    g_connman->ForEachNodeUnderLock([&alert](CNode* pnode) {
+                        alert.RelayTo(pnode);
+                    });
+                }
+            }
+            else {
+                // Small DoS penalty so peers that send us lots of
+                // duplicate/expired/invalid-signature/whatever alerts
+                // eventually get banned.
+                // This isn't a Misbehaving(100) (immediate ban) because the
+                // peer might be an older or different implementation with
+                // a different signature key, etc.
+                pfrom->Misbehaving(10);
+            }
+        }
+    }
+
+    else if (strCommand == NetMsgType::SCRAPERINDEX)
+    {
+        CScraperManifest::RecvManifest(pfrom, vRecv);
+    }
+    else if (strCommand == NetMsgType::PART)
+    {
+        CSplitBlob::RecvPart(pfrom, vRecv);
+    }
+    else if (strCommand == NetMsgType::PSGT)
+    {
+        ProcessPSGTMessage(pfrom, vRecv);
+    }
+
+
+    else
+    {
+        // Ignore unknown commands for extensibility
+        // Let the peer know that we didn't find what it asked for, so it doesn't
+        // have to wait around forever. Currently only SPV clients actually care
+        // about this message: it's needed when they are recursively walking the
+        // dependencies of relevant unconfirmed transactions. SPV clients want to
+        // do that because they want to know about (and store and rebroadcast and
+        // risk analyze) the dependencies of transactions relevant to them, without
+        // having to download the entire memory pool.
+
+
+    }
+
+    // Update the last seen time for this node's address
+    if (pfrom->fNetworkNode)
+        if (strCommand == NetMsgType::ARIES || strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::INV || strCommand == NetMsgType::GETDATA || strCommand == NetMsgType::PING || strCommand == NetMsgType::VERSION || strCommand == NetMsgType::ADDR)
+            AddressCurrentlyConnected(pfrom->addr);
+
+    return true;
+}
+
+// File-static since PR 8a: the only callers are PeerManagerImpl (below) and,
+// through it, ThreadMessageHandler via g_peerman. Was a net_processing.h export.
+static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
+{
+    //
+    // Message format
+    //  (4) message start
+    //  (12) command
+    //  (4) size
+    //  (4) checksum
+    //  (x) data
+    //
+    bool fOk = true;
+
+    std::deque<CNetMessage>::iterator it = pfrom->vRecvMsg.begin();
+    while (!pfrom->fDisconnect && it != pfrom->vRecvMsg.end()) {
+        // Don't bother if send buffer is too full to respond anyway
+        if (WITH_LOCK(pfrom->cs_vSend, return pfrom->nSendSize) >= SendBufferSize())
+            break;
+
+        // get next message
+        CNetMessage& msg = *it;
+
+        LogPrint(BCLog::LogFlags::NOISY, "ProcessMessages(message %u msgsz, %zu bytes, complete:%s)",
+                 msg.hdr.nMessageSize, msg.vRecv.size(),
+                 msg.complete() ? "Y" : "N");
+
+        // end, if an incomplete message is found
+        if (!msg.complete())
+            break;
+
+        // at this point, any failure means we can delete the current message
+        it++;
+
+        // Scan for message start
+        if (memcmp(msg.hdr.pchMessageStart, Params().MessageStart(), CMessageHeader::MESSAGE_START_SIZE) != 0) {
+            LogPrint(BCLog::LogFlags::NOISY, "PROCESSMESSAGE: INVALID MESSAGESTART");
+            fOk = false;
+            break;
+        }
+
+        // Read header
+        CMessageHeader& hdr = msg.hdr;
+        if (!hdr.IsValid())
+        {
+            LogPrint(BCLog::LogFlags::NET, "PROCESSMESSAGE: ERRORS IN HEADER %s", SanitizeString(hdr.GetCommand()));
+            continue;
+        }
+        string strCommand = hdr.GetCommand();
+
+
+        // Message size
+        unsigned int nMessageSize = hdr.nMessageSize;
+
+        // Checksum
+        CDataStream& vRecv = msg.vRecv;
+        // The previous form `&vRecv.begin()[0]` dereferenced begin() to take
+        // its address, which UBSan reported as a null-pointer-of-type bind on
+        // a zero-length message. `vRecv.data()` is well-defined for an empty
+        // container, but the standard permits it to return nullptr when size()
+        // is 0 -- and passing that down to CSHA256::Write would then exhibit
+        // `nullptr + 0` UB inside the hash core. That root is closed (see
+        // CSHA256::Write's len == 0 guard in crypto/sha256.cpp), so
+        // empty-payload messages (verack et al.) hash cleanly here.
+        uint256 hash = Hash(Span<std::byte>{vRecv.data(), nMessageSize});
+
+        // We just received a message off the wire, harvest entropy from the time (and the message checksum)
+        RandAddEvent(ReadLE32(hash.begin()));
+
+        // TODO: hardcoded checksum size;
+        //  will no longer be used once we adopt CNetMessage from Bitcoin
+        uint8_t nChecksum[CMessageHeader::CHECKSUM_SIZE];
+        memcpy(&nChecksum, &hash, sizeof(nChecksum));
+        if (!std::equal(std::begin(nChecksum), std::end(nChecksum), std::begin(hdr.pchChecksum)))
+        {
+            LogPrint(BCLog::LogFlags::NET, "ProcessMessages(%s, %u bytes) : CHECKSUM ERROR nChecksum=%08x hdr.nChecksum=%08x",
+               SanitizeString(strCommand), nMessageSize, nChecksum, hdr.pchChecksum);
+            continue;
+        }
+
+        // Process message
+        bool fRet = false;
+        try
+        {
+            fRet = ProcessMessage(pfrom, strCommand, vRecv, msg.nTime);
+            if (ShutdownInProgress())
+                break;
+        }
+        // Log whatever ProcessMessage() throws and go on to the next message.
+        // Most of it is a peer's malformed message, which deserialization
+        // rejects by throwing. PrintExceptionContinue() would write it to
+        // stderr and assign strMiscWarning, which GetWarnings() returns at
+        // priority 1000 in getinfo, getstakinginfo, getnetworkinfo,
+        // getblockchaininfo and the GUI status bar, so any peer could set the
+        // node's user-visible warning with one malformed message.
+        //
+        // bitcoin#17762 logs these to the net category. Here they are logged
+        // unconditionally: the same catch receives internal errors thrown while
+        // a message is processed, and those belong in the default debug.log.
+        catch (const std::exception& e) {
+            LogPrintf("%s(%s, %u bytes): Exception '%s' (%s) caught", __func__, SanitizeString(strCommand), nMessageSize, e.what(), typeid(e).name());
+        } catch (...) {
+            LogPrintf("%s(%s, %u bytes): Unknown exception caught", __func__, SanitizeString(strCommand), nMessageSize);
+        }
+
+        if (!fRet)
+        {
+           LogPrint(BCLog::LogFlags::NOISY, "ProcessMessage(%s, %u bytes) FAILED", strCommand, nMessageSize);
+        }
+    }
+
+    // In case the connection got shut down, its receive buffer was wiped
+    if (!pfrom->fDisconnect)
+        pfrom->vRecvMsg.erase(pfrom->vRecvMsg.begin(), it);
+
+    return fOk;
+}
+
+// Note: this function requires a lock on cs_main before calling. (See below comments.)
+// File-static since PR 8a (see ProcessMessages above).
+static bool SendMessages(CNode* pto, bool fSendTrickle)
+{
+    // Some comments and TODOs in order...
+    // 1. This function never returns anything but true... (try to find a return other than true).
+    // 2. The try lock inside this function causes a potential deadlock due to a lock order reversal in main.
+    // 3. The reason for the interior lock is vacated by 1. So the below is commented out, and moved to
+    //    the ThreadMessageHandler2 in net.cpp.
+    // 4. We need to research why we never return false at all, and subordinately, why we never consume
+    //    the value of this function.
+
+    /*
+    // Treat lock failures as send successes in case the caller disconnects
+    // the node based on the return value.
+    TRY_LOCK(cs_main, lockMain);
+    if(!lockMain)
+        return true;
+    */
+
+    // Don't send anything until we get their version message
+    if (pto->nVersion == 0)
+        return true;
+
+    //
+    // Message: ping
+    //
+    bool pingSend = false;
+    if (pto->fPingQueued)
+    {
+        // RPC ping request by user
+        pingSend = true;
+    }
+    if (pto->nPingNonceSent == 0 && pto->nPingUsecStart + PING_INTERVAL * 1000000 < GetTimeMicros())
+    {
+        // Ping automatically sent as a latency probe & keepalive.
+        pingSend = true;
+    }
+    if (pingSend)
+    {
+        uint64_t nonce = 0;
+        while (nonce == 0) {
+            GetRandBytes({(unsigned char*)&nonce, sizeof(nonce)});
+        }
+        pto->fPingQueued = false;
+        pto->nPingUsecStart = GetTimeMicros();
+        pto->nPingNonceSent = nonce;
+
+        pto->PushMessage(NetMsgType::PING, nonce);
+    }
+
+    // Wallet rebroadcast of unconfirmed transactions now self-schedules on
+    // g_scheduler (see AppInit2) rather than running per SendMessages pass,
+    // retiring the setpwalletRegistered ResendWalletTransactions wrapper
+    // (issue #3030).
+
+    // (The node's own unbroadcast transactions are rebroadcast from a scheduler
+    // job, ResendUnbroadcastTransactions(), not here -- relaying from inside
+    // SendMessages would run under pto->cs_vSend and invert the
+    // m_nodes_mutex -> cs_vSend order taken by the socket handler.)
+
+    // Address refresh broadcast
+    if (!IsInitialBlockDownload())
+    {
+        if (GetAdjustedTime() > pto->nNextRebroadcastTime)
+        {
+            // Periodically clear setAddrKnown to allow refresh broadcasts
+            //pnode->setAddrKnown.clear();
+            // Rebroadcast our address
+            if (!IsListenDisabled())
+            {
+                AdvertiseLocal(pto);
+                pto->nNextRebroadcastTime = GetAdjustedTime() + 12*60*60 + GetRand(12*60*60);
+            }
+        }
+    }
+
+    //
+    // Message: addr
+    //
+    if (fSendTrickle)
+    {
+        vector<CAddress> vAddr;
+        vAddr.reserve(pto->vAddrToSend.size());
+        for (auto const& addr : pto->vAddrToSend)
+        {
+            // returns true if wasn't already contained in the set
+            if (pto->setAddrKnown.insert(addr).second)
+            {
+                vAddr.push_back(addr);
+                // receiver rejects addr messages larger than 1000
+                if (vAddr.size() >= 1000)
+                {
+                    pto->PushMessage(NetMsgType::GRIDADDR, vAddr);
+                    vAddr.clear();
+                }
+            }
+        }
+        pto->vAddrToSend.clear();
+        if (!vAddr.empty())
+            pto->PushMessage(NetMsgType::GRIDADDR, vAddr);
+    }
+
+
+    //
+    // Message: inventory
+    //
+    vector<CInv> vInv;
+    vector<CInv> vInvWait;
+
+    // The wallet answer the trickle decision needs is resolved BEFORE
+    // cs_inventory is taken, not under it. CWallet::GetTransaction takes
+    // cs_wallet, and a thread committing a wallet transaction announces it under
+    // cs_wallet and walks every node to reach this peer's cs_inventory, so
+    // querying the wallet here closes an ABBA cycle (#3391). cs_inventory has no
+    // other outgoing edge, so resolving this one outside it makes it a leaf.
+    //
+    // Only the announcements that would otherwise blast immediately need an
+    // answer: a trickle round announces everything anyway, and the three in four
+    // the filter holds back are held back whichever way the wallet answers. On
+    // this network that leaves a handful of hashes at most.
+    std::set<uint256> blast_ok;
+    if (!fSendTrickle)
+    {
+        std::vector<CInv> snapshot;
+        {
+            LOCK(pto->cs_inventory);
+            snapshot = pto->vInventoryToSend;
+        }
+
+        for (const CInv& inv : snapshot)
+        {
+            if (inv.type != MSG_TX) continue;
+            if (TrickleWaitByHash(inv.hash)) continue;
+
+            // setInventoryKnown is deliberately not consulted here. Reading it
+            // needs cs_inventory, and the only cost of resolving an entry the
+            // loop below then skips is one wallet lookup that goes unused.
+            CWalletTx wtx;
+            if (!(pwalletMain && pwalletMain->GetTransaction(inv.hash, wtx) && wtx.fFromMe)) {
+                blast_ok.insert(inv.hash);
+            }
+        }
+    }
+
+    {
+        LOCK(pto->cs_inventory);
+        vInv.reserve(pto->vInventoryToSend.size());
+        vInvWait.reserve(pto->vInventoryToSend.size());
+        for (auto const& inv : pto->vInventoryToSend)
+        {
+            if (pto->setInventoryKnown.count(inv))
+                continue;
+
+            // trickle out tx inv to protect privacy
+            if (inv.type == MSG_TX && !fSendTrickle)
+            {
+                // 1/4 of tx invs blast to all immediately
+                bool fTrickleWait = TrickleWaitByHash(inv.hash);
+
+                // Always trickle our own transactions. Anything queued after the
+                // snapshot above has no resolved answer, and the default is to
+                // wait: that costs an unowned transaction one more SendMessages
+                // round, where it will be in the snapshot, and it never announces
+                // one of ours early. Erring the other way would leak exactly what
+                // the trickle exists to hide.
+                if (!fTrickleWait)
+                {
+                    fTrickleWait = !blast_ok.count(inv.hash);
+                }
+
+                if (fTrickleWait)
+                {
+                    vInvWait.push_back(inv);
+                    continue;
+                }
+            }
+
+            // returns true if wasn't already contained in the set
+            if (pto->setInventoryKnown.insert(inv).second)
+            {
+                vInv.push_back(inv);
+                if (vInv.size() >= 1000)
+                {
+                    pto->PushMessage(NetMsgType::INV, vInv);
+                    vInv.clear();
+                }
+            }
+        }
+        pto->vInventoryToSend = vInvWait;
+    }
+    if (!vInv.empty())
+        pto->PushMessage(NetMsgType::INV, vInv);
+
+
+    //
+    // Message: getdata
+    //
+    vector<CInv> vGetData;
+    int64_t nNow =  GetAdjustedTime() * 1000000;
+    CTxDB txdb("r");
+    while (!pto->mapAskFor.empty() && (*pto->mapAskFor.begin()).first <= nNow)
+    {
+        const CInv& inv = (*pto->mapAskFor.begin()).second;
+
+        // This used to skip the request entirely when inv was absent from
+        // mapAlreadyAskedFor, on the reasoning that the entry is removed when
+        // the object arrives, so absence means satisfied.
+        //
+        // That inference was sound only while the map was unbounded. It is now
+        // a limitedmap capped at MAX_INV_SZ and evicts lowest-value-first,
+        // where the value is the request time -- so absence now means EITHER
+        // "received" OR "evicted because something newer arrived", and the two
+        // are indistinguishable here. One peer announcing MAX_INV_SZ unknown
+        // hashes in a single inv inserts a fresh, higher-valued entry for each,
+        // which is enough to evict every older pending request in the process.
+        // Skipping on absence would then silently cancel real requests that
+        // were never answered, and nothing re-issues them unless another peer
+        // re-announces.
+        //
+        // AlreadyHave() below already answers the real question -- do we still
+        // need this object -- so the check simply falls through to it. The cost
+        // is one AlreadyHave() call for objects we have already received, where
+        // this previously short-circuited; correctness is worth more than the
+        // lookup, and the mapAskFor entry is erased at the bottom of the loop
+        // either way.
+
+        // cs_main is required for the AlreadyHave call (mapBlockIndex
+        // lookup) and must be released before the cs_mapManifest scope
+        // below to preserve the canonical cs_main -> subsystem order
+        // documented at the inv-handling site near main.cpp:2533.
+        bool fAlreadyHave;
+        {
+            LOCK(cs_main);
+            fAlreadyHave = AlreadyHave(txdb, inv);
+        }
+
+        // Check also the scraper data propagation system to see if it needs
+        // this inventory object:
+        if (fAlreadyHave)
+        {
+            LOCK(CScraperManifest::cs_mapManifest);
+            fAlreadyHave = CScraperManifest::AlreadyHave(nullptr, inv);
+        }
+
+        if (!fAlreadyHave)
+        {
+            LogPrint(BCLog::LogFlags::NET, "sending getdata: %s", inv.ToString());
+            vGetData.push_back(inv);
+            if (vGetData.size() >= 1000)
+            {
+                pto->PushMessage(NetMsgType::GETDATA, vGetData);
+                vGetData.clear();
+            }
+
+            // Re-check presence under the lock before refreshing the
+            // timestamp. Another thread may have removed the entry
+            // between the initial presence check above and here
+            // (e.g. the inventory arrived and was processed via the
+            // TX / BLOCK handlers in ProcessMessage, which erase under
+            // cs_mapAlreadyAskedFor). If the entry is gone, the
+            // request is satisfied and we should not reinsert it.
+            {
+                LOCK(cs_mapAlreadyAskedFor);
+                const auto it = mapAlreadyAskedFor.find(inv);
+                if (it != mapAlreadyAskedFor.end()) {
+                    mapAlreadyAskedFor.update(it, nNow);
+                }
+            }
+        }
+        pto->mapAskFor.erase(pto->mapAskFor.begin());
+    }
+    if (!vGetData.empty())
+        pto->PushMessage(NetMsgType::GETDATA, vGetData);
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// PeerManager (issue #2558): the message-processing manager. A thin shell over
+// the file-static ProcessMessages/SendMessages (PR 8a) that now also owns the
+// peer-misbehavior state relocated from this TU's file scope (PR 8b).
+// ---------------------------------------------------------------------------
+
+namespace {
+class PeerManagerImpl final : public PeerManager
+{
+public:
+    explicit PeerManagerImpl(BanMan* banman) : m_banman(banman) {}
+
+    bool ProcessMessages(CNode* pfrom) override EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
+    {
+        return ::ProcessMessages(pfrom);
+    }
+
+    bool SendMessages(CNode* pto, bool fSendTrickle) override
+    {
+        return ::SendMessages(pto, fSendTrickle);
+    }
+
+    void StartScheduledTasks(CScheduler& /*scheduler*/) override
+    {
+        // Intentionally empty. The recurring PSGT-pool sweep (EraseExpired,
+        // #2910) is scheduled in AppInit2 alongside the other recurring tasks
+        // (banlist dump, entropy, unbroadcast rebroadcast), so it is NOT
+        // duplicated here -- scheduling it in both places ran two sweeps of the
+        // same pool. This hook remains as the eventual home should those tasks
+        // be consolidated onto PeerManager.
+    }
+
+    void UpdatedBlockTip(const CBlockIndex* pindexNew, const CBlockIndex* /*pindexFork*/,
+                         bool /*fInitialDownload*/) override EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        // Relay inventory, but don't relay old inventory during initial block
+        // download (moved verbatim from AcceptBlock, issue #3125 C8; the
+        // per-node nStartingHeight heuristic below is the historical IBD
+        // suppressor, so no fInitialDownload gate is added).
+        //
+        // Defensive best-chain guard. SetBestChain now emits UpdatedBlockTip only
+        // when the tip actually advanced -- it reports pindexBest and skips the
+        // emission on its trust-regression reorg-back path (issues #3145, #3125
+        // C8) -- so pindexNew is the best chain here. The guard stays as cheap
+        // insurance against a future emitter that fires on a non-advancing tip
+        // (relaying that inv would advertise a non-best block).
+        if (pindexNew == nullptr || pindexNew->GetBlockHash() != hashBestChain) return;
+
+        int nBlockEstimate = Params().Checkpoints().GetHeight();
+
+        // Iterate under the already-held cs_main (issue #2558 PR 9c); read the
+        // cs_main-guarded height into a local so the callback stays lock-clean.
+        const int nBestHeightLocal = nBestHeight;
+        const CInv inv(MSG_BLOCK, pindexNew->GetBlockHash());
+        if (g_connman)
+        {
+            g_connman->ForEachNodeUnderLock([&](CNode* pnode) {
+                if (nBestHeightLocal > (pnode->nStartingHeight != -1 ? pnode->nStartingHeight - 2000 : nBlockEstimate))
+                    pnode->PushInventory(inv);
+            });
+        }
+    }
+
+    bool Misbehaving(const CAddress& addr, int howmuch) override
+    {
+        if (addr.IsLocal())
+        {
+            LogPrintf("Warning: Local address %s misbehaving (delta: %d)!", addr.ToString(), howmuch);
+            return false;
+        }
+
+        // Decide under the lock, ban outside it. Holding m_misbehavior_cs across
+        // Ban() takes BanMan::m_cs_banned second, while ClearBanned / Unban /
+        // SweepBanned take m_cs_banned first and reach m_misbehavior_cs through the
+        // misbehavior-clear callback (BanMan::ZeroMisbehavior ->
+        // ClearMisbehaviorForSubnet). That AB-BA needs no exotic interleaving: a peer
+        // crossing -banscore on a message-handler thread while the periodic banlist
+        // sweep or an RPC clearbanned runs is enough. Keeping m_misbehavior_cs a leaf
+        // removes the edge outright rather than leaving a rule every future caller has
+        // to remember.
+        //
+        // The score is captured here rather than re-read after the lock is dropped:
+        // the ban decision and the transition this call logs must describe the same
+        // update, and another thread may adjust the entry in between.
+        int nMisbehavior;
+        bool fBan;
+
+        {
+            LOCK(m_misbehavior_cs);
+
+            nMisbehavior = GetMisbehaviorScore_(addr) + howmuch;
+
+            m_misbehavior[addr] = std::make_pair(nMisbehavior, GetAdjustedTime());
+
+            fBan = nMisbehavior >= gArgs.GetArg("-banscore", 100);
+        }
+
+        // The ban lands OUTSIDE m_misbehavior_cs -- holding it across Ban()
+        // was the m_misbehavior_cs -> m_cs_banned half of an AB-BA against
+        // the clear-callback path. Accepted trade-off of the release: a
+        // clearbanned/Unban/sweep that fully completes in this window zeroes
+        // a score this thread already counted, and the Ban() below still
+        // lands afterwards -- a decision made microseconds before the clear
+        // is not unwound by it. Benign (the operator can clear again;
+        // Ban() itself is last-writer-wins under m_cs_banned), and strictly
+        // better than the deadlock.
+        if (fBan)
+        {
+            LogPrint(BCLog::LogFlags::NET, "Misbehaving: %s (%d -> %d) BANNING", addr.ToString(), nMisbehavior - howmuch, nMisbehavior);
+
+            if (m_banman) m_banman->Ban(addr, BanReasonNodeMisbehaving);
+            return true;
+        }
+
+        LogPrint(BCLog::LogFlags::NET, "Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior - howmuch, nMisbehavior);
+        return false;
+    }
+
+    int GetMisbehaviorScore(const CAddress& addr) override
+    {
+        LOCK(m_misbehavior_cs);
+        return GetMisbehaviorScore_(addr);
+    }
+
+    unsigned int ClearMisbehaviorForSubnet(const CSubNet& sub_net) override
+    {
+        unsigned int nZeroed = 0;
+
+        LOCK(m_misbehavior_cs);
+
+        for (auto it = m_misbehavior.begin(); it != m_misbehavior.end();)
+        {
+            if (sub_net.Match(it->first))
+            {
+                it = m_misbehavior.erase(it);
+                ++nZeroed;
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        return nZeroed;
+    }
+
+    unsigned int SweepDecayedMisbehavior() override
+    {
+        unsigned int erased = 0;
+
+        LOCK(m_misbehavior_cs);
+
+        for (auto it = m_misbehavior.begin(); it != m_misbehavior.end();)
+        {
+            if (DecayedScore_(it->second) == 0)
+            {
+                it = m_misbehavior.erase(it);
+                ++erased;
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        return erased;
+    }
+
+    void AskFor(CNode* pnode, const CInv& inv) override
+    {
+        AskForInv(pnode, inv);
+    }
+
+    void ForgetInventoryRequest(const CInv& inv) override
+    {
+        LOCK(cs_mapAlreadyAskedFor);
+        mapAlreadyAskedFor.erase(inv);
+    }
+
+    void ResetInventoryRequestBackoff(const CInv& inv) override
+    {
+        LOCK(cs_mapAlreadyAskedFor);
+
+        const auto it = mapAlreadyAskedFor.find(inv);
+
+        if (it != mapAlreadyAskedFor.end()) {
+            mapAlreadyAskedFor.update(it, 0);
+        } else {
+            mapAlreadyAskedFor.insert(std::make_pair(inv, 0));
+        }
+    }
+
+private:
+    //! The score an entry holds now: its recorded score less the decay since
+    //! it was last raised.
+    int DecayedScore_(const std::pair<int, int64_t>& entry) const EXCLUSIVE_LOCKS_REQUIRED(m_misbehavior_cs)
+    {
+        // This expression results in the misbehavior decaying linearly over a 24 hour period at a rate equal to the default banscore.
+        // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
+        // This results in a decay of roughly 100/24 = 4 points per hour.
+        int time_based_decay_correction = std::round(
+                    (double) gArgs.GetArg("-banscore", 100)
+                    * (double) std::max((int64_t) 0, GetAdjustedTime() - entry.second)
+                    / (double) gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
+                    );
+
+        // Never below zero.
+        return std::max(0, entry.first - time_based_decay_correction);
+    }
+
+    //! Current (decayed) misbehavior score for addr; erases a zeroed entry.
+    //! Caller holds m_misbehavior_cs (so Misbehaving/GetMisbehaviorScore share
+    //! one lock acquisition instead of re-locking, as the PR 2c free functions
+    //! did via the recursive cs_mapMisbehavior).
+    int GetMisbehaviorScore_(const CAddress& addr) EXCLUSIVE_LOCKS_REQUIRED(m_misbehavior_cs)
+    {
+        int nMisbehavior = 0;
+
+        const auto& iMisbehavior = m_misbehavior.find(addr);
+
+        if (iMisbehavior != m_misbehavior.end())
+        {
+            nMisbehavior = DecayedScore_(iMisbehavior->second);
+
+            // Delete entry if nMisbehavior is zero.
+            if (!nMisbehavior) m_misbehavior.erase(iMisbehavior);
+        }
+
+        return nMisbehavior;
+    }
+
+    BanMan* const m_banman;
+
+    // Per-address misbehavior scores (relocated from net_processing file scope
+    // in PR 8b). m_misbehavior_cs is a leaf with ONE deliberate exception:
+    // gArgs.GetArg (-banscore/-bantime for the decay math) is read while it is
+    // held, taking ArgsManager's cs_args nested. cs_args is itself a terminal
+    // leaf that calls nothing, so the edge cannot form a cycle. Nothing else
+    // is called out to under this lock -- in particular Misbehaving() decides
+    // under it and releases before m_banman->Ban(), so the only cross-
+    // subsystem edge is BanMan::m_cs_banned -> m_misbehavior_cs, taken by
+    // ClearBanned / Unban / SweepBanned through the misbehavior-clear callback.
+    // Lock order: cs_main -> cs_wallet -> BanMan::m_cs_banned -> m_misbehavior_cs
+    // (-> cs_args).
+    mutable CCriticalSection m_misbehavior_cs;
+    // Keyed by the address.
+    std::map<CNetAddr, std::pair<int, int64_t>> m_misbehavior GUARDED_BY(m_misbehavior_cs);
+};
+} // namespace
+
+std::unique_ptr<PeerManager> g_peerman;
+
+std::unique_ptr<PeerManager> PeerManager::make(CConnman& /*connman*/, BanMan* banman)
+{
+    return std::make_unique<PeerManagerImpl>(banman);
+}

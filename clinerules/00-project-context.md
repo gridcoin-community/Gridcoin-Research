@@ -63,9 +63,9 @@ This is the Gridcoin-Research cryptocurrency project - an open-source blockchain
 
 ### Core Dependencies (Required)
 
-- **Boost 1.89.0** (minimum 1.63.0) - C++ utility libraries for filesystem, threading, iostreams, serialization, and date_time operations
+- **Boost 1.89.0** (minimum 1.66.0) - C++ utility libraries for filesystem, threading, iostreams, and date_time operations
   - Location: External via depends/ or system
-  - Components: filesystem, iostreams, thread, serialization, date_time, interprocess, test framework
+  - Components: filesystem, iostreams, thread, date_time, interprocess, test framework
 
 - **OpenSSL 1.1.1l** - Limited cryptographic use (minimal dependency)
   - Location: External via depends/ or system
@@ -103,10 +103,6 @@ This is the Gridcoin-Research cryptocurrency project - an open-source blockchain
   - Location: External via depends/ or system
   - Used for: HTTP server, RPC server, and network event handling
 
-- **libzip 1.11.1** - ZIP archive handling
-  - Location: External via depends/ or system
-  - Used for: Snapshot handling and compressed data
-
 - **miniupnpc 2.2.2** (minimum 1.9) - UPnP port mapping client (Optional)
   - Location: External via depends/ or system
   - Used for: Automatic port forwarding configuration
@@ -114,12 +110,12 @@ This is the Gridcoin-Research cryptocurrency project - an open-source blockchain
 
 ### GUI Dependencies (Optional - Qt-based GUI only)
 
-- **Qt 6.7.3** (Qt6 minimum 6.2.0, Qt5 minimum 5.9.5) - Cross-platform GUI framework
+- **Qt 6.7.3** (Qt6 minimum 6.2.0, Qt5 minimum 5.15.0) - Cross-platform GUI framework
   - Location: External via depends/ or system
   - Components: qtbase, qttools, qttranslations, qtsvg, qt5compat
-  - Required modules: Core, Concurrent, Gui, LinguistTools, Network, Widgets, Svg, Charts
+  - Required modules: Core, Concurrent, Gui, LinguistTools, Network, Widgets, Svg
   - Build flag: ENABLE_GUI, USE_QT6
-  - **Default**: Qt5 is used by default; Qt6 requires explicit `USE_QT6=ON` flag
+  - **Default**: Qt 6; Qt 5 requires `USE_QT6=OFF`
 
 - **QRencode 4.1.1** - QR code generation library (Optional)
   - Location: External via depends/ or system
@@ -160,7 +156,7 @@ These dependencies are required for building the Qt GUI on Linux systems:
 
 ### Build & Development Tools
 
-- **CMake 3.18+** - Build system generator
+- **CMake 3.21+** - Build system generator
 - **pkg-config** - Library metadata helper
 - **Python 3** - Build scripts and utilities
 

@@ -29,6 +29,7 @@ struct DummyField : public QWidget
 VoteWizardBallotPage::VoteWizardBallotPage(QWidget *parent)
     : QWizardPage(parent)
     , ui(new Ui::VoteWizardBallotPage)
+    , m_voting_model(nullptr)
     , m_choice_buttons(new QButtonGroup(this))
 {
     ui->setupUi(this);

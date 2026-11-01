@@ -1,0 +1,2165 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include "interfaces/staking.h"
+#include "interfaces/mrc.h"
+#include "interfaces/psgt.h"
+#include "interfaces/researcher.h"
+#include "interfaces/sidestake.h"
+#include "interfaces/voting.h"
+
+#include "amount.h"
+#include "chainparams.h"
+#include "fs.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/boinc.h"
+#include "gridcoin/contract/contract.h"
+#include "gridcoin/contract/message.h"
+#include "gridcoin/magnitude.h"
+#include "gridcoin/mrc.h"
+#include "gridcoin/pool.h"
+#include "gridcoin/project.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/researcher.h"
+#include "gridcoin/scraper/scraper.h"
+#include "gridcoin/sidestake.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/kernel.h"
+#include "gridcoin/staking/status.h"
+#include "gridcoin/superblock.h"
+#include "gridcoin/support/xml.h"
+#include "gridcoin/voting/builders.h"
+#include "gridcoin/voting/filter.h"
+#include "gridcoin/voting/fwd.h"
+#include "gridcoin/voting/poll.h"
+#include "gridcoin/voting/poll_result_cache.h"
+#include "gridcoin/voting/registry.h"
+#include "gridcoin/voting/result.h"
+#include "interfaces/handler.h"
+#include "key_io.h"
+#include "chain.h"
+#include "net_processing.h"
+#include "node/psgt_pool.h"
+#include "node/ui_interface.h"
+#include "psgt.h"
+#include "script/interpreter.h"
+#include "script/standard.h"
+#include "streams.h"
+#include "sync.h"
+#include "txmempool.h"
+#include "util/strencodings.h"
+#include "util/string.h"
+#include "validation.h"
+#include "version.h"
+#include "wallet/wallet.h"
+
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <functional>
+#include <limits>
+#include <map>
+#include <memory>
+#include <set>
+#include <string>
+#include <utility>
+#include <variant>
+#include <vector>
+
+extern CWallet* pwalletMain;
+extern ConvergedScraperStats ConvergedScraperStatsCache;
+
+namespace interfaces {
+
+static_assert(STAKE_WEIGHT_UNITS_PER_COIN == GRC::STAKE_WEIGHT_UNITS_PER_COIN,
+              "the interface's stake weight units per GRC must match the kernel's");
+
+namespace {
+
+//! In-process StakingStatus implementation wrapping g_miner_status and the
+//! staking difficulty helpers. The try* variants preserve the GUI's
+//! historical TRY_LOCK(cs_main) semantics: skip the refresh rather than
+//! block a GUI-thread slot on a contended lock.
+class StakingStatusImpl : public StakingStatus
+{
+public:
+    bool isStaking() override { return g_miner_status.StakingActive(); }
+
+    std::string getErrors() override { return g_miner_status.FormatErrors(); }
+
+    double getCoinWeight() override { return g_miner_status.GetSearchReport().CoinWeight(); }
+
+    double getNetworkWeight() override
+    {
+        LOCK(cs_main);
+        return GRC::GetEstimatedNetworkWeight();
+    }
+
+    std::optional<double> tryGetNetworkWeight() override
+    {
+        TRY_LOCK(cs_main, locked);
+
+        if (!locked) {
+            return std::nullopt;
+        }
+
+        return GRC::GetEstimatedNetworkWeight();
+    }
+
+    std::optional<double> tryGetEstimatedTimeToStake() override
+    {
+        TRY_LOCK(cs_main, locked);
+
+        if (!locked) {
+            return std::nullopt;
+        }
+
+        return GRC::GetEstimatedTimetoStake();
+    }
+};
+
+//! In-process MRC implementation over the node's single wallet. snapshot()
+//! reproduces MRCModel::refresh()'s former GUI-thread reads (chain tip, version
+//! gate, trial CreateMRC, mempool queue) under one cs_main hold and returns
+//! them as one consistent value snapshot; submit() reproduces
+//! MRCModel::submitMRC(), recreating the claim fresh at the current tip so the
+//! broadcast is atomic. The GUI keeps all classification (status enums, display
+//! strings) and no longer touches core state — see interfaces/mrc.h.
+class MRCImpl : public MRC
+{
+public:
+    explicit MRCImpl(CWallet* wallet) : m_wallet(wallet) {}
+
+    MRCSnapshot snapshot(CAmount fee_boost, bool wallet_locked, bool researcher_eligible) override
+    {
+        MRCSnapshot snap;
+
+        LOCK(cs_main);
+
+        // Defensive: before the chain tip exists, present as out-of-sync rather
+        // than dereferencing a null tip. In practice the GUI models are built
+        // well past genesis load, so pindexBest is set.
+        if (!pindexBest) {
+            snap.out_of_sync = true;
+            return snap;
+        }
+
+        // Populate the chain-state flags up front (cheap tip reads) so the GUI
+        // can classify OUT_OF_SYNC vs INVALID_BLOCK_VERSION correctly. In
+        // particular block_version_valid must reflect the current tip even while
+        // out of sync, matching MRCModel::getMRCModelStatus()'s former ordering
+        // (IsV12Enabled(m_block_height) checked before OutOfSyncByAge()).
+        snap.block_height = pindexBest->nHeight;
+        snap.block_version_valid = IsV12Enabled(pindexBest->nHeight);
+        snap.out_of_sync = OutOfSyncByAge();
+
+        // Out of sync: the GUI shows the out-of-sync state and ignores the rest.
+        if (snap.out_of_sync) {
+            return snap;
+        }
+
+        // The GUI owns researcher eligibility (active beacon / not-noncruncher /
+        // not-pool; ResearcherModel, migrated in 1d-iv). When the user is not a
+        // valid researcher, CreateMRC would throw MRC_error on every block; skip
+        // the trial claim and queue scan and let the GUI classify.
+        if (!researcher_eligible) {
+            return snap;
+        }
+
+        if (!snap.block_version_valid) {
+            return snap;
+        }
+
+        snap.output_limit = static_cast<int>(GetMRCOutputLimit(pindexBest->nVersion, false));
+
+        GRC::MRC mrc;
+        CAmount reward = 0;
+        CAmount min_fee = 0;
+
+        // First run with fee = 0 computes the minimum required fee. CreateMRC
+        // takes the wallet lock in its own scope. wallet_locked -> no_sign
+        // (a locked wallet cannot sign the trial claim).
+        try {
+            GRC::CreateMRC(pindexBest, mrc, reward, min_fee, m_wallet, wallet_locked);
+        } catch (GRC::MRC_error& e) {
+            snap.create_error = true;
+            snap.create_error_msg = e.what();
+        }
+
+        snap.min_fee = min_fee;
+
+        // The total fee the caller is requesting: min_fee + boost when a boost is
+        // set, 0 otherwise. This intended value drives the excessive-fee
+        // classification GUI-side.
+        const CAmount total_fee = (fee_boost != 0) ? min_fee + fee_boost : 0;
+        snap.fee = total_fee;
+
+        if (fee_boost != 0) {
+            // Rerun with the boosted fee so the mempool queue comparison below
+            // uses the fee the request would actually carry (mrc.m_fee).
+            // CreateMRC takes the fee by non-const reference and resets it to the
+            // computed minimum when the provided fee is out of range (before
+            // throwing), so pass a scratch copy to keep snap.fee = the intended
+            // total.
+            CAmount rerun_fee = total_fee;
+            try {
+                GRC::CreateMRC(pindexBest, mrc, reward, rerun_fee, m_wallet, wallet_locked);
+            } catch (GRC::MRC_error& e) {
+                snap.boosted_fee_error = true;
+                snap.boosted_fee_error_msg = e.what();
+            }
+        }
+
+        // reward is fee-independent; both runs set it to the research subsidy, so
+        // read it after the (last) run.
+        snap.reward = reward;
+
+        // Fee-ordered mempool MRC queue evaluated against this request's object
+        // fee (mrc.m_fee == min_fee with no boost, the boosted fee otherwise).
+        CAmount tail = std::numeric_limits<CAmount>::max();
+        CAmount head = 0;
+        bool found = false;
+
+        const std::vector<std::pair<CAmount, GRC::Cpid>> mrc_queue = mempool.GetMRCQueue();
+
+        GRC::Cpid mrc_cpid;
+        if (auto cpid = mrc.m_mining_id.TryCpid()) mrc_cpid = *cpid;
+
+        for (const auto& [mempool_fee, mempool_cpid] : mrc_queue) {
+            found |= mempool_cpid == mrc_cpid;
+
+            if (!found && mempool_fee >= mrc.m_fee) ++snap.pos;
+            head = std::max(head, mempool_fee);
+            tail = std::min(tail, mempool_fee);
+
+            ++snap.queue_length;
+        }
+
+        // Tail converges from CAmount max, but cannot exceed head (e.g. an empty
+        // queue leaves tail at max and head at 0).
+        tail = std::min(head, tail);
+
+        // The last queue slot that would still be paid: min(queue size,
+        // output_limit) - 1, capped at the head fee.
+        int pay_limit_fee_pos = std::min<int>(mrc_queue.size(), snap.output_limit) - 1;
+
+        CAmount pay_limit = std::numeric_limits<CAmount>::max();
+        if (pay_limit_fee_pos >= 0) {
+            pay_limit = mrc_queue[pay_limit_fee_pos].first;
+        }
+        pay_limit = std::min(head, pay_limit);
+
+        snap.found_in_queue = found;
+        snap.queue_head_fee = head;
+        snap.queue_tail_fee = tail;
+        snap.queue_pay_limit_fee = pay_limit;
+
+        return snap;
+    }
+
+    MRCSubmitResult submit(CAmount fee_boost, bool wallet_locked) override
+    {
+        MRCSubmitResult res;
+
+        // A locked wallet cannot sign the claim: CreateMRC would build it
+        // unsigned (no_sign) and the broadcast below would relay an invalid MRC.
+        // The GUI only reaches submit() from the ELIGIBLE state (never locked),
+        // but enforce the interface contract here so a future or out-of-process
+        // caller cannot broadcast an unsigned claim.
+        // Trust-boundary guard, before any signing work. The GUI asks for an
+        // elevation before submitting (MRCRequestPage::submitMRC), which is the
+        // friendly answer for a researcher who unlocked for staking: the claim
+        // proceeds and the staking-only scope is handed back afterwards. The
+        // node must not rely on the client having done that.
+        //
+        // Placed with the other lock check rather than at the send, so a
+        // refusal costs nothing: CreateMRC signs the claim, twice on the fee
+        // path, and there is no reason to do that work only to refuse.
+        //
+        // MRCModel CAN see this state now: WalletModel's status enum carries
+        // UnlockedForStakingOnly, and walletStatusChanged() receives it. It
+        // deliberately does not treat that as locked, so the submit button
+        // stays enabled and the claim path asks for a temporary elevation
+        // instead of refusing. This refusal is what backstops that -- it is
+        // reached only if the elevation did not happen.
+        if (m_wallet->IsUnlockedForStakingOnly()) {
+            res.error = "The wallet is unlocked for staking only. Unlock it fully to submit a "
+                        "manual research claim.";
+            return res;
+        }
+
+        if (wallet_locked) {
+            res.error = "Wallet is locked; unlock it before submitting an MRC.";
+            return res;
+        }
+
+        LOCK(cs_main);
+
+        if (!pindexBest) {
+            res.error = "No chain tip.";
+            return res;
+        }
+
+        LOCK(m_wallet->cs_wallet);
+
+        GRC::MRC mrc;
+        CAmount reward = 0;
+        CAmount fee = 0;
+
+        // Recreate the claim fresh at the current tip so the broadcast reflects
+        // the fee the user acted on. First run computes the min fee; the rerun
+        // applies the boost, mirroring snapshot()/refresh(). The wallet is
+        // guaranteed unlocked here (guard above), so always sign (no_sign=false).
+        try {
+            GRC::CreateMRC(pindexBest, mrc, reward, fee, m_wallet, /*no_sign=*/false);
+
+            if (fee_boost != 0) {
+                fee = fee + fee_boost;
+                GRC::CreateMRC(pindexBest, mrc, reward, fee, m_wallet, /*no_sign=*/false);
+            }
+        } catch (GRC::MRC_error& e) {
+            res.error = e.what();
+            return res;
+        }
+
+        uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
+
+        auto [wtx, e_str] = GRC::SendContract(GRC::MakeContract<GRC::MRC>(contract_version,
+                                                                          GRC::ContractAction::ADD,
+                                                                          mrc));
+        if (!e_str.empty()) {
+            res.error = e_str;
+            return res;
+        }
+
+        res.success = true;
+        res.submitted_height = pindexBest->nHeight;
+        res.research_subsidy = mrc.m_research_subsidy;
+        return res;
+    }
+
+    bool isOutOfSync() override
+    {
+        // OutOfSyncByAge() is a lock-free time comparison (GetAdjustedTime() vs
+        // the g_previous_block_time global), matching the former direct GUI-thread
+        // call in MRCModel::getMRCModelStatus().
+        return OutOfSyncByAge();
+    }
+
+    std::unique_ptr<Handler> handleMRCChanged(MRCChangedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.MRCChanged_connect(interfaces::GuardNotify(std::move(fn))));
+    }
+
+private:
+    CWallet* m_wallet;
+};
+
+//! In-process SideStakeManager over the global sidestake registry (Phase 1d-ii).
+//! Presents the unified mandatory+local table as value rows and moves all local
+//! add/edit/delete validation (formerly in SideStakeTableModel) behind command
+//! methods, so no GUI code holds a GRC::SideStake or calls GetSideStakeRegistry()
+//! directly. Mutations return the post-mutation local sidestake revision (design
+//! §4.4) for read-your-writes.
+class SideStakeManagerImpl : public SideStakeManager
+{
+public:
+    SideStakeSnapshot entries() override
+    {
+        GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+        SideStakeSnapshot snap;
+
+        // Read the revision BEFORE the entries so an interleaving local mutation
+        // only makes it conservatively low (an extra refetch), never stale.
+        snap.local_revision = registry.GetLocalSideStakeRevision();
+
+        for (const auto& entry :
+             registry.ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, true)) {
+            SideStakeEntry row;
+            row.address = EncodeDestination(entry->GetDestination());
+            row.allocation_percent = entry->GetAllocation().ToPercent();
+            row.description = entry->GetDescription();
+            row.status = entry->StatusToString();
+            row.is_mandatory = entry->IsMandatory();
+            row.status_sort_key = StatusSortKey(*entry);
+
+            snap.entries.push_back(std::move(row));
+        }
+
+        return snap;
+    }
+
+    uint64_t localRevision() override
+    {
+        return GRC::GetSideStakeRegistry().GetLocalSideStakeRevision();
+    }
+
+    SideStakeEditResult addLocal(const std::string& address,
+                                 double allocation_percent,
+                                 const std::string& description) override
+    {
+        GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+        const CTxDestination destination = DecodeDestination(address);
+        if (!IsValidDestination(destination)) {
+            return Result(SideStakeEditStatus::INVALID_ADDRESS);
+        }
+
+        // Duplicate local sidestake check against the registry (not a stale view).
+        if (!registry.Try(destination, GRC::SideStake::FilterFlag::LOCAL).empty()) {
+            return Result(SideStakeEditStatus::DUPLICATE_ADDRESS);
+        }
+
+        // Validate the percent before constructing GRC::Allocation, whose
+        // double -> int64_t conversion is undefined for NaN/Inf/out-of-range.
+        if (!ValidAllocationPercent(allocation_percent)) {
+            return Result(SideStakeEditStatus::INVALID_ALLOCATION);
+        }
+
+        const GRC::Allocation new_allocation(allocation_percent / 100.0);
+
+        // The new allocation plus all active entries must not exceed 100%.
+        //
+        // This is a user-facing guard: it stops someone creating, through the one
+        // entry point we control, an entry that would then be silently suppressed
+        // at staking time. It is not what makes over-allocation safe.
+        //
+        // The same rule is applied where sidestakes are read
+        // (SideStakeRegistry::ActiveSideStakeEntries -- read its comment before
+        // changing anything here), and again where they are parsed from
+        // gridcoinresearch.conf, which is read-only to us and where a hand-edited
+        // mistake can only be logged and stopped at, never corrected.
+        //
+        // So this check deliberately does not need to be atomic with the commit
+        // below. Losing that race cannot cause an over-allocated payout: the
+        // read-side accumulate-and-stop is what decides what is actually applied.
+        if (TotalActiveAllocation(registry, nullptr) + new_allocation > 1) {
+            return Result(SideStakeEditStatus::INVALID_ALLOCATION);
+        }
+
+        const std::string sanitized = SanitizeString(description, SAFE_CHARS_CSV);
+        if (sanitized != description) {
+            return Result(SideStakeEditStatus::INVALID_DESCRIPTION);
+        }
+
+        registry.NonContractAdd(GRC::LocalSideStake(destination,
+                                                    new_allocation,
+                                                    sanitized,
+                                                    GRC::LocalSideStake::LocalSideStakeStatus::ACTIVE));
+
+        return Result(SideStakeEditStatus::OK, EncodeDestination(destination));
+    }
+
+    SideStakeEditResult setAllocation(const std::string& address,
+                                      double allocation_percent) override
+    {
+        GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+        GRC::SideStake original;
+        if (!FindLocal(registry, address, original)) {
+            return Result(SideStakeEditStatus::INVALID_ADDRESS);
+        }
+
+        if (original.GetAllocation().ToPercent() == allocation_percent) {
+            return Result(SideStakeEditStatus::NO_CHANGES);
+        }
+
+        // Validate the percent before constructing GRC::Allocation (see addLocal).
+        if (!ValidAllocationPercent(allocation_percent)) {
+            return Result(SideStakeEditStatus::INVALID_ALLOCATION);
+        }
+
+        const CTxDestination destination = original.GetDestination();
+        const GRC::Allocation new_allocation(allocation_percent / 100.0);
+
+        // The new allocation plus the OTHER active entries must not exceed 100%.
+        if (TotalActiveAllocation(registry, &destination) + new_allocation > 1) {
+            return Result(SideStakeEditStatus::INVALID_ALLOCATION);
+        }
+
+        // Change only the allocation. Rebuilding the whole entry from `original`
+        // and writing it back through NonContractAdd() would carry the description
+        // and status from a read taken in an earlier lock scope, so a config reload
+        // (changesettings -> RwSettingsUpdated -> LoadLocalSideStakesFromConfig)
+        // landing in between would be silently reverted by those stale fields.
+        if (!registry.NonContractSetAllocation(destination, new_allocation)) {
+            // Removed between the lookup above and here.
+            return Result(SideStakeEditStatus::INVALID_ADDRESS);
+        }
+
+        return Result(SideStakeEditStatus::OK);
+    }
+
+    SideStakeEditResult setDescription(const std::string& address,
+                                       const std::string& description) override
+    {
+        GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+        GRC::SideStake original;
+        if (!FindLocal(registry, address, original)) {
+            return Result(SideStakeEditStatus::INVALID_ADDRESS);
+        }
+
+        if (original.GetDescription() == description) {
+            return Result(SideStakeEditStatus::NO_CHANGES);
+        }
+
+        const std::string sanitized = SanitizeString(description, SAFE_CHARS_CSV);
+        if (sanitized != description) {
+            return Result(SideStakeEditStatus::INVALID_DESCRIPTION);
+        }
+
+        // Change only the description; see setAllocation for why the surviving
+        // fields must not be round-tripped through the earlier read.
+        if (!registry.NonContractSetDescription(original.GetDestination(), sanitized)) {
+            // Removed between the lookup above and here.
+            return Result(SideStakeEditStatus::INVALID_ADDRESS);
+        }
+
+        return Result(SideStakeEditStatus::OK);
+    }
+
+    SideStakeEditResult deleteLocal(const std::string& address) override
+    {
+        GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+        GRC::SideStake original;
+        // Only local entries are deletable; a mandatory address is not found as
+        // LOCAL, so this also enforces the GUI's "no deleting mandatory" rule.
+        if (!FindLocal(registry, address, original)) {
+            return Result(SideStakeEditStatus::INVALID_ADDRESS);
+        }
+
+        registry.NonContractDelete(original.GetDestination());
+
+        return Result(SideStakeEditStatus::OK);
+    }
+
+    std::unique_ptr<Handler> handleRwSettingsUpdated(RwSettingsUpdatedFn fn) override
+    {
+        // Forward the payload-free callback directly. Deliberately does NOT read
+        // the revision here: this slot may run before the registry's own
+        // RwSettingsUpdated reload slot (slot order is not guaranteed), so an
+        // emission-time revision could predate the reload. The consumer reads
+        // localRevision() itself when handling the notification — see
+        // interfaces/sidestake.h.
+        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(interfaces::GuardNotify(std::move(fn))));
+    }
+
+    std::unique_ptr<Handler> handleMandatorySideStakeChanged(MandatorySideStakeChangedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.MandatorySideStakeChanged_connect(interfaces::GuardNotify(std::move(fn))));
+    }
+
+private:
+    //! Build a result stamped with the current local sidestake revision.
+    static SideStakeEditResult Result(SideStakeEditStatus status, std::string address = {})
+    {
+        SideStakeEditResult res;
+        res.status = status;
+        res.address = std::move(address);
+        res.local_revision = GRC::GetSideStakeRegistry().GetLocalSideStakeRevision();
+        return res;
+    }
+
+    //! A well-formed allocation percentage: finite and within [0, 100]. Checked
+    //! before constructing GRC::Allocation, whose double -> int64_t conversion is
+    //! undefined behavior for NaN/Inf/out-of-range values (QString::toDouble can
+    //! yield inf, e.g. from "1e400").
+    static bool ValidAllocationPercent(double percent)
+    {
+        return std::isfinite(percent) && percent >= 0.0 && percent <= 100.0;
+    }
+
+    //! The Status-column sort key: mandatory statuses keep their enum value,
+    //! local statuses are shifted above the mandatory range (reproducing the
+    //! former SideStakeLessThan ordering).
+    static int StatusSortKey(const GRC::SideStake& entry)
+    {
+        if (entry.IsMandatory()) {
+            return static_cast<int>(
+                std::get<GRC::MandatorySideStake::Status>(entry.GetStatus()).Value());
+        }
+
+        return static_cast<int>(std::get<GRC::LocalSideStake::Status>(entry.GetStatus()).Value())
+               + static_cast<int>(GRC::MandatorySideStake::MandatorySideStakeStatus::OUT_OF_BOUND);
+    }
+
+    //! Total allocation of the active entries, optionally excluding one
+    //! destination (used when re-validating an edit of that entry).
+    static GRC::Allocation TotalActiveAllocation(GRC::SideStakeRegistry& registry,
+                                                 const CTxDestination* exclude)
+    {
+        GRC::Allocation total;
+
+        for (const auto& entry :
+             registry.ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, true)) {
+            if (exclude != nullptr && entry->GetDestination() == *exclude) {
+                continue;
+            }
+
+            total += entry->GetAllocation();
+        }
+
+        return total;
+    }
+
+    //! Look up an existing LOCAL sidestake by encoded address. Returns false if
+    //! the address is invalid or has no local entry.
+    static bool FindLocal(GRC::SideStakeRegistry& registry,
+                          const std::string& address,
+                          GRC::SideStake& out)
+    {
+        const CTxDestination destination = DecodeDestination(address);
+        if (!IsValidDestination(destination)) {
+            return false;
+        }
+
+        const auto existing = registry.Try(destination, GRC::SideStake::FilterFlag::LOCAL);
+        if (existing.empty()) {
+            return false;
+        }
+
+        out = *existing.front();
+        return true;
+    }
+};
+
+//! In-process VotingManager implementation. buildPollTable drives the core
+//! PollResultCache (tally memoization, pinned-tip consistency and the reorg-retry
+//! all live in the cache) and flattens each result into a value row; submitPoll /
+//! submitVote reproduce the former VotingModel send paths through the poll/vote
+//! builders, choosing the payload version node-side. The GUI keeps the wallet
+//! unlock (a modal it drives through the wallet interface) and all presentation
+//! — see interfaces/voting.h.
+class VotingManagerImpl : public VotingManager
+{
+public:
+    std::vector<PollTableItem> buildPollTable(int filter_flags) override
+    {
+        std::vector<PollTableItem> table;
+
+        for (const GRC::PollResultItem& src :
+             GRC::GetPollResultCache().BuildPollTable(static_cast<GRC::PollFilterFlag>(filter_flags))) {
+            table.push_back(ToTableItem(src));
+        }
+
+        return table;
+    }
+
+    CAmount estimatePollFee() override
+    {
+        // Matches the former VotingModel::estimatePollFee. TODO: derive a precise
+        // fee from the balance-attestation output count rather than a flat value.
+        return 50 * COIN;
+    }
+
+    std::vector<PollTypeMeta> getPollTypes() override
+    {
+        // The GUI-facing enum mirrors and limit constants must match the core.
+        static_assert(static_cast<int>(PollFilterFlag::NO_FILTER) == static_cast<int>(GRC::PollFilterFlag::NO_FILTER)
+                      && static_cast<int>(PollFilterFlag::ACTIVE) == static_cast<int>(GRC::PollFilterFlag::ACTIVE)
+                      && static_cast<int>(PollFilterFlag::FINISHED) == static_cast<int>(GRC::PollFilterFlag::FINISHED),
+                      "interfaces::PollFilterFlag must mirror GRC::PollFilterFlag");
+        static_assert(static_cast<int>(PollType::UNKNOWN) == static_cast<int>(GRC::PollType::UNKNOWN)
+                      && static_cast<int>(PollType::SURVEY) == static_cast<int>(GRC::PollType::SURVEY)
+                      && static_cast<int>(PollType::PROJECT) == static_cast<int>(GRC::PollType::PROJECT)
+                      && static_cast<int>(PollType::DEVELOPMENT) == static_cast<int>(GRC::PollType::DEVELOPMENT)
+                      && static_cast<int>(PollType::GOVERNANCE) == static_cast<int>(GRC::PollType::GOVERNANCE)
+                      && static_cast<int>(PollType::MARKETING) == static_cast<int>(GRC::PollType::MARKETING)
+                      && static_cast<int>(PollType::OUTREACH) == static_cast<int>(GRC::PollType::OUTREACH)
+                      && static_cast<int>(PollType::COMMUNITY) == static_cast<int>(GRC::PollType::COMMUNITY)
+                      && static_cast<int>(PollType::OUT_OF_BOUND) == static_cast<int>(GRC::PollType::OUT_OF_BOUND),
+                      "interfaces::PollType must mirror GRC::PollType");
+        static_assert(static_cast<int>(PollWeightType::UNKNOWN) == static_cast<int>(GRC::PollWeightType::UNKNOWN)
+                      && static_cast<int>(PollWeightType::MAGNITUDE) == static_cast<int>(GRC::PollWeightType::MAGNITUDE)
+                      && static_cast<int>(PollWeightType::BALANCE) == static_cast<int>(GRC::PollWeightType::BALANCE)
+                      && static_cast<int>(PollWeightType::BALANCE_AND_MAGNITUDE) == static_cast<int>(GRC::PollWeightType::BALANCE_AND_MAGNITUDE)
+                      && static_cast<int>(PollWeightType::CPID_COUNT) == static_cast<int>(GRC::PollWeightType::CPID_COUNT)
+                      && static_cast<int>(PollWeightType::PARTICIPANT_COUNT) == static_cast<int>(GRC::PollWeightType::PARTICIPANT_COUNT)
+                      && static_cast<int>(PollWeightType::OUT_OF_BOUND) == static_cast<int>(GRC::PollWeightType::OUT_OF_BOUND),
+                      "interfaces::PollWeightType must mirror GRC::PollWeightType");
+        static_assert(poll_limits::MIN_DURATION_DAYS == static_cast<int>(GRC::Poll::MIN_DURATION_DAYS)
+                      && poll_limits::MAX_TITLE_LENGTH == static_cast<int>(GRC::Poll::MAX_TITLE_SIZE)
+                      && poll_limits::MAX_URL_LENGTH == static_cast<int>(GRC::Poll::MAX_URL_SIZE)
+                      && poll_limits::MAX_QUESTION_LENGTH == static_cast<int>(GRC::Poll::MAX_QUESTION_SIZE)
+                      && poll_limits::MAX_CHOICE_LABEL_LENGTH == static_cast<int>(GRC::Poll::Choice::MAX_LABEL_SIZE)
+                      && poll_limits::MAX_ADDITIONAL_FIELD_NAME_LENGTH == static_cast<int>(GRC::Poll::AdditionalField::MAX_NAME_SIZE)
+                      && poll_limits::MAX_ADDITIONAL_FIELD_VALUE_LENGTH == static_cast<int>(GRC::Poll::AdditionalField::MAX_VALUE_SIZE)
+                      && poll_limits::MAX_CHOICES == static_cast<int>(GRC::POLL_MAX_CHOICES_SIZE),
+                      "interfaces::poll_limits must mirror GRC::Poll::MAX_* / MIN_DURATION_DAYS");
+
+        std::vector<PollTypeMeta> types;
+        for (const auto& type : GRC::Poll::POLL_TYPES) {
+            if (type == GRC::PollType::OUT_OF_BOUND) continue;
+
+            PollTypeMeta meta;
+            meta.type = static_cast<int>(type);
+            meta.name = GRC::Poll::PollTypeToString(type);
+            meta.description = GRC::Poll::PollTypeToDescString(type);
+            meta.min_duration_days =
+                static_cast<int>(GRC::Poll::POLL_TYPE_RULES[static_cast<int>(type)].m_mininum_duration);
+            meta.required_fields = GRC::Poll::POLL_TYPE_RULES[static_cast<int>(type)].m_required_fields;
+            types.push_back(std::move(meta));
+        }
+        return types;
+    }
+
+    bool pollV3Enabled() override
+    {
+        LOCK(cs_main);
+        return IsPollV3Enabled(nBestHeight);
+    }
+
+    std::string currentPollTitle() override
+    {
+        // Raw title; the GUI applies its cosmetic formatting (length cap, '_' -> ' ').
+        return GRC::GetCurrentPollTitle();
+    }
+
+    int64_t latestActivePollTime() override
+    {
+        // The newest active poll's timestamp. Needs only cs_poll_registry:
+        // Polls().OnlyActive() filters on GetAdjustedTime() and PollReference::Time()
+        // reads a stored timestamp — neither touches cs_main — so cs_main is not
+        // taken, avoiding needless contention on it.
+        //
+        // The lock is held across the WHOLE walk, not just while building the
+        // sequence. This used to be a WITH_LOCK around Polls().OnlyActive() alone,
+        // which released cs_poll_registry at the end of that expression and then ran
+        // begin/end, operator++/!= and Ref() unlocked — every one of them
+        // EXCLUSIVE_LOCKS_REQUIRED(cs_poll_registry), over a GUARDED_BY map that
+        // PollRegistry::Delete erases from and Reset() clears. A block being
+        // disconnected on the validation thread while the GUI walked here was an
+        // iterator use-after-free.
+        //
+        // The old comment claimed this matched PollResultCache::BuildPollTable. It
+        // did not: BuildPollTable additionally holds a TraversalScope and rechecks
+        // reorg_occurred_during_reg_traversal per element, precisely because it must
+        // drop the lock to tally (which takes cs_main, and cs_main must be acquired
+        // BEFORE cs_poll_registry). Nothing here needs cs_main, so simply keeping
+        // the lock is both correct and cheaper than replicating that protocol —
+        // a writer cannot mutate the map underneath us at all, so no reorg
+        // bookkeeping is required.
+        GRC::PollRegistry& registry = GRC::GetPollRegistry();
+
+        int64_t latest = 0;
+        LOCK(GRC::PollRegistry::cs_poll_registry);
+        for (const auto& iter : registry.Polls().OnlyActive()) {
+            latest = std::max<int64_t>(latest, iter->Ref().Time());
+        }
+
+        return latest;
+    }
+
+    VotingSubmitResult submitPoll(const PollSubmission& poll) override
+    {
+        // The payload version (and, pre-v3, the forced SURVEY type) depend on the
+        // chain height, so they are resolved node-side rather than in the GUI.
+        uint32_t payload_version = 0;
+        GRC::PollType type_by_version = GRC::PollType::SURVEY;
+        {
+            LOCK(cs_main);
+            const bool v3_enabled = IsPollV3Enabled(nBestHeight);
+            payload_version = v3_enabled ? 3 : 2;
+            type_by_version = v3_enabled ? static_cast<GRC::PollType>(poll.type) : GRC::PollType::SURVEY;
+        }
+
+        std::vector<GRC::Poll::AdditionalField> additional_fields;
+        for (const auto& field : poll.additional_fields) {
+            additional_fields.push_back(GRC::Poll::AdditionalField(field.name, field.value, field.required));
+        }
+
+        try {
+            GRC::PollBuilder builder = GRC::PollBuilder();
+
+            {
+                // SetPayloadVersion reads nBestHeight; the other setters do not.
+                LOCK(cs_main);
+                builder = std::move(builder).SetPayloadVersion(payload_version);
+            }
+
+            builder = std::move(builder)
+                          .SetType(type_by_version)
+                          .SetTitle(poll.title)
+                          .SetDuration(poll.duration_days)
+                          .SetQuestion(poll.question)
+                          .SetWeightType(poll.weight_type)
+                          .SetResponseType(poll.response_type)
+                          .SetUrl(poll.url)
+                          .SetAdditionalFields(additional_fields);
+
+            for (const auto& choice : poll.choices) {
+                builder = builder.AddChoice(choice);
+            }
+
+            // The wallet must already be unlocked by the caller; SendPollContract
+            // signs and broadcasts. A VotingError (or any other failure) is turned
+            // into a result rather than thrown across the interface boundary.
+            const uint256 txid = GRC::SendPollContract(std::move(builder));
+            return Submitted(txid);
+        } catch (const std::exception& e) {
+            return Failed(e.what());
+        }
+    }
+
+    VotingSubmitResult submitVote(const std::string& poll_txid,
+                                  const std::vector<uint8_t>& choice_offsets) override
+    {
+        const uint256 txid = uint256S(poll_txid);
+
+        // Look up and read the poll under cs_poll_registry, then copy out the poll
+        // and its txid and release before building/broadcasting the vote:
+        // TryByTxid reads the registry map, and the reference it returns lives
+        // only as long as the registry keeps it. Reading the poll needs no
+        // cs_main: contract parsing reads no chain state, and the magnitude
+        // weight factor comes from the block the registry recorded.
+        // SendVoteContract takes cs_main + cs_wallet itself, so the build/broadcast
+        // must run OUTSIDE this lock.
+        GRC::PollOption poll;
+        uint256 poll_reference_txid;
+        {
+            LOCK(GRC::PollRegistry::cs_poll_registry);
+
+            const GRC::PollReference* ref = GRC::GetPollRegistry().TryByTxid(txid);
+            if (!ref) {
+                return SubmitStatus(VotingSubmitStatus::POLL_NOT_FOUND);
+            }
+
+            poll_reference_txid = ref->Txid();
+            poll = ref->TryReadFromDisk();
+        }
+
+        if (!poll) {
+            return SubmitStatus(VotingSubmitStatus::POLL_LOAD_FAILED);
+        }
+
+        try {
+            GRC::VoteBuilder builder = GRC::VoteBuilder::ForPoll(*poll, poll_reference_txid);
+            builder = builder.AddResponses(choice_offsets);
+
+            const uint256 vote_txid = GRC::SendVoteContract(std::move(builder));
+            return Submitted(vote_txid);
+        } catch (const std::exception& e) {
+            return Failed(e.what());
+        }
+    }
+
+    std::unique_ptr<Handler> handleNewPollReceived(NewPollReceivedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.NewPollReceived_connect(interfaces::GuardNotify(std::move(fn))));
+    }
+
+    std::unique_ptr<Handler> handleNewVoteReceived(NewVoteReceivedFn fn) override
+    {
+        // The core signal carries a uint256; hand the consumer its hex form so no
+        // core type crosses the boundary.
+        return MakeSignalHandler(uiInterface.NewVoteReceived_connect(
+            interfaces::GuardNotify([fn = std::move(fn)](const uint256& poll_txid) { fn(poll_txid.ToString()); })));
+    }
+
+private:
+    //! Flatten a core tally bundle into the pointer-free value row the GUI renders.
+    //! Mirrors the former VotingModel BuildPollItem field-for-field, but produces
+    //! std::string / value types and leaves cosmetic string transforms (underscore
+    //! substitution, URL scheme prefixing) to the GUI.
+    static PollTableItem ToTableItem(const GRC::PollResultItem& src)
+    {
+        const GRC::PollResult& result = src.result;
+        const GRC::Poll& poll = result.m_poll;
+
+        PollTableItem item;
+        item.txid = src.txid.ToString();
+        item.payload_version = src.payload_version;
+        item.type_str = poll.PollTypeToString();
+        item.title = poll.m_title;
+        item.question = poll.m_question;
+        item.url = poll.m_url;
+        item.start_time = poll.m_timestamp;
+        item.expiration = poll.Expiration();
+        item.duration_days = poll.m_duration_days;
+        item.weight_type = poll.m_weight_type.Raw();
+        item.weight_type_str = poll.WeightTypeToString();
+        item.response_type = poll.ResponseTypeToString();
+        item.total_votes = result.m_votes.size();
+        item.total_weight = result.m_total_weight / COIN;
+
+        if (result.m_active_vote_weight) {
+            item.active_weight = *result.m_active_vote_weight / COIN;
+        }
+
+        if (result.m_vote_percent_avw) {
+            item.vote_percent_avw = *result.m_vote_percent_avw;
+        }
+
+        item.validated = result.m_poll_results_validated;
+        item.finished = result.m_finished;
+        item.multiple_choice = poll.AllowsMultipleChoices();
+
+        for (size_t i = 0; i < poll.m_additional_fields.size(); ++i) {
+            PollAdditionalField field;
+            field.name = poll.AdditionalFields().At(i)->m_name;
+            field.value = poll.AdditionalFields().At(i)->m_value;
+            field.required = poll.AdditionalFields().At(i)->m_required;
+            item.additional_fields.push_back(std::move(field));
+        }
+
+        for (size_t i = 0; i < result.m_responses.size(); ++i) {
+            PollChoiceResult choice;
+            choice.label = poll.Choices().At(i)->m_label;
+            choice.votes = result.m_responses[i].m_votes;
+            choice.weight = result.m_responses[i].m_weight / COIN;
+            item.choices.push_back(std::move(choice));
+        }
+
+        item.self_voted = result.m_self_voted;
+        if (result.m_self_voted) {
+            for (const auto& response : result.m_self_vote_detail.m_responses) {
+                item.self_vote_responses.push_back(PollSelfVoteResponse{response.first, response.second});
+            }
+        }
+
+        if (!result.m_votes.empty()) {
+            item.top_answer = result.WinnerLabel();
+        }
+
+        return item;
+    }
+
+    static VotingSubmitResult Submitted(const uint256& txid)
+    {
+        VotingSubmitResult res;
+        res.status = VotingSubmitStatus::OK;
+        res.txid = txid.ToString();
+        return res;
+    }
+
+    //! A categorized failure (GUI maps the status to translated text).
+    static VotingSubmitResult SubmitStatus(VotingSubmitStatus status)
+    {
+        VotingSubmitResult res;
+        res.status = status;
+        return res;
+    }
+
+    //! A failure carrying a dynamic message (e.g. a VotingError) shown as-is.
+    static VotingSubmitResult Failed(std::string error)
+    {
+        VotingSubmitResult res;
+        res.status = VotingSubmitStatus::FAILED;
+        res.error = std::move(error);
+        return res;
+    }
+};
+
+//! Maps a core BeaconError to the interface BeaconStatus. Ported verbatim from
+//! the former GUI ResearcherModel::MapAdvertiseBeaconError so the classification
+//! is byte-for-byte identical, now computed node-side.
+BeaconStatus MapBeaconError(const GRC::BeaconError error)
+{
+    switch (error) {
+        case GRC::BeaconError::NONE:               return BeaconStatus::ACTIVE;
+        case GRC::BeaconError::INSUFFICIENT_FUNDS: return BeaconStatus::ERROR_INSUFFICIENT_FUNDS;
+        case GRC::BeaconError::MISSING_KEY:        return BeaconStatus::ERROR_MISSING_KEY;
+        case GRC::BeaconError::NO_CPID:            return BeaconStatus::NO_CPID;
+        case GRC::BeaconError::NOT_NEEDED:         return BeaconStatus::ERROR_NOT_NEEDED;
+        case GRC::BeaconError::PENDING:            return BeaconStatus::PENDING;
+        case GRC::BeaconError::TX_FAILED:          return BeaconStatus::ERROR_TX_FAILED;
+        case GRC::BeaconError::V14_NOT_ENABLED:    return BeaconStatus::ERROR_TX_FAILED;
+        case GRC::BeaconError::WALLET_LOCKED:      return BeaconStatus::ERROR_WALLET_LOCKED;
+        case GRC::BeaconError::ALEADY_IN_MEMPOOL:  return BeaconStatus::ALREADY_IN_MEMPOOL;
+        // The status the snapshot itself reports while out of sync (DeriveBeacon).
+        case GRC::BeaconError::OUT_OF_SYNC:        return BeaconStatus::UNKNOWN;
+    }
+
+    assert(false); // unreachable: every BeaconError enumerator is handled above
+    return BeaconStatus::UNKNOWN;
+}
+
+//! Beacon-renewal warning window (mirrors the former GUI ResearcherModel constant
+//! BEACON_RENEWAL_WARNING_THRESHOLD): a beacon expiring within 15 days reads as
+//! RENEWAL_NEEDED.
+constexpr int64_t BEACON_RENEWAL_WARNING_THRESHOLD = 15 * 24 * 60 * 60;
+
+//! Classify a whitelist entry's status into a ResearcherProjectRow::WhitelistStatus,
+//! matching the former buildProjectTable's if/else chain. \p is_label_status is
+//! set true for the greylisted/excluded cases where the status itself is the row's
+//! error label (so the caller clears any baseline error, letting the GUI derive the
+//! label from the status).
+ResearcherProjectRow::WhitelistStatus ClassifyWhitelist(const GRC::ProjectEntry& wl,
+                                                        const std::vector<std::string>& excluded,
+                                                        bool& is_label_status)
+{
+    using WS = ResearcherProjectRow::WhitelistStatus;
+
+    is_label_status = true;
+
+    if (wl.m_status == GRC::ProjectEntryStatus::MAN_GREYLISTED) {
+        return WS::MANUALLY_GREYLISTED;
+    }
+    if (wl.m_status == GRC::ProjectEntryStatus::AUTO_GREYLISTED) {
+        return WS::AUTOMATICALLY_GREYLISTED;
+    }
+    if (std::find(excluded.begin(), excluded.end(), wl.m_name) != excluded.end()) {
+        return WS::EXCLUDED;
+    }
+
+    is_label_status = false;
+
+    if (wl.m_status == GRC::ProjectEntryStatus::UNKNOWN) {
+        return WS::NOT_WHITELISTED;
+    }
+
+    // Remaining REG_ACTIVE / AUTO_GREYLIST_OVERRIDE == the ACTIVE whitelist filter.
+    return WS::WHITELISTED;
+}
+
+//! Copy a whitelist entry's magnitude/RAC into the row from the ExplainMagnitude
+//! results (matches the inner lookup loops in the former buildProjectTable).
+void ApplyExplainMagnitude(ResearcherProjectRow& row,
+                           const std::string& project_name,
+                           const std::vector<GRC::ExplainMagnitudeProject>& explain_mag)
+{
+    for (const auto& explain_mag_project : explain_mag) {
+        if (explain_mag_project.m_name == project_name) {
+            row.magnitude = explain_mag_project.m_magnitude;
+            row.rac = explain_mag_project.m_rac;
+            return;
+        }
+    }
+}
+
+//! In-process ResearcherContext (Phase 1d-iv). Owns the node's single wallet
+//! pointer for the beacon-key/advertise/V3 paths; every read runs node-side so the
+//! Qt ResearcherModel holds no GRC::Researcher / GRC::Beacon and touches no beacon
+//! registry, quorum, whitelist, or scraper-cache global directly.
+class ResearcherContextImpl : public ResearcherContext
+{
+public:
+    explicit ResearcherContextImpl(CWallet* wallet) : m_wallet(wallet) {}
+
+    ResearcherSnapshot snapshot() override
+    {
+        LOCK(cs_main);
+        return BuildSnapshotLocked();
+    }
+
+    std::optional<ResearcherSnapshot> trySnapshot() override
+    {
+        TRY_LOCK(cs_main, locked);
+        if (!locked) {
+            return std::nullopt;
+        }
+        return BuildSnapshotLocked();
+    }
+
+    bool outOfSync() override
+    {
+        // Lock-free, matching the former ResearcherModel::refresh()'s unguarded
+        // OutOfSyncByAge() call.
+        return OutOfSyncByAge();
+    }
+
+    bool hasV3CapableProjects() override
+    {
+        return !GetProjectsWithOwnershipProofSupport().empty();
+    }
+
+    std::vector<ResearcherProjectRow> projects(bool extended) override
+    {
+        // Fuses the same three loosely-related record types the former
+        // ResearcherModel::buildProjectTable did: local BOINC projects, the
+        // Gridcoin whitelist, and scraper magnitude statistics.
+        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+
+        // One whitelist snapshot, reused for both TryWhitelist() and the
+        // whitelist-only pass below (the former GUI took two snapshots; one is
+        // more internally consistent and cheaper).
+        // PENDING: these rows are joined with the excluded-projects list read from the
+        // convergence cache just below, so the greylist must match that convergence (the
+        // data-source rule).
+        const GRC::WhitelistSnapshot whitelist =
+            GRC::GetWhitelist().Snapshot(GRC::GreylistState::PENDING,
+                                         GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
+
+        std::vector<std::string> excluded_projects;
+        {
+            LOCK(cs_ConvergedScraperStatsCache);
+            excluded_projects = ConvergedScraperStatsCache.Convergence.vExcludedProjects;
+        }
+
+        const std::vector<std::string> external_adapter_projects = GetProjectsExternalAdapterRequired();
+
+        std::vector<GRC::ExplainMagnitudeProject> explain_mag;
+        if (extended) {
+            if (const GRC::CpidOption cpid = researcher->Id().TryCpid()) {
+                explain_mag = GRC::Quorum::ExplainMagnitude(*cpid);
+            }
+        }
+
+        std::map<std::string, ResearcherProjectRow> rows;
+
+        // Pass 1: local BOINC projects, linked to the whitelist where possible.
+        for (const auto& project_pair : researcher->Projects()) {
+            const GRC::MiningProject& project = project_pair.second;
+
+            ResearcherProjectRow row;
+
+            if (!project.m_cpid.IsZero()) {
+                row.cpid = project.m_cpid.ToString();
+            }
+
+            const bool eligible = project.Eligible();
+            if (!eligible) {
+                row.error_kind = ResearcherProjectRow::ErrorKind::CORE_MESSAGE;
+                row.error_message = project.ErrorMessage();
+            }
+
+            if (const GRC::ProjectEntry* whitelist_project = project.TryWhitelist(whitelist)) {
+                bool is_label_status = false;
+                row.whitelisted = ClassifyWhitelist(*whitelist_project, excluded_projects, is_label_status);
+
+                // Greylisted/excluded: the status IS the label, so drop the
+                // baseline core error and let the GUI render the status label.
+                if (is_label_status) {
+                    row.error_kind = ResearcherProjectRow::ErrorKind::NONE;
+                    row.error_message.clear();
+                }
+
+                // Display name in original case; the GUI lowercases it with
+                // QString::toLower() (Unicode-aware, as the former code did).
+                row.name = whitelist_project->DisplayName();
+                ApplyExplainMagnitude(row, whitelist_project->m_name, explain_mag);
+                row.gdpr_controls = whitelist_project->HasGDPRControls();
+
+                rows.emplace(whitelist_project->m_name, std::move(row));
+            } else {
+                row.whitelisted = ResearcherProjectRow::WhitelistStatus::NOT_WHITELISTED;
+                row.name = project.m_name;
+                row.rac = project.m_rac;
+
+                if (eligible) {
+                    row.error_kind = ResearcherProjectRow::ErrorKind::NOT_WHITELISTED;
+                    row.error_message.clear();
+                }
+
+                rows.emplace(project.m_name, std::move(row));
+            }
+        }
+
+        // Pass 2: whitelisted projects not detected from the local BOINC client.
+        for (const auto& project : whitelist) {
+            if (rows.find(project.m_name) != rows.end()) {
+                continue;
+            }
+
+            ResearcherProjectRow row;
+            row.gdpr_controls = project.HasGDPRControls();
+            row.name = project.DisplayName();
+            row.magnitude = 0.0;
+
+            const bool requires_external_adapter =
+                project.RequiresExtAdapter().has_value() && project.RequiresExtAdapter().value();
+            const bool legacy_external_adapter = std::find(external_adapter_projects.begin(),
+                                                           external_adapter_projects.end(),
+                                                           project.m_name) != external_adapter_projects.end();
+
+            if (requires_external_adapter || legacy_external_adapter) {
+                row.error_kind = ResearcherProjectRow::ErrorKind::USES_EXTERNAL_ADAPTER;
+            } else {
+                row.error_kind = ResearcherProjectRow::ErrorKind::NOT_ATTACHED;
+            }
+
+            bool is_label_status = false;
+            row.whitelisted = ClassifyWhitelist(project, excluded_projects, is_label_status);
+            if (is_label_status) {
+                row.error_kind = ResearcherProjectRow::ErrorKind::NONE;
+            }
+
+            ApplyExplainMagnitude(row, project.m_name, explain_mag);
+
+            rows.emplace(project.m_name, std::move(row));
+        }
+
+        std::vector<ResearcherProjectRow> rows_out;
+        rows_out.reserve(rows.size());
+        for (auto& row_pair : rows) {
+            rows_out.emplace_back(std::move(row_pair.second));
+        }
+
+        return rows_out;
+    }
+
+    std::vector<WhitelistProject> whitelistProjects() override
+    {
+        // Matches the former VotingModel::getActiveProjectNames/getActiveProjectUrls
+        // exactly: the ACTIVE-filter snapshot, Sorted(), raw m_name/m_url (not the
+        // Display* variants the researcher table uses). A single call now backs both
+        // of the wizard's parallel name/url lists, so their indices still align.
+        std::vector<WhitelistProject> result;
+
+        // AUTHORITATIVE: a pure registry-derived name/url list (no convergence data read),
+        // so the committed-superblock state is the matching source.
+        for (const auto& project : GRC::GetWhitelist().Snapshot(GRC::GreylistState::AUTHORITATIVE).Sorted()) {
+            result.push_back({project.m_name, project.m_url});
+        }
+
+        return result;
+    }
+
+    std::vector<PoolRow> activePools() override
+    {
+        // ActivePoolsByOperator collapses the CPIDs an operator holds into the
+        // one site a researcher joins, so the four grandfathered grcpool.com
+        // seeds present as a single row. The registry is seeded at construction
+        // and re-seeded by Reset(), so there are rows from genesis; this is
+        // empty only if every ACTIVE pool has been de-listed on chain.
+        std::vector<PoolRow> result;
+
+        for (const auto& pool : GRC::GetPoolRegistry().ActivePoolsByOperator()) {
+            result.push_back({pool.m_name, pool.m_url});
+        }
+
+        return result;
+    }
+
+    int maxProjectNameLength() override { return static_cast<int>(GRC::Project::MAX_NAME_SIZE); }
+
+    int maxProjectUrlLength() override { return static_cast<int>(GRC::Project::MAX_URL_SIZE); }
+
+    std::vector<WhitelistProject> v3CapableProjects() override
+    {
+        // Ports ResearcherModel::buildV3ProjectList: the whitelist entries whose
+        // (trailing-slash-normalized) base URL is in the ownership-proof set.
+        const std::set<std::string> v3_urls = GetProjectsWithOwnershipProofSupport();
+
+        std::vector<WhitelistProject> result;
+        if (v3_urls.empty()) {
+            return result;
+        }
+
+        // AUTHORITATIVE: registry-derived (URL matching against the ownership-proof set).
+        for (const auto& project : GRC::GetWhitelist().Snapshot(
+                 GRC::GreylistState::AUTHORITATIVE,
+                 GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED)) {
+            std::string base_url = project.BaseUrl();
+            if (!base_url.empty() && base_url.back() != '/') {
+                base_url += '/';
+            }
+
+            if (v3_urls.count(base_url) > 0) {
+                result.push_back({project.DisplayName(), project.DisplayUrl()});
+            }
+        }
+
+        return result;
+    }
+
+    bool switchMode(ResearcherMode mode, const std::string& email) override
+    {
+        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+
+        switch (mode) {
+            case ResearcherMode::SOLO:
+                return researcher->ChangeMode(GRC::ResearcherMode::SOLO, email);
+            case ResearcherMode::POOL:
+                return researcher->ChangeMode(GRC::ResearcherMode::POOL, std::string());
+            case ResearcherMode::NONCRUNCHER:
+                return researcher->ChangeMode(GRC::ResearcherMode::NONCRUNCHER, std::string());
+        }
+
+        return false;
+    }
+
+    BeaconAdvertiseResult advertiseBeacon() override
+    {
+        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+        const GRC::AdvertiseBeaconResult result = researcher->AdvertiseBeacon();
+
+        return {MapBeaconError(result.Error())};
+    }
+
+    std::string generateBeaconKeyForV3() override
+    {
+        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+        const GRC::CpidOption cpid = researcher->Id().TryCpid();
+
+        // The wizard flow requires a CPID before the beacon page, so this is not
+        // reachable in practice; defensive only.
+        if (!cpid) {
+            return std::string();
+        }
+
+        // pwalletMain is the node's single wallet (== m_wallet); referencing it
+        // directly matches SendBeaconContractV3/GenerateBeaconKey's
+        // EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet) annotation.
+        // Enforce the single-wallet invariant this relies on.
+        assert(pwalletMain && pwalletMain == m_wallet);
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        GRC::AdvertiseBeaconResult result = GRC::GenerateBeaconKey(*cpid);
+
+        if (auto public_key = result.TryPublicKey()) {
+            return HexStr(*public_key);
+        }
+
+        return std::string();
+    }
+
+    BeaconAdvertiseResult advertiseBeaconV3(const std::string& ownership_proof_xml) override
+    {
+        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+        const GRC::CpidOption cpid = researcher->Id().TryCpid();
+
+        if (!cpid) {
+            return {BeaconStatus::NO_CPID};
+        }
+
+        const std::string master_url = TrimString(ExtractXML(ownership_proof_xml, "<master_url>", "</master_url>"));
+        const std::string msg = TrimString(ExtractXML(ownership_proof_xml, "<msg>", "</msg>"));
+        const std::string sig_b64 = TrimString(ExtractXML(ownership_proof_xml, "<signature>", "</signature>"));
+
+        if (master_url.empty() || msg.empty() || sig_b64.empty()) {
+            return {BeaconStatus::ERROR_INVALID_PROOF_XML};
+        }
+
+        // Parse the msg field: "{account_id} {beacon_public_key_hex}".
+        const size_t space_pos = msg.find(' ');
+        if (space_pos == std::string::npos || space_pos + 1 >= msg.size()) {
+            return {BeaconStatus::ERROR_INVALID_PROOF_XML};
+        }
+
+        uint32_t account_id = 0;
+        if (!ParseUInt32(msg.substr(0, space_pos), &account_id) || account_id == 0) {
+            return {BeaconStatus::ERROR_INVALID_PROOF_XML};
+        }
+
+        const std::string public_key_hex = msg.substr(space_pos + 1);
+        const std::vector<uint8_t> pubkey_bytes = ParseHex(public_key_hex);
+        CPubKey beacon_pubkey(pubkey_bytes);
+
+        if (!beacon_pubkey.IsValid()) {
+            return {BeaconStatus::ERROR_INVALID_PROOF_XML};
+        }
+
+        // pwalletMain (== the node's single wallet m_wallet) is used to satisfy
+        // SendBeaconContractV3's EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
+        // annotation; enforce that single-wallet invariant.
+        assert(pwalletMain && pwalletMain == m_wallet);
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        if (!pwalletMain->HaveKey(beacon_pubkey.GetID())) {
+            return {BeaconStatus::ERROR_MISSING_KEY};
+        }
+
+        bool b64_invalid = false;
+        const std::vector<uint8_t> rsa_sig_bytes = DecodeBase64(sig_b64.c_str(), &b64_invalid);
+
+        if (b64_invalid || rsa_sig_bytes.empty()) {
+            return {BeaconStatus::ERROR_INVALID_PROOF_XML};
+        }
+
+        GRC::Beacon beacon(beacon_pubkey);
+        GRC::OwnershipProof proof;
+        proof.m_master_url = master_url;
+        proof.m_account_id = account_id;
+        proof.m_rsa_signature = rsa_sig_bytes;
+
+        GRC::AdvertiseBeaconResult result = GRC::SendBeaconContractV3(*cpid, beacon, std::move(proof));
+
+        return {MapBeaconError(result.Error())};
+    }
+
+    void reload() override
+    {
+        LOCK(cs_main);
+        GRC::Researcher::Reload();
+    }
+
+    std::unique_ptr<Handler> handleResearcherChanged(ResearcherChangedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.ResearcherChanged_connect(interfaces::GuardNotify(std::move(fn))));
+    }
+
+    std::unique_ptr<Handler> handleBeaconChanged(BeaconChangedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.BeaconChanged_connect(interfaces::GuardNotify(std::move(fn))));
+    }
+
+    std::unique_ptr<Handler> handleAccrualChanged(AccrualChangedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.AccrualChangedFromStakeOrMRC_connect(interfaces::GuardNotify(std::move(fn))));
+    }
+
+    std::unique_ptr<Handler> handleBlocksChanged(BlocksChangedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(interfaces::GuardNotify(std::move(fn))));
+    }
+
+private:
+    CWallet* m_wallet;
+
+    //! Build the full snapshot with cs_main held. Shared by snapshot() (blocking)
+    //! and trySnapshot() (TRY_LOCK). The whole snapshot is built under one cs_main
+    //! hold so it reflects a single consistent tip (identity/magnitude reads off
+    //! the immutable Researcher::Get() pointer do not strictly need cs_main, but
+    //! holding it is harmless and keeps the beacon/version reads consistent).
+    ResearcherSnapshot BuildSnapshotLocked() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        ResearcherSnapshot snap;
+
+        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+
+        const GRC::MiningId id = researcher->Id();
+        snap.has_cpid = id.Which() == GRC::MiningId::Kind::CPID;
+        snap.has_eligible_projects = snap.has_cpid;
+        snap.cpid = id.ToString();
+        snap.has_split_cpid = researcher->hasSplitCpid();
+        snap.has_rac = researcher->HasRAC();
+        snap.has_pool_projects = researcher->Projects().ContainsPool();
+        snap.detected_pool_mode = !snap.has_eligible_projects && snap.has_pool_projects;
+        snap.email = GRC::Researcher::Email();
+        snap.configured_for_noncruncher_mode = GRC::Researcher::ConfiguredForNoncruncherMode();
+
+        const GRC::Magnitude magnitude = researcher->Magnitude();
+        snap.magnitude = magnitude.Floating();
+        snap.magnitude_text = magnitude.ToString();
+        snap.has_magnitude = magnitude != 0;
+        snap.accrual = researcher->Accrual();
+        snap.accrual_near_limit = researcher->AccrualNearLimit();
+
+        snap.out_of_sync = OutOfSyncByAge();
+        snap.is_v14_enabled = IsV14Enabled(nBestHeight);
+
+        // msMiningErrors is shared with the getstakinginfo RPC; read it under its
+        // own lock. cs_msMiningErrors is a leaf everywhere it is taken
+        // (StoreResearcher, getstakinginfo, and here all acquire it alone and
+        // release without acquiring cs_main under it), so nesting it beneath
+        // cs_main here introduces no lock-order inversion.
+        {
+            LOCK(cs_msMiningErrors);
+            snap.mining_status = msMiningErrors;
+        }
+
+        DeriveBeacon(*researcher, snap);
+        snap.action_needed = ComputeActionNeeded(snap);
+        // UTF-8 for user-facing display: fsbridge::LongPathString is the in-tree
+        // helper documented "for error messages, log output, and any user-facing
+        // display" (it restores the long Unicode form on Windows before UTF-8
+        // encoding), so the GUI's QString::fromStdString() renders non-ASCII paths
+        // correctly cross-platform. Matches the datadir display in bitcoin.cpp.
+        // A non-cruncher has declined research rewards, so there is nothing to look
+        // for and the "you may need to manually specify boincdatadir" advice that
+        // FindBoincDataDir() logs on a miss is simply wrong for them. Diagnostics
+        // already reports N/A for the BOINC path in this mode, so leaving it empty
+        // matches what the UI shows.
+        snap.boinc_data_dir = GRC::Researcher::ConfiguredForNoncruncherMode()
+            ? std::string{}
+            : fsbridge::LongPathString(GRC::GetBoincDataDir());
+
+        return snap;
+    }
+
+    //! Ports ResearcherModel::updateBeacon(): derive the beacon status and flatten
+    //! the committed active/pending beacons into the snapshot's value fields.
+    void DeriveBeacon(const GRC::Researcher& researcher, ResearcherSnapshot& snap) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        const GRC::CpidOption cpid = researcher.Id().TryCpid();
+
+        if (!cpid) {
+            snap.beacon_status = BeaconStatus::NO_CPID;
+            return;
+        }
+
+        if (snap.out_of_sync) {
+            snap.beacon_status = BeaconStatus::UNKNOWN;
+            return;
+        }
+
+        bool beacon_key_present = false;
+        std::unique_ptr<GRC::Beacon> beacon;
+        std::unique_ptr<GRC::Beacon> pending_beacon;
+
+        if (auto beacon_option = researcher.TryBeacon()) {
+            beacon = std::make_unique<GRC::Beacon>(std::move(*beacon_option));
+            beacon_key_present = beacon->WalletHasPrivateKey(m_wallet);
+        }
+
+        if (auto beacon_option = researcher.TryPendingBeacon()) {
+            pending_beacon = std::make_unique<GRC::Beacon>(std::move(*beacon_option));
+            beacon_key_present = pending_beacon->WalletHasPrivateKey(m_wallet);
+        } else if (m_wallet) {
+            // Shown as pending while it waits to confirm; the send path still
+            // refuses on the mempool check, not on this.
+            if (auto advertisement = GRC::TryRecentBeaconAdvertisement(*m_wallet, *cpid)) {
+                pending_beacon = std::make_unique<GRC::Beacon>(std::move(*advertisement));
+                beacon_key_present = true;
+            }
+        }
+
+        BeaconStatus beacon_status;
+
+        if (beacon_key_present) {
+            beacon_status = MapBeaconError(researcher.BeaconError());
+        } else if (!beacon && !pending_beacon) {
+            beacon_status = BeaconStatus::NO_BEACON;
+        } else {
+            beacon_status = BeaconStatus::ERROR_MISSING_KEY;
+        }
+
+        const int64_t now = GetAdjustedTime();
+
+        // A beacon is pending only once it is on chain. Until a new beacon's
+        // advertisement confirms, say that it is in the mempool, rather than that
+        // there is no beacon or that the expired one needs renewing. An active
+        // beacon keeps its own status.
+        if ((beacon_status == BeaconStatus::ACTIVE || beacon_status == BeaconStatus::NO_BEACON)
+            && !pending_beacon
+            && (!beacon || beacon->Expired(now))
+            && mempool.HasBeaconForCpid(*cpid))
+        {
+            beacon_status = BeaconStatus::ALREADY_IN_MEMPOOL;
+        }
+
+        if (beacon_status != BeaconStatus::ACTIVE) {
+            // Keep the mapped/derived status.
+        } else if (pending_beacon) {
+            beacon_status = BeaconStatus::PENDING;
+        } else if (beacon) {
+            if (beacon->Expired(now + BEACON_RENEWAL_WARNING_THRESHOLD)) {
+                beacon_status = BeaconStatus::RENEWAL_NEEDED;
+            } else if (beacon->Renewable(now)) {
+                beacon_status = BeaconStatus::RENEWAL_POSSIBLE;
+            } else if (researcher.Magnitude() == 0) {
+                beacon_status = BeaconStatus::NO_MAGNITUDE;
+            } else {
+                beacon_status = BeaconStatus::ACTIVE;
+            }
+        }
+
+        snap.beacon_status = beacon_status;
+
+        FillBeaconFields(beacon.get(), pending_beacon.get(), now, snap);
+    }
+
+    //! Flatten the committed active/pending beacons into the snapshot's value
+    //! fields — the booleans the former ResearcherModel getters returned plus the
+    //! epochs (Unix seconds) the GUI formats locally.
+    static void FillBeaconFields(const GRC::Beacon* beacon,
+                                 const GRC::Beacon* pending,
+                                 int64_t now,
+                                 ResearcherSnapshot& snap)
+    {
+        snap.beacon_present = beacon != nullptr;
+        snap.pending_beacon_present = pending != nullptr;
+        snap.has_active_beacon = beacon && !beacon->Expired(now);
+        snap.beacon_expired = beacon && beacon->Expired(now);
+        snap.has_renewable_beacon = beacon && beacon->Renewable(now);
+
+        // Pending until a superblock activates it or sweeps it out as expired,
+        // not merely until its pending age passes: up to that superblock it can
+        // still activate, and the send path refuses a second advertisement for
+        // as long (TryOwnPendingBeacon). Shown any shorter, the wizard would
+        // offer a send that is then refused.
+        const bool has_pending = pending != nullptr;
+        snap.has_pending_beacon = has_pending;
+
+        if (!has_pending) {
+            snap.needs_beacon_auth = false;
+        } else if (!snap.has_active_beacon) {
+            snap.needs_beacon_auth = true;
+        } else {
+            snap.needs_beacon_auth = beacon->m_public_key != pending->m_public_key;
+        }
+
+        if (beacon) {
+            snap.beacon_timestamp = beacon->m_timestamp;
+            snap.beacon_age = beacon->Age(now);
+            snap.time_to_beacon_expiration = GRC::Beacon::MAX_AGE - beacon->Age(now);
+            snap.beacon_address = EncodeDestination(beacon->GetAddress());
+        }
+
+        if (pending) {
+            // Zero once the pending age has passed: the next superblock decides.
+            snap.time_to_pending_beacon_expiration =
+                std::max<int64_t>(0, GRC::PendingBeacon::RETENTION_AGE - pending->Age(now));
+            snap.beacon_verification_code = pending->GetVerificationCode();
+        }
+    }
+
+    //! Ports ResearcherModel::actionNeeded() over the already-filled snapshot.
+    static bool ComputeActionNeeded(const ResearcherSnapshot& snap)
+    {
+        if (snap.out_of_sync) {
+            return false;
+        }
+        if (snap.configured_for_noncruncher_mode) {
+            return false;
+        }
+        if (snap.has_eligible_projects) {
+            return snap.has_split_cpid || (!snap.has_active_beacon && !snap.has_pending_beacon);
+        }
+        return !snap.has_pool_projects;
+    }
+};
+
+// --- PSGT enum mappers (mirror the core enums; explicit switches so a future
+//     reordering of either side is a compile error rather than a silent skew) ---
+
+PSGTSignStatus MapPSGTSignResult(::PSGTSignResult r)
+{
+    switch (r) {
+        case ::PSGTSignResult::SIGNED_AND_RELAYED:      return PSGTSignStatus::SIGNED_AND_RELAYED;
+        case ::PSGTSignResult::COMPLETED_AND_BROADCAST: return PSGTSignStatus::COMPLETED_AND_BROADCAST;
+        case ::PSGTSignResult::NO_NEW_SIGNATURES:       return PSGTSignStatus::NO_NEW_SIGNATURES;
+        case ::PSGTSignResult::ALREADY_KNOWN:           return PSGTSignStatus::ALREADY_KNOWN;
+        case ::PSGTSignResult::NOT_FOUND:               return PSGTSignStatus::NOT_FOUND;
+        case ::PSGTSignResult::FAILED:                  return PSGTSignStatus::FAILED;
+    }
+    assert(false);
+    return PSGTSignStatus::FAILED;
+}
+
+PSGTPoolAddStatus MapPSGTPoolAddResult(::PSGTPoolAddResult r)
+{
+    switch (r) {
+        case ::PSGTPoolAddResult::ACCEPTED_NEW:           return PSGTPoolAddStatus::ACCEPTED_NEW;
+        case ::PSGTPoolAddResult::ACCEPTED_REPLACEMENT:   return PSGTPoolAddStatus::ACCEPTED_REPLACEMENT;
+        case ::PSGTPoolAddResult::DUPLICATE:              return PSGTPoolAddStatus::DUPLICATE;
+        case ::PSGTPoolAddResult::REJECTED_POOL_FULL:     return PSGTPoolAddStatus::REJECTED_POOL_FULL;
+        case ::PSGTPoolAddResult::REJECTED_NOT_BETTER:    return PSGTPoolAddStatus::REJECTED_NOT_BETTER;
+        case ::PSGTPoolAddResult::REJECTED_NOT_INITIATOR: return PSGTPoolAddStatus::REJECTED_NOT_INITIATOR;
+    }
+    assert(false);
+    return PSGTPoolAddStatus::DUPLICATE;
+}
+
+PSGTPoolRejectReason MapPSGTPoolReject(::PSGTPoolReject r)
+{
+    switch (r) {
+        case ::PSGTPoolReject::NONE:               return PSGTPoolRejectReason::NONE;
+        case ::PSGTPoolReject::TOO_LARGE:          return PSGTPoolRejectReason::TOO_LARGE;
+        case ::PSGTPoolReject::MALFORMED:          return PSGTPoolRejectReason::MALFORMED;
+        case ::PSGTPoolReject::HAS_UNKNOWN_FIELDS: return PSGTPoolRejectReason::HAS_UNKNOWN_FIELDS;
+        case ::PSGTPoolReject::DUPLICATE_REVISION: return PSGTPoolRejectReason::DUPLICATE_REVISION;
+        case ::PSGTPoolReject::STRUCTURAL:         return PSGTPoolRejectReason::STRUCTURAL;
+        case ::PSGTPoolReject::INVALID_SIG:        return PSGTPoolRejectReason::INVALID_SIG;
+        case ::PSGTPoolReject::NO_VALID_SIG:       return PSGTPoolRejectReason::NO_VALID_SIG;
+        case ::PSGTPoolReject::COMPLETE:           return PSGTPoolRejectReason::COMPLETE;
+        case ::PSGTPoolReject::UTXO_MISSING:       return PSGTPoolRejectReason::UTXO_MISSING;
+        case ::PSGTPoolReject::UTXO_SPENT:         return PSGTPoolRejectReason::UTXO_SPENT;
+        case ::PSGTPoolReject::FEE_TOO_LOW:        return PSGTPoolRejectReason::FEE_TOO_LOW;
+        case ::PSGTPoolReject::FEE_ABSURD:         return PSGTPoolRejectReason::FEE_ABSURD;
+    }
+    assert(false);
+    return PSGTPoolRejectReason::MALFORMED;
+}
+
+//! In-process PSGTPoolContext (Phase 1d-v). Owns the node's single wallet for the
+//! sign paths and the per-row wallet-relevance derivation. Every read/command runs
+//! node-side so the Qt PSGTPoolPage/PSGTPoolTableModel and MultisignPSGTDialog hold
+//! no core PartiallySignedTransaction and touch no g_psgt_pool / pwalletMain / cs_*.
+class PSGTPoolContextImpl : public PSGTPoolContext
+{
+public:
+    explicit PSGTPoolContextImpl(CWallet* wallet) : m_wallet(wallet) {}
+
+    std::vector<PSGTPoolRow> entries() override
+    {
+        std::vector<PSGTPoolRow> out;
+        const std::vector<PSGTPoolEntry> all = g_psgt_pool.GetAll();
+
+        // The pool GetAll() returns a copy under its own leaf lock, so no pool lock
+        // is held here and cs_main is not needed; the per-row wallet-relevance read
+        // takes cs_wallet inside DeriveRelevance (the former MakeRow's scope).
+        for (const PSGTPoolEntry& entry : all) {
+            PSGTPoolRow row;
+            row.image_hex = entry.image.ToString();
+            row.image_address = EncodeDestination(CTxDestination(entry.image));
+            row.revision_hex = entry.revision_hash.GetHex();
+            row.tx_hash_hex = entry.tx_hash.GetHex();
+            row.valid_sigs = entry.valid_sigs;
+            row.sigs_required = entry.sigs_required;
+            row.sigs_total = entry.sigs_total;
+            row.time_received = entry.time_received;
+            row.in_pool = true;
+
+            FillPayment(entry, row);
+            row.relevance = DeriveRelevance(entry);
+
+            out.push_back(std::move(row));
+        }
+
+        return out;
+    }
+
+    PSGTSignStatus signPoolEntry(const std::string& image_hex, std::string& error,
+                                 std::string& txid) override
+    {
+        CScriptID image;
+        if (!TryImageFromHex(image_hex, image)) {
+            return PSGTSignStatus::NOT_FOUND;
+        }
+        // SignAndAdvancePSGT takes cs_main + the wallet lock internally; the GUI
+        // holds the wallet unlocked (WalletModel::UnlockContext) around this.
+        uint256 tx_hash;
+        const PSGTSignStatus status =
+            MapPSGTSignResult(SignAndAdvancePSGT(image, error, &tx_hash));
+        txid = tx_hash.ToString(); // meaningful only for COMPLETED_AND_BROADCAST
+        return status;
+    }
+
+    bool removePoolEntry(const std::string& image_hex) override
+    {
+        CScriptID image;
+        if (!TryImageFromHex(image_hex, image)) {
+            return false;
+        }
+        // ::PSGTRemovalReason is the core enum; the unqualified name would resolve
+        // to interfaces::PSGTRemovalReason (the GUI-facing mirror) inside this namespace.
+        return g_psgt_pool.Remove(image, ::PSGTRemovalReason::LOCAL_REMOVE);
+    }
+
+    PSGTPoolStatus poolStatus() override
+    {
+        LOCK(cs_main);
+        PSGTPoolStatus status;
+        status.v15_enabled = IsV15Enabled(nBestHeight);
+        status.out_of_sync = OutOfSyncByAge();
+        status.active = status.v15_enabled && !status.out_of_sync;
+        return status;
+    }
+
+    PSGTBytes poolEntryPsgt(const std::string& image_hex) override
+    {
+        CScriptID image;
+        if (!TryImageFromHex(image_hex, image)) {
+            return {};
+        }
+        if (const auto entry = g_psgt_pool.Get(image)) {
+            return SerializePSGT(entry->psgt);
+        }
+        return {};
+    }
+
+    PSGTDescription describePSGT(const PSGTBytes& bytes) override
+    {
+        PSGTDescription d;
+        PartiallySignedTransaction psgt;
+        if (!DecodePSGTBytes(psgt, bytes, d.error)) {
+            return d; // valid == false
+        }
+        d.valid = true;
+
+        const CTransaction ctx(psgt.tx);
+        d.txid = ctx.GetHash().GetHex();
+        d.version = psgt.tx.nVersion;
+        d.time = psgt.tx.nTime;
+        d.lock_time = psgt.tx.nLockTime;
+        d.input_count = static_cast<int>(psgt.tx.vin.size());
+
+        int signed_inputs = 0;
+        for (unsigned int i = 0; i < psgt.tx.vin.size(); ++i) {
+            const CTxIn& txin = psgt.tx.vin[i];
+            PSGTInputInfo info;
+            info.prevout_hash = txin.prevout.hash.GetHex();
+            info.prevout_n = txin.prevout.n;
+
+            if (i < psgt.inputs.size()) {
+                info.has_metadata = true;
+                const PSGTInput& input = psgt.inputs[i];
+
+                if (!input.non_witness_utxo.IsNull()
+                    && txin.prevout.n < input.non_witness_utxo.vout.size()
+                    && input.non_witness_utxo.GetHash() == txin.prevout.hash) {
+                    info.amount_state = PSGTInputAmountState::HAVE;
+                    info.amount = input.non_witness_utxo.vout[txin.prevout.n].nValue;
+                } else if (!input.non_witness_utxo.IsNull()) {
+                    info.amount_state = PSGTInputAmountState::MISMATCH;
+                } else {
+                    info.amount_state = PSGTInputAmountState::NOT_LOADED;
+                }
+
+                if (PSGTInputSigned(input)) {
+                    info.sig_state = PSGTInputSigState::FINALIZED;
+                    ++signed_inputs;
+                } else if (!input.partial_sigs.empty()) {
+                    info.sig_state = PSGTInputSigState::PARTIAL;
+                    info.partial_sig_count = static_cast<int>(input.partial_sigs.size());
+                } else {
+                    info.sig_state = PSGTInputSigState::UNSIGNED;
+                }
+
+                if (!input.redeem_script.empty()) {
+                    info.has_redeem = true;
+                    const CScriptID scriptID(input.redeem_script);
+                    info.p2sh_address = EncodeDestination(scriptID);
+                    info.p2sh_hash_hex = scriptID.ToString();
+
+                    txnouttype rtype;
+                    std::vector<std::vector<unsigned char>> rsols;
+                    if (Solver(input.redeem_script, rtype, rsols) && rtype == TX_MULTISIG && rsols.size() >= 3) {
+                        info.is_multisig = true;
+                        info.multisig_m = static_cast<int>(rsols.front()[0]);
+                        info.multisig_n = static_cast<int>(rsols.size()) - 2;
+                    }
+                }
+            }
+
+            d.inputs.push_back(std::move(info));
+        }
+        d.signed_input_count = signed_inputs;
+
+        for (const CTxOut& txout : psgt.tx.vout) {
+            PSGTOutputInfo oi;
+            txnouttype type;
+            std::vector<CTxDestination> addresses;
+            int n_required = 0;
+            if (ExtractDestinations(txout.scriptPubKey, type, addresses, n_required)) {
+                oi.is_standard = true;
+                for (const CTxDestination& addr : addresses) {
+                    oi.destinations.push_back(EncodeDestination(addr));
+                }
+                oi.n_required = n_required;
+            }
+            oi.amount = txout.nValue;
+            d.outputs.push_back(std::move(oi));
+        }
+
+        PartiallySignedTransaction copy = psgt;
+        d.complete = FinalizePSGT(copy);
+
+        return d;
+    }
+
+    PSGTSignResult signPSGT(const PSGTBytes& bytes) override
+    {
+        PSGTSignResult res;
+        PartiallySignedTransaction psgt;
+        if (!DecodePSGTBytes(psgt, bytes, res.error)) {
+            return res; // ok == false
+        }
+
+        // The GUI holds the wallet unlocked (UnlockContext) around this call.
+        LOCK2(cs_main, m_wallet->cs_wallet);
+
+        // Updater: fill non_witness_utxo + redeem_script (mirrors walletprocesspsgt).
+        for (unsigned int i = 0; i < psgt.inputs.size(); ++i) {
+            if (psgt.inputs[i].non_witness_utxo.IsNull()) {
+                const uint256& prev_hash = psgt.tx.vin[i].prevout.hash;
+                CTransaction prev_tx;
+                uint256 hash_block;
+                if (GetTransaction(prev_hash, prev_tx, hash_block)) {
+                    psgt.inputs[i].non_witness_utxo = prev_tx;
+                }
+            }
+
+            if (psgt.inputs[i].redeem_script.empty() && !psgt.inputs[i].non_witness_utxo.IsNull()) {
+                const COutPoint& prevout = psgt.tx.vin[i].prevout;
+                if (prevout.n < psgt.inputs[i].non_witness_utxo.vout.size()) {
+                    const CScript& script_pub_key = psgt.inputs[i].non_witness_utxo.vout[prevout.n].scriptPubKey;
+                    if (script_pub_key.IsPayToScriptHash()) {
+                        const CScriptID script_id(uint160(std::vector<unsigned char>(
+                            script_pub_key.begin() + 2, script_pub_key.begin() + 22)));
+                        CScript redeem_script;
+                        if (m_wallet->GetCScript(script_id, redeem_script)) {
+                            psgt.inputs[i].redeem_script = redeem_script;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Snapshot per-input signing state (SignPSGTInput's bool is unreliable for
+        // multisig; count new partial sigs / newly-final scriptSigs instead).
+        std::vector<size_t> sigs_before(psgt.inputs.size());
+        std::vector<bool> final_before(psgt.inputs.size());
+        for (unsigned int i = 0; i < psgt.inputs.size(); ++i) {
+            sigs_before[i] = psgt.inputs[i].partial_sigs.size();
+            final_before[i] = !psgt.inputs[i].final_script_sig.empty();
+        }
+
+        for (unsigned int i = 0; i < psgt.inputs.size(); ++i) {
+            SignPSGTInput(*m_wallet, psgt, i, SIGHASH_ALL);
+        }
+
+        int signed_now = 0;
+        for (unsigned int i = 0; i < psgt.inputs.size(); ++i) {
+            const bool final_now = !psgt.inputs[i].final_script_sig.empty();
+            if (psgt.inputs[i].partial_sigs.size() > sigs_before[i] || (final_now && !final_before[i])) {
+                ++signed_now;
+            }
+        }
+
+        PartiallySignedTransaction psgt_copy = psgt;
+        const bool complete = FinalizePSGT(psgt_copy);
+
+        for (unsigned int i = 0; i < psgt.outputs.size(); ++i) {
+            UpdatePSGTOutput(*m_wallet, psgt, i);
+        }
+
+        const PSGTAnalysis analysis = AnalyzePSGT(psgt);
+        int could_not_sign = 0;
+        for (const PSGTInputAnalysis& ia : analysis.inputs) {
+            for (const CKeyID& keyid : ia.missing_sigs) {
+                if (m_wallet->HaveKey(keyid)) {
+                    ++could_not_sign;
+                    break;
+                }
+            }
+        }
+        int needs_data = 0;
+        for (const PSGTInputAnalysis& ia : analysis.inputs) {
+            if (!ia.is_final && (!ia.has_utxo || ia.missing_redeem_script)) {
+                ++needs_data;
+            }
+        }
+
+        res.psgt = SerializePSGT(psgt);
+        res.ok = true;
+        res.complete = complete;
+        res.signed_now = signed_now;
+        res.needs_data = needs_data;
+        res.could_not_sign = could_not_sign;
+        return res;
+    }
+
+    PSGTCombineResult combinePSGTs(const std::vector<PSGTBytes>& blobs) override
+    {
+        PSGTCombineResult res;
+        std::vector<PartiallySignedTransaction> psgts;
+        for (const PSGTBytes& b : blobs) {
+            PartiallySignedTransaction p;
+            if (!DecodePSGTBytes(p, b, res.error)) {
+                return res; // ok == false, error set (a decode failure)
+            }
+            psgts.push_back(std::move(p));
+        }
+
+        PartiallySignedTransaction merged;
+        if (!CombinePSGTs(merged, psgts)) {
+            // ok == false, error left empty -> the GUI shows its "not the same
+            // transaction" translated message (distinguished by empty error).
+            return res;
+        }
+
+        res.psgt = SerializePSGT(merged);
+        res.ok = true;
+        return res;
+    }
+
+    PSGTSubmitResult submitPSGTToPool(const PSGTBytes& bytes) override
+    {
+        PSGTSubmitResult res;
+        PartiallySignedTransaction psgt;
+        if (!DecodePSGTBytes(psgt, bytes, res.error)) {
+            return res; // decoded == false
+        }
+        res.decoded = true;
+
+        const std::vector<unsigned char> wire = SerializePSGT(psgt);
+
+        PSGTPoolEntry entry;
+        uint256 revision_hash;
+        std::string reject_reason;
+        ::PSGTPoolAddResult add_result;
+        {
+            // Hold cs_main continuously from validation through Add so the
+            // funding-unspent guarantee still holds at insertion (Add's contract).
+            LOCK(cs_main);
+            const ::PSGTPoolReject reject =
+                ValidatePSGTForPool(g_psgt_pool, wire, GetAdjustedTime(), entry, res.error);
+            if (reject != ::PSGTPoolReject::NONE) {
+                res.validated = false;
+                res.reject_reason = MapPSGTPoolReject(reject);
+                res.reject_text = PSGTPoolRejectToString(reject);
+                return res;
+            }
+            revision_hash = entry.revision_hash;
+            add_result = g_psgt_pool.Add(std::move(entry), reject_reason);
+        }
+
+        res.add_status = MapPSGTPoolAddResult(add_result);
+        res.revision_hex = revision_hash.GetHex();
+        res.error = reject_reason; // non-accepted add cases carry a reason here
+        res.accepted = add_result == ::PSGTPoolAddResult::ACCEPTED_NEW
+                       || add_result == ::PSGTPoolAddResult::ACCEPTED_REPLACEMENT;
+        if (res.accepted) {
+            RelayPSGT(revision_hash);
+        }
+        return res;
+    }
+
+    PSGTFinalizeResult finalizeToRawTxHex(const PSGTBytes& bytes) override
+    {
+        PSGTFinalizeResult res;
+        PartiallySignedTransaction psgt;
+        if (!DecodePSGTBytes(psgt, bytes, res.error)) {
+            return res;
+        }
+
+        CMutableTransaction mtx;
+        if (!FinalizeAndExtractPSGT(psgt, mtx)) {
+            // complete == false, error empty -> GUI shows its "not complete" message.
+            return res;
+        }
+
+        CDataStream ss_tx(SER_NETWORK, PROTOCOL_VERSION);
+        ss_tx << mtx;
+        res.raw_tx_hex = HexStr(ss_tx);
+        res.complete = true;
+        return res;
+    }
+
+    PSGTDecodeResult decodePSGT(const PSGTBytes& bytes) override
+    {
+        PSGTDecodeResult res;
+        PartiallySignedTransaction psgt;
+        if (!DecodePSGTBytes(psgt, bytes, res.error)) {
+            return res;
+        }
+        res.psgt = SerializePSGT(psgt); // canonical re-serialization
+        res.ok = true;
+        return res;
+    }
+
+    bool walletHasSignature(const PSGTBytes& bytes) override
+    {
+        PartiallySignedTransaction psgt;
+        std::string error;
+        if (!DecodePSGTBytes(psgt, bytes, error)) {
+            return false;
+        }
+        LOCK(m_wallet->cs_wallet);
+        return PSGTSignedBy(*m_wallet, psgt);
+    }
+
+    bool walletMustSignRevision(const std::string& revision_hex) override
+    {
+        // Validate before SetHex, which silently maps malformed input to 0
+        // (mirrors TryImageFromHex above; a revision hash is a 32-byte uint256).
+        if (revision_hex.size() != 64 || !IsHex(revision_hex)) {
+            return false;
+        }
+        uint256 revision;
+        revision.SetHex(revision_hex);
+
+        const auto entry = g_psgt_pool.GetByRevision(revision);
+        if (!entry) {
+            return false;
+        }
+
+        // Already signed by this wallet? Then there is nothing to prompt for.
+        if (WITH_LOCK(m_wallet->cs_wallet, return PSGTSignedBy(*m_wallet, entry->psgt))) {
+            return false;
+        }
+
+        // Does the wallet hold one of the multisig arrangement's keys?
+        // Decode outside the lock; scan under it (the inline predecessor's
+        // scopes, preserved).
+        const std::vector<CPubKey> arrangement = PSGTArrangementKeys(entry->psgt);
+        if (arrangement.empty()) return false;
+        return WITH_LOCK(m_wallet->cs_wallet, return PSGTKeyHeldBy(*m_wallet, arrangement));
+    }
+
+private:
+    CWallet* m_wallet;
+
+    //! Parse a pool image hex into a CScriptID, rejecting anything that is not a
+    //! full 20-byte hash. uint160::SetHex() silently maps malformed input to 0, so
+    //! validate first — this is an interface boundary (headed for IPC) and must not
+    //! act on image 0 for a garbled hex string.
+    static bool TryImageFromHex(const std::string& image_hex, CScriptID& out)
+    {
+        if (image_hex.size() != 40 || !IsHex(image_hex)) {
+            return false;
+        }
+        uint160 hash;
+        hash.SetHex(image_hex);
+        out = CScriptID(hash);
+        return true;
+    }
+
+    //! Port of the former MakeRow payment/destination derivation: the largest
+    //! output that is not change (change returns to the arrangement's own image).
+    static void FillPayment(const PSGTPoolEntry& entry, PSGTPoolRow& row)
+    {
+        CAmount best = 0;
+        const CTxOut* payment = nullptr;
+        CAmount best_any = 0;
+        const CTxOut* payment_any = nullptr;
+        for (const CTxOut& txout : entry.psgt.tx.vout) {
+            if (txout.nValue >= best_any) {
+                best_any = txout.nValue;
+                payment_any = &txout;
+            }
+            CTxDestination dest;
+            const bool is_change = ExtractDestination(txout.scriptPubKey, dest)
+                && std::holds_alternative<CScriptID>(dest)
+                && std::get<CScriptID>(dest) == entry.image;
+            if (!is_change && txout.nValue >= best) {
+                best = txout.nValue;
+                payment = &txout;
+            }
+        }
+        if (!payment) payment = payment_any; // all outputs were change (degenerate)
+        if (payment) {
+            row.amount = payment->nValue;
+            CTxDestination dest;
+            row.destination = ExtractDestination(payment->scriptPubKey, dest)
+                                  ? EncodeDestination(dest)
+                                  : std::string(); // GUI shows "(nonstandard)" on empty
+        }
+    }
+
+    //! Port of the former MakeRow wallet-relevance derivation. Takes cs_wallet
+    //! per row (matching MakeRow's scope), not across the entries() loop, so the
+    //! lock is not held during the lock-free FillPayment/dest derivation.
+    PSGTRelevance DeriveRelevance(const PSGTPoolEntry& entry)
+    {
+        LOCK(m_wallet->cs_wallet);
+
+        if (!PSGTKeyHeldBy(*m_wallet, PSGTArrangementKeys(entry.psgt))) {
+            return PSGTRelevance::NOT_MINE;
+        }
+        return PSGTSignedBy(*m_wallet, entry.psgt)
+                   ? PSGTRelevance::MINE_AWAITING_OTHERS
+                   : PSGTRelevance::MINE_AWAITING_YOU;
+    }
+};
+
+} // namespace
+
+std::unique_ptr<StakingStatus> MakeStakingStatus()
+{
+    return std::make_unique<StakingStatusImpl>();
+}
+
+std::unique_ptr<MRC> MakeMRC(CWallet* wallet)
+{
+    return std::make_unique<MRCImpl>(wallet);
+}
+
+std::unique_ptr<SideStakeManager> MakeSideStakeManager()
+{
+    return std::make_unique<SideStakeManagerImpl>();
+}
+
+std::unique_ptr<VotingManager> MakeVotingManager()
+{
+    return std::make_unique<VotingManagerImpl>();
+}
+
+std::unique_ptr<ResearcherContext> MakeResearcherContext(CWallet* wallet)
+{
+    return std::make_unique<ResearcherContextImpl>(wallet);
+}
+
+std::unique_ptr<PSGTPoolContext> MakePSGTPoolContext(CWallet* wallet)
+{
+    return std::make_unique<PSGTPoolContextImpl>(wallet);
+}
+
+} // namespace interfaces

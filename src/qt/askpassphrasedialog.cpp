@@ -1,15 +1,15 @@
 #include "askpassphrasedialog.h"
 #include "ui_askpassphrasedialog.h"
 
+#include "bitcoingui.h"
 #include "guiconstants.h"
 #include "qt/decoration.h"
 #include "walletmodel.h"
 
+#include <QApplication>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QKeyEvent>
-
-extern bool fWalletUnlockStakingOnly;
 
 AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
                  : QDialog(parent)
@@ -31,8 +31,6 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
     ui->newPassphraseEdit->installEventFilter(this);
     ui->repeatNewPassphraseEdit->installEventFilter(this);
 
-    ui->stakingCheckBox->setChecked(fWalletUnlockStakingOnly);
-
     switch(mode)
     {
         case Encrypt: // Ask passphrase x2
@@ -45,8 +43,22 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
             ui->stakingCheckBox->setChecked(true);
             ui->stakingCheckBox->show();
             // fallthru
+            [[fallthrough]];
+        case Elevate:
         case Unlock: // Ask passphrase
-            ui->warningLabel->setText(tr("This operation needs your wallet passphrase to unlock the wallet."));
+            // Two different promises, so do not make one of them twice.
+            //
+            // UnlockStaking is the Unlock BUTTON: a directive that outlives this
+            // dialog, and the wallet stays as chosen here until it is locked
+            // again. Unlock and Elevate are taken for ONE operation and do give
+            // the wallet back afterwards. Saying "returns to its previous state"
+            // for all three told a user pressing Unlock that their unlock was
+            // temporary, which it is not.
+            ui->warningLabel->setText(mode == UnlockStaking
+                ? tr("Enter your wallet passphrase to unlock the wallet. It stays unlocked until "
+                     "you lock it again.")
+                : tr("This operation needs your wallet passphrase. The wallet is unlocked for the "
+                     "operation and returns to its previous state afterwards."));
             ui->newPassphraseLabel->hide();
             ui->newPassphraseEdit->hide();
             ui->repeatNewPassphraseLabel->hide();
@@ -74,7 +86,34 @@ AskPassphraseDialog::~AskPassphraseDialog()
 void AskPassphraseDialog::setModel(WalletModel *model)
 {
     this->model = model;
+
+    // The box is no longer seeded from a remembered preference. There is no such
+    // preference any more -- the restriction belongs to the unlock -- and the
+    // only mode that shows the box, UnlockStaking, ticks it in the constructor
+    // because staking-only is the conservative default for a directive.
+    //
+    // Dropping the seeding also removes a lockout. The box is invisible in the
+    // Unlock mode the operation-driven prompt uses, so a user whose last unlock
+    // was staking-only used to get the hidden box pre-ticked, unlock
+    // staking-only again, and fail the very operation that raised the prompt.
+    // Do not restore "stickiness" without solving that.
 }
+
+namespace {
+//! Balances setOverrideCursor/restoreOverrideCursor even if the call it wraps
+//! throws.
+//!
+//! Both users cross IPC in the split build, where a disconnect mid-call raises,
+//! and an override cursor that is set and never restored persists for the life
+//! of the application -- the whole GUI keeps a wait cursor with nothing running.
+struct BusyCursor {
+    BusyCursor() { QApplication::setOverrideCursor(Qt::WaitCursor); }
+    ~BusyCursor() { QApplication::restoreOverrideCursor(); }
+
+    BusyCursor(const BusyCursor&) = delete;
+    BusyCursor& operator=(const BusyCursor&) = delete;
+};
+} // namespace
 
 void AskPassphraseDialog::accept()
 {
@@ -99,42 +138,150 @@ void AskPassphraseDialog::accept()
             // Cannot encrypt with empty passphrase
             break;
         }
+        if(newpass1 != newpass2)
+        {
+            // Checked before the confirmation, while this dialog is still up:
+            // the passphrase is retyped here, so the dialog has to stay. Asking
+            // "are you sure" first and reporting the mismatch only afterwards
+            // had the user confirm an encryption that could not happen.
+            QMessageBox::critical(this, tr("Wallet encryption failed"),
+                                 tr("The supplied passphrases do not match."));
+            break;
+        }
+
+        // Take this dialog down BEFORE the confirmation, not after it. accept()
+        // cleared the passphrase fields on entry, so leaving it up shows an
+        // empty prompt behind the confirmation -- two prompts at once -- and
+        // then an empty, frozen one for the seconds setWalletEncrypted() blocks
+        // this thread rewriting the wallet database and regenerating the
+        // keypool.
+        //
+        // hide(), not accept(): the message boxes below parent to this dialog,
+        // and the accept() or reject() at the end of this branch is what ends
+        // exec() with the right result.
+        hide();
+
         QMessageBox::StandardButton retval = QMessageBox::question(this, tr("Confirm wallet encryption"),
                  tr("Warning: If you encrypt your wallet and lose your passphrase, you will <b>LOSE ALL OF YOUR COINS</b>!") + "<br><br>" + tr("Are you sure you wish to encrypt your wallet?"),
                  QMessageBox::Yes|QMessageBox::Cancel,
                  QMessageBox::Cancel);
         if(retval == QMessageBox::Yes) {
-            if(newpass1 == newpass2) {
-                if(model->setWalletEncrypted(newpass1)) {
+            // Nothing else on screen says the application is busy once the
+            // dialog is gone, and the whole GUI thread is blocked here.
+            bool encrypted = false;
+            {
+                BusyCursor busy;
+                encrypted = model->setWalletEncrypted(newpass1);
+            }
+
+            if(encrypted) {
+                // Earlier backups of the pre-encryption wallet are not merely useless
+                // once the new wallet is in use -- they remain a security risk, because
+                // they still contain the UNENCRYPTED private keys. This includes the
+                // automatic backups written to the walletbackups folder. Shown in both
+                // the monolithic and multiprocess cases (most users do not know this).
+                const QString backupWarning = "<b>" +
+                                              tr("IMPORTANT: Any earlier backups of your wallet file are not just "
+                                                 "useless once you use the new encrypted wallet; they are a security "
+                                                 "risk. They still contain your UNENCRYPTED private keys, so anyone who "
+                                                 "obtains one can take your coins even after the live wallet is encrypted. "
+                                                 "This includes the automatic backups Gridcoin writes to the wallet backups "
+                                                 "directory (\"walletbackups\" by default, or the directory set by -backupdir). "
+                                                 "After making a fresh backup of the new encrypted wallet, securely delete "
+                                                 "every backup taken before encryption, including those in that directory.") +
+                                              "</b>";
+
+                if (!m_multiprocess) {
+                    // Monolithic: node + wallet + GUI are one process, so restarting the
+                    // application performs the clean reload that finishes the encryption.
                     QMessageBox::warning(this, tr("Wallet encrypted"),
                                          "<qt>" +
-                                         tr("Gridcoin will close now to finish the encryption process. "
-                                         "Remember that encrypting your wallet cannot fully protect "
-                                         "your coins from being stolen by malware infecting your computer.") +
-                                         "<br><br><b>" +
-                                         tr("IMPORTANT: Any previous backups you have made of your wallet file "
-                                         "should be replaced with the newly generated, encrypted wallet file. "
-                                         "For security reasons, previous backups of the unencrypted wallet file "
-                                         "will become useless as soon as you start using the new, encrypted wallet.") +
-                                         "</b></qt>");
-                    QApplication::quit();
+                                             tr("Gridcoin will close now to finish the encryption process. "
+                                                "Remember that encrypting your wallet cannot fully protect "
+                                                "your coins from being stolen by malware infecting your computer.") +
+                                             "<br><br>" + backupWarning + "</qt>");
+                    // The wallet must restart to finish encryption; route the
+                    // shutdown through BitcoinGUI::requestQuit() so it can't be
+                    // vetoed by minimize-on-close on Qt6 (issue #2995).
+                    BitcoinGUI::requestQuit();
+                } else {
+                    // Multiprocess: the wallet lives in the separate core process, which
+                    // keeps running -- closing this GUI would NOT restart it. The on-disk
+                    // encryption is already complete (the wallet database was rewritten and
+                    // the keypool regenerated in the core); the core just needs a restart to
+                    // drop the pre-encryption database state it still holds in memory and
+                    // reload cleanly. Deliberately no requestQuit() here.
+                    QMessageBox::warning(this, tr("Wallet encrypted - restart the core to finish"),
+                                         "<qt>" +
+                                             tr("Your wallet is now fully encrypted and has been locked.") +
+                                             "<br><br>" +
+                                             tr("You are running in multiprocess mode, so the wallet lives in the "
+                                                "separate Gridcoin core process, which is still running. To finish the "
+                                                "encryption cleanly, restart the core process now (the running "
+                                                "<code>gridcoinresearchd</code>). The encryption on disk is already "
+                                                "complete; the restart is only so the core drops the pre-encryption "
+                                                "database state it still holds in memory and reloads the encrypted "
+                                                "wallet fresh.") +
+                                             "<br><br>" +
+                                             tr("Note: closing this window will not restart the core. Only "
+                                                "stopping and starting the core process does that; stopping it "
+                                                "will also close this window, so reopen the wallet once the core "
+                                                "is back up.") +
+                                             "<br><br>" + backupWarning + "</qt>");
                 }
-                else {
-                    QMessageBox::critical(this, tr("Wallet encryption failed"),
-                                         tr("Wallet encryption failed due to an internal error. Your wallet was not encrypted."));
-                }
-                QDialog::accept(); // Success
-            } else {
-                QMessageBox::critical(this, tr("Wallet encryption failed"),
-                                     tr("The supplied passphrases do not match."));
             }
+            else {
+                QMessageBox::critical(this, tr("Wallet encryption failed"),
+                                     tr("Wallet encryption failed due to an internal error. Your wallet was not encrypted."));
+            }
+            QDialog::accept(); // Success
         } else {
             QDialog::reject(); // Cancelled
         }
     } break;
     case UnlockStaking:
-    case Unlock:
-        if(!model->setWalletLocked(false, oldpass)) {
+    case Elevate:
+    case Unlock: {
+        // Two different questions, so do not read one answer for both.
+        //
+        // UnlockStaking is the Unlock BUTTON: a directive that leaves the
+        // wallet in a state the user chose and that outlives this dialog. The
+        // checkbox is that choice, and it opens ticked because staking-only is
+        // the conservative option.
+        //
+        // Unlock is an ELEVATION raised by an operation that cannot proceed
+        // without a full unlock. There is nothing to choose: staking-only would
+        // not satisfy the caller, so the box is not shown and full is the only
+        // answer. Reading the hidden widget here gave the right result only
+        // because it happens to be unchecked, which is an accident rather than
+        // a decision. WalletModel::UnlockContext restores the prior scope when
+        // the operation finishes, so this elevation is temporary.
+        //
+        // Elevate widens the unlock already in progress rather than locking and
+        // unlocking again. The relock dance threw that unlock's deadline away,
+        // so a wallet unlocked by walletpassphrase for a fixed time stayed
+        // unlocked indefinitely after any GUI action, and a cancelled prompt
+        // left a staking node locked.
+        //
+        // It is NOT retried as an ordinary unlock when it fails. Elevate refuses
+        // a locked wallet, so the failure that matters here is the unlock having
+        // expired while this prompt sat open; unlocking instead would start a
+        // fresh unlock with no deadline, and the caller's context would narrow
+        // that to staking-only forever. Reporting it leaves the wallet locked,
+        // which is what the timer decided, and the user can unlock and retry.
+        const bool unlocked = mode == Elevate
+            ? model->elevateWallet(oldpass)
+            : model->setWalletLocked(false, oldpass,
+                                     mode == UnlockStaking && ui->stakingCheckBox->isChecked());
+
+        if (!unlocked && mode == Elevate
+                && model->getEncryptionStatus() == WalletModel::Locked) {
+            QMessageBox::critical(this, tr("Wallet unlock failed"),
+                                  tr("The wallet locked itself while you were entering your "
+                                     "passphrase, because the unlock you had asked for ran out. "
+                                     "Unlock the wallet and try again."));
+        }
+        else if(!unlocked) {
             // Check if the passphrase has a null character
             if (oldpass.find('\0') == std::string::npos) {
                     QMessageBox::critical(this, tr("Wallet unlock failed"),
@@ -151,14 +298,26 @@ void AskPassphraseDialog::accept()
         }
         else
         {
-            fWalletUnlockStakingOnly = ui->stakingCheckBox->isChecked();
             QDialog::accept(); // Success
         }
-        break;
+    } break;
     case ChangePass:
         if(newpass1 == newpass2)
         {
-            if(model->changePassphrase(oldpass, newpass1))
+            // Down BEFORE the call, exactly as the Encrypt case above, and for
+            // the same reason: changePassphrase() re-derives the key several
+            // times to recalibrate the iteration count, blocking the GUI thread,
+            // and accept() already cleared the fields -- so leaving it up shows
+            // an empty frozen prompt here too, just for less time.
+            hide();
+
+            bool changed = false;
+            {
+                BusyCursor busy;
+                changed = model->changePassphrase(oldpass, newpass1);
+            }
+
+            if(changed)
             {
                 QMessageBox::information(this, tr("Wallet encrypted"),
                                      tr("Wallet passphrase was successfully changed."));
@@ -166,6 +325,11 @@ void AskPassphraseDialog::accept()
             }
             else
             {
+                // Back up before the error: this dialog is where the passphrase
+                // is retyped, so it has to return. The box on top of it is right
+                // here -- unlike the success case, the prompt is still wanted.
+                show();
+
                 // Check if the old passphrase had a null character
                 if (oldpass.find('\0') == std::string::npos) {
                     QMessageBox::critical(this, tr("Passphrase change failed"),
@@ -199,6 +363,7 @@ void AskPassphraseDialog::textChanged()
         acceptable = !ui->newPassphraseEdit->text().isEmpty() && !ui->repeatNewPassphraseEdit->text().isEmpty();
         break;
     case UnlockStaking:
+    case Elevate:
     case Unlock: // Old passphrase x1
         acceptable = !ui->oldPassphraseEdit->text().isEmpty();
         break;

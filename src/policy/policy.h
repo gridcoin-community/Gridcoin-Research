@@ -6,12 +6,12 @@
 #ifndef BITCOIN_POLICY_POLICY_H
 #define BITCOIN_POLICY_POLICY_H
 
-#include "main.h"
+#include "script.h"
+#include "validation.h"
 
 /**
- * Mandatory script verification flags that all new transactions must comply with for
- * them to be valid. Failing one of these tests may trigger a DoS ban;
- * see CheckInputScripts() for details.
+ * Mandatory script verification flags: the base that STANDARD_SCRIPT_VERIFY_FLAGS
+ * is built on, which feeds wallet signing, PSGT and raw-transaction checks.
  *
  * Note that this does not affect consensus validity; see GetBlockScriptFlags()
  * for that.
@@ -35,7 +35,32 @@ static constexpr unsigned int STANDARD_SCRIPT_VERIFY_FLAGS{MANDATORY_SCRIPT_VERI
                                                              SCRIPT_VERIFY_CHECKSEQUENCEVERIFY |
                                                              SCRIPT_VERIFY_LOW_S};
 
-/** For convenience, standard but not mandatory verify flags. */
+/**
+ * Script verification flags that close signature malleability, activated as
+ * CONSENSUS at block version 15 by GetBlockScriptFlags().
+ *
+ * Named for what they are rather than where they are applied: v15 turns them on
+ * for relay and for block validity at the same height, so there is no window in
+ * which a staker assembles a block from its own mempool that its peers reject.
+ *
+ * These close what the crypto layer leaves open by design -- pubkey.cpp
+ * normalizes high-S on verification and documents that enforcement belongs to
+ * SCRIPT_VERIFY_LOW_S, which nothing was setting. Safe to require because
+ * CKey::Sign() produces low-S, canonical-DER signatures by construction, so no
+ * transaction this wallet has ever produced is affected.
+ */
+static constexpr unsigned int V15_SCRIPT_VERIFY_FLAGS{SCRIPT_VERIFY_LOW_S |
+                                                      SCRIPT_VERIFY_DERSIG |
+                                                      SCRIPT_VERIFY_STRICTENC |
+                                                      SCRIPT_VERIFY_NULLDUMMY |
+                                                      SCRIPT_VERIFY_MINIMALDATA |
+                                                      SCRIPT_VERIFY_CLEANSTACK};
+
+/** For convenience, standard but not mandatory verify flags. These feed wallet
+ *  signing, PSGT, and raw-transaction sanity checks only. The mempool's
+ *  policy-tier script flags for input connection live in
+ *  POLICY_SCRIPT_VERIFY_FLAGS (validation.cpp) -- extend that set, not this
+ *  one, to add a relay-policy script rule. */
 static constexpr unsigned int STANDARD_NOT_MANDATORY_VERIFY_FLAGS{STANDARD_SCRIPT_VERIFY_FLAGS & ~MANDATORY_SCRIPT_VERIFY_FLAGS};
 
 bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType);
@@ -43,7 +68,7 @@ bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType);
 /** Check for standard transaction types
     @return True if all outputs (scriptPubKeys) use only standard transaction forms
 */
-bool IsStandardTx(const CTransaction& tx);
+bool IsStandardTx(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 /** Check for standard transaction types
     @param[in] tx   Transaction to check

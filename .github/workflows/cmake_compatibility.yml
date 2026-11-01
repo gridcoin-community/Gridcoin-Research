@@ -18,6 +18,11 @@ env:
   # Global settings for all jobs
   BUILD_TYPE: RelWithDebInfo
   USE_CCACHE: true
+  # Match the `path: ~/.ccache` declared by each job's actions/cache step.
+  # ccache 4.x defaults to ~/.cache/ccache, so without this override the
+  # builds write to a directory the cache action never sees and no caching
+  # actually happens.
+  CCACHE_DIR: /home/runner/.ccache
 
 jobs:
   # ----------------------------------------------------------------------
@@ -59,7 +64,6 @@ jobs:
             -DENABLE_QRENCODE=ON \
             -DUSE_DBUS=ON \
             -DENABLE_UPNP=ON \
-            -DDEFAULT_UPNP=ON \
             -DENABLE_PIE=ON \
             -DENABLE_DOCS=OFF \
             -DENABLE_TESTS=ON \
@@ -68,8 +72,11 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      # check-build-warnings.sh fails the step on any compiler or linker warning in
+      # the tree's own build. Every build of the tree in these workflows goes
+      # through it.
       - name: Build
-        run: cmake --build build_native
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_native
 
       - name: Test
         run: ctest --test-dir build_native --output-on-failure
@@ -91,6 +98,12 @@ jobs:
       - name: Add ARM64 Architecture
         run: |
           sudo dpkg --add-architecture arm64
+          # Take phased updates. While an Ubuntu update is phasing, apt keeps the
+          # installed amd64 copy of a package back but can pick the new version
+          # for the arm64 copy it installs. Multi-Arch: same packages (mesa, for
+          # one) must match across architectures, so without this the install
+          # fails with "held broken packages" on any runner outside the phase.
+          echo 'APT::Get::Always-Include-Phased-Updates "true";' | sudo tee /etc/apt/apt.conf.d/99-phased-updates
           # Remove all existing sources and write clean amd64-only + arm64 config.
           # The runner image adds sources (microsoft-prod, azure-cli, ubuntu) with
           # varying formats that break when arm64 is added as an architecture.
@@ -104,16 +117,21 @@ jobs:
           Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 
           Types: deb
-          URIs: http://security.ubuntu.com/ubuntu
+          URIs: http://azure.archive.ubuntu.com/ubuntu
           Suites: noble-security
           Components: main universe multiverse restricted
           Architectures: amd64
           Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
           EOF
+          # The arm64 sources come from Azure's ports mirror, like every amd64 pocket
+          # above. Multi-Arch: same packages (mesa, krb5, ...) must be the identical
+          # version in both architectures, and two different mirrors can be a
+          # generation apart (ports.ubuntu.com served a stale mesa for hours after
+          # Azure had the new one), which apt reports as "held broken packages".
           cat <<'EOF' | sudo tee /etc/apt/sources.list.d/arm64.list
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main universe multiverse restricted
+          deb [arch=arm64] http://azure.ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted
+          deb [arch=arm64] http://azure.ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted
+          deb [arch=arm64] http://azure.ports.ubuntu.com/ubuntu-ports noble-security main universe multiverse restricted
           EOF
           sudo apt-get update
 
@@ -123,13 +141,13 @@ jobs:
           sudo apt-get update
           sudo apt-get -f install -y
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build zipcmp zipmerge ziptool qemu-user-static \
-            g++-aarch64-linux-gnu qt6-base-dev:arm64 qt6-charts-dev:arm64 qt6-svg-dev:arm64 \
+            build-essential cmake ninja-build qemu-user-static \
+            g++-aarch64-linux-gnu qt6-base-dev:arm64 qt6-svg-dev:arm64 \
             qt6-l10n-tools qt6-tools-dev:arm64 qt6-tools-dev-tools:arm64 \
-            libqt6core5compat6-dev:arm64 libssl-dev:arm64 libzip-dev:arm64 \
+            libssl-dev:arm64 zlib1g-dev:arm64 \
             libcurl4-openssl-dev:arm64 libboost-system-dev:arm64 libboost-filesystem-dev:arm64 \
             libboost-thread-dev:arm64 libboost-iostreams-dev:arm64 libboost-program-options-dev:arm64 \
-            libboost-serialization-dev:arm64 libboost-chrono-dev:arm64 libboost-test-dev:arm64 \
+            libboost-chrono-dev:arm64 libboost-test-dev:arm64 \
             libminiupnpc-dev:arm64 libqrencode-dev:arm64 libxkbcommon-dev:arm64 \
             libcups2t64:arm64 \
             ccache
@@ -153,6 +171,10 @@ jobs:
 
       - name: Configure CMake (Cross)
         run: |
+          # Set an explicit build type. With none, CMake emits no -O flag and
+          # the tree is compiled unoptimised; every other job in CI sets one.
+          # The cost lands hardest here because ctest runs under emulation, so
+          # the unoptimised code is also the slowest code to execute.
           cmake -B build_arm64 -GNinja \
             -DCMAKE_SYSTEM_NAME=Linux \
             -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
@@ -164,12 +186,13 @@ jobs:
             -DUSE_QT6=ON \
             -DQt6_DIR=/usr/lib/aarch64-linux-gnu/cmake/Qt6 \
             -DENABLE_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/qemu-aarch64-static \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build_arm64
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_arm64
 
       - name: Test (QEMU Emulation)
         env:
@@ -193,13 +216,24 @@ jobs:
       - name: Add ARMhf Architecture
         run: |
           sudo dpkg --add-architecture armhf
+          # Take phased updates. While an Ubuntu update is phasing, apt keeps the
+          # installed amd64 copy of a package back but can pick the new version
+          # for the armhf copy it installs. Multi-Arch: same packages (mesa, for
+          # one) must match across architectures, so without this the install
+          # fails with "held broken packages" on any runner outside the phase.
+          echo 'APT::Get::Always-Include-Phased-Updates "true";' | sudo tee /etc/apt/apt.conf.d/99-phased-updates
           sudo add-apt-repository -y universe
           sudo add-apt-repository -y multiverse
           sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
+          # The armhf sources come from Azure's ports mirror, like every amd64 pocket
+          # above. Multi-Arch: same packages (mesa, krb5, ...) must be the identical
+          # version in both architectures, and two different mirrors can be a
+          # generation apart (ports.ubuntu.com served a stale mesa for hours after
+          # Azure had the new one), which apt reports as "held broken packages".
           cat <<EOF | sudo tee /etc/apt/sources.list.d/armhf.list
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-security main universe multiverse restricted
+          deb [arch=armhf] http://azure.ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted
+          deb [arch=armhf] http://azure.ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted
+          deb [arch=armhf] http://azure.ports.ubuntu.com/ubuntu-ports noble-security main universe multiverse restricted
           EOF
           sudo apt-get update
 
@@ -209,13 +243,13 @@ jobs:
           sudo apt-get update
           sudo apt-get -f install -y
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build zipcmp zipmerge ziptool qemu-user-static \
-            g++-arm-linux-gnueabihf qt6-base-dev:armhf qt6-charts-dev:armhf qt6-svg-dev:armhf \
+            build-essential cmake ninja-build qemu-user-static \
+            g++-arm-linux-gnueabihf qt6-base-dev:armhf qt6-svg-dev:armhf \
             qt6-l10n-tools:armhf qt6-tools-dev:armhf qt6-tools-dev-tools:armhf \
-            libqt6core5compat6-dev:armhf libssl-dev:armhf libzip-dev:armhf \
+            libssl-dev:armhf zlib1g-dev:armhf \
             libcurl4-openssl-dev:armhf libboost-system-dev:armhf libboost-filesystem-dev:armhf \
             libboost-thread-dev:armhf libboost-iostreams-dev:armhf libboost-program-options-dev:armhf \
-            libboost-serialization-dev:armhf libboost-chrono-dev:armhf libboost-test-dev:armhf \
+            libboost-chrono-dev:armhf libboost-test-dev:armhf \
             libminiupnpc-dev:armhf libqrencode-dev:armhf libxkbcommon-dev:armhf \
             libcups2t64:armhf \
             ccache
@@ -239,6 +273,10 @@ jobs:
 
       - name: Configure CMake (Cross)
         run: |
+          # Set an explicit build type. With none, CMake emits no -O flag and
+          # the tree is compiled unoptimised; every other job in CI sets one.
+          # The cost lands hardest here because ctest runs under emulation, so
+          # the unoptimised code is also the slowest code to execute.
           cmake -B build_armhf -GNinja \
             -DCMAKE_SYSTEM_NAME=Linux \
             -DCMAKE_SYSTEM_PROCESSOR=arm \
@@ -248,6 +286,7 @@ jobs:
             -DCMAKE_SYSROOT=/ \
             -DQt6_DIR=/usr/lib/arm-linux-gnueabihf/cmake/Qt6 \
             -DENABLE_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DENABLE_GUI=ON \
             -DUSE_QT6=ON \
             -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/qemu-arm-static \
@@ -255,7 +294,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build_armhf
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_armhf
 
       - name: Test (QEMU Emulation)
         env:

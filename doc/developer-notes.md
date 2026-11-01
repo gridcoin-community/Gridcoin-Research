@@ -32,6 +32,7 @@ Developer Notes
     - [C++ data structures](#c-data-structures)
     - [Strings and formatting](#strings-and-formatting)
     - [Shadowing](#shadowing)
+    - [Signed and unsigned comparisons](#signed-and-unsigned-comparisons)
     - [Threads and synchronization](#threads-and-synchronization)
     - [Scripts](#scripts)
         - [Shebang](#shebang)
@@ -45,6 +46,7 @@ Developer Notes
         - [Suggestions and examples](#suggestions-and-examples)
     - [Release notes](#release-notes)
     - [RPC interface guidelines](#rpc-interface-guidelines)
+      - [RPC heritage ledger (backport hygiene)](#rpc-heritage-ledger-backport-hygiene)
 
 <!-- markdown-toc end -->
 
@@ -295,6 +297,14 @@ needs for debugging, while -debug=NOISY results in extensive debugging entries.
 The Qt code routes `qDebug()` output to `debug.log` under category "qt": run
 with `-debug=qt` to see it.
 
+Multiprocess (split GUI/node) IPC bookkeeping logs under category "ipc": run with
+`-debug=ipc` to see the per-request libmultiprocess traffic, proxy create/destroy
+and post-disconnect notices. That category carries informational traffic only --
+IPC warnings and errors are deliberately uncategorised (`LogPrintf("WARN: ...")`
+and `error(...)`) so they are always logged rather than hidden behind a debug
+switch. Note "ipc" occupies the bit Bitcoin Core assigns to "cmpctblock", which
+Gridcoin does not implement; see the comment on `BCLog::IPC` in `logging.h`.
+
 ### Testnet mode
 
 If you are testing multi-machine code that needs to operate across the internet,
@@ -305,12 +315,12 @@ testnet so that your nodes can be identified.
 ### DEBUG_LOCKORDER
 
 Gridcoin is a multi-threaded application, and deadlocks or other
-multi-threading bugs can be very difficult to track down. Building with
-`-DENABLE_DEBUG_LOCKORDER=ON` adds `-DDEBUG_LOCKORDER` to the compiler
-flags. This inserts run-time checks to keep track of which locks are held
-and adds warnings to the `debug.log` file if inconsistencies are detected.
-This option is independent of `CMAKE_BUILD_TYPE` so it can be used with any
-build configuration.
+multi-threading bugs can be very difficult to track down. `DEBUG_LOCKORDER`
+inserts run-time checks to keep track of which locks are held and adds
+warnings to the `debug.log` file if inconsistencies are detected. A `Debug`
+build defines it, along with `ABORT_ON_FAILED_ASSUME`, as Bitcoin Core's
+Debug builds do; `-DENABLE_DEBUG_LOCKORDER=ON` adds it to any other build
+type.
 
 ### Assertions and Checks
 
@@ -351,8 +361,21 @@ in-tree. Example use:
 $ valgrind --suppressions=contrib/valgrind.supp build/src/test/test_gridcoin
 $ valgrind --suppressions=contrib/valgrind.supp --leak-check=full \
       --show-leak-kinds=all build/src/test/test_gridcoin --log_level=test_suite
-$ valgrind -v --leak-check=full build/src/gridcoinresearchd -printtoconsole
+$ valgrind -v --leak-check=full build/bin/gridcoinresearchd -printtoconsole
 ```
+
+The Valgrind CI job builds with Clang, `RelWithDebInfo`, and runs the unit
+suite as in the first line, then the functional suite with `--valgrind`, which
+runs every node under memcheck and stops it at its first error:
+
+```shell
+$ GRIDCOIND=$PWD/build/bin/gridcoinresearchd GRIDCOINCLI=$PWD/build/bin/gridcoinresearchd \
+      test/functional/test_runner.py --configfile=$PWD/build/test/config.ini \
+      --valgrind --timeout-factor=10
+```
+
+Valgrind reports what ASan does not: reads of uninitialised memory. Expect the
+unit suite to take about nine times as long as it does natively.
 
 ### Compiling for test coverage
 
@@ -404,7 +427,7 @@ invocation of `perf record` like this:
 ```sh
 $ perf record \
     -g --call-graph dwarf --per-thread -F 140 \
-    -p `pgrep gridcoinresearchd` -- sleep 60
+    -p `pidof -s gridcoinresearchd` -- sleep 60
 ```
 
 You could then analyze the results by running:
@@ -473,6 +496,46 @@ The `g_timer` instance is also used during initialization
 single-point timings, using `GetTimeMillis()` directly is lighter weight than
 constructing a `MilliTimer`.
 
+#### Where to create the label
+
+**Create a timer at the outermost function of the operation being timed, in the
+same translation unit as the code that reads it. If a second caller can reach the
+readers without passing through the creator, the label is in the wrong place.**
+
+This is the one recurring hazard of the class, and it comes from an asymmetry that
+is easy to miss: the label's lifetime is scoped by *control flow*, while the
+`GetTimes` calls that consume it are placed by *lexical* convenience. Nothing ties
+the two together, so an entirely reasonable-looking pair of edits can leave readers
+running on paths where the label was never created. `GetTimes` then returns a zeroed
+timer and warns — the measurement is silently useless and `debug.log` fills at
+default level, because the warning is a `LogPrintf` rather than a category.
+
+Two real instances, both fixed:
+
+- The `"miner"` label is created inside `StakeMiner()`'s loop, but
+  `SelectCoinsForStaking()` and `AvailableCoinsForStaking()` in
+  [`src/wallet/wallet.cpp`](/src/wallet/wallet.cpp) read it — and they are also
+  called from the staking-difficulty path, which the GUI polls. Every poll warned.
+  Fixed by honouring the `fMiner` flag those functions already take, so the reads
+  only happen on the staking path.
+- The `"buildPollTable"` label was created by `PollResultToJson()` in
+  [`src/rpc/voting.cpp`](/src/rpc/voting.cpp), an RPC that never reads it, while all
+  ten readers live in the vote-resolution engine
+  ([`src/gridcoin/voting/result.cpp`](/src/gridcoin/voting/result.cpp)). The
+  poll-result cache and the GUI reach that engine without the RPC, so every phase of
+  every poll resolution warned. Fixed by creating the label in
+  `PollResult::BuildFor()`, the engine's outermost entry.
+
+`"default"` is read from four files and is nonetheless safe, but only because it is
+created in `main()` and therefore lives for the whole process. Do not treat that as
+the pattern to copy — it is the exception that a process-lifetime owner buys.
+
+The warning names both the label and the log string, so a recurrence identifies its
+own culprit rather than requiring every call site to be enumerated by hand. Note
+that a missing timer is deliberately *not* auto-created on read: that would turn a
+loud bug into a quietly meaningless first measurement, which is worse in a tool
+whose only job is measurement.
+
 ### Sanitizers
 
 Gridcoin Core can be compiled with various "sanitizers" enabled, which add
@@ -481,36 +544,65 @@ conditions, or undefined behavior. These sanitizers have runtime overhead,
 so they are most useful when testing changes or producing debugging builds.
 Sanitizers are actively used in CI (see `.github/workflows/cmake_quality.yml`).
 
-To build with AddressSanitizer (ASan) and UndefinedBehaviorSanitizer (UBSan),
-pass the flags via `CMAKE_CXX_FLAGS` and `CMAKE_EXE_LINKER_FLAGS`:
+To build with AddressSanitizer (ASan) and UndefinedBehaviorSanitizer (UBSan)
+the way the CI sanitizer job does, pass the flags via `CMAKE_C_FLAGS`,
+`CMAKE_CXX_FLAGS` and the linker flags:
 
 ```bash
+SAN="-fsanitize=address,float-divide-by-zero,integer,undefined -fno-omit-frame-pointer -ftrivial-auto-var-init=pattern"
 cmake -B build_asan \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
   -DCMAKE_BUILD_TYPE=Debug \
+  -DENABLE_GUI=ON -DUSE_QT6=ON -DENABLE_MULTIPROCESS=ON -DENABLE_TESTS=ON \
   -DUSE_ASM=OFF \
-  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+  -DCMAKE_C_FLAGS="$SAN" \
+  -DCMAKE_CXX_FLAGS="$SAN -DARENA_DEBUG" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,float-divide-by-zero,integer,undefined" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,float-divide-by-zero,integer,undefined"
 cmake --build build_asan -j $(nproc)
 
-# Run tests with suppression files:
-LSAN_OPTIONS=suppressions=test/sanitizer_suppressions/lsan \
-UBSAN_OPTIONS=suppressions=test/sanitizer_suppressions/ubsan:print_stacktrace=1:halt_on_error=1 \
-ASAN_OPTIONS=malloc_context_size=0:check_initialization_order=1 \
-  ctest --test-dir build_asan --output-on-failure
+# Run the tests with the options and suppression files CI uses:
+build_asan/test/with_sanitizer_env.py ctest --test-dir build_asan --output-on-failure
 ```
+
+`with_sanitizer_env.py` is generated into every build with tests. It runs its
+arguments with the sanitizer options and suppression files the CI jobs use,
+leak checking included, and any option already in the environment wins, e.g.
+`ASAN_OPTIONS=detect_leaks=0 build_asan/test/with_sanitizer_env.py ctest ...`.
+It also works for running a single binary or a daemon by hand. Do not set
+`malloc_context_size=0`: it removes the allocation and free stacks from every
+use-after-free report, and it stops LeakSanitizer from reporting anything.
+
+A Debug build defines `DEBUG_LOCKORDER`, so the runtime lock checks run too, as
+in the CI job.
+
+`integer` is a Clang sanitizer, so the recipe selects Clang, as the CI job does.
+It reports behaviour that is defined but usually unintended: unsigned
+wrap-around, and implicit conversions that change a value. The places that
+mean it, mostly hash arithmetic and dependencies, are listed in
+`test/sanitizer_suppressions/ubsan`. A new report is a finding: fix the code, or
+add a suppression that names the function and says why the wrap is intended.
 
 To build with ThreadSanitizer (TSan) instead:
 
 ```bash
 cmake -B build_tsan \
-  -DCMAKE_BUILD_TYPE=Debug \
-  -DCMAKE_CXX_FLAGS="-fsanitize=thread" \
-  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DENABLE_MULTIPROCESS=ON -DENABLE_TESTS=ON \
+  -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+  -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
 cmake --build build_tsan -j $(nproc)
 
-TSAN_OPTIONS=suppressions=test/sanitizer_suppressions/tsan \
-  ctest --test-dir build_tsan --output-on-failure
+build_tsan/test/with_sanitizer_env.py ctest --test-dir build_tsan --output-on-failure
 ```
+
+This is what the ThreadSanitizer CI job builds. Do not build TSan as Debug, and
+do not add `ENABLE_DEBUG_LOCKORDER`: the lock-order checker records every lock
+acquisition under one global mutex, so any two threads that take a lock are
+ordered through it, and TSan treats their unsynchronised accesses as ordered
+and does not report them.
 
 Suppression files for known issues in dependencies are located in
 `test/sanitizer_suppressions/` (lsan, tsan, ubsan).
@@ -557,7 +649,27 @@ as each waits for the other to release its lock) are a problem. Compile with
   lock acquisitions. This means **argument order matters**: callers must list
   locks in the canonical order to prevent deadlocks. For example, always write
   `LOCK2(cs_main, cs_wallet)`, never `LOCK2(cs_wallet, cs_main)`.
-- **`TRY_LOCK(cs, name)`** — Non-blocking lock attempt.
+- **`TRY_LOCK(cs, name)`** — Non-blocking lock attempt. It stays in the lock
+  hierarchy on purpose: `DEBUG_LOCKORDER` records and checks its order like a
+  blocking lock's, even though a try-lock cannot wait. With the canonical order
+  applied throughout, a try-lock should never be *needed* to avoid a deadlock
+  (upstream's position, bitcoin/bitcoin#9674, and the goal here), so a
+  `TRY_LOCK` in the reverse order is usually a lock-order inversion compensated
+  by a try, and whether its author knew that is exactly what the report exists
+  to ask.
+- **`TRY_LOCK_ORDER_EXEMPT(cs, name)`** — A non-blocking attempt that
+  `DEBUG_LOCKORDER` leaves out of the hierarchy: no order is recorded into it
+  and none is checked, while a blocking lock taken while it is held is still
+  ordered against it. Use it only for a try-lock that gives up on the spot when
+  it fails, never for one that retries until it succeeds (that waits after all),
+  and say why at the site. The point of the split is that the exemption is
+  explicit and reviewed: a `TRY_LOCK` reached for by someone unsure of the
+  canonical order is still caught. The only sites that carry it are the net
+  layer's per-node probes, and they carry it because the refactor that removes
+  the need for them (per-node message queues in place of the scanning loops)
+  has not happened yet, not because a try-lock is an acceptable way to live
+  with an inversion. See "Known DEBUG_LOCKORDER reports that are not deadlocks"
+  below for those sites and the argument behind each.
 
 ### Canonical lock ordering
 
@@ -601,10 +713,147 @@ Key elements:
   (recursive mutex) when a function that takes `LOCK(cs_main)` is called from code
   that already holds `cs_main`.
 
+### Known DEBUG_LOCKORDER reports that are not deadlocks
+
+The checker records a `TRY_LOCK` acquisition in the lock-order graph exactly as
+it records a blocking one: `push_lock()` in `src/sync.cpp` never consults the
+try flag, which only decorates the printed stack with `(TRY)`. An ordering
+whose second step is always a try-lock is therefore reported as a potential
+deadlock even though the thread holding the first lock never waits for the
+second, and a deadlock needs every thread in the cycle to wait.
+
+This is the checker's oldest known limitation, not a discovery. Bitcoin Core's
+checker, which this one descends from, exempted a try-lock as the second lock
+from December 2014 (bitcoin/bitcoin#5515) and removed that exemption in
+February 2017 (bitcoin/bitcoin#9674, "Always enforce strict lock ordering (try
+or not)") as a discipline choice: upstream's code was by then close to using
+the canonical order inside try-locks as well, so a try-lock in the reverse
+order is reported as a violation of the hierarchy, not because it can wait.
+Upstream still reports them that way, and so does this tree. Gridcoin's #779
+(December 2017) is this very report on the same locks under their pre-CConnman
+names, `cs_vNodes`, `pto->cs_vSend (TRY)` and `cs_main (TRY)`; it aborted the
+client under `--enable-debug` for two years and is why the checker here was
+changed in 2021 (594658bb0) to report and continue rather than assert.
+
+The net layer produced three such reports on a `DEBUG_LOCKORDER` daemon as soon
+as it exchanged messages with a peer, so they showed up in any functional test
+that connected two nodes, until the socket handler's probes were marked
+`TRY_LOCK_ORDER_EXEMPT` (see the end of this section). They never reach CI: the Sanitizers job runs the
+functional suite too (`ctest` registers it for every native build with Python
+3) under the same checker, but a daemon writes its reports to its own
+`debug.log`, in a directory the harness removes when the test passes, and the
+job's gate reads the `ctest` log, where only the unit binary's reports appear.
+The reports are:
+
+```
+Conflict: 'm_nodes_mutex' and 'pnode->cs_vRecvMsg' acquired in inconsistent orders.
+Conflict: 'pnode->cs_vSend' and 'pnode->cs_vRecvMsg' acquired in inconsistent orders.
+Conflict: 'm_nodes_mutex' and 'cs_vRecvMsg' acquired in inconsistent orders.
+```
+
+The two sides are the socket handler (`grc-net`) and the message handler
+(`grc-msghand`) in `src/net.cpp`:
+
+- The socket handler holds `m_nodes_mutex` while it decides whether a
+  disconnected node can be deleted, and takes that node's `cs_vSend`,
+  `cs_vRecvMsg` and `cs_inventory` with `TRY_LOCK`, skipping the node if any is
+  contended. Its receive and send passes run on a snapshot of the node list with
+  `m_nodes_mutex` released and again only `TRY_LOCK` the per-node locks;
+  `CNode::CloseSocketDisconnect()` try-locks `cs_vRecvMsg` to drain the buffer.
+  Every `(TRY)` entry in the reports' "Current" stacks is one of these.
+- The message handler try-locks `cs_vRecvMsg` and then, inside
+  `ProcessMessages()`, takes `cs_main`, `m_nodes_mutex` (through the `CConnman`
+  node-access API: `CheckIncomingNonce`, `ForEachNode`, `GetNodeCount`,
+  `RelayAddress`) and `cs_vSend` (through `PushMessage`) with blocking locks.
+  That is the "Historical" order in the reports, and it is the one that can
+  wait. It then try-locks `cs_main` and, only if that succeeded, try-locks
+  `cs_vSend` around `SendMessages()`.
+
+No cycle can close, because of two invariants the net code keeps:
+
+1. **A thread that holds `m_nodes_mutex` or `cs_main` takes `cs_vRecvMsg` only
+   with `TRY_LOCK`.** The only blocking `LOCK(cs_vRecvMsg)` in the tree is the
+   VERACK handler in `src/net_processing.cpp`, which runs inside
+   `ProcessMessages()` under the same lock, so it is a re-entrant acquisition
+   of a recursive mutex, never a wait.
+2. **A thread that holds `cs_vSend` never waits for `m_nodes_mutex` or
+   `cs_main`.** `SendMessages()` and `SocketSendData()` take neither, and
+   `PushMessage()` holds `cs_vSend` only around the message framing. The
+   message handler acquires `cs_main` by `TRY_LOCK` *before* `cs_vSend`, which
+   is what retired the old `sendalert` deadlock: the RPC thread blocks on
+   `cs_vSend` in `CAlert::RelayTo()` while holding `m_nodes_mutex`, and the
+   handler no longer holds `cs_vSend` while waiting for `cs_main`.
+
+   The handler does wait for one lock under `cs_vSend`: `SendMessages()`'s
+   wallet lookup takes `cs_wallet`. So `cs_vSend` is not a leaf. A fan-out
+   that blocks on `cs_vSend` under `m_nodes_mutex` would close
+   `cs_wallet` -> `m_nodes_mutex` -> `cs_vSend` -> `cs_wallet` with any thread
+   relaying a transaction under `cs_wallet`. Every such fan-out therefore
+   holds `cs_main`, which excludes the handler, and goes through
+   `ForEachNodeUnderLock`, which requires it. The lock rule on
+   `CConnman::ForEachNode` states this for callbacks.
+
+The blocking nestings that do exist, `cs_vSend` under `cs_main` plus
+`m_nodes_mutex` in the alert relays and in the getblocks fan-out of
+`src/node/chainman.cpp`, are therefore one-directional: nothing holds
+`cs_vSend` and waits for `m_nodes_mutex` or `cs_main`. Keep both invariants
+when touching the net code; a change that turns one of the socket handler's `TRY_LOCK`s into a
+`LOCK`, or takes `m_nodes_mutex` from inside `SendMessages()`, creates the
+deadlock the reports describe.
+
+The five socket-handler probes, the three in the delete-disconnected pass, the
+one in event registration and the drain in `CloseSocketDisconnect()`, carry
+`TRY_LOCK_ORDER_EXEMPT`, so the checker records no order into them and these
+reports no longer appear. That is the whole of the exemption: plain `TRY_LOCK`
+stays in the hierarchy, so a try-lock added in the reverse order anywhere else
+is still reported (that is the case worth catching: an inversion compensated
+by an uncontrolled try, by someone who has not read this far), and so is a
+blocking lock taken while one of the marked probes is held. The message handler's own try-locks need no mark, since nothing
+is held before them and no reverse edge exists. The two invariants above are
+still what keeps the blocking nestings one-directional, and the probes are the
+only sites that meet the keyword's contract: each gives up on the spot. The
+scanning loops themselves last until the net refactor (the CConnman and
+PeerManager backport line that #2558 started) replaces them with per-node
+message queues. A report between these locks whose "Current" stack shows a
+blocking or a plain `(TRY)` acquisition, rather than `(TRY, order-exempt)`, is a
+real finding.
+
 Re-architecting the core code so there are better-defined interfaces
 between the various components is a goal, with any necessary locking
 done by the components (e.g. see the self-contained `CKeyStore` class (in `src/keystore.h`)
 and its `cs_KeyStore` lock for example).
+
+### Clang thread-safety analysis
+
+Clang ships a static thread-safety analyzer that checks the `GUARDED_BY`,
+`EXCLUSIVE_LOCKS_REQUIRED` and related annotations at compile time — it
+verifies that a guarded variable is only touched while the right lock is
+held, and that a function annotated as requiring a lock is only called with
+that lock held. It is complementary to `DEBUG_LOCKORDER`: that flag checks
+lock *ordering* at runtime, the analyzer checks lock *coverage* at compile
+time.
+
+The analyzer only runs under Clang (and Apple Clang). **gcc ignores the
+annotations entirely**, so a gcc-only build never exercises them — a missing
+or stale annotation compiles cleanly. The build system auto-enables
+`-Wthread-safety` whenever the compiler supports it; by default the
+diagnostics are warning-only.
+
+**Do a Clang build before opening a PR** so the analyzer runs against your
+changes. `build_targets.sh` honors the `CC` / `CXX` environment variables:
+
+```bash
+CC=clang CXX=clang++ ./build_targets.sh TARGET=native BUILD_TYPE=RelWithDebInfo
+```
+
+The `Thread Safety (Clang)` job in `.github/workflows/cmake_quality.yml`
+builds with `-DWERROR_THREAD_SAFETY=ON`, which promotes the thread-safety
+diagnostics to hard errors — a PR that introduces an annotation violation
+fails CI. To reproduce that gate locally, pass the same option to CMake:
+
+```bash
+cmake -B build -DCMAKE_CXX_COMPILER=clang++ -DWERROR_THREAD_SAFETY=ON ...
+```
 
 Threads
 --------
@@ -613,7 +862,7 @@ Gridcoin is a multi-threaded application. Key threads include:
 
 | Thread | Source | Description |
 |--------|--------|-------------|
-| `ThreadStakeMiner` | `src/net.cpp` | Proof-of-stake block creation (calls `StakeMiner()` in `src/miner.cpp`) |
+| `ThreadStakeMiner` | `src/miner.cpp` | Proof-of-stake block creation (calls `StakeMiner()`); launched from `AppInit2`, joined in `Shutdown()` before the block-file flush |
 | `ThreadScraper` | `src/gridcoin/gridcoin.cpp` | Active scraper: downloads BOINC project stats and publishes signed manifests (mutually exclusive with subscriber) |
 | `ThreadScraperSubscriber` | `src/gridcoin/gridcoin.cpp` | Subscriber: receives scraper manifests and runs convergence to build superblocks (mutually exclusive with scraper) |
 | `ThreadSocketHandler` | `src/net.cpp` | Low-level socket I/O for P2P connections |
@@ -892,6 +1141,44 @@ please name variables so that their names do not shadow variables defined in the
 When using nested cycles, do not name the inner cycle variable the same as in
 the upper cycle, etc.
 
+Signed and unsigned comparisons
+-------------------------------
+
+Comparing a signed value with an unsigned one converts the signed value to
+unsigned, so a negative value becomes a very large one and the comparison can
+give the wrong answer. `-Wsign-compare` reports these. The answer is always to
+fix the code, never to silence the warning.
+
+- Evaluate the comparison by hand and make sure the signed side cannot be
+  negative there. This matters most for `<`, `<=`, `>` and `>=`, where a
+  negative value converted to unsigned reverses the result.
+- Then convert the signed side to the unsigned type explicitly: a `static_cast`
+  for a variable or an expression, a `U` suffix for a literal.
+- Comment every such comparison, literals included, saying why the signed side
+  cannot be negative, so that it is plain the comparison was checked:
+
+  ```cpp
+  // sign-compare checked: size() is size_t; 1U is a non-negative literal, so both sides are unsigned.
+  BOOST_CHECK_EQUAL(entries.size(), 1U);
+  ```
+
+- A value that cannot be negative, such as a count, a size or a bit width,
+  should have an unsigned type in the first place. `Fraction::BitWidth()`
+  returns `unsigned int` for this reason. Fixing the type removes the mixed
+  comparison instead of casting at it.
+
+The compiler does not report every such comparison: it stays silent when the
+signed side is a constant it can see is non-negative, as in `i < 63` with an
+unsigned `i`. Apply the same rule there in code you write or change.
+
+`BOOST_CHECK_EQUAL` and its relatives compare their two sides inside Boost.Test's
+own templates, so a mixed-sign check is reported from a Boost.Test header. The
+test build therefore compiles Boost.Test's headers as user headers, not system
+headers, on every platform (see `src/test/CMakeLists.txt`), and they must stay
+that way: as system headers they would hide these warnings. Warnings in
+Boost.Test's own declarations, which are Boost's code, are silenced in
+`src/test/boost_test_prelude.h` and nowhere else.
+
 Threads and synchronization
 ----------------------------
 
@@ -926,10 +1213,10 @@ bool CreateGridcoinReward(CBlock& blocknew,
 
 ```C++
 // Example: a function that acquires cs_main internally
-// main.h
+// validation.h
 bool GetTransaction(const uint256& hash, CTransaction& tx, uint256& hashBlock);
 
-// main.cpp
+// validation.cpp
 bool GetTransaction(const uint256& hash, CTransaction& tx, uint256& hashBlock)
 {
     LOCK(cs_main);
@@ -1311,3 +1598,127 @@ A few guidelines for introducing and reviewing new RPC interfaces:
   timestamps in the documentation.
 
   - *Rationale*: User-facing consistency.
+
+### RPC heritage ledger (backport hygiene)
+
+Gridcoin's RPC layer began as a port of Bitcoin Core's. Years of divergence later,
+"is this RPC the same as upstream?" no longer has a yes/no answer at the folder level —
+some RPCs are faithful ports, some share upstream's name and argument list but have a
+Gridcoin-specific wrinkle inside, and many have no upstream analogue at all. To make that
+relationship explicit and *enforced* (rather than a comforting fiction of separation),
+every registered RPC carries its classification as a **column on its `vRPCCommands[]` row**
+in `src/rpc/server.cpp` — `{ "name", &impl, cat, &help, heritage_<bucket>, "<fp>" }`. The
+`CRPCCommand` constructor makes all fields mandatory, so a command cannot be registered
+without a bucket (classify-at-birth, compiler-enforced). `test/lint/lint-rpc-heritage.py`
+(run by `lint-all.sh`) reads that column — the same table the dispatcher reads — and
+re-checks the surface fingerprint. The human-readable roll-up is
+[`doc/rpc-heritage.md`](rpc-heritage.md) (issue #3069; this supersedes the folder-isolation
+goal of the old issue #1142, which was found to be artificial and to provide false comfort).
+
+**Four buckets:**
+
+- `pure-upstream` — behaviorally faithful to current upstream; an upstream change can be
+  taken with normal care. Any difference is a *rote* Gridcoin substitution (e.g.
+  `GRC::BlockFinder::FindByHeight(h)` where upstream writes `active_chain[h]`) or purely
+  cosmetic (e.g. `getblockhash`'s arg is named `index`, upstream's `height` — same
+  contract). Fingerprint-tracked.
+- `mixed` — shares upstream's name/surface but has a real divergence a naive backport will
+  trip over: a retained API upstream deleted, a Gridcoin-only output field, a forked helper.
+  Carries a prose `-- diverges:` note describing the hazard. Fingerprint-tracked. Example:
+  `setban` keeps the `BanReason` enum upstream removed (and serializes it to `banlist.dat`),
+  so copying an upstream `setban` patch verbatim won't compile and would change the on-disk
+  format.
+- `removed-upstream` — upstream-derived, but current upstream has **deleted** the RPC
+  (legacy/BDB-wallet sunset: `dumpprivkey`/`importwallet`/`sethdseed`/…; the `CAlert` system;
+  the legacy account family; the `signrawtransaction` split). No *current* backport target
+  exists, so it isn't `mixed` — but it's a frozen Bitcoin-lineage fork, not Gridcoin-native, so
+  it isn't `pure-gridcoin` either. **Fingerprint-tracked**, a sibling of `mixed`: the point is
+  that we may still be *behind* the last valid pre-removal upstream version, and a deliberate
+  pull up to that version (if we choose to keep maintaining the RPC rather than retire it as
+  upstream did) must be a **controlled, re-confirmed** change — exactly what the tripwire
+  enforces. Carries a `-- diverges:` note (e.g. `dumpprivkey` is *extended* beyond its legacy
+  upstream: extra `dump_hex` arg + object output vs upstream's bare WIF string).
+- `pure-gridcoin` — no current upstream analogue *by function* (beacon, superblock, scraper,
+  MRC, voting, sidestake, …). **Not** fingerprinted — there is nothing upstream to drift from.
+  A pure-gridcoin RPC whose *name* nonetheless collides with an unrelated upstream RPC (e.g.
+  `getblockstats`, `generate`, the `getmininginfo` alias) carries a prominent "do NOT port"
+  name-collision note, so a same-named upstream change is never mistakenly applied here.
+
+**The classification rule — rote substitution vs. decision:** an RPC is `pure-upstream` if
+porting an upstream change to it requires only substitutions a Gridcoin dev makes
+reflexively; it is `mixed` if the divergence forces a *non-obvious decision* (what to do
+with a retained enum, a forked formatter, an extra output key). When in doubt, `mixed` —
+under-stating a divergence is the dangerous direction.
+
+**The surface fingerprint:** `fp = sha256("ARGS:" + args[in RPCHelpMan declaration order] +
+"|KEYS:" + sorted(result pushKV keys, gathered by cycle-safe recursive descent through
+called result-builder helpers))[:12]`. The recursive descent means **nested schemas are
+captured**: a transaction RPC that renders a Gridcoin contract payload inherits the
+contract's keys (`cpid`, `magnitude`, `choices`, …), so the fingerprint reflects the full
+observable surface, not just the top level. Any fingerprinted RPC (pure-upstream, mixed, or
+removed-upstream) whose output the literal-key capture cannot represent — a dynamically-keyed object (e.g.
+`logging`'s `pushKV(category, active)`) or a positional array of scalars (e.g.
+`getrawmempool`) — uses `fp=manual` instead, and its drift is reviewed by hand. The
+JSON-RPC error envelope (`JSONRPCError`'s `code`/`message`) is deliberately excluded from
+the captured surface — it is reached from nearly every RPC via `throw` and is not part of
+any success result.
+
+**Why we "freeze-dry" the `pure-upstream` bucket.** We are *not* continuously chasing
+upstream. A `pure-upstream` RPC is deliberately pinned in its current — often stale —
+state, and the fingerprint freeze-dries that surface as it stands today. The value is
+realized the moment someone *modernizes* one toward upstream: the surface changes, the
+fingerprint drifts, and the heritage lint fails. **That failure is the point.** It forces
+the modernizer through a mindful re-classification: is the RPC still a faithful port (just
+re-stamp the fp), or did the act of modernizing introduce a Gridcoin-specific wrinkle that
+makes it `mixed` (re-bucket and write a `diverges` note)? Without the freeze-dry, an RPC
+could silently slide from "faithful port" to "quietly forked" with nobody noticing until a
+future backport broke in a surprising way. The lint converts that silent drift into a
+required, documented decision.
+
+**Responding to a heritage-lint failure:**
+
+- *"surface fingerprint drift (row heritage_fp=X, recomputed Y)"* — you changed an RPC's
+  input args or output keys. **Do not** just paste `Y` over `X` to silence it; that throws
+  away the whole mechanism. Instead: (1) re-confirm the bucket — did the change keep the RPC
+  faithful to upstream, or introduce/remove a Gridcoin divergence? (2) if the bucket changed,
+  update the row's `heritage_<bucket>` and, for `mixed`/`removed-upstream`, refresh the
+  `diverges` note in `doc/rpc-heritage.md`. (3) update the row's `heritage_fp` to the
+  recomputed value **and** the matching row in `doc/rpc-heritage.md` (the lint checks the two
+  agree, per-row).
+- *new RPC won't compile* — `CRPCCommand` requires a `heritage_<bucket>` and `heritage_fp` on
+  the row; that's classify-at-birth. Pick the bucket, run the lint to get the fingerprint, fill
+  both in, and add a `doc/rpc-heritage.md` row (`pure-gridcoin` takes an empty `heritage_fp`).
+- *"result-builder reachable from an RPC only at depth N > MAX_DESCENT"* — a contract-payload
+  builder chain grew deeper than the descent cap; raise `MAX_DESCENT` in the lint so the
+  fingerprint stops truncating that surface.
+- *"command row did not parse into the heritage table"* — a `vRPCCommands[]` row's shape
+  doesn't match `ROW_RE` (e.g. a malformed `heritage_fp`); fix the row, or update `ROW_RE` in
+  the lint if the table format itself changed, so no RPC is silently unenforced.
+
+Functional tests
+----------------
+
+In addition to the C++ Boost unit tests under `src/test/`, there is a Python
+end-to-end functional-test framework under `test/functional/` that starts real
+`gridcoinresearchd` nodes in `-regtest` mode and drives them over JSON-RPC and
+P2P. It is ported from Bitcoin Core v0.21.2 and adapted for Gridcoin's
+proof-of-stake + premine model.
+
+- How to run, environment variables, and regtest gotchas:
+  [`test/functional/README.md`](../test/functional/README.md).
+- Regtest mode itself (premine, ports, instant staking): [`doc/regtest.md`](regtest.md).
+- Build with `-DENABLE_TESTS=ON` and run `ctest -R functional_tests`, or
+  `cmake --build build --target check-functional`.
+
+Conventions when adding a test:
+
+- Name it by area prefix (`feature_`, `wallet_`, `mempool_`, `rpc_`, `p2p_`) and
+  register it in `BASE_SCRIPTS` in `test/functional/test_runner.py`.
+- Subclass `GridcoinTestFramework`; set `self.chain = "regtest"` and
+  `self.setup_clean_chain = True`, and override `setup_network()` to bypass the
+  base `createwallet` path (Gridcoin has a single default wallet). See
+  `feature_regtest_staking.py` as the canonical template.
+- Keep each test small and deterministic (pass `-staking=0` and advance the
+  chain with explicit `generatetoaddress` calls).
+- Strip unused function parameters/locals: the lint gate runs `vulture
+  --min-confidence 100` over all tracked `*.py` and will fail on dead code.

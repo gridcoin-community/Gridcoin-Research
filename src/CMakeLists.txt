@@ -17,6 +17,10 @@ add_compile_definitions(
     __STDC_FORMAT_MACROS
 )
 
+# Multiprocess (IPC) build, RFC #2937: src/ipc is add_subdirectory'd later in this
+# file (after gridcoin_util is defined, since the generated proxy layer links it
+# for the core interface headers). See the ENABLE_MULTIPROCESS block near the end.
+
 if(WIN32)
     # _WIN32_WINNT is already defined by the toolchain/CMake.
     # We remove it here to avoid "redefined" warnings.
@@ -68,13 +72,69 @@ else()
     add_subdirectory(leveldb)
     set(LIBLEVELDB leveldb)
 
+    # src/leveldb is an upstream import that this tree does not style-own -- the
+    # lint suite skips it alongside secp256k1, univalue and the other vendored
+    # trees -- so a local edit here is divergence to carry across every future
+    # import. These warnings fire inside it, and each is suppressed in LevelDB
+    # only, leaving the tree's own code under them:
+    #
+    #   -Wimplicit-fallthrough      util/hash.cc annotates with
+    #                               FALLTHROUGH_INTENDED, but the definition it
+    #                               carries is the do-nothing fallback and the
+    #                               comment there says the real one comes from
+    #                               outside.
+    #   -Wconditional-uninitialized db/version_set.cc, Clang only.
+    #   -Wmaybe-uninitialized       db/db_impl.cc, CompactionState::Output's
+    #                               file_size through vector::push_back; GCC
+    #                               only, at -O2 as well as -O3 (the distro CI
+    #                               jobs).
+    #   -Wmissing-field-initializers util/env_windows.cc, a partly initialised
+    #                               OVERLAPPED; Windows only.
+    #
+    # The first two are suppressed on the leveldb target and probed by the same
+    # variables the top-level loop set, so a compiler that rejected the positive
+    # form never sees the negative one. The other two come with -Wall and -Wextra
+    # rather than from that loop, so their positive forms are probed here, under
+    # -Werror as the loop probes (Clang does not know -Wmaybe-uninitialized), and
+    # each is suppressed only in the file it fires in.
+    if(WARN_CXX_Wimplicit_fallthrough)
+        target_compile_options(leveldb PRIVATE -Wno-implicit-fallthrough)
+    endif()
+    if(WARN_CXX_Wconditional_uninitialized)
+        target_compile_options(leveldb PRIVATE -Wno-conditional-uninitialized)
+    endif()
+
+    set(_leveldb_saved_required_flags "${CMAKE_REQUIRED_FLAGS}")
+    if(WARN_HAVE_WERROR)
+        string(APPEND CMAKE_REQUIRED_FLAGS " -Werror")
+    endif()
+    check_cxx_compiler_flag("-Wmaybe-uninitialized" WARN_CXX_Wmaybe_uninitialized)
+    check_cxx_compiler_flag("-Wmissing-field-initializers" WARN_CXX_Wmissing_field_initializers)
+    set(CMAKE_REQUIRED_FLAGS "${_leveldb_saved_required_flags}")
+    unset(_leveldb_saved_required_flags)
+
+    if(WARN_CXX_Wmaybe_uninitialized)
+        set_property(SOURCE leveldb/db/db_impl.cc TARGET_DIRECTORY leveldb
+            APPEND PROPERTY COMPILE_OPTIONS -Wno-maybe-uninitialized)
+    endif()
+    if(WARN_CXX_Wmissing_field_initializers)
+        set_property(SOURCE leveldb/util/env_windows.cc TARGET_DIRECTORY leveldb
+            APPEND PROPERTY COMPILE_OPTIONS -Wno-missing-field-initializers)
+    endif()
+
     set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_ORIG})
 endif()
 
 if(SYSTEM_SECP256K1)
     set(LIBSECP256K1 PkgConfig::SECP256K1)
 else()
+    # CMP0077 makes the subtree's option()s take the values set below, and
+    # CMP0126 does the same for its set(... CACHE) string settings, ASM and
+    # VALGRIND. Without CMP0126 a first configure dropped both and used AUTO,
+    # so USE_ASM=OFF still built the x86_64 assembly; a re-configure honoured
+    # them, because by then the cache entries existed.
     set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+    set(CMAKE_POLICY_DEFAULT_CMP0126 NEW)
 
     set(SECP256K1_DISABLE_SHARED ON CACHE BOOL "" FORCE)
     set(SECP256K1_ENABLE_MODULE_ECDH OFF)
@@ -123,6 +183,7 @@ add_library(gridcoin_util STATIC
     arith_uint256.cpp
     banman.cpp
     base58.cpp
+    chain.cpp
     chainparams.cpp
     chainparamsbase.cpp
     checkpoints.cpp
@@ -133,17 +194,25 @@ add_library(gridcoin_util STATIC
     dbwrapper.cpp
     fs.cpp
     htlc.cpp
+    gridcoin/accrual/snapshot.cpp
+    gridcoin/autogreylist.cpp
+    gridcoin/autogreylist_v2.cpp
     gridcoin/backup.cpp
     gridcoin/beacon.cpp
+    gridcoin/block_claims.cpp
     gridcoin/boinc.cpp
     gridcoin/crypto/rsaverify.cpp
     gridcoin/claim.cpp
+    gridcoin/consensus/block_rewards.cpp
     gridcoin/contract/contract.cpp
     gridcoin/contract/message.cpp
     gridcoin/contract/registry.cpp
     gridcoin/cpid.cpp
     gridcoin/gridcoin.cpp
+    gridcoin/interfaces.cpp
+    gridcoin/mnemonics.cpp
     gridcoin/mrc.cpp
+    gridcoin/pool.cpp
     gridcoin/project.cpp
     gridcoin/protocol.cpp
     gridcoin/quorum.cpp
@@ -153,6 +222,7 @@ add_library(gridcoin_util STATIC
     gridcoin/scraper/scraper_net.cpp
     gridcoin/scraper/scraper_registry.cpp
     gridcoin/sidestake.cpp
+    gridcoin/staking/chain_trust.cpp
     gridcoin/staking/difficulty.cpp
     gridcoin/staking/exceptions.cpp
     gridcoin/staking/kernel.cpp
@@ -166,27 +236,39 @@ add_library(gridcoin_util STATIC
     gridcoin/voting/builders.cpp
     gridcoin/voting/claims.cpp
     gridcoin/voting/poll.cpp
+    gridcoin/voting/poll_result_cache.cpp
     gridcoin/voting/registry.cpp
     gridcoin/voting/result.cpp
     gridcoin/voting/vote.cpp
     hash.cpp
     init.cpp
+    interfaces/handler.cpp
+    interfaces/init.cpp
     key.cpp
     key_io.cpp
     keystore.cpp
     logging.cpp
-    main.cpp
+    merkleblock.cpp
     miner.cpp
     net.cpp
+    net_processing.cpp
     netaddress.cpp
     netbase.cpp
     node/blockstorage.cpp
+    node/chainman.cpp
+    node/coherence.cpp
+    node/interfaces.cpp
+    node/mempool_persist.cpp
     node/orphan_blocks.cpp
+    node/psgt_pool.cpp
+    node/shutdown.cpp
     node/ui_interface.cpp
     noui.cpp
     pbkdf2.cpp
     policy/policy.cpp
     primitives/transaction.cpp
+    primitives/block.cpp
+    psgt.cpp
     protocol.cpp
     pubkey.cpp
     random.cpp
@@ -195,38 +277,62 @@ add_library(gridcoin_util STATIC
     rpc/htlc.cpp
     rpc/client.cpp
     rpc/dataacq.cpp
+    rpc/mempool.cpp
     rpc/mining.cpp
     rpc/misc.cpp
     rpc/net.cpp
     rpc/protocol.cpp
+    rpc/psgt.cpp
     rpc/rawtransaction.cpp
     rpc/server.cpp
+    rpc/util.cpp
     rpc/voting.cpp
     scheduler.cpp
-    script.cpp
+    script/interpreter.cpp
+    script/script.cpp
+    script/sign.cpp
+    script/standard.cpp
     scrypt.cpp
     support/cleanse.cpp
     support/lockedpool.cpp
     sync.cpp
+    timedata.cpp
+    txmempool.cpp
     uint256.cpp
     util.cpp
     util/bip32.cpp
+    util/proc_hardening.cpp
     util/settings.cpp
+    util/sock.cpp
     util/strencodings.cpp
     util/string.cpp
     util/syserror.cpp
+    util/dir_permissions.cpp
     util/system.cpp
     util/threadinterrupt.cpp
     util/threadnames.cpp
     util/time.cpp
     util/tokenpipe.cpp
     validation.cpp
+    validationinterface.cpp
+    wallet/coinviews.cpp
+    wallet/cursor.cpp
     wallet/db.cpp
     wallet/diagnose.cpp
+    wallet/interfaces.cpp
     wallet/rpcdump.cpp
     wallet/rpcwallet.cpp
+    wallet/synthetic_coin_source.cpp
+    wallet/transactionrecord.cpp
+    wallet/txdetail.cpp
+    wallet/txfilter.cpp
+    wallet/txorder.cpp
     wallet/wallet.cpp
+    wallet/wallet_coin_source.cpp
+    wallet/wallet_tx_source.cpp
+    wallet/walletcoinstore.cpp
     wallet/walletdb.cpp
+    wallet/wallettxstore.cpp
     wallet/walletutil.cpp
 )
 
@@ -241,11 +347,19 @@ target_include_directories(gridcoin_util PUBLIC
 
 target_link_libraries(gridcoin_util PUBLIC
     ${LIBBDB_CXX} ${LIBLEVELDB} ${LIBSECP256K1} ${LIBUNIVALUE}
-    Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time Boost::serialization
+    Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time
     CURL::libcurl
+    # OpenSSL::SSL is linked for libcurl, NOT for the RPC server.
+    #
+    # -rpcssl is gone and no Gridcoin code calls into libssl any more, which
+    # made this look removable. It is not: the scraper fetches project
+    # statistics over HTTPS through libcurl, whose OpenSSL backend needs these
+    # symbols. A dynamic build hides that -- libcurl.so pulls libssl.so in
+    # transitively -- so removing it builds and links cleanly on the native
+    # target and fails only in the static depends build, with 54 undefined
+    # SSL_* references out of libcurl.a.
     OpenSSL::Crypto OpenSSL::SSL
     Threads::Threads
-    libzip::zip
     ZLIB::ZLIB
 )
 
@@ -254,6 +368,27 @@ if(UNIX)
 endif()
 
 target_link_libraries(gridcoin_util PUBLIC ${LIBGRIDCOIN_CRYPTO})
+
+# advapi32: util/dir_permissions.cpp applies the owner-only NTFS DACL that protects
+# a freshly created data directory (SetNamedSecurityInfoW / SetEntriesInAclW /
+# GetNamedSecurityInfoW). This lives in gridcoin_util rather than gridcoin_ipc
+# because the monolithic build creates data directories too (the Qt chooser) and
+# gridcoin_ipc is only built when ENABLE_MULTIPROCESS=ON.
+if(WIN32)
+    target_link_libraries(gridcoin_util PUBLIC advapi32)
+endif()
+
+# Multiprocess (IPC) build, RFC #2937. src/ipc owns the libmultiprocess runtime +
+# mpgen (built from the in-tree subtree in the default vendored mode) and the
+# generated Cap'n Proto proxy layer (gridcoin_ipc). Added here, after gridcoin_util
+# is defined, because the generated proxy code includes the interfaces:: headers,
+# which transitively pull core headers (univalue, etc.); gridcoin_ipc links
+# gridcoin_util for that include environment. The proxy targets are
+# EXCLUDE_FROM_ALL; no Gridcoin binary links them yet (transport + client wiring
+# are later Phase 2 steps).
+if(ENABLE_MULTIPROCESS)
+    add_subdirectory(ipc)
+endif()
 
 if(WIN32)
     target_link_libraries(gridcoin_util PUBLIC
@@ -287,9 +422,15 @@ if(ENABLE_UPNP)
     target_link_libraries(gridcoin_util PUBLIC ${LIBMINIUPNPC})
 endif()
 
-if(ENABLE_DEBUG_LOCKORDER)
-    target_compile_definitions(gridcoin_util PUBLIC DEBUG_LOCKORDER)
-endif()
+# Debug builds run the runtime lock checks and abort on a failed Assume(), as
+# Bitcoin Core's Debug builds do. ENABLE_DEBUG_LOCKORDER adds the lock checks to
+# any other build type. DEBUG_LOCKCONTENTION, which Core also defines here, is
+# left out: Gridcoin's version logs every contended lock unconditionally rather
+# than under a log category.
+target_compile_definitions(gridcoin_util PUBLIC
+    $<$<OR:$<CONFIG:Debug>,$<BOOL:${ENABLE_DEBUG_LOCKORDER}>>:DEBUG_LOCKORDER>
+    $<$<CONFIG:Debug>:ABORT_ON_FAILED_ASSUME>
+)
 
 # Daemon
 # ======
@@ -299,6 +440,13 @@ if(ENABLE_DAEMON)
     target_include_directories(gridcoinresearchd PRIVATE ${CMAKE_BINARY_DIR})
     target_compile_definitions(gridcoinresearchd PRIVATE CURL_STATICLIB) # <--- ADDED
 
+    # Multiprocess (RFC #2937): the daemon links the IPC layer so -multiprocess can
+    # serve the GUI over the socket. gridcoin_ipc is EXCLUDE_FROM_ALL, so listing it
+    # here is what pulls it into the build for this configuration.
+    if(ENABLE_MULTIPROCESS)
+        target_link_libraries(gridcoinresearchd PRIVATE gridcoin_ipc)
+    endif()
+
     # Link gridcoinresearchd to gridcoin_util AND all of gridcoin_util's
     # dependencies, because it is a static library.
     target_link_libraries(gridcoinresearchd PUBLIC
@@ -307,11 +455,10 @@ if(ENABLE_DAEMON)
 
         # Dependencies of gridcoin_util
         ${LIBBDB_CXX} ${LIBLEVELDB} ${LIBSECP256K1} ${LIBUNIVALUE}
-        Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time Boost::serialization
+        Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time
         CURL::libcurl
         OpenSSL::Crypto OpenSSL::SSL
         Threads::Threads
-        libzip::zip
         ZLIB::ZLIB
     )
 
@@ -349,6 +496,15 @@ if(ENABLE_DAEMON)
         install(FILES "${CMAKE_SOURCE_DIR}/contrib/init/gridcoinresearchd.service" COMPONENT daemon
             DESTINATION "lib/systemd/system"
         )
+        install(FILES "${CMAKE_SOURCE_DIR}/contrib/init/gridcoinresearchd-autounlock.service" COMPONENT daemon
+            DESTINATION "lib/systemd/system"
+        )
+        # The stake-only autounlock helper the unit above runs. install(PROGRAMS ...)
+        # sets the executable bit; share/gridcoin is portable (share == share on
+        # every distro), matching the unit's ExecStart path.
+        install(PROGRAMS "${CMAKE_SOURCE_DIR}/contrib/wallettools/gridcoin_autounlock.py" COMPONENT daemon
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/gridcoin"
+        )
         install(FILES "${CMAKE_SOURCE_DIR}/contrib/completions/bash/gridcoinresearchd.bash" COMPONENT daemon
             DESTINATION "${CMAKE_INSTALL_DATADIR}/bash-completion/completions"
             RENAME "gridcoinresearchd"
@@ -358,6 +514,25 @@ if(ENABLE_DAEMON)
             RUNTIME DESTINATION bin
             BUNDLE  DESTINATION "."
         )
+        if(WIN32)
+            # Bundle the PowerShell helpers that run the multiprocess core as a background
+            # scheduled task and provide opt-in stake-only autounlock. They install into the
+            # package's windows\ folder (NSIS.template.in Files them into $INSTDIR\windows);
+            # from there the scripts resolve the daemon at ..\daemon\gridcoinresearchd.exe and
+            # the GUI at ..\gridcoinresearch.exe, matching the installed layout.
+            install(FILES
+                "${CMAKE_SOURCE_DIR}/contrib/windows/Install-GridcoinCoreTask.ps1"
+                "${CMAKE_SOURCE_DIR}/contrib/windows/Uninstall-GridcoinCoreTask.ps1"
+                "${CMAKE_SOURCE_DIR}/contrib/windows/Update-GridcoinCore.ps1"
+                "${CMAKE_SOURCE_DIR}/contrib/windows/Start-GridcoinGui.ps1"
+                "${CMAKE_SOURCE_DIR}/contrib/windows/Set-GridcoinAutounlock.ps1"
+                "${CMAKE_SOURCE_DIR}/contrib/windows/Invoke-GridcoinAutounlock.ps1"
+                "${CMAKE_SOURCE_DIR}/contrib/windows/Set-GridcoinShutdownFlush.ps1"
+                "${CMAKE_SOURCE_DIR}/contrib/windows/README.md"
+                COMPONENT daemon
+                DESTINATION windows
+            )
+        endif()
     endif()
 endif()
 

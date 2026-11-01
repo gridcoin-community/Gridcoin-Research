@@ -1,0 +1,480 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef GRIDCOIN_WALLET_WALLETTXSTORE_H
+#define GRIDCOIN_WALLET_WALLETTXSTORE_H
+
+#include "interfaces/wallet_tx_channel.h"
+#include "interfaces/wallet_tx_record.h"
+#include "wallet/cursor.h"
+#include "wallet/txorder.h"
+#include "wallet/wallet_event_queue.h"
+#include "sync.h"
+#include "uint256.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <deque>
+#include <functional>
+#include <map>
+#include <string>
+#include <thread>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+class CWallet;
+
+//! Forward declaration so applyChainTipRefresh() can carry an
+//! EXCLUSIVE_LOCKS_REQUIRED(cs_main) annotation without pulling in the heavy
+//! chain.h here (mirrors the same extern in net.h / validation.h). CCriticalSection
+//! comes from sync.h, included above.
+extern CCriticalSection cs_main;
+
+namespace GRC {
+
+//!
+//! \brief Qt-free hasher for the tx-hash index. A correct internal hash over
+//! uint256 (any well-distributed hash works for a private multimap); kept
+//! header-light so wallettxstore.h need not pull in primitives/block.h's BlockHasher.
+//!
+struct TxHashHasher {
+    std::size_t operator()(const uint256& h) const { return static_cast<std::size_t>(h.GetUint64(0)); }
+};
+
+//!
+//! \brief Producer-owned authoritative ordering store for the windowed
+//! transaction-table model (windowed-model PR2).
+//!
+//! Step 2 of the windowed-model rewrite relocates the cached-wallet ORDERING
+//! out of the Qt-thread-exclusive TransactionTablePriv into this object, which
+//! the producer (core threads, in WalletModel's NotifyTransactionChanged
+//! handler) mutates. The store computes each new transaction's insert position
+//! and each removal's contiguous range, then pushes a position-stamped
+//! RowsInserted / RowsRemoved event onto the WalletEventQueue. The consumer
+//! (TransactionTableModel) applies those events to its own replica in lockstep
+//! — it never reads this store on the render path — which is what keeps the
+//! still-present QSortFilterProxyModel consistent across a multi-insert drain
+//! batch (a pure-passthrough-reading-the-eager-store consumer would mis-map
+//! rows mid-replay).
+//!
+//! As of PR3 the store holds the FULL authoritative TransactionRecords (not just
+//! ordering keys): the per-view cursors filter/sort over them and the store
+//! serves reads (getRows) for the windowed consumers. The detailed-table consumer
+//! still keeps its own full replica until it migrates to a viewport slice (PR5).
+//!
+//! Threading: m_records / m_by_hash are guarded by the leaf mutex cs_store. The
+//! canonical lock order is cs_main -> cs_wallet -> cs_store; cs_store is NEVER
+//! held while acquiring cs_main / cs_wallet. Producers finish all wallet work
+//! (decompose under the locks they already hold) BEFORE calling into the store,
+//! which takes cs_store last and for a microsecond-bounded window. The Rows*
+//! event is pushed WHILE cs_store is held, so queue seqno-order is identical to
+//! store-mutation-order across all producer threads.
+//!
+class WalletTxStore
+{
+public:
+    WalletTxStore(CWallet* wallet, GRC::WalletEventQueue& queue);
+    ~WalletTxStore();
+
+    WalletTxStore(const WalletTxStore&) = delete;
+    WalletTxStore& operator=(const WalletTxStore&) = delete;
+
+    //!
+    //! \brief Start the store-worker thread. Called once by WalletModel after
+    //! construction, before the first prime. Idempotent.
+    //!
+    void start();
+
+    //!
+    //! \brief Producer: a transaction became visible. Enqueues the
+    //! already-decomposed \p records onto the intake queue and returns
+    //! immediately (O(1), no store mutation on the caller's thread); the worker
+    //! applies the datetime cutoff, dedup, ordering, and the RowsInserted event
+    //! off-lock. Called from core threads under cs_main/cs_wallet — takes only
+    //! the leaf cs_intake, never cs_store, so it never waits on the O(N)
+    //! ordering maintenance (PR2.5 double-queue).
+    //!
+    void enqueueInsert(std::vector<TransactionRecord> records, bool block_known = false);
+
+    //!
+    //! \brief Producer: a transaction is no longer visible / was deleted.
+    //! Enqueues a removal by \p hash for the worker (O(1), same threading
+    //! contract as enqueueInsert). Safe from the CT_DELETED path (no wallet
+    //! locks held).
+    //!
+    void enqueueRemove(const uint256& hash);
+
+    //!
+    //! \brief Producer: a transaction already in the store changed (CT_UPDATED —
+    //! e.g. first confirmation). Enqueues the freshly re-decomposed \p records
+    //! (with producer-computed status) for the worker, which replaces the stored
+    //! records in place and re-evaluates each cursor's membership/sort slot
+    //! (applyStatusUpdate). Same O(1) threading contract as enqueueInsert.
+    //!
+    void enqueueUpsert(std::vector<TransactionRecord> records, bool block_known = false);
+
+    //!
+    //! \brief Producer: an address-book entry changed (label added / renamed /
+    //! removed). Enqueues the address + its new label for the worker (O(1)); the
+    //! worker re-snapshots TransactionRecord::label on every stored record with
+    //! that address and re-evaluates each cursor (the label is the Address-column
+    //! sort key and an address-substring filter target). Restores the live-label
+    //! filter/sort the deleted TransactionFilterProxy had (windowed-model PR4-C).
+    //! \p label is "" when the entry was deleted.
+    //!
+    void enqueueAddressBookChange(const std::string& address, const std::string& label);
+
+    //!
+    //! \brief Producer (core thread, cs_main held): the chain tip advanced.
+    //! Re-runs updateStatus on the bounded set of records whose displayed status
+    //! is still height-dependent (Confirming / Immature / Unconfirmed / ...), then
+    //! drives each cursor so the detailed/overview views show advancing
+    //! confirmation counts and maturity — the per-block refresh the deleted proxy
+    //! got from TransactionTableModel::index()'s lazy updateStatus (windowed-model
+    //! PR4-A). Runs INLINE (not on the store-worker) so it can take cs_wallet +
+    //! cs_store under the caller's cs_main without the worker ever needing
+    //! cs_main/cs_wallet (which would deadlock prime's park protocol);
+    //! cs_main also mutually excludes this from prime.
+    //!
+    //! A refreshed record whose fresh status is just the height projection of its
+    //! previous one (GRC::ProjectTxStatus) emits NO delta: the GUI derives depth and
+    //! maturity progress from the pushed tip height (#3059). Only a real change -- a
+    //! status flip, countsForBalance, sortKey -- reaches the cursors. A hash whose
+    //! refresh threw bypasses that gate on its next refresh (m_refresh_force).
+    //!
+    void applyChainTipRefresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //! Points inside applyChainTipRefresh where a test can inject a throw.
+    enum class RefreshStage {
+        AfterUpdateStatus, //!< updateStatus returned; the record holds the fresh status
+        AfterRecompute,    //!< the sort/filter caches were recomputed
+        BeforeViewEmit,    //!< about to drive one view's cursor (view id passed)
+        AfterCursorUpdate, //!< that cursor moved the row; its deltas are not queued yet
+    };
+    using RefreshFaultHook = std::function<void(RefreshStage stage, std::size_t record, int view)>;
+
+    //! Test seam: called at each RefreshStage (under cs_store); may throw to simulate a
+    //! failure there. Unset in production.
+    void SetRefreshFaultHookForTests(RefreshFaultHook hook) LOCKS_EXCLUDED(cs_store)
+    {
+        LOCK(cs_store);
+        m_refresh_fault_hook = std::move(hook);
+    }
+
+    //!
+    //! \brief Qt thread: register a per-view cursor (server-side filter+sort).
+    //! Builds the cursor over the current m_records and pushes a RowsReset so the
+    //! consumer bulk-refills via getRows. Re-registering an existing viewId
+    //! replaces it. \p viewId is one of the GRC::VIEW_* identifiers.
+    //!
+    void registerView(int viewId, FilterSpec filter, int sort_column, int sort_order);
+
+    //! Qt thread: drop a registered view's cursor on consumer teardown (Phase
+    //! 1c-ii-c). Idempotent; emits no event (the consumer is going away).
+    void unregisterView(int viewId);
+
+    //! Qt thread: change a registered view's sort / filter / served-row cap.
+    //! Each pushes the cursor's resulting events (Reset for sort/filter,
+    //! Insert/Remove at the boundary for a limit change).
+    void setViewSort(int viewId, int sort_column, int sort_order);
+    void setViewFilter(int viewId, FilterSpec filter);
+    void setViewLimit(int viewId, int limit);
+
+    //! Qt thread: read [first, first+count) served rows of \p viewId, plus the
+    //! view's total_accepted / epoch / high_water, ALL under one cs_store hold
+    //! (\ref RowsResult). Clamps the slice to the served window; returns fewer
+    //! rows if it is shorter. \p count < 0 means "all served rows from \p first".
+    //! Unknown viewId / first < 0 / count == 0 -> empty slice, but the metadata
+    //! fields are still valid for a registered view (total_accepted/epoch/
+    //! high_water reflect the current cursor) so a caller can refresh its
+    //! reconciliation baseline without a slice copy. Returning the metadata
+    //! WITH the slice atomically is what closes the PR4-fix B race for both the
+    //! Reset refetch and the PR5 scroll fetch — see \ref RowsResult.
+    RowsResult getRows(int viewId, int first, int count);
+
+    //! Qt thread: ALL accepted rows of \p viewId in view order, plus the same
+    //! metadata as getRows, under ONE cs_store hold. CAP-INDEPENDENT — iterates the
+    //! full accepted set (totalAccepted), not the served window — so a CSV export
+    //! covers every matching row even if a finite served cap is ever introduced
+    //! (windowed-model PR5-B; the detailed view's cap stays unlimited today, so this
+    //! equals getRows(viewId,0,-1), but the contract is the distinction).
+    RowsResult getAllRows(int viewId);
+
+    //! Qt thread: the accepted-view row of the record identified by (\p hash,
+    //! \p idx), or -1 if the key is absent, filtered out, or the view is unknown.
+    //! \p idx < 0 matches the FIRST part of the transaction — the lowest accepted
+    //! row across all parts sharing \p hash — reproducing the old indexForTxid
+    //! hash-only semantics. Resolves \p hash via m_by_hash to absolute record
+    //! indices, then Cursor::positionOf to the accepted row. Backs click-through and
+    //! anchor-on-resort (windowed-model PR5-B). Pure read; no projector calls.
+    int rowForKey(int viewId, const uint256& hash, int idx = -1);
+
+    //! Qt thread: structured transaction-detail DTO for the record identified
+    //! by (\p hash, \p idx) — the double-click detail dialog. The consumer
+    //! passes a self-describing identity (read from its OWN cached record via
+    //! DetailedTxModel::keyAt), NOT a view-relative row, so the result is
+    //! drift-free even if the consumer's drain queue lags the producer cursor
+    //! (the absolute row a stale cursor maps could be a neighbouring tx). \p idx
+    //! < 0 matches SOME part sharing \p hash — the m_by_hash iteration order is
+    //! unspecified — which is fine for this defensive fallback only because the
+    //! real path (keyAt) always supplies a concrete idx. Resolves the part's vout
+    //! under cs_store (the leaf), RELEASES cs_store, then fills the DTO under
+    //! LOCK2(cs_main, cs_wallet) — the node-side call at the multiprocess split
+    //! (#2937); rendering (and translation) is the GUI's job (design §4.1).
+    //! IMPORTANT: in-process this still takes the wallet locks on the Qt
+    //! thread, so it RELOCATES (does not remove) the detail-path stall; only
+    //! deleting the lazy index() refresh takes the render thread fully off
+    //! cs_main/cs_wallet. Returns found == false for an unknown key or a tx no
+    //! longer in the wallet (the dialog then shows a fallback string).
+    WalletTxDetail getRowDetail(const uint256& hash, int idx);
+
+    //!
+    //! \brief Qt thread: (re)build the store from the wallet and re-arm every
+    //! registered view cursor. Returns nothing — the full transaction list never
+    //! leaves the node; the windowed consumers refill their slice via getRows()
+    //! off the Reset this pushes to each cursor.
+    //!
+    //! Holds cs_main + cs_wallet across the whole rebuild (blocking producers,
+    //! exactly as the old loadWallet did), swaps the index under cs_store, and
+    //! drains+discards any pending queue events while producers are still
+    //! blocked — so the rebuilt index, the re-armed cursors, and the (now empty)
+    //! queue are mutually consistent. Any producer event after this returns is
+    //! computed against the rebuilt index and applied by the next drain.
+    //! \p limit_enabled / \p limit_time are the OptionsModel datetime-display
+    //! cutoff (read on the Qt thread by the caller); the store caches them and
+    //! applies them to subsequent insertTransaction calls, so re-calling prime()
+    //! when the option changes re-filters every view.
+    //!
+    void prime(bool limit_enabled, int64_t limit_time);
+
+private:
+    //! One unit of deferred store maintenance handed from a producer to the worker.
+    struct IntakeItem {
+        enum Kind { Insert, Remove, Update, AddressBook } kind;
+        std::vector<TransactionRecord> records; //!< Insert/Update: the decomposed parts.
+        uint256 hash;                           //!< Remove/Update: the tx hash.
+        std::string ab_address{};               //!< AddressBook: the changed address.
+        std::string ab_label{};                 //!< AddressBook: its new label ("" if removed).
+        //! Insert/Update: the producer saw this tx's confirming block in
+        //! mapBlockIndex while its status still read depth -1. That is the window
+        //! where the block is being connected but pindexBest has not advanced, so
+        //! the record needs exactly one more refresh to ripen. See
+        //! WalletTxStore::isVolatile() for why this cannot be decided worker-side.
+        bool block_known_at_produce = false;
+    };
+
+    //! Intake depth at which to start warning that the worker is not keeping up.
+    //! Far above any legitimate burst (a reorg or an IBD catch-up drains in
+    //! well under this), so a crossing means the worker is wedged or starved.
+    static constexpr std::size_t kIntakeBacklogWarn = 2000;
+
+    //! Warn (at doubling thresholds, so it cannot spam) when the intake queue is
+    //! growing without being drained. Caller holds cs_intake.
+    //!
+    //! The worker is the SOLE path by which a new transaction reaches m_records,
+    //! and its health is otherwise invisible: if it stops draining, producers keep
+    //! enqueuing successfully and the inline applyChainTipRefresh keeps refreshing
+    //! already-stored rows, so the only symptom is that no new row ever appears
+    //! again — with nothing in the log to say why (#3257). A backlog that keeps
+    //! growing is the one observable signature, so say it out loud.
+    void warnIfIntakeBacklogged() EXCLUSIVE_LOCKS_REQUIRED(cs_intake);
+
+    //! Worker entry point: drain the intake queue and apply each item. Parks
+    //! while m_rebuilding is set (acknowledging via m_worker_parked); exits on
+    //! m_stop. Holds cs_intake only while waiting/dequeuing — never with cs_store.
+    void workerLoop();
+    //! Worker: apply one intake item (the O(N) store maintenance). Must be called
+    //! with NO lock held; insert/removeTransaction take cs_store internally.
+    void applyIntake(IntakeItem item);
+
+    //! The O(N) ordering maintenance, now worker-private (was the public PR2 API;
+    //! producers call enqueue* instead). Each takes cs_store and pushes the native
+    //! VIEW_FULL event AND drives the registered cursors.
+    void insertTransaction(std::vector<TransactionRecord> records);
+    void removeTransaction(const uint256& hash);
+    //! Worker: a present tx's records changed in place (CT_UPDATED). Replaces the
+    //! stored records and re-evaluates each cursor (applyStatusUpdate). Takes cs_store.
+    void updateTransaction(std::vector<TransactionRecord> records);
+    //! Worker (cs_store only): re-snapshot TransactionRecord::label on every stored
+    //! record whose address matches, refresh its cached projector outputs, and
+    //! re-evaluate each cursor (the label drives the Address sort + label filter).
+    //! The new label is carried in, so no cs_wallet is needed — keeping the worker
+    //! free of cs_main/cs_wallet (prime's park protocol depends on it).
+    void applyAddressBookChange(const std::string& address, const std::string& label);
+    //! Lock-free cores (caller already holds cs_store): the actual O(N) maintenance
+    //! + cursor drive. insert/removeTransaction are thin lock-taking wrappers;
+    //! updateTransaction composes these directly for its not-present /
+    //! part-count-changed fallback without re-entering the non-recursive cs_store.
+    void insertLocked(std::vector<TransactionRecord> records) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+    //! \return false only if the hash is present but its index entries could not
+    //! be reconciled with m_records even after an index rebuild. A caller that
+    //! intends to re-insert afterwards MUST check this: insertLocked's hash dedup
+    //! would otherwise see the stale entries and silently drop the re-insert.
+    bool removeLocked(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! Resolve \p hash to the contiguous record range [\p minPos, \p maxPos] that
+    //! m_by_hash claims for it, and validate that claim against m_records:
+    //! in range, entry count matching the span, and both endpoints actually
+    //! carrying \p hash. \return false if the hash is absent OR the index
+    //! disagrees with the records — removeLocked distinguishes the two and repairs
+    //! the second. Out-params are only meaningful when the hash was found (they
+    //! are set even on a validation failure, for the diagnostic).
+    //!
+    //! A member rather than a local lambda in removeLocked: Clang's thread-safety
+    //! analysis does not propagate the caller's held-lock state into a lambda body,
+    //! so reading the GUARDED_BY members there is a -Wthread-safety-analysis error.
+    bool locateHashRange(const uint256& hash, std::size_t& minPos, std::size_t& maxPos,
+                         std::size_t& count) const EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    void shiftIndex(std::size_t from, std::ptrdiff_t delta) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+    void rebuildIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! Rebuild the projector caches and the volatile set from m_records, the
+    //! authoritative table. Used by prime() for a full reload, and by
+    //! insertLocked()'s failure path to restore the cross-container invariant if a
+    //! splice throws part-way through.
+    void rebuildCaches() EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! Translate one cursor's served-window CursorDeltas into WalletEvents for
+    //! \p viewId (Reset/Insert/Remove/Change), fetching records from m_records for
+    //! the inserted/changed served rows. Caller holds cs_store.
+    void emitCursorDeltas(int viewId, uint64_t epoch,
+                          const std::vector<CursorDelta>& deltas) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! Cursor projectors over m_records[i]. Read m_records while the caller holds
+    //! cs_store, but they are invoked through the cursor's std::function
+    //! indirection, which the Clang thread-safety analyzer cannot see the lock
+    //! through — hence NO_THREAD_SAFETY_ANALYSIS. Every call path holds cs_store
+    //! (the worker's apply* and the Qt-thread register/getRows all take it).
+    //! Return the CACHED projector outputs for record i by const ref (PR4-fix F):
+    //! the cursor reads these per comparison without re-projecting. The reference
+    //! is into m_fields_cache / m_keys_cache, valid while the caller holds cs_store.
+    const TxFilterFields& projectFieldsAt(std::size_t i) const NO_THREAD_SAFETY_ANALYSIS;
+    const SortKey& projectKeysAt(std::size_t i) const NO_THREAD_SAFETY_ANALYSIS;
+    //! Build the (Fields, Keys) projector pair bound to this store for a cursor.
+    void makeCursorProjectors(Cursor::FieldsFn& fields, Cursor::KeysFn& keys);
+
+    //! (Re)compute the cached projector outputs for record i from m_records[i].
+    //! Call after any insert/in-place mutation of m_records[i]; the parallel cache
+    //! vectors are kept exactly the same size and order as m_records under cs_store.
+    void recomputeCacheAt(std::size_t i) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! True if record r's displayed status is still height-dependent, so it must
+    //! stay in the per-block refresh set: Unconfirmed / Confirming / Immature /
+    //! Open* / MaturesWarning, AND Conflicted / NotAccepted.
+    //!
+    //! Conflicted and NotAccepted are deliberately included even though they look
+    //! terminal. A record can land in one of them transiently — a coinstake is
+    //! stamped NotAccepted at CT_NEW, because the wallet is notified inside block
+    //! connection before pindexBest advances — and the default view filters mask
+    //! inactive rows, so such a record is invisible while in that state. If it
+    //! were also excluded from the refresh set, nothing would ever re-evaluate it
+    //! and it could never appear (#3100; the same invariant #3257 depends on).
+    //! See the rationale on recordStatusIsVolatile in wallettxstore.cpp; do not
+    //! "simplify" either to match the other without reading it.
+    static bool isVolatile(const TransactionRecord& r, bool block_known);
+
+    //! Mark `hash` so its next applyChainTipRefresh bypasses the height-only gate.
+    //! noexcept: called from that function's exception handlers.
+    void markRefreshForce(const uint256& hash) noexcept EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! Rebuild every cursor and push a Reset to every view, after a refresh threw while a
+    //! cursor update was in flight. noexcept: called from applyChainTipRefresh's handlers.
+    void resetCursorsAfterFailedRefresh(const uint256& hash) noexcept EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! Re-evaluate whether `hash` belongs in m_volatile from its records' current
+    //! status, inserting or erasing it. Caller holds cs_store.
+    void updateVolatileForHash(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! Record (or clear) whether \p hash's confirming block was known to the
+    //! producer. See m_block_known.
+    void setBlockKnown(const uint256& hash, bool known) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    CWallet* const m_wallet;
+    GRC::WalletEventQueue& m_queue;
+
+    mutable Mutex cs_store;
+
+    //! Full authoritative records, sorted by TxOrderLess (RecordOrder). Position
+    //! oracle for the native VIEW_FULL stream and the backing table the per-view
+    //! cursors index into.
+    std::vector<TransactionRecord> m_records GUARDED_BY(cs_store);
+    //! tx hash -> positions in m_records. Same-hash records are contiguous.
+    std::unordered_multimap<uint256, std::size_t, TxHashHasher> m_by_hash GUARDED_BY(cs_store);
+
+    //! Cached projector outputs, kept exactly parallel to m_records (PR4-fix F):
+    //! computed once per record at insert/update/refresh so a cursor sort or
+    //! lower_bound reads them by const ref — no strprintf / string allocation per
+    //! comparison. Every m_records mutation updates these in lockstep under cs_store.
+    std::vector<TxFilterFields> m_fields_cache GUARDED_BY(cs_store);
+    std::vector<SortKey> m_keys_cache GUARDED_BY(cs_store);
+
+    //! Tx hashes with at least one height-volatile record (Confirming / Immature /
+    //! ...). applyChainTipRefresh() re-runs updateStatus only over this bounded set
+    //! each block, so the per-block cost is O(volatile) rather than O(N) (PR4-fix A).
+    std::unordered_set<uint256, TxHashHasher> m_volatile GUARDED_BY(cs_store);
+
+    //! Hashes whose last refresh threw. applyChainTipRefresh bypasses its height-only
+    //! gate for these on the next tip, so every view is re-sent the fresh status
+    //! whatever point the throw came from (inside updateStatus, in the cache recompute,
+    //! or between two views' emissions) -- what the ungated loop always did. Cleared
+    //! for a hash after a clean pass, and wherever m_volatile drops or clears it.
+    std::unordered_set<uint256, TxHashHasher> m_refresh_force GUARDED_BY(cs_store);
+
+    //! Test seam (SetRefreshFaultHookForTests). Unset in production.
+    RefreshFaultHook m_refresh_fault_hook GUARDED_BY(cs_store);
+
+    //! Transactions whose confirming block the PRODUCER saw in mapBlockIndex while
+    //! the record still read depth -1 -- i.e. the block is being connected but
+    //! pindexBest has not advanced yet. Such a record is inserted with a status the
+    //! views mask and gets no further CT_UPDATED (a block connects once), so it
+    //! must stay volatile for the single refresh that ripens it. Everything else at
+    //! depth -1 (the whole wallet during IBD, whose blocks are not in the index) is
+    //! correctly excluded. See recordStatusIsVolatile().
+    //!
+    //! Kept here rather than on TransactionRecord because the record crosses the
+    //! capnp boundary to the GUI and this is store-internal bookkeeping; and it
+    //! cannot be recomputed worker-side, which holds neither cs_main nor the index.
+    //! Entries are dropped as soon as the record reaches depth >= 0, so this stays
+    //! bounded by the transactions in the block currently being connected.
+    std::unordered_set<uint256, TxHashHasher> m_block_known GUARDED_BY(cs_store);
+
+    //! Registered per-view cursors (server-side filter+sort), keyed by VIEW_*.
+    //! Each indexes into m_records; maintained on the worker thread (insert/
+    //! remove/update) and on the Qt thread (register/setView*/getRows), all under
+    //! cs_store. std::map for stable references across insertion.
+    std::map<int, Cursor> m_cursors GUARDED_BY(cs_store);
+
+    //! Per-view high-water: the seqno of the last event emitted for each view
+    //! (PR4-fix B). getRows returns it so a consumer can discard any event already
+    //! reflected in a refetched snapshot, closing the reset/delta double-apply race
+    //! (a worker insert/remove landing between a Reset emission and the consumer's
+    //! getRows would otherwise be applied twice).
+    std::map<int, uint64_t> m_view_seqno GUARDED_BY(cs_store);
+
+    //! Cached OptionsModel datetime-display cutoff, set by prime.
+    bool m_limit_enabled GUARDED_BY(cs_store){false};
+    int64_t m_limit_time GUARDED_BY(cs_store){0};
+
+    //! Intake queue (PR2.5). Producers enqueue here; the store-worker drains it
+    //! and performs the O(N) maintenance off the core locks. cs_intake is an
+    //! independent leaf — it is NEVER held while taking cs_store (and vice
+    //! versa), so the two never invert.
+    mutable Mutex cs_intake;
+    std::deque<IntakeItem> m_intake GUARDED_BY(cs_intake);
+    bool m_stop GUARDED_BY(cs_intake){false};          //!< shutdown request (dtor)
+    bool m_rebuilding GUARDED_BY(cs_intake){false};    //!< prime wants the worker parked
+    bool m_worker_parked GUARDED_BY(cs_intake){false}; //!< worker has acknowledged the pause
+    //! Next intake depth at which to warn, doubled after each warning.
+    std::size_t m_intake_warn_at GUARDED_BY(cs_intake){kIntakeBacklogWarn};
+    CConditionVariable m_intake_cv;  //!< worker waits for work / stop / resume
+    CConditionVariable m_idle_cv;    //!< prime waits for m_worker_parked
+    std::thread m_worker;
+    bool m_started{false};           //!< Qt-thread only: start() idempotency guard
+};
+
+} // namespace GRC
+
+#endif // GRIDCOIN_WALLET_WALLETTXSTORE_H

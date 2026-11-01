@@ -118,6 +118,23 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND NOT CMAKE_HOST_APPLE)
   set(CMAKE_FRAMEWORK_PATH "@OSX_SDK@/System/Library/Frameworks")
 endif()
 
+# depends already bakes its macOS floor into the compile and link flags
+# (-mmacos-version-min / -platform_version, from OSX_MIN_VERSION in
+# hosts/darwin.mk). State it as the CMake variable too, because that is what
+# share/qt/Info.plist.cmake.in substitutes into LSMinimumSystemVersion: without
+# it the bundle declares nothing at all while the binaries inside it target this
+# version. The flags remain the authority for what is compiled; this only makes
+# the bundle say the same thing.
+#
+# Guarded on the value rather than on CMAKE_SYSTEM_NAME or CMAKE_HOST_APPLE.
+# OSX_MIN_VERSION is defined only by hosts/darwin.mk, so it is non-empty exactly
+# when depends targets macOS -- whether cross-compiled from Linux or built on a
+# Mac. The Darwin block above is host-conditional and would have missed the
+# second case.
+if(NOT "@OSX_MIN_VERSION@" STREQUAL "")
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "@OSX_MIN_VERSION@" CACHE STRING "Minimum macOS version, from depends OSX_MIN_VERSION")
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(CMAKE_RC_COMPILER "@WINDRES@")
 endif()
@@ -130,3 +147,18 @@ set(ENV{PKG_CONFIG_PATH} ${pkg_config_path})
 set(ENV{PKG_CONFIG_LIBDIR} ${pkg_config_path})
 unset(pkg_config_path)
 set(PKG_CONFIG_ARGN --static)
+
+# Multiprocess (IPC) toolchain. When depends was built with MULTIPROCESS=1 the
+# Cap'n Proto + libmultiprocess packages were staged and @multiprocess_packages@
+# expands to a non-empty list; force ENABLE_MULTIPROCESS ON and point the build at
+# the native code generators depends built for this machine (mpgen / capnp /
+# capnpc-c++ under native/bin). When multiprocess was not built this expands to an
+# empty string and the block is skipped, leaving the project default (OFF).
+set(multiprocess_packages @multiprocess_packages@)
+if(NOT "${multiprocess_packages}" STREQUAL "")
+  set(ENABLE_MULTIPROCESS ON CACHE BOOL "")
+  set(MPGEN_EXECUTABLE "${CMAKE_CURRENT_LIST_DIR}/native/bin/mpgen" CACHE FILEPATH "")
+  set(CAPNP_EXECUTABLE "${CMAKE_CURRENT_LIST_DIR}/native/bin/capnp" CACHE FILEPATH "")
+  set(CAPNPC_CXX_EXECUTABLE "${CMAKE_CURRENT_LIST_DIR}/native/bin/capnpc-c++" CACHE FILEPATH "")
+endif()
+unset(multiprocess_packages)

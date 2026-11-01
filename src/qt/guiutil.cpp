@@ -3,8 +3,19 @@
 #include "walletmodel.h"
 #include "bitcoinunits.h"
 #include "util.h"
-#include "init.h"
-#include <codecvt>
+// GUI-process-local network identity: GetAutoStartupArguments() must decide the
+// autostart shortcut suffix / relaunch args, and AutoStartupAvailable() whether
+// there is a login item at all, from the network THIS GUI process selected on
+// its own command line. In the separated (multiprocess) build there
+// is no core process yet to answer a Node::isTestNet() call -- resolving the
+// GUI's own -testnet/-chain arg locally is precisely what tells the GUI which
+// core (mainnet vs testnet) to connect to. So this file reads OnTestnet() and
+// OnMainnet() (the GUI's own SelectParams() result) directly; chainparams.h is
+// outside lint-qt-includes.sh's forbidden list.
+#include "chainparams.h"
+#include "clientversion.h"
+#include "util/strencodings.h" // For SanitizeString (per-node QSettings key).
+#include <algorithm>           // For std::replace.
 
 #include <QString>
 #include <QDateTime>
@@ -20,7 +31,7 @@
 #include <QDesktopServices>
 #include <QThread>
 #include <QStandardPaths>
-#include <QRegExp>
+#include <QRegularExpression>
 
 #ifdef WIN32
 #ifdef _WIN32_IE
@@ -299,10 +310,9 @@ QList<QModelIndex> getEntryData(QAbstractItemView *view, int column)
 
 fs::path qstringToBoostPath(const QString &path)
 {
-    // On Windows, QString is UTF-16 and toStdString() produces UTF-8, but boost::filesystem::path
-    // interprets narrow strings as the system code page (e.g. CP-1252), not UTF-8. Using
-    // toStdWString() stays in UTF-16, which is the native Windows path encoding and is accepted
-    // directly by boost::filesystem::path. See #2736.
+    // On Windows, toStdWString() hands boost::filesystem::path the UTF-16 that Windows paths are,
+    // so the result does not depend on how Boost decodes a narrow string: as UTF-8 once
+    // SetupEnvironment() has run, and in the system code page before that.
 #ifdef WIN32
     return fs::path(path.toStdWString());
 #else
@@ -312,9 +322,9 @@ fs::path qstringToBoostPath(const QString &path)
 
 QString boostPathToQString(const fs::path &path)
 {
-    // On Windows, path.string() converts to the system code page, but QString::fromStdString()
-    // expects UTF-8 — encoding mismatch corrupts non-ASCII characters. Using wstring() stays in
-    // UTF-16 which QString::fromStdWString() handles natively. See #2736.
+    // On Windows, wstring() is the path's own UTF-16, which QString takes as it is, so the result
+    // does not depend on how Boost encodes path.string(): UTF-8 once SetupEnvironment() has run,
+    // and the system code page before that.
 #ifdef WIN32
     return QString::fromStdWString(path.wstring());
 #else
@@ -325,6 +335,52 @@ QString boostPathToQString(const fs::path &path)
 QString getDefaultDataDirectory()
 {
     return boostPathToQString(GetDefaultDataDir());
+}
+
+namespace {
+//! The per-node QSettings group: "" for the default datadir (keep the existing
+//! flat keys), "node_<sanitized datadir>" otherwise. Path separators are
+//! flattened so the datadir becomes one group level rather than nested QSettings
+//! groups.
+QString NodeSettingsGroup()
+{
+    // Compare the NON-net-specific datadir against the default. The network is
+    // already separated by the QSettings ApplicationName, so the group only needs
+    // to distinguish datadirs. GetDataDir() (net-specific) includes the
+    // "testnet"/"regtest" subdir, which would make even the default datadir look
+    // non-default on those networks -- breaking the "primary node keeps flat keys"
+    // goal. GetDataDir(false) answers "did the user override -datadir?" regardless
+    // of network.
+    if (GetDataDir(false) == GetDefaultDataDir()) {
+        return QString();
+    }
+    // Convert via boostPathToQString(), not fs::path::string(): a raw narrowing
+    // can corrupt non-codepage path characters on Windows (see boostPathToQString).
+    std::string dd = SanitizeString(boostPathToQString(GetDataDir(false)).toStdString());
+    std::replace(dd.begin(), dd.end(), '/', '_');
+    std::replace(dd.begin(), dd.end(), '\\', '_');
+    return "node_" + QString::fromStdString(dd);
+}
+} // namespace
+
+QString nodeSettingsKey(const QString& key)
+{
+    const QString group = NodeSettingsGroup();
+    return group.isEmpty() ? key : group + "/" + key;
+}
+
+QString ExtractFirstSuffixFromFilter(const QString& filter)
+{
+    /* Extract first suffix from filter pattern "Description (*.foo)" or "Description (*.foo *.bar ...) */
+    // Unanchored and lazy, so a multi-extension filter yields its first extension, as in Bitcoin Core.
+    QRegularExpression filter_re(QStringLiteral(".* \\(\\*\\.(.*)[ \\)]"), QRegularExpression::InvertedGreedinessOption);
+    QString selectedSuffix;
+    const QRegularExpressionMatch filter_match = filter_re.match(filter);
+    if(filter_match.hasMatch())
+    {
+        selectedSuffix = filter_match.captured(1);
+    }
+    return selectedSuffix;
 }
 
 QString getSaveFileName(QWidget *parent, const QString &caption,
@@ -340,13 +396,7 @@ QString getSaveFileName(QWidget *parent, const QString &caption,
                     : dir;
     QString result = QFileDialog::getSaveFileName(parent, caption, myDir, filter, &selectedFilter);
 
-    /* Extract first suffix from filter pattern "Description (*.foo)" or "Description (*.foo *.bar ...) */
-    QRegExp filter_re(".* \\(\\*\\.(.*)[ \\)]");
-    QString selectedSuffix;
-    if(filter_re.exactMatch(selectedFilter))
-    {
-        selectedSuffix = filter_re.cap(1);
-    }
+    QString selectedSuffix = ExtractFirstSuffixFromFilter(selectedFilter);
 
     /* Add suffix if needed */
     QFileInfo info(result);
@@ -457,6 +507,19 @@ struct AutoStartupArguments
     std::string arguments;
 };
 
+// Whether this GUI process has an OS login item to manage. The item is named and
+// relaunched for mainnet or testnet only (GetAutoStartupArguments()), so on any
+// other chain -- regtest, a private and usually disposable one -- it would start a
+// mainnet node. Regtest also shares mainnet's QSettings store and so its flat
+// fStartAtStartup key, and the GUI regenerates the item at every start-up. Off
+// mainnet and testnet, Get/SetStartOnSystemStartup therefore do nothing: no entry
+// of their own, and no rewrite or removal of the mainnet one. The options dialog
+// hides the checkboxes on the same condition.
+[[maybe_unused]] static bool AutoStartupAvailable()
+{
+    return OnMainnet() || OnTestnet();
+}
+
 AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
 {
     // This helper function checks for the presence of certain startup arguments
@@ -466,7 +529,8 @@ AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
     // and then adds the other three as arguments if they were specified for the
     // running instance. This allows two different automatic startups, one for
     // mainnet, and the other for testnet, and each of them can have different datadir,
-    // scraper, and/or explorer arguments.
+    // scraper, and/or explorer arguments. Its callers run only where
+    // AutoStartupAvailable() holds, so the else branch below is mainnet.
 
     AutoStartupArguments result;
 
@@ -476,7 +540,7 @@ AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
 
     result.arguments = {};
 
-    if (fTestNet)
+    if (OnTestnet())
     {
         result.link_name_suffix += "-testnet";
         result.arguments = "-testnet";
@@ -518,13 +582,18 @@ fs::path static StartupShortcutPath()
 
 bool GetStartOnSystemStartup()
 {
+    if (!AutoStartupAvailable()) return false;
+
     // check for Gridcoin.lnk
     return fs::exists(StartupShortcutPath());
 }
 
 bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 {
-    // Remove the legacy shortcut unconditionally.
+    // Touch nothing off mainnet and testnet; see AutoStartupAvailable().
+    if (!AutoStartupAvailable()) return false;
+
+    // Remove the legacy shortcut whether or not autostart is on.
     fs::remove(StartupShortcutLegacyPath());
 
     // If the shortcut exists already, remove it for updating
@@ -547,19 +616,27 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
         {
             // Get the current executable path
             WCHAR pszExePath[MAX_PATH];
-            GetModuleFileNameW(nullptr, pszExePath, sizeof(pszExePath));
+            GetModuleFileNameW(nullptr, pszExePath, MAX_PATH);
 
             std::wstring autostartup_arguments;
-            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 
             if (!autostartup.data_dir.empty())
             {
-                autostartup_arguments = converter.from_bytes("-datadir=\"")
-                        + autostartup.data_dir.wstring()
-                        + converter.from_bytes("\" ");
+                // The started process splits its command line with CommandLineToArgvW()
+                // (WinCmdLineArgs), which reads backslashes just before a quote as escapes:
+                // 2n of them give n and leave the quote ending the argument; 2n+1 give n
+                // and a literal quote. A data directory ending in a backslash, such as a
+                // drive root (E:\), would escape its closing quote and take in the
+                // arguments after it. Doubled, its trailing backslashes stay as they are
+                // and the quote stays a quote.
+                std::wstring data_dir = autostartup.data_dir.wstring();
+                const size_t last = data_dir.find_last_not_of(L'\\');
+                const size_t trailing = last == std::wstring::npos ? data_dir.size() : data_dir.size() - last - 1;
+                data_dir.append(trailing, L'\\');
+                autostartup_arguments = L"-datadir=\"" + data_dir + L"\" ";
             }
 
-            autostartup_arguments += converter.from_bytes(autostartup.arguments);
+            autostartup_arguments += Utf8ToWide(autostartup.arguments);
 
             LPCTSTR pszArgs = autostartup_arguments.c_str();
 
@@ -630,6 +707,8 @@ fs::path static GetAutostartFilePath()
 
 bool GetStartOnSystemStartup()
 {
+    if (!AutoStartupAvailable()) return false;
+
     fsbridge::ifstream optionFile(GetAutostartFilePath());
     if (!optionFile.good())
         return false;
@@ -649,6 +728,9 @@ bool GetStartOnSystemStartup()
 
 bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 {
+    // Touch nothing off mainnet and testnet; see AutoStartupAvailable().
+    if (!AutoStartupAvailable()) return false;
+
     // Remove legacy autostart path if it exists.
     if (fs::exists(GetAutostartLegacyFilePath()))
     {

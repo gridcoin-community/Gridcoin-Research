@@ -1,56 +1,39 @@
-// Copyright (c) 2014-2025 The Gridcoin developers
+// Copyright (c) 2014-2026 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #ifndef GRIDCOIN_QT_RESEARCHER_RESEARCHERMODEL_H
 #define GRIDCOIN_QT_RESEARCHER_RESEARCHERMODEL_H
 
+#include "amount.h"
+#include "interfaces/researcher.h"
+#include "qt/notificationlifetime.h"
+
+#include <atomic>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
-#include "amount.h"
+
 #include <QObject>
 #include <QString>
-#include <optional>
 
 QT_BEGIN_NAMESPACE
 class QIcon;
+class QTimer;
 QT_END_NAMESPACE
 
 class ResearcherWizard;
 class WalletModel;
 
-namespace GRC {
-class Beacon;
-class Researcher;
-
-//!
-//! \brief A smart pointer around the global BOINC researcher context.
-//!
-typedef std::shared_ptr<Researcher> ResearcherPtr;
-}
-
 //!
 //! \brief Describes the researcher's current beacon status.
 //!
-enum class BeaconStatus
-{
-    ACTIVE,
-    ERROR_INSUFFICIENT_FUNDS,
-    ERROR_MISSING_KEY,
-    ERROR_NOT_NEEDED,
-    ERROR_TX_FAILED,
-    ERROR_INVALID_PROOF_XML,
-    ERROR_WALLET_LOCKED,
-    NO_BEACON,
-    NO_CPID,
-    NO_MAGNITUDE,
-    PENDING,
-    RENEWAL_NEEDED,
-    RENEWAL_POSSIBLE,
-    ALREADY_IN_MEMPOOL,
-    UNKNOWN,
-};
+//! The enumeration now lives in the interfaces layer (Phase 1d-iv) so the node
+//! side can classify it; this alias keeps the existing GUI references
+//! (\c BeaconStatus::ACTIVE, etc.) unchanged.
+//!
+using BeaconStatus = interfaces::BeaconStatus;
 
 //!
 //! \brief Combined information about a BOINC project to display in a table.
@@ -60,6 +43,10 @@ enum class BeaconStatus
 //!  - The Gridcoin whitelist
 //!  - Local BOINC projects detected in client_state.xml
 //!  - Scraper magnitude values for a CPID
+//!
+//! The fusion is performed node-side by interfaces::ResearcherContext::projects();
+//! ResearcherModel maps each interfaces::ResearcherProjectRow into one of these Qt
+//! rows (translating the whitelist status and error label).
 //!
 class ProjectRow
 {
@@ -85,12 +72,18 @@ public:
 //!
 //! \brief Presents researcher context state for UI components.
 //!
+//! Backed by an interfaces::ResearcherContext (Phase 1d-iv): the model caches a
+//! value ResearcherSnapshot refreshed on the researcher/beacon/accrual/tip
+//! notifications, and every getter reads that snapshot instead of a
+//! GRC::Researcher / GRC::Beacon. Beacon/mode operations and the project-table
+//! fusion run node-side behind the interface.
+//!
 class ResearcherModel : public QObject
 {
     Q_OBJECT
 
 public:
-    ResearcherModel();
+    explicit ResearcherModel(interfaces::ResearcherContext& researcher_context);
     ~ResearcherModel();
 
     static QString mapBeaconStatus(const BeaconStatus status);
@@ -109,7 +102,7 @@ public:
     bool hasActiveBeacon() const;
 
     //!
-    //! \brief hasPendingBeacon returns true if m_pending_beacon is not null and also not expired while pending.
+    //! \brief hasPendingBeacon returns true if a pending beacon is present and also not expired while pending.
     //! \return boolean
     //!
     bool hasPendingBeacon() const;
@@ -145,30 +138,64 @@ public:
     bool isV14Enabled() const;
     bool hasV3CapableProjects() const;
     std::vector<std::pair<QString, QString>> buildV3ProjectList() const;
+
+    //! The pools a researcher can join, as (name, website URL) pairs, one per
+    //! operator site. Backs the wizard pool page's table, which used to carry
+    //! the same two rows hardcoded in its .ui.
+    std::vector<std::pair<QString, QString>> buildPoolList() const;
     QString generateBeaconKeyForV3();
     BeaconStatus advertiseBeaconV3(const QString& ownership_proof_xml);
     QString cachedBeaconPubKeyHex() const;
 
 private:
-    GRC::ResearcherPtr m_researcher;
-    std::unique_ptr<GRC::Beacon> m_beacon;
-    std::unique_ptr<GRC::Beacon> m_pending_beacon;
-    BeaconStatus m_beacon_status;
-    bool m_configured_for_noncruncher_mode;
+    interfaces::ResearcherContext& m_researcher_context;
+
+    //! Cached value snapshot of the researcher/beacon context. Refreshed on the
+    //! interface notifications (and by the wizard commands); every getter reads it.
+    interfaces::ResearcherSnapshot m_snapshot;
+
+    //! Rate-limit state for the per-block refresh, written from the CORE thread
+    //! (the notification is emitted under cs_main) and read there too, hence
+    //! atomic -- the model itself lives on the GUI thread.
+    //!
+    //! ResearcherModel is the one per-block GUI consumer that subscribes to the
+    //! core signal directly. Every other one (MRCModel, the PSGT pool page) goes
+    //! through ClientModel::numBlocksChanged, which is already throttled, so this
+    //! model was the only path with no rate limit at all.
+    std::atomic<int64_t> m_last_block_refresh_ms{0};
+    std::atomic<bool> m_last_syncing{false};
+
+    //! How often updateSyncState() polls. OutOfSyncByAge()'s threshold is
+    //! minutes long, so this delays showing the change by at most one interval.
+    static constexpr int SYNC_STATE_POLL_INTERVAL_MS = 30 * 1000;
+
+    //! Drives updateSyncState(). Owned by this model (QObject parent).
+    QTimer* m_sync_state_timer = nullptr;
+
+    //! The last refresh() skipped its snapshot because cs_main was busy, so
+    //! updateSyncState() retries it.
+    bool m_snapshot_skipped = false;
+
     bool m_wizard_open;
-    bool m_out_of_sync;
-    bool m_split_cpid;
     bool m_privacy_enabled;
     QString m_theme_suffix;
     QString m_cached_beacon_pubkey_hex;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
-    void commitBeacon(const BeaconStatus beacon_status);
-    void commitBeacon(
-        const BeaconStatus beacon_status,
-        std::unique_ptr<GRC::Beacon>& current_beacon,
-        std::unique_ptr<GRC::Beacon>& pending_beacon);
+
+    //! Retained interface-notification handlers, cleared on teardown so a signal
+    //! that fires after this model is destroyed cannot invoke a slot bound to
+    //! freed memory (issue #3129).
+    std::vector<std::unique_ptr<interfaces::Handler>> m_handlers;
+
+    //! Closes the destruction race that disconnecting alone leaves open.
+    //! See qt/notificationlifetime.h.
+    NotificationLifetime m_notify_lifetime;
+
+    //! Map one node-side project row into a Qt ProjectRow, translating the
+    //! whitelist status and resolving the (translatable) error label.
+    ProjectRow mapProjectRow(const interfaces::ResearcherProjectRow& src) const;
 
 signals:
     void researcherChanged();
@@ -179,7 +206,11 @@ signals:
 public slots:
     void reload();
     void refresh();
-    void resetResearcher(GRC::ResearcherPtr researcher);
+    //! Refresh if the node's sync state differs from the cached one, or the
+    //! last refresh skipped its snapshot. Polled by m_sync_state_timer, because
+    //! no notification reports a node falling out of sync.
+    void updateSyncState();
+    void onResearcherChanged();
     bool switchToSolo(const QString& email);
     bool switchToPool();
     bool switchToNoncruncher();

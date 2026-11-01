@@ -7,9 +7,11 @@
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/sidestake.h"
 #include "script.h"
+#include "net_processing.h"
 #include "wallet/wallet.h"
 
 #include "wallet/coincontrol.h"
+#include "txmempool.h"
 
 using namespace GRC;
 
@@ -25,9 +27,14 @@ namespace {
 //!
 //! \return \c true if the wallet owns UTXOs for the master key address.
 //!
-bool SelectMasterInputOutput(CCoinControl& coin_control)
+bool SelectMasterInputOutput(CCoinControl& coin_control) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    const CTxDestination master_address = CWallet::MasterAddress(pindexBest->nHeight);
+    // The master key rotates by height, and the transaction being built here is
+    // validated against the block it lands in -- the next one at the earliest.
+    // Selecting for the tip would, in the block before a rotation, spend the
+    // OUTGOING key's UTXOs and send change to its address, and HasMasterKeyInput
+    // would then reject the transaction against the incoming key.
+    const CTxDestination master_address = CWallet::MasterAddress(pindexBest->nHeight + 1);
 
     // Send change back to the master address:
     coin_control.destChange = master_address;
@@ -62,10 +69,11 @@ bool SelectMasterInputOutput(CCoinControl& coin_control)
 //!
 //! \return \c true if coin selection succeeded.
 //!
-bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn_fee)
+bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn_fee,
+                      bool permitted_while_staking_only) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CCoinControl coin_control_out;
-    CAmount applied_fee_out; // Unused
+    CAmount applied_fee_out = 0; // Unused, but the builder can return before seeding it
     bool admin = false;
     bool contract_change_to_input_address = gArgs.GetBoolArg("-contractchangetoinputaddress", false);
     CTxDestination out_address {CNoDestination()};
@@ -114,7 +122,8 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
         wtx_out,
         reserve_key,
         applied_fee_out,
-        &coin_control_out, contract_change_to_input_address);
+        &coin_control_out, contract_change_to_input_address,
+        permitted_while_staking_only);
 }
 
 //!
@@ -125,12 +134,34 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
 //! \return An empty string when successful or a description of the error that
 //! occurred. TODO: Refactor to remove string-based signaling.
 //!
-std::string SendContractTx(CWalletTx& wtx_new)
+std::string SendContractTx(CWalletTx& wtx_new, bool permitted_while_staking_only) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    // Declared before the lock below, so the announcement flushes after this
+    // function's cs_wallet is released (#3391), as in CWallet::SendMoney.
+    DeferredRelay relay;
+
+    // Held from the scope check through CommitTransaction, as in
+    // CWallet::SendMoney: a narrowing to staking-only waits for this send to
+    // finish instead of landing between building and committing it (#3389).
+    // cs_main is already held (above); cs_wallet is recursive, so callers that
+    // hold it already are unaffected. A caller that holds cs_wallet itself
+    // still announces under it when the relay flushes, which is safe: see the
+    // lock rule on CConnman::ForEachNode (#3443).
+    LOCK(pwalletMain->cs_wallet);
+
     CReserveKey reserve_key(pwalletMain);
 
     if (pwalletMain->IsLocked()) {
         std::string strError = _("Error: Wallet locked, unable to create transaction.");
+        LogPrintf("%s: %s", __func__, strError);
+        return strError;
+    }
+
+    // The builder refuses too, but only as "Transaction creation failed"; this
+    // reports why, as CWallet::SendMoney does. Under the lock above, so a
+    // narrowing that lands while this send waits for the wallet is seen here.
+    if (pwalletMain->IsUnlockedForStakingOnly() && !permitted_while_staking_only) {
+        std::string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
         LogPrintf("%s: %s", __func__, strError);
         return strError;
     }
@@ -148,26 +179,24 @@ std::string SendContractTx(CWalletTx& wtx_new)
         return strError;
     }
 
-    if (!CreateContractTx(wtx_new, reserve_key, burn_fee)) {
+    if (!CreateContractTx(wtx_new, reserve_key, burn_fee, permitted_while_staking_only)) {
         std::string strError = _("Error: Transaction creation failed.");
         error("%s: %s", __func__, strError);
         return strError;
     }
 
-    for (const auto& pool_tx : mempool.mapTx) {
-        for (const auto& pool_tx_contract : pool_tx.second.GetContracts()) {
-            if (pool_tx_contract.m_type == GRC::ContractType::SIDESTAKE) {
-                std::string strError = _(
-                    "Error: The mandatory sidestake transaction was rejected. "
-                    "There is already a mandatory sidestake transaction in the mempool. "
-                    "Wait until that transaction is bound in a block.");
-                error("%s: %s", __func__, strError);
-                return strError;
-            }
-        }
+    // An O(1) index check (replaced a full mempool scan) enforces at most one
+    // mandatory sidestake transaction in the pool at a time.
+    if (mempool.HasMandatorySidestake()) {
+        std::string strError = _(
+            "Error: The mandatory sidestake transaction was rejected. "
+            "There is already a mandatory sidestake transaction in the mempool. "
+            "Wait until that transaction is bound in a block.");
+        error("%s: %s", __func__, strError);
+        return strError;
     }
 
-    if (!pwalletMain->CommitTransaction(wtx_new, reserve_key)) {
+    if (!pwalletMain->CommitTransaction(wtx_new, reserve_key, &relay)) {
         std::string strError = _(
             "Error: The transaction was rejected. This might happen if some of "
             "the coins in your wallet were already spent, such as if you used "
@@ -195,21 +224,24 @@ std::string SendContractTx(CWalletTx& wtx_new)
 // Functions
 // -----------------------------------------------------------------------------
 
-std::pair<CWalletTx, std::string> GRC::SendContract(Contract contract)
+std::pair<CWalletTx, std::string> GRC::SendContract(Contract contract, bool permitted_while_staking_only) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    CWalletTx wtx;
-    wtx.vContracts.emplace_back(std::move(contract));
+    CMutableTransaction mtx;
+    mtx.vContracts.emplace_back(std::move(contract));
 
-    return SendContract(std::move(wtx));
+    CWalletTx wtx;
+    static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
+
+    return SendContract(std::move(wtx), permitted_while_staking_only);
 }
 
-std::pair<CWalletTx, std::string> GRC::SendContract(CWalletTx wtx)
+std::pair<CWalletTx, std::string> GRC::SendContract(CWalletTx wtx, bool permitted_while_staking_only) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (wtx.vContracts.empty()) {
         return std::make_pair(std::move(wtx), "Transaction contains no contract.");
     }
 
-    std::string error = SendContractTx(wtx);
+    std::string error = SendContractTx(wtx, permitted_while_staking_only);
 
     return std::make_pair(std::move(wtx), std::move(error));
 }

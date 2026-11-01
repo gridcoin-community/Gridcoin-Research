@@ -17,6 +17,11 @@ install_deps() {
     local TARGET="$1"
     local USE_QT6="$2"
     local WITH_GUI="$3"
+    # Multiprocess (IPC) build: when "true", add the system Cap'n Proto packages
+    # needed for a native ENABLE_MULTIPROCESS=ON build. Defaults to "false" so
+    # existing 3-arg callers are unaffected. Note: libmultiprocess is not packaged
+    # by any distro and must be built from source (see the note emitted below).
+    local ENABLE_MULTIPROCESS="${4:-false}"
 
     # Detect OS Type first
     OS_TYPE=$(uname -s)
@@ -78,12 +83,19 @@ install_deps() {
             # Base Tools
             append_base cmake ccache libtool automake autoconf pkg-config
             # Libraries
-            append_base boost openssl libevent miniupnpc qrencode libzip
+            append_base boost openssl libevent miniupnpc qrencode
 
             # Qt Logic for macOS Homebrew (Only if GUI is requested)
             if [[ "$WITH_GUI" == "true" ]]; then
                 if [[ "$USE_QT6" == "true" ]]; then
-                    append_qt qt
+                    # The SUBSET, not the `qt` meta-formula. `qt` depends on
+                    # qtwebengine, which Gridcoin does not use and which has no
+                    # bottle on the configurations Homebrew has wound down to
+                    # Tier 3 -- every x86_64 Mac, and Apple Silicon on macOS 14.
+                    # Requesting `qt` there starts an hours-long source build
+                    # that then fails outright. Keep this in step with
+                    # doc/build-macos.md and the macOS CI jobs.
+                    append_qt qtbase qttools qtsvg qttranslations qtdeclarative
                 else
                     # Install Qt5 specific formula for legacy support
                     append_qt qt@5
@@ -106,7 +118,7 @@ install_deps() {
             append_base build-essential libtool autotools-dev automake pkg-config bsdmainutils python3 cmake git curl ccache doxygen graphviz bison xxd libxkbcommon-dev
 
             # Libraries for Native Build
-            append_base libssl-dev libevent-dev libboost-all-dev libminiupnpc-dev libqrencode-dev libzip-dev libcurl4-openssl-dev zipcmp zipmerge ziptool
+            append_base libssl-dev libevent-dev libboost-all-dev libminiupnpc-dev libqrencode-dev zlib1g-dev libcurl4-openssl-dev
 
             # Qt6 Packages (Qt5 names are not defined here as most are EOL)
             append_qt qt6-base-dev qt6-tools-dev qt6-l10n-tools qt6-tools-dev-tools
@@ -138,9 +150,7 @@ install_deps() {
                     append_qt "$old"
                 fi
             }
-            prefer_new_qt_package qt6-charts-dev   libqt6charts6-dev
             prefer_new_qt_package qt6-svg-dev      libqt6svg6-dev
-            prefer_new_qt_package qt6-5compat-dev  libqt6core5compat6-dev
 
             # Windows Cross-Compile Tools
             # NOTE: We only append NSIS here. The MinGW compiler (g++-mingw-w64-x86-64)
@@ -206,9 +216,9 @@ install_deps() {
 
         fedora|rhel)
             append_base libstdc++-static gcc-c++ libtool automake autoconf pkgconf-pkg-config python3 cmake git curl patch perl-FindBin bison flex ccache doxygen graphviz
-            append_base openssl-devel libevent-devel boost-devel miniupnpc-devel qrencode-devel libzip-devel libcurl-devel libzip-tools
+            append_base openssl-devel libevent-devel boost-devel miniupnpc-devel qrencode-devel zlib-devel libcurl-devel
 
-            append_qt qt6-qtbase-devel qt6-qttools-devel qt6-qtcharts-devel qt6-qtsvg-devel qt6-qt5compat-devel
+            append_qt qt6-qtbase-devel qt6-qttools-devel qt6-qtsvg-devel
 
             append_mingw mingw64-gcc-c++ mingw64-nsis xxd
 
@@ -327,11 +337,11 @@ install_deps() {
 
             # Base common packages
             append_base libtool automake autoconf pkg-config python3 cmake git curl ccache doxygen graphviz libzstd-devel
-            append_base libopenssl-devel libevent-devel qrencode-devel libzip-devel libcurl-devel libzip-tools
+            append_base libopenssl-devel libevent-devel qrencode-devel 'pkgconfig(zlib)' libcurl-devel
             append_base miniupnpc libminiupnpc-devel
 
             # Boost Packages
-            append_base libboost_headers-devel libboost_filesystem-devel libboost_thread-devel libboost_date_time-devel libboost_iostreams-devel libboost_serialization-devel libboost_test-devel libboost_atomic-devel libboost_regex-devel
+            append_base libboost_headers-devel libboost_filesystem-devel libboost_thread-devel libboost_date_time-devel libboost_iostreams-devel libboost_test-devel libboost_atomic-devel libboost_regex-devel
 
             # Boost System Logic:
             # Use 'zypper info' to check which version of headers is (or will be) installed.
@@ -364,7 +374,7 @@ install_deps() {
                 append_base libboost_system-devel
             fi
 
-            append_qt qt6-base-devel qt6-tools-devel qt6-charts-devel qt6-svg-devel qt6-qt5compat-devel qt6-linguist-devel
+            append_qt qt6-base-devel qt6-tools-devel qt6-svg-devel qt6-linguist-devel
 
             append_mingw mingw64-cross-gcc-c++ nsis
 
@@ -376,9 +386,9 @@ install_deps() {
             sudo pacman -Syu --noconfirm
 
             append_base base-devel python cmake git ccache doxygen graphviz
-            append_base boost boost-libs libevent miniupnpc libzip qrencode curl icu
+            append_base boost boost-libs libevent miniupnpc qrencode curl icu
 
-            append_qt qt6-base qt6-tools qt6-charts qt6-svg qt6-5compat
+            append_qt qt6-base qt6-tools qt6-svg
 
             append_mingw mingw-w64-gcc nsis
 
@@ -394,10 +404,10 @@ install_deps() {
             append_base build-base cmake git curl ccache doxygen graphviz bison linux-headers xxd bash autoconf automake libtool perl
 
             # Libraries
-            append_base boost-dev openssl-dev libevent-dev miniupnpc-dev libqrencode-dev libzip-dev curl-dev
+            append_base boost-dev openssl-dev libevent-dev miniupnpc-dev libqrencode-dev zlib-dev curl-dev
 
             # Qt6 Packages
-            append_qt qt6-qtbase-dev qt6-qttools-dev qt6-qtcharts-dev qt6-qtsvg-dev qt6-qt5compat-dev
+            append_qt qt6-qtbase-dev qt6-qttools-dev qt6-qtsvg-dev
             ;;
 
         *)
@@ -405,6 +415,35 @@ install_deps() {
             return 1
             ;;
     esac
+
+    # --- Multiprocess (IPC) System Dependencies ---
+    # Only relevant for native / all targets (a depends build gets Cap'n Proto from
+    # the depends 'capnp' recipe built with MULTIPROCESS=1). Only Cap'n Proto is a
+    # system dependency: libmultiprocess is vendored in-tree (src/ipc/libmultiprocess)
+    # and built from source by the project, so nothing to install for it here.
+    if [[ "$ENABLE_MULTIPROCESS" == "true" ]] && [[ "$TARGET" == "native" || "$TARGET" == "all" || "$TARGET" == "macos" ]]; then
+        echo "Multiprocess build requested: adding Cap'n Proto system packages."
+        case $OS in
+            macos)
+                append_base capnp
+                ;;
+            debian|ubuntu|linuxmint)
+                append_base capnproto libcapnp-dev
+                ;;
+            fedora|rhel)
+                append_base capnproto capnproto-devel
+                ;;
+            opensuse*|sles)
+                append_base capnproto libcapnp-devel
+                ;;
+            arch|manjaro)
+                append_base capnproto
+                ;;
+            alpine)
+                append_base capnproto capnproto-dev
+                ;;
+        esac
+    fi
 
     # --- Determine Final Package List to Install ---
     PKGS_TO_INSTALL=""

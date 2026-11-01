@@ -1,0 +1,107 @@
+# Copyright (c) 2026 The Gridcoin developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or https://opensource.org/license/mit/.
+
+# Multiprocess (IPC) layer for the interfaces:: boundary (RFC #2937, Phase 2).
+# Reached only when ENABLE_MULTIPROCESS is ON (this directory is add_subdirectory'd
+# from src/CMakeLists.txt under that guard).
+
+# Build the vendored libmultiprocess runtime + mpgen from the in-tree subtree,
+# unless an external libmultiprocess was requested (then the top-level
+# CMakeLists.txt found it via find_package).
+if(NOT WITH_EXTERNAL_LIBMULTIPROCESS)
+    include(${CMAKE_SOURCE_DIR}/cmake/libmultiprocess.cmake)
+    add_libmultiprocess(libmultiprocess)
+endif()
+
+# Do NOT put this directory (src/ipc) on the header search path. On Windows,
+# mingw's <pthread.h> does `#include <process.h>` (the CRT threading header);
+# with src/ipc on the search path that angle-bracket include resolves to our
+# ipc/process.h instead, which drags fs.h/<fstream> into the middle of libstdc++'s
+# gthreads bootstrap and shatters <ios>/<istream> (seekdir/__gthread errors) in
+# every generated proxy TU. Our own sources include "ipc/..." (resolved via src/)
+# and the generated proxies include "ipc/capnp/..." (resolved via the build tree),
+# so the current directory is never needed on the include path here. (The
+# libmultiprocess subtree is unaffected: its current dir is src/ipc/libmultiprocess.)
+set(CMAKE_INCLUDE_CURRENT_DIR OFF)
+
+# The IPC layer: the hand-written transport (process/protocol/interfaces) plus the
+# generated Cap'n Proto proxy layer. target_capnp_sources runs mpgen on each
+# .capnp, generating the raw capnp types (.capnp.h/.c++) and the ProxyClient/
+# ProxyServer marshalling code (.proxy-*), and adds them as sources of this
+# library. The include prefix (this dir) reproduces the ipc/capnp/... include
+# spelling the schemas' $Proxy.includeTypes and consumers use.
+add_library(gridcoin_ipc STATIC EXCLUDE_FROM_ALL
+    process.cpp
+    interfaces.cpp
+    handshake.cpp
+    peercred.cpp
+    serve_init.cpp
+    connect.cpp
+    capnp/protocol.cpp
+)
+
+# handshake.cpp allows __DATE__ and __TIME__ in one line with a #pragma that GCC
+# before 13 ignores in C++ (GCC bug 53431), so for those compilers -Wdate-time is
+# turned off for the file. src/test/CMakeLists.txt does the same for its copy.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
+    set_property(SOURCE handshake.cpp APPEND PROPERTY COMPILE_OPTIONS -Wno-date-time)
+endif()
+
+target_capnp_sources(gridcoin_ipc ${CMAKE_CURRENT_SOURCE_DIR}
+    capnp/handler.capnp
+    capnp/staking.capnp
+    capnp/node.capnp
+    capnp/wallet.capnp
+    capnp/wallet_tx_source.capnp
+    capnp/wallet_coin_source.capnp
+    capnp/mrc.capnp
+    capnp/voting.capnp
+    capnp/researcher.capnp
+    capnp/psgt.capnp
+    capnp/sidestake.capnp
+    capnp/init.capnp
+)
+
+# ${CMAKE_SOURCE_DIR}/src resolves the interfaces/*.h the generated code wraps;
+# ${CMAKE_BINARY_DIR}/src resolves the generated ipc/capnp/*.capnp.h headers
+# (matching the project-wide convention in this file's parent).
+target_include_directories(gridcoin_ipc PUBLIC
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_BINARY_DIR}/src
+)
+
+# The generated proxy code includes libmultiprocess's mp/ headers, which use C++20
+# concepts; the rest of Gridcoin is C++17. Compile this target (and propagate to
+# anything linking it, since the proxy headers are C++20) as C++20.
+set_target_properties(gridcoin_ipc PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+target_compile_features(gridcoin_ipc PUBLIC cxx_std_20)
+
+# Link gridcoin_util for the core interface headers' include environment (the
+# interfaces:: headers the generated proxies wrap transitively include core
+# headers such as univalue). Static-lib linkage here only propagates include
+# dirs / compile definitions; no objects are pulled into libgridcoin_ipc.a.
+target_link_libraries(gridcoin_ipc PUBLIC
+    gridcoin_util
+)
+
+# On Windows the transport uses winsock (AF_UNIX via <afunix.h>: WSAStartup,
+# WSASocketW, closesocket, WSAGetLastError) and libmultiprocess's kj-async pulls
+# in the IOCP backend. ws2_32/wsock32 already arrive transitively through
+# gridcoin_util's WIN32 block; list ws2_32 here too so the IPC layer's socket
+# dependency is self-documenting, and add mswsock (AcceptEx/ConnectEx) for the
+# kj-async Win32 async I/O backend.
+#
+# advapi32 supplies the DACL hardening the transport applies to the datadir,
+# socket and cookie: SetEntriesInAclW, Get/SetNamedSecurityInfoW (process.cpp,
+# via <aclapi.h>) and InitializeSecurityDescriptor / SetSecurityDescriptorDacl
+# (handshake.cpp, via <securitybaseapi.h>). These compile without it -- the
+# headers only declare them -- so the omission surfaces as five undefined
+# __imp_* symbols at final link, long after every object and archive succeeds.
+if(WIN32)
+    target_link_libraries(gridcoin_ipc PUBLIC
+        ws2_32
+        mswsock
+        advapi32
+    )
+endif()

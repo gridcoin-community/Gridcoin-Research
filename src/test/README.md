@@ -19,3 +19,118 @@ the current test cases.
 
 For further reading, [see Boost's documentation](https://www.boost.org/doc/libs/1_73_0/libs/test/doc/html/boost_test/intro.html)
 about how the boost unit test framework works
+
+## Process state, and what a suite must put back
+
+Every suite runs in one process on top of a single global fixture,
+`TestingSetup` in test_gridcoin.cpp, which builds the in-memory transaction
+database, the mock wallet, ECC and the (quiescent) net managers once for the
+whole binary. Nothing rebuilds them per suite: the LevelDB handle must never be
+closed, the wallet's Berkeley DB environment is bound to the one data
+directory, and the net managers assert they are created exactly once.
+
+The consequence is that anything a suite leaves in a process global is the
+next suite's input, and which suite is next is link order -- so a leak that is
+harmless on one CI leg is a failure on another (the Windows cross-compile leg
+links in a different order from the Linux legs, and has been the one to find
+them).
+
+### The leak detector
+
+`state_leak_detector.cpp`, installed from `TestingSetup`, checks the boundary.
+It attaches a fixture to every top-level suite that snapshots a fixed set of
+process globals at suite entry and compares at suite exit, and fails the run
+with one error per invariant that changed, naming the suite, the value before
+and after, and the first test case that changed it. The invariant set is
+`grc_test::StateSnapshot` in state_guard.h: the chain tip and the mapBlockIndex
+key set, the selected network, the consensus globals `LoadBlockIndex()`
+overwrites, mock time, `g_mock_deterministic_tests`, the mempool size, the
+miner status, `fUseFastIndex`, the ArgsManager settings, and, key by key, a
+content hash of each current entry of the beacon (active beacons only),
+protocol, scraper and pool registries; pending beacons and each registry's
+historical store are not compared.
+
+Three rules of the comparison matter when reading a report:
+
+- Size-like fields (mempool, mapBlockIndex, miner status) fail on **growth
+  only**. A suite that clears an earlier suite's residue is reported as a
+  cleaner in a note, not as a leaker; several fixtures clear on exit by
+  design.
+- A registry is compared entry by entry, and any change is a leak, including
+  one that keeps the entry count: editing an entry in place is a leak. Two
+  changes are reported as a cleaner instead: the registry ends exactly as
+  the first suite found it, or the suite only removed entries the first
+  suite did not have and left every other entry unchanged. A registry
+  report names up to five changed keys.
+- The settings comparison is **presence-sensitive**. A key that is present
+  at its default value is a different state from an absent key: an empty
+  string parses as `true` for a boolean argument and as `0` for an integer
+  one, and `IsArgSet()` changes its answer. "Restoring" an argument by
+  writing a value back is therefore still a leak.
+
+`kKnownLeaks` in state_leak_detector.cpp downgrades a listed leak to a printed
+note. An entry is a tolerance for a leak that is tracked and not yet fixed,
+never a requirement: whether it fires depends on which suite ran first (two
+suites that exit with the same value are mutually exclusive) and on
+`--run_test` filters. Add one only with an issue reference, and remove it in
+the commit that fixes the leak at source. The table is empty, and empty is
+the goal: the mechanism is kept for the next leak that has to be tolerated
+while its fix is tracked, not because entries are expected.
+
+### Writing a suite that mutates globals
+
+Use `grc_test::StateGuard` (state_guard.h). It captures on construction and
+restores on destruction, and works as a suite decorator, a per-case fixture
+base, or a local:
+
+    BOOST_AUTO_TEST_SUITE(x_tests, *boost::unit_test::fixture<grc_test::StateGuard>())
+    BOOST_FIXTURE_TEST_SUITE(x_tests, grc_test::StateGuard)
+    { grc_test::StateGuard guard; ... }
+
+`CleanStateGuard` also moves mapBlockIndex aside, nulls the tip and clears
+the mempool on entry, which is what a suite needs before `LoadBlockIndex()`
+will create genesis. `MempoolStateGuard` clears only the mempool, on entry
+and exit. The registries are deliberately outside `StateGuard` because
+`Reset()` is destructive; use `RegistryResetFor<GRC::ContractType::...>` as a
+suite decorator, which resets on entry AND exit. With `RegtestChainSetup`,
+declare `RegistryResetFor` before it. Decorator fixtures tear down in reverse
+order, so the chain rewinds first, reverting any contract it connected while
+the registry still holds the entries that revert needs, and only then is the
+registry reset. Declared the other way round, the revert runs against the
+freshly reset registry, and a pool revert can erase a builtin.
+`V15HeightGuard` pins
+`-blockv15height` for a scope and restores its presence exactly;
+`RequireV15Unscheduled()` is the precondition for tests that rely on V15
+rules being inert.
+
+What the guard deliberately does not restore, and why, is in the header
+comment of state_guard.h: the LevelDB handle, the wallet, the net managers,
+the registered-argument table `ClearArgs()` wipes, and the temporary data
+directory on disk.
+
+Two habits keep a new suite out of the detector's report:
+
+- Never `ForceSetArg(name, "")` to "unset" an argument. Use a guard, which
+  puts the whole settings map back.
+- A fixture that points `pindexBest` / `pindexGenesisBlock` at memory it
+  owns must restore the pointers as well as free the memory; a `StateGuard`
+  as the fixture's first member does both in the right order.
+
+A `--run_test=<suite>/<case>` filter still runs the suite's fixtures, so a
+single case can show a diff set that the whole suite would not.
+
+### Running the suites alone, and in shuffled order
+
+The detector reports a suite that leaks. The other half of the same defect, a
+suite that only passes because of what an earlier one left behind, shows up
+by running each suite in its own process, or by running the binary in a
+shuffled order:
+
+    contrib/devtools/run-unit-suites-isolated.sh build/src/test/test_gridcoin
+    contrib/devtools/run-unit-suites-isolated.sh --random 7 build/src/test/test_gridcoin
+
+The `Unit Suite Isolation` job in `.github/workflows/cmake_quality.yml` runs
+the first on every push and pull request, and fails on any suite that does not
+pass alone. It also runs one shuffled order per run, seeded from the run
+number; a failure there is reported as a warning annotation naming the seed,
+not as a job failure.

@@ -14,7 +14,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+77"/>
         <source>
 This is experimental software.
 
@@ -29,7 +29,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../aboutdialog.cpp" line="+37"/>
+        <location filename="../aboutdialog.cpp" line="+59"/>
         <source>Version information and update check has been disabled by config or startup parameter.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -38,11 +38,51 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>Version information is not available on testnet.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location line="+20"/>
+        <source>unavailable</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>&lt;b&gt;Multiprocess connection&lt;/b&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>GUI version: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Node version: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Node built: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>IPC schema %1, protocol %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Node identity: %1 (%2)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Socket: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>AdditionalFieldsTableDataModel</name>
     <message>
-        <location filename="../voting/additionalfieldstablemodel.cpp" line="+23"/>
+        <location filename="../voting/additionalfieldstablemodel.cpp" line="+21"/>
         <source>Name</source>
         <translation type="unfinished">Namn</translation>
     </message>
@@ -55,6 +95,41 @@ This product includes software developed by the OpenSSL Project for use in the O
         <location line="+1"/>
         <source>Required</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+56"/>
+        <source>Field &quot;%1&quot;, value &quot;%2&quot;, %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>required</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>optional</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Value: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Required: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>yes</source>
+        <translation type="unfinished">ja</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>no</source>
+        <translation type="unfinished">nej</translation>
     </message>
 </context>
 <context>
@@ -140,7 +215,17 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Radera</translation>
     </message>
     <message>
-        <location filename="../addressbookpage.cpp" line="+75"/>
+        <location filename="../addressbookpage.cpp" line="+65"/>
+        <source>Sending addresses</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Receiving addresses</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Copy &amp;Label</source>
         <translation>Kopiera &amp;etikett</translation>
     </message>
@@ -150,7 +235,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Redigera</translation>
     </message>
     <message>
-        <location line="+267"/>
+        <location line="+273"/>
         <source>Export Address Book Data</source>
         <translation>Exportera adressboken</translation>
     </message>
@@ -174,7 +259,7 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>AddressTableModel</name>
     <message>
-        <location filename="../addresstablemodel.cpp" line="+149"/>
+        <location filename="../addresstablemodel.cpp" line="+141"/>
         <source>Label</source>
         <translation>Etikett</translation>
     </message>
@@ -185,8 +270,19 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+38"/>
+        <location line="+20"/>
         <source>(no label)</source>
         <translation>(Ingen etikett)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Label &quot;%1&quot;, address %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Address: %1</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -222,7 +318,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Endast för &quot;staking&quot;</translation>
     </message>
     <message>
-        <location filename="../askpassphrasedialog.cpp" line="+41"/>
+        <location filename="../askpassphrasedialog.cpp" line="+38"/>
         <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
         <translation>Ange plånbokens nya lösenord. &lt;br/&gt; Använd ett lösenord på &lt;b&gt;tio eller fler slumpmässiga tecken,&lt;/b&gt; eller &lt;b&gt;åtta eller fler ord.&lt;/b&gt;.</translation>
     </message>
@@ -252,7 +348,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Ange plånbokens gamla och nya lösenord.</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+53"/>
         <source>Confirm wallet encryption</source>
         <translation>Bekräfta kryptering av plånbok</translation>
     </message>
@@ -267,58 +363,82 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Är du säker på att du vill kryptera din plånbok?</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <location line="+54"/>
+        <location line="+12"/>
+        <source>IMPORTANT: Any earlier backups of your wallet file are not just useless once you use the new encrypted wallet; they are a security risk. They still contain your UNENCRYPTED private keys, so anyone who obtains one can take your coins even after the live wallet is encrypted. This includes the automatic backups Gridcoin writes to the wallet backups directory (&quot;walletbackups&quot; by default, or the directory set by -backupdir). After making a fresh backup of the new encrypted wallet, securely delete every backup taken before encryption, including those in that directory.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location line="+79"/>
         <source>Wallet encrypted</source>
         <translation>Plånbok krypterad</translation>
     </message>
     <message>
-        <location line="-52"/>
+        <location line="-77"/>
         <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
         <translation>Gridcoin plånboken kommer nu att stängas för att slutföra krypteringen: Kom ihåg att även en krypterad plånboks säkerhet kan äventyras genom keyloggers eller dylika malwares.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+15"/>
+        <source>Wallet encrypted - restart the core to finish</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Your wallet is now fully encrypted and has been locked.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>You are running in multiprocess mode, so the wallet lives in the separate Gridcoin core process, which is still running. To finish the encryption cleanly, restart the core process now (the running &lt;code&gt;gridcoinresearchd&lt;/code&gt;). The encryption on disk is already complete; the restart is only so the core drops the pre-encryption database state it still holds in memory and reloads the encrypted wallet fresh.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Note: closing this window will not restart the core. Only stopping and starting the core process does that; stopping it will also close this window, so reopen the wallet once the core is back up.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
-        <translation>VIKTIGT: Alla tidigare säkerhetskopior du har gjort av plånboksfilen ska ersättas med den nya genererade, krypterade plånboksfilen. Av säkerhetsskäl kommer tidigare säkerhetskopior av den okrypterade plånboksfilen blir oanvändbara när du börjar använda en ny, krypterad plånbok.</translation>
+        <translation type="vanished">VIKTIGT: Alla tidigare säkerhetskopior du har gjort av plånboksfilen ska ersättas med den nya genererade, krypterade plånboksfilen. Av säkerhetsskäl kommer tidigare säkerhetskopior av den okrypterade plånboksfilen blir oanvändbara när du börjar använda en ny, krypterad plånbok.</translation>
     </message>
     <message>
         <location line="+8"/>
         <location line="+5"/>
-        <location line="+57"/>
+        <location line="+59"/>
         <source>Wallet encryption failed</source>
         <translation>Kryptering av plånbok misslyckades</translation>
     </message>
     <message>
-        <location line="-61"/>
+        <location line="-63"/>
         <source>Wallet encryption failed due to an internal error. Your wallet was not encrypted.</source>
         <translation>Kryptering av plånbok misslyckades på grund av ett internt fel. Din plånbok blev inte krypterad.</translation>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+57"/>
+        <location line="+59"/>
         <source>The supplied passphrases do not match.</source>
         <translation>De angivna lösenorden överensstämmer inte.</translation>
     </message>
     <message>
-        <location line="-46"/>
+        <location line="-45"/>
         <location line="+3"/>
         <source>Wallet unlock failed</source>
         <translation>Misslyckades låsa upp plånboken</translation>
     </message>
     <message>
         <location line="-2"/>
-        <location line="+31"/>
+        <location line="+30"/>
         <source>The passphrase entered for the wallet decryption was incorrect.</source>
         <translation>Lösenordet för dekryptering av plånboken var felaktig.</translation>
     </message>
     <message>
-        <location line="-28"/>
+        <location line="-27"/>
         <source>The passphrase entered for the wallet decryption is incorrect. It contains a null character (ie - a zero byte). If the passphrase was set with a version of this software prior to 5.4.6, please try again with only the characters up to — but not including — the first null character. If this is successful, please set a new passphrase to avoid this issue in the future.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+19"/>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Plånbokens lösenord har ändrats.</translation>
     </message>
@@ -343,7 +463,7 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>BanTableModel</name>
     <message>
-        <location filename="../bantablemodel.cpp" line="+88"/>
+        <location filename="../bantablemodel.cpp" line="+83"/>
         <source>IP/Netmask</source>
         <translation type="unfinished"></translation>
     </message>
@@ -356,12 +476,12 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoin.cpp" line="+244"/>
+        <location filename="../bitcoin.cpp" line="+323"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation>Ett fatalt fel uppstod. Gridcoin kan inte fortsätta och stänger programmet.</translation>
     </message>
     <message>
-        <location filename="../bitcoingui.cpp" line="+170"/>
+        <location filename="../bitcoingui.cpp" line="+161"/>
         <source>Wallet</source>
         <translation>Plånbok</translation>
     </message>
@@ -371,7 +491,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+151"/>
+        <location line="+68"/>
+        <source>Dismiss</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+108"/>
         <source>&amp;Overview</source>
         <translation>&amp;Översikt</translation>
     </message>
@@ -507,7 +632,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+35"/>
         <source>E&amp;xit</source>
         <translation>&amp;Avsluta</translation>
     </message>
@@ -632,6 +757,11 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Verifiera meddelande...</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>&amp;Multisign (PSGT)...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+2"/>
         <source>&amp;Export...</source>
         <translation>&amp;Exportera...</translation>
@@ -652,17 +782,21 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Öppna debug- och diagnostikkonsolen</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>&amp;Snapshot Download</source>
-        <translation>Ladda ner &amp;Snapshot</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Download and apply latest snapshot</source>
+        <location line="+1002"/>
+        <source>Reset blockchain data</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>This is not available in multiprocess mode. The blockchain data belongs to the separate Gridcoin core process, which keeps running when this window closes. Stop the core and reset its data directly.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&amp;Snapshot Download</source>
+        <translation type="vanished">Ladda ner &amp;Snapshot</translation>
+    </message>
+    <message>
+        <location line="-1000"/>
         <source>&amp;Reset blockchain data</source>
         <translation type="unfinished"></translation>
     </message>
@@ -682,12 +816,32 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+17"/>
+        <source>PSGT &amp;pool...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Multisig transactions awaiting signatures (PSGT pool)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+98"/>
         <source>&amp;File</source>
         <translation>&amp;Arkiv</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+11"/>
+        <source>Sign &amp;message</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>MultiSig &amp;Txns</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>&amp;Settings</source>
         <translation>&amp;Inställningar</translation>
     </message>
@@ -722,19 +876,34 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+11"/>
+        <source>The GUI (%1) and the Gridcoin daemon (%2) were built from different commits. Mixed builds can behave unexpectedly.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>&amp;Reset blockchain data (not available in multiprocess mode)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The blockchain data belongs to the separate Gridcoin core process. Stop the core and reset it there.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <location line="+7"/>
         <source>[testnet]</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+142"/>
+        <location line="+225"/>
         <source>Gridcoin client</source>
         <translation>Gridcoin-klient</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+146"/>
         <source>No active connections to the Gridcoin network. If this persists more than a few minutes, please check your configuration and your network connectivity.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -807,17 +976,17 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Senaste mottagna block genererades %1.</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location filename="../sendcoinsdialog.cpp" line="+232"/>
         <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
         <translation>Denna transaktion är över gränsen. Du kan ändå skicka den med en %1 avgift, som går till noderna som processerar din transaktion och hjälper till med att upprätthålla nätverket. Vill du betala denna avgift?</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Confirm transaction fee</source>
         <translation>Bekräfta transaktionsavgiften</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location filename="../bitcoingui.cpp" line="+161"/>
         <source>Sent transaction</source>
         <translation>Transaktion skickad</translation>
     </message>
@@ -838,17 +1007,11 @@ Typ: %3
 Adress: %4</translation>
     </message>
     <message>
-        <location line="+17"/>
-        <source>Do you wish to download and apply the latest snapshot? If yes the wallet will shutdown and perform the task.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
         <source>Warning: Canceling after stage 2 will result in sync from 0 or corrupted blockchain files.</source>
-        <translation>Varning: Att avbryta efter steg 2 kommer resultera i synkronisering från 0 eller korrupta blockchain-filer.</translation>
+        <translation type="vanished">Varning: Att avbryta efter steg 2 kommer resultera i synkronisering från 0 eller korrupta blockchain-filer.</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+28"/>
         <source>Do you want to delete blockchain data and sync from zero?</source>
         <translation type="unfinished"></translation>
     </message>
@@ -868,7 +1031,7 @@ Adress: %4</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+132"/>
+        <location line="+146"/>
         <location line="+25"/>
         <source>Wallet Not In Sync</source>
         <translation type="unfinished"></translation>
@@ -886,7 +1049,17 @@ Are you sure you want to proceed?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+62"/>
+        <source>Multisig signature requested</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>A multisig transaction is waiting for your signature. Open the PSGT pool to review and sign it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+27"/>
         <location line="+15"/>
         <source>URI handling</source>
         <translation>URI-hantering</translation>
@@ -903,7 +1076,7 @@ Are you sure you want to proceed?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+22"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently %1 </source>
         <translation>Plånboken är &lt;b&gt;krypterad&lt;/b&gt; och för tillfället %1 </translation>
     </message>
@@ -918,12 +1091,12 @@ Are you sure you want to proceed?</source>
         <translation>&lt;b&gt;helt upplåst&lt;/b&gt;</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Denna plånbok är &lt;b&gt;krypterad&lt;/b&gt; och för närvarande &lt;b&gt;låst&lt;/b&gt;</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+58"/>
         <source>Backup Wallet</source>
         <translation>Säkerhetskopiera plånbok</translation>
     </message>
@@ -934,18 +1107,17 @@ Are you sure you want to proceed?</source>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>Backup Failed</source>
         <translation>Säkerhetskopieringen misslyckades</translation>
     </message>
     <message>
-        <location line="-6"/>
-        <location line="+6"/>
+        <location line="-7"/>
         <source>There was an error trying to save the wallet data to the new location.</source>
         <translation>Ett fel uppstod vid sparandet av plånboken till den nya platsen.</translation>
     </message>
     <message>
-        <location line="-3"/>
+        <location line="+4"/>
         <source>Backup Config</source>
         <translation>Säkerhetskopiera Inställningar</translation>
     </message>
@@ -955,7 +1127,12 @@ Are you sure you want to proceed?</source>
         <translation>Plånboksinställningar (*.conf)</translation>
     </message>
     <message>
-        <location line="+85"/>
+        <location line="+3"/>
+        <source>There was an error trying to save the config file to the new location.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+66"/>
         <source>not available</source>
         <translation>inte tillgänglig</translation>
     </message>
@@ -1042,7 +1219,7 @@ Scraper(s) not publishing: %5.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+27"/>
         <source>CPID: %1
 Time left to activate: %2
 %3</source>
@@ -1094,12 +1271,12 @@ Expires: %3
 <context>
     <name>ClientModel</name>
     <message>
-        <location filename="../clientmodel.cpp" line="+166"/>
+        <location filename="../clientmodel.cpp" line="+167"/>
         <source>Network Alert</source>
         <translation>Nätverkslarm</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+64"/>
         <source>Low difficulty!; </source>
         <translation type="unfinished"></translation>
     </message>
@@ -1158,7 +1335,7 @@ Expires: %3
     </message>
     <message>
         <location line="+3"/>
-        <location filename="../coincontroldialog.cpp" line="+224"/>
+        <location filename="../coincontroldialog.cpp" line="+277"/>
         <source>Select All</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1208,42 +1385,36 @@ Expires: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+43"/>
         <source>Amount</source>
-        <translation>Mängd</translation>
+        <translation type="vanished">Mängd</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>Date</source>
-        <translation>Datum</translation>
+        <translation type="vanished">Datum</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Confirmations</source>
-        <translation>Bekräftelser</translation>
+        <translation type="vanished">Bekräftelser</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Confirmed</source>
-        <translation>Bekräftad</translation>
+        <translation type="vanished">Bekräftad</translation>
     </message>
     <message>
-        <location line="-18"/>
         <source>Label</source>
-        <translation>etikett</translation>
+        <translation type="vanished">etikett</translation>
     </message>
     <message>
-        <location line="-128"/>
+        <location line="-80"/>
         <source>&amp;List mode</source>
         <translation>&amp;Listvisning</translation>
     </message>
     <message>
-        <location line="+133"/>
         <source>Address</source>
-        <translation>Adress</translation>
+        <translation type="vanished">Adress</translation>
     </message>
     <message>
-        <location filename="../coincontroldialog.cpp" line="-177"/>
+        <location filename="../coincontroldialog.cpp" line="-222"/>
         <source>Copy address</source>
         <translation>Kopiera adress</translation>
     </message>
@@ -1254,17 +1425,17 @@ Expires: %3
     </message>
     <message>
         <location line="+1"/>
-        <location line="+26"/>
+        <location line="+19"/>
         <source>Copy amount</source>
         <translation>Kopiera belopp</translation>
     </message>
     <message>
-        <location line="-25"/>
+        <location line="-18"/>
         <source>Copy transaction ID</source>
         <translation>Kopiera transaktions-ID</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+17"/>
         <source>Copy quantity</source>
         <translation>Kopiera antal</translation>
     </message>
@@ -1294,17 +1465,17 @@ Expires: %3
         <translation>Kopiera förändringarna</translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+62"/>
         <source>Flips the filter mode between selecting inputs less than or equal to the provided value (&lt;=) and greater than or equal to the provided value (&gt;=). The filter also automatically limits the number of inputs to %1, in ascending order for &lt;= and descending order for &gt;=.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+90"/>
+        <location line="+138"/>
         <source>Select None</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+529"/>
+        <location line="+314"/>
         <source>DUST</source>
         <translation>STOFT</translation>
     </message>
@@ -1354,20 +1525,65 @@ Mängder under 0,546 gånger minimiavgiften visas som DUST.</translation>
 Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
-        <location line="+36"/>
-        <location line="+57"/>
+        <location line="-235"/>
         <source>(no label)</source>
         <translation>(Ingen etikett)</translation>
     </message>
     <message>
-        <location line="-10"/>
         <source>change from %1 (%2)</source>
-        <translation>ändra från %1(%2)</translation>
+        <translation type="vanished">ändra från %1(%2)</translation>
+    </message>
+    <message>
+        <source>(change)</source>
+        <translation type="vanished">(ändra)</translation>
+    </message>
+</context>
+<context>
+    <name>CoinSelectionModel</name>
+    <message>
+        <location filename="../coinselectionmodel.cpp" line="+357"/>
+        <location line="+24"/>
+        <location line="+10"/>
+        <location line="+566"/>
+        <location line="+5"/>
+        <source>(no label)</source>
+        <translation type="unfinished">(Ingen etikett)</translation>
+    </message>
+    <message>
+        <location line="-582"/>
+        <source>change from %1 (%2)</source>
+        <translation type="unfinished">ändra från %1(%2)</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+572"/>
+        <source>(change)</source>
+        <translation type="unfinished">(ändra)</translation>
+    </message>
+    <message>
+        <location line="-524"/>
+        <source>Amount</source>
+        <translation type="unfinished">Mängd</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>(change)</source>
-        <translation>(ändra)</translation>
+        <source>Label</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Address</source>
+        <translation type="unfinished">Adress</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Date</source>
+        <translation type="unfinished">Datum</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Confirmations</source>
+        <translation type="unfinished">Bekräftelser</translation>
     </message>
 </context>
 <context>
@@ -1393,7 +1609,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished">Adress</translation>
     </message>
     <message>
-        <location filename="../consolidateunspentdialog.cpp" line="+27"/>
+        <location filename="../consolidateunspentdialog.cpp" line="+28"/>
         <source>Note: The number of inputs selected for consolidation has been limited to %1 to prevent a transaction failure due to too many inputs.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1455,7 +1671,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+14"/>
-        <location filename="../consolidateunspentwizardselectinputspage.cpp" line="+141"/>
+        <location filename="../consolidateunspentwizardselectinputspage.cpp" line="+161"/>
         <source>Select All</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1490,37 +1706,27 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+43"/>
         <source>Amount</source>
-        <translation type="unfinished">Mängd</translation>
+        <translation type="obsolete">Mängd</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Label</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
         <source>Address</source>
-        <translation type="unfinished">Adress</translation>
+        <translation type="obsolete">Adress</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Date</source>
-        <translation type="unfinished">Datum</translation>
+        <translation type="obsolete">Datum</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Confirmations</source>
-        <translation type="unfinished">Bekräftelser</translation>
+        <translation type="obsolete">Bekräftelser</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Confirmed</source>
-        <translation type="unfinished">Bekräftad</translation>
+        <translation type="obsolete">Bekräftad</translation>
     </message>
     <message>
-        <location line="+75"/>
+        <location line="+82"/>
         <source>Quantity</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1555,7 +1761,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../consolidateunspentwizardselectinputspage.cpp" line="-71"/>
+        <location filename="../consolidateunspentwizardselectinputspage.cpp" line="-86"/>
         <source>Note: The number of inputs selected for consolidation has been limited to %1 to prevent a transaction failure due to too many inputs.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1565,25 +1771,22 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+72"/>
+        <location line="+87"/>
         <source>Select None</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+404"/>
-        <location line="+57"/>
+        <location line="+127"/>
         <source>(no label)</source>
         <translation type="unfinished">(Ingen etikett)</translation>
     </message>
     <message>
-        <location line="-10"/>
         <source>change from %1 (%2)</source>
-        <translation type="unfinished">ändra från %1(%2)</translation>
+        <translation type="obsolete">ändra från %1(%2)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>(change)</source>
-        <translation type="unfinished">(ändra)</translation>
+        <translation type="obsolete">(ändra)</translation>
     </message>
 </context>
 <context>
@@ -1733,7 +1936,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../diagnosticsdialog.cpp" line="+80"/>
+        <location filename="../diagnosticsdialog.cpp" line="+99"/>
+        <source></source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Testing...</source>
         <translation>Testar...</translation>
     </message>
@@ -1758,7 +1966,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Underkänt</translation>
     </message>
     <message>
-        <location line="+150"/>
+        <location line="+132"/>
         <source>One or more tests have generated a warning status. Wallet operation may be degraded. Please see the individual test tooltips for details and recommended action(s).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1934,7 +2142,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
 <context>
     <name>FreespaceChecker</name>
     <message>
-        <location filename="../intro.cpp" line="+73"/>
+        <location filename="../intro.cpp" line="+74"/>
         <source>A new data directory will be created.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1949,6 +2157,11 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+12"/>
+        <source>This location is on a temporary filesystem. Anything stored here, including the wallet, is lost when the program exits.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+7"/>
         <source>Cannot create data directory here.</source>
         <translation type="unfinished"></translation>
@@ -1957,7 +2170,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
 <context>
     <name>GUIUtil::HelpMessageBox</name>
     <message>
-        <location filename="../guiutil.cpp" line="+705"/>
+        <location filename="../guiutil.cpp" line="+748"/>
         <source>version</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1985,7 +2198,16 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+122"/>
+        <source>Error: The data directory &quot;%1&quot; could not be created and secured.
+
+%2
+
+Please choose a different location.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Error: Specified data directory &quot;%1&quot; cannot be created.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2057,22 +2279,22 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
 <context>
     <name>MRCModel</name>
     <message>
-        <location filename="../mrcmodel.cpp" line="+273"/>
+        <location filename="../mrcmodel.cpp" line="+292"/>
         <source>You must have a mature balance of at least 1 GRC to submit an MRC.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+37"/>
         <source>Too soon to submit an MRC request. At least 14 days must elapse from your original beacon advertisement or last research reward payment, whether by stake or MRC, whichever is later.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+8"/>
         <source>The total fee (the minimum fee + fee boost) is greater than the rewards due.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+29"/>
         <source>Your MRC was successfully submitted earlier but has now become stale without being bound to the just received block by a staker. This may be because your MRC was submitted just before the block was staked and the MRC didn&apos;t make it to the staker in time, or your MRC was pushed down in the queue past the pay limit. Please wait for the next block to clear the queue and try again.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2136,7 +2358,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location filename="../mrcrequestpage.cpp" line="+205"/>
+        <location filename="../mrcrequestpage.cpp" line="+203"/>
         <location line="+27"/>
         <location line="+20"/>
         <source>Your Projected MRC Request Position in Queue</source>
@@ -2255,6 +2477,370 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+6"/>
         <source>You must have a mature balance of at least 1 GRC to submit an MRC.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MultisignPSGTDialog</name>
+    <message>
+        <location filename="../forms/multisigndialog.ui" line="+14"/>
+        <source>Multisign (PSGT)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Load a Partially Signed Gridcoin Transaction (PSGT), inspect it, sign your inputs with this wallet, combine signatures from co-signers, and finalize it to a broadcast-ready raw transaction. Paste the base64 PSGT below.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>PSGT (base64):</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Paste the base64-encoded PSGT here. Operations below update this working PSGT in place.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Paste a base64 PSGT (e.g. from createpsgt)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Decode the PSGT and show its inputs, outputs and signing status</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>&amp;Inspect</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Sign every input this wallet has keys for, then update the working PSGT</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>&amp;Sign with wallet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Relay this PSGT to co-signers through the network PSGT pool (requires v15 and at least one of your signatures)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Submit to &amp;pool</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>If fully signed, extract the completed raw transaction (hex) for broadcast</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>&amp;Finalize → hex</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Clear all fields</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Clear &amp;All</source>
+        <translation type="unfinished">Rensa &amp;alla</translation>
+    </message>
+    <message>
+        <location line="+35"/>
+        <source>Decoded:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Click &quot;Inspect&quot; to decode the PSGT</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Out-of-band: co-signers&apos; PSGTs to combine (one base64 PSGT per line):</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Out-of-band combine: paste one or more co-signers&apos; PSGTs (one per line). Combine merges them with the working PSGT above. This is the manual path, distinct from the future network PSGT pool.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>One base64 PSGT per line</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Merge the co-signers&apos; PSGTs into the working PSGT (out-of-band)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>&amp;Combine</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Result (signed PSGT base64, or finalized transaction hex):</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Copy the result to the clipboard</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Cop&amp;y</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../multisigndialog.cpp" line="+60"/>
+        <source>Transaction id: %1
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Version: %1   Time: %2   Locktime: %3
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Inputs: %1   Outputs: %2
+
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Inputs:
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+8"/>
+        <source>(prev tx not loaded)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>(prev tx mismatch)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>finalized</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n partial sig(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>unsigned</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>no metadata</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>        multisig %1-of-%2   image P2SH:%3 (hash %4)
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>        image P2SH:%1 (hash %2)
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>
+Outputs:
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>(non-standard)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>
+Signed inputs: %1/%2   Complete: %3
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+107"/>
+        <location line="+52"/>
+        <source>yes</source>
+        <translation type="unfinished">ja</translation>
+    </message>
+    <message>
+        <location line="-159"/>
+        <location line="+107"/>
+        <location line="+52"/>
+        <source>no</source>
+        <translation type="unfinished">nej</translation>
+    </message>
+    <message>
+        <location line="-114"/>
+        <source>PSGT support is not available.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Paste a base64 PSGT first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <location line="+9"/>
+        <location line="+180"/>
+        <location line="+45"/>
+        <source>Could not decode PSGT: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-234"/>
+        <location line="+134"/>
+        <source>invalid base64</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-88"/>
+        <source>This wallet&apos;s signature present: %1
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Decoded %1 input(s), %2 output(s).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Wallet is not available.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Wallet unlock was cancelled.</source>
+        <translation type="unfinished">Upplåsningen av plånboken avbröts.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Signing failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Signed %1 input(s) with this wallet. Complete: %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+5"/>
+        <source>%n input(s) still need a previous transaction or redeem script before they can be signed.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+5"/>
+        <source>%n input(s) the wallet holds keys for could not be signed.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <location line="+18"/>
+        <source>Could not decode a co-signer PSGT: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-10"/>
+        <source>Add at least one co-signer PSGT to combine.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>PSGTs do not refer to the same transaction.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Combined %1 PSGT(s).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>The PSGT pool is unavailable: block v15 has not activated on this network, or this node is still syncing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Sign the PSGT with this wallet before submitting it to the pool.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>The pool rejected this PSGT (%1): %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Submitted to the pool, superseding your earlier PSGT. Co-signers have been notified.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Submitted to the pool. Co-signers have been notified.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>The pool did not accept this PSGT: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>PSGT is not complete yet; cannot finalize.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Finalized. Raw transaction hex is ready to broadcast (e.g. via sendrawtransaction).</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2570,7 +3156,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>&amp;Avbryt</translation>
     </message>
     <message>
-        <location filename="../optionsdialog.cpp" line="+83"/>
+        <location filename="../optionsdialog.cpp" line="+82"/>
         <source>default</source>
         <translation>standard</translation>
     </message>
@@ -2585,7 +3171,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Ljus</translation>
     </message>
     <message>
-        <location line="+240"/>
+        <location line="+246"/>
         <location line="+23"/>
         <source>Error</source>
         <translation type="unfinished">Fel</translation>
@@ -2813,18 +3399,23 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Aktuella omröstningar</translation>
     </message>
     <message>
-        <location filename="../overviewpage.cpp" line="+175"/>
+        <location filename="../overviewpage.cpp" line="+167"/>
+        <source>Recent transactions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <location line="+1"/>
         <source>Out of Sync</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+19"/>
         <source>Copy amount</source>
         <translation type="unfinished">Kopiera belopp</translation>
     </message>
     <message>
-        <location line="+311"/>
+        <location line="+317"/>
         <source>Pool</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2835,9 +3426,223 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
 </context>
 <context>
+    <name>PSGTPoolPage</name>
+    <message>
+        <location filename="../psgtpoolpage.cpp" line="+27"/>
+        <source>PSGT Pool</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Multisig transactions awaiting signatures.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>&amp;Sign</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sign the selected PSGT with this wallet and, if it completes the multisig, broadcast the transaction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>&amp;Remove</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove the selected PSGT from this node&apos;s pool (local only; other nodes keep their copies)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>&amp;Details...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open the selected PSGT in the Multisign dialog</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Re&amp;fresh</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+107"/>
+        <source>The PSGT pool is not active yet: it activates with the block v15 network upgrade. Pending multisig transactions will appear here once it does.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The PSGT pool is unavailable while this node is syncing. Pending multisig transactions will appear here once the node has caught up with the network.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+55"/>
+        <location line="+5"/>
+        <location line="+5"/>
+        <location line="+6"/>
+        <location line="+5"/>
+        <location line="+4"/>
+        <source>Sign PSGT</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-24"/>
+        <source>The multisig is complete. The transaction was broadcast:
+%1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Your signature was added and relayed to the other co-signers.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Your signature was added, but this exact revision is already known to the network (a co-signer may have signed it first). Nothing more to do.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>This wallet holds no key that can add a signature to this PSGT.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Signing failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>This PSGT is no longer in the pool (it may have completed or expired).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Remove PSGT</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove this PSGT from your node&apos;s pool? Other nodes keep their copies, and a new revision from the network would be accepted again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>PSGT details</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This PSGT is no longer in the pool.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PSGTPoolTableModel</name>
+    <message>
+        <location filename="../psgtpooltablemodel.cpp" line="+139"/>
+        <source>Awaiting your signature</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Awaiting others</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Expired</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Completed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Conflict</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Removed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+20"/>
+        <source>%n second(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n minute(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n hour(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n day(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Status</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Destination</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Amount</source>
+        <translation type="unfinished">Mängd</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Signatures</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Age</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Multisig address</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>PeerTableModel</name>
     <message>
-        <location filename="../peertablemodel.cpp" line="+109"/>
+        <location filename="../peertablemodel.cpp" line="+99"/>
         <source>Node ID</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2951,7 +3756,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+20"/>
-        <location filename="../voting/pollcard.cpp" line="+125"/>
+        <location filename="../voting/pollcard.cpp" line="+132"/>
         <source>Voting finished.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2991,6 +3796,11 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <source>Top Answer:</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../voting/polldetails.cpp" line="+29"/>
+        <source>Poll additional fields</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>PollResultChoiceItem</name>
@@ -3026,7 +3836,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished">Formulär</translation>
     </message>
     <message>
-        <location filename="../voting/polltab.cpp" line="+25"/>
+        <location filename="../voting/polltab.cpp" line="+23"/>
         <source>Press &quot;Refresh&quot; to update the list.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3036,7 +3846,17 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+254"/>
+        <location line="+149"/>
+        <source>Polls (card view)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Polls (table view)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+110"/>
         <source>Show Results</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3049,7 +3869,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
 <context>
     <name>PollTableDataModel</name>
     <message>
-        <location filename="../voting/polltablemodel.cpp" line="+24"/>
+        <location filename="../voting/polltablemodel.cpp" line="+23"/>
         <source>Title</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3102,6 +3922,83 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <location line="+1"/>
         <source>Stale Results</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+81"/>
+        <source>Poll &quot;%1&quot;, type %2, expires %3, top answer %4</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+5"/>
+        <source>(legacy)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <location line="+21"/>
+        <source>none</source>
+        <translation type="unfinished">ingen</translation>
+    </message>
+    <message>
+        <location line="-19"/>
+        <source>Poll type: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Duration: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Expires: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Weight type: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Total votes: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Total weight: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Percent of active vote weight: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Validated: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Top answer: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Stale results: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>yes</source>
+        <translation type="unfinished">ja</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>no</source>
+        <translation type="unfinished">nej</translation>
     </message>
 </context>
 <context>
@@ -3186,12 +4083,17 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location filename="../voting/pollwizarddetailspage.cpp" line="+175"/>
-        <location line="+168"/>
+        <location line="+164"/>
         <source>Create Poll</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-149"/>
+        <location line="-146"/>
+        <source>Poll additional fields</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Balance</source>
         <translation type="unfinished">Saldo</translation>
     </message>
@@ -3216,12 +4118,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished">Flera alternativ</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+30"/>
         <source>Cannot have more than 20 choices in a poll.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+110"/>
         <source>This poll will cost %1 plus a transaction fee. Continue?</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3308,7 +4210,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
 <context>
     <name>ProjectTableModel</name>
     <message>
-        <location filename="../researcher/projecttablemodel.cpp" line="+131"/>
+        <location filename="../researcher/projecttablemodel.cpp" line="+129"/>
         <source>Name</source>
         <translation>Namn</translation>
     </message>
@@ -3346,14 +4248,48 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../bitcoin.cpp" line="+74"/>
+        <location filename="../bitcoin.cpp" line="+115"/>
+        <source>The wallet in this data directory appears to have changed since you last connected to the Gridcoin daemon from here (it may have been replaced or restored).
+
+Trust this wallet and remember it, or quit?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Trust this wallet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+39"/>
+        <source>Quit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-4"/>
+        <source>The Gridcoin daemon is no longer reporting a wallet identity, though this front end was bound to one for this data directory. Proceed this time (the existing binding is kept), or quit?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Proceed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+315"/>
         <source>Error: Cannot parse command line arguments. Please check the arguments and ensure they are valid and formatted correctly: 
 
 </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+136"/>
+        <location line="+44"/>
+        <source>Error: Cannot access the data directory. Check that it exists and that you have permission to read and write it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-33"/>
         <source>Error: Cannot read configuration file. Please check the path and format of the file.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3363,7 +4299,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+33"/>
         <source>Error: Cannot obtain a lock on the specified data directory. An instance is probably already using that directory.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3378,12 +4314,35 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+223"/>
+        <location line="+111"/>
+        <source>Could not connect to the Gridcoin daemon:
+%1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+44"/>
+        <source>This build was compiled without multiprocess (IPC) support.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>Lost connection to the Gridcoin daemon during startup:
+%1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>An error occurred during startup:
+%1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+326"/>
         <source>%1 didn&apos;t yet exit safely...</source>
         <translation>%1 har ännu inte avslutats säkert...</translation>
     </message>
     <message>
-        <location filename="../guiutil.cpp" line="-657"/>
+        <location filename="../guiutil.cpp" line="-689"/>
         <source>N/A</source>
         <translation>ej tillgänglig</translation>
     </message>
@@ -3493,7 +4452,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Ingen</translation>
     </message>
     <message>
-        <location filename="../researcher/researchermodel.cpp" line="+211"/>
+        <location filename="../researcher/researchermodel.cpp" line="+126"/>
         <source>Wallet Not In Sync</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3503,7 +4462,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../transactionrecord.cpp" line="+376"/>
+        <location filename="../transactionview.cpp" line="+51"/>
         <source>Other</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3565,6 +4524,11 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location filename="../voting/pollcard.cpp" line="+8"/>
         <source>%1 remaining.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../psgtpooltablemodel.cpp" line="-133"/>
+        <source>(nonstandard)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3660,7 +4624,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <location line="+26"/>
         <location line="+23"/>
         <location line="+23"/>
-        <location filename="../rpcconsole.cpp" line="+493"/>
+        <location filename="../rpcconsole.cpp" line="+595"/>
         <source>N/A</source>
         <translation>ej tillgänglig</translation>
     </message>
@@ -3741,7 +4705,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+69"/>
-        <location filename="../rpcconsole.cpp" line="+380"/>
+        <location filename="../rpcconsole.cpp" line="+374"/>
         <source>Select a peer to view detailed information.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3979,7 +4943,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Nej</translation>
     </message>
     <message>
-        <location line="+56"/>
+        <location line="+62"/>
         <source>Welcome to the Gridcoin RPC console! </source>
         <translation type="unfinished"></translation>
     </message>
@@ -3994,7 +4958,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Skriv &lt;b&gt;help&lt;/b&gt; för en översikt av alla kommandon.</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+139"/>
         <source>%1 B</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4055,10 +5019,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Utgående</translation>
     </message>
     <message>
-        <location line="+16"/>
-        <location line="+6"/>
         <source>Unknown</source>
-        <translation>Okänd</translation>
+        <translation type="vanished">Okänd</translation>
     </message>
 </context>
 <context>
@@ -4149,40 +5111,37 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+258"/>
+        <location line="+217"/>
         <source>Waiting for sync...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+129"/>
-        <location line="+79"/>
+        <location line="+108"/>
         <source>Manually Greylisted</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-76"/>
-        <location line="+79"/>
+        <location line="+3"/>
         <source>Automatically Greylisted</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-70"/>
-        <location line="+79"/>
+        <location line="+3"/>
         <source>Excluded</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-49"/>
+        <location line="+10"/>
         <source>Not whitelisted</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+6"/>
         <source>Uses external adapter</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-3"/>
         <source>Not attached</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4640,7 +5599,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../researcher/researcherwizardpoolpage.cpp" line="+89"/>
+        <location filename="../researcher/researcherwizardpoolpage.cpp" line="+95"/>
         <source>Address Label</source>
         <translation>Adressetikett</translation>
     </message>
@@ -4761,7 +5720,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+124"/>
-        <location filename="../researcher/researcherwizardsummarypage.cpp" line="+145"/>
+        <location filename="../researcher/researcherwizardsummarypage.cpp" line="+144"/>
         <source>Everything looks good.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4875,7 +5834,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <name>SendCoinsDialog</name>
     <message>
         <location filename="../forms/sendcoinsdialog.ui" line="+14"/>
-        <location filename="../sendcoinsdialog.cpp" line="+195"/>
+        <location filename="../sendcoinsdialog.cpp" line="+15"/>
         <location line="+5"/>
         <location line="+5"/>
         <location line="+5"/>
@@ -4898,7 +5857,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location filename="../sendcoinsdialog.cpp" line="+156"/>
+        <location filename="../sendcoinsdialog.cpp" line="+158"/>
         <location line="+11"/>
         <source>Available (%1)</source>
         <translation type="unfinished"></translation>
@@ -4910,7 +5869,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+14"/>
-        <location filename="../sendcoinsdialog.cpp" line="+241"/>
+        <location filename="../sendcoinsdialog.cpp" line="+248"/>
         <source>Inactive</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5034,7 +5993,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Ange en Gridcoin-address (t.ex. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
     <message>
-        <location filename="../sendcoinsdialog.cpp" line="-582"/>
+        <location filename="../sendcoinsdialog.cpp" line="-650"/>
         <source>Copy quantity</source>
         <translation>Kopiera antal</translation>
     </message>
@@ -5094,7 +6053,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation> och </translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+88"/>
         <source>The recipient address is not valid, please recheck.</source>
         <translation>Mottagarens adress är inte giltig, vänligen kontrollera igen.</translation>
     </message>
@@ -5134,8 +6093,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Fel: Transaktionen nekades. Detta kan hända om vissa av mynten i din plånbok redan är använda, t.ex om du använder en kopia av wallet.dat och mynten redan var använda i kopia men inte markerade som använda här.</translation>
     </message>
     <message>
-        <location line="+291"/>
-        <location line="+49"/>
+        <location line="+293"/>
+        <location line="+56"/>
         <source>(no label)</source>
         <translation>(Ingen etikett)</translation>
     </message>
@@ -5242,7 +6201,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
 <context>
     <name>SideStakeTableModel</name>
     <message>
-        <location filename="../sidestaketablemodel.cpp" line="+116"/>
+        <location filename="../sidestaketablemodel.cpp" line="+123"/>
         <source>Address</source>
         <translation type="unfinished">Adress</translation>
     </message>
@@ -5380,42 +6339,42 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Fyll i Gridcoin-signatur</translation>
     </message>
     <message>
-        <location filename="../signverifymessagedialog.cpp" line="+110"/>
-        <location line="+83"/>
+        <location filename="../signverifymessagedialog.cpp" line="+106"/>
+        <location line="+85"/>
         <source>The entered address is invalid.</source>
         <translation>Den angivna adressen är ogiltig.</translation>
     </message>
     <message>
-        <location line="-83"/>
+        <location line="-85"/>
         <location line="+8"/>
-        <location line="+75"/>
+        <location line="+77"/>
         <location line="+8"/>
         <source>Please check the address and try again.</source>
         <translation>Vad god kontrollera adressen och försök igen.</translation>
     </message>
     <message>
-        <location line="-83"/>
-        <location line="+83"/>
+        <location line="-85"/>
+        <location line="+85"/>
         <source>The entered address does not refer to a key.</source>
         <translation>Den angivna adressen refererar inte till en nyckel.</translation>
     </message>
     <message>
-        <location line="-75"/>
+        <location line="-77"/>
         <source>Wallet unlock was cancelled.</source>
         <translation>Upplåsningen av plånboken avbröts.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+16"/>
         <source>Private key for the entered address is not available.</source>
         <translation>Privat nyckel för den angivna adressen är inte tillgänglig.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+4"/>
         <source>Message signing failed.</source>
         <translation>Signeringen av meddelandet misslyckades.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Message signed.</source>
         <translation>Meddelande signerat.</translation>
     </message>
@@ -5426,7 +6385,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+13"/>
+        <location line="+16"/>
         <source>Please check the signature and try again.</source>
         <translation>Kontrollera signaturen och försök igen.</translation>
     </message>
@@ -5477,7 +6436,7 @@ Operations such as beacon management, voting, and sending transactions should no
 <context>
     <name>TransactionDesc</name>
     <message numerus="yes">
-        <location filename="../transactiondesc.cpp" line="+36"/>
+        <location filename="../transactiondesc.cpp" line="+21"/>
         <source>Open for %n more block(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -5485,32 +6444,32 @@ Operations such as beacon management, voting, and sending transactions should no
         </translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+2"/>
         <source>Open until %1</source>
         <translation>Öppet till %1</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+2"/>
         <source>conflicted</source>
         <translation>konflikt</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+2"/>
         <source>%1/offline</source>
         <translation>%1/nerkopplad</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+2"/>
         <source>%1/unconfirmed</source>
         <translation>%1/obekräftade</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+2"/>
         <source>%1 confirmations</source>
         <translation>%1 bekräftelser</translation>
     </message>
     <message>
-        <location line="+38"/>
+        <location line="+35"/>
         <source>Status</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5533,74 +6492,74 @@ Operations such as beacon management, voting, and sending transactions should no
         <translation>Datum</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <location line="+5"/>
+        <location line="+6"/>
+        <location line="+3"/>
         <source>Source</source>
         <translation>Källa</translation>
     </message>
     <message>
-        <location line="-5"/>
+        <location line="-3"/>
         <source>Generated in CoinBase</source>
         <translation>Genererade i CoinBase</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="-42"/>
         <source>Mined - PoS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Mined - PoS+RR</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Mined - Orphaned</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>PoS Side Stake Received</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>PoS+RR Side Stake Received</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>PoS Side Stake Sent</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>PoS+RR Side Stake Sent</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>MRC Payment Received</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>MRC Payment Sent</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Mined - Superblock</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Mined - Unknown</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
-        <location line="+18"/>
+        <location line="+38"/>
+        <location line="+5"/>
         <source>From</source>
         <translation>Från</translation>
     </message>
@@ -5611,13 +6570,13 @@ Operations such as beacon management, voting, and sending transactions should no
     </message>
     <message>
         <location line="+1"/>
-        <location line="+25"/>
-        <location line="+63"/>
+        <location line="+17"/>
+        <location line="+32"/>
         <source>To</source>
         <translation>Till</translation>
     </message>
     <message>
-        <location line="-84"/>
+        <location line="-45"/>
         <location line="+3"/>
         <source>own address</source>
         <translation>egen adress</translation>
@@ -5628,16 +6587,16 @@ Operations such as beacon management, voting, and sending transactions should no
         <translation>etikett</translation>
     </message>
     <message>
-        <location line="+40"/>
-        <location line="+14"/>
+        <location line="+25"/>
+        <location line="+12"/>
+        <location line="+23"/>
+        <location line="+12"/>
         <location line="+50"/>
-        <location line="+20"/>
-        <location line="+63"/>
         <source>Credit</source>
         <translation>Kredit</translation>
     </message>
     <message numerus="yes">
-        <location line="-144"/>
+        <location line="-94"/>
         <source>matures in %n more block(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -5650,31 +6609,31 @@ Operations such as beacon management, voting, and sending transactions should no
         <translation>inte accepterad</translation>
     </message>
     <message>
-        <location line="+48"/>
-        <location line="+9"/>
-        <location line="+16"/>
-        <location line="+63"/>
+        <location line="+23"/>
+        <location line="+5"/>
+        <location line="+10"/>
+        <location line="+50"/>
         <source>Debit</source>
         <translation>Belasta</translation>
     </message>
     <message>
-        <location line="-72"/>
+        <location line="-55"/>
         <source>Transaction fee</source>
         <translation>Transaktionsavgift</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+12"/>
         <source>Net amount</source>
         <translation>Nettobelopp</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <location line="+20"/>
+        <location line="+3"/>
+        <location line="+15"/>
         <source>Message</source>
         <translation>Meddelande</translation>
     </message>
     <message>
-        <location line="-17"/>
+        <location line="-12"/>
         <source>Comment</source>
         <translation>Kommentar</translation>
     </message>
@@ -5684,38 +6643,38 @@ Operations such as beacon management, voting, and sending transactions should no
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5"/>
         <location line="+3"/>
+        <location line="+2"/>
         <source>Block Hash</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+12"/>
         <source>Transaction Stake Data</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="-188"/>
         <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
         <translation>Gridcoin-genererade mynt måste mogna i 110 block innan de kan spenderas. När du skapade detta block skickades det ut på nätverket för att läggas till i blockkedjan. Om det misslyckas att läggas till kommer dess status ändras till &quot;ej accepterad&quot; och mynten kan inte spenderas. Detta kan hända om en annan nod skapar ett block inom några sekunder av ditt.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+203"/>
         <source>Transaction Debits/Credits</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+8"/>
         <source>Transaction Data</source>
         <translation>Transaktionsdata</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+3"/>
         <source>Transaction Inputs</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+10"/>
         <source>Amount</source>
         <translation>Mängd</translation>
     </message>
@@ -5747,11 +6706,16 @@ Operations such as beacon management, voting, and sending transactions should no
         <source>C&amp;lose</source>
         <translation>S&amp;täng</translation>
     </message>
+    <message>
+        <location filename="../transactiondescdialog.cpp" line="+15"/>
+        <source>Transaction details unavailable.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>TransactionTableModel</name>
     <message>
-        <location filename="../transactiontablemodel.cpp" line="+263"/>
+        <location filename="../transactiontablemodel.cpp" line="+40"/>
         <source>Date</source>
         <translation>Datum</translation>
     </message>
@@ -5771,7 +6735,7 @@ Operations such as beacon management, voting, and sending transactions should no
         <translation>Mängd</translation>
     </message>
     <message numerus="yes">
-        <location line="+63"/>
+        <location line="+53"/>
         <source>Open for %n more block(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -5799,12 +6763,12 @@ Operations such as beacon management, voting, and sending transactions should no
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+23"/>
         <source>Confirmed (%1 confirmations)</source>
         <translation>Bekräftad (%1 bekräftelser)</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Conflicted</source>
         <translation>Konflikt</translation>
     </message>
@@ -6029,7 +6993,42 @@ Operations such as beacon management, voting, and sending transactions should no
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+67"/>
+        <source>%1, %2 %3, amount %4, %5</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>confirmed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>unconfirmed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Date: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Type: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Address: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Amount: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-454"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Transaktionsstatus. Håll muspekaren över för att se antal bekräftelser.</translation>
     </message>
@@ -6057,7 +7056,7 @@ Operations such as beacon management, voting, and sending transactions should no
 <context>
     <name>TransactionView</name>
     <message>
-        <location filename="../transactionview.cpp" line="+51"/>
+        <location filename="../transactionview.cpp" line="+26"/>
         <source>Transaction History</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6112,7 +7111,12 @@ Operations such as beacon management, voting, and sending transactions should no
         <translation>Minsta mängd</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+17"/>
+        <source>Transaction history</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+21"/>
         <source>Copy address</source>
         <translation>Kopiera adress</translation>
     </message>
@@ -6142,7 +7146,7 @@ Operations such as beacon management, voting, and sending transactions should no
         <translation>Visa transaktionsdetaljer</translation>
     </message>
     <message>
-        <location line="+143"/>
+        <location line="+232"/>
         <source>Export Transaction Data</source>
         <translation>Exportera transaktionsdata</translation>
     </message>
@@ -6153,7 +7157,7 @@ Operations such as beacon management, voting, and sending transactions should no
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+12"/>
         <source>Confirmed</source>
         <translation>Bekräftad</translation>
     </message>
@@ -6198,7 +7202,7 @@ Operations such as beacon management, voting, and sending transactions should no
         <translation>Kan inte skriva till fil %1.</translation>
     </message>
     <message>
-        <location line="+100"/>
+        <location line="+126"/>
         <source>Range:</source>
         <translation>Intervall:</translation>
     </message>
@@ -6234,19 +7238,16 @@ Operations such as beacon management, voting, and sending transactions should no
 <context>
     <name>UpgradeQt</name>
     <message>
-        <location filename="../upgradeqt.cpp" line="+70"/>
         <source>E&amp;xit</source>
-        <translation type="unfinished">&amp;Avsluta</translation>
+        <translation type="obsolete">&amp;Avsluta</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Quit application</source>
-        <translation type="unfinished">Avsluta programmet</translation>
+        <translation type="obsolete">Avsluta programmet</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>&amp;File</source>
-        <translation type="unfinished">&amp;Arkiv</translation>
+        <translation type="obsolete">&amp;Arkiv</translation>
     </message>
 </context>
 <context>
@@ -6260,7 +7261,7 @@ Operations such as beacon management, voting, and sending transactions should no
 <context>
     <name>VoteWizardBallotPage</name>
     <message>
-        <location filename="../voting/votewizardballotpage.cpp" line="+37"/>
+        <location filename="../voting/votewizardballotpage.cpp" line="+38"/>
         <source>Submit Vote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6286,18 +7287,18 @@ Operations such as beacon management, voting, and sending transactions should no
 <context>
     <name>VotingModel</name>
     <message>
-        <location filename="../voting/votingmodel.cpp" line="+489"/>
-        <location line="+40"/>
+        <location filename="../voting/votingmodel.cpp" line="+351"/>
+        <location line="+23"/>
         <source>Please unlock the wallet.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-16"/>
+        <location line="+12"/>
         <source>Poll not found.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+2"/>
         <source>Failed to load poll from disk</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6374,15 +7375,14 @@ Operations such as beacon management, voting, and sending transactions should no
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+338"/>
         <source>Sending...</source>
-        <translation>Skickar...</translation>
+        <translation type="vanished">Skickar...</translation>
     </message>
 </context>
 <context>
     <name>bitcoin-core</name>
     <message>
-        <location filename="../bitcoinstrings.cpp" line="+33"/>
+        <location filename="../bitcoinstrings.cpp" line="+40"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
         <translation>Ett fel uppstod vid upprättandet av RPC port %u för att lyssna på IPv6, faller tillbaka till IPV4: %s</translation>
     </message>
@@ -6392,23 +7392,23 @@ Operations such as beacon management, voting, and sending transactions should no
         <translation>Ett fel uppstod vid upprättandet av RPC port %u för att lyssna på IPv4: %s</translation>
     </message>
     <message>
-        <location line="+457"/>
+        <location line="+461"/>
         <source>Usage:</source>
         <translation>Användning:</translation>
     </message>
     <message>
-        <location line="-109"/>
+        <location line="-90"/>
         <source>List commands</source>
         <translation>Lista kommandon</translation>
     </message>
     <message>
-        <location line="-367"/>
-        <location line="+344"/>
+        <location line="-397"/>
+        <location line="+376"/>
         <source>Gridcoin</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-343"/>
+        <location line="-375"/>
         <source>The %s developers</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6434,11 +7434,31 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     </message>
     <message>
         <location line="+13"/>
+        <source>-rpcssl is no longer supported, and -rpcconnect=%s does not resolve to a loopback address. Sending RPC credentials to it would transmit them unencrypted. Remove -rpcssl to proceed deliberately, and tunnel the connection (for example over SSH) if it crosses an untrusted network.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>A poll with a yes/no/abstain response type cannot include any additional custom choices.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+3"/>
+        <source>An error occurred while setting up the RPC port %u for listening on %s: %s</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Block file corruption detected and automatic recovery failed. Please restart with -reindex to rebuild the chain state.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Cannot access the data directory; check that it exists and that you have permission to read and write it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Cannot obtain a lock on data directory %s. %s is probably already running and using that directory.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6458,21 +7478,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>ERROR: Checkpoint mismatch: Blockchain data may be corrupted.
-
-Gridcoin detected bad index entries. This may occur because of a late software upgrade, unexpected exit, or a power failure. Please run gridcoinresearchd with the -resetblockchaindata parameter. Your wallet will re-download the blockchain. Your balance may appear incorrect until the synchronization finishes.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>ERROR: Checkpoint mismatch: Blockchain data may be corrupted.
-
-Gridcoin detected bad index entries. This may occur because of a late software upgrade, unexpected exit, or a power failure. Your blockchain data is being reset and your wallet will resync from genesis when you restart. Your balance may appear incorrect until the synchronization finishes.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
+        <location line="+43"/>
         <source>Error: Clock skew is 5 minutes or greater. Please check your clock settings.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6498,11 +7504,6 @@ Gridcoin detected bad index entries. This may occur because of a late software u
     </message>
     <message>
         <location line="+3"/>
-        <source>Failed to download snapshot as mandatory client is available for download.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
         <source>Failed: 80 block difficulty is less than %1. This wallet is almost certainly forked.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6519,6 +7520,16 @@ Gridcoin detected bad index entries. This may occur because of a late software u
     <message>
         <location line="+3"/>
         <source>For polls about community representation, public relations, and communications.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Gridcoin detected a multi-superblock chain reorganization and is rebuilding the beacon registry to maintain consensus with the network. The wallet may be briefly unresponsive while the rebuild runs.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No single address can attest to %s GRC in %u or fewer UTXOs. Consider consolidating UTXOs.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -6563,6 +7574,11 @@ Gridcoin detected bad index entries. This may occur because of a late software u
     </message>
     <message>
         <location line="+6"/>
+        <source>The default data directory is on a temporary filesystem, so the block chain and wallet would be lost when the program exits. Pass -datadir with a location on persistent storage.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>The network has experienced a low-level error and this probably means your IP address or other network connection parameters are not configured correctly. Please check your network configuration on your computer.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6598,11 +7614,6 @@ Gridcoin detected bad index entries. This may occur because of a late software u
     </message>
     <message>
         <location line="+5"/>
-        <source>Unable to download a snapshot, as the wallet has detected that a new mandatory version is available for install. The mandatory upgrade must be installed before the snapshot can be downloaded and applied.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
         <source>Verify (1) that you have BOINC installed correctly, (2) that you have attached at least one whitelisted project, (3) that you advertised your beacon with the same email as you use for your BOINC project(s), and (4) that the CPID on the overview screen matches the CPID when you login to your BOINC project(s) online.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6642,12 +7653,7 @@ Gridcoin detected bad index entries. This may occur because of a late software u
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>Warning: Ending this process after Stage 2 will result in syncing from 0 or an incomplete/corrupted blockchain.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+12"/>
         <source>You have no balance and will be unable to retrieve your research rewards when solo crunching by staking. You can use MRC to retrieve your rewards, or you should acquire GRC to stake so you can retrieve your research rewards. Please see https://gridcoin.us/guides/boinc-install.htm.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6713,6 +7719,11 @@ Gridcoin detected bad index entries. This may occur because of a late software u
     </message>
     <message>
         <location line="+5"/>
+        <source>-maxmempool must be between %d and %d MB.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>A poll choice cannot be empty.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6724,11 +7735,6 @@ Gridcoin detected bad index entries. This may occur because of a late software u
     <message>
         <location line="+1"/>
         <source>Active</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Are you sure you want to cancel the snapshot operation?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -6789,16 +7795,6 @@ Gridcoin detected bad index entries. This may occur because of a late software u
     <message>
         <location line="+1"/>
         <source>CPID</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Cancel snapshot operation?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Cancel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -6897,11 +7893,6 @@ Gridcoin detected bad index entries. This may occur because of a late software u
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Failed to download snapshot.zip; See debug.log</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Failed to rename bootstrap file to .old for backup purposes.</source>
         <translation type="unfinished"></translation>
@@ -6924,16 +7915,6 @@ Gridcoin detected bad index entries. This may occur because of a late software u
     <message>
         <location line="+1"/>
         <source>For opinion or casual polls without any particular requirements.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>GB)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>GB/</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -7007,16 +7988,6 @@ Gridcoin detected bad index entries. This may occur because of a late software u
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>KB/s</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Latest Version GitHub data response:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Loading Network Averages...</source>
         <translation type="unfinished"></translation>
@@ -7040,11 +8011,6 @@ Gridcoin detected bad index entries. This may occur because of a late software u
         <location line="+2"/>
         <source>Local version: </source>
         <translation>Lokal version: </translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>MB/s</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+2"/>
@@ -7082,18 +8048,12 @@ Gridcoin detected bad index entries. This may occur because of a late software u
         <translation>Flera alternativ</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>N/A</source>
-        <translation>ej tillgänglig</translation>
+        <translation type="vanished">ej tillgänglig</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>No UTXOs available due to reserve balance</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>No address contains %s GRC in %s UTXOs or fewer.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -7109,6 +8069,11 @@ Gridcoin detected bad index entries. This may occur because of a late software u
     <message>
         <location line="+1"/>
         <source>No mature coins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No single address has the required %s GRC balance to create a poll.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -7327,77 +8292,7 @@ Gridcoin detected bad index entries. This may occur because of a late software u
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Snapshot Process Complete!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Snapshot Process Has Begun.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Snapshot extraction failed! Cleaning up any extracted data</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Snapshot operation canceled due to an invalid snapshot zip.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Snapshot operation canceled.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Snapshot operation successful!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Stage (1/4): Downloading snapshot.zip:         </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Stage (1/4): Downloading snapshot.zip: Speed </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Stage (2/4): Verify SHA256SUM of snapshot.zip</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Stage (2/4): Verify SHA256SUM of snapshot.zip: </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Stage (3/4): Cleanup blockchain data</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Stage (3/4): Cleanup blockchain data:          </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Stage (4/4): Extracting snapshot.zip</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Stage (4/4): Extracting snapshot.zip:          </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Staking Only - No Eligible Research Projects</source>
         <translation type="unfinished"></translation>
     </message>
@@ -7447,16 +8342,6 @@ Gridcoin detected bad index entries. This may occur because of a late software u
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>The wallet is now shutting down. Please restart your wallet.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>The wallet will now shutdown.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location line="+4"/>
         <source>Unable to create the PID file &apos;%s&apos;: %s</source>
         <translation type="unfinished"></translation>
@@ -7493,6 +8378,11 @@ Gridcoin detected bad index entries. This may occur because of a late software u
     </message>
     <message>
         <location line="+2"/>
+        <source>Wallet balance of %s in top %s UTXOs is less than required %s GRC.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Wallet locked</source>
         <translation type="unfinished"></translation>
     </message>
@@ -7588,6 +8478,16 @@ Gridcoin detected bad index entries. This may occur because of a late software u
     </message>
     <message>
         <location line="+1"/>
+        <source>pool_approve</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>pool_register</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>project</source>
         <translation type="unfinished"></translation>
     </message>
@@ -7612,17 +8512,45 @@ Gridcoin detected bad index entries. This may occur because of a late software u
         <translation>okänd</translation>
     </message>
     <message>
-        <location line="-224"/>
+        <location line="-201"/>
         <source>Balance</source>
         <translation>Saldo</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-271"/>
+        <source>ERROR: Block index integrity check failed: Blockchain data may be corrupted.
+
+Gridcoin detected a block index entry with a broken pprev linkage. This may occur because of a late software upgrade, unexpected exit, or a power failure that left the on-disk block index database in an inconsistent state. Please run gridcoinresearchd with the -resetblockchaindata parameter. Your wallet will re-download the blockchain. Your balance may appear incorrect until the synchronization finishes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>ERROR: Block index integrity check failed: Blockchain data may be corrupted.
+
+Gridcoin detected a block index entry with a broken pprev linkage. This may occur because of a late software upgrade, unexpected exit, or a power failure that left the on-disk block index database in an inconsistent state. Your blockchain data is being reset and your wallet will resync from genesis when you restart. Your balance may appear incorrect until the synchronization finishes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>ERROR: Checkpoint mismatch: Blockchain data may be corrupted.
+
+Gridcoin&apos;s compiled-in hardened checkpoint does not match the block at that height in your local block index. This may occur because of a late software upgrade, unexpected exit, or a power failure. Please run gridcoinresearchd with the -resetblockchaindata parameter. Your wallet will re-download the blockchain. Your balance may appear incorrect until the synchronization finishes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>ERROR: Checkpoint mismatch: Blockchain data may be corrupted.
+
+Gridcoin&apos;s compiled-in hardened checkpoint does not match the block at that height in your local block index. This may occur because of a late software upgrade, unexpected exit, or a power failure. Your blockchain data is being reset and your wallet will resync from genesis when you restart. Your balance may appear incorrect until the synchronization finishes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+249"/>
         <source>Boinc Reward</source>
         <translation>BOINC-belöning</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+9"/>
         <source>Client Version</source>
         <translation>Klientversion</translation>
     </message>
@@ -7637,7 +8565,7 @@ Gridcoin detected bad index entries. This may occur because of a late software u
         <translation>FEL</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+30"/>
         <source>Height</source>
         <translation>Höjd</translation>
     </message>
@@ -7652,22 +8580,22 @@ Gridcoin detected bad index entries. This may occur because of a late software u
         <translation>Ogiltigt team</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+11"/>
         <source>Magnitude</source>
         <translation>Magnitud</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+17"/>
         <source>Organization</source>
         <translation>Organisation</translation>
     </message>
     <message>
-        <location line="-223"/>
+        <location line="-211"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Varning: -paytxfee är satt väldigt hög! Detta är avgiften du kommer betala för varje transaktion.</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+19"/>
         <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
         <translation>Varning: wallet.dat korrupt, datan har räddats! Den ursprungliga wallet.dat har sparas som wallet.{timestamp}.bak i %s; om ditt saldo eller transaktioner är felaktiga ska du återställa från en säkerhetskopia.</translation>
     </message>
@@ -7677,7 +8605,7 @@ Gridcoin detected bad index entries. This may occur because of a late software u
         <translation>Varning: fel vid läsning av wallet.dat! Alla nycklar lästes korrekt, men transaktionsdatan eller adressbokens poster kanske saknas eller är felaktiga.</translation>
     </message>
     <message>
-        <location line="+130"/>
+        <location line="+128"/>
         <source>Error: Transaction creation failed  </source>
         <translation>Fel: Skapandet av transaktion misslyckades  </translation>
     </message>
@@ -7687,22 +8615,22 @@ Gridcoin detected bad index entries. This may occur because of a late software u
         <translation>Fel: Transaktionen nekades. Detta kan hända om vissa av mynten i din plånbok redan är använda, t.ex om du använder en kopia av wallet.dat och mynten redan var använda i kopia men inte markerade som använda här.</translation>
     </message>
     <message>
-        <location line="+272"/>
+        <location line="+271"/>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>Misslyckades att lyssna på någon port. Använd -listen=0 om du vill detta.</translation>
     </message>
     <message>
-        <location line="+107"/>
+        <location line="+100"/>
         <source>Single Choice</source>
         <translation>Ett alternativ</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+12"/>
         <source>To use the %s option</source>
         <translation>Att använda %s alternativet</translation>
     </message>
     <message>
-        <location line="-263"/>
+        <location line="-237"/>
         <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
 %s
 If the file does not exist, create it with owner-readable-only file permissions.</source>
@@ -7711,7 +8639,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
 Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägaren.</translation>
     </message>
     <message>
-        <location line="+266"/>
+        <location line="+240"/>
         <source>Unknown error</source>
         <translation>Okänt fel</translation>
     </message>
@@ -7726,12 +8654,12 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>Den här uppdateringen är</translation>
     </message>
     <message>
-        <location line="-76"/>
+        <location line="-60"/>
         <source>No current polls</source>
         <translation>Inga pågående omröstningar</translation>
     </message>
     <message>
-        <location line="-30"/>
+        <location line="-25"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Ogiltigt belopp för -paytxfee=&lt;belopp&gt;:&apos;%s&apos;</translation>
     </message>
@@ -7741,7 +8669,7 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>Fel mängd för  -mininput=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+101"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation>Plånbok %s ligger utanför datamappen %s.</translation>
     </message>
@@ -7751,12 +8679,12 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>Verifierar integriteten i databasen...</translation>
     </message>
     <message>
-        <location line="-428"/>
+        <location line="-404"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation>Ett fel uppstod vid initialiseringen av databasen %s! För att återställa, SÄKERHETSKOPIERA MAPPEN, radera sedan allt från mappen förutom wallet.dat.</translation>
     </message>
     <message>
-        <location line="+457"/>
+        <location line="+436"/>
         <source>vote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -7766,7 +8694,7 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>wallet.dat korrupt, räddning misslyckades</translation>
     </message>
     <message>
-        <location line="-152"/>
+        <location line="-134"/>
         <source>Invalid -proxy address: &apos;%s&apos;</source>
         <translation>Ogiltig -proxy adress: &apos;%s&apos;</translation>
     </message>
@@ -7776,7 +8704,7 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>Fel -tor adress: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-62"/>
+        <location line="-59"/>
         <source>Cannot resolve -bind address: &apos;%s&apos;</source>
         <translation>Kan inte matcha -bind adress: &apos;%s&apos;</translation>
     </message>
@@ -7786,12 +8714,12 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>Kan inte matcha -externalip adress: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+65"/>
+        <location line="+62"/>
         <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
         <translation>Fel mängd för -reservebalance=&lt;amount&gt;</translation>
     </message>
     <message>
-        <location line="-45"/>
+        <location line="-42"/>
         <source>Error loading blkindex.dat</source>
         <translation>Fel vid laddande av blkindex.dat</translation>
     </message>
@@ -7806,42 +8734,42 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>Kunde inte ladda wallet.dat: En nyare version av Gridcoin krävs</translation>
     </message>
     <message>
-        <location line="+163"/>
+        <location line="+140"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation>Plånboken måste skrivas om: Starta om Gridcoin för att slutföra</translation>
     </message>
     <message>
-        <location line="-165"/>
+        <location line="-142"/>
         <source>Error loading wallet.dat</source>
         <translation>Fel vid inläsning av plånboksfilen wallet.dat</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+27"/>
         <source>Importing bootstrap blockchain data file.</source>
         <translation>Importerar bootstrap blockchain data fil.</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+20"/>
         <source>Loading addresses...</source>
         <translation>Laddar adresser...</translation>
     </message>
     <message>
-        <location line="-43"/>
+        <location line="-38"/>
         <source>Error: could not start node</source>
         <translation>Fel: kunde inte starta noden</translation>
     </message>
     <message>
-        <location line="-175"/>
+        <location line="-166"/>
         <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
         <translation>Kan inte binda till %s på denna dator. Gridcoin är sannolikt redan startad.</translation>
     </message>
     <message>
-        <location line="+316"/>
+        <location line="+283"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Det går inte att binda till %s på den här datorn (bind returnerade felmeddelande %d, %s)</translation>
     </message>
     <message>
-        <location line="-144"/>
+        <location line="-120"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation>Fel: Plånboken låst, kan inte utföra transaktion  </translation>
     </message>
@@ -7856,37 +8784,36 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>Fel: Transaktionen kräver en transaktionsavgift på min %s på grund av dess storlek, komplexitet eller användning av nyligen mottagna kapital  </translation>
     </message>
     <message>
-        <location line="+370"/>
         <source>Sending...</source>
-        <translation>Skickar...</translation>
+        <translation type="vanished">Skickar...</translation>
     </message>
     <message>
-        <location line="-75"/>
+        <location line="+292"/>
         <source>Invalid amount</source>
         <translation>Ogiltig mängd</translation>
     </message>
     <message>
-        <location line="-174"/>
+        <location line="-169"/>
         <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
         <translation>Varning: Kolla att din dators tid och datum är rätt. Gridcoin kan inte fungera ordentligt om tiden i datorn är fel.</translation>
     </message>
     <message>
-        <location line="+300"/>
+        <location line="+275"/>
         <source>Warning: Disk space is low!</source>
         <translation>Varning: Lågt skivutrymme!</translation>
     </message>
     <message>
-        <location line="-18"/>
+        <location line="-19"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>Okänt nätverk som anges i -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-96"/>
         <source>Insufficient funds</source>
         <translation>Otillräckligt med bitcoins</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+16"/>
         <source>Loading block index...</source>
         <translation>Laddar blockindex...</translation>
     </message>
@@ -7896,17 +8823,17 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>Laddar plånbok...</translation>
     </message>
     <message>
-        <location line="-77"/>
+        <location line="-72"/>
         <source>Cannot write default address</source>
         <translation>Kan inte skriva standardadress</translation>
     </message>
     <message>
-        <location line="+135"/>
+        <location line="+128"/>
         <source>Rescanning...</source>
         <translation>Söker igen...</translation>
     </message>
     <message>
-        <location line="-124"/>
+        <location line="-117"/>
         <source>Done loading</source>
         <translation>Klar med laddning</translation>
     </message>

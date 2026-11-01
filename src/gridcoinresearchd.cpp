@@ -7,9 +7,11 @@
 #include "config/gridcoin-config.h"
 #endif
 
+#include "util/dir_permissions.h"
 #include "chainparams.h"
 #include "chainparamsbase.h"
 #include "util.h"
+#include <util/proc_hardening.h>
 #include <util/syserror.h>
 #include "util/threadnames.h"
 #include <util/tokenpipe.h>
@@ -17,17 +19,27 @@
 #include "txdb.h"
 #include "wallet/walletdb.h"
 #include "init.h"
+#include "node/shutdown.h"
 #include "rpc/server.h"
 #include "rpc/client.h"
 #include "node/ui_interface.h"
 #include "gridcoin/upgrade.h"
 
+#ifdef ENABLE_MULTIPROCESS
+#include "interfaces/init.h"
+#include "interfaces/ipc.h"
+#include "ipc/handshake.h"
+#include "ipc/peercred.h"
+#include "ipc/serve_init.h"
+#include "wallet/wallet.h" // pwalletMain / CWallet::GetWalletUuid for the identity token
+#include <atomic>
+#include <memory>
+#endif
+
 #include <boost/thread.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <stdio.h>
 #include <stdexcept>
-
-extern bool fQtActive;
 
 #if HAVE_DECL_FORK
 
@@ -167,34 +179,47 @@ bool AppInit(int argc, char* argv[])
         /** Check mainnet config file first in case testnet is set there and not in command line args **/
         SelectParams(CBaseChainParams::MAIN);
 
-        // Currently unused.
         std::string error_msg;
+        const auto config_error = [&error_msg] {
+            return InitError(strprintf("Config file cannot be parsed%s. Cannot continue.\n",
+                                       error_msg.empty() ? "" : ": " + error_msg));
+        };
 
         if (!gArgs.ReadConfigFiles(error_msg, true))
         {
-            return InitError("Config file cannot be parsed. Cannot continue.\n");
+            return config_error();
         }
 
-        SelectParams(gArgs.IsArgSet("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
+        SelectParams(gArgs.GetChainName());
 
         // reread config file after correct chain is selected
         if (!gArgs.ReadConfigFiles(error_msg, true))
         {
-            return InitError("Config file cannot be parsed. Cannot continue.\n");
+            return config_error();
         }
 
-        if (!gArgs.InitSettings(error)) {
-            return InitError("Error initializing settings.\n");
-        }
-
-        // Command-line RPC  - single commands execute and exit.
+        // Command-line RPC  - single commands execute and exit. Local to this
+        // entry point; formerly a util.h global read nowhere else.
+        bool fCommandLine = false;
         for (int i = 1; i < argc; i++)
             if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoinresearchd"))
                 fCommandLine = true;
 
         if (fCommandLine)
         {
+            // The client reads the node's read-write settings, because a connection setting stored there with
+            // changesettings (rpcconnect, rpcport, rpcuser, ...) outranks the config file. It never writes them:
+            // InitSettings rewrites the file through a fixed temporary name, so clients calling the same node at
+            // once raced on it, and a client could write back a setting the node had just changed.
+            std::vector<std::string> errors;
+            if (!gArgs.ReadSettingsFile(&errors)) {
+                return InitError(strprintf("Failed loading settings file:\n- %s\n", Join(errors, "\n- ")));
+            }
             return !CommandLineRPC(argc, argv);
+        }
+
+        if (!gArgs.InitSettings(error)) {
+            return InitError("Error initializing settings.\n" + error);
         }
 
         if (gArgs.GetBoolArg("-printtoconsole", false) && gArgs.GetBoolArg("-daemon", DEFAULT_DAEMON)) {
@@ -212,47 +237,16 @@ bool AppInit(int argc, char* argv[])
         // Initialize logging as early as possible.
         InitLogging();
 
-        // Make sure a user does not request snapshotdownload and resetblockchaindata at same time!
-        if (gArgs.IsArgSet("-snapshotdownload") && gArgs.IsArgSet("-resetblockchaindata"))
-        {
-            return InitError("-snapshotdownload and -resetblockchaindata cannot be used in conjunction");
+        // Best-effort in-process privilege hardening (Linux): NO_NEW_PRIVS +
+        // capability-bounding-set drop, inherited across the daemonizing fork
+        // below. Defence-in-depth secondary to the hardened systemd unit; a
+        // no-op on non-Linux. Runs for the daemon / -multiprocess node only,
+        // never the GUI process.
+        if (gArgs.GetBoolArg("-nonewprivs", DEFAULT_NO_NEW_PRIVS)) {
+            HardenProcess();
         }
 
-        // Check to see if the user requested a snapshot and we are not running TestNet!
-        if (gArgs.IsArgSet("-snapshotdownload") && !gArgs.IsArgSet("-testnet"))
-        {
-            GRC::Upgrade snapshot;
-
-            // Let's check make sure Gridcoin is not already running in the data directory.
-            // Use new probe feature
-            if (!LockDirectory(GetDataDir(), ".lock", false))
-            {
-                return InitError(strprintf("Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.",
-                                           GetDataDir().string()));
-            }
-
-            else
-            {
-                try
-                {
-                    snapshot.SnapshotMain();
-                }
-
-                catch (std::runtime_error& e)
-                {
-                    LogPrintf("Snapshot Downloader: Runtime exception occurred in SnapshotMain() (%s)", e.what());
-
-                    snapshot.DeleteSnapshot();
-
-                    return false;
-                }
-            }
-
-            // Delete snapshot file
-            snapshot.DeleteSnapshot();
-        }
-
-        // Check to see if the user requested to reset blockchain data -- We allow reset blockchain data on testnet, but not a snapshot download.
+        // Check to see if the user requested to reset blockchain data -- We allow reset blockchain data on testnet.
         if (gArgs.IsArgSet("-resetblockchaindata"))
         {
             GRC::Upgrade resetblockchain;
@@ -328,9 +322,98 @@ bool AppInit(int argc, char* argv[])
     }
 
     if (fRet) {
+        // Core init succeeded. ThreadAppInit2 (the GUI's init wrapper) sets this
+        // for the monolith; the daemon calls AppInit2 directly, so set it here so
+        // a multiprocess GUI's isCoreReady() (served from this process) returns
+        // true once the core is up.
+        bGridcoinCoreInitComplete = true;
+#ifdef ENABLE_MULTIPROCESS
+        // Multiprocess (RFC #2937): after core init, optionally listen on the
+        // AF_UNIX socket and serve a fresh interfaces::Init to each attached GUI.
+        // Per-connection auth: a new ServeInit is built per connection; the Ipc
+        // lives for the run, torn down after the wait loop.
+        std::unique_ptr<interfaces::Ipc> ipc;
+        // Whether this run minted an IPC cookie, so shutdown knows to remove it.
+        // Tracked separately from `ipc`: WriteCookie runs before the Ipc is built,
+        // so a failure in between would otherwise leave the credential on disk.
+        bool cookie_written = false;
+        // Note the default: this block runs only when -multiprocess was explicitly
+        // set (command line or config file). There is no implicit/optional MP mode
+        // in the daemon, so a failure here is a failure to honor an explicit
+        // request, not the loss of a nice-to-have.
+        if (gArgs.GetBoolArg("-multiprocess", false)) {
+            try {
+                std::string cookie = ipc::WriteCookie(GetDataDir());
+                cookie_written = true;
+                interfaces::NodeIdentity identity;
+                identity.network = Params().NetworkIDString();
+                // Fingerprint the wallet this node serves. Empty when there is no
+                // wallet, or its UUID could not be minted (e.g. a mockable chain) --
+                // the GUI then treats identity as "unavailable".
+                if (pwalletMain) {
+                    identity.identity_token = ipc::ComputeIdentityToken(pwalletMain->GetWalletUuid());
+                }
+                // Per-connection auth (RFC #2937 §4.3 hardening): build a FRESH
+                // ServeInit for EACH accepted connection, so every client must
+                // present the cookie itself -- no shared, sticky authentication.
+                // Reject a foreign OS user before serving (CheckPeerCredentials:
+                // SO_PEERCRED / getpeereid). Windows has no peer credentials, so
+                // there the owner-only DACLs on node.sock and ipc.cookie are the
+                // guard.
+                // cookie + identity are captured by value and copied into each
+                // ServeInit.
+                auto make_serve_init = [cookie = std::move(cookie), identity = std::move(identity)]
+                    (int peer_fd) -> std::unique_ptr<interfaces::Init> {
+                        if (!ipc::CheckPeerCredentials(peer_fd)) return nullptr;
+                        return ipc::MakeServeInit(interfaces::MakeGridcoinInit(), cookie, identity);
+                    };
+                ipc = interfaces::MakeIpc("gridcoinresearchd", std::move(make_serve_init));
+                std::string address = "unix";
+                ipc->listenAddress(address);
+                LogPrintf("IPC: serving GUI connections on %s\n", address);
+                // Say which access controls are actually in force, rather than
+                // leaving an operator to infer it from the platform. The uid check
+                // is real on POSIX and absent on Windows; debug.log should not
+                // require the reader to know that.
+                LogPrintf("IPC: peer-credential enforcement: %s\n", ipc::PeerCredentialEnforcement());
+            } catch (const std::exception& e) {
+                // Fail loudly and fatally. Previously this was logged and the
+                // daemon carried on as a non-multiprocess node -- but a fresh
+                // ipc.cookie has already been written above, so the GUI finds a
+                // cookie, dials a socket nobody is listening on, and fails forever
+                // with no explanation, while the one line that says why is buried
+                // in debug.log. The failures reaching here are all actionable:
+                // another process already listening, a socket path over the
+                // 108-byte sockaddr_un limit, or the socket/cookie access control
+                // (chmod / owner-only DACL) not being applicable to this data
+                // directory.
+                InitError(strprintf("Failed to start the multiprocess IPC listener: %s\n\n"
+                                    "-multiprocess was requested, so this is fatal. If the node was "
+                                    "killed or crashed, a stale socket may be left in the data "
+                                    "directory: stop any running gridcoinresearchd, delete "
+                                    "'node.sock' there, and start again. Otherwise start without "
+                                    "-multiprocess.",
+                                    e.what()));
+                // Exit non-zero and take the normal shutdown path: the wait loop
+                // below sees the request immediately and falls through to
+                // Shutdown(), so the node stops cleanly instead of running on as a
+                // node the GUI can never reach.
+                fRet = false;
+                SetShutdownRequested();
+            }
+        }
+#endif
         while (!ShutdownRequested()) {
             UninterruptibleSleep(std::chrono::milliseconds{500});
         }
+#ifdef ENABLE_MULTIPROCESS
+        if (ipc) ipc->disconnectIncoming();
+        // The cookie is a live credential for as long as the file exists, so it goes
+        // when the socket does -- mirroring upstream's DeleteAuthCookie(). It is also
+        // what ConnectToNode checks before dialling, so leaving it behind sends the
+        // next GUI to a socket nobody is listening on.
+        if (cookie_written) ipc::DeleteCookie(GetDataDir());
+#endif
     }
 
     Shutdown(nullptr);
@@ -347,6 +430,12 @@ bool AppInit(int argc, char* argv[])
 extern void noui_connect();
 int main(int argc, char* argv[])
 {
+    // Before anything can create a file: debug.log, the read-write settings file
+    // and the block subdirectories are all created without an explicit mode, so
+    // without this they inherit a default desktop umask of 022 and land
+    // world-readable. Narrowing here rather than after the fact leaves no window.
+    util::SetOwnerOnlyUmask();
+
     // Reinit default timer to ensure it is zeroed out at the start of main.
     g_timer.InitTimer("default", false);
 

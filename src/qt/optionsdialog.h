@@ -1,6 +1,8 @@
 #ifndef BITCOIN_QT_OPTIONSDIALOG_H
 #define BITCOIN_QT_OPTIONSDIALOG_H
 
+#include "qvalidatedlineedit.h"
+
 #include <QDialog>
 
 namespace Ui {
@@ -8,7 +10,6 @@ class OptionsDialog;
 }
 class OptionsModel;
 class MonitoredDataMapper;
-class QValidatedLineEdit;
 
 /** Preferences dialog. */
 class OptionsDialog : public QDialog

@@ -7,6 +7,7 @@
 #ifndef BITCOIN_NODE_UI_INTERFACE_H
 #define BITCOIN_NODE_UI_INTERFACE_H
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -91,15 +92,6 @@ public:
     /** Update notification message box. */
     ADD_SIGNALS_DECL_WRAPPER(UpdateMessageBox, void, const std::string& version, const int& update_type, const std::string& message);
 
-    /** Ask the user whether they want to pay a fee or not. */
-    ADD_SIGNALS_DECL_WRAPPER(ThreadSafeAskFee, bool, int64_t nFeeRequired, const std::string& strCaption);
-
-	/** Ask the user a question */
-    ADD_SIGNALS_DECL_WRAPPER(ThreadSafeAskQuestion, bool, std::string caption, std::string body);
-
-    /** Handle a URL passed at the command line. */
-    ADD_SIGNALS_DECL_WRAPPER(ThreadSafeHandleURI, void, const std::string& strURI);
-
     /** Progress message during initialization. */
     ADD_SIGNALS_DECL_WRAPPER(InitMessage, void, const std::string &message);
 
@@ -133,6 +125,13 @@ public:
     /** Beacon changed */
     ADD_SIGNALS_DECL_WRAPPER(BeaconChanged, void);
 
+    /** PSGT pool changed (#2910): an entry was added (CT_NEW), replaced by a
+     * better revision (CT_UPDATED) or removed (CT_DELETED). The revision hash
+     * identifies the affected entry; consumers query the pool for details. **/
+    // reason is a PSGTRemovalReason (as int) on removal (CT_DELETED), or -1 for
+    // CT_NEW/CT_UPDATED. Kept as int so this header stays decoupled from the pool enum.
+    ADD_SIGNALS_DECL_WRAPPER(PSGTPoolChanged, void, const uint256& revision_hash, ChangeType status, int reason);
+
     /** New poll received **/
     ADD_SIGNALS_DECL_WRAPPER(NewPollReceived, void, int64_t poll_time);
 
@@ -141,6 +140,12 @@ public:
 
     /** Read-write settings file updated **/
     ADD_SIGNALS_DECL_WRAPPER(RwSettingsUpdated, void);
+
+    /** A mandatory (contract) sidestake entry was added, deleted, or reverted.
+     *  Payload-free refetch trigger for the GUI sidestake table (the mandatory
+     *  side already has block-height ordering). @note emitted with the sidestake
+     *  registry lock held; the only subscriber marshals to the GUI thread. */
+    ADD_SIGNALS_DECL_WRAPPER(MandatorySideStakeChanged, void);
 
     /**
      * New, updated or cancelled alert.
@@ -153,6 +158,23 @@ public:
      * @note called with lock cs_ConvergedScraperStatsCache held.
      */
     ADD_SIGNALS_DECL_WRAPPER(NotifyScraperEvent, void, const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message);
+
+    //! Snapshot of the most recent non-Log scraper event, so a UI that connects
+    //! after the event was emitted -- notably the -multiprocess GUI attaching to
+    //! an already-running node whose scraper already converged -- can initialize
+    //! its status icon to the current state instead of a stale default. Written
+    //! from the scraper thread inside NotifyScraperEvent, read from the GUI/IPC
+    //! thread through a single std::atomic -- no external locks. Returns false
+    //! (leaving the args untouched) when no non-Log event has been emitted since
+    //! node startup.
+    bool GetLastScraperEvent(int& event_type, int& status) const;
+
+private:
+    //! (event_type << 16) | (status & 0xFFFF) of the last non-Log scraper event,
+    //! or kNoScraperEvent when none has been emitted. scrapereventtypes and
+    //! ChangeType are small enums, so they pack losslessly into 32 bits.
+    static constexpr uint32_t kNoScraperEvent = 0xFFFFFFFFu;
+    std::atomic<uint32_t> m_last_scraper_event{kNoScraperEvent};
 };
 
 /** Show warning message **/

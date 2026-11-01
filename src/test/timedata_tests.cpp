@@ -1,0 +1,589 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include <netbase.h>
+#include <timedata.h>
+#include <util.h>
+
+#include <boost/test/unit_test.hpp>
+
+#include <algorithm>
+#include <cstdint>
+#include <deque>
+#include <limits>
+#include <optional>
+#include <random>
+#include <string>
+#include <vector>
+
+namespace {
+//! A distinct peer group per index. TimeOffsetVotes only compares group bytes,
+//! so these need not look like a real CNetAddr::GetGroup() result.
+TimeOffsetVotes::Group G(uint32_t i)
+{
+    return {1,
+            static_cast<unsigned char>(i >> 16),
+            static_cast<unsigned char>(i >> 8),
+            static_cast<unsigned char>(i)};
+}
+
+CNetAddr Addr(const std::string& ip)
+{
+    CNetAddr addr;
+    BOOST_REQUIRE(LookupHost(ip.c_str(), addr, false));
+    return addr;
+}
+
+//! The offset AddTimeData() stores for a median: 95% of it, truncated toward
+//! zero, worked out in integers so that it is the same number on every
+//! platform.
+//!
+//! This used to be static_cast<int64_t>(0.95 * median), the production
+//! expression copied. On 32-bit x86 the compiler folded this copy to 95 for a
+//! median of 100 at build time, while the production code worked it out at run
+//! time on the x87 unit and got 94 (StoreTimeOffset in util.cpp explains why).
+//! The check then compared two roundings of one expression instead of the rule.
+//! median * 19 / 20 states the rule a second way rather than copying the code
+//! under test.
+int64_t Weighted(int64_t median)
+{
+    return median * 19 / 20;
+}
+
+//! Starts and ends a test with no time votes and a zero offset, so a failed
+//! check cannot leave the process-wide offset set for later suites.
+struct TimeDataReset
+{
+    TimeDataReset() { ResetTimeDataForTesting(); }
+    ~TimeDataReset() { ResetTimeDataForTesting(); }
+};
+} // anonymous namespace
+
+BOOST_AUTO_TEST_SUITE(timedata_tests)
+
+BOOST_AUTO_TEST_CASE(own_clock_is_the_only_vote_initially)
+{
+    TimeOffsetVotes votes;
+
+    BOOST_CHECK_EQUAL(votes.Size(), 1U);
+    BOOST_CHECK(votes.Sorted() == std::vector<int64_t>{0});
+}
+
+BOOST_AUTO_TEST_CASE(median_needs_four_peer_groups)
+{
+    TimeOffsetVotes votes;
+
+    BOOST_CHECK(!votes.Add(1, G(1), 10));
+    BOOST_CHECK(!votes.Add(2, G(2), 20));
+    BOOST_CHECK(!votes.Add(3, G(3), 30));
+
+    // The fourth peer group makes five votes with the node's own 0:
+    // {0, 10, 20, 30, 40}.
+    const std::optional<int64_t> median = votes.Add(4, G(4), 40);
+
+    BOOST_REQUIRE(median);
+    BOOST_CHECK_EQUAL(*median, 20);
+}
+
+BOOST_AUTO_TEST_CASE(even_vote_count_still_produces_a_median)
+{
+    TimeOffsetVotes votes;
+
+    for (uint32_t i = 1; i <= 4; ++i) {
+        votes.Add(i, G(i), 10 * i);
+    }
+
+    // Six votes: {0, 10, 20, 30, 40, 50}.
+    const std::optional<int64_t> median = votes.Add(5, G(5), 50);
+
+    BOOST_REQUIRE(median);
+    BOOST_CHECK_EQUAL(*median, 25);
+}
+
+BOOST_AUTO_TEST_CASE(median_matches_the_old_filter_until_its_window_fills)
+{
+    // Before its 200-sample window filled, the old CMedianFilter-based code
+    // produced the same median whenever it updated (odd sizes). Check the
+    // arithmetic is identical at every size, odd and even, including the
+    // truncating average of the two middle values and negative offsets.
+    std::mt19937_64 rng(3402);
+    std::uniform_int_distribution<int64_t> offset(-480, 480);
+
+    TimeOffsetVotes votes;
+    CMedianFilter<int64_t> old_filter(200, 0);
+
+    for (uint32_t i = 0; i < TimeOffsetVotes::MAX_PEER_VOTES; ++i) {
+        const int64_t sample = offset(rng);
+        const std::optional<int64_t> median = votes.Add(i, G(i), sample);
+        old_filter.input(sample);
+
+        BOOST_CHECK_EQUAL(votes.Size(), static_cast<size_t>(old_filter.size()));
+
+        if (old_filter.size() >= 5) {
+            BOOST_REQUIRE(median);
+            BOOST_CHECK_EQUAL(*median, old_filter.median());
+        } else {
+            BOOST_CHECK(!median);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(extreme_votes_do_not_overflow_the_even_count_median)
+{
+    // Averaging the two middle votes of an even count must not overflow when
+    // both are extreme with the same sign. The old code never averaged in
+    // practice (it only updated at odd sizes).
+    const int64_t max = std::numeric_limits<int64_t>::max();
+    const int64_t min = std::numeric_limits<int64_t>::min();
+
+    TimeOffsetVotes high;
+    std::optional<int64_t> median;
+
+    for (uint32_t i = 1; i <= 5; ++i) {
+        median = high.Add(i, G(i), max);
+    }
+
+    // {0, max, max, max, max, max}: middles max and max.
+    BOOST_REQUIRE(median);
+    BOOST_CHECK_EQUAL(*median, max);
+
+    TimeOffsetVotes low;
+
+    for (uint32_t i = 1; i <= 5; ++i) {
+        median = low.Add(i, G(i), min);
+    }
+
+    // {min, min, min, min, min, 0}: middles min and min.
+    BOOST_REQUIRE(median);
+    BOOST_CHECK_EQUAL(*median, min);
+
+    TimeOffsetVotes mixed;
+
+    for (uint32_t i = 1; i <= 3; ++i) {
+        mixed.Add(i, G(i), min);
+    }
+
+    mixed.Add(4, G(4), max);
+    median = mixed.Add(5, G(5), max);
+
+    // {min, min, min, 0, max, max}: middles min and 0.
+    BOOST_REQUIRE(median);
+    BOOST_CHECK_EQUAL(*median, min / 2);
+}
+
+BOOST_AUTO_TEST_CASE(keeps_updating_as_outbound_peers_churn)
+{
+    // The old code stopped updating for good after 199 outbound samples. Here
+    // four honest peers are replaced, one at a time, by peers in new groups
+    // reporting +300, well past the old freeze point.
+    TimeOffsetVotes votes;
+    std::deque<uint32_t> live;
+
+    for (uint32_t i = 0; i < 4; ++i) {
+        votes.Add(i, G(i), 0);
+        live.push_back(i);
+    }
+
+    std::optional<int64_t> median;
+
+    for (uint32_t i = 0; i < 400; ++i) {
+        votes.Remove(live.front()); // the longest-connected peer disconnects
+        live.pop_front();
+
+        const uint32_t peer = 1000 + i;
+        median = votes.Add(peer, G(peer), i < 396 ? 0 : 300);
+        live.push_back(peer);
+        BOOST_REQUIRE(median);
+    }
+
+    // The four live votes are the last four peers, all +300: {0, 300 x 4}.
+    BOOST_CHECK_EQUAL(votes.Size(), 5U);
+    BOOST_CHECK_EQUAL(*median, 300);
+}
+
+BOOST_AUTO_TEST_CASE(a_disconnected_peer_leaves_nothing_behind)
+{
+    TimeOffsetVotes votes;
+
+    for (uint32_t i = 1; i <= 4; ++i) {
+        votes.Add(i, G(i), 0);
+    }
+
+    // A thousand peers, each in a new group, connect, vote -480 and disconnect.
+    // None of them displaces an honest vote.
+    for (uint32_t i = 0; i < 1000; ++i) {
+        const std::optional<int64_t> median = votes.Add(100 + i, G(100 + i), -480);
+        BOOST_REQUIRE(median);
+        BOOST_CHECK_EQUAL(*median, 0); // {-480, 0, 0, 0, 0}
+        votes.Remove(100 + i);
+    }
+
+    BOOST_CHECK(votes.Sorted() == (std::vector<int64_t>{0, 0, 0, 0, 0}));
+}
+
+BOOST_AUTO_TEST_CASE(moving_the_median_takes_a_simultaneous_majority)
+{
+    TimeOffsetVotes votes;
+
+    for (uint32_t i = 1; i <= 4; ++i) {
+        votes.Add(i, G(i), 0);
+    }
+
+    // Four live attacker votes against four honest ones and the node's own:
+    // {-480 x 4, 0 x 5}. Still the honest median.
+    std::optional<int64_t> median;
+
+    for (uint32_t i = 11; i <= 14; ++i) {
+        median = votes.Add(i, G(i), -480);
+    }
+
+    BOOST_REQUIRE(median);
+    BOOST_CHECK_EQUAL(*median, 0);
+
+    // A fifth ties them with the four honest votes and the node's own, and a
+    // tie already moves the median halfway: {-480 x 5, 0 x 5}.
+    median = votes.Add(15, G(15), -480);
+
+    BOOST_REQUIRE(median);
+    BOOST_CHECK_EQUAL(*median, -240);
+
+    // A sixth, simultaneous, attacker vote takes the majority.
+    median = votes.Add(16, G(16), -480);
+
+    BOOST_REQUIRE(median);
+    BOOST_CHECK_EQUAL(*median, -480);
+}
+
+BOOST_AUTO_TEST_CASE(a_group_counts_once_with_its_latest_live_vote)
+{
+    TimeOffsetVotes votes;
+
+    for (uint32_t i = 1; i <= 4; ++i) {
+        votes.Add(i, G(i), 0);
+    }
+
+    // Many connected peers in one group (one IPv4 /16 or IPv6 /32) count once.
+    for (uint32_t i = 0; i < 100; ++i) {
+        votes.Add(100 + i, G(99), 400);
+    }
+
+    BOOST_CHECK_EQUAL(votes.Size(), 6U);
+
+    // The group's most recently cast vote is the one counted, and when that
+    // peer goes, the group falls back to its other live votes.
+    votes.Add(500, G(99), -200);
+    BOOST_CHECK(votes.Sorted() == (std::vector<int64_t>{-200, 0, 0, 0, 0, 0}));
+
+    votes.Remove(500);
+    BOOST_CHECK(votes.Sorted() == (std::vector<int64_t>{0, 0, 0, 0, 0, 400}));
+}
+
+BOOST_AUTO_TEST_CASE(a_new_sample_replaces_the_peers_earlier_vote)
+{
+    TimeOffsetVotes votes;
+
+    votes.Add(1, G(1), 100);
+    votes.Add(1, G(1), -100);
+
+    BOOST_CHECK(votes.Sorted() == (std::vector<int64_t>{-100, 0}));
+}
+
+BOOST_AUTO_TEST_CASE(remove_reports_whether_a_vote_was_withdrawn)
+{
+    TimeOffsetVotes votes;
+
+    votes.Add(1, G(1), 100);
+
+    BOOST_CHECK(!votes.Remove(2));
+    BOOST_CHECK(votes.Sorted() == (std::vector<int64_t>{0, 100}));
+
+    BOOST_CHECK(votes.Remove(1));
+    BOOST_CHECK(!votes.Remove(1));
+    BOOST_CHECK(votes.Sorted() == std::vector<int64_t>{0});
+}
+
+BOOST_AUTO_TEST_CASE(the_memory_bound_drops_the_vote_cast_longest_ago)
+{
+    TimeOffsetVotes votes;
+
+    votes.Add(0, G(0), 55);  // cast first
+    votes.Add(1, G(1), -77); // cast second
+
+    for (uint32_t i = 2; i < TimeOffsetVotes::MAX_PEER_VOTES; ++i) {
+        votes.Add(i, G(i), 0);
+    }
+
+    // Recasting a stored vote must not drop anything, even at the bound. It
+    // makes peer 1's the vote cast longest ago.
+    votes.Add(0, G(0), 55);
+
+    std::vector<int64_t> sorted = votes.Sorted();
+
+    BOOST_CHECK_EQUAL(votes.Size(), 200U);
+    BOOST_CHECK_EQUAL(std::count(sorted.begin(), sorted.end(), -77), 1);
+
+    // A new peer past the bound drops peer 1's vote, not the recast peer 0's.
+    votes.Add(5000, G(5000), 0);
+    sorted = votes.Sorted();
+
+    BOOST_CHECK_EQUAL(votes.Size(), 200U);
+    BOOST_CHECK_EQUAL(std::count(sorted.begin(), sorted.end(), 55), 1);
+    BOOST_CHECK_EQUAL(std::count(sorted.begin(), sorted.end(), -77), 0);
+}
+
+BOOST_AUTO_TEST_CASE(within_time_drift_is_exact_across_the_int64_range)
+{
+    const int64_t max = std::numeric_limits<int64_t>::max();
+    const int64_t min = std::numeric_limits<int64_t>::min();
+    const int64_t now = 1790429664;
+    const uint64_t limit = 8 * 60;
+
+    // The band edges, both ways round.
+    BOOST_CHECK(WithinTimeDrift(now, now, limit));
+    BOOST_CHECK(WithinTimeDrift(now + 480, now, limit));
+    BOOST_CHECK(WithinTimeDrift(now - 480, now, limit));
+    BOOST_CHECK(!WithinTimeDrift(now + 481, now, limit));
+    BOOST_CHECK(!WithinTimeDrift(now - 481, now, limit));
+    BOOST_CHECK(WithinTimeDrift(now, now - 480, limit));
+    BOOST_CHECK(!WithinTimeDrift(now, now + 481, limit));
+
+    // A peer time that made the old std::abs(now - nTime) negative.
+    BOOST_CHECK(!WithinTimeDrift(min + now, now, limit));
+
+    // A clock mocked near either end, where now +/- 480 would overflow.
+    BOOST_CHECK(WithinTimeDrift(max, max - 100, limit));
+    BOOST_CHECK(!WithinTimeDrift(max, max - 481, limit));
+    BOOST_CHECK(WithinTimeDrift(min, min + 480, limit));
+    BOOST_CHECK(!WithinTimeDrift(min + 481, min, limit));
+
+    // The whole range apart: 2^64 - 1.
+    BOOST_CHECK(!WithinTimeDrift(min, max, limit));
+    BOOST_CHECK(!WithinTimeDrift(max, min, limit));
+    BOOST_CHECK(WithinTimeDrift(min, max, std::numeric_limits<uint64_t>::max()));
+}
+
+BOOST_AUTO_TEST_CASE(add_time_data_sets_the_weighted_offset)
+{
+    // Through the real entry points: group keying from CNetAddr, the odd and
+    // even vote counts, the 0.95 weight, and vote withdrawal.
+    const TimeDataReset reset;
+
+    AddTimeData(1, Addr("1.1.0.1"), 100);
+    AddTimeData(2, Addr("2.2.0.1"), 100);
+    AddTimeData(3, Addr("3.3.0.1"), 200);
+    BOOST_CHECK_EQUAL(GetTimeOffset(), 0); // three peer groups: no median yet
+
+    AddTimeData(4, Addr("4.4.0.1"), 200); // {0, 100, 100, 200, 200}
+    BOOST_CHECK_EQUAL(GetTimeOffset(), Weighted(100));
+
+    AddTimeData(5, Addr("5.5.0.1"), 200); // {0, 100, 100, 200, 200, 200}: even count
+    BOOST_CHECK_EQUAL(GetTimeOffset(), Weighted(150));
+
+    // Three more peers inside 1.1.0.0/16 count once, with the latest vote:
+    // {-400, 0, 100, 200, 200, 200}. Keyed per address instead, the nine
+    // votes {-400 x 3, 0, 100 x 2, 200 x 3} would give a median of 100.
+    AddTimeData(6, Addr("1.1.7.1"), -400);
+    AddTimeData(7, Addr("1.1.8.1"), -400);
+    AddTimeData(8, Addr("1.1.9.1"), -400);
+    BOOST_CHECK_EQUAL(GetTimeOffset(), Weighted(150));
+
+    // Peers 5 and 8 disconnect, and the offset follows at once. 1.1/16 still
+    // counts, now with peer 7's -400: {-400, 0, 100, 200, 200}.
+    RemoveTimeData(5);
+    RemoveTimeData(8);
+    BOOST_CHECK_EQUAL(GetTimeOffset(), Weighted(100));
+
+    // The next sample is counted over live votes only:
+    // {-400, 0, 0, 100, 200, 200}. Had the withdrawn votes stayed, the seven
+    // votes {-400, 0, 0, 100, 200, 200, 200} would give a median of 100.
+    AddTimeData(9, Addr("9.9.0.1"), 0);
+    BOOST_CHECK_EQUAL(GetTimeOffset(), Weighted(50));
+}
+
+BOOST_AUTO_TEST_CASE(the_offset_is_95_percent_of_the_median_truncated_toward_zero)
+{
+    // The exact offset where 95% of the median is a whole number and where it
+    // is not, on both sides of zero, at the 70-minute limit, and at the int64
+    // extremes. A median of 100 is the one 32-bit x86 builds used to get wrong
+    // (94; StoreTimeOffset in util.cpp explains why). The expected offsets are
+    // written out rather than worked out, so this shares no arithmetic with the
+    // code under test.
+    const int64_t max = std::numeric_limits<int64_t>::max();
+    const int64_t min = std::numeric_limits<int64_t>::min();
+
+    const std::vector<std::pair<int64_t, int64_t>> cases{
+        {100, 95}, {-100, -95}, {99, 94}, {-99, -94}, {150, 142}, {-150, -142},
+        {4421, 4199}, {-4421, -4199}, {4422, 0}, {-4422, 0}, {max, 0}, {min, 0},
+    };
+
+    for (const auto& [median, offset] : cases) {
+        const TimeDataReset reset;
+
+        // Four peer groups vote the same value. With this node's own 0, the
+        // median of the five votes is that value.
+        for (int i = 1; i <= 4; ++i) {
+            AddTimeData(i, Addr(strprintf("%d.%d.0.1", i, i)), median);
+        }
+
+        // A quorum formed, so an offset of 0 below is the 70-minute limit.
+        BOOST_CHECK_EQUAL(GetPeerTimeMedian(), median);
+        BOOST_CHECK_MESSAGE(GetTimeOffset() == offset,
+                            "median " << median << " gave an offset of " << GetTimeOffset()
+                                      << ", not " << offset);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(a_departed_vote_leaves_no_trace_in_the_offset)
+{
+    const TimeDataReset reset;
+
+    AddTimeData(1, Addr("1.1.0.1"), -100);
+    AddTimeData(2, Addr("2.2.0.1"), -100);
+    AddTimeData(3, Addr("3.3.0.1"), 100);
+    AddTimeData(4, Addr("4.4.0.1"), 100); // {-100, -100, 0, 100, 100}
+    BOOST_CHECK_EQUAL(GetTimeOffset(), 0);
+
+    // A peer connects, votes +480 and disconnects:
+    // {-100, -100, 0, 100, 100, 480} while it is connected.
+    AddTimeData(5, Addr("5.5.0.1"), 480);
+    BOOST_CHECK_EQUAL(GetTimeOffset(), Weighted(50));
+
+    RemoveTimeData(5);
+    BOOST_CHECK_EQUAL(GetTimeOffset(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(without_a_quorum_the_offset_falls_back_to_zero)
+{
+    const TimeDataReset reset;
+
+    AddTimeData(1, Addr("1.1.0.1"), 100);
+    AddTimeData(2, Addr("2.2.0.1"), 100);
+    AddTimeData(3, Addr("3.3.0.1"), 200);
+    AddTimeData(4, Addr("4.4.0.1"), 200); // {0, 100, 100, 200, 200}
+    BOOST_CHECK_EQUAL(GetTimeOffset(), Weighted(100));
+
+    // Down to three live peer groups: no quorum, so the node's own clock.
+    RemoveTimeData(4);
+    BOOST_CHECK_EQUAL(GetTimeOffset(), 0);
+
+    // A fourth group again restores the median: {0, 100, 100, 200, 300}.
+    AddTimeData(5, Addr("5.5.0.1"), 300);
+    BOOST_CHECK_EQUAL(GetTimeOffset(), Weighted(100));
+}
+
+BOOST_AUTO_TEST_CASE(clock_warning_follows_the_quorum_and_the_peer_median)
+{
+    const TimeDataReset reset;
+
+    // No quorum: the warning applies only to a staking node, which is then using its own clock.
+    BOOST_CHECK(!HasTimeQuorum());
+    BOOST_CHECK_EQUAL(GetPeerTimeMedian(), 0);
+    BOOST_CHECK(!GetClockWarning(/* staking */ true).empty());
+    BOOST_CHECK(GetClockWarning(/* staking */ false).empty());
+
+    // Four peer groups make a quorum with the node's own 0. A median of 24 s is within the threshold, 25 s is not,
+    // in either direction, staking or not.
+    const auto vote_all = [](int64_t offset) {
+        for (int i = 1; i <= 4; ++i) {
+            AddTimeData(i, Addr(strprintf("%d.%d.0.1", i, i)), offset);
+        }
+    };
+
+    vote_all(24);
+    BOOST_CHECK(HasTimeQuorum());
+    BOOST_CHECK_EQUAL(GetPeerTimeMedian(), 24);
+    BOOST_CHECK(GetClockWarning(true).empty());
+    BOOST_CHECK(GetClockWarning(false).empty());
+
+    vote_all(25);
+    BOOST_CHECK_EQUAL(GetPeerTimeMedian(), 25);
+    BOOST_CHECK(!GetClockWarning(true).empty());
+    BOOST_CHECK(!GetClockWarning(false).empty());
+
+    vote_all(-25);
+    BOOST_CHECK_EQUAL(GetPeerTimeMedian(), -25);
+    BOOST_CHECK(!GetClockWarning(false).empty());
+
+    // Losing the quorum clears the median.
+    RemoveTimeData(4);
+    BOOST_CHECK(!HasTimeQuorum());
+    BOOST_CHECK_EQUAL(GetPeerTimeMedian(), 0);
+    BOOST_CHECK(GetClockWarning(false).empty());
+}
+
+BOOST_AUTO_TEST_CASE(clock_warning_follows_the_staking_state_the_miner_reports)
+{
+    const TimeDataReset reset;
+
+    // No quorum: the warning shows only while the miner reports that it is trying to stake.
+    SetClockWarningStaking(true);
+    BOOST_CHECK(!GetCurrentClockWarning().empty());
+    SetClockWarningStaking(false);
+    BOOST_CHECK(GetCurrentClockWarning().empty());
+}
+
+BOOST_AUTO_TEST_CASE(clock_warning_changes_are_logged_once_each)
+{
+    const TimeDataReset reset;
+
+    std::vector<std::string> lines;
+    const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) {
+        if (s.find("Clock warning") != std::string::npos) lines.push_back(s);
+    });
+
+    SetClockWarningStaking(true);   // no quorum while staking
+    SetClockWarningStaking(true);   // unchanged: not logged again
+    BOOST_REQUIRE_EQUAL(lines.size(), 1U);
+    BOOST_CHECK(lines[0].find("staking without a network time quorum") != std::string::npos);
+
+    for (int i = 1; i <= 4; ++i) {
+        AddTimeData(i, Addr(strprintf("%d.%d.0.1", i, i)), 30);   // quorum, median 30 s
+    }
+    BOOST_REQUIRE_EQUAL(lines.size(), 2U);
+    BOOST_CHECK(lines[1].find("+30") != std::string::npos);
+
+    for (int i = 1; i <= 4; ++i) {
+        AddTimeData(i, Addr(strprintf("%d.%d.0.1", i, i)), 10);   // median 10 s: cleared
+    }
+    BOOST_REQUIRE_EQUAL(lines.size(), 3U);
+    BOOST_CHECK(lines[2].find("cleared") != std::string::npos);
+
+    LogInstance().DeleteCallback(callback);
+}
+
+BOOST_AUTO_TEST_CASE(a_rejected_offset_raises_the_clock_warning_not_the_old_one)
+{
+    const TimeDataReset reset;
+    const std::string saved = strMiscWarning;
+    strMiscWarning.clear();
+
+    // Every peer two hours ahead: the 70-minute check rejects the offset. The clock warning reports it; the old
+    // one-shot message box warning is gone.
+    for (int i = 1; i <= 4; ++i) {
+        AddTimeData(i, Addr(strprintf("%d.%d.0.1", i, i)), 2 * 60 * 60);
+    }
+    BOOST_CHECK_EQUAL(GetTimeOffset(), 0);
+    BOOST_CHECK(strMiscWarning.empty());
+    BOOST_CHECK(!GetClockWarning(/* staking */ false).empty());
+
+    strMiscWarning = saved;
+}
+
+BOOST_AUTO_TEST_CASE(block_lead_counters_bucket_by_threshold)
+{
+    // The counters are process-wide and cumulative, so compare deltas.
+    const BlockLeadCounts before = GetBlockLeadCounts();
+    for (const int64_t lead : {-5, 16, 17, 33, 48, 49, 128, 129}) {
+        RecordBlockLead(lead);
+    }
+    const BlockLeadCounts after = GetBlockLeadCounts();
+
+    BOOST_CHECK_EQUAL(after.seen - before.seen, 8U);
+    BOOST_CHECK_EQUAL(after.over16 - before.over16, 6U);   // 17, 33, 48, 49, 128, 129
+    BOOST_CHECK_EQUAL(after.over32 - before.over32, 5U);   // 33, 48, 49, 128, 129
+    BOOST_CHECK_EQUAL(after.over48 - before.over48, 3U);   // 49, 128, 129
+    BOOST_CHECK_EQUAL(after.over128 - before.over128, 1U); // 129
+}
+
+BOOST_AUTO_TEST_SUITE_END()

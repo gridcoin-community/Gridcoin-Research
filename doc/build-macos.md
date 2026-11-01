@@ -32,7 +32,46 @@ Options:
   --help, -h          Show this help message.
 ```
 
-**macOS 14 (Sonoma) or newer is required.**
+**The released app requires macOS 15 (Sequoia) or newer on Apple Silicon, and
+macOS 14 (Sonoma) or newer on Intel.**
+
+Those are the floors the dependency stacks impose rather than a preference.
+Homebrew sets no deployment target when it builds a bottle, so a bottle's
+minimum is simply whatever macOS it was compiled on, and the bundle's real floor
+is the highest minimum among every library it ships -- not whatever
+`LSMinimumSystemVersion` claims. Two things raise that floor without saying so:
+a formula that publishes a bottle for a newer macOS (Homebrew prefers the
+newest), and a formula with no bottle for your architecture at all, which is
+built from source against the machine you are on. Qt 6.10 and later do not
+support anything below macOS 13 in any case.
+
+The ARM job runs on a macOS 15 runner, so its bottles carry a 15.0 minimum and
+the Apple Silicon app declares 15.0. It used to run on macOS 14, but Homebrew has
+moved Apple Silicon on macOS 14 to Tier 3 and no longer builds bottles for it
+when a formula is revised. The Intel job keeps the 14.0 floor: it runs on
+macOS 15, so every formula that Homebrew would raise above 14.0 by either route
+is pinned to a keg built on a native Intel macOS 14 machine and mirrored to S3 --
+see `contrib/devtools/macos-pinned-kegs.txt`, which records why each one is
+there. Both jobs then verify the finished DMG: the packaging step measures the
+`LC_BUILD_VERSION` minimum of every Mach-O in the bundle and fails if any of them
+needs a newer macOS than the version the bundle declares.
+
+The released binaries declare the floor explicitly: CI passes
+`-DCMAKE_OSX_DEPLOYMENT_TARGET` (see `MACOS_DEPLOYMENT_TARGET` in
+`.github/workflows/cmake_production.yml`), and the app bundle substitutes it into
+`LSMinimumSystemVersion`. `CMakeLists.txt` carries the Intel value, 14.0, as the
+project default for builds that do not pass one; pass
+`-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0` for an Apple Silicon bundle that matches the
+release.
+
+The default is never newer than the Mac doing the build. On a Mac older than
+macOS 14 it is that Mac's own version instead (12.0 on Monterey), so the app
+launches on the machine that built it; configure warns, because that is below
+the floor any release supports. A `MACOSX_DEPLOYMENT_TARGET` set in the
+environment replaces the default and is used as given, with no cap and no
+warning; `-DCMAKE_OSX_DEPLOYMENT_TARGET` overrides both. The target is stored in
+the build directory's CMake cache and kept when that directory is reconfigured,
+so after upgrading macOS, configure a fresh build directory or pass `-D`.
 
 If you use the build helper script above:
 
@@ -49,7 +88,9 @@ If you use the build helper script above:
 
 ### Prerequisites
 
-1. macOS 14 (Sonoma) or newer is required.
+1. macOS 14 (Sonoma) or newer is required to build. On Apple Silicon, macOS 14 is
+   a Homebrew Tier 3 configuration, so expect some formulae to build from source
+   there.
 2. Xcode Command Line Tools: Install these by running the following in your terminal:
 
 ```
@@ -59,7 +100,7 @@ xcode-select --install
 3. Homebrew: The standard package manager for macOS (see [https://brew.sh](https://brew.sh)). If you don't have it, install it by running the following in your terminal:
 
 ```
-/bin/bash -c "$(curl -fsSL [https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh](https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh))"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
 ### 1. Install Dependencies
@@ -70,17 +111,38 @@ Open your terminal and run:
 
 ```
 brew update
-brew install qt boost openssl libevent miniupnpc qrencode libzip ccache cmake
+brew install qtbase qttools qtsvg qttranslations qtdeclarative boost openssl libevent miniupnpc qrencode ccache cmake
 ```
 
-Note: Homebrew installs Qt6 by default when you request qt.
+Then pass the brew prefix when you configure (e.g.
+`-DCMAKE_PREFIX_PATH=$(brew --prefix)`) so CMake sees the aggregate linked Qt
+view. With the Qt formulae split like this, qtbase's own `Qt6Config` cannot
+resolve the Svg and LinguistTools components, which live in the qtsvg and
+qttools kegs.
+
+Note the Qt SUBSET above rather than the `qt` meta-formula, which is what most
+Qt build instructions tell you to install. `qt` depends on qtwebengine, which
+Gridcoin does not use and which has no bottle on the configurations Homebrew has
+wound down to Tier 3 -- every x86_64 Mac, and Apple Silicon on macOS 14. There,
+`brew install qt` silently starts building qtwebengine from source: hours of
+compilation that, on macOS 14, then fails outright. Requesting the subset avoids
+pulling it in at all. On Apple Silicon running macOS 15 or newer, `brew install
+qt` does still work if you prefer it.
+
+On Intel macOS the Qt formulae and `openssl@3` have no bottle at any tag, so
+those will source-build and take hours. CI does not pay that cost: it restores
+prebuilt kegs at pinned versions from the project's S3 mirror, via
+`contrib/devtools/macos-restore-pinned-kegs.sh` and
+`contrib/devtools/macos-pinned-kegs.txt`. You can use the same script locally on
+an Intel Mac, provided your Homebrew prefix is `/usr/local` -- the kegs carry
+absolute paths.
 
 ### 2. Get the Source Code
 
 Clone the repository and enter the directory (substitute the desired branch if not master):
 
 ```
-git clone [https://github.com/gridcoin-community/Gridcoin-Research.git](https://github.com/gridcoin-community/Gridcoin-Research.git)
+git clone https://github.com/gridcoin-community/Gridcoin-Research.git
 cd Gridcoin-Research
 git checkout master
 ```
@@ -91,9 +153,11 @@ We need to tell CMake where Homebrew installed Qt and OpenSSL. We do this dynami
 Create a build directory and configure the project by running the following in the terminal:
 
 ```
-# Set paths for Homebrew libraries
-QT6_PATH=$(brew --prefix qt)
-OPENSSL_ROOT=$(brew --prefix openssl)
+# Set paths for Homebrew libraries. QT6_PATH is the brew prefix itself, not
+# `brew --prefix qt`: the Qt subset installed above leaves no `qt` keg to point
+# at, and the prefix is what exposes the aggregate linked lib/cmake view.
+QT6_PATH=$(brew --prefix)
+OPENSSL_ROOT=$(brew --prefix openssl@3)
 
 # Configure CMake
 cmake -B build \
@@ -101,7 +165,6 @@ cmake -B build \
   -DENABLE_GUI=ON \
   -DENABLE_QRENCODE=ON \
   -DENABLE_UPNP=ON \
-  -DDEFAULT_UPNP=ON \
   -DENABLE_TESTS=ON \
   -DUSE_QT6=ON \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo \
@@ -136,7 +199,7 @@ ctest --test-dir build_macos --output-on-failure
 You can run the application directly from the build folder:
 
 ```
-./build_macos/src/qt/gridcoinresearch
+./build_macos/bin/gridcoinresearch.app/Contents/MacOS/gridcoinresearch
 ```
 
 ### 7. Create the DMG Installer (Optional)

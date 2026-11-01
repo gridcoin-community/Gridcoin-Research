@@ -4,37 +4,42 @@
 
 #include "node/orphan_blocks.h"
 
-#include "main.h"
 #include "random.h"
 #include "gridcoin/staking/spam.h"
 #include "util.h"
 
-extern GRC::SeenStakes g_seen_stakes;
+OrphanBlockManager g_orphan_blocks GUARDED_BY(cs_main);
 
-OrphanBlockManager g_orphan_blocks;
-
-bool OrphanBlockManager::Add(const uint256& hash, const CBlock& block, int64_t now)
+bool OrphanBlockManager::Add(const uint256& hash, const CBlock& block, int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Reject duplicates.
     if (m_orphans.count(hash)) {
         return false;
     }
 
-    // Expire stale orphans first, then evict randomly if still full.
+    const size_t bytes = ::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION);
+
+    // Expire stale orphans first, then evict randomly if still full -- on
+    // either bound. Guarded on emptiness rather than on the counters alone: a
+    // single block larger than the whole budget would otherwise spin here
+    // evicting nothing.
     EraseExpired(now);
 
-    while (m_orphans.size() >= MAX_ORPHAN_BLOCKS) {
+    while (!m_orphans.empty()
+           && (m_orphans.size() >= MAX_ORPHAN_BLOCKS || m_bytes + bytes > MAX_ORPHAN_BYTES)) {
         EvictRandom();
     }
 
     OrphanEntry entry;
     entry.block = std::make_unique<CBlock>(block);
     entry.time_received = now;
+    entry.bytes = bytes;
 
     const uint256 prev_hash = block.hashPrevBlock;
 
     m_orphans.emplace(hash, std::move(entry));
     m_by_prev.emplace(prev_hash, hash);
+    m_bytes += bytes;
 
     LogPrint(BCLog::LogFlags::VERBOSE, "OrphanBlockManager: added orphan %s (prev=%s, map size %u)",
              hash.ToString(), prev_hash.ToString(), m_orphans.size());
@@ -44,7 +49,7 @@ bool OrphanBlockManager::Add(const uint256& hash, const CBlock& block, int64_t n
 
 size_t OrphanBlockManager::ProcessQueue(
     const uint256& accepted_hash,
-    std::function<bool(CBlock&)> accept_fn)
+    std::function<bool(CBlock&)> accept_fn) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     std::vector<uint256> work_queue;
     work_queue.push_back(accepted_hash);
@@ -89,22 +94,22 @@ size_t OrphanBlockManager::ProcessQueue(
     return accepted_count;
 }
 
-const CBlock* OrphanBlockManager::GetRootBlock(const uint256& hash) const
+const CBlock* OrphanBlockManager::GetRootBlock(const uint256& hash) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return FindRootBlock(hash);
 }
 
-bool OrphanBlockManager::Contains(const uint256& hash) const
+bool OrphanBlockManager::Contains(const uint256& hash) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return m_orphans.count(hash) > 0;
 }
 
-bool OrphanBlockManager::HasChildrenOf(const uint256& prev_hash) const
+bool OrphanBlockManager::HasChildrenOf(const uint256& prev_hash) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return m_by_prev.count(prev_hash) > 0;
 }
 
-size_t OrphanBlockManager::EraseExpired(int64_t now)
+size_t OrphanBlockManager::EraseExpired(int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     size_t count = 0;
 
@@ -138,12 +143,17 @@ size_t OrphanBlockManager::EraseExpired(int64_t now)
     return count;
 }
 
-size_t OrphanBlockManager::Size() const
+size_t OrphanBlockManager::Size() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return m_orphans.size();
 }
 
-void OrphanBlockManager::Clear()
+size_t OrphanBlockManager::Bytes() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    return m_bytes;
+}
+
+void OrphanBlockManager::Clear() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     for (auto& [hash, entry] : m_orphans) {
         if (entry.block->IsProofOfStake()) {
@@ -153,6 +163,7 @@ void OrphanBlockManager::Clear()
 
     m_orphans.clear();
     m_by_prev.clear();
+    m_bytes = 0;
 }
 
 std::unique_ptr<CBlock> OrphanBlockManager::EraseInternal(const uint256& hash)
@@ -164,6 +175,9 @@ std::unique_ptr<CBlock> OrphanBlockManager::EraseInternal(const uint256& hash)
 
     const uint256 prev_hash = it->second.block->hashPrevBlock;
     std::unique_ptr<CBlock> block = std::move(it->second.block);
+
+    // Subtract what was added, not a fresh measurement of the block.
+    m_bytes -= it->second.bytes;
 
     m_orphans.erase(it);
 
@@ -179,7 +193,7 @@ std::unique_ptr<CBlock> OrphanBlockManager::EraseInternal(const uint256& hash)
     return block;
 }
 
-void OrphanBlockManager::EvictRandom()
+void OrphanBlockManager::EvictRandom() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (m_orphans.empty()) {
         return;

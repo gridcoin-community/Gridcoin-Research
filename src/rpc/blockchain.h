@@ -5,7 +5,6 @@
 #ifndef BITCOIN_RPC_BLOCKCHAIN_H
 #define BITCOIN_RPC_BLOCKCHAIN_H
 
-#include "main.h"
 #include "server.h"
 #include "protocol.h"
 #include "init.h" // for pwalletMain
@@ -26,7 +25,7 @@
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
 #include "policy/fees.h"
-#include "util.h"
+#include <util.h>
 
 #include <stdexcept>
 
@@ -42,7 +41,7 @@ class MockBlockIndex : CDiskBlockIndex
     };
 
 public:
-    static CBlockIndex* InsertBlockIndex(const uint256& hash)
+    static CBlockIndex* InsertBlockIndex(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (hash.IsNull())
             return nullptr;

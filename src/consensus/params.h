@@ -38,6 +38,24 @@ struct Params {
     int BlockV13Height;
     /** Block height at which v14 blocks are created (CLTV + CSV + BIP68) */
     int BlockV14Height;
+    /** Block height at which v15 blocks are created. Default
+      * std::numeric_limits<int>::max() means the v15 hard-fork machinery
+      * (including on-chain pool registration, issue #1783) is inert until a
+      * follow-up release pins the activation height by maintainer/community
+      * decision. See doc/consensus.md.
+      */
+    int BlockV15Height;
+    /** Retention window (in blocks) after which a PENDING pool registration
+      * or a POOL_APPROVE OPEN pre-authorization is treated as expired for
+      * query and takeover-defense purposes. Pure query-time check, no state
+      * mutation at the expiration boundary — reorg-safe by construction.
+      * 28800 blocks is ~30 days at mainnet ~90s spacing. Consensus-affecting:
+      * nodes with differing values will disagree on POOL_REGISTER admission
+      * across expiration boundaries and fork. Override via the hidden
+      * -pendingpoolretention arg (isolated-testnet / regtest only — see
+      * init.cpp). See doc/consensus.md §11.
+      */
+    int PendingPoolRetention;
     /** Grace period in blocks after BlockV14Height before peers on the old
       * protocol version are disconnected. Network-specific to allow testnet
       * a longer window when the fork has already passed before deployment.
@@ -47,10 +65,51 @@ struct Params {
     int PollV3Height;
     /** Block height at which project v2 contracts are allowed */
     int ProjectV2Height;
+    /** Block height at which poll multi-address eligibility claims are required */
+    int PollMultiAddressHeight;
     /** Block height at which project v4 contracts are allowed */
     int ProjectV4Height;
     /** Height at which the benefit of the doubt logic is enabled for autogreylist evaluation */
     int AutoGreylistAuditHeight;
+    /** Height at which Whitelist::Snapshot deep-copies project entries before applying the
+      * auto-greylist overlay. Set to std::numeric_limits<int>::max() on main/testnet until
+      * activation is scheduled; overridable via -autogreylistdeepcopyheight for testnet
+      * rollout. */
+    int AutoGreylistDeepCopyHeight;
+    /** Height at which the scraper stops emitting a (spurious zero) total-credit entry for a project
+      * whose user-statistics export returned no usable records this cycle (the "no_records" condition).
+      * Before this height the legacy behavior is preserved (a no_records project still gets a zero entry
+      * in ProjectsAllCpidTotalCredits) so historical superblocks remain bit-identical; at/after it the
+      * entry is omitted, so the auto-greylist baseline records nullopt (benefit-of-doubt) instead of a
+      * hard zero that collapses WAS. Set to std::numeric_limits<int>::max() on main/testnet until
+      * activation is scheduled; overridable via -autogreylisttotalcreditfixheight for testnet rollout. */
+    int AutoGreylistTotalCreditFixHeight;
+    /**
+      * @brief Single activation height for the remaining AutoGreylist correctness batch. Covers
+      * (a) separation of the pending (candidate/tip-anchored) greylist state from the authoritative
+      * (committed-superblock) state, (b) treating a chain-resident zero project total credit as
+      * missing data rather than a real observation, and (c) the walker corrections that follow from
+      * (a). Batched behind ONE height deliberately: these activate together in the release, and a
+      * partial combination is a configuration nobody tests. AutoGreylistTotalCreditFixHeight is a
+      * different thing -- a scraper-EMIT gate that stops new spurious zeros being written; zeros
+      * already recorded in the chain are permanent and keep corrupting the WAS window as they
+      * transit it (one landing on the j=40 endpoint inflates the 40-SB average and collapses WAS;
+      * one at j<=7 inflates the 7-SB average and can mask a genuine greylist).
+      *
+      * MUST NOT be set below AutoGreylistDeepCopyHeight. Before the deep-copy gate the Snapshot
+      * overlay writes through to the registry and only ever promotes to AUTO_GREYLISTED -- there is
+      * no demotion arm, and ReinitFromDisk is conditioned on the deep-copy crossing -- so a project
+      * spuriously greylisted before that gate cannot heal. Co-activation satisfies this: within
+      * Quorum::PushSuperblock, ReinitFromDisk runs before the AutoGreylist Refresh. By procedure the
+      * deep-copy height is never set above the others.
+      *
+      * TBD: set coincident with BlockV15Height when v15 is scheduled. std::numeric_limits<int>::max()
+      * on main/testnet until then; kept as its own field only so it can be driven independently
+      * during testing. Overridable via -autogreylistredesignheight for testnet rollout. */
+    int AutoGreylistRedesignHeight;
+    /**
+     *  @brief The height that message contracts are no longer allowed on the chain. */
+    int MessageContractDisableHeight;
     /**
       * @brief The default GRC paid for a constant block reward.
       *

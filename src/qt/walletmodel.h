@@ -2,22 +2,24 @@
 #define BITCOIN_QT_WALLETMODEL_H
 
 #include <QObject>
-#include <vector>
 #include <map>
+#include <thread>
+#include <optional>
+#include <string>
+#include <vector>
 
+#include "interfaces/wallet.h"
+#include "interfaces/wallet_coin_source.h"
+#include "interfaces/wallet_tx_source.h"
+#include "qt/notificationlifetime.h"
 #include "support/allocators/secure.h" /* for SecureString */
-#include "wallet/ismine.h"
 
 class OptionsModel;
 class AddressTableModel;
 class TransactionTableModel;
-class CWallet;
 class CKeyID;
 class CPubKey;
-class COutput;
 class COutPoint;
-class uint256;
-class CCoinControl;
 
 QT_BEGIN_NAMESPACE
 class QTimer;
@@ -39,7 +41,20 @@ class WalletModel : public QObject
     Q_OBJECT
 
 public:
-    explicit WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* parent = nullptr);
+    //! The query/command surface goes through the interfaces::Wallet
+    //! boundary (Phase 1c-i); the windowed tx-table store/event-queue
+    //! machinery is reached through the interfaces::WalletTxSource boundary
+    //! (Phase 1c-ii) and the windowed coin-control store through
+    //! interfaces::WalletCoinSource (#3183) — neither is owned by the model:
+    //! both are created node-side (interfaces::Init::makeWalletTxSource /
+    //! makeWalletCoinSource) and must outlive it. No raw CWallet* leg remains:
+    //! every core interaction crosses one of the three interface boundaries, so
+    //! the model carries nothing that would prevent it running in a separate
+    //! process from the wallet (Phase 2).
+    explicit WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource& tx_source,
+                         interfaces::WalletCoinSource& coin_source,
+                         OptionsModel* optionsModel,
+                         QObject* parent = nullptr);
     ~WalletModel();
 
     enum StatusCode // Returned by sendCoins
@@ -51,21 +66,47 @@ public:
         AmountWithFeeExceedsBalance,
         FeeExceedsSubtractedAmount,
         DuplicateAddress,
-        TransactionCreationFailed, // Error returned when wallet is still locked
+        //! Transaction could not be created and nothing was committed. Most
+        //! commonly the wallet is still locked; also covers subtract-fee
+        //! non-convergence node-side and the fee-confirmation attempt cap
+        //! in SendCoinsDialog.
+        TransactionCreationFailed,
         TransactionCommitFailed,
-        Aborted
+        //! The wallet is unlocked for staking only and will not build a spend.
+        WalletUnlockedForStakingOnly,
+        Aborted,
+        //! The required fee exceeds both the configured transaction fee and
+        //! the fee the caller has accepted so far; nothing was committed.
+        //! The caller prompts the user (with no core locks held — this
+        //! replaces the eliminated ThreadSafeAskFee modal) and re-invokes
+        //! sendCoins with acceptedFee set to the returned fee.
+        FeeConfirmationRequired
     };
 
     enum EncryptionStatus
     {
-        Unencrypted,  // !wallet->IsCrypted()
-        Locked,       // wallet->IsCrypted() && wallet->IsLocked()
-        Unlocked      // wallet->IsCrypted() && !wallet->IsLocked()
+        Unencrypted,             // !wallet->IsCrypted()
+        Locked,                  // crypted, scope Locked
+        Unlocked,                // crypted, scope Full
+        UnlockedForStakingOnly   // crypted, scope StakingOnly
     };
+
+    //! The interface boundary for wallet queries and commands. Dialogs that
+    //! need surface not wrapped by this model (e.g. the staking-only unlock
+    //! preference) reach it here rather than through core globals.
+    interfaces::Wallet& wallet() const { return m_wallet; }
 
     OptionsModel *getOptionsModel();
     AddressTableModel *getAddressTableModel();
     TransactionTableModel *getTransactionTableModel();
+
+    //! Last chain-tip height pushed to the GUI via the wallet event stream
+    //! (ChainTipChangedPayload), cached on the GUI thread. Lets the transaction
+    //! table derive live confirmation counts on read without reaching into core
+    //! state or taking cs_main — GUI-thread-owned, no lock, process-separation safe.
+    //! 0 until the first chain-tip event drains (callers must guard, as the count
+    //! derivation does); never blocks.
+    int getChainHeight() const { return cachedNumBlocks; }
 
     qint64 getBalance() const;
     qint64 getStake() const;
@@ -89,20 +130,35 @@ public:
         QString hex; // is filled with the transaction hash if status is "OK"
     };
 
-    // Send coins to a list of recipients
-    SendCoinsReturn sendCoins(const QList<SendCoinsRecipient>& recipients, const CCoinControl* coinControl = nullptr);
+    // Send coins to a list of recipients. acceptedFee is the largest fee the
+    // user has already confirmed (see StatusCode::FeeConfirmationRequired).
+    SendCoinsReturn sendCoins(const QList<SendCoinsRecipient>& recipients,
+                              const std::optional<interfaces::WalletCoinControl>& coinControl = std::nullopt,
+                              qint64 acceptedFee = 0);
 
     // Wallet encryption
     bool setWalletEncrypted(const SecureString& passphrase);
-    // Passphrase only needed when unlocking
-    bool setWalletLocked(bool locked, const SecureString& passPhrase=SecureString());
+    // Passphrase only needed when unlocking; stakingOnly restricts the
+    // unlock to staking (persisted node-side as the unlock preference).
+    bool setWalletLocked(bool locked, const SecureString& passPhrase=SecureString(),
+                         bool stakingOnly = false);
+    //! Widen an unlock in progress to full, for one operation. What an
+    //! elevation prompt calls instead of locking and unlocking again, so the
+    //! unlock's deadline and the relock armed for it survive it.
+    bool elevateWallet(const SecureString& passPhrase);
     bool changePassphrase(const SecureString& oldPass, const SecureString& newPass);
+
+    // Back up the wallet .dat / config file to dest (pass-throughs to the
+    // wallet interface, used by the GUI backup action). Return false on
+    // I/O failure.
+    bool backupWallet(const std::string& dest);
+    bool backupConfigFile(const std::string& dest);
 
     // RAI object for unlocking wallet, returned by requestUnlock()
     class UnlockContext
     {
     public:
-        UnlockContext(WalletModel *wallet, bool valid, bool relock);
+        UnlockContext(WalletModel *wallet, bool valid, bool relock, bool restore_staking_only = false);
         ~UnlockContext();
 
         bool isValid() const { return valid; }
@@ -117,6 +173,9 @@ public:
         WalletModel *wallet;
         bool valid;
         mutable bool relock; // mutable, as it can be set to false by copying
+        //! The wallet was unlocked for staking when this context elevated it,
+        //! so give that scope back on expiry instead of locking.
+        mutable bool restore_staking_only;
 
         void CopyFrom(const UnlockContext& rhs);
     };
@@ -125,15 +184,81 @@ public:
 
     bool getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
     bool getKeyFromPool(CPubKey& out_public_key, const std::string& label);
-    void getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs);
-    void listCoins(std::map<QString, std::vector<COutput> >& mapCoins) const;
-    bool isLockedCoin(uint256 hash, unsigned int n) const;
-    void lockCoin(COutPoint& output);
-    void unlockCoin(COutPoint& output);
-    void listLockedCoins(std::vector<COutPoint>& vOutpts);
+    //! Reserve a fresh receive key labeled \p label and return its encoded
+    //! address (empty on failure). The key stays node-side; used by the
+    //! researcher pool page so it needs no key.h / CPubKey.
+    QString getNewReceiveAddress(const QString& label);
+    std::vector<interfaces::WalletOutput> getOutputs(const std::vector<COutPoint>& vOutpoints) const;
+
+    //!
+    //! \brief The windowed transaction-table boundary (Phase 1c-ii). The GUI
+    //! sub-models drive per-view cursors, pull rows/detail, and drain the
+    //! producer→GUI event stream through this handle; the concrete node-side
+    //! implementation owns the store, its worker thread, and the producer
+    //! subscriptions to CWallet's transaction signals. The source is created
+    //! and owned outside this model (interfaces::Init::makeWalletTxSource) and
+    //! must outlive it.
+    //!
+    interfaces::WalletTxSource& txSource() { return m_tx_source; }
+
+    //! The windowed coin-control boundary (#3183). Same ownership contract as
+    //! txSource(): created node-side (interfaces::Init::makeWalletCoinSource)
+    //! and outlives this model.
+    interfaces::WalletCoinSource& coinSource() { return m_coin_source; }
+
+    //! Drain the coin-channel event queue and fan the batch out via
+    //! coinEventsDrained. THE single drain point for the coin channel:
+    //! drainEvents is destructive, and the consolidate-wizard flow can have
+    //! two live coin views — per-consumer drain timers would steal each
+    //! other's events. Driven by the periodic tick; also called synchronously
+    //! by CoinSelectionModel's fetch/sort paths.
+    void drainCoinEventQueue();
+
+    //! Run the coin store's initial wallet scan (reloadAndSnapshot) on a
+    //! one-shot load thread — never the GUI thread: the scan holds
+    //! cs_main + cs_wallet and is O(wallet). Idempotent unless \p force
+    //! (the bulk-resync path). Completion is drained and then announced via
+    //! coinSourceLoadFinished().
+    void ensureCoinSourceLoaded(bool force = false);
+
+    //! True once a coin-store scan has completed and been drained. A consumer
+    //! attaching to a warm store (a dialog reopen) is not loading and needs no
+    //! signal; one attaching to a cold store waits for
+    //! coinSourceLoadFinished(). Distinguishing the two is what keeps the
+    //! registration Reset — published against a not-yet-scanned store — from
+    //! being mistaken for the load completing.
+    bool isCoinSourceLoaded() const { return m_coin_load_complete; }
+
+    //! Kick an immediate (next-event-loop-turn) event-queue drain, so a
+    //! user-initiated cursor change (a windowed-view filter/sort) is reflected
+    //! without waiting for the periodic drain tick (windowed-model PR4-fix D).
+    void requestEventDrainSoon();
 
 private:
-    CWallet *wallet;
+    //! Interface boundary for the query/command surface (Phase 1c-i).
+    interfaces::Wallet& m_wallet;
+
+    //! The windowed transaction-table boundary (Phase 1c-ii). Not owned: the
+    //! source is created node-side (interfaces::Init::makeWalletTxSource) and
+    //! outlives this model; the model only drives it.
+    interfaces::WalletTxSource& m_tx_source;
+
+    //! The windowed coin-control boundary (#3183). Not owned (see coinSource()).
+    interfaces::WalletCoinSource& m_coin_source;
+
+    //! One-shot coin-store load thread (see ensureCoinSourceLoaded); joined in
+    //! the destructor.
+    std::thread m_coin_load_thread;
+    bool m_coin_load_started = false;
+    //! Set on the GUI thread when a completed scan has been drained (see
+    //! isCoinSourceLoaded).
+    bool m_coin_load_complete = false;
+    //! A scan is running: further requests must not join it on the GUI thread.
+    bool m_coin_load_in_flight = false;
+    //! A resync was requested mid-scan; run one more pass when it finishes.
+    bool m_coin_reload_pending = false;
+    //! Reentrancy guard for drainCoinEventQueue (mirrors m_draining).
+    bool m_coin_draining = false;
 
     // Wallet has an options model for wallet-specific options
     // (transaction fee, for example)
@@ -153,28 +278,86 @@ private:
 
     int64_t last_balance_update_time = 0;
 
-    QTimer *pollTimer;
+    QTimer *eventDrainTimer;
+
+    //! Coalescing guard for requestEventDrainSoon() (PR4-fix D): true while a
+    //! user-requested immediate drain is already scheduled, so a burst of requests
+    //! (e.g. per-keystroke filter changes) collapses to one drain. Qt-thread only.
+    bool m_event_drain_requested = false;
+
+    //! Reentrancy guard for drainEventQueue() (windowed-model PR5-B): true while a
+    //! drain is applying events. A windowed consumer's synchronous fetch path
+    //! (DetailedTxModel::fetchWindow) calls drainEventQueue(), and applying a Reset
+    //! can synchronously re-enter (viewReset -> restoreAnchor -> setCurrentIndex ->
+    //! ...). A nested call no-ops so the outer drain owns the queue and events are
+    //! never double-processed. Qt-thread only.
+    bool m_draining = false;
+
+    //! Consecutive drain failures that were NOT a node disconnect. Any clean pass
+    //! resets it; the periodic pump gives up at MODEL_EVENT_DRAIN_MAX_FAILURES, so
+    //! a repeating fault stays bounded without a single transient throw silencing
+    //! both windowed views and the balance refresh for the session. Qt-thread only.
+    int m_drain_failures = 0;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
     void checkBalanceChanged();
 
+    //! Retained interface notification handlers (status and address-book
+    //! changes), cleared on teardown. interfaces::Handler disconnects on
+    //! destruction. The tx-table producer subscriptions moved node-side into
+    //! the WalletTxSource in Phase 1c-ii, so this model no longer holds any
+    //! raw core-signal connections.
+    std::vector<std::unique_ptr<interfaces::Handler>> m_wallet_handlers;
+
+    //! Closes the destruction race that disconnecting alone leaves open.
+    //! See qt/notificationlifetime.h.
+    NotificationLifetime m_notify_lifetime;
+
 
 public slots:
     /* Wallet status might have changed */
     void updateStatus();
-    /* New transaction, or transaction changed status */
-    void updateTransaction(const QString &hash, int status);
     /* New, updated or removed address book entry */
     void updateAddressBook(const QString &address, const QString &label, bool isMine, int status);
-    /* Current, immature or unconfirmed balance might have changed - emit 'balanceChanged' if so */
-    void pollBalanceChanged();
+    /* Drain the WalletEventQueue and apply any pending events to the
+     * transaction table model. Fires from eventDrainTimer on a 500ms
+     * cadence. Replaces both the legacy QMetaObject::invokeMethod queued
+     * connection from CWallet::NotifyTransactionChanged and the
+     * 4-second pollBalanceChanged timer that used to drive balance /
+     * confirmation refresh — the latter is now event-driven via
+     * ChainTipChangedPayload pushed by the uiInterface.NotifyBlocksChanged
+     * subscriber. */
+    void drainEventQueue();
+
+    //! Re-prime the node-side store under the current datetime-display cutoff
+    //! option and kick a drain so the Reset each view cursor receives is applied
+    //! promptly. Wired to OptionsModel::LimitTxnDisplayChanged; the windowed
+    //! views re-filter off the Resets prime() pushes.
+    void reloadTransactionView();
 
 signals:
     // Transaction updated. This is necessary because on a resync from zero with an existing wallet.
     // the numTransactionsChanged signal will not be emitted, and therefore the overpage transaction list
     // needs this signal instead.
     void transactionUpdated();
+
+    //! Fan-out of a drained wallet-event batch to per-view windowed consumers
+    //! (PR3: OverviewTxModel). WalletModel drains the queue once and applies the
+    //! VIEW_FULL stream to its TransactionTableModel; this delivers the same batch
+    //! to the per-view consumers, which filter to their own viewId. Same-thread
+    //! (DirectConnection), so the const-ref is passed without a copy.
+    void walletEventsDrained(const std::vector<GRC::WalletEvent>& events);
+
+    //! One drained coin-channel batch, fanned out to the coin-selection
+    //! consumers (which filter by their view id). Emitted only from
+    //! drainCoinEventQueue — the coin queue is drained exactly once, there.
+    void coinEventsDrained(const std::vector<GRC::WalletCoinEvent>& events);
+
+    //! The coin store's wallet scan finished and its Reset has been drained,
+    //! so the consumers' caches hold the scanned wallet. Emitted on the GUI
+    //! thread; consumers clear their loading state here.
+    void coinSourceLoadFinished();
 
     // Signal that balance in wallet changed
     void balanceChanged(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);
@@ -188,7 +371,15 @@ signals:
     // Signal emitted when wallet needs to be unlocked
     // It is valid behaviour for listeners to keep the wallet locked after this signal;
     // this means that the unlocking failed or was cancelled.
-    void requireUnlock();
+    //! Ask the UI for the passphrase so an operation can proceed.
+    //!
+    //! \p elevate says WHICH question, decided here where the wallet state was
+    //! read: true widens an unlock that is already open for staking, false
+    //! unlocks a locked wallet. The receiver must not re-derive it from a second
+    //! status read -- the unlock can expire in between, and answering "unlock"
+    //! then starts a fresh one with no deadline, which this context would go on
+    //! to narrow to staking-only permanently.
+    void requireUnlock(bool elevate);
 
     // Asynchronous error notification
     void error(const QString &title, const QString &message, bool modal);

@@ -7,6 +7,7 @@
 #include "netbase.h" // for AddTimeData
 #include "support/cleanse.h"
 #include "sync.h"
+#include "timedata.h"
 #include "version.h"
 #include "node/ui_interface.h"
 #include <random.h>
@@ -23,21 +24,18 @@
 #include <boost/iostreams/filter/newline.hpp>
 #include <openssl/crypto.h>
 #include <cstdarg>
-#include <codecvt>
 
 using namespace std;
 
-bool fPrintToConsole = false;
-bool fRequestShutdown = false;
-std::atomic<bool> fShutdown = false;
-bool fCommandLine = false;
-bool fTestNet = false;
-bool fNoListen = false;
-bool fLogTimestamps = false;
-CMedianFilter<int64_t> vTimeOffsets(200,0);
-bool fReopenDebugLog = false;
+// Moved from main.cpp (issue #3125 C9); declared in util.h.
+const std::string strMessageMagic = "Gridcoin Signed Message:\n";
 
-bool fDevbuildCripple;
+double CoinToDouble(double surrogate)
+{
+    //Converts satoshis to a human double amount
+    double coin = (double)surrogate/(double)COIN;
+    return coin;
+}
 
 /** A map that contains all the currently held directory locks. After
  * successful locking, these will be held here until the global destructor
@@ -131,8 +129,13 @@ bool ParseMoney(const char* pszIn, int64_t& nRet)
 
     int64_t nWhole = 0;
 
-    // Because of the protection above, this assert should never fail.
-    assert(ParseInt64(strWhole, &nWhole));
+    // strWhole is empty for inputs that carry no leading digits -- ".5", ".",
+    // "" and " " all reach here with nothing accumulated -- and ParseInt64
+    // rejects an empty string. Return false so the caller reports a bad value
+    // rather than terminating. ParseFixedPoint, which the RPC amount path uses,
+    // already rejects the same inputs the same way.
+    if (!ParseInt64(strWhole, &nWhole))
+        return false;
 
     int64_t nValue = nWhole*COIN + nUnits;
 
@@ -255,7 +258,14 @@ std::string GetFileContents(const fs::path filepath)
 #ifndef UPGRADERFLAG
 // avoid including unnecessary files for standalone upgrader
 
-static int64_t nTimeOffset = 0;
+// Atomic: written under g_time_offset_votes_mutex by AddTimeData() (the
+// message-handler thread, from ProcessMessage's VERSION-handling path),
+// RemoveTimeData() (the socket thread, deleting a disconnected node) and
+// ResetTimeDataForTesting() (unit tests), and read without a lock through
+// GetTimeOffset() -> GetAdjustedTime() from many threads (GUI, miner,
+// validation, RPC). Bitcoin Core fixed the same pattern years ago by making
+// this atomic.
+static std::atomic<int64_t> nTimeOffset{0};
 
 int64_t GetTimeOffset()
 {
@@ -267,53 +277,245 @@ int64_t GetAdjustedTime()
     return GetTime() + GetTimeOffset();
 }
 
-void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
+// Peer time votes: one per connected outbound peer, counted once per network
+// group (see TimeOffsetVotes). Only AddTimeData(), RemoveTimeData() and
+// ResetTimeDataForTesting() touch them. The mutex is a leaf: nothing else is
+// acquired while it is held, and AddTimeData() releases it before it logs,
+// warns or calls into the UI.
+static Mutex g_time_offset_votes_mutex;
+static TimeOffsetVotes g_time_offset_votes GUARDED_BY(g_time_offset_votes_mutex);
+//! The median the live votes gave at the last StoreTimeOffset(), or nullopt without a quorum.
+static std::optional<int64_t> g_time_median GUARDED_BY(g_time_offset_votes_mutex);
+
+//! A peer time median further than this from the local clock, in seconds, raises the clock warning.
+static constexpr int64_t CLOCK_WARNING_THRESHOLD = 24;
+
+static std::atomic<uint64_t> g_lead_seen{0};
+static std::atomic<uint64_t> g_lead_over16{0};
+static std::atomic<uint64_t> g_lead_over32{0};
+static std::atomic<uint64_t> g_lead_over48{0};
+static std::atomic<uint64_t> g_lead_over128{0};
+
+namespace {
+enum class ClockState { OK, STAKING_WITHOUT_QUORUM, FAR_FROM_PEERS };
+
+ClockState GetClockState(const std::optional<int64_t>& median, bool staking)
 {
-    // Ignore duplicates
-    static set<CNetAddr> setKnown;
-    if (!setKnown.insert(ip).second)
-        return;
-
-    // Add data
-    vTimeOffsets.input(nOffsetSample);
-    LogPrint(BCLog::LogFlags::NOISY, "Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
-    if (vTimeOffsets.size() >= 5 && vTimeOffsets.size() % 2 == 1)
-    {
-        // We believe the median of the other nodes 95% and our own node's time ("0" initial offset) 5%. This will also act to gently converge the network to consensus UTC, in case
-        // the entire network is displaced for some reason.
-        nTimeOffset = 0.95 * vTimeOffsets.median();
-        std::vector<int64_t> vSorted = vTimeOffsets.sorted();
-        // Only let other nodes change our time by so much
-        if (abs64(nTimeOffset) >= 70 * 60)
-        {
-            nTimeOffset = 0;
-
-            static bool fDone;
-            if (!fDone)
-            {
-                // If nobody has a time different than ours but within 5 minutes of ours, give a warning
-                bool fMatch = false;
-                for (auto const& nOffset : vSorted)
-                    if (nOffset != 0 && abs64(nOffset) < 5 * 60)
-                        fMatch = true;
-
-                if (!fMatch)
-                {
-                    fDone = true;
-                    string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.");
-                    strMiscWarning = strMessage;
-                    LogPrintf("*** %s", strMessage);
-                    uiInterface.ThreadSafeMessageBox(strMessage+" ", string("Gridcoin"), CClientUIInterface::MSG_WARNING);
-                }
-            }
-        }
-        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY)) {
-            for (auto const& n : vSorted)
-                LogPrintf("%+" PRId64 "  ", n);
-            LogPrintf("|  ");
-        }
-        LogPrint(BCLog::LogFlags::NOISY, "nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)", nTimeOffset, nTimeOffset/60);
+    if (!median) {
+        return staking ? ClockState::STAKING_WITHOUT_QUORUM : ClockState::OK;
     }
+
+    // Compared without abs(), which is undefined for the most negative value.
+    if (*median > CLOCK_WARNING_THRESHOLD || *median < -CLOCK_WARNING_THRESHOLD) {
+        return ClockState::FAR_FROM_PEERS;
+    }
+
+    return ClockState::OK;
+}
+} // anonymous namespace
+
+//! Whether the stake miner last reported that it is trying to stake.
+static std::atomic<bool> g_clock_warning_staking{false};
+//! The clock state last logged, so that each change is logged once. A leaf, like the votes mutex, and never held
+//! with it.
+static Mutex g_clock_log_mutex;
+static ClockState g_logged_clock_state GUARDED_BY(g_clock_log_mutex) = ClockState::OK;
+
+static std::optional<int64_t> GetTimeMedian()
+{
+    LOCK(g_time_offset_votes_mutex);
+    return g_time_median;
+}
+
+//! Log the clock state if it changed since it was last logged. Called after every change to the time votes and on
+//! every stake miner round, never with the votes mutex held.
+static void LogClockStateChange()
+{
+    const std::optional<int64_t> median = GetTimeMedian();
+    const ClockState state = GetClockState(median, g_clock_warning_staking.load());
+
+    LOCK(g_clock_log_mutex);
+    if (state == g_logged_clock_state) return;
+    g_logged_clock_state = state;
+
+    switch (state) {
+    case ClockState::OK:
+        LogPrintf("Clock warning cleared");
+        break;
+    case ClockState::STAKING_WITHOUT_QUORUM:
+        LogPrintf("Clock warning: staking without a network time quorum; this node is using its own clock");
+        break;
+    case ClockState::FAR_FROM_PEERS:
+        LogPrintf("Clock warning: the peer time median is %+d s from this computer's clock (more than %d s)",
+                  *median, CLOCK_WARNING_THRESHOLD);
+        break;
+    }
+}
+
+//! Store the offset the live votes give. Called under the votes mutex, so the
+//! stored offset always matches the latest vote set, whichever thread changed
+//! it last.
+static void StoreTimeOffset(const std::optional<int64_t>& median) EXCLUSIVE_LOCKS_REQUIRED(g_time_offset_votes_mutex)
+{
+    // We believe the median of the other nodes 95% and our own node's time ("0" initial offset) 5%. This will also act to gently converge the network to consensus UTC, in case
+    // the entire network is displaced for some reason. Without a quorum of live votes, our own
+    // clock is all we have.
+    g_time_median = median;
+    // The offset is 95% of the median, truncated toward zero, and it is worked
+    // out in integers on purpose. Do not put back 0.95 * median.
+    //
+    // 0.95 has no exact binary form. The nearest double is a little under it,
+    // 0.94999999999999995559..., so 0.95 * 100 is 94.99999999999999556 before
+    // it is rounded. What happens next depends on the floating-point unit:
+    //
+    //   - x86_64 (SSE2), ARM, and every other unit that does double arithmetic
+    //     in 64 bits rounds the product to the nearest double, which is exactly
+    //     95.0, and the cast gives 95.
+    //   - 32-bit x86 builds use the x87 unit, which keeps intermediate results
+    //     in 80 bits with a 64-bit mantissa. Rounded to that precision the
+    //     product is still just under 95, nothing rounds it up, and the cast
+    //     truncates it to 94. That is GCC's default, -fexcess-precision=fast,
+    //     which the tree's GNU dialect (-std=gnu++17) gets with every GCC.
+    //     GCC 13 and later in a strict ISO dialect (-std=c++17) use
+    //     -fexcess-precision=standard instead, round the product to a double
+    //     at the cast, and get 95.
+    //
+    // So a 32-bit x86 node stored an offset one second nearer zero than every
+    // other node at each nonzero median that is a multiple of 20, where 95% is a
+    // whole number. At any other median 95% is at least 0.05 from a whole
+    // number, far more than the error, and all builds agree.
+    //
+    // Worse, which answer a 32-bit build got was up to the compiler. A product
+    // it folded at build time, or stored to memory as a 64-bit double before the
+    // cast, came out 95; one cast straight from an x87 register came out 94. The
+    // unit test worked out its expected value with this very expression, the
+    // compiler folded the test's copy, and the test and the code it tested
+    // disagreed on the same machine (94 != 95). GCC 12 and GCC 14 on Debian i386
+    // both do this.
+    //
+    // Adjusted time is local to this node, not consensus, so the error was
+    // harmless. It is the reason consensus code uses no floating point: the same
+    // expression need not give the same answer on every machine.
+    //
+    // The integer form equals the x86_64 double result at every median in
+    // +/-2e7, far wider than any median the handshake lets through: it refuses
+    // a peer more than 8 minutes from our adjusted time, so with the 70-minute
+    // limit below no sample is more than about 78 minutes from this computer's
+    // clock. Splitting the median at 100 keeps median * 95 from overflowing
+    // for any int64_t median: TimeOffsetVotes takes any vote, and a median that
+    // large ends at the 70-minute limit below either way. median - median / 20
+    // is not the same thing: it truncates the 5% instead of the 95%, so 99 gives
+    // 95 where 95% of 99 is 94.05.
+    int64_t offset = median ? *median / 100 * 95 + *median % 100 * 95 / 100 : 0;
+    // Only let other nodes change our time by so much. A median beyond this
+    // still raises the clock warning (see GetClockState).
+    if (abs64(offset) >= 70 * 60)
+        offset = 0;
+    nTimeOffset = offset;
+}
+
+void AddTimeData(int64_t node_id, const CNetAddr& ip, int64_t nOffsetSample)
+{
+    // The vote lasts until RemoveTimeData() withdraws it when this peer's
+    // connection is deleted, and peers in one network group count once.
+    const TimeOffsetVotes::Group group = ip.GetGroup();
+    std::vector<int64_t> vSorted;
+    {
+        LOCK(g_time_offset_votes_mutex);
+        StoreTimeOffset(g_time_offset_votes.Add(node_id, group, nOffsetSample));
+        vSorted = g_time_offset_votes.Sorted();
+    }
+
+    LogPrint(BCLog::LogFlags::NOISY, "Added time data, votes %d, offset %+" PRId64 " (%+" PRId64 " minutes)", vSorted.size(), nOffsetSample, nOffsetSample/60);
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY)) {
+        for (auto const& n : vSorted)
+            LogPrintf("%+" PRId64 "  ", n);
+        LogPrintf("|  ");
+    }
+    const int64_t offset = GetTimeOffset();
+    LogPrint(BCLog::LogFlags::NOISY, "nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)", offset, offset/60);
+
+    LogClockStateChange();
+}
+
+void RemoveTimeData(int64_t node_id)
+{
+    // Recompute over the votes still live, so a departed peer leaves no trace
+    // in the offset either. The 70-minute check still applies, silently: its
+    // warning calls into the UI, and this runs on the socket thread under
+    // m_nodes_mutex.
+    {
+        LOCK(g_time_offset_votes_mutex);
+        if (!g_time_offset_votes.Remove(node_id)) {
+            return;
+        }
+        StoreTimeOffset(g_time_offset_votes.Median());
+    }
+
+    LogPrint(BCLog::LogFlags::NOISY, "Withdrew time vote of peer %d, nTimeOffset = %+" PRId64, node_id, GetTimeOffset());
+    LogClockStateChange();
+}
+
+void ResetTimeDataForTesting()
+{
+    {
+        LOCK(g_time_offset_votes_mutex);
+        g_time_offset_votes = TimeOffsetVotes{};
+        g_time_median.reset();
+        nTimeOffset = 0;
+    }
+    g_clock_warning_staking = false;
+    LOCK(g_clock_log_mutex);
+    g_logged_clock_state = ClockState::OK;
+}
+
+bool HasTimeQuorum()
+{
+    return GetTimeMedian().has_value();
+}
+
+int64_t GetPeerTimeMedian()
+{
+    return GetTimeMedian().value_or(0);
+}
+
+std::string GetClockWarning(bool staking)
+{
+    switch (GetClockState(GetTimeMedian(), staking)) {
+    case ClockState::OK:
+        return std::string();
+    case ClockState::STAKING_WITHOUT_QUORUM:
+        return _("Warning: staking without a network time quorum; this node is using its own clock.");
+    case ClockState::FAR_FROM_PEERS:
+        return _("Warning: this computer's clock differs from the network by more than 24 seconds.");
+    }
+    return std::string();
+}
+
+std::string GetCurrentClockWarning()
+{
+    return GetClockWarning(g_clock_warning_staking.load());
+}
+
+void SetClockWarningStaking(bool staking)
+{
+    g_clock_warning_staking = staking;
+    LogClockStateChange();
+}
+
+void RecordBlockLead(int64_t lead)
+{
+    ++g_lead_seen;
+    if (lead > 16) ++g_lead_over16;
+    if (lead > 32) ++g_lead_over32;
+    if (lead > 48) ++g_lead_over48;
+    if (lead > 128) ++g_lead_over128;
+}
+
+BlockLeadCounts GetBlockLeadCounts()
+{
+    return {g_lead_seen.load(), g_lead_over16.load(), g_lead_over32.load(), g_lead_over48.load(),
+            g_lead_over128.load()};
 }
 
 
@@ -375,7 +577,29 @@ void runCommand(std::string strCommand)
 #ifndef WIN32
     int nErr = ::system(strCommand.c_str());
 #else
-    int nErr = ::_wsystem(std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>,wchar_t>().from_bytes(strCommand).c_str());
+    // The callers run this on threads of their own, where an uncaught exception
+    // ends the program, so a command that is not valid UTF-8, as from a
+    // configuration file saved in a legacy code page, is logged and not run.
+    std::wstring command;
+    try {
+        command = Utf8ToWide(strCommand);
+    } catch (const std::range_error&) {
+        // Escape each byte that is not ASCII, as \xNN, so that debug.log stays UTF-8.
+        std::string escaped;
+        for (const char ch : strCommand) {
+            const unsigned int byte = static_cast<unsigned char>(ch);
+            // sign-compare checked: byte is unsigned int; 0x80U is a non-negative literal, so
+            // both sides are unsigned.
+            if (byte < 0x80U) {
+                escaped += ch;
+            } else {
+                escaped += strprintf("\\x%02x", byte);
+            }
+        }
+        LogPrintf("runCommand error: %s is not valid UTF-8 and was not run", escaped);
+        return;
+    }
+    int nErr = ::_wsystem(command.c_str());
 #endif
     if (nErr)
         LogPrintf("runCommand error: system(%s) returned %d", strCommand, nErr);
@@ -419,7 +643,7 @@ bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr 
 {
     try
     {
-#if defined(__linux__) && !defined(__GLIBCXX__)
+#if defined(__linux__) && !defined(__GLIBC__)
         //
         // Explicitly set the stack size for this thread to 2 MB.
         //
@@ -433,11 +657,18 @@ bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr 
         // Bitcoin's newer thread management utilities, I will not take time
         // to generalize this patch. Ideally, we should specify a stack size
         // suitable for the application instead of relying on the default of
-        // the libc implementation. For now, we will let glibc do its thing.
-        // 2 MB is the typical default for glibc on x86 platforms so this is
-        // the size we'll start with. After testing, we may choose a smaller
-        // stack size. This patch may apply to other libc implementations as
-        // well.
+        // the libc implementation. For now, we let glibc do its thing: 2 MB
+        // matches glibc's typical x86 default, so this only raises musl to
+        // parity rather than changing glibc behaviour.
+        //
+        // The guard tests __GLIBC__, the C library macro, and NOT __GLIBCXX__,
+        // which libstdc++ defines. They are different libraries: Alpine's
+        // ordinary C++ toolchain is musl + libstdc++, so __GLIBCXX__ IS
+        // defined there and a !__GLIBCXX__ guard silently skipped this on the
+        // one platform it was written for. Verified on alpine:latest with g++:
+        // __GLIBCXX__ defined, __GLIBC__ absent, default pthread stack 131072
+        // bytes -- 128 KB, i.e. exactly the size the comment above says scrypt
+        // overruns.
         //
         boost::thread::attributes attrs;
         attrs.set_stack_size(2 << 20);
@@ -459,7 +690,7 @@ bool ThreadHandler::createThread(void(*pfn)(void*), void* parg, const std::strin
 {
     try
     {
-#if defined(__linux__) && !defined(__GLIBCXX__)
+#if defined(__linux__) && !defined(__GLIBC__)
         //
         // Explicitly set the stack size for this thread to 2 MB.
         //
@@ -473,11 +704,18 @@ bool ThreadHandler::createThread(void(*pfn)(void*), void* parg, const std::strin
         // Bitcoin's newer thread management utilities, I will not take time
         // to generalize this patch. Ideally, we should specify a stack size
         // suitable for the application instead of relying on the default of
-        // the libc implementation. For now, we will let glibc do its thing.
-        // 2 MB is the typical default for glibc on x86 platforms so this is
-        // the size we'll start with. After testing, we may choose a smaller
-        // stack size. This patch may apply to other libc implementations as
-        // well.
+        // the libc implementation. For now, we let glibc do its thing: 2 MB
+        // matches glibc's typical x86 default, so this only raises musl to
+        // parity rather than changing glibc behaviour.
+        //
+        // The guard tests __GLIBC__, the C library macro, and NOT __GLIBCXX__,
+        // which libstdc++ defines. They are different libraries: Alpine's
+        // ordinary C++ toolchain is musl + libstdc++, so __GLIBCXX__ IS
+        // defined there and a !__GLIBCXX__ guard silently skipped this on the
+        // one platform it was written for. Verified on alpine:latest with g++:
+        // __GLIBCXX__ defined, __GLIBC__ absent, default pthread stack 131072
+        // bytes -- 128 KB, i.e. exactly the size the comment above says scrypt
+        // overruns.
         //
         boost::thread::attributes attrs;
         attrs.set_stack_size(2 << 20);
@@ -512,11 +750,16 @@ void ThreadHandler::interruptAll(){
     threadGroup.interrupt_all();
 }
 
+// boost::thread_group deletes the threads it holds when it is destroyed, but
+// remove_thread() hands that ownership back to the caller, so both of these
+// delete each thread they remove.
 void ThreadHandler::removeByName(const std::string tname)
 {
-    threadGroup.remove_thread(threadMap[tname]);
-    threadMap[tname]->join();
+    boost::thread* thread = threadMap[tname];
+    threadGroup.remove_thread(thread);
+    thread->join();
     threadMap.erase(tname);
+    delete thread;
 }
 
 void ThreadHandler::removeAll()
@@ -526,6 +769,7 @@ void ThreadHandler::removeAll()
     for (auto it=threadMap.begin(); it!=threadMap.end(); ++it)
     {
         threadGroup.remove_thread(it->second);
+        delete it->second;
     }
     threadMap.clear();
 }

@@ -16,11 +16,6 @@ static int noui_ThreadSafeMessageBox(const std::string& message, const std::stri
     return 4;
 }
 
-static bool noui_ThreadSafeAskFee(int64_t nFeeRequired, const std::string& strCaption)
-{
-    return true;
-}
-
 static int noui_UpdateMessageBox(const std::string& version, const int& upgrade_type, const std::string& message)
 {
     std::string caption = _("Gridcoin Update Available");
@@ -35,6 +30,5 @@ void noui_connect()
 {
     // Connect bitcoind signal handlers
     uiInterface.ThreadSafeMessageBox_connect(noui_ThreadSafeMessageBox);
-    uiInterface.ThreadSafeAskFee_connect(noui_ThreadSafeAskFee);
     uiInterface.UpdateMessageBox_connect(noui_UpdateMessageBox);
 }

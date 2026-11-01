@@ -2,9 +2,13 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/test/unit_test.hpp>
 
+#include "test/state_guard.h"
+
 #include "util/system.h"
 
-BOOST_AUTO_TEST_SUITE(getarg_tests)
+// Suite-level guard: ResetArgs re-parses test arguments into the global
+// ArgsManager and never removes them.
+BOOST_AUTO_TEST_SUITE(getarg_tests, *boost::unit_test::fixture<grc_test::StateGuard>())
 
 static void AddArgs(const std::string& strArg)
 {
@@ -190,6 +194,33 @@ BOOST_AUTO_TEST_CASE(boolargno)
 
     BOOST_CHECK(ResetArgs("-foo", "-nofoo -foo"));
     BOOST_CHECK(gArgs.GetBoolArg("-foo"));
+}
+
+BOOST_AUTO_TEST_CASE(clearforcedarg_falls_back_to_the_other_sources)
+{
+    // A forced value outranks the command line, and a forced empty string reads
+    // as true for a boolean arg. Clearing it hands the arg back to the command line.
+    BOOST_CHECK(ResetArgs("-foo", "-foo=0"));
+    gArgs.ForceSetArg("-foo", "");
+    BOOST_CHECK(gArgs.GetBoolArg("-foo", false));
+
+    gArgs.ClearForcedArg("-foo");
+    BOOST_CHECK(!gArgs.GetBoolArg("-foo", false));
+    BOOST_CHECK(!gArgs.GetBoolArg("-foo", true));
+
+    // With nothing else set, the arg is unset again and the default applies.
+    BOOST_CHECK(ResetArgs("-foo -bar", "-bar"));
+    gArgs.ForceSetArg("-foo", "1");
+    BOOST_CHECK(gArgs.GetBoolArg("-foo", false));
+
+    gArgs.ClearForcedArg("-foo");
+    BOOST_CHECK(!gArgs.IsArgSet("-foo"));
+    BOOST_CHECK(!gArgs.GetBoolArg("-foo", false));
+    BOOST_CHECK(gArgs.GetBoolArg("-foo", true));
+
+    // Clearing an arg that is not forced changes nothing.
+    gArgs.ClearForcedArg("-foo");
+    BOOST_CHECK(!gArgs.IsArgSet("-foo"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

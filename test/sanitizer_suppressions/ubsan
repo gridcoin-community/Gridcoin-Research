@@ -5,57 +5,67 @@
 
 # -fsanitize=integer suppressions
 # ===============================
+# The integer checks report behaviour that is defined (unsigned wrap-around, an
+# implicit conversion that changes a value), so each entry below is a place
+# that means it. Anything else the CI sanitizer job reports is a finding.
+#
 # Dependencies
 # ------------
 # Suppressions in dependencies that are developed outside this repository.
 unsigned-integer-overflow:*/include/c++/
-unsigned-integer-overflow:FuzzedDataProvider::ConsumeIntegralInRange
 unsigned-integer-overflow:leveldb/
-unsigned-integer-overflow:minisketch/
-unsigned-integer-overflow:test/fuzz/crypto_diff_fuzz_chacha20.cpp
+unsigned-integer-overflow:secp256k1/
 implicit-integer-sign-change:*/include/boost/
 implicit-integer-sign-change:*/include/c++/
 implicit-integer-sign-change:*/new_allocator.h
+implicit-integer-sign-change:*/qarraydata.h
+implicit-integer-sign-change:*/qflags.h
 implicit-integer-sign-change:crc32c/
-implicit-integer-sign-change:minisketch/
+implicit-integer-sign-change:BytewiseComparatorImpl::FindShortSuccessor
+implicit-integer-sign-change:secp256k1/
 implicit-signed-integer-truncation:*/include/c++/
 implicit-signed-integer-truncation:leveldb/
+implicit-signed-integer-truncation:secp256k1/
+implicit-signed-integer-truncation,implicit-integer-sign-change:secp256k1_modinv64_posdivsteps_62_var
 implicit-unsigned-integer-truncation:*/include/c++/
 implicit-unsigned-integer-truncation:leveldb/
-implicit-unsigned-integer-truncation:test/fuzz/crypto_diff_fuzz_chacha20.cpp
+implicit-unsigned-integer-truncation:secp256k1/
 shift-base:*/include/c++/
 shift-base:leveldb/
-shift-base:minisketch/
-shift-base:test/fuzz/crypto_diff_fuzz_chacha20.cpp
-# Unsigned integer overflow occurs when the result of an unsigned integer
-# computation cannot be represented in its type. Unlike signed integer overflow,
-# this is not undefined behavior, but it is often unintentional. The list below
-# contains files in which we expect unsigned integer overflows to occur. The
-# list is used to suppress -fsanitize=integer warnings when running our CI UBSan
-# job.
+shift-base:secp256k1/
+
+# Suppressions in code developed inside this repository.
+# ------------
+# Hash and cipher arithmetic, which wraps by design.
 unsigned-integer-overflow:arith_uint256.h
-unsigned-integer-overflow:common/bloom.cpp
-unsigned-integer-overflow:coins.cpp
-unsigned-integer-overflow:compressor.cpp
 unsigned-integer-overflow:crypto/
+unsigned-integer-overflow:gridcoin/md5.c
 unsigned-integer-overflow:hash.cpp
-unsigned-integer-overflow:policy/fees.cpp
-unsigned-integer-overflow:prevector.h
-unsigned-integer-overflow:script.cpp
-unsigned-integer-overflow:xoroshiro128plusplus.h
-implicit-integer-sign-change:compat/stdin.cpp
-implicit-integer-sign-change:compressor.h
+unsigned-integer-overflow:scrypt.cpp
 implicit-integer-sign-change:crypto/
-implicit-integer-sign-change:policy/fees.cpp
-implicit-integer-sign-change:prevector.h
-implicit-integer-sign-change:script/bitcoinconsensus.cpp
-implicit-integer-sign-change:script.cpp
-implicit-integer-sign-change:serialize.h
+implicit-integer-sign-change:gridcoin/md5.c
 implicit-signed-integer-truncation:crypto/
+implicit-signed-integer-truncation:gridcoin/md5.c
 implicit-unsigned-integer-truncation:crypto/
+implicit-unsigned-integer-truncation:gridcoin/md5.c
 shift-base:arith_uint256.cpp
 shift-base:crypto/
+shift-base:gridcoin/md5.c
 shift-base:hash.cpp
+shift-base:scrypt.cpp
 shift-base:streams.h
 shift-base:util/bip32.cpp
-shift-base:xoroshiro128plusplus.h
+#
+# SeenStakes::GetOffset is a multiply-shift hash over the proof hash's words.
+unsigned-integer-overflow:GRC::SeenStakes::GetOffset
+#
+# WithinTimeDrift subtracts as uint64_t on purpose: for a >= b,
+# uint64_t(a) - uint64_t(b) is exactly a - b even when it wraps, which is what
+# keeps the drift of two extreme int64_t times from overflowing.
+unsigned-integer-overflow:WithinTimeDrift
+#
+# EvalScript's stacktop(i) adds a negative int to stack.size(). Bitcoin Core
+# casts through int64_t in the macro instead; that change is in consensus code
+# and is not made here, so the wrap is suppressed for EvalScript alone.
+unsigned-integer-overflow:EvalScript
+implicit-integer-sign-change:EvalScript

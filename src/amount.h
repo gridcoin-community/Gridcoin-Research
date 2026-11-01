@@ -26,4 +26,13 @@ static const CAmount CENT = 1000000;
 static const CAmount MAX_MONEY = 2000000000 * COIN;
 inline bool MoneyRange(const CAmount& nValue) { return (nValue >= 0 && nValue <= MAX_MONEY); }
 
+//! Floor for the post-split coinstake UTXO size, in whole GRC (not Halfords) to
+//! match the -minstakesplitvalue config entry. It is a hard clamp, not just a
+//! default: miner.cpp takes max(-minstakesplitvalue, this), so a smaller
+//! configured value is raised to it. Not a consensus or per-network parameter
+//! (same on every chain), so it lives in this stateless header rather than
+//! chainparams or miner.h -- which also lets the GUI options dialog/model read
+//! it without pulling in the mining engine's headers.
+static const int64_t MIN_STAKE_SPLIT_VALUE_GRC = 800;
+
 #endif //  BITCOIN_AMOUNT_H

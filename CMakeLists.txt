@@ -1,8 +1,21 @@
 # CMake is the official build system for Gridcoin.
 
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.21)
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cmake")
 set(CPACK_MODULE_PATH "${CPACK_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cpack")
+
+# Without this policy CMake repeats static libraries on a link line, as a
+# single-pass linker needs to resolve references between them. Apple's linker
+# since Xcode 15 resolves archives across the whole link, needs no repeats, and
+# warns "ignoring duplicate libraries" for each one -- here when linking the GUI
+# and test_gridcoin. CMP0156 (CMake 3.29) de-duplicates for the linkers that
+# need no repeats: Apple's, MSVC's, LLD and mold. GNU ld, which the Linux and
+# MinGW builds use, is not among them, and their link lines are unchanged. It is
+# set here, ahead of every target. Older CMake keeps the repeats, and on macOS
+# the warnings with them.
+if(POLICY CMP0156)
+    cmake_policy(SET CMP0156 NEW)
+endif()
 
 
 # Hunter Package Manager
@@ -22,8 +35,87 @@ HunterGate(
 # Project configuration
 # =====================
 
+# The macOS floor. Set before project(), which is when CMake reads it.
+#
+# This is the project's declaration, not CI's: share/qt/Info.plist.cmake.in
+# substitutes it into LSMinimumSystemVersion, so without a default here every
+# build that does not pass -DCMAKE_OSX_DEPLOYMENT_TARGET -- build_targets.sh
+# TARGET=macos, and any plain cmake invocation -- would stamp the bundle with an
+# empty minimum. The Intel CI job passes the same value explicitly
+# (MACOS_DEPLOYMENT_TARGET in .github/workflows/cmake_production.yml); this makes
+# a local Intel bundle agree with the released one, unless the Mac doing the
+# build runs an older macOS or MACOSX_DEPLOYMENT_TARGET is set (both below).
+# The Apple Silicon job declares a higher floor; see below.
+#
+# FORCE is required, not tidiness. On macOS, CMake's own
+# Platform/Darwin-Initialize.cmake unconditionally caches this variable --
+# `set(CMAKE_OSX_DEPLOYMENT_TARGET "$ENV{MACOSX_DEPLOYMENT_TARGET}" CACHE STRING
+# ...)`, empty when that environment variable is unset -- so any build tree
+# configured before this default existed already holds an empty entry, and a
+# plain `set(... CACHE ...)` is a no-op whenever an entry exists. Without FORCE
+# the guard passes, the assignment is discarded, and the bundle gets an empty
+# minimum anyway: the exact hole this closes. An explicitly empty
+# `-DCMAKE_OSX_DEPLOYMENT_TARGET=` behaves the same way and is covered by the
+# same FORCE. An explicit non-empty -D still wins, because then the guard fails.
+#
+# The toolchain guard keeps this out of depends cross-builds. depends declares
+# its own floor (OSX_MIN_VERSION in depends/hosts/darwin.mk) and bakes it into
+# darwin_CFLAGS/CXXFLAGS/LDFLAGS, so applying this default there would put two
+# contradictory version-min specs on the same compile and link lines.
+#
+# 14.0 is what the Intel dependency stack supports: every library the Intel CI
+# job links is built on macOS 14 and carries minos 14.0 (see
+# contrib/devtools/macos-pinned-kegs.txt for how that is held true), and Qt 6.10
+# and later do not support anything below macOS 13. The Apple Silicon CI job
+# declares 15.0 instead, because Homebrew has stopped building Apple Silicon
+# bottles for macOS 14; a local Apple Silicon bundle meant to match the release
+# needs -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0.
+#
+# The default is never above the Mac doing the build. Built for 14.0 on macOS
+# 12, a bundle would not launch on the machine that built it; so a Mac older
+# than macOS 14 gets its own version instead: the major version from macOS 11
+# on (12.0 on Monterey), and 10.x before that, macOS 10 being versioned by its
+# minor number. That is below every floor a release supports, and configure
+# warns about it. CMAKE_HOST_APPLE is set this early but
+# CMAKE_HOST_SYSTEM_VERSION is not, hence sw_vers.
+#
+# A MACOSX_DEPLOYMENT_TARGET in the environment is used as given, ahead of this
+# default, as Darwin-Initialize.cmake itself would use it; only an explicit -D
+# comes before it.
+if(NOT CMAKE_TOOLCHAIN_FILE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(_macos_floor "14.0")
+    if(NOT "$ENV{MACOSX_DEPLOYMENT_TARGET}" STREQUAL "")
+        set(_macos_floor "$ENV{MACOSX_DEPLOYMENT_TARGET}")
+    elseif(CMAKE_HOST_APPLE)
+        execute_process(COMMAND sw_vers -productVersion
+            OUTPUT_VARIABLE _macos_host_version
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE _macos_sw_vers_status
+            ERROR_QUIET)
+        if(_macos_sw_vers_status EQUAL 0 AND _macos_host_version MATCHES "^(10\\.[0-9]+|[0-9]+)")
+            set(_macos_host_floor "${CMAKE_MATCH_1}")
+            if(NOT _macos_host_floor MATCHES "\\.")
+                string(APPEND _macos_host_floor ".0")
+            endif()
+            if(_macos_host_floor VERSION_LESS _macos_floor)
+                set(_macos_floor "${_macos_host_floor}")
+                message(WARNING "This Mac runs macOS ${_macos_host_version}, so the build targets "
+                    "macOS ${_macos_floor} instead of 14.0, and the app will need macOS "
+                    "${_macos_floor} or newer. Releases require macOS 14 (Intel) or 15 (Apple "
+                    "Silicon). Pass -DCMAKE_OSX_DEPLOYMENT_TARGET=<version>, or set "
+                    "MACOSX_DEPLOYMENT_TARGET, to choose the target yourself.")
+            endif()
+        endif()
+    endif()
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "${_macos_floor}" CACHE STRING "Minimum macOS version (ignored off Apple platforms)" FORCE)
+    unset(_macos_floor)
+    unset(_macos_host_version)
+    unset(_macos_host_floor)
+    unset(_macos_sw_vers_status)
+endif()
+
 project("Gridcoin"
-    VERSION 5.5.1.0
+    VERSION 5.5.2.0
     DESCRIPTION "POS-based cryptocurrency that rewards BOINC computation"
     HOMEPAGE_URL "https://gridcoin.us"
     LANGUAGES C CXX
@@ -121,13 +213,29 @@ endif()
 option(USE_ASM_SCRYPT   "Enable scrypt assembly routines (requires GNU assembler)" ${USE_ASM_SCRYPT})
 
 # Optional functionality
-option(ENABLE_PIE       "Build position-independent executables" OFF)
+option(ENABLE_PIE       "Build position-independent executables. OFF genuinely disables PIE, it does not defer to the toolchain default" OFF)
+option(ENABLE_HARDENING "Apply exploit-mitigation compiler and linker flags" ON)
 option(ENABLE_DEBUG_LOCKORDER "Enable run-time lock-order checking (DEBUG_LOCKORDER)" OFF)
+option(WERROR_THREAD_SAFETY "Promote Clang thread-safety diagnostics to build errors" OFF)
+option(WERROR "Promote the selected warning set to build errors (Autotools --enable-werror)" OFF)
 option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" OFF)
-option(ENABLE_UPNP      "Enable UPnP port mapping support" OFF)
+option(ENABLE_UPNP      "Enable UPnP port mapping support" ON)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
-option(USE_QT6          "Use Qt 6 instead of Qt 5" OFF)
+option(USE_QT6          "Use Qt 6 instead of Qt 5" ON)
+
+# Multiprocess (Phase 2 GUI/node IPC split, RFC #2937). OFF = the monolithic
+# build with direct in-process calls (current behavior); ON = build against
+# Cap'n Proto + libmultiprocess so the interfaces:: boundaries can be driven
+# over IPC. This flag only wires the toolchain (dependency detection + codegen
+# tooling); it does not by itself change any runtime behavior yet.
+option(ENABLE_MULTIPROCESS "Build with Cap'n Proto + libmultiprocess for the multiprocess (IPC) build" OFF)
+
+# Build against an external libmultiprocess (system / depends install) instead of
+# the vendored in-tree subtree (src/ipc/libmultiprocess). OFF (the default) builds
+# the runtime from the subtree, matching Bitcoin Core; ON is mainly useful for
+# developing libmultiprocess itself against a separate checkout.
+option(WITH_EXTERNAL_LIBMULTIPROCESS "Use an external libmultiprocess instead of the vendored subtree" OFF)
 
 # Bundled packages
 option(SYSTEM_BDB       "Find system installation of Berkeley DB CXX 5.3" OFF)
@@ -139,9 +247,7 @@ option(SYSTEM_XXD       "Find system xxd binary" OFF)
 # Hunter packages
 option(BUNDLED_BOOST    "Use the bundled version of Boost" ${HUNTER_ENABLED})
 option(BUNDLED_CURL     "Use the bundled version of cURL" ${HUNTER_ENABLED})
-option(BUNDLED_LIBZIP   "Use the bundled version of libzip" ${HUNTER_ENABLED})
 option(BUNDLED_OPENSSL  "Use the bundled version of OpenSSL" ${HUNTER_ENABLED})
-option(BUNDLED_QT5      "Use the bundled version of Qt 5" ${HUNTER_ENABLED})
 
 
 # Handle dependencies
@@ -149,13 +255,9 @@ option(BUNDLED_QT5      "Use the bundled version of Qt 5" ${HUNTER_ENABLED})
 
 set(MINIUPNPC_USE_STATIC_LIBS ${STATIC_LIBS})
 
-set(QT5_MINIMUM_VERSION 5.9.5)
+set(QT5_MINIMUM_VERSION 5.15.0)
 set(QT6_MINIMUM_VERSION 6.2.0)
 set(QT_COMPONENTS Core Concurrent Gui LinguistTools Network Widgets Svg)
-set(QT_HUNTER_COMPONENTS qtbase qttools)
-if(USE_QT6)
-    list(APPEND QT_COMPONENTS Core5Compat)
-endif()
 if(USE_DBUS)
     list(APPEND QT_COMPONENTS DBus)
 endif()
@@ -163,8 +265,18 @@ if(ENABLE_TESTS)
     list(APPEND QT_COMPONENTS Test)
 endif()
 
-set(BOOST_MINIMUM_VERSION 1.63.0)
-set(BOOST_COMPONENTS filesystem iostreams thread serialization date_time)
+# 1.66 is the oldest release this source can actually compile against, and has
+# been for some time: rpc/server.cpp uses boost::asio::ip::make_address_v6()
+# with no version guard, and that entered Boost in 1.66 along with the asio
+# rewrite. The 1.63 declared here was simply never revisited when that landed,
+# so it promised a floor no build has met in a while.
+#
+# 1.66 is the floor the source implies, not a version anyone exercises: CI
+# builds against the distribution Boost and depends pins 1.89. The io_context /
+# io_service shim in rpc/protocol.h still guards at 1.70, so 1.66-1.69 remains
+# intended to work.
+set(BOOST_MINIMUM_VERSION 1.66.0)
+set(BOOST_COMPONENTS filesystem iostreams thread date_time)
 set(BOOST_HUNTER_COMPONENTS system atomic regex ${BOOST_COMPONENTS})
 if(ENABLE_TESTS)
     list(APPEND BOOST_COMPONENTS unit_test_framework)
@@ -176,6 +288,12 @@ find_package(Threads REQUIRED)
 
 if(SYSTEM_BDB)
     find_package(BerkeleyDB 5.3...<5.4 COMPONENTS CXX REQUIRED)
+    if(WIN32)
+        message(WARNING "SYSTEM_BDB on Windows: the wallet gives Berkeley DB its paths in UTF-8, which it "
+                        "reads correctly only if it was built with UNICODE and _UNICODE, as the bundled copy "
+                        "is (src/bdb53/CMakeLists.txt). Otherwise a data directory or wallet file with a "
+                        "non-ASCII character in its name will not open.")
+    endif()
 else()
     find_program(SH_EXE NAMES sh bash REQUIRED)
     find_program(MAKE_EXE NAMES gmake nmake make REQUIRED)
@@ -204,6 +322,31 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.30)
     cmake_policy(SET CMP0167 OLD)
 endif()
 
+# CMake's FindBoost defaults Boost_USE_DEBUG_RUNTIME to TRUE when the caller has not
+# set it. That is an MSVC-only concept -- it selects the /MDd runtime -- but Boost's own
+# CMake config files honour it on every platform: each variant file begins with
+#
+#     if(Boost_USE_DEBUG_RUNTIME)
+#       _BOOST_SKIPPED("libboost_foo.so" "release runtime, ...")
+#
+# so on a distribution that ships only release-runtime variants EVERY variant is rejected
+# and Boost is reported as not found ("No suitable build variant has been found").
+# FreeBSD's boost packages are built that way.
+#
+# This only bites when FindBoost actually runs its module search: FindBoost first delegates
+# to find_package(Boost NO_MODULE) and returns early if a BoostConfig.cmake is found, in
+# which case the default is never assigned. So the failure appears on systems whose Boost
+# lacks the CMake config package, and not on those that have it -- which is why it is not
+# reproducible everywhere.
+#
+# Set it OFF up front rather than unsetting it afterwards: FindBoost only assigns the
+# default under if(NOT DEFINED ...), so a value defined here is preserved, it covers the
+# pre-1.70 module-mode branch below as well, and it does not discard a value a user or
+# toolchain file set deliberately.
+if(NOT DEFINED Boost_USE_DEBUG_RUNTIME)
+    set(Boost_USE_DEBUG_RUNTIME OFF)
+endif()
+
 find_package(Boost ${BOOST_MINIMUM_VERSION} REQUIRED)
 
 if(Boost_VERSION VERSION_LESS 1.69.0)
@@ -220,19 +363,29 @@ endif()
 if(BUNDLED_OPENSSL)
     hunter_add_package(OpenSSL)
 endif()
-find_package(OpenSSL REQUIRED)
+# A static Windows build links the static OpenSSL from depends. With
+# OPENSSL_USE_STATIC_LIBS, FindOpenSSL adds the system libraries it needs
+# (ws2_32 and crypt32) to the OpenSSL targets, so they follow libcrypto.a on the
+# link line. A value a user or toolchain file set is kept.
+if(WIN32 AND STATIC_LIBS AND NOT DEFINED OPENSSL_USE_STATIC_LIBS)
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
+endif()
+find_package(OpenSSL 1.1.0 REQUIRED)
 
 if(BUNDLED_CURL)
     hunter_add_package(CURL)
     find_package(CURL CONFIG REQUIRED)
 else()
     find_package(CURL REQUIRED)
+    # FindCURL adds no system libraries for a static MinGW libcurl. Add the ones
+    # its libcurl.pc lists (zlib comes from ZLIB::ZLIB): curl 8's Schannel
+    # backend needs secur32, and crypt32 is for its certificate handling. A curl
+    # found through its own CMake package (CURL_DIR) carries them already.
+    if(WIN32 AND NOT CURL_DIR)
+        set_property(TARGET CURL::libcurl APPEND PROPERTY INTERFACE_LINK_LIBRARIES
+            secur32 bcrypt advapi32 crypt32 ws2_32 iphlpapi)
+    endif()
 endif()
-
-if(BUNDLED_LIBZIP)
-    hunter_add_package(libzip)
-endif()
-find_package(libzip CONFIG REQUIRED)
 
 find_package(ZLIB REQUIRED)
 
@@ -246,9 +399,6 @@ if(ENABLE_GUI)
         find_package(Qt6 ${QT6_MINIMUM_VERSION} COMPONENTS ${QT_COMPONENTS} REQUIRED)
         set(QT Qt6)
     else()
-        if(BUNDLED_QT5)
-            hunter_add_package(Qt COMPONENTS ${QT_HUNTER_COMPONENTS})
-        endif()
         find_package(Qt5 ${QT5_MINIMUM_VERSION} COMPONENTS ${QT_COMPONENTS} REQUIRED)
         set(QT Qt5)
 
@@ -278,9 +428,67 @@ if(ENABLE_UPNP)
     if(MINIUPNPC_FOUND)
         set(LIBMINIUPNPC PkgConfig::MINIUPNPC)
     else()
-        find_package(miniupnpc CONFIG REQUIRED)
-        set(LIBMINIUPNPC miniupnpc::miniupnpc)
+        find_package(miniupnpc CONFIG QUIET)
+
+        if(miniupnpc_FOUND)
+            set(LIBMINIUPNPC miniupnpc::miniupnpc)
+        else()
+            # ENABLE_UPNP defaults ON so the GUI setting is always operative, but
+            # the library is optional and was not previously needed for a plain
+            # configure. Requiring it here would turn "cmake -B build" into a hard
+            # failure on any machine without it. Build without UPnP instead, and
+            # say so.
+            # No "pass -DENABLE_UPNP=ON to make this fatal" advice here: ENABLE_UPNP
+            # already defaults to ON, and option() caches, so this branch cannot tell
+            # an explicit -DENABLE_UPNP=ON from the default. An earlier revision tried
+            # to and became fatal on every RE-configure once the value was cached.
+            # Offering a switch that does nothing is worse than not offering one.
+            message(WARNING "miniupnpc not found: building without UPnP support.")
+            set(ENABLE_UPNP OFF)
+        endif()
     endif()
+endif()
+
+if(ENABLE_MULTIPROCESS)
+    # The IPC transport is pathname AF_UNIX sockets (src/ipc/). AF_UNIX is not
+    # POSIX-only: Windows 10 1803+ provides it via <afunix.h> with the same
+    # sockaddr_un layout, so the same transport builds on both platforms. The
+    # Windows port swaps the POSIX socket/close-on-exec/permission primitives for
+    # their winsock equivalents (WSASocketW / handle-inherit flags / NTFS ACLs)
+    # in src/ipc/process.cpp and fences the unused fork/spawn paths in the
+    # libmultiprocess subtree; both platforms are driven by this one switch.
+
+    # Cap'n Proto provides the serialization runtime and the capnp / capnpc-c++
+    # code generators; libmultiprocess provides the proxy runtime and the mpgen
+    # generator that turns an interfaces .capnp schema into client/server proxies.
+    #
+    # Cap'n Proto is always an external dependency (system / /usr/local, or the
+    # depends 'capnp' package). In a depends build the toolchain file
+    # (depends/toolchain.cmake.in) pre-seeds MPGEN_EXECUTABLE / CAPNP_EXECUTABLE /
+    # CAPNPC_CXX_EXECUTABLE to the tools it built and points CMAKE_PREFIX_PATH at
+    # the staged libraries, so find_package resolves there.
+    find_package(CapnProto CONFIG REQUIRED)
+
+    if(WITH_EXTERNAL_LIBMULTIPROCESS)
+        # Developer path: link an external libmultiprocess and locate its mpgen.
+        find_package(Libmultiprocess CONFIG REQUIRED)
+        if(NOT MPGEN_EXECUTABLE)
+            find_program(MPGEN_EXECUTABLE NAMES mpgen REQUIRED)
+        endif()
+        message(STATUS "Multiprocess (IPC) build: ENABLED (external libmultiprocess)")
+        message(STATUS "  mpgen:       ${MPGEN_EXECUTABLE}")
+    else()
+        # Default path: build the vendored subtree in-tree (see src/CMakeLists.txt,
+        # add_libmultiprocess()). It produces the 'multiprocess' runtime library and
+        # the 'mpgen' code generator as build targets.
+        message(STATUS "Multiprocess (IPC) build: ENABLED (vendored subtree)")
+    endif()
+    message(STATUS "  Cap'n Proto: ${CapnProto_VERSION}")
+    # Compile definition so the -multiprocess seam code (in gridcoinresearchd and
+    # the GUI) is gated: OFF builds neither reference nor link gridcoin_ipc.
+    add_compile_definitions(ENABLE_MULTIPROCESS)
+else()
+    message(STATUS "Multiprocess (IPC) build: disabled (monolithic, direct calls)")
 endif()
 
 if(ENABLE_TESTS)
@@ -289,6 +497,15 @@ if(ENABLE_TESTS)
     if(SYSTEM_XXD)
         find_program(XXD xxd REQUIRED)
     endif()
+
+    # build/test/with_sanitizer_env.py COMMAND... runs COMMAND with the sanitizer
+    # options and suppression files the CI sanitizer jobs use; any option already
+    # set in the environment wins. It is harmless on a build without sanitizers.
+    configure_file(
+        "${CMAKE_SOURCE_DIR}/test/with_sanitizer_env.py.in"
+        "${CMAKE_BINARY_DIR}/test/with_sanitizer_env.py"
+        USE_SOURCE_PERMISSIONS @ONLY
+    )
 endif()
 
 if(UNIX)
@@ -300,27 +517,400 @@ if(WIN32)
     find_program(MAKENSIS makensis)
 elseif(APPLE)
     enable_language(OBJCXX)
+
+    # Apple's clang driver adds /usr/local/include to every compile as a USER
+    # include path (-I, not -internal-isystem; see `clang++ -###`). CMake finds
+    # it in the compiler's default search list, records it as an implicit
+    # include directory, and so never emits it itself -- not even as the
+    # -isystem that imported targets installed there ask for. Everything under
+    # it, which on Intel is all of Homebrew and Boost among it, was therefore
+    # compiled as project code: 244 Boost warnings per Intel CI build. Taken off
+    # the implicit list, it is emitted as -isystem, and clang drops its own -I
+    # copy in favour of the system entry. /opt/homebrew on Apple Silicon was
+    # never implicit, so it already got -isystem.
+    foreach(lang IN ITEMS C CXX OBJCXX)
+        list(REMOVE_ITEM CMAKE_${lang}_IMPLICIT_INCLUDE_DIRECTORIES /usr/local/include)
+    endforeach()
 endif()
+
+
+# Optimisation level
+# ==================
+
+# Release compiles at -O2, as the Autotools build did (autoconf's default
+# "-g -O2", and -O2 from depends) and as Bitcoin Core does. CMake's own default
+# for CMAKE_<LANG>_FLAGS_RELEASE is "-O3 -DNDEBUG" with GCC and Clang, and
+# nothing here replaced it, so Release builds -- the CI release artifacts among
+# them -- have compiled at -O3 since the migration. RelWithDebInfo is already
+# -O2.
+#
+# Only while the value is still CMake's stock "-O3 -DNDEBUG", both in the cache
+# and in CMAKE_<LANG>_FLAGS_RELEASE_INIT, so a value anyone has changed is left
+# alone. That includes a toolchain file's CMAKE_<LANG>_FLAGS_RELEASE_INIT:
+# CMake appends its own " -O3 -DNDEBUG" to it, so a cache that matches the
+# _INIT value is not necessarily stock. Comparing with the stock value, rather
+# than asking whether the variable was given on the command line, also
+# corrects a build directory configured before this rule: build_targets.sh
+# reconfigures existing directories by default (CLEAN_BUILD=false), and its
+# cache would otherwise keep -O3. The one value this cannot tell from "never
+# set" is the stock string itself, so the rewrite is announced along with how
+# to keep -O3. After the language enables above, so that OBJCXX is covered.
+foreach(lang IN ITEMS C CXX OBJCXX)
+    if(NOT CMAKE_${lang}_COMPILER_LOADED)
+        continue()
+    endif()
+    string(STRIP "${CMAKE_${lang}_FLAGS_RELEASE}" release_flags)
+    string(STRIP "${CMAKE_${lang}_FLAGS_RELEASE_INIT}" init_flags)
+    if(release_flags STREQUAL "-O3 -DNDEBUG" AND init_flags STREQUAL release_flags)
+        message(STATUS "CMAKE_${lang}_FLAGS_RELEASE: CMake's stock \"-O3 -DNDEBUG\" replaced "
+                       "with \"-O2 -DNDEBUG\"; any other value, such as \"-O3\", is kept as given")
+        set_property(CACHE CMAKE_${lang}_FLAGS_RELEASE PROPERTY VALUE "-O2 -DNDEBUG")
+    endif()
+endforeach()
 
 
 # Run probes
 # ==========
 
-if(ENABLE_PIE)
-    check_pie_supported()
-    if(NOT CMAKE_CXX_LINK_PIE_SUPPORTED)
-        message(FATAL_ERROR "PIE is not supported by the current linker")
-    endif()
+# check_pie_supported() is what activates policy CMP0083's handling of
+# POSITION_INDEPENDENT_CODE on executables. Probing only when ENABLE_PIE was ON
+# left the property silently ignored in BOTH directions whenever it was OFF:
+# CMake emitted neither -pie nor -no-pie, so the option could turn PIE on but
+# never off, and OFF actually meant "whatever this toolchain happens to default
+# to". Probe unconditionally so the setting is honoured either way -- OFF then
+# genuinely emits the no-PIE link flags rather than nothing.
+check_pie_supported()
+
+if(ENABLE_PIE AND NOT CMAKE_CXX_LINK_PIE_SUPPORTED)
+    message(FATAL_ERROR "PIE is not supported by the current linker")
 endif()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ${ENABLE_PIE})
 
+# Exploit mitigations
+# ===================
+#
+# Restores the set the Autotools build applied. There --enable-hardening was the
+# DEFAULT (the spelling was --disable-hardening, i.e. opt out) and configure.ac
+# fed HARDENED_CXXFLAGS/CPPFLAGS/LDFLAGS into AM_* so every target inherited
+# them. The CMake port carried none of it across, so nothing built here has had a
+# stack canary, FORTIFY, full RELRO or CET since the migration. ON by default
+# restores that posture rather than inventing a new one; distributions that
+# manage their own hardening can pass -DENABLE_HARDENING=OFF.
+#
+# Every flag is probed before use, so a toolchain that outright rejects one simply
+# does not get it -- that is what keeps the ELF-only linker flags off Mach-O and
+# -fcf-protection off arm64, where they are not valid options.
+#
+# Probing alone is not sufficient, though: it answers "does the driver accept
+# this?", not "does this target honour the code it generates?". Flags that are
+# accepted everywhere but only meaningful on ELF are gated on the platform below.
+include(CheckCXXCompilerFlag)
+include(CheckLinkerFlag)
+
+if(ENABLE_HARDENING)
+    # _FORTIFY_SOURCE needs optimisation; without it GCC warns and the checks do
+    # nothing. Debug is excluded via a generator expression. Sanitizer builds are
+    # excluded too: they are built RelWithDebInfo here, so the config test alone
+    # would not catch them, and the instrumentation does not combine well with
+    # FORTIFY's interception of the same calls.
+    string(FIND "${CMAKE_CXX_FLAGS}" "-fsanitize" _hardening_sanitizer_pos)
+    if(_hardening_sanitizer_pos EQUAL -1)
+        # -U first: some toolchains predefine it, and redefining warns.
+        # Guard on there being an optimised config at all, not merely on the
+        # config not being named Debug: with no CMAKE_BUILD_TYPE the compiler runs
+        # at -O0, and FORTIFY then warns on every translation unit while checking
+        # nothing. doc/build.md describes that configuration, so it is reachable.
+        if(CMAKE_BUILD_TYPE OR CMAKE_CONFIGURATION_TYPES)
+            # A _FORTIFY_SOURCE already in CMAKE_C_FLAGS or CMAKE_CXX_FLAGS is the
+            # packager's choice, and it stands for that language, as it did under
+            # Autotools, where the user's CPPFLAGS and CXXFLAGS came after the
+            # hardening ones. Ours could not override one passed through -Wp
+            # anyway: -Wp options reach the preprocessor after every driver -U and
+            # -D. Fedora's -Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3 wins quietly;
+            # the Flatpak SDK's -Wp,-D_FORTIFY_SOURCE=3, with no -U, wins with a
+            # warning in every translation unit that the macro was redefined.
+            set(_hardening_fortify_when "$<NOT:$<CONFIG:Debug>>")
+            foreach(_hardening_lang C CXX)
+                string(FIND "${CMAKE_${_hardening_lang}_FLAGS}" "_FORTIFY_SOURCE" _hardening_fortify_pos)
+                if(NOT _hardening_fortify_pos EQUAL -1)
+                    string(APPEND _hardening_fortify_when ",$<NOT:$<COMPILE_LANGUAGE:${_hardening_lang}>>")
+                    message(STATUS "Hardening: _FORTIFY_SOURCE left as CMAKE_${_hardening_lang}_FLAGS set it")
+                endif()
+            endforeach()
+            add_compile_options(
+                "$<$<AND:${_hardening_fortify_when}>:-U_FORTIFY_SOURCE>"
+                "$<$<AND:${_hardening_fortify_when}>:-D_FORTIFY_SOURCE=2>")
+        else()
+            message(STATUS "Hardening: _FORTIFY_SOURCE skipped (no build type, so no optimisation)")
+        endif()
+    else()
+        message(STATUS "Hardening: _FORTIFY_SOURCE skipped (sanitizer build)")
+    endif()
+
+    # Stack canaries are supported by every toolchain we ship, on every target.
+    set(hardening_flags -fstack-protector-all -Wstack-protector)
+
+    # The rest are ELF/AAPCS mitigations, and they are gated on the platform
+    # rather than on the probe alone. check_cxx_compiler_flag proves only that the
+    # driver ACCEPTS a flag -- never that the target's runtime honours the code it
+    # generates. Clang accepts all three on targets where they do nothing
+    # (-mbranch-protection is inert on x86) or are actively wrong, so probing
+    # cannot tell the two apart and an earlier revision of this block assumed a
+    # symmetry that the build logs do not show.
+    #
+    # On Apple Silicon -mbranch-protection=standard emits pointer-authentication
+    # sign/authenticate pairs around returns. PAC on Darwin is an ABI-level opt-in
+    # (arm64e), not a per-flag one: on plain arm64 the signed return addresses
+    # defeat libunwind, so a throw never reaches a handler that is lexically right
+    # above it. That turned the in-scope catch in ThreadSocketHandler into a
+    # "terminating due to uncaught exception" abort and hung the macOS ARM64
+    # functional tests, while macOS Intel -- where the same flag is a no-op --
+    # passed in three minutes. Keep all three off Mach-O.
+    # -fcf-protection=full stays on every platform. It is meaningful on macOS Intel
+    # -- the Mach-O x86_64 CONTROL_FLOW check reads endbr64 at the entrypoint, and
+    # that check passes today -- and the probe rejects it outright on arm64, so it
+    # lands only where it does something.
+    list(APPEND hardening_flags -fcf-protection=full)
+
+    # Two flags are withheld from Mach-O:
+    #
+    #   -mbranch-protection=standard emits pointer-authentication sign/authenticate
+    #   pairs around returns on AArch64. PAC on Darwin is an ABI-level opt-in
+    #   (arm64e), not a per-flag one, and on plain arm64 the signed return addresses
+    #   stop a throw from reaching its handler -- an exception raised directly
+    #   beneath an in-scope catch aborted as "uncaught", and the macOS ARM64
+    #   functional tests hung. Removing it turned that job green.
+    #
+    #   -fstack-clash-protection is accepted by the driver and then reported as
+    #   "argument unused during compilation" on every translation unit, so it buys
+    #   nothing on Darwin and costs several hundred warnings.
+    #
+    # security-check.py drops the Mach-O arm64 BRANCH_PROTECTION check to match;
+    # the two must be changed together or the artifact check contradicts the build.
+    if(NOT APPLE)
+        list(APPEND hardening_flags -fstack-clash-protection -mbranch-protection=standard)
+    else()
+        message(STATUS "Hardening: branch-protection and stack-clash skipped (Mach-O target)")
+    endif()
+
+    # Make the probes reject a flag the driver accepts but then does not implement.
+    #
+    # check_cxx_compiler_flag only proves the driver did not reject the spelling. Clang
+    # will accept a flag it has no implementation for on the current target and then
+    # report "argument unused during compilation: '-fstack-clash-protection'" on EVERY
+    # translation unit: the flag is requested, the mitigation is absent, and the build
+    # gains several hundred warnings saying so. OpenBSD/amd64 does exactly this with
+    # -fstack-clash-protection (316 warnings in a full build), and Darwin does the same.
+    #
+    # Promoting that diagnostic to an error for the duration of the probes turns
+    # "accepted but ignored" into a failed check, so the flag is simply not added. GCC
+    # has no such warning and errors on the option, so probe for it first -- without the
+    # guard, setting it unconditionally would make every hardening probe below fail on
+    # GCC and silently disable hardening on Linux.
+    #
+    # This does not catch a flag that is accepted AND honoured but semantically wrong for
+    # the target -- see -mbranch-protection on Mach-O above, which generates real code
+    # that breaks unwinding. No probe can see that; it stays platform-gated.
+    check_cxx_compiler_flag("-Werror=unused-command-line-argument" HARDENING_HAVE_WERROR_UNUSED_ARG)
+    set(_hardening_saved_required_flags "${CMAKE_REQUIRED_FLAGS}")
+    if(HARDENING_HAVE_WERROR_UNUSED_ARG)
+        string(APPEND CMAKE_REQUIRED_FLAGS " -Werror=unused-command-line-argument")
+    endif()
+
+    foreach(flag ${hardening_flags})
+        string(MAKE_C_IDENTIFIER "HARDENING_CXX${flag}" flag_var)
+        check_cxx_compiler_flag("${flag}" ${flag_var})
+        if(${flag_var})
+            add_compile_options("${flag}")
+        else()
+            message(STATUS "Hardening: ${flag} not applied (compiler accepts no working "
+                           "implementation for this target)")
+        endif()
+    endforeach()
+
+    set(CMAKE_REQUIRED_FLAGS "${_hardening_saved_required_flags}")
+    unset(_hardening_saved_required_flags)
+
+    # separate-code keeps executable and non-executable content on distinct pages,
+    # which shrinks what a ROP search has to work with. GNU ld enables it by default
+    # on x86 since binutils 2.31, so x86 had it accidentally; the aarch64 cross
+    # linker does not, which is how the arm64 job failed this check while every
+    # x86 job passed. Ask for it rather than inheriting it.
+    foreach(flag -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -Wl,-z,separate-code)
+        string(MAKE_C_IDENTIFIER "HARDENING_LD${flag}" flag_var)
+        check_linker_flag(CXX "${flag}" ${flag_var})
+        if(${flag_var})
+            add_link_options("${flag}")
+        endif()
+    endforeach()
+endif()
+
 # Set compiler flags
 if(APPLE)
     add_compile_options(-Wno-error=deprecated-declarations)
-    add_compile_options(-Wno-error=thread-safety-analysis)
-    add_compile_options(-Wno-error=thread-safety-reference)
+    # MAC_OSX gates macOS-specific code paths inherited from Bitcoin (data
+    # directory under ~/Library/Application Support, F_FULLFSYNC, getentropy,
+    # pthread thread names). The Autotools build defined it via configure.ac;
+    # the move to CMake dropped it, silently disabling those paths on macOS.
+    add_compile_definitions(MAC_OSX)
 endif()
+
+# Enable Clang Thread Safety Analysis where supported (issue #2869). The
+# analyzer ships in upstream Clang and Apple Clang; gcc has no equivalent
+# attribute set. Detect rather than gating on CMAKE_CXX_COMPILER_ID so any
+# clang-compatible compiler picks it up (e.g. clang-cl on Windows).
+#
+# By default thread-safety diagnostics are warning-only (the -Wno-error=
+# flags below): a stale or missing annotation does not break a normal build.
+# When WERROR_THREAD_SAFETY is set they are promoted to hard errors instead.
+# The "Thread Safety (Clang)" job in .github/workflows/cmake_quality.yml
+# builds with WERROR_THREAD_SAFETY=ON, so an annotation regression fails CI;
+# a local build can opt in the same way. See doc/developer-notes.md, section
+# "Clang thread-safety analysis".
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag(-Wthread-safety HAVE_CLANG_THREAD_SAFETY)
+if(HAVE_CLANG_THREAD_SAFETY)
+    add_compile_options(-Wthread-safety)
+    if(WERROR_THREAD_SAFETY)
+        add_compile_options(-Werror=thread-safety-analysis)
+        add_compile_options(-Werror=thread-safety-reference)
+    else()
+        add_compile_options(-Wno-error=thread-safety-analysis)
+        add_compile_options(-Wno-error=thread-safety-reference)
+    endif()
+endif()
+
+# Warning flags, restored from the Autotools build.
+#
+# configure.ac carried these until it was deleted (291528e7f, 2026-02-18).
+# CMakeLists.txt never had them -- `git log -S'-Wall' -- CMakeLists.txt` is empty
+# from its introduction (91a84ffd3, 2023-01-28) -- so cmake builds went unwarned
+# for the whole period both systems coexisted, and after the removal nobody was
+# warned at all. -Wthread-safety above is the sole survivor, and only because the
+# analyzer rollout (#2869) re-added it for its own purposes. See issue #3387.
+#
+# Each flag is probed rather than assumed, matching the hardening loop above, so
+# a compiler that does not know one degrades instead of failing to configure.
+#
+# One deliberate difference from configure.ac: it skipped this whole block when
+# CXXFLAGS was given on the configure line. CMake has no equivalent, and faking
+# one would be worse -- CMAKE_CXX_FLAGS is emitted BEFORE directory-level
+# COMPILE_OPTIONS, so keying off it would silently drop every warning for anyone
+# who passes something ordinary like -march=native. These are unconditional.
+set(WARN_CXXFLAGS
+    -Wall
+    -Wextra
+    -Wvla
+    -Wshadow-field
+    -Wloop-analysis
+    -Wunused-member-function
+    -Wdate-time
+    -Wconditional-uninitialized
+    -Wduplicated-branches
+    -Wduplicated-cond
+    -Wlogical-op
+    -Woverloaded-virtual
+    -Wunreachable-code-loop-increment
+    -Wimplicit-fallthrough
+)
+
+# Suppressions the tree was already tuned to under Autotools. These are not new
+# policy: they are the families configure.ac had already decided were not worth
+# chasing here, and starting from them is what keeps this a restoration rather
+# than a triage exercise from zero.
+#
+# -Wimplicit-fallthrough is the one deliberate deviation from configure.ac, and it
+# is enabled rather than suppressed. configure.ac added it to CXXFLAGS and then
+# added -Wno-implicit-fallthrough after it, so the later flag won and the warning
+# was effectively off -- but that suppression came in from upstream Bitcoin, not
+# from a decision here. This tree uses [[fallthrough]] in its own code, so the
+# convention is already followed and only the enforcement was missing.
+# Bare names: the loop below builds both -W<name> (to probe) and -Wno-<name>.
+set(WARN_SUPPRESS_CXXFLAGS
+    unused-parameter
+    self-assign
+    deprecated-register
+    deprecated-copy
+)
+
+# Every flag below is added for C++ only. configure.ac put them in CXXFLAGS, so
+# that is the faithful port, and it is also required: several of them
+# (-Woverloaded-virtual, -Wno-deprecated-copy, -Wshadow-field) are C++-only
+# spellings that make GCC emit a "valid for C++/ObjC++ but not for C" note on
+# every C translation unit if they reach one.
+# Probe under -Werror, the way configure.ac did: it passed $CXXFLAG_WERROR as the
+# fourth argument of every AX_CHECK_COMPILE_FLAG above. Without it the probe only
+# proves the driver did not reject the spelling, and Clang accepts an unknown -W
+# option with nothing worse than -Wunknown-warning-option -- so a flag it does not
+# implement would be probed as supported and then added to every compile. This is
+# the same guard the hardening loop above applies for its own reason; -Werror is
+# itself probed first, because a compiler that does not take it must not have
+# every subsequent check fail.
+check_cxx_compiler_flag("-Werror" WARN_HAVE_WERROR)
+set(_warn_saved_required_flags "${CMAKE_REQUIRED_FLAGS}")
+if(WARN_HAVE_WERROR)
+    string(APPEND CMAKE_REQUIRED_FLAGS " -Werror")
+endif()
+
+# -Wformat-security is probed with -Wformat rather than on its own: GCC answers a
+# lone -Wformat-security with "-Wformat-security ignored without -Wformat", which
+# the -Werror guard above turns into a failed probe, silently dropping the flag.
+# configure.ac probed the pair as one string for exactly this reason. They are
+# added as two separate options because a single add_compile_options string
+# containing a space reaches the compiler as one unrecognised argument.
+check_cxx_compiler_flag("-Wformat -Wformat-security" WARN_CXX_Wformat_security)
+if(WARN_CXX_Wformat_security)
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wformat>"
+                        "$<$<COMPILE_LANGUAGE:CXX>:-Wformat-security>")
+endif()
+
+foreach(flag ${WARN_CXXFLAGS})
+    string(MAKE_C_IDENTIFIER "WARN_CXX${flag}" flag_var)
+    check_cxx_compiler_flag("${flag}" ${flag_var})
+    if(${flag_var})
+        add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${flag}>")
+    endif()
+endforeach()
+
+# GCC ignores an unknown -Wno-* silently but then complains about it if any other
+# warning fires, so probe the POSITIVE form and add the negative one only if the
+# compiler knows it. configure.ac did the same, for the same reason.
+foreach(flag ${WARN_SUPPRESS_CXXFLAGS})
+    string(MAKE_C_IDENTIFIER "WARN_SUPPRESS_CXX_${flag}" flag_var)
+    check_cxx_compiler_flag("-W${flag}" ${flag_var})
+    if(${flag_var})
+        add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-${flag}>")
+    endif()
+endforeach()
+
+# Mirrors Autotools --enable-werror. Thread-safety is deliberately absent: it has
+# its own WERROR_THREAD_SAFETY switch above, which CI already sets.
+if(WERROR)
+    set(WERROR_CXXFLAGS
+        -Werror=vla
+        -Werror=shadow-field
+        -Werror=switch
+        -Werror=range-loop-analysis
+        -Werror=unused-variable
+        -Werror=date-time
+        -Werror=return-type
+        -Werror=conditional-uninitialized
+        -Werror=unreachable-code-loop-increment
+        -Werror=mismatched-tags
+    )
+
+    foreach(flag ${WERROR_CXXFLAGS})
+        string(MAKE_C_IDENTIFIER "WERROR_CXX${flag}" flag_var)
+        check_cxx_compiler_flag("${flag}" ${flag_var})
+        if(${flag_var})
+            add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${flag}>")
+        endif()
+    endforeach()
+endif()
+
+set(CMAKE_REQUIRED_FLAGS "${_warn_saved_required_flags}")
+unset(_warn_saved_required_flags)
 
 if(STATIC_LIBS)
     set(CMAKE_LINK_SEARCH_START_STATIC ON)
@@ -336,7 +926,7 @@ if(STATIC_RUNTIME)
 endif()
 
 # Set endianness
-if(CMAKE_CXX_BYTE_ORDER EQUAL BIG_ENDIAN)
+if(CMAKE_CXX_BYTE_ORDER STREQUAL "BIG_ENDIAN")
     set(WORDS_BIGENDIAN 1)
 endif()
 
@@ -370,6 +960,14 @@ list(APPEND CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 check_symbol_exists(pipe2 "unistd.h" HAVE_DECL_PIPE2)
 list(REMOVE_ITEM CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 check_symbol_exists(setsid "unistd.h" HAVE_DECL_SETSID)
+
+# randomenv.cpp gathers entropy from the network interface list under
+# HAVE_DECL_GETIFADDRS && HAVE_DECL_FREEIFADDRS. Nothing has ever defined those:
+# configure.ac had no AC_CHECK_DECLS for them either, so that block has been
+# compiled out since the code was imported, and AddSockaddr sat there unused --
+# which is how -Wunused-function found it.
+check_symbol_exists(getifaddrs "sys/types.h;ifaddrs.h" HAVE_DECL_GETIFADDRS)
+check_symbol_exists(freeifaddrs "sys/types.h;ifaddrs.h" HAVE_DECL_FREEIFADDRS)
 
 check_symbol_exists(le16toh "${ENDIAN_INCLUDES}" HAVE_DECL_LE16TOH)
 check_symbol_exists(le32toh "${ENDIAN_INCLUDES}" HAVE_DECL_LE32TOH)
@@ -424,6 +1022,79 @@ check_symbol_exists(getauxval "sys/auxv.h" HAVE_STRONG_GETAUXVAL)
 add_subdirectory(src)
 if(ENABLE_DOCS)
     add_subdirectory(doc)
+endif()
+
+# Python functional test suite (test/functional). Phase 4 — refs #2932.
+# ====================================================================
+# Generates test/config.ini from config.ini.in, then registers:
+#   * a CTest case `functional_tests` (run via `ctest -R functional_tests`)
+#   * a convenience target `check-functional` (run via `cmake --build . --target check-functional`)
+# both of which drive test/functional/test_runner.py.
+if(ENABLE_TESTS AND ENABLE_DAEMON)
+    # How many times the functional_tests case runs a script that failed with one
+    # of test_runner.py's known transient slow-node signatures (--attempts). The
+    # CI sanitizer jobs set 1: a node halted by a sanitizer can fail its test with
+    # one of those signatures, and a retry that passes would hide it.
+    set(FUNCTIONAL_TEST_ATTEMPTS 3 CACHE STRING "test_runner.py --attempts for the functional_tests ctest case")
+
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        set(PACKAGE_NAME "${PROJECT_NAME}")
+        set(PACKAGE_BUGREPORT "https://github.com/gridcoin-community/Gridcoin-Research/issues")
+        set(ENABLE_GRIDCOIND_CONF "true")
+        set(ENABLE_CLI_CONF "true")      # no separate gridcoin-cli, but the daemon
+                                         # doubles as the RPC client (GRIDCOINCLI below
+                                         # points at it), so CLI tests can run.
+        set(ENABLE_WALLET_CONF "true")   # Gridcoin always builds the BDB wallet
+        set(ENABLE_ZMQ_CONF "false")     # Gridcoin has no ZMQ support
+
+        configure_file(
+            "${CMAKE_SOURCE_DIR}/test/config.ini.in"
+            "${CMAKE_BINARY_DIR}/test/config.ini"
+            @ONLY
+        )
+
+        # gridcoinresearchd is emitted to ${CMAKE_BINARY_DIR}/bin (see
+        # src/CMakeLists.txt RUNTIME_OUTPUT_DIRECTORY), not the src/ path the
+        # ported framework defaults to, so point it there via the framework's
+        # supported GRIDCOIND/GRIDCOINCLI overrides. (The daemon doubles as CLI.)
+        set(_functional_env
+            "GRIDCOIND=${CMAKE_BINARY_DIR}/bin/gridcoinresearchd${CMAKE_EXECUTABLE_SUFFIX}"
+            "GRIDCOINCLI=${CMAKE_BINARY_DIR}/bin/gridcoinresearchd${CMAKE_EXECUTABLE_SUFFIX}"
+        )
+
+        # Only register the CTest case for native builds: the functional suite
+        # spawns and drives a real gridcoinresearchd, which cannot run under a
+        # cross-compile's emulator (e.g. the Windows mingw build's `ctest` runs
+        # under wine on a Linux host). Cross builds still get config.ini and the
+        # check-functional target, just not the auto-run ctest case.
+        if(NOT CMAKE_CROSSCOMPILING)
+            add_test(
+                NAME functional_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        "${CMAKE_SOURCE_DIR}/test/functional/test_runner.py"
+                        "--configfile=${CMAKE_BINARY_DIR}/test/config.ini"
+                        --ci --quiet --combinedlogslen=4000 --attempts=${FUNCTIONAL_TEST_ATTEMPTS}
+            )
+            set_tests_properties(functional_tests PROPERTIES
+                ENVIRONMENT "${_functional_env}"
+                RUN_SERIAL TRUE   # tests spin up daemons; don't overlap with other ctest cases
+                TIMEOUT 1800
+            )
+        endif()
+
+        add_custom_target(check-functional
+            COMMAND ${CMAKE_COMMAND} -E env ${_functional_env}
+                    ${Python3_EXECUTABLE}
+                    "${CMAKE_SOURCE_DIR}/test/functional/test_runner.py"
+                    "--configfile=${CMAKE_BINARY_DIR}/test/config.ini"
+            USES_TERMINAL
+            VERBATIM
+            COMMENT "Running Gridcoin functional test suite"
+        )
+    else()
+        message(WARNING "Python3 interpreter not found; the `functional_tests` CTest case will not be registered. Install Python 3 and reconfigure to enable it.")
+    endif()
 endif()
 
 # CPack packaging

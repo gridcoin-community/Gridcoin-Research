@@ -6,52 +6,157 @@
 
 #include "chainparams.h"
 
+#include "amount.h"
+#include "arith_uint256.h"
 #include "consensus/merkle.h"
 #include <key.h>
+#include "primitives/block.h"
+#include "script.h"
 #include "tinyformat.h"
+#include "util.h"
 #include "util/strencodings.h"
+#include "util/system.h"
 
 #include <assert.h>
 
+#include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 
-/* TODO: Uncomment this when CBlock is moved from main.h
-static CBlock CreateGenesisBlock(const char* pszTimestamp, uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion)
+// Construct the genesis block for the active network (main/testnet/regtest).
+// Moved out of LoadBlockIndex (issue #3125, workstream C5), fulfilling the
+// old "uncomment when CBlock is moved out of main.h" TODO that sat here --
+// CBlock moved to primitives/block.h in #3060. Behavior-preserving: note the
+// mainnet/testnet coinbase nTime (1413033777) deliberately differs from the
+// testnet block nTime (1406674534), exactly as the original code had it.
+CBlock CreateGenesisBlock()
 {
-    CMutableTransaction txNew;
-    txNew.nVersion = 1;
-    txNew.nTime = nTime;
-    txNew.vin.resize(1);
-    txNew.vout.resize(1);
-    txNew.vin[0].scriptSig = CScript() << 0 << CBigNum(42) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
-    txNew.vout[0].SetEmpty();
+    // Genesis block - Genesis2
+    // MainNet - Official New Genesis Block:
+    ////////////////////////////////////////
+    /*
+         21:58:24 block.nTime = 1413149999
+        10/12/14 21:58:24 block.nNonce = 1572771
+        10/12/14 21:58:24 block.GetHash = 00000f762f698b5962aa81e38926c3a3f1f03e0b384850caed34cd9164b7f990
+        10/12/14 21:58:24 CBlock(hash=00000f762f698b5962aa81e38926c3a3f1f03e0b384850caed34cd9164b7f990, ver=1,
+        hashPrevBlock=0000000000000000000000000000000000000000000000000000000000000000,
+        hashMerkleRoot=0bd65ac9501e8079a38b5c6f558a99aea0c1bcff478b8b3023d09451948fe841, nTime=1413149999, nBits=1e0fffff, nNonce=1572771, vtx=1, vchBlockSig=)
+        10/12/14 21:58:24   Coinbase(hash=0bd65ac950, nTime=1413149999, ver=1, vin.size=1, vout.size=1, nLockTime=0)
+        CTxIn(COutPoint(0000000000, 4294967295), coinbase 00012a4531302f31312f313420416e6472656120526f73736920496e647573747269616c20486561742076696e646963617465642077697468204c454e522076616c69646174696f6e)
+        CTxOut(empty)
+        vMerkleTree: 0bd65ac950
 
-    CBlock genesis;
-    genesis.nTime    = nTime;
-    genesis.nBits    = nBits;
-    genesis.nNonce   = nNonce;
-    genesis.nVersion = nVersion;
-    genesis.vtx.push_back(txNew);
-    genesis.hashPrevBlock.SetNull();
-    genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
-    return genesis;
-} */
+    */
 
-/**
- * Build the genesis block. Note that the output of its generation
- * transaction cannot be spent since it did not originally exist in the
- * database.
- *
- * CBlock(hash=00000f762f698b5962aa81e38926c3a3f1f03e0b384850caed34cd9164b7f990, ver=1,
- *        hashPrevBlock=0000000000000000000000000000000000000000000000000000000000000000,
- *        hashMerkleRoot=0bd65ac9501e8079a38b5c6f558a99aea0c1bcff478b8b3023d09451948fe841, nTime=1413149999, nBits=1e0fffff, nNonce=1572771, vtx=1, vchBlockSig=)
-static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion)
-{
     const char* pszTimestamp = "10/11/14 Andrea Rossi Industrial Heat vindicated with LENR validation";
-    return CreateGenesisBlock(pszTimestamp, nTime, nNonce, nBits, nVersion);
-}  */
+
+    CMutableTransaction txNew;
+    //GENESIS TIME
+    txNew.nVersion = 1;
+    txNew.nTime = Params().IsMockableChain() ? 1296688602u : 1413033777u;
+    txNew.vin.resize(1);
+    txNew.vin[0].scriptSig = CScript() << 0 << CScriptNum(42) << std::vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
+
+    if (Params().IsMockableChain()) {
+        // Regtest premine. Pays 10 UTXOs of 100,000 GRC each (1M total) to
+        // the well-known secp256k1 privkey=1 P2PKH address. The matching
+        // private key is `01..01` (32 bytes of 0x01... no, scalar value 1)
+        // and is imported into the wallet by init.cpp under -regtest. UTXOs
+        // are marked immediately mature by GetBlocksToMaturity's regtest
+        // shortcut so the staker can use them at height 1.
+        //
+        // Master plan calls for 10M GRC across 100 UTXOs (final amount/dist
+        // needs maintainer signoff — flagged in PR description). Tonight's
+        // smaller layout is enough to fund Phase 2B.2 generate tests.
+        const std::vector<unsigned char> kRegtestPubKeyHash = {
+            0x75, 0x1e, 0x76, 0xe8, 0x19, 0x91, 0x96, 0xd4, 0x54, 0x94,
+            0x1c, 0x45, 0xd1, 0xb3, 0xa3, 0x23, 0xf1, 0x43, 0x3b, 0xd6
+        };
+        const CScript premine_script = CScript()
+            << OP_DUP << OP_HASH160
+            << kRegtestPubKeyHash
+            << OP_EQUALVERIFY << OP_CHECKSIG;
+        txNew.vout.resize(10);
+        for (size_t i = 0; i < txNew.vout.size(); ++i) {
+            txNew.vout[i].nValue = 100000 * COIN;
+            txNew.vout[i].scriptPubKey = premine_script;
+        }
+    } else {
+        txNew.vout.resize(1);
+        txNew.vout[0].SetEmpty();
+    }
+    CBlock block;
+    block.vtx.push_back(CTransaction(txNew));
+    block.hashPrevBlock.SetNull();
+    block.hashMerkleRoot = BlockMerkleRoot(block);
+    const bool fRegTest = Params().IsMockableChain();
+    // Regtest genesis announces a modern block version so the staker
+    // walking back to it via GetProofOfStakeReward() sees pindexPrev->nVersion
+    // >= 10 and uses GetConstantBlockReward(); with nVersion=1 the call
+    // falls into the coin-age formula with our nCoinAge=0 argument and
+    // returns a zero subsidy, which fails Claim::WellFormed.
+    block.nVersion = fRegTest ? 14 : 1;
+    //R&D - Testers Wanted Thread:
+    block.nTime    = fRegTest ? 1296688602 : !OnTestnet() ? 1413033777 : 1406674534;
+    //Official Launch time:
+    block.nBits    = UintToArith256(Params().GetConsensus().powLimit).GetCompact();
+    block.nNonce = fRegTest ? 0 : !OnTestnet() ? 130208 : 22436;
+    LogPrintf("starting Genesis Check...");
+    // If genesis block hash does not match, then generate new genesis hash.
+    if (block.GetHash(true) != (fRegTest ? hashGenesisBlockRegTest : !OnTestnet() ? hashGenesisBlock : hashGenesisBlockTestNet))
+    {
+        LogPrintf("Searching for genesis block...");
+        // This will figure out a valid hash and Nonce if you're
+        // creating a different genesis block: 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000xFFF
+        arith_uint256 hashTarget = arith_uint256().SetCompact(block.nBits);
+        arith_uint256 thash;
+        while (true)
+        {
+            thash = UintToArith256(block.GetHash(true));
+            if (thash <= hashTarget)
+                break;
+            if ((block.nNonce & 0xFFF) == 0)
+            {
+                LogPrintf("nonce %08X: hash = %s (target = %s)", block.nNonce, thash.ToString(), hashTarget.ToString());
+            }
+            ++block.nNonce;
+            if (block.nNonce == 0)
+            {
+                LogPrintf("NONCE WRAPPED, incrementing time");
+                ++block.nTime;
+            }
+        }
+        LogPrintf("block.nTime = %u ", block.nTime);
+        LogPrintf("block.nNonce = %u ", block.nNonce);
+        LogPrintf("block.GetHash = %s", block.GetHash(true).ToString());
+    }
+
+
+    block.print();
+
+    //// debug print
+
+    //GENESIS3: Official Merkle Root
+    if (!fRegTest) {
+        uint256 merkle_root = uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
+        assert(block.hashMerkleRoot == merkle_root);
+        assert(block.GetHash(true) == (!OnTestnet() ? hashGenesisBlock : hashGenesisBlockTestNet));
+    } else {
+        // Regtest genesis is deterministic (fixed nVersion/nTime/nNonce and a
+        // fixed premine coinbase), so its hash is stable and assertable. Mirror
+        // the main/testnet assert so a future premine-layout change can't leave
+        // hashGenesisBlockRegTest (chainparams.h) silently stale.
+        LogPrintf("regtest genesis hash = %s merkle_root = %s nNonce = %u nTime = %u",
+                  block.GetHash(true).ToString(),
+                  block.hashMerkleRoot.ToString(),
+                  block.nNonce, block.nTime);
+        assert(block.GetHash(true) == hashGenesisBlockRegTest);
+    }
+
+    return block;
+}
 
 /**
  * Main network
@@ -70,10 +175,24 @@ public:
         consensus.BlockV12Height = 2671700;
         consensus.BlockV13Height = 3989800;
         consensus.BlockV14Height = 3990000;
+        consensus.BlockV15Height = std::numeric_limits<int>::max();
+        consensus.PendingPoolRetention = 28800; // ~30 days at ~90s spacing (issue #1783)
         consensus.ProtocolVersionGracePeriod = 900 * 7; // ~6.5 days
         consensus.PollV3Height = 2671700;
         consensus.ProjectV2Height = 2671700;
+        consensus.PollMultiAddressHeight = std::numeric_limits<int>::max();
         consensus.AutoGreylistAuditHeight = 3989800;
+        // TBD: set coincident with BlockV15Height when v15 is scheduled. numeric_limits max keeps
+        // the deep-copy overlay fix inactive on mainnet until then (mirrors PollMultiAddressHeight).
+        consensus.AutoGreylistDeepCopyHeight = std::numeric_limits<int>::max();
+        // TBD: set coincident with BlockV15Height when v15 is scheduled. numeric_limits max keeps the
+        // scraper no_records total-credit fix inactive on mainnet until then (mirrors the deep-copy fix).
+        consensus.AutoGreylistTotalCreditFixHeight = std::numeric_limits<int>::max();
+        // TBD: set coincident with BlockV15Height when v15 is scheduled. Must never be set
+        // below AutoGreylistDeepCopyHeight (see Consensus::Params).
+        consensus.AutoGreylistRedesignHeight = std::numeric_limits<int>::max();
+        // TBD: set coincident with BlockV15Height when v15 is scheduled.
+        consensus.MessageContractDisableHeight = std::numeric_limits<int>::max();
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
         consensus.ConstantBlockRewardCeiling = 500 * COIN;
@@ -194,10 +313,24 @@ public:
         consensus.BlockV12Height = 1871830;
         consensus.BlockV13Height = 2870000;
         consensus.BlockV14Height = 3126500;
+        consensus.BlockV15Height = std::numeric_limits<int>::max();
+        consensus.PendingPoolRetention = 28800; // identical to mainnet (~30 days at ~90s); override via -pendingpoolretention for isolated-testnet runs (issue #1783)
         consensus.ProtocolVersionGracePeriod = 900 * 21; // ~19.6 days — extended because v14 fork preceded deployment
         consensus.PollV3Height = 1944820;
         consensus.ProjectV2Height = 1944820;
+        consensus.PollMultiAddressHeight = std::numeric_limits<int>::max();
         consensus.AutoGreylistAuditHeight = 3111000;
+        // Inactive by default; activated on the isolated mesh / public testnet via the
+        // -autogreylistdeepcopyheight override ahead of v15.
+        consensus.AutoGreylistDeepCopyHeight = std::numeric_limits<int>::max();
+        // Inactive by default; activated on the isolated mesh / public testnet via the
+        // -autogreylisttotalcreditfixheight override ahead of v15.
+        consensus.AutoGreylistTotalCreditFixHeight = std::numeric_limits<int>::max();
+        // TBD: set coincident with BlockV15Height when v15 is scheduled. Must never be set
+        // below AutoGreylistDeepCopyHeight (see Consensus::Params).
+        consensus.AutoGreylistRedesignHeight = std::numeric_limits<int>::max();
+        // TBD: set coincident with BlockV15Height when v15 is scheduled.
+        consensus.MessageContractDisableHeight = std::numeric_limits<int>::max();
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
         consensus.ConstantBlockRewardCeiling = 500 * COIN;
@@ -260,6 +393,93 @@ public:
     }
 };
 
+/**
+ * Regression test
+ *
+ * Local development chain in which blocks can be deterministically generated for
+ * functional testing. All version-gate heights are set to 0 so the chain runs at
+ * the latest consensus rules from genesis. `powLimit` is the most permissive
+ * 256-bit value so the genesis nonce and any subsequent kernel-target checks
+ * pass trivially. The `m_is_mockable_chain` flag is the gate consulted by
+ * regtest-only code paths (zero stake-age, no scraper threads, no auto-superblock
+ * attach). Magic bytes match Bitcoin Core's regtest for ergonomic compatibility
+ * with downstream tooling.
+ */
+class CRegTestParams : public CChainParams {
+public:
+    CRegTestParams() {
+        strNetworkID = CBaseChainParams::REGTEST;
+        consensus.ProtocolV2Height = 0;
+        consensus.ResearchAgeHeight = 0;
+        consensus.BlockV8Height = 0;
+        consensus.BlockV9Height = 0;
+        consensus.BlockV9TallyHeight = 0;
+        consensus.BlockV10Height = 0;
+        consensus.BlockV11Height = 0;
+        consensus.BlockV12Height = 0;
+        consensus.BlockV13Height = 0;
+        consensus.BlockV14Height = 0;
+        // V15 stays inert on regtest by default (matching CMainParams /
+        // CTestNetParams) so the functional-test suite, which mines v14 blocks,
+        // is accepted. Without this the member is left at 0 and IsV15Enabled
+        // would be true from genesis, rejecting every v14 block with
+        // "AcceptBlock: reject too old nVersion = 14". Activate early in an
+        // isolated regtest run with -blockv15height=N to exercise POOL
+        // contracts (issue #1783).
+        consensus.BlockV15Height = std::numeric_limits<int>::max();
+        consensus.PendingPoolRetention = 28800; // shorten via -pendingpoolretention for POOL regtest runs (issue #1783)
+        consensus.ProtocolVersionGracePeriod = 900 * 7;
+        consensus.PollV3Height = 0;
+        consensus.ProjectV2Height = 0;
+        consensus.PollMultiAddressHeight = 0;
+        consensus.AutoGreylistAuditHeight = 0;
+        consensus.AutoGreylistDeepCopyHeight = 0;
+        consensus.AutoGreylistTotalCreditFixHeight = 0;
+        consensus.AutoGreylistRedesignHeight = 0;
+        // Inert on regtest to match V15 setting above.
+        consensus.MessageContractDisableHeight = std::numeric_limits<int>::max();
+        consensus.DefaultConstantBlockReward = 10 * COIN;
+        consensus.ConstantBlockRewardFloor = 0;
+        consensus.ConstantBlockRewardCeiling = 500 * COIN;
+        consensus.ProjectV4Height = 0;
+        consensus.SuperblockV3Height = 0;
+        consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
+        consensus.MRCZeroPaymentInterval = 10 * 60;
+        consensus.MaxMandatorySideStakeTotalAlloc = Fraction(1, 4);
+        consensus.DefaultMagnitudeUnit = Fraction(1, 4);
+        consensus.MaxMagnitudeUnit = Fraction(5, 1);
+        consensus.MinMagnitudeWeightFactor = Fraction(1, 10);
+        consensus.DefaultMagnitudeWeightFactor = Fraction(100, 567);
+        consensus.MaxMagnitudeWeightFactor = Fraction(1);
+        consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
+        consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+
+        pchMessageStart[0] = 0xfa;
+        pchMessageStart[1] = 0xbf;
+        pchMessageStart[2] = 0xb5;
+        pchMessageStart[3] = 0xda;
+        nDefaultPort = 32747;
+        m_assumed_blockchain_size = 1;
+
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,111);
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,196);
+        base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1,239);
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
+        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
+
+        m_is_test_chain = true;
+        m_is_mockable_chain = true;
+
+        checkpointData = { {} };
+
+        vAlertPubKey = ParseHex("02bf4aa6330f525ab91a25cd5c1362481d16d8c039b3d27cb48ac0870176202462");
+
+        masterkeys = {
+            {0, ParseHex("049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a")}
+        };
+    }
+};
+
 static std::unique_ptr<const CChainParams> globalChainParams;
 
 const CChainParams &Params() {
@@ -273,6 +493,8 @@ std::unique_ptr<const CChainParams> CreateChainParams(const std::string& chain)
         return std::unique_ptr<CChainParams>(new CMainParams());
     else if (chain == CBaseChainParams::TESTNET)
         return std::unique_ptr<CChainParams>(new CTestNetParams());
+    else if (chain == CBaseChainParams::REGTEST)
+        return std::unique_ptr<CChainParams>(new CRegTestParams());
     throw std::runtime_error(strprintf("%s: Unknown chain %s.", __func__, chain));
 }
 
@@ -280,4 +502,33 @@ void SelectParams(const std::string& network)
 {
     SelectBaseParams(network);
     globalChainParams = CreateChainParams(network);
+}
+
+bool g_unit_test_consensus_overrides = false;
+
+int GetBlockV15Height()
+{
+    // Hidden `-blockv15height` arg lets isolated testnet / regtest activate
+    // POOL contracts at a low height for end-to-end exercise. Defaults to the
+    // chainparams value (std::numeric_limits<int>::max() until pinned).
+    return GetConsensusOverride("-blockv15height", Params().GetConsensus().BlockV15Height);
+}
+
+int GetMessageContractDisableHeight()
+{
+    // Hidden `-messagecontractdisableheight` arg lets isolated testnet / regtest disable
+    // MESSAGE contracts at a lower height for end-to-end exercise.
+    return GetConsensusOverride("-messagecontractdisableheight",
+                                Params().GetConsensus().MessageContractDisableHeight);
+}
+
+int GetPendingPoolRetention()
+{
+    // Hidden `-pendingpoolretention` arg shortens the PENDING / OPEN
+    // expiration window so isolated-testnet / regtest runs can exercise
+    // expiration boundaries without waiting ~30 days of mainnet-paced
+    // blocks. Consensus-affecting on shared networks: nodes with different
+    // values will disagree on POOL_REGISTER admission across expiration
+    // boundaries and fork. Defaults to the chainparams value (28800).
+    return GetConsensusOverride("-pendingpoolretention", Params().GetConsensus().PendingPoolRetention);
 }

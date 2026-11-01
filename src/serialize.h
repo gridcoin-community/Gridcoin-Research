@@ -255,15 +255,15 @@ template<typename X> const X& ReadWriteAsHelper(const X& x) { return x; }
     FORMATTER_METHODS(cls, obj)
 
 #ifndef CHAR_EQUALS_INT8
-template<typename Stream> inline void Serialize(Stream& s, char a    ) { ser_writedata8(s, a); } // TODO Get rid of bare char
+template<typename Stream> inline void Serialize(Stream& s, char a    ) { ser_writedata8(s, uint8_t(a)); } // TODO Get rid of bare char
 #endif
-template<typename Stream> inline void Serialize(Stream& s, int8_t a  ) { ser_writedata8(s, a); }
+template<typename Stream> inline void Serialize(Stream& s, int8_t a  ) { ser_writedata8(s, uint8_t(a)); }
 template<typename Stream> inline void Serialize(Stream& s, uint8_t a ) { ser_writedata8(s, a); }
-template<typename Stream> inline void Serialize(Stream& s, int16_t a ) { ser_writedata16(s, a); }
+template<typename Stream> inline void Serialize(Stream& s, int16_t a ) { ser_writedata16(s, uint16_t(a)); }
 template<typename Stream> inline void Serialize(Stream& s, uint16_t a) { ser_writedata16(s, a); }
-template<typename Stream> inline void Serialize(Stream& s, int32_t a ) { ser_writedata32(s, a); }
+template<typename Stream> inline void Serialize(Stream& s, int32_t a ) { ser_writedata32(s, uint32_t(a)); }
 template<typename Stream> inline void Serialize(Stream& s, uint32_t a) { ser_writedata32(s, a); }
-template<typename Stream> inline void Serialize(Stream& s, int64_t a ) { ser_writedata64(s, a); }
+template<typename Stream> inline void Serialize(Stream& s, int64_t a ) { ser_writedata64(s, uint64_t(a)); }
 template<typename Stream> inline void Serialize(Stream& s, uint64_t a) { ser_writedata64(s, a); }
 template<typename Stream> inline void Serialize(Stream& s, float a   ) { ser_writedata32(s, ser_float_to_uint32(a)); }
 template<typename Stream> inline void Serialize(Stream& s, double a  ) { ser_writedata64(s, ser_double_to_uint64(a)); }
@@ -273,15 +273,15 @@ template<typename Stream> inline void Serialize(Stream& s, const Span<const unsi
 template<typename Stream> inline void Serialize(Stream& s, const Span<unsigned char>& span) { s.write(CharCast(span.data()), span.size()); }
 
 #ifndef CHAR_EQUALS_INT8
-template<typename Stream> inline void Unserialize(Stream& s, char& a    ) { a = ser_readdata8(s); } // TODO Get rid of bare char
+template<typename Stream> inline void Unserialize(Stream& s, char& a    ) { a = char(ser_readdata8(s)); } // TODO Get rid of bare char
 #endif
-template<typename Stream> inline void Unserialize(Stream& s, int8_t& a  ) { a = ser_readdata8(s); }
+template<typename Stream> inline void Unserialize(Stream& s, int8_t& a  ) { a = int8_t(ser_readdata8(s)); }
 template<typename Stream> inline void Unserialize(Stream& s, uint8_t& a ) { a = ser_readdata8(s); }
-template<typename Stream> inline void Unserialize(Stream& s, int16_t& a ) { a = ser_readdata16(s); }
+template<typename Stream> inline void Unserialize(Stream& s, int16_t& a ) { a = int16_t(ser_readdata16(s)); }
 template<typename Stream> inline void Unserialize(Stream& s, uint16_t& a) { a = ser_readdata16(s); }
-template<typename Stream> inline void Unserialize(Stream& s, int32_t& a ) { a = ser_readdata32(s); }
+template<typename Stream> inline void Unserialize(Stream& s, int32_t& a ) { a = int32_t(ser_readdata32(s)); }
 template<typename Stream> inline void Unserialize(Stream& s, uint32_t& a) { a = ser_readdata32(s); }
-template<typename Stream> inline void Unserialize(Stream& s, int64_t& a ) { a = ser_readdata64(s); }
+template<typename Stream> inline void Unserialize(Stream& s, int64_t& a ) { a = int64_t(ser_readdata64(s)); }
 template<typename Stream> inline void Unserialize(Stream& s, uint64_t& a) { a = ser_readdata64(s); }
 template<typename Stream> inline void Unserialize(Stream& s, float& a   ) { a = ser_uint32_to_float(ser_readdata32(s)); }
 template<typename Stream> inline void Unserialize(Stream& s, double& a  ) { a = ser_uint64_to_double(ser_readdata64(s)); }
@@ -289,8 +289,8 @@ template<typename Stream, int N> inline void Unserialize(Stream& s, char (&a)[N]
 template<typename Stream, int N> inline void Unserialize(Stream& s, unsigned char (&a)[N]) { s.read(MakeWritableByteSpan(a)); }
 template<typename Stream> inline void Unserialize(Stream& s, Span<unsigned char>& span) { s.read(span); }
 
-template<typename Stream> inline void Serialize(Stream& s, bool a)    { char f=a; ser_writedata8(s, f); }
-template<typename Stream> inline void Unserialize(Stream& s, bool& a) { char f=ser_readdata8(s); a=f; }
+template<typename Stream> inline void Serialize(Stream& s, bool a)    { uint8_t f=a; ser_writedata8(s, f); }
+template<typename Stream> inline void Unserialize(Stream& s, bool& a) { uint8_t f=ser_readdata8(s); a=f; }
 
 
 
@@ -503,6 +503,7 @@ static inline Wrapper<Formatter, T&> Using(T&& t) { return Wrapper<Formatter, T&
 #define VARINT(obj, ...) WrapVarInt<__VA_ARGS__>(REF(obj))
 #define COMPACTSIZE(obj) CCompactSize(REF(obj))
 #define LIMITED_STRING(obj,n) LimitedString< n >(REF(obj))
+#define LIMITED_VECTOR(obj,n) MakeLimitedVector< n >(REF(obj))
 
 template<VarIntMode Mode, typename I>
 class CVarInt
@@ -648,6 +649,58 @@ public:
     }
 };
 
+/**
+ * Wrapper for a vector with a maximum element count, enforced at the length
+ * prefix.
+ *
+ * The mirror of LimitedString above, and for the same reason: the check has to
+ * happen on the CompactSize prefix, BEFORE the vector is sized. The default
+ * vector deserializer grows in 5,000,000/sizeof(T) element steps and allocates
+ * against the declared count before reading the data behind it, so a short
+ * message declaring a huge count already costs a multi-megabyte allocation by
+ * the time a post-hoc size test could run.
+ *
+ * Deliberately shaped like LimitedString rather than ported from upstream's
+ * LimitedVectorFormatter, which needs the DefaultFormatter / VectorFormatter
+ * chain that this tree does not carry.
+ */
+template<size_t Limit, typename V>
+class LimitedVector
+{
+protected:
+    V& vec;
+public:
+    explicit LimitedVector(V& _vec) : vec(_vec) {}
+
+    template<typename Stream>
+    void Unserialize(Stream& s)
+    {
+        vec.clear();
+        const size_t size = ReadCompactSize(s);
+        if (size > Limit) {
+            throw std::ios_base::failure("Vector length limit exceeded");
+        }
+        vec.reserve(size);
+        for (size_t i = 0; i < size; ++i) {
+            vec.emplace_back();
+            s >> vec.back();
+        }
+    }
+
+    template<typename Stream>
+    void Serialize(Stream& s) const
+    {
+        WriteCompactSize(s, vec.size());
+        for (const auto& element : vec) {
+            s << element;
+        }
+    }
+};
+
+//! Deduction helper so LIMITED_VECTOR need not name the container type.
+template<size_t Limit, typename V>
+LimitedVector<Limit, V> MakeLimitedVector(V& vec) { return LimitedVector<Limit, V>(vec); }
+
 template<VarIntMode Mode=VarIntMode::DEFAULT, typename I>
 CVarInt<Mode, I> WrapVarInt(I& n) { return CVarInt<Mode, I>{n}; }
 
@@ -750,7 +803,14 @@ inline void Serialize(Stream& os, const T& a)
 template<typename Stream, typename T>
 inline void Unserialize(Stream& is, T&& a)
 {
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
     a.Unserialize(is);
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 }
 
 

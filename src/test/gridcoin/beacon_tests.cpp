@@ -12,6 +12,8 @@
 #include <util/string.h>
 
 #include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
 #include <vector>
 
 extern leveldb::DB *txdb;
@@ -1000,7 +1002,22 @@ BOOST_AUTO_TEST_SUITE_END()
 // BeaconPayload
 // -----------------------------------------------------------------------------
 
-BOOST_AUTO_TEST_SUITE(BeaconPayload)
+// Suite-level guards: BeaconRegistryTest inserts every block of the fixture
+// file into mapBlockIndex and advances hashBestChain without ever erasing
+// or restoring them, and resets the beacon registry on entry only.
+BOOST_AUTO_TEST_SUITE(BeaconPayload,
+                      *boost::unit_test::fixture<grc_test::StateGuard>()
+                      * boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::BEACON>>())
+
+// BeaconRegistry methods (Reset, Add, ActivatePending, Delete, Try,
+// FindPending, FindHistorical, Deactivate) are EXCLUSIVE_LOCKS_REQUIRED(cs_main).
+// These tests directly mutate the registry without acquiring cs_main (the
+// test fixtures are single-threaded). Suppress thread-safety warnings for
+// the test suite rather than wrapping every call.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_invalid_payload)
 {
@@ -1353,6 +1370,66 @@ BOOST_AUTO_TEST_CASE(it_includes_ownership_proof_in_v3_hash)
     BOOST_CHECK(hasher1.GetHash() != hasher2.GetHash());
 }
 
+BOOST_AUTO_TEST_CASE(it_gets_the_ownership_proof_from_a_v3_advertisement)
+{
+    GRC::OwnershipProof proof;
+    proof.m_master_url = "https://example.com/project/";
+    proof.m_account_id = 42;
+    proof.m_rsa_signature.resize(256, 0xAA);
+
+    GRC::BeaconPayload payload(TestKey::Cpid(), GRC::Beacon(TestKey::Public()), GRC::OwnershipProof(proof));
+    payload.m_signature = TestKey::Signature(payload);
+
+    CMutableTransaction advertisement;
+    advertisement.vContracts.push_back(GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload));
+    const CTransaction tx(advertisement);
+
+    const std::optional<GRC::OwnershipProof> found = GRC::GetOwnershipProofFromTx(tx, TestKey::KeyId());
+
+    BOOST_REQUIRE(found.has_value());
+    BOOST_CHECK_EQUAL(found->m_master_url, proof.m_master_url);
+    BOOST_CHECK_EQUAL(found->m_account_id, proof.m_account_id);
+    BOOST_CHECK(found->m_rsa_signature == proof.m_rsa_signature);
+
+    // The transaction advertises no beacon under any other key.
+    CKey other_key;
+    other_key.MakeNewKey(true);
+
+    BOOST_CHECK(!GRC::GetOwnershipProofFromTx(tx, other_key.GetPubKey().GetID()).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(it_gets_no_ownership_proof_without_a_v3_advertisement)
+{
+    // A v2 advertisement carries no proof.
+    GRC::BeaconPayload v2_payload {2, TestKey::Cpid(), GRC::Beacon(TestKey::Public())};
+    v2_payload.m_signature = TestKey::Signature(v2_payload);
+
+    CMutableTransaction v2_advertisement;
+    v2_advertisement.vContracts.push_back(
+        GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, v2_payload));
+
+    BOOST_CHECK(!GRC::GetOwnershipProofFromTx(CTransaction(v2_advertisement), TestKey::KeyId()).has_value());
+
+    // A v3 payload in a removal is not an advertisement.
+    GRC::OwnershipProof proof;
+    proof.m_master_url = "https://example.com/project/";
+    proof.m_account_id = 42;
+    proof.m_rsa_signature.resize(256, 0xAA);
+
+    GRC::BeaconPayload v3_payload(TestKey::Cpid(), GRC::Beacon(TestKey::Public()), std::move(proof));
+    v3_payload.m_signature = TestKey::Signature(v3_payload);
+
+    CMutableTransaction removal;
+    removal.vContracts.push_back(GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::REMOVE, v3_payload));
+
+    BOOST_CHECK(!GRC::GetOwnershipProofFromTx(CTransaction(removal), TestKey::KeyId()).has_value());
+
+    // Nor is a transaction without contracts.
+    const CMutableTransaction no_contracts;
+
+    BOOST_CHECK(!GRC::GetOwnershipProofFromTx(CTransaction(no_contracts), TestKey::KeyId()).has_value());
+}
+
 BOOST_AUTO_TEST_CASE(beaconstorage_testnet_test)
 {
     // These should be set to correspond to the dumpcontracts run used to create testnet_beacon.bin
@@ -1423,9 +1500,10 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
     // This is a trivial initial pending beacon, activation, and two renewals. The typical type of beacon chainlet.
 
     // Pending beacon
-    CTransaction tx1 {};
+    CMutableTransaction tx1 {};
     tx1.nTime = int64_t {1};
-    uint256 tx1_hash = tx1.GetHash();
+    CTransaction ctx_tx1(tx1);
+    uint256 tx1_hash = ctx_tx1.GetHash();
 
     CBlockIndex pindex1 {};
     pindex1.nVersion = 13;
@@ -1439,7 +1517,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
     beacon_payload1.m_signature = TestKey::Signature(beacon_payload1);
 
     GRC::Contract contract1 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload1);
-    GRC::ContractContext ctx1 {contract1, tx1, &pindex1};
+    GRC::ContractContext ctx1 {contract1, ctx_tx1, &pindex1};
 
     BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_cpid == TestKey::Cpid());
     BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_beacon.m_status == GRC::BeaconStatusForStorage::PENDING);
@@ -1499,13 +1577,15 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
 
         // There is only one entry in the chainlet.. so the head and root are the same.
         BOOST_CHECK(chainlet_root->m_hash == chainlet_head->m_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1);
+        // sign-compare checked: size() is size_t; 1U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1U);
     }
 
     // Renewal
-    CTransaction tx3 {};
+    CMutableTransaction tx3 {};
     tx3.nTime = int64_t {3};
-    uint256 tx3_hash = tx3.GetHash();
+    CTransaction ctx_tx3(tx3);
+    uint256 tx3_hash = ctx_tx3.GetHash();
     CBlockIndex index3 {};
     index3.nVersion = 13;
     index3.nHeight = 3;
@@ -1517,7 +1597,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
     beacon_payload3.m_signature = TestKey::Signature(beacon_payload3);
 
     GRC::Contract contract3 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload3);
-    GRC::ContractContext ctx3 {contract3, tx3, &index3};
+    GRC::ContractContext ctx3 {contract3, ctx_tx3, &index3};
 
     registry.Add(ctx3);
 
@@ -1537,13 +1617,15 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
         GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
 
         BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2);
+        // sign-compare checked: size() is size_t; 2U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2U);
     }
 
     // Second renewal
-    CTransaction tx4 {};
+    CMutableTransaction tx4 {};
     tx4.nTime = int64_t {4};
-    uint256 tx4_hash = tx4.GetHash();
+    CTransaction ctx_tx4(tx4);
+    uint256 tx4_hash = ctx_tx4.GetHash();
     CBlockIndex index4 = {};
     index4.nVersion = 13;
     index4.nHeight = 2;
@@ -1555,7 +1637,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
     beacon_payload4.m_signature = TestKey::Signature(beacon_payload4);
 
     GRC::Contract contract4 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload4);
-    GRC::ContractContext ctx4 {contract4, tx4, &index4};
+    GRC::ContractContext ctx4 {contract4, ctx_tx4, &index4};
     registry.Add(ctx4);
 
     chainlet_head = registry.Try(TestKey::Cpid());
@@ -1574,7 +1656,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
         GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
 
         BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3);
+        // sign-compare checked: size() is size_t; 3U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3U);
     }
 
     // Let's corrupt the activation beacon to have a previous beacon hash that refers circularly back to the chain head...
@@ -1630,9 +1713,10 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     // This is a trivial initial pending beacon, activation, and two renewals. The typical type of beacon chainlet.
 
     // Pending beacon
-    CTransaction tx1 {};
+    CMutableTransaction tx1 {};
     tx1.nTime = int64_t {1};
-    uint256 tx1_hash = tx1.GetHash();
+    CTransaction ctx_tx1(tx1);
+    uint256 tx1_hash = ctx_tx1.GetHash();
 
     CBlockIndex pindex1 {};
     pindex1.nVersion = 13;
@@ -1646,7 +1730,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     beacon_payload1.m_signature = TestKey::Signature(beacon_payload1);
 
     GRC::Contract contract1 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload1);
-    GRC::ContractContext ctx1 {contract1, tx1, &pindex1};
+    GRC::ContractContext ctx1 {contract1, ctx_tx1, &pindex1};
 
     BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_cpid == TestKey::Cpid());
     BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_beacon.m_status == GRC::BeaconStatusForStorage::PENDING);
@@ -1706,13 +1790,15 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
 
         // There is only one entry in the chainlet.. so the head and root are the same.
         BOOST_CHECK(chainlet_root->m_hash == chainlet_head->m_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1);
+        // sign-compare checked: size() is size_t; 1U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1U);
     }
 
     // Renewal
-    CTransaction tx3 {};
+    CMutableTransaction tx3 {};
     tx3.nTime = int64_t {3};
-    uint256 tx3_hash = tx3.GetHash();
+    CTransaction ctx_tx3(tx3);
+    uint256 tx3_hash = ctx_tx3.GetHash();
     CBlockIndex index3 {};
     index3.nVersion = 13;
     index3.nHeight = 3;
@@ -1724,7 +1810,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     beacon_payload3.m_signature = TestKey::Signature(beacon_payload3);
 
     GRC::Contract contract3 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload3);
-    GRC::ContractContext ctx3 {contract3, tx3, &index3};
+    GRC::ContractContext ctx3 {contract3, ctx_tx3, &index3};
 
     registry.Add(ctx3);
 
@@ -1744,13 +1830,15 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
         GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
 
         BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2);
+        // sign-compare checked: size() is size_t; 2U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2U);
     }
 
     // Second renewal
-    CTransaction tx4 {};
+    CMutableTransaction tx4 {};
     tx4.nTime = int64_t {4};
-    uint256 tx4_hash = tx4.GetHash();
+    CTransaction ctx_tx4(tx4);
+    uint256 tx4_hash = ctx_tx4.GetHash();
     CBlockIndex index4 = {};
     index4.nVersion = 13;
     index4.nHeight = 2;
@@ -1762,7 +1850,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     beacon_payload4.m_signature = TestKey::Signature(beacon_payload4);
 
     GRC::Contract contract4 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload4);
-    GRC::ContractContext ctx4 {contract4, tx4, &index4};
+    GRC::ContractContext ctx4 {contract4, ctx_tx4, &index4};
     registry.Add(ctx4);
 
     chainlet_head = registry.Try(TestKey::Cpid());
@@ -1781,7 +1869,8 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
         GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
 
         BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
-        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3);
+        // sign-compare checked: size() is size_t; 3U is a non-negative literal, so both sides are unsigned.
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3U);
     }
 
     // Let's corrupt the activation beacon to have a previous beacon hash that is the same as its hash...
@@ -1818,5 +1907,149 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
         BOOST_CHECK_EQUAL(circular_corruption_detected, true);
     }
 }
+
+BOOST_AUTO_TEST_CASE(beacon_registry_readvertisement_without_a_proof_drops_the_old_proof)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+
+    registry.Reset();
+
+    // A v3 advertisement leaves a pending beacon with its proof.
+    CMutableTransaction tx1 {};
+    tx1.nTime = int64_t {1};
+    const CTransaction ctx_tx1(tx1);
+
+    CBlockIndex index1 {};
+    index1.nVersion = 13;
+    index1.nHeight = 1;
+    index1.nTime = tx1.nTime;
+
+    GRC::OwnershipProof proof;
+    proof.m_master_url = "https://example.com/project/";
+    proof.m_account_id = 42;
+    proof.m_rsa_signature.resize(256, 0xAA);
+
+    GRC::BeaconPayload payload1(TestKey::Cpid(), GRC::Beacon(TestKey::Public()), std::move(proof));
+    payload1.m_signature = TestKey::Signature(payload1);
+
+    GRC::Contract contract1 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload1);
+    registry.Add({contract1, ctx_tx1, &index1});
+
+    BOOST_CHECK_EQUAL(registry.PendingOwnershipProofs().count(TestKey::KeyId()), 1U);
+
+    // A v2 advertisement of the same key replaces the pending beacon, and takes the proof with it.
+    CMutableTransaction tx2 {};
+    tx2.nTime = int64_t {2};
+    const CTransaction ctx_tx2(tx2);
+
+    CBlockIndex index2 {};
+    index2.nVersion = 13;
+    index2.nHeight = 2;
+    index2.nTime = tx2.nTime;
+
+    GRC::BeaconPayload payload2 {2, TestKey::Cpid(), GRC::Beacon(TestKey::Public())};
+    payload2.m_signature = TestKey::Signature(payload2);
+
+    GRC::Contract contract2 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload2);
+    registry.Add({contract2, ctx_tx2, &index2});
+
+    BOOST_CHECK_EQUAL(registry.PendingBeacons().count(TestKey::KeyId()), 1U);
+    BOOST_CHECK_EQUAL(registry.PendingOwnershipProofs().count(TestKey::KeyId()), 0U);
+
+    registry.Reset();
+}
+
+namespace {
+//!
+//! \brief Apply a v2 beacon advertisement to the registry, as a block at the given height would.
+//!
+//! \return The hash of the advertisement transaction, which is also the key of the pending beacon's record.
+//!
+uint256 AddPendingBeacon(GRC::BeaconRegistry& registry, const GRC::Cpid& cpid, const CPubKey& key,
+                         const int64_t time, const int height)
+{
+    CMutableTransaction mtx;
+    mtx.nTime = time;
+    mtx.nLockTime = static_cast<uint32_t>(height);
+    const CTransaction tx(mtx);
+
+    CBlockIndex index;
+    index.nVersion = 13;
+    index.nHeight = height;
+    index.nTime = time;
+
+    GRC::BeaconPayload payload {2, cpid, GRC::Beacon(key)};
+    const GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload);
+
+    registry.Add({contract, tx, &index});
+
+    return tx.GetHash();
+}
+
+//!
+//! \brief Reload the registry from the beacon db, as a restarted node does.
+//!
+void ReloadRegistry(GRC::BeaconRegistry& registry)
+{
+    registry.ResetInMemoryOnly();
+    registry.Initialize();
+}
+
+constexpr int64_t DAY = 60 * 60 * 24;
+constexpr int64_t START_TIME = 1600000000;
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(beacon_registry_deactivate_skips_missing_pending_records)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key_1;
+    key_1.MakeNewKey(true);
+    CKey key_2;
+    key_2.MakeNewKey(true);
+
+    const GRC::Cpid cpid_1 = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const GRC::Cpid cpid_2 = GRC::Cpid::Parse("15141312111009080706050403020100");
+
+    const uint256 advertisement_1 = AddPendingBeacon(registry, cpid_1, key_1.GetPubKey(), START_TIME, 1);
+    const uint256 advertisement_2 = AddPendingBeacon(registry, cpid_2, key_2.GetPubKey(), START_TIME, 2);
+
+    // The superblock activates the first beacon and expires the second.
+    const uint256 superblock = uint256S("0303030303030303030303030303030303030303030303030303030303030303");
+
+    registry.ActivatePending({key_1.GetPubKey().GetID()},
+                             START_TIME + GRC::PendingBeacon::RETENTION_AGE + DAY, superblock, 3);
+
+    BOOST_REQUIRE(registry.Try(cpid_1) != nullptr);
+    BOOST_REQUIRE(registry.PendingBeacons().empty());
+    BOOST_REQUIRE_EQUAL(registry.ExpiredBeacons().size(), 1U);
+
+    // Neither pending record is in the db any more.
+    registry.GetBeaconDB().erase(advertisement_1);
+    registry.GetBeaconDB().erase(advertisement_2);
+
+    // Deactivate has nothing to restore either beacon to, and returns.
+    registry.Deactivate(superblock);
+
+    BOOST_CHECK(registry.PendingBeacons().empty());
+    BOOST_CHECK(registry.Try(cpid_1) != nullptr);
+
+    // A restart computes the same state.
+    ReloadRegistry(registry);
+
+    BOOST_CHECK(registry.PendingBeacons().empty());
+    BOOST_CHECK(registry.Try(cpid_1) != nullptr);
+
+    registry.Reset();
+}
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -6,20 +6,17 @@
 #define BITCOIN_QT_DIAGNOSTICSDIALOG_H
 
 #include <QDialog>
-#include <QtNetwork/QTcpSocket>
-#include <QtNetwork/QUdpSocket>
 #include <QtWidgets/QLabel>
 
 #include <string>
 #include <unordered_map>
 
-#include "sync.h"
-#include <set>
-#include <vector>
-#include <memory>
-#include "wallet/diagnose.h"
-
+class ClientModel;
 class ResearcherModel;
+
+namespace interfaces {
+class Node;
+} // namespace interfaces
 
 namespace Ui {
 class DiagnosticsDialog;
@@ -50,14 +47,12 @@ public:
 
 private:
     Ui::DiagnosticsDialog *ui;
-    void GetData();
 
-    typedef std::set<std::pair<QLabel*, std::unique_ptr<DiagnoseLib::Diagnose>>> DiagnoseLabelTestPtr_set;
-    //Set the contains a pair <Label of the diagnose, Pointer to TestClass>
-    DiagnoseLabelTestPtr_set m_diagnostic_tests;
-
-    // Because some of the tests are "spurs", this object is multithreaded
-    CCriticalSection cs_diagnostictests;
+    //! Maps each diagnostic test (interfaces::DiagnosticTest raw value, matching
+    //! the test_id carried in interfaces::DiagnosticResult) to its result row
+    //! label. Built once at construction; the node owns the tests now, so the
+    //! dialog holds only display state.
+    std::unordered_map<int, QLabel*> m_test_labels;
 
     // Holds the overall result of all diagnostic tests
     DiagnosticResult m_overall_diagnostic_result;
@@ -72,28 +67,30 @@ private:
     // Boolean to indicate researcher mode.
     bool m_researcher_mode = true;
 
-    // Holds the test status and result entries
-    typedef std::unordered_map<DiagnoseLib::Diagnose::TestNames, DiagnosticTestStatus> DiagnosticTestStatus_map;
-    typedef std::unordered_map<DiagnoseLib::Diagnose::TestNames, DiagnosticResult> DiagnosticTestResult_map;
+    // Holds the test status and result entries, keyed by test_id.
+    typedef std::unordered_map<int, DiagnosticTestStatus> DiagnosticTestStatus_map;
+    typedef std::unordered_map<int, DiagnosticResult> DiagnosticTestResult_map;
     DiagnosticTestStatus_map m_test_status_map;
     DiagnosticTestResult_map m_test_result_map;
 
     ResearcherModel *m_researcher_model;
 
-    QUdpSocket *m_udpSocket;
-    QTcpSocket *m_tcpSocket;
+    //! The node interface used to run the diagnostics. Set via setClientModel()
+    //! from the client model's node(); the tests execute in the node.
+    interfaces::Node* m_node = nullptr;
 
 public:
+    void setClientModel(ClientModel* client_model);
     void SetResearcherModel(ResearcherModel *researcherModel);
     unsigned int GetNumberOfTestsPending();
-    unsigned int UpdateTestStatus(DiagnoseLib::Diagnose::TestNames test_name, QLabel *label,
+    unsigned int UpdateTestStatus(int test_id, QLabel *label,
                                   DiagnosticTestStatus test_status, DiagnosticResult test_result,
                                   QString override_text = QString(), QString tooltip_text = QString());
-    DiagnosticTestStatus GetTestStatus(DiagnoseLib::Diagnose::TestNames test_name);
-    void UpdateTestResult(DiagnoseLib::Diagnose::TestNames test_name, DiagnosticResult test_result);
+    DiagnosticTestStatus GetTestStatus(int test_id);
+    void UpdateTestResult(int test_id, DiagnosticResult test_result);
     void ResetOverallDiagnosticResult();
     void UpdateOverallDiagnosticResult(DiagnosticResult diagnostic_result_in);
-    DiagnosticResult GetTestResult(DiagnoseLib::Diagnose::TestNames test_name);
+    DiagnosticResult GetTestResult(int test_id);
     DiagnosticResult GetOverallDiagnosticResult();
     DiagnosticTestStatus GetOverallDiagnosticStatus();
     void DisplayOverallDiagnosticResult();
@@ -102,11 +99,6 @@ private:
     void SetResultLabel(QLabel *label, DiagnosticTestStatus test_status,
                         DiagnosticResult test_result, QString override_text = QString(),
                         QString tooltip_text = QString());
-    void diagnoseTestInsertInSet(QLabel* label, std::unique_ptr<DiagnoseLib::Diagnose>&& test){
-        auto labeltestpair = std::make_pair(label , std::move(test));
-        m_diagnostic_tests.insert(std::move(labeltestpair));
-    }
-
 
 private slots:
     void on_testButton_clicked();

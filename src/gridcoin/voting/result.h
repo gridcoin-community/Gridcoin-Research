@@ -5,13 +5,17 @@
 #ifndef GRIDCOIN_VOTING_RESULT_H
 #define GRIDCOIN_VOTING_RESULT_H
 
+#include "amount.h"
 #include "wallet/ismine.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/voting/fwd.h"
 #include "gridcoin/voting/poll.h"
 
+#include <optional>
 #include <vector>
+
+class CBlockIndex;
 
 namespace GRC {
 //!
@@ -91,13 +95,15 @@ public:
     const Poll m_poll;                            //!< The poll associated with the result.
     Weight m_total_weight;                        //!< Aggregate weight of all the votes submitted.
     size_t m_invalid_votes;                       //!< Number of votes that failed validation.
+    size_t m_superseded_votes;                    //!< Number of votes newer counted votes replace.
+    size_t m_vote_count;                          //!< Number of votes the tally read.
     std::vector<Cpid> m_pools_voted;              //!< Cpids of pools that actually voted.
     std::optional<CAmount> m_active_vote_weight;  //!< Active vote weight of poll.
     std::optional<double> m_vote_percent_avw;     //!< Vote weight percent of AVW.
     std::optional<bool> m_poll_results_validated; //!< Whether the poll's AVW is >= the minimum AVW for the poll.
     bool m_finished;                              //!< Whether the poll finished as of this result.
     bool m_self_voted;                            //!< Whether the wallet holder voted.
-    VoteDetail m_self_vote_detail;                //!< The vote detail from the wallet holder's (last) vote
+    VoteDetail m_self_vote_detail;                //!< The wallet holder's counted votes, combined
 
     //!
     //! \brief The aggregated voting weight tallied for each poll choice.
@@ -124,11 +130,19 @@ public:
     //! \brief Generate the result for the specified poll.
     //!
     //! \param poll_ref Refers to the poll to generate the result for.
+    //! \param pindex_tip The chain tip to tally the poll against, captured once
+    //! by the caller under cs_main. Pinning a single tip for the whole tally
+    //! (rather than re-reading the live pindexBest at each step) keeps the money
+    //! supply, superblock, and active-vote-weight reads mutually consistent, and
+    //! lets the legacy magnitude factor read the tip's money supply without
+    //! holding cs_main (the tip's CBlockIndex is never freed and nMoneySupply is
+    //! immutable once connected). Block-index chain walks still take a tight
+    //! per-operation cs_main; the poll-result cache re-tallies on a tip change.
     //!
     //! \return An object that contains the calculated result for the poll or
     //! no result if an error occurred.
     //!
-    static PollResultOption BuildFor(const PollReference& poll_ref);
+    static PollResultOption BuildFor(const PollReference& poll_ref, const CBlockIndex* pindex_tip);
 
     //!
     //! \brief Get the offset of the poll choice with the most votes.
@@ -147,10 +161,44 @@ public:
     //!
     //! \brief Add a resolved vote to the poll result.
     //!
+    //! A vote that would carry any reported weight past what a CAmount holds is
+    //! counted as invalid instead.
+    //!
     //! \param detail Vote context resolved from a vote contract.
     //!
     void TallyVote(VoteDetail detail);
 }; // PollResult
+
+//!
+//! \brief Determine whether a poll's vote weight reaches its minimum percentage
+//! of the active vote weight.
+//!
+//! Equivalent to floor(100 * total_weight / active_vote_weight) >= min_vote_percent,
+//! computed without the division in 256-bit arithmetic.
+//!
+//! \param total_weight       Total weight of the votes, in units of 1/100000000 GRC.
+//! \param active_vote_weight Active vote weight of the poll, in the same units.
+//! \param min_vote_percent   Minimum whole percentage required.
+//!
+//! \return \c false when the active vote weight is not positive.
+//!
+bool MeetsMinimumVotePercentAVW(
+    const PollResult::Weight total_weight,
+    const CAmount active_vote_weight,
+    const uint32_t min_vote_percent);
+
+//!
+//! \brief Convert the balance a legacy vote states, in GRC, to an amount in
+//! units of 1/100000000 GRC.
+//!
+//! \param amount Balance parsed from a legacy vote contract.
+//!
+//! \return Nothing when converting the balance would be undefined: it is not a
+//! number, or its truncated amount is negative or too large for a
+//! PollResult::Weight. Every other balance converts exactly as before; the
+//! tally's overflow checks handle the totals.
+//!
+std::optional<PollResult::Weight> LegacyVoteAmount(const double amount);
 }
 
 #endif // GRIDCOIN_VOTING_RESULT_H

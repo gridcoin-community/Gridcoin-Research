@@ -3,7 +3,15 @@
 #include "ui_aboutdialog.h"
 #include "clientmodel.h"
 #include "updatedialog.h"
+#include "interfaces/node.h"
 #include "util.h"
+
+#include <QDialogButtonBox>
+#include <QFile>
+#include <QFontDatabase>
+#include <QPlainTextEdit>
+#include <QVBoxLayout>
+#include <QtConcurrent>
 
 AboutDialog::AboutDialog(QWidget *parent) :
     QDialog(parent),
@@ -30,28 +38,146 @@ AboutDialog::AboutDialog(QWidget *parent) :
 
     resize(GRC::ScaleSize(this, width(), height()));
 
-    if (!fTestNet && !gArgs.GetBoolArg("-disableupdatecheck", false)) {
-        connect(ui->versionInfoButton, &QAbstractButton::pressed, this, [this]() { handlePressVersionInfoButton(); });
-    } else if (gArgs.GetBoolArg("-disableupdatecheck", false)) {
-        ui->versionInfoButton->setDisabled(true);
-        ui->versionInfoButton->setToolTip(tr("Version information and update check has been disabled "
-                                             "by config or startup parameter."));
-    } else {
-        ui->versionInfoButton->setDisabled(true);
-        ui->versionInfoButton->setToolTip(tr("Version information is not available on testnet."));
+    connect(&m_version_check_watcher, &QFutureWatcher<AboutVersionInfo>::finished,
+            this, &AboutDialog::versionCheckFinished);
+
+    // Needs no model: the texts are embedded resources.
+    connect(ui->thirdPartyLicensesButton, &QAbstractButton::clicked,
+            this, &AboutDialog::showThirdPartyLicenses);
+}
+
+QString AboutDialog::thirdPartyLicensesText()
+{
+    struct Entry {
+        QString heading;
+        const char* resource;
+    };
+    const Entry entries[] = {
+        {tr("Inter (user interface font)"), ":/fonts/ofl-inter"},
+        {tr("Inconsolata (debug console font)"), ":/fonts/ofl-inconsolata"},
+    };
+
+    QString text;
+    for (const Entry& entry : entries) {
+        if (!text.isEmpty()) text += QStringLiteral("\n\n");
+        text += entry.heading + QStringLiteral("\n") + QString(entry.heading.size(), QChar('=')) + QStringLiteral("\n\n");
+
+        QFile file(QString::fromLatin1(entry.resource));
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            text += QString::fromUtf8(file.readAll()).trimmed();
+        } else {
+            text += tr("License text not available in this build.");
+        }
     }
+    return text;
+}
+
+void AboutDialog::showThirdPartyLicenses()
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Third-Party Licenses"));
+
+    auto* text = new QPlainTextEdit(&dialog);
+    text->setReadOnly(true);
+    text->setPlainText(thirdPartyLicensesText());
+    text->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    text->setObjectName(QStringLiteral("thirdPartyLicensesText"));
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->addWidget(text);
+    layout->addWidget(buttons);
+
+    dialog.resize(GRC::ScaleSize(&dialog, 640, 520));
+    dialog.exec();
 }
 
 void AboutDialog::setModel(ClientModel *model)
 {
+    // Set unconditionally so a teardown setModel(nullptr) clears the pointer
+    // rather than leaving it dangling at the previous model's node.
+    m_node = model ? &model->node() : nullptr;
+
     if(model)
     {
         ui->versionLabel->setText(model->formatFullVersion());
+
+        // Wire the version-info / update-check button. Network identity is read
+        // through the client model's node interface (ClientModel::isMainNet ->
+        // interfaces::Node), never by calling chainparams (OnMainnet()) from GUI
+        // code; done here rather than in the constructor because the model is
+        // only available once set. -disableupdatecheck is read through the node
+        // too: it is a node setting, and in -multiprocess mode the GUI has no
+        // copy of the node's settings.
+        //
+        // isMainNet() rather than !isTestNet(): the check is served only on
+        // mainnet, and !isTestNet() is true on regtest, which would leave the
+        // button live and reporting a network error caused by policy.
+        const bool update_check_disabled = model->node().getSettingBool("disableupdatecheck", false);
+        if (model->isMainNet() && !update_check_disabled) {
+            connect(ui->versionInfoButton, &QAbstractButton::pressed, this, [this]() { handlePressVersionInfoButton(); });
+        } else if (update_check_disabled) {
+            ui->versionInfoButton->setDisabled(true);
+            ui->versionInfoButton->setToolTip(tr("Version information and update check has been disabled "
+                                                 "by config or startup parameter."));
+        } else {
+            ui->versionInfoButton->setDisabled(true);
+            ui->versionInfoButton->setToolTip(tr("Version information is only available on mainnet."));
+        }
     }
+}
+
+void AboutDialog::setIpcConnectionInfo(const GuiIpcInfo& info)
+{
+    // In the monolithic build the GUI and node share one process, so there is no
+    // IPC connection to describe -- hide the section.
+    if (!info.active) {
+        ui->ipcInfoLabel->hide();
+        return;
+    }
+
+    // The label is Qt::RichText, so every interpolated value must be HTML-escaped
+    // before insertion: the node-sourced strings (versions, build date, identity,
+    // network) arrive over IPC from the daemon and must not be able to inject
+    // markup, and a benign '&' or '<' in a local value (e.g. a data-dir path in
+    // the socket) would otherwise break rendering. Captions are our own literals.
+    const QString identity = info.node_identity.isEmpty()
+        ? tr("unavailable") : info.node_identity.toHtmlEscaped();
+
+    const QString text =
+        tr("<b>Multiprocess connection</b>") + QStringLiteral("<br>") +
+        tr("GUI version: %1").arg(info.gui_version.toHtmlEscaped()) + QStringLiteral("<br>") +
+        tr("Node version: %1").arg(info.node_version.toHtmlEscaped()) + QStringLiteral("<br>") +
+        tr("Node built: %1").arg(info.node_built_at.toHtmlEscaped()) + QStringLiteral("<br>") +
+        tr("IPC schema %1, protocol %2").arg(info.ipc_schema.toHtmlEscaped(), info.ipc_protocol.toHtmlEscaped()) + QStringLiteral("<br>") +
+        tr("Node identity: %1 (%2)").arg(identity, info.network.toHtmlEscaped()) + QStringLiteral("<br>") +
+        tr("Socket: %1").arg(info.socket_path.toHtmlEscaped());
+
+    ui->ipcInfoLabel->setText(text);
+    ui->ipcInfoLabel->show();
 }
 
 AboutDialog::~AboutDialog()
 {
+    // Sever the result signal, but deliberately do NOT wait for the worker here.
+    //
+    // The worker captures only the interfaces::Node* -- not `this` -- so it never
+    // touches the dialog; the sole path back into dialog state is the watcher's
+    // finished() -> versionCheckFinished(), which this disconnect closes. Destroying
+    // a QFutureWatcher while its future is still running is safe (the QFuture is
+    // refcounted and the watcher simply stops reporting), so closing this dialog is
+    // not the lifetime hazard.
+    //
+    // The hazard is the NODE: the worker dereferences it, and it is destroyed by
+    // StartGridcoinQt's teardown. Waiting here would only freeze the GUI thread for
+    // up to the libcurl connect timeout (~10 s) every time a user closes the dialog
+    // mid-check, while doing nothing about the case that actually matters. The join
+    // therefore lives at teardown, immediately before the node is destroyed --
+    // rarer, and already a waiting context.
+    m_version_check_watcher.disconnect();
+
     delete ui;
 }
 
@@ -62,24 +188,49 @@ void AboutDialog::on_buttonBox_accepted()
 
 void AboutDialog::handlePressVersionInfoButton()
 {
-    std::string client_message_out;
-    std::string change_log;
-    GRC::Upgrade::UpgradeType upgrade_type = GRC::Upgrade::UpgradeType::Unknown;
+    // No node (dialog shown before setModel(), or cleared at teardown): nothing
+    // to query. The captured pointer below must be non-null off the GUI thread.
+    if (!m_node) {
+        return;
+    }
 
+    // CheckForLatestUpdate does a blocking libcurl GET of the GitHub release
+    // JSON (up to a 10 s connect timeout). Run it off the GUI thread so a click
+    // never freezes the UI. Guard against overlapping checks: a second click
+    // while one is in flight would spawn another worker (this is the read-only
+    // half of GRC::Upgrade; it must not touch the download/reset write side).
+    if (m_version_check_watcher.isRunning()) {
+        return;
+    }
 
-    GRC::Upgrade::CheckForLatestUpdate(client_message_out, change_log, upgrade_type, false, false);
+    ui->versionInfoButton->setDisabled(true);
 
-    if (client_message_out == std::string {}) {
-        client_message_out = "No response from GitHub - check network connectivity.";
-        change_log = " ";
+    m_version_check_watcher.setFuture(QtConcurrent::run([node = m_node]() {
+        interfaces::LatestVersionInfo latest = node->checkForLatestUpdate();
+        return AboutVersionInfo{latest.version, latest.details, latest.upgrade_type};
+    }));
+}
+
+void AboutDialog::versionCheckFinished()
+{
+    ui->versionInfoButton->setDisabled(false);
+
+    AboutVersionInfo info = m_version_check_watcher.result();
+
+    if (info.version.empty()) {
+        info.version = "No response from GitHub - check network connectivity.";
+        info.details = " ";
     }
 
     UpdateDialog update_dialog;
 
     update_dialog.setWindowTitle("Gridcoin Version Information");
-    update_dialog.setVersion(QString().fromStdString(client_message_out));
-    update_dialog.setUpgradeType(static_cast<GRC::Upgrade::UpgradeType>(upgrade_type));
-    update_dialog.setDetails(QString().fromStdString(change_log));
+    update_dialog.setVersion(QString::fromStdString(info.version));
+    // info.upgrade_type is an int carrying a GRC::Upgrade::UpgradeType value
+    // (from interfaces::Node::checkForLatestUpdate, which static_asserts the
+    // mapping node-side); UpdateDialog consumes it as its own UpdateType mirror.
+    update_dialog.setUpgradeType(info.upgrade_type);
+    update_dialog.setDetails(QString::fromStdString(info.details));
     update_dialog.setModal(false);
 
     update_dialog.exec();

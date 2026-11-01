@@ -5,7 +5,6 @@
 #include "amount.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/staking/reward.h"
-#include "main.h"
 
 namespace {
 CAmount GetCoinYearReward(int64_t nTime)

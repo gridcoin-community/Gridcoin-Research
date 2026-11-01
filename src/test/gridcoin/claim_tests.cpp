@@ -5,8 +5,8 @@
 #include "gridcoin/claim.h"
 
 #include "key.h"
-#include "main.h"
 #include "streams.h"
+#include "primitives/transaction.h"
 
 #include <boost/test/unit_test.hpp>
 #include <iostream>

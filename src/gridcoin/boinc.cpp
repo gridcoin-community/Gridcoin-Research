@@ -5,20 +5,38 @@
 #include "gridcoin/boinc.h"
 #include "util.h"
 
+#include <mutex>
+#include <optional>
 #include <vector>
+
+namespace {
+//! \brief fs::exists() that reports an unprobeable path as absent.
+//!
+//! The throwing overload raises filesystem_error when the path cannot be
+//! stat()ed at all -- most commonly EACCES on a directory owned by another
+//! user. Probing for BOINC is a best-effort guess among candidates, and every
+//! caller here wants "no" for a candidate it is not allowed to look at, not an
+//! exception unwinding out of startup.
+bool PathExists(const fs::path& path)
+{
+    boost::system::error_code ec;
+
+    return fs::exists(path, ec) && !ec;
+}
+} // anonymous namespace
 
 fs::path GRC::ResolveBoincDataDir(const std::vector<fs::path>& candidates)
 {
     // Pass 1: Prefer a directory with client_state.xml (active BOINC installation).
     for (const auto& candidate : candidates) {
-        if (fs::exists(candidate / "client_state.xml")) {
+        if (PathExists(candidate / "client_state.xml")) {
             return candidate;
         }
     }
 
     // Pass 2: Fall back to any directory that exists (installed but not yet run).
     for (const auto& candidate : candidates) {
-        if (fs::exists(candidate)) {
+        if (PathExists(candidate)) {
             return candidate;
         }
     }
@@ -26,7 +44,23 @@ fs::path GRC::ResolveBoincDataDir(const std::vector<fs::path>& candidates)
     return "";
 }
 
-fs::path GRC::GetBoincDataDir()
+namespace {
+//! Guards the resolved-path cache below. A leaf lock: nothing is taken while it is
+//! held except the filesystem/registry probe itself, which is exactly what the cache
+//! exists to stop repeating.
+std::mutex g_boinc_data_dir_mutex;
+
+//! Empty until the first probe. Holds the NEGATIVE result too -- caching only
+//! successes would leave the failing case probing forever, and the failing case is
+//! precisely the expensive one (on Windows: a registry open/query, then fs::exists on
+//! C:\ProgramData\BOINC\, then on the legacy C:\Documents and Settings\All Users\...
+//! junction, then an error() log).
+std::optional<fs::path> g_boinc_data_dir_cache;
+} // anonymous namespace
+
+//! Resolve the BOINC data directory from scratch. Callers want GetBoincDataDir(),
+//! which memoizes this.
+static fs::path FindBoincDataDir()
 {
     std::string path = gArgs.GetArg("-boincdatadir", "");
 
@@ -43,34 +77,39 @@ fs::path GRC::GetBoincDataDir()
         KEY_READ|KEY_WOW64_64KEY,
         &hKey) == ERROR_SUCCESS)
     {
-        wchar_t szPath[MAX_PATH];
-        DWORD dwSize = sizeof(szPath);
+        // One slot more than the size passed in, so the value can always be
+        // terminated: a registry string is not guaranteed to carry its NUL.
+        wchar_t szPath[MAX_PATH + 1] = {};
+        DWORD dwType = 0;
+        DWORD dwSize = MAX_PATH * sizeof(wchar_t);
 
-        if (RegQueryValueEx(
+        const LONG status = RegQueryValueEx(
             hKey,
             L"DATADIR",
             nullptr,
-            nullptr,
-            (LPBYTE)&szPath,
-            &dwSize) == ERROR_SUCCESS)
-        {
-            RegCloseKey(hKey);
+            &dwType,
+            reinterpret_cast<LPBYTE>(szPath),
+            &dwSize);
+
+        // Closed here, once, before anything below can return.
+        RegCloseKey(hKey);
+
+        if (status == ERROR_SUCCESS && dwType == REG_SZ) {
+            szPath[dwSize / sizeof(wchar_t)] = L'\0';
 
             fs::path path = std::wstring(szPath);
 
-            if (fs::exists(path)){
+            if (PathExists(path)) {
                 return path;
-            } else {
-                LogPrintf("Cannot find BOINC data dir %s.", path.string());
             }
-        }
 
-        RegCloseKey(hKey);
+            LogPrintf("Cannot find BOINC data dir %s.", path.string());
+        }
     }
 
-    if (fs::exists("C:\\ProgramData\\BOINC\\")){
+    if (PathExists("C:\\ProgramData\\BOINC\\")){
         return "C:\\ProgramData\\BOINC\\";
-    } else if(fs::exists("C:\\Documents and Settings\\All Users\\Application Data\\BOINC\\")) {
+    } else if(PathExists("C:\\Documents and Settings\\All Users\\Application Data\\BOINC\\")) {
         return "C:\\Documents and Settings\\All Users\\Application Data\\BOINC\\";
     }
     #endif
@@ -87,7 +126,7 @@ fs::path GRC::GetBoincDataDir()
         linux_candidates.push_back(fs::path(pszHome) / ".var/app/edu.berkeley.BOINC/");
     }
 
-    fs::path linux_result = ResolveBoincDataDir(linux_candidates);
+    fs::path linux_result = GRC::ResolveBoincDataDir(linux_candidates);
 
     if (!linux_result.empty()) {
         return linux_result;
@@ -95,7 +134,7 @@ fs::path GRC::GetBoincDataDir()
     #endif
 
     #ifdef __APPLE__
-    if (fs::exists("/Library/Application Support/BOINC Data/")) {
+    if (PathExists("/Library/Application Support/BOINC Data/")) {
         return "/Library/Application Support/BOINC Data/";
     }
     #endif
@@ -104,4 +143,36 @@ fs::path GRC::GetBoincDataDir()
           "the data directory location by using boincdatadir=<data directory location>.", __func__);
 
     return "";
+}
+
+fs::path GRC::GetBoincDataDir()
+{
+    std::lock_guard<std::mutex> lock(g_boinc_data_dir_mutex);
+
+    // Probing per call was costing a registry query and two filesystem probes on
+    // Windows every time the GUI rebuilt its researcher snapshot -- which was once
+    // per block. Worse, it is guaranteed futile for a whole class of user: someone
+    // who installs Gridcoin before BOINC has no data directory, and the beacon
+    // wizard that would let them fix it is gated on the wallet being synced. So for
+    // the entire initial sync the answer cannot change and every probe fails, while
+    // error() logs unconditionally -- default logging, no -debug needed.
+    //
+    // Cache it instead. The answer only changes when the user tells the wallet
+    // something changed, and every one of those routes through the no-arg
+    // Researcher::Reload() -- startup, the wizard (switchMode -> ChangeMode ->
+    // Reload), resetcpids, and the interface reload() -- which calls
+    // ResetBoincDataDirCache(). A time-based cache would be wrong here: nothing
+    // expires on a schedule, it changes on an action.
+    if (!g_boinc_data_dir_cache) {
+        g_boinc_data_dir_cache = FindBoincDataDir();
+    }
+
+    return *g_boinc_data_dir_cache;
+}
+
+void GRC::ResetBoincDataDirCache()
+{
+    std::lock_guard<std::mutex> lock(g_boinc_data_dir_mutex);
+
+    g_boinc_data_dir_cache.reset();
 }

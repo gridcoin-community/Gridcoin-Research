@@ -6,31 +6,52 @@
 
 
 #include "chainparams.h"
+#include "dbwrapper.h"
 #include "gridcoin/support/block_finder.h"
 #include "util.h"
+#include "node/shutdown.h"
 #include "util/threadnames.h"
 #include "net.h"
 #include "wallet/walletdb.h"
+#include <key_io.h>
 #include "banman.h"
+#include "base58.h"
 #include "random.h"
 #include "rpc/server.h"
 #include "init.h"
 #include "node/ui_interface.h"
 #include "scheduler.h"
+#include "validationinterface.h"
+#include "script/interpreter.h"
 #include "gridcoin/gridcoin.h"
 #include "gridcoin/upgrade.h"
 #include "gridcoin/contract/registry.h"
 #include "miner.h"
+#include "net_processing.h"
+#include "txmempool.h"
 #include "node/blockstorage.h"
+#include "node/coherence.h"
+#include "node/mempool_persist.h"
+#include "node/psgt_pool.h"
+#include <util/check.h>
+#include <util/proc_hardening.h>
+#include <util/strencodings.h>
+#include <util/string.h>
 #include <util/syserror.h>
+#include "consensus/consensus.h"  // MAX_BLOCK_SIZE_GEN
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <openssl/crypto.h>
 
-#include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
+#include <thread>
 
 static boost::thread_group threadGroup;
-static CScheduler scheduler;
+
+//! The proof-of-stake miner thread. Launched from AppInit2 Step 12 and joined
+//! in Shutdown() after StopNode(), before the block-file flush, so a block
+//! staked during shutdown cannot land after the flush (issue #2865). Owned
+//! here rather than by net.cpp's netThreads because it is a staking thread,
+//! not a network thread (issue #2558 PR 0).
+static std::thread g_stake_miner_thread;
 
 extern void ThreadAppInit2(void* parg);
 
@@ -41,11 +62,14 @@ extern void ThreadAppInit2(void* parg);
 
 using namespace std;
 CWallet* pwalletMain;
-extern bool fQtActive;
-extern bool bGridcoinCoreInitComplete;
+
+// Node-lifecycle flags (moved from main.cpp, issue #3125 C9; declared in
+// init.h).
+bool fQtActive = false;
+std::atomic<bool> bGridcoinCoreInitComplete{false};
+
 extern bool fConfChange;
 extern bool fEnforceCanonical;
-extern unsigned int nNodeLifespan;
 extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
 extern bool fUseFastIndex;
@@ -57,11 +81,46 @@ extern constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
 
 
 std::unique_ptr<BanMan> g_banman;
+std::unique_ptr<CScheduler> g_scheduler;
+std::atomic<CScheduler*> g_scheduler_handle{nullptr};
+
+//! Keeps unbroadcast.dat in step with the unbroadcast set. Enabled once AppInit2
+//! has reloaded the set, so an early AppInit2 failure (which still runs
+//! Shutdown) cannot overwrite a good unbroadcast.dat with the empty pool of an
+//! init that never loaded it. Never enabled under -persistmempool=0, or when an
+//! unreadable unbroadcast.dat could not be moved aside.
+static node::UnbroadcastPersister g_unbroadcast_persister;
+
+namespace {
+//! Bridges the validation-signal layer to the legacy ui_interface block
+//! notification. Routing GUI tip updates through CValidationInterface (issue
+//! #3030, workstream B3) keeps the Qt models subscribing to
+//! uiInterface.NotifyBlocksChanged unchanged while letting any future
+//! subscriber (e.g. a PeerManager) hook UpdatedBlockTip as well.
+class UINotificationBridge : public CValidationInterface
+{
+protected:
+    void UpdatedBlockTip(const CBlockIndex* pindexNew, const CBlockIndex* /*pindexFork*/, bool fInitialDownload) override
+    {
+        if (pindexNew == nullptr) return;
+        uiInterface.NotifyBlocksChanged(fInitialDownload, pindexNew->nHeight,
+                                        pindexNew->GetBlockTime(), pindexNew->nBits);
+    }
+};
+UINotificationBridge g_ui_notification_bridge;
+} // namespace
 
 /**
  * The PID file facilities.
  */
 static const char* GRIDCOIN_PID_FILENAME = "gridcoinresearchd.pid";
+
+//! The options SetupUIArgs registers for the GUI process. The node registers them as hidden arguments only so that
+//! one config file or command line can serve both programs without the node warning about, or rejecting, an option
+//! it does not use. They are never node settings, and ChangeSettings refuses to store them.
+static const std::vector<std::string> GUI_ONLY_ARGS{
+    "-autotrustidentity", "-choosedatadir", "-devsyntheticcoins", "-guilogfile", "-lang", "-min", "-nobuildwarn",
+    "-resetguisettings", "-splash", "-style", "-suppressnetworkgraph"};
 
 static fs::path GetPidFile(const ArgsManager& args)
 {
@@ -101,11 +160,6 @@ static void ShutdownNotify(const ArgsManager& args)
 }
 #endif
 
-bool ShutdownRequested()
-{
-    return fRequestShutdown;
-}
-
 void StartShutdown()
 {
 
@@ -116,7 +170,7 @@ void StartShutdown()
         uiInterface.QueueShutdown();
     else
         // Without UI, shutdown is initiated and shutdown() is called in AppInit
-        fRequestShutdown = true;
+        SetShutdownRequested();
 }
 
 void Shutdown(void* parg)
@@ -145,16 +199,30 @@ void Shutdown(void* parg)
             ShutdownNotify(gArgs);
         #endif
 
-        fShutdown = true;
+        SetShutdownInProgress();
 
-        // Signal to the scheduler to stop.
+        // Signal to the scheduler to stop. Guarded because Shutdown() can run
+        // after an early AppInit2 failure, before the scheduler is constructed.
         LogPrintf("INFO: %s: Stopping the scheduler.", __func__);
-        scheduler.stop();
+
+        // Unpublish BEFORE stopping, so a thread that is still running -- the
+        // RPC workers are not stopped until much later -- sees "no scheduler"
+        // rather than one that is about to stop servicing its queue.
+        g_scheduler_handle.store(nullptr, std::memory_order_release);
+
+        if (g_scheduler) g_scheduler->stop();
 
         // clean up any remaining threads running serviceQueue:
         LogPrintf("INFO: %s: Cleaning up any remaining threads in scheduler.", __func__);
         threadGroup.interrupt_all();
         threadGroup.join_all();
+
+        // The scheduler thread is now stopped; drain any remaining background
+        // validation-interface callbacks on this thread, then detach the
+        // scheduler from CMainSignals (issue #3030, workstream B).
+        LogPrintf("INFO: %s: Flushing background validation callbacks.", __func__);
+        GetMainSignals().FlushBackgroundCallbacks();
+        GetMainSignals().UnregisterBackgroundSignalScheduler();
 
         LogPrintf("INFO: %s: Flushing wallet database.", __func__);
         bitdb.Flush(false);
@@ -166,19 +234,123 @@ void Shutdown(void* parg)
         LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
         StopNode();
 
+        // The stake miner exits via ShutdownInProgress() plus the
+        // g_thread_interrupt() call above, which wakes its MilliSleep.
+        LogPrintf("INFO: %s: Stopping the stake miner thread.", __func__);
+        if (g_stake_miner_thread.joinable()) {
+            g_stake_miner_thread.join();
+        }
+
+        // Coordinate block-file and block-index DB state before exit so a
+        // clean shutdown never leaves the LevelDB index referencing flat-file
+        // data that hasn't been fsynced. The fsync on the active blk*.dat
+        // covers the IBD case where the last block was written between
+        // 5000-block fsync boundaries; the CTxDB::Sync() barrier then forces
+        // the LevelDB WAL to disk so any pending CDiskBlockIndex entries are
+        // durable. See issue #2865.
+        //
+        // This must run after StopNode() and the stake-miner join so that
+        // every thread that can write a block (ThreadMessageHandler,
+        // ThreadStakeMiner, ThreadScraper, and the rest of the net/peer
+        // thread group) has been joined. Running it earlier leaves a small
+        // race window where a block accepted during shutdown could land
+        // after our flush and bypass the coordination guarantee Phase 2's
+        // startup recovery relies on.
+        LogPrintf("INFO: %s: Flushing block files and index DB.", __func__);
+        {
+            LOCK(cs_main);
+            unsigned int nFile = 0;
+            bool block_file_synced = false;
+            if (FILE* fp = AppendBlockFile(nFile)) {
+                block_file_synced = FileCommit(fp);
+                // The handle is cached and owned by blockstorage, not by us.
+                CloseBlockFile();
+                if (!block_file_synced) {
+                    LogPrintf("WARN: %s: FileCommit failed for blk%04u.dat during shutdown; "
+                              "skipping LevelDB sync barrier so the block-index DB does not "
+                              "become durable referencing unflushed flat-file data.",
+                              __func__, nFile);
+                }
+            } else {
+                LogPrintf("WARN: %s: AppendBlockFile failed during shutdown; "
+                          "skipping LevelDB sync barrier.", __func__);
+            }
+            if (block_file_synced) {
+                if (!CTxDB().Sync()) {
+                    LogPrintf("WARN: %s: CTxDB::Sync failed during shutdown.", __func__);
+                }
+            }
+        }
+
         LogPrintf("INFO: %s: Final flush of wallet database and closing wallet database file.", __func__);
         bitdb.Flush(true);
 
         LogPrintf("INFO: %s: Stopping RPC threads.", __func__);
         StopRPCThreads();
 
+        // Persist the unbroadcast set -- the node's own transactions that have not
+        // yet been seen propagating -- so a restart does not silently drop them.
+        // The scheduler kept the file current while the node ran, and is stopped;
+        // this final write catches whatever changed since its last pass. It comes
+        // after the RPC server stops, so a send or a cancelunbroadcasttransaction
+        // that arrived during shutdown is in it. The whole pool is intentionally
+        // NOT saved: every other tx is redelivered by block/inv gossip. A no-op
+        // unless the reload in AppInit2 enabled the persister (see its
+        // declaration).
+        if (g_unbroadcast_persister.Write(mempool)) {
+            LogPrintf("INFO: %s: Persisted the unbroadcast set.", __func__);
+        }
+
+        // Tear down the message processor and connection manager only AFTER the RPC
+        // worker threads are stopped (issue #2558). RPC handlers
+        // (getpeerinfo/getconnectioncount/disconnectnode/addnode) call into
+        // g_connman/g_peerman, which now OWN the node list (m_nodes/m_nodes_mutex);
+        // destroying them while an RPC call is in flight would lock a destroyed mutex
+        // and read freed node storage -- a use-after-free. (When the list was a file
+        // global with static lifetime this window was benign; the storage move makes
+        // it dangerous, so the reset moves below StopRPCThreads.) The net threads that
+        // drove the message processor were already joined by StopNode() above, and the
+        // stake miner above too, so this is the first point at which no thread -- net,
+        // RPC, or miner -- can still touch either. Reset the peer manager before the
+        // connection manager it is associated with (PR 8a).
+        //
+        // Defensive/idiomatic unregister before destruction (issue #3125 C8; see
+        // the comment on the Unregister block further below): in the current
+        // teardown order this is a no-op -- UnregisterBackgroundSignalScheduler()
+        // earlier in Shutdown() already disconnected every subscriber -- and the
+        // operative safety invariant is the thread joins described above.
+        if (g_peerman) UnregisterValidationInterface(g_peerman.get());
+        if (g_peerman) g_peerman.reset();
+        if (g_connman) g_connman.reset();
+
+        // Then the ban manager, as upstream does. Its destructor writes the ban
+        // list, which has to happen here, while the process is whole, and not
+        // during static destruction after main() returns, when the RNG and other
+        // state the write uses may already be gone. Nothing can reach it now:
+        // the scheduler that dumps it periodically, the net threads and the RPC
+        // workers are stopped above, and the peer manager that held a pointer to
+        // it is gone. The node interface the GUI uses checks for a null g_banman.
+        g_banman.reset();
+
         // This is necessary here to prevent a snapshot download from failing at the cleanup
         // step because of a write lock on accrual/registry.dat.
         GRC::CloseResearcherRegistryFile();
 
         fs::remove(GetPidFile(gArgs));
-        UnregisterWallet(pwalletMain);
+        // Defensive/idiomatic: a subscriber unregisters itself before deletion. In the
+        // current teardown order these are no-ops -- GetMainSignals().UnregisterBackground-
+        // SignalScheduler() earlier in Shutdown() already reset CMainSignals' internals and
+        // disconnected every subscriber -- but keeping them makes the subscribers' lifetimes
+        // self-contained and load-bearing again if that ordering is ever changed.
+        UnregisterValidationInterface(&g_psgt_pool);
+        UnregisterValidationInterface(&g_ui_notification_bridge);
+        UnregisterValidationInterface(pwalletMain);
         delete pwalletMain;
+        // Null the global so any late/defensive `if (pwalletMain)` guard (e.g. the
+        // scheduled wallet-rebroadcast job) is load-bearing rather than seeing a
+        // dangling pointer. Safe today only because the scheduler thread is already
+        // joined above; nulling hardens against future teardown reordering.
+        pwalletMain = nullptr;
         // close transaction database to prevent lock issue on restart
         // This causes issues on daemons where it tries to create a second
         // lock file.
@@ -198,17 +370,24 @@ void Shutdown(void* parg)
 #ifndef WIN32
 static void HandleSIGTERM(int)
 {
-    fRequestShutdown = true;
+    SetShutdownRequested();
 }
 
 static void HandleSIGHUP(int)
 {
-    fReopenDebugLog = true;
+    // Ask the logger to reopen debug.log on the next write (log rotation).
+    // m_reopen_file is a std::atomic<bool>, and by the time any signal is
+    // delivered LogInstance() just returns the already-constructed logger, so
+    // this handler only flips an atomic flag -- the same reopen mechanism Bitcoin
+    // Core uses from its SIGHUP handler. (This does not make the whole handler
+    // formally async-signal-safe; it replaces the former fReopenDebugLog global,
+    // which only shadowed this flag.)
+    LogInstance().m_reopen_file = true;
 }
 #else
 static BOOL WINAPI consoleCtrlHandler(DWORD dwCtrlType)
 {
-    fRequestShutdown = true;
+    SetShutdownRequested();
     Sleep(INFINITE);
     return true;
 }
@@ -239,18 +418,184 @@ bool static Bind(const CService &addr, bool fError = true) {
     return true;
 }
 
+//! A random 256-bit RPC password, base58-encoded.
+//!
+//! Base58 is alphanumeric, which matters twice over: the config parser sees no
+//! character it treats specially, and core rejects '#' in an rpcpassword outright
+//! (the autounlock helper documents the same constraint). The encoding is 43-44
+//! characters, so it can never collide with the fixed username either.
+static std::string GenerateRpcPassword()
+{
+    unsigned char rand_pwd[32];
+    GetRandBytes(rand_pwd);
+
+    return EncodeBase58(rand_pwd);
+}
+
+//! Add generated RPC credentials to an EXISTING configuration file that has none.
+//!
+//! CreateNewConfigFile only runs when there is no configuration file at all
+//! (IsConfigFileEmpty is misnamed -- it reports that the file could not be opened,
+//! not that it is empty). So generating credentials there fixes only a genuinely
+//! fresh install. Two cases it does not reach, both of which end with a daemon that
+//! will not run:
+//!
+//!  - Retrofit. An existing wallet's config was written by a build that emitted only
+//!    addnode= lines. The monolithic GUI never needed RPC credentials, so nobody ever
+//!    noticed. Point gridcoinresearchd at that same data directory -- which is exactly
+//!    what moving an existing install to multiprocess does -- and it soft-sets -server,
+//!    StartRPCThreads refuses the empty password, and the core exits during startup.
+//!    Under a service manager that is a silent retry-fail at boot.
+//!  - The newbie headless install. Someone hand-writes a config, forgets credentials,
+//!    and ends up with an instance that cannot be controlled at all.
+//!
+//! The expectation for a headless daemon is that it answers RPC on loopback. That is
+//! not merely convention here: the stake-only autounlock helper is pure RPC
+//! (contrib/wallettools/gridcoin_autounlock.py), so an RPC-less daemon silently loses
+//! the one feature the unattended deployment exists for.
+//!
+//! Scope, deliberately narrow:
+//!  - Only when an RPC server is actually being started. An explicit server=0 is a real
+//!    choice and is honoured -- the config is not touched (and autounlock will not work,
+//!    which is documented).
+//!  - Only ever APPENDS. Nothing already in the file is rewritten or removed. A missing
+//!    rpcpassword is an absence rather than a decision -- no interface ever offered the
+//!    user a way to choose it -- which is what separates this from the data directory
+//!    ACL rule, where widening the permissions IS a deliberate act we must not undo.
+//!  - Each key independently: a user who set rpcuser but no password keeps their name.
+static void AddMissingRpcCredentials()
+{
+    const bool need_user = gArgs.GetArg("-rpcuser", "").empty();
+    const bool need_password = gArgs.GetArg("-rpcpassword", "").empty();
+
+    if (!need_password && !need_user) return;
+
+    const fs::path config_file = GetConfigFile();
+
+    // Warn rather than re-tighten. We are adding a secret to a file the operator already
+    // owns, and this branch's rule is that permissions the user set are left as the user
+    // set them -- the same choice ipc::Process::bind() makes for a pre-existing data
+    // directory. Say so loudly instead, because a credential in a group-readable file is
+    // worth acting on.
+#ifndef WIN32
+    struct stat st;
+    if (::stat(config_file.string().c_str(), &st) == 0 && (st.st_mode & (S_IRWXG | S_IRWXO)) != 0) {
+        LogPrintf("WARNING: %s: %s is readable by other users (mode %03o) and is about to receive a "
+                  "generated RPC password. Leaving the permissions as configured; chmod 600 it if that "
+                  "is not what you want.",
+                  __func__, config_file.string(), static_cast<unsigned>(st.st_mode & 07777));
+    }
+#endif
+
+    {
+        fsbridge::ofstream config(config_file, std::ios_base::app);
+
+        if (!config.good()) {
+            // Not fatal here: fall through to StartRPCThreads, which already fails with a
+            // clear message telling the operator exactly what to put in the file. This is
+            // no worse than the behaviour before this function existed.
+            LogPrintf("WARNING: %s: could not open %s to add the missing RPC credentials",
+                      __func__, config_file.string());
+            return;
+        }
+
+        // Lead with a newline: an existing file need not end with one, and silently gluing
+        // rpcuser= onto the tail of somebody's last directive would corrupt their config.
+        config << "\n"
+               << "# Generated because an RPC server is being started without credentials, which\n"
+               << "# the daemon refuses to do. Without these it would not start at all. Change\n"
+               << "# them if you like; do not leave rpcpassword empty or equal to rpcuser.\n";
+
+        if (need_user) config << "rpcuser=gridcoinrpc\n";
+        if (need_password) config << "rpcpassword=" << GenerateRpcPassword() << "\n";
+    }
+
+    // Re-read so THIS start works rather than only the next one -- the whole point is that
+    // an unattended boot does not need a human. Same pattern as the fresh-config branch.
+    std::string error_msg;
+
+    if (!gArgs.ReadConfigFiles(error_msg, true)) {
+        LogPrintf("WARNING: %s: added RPC credentials but could not re-read the configuration: %s",
+                  __func__, error_msg);
+        return;
+    }
+
+    LogPrintf("%s: added generated RPC credentials to %s (an RPC server was requested without them)",
+              __func__, config_file.string());
+}
+
+//! Write the first-run configuration file, including RPC credentials.
+//!
+//! The credentials are not optional garnish. gridcoinresearchd soft-sets
+//! -server (gridcoinresearchd.cpp), so StartRPCThreads() runs on every daemon
+//! start, and it refuses to start with an empty rpcpassword. Without credentials
+//! here a genuinely fresh headless install cannot come up at all: the daemon
+//! creates its data directory, writes this file, and then exits telling the
+//! operator to put a password in the file it just wrote. That blocks exactly the
+//! deployment the multiprocess split is built around -- the core started first by
+//! a service manager (Windows scheduled task, systemd unit), where no GUI has run
+//! and no human is present to edit a config mid-boot.
+//!
+//! The generated password is what the error message itself recommends: a random
+//! 256-bit value, base58-encoded, with a fixed username that differs from it.
+//! Nobody needs to memorise it -- it exists so the local RPC endpoint is not
+//! open, and the autounlock helper reads it from this file.
+//!
+//! The file is created owner-only where the platform expresses that as a mode.
+//! On Windows it inherits the data directory's owner+SYSTEM DACL (see
+//! util::CreateOwnerOnlyDirectory), which is applied at creation and inheritable.
 static void CreateNewConfigFile()
 {
     fsbridge::ofstream myConfig;
     myConfig.open(GetConfigFile());
 
+    // Narrow the file BEFORE the password is written, not after: between creation
+    // and a trailing chmod the file would briefly sit at whatever the umask allows,
+    // and on a data directory the operator had previously widened that window is
+    // readable. On Windows there is no meaningful chmod, but the file inherits the
+    // data directory's owner+SYSTEM DACL from creation (util::CreateOwnerOnlyDirectory
+    // applies it inheritable), which closes the same window by a different route.
+#ifndef WIN32
+    if (::chmod(GetConfigFile().string().c_str(), 0600) != 0) {
+        LogPrintf("WARNING: %s: could not restrict %s to owner-only (errno %d); it will contain "
+                  "the generated RPC password", __func__, GetConfigFile().string(), errno);
+    }
+#endif
+
     myConfig
-        << "addnode=addnode-us-central.cycy.me\n"
-        << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
-        << "addnode=gridcoin.network\n"
-        << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
-        << "addnode=seed.gridcoin.pl\n"
-        << "addnode=www.grcpool.com\n";
+        << "# RPC credentials, generated on first run. The local RPC interface is\n"
+        << "# credential-protected even though it listens on localhost only; the\n"
+        << "# daemon will not start without them. Change them if you like, but do\n"
+        << "# not leave rpcpassword empty or equal to rpcuser.\n"
+        << "rpcuser=gridcoinrpc\n"
+        << "rpcpassword=" << GenerateRpcPassword() << "\n";
+
+    // Bootstrap peers for the public networks, and only for those.
+    //
+    // On testnet these are load-bearing rather than a convenience: ThreadDNSAddressSeed2
+    // and the pnSeed fallback in ThreadOpenConnections2 are both mainnet-only, chainparams
+    // carries no per-network seed list, and peers.dat is empty on a fresh node -- so
+    // without these lines a fresh testnet node has no automatic peer discovery at all.
+    // They are resolved against Params().GetDefaultPort(), so testnet dials them on its
+    // own port rather than mainnet's. That is why the guard here is IsMockableChain()
+    // and not OnMainnet(): excluding testnet would strand it.
+    //
+    // Regtest is a private, local chain, so writing real-network hostnames into its
+    // config is wrong twice over -- an isolated test chain resolves and repeatedly dials
+    // third-party production hosts, and the lines persist for the life of the datadir.
+    //
+    // The credentials above are still written on every network: the daemon soft-sets
+    // -server and StartRPCThreads refuses to start without them.
+    if (!Params().IsMockableChain()) {
+        myConfig
+            << "\n"
+            << "addnode=addnode-us-central.cycy.me\n"
+            << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
+            << "addnode=gridcoin.network\n"
+            << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
+            << "addnode=seed.gridcoin.pl\n"
+            << "addnode=www.grcpool.com\n";
+    }
 }
 
 void AddLoggingArgs(ArgsManager& argsman)
@@ -271,16 +616,13 @@ void AddLoggingArgs(ArgsManager& argsman)
                    ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logtimestamps", strprintf("Prepend debug output with timestamp (default: %u)", DEFAULT_LOGTIMESTAMPS),
                    ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
-#ifdef HAVE_THREAD_LOCAL
-    argsman.AddArg("-logthreadnames", strprintf("Prepend debug output with name of the originating thread (only available on"
-                                                " platforms supporting thread_local) (default: %u)", DEFAULT_LOGTHREADNAMES),
+    argsman.AddArg("-logthreadnames", strprintf("Prepend debug output with name of the originating thread (default: %u)", DEFAULT_LOGTHREADNAMES),
                    ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
-#else
-    argsman.AddHiddenArgs({"-logthreadnames"});
-#endif
     argsman.AddArg("-logtimemicros", strprintf("Add microsecond precision to debug timestamps (default: %u)",
                                                DEFAULT_LOGTIMEMICROS),
                    ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-logips", strprintf("Include IP addresses in debug output (default: %u)", DEFAULT_LOGIPS),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-printtoconsole", "Send trace/debug info to console (default: 0) )",
                    ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-printtodebugger", "Send trace/debug info to debugger (default: 0)",
@@ -316,11 +658,9 @@ void SetupServerArgs()
     const auto testnetChainParams = CreateChainParams(CBaseChainParams::TESTNET);
 
     // Hidden Options
-    std::vector<std::string> hidden_args = {
-        "-dbcrashratio", "-forcecompactdb", "-fastindex",
-        // GUI args. These will be overwritten by SetupUIArgs for the GUI
-        "-choosedatadir", "-lang=<lang>", "-min", "-resetguisettings",
-        "-splash", "-style", "-suppressnetworkgraph", "-showorphans"};
+    std::vector<std::string> hidden_args = {"-dbcrashratio", "-forcecompactdb", "-fastindex"};
+    // The GUI's own options; SetupUIArgs registers them properly for the GUI.
+    hidden_args.insert(hidden_args.end(), GUI_ONLY_ARGS.begin(), GUI_ONLY_ARGS.end());
 
     // Listed Options
     // General
@@ -333,6 +673,13 @@ void SetupServerArgs()
                                             " location. (default: %s)", GRIDCOIN_PID_FILENAME),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-datadir=<dir>", "Specify data directory", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-blocksdir=<dir>", "Specify directory to hold block data (default: <datadir>)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-nonewprivs", strprintf("On Linux, set NO_NEW_PRIVS and drop the capability bounding set at "
+                                            "startup so the daemon and its children can never gain privileges "
+                                            "(e.g. via a setuid binary). Best-effort defence-in-depth; ignored on "
+                                            "other platforms (default: %u)", DEFAULT_NO_NEW_PRIVS),
+                   ArgsManager::ALLOW_BOOL, OptionsCategory::OPTIONS);
     argsman.AddArg("-wallet=<dir>", "Specify wallet file (within data directory)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-dbcache=<n>", strprintf("Set database cache size in megabytes (%d to %d, default: %d)",
@@ -349,7 +696,7 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-paytxfee=<amt>", "Fee per KB to add to transactions you send",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-mintxfee=<amt>", "Minimum transaction fee for transactions you send or process (default: 0.001 GRC)",
+    argsman.AddArg("-mintxfee=<amt>", "Minimum fee rate, per KB, a transaction must pay to be included in a block this node stakes (default: 0.001 GRC). Does not affect transactions you send; use -paytxfee for that.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-mininput=<amt>", "When creating transactions, ignore inputs with value less than this (default: 0.01)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -359,11 +706,18 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-walletnotify=<cmd>", "Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-projectnotify=<cmd>", "Execute command when a project is added to or removed from the whitelist, or "
+                                           "an existing project's status changes",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-pollnotify=<cmd>", "Execute command when a poll is added/deleted/expiring (%s1 in cmd is replaced by poll id,"
                                         "%s2 is replaced by status: added, deleted, expiration warning)",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
     argsman.AddArg("-pollexpirewarningtime=<hours>", "Hours before poll expiration to execute notification command. Default is "
                                                      "7 days (168 hours)",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
+    argsman.AddArg("-psgtnotify=<cmd>", "Execute command when the PSGT pool changes (%s1 in cmd is replaced by the multisig "
+                                        "image hash, %s2 by the event: added, updated, expired, completed, "
+                                        "conflict-mempool, conflict-block, removed; %s3 by the unsigned transaction id)",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
 #endif
     argsman.AddArg("-confchange", "Require confirmations for change (default: 0)",
@@ -379,16 +733,8 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-blockmaxsize=<n>", strprintf("Set maximum block size in bytes (default: %u)", MAX_BLOCK_SIZE_GEN/2),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-snapshotdownload", "Download and apply latest snapshot",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-snapshoturl=<url>", "Optional: URL for the snapshot.zip file (ex: "
-                                         "https://sub.domain.com/location/snapshot.zip)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-snapshotsha256url=<url>", "Optional: URL for the snapshot.sha256 file (ex: "
-                                               "https://sub.domain.com/location/snapshot.sha256)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-disableupdatecheck", "Optional: Disable update checks by wallet",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
     argsman.AddArg("-updatecheckinterval=<n>", "Optional: Check for updates every <n> hours (default: 120, minimum: 1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-updatecheckurl=<url>", "Optional: URL for the update version checks (ex: "
@@ -402,6 +748,10 @@ void SetupServerArgs()
                                         "the command line.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-reindex", "Rebuild chain state and block index from the blk*.dat files on disk",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-checkblocks=<n>", "How many blocks to verify at startup, counting back from the tip (default: 1000, 0 = none)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-checklevel=<n>", "How thorough the startup block verification is (0-7, default: 1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-settings=<file>", strprintf("Specify path to dynamic settings data file. Can be disabled with"
                                                  " -nosettings. File is written at runtime and not meant to be edited by"
@@ -421,6 +771,10 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-staking", "Allow wallet to stake if conditions to stake are met (default: 1)",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-showorphans", "Include stale (orphaned) coinstake transactions in the transaction list",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-minersleep=<n>", "Milliseconds the staking loop sleeps between rounds (default: 8000)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
     argsman.AddArg("-sidestake=<address,percent>", "Sidestake destination and allocation entry. There can be as many "
                                                    "specified as desired. Only six per stake can be sent. If more than "
                                                    "six are specified. Six are randomly chosen for each stake. Only active "
@@ -454,6 +808,8 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-minstakesplitvalue=<n>", strprintf("Specify minimum output value for post split output when stake "
                                                         "splitting (default: %" PRId64 "GRC)", MIN_STAKE_SPLIT_VALUE_GRC),
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-reservebalance=<amt>", "Keep <amt> GRC unspent and unstaked (reserve). Applied live when changed.",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
 
     // Scraper
@@ -495,10 +851,11 @@ void SetupServerArgs()
     argsman.AddArg("-zapwallettxes", "Delete all wallet transactions and only recover those parts of the blockchain through"
                                      " -rescan on startup",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
-    argsman.AddArg("-checkblocks=<n>", "How many blocks to check at startup (default: 2500, 0 = all)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
-    argsman.AddArg("-checklevel=<n>", "How thorough the block verification is (0-6, default: 1)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-coherencewalkmax=<n>",
+                   strprintf("Cap on how far backward the Phase 2 startup chain-coherence walk will go "
+                             "before giving up and requiring -reindex (default: %d). See issue #2865.",
+                             GRC::DEFAULT_COHERENCE_WALK_MAX),
+                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-walletbackupinterval=<n>", "DEPRECATED: Optional: Create a wallet backup every <n> blocks. Zero"
                                                 " disables backups",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
@@ -519,7 +876,9 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-enableaccounts", "DEPRECATED: Enable accounting functionality (default: 0)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
-    argsman.AddArg("-maxsigcachesize=<n>", "Set maximum size for signature cache (default: 50000)",
+    argsman.AddArg("-maxsigcachesize=<n>", strprintf("Set maximum size for signature cache, in entries "
+                                                     "(default: %d, maximum: %d)",
+                                                     DEFAULT_MAX_SIG_CACHE_SIZE, MAX_SIG_CACHE_ENTRIES),
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-contractchangetoinputaddress", "Change from a contract transaction is returned to an input address "
                                                     "rather than creating a new change address (default: 0)",
@@ -532,10 +891,13 @@ void SetupServerArgs()
                                        " a peer may be inactive before the connection to it is dropped. (minimum: 1, default:"
                                        " 45)",
                    ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::CONNECTION);
-    argsman.AddArg("-proxy=<ip:port>", "Connect through SOCKS5 proxy", ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-proxy=<ip:port>", "Connect through SOCKS5 proxy", ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::CONNECTION);
     argsman.AddArg("-tor=<ip:port>", "Use proxy to reach Tor onion services (default: same as -proxy)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-dns", "Allow DNS lookups for -addnode, -seednode and -connect",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-addrlifespan=<n>", "Maximum age in days of the peer addresses returned in response to a getaddr "
+                                        "message; older addresses are withheld (default: 7)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-port=<port>", "Listen for connections on <port> (default: 32749 or testnet: 32748)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
@@ -543,6 +905,11 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxoutboundconnections=<n>", "Maximum number of outbound connections (default: 8)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-maxmempool=<n>", "Keep the transaction memory pool below <n> megabytes (default: 300)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::NODE_RELAY);
+    argsman.AddArg("-persistmempool", "Whether to keep this node's own unbroadcast transactions on "
+                   "disk as they change and reload them on startup so they survive a restart (default: 1)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::NODE_RELAY);
     argsman.AddArg("-addnode=<ip>", "Add a node to connect to and attempt to keep the connection open",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-connect=<ip>", "Connect only to the specified node(s)",
@@ -574,11 +941,13 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
 #ifdef USE_UPNP
 #if USE_UPNP
-    argsman.AddArg("-upnp", "Use UPnP to map the listening port (default: 1 when listening and no -proxy)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-upnp", "Use UPnP to map the listening port. Ignored when not listening, "
+                            "which -connect and -proxy imply (default: 1)",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::CONNECTION);
 #else
-    argsman.AddArg("-upnp", "Use UPnP to map the listening port (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-upnp", "Use UPnP to map the listening port. Ignored when not listening, "
+                            "which -connect and -proxy imply (default: 0)",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::CONNECTION);
 #endif
 #else
     hidden_args.emplace_back("-upnp");
@@ -587,6 +956,19 @@ void SetupServerArgs()
     // RPC
     argsman.AddArg("-server", "Accept command line and JSON-RPC commands",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-multiprocess",
+                   "Run in multiprocess mode (RFC #2937): the daemon also listens on an AF_UNIX "
+                   "socket in the data directory and serves the GUI over IPC; the GUI (started "
+                   "separately with -multiprocess) connects to it instead of running core in-process. "
+                   "Default: off (monolithic).",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-ipclogtrace",
+                   "Log the full request and response payload of every IPC call. This includes "
+                   "arguments, so anything passed over the wallet interfaces -- passphrases and "
+                   "seed phrases among them -- is written to debug.log in the clear. Diagnostic "
+                   "use only, on a wallet you are willing to expose. Deliberately separate from "
+                   "-debug: no logging category, including -debug=all, enables this (default: 0).",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-rpcuser=<user>", "Username for JSON-RPC connections",
                    ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::RPC);
     argsman.AddArg("-rpcwait", "Wait for RPC server to start.",
@@ -599,19 +981,23 @@ void SetupServerArgs()
     argsman.AddArg("-rpcport=<port>", strprintf("Listen for JSON-RPC connections on <port> (default: %u, testnet: %u)",
                                                 defaultBaseParams->RPCPort(), testnetBaseParams->RPCPort()),
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcallowip=<ip>", "Allow JSON-RPC connections from specified IP address",
+    argsman.AddArg("-rpcallowip=<ip>", "Allow JSON-RPC connections from the specified IP address, "
+                   "subnet (1.2.3.4/24 or 1.2.3.4/255.255.255.0) or wildcard pattern (1.2.3.*). "
+                   "May be given more than once. Note that setting this without -rpcbind also "
+                   "opens the RPC port on all interfaces",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcbind=<addr>[:port]", "Bind the JSON-RPC listener to the given address, "
+                   "optionally on a specific port. May be given more than once. Each entry binds "
+                   "exactly what it names, so an IPv6 entry does NOT also accept IPv4 -- pass both "
+                   "-rpcbind=:: and -rpcbind=0.0.0.0 to listen on each. When unset the listener "
+                   "uses loopback, or all interfaces (dual-stack) if -rpcallowip is set",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcconnect=<ip>", "Send commands to node running on <ip> (default: 127.0.0.1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcthreads=<n>", "Set the number of threads to service RPC calls (default: 4)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcssl", "Use OpenSSL (https) for JSON-RPC connections", ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcsslcertificatechainfile=<file.cert>", "Server certificate file (default: server.cert)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcsslprivatekeyfile=<file.pem>", "Server private key (default: server.pem)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
-    argsman.AddArg("-rpcsslciphers=<ciphers>",
-                   "Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)",
+    argsman.AddArg("-rpcservertimeout=<n>", strprintf("Close an RPC connection that has been idle "
+                   "for this many seconds; 0 disables (default: %d)", DEFAULT_RPC_SERVER_TIMEOUT),
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
 
 #if HAVE_DECL_FORK
@@ -631,6 +1017,16 @@ void SetupServerArgs()
     hidden_args.emplace_back("-devbuild");
     hidden_args.emplace_back("-scrapersleep");
     hidden_args.emplace_back("-activebeforesb");
+
+    // Feature-specific consensus-height test overrides. Each entry pairs with a
+    // gArgs.GetArg(...) call in the corresponding IsXxxEnabled helper in
+    // chainparams.h. Registering them here suppresses the "argument not
+    // registered" startup warning when an isolated-testnet node sets the
+    // height via the override.
+    hidden_args.emplace_back("-pollmultiaddressheight");
+    hidden_args.emplace_back("-autogreylistdeepcopyheight");
+    hidden_args.emplace_back("-autogreylisttotalcreditfixheight");
+    hidden_args.emplace_back("-autogreylistredesignheight");
 
     // This puts hidden options in the form of -clear<type>history, where <type> is the contract types that have a
     // registry with a backing db. This is currently beacon, project, protocol, and scraper, with sidestakes starting
@@ -660,6 +1056,13 @@ void SetupServerArgs()
 
     // These probably should be removed
     hidden_args.emplace_back("-printcoinage");
+    // Same family as the four above, and missed when they were registered: each
+    // of these dumps state and then aborts startup, so they are debug tools that
+    // have been unreachable rather than options anyone relies on.
+    hidden_args.emplace_back("-printblock");
+    hidden_args.emplace_back("-printblockindex");
+    hidden_args.emplace_back("-printblocktree");
+    hidden_args.emplace_back("-loadblockindextest");
     hidden_args.emplace_back("-privdb");
 
     // This is hidden because it defaults to true and should NEVER be changed unless you know what you are doing.
@@ -667,9 +1070,52 @@ void SetupServerArgs()
 
     hidden_args.emplace_back("-upgradewallet");
 
+    // Isolated-testnet / regtest override for the V15 (on-chain pool
+    // registration, issue #1783) activation height. Default chainparams
+    // value is std::numeric_limits<int>::max() until pinned by a follow-up
+    // release; this arg lets dev runs activate POOL contracts early so the
+    // full lifecycle can be exercised end-to-end. Read via GetBlockV15Height
+    // in chainparams.cpp.
+    hidden_args.emplace_back("-blockv15height");
+
+    // Isolated-testnet / regtest override for the message contract disable height.
+    // The default chainparams value is std::numeric_limits<int>::max() until
+    // pinned by a follow-up release; the arg lets dev runs disable message contracts
+    // early so the validation can be tested.
+    hidden_args.emplace_back("-messagecontractdisableheight");
+
+    // Isolated-testnet / regtest override for the PENDING / OPEN expiration
+    // window on POOL contracts (issue #1783). Default chainparams value is
+    // 28800 blocks (~30 days at mainnet ~90s spacing); this arg shortens
+    // the window so dev runs can exercise expiration boundaries without
+    // waiting weeks. Ignored on mainnet, like every hidden consensus
+    // override (ConsensusOverridesAllowed()). On regtest and testnet it is
+    // CONSENSUS-AFFECTING — nodes with differing values disagree on
+    // POOL_REGISTER admission across expiration boundaries, so on the
+    // public testnet a node with a different value forks off.
+    // Read via GetPendingPoolRetention in chainparams.cpp.
+    hidden_args.emplace_back("-pendingpoolretention");
+
     SetupChainParamsBaseOptions(argsman);
 
     // Add the hidden options
+    // Removed options, still accepted so that a node whose config or command
+    // line carries them starts instead of dying on "invalid parameter". The RPC
+    // server logs a warning for each one it finds set.
+    hidden_args.emplace_back("-rpcssl");
+    hidden_args.emplace_back("-rpcsslcertificatechainfile");
+    hidden_args.emplace_back("-rpcsslprivatekeyfile");
+    hidden_args.emplace_back("-rpcsslciphers");
+
+    // -socks is also a removed option, but unlike the -rpcssl group it is
+    // refused rather than warned about: AppInit2 returns InitError when it is
+    // set, because silently ignoring a SOCKS-version setting is a privacy risk.
+    // That guard only works if the option parses at all -- while unregistered, a
+    // -socks in the config file is dropped before AppInit2 can test for it, and
+    // on the command line it dies as "Invalid parameter" instead of explaining
+    // itself.
+    hidden_args.emplace_back("-socks");
+
     argsman.AddHiddenArgs(hidden_args);
 }
 
@@ -715,6 +1161,18 @@ static void StartupNotify(const ArgsManager& args)
 #endif
 
 /**
+ * Whether the node runs on the DEFAULT data directory because none was chosen.
+ * An explicit -datadir is a choice even when it names the default path. Asks
+ * what GetDataDirPath() and CheckDataDirOption() ask, so an empty -datadir counts
+ * as the default, which is where it resolves: -datadir= (a wrapper's
+ * -datadir=$DIR with DIR unset) chooses nothing. IsArgSet() would call it explicit.
+ */
+static bool DataDirIsDefault()
+{
+    return gArgs.GetArg("-datadir", "").empty();
+}
+
+/**
  * Initialize global loggers.
  *
  * Note that this is called very early in the process lifetime, so you should be
@@ -722,8 +1180,31 @@ static void StartupNotify(const ArgsManager& args)
  */
 void InitLogging()
 {
-    fPrintToConsole = gArgs.GetBoolArg("-printtoconsole");
-    fLogTimestamps = gArgs.GetBoolArg("-logtimestamps", true);
+    // Report the data directory on stderr before the log file is opened. The log
+    // lives inside the data directory, so when that directory is the problem --
+    // for example a sandbox default that resolves to tmpfs -- every record of
+    // which directory was used disappears along with it. ASCII only: this can
+    // reach a Windows console.
+    const fs::path resolved_data_dir = GetDataDir();
+
+    // Only speak up when the DEFAULT directory is the problem. Nobody chose it, so
+    // AppInit2 refuses to start on it, and debug.log lives inside it: a volatile
+    // default takes every record of itself with it, which makes it the case worth
+    // a line on stderr before logging starts. Reporting the path unconditionally
+    // was noise on every normal start. The line only names the directory; the
+    // node's refusal says what that costs and what to do about it.
+    //
+    // An explicit -datadir on tmpfs is the operator's choice, so the node runs,
+    // and its AppInit2 records the choice in debug.log instead. Keeping that case
+    // off stderr is not cosmetic: the functional test framework passes -datadir
+    // for every node and treats any stderr output as a failure, correctly, so on
+    // a host whose /tmp is tmpfs this line used to fail every test that stops its
+    // node through the framework. The predicate is the refusal's: DataDirIsDefault().
+    if (DataDirIsDefault() && fsbridge::IsVolatileFilesystem(resolved_data_dir)) {
+        fputs(strprintf("WARNING: the default data directory %s is on a temporary filesystem "
+                        "(tmpfs/ramfs).\n",
+                        resolved_data_dir.string()).c_str(), stderr);
+    }
 
     // This is needed because it is difficult to inject the equivalent of -nodebuglogfile in the testing suite for
     // console only logging, so in the testing suite, -debuglogfile=none is used.
@@ -734,8 +1215,8 @@ void InitLogging()
     }
 
     LogInstance().m_file_path = AbsPathForConfigVal(gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
-    LogInstance().m_print_to_console = fPrintToConsole;
-    LogInstance().m_log_timestamps = fLogTimestamps;
+    LogInstance().m_print_to_console = gArgs.GetBoolArg("-printtoconsole");
+    LogInstance().m_log_timestamps = gArgs.GetBoolArg("-logtimestamps", true);
     LogInstance().m_log_time_micros = gArgs.GetBoolArg("-logtimemicros", DEFAULT_LOGTIMEMICROS);
     LogInstance().m_log_threadnames = gArgs.GetBoolArg("-logthreadnames", DEFAULT_LOGTHREADNAMES);
 
@@ -821,6 +1302,200 @@ void InitLogging()
 
 
 
+void ApplyRwSettingSideEffect(const std::string& name)
+{
+    if (name == "proxy") {
+        // Enable/redirect the SOCKS proxy live from the current -proxy value.
+        // After an erase that is whatever the command line or config file sets,
+        // if anything. An empty value applies nothing: netbase has no primitive
+        // to clear a live proxy, so disabling is (as it always was) effective on
+        // restart.
+        const std::string proxy_arg = gArgs.GetArg("-proxy", "");
+        if (!proxy_arg.empty()) {
+            CService addrProxy(LookupNumeric(proxy_arg.c_str(), 9050));
+            if (addrProxy.IsValid()) {
+                if (!IsLimited(NET_IPV4)) SetProxy(NET_IPV4, addrProxy);
+                if (!IsLimited(NET_IPV6)) SetProxy(NET_IPV6, addrProxy);
+                SetNameProxy(addrProxy);
+            }
+        }
+    } else if (name == "upnp") {
+#ifdef USE_UPNP
+        // USE_UPNP is only defined when UPnP support is compiled in; without it
+        // there is nothing to toggle and SetUseUPnP/MapPort do not apply.
+        if (g_connman) {
+            // Apply the same rule AppInit2 applies at startup: mapping a port we
+            // do not listen on is pointless, so -connect or -proxy keeps the
+            // mapping off. That startup rule is a SoftSetBoolArg, which only
+            // covers the initial config -- an explicit runtime change, such as
+            // ticking the GUI checkbox, would otherwise walk straight past it and
+            // start the port-map thread anyway.
+            const bool listening = gArgs.GetBoolArg("-listen", true);
+            g_connman->SetUseUPnP(listening && gArgs.GetBoolArg("-upnp", USE_UPNP));
+            MapPort(); // starts or stops the port-map thread to match the flag
+        }
+#endif
+    } else if (name == "reservebalance") {
+        // Empty/unset → 0 (no reserve). ParseMoney fills reserve on success.
+        int64_t reserve = 0;
+        const std::string reserve_arg = gArgs.GetArg("-reservebalance", "");
+        if (reserve_arg.empty() || ParseMoney(reserve_arg, reserve)) {
+            nReserveBalance = reserve;
+        }
+    }
+    // else: pull-model setting (staking cluster, disableupdatecheck, ...) whose
+    // consumers re-read gArgs on use; nothing to apply here.
+}
+
+bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& settings,
+                    bool& requires_restart_out,
+                    std::vector<std::string>& no_change_out,
+                    std::vector<std::string>& immediate_out,
+                    std::vector<std::string>& requires_restart_list_out,
+                    bool& invalid_input_out,
+                    std::string& error_out)
+{
+    // Reset all outputs so results are well-defined even if the caller reuses
+    // the vectors across calls (or on an early-return failure).
+    requires_restart_out = false;
+    no_change_out.clear();
+    immediate_out.clear();
+    requires_restart_list_out.clear();
+    error_out.clear();
+    // Phase-1 failures are caller/validation errors; a phase-2 storage failure
+    // flips this back to false.
+    invalid_input_out = true;
+
+    // -------- name ------------ value - value_changed - immediate_effect
+    std::map<std::string, std::tuple<std::string, bool, bool>> valid_settings;
+
+    // Phase 1: fully validate (name and, for the knobs that would break on
+    // restart, the value) before mutating anything.
+    for (const auto& setting : settings) {
+        const std::string& name = setting.first;
+        const std::string& value = setting.second;
+
+        if (name.empty() || name[0] == '-') {
+            error_out = "Incorrectly formatted setting name: '" + name + "'";
+            return false;
+        }
+
+        std::optional<unsigned int> flags = gArgs.GetArgFlags('-' + name);
+        if (!flags) {
+            error_out = "Invalid setting: " + name;
+            return false;
+        }
+
+        // A GUI option stored in the node's settings would be a second, node-side copy that the -multiprocess GUI
+        // never reads. An empty value is still accepted, so an entry stored by an older build can be erased.
+        if (!value.empty() && std::find(GUI_ONLY_ARGS.begin(), GUI_ONLY_ARGS.end(), '-' + name) != GUI_ONLY_ARGS.end()) {
+            error_out = "Not a node setting (it belongs to the GUI): " + name;
+            return false;
+        }
+
+        // Value validation for the push-model network/staking knobs whose bad
+        // value would otherwise persist and fail at the next startup (the config
+        // consumers assert/InitError on a malformed value). An empty value erases
+        // and needs no check. GetBoolArg/GetArg coerce the rest leniently.
+        if (!value.empty()) {
+            if (name == "proxy" && !CService(LookupNumeric(value.c_str(), 9050)).IsValid()) {
+                error_out = "Invalid proxy address: " + value;
+                return false;
+            }
+            if (name == "reservebalance") {
+                int64_t parsed = 0;
+                if (!ParseMoney(value, parsed)) {
+                    error_out = "Invalid reservebalance amount: " + value;
+                    return false;
+                }
+            }
+        }
+
+        // GetArg is overloaded; one of these succeeds (matches the changesettings RPC).
+        std::string current_value;
+        try {
+            current_value = gArgs.GetArg(name, "never_used_default");
+        } catch (...) {
+            current_value = ToString(gArgs.GetArg(name, 1));
+        }
+
+        const bool value_changed = (current_value != value);
+        const bool immediate_effect = *flags & ArgsManager::IMMEDIATE_EFFECT;
+
+        if (!valid_settings.insert(std::make_pair(
+                name, std::make_tuple(value, value_changed, immediate_effect))).second) {
+            error_out = "The same setting was specified more than once: " + name;
+            return false;
+        }
+    }
+
+    // Phase 2: apply. A failure here is a storage error, not a caller error.
+    invalid_input_out = false;
+    for (const auto& setting : valid_settings) {
+        const std::string& name = setting.first;
+        const std::string& value = std::get<0>(setting.second);
+        const bool value_changed = std::get<1>(setting.second);
+        const bool immediate_effect = std::get<2>(setting.second);
+
+        // param is what we report back to the caller, so mask the value of a
+        // setting declared SENSITIVE -- rpcuser and rpcpassword today. The stored
+        // and applied value below is the real one; only the echo is reduced.
+        // Same "****" convention ArgsManager::LogArgs uses at startup.
+        //
+        // The reply travels further than the request did: over the RPC socket to
+        // whatever the caller pipes it into, and, in multiprocess builds, across
+        // the IPC boundary to the GUI. Echoing a credential the caller already
+        // knows still multiplies the number of places it comes to rest.
+        const std::optional<unsigned int> echo_flags = gArgs.GetArgFlags('-' + name);
+        const bool sensitive = echo_flags && (*echo_flags & ArgsManager::SENSITIVE);
+        const std::string param = name + "=" + (sensitive ? "****" : value);
+
+        // An empty value erases the setting; a null SettingsValue removes the key
+        // from gridcoinsettings.json.
+        //
+        // A changed value is applied to the running args in the same step
+        // (apply_to_running_args), before RwSettingsUpdated is emitted. A listener
+        // that reads the setting during the emission therefore reads the new
+        // value: the side-stake registry reloads its keys there, and a forced
+        // value outranks the read-write settings. If the write fails, the
+        // read-write and the running value are both left as they were.
+        //
+        // Erasing must also drop any value forced into the running args, not force
+        // an empty one. A forced value outranks every other source, and an empty
+        // string reads as true for a boolean arg, so "enablesidestaking=" used to
+        // switch side staking ON for the rest of the session. Cleared, the arg
+        // falls back to the command line, then the config file, then its default.
+        // That includes a value init soft-set at startup for this same arg, which
+        // is forced too.
+        //
+        // An erase of a value that already reads empty is not a change, so it is
+        // stored without apply_to_running_args, and a forced empty value stays in
+        // place. Its main in-tree source is researcher.cpp's ForceSetArg("-email",
+        // email) on a switch to pool or non-cruncher mode, which passes an empty
+        // email. A non-empty value researcher.cpp forces (-email, -noncruncher) is
+        // cleared by an erase like any other.
+        if (!updateRwSetting(name, value.empty() ? util::SettingsValue() : util::SettingsValue(value),
+                             /*apply_to_running_args=*/value_changed)) {
+            error_out = "Error storing setting in read-write settings file: " + name;
+            return false;
+        }
+
+        if (value_changed) {
+            if (immediate_effect) {
+                ApplyRwSettingSideEffect(name);
+                immediate_out.push_back(param);
+            } else {
+                requires_restart_list_out.push_back(param);
+                requires_restart_out = true;
+            }
+        } else {
+            no_change_out.push_back(param);
+        }
+    }
+
+    return true;
+}
+
 void ThreadAppInit2(ThreadHandlerPtr th)
 {
     // Make this thread recognisable
@@ -832,7 +1507,7 @@ void ThreadAppInit2(ThreadHandlerPtr th)
     LogPrintf("Initializing Core...");
 
     if (!AppInit2(th)) {
-        fRequestShutdown = true;
+        SetShutdownRequested();
     }
 
     LogPrintf("Core Initialized...");
@@ -843,6 +1518,60 @@ void ThreadAppInit2(ThreadHandlerPtr th)
 
 
 
+
+CKey GetRegtestPremineKey()
+{
+    // Genesis coinbase pays 10 UTXOs to the P2PKH of the secp256k1
+    // privkey-scalar=1 compressed pubkey (HASH160 751e76e8...).
+    const unsigned char kRegtestSecret[32] = {
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+    };
+    CKey regtest_key;
+    regtest_key.Set(kRegtestSecret, kRegtestSecret + 32, /*fCompressedIn=*/true);
+    return regtest_key;
+}
+
+void PlantRegtestPremineKey(CWallet* pwallet)
+{
+    Assert(pwallet);
+
+    // Plant the private key matching the regtest genesis premine into the
+    // wallet on every -regtest start so the staker can spend it. The BDB env
+    // is mocked (in-memory) under regtest, so this re-runs each start and the
+    // key is never persisted to disk.
+    //
+    // Acquire cs_main before cs_wallet (canonical order; ScanForWalletTransactions
+    // below also takes LOCK2(cs_main, cs_wallet)). Holding both up front avoids the
+    // cs_wallet -> cs_main inversion that -DENABLE_DEBUG_LOCKORDER would flag.
+    LOCK2(cs_main, pwallet->cs_wallet);
+    const CKey regtest_key = GetRegtestPremineKey();
+    if (!regtest_key.IsValid()) {
+        LogPrintf("ERROR: regtest premine key did not validate");
+    } else if (!pwallet->HaveKey(regtest_key.GetPubKey().GetID())) {
+        if (!pwallet->AddKeyPubKey(regtest_key, regtest_key.GetPubKey())) {
+            LogPrintf("ERROR: failed to plant regtest premine key");
+        } else {
+            // Force nTimeFirstKey down to before genesis so
+            // ScanForWalletTransactions doesn't skip the genesis block
+            // via its wallet-birthday optimization (regtest genesis nTime
+            // is 1296688602; the wallet was created "now", so without
+            // this nudge the scan would skip all of history).
+            pwallet->LoadKeyMetadata(regtest_key.GetPubKey(), CKeyMetadata(1));
+
+            LogPrintf("regtest: planted premine private key, address %s",
+                      EncodeDestination(regtest_key.GetPubKey().GetID()));
+            // Genesis is loaded before the key is in the wallet, so the
+            // wallet has no record of the premine coinbase outputs. Walk
+            // the chain from genesis to surface them. pindexGenesisBlock
+            // is GUARDED_BY(cs_main), already held via the LOCK2 above.
+            if (pindexGenesisBlock) {
+                int n = pwallet->ScanForWalletTransactions(pindexGenesisBlock, /*fUpdate=*/true);
+                LogPrintf("regtest: scanned %d wallet transactions after premine key plant", n);
+            }
+        }
+    }
+}
 
 /** Initialize Gridcoin.
  *  @pre Parameters should be parsed and config file should be read.
@@ -866,7 +1595,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     HeapSetInformation(nullptr, HeapEnableTerminationOnCorruption, nullptr, 0);
 #endif
 #ifndef WIN32
-    umask(077);
+    // The process umask is set at the top of main() (util::SetOwnerOnlyUmask), so
+    // that debug.log and the settings file -- both created before this point -- are
+    // covered too. Setting it here would be too late for them.
 
     // Clean shutdown on SIGTERM
     registerSignalHandler(SIGTERM, HandleSIGTERM);
@@ -905,6 +1636,14 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (!GRC::CleanConfig()) {
             InitWarning("Failed to clean obsolete config keys.");
         }
+
+        // An existing config predating first-run credential generation, or a hand-written
+        // one, otherwise leaves a daemon that cannot start. Only when an RPC server is
+        // actually being started; -server is soft-set by gridcoinresearchd before AppInit2
+        // runs, so it is already known here, and an explicit server=0 is honoured.
+        if (gArgs.GetBoolArg("-server", false)) {
+            AddMissingRpcCredentials();
+        }
     }
 
     //6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
@@ -924,8 +1663,24 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     nMinerSleep = gArgs.GetArg("-minersleep", 8000);
 
+    // Cap the transaction memory pool size (#3029 Phase 4). Value is in MB.
+    // Enforce a floor: a tiny (or zero/negative) cap would evict transactions as
+    // fast as they arrive -- including the node's own sends -- effectively
+    // disabling tx relay. Enforce a ceiling too: it keeps the byte value well
+    // within a 32-bit size_t so the conversion below cannot overflow on 32-bit
+    // builds (where a large value would silently wrap to a tiny, relay-breaking
+    // cap). 4000 MB is far above any real need. Reject a misconfiguration rather
+    // than silently clamping, so the operator sees what happened.
+    static const int64_t nMaxMempoolMinMB = 5;
+    static const int64_t nMaxMempoolMaxMB = 4000;
+    int64_t nMaxMempoolMB = gArgs.GetArg("-maxmempool", 300);
+    if (nMaxMempoolMB < nMaxMempoolMinMB || nMaxMempoolMB > nMaxMempoolMaxMB) {
+        return InitError(strprintf(_("-maxmempool must be between %d and %d MB."),
+                                   nMaxMempoolMinMB, nMaxMempoolMaxMB));
+    }
+    mempool.SetMaxSize(static_cast<size_t>(nMaxMempoolMB) * 1000 * 1000);
+
     nDerivationMethodIndex = 0;
-    fTestNet = gArgs.GetBoolArg("-testnet");
 
     if (gArgs.GetArgs("-bind").size()) {
         // when specifying an explicit binding address, you want to listen on it
@@ -965,10 +1720,6 @@ bool AppInit2(ThreadHandlerPtr threads)
         gArgs.SoftSetBoolArg("-rescan", true);
     }
 
-    // Verify testnet is using the testnet directory for the config file:
-    std::string sTestNetSpecificArg = gArgs.GetArg("-testnetarg", "default");
-    LogPrintf("Using specific arg %s", sTestNetSpecificArg);
-
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
@@ -986,7 +1737,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     {
         int nNewTimeout = gArgs.GetArg("-timeout", 5000);
         if (nNewTimeout > 0 && nNewTimeout < 600000)
-            nConnectTimeout = nNewTimeout;
+            SetConnectTimeout(nNewTimeout);
     }
 
     if (gArgs.IsArgSet("-peertimeout"))
@@ -1006,6 +1757,51 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (nTransactionFee > 0.25 * COIN)
             InitWarning(_("Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction."));
     }
+
+    if (gArgs.IsArgSet("-mintxfee"))
+    {
+        // Parse into a local: ParseMoney leaves its out-param untouched on
+        // failure, so parsing straight into nMinerMinTxFee would silently keep
+        // the "unset" sentinel and fall back to the default -- which is how this
+        // option managed to be ignored for years.
+        CAmount fee_rate = 0;
+
+        // The fee_rate < 0 arm is defensive depth, not a reachable branch:
+        // ParseMoney stops at the first non-digit (util.cpp), so a leading '-'
+        // fails the parse outright and it cannot return true with a negative.
+        // It is kept so the guard stays correct if ParseMoney ever learns to
+        // accept a sign -- but the negative case in mining_fee_policy.py is
+        // pinning the PARSE failure, not this check.
+        if (!ParseMoney(gArgs.GetArg("-mintxfee", ""), fee_rate) || fee_rate < 0) {
+            return InitError(strprintf(_("Invalid amount for -mintxfee=<amount>: '%s'"),
+                                       gArgs.GetArg("-mintxfee", "")));
+        }
+
+        nMinerMinTxFee = fee_rate;
+
+        if (nMinerMinTxFee > 0.25 * COIN) {
+            InitWarning(_("Warning: -mintxfee is set very high! Transactions paying less than "
+                          "this per KB will be left out of blocks this node stakes."));
+        }
+    }
+
+#ifdef WIN32
+    // runCommand() hands a command to the wide-character API, so it refuses one that is not
+    // UTF-8 -- from a configuration file saved in a legacy code page -- and logs that each time
+    // the command would have run. Say so once here, where the operator will see it.
+    // GetArgs, not GetArg: -shutdownnotify runs every value it is given.
+    for (const char* notify : {"-alertnotify", "-blocknotify", "-pollnotify", "-projectnotify", "-psgtnotify",
+                               "-shutdownnotify", "-startupnotify", "-walletnotify"}) {
+        for (const std::string& cmd : gArgs.GetArgs(notify)) {
+            try {
+                Utf8ToWide(cmd);
+            } catch (const std::range_error&) {
+                InitWarning(strprintf(_("Warning: the %s command is not valid UTF-8, so it will not be run. "
+                                        "Save the configuration file as UTF-8."), notify));
+            }
+        }
+    }
+#endif
 
     fConfChange = gArgs.GetBoolArg("-confchange", false);
     fEnforceCanonical = gArgs.GetBoolArg("-enforcecanonical", true);
@@ -1035,8 +1831,112 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("Block version 12 hard fork configured for block %d", Params().GetConsensus().BlockV12Height);
     LogPrintf("Block version 13 hard fork configured for block %d", Params().GetConsensus().BlockV13Height);
     LogPrintf("Block version 14 hard fork configured for block %d", Params().GetConsensus().BlockV14Height);
+    LogPrintf("Block version 15 hard fork configured for block %d", GetBlockV15Height());
+
+    // Same rationale as the heights above and the retention below: this value is
+    // consensus-affecting and carries a hidden isolated-testnet override, so a
+    // node running a different effective value from its peers would otherwise
+    // have nothing in the log to show it during incident diagnosis.
+    LogPrintf("MESSAGE contracts disabled from block %d", GetMessageContractDisableHeight());
+
+    // Surface the effective POOL PENDING/OPEN retention so an isolated-testnet
+    // -pendingpoolretention override is visible in the log and an accidental
+    // mismatch across nodes is diagnosable (the value is consensus-affecting).
+    LogPrintf("POOL pending/open retention configured at %d blocks", GetPendingPoolRetention());
+
+    // The hidden consensus overrides apply only on regtest and testnet, so on
+    // mainnet the heights logged here are the chainparams ones. Say why when an
+    // override was set anyway.
+    if (!ConsensusOverridesAllowed()) {
+        for (const char* arg : CONSENSUS_OVERRIDE_ARGS) {
+            if (gArgs.IsArgSet(arg)) {
+                LogPrintf("WARNING: %s is ignored on this network: consensus overrides apply only on regtest and testnet", arg);
+            }
+        }
+    }
+
+    // Same rationale for the AutoGreylist activation heights: all four are
+    // consensus-affecting, all four carry hidden isolated-testnet overrides, and
+    // none of them was previously surfaced -- so a node running a different
+    // effective value from its peers had nothing in the log to show it.
+    {
+        // No gArgs override for the audit height: unlike its three siblings it has no hidden
+        // argument and IsAutoGreylistAuditEnabled() consults only the consensus value (the
+        // gate is already crossed on mainnet and testnet, so an override would be a pure
+        // footgun). Reading a nonexistent override here would log a value consensus ignores.
+        const int64_t audit_height = Params().GetConsensus().AutoGreylistAuditHeight;
+        // Through GetConsensusOverride(), so the logged and ordering-checked values are the
+        // ones consensus uses, which are the chainparams values where overrides do not apply.
+        const int64_t deep_copy_height = GetConsensusOverride("-autogreylistdeepcopyheight",
+                                                              Params().GetConsensus().AutoGreylistDeepCopyHeight);
+        const int64_t total_credit_fix_height = GetConsensusOverride("-autogreylisttotalcreditfixheight",
+                                                                     Params().GetConsensus().AutoGreylistTotalCreditFixHeight);
+        const int64_t redesign_height = GetConsensusOverride("-autogreylistredesignheight",
+                                                             Params().GetConsensus().AutoGreylistRedesignHeight);
+
+        LogPrintf("AutoGreylist audit configured for block %" PRId64, audit_height);
+        LogPrintf("AutoGreylist deep-copy configured for block %" PRId64, deep_copy_height);
+        LogPrintf("AutoGreylist total-credit fix configured for block %" PRId64, total_credit_fix_height);
+        LogPrintf("AutoGreylist redesign configured for block %" PRId64, redesign_height);
+
+        // Enforce the ordering the Consensus::Params comment documents, rather than
+        // relying on it being followed. Before the deep-copy gate the Snapshot overlay
+        // writes through to the registry and only ever promotes to AUTO_GREYLISTED --
+        // there is no demotion arm -- so a project greylisted while the redesign is
+        // active but deep-copy is not cannot heal.
+        //
+        // Refused rather than silently clamped to the deep-copy height. Clamping would
+        // make the effective redesign height a function of BOTH values, so two nodes
+        // configuring the redesign identically but the deep-copy differently would then
+        // disagree about the redesign gate as well -- turning one misconfiguration into
+        // two divergences, silently. Refusing to start surfaces it on the node that is
+        // actually wrong.
+        if (redesign_height < deep_copy_height) {
+            return InitError(strprintf(_("-autogreylistredesignheight (%d) must not be below "
+                                         "-autogreylistdeepcopyheight (%d). Activating the AutoGreylist "
+                                         "redesign before the deep-copy gate leaves a spuriously greylisted "
+                                         "project unable to recover."),
+                                       redesign_height, deep_copy_height));
+        }
+    }
 
     fs::path datadir = GetDataDir();
+
+    // GetDataDirPath returns an empty path when the data directory cannot be accessed or
+    // created (e.g. wrong permissions, or a -datadir this user cannot read). It no longer
+    // throws, so guard here rather than proceed with an empty path -- DirIsWritable("")
+    // and LockDirectory("") would otherwise silently operate in the current working
+    // directory, seeding a fresh datadir/wallet in the wrong place.
+    if (datadir.empty()) {
+        return InitError(_("Cannot access the data directory; check that it exists and that you have permission to read and write it."));
+    }
+
+    // Refuse to run when the DEFAULT data directory lands on a temporary
+    // filesystem. That combination is never deliberate -- it is what the sandbox
+    // fallback used to produce -- and proceeding writes the chain and the wallet
+    // into RAM, where they are lost, along with this log, when that filesystem is
+    // cleared.
+    //
+    // Deliberately scoped to the default. An operator who passes -datadir
+    // pointing at tmpfs has chosen it, and both test harnesses do exactly that:
+    // the unit fixture and the functional framework each set -datadir, sometimes
+    // beneath a /tmp that is tmpfs on the host distribution. That case runs, and
+    // is reported here in debug.log rather than on stderr (see InitLogging). An
+    // empty -datadir is not that case: it resolves to the default directory.
+    if (fsbridge::IsVolatileFilesystem(datadir)) {
+        if (DataDirIsDefault()) {
+            return InitError(_("The default data directory is on a temporary filesystem, so the "
+                               "block chain and wallet would be lost when the program exits. Pass "
+                               "-datadir with a location on persistent storage."));
+        }
+
+        LogPrintf("WARNING: %s: the data directory %s is on a temporary filesystem (tmpfs/ramfs). "
+                  "The block chain and the wallet stored there are lost when that filesystem is "
+                  "cleared: on reboot at the latest, and on exit inside a sandbox such as Flatpak.",
+                  __func__, fsbridge::LongPathString(datadir));
+    }
+
+
     fs::path walletFileName = gArgs.GetArg("-wallet", "wallet.dat");
 
     LogPrintf("INFO %s: DataDir = %s.", __func__, fsbridge::LongPathString(datadir));
@@ -1053,27 +1953,33 @@ bool AppInit2(ThreadHandlerPtr threads)
         return InitError(strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running."), fsbridge::LongPathString(datadir), PACKAGE_NAME));
     }
 
-    // Check early whether the data directory path can be used by legacy database libraries (BDB, LevelDB)
-    // that only accept narrow (const char*) paths. On Windows, paths with characters outside the system
-    // code page require conversion to 8.3 short names for BDB compatibility.
-    //
-    // Known limitation: if -datadir is passed on the command line with non-codepage characters, the path
-    // is already garbled by the time we see it — Windows main(argc, argv) delivers narrow strings in the
-    // system code page. The same applies to datadir= in gridcoin.conf saved as UTF-8. Fixing this would
-    // require switching to GetCommandLineW()/wmain at the argument parsing level. The Qt directory chooser
-    // path (which stays in UTF-16 via QString) is not affected.
-    if (fsbridge::PathHasNonCodepageChars(datadir)) {
-        if (fsbridge::ShortPathString(datadir).empty()) {
-            return InitError(strprintf(_("The data directory path '%s' contains characters that cannot be "
-                "represented in the system code page, and Windows 8.3 short filename generation is not available "
-                "on this volume. Please choose a data directory path using only characters supported by your "
-                "system locale, or enable 8.3 filename generation."), fsbridge::LongPathString(datadir)));
+#ifdef WIN32
+    // Until the bundled Berkeley DB was built with UNICODE (src/bdb53/CMakeLists.txt), it read the
+    // UTF-8 of a wallet name in the system code page and created the file under that reading: on
+    // code page 1252 an e-diaeresis (UTF-8 C3 AB) became an A-tilde and a guillemet. Now it opens
+    // the name itself, so it would create a new, empty wallet beside the old one. Refuse instead,
+    // and say which file to rename. The ANSI API read the name with the system code page, as
+    // MultiByteToWideChar(CP_ACP) does.
+    if (const std::string name = walletFileName.string();
+            std::any_of(name.begin(), name.end(), [](unsigned char c) { return c >= 0x80; })
+            && !fs::exists(datadir / walletFileName)) {
+        const int name_len = static_cast<int>(name.size());
+        const int len = MultiByteToWideChar(CP_ACP, 0, name.data(), name_len, nullptr, 0);
+        if (len > 0) {
+            std::wstring legacy_name(static_cast<size_t>(len), L'\0');
+            MultiByteToWideChar(CP_ACP, 0, name.data(), name_len, legacy_name.data(), len);
+            const fs::path legacy = datadir / legacy_name;
+            if (fs::exists(legacy)) {
+                return InitError(strprintf(_("Wallet %s was created by an earlier version under the name %s. "
+                                             "Rename that file in %s to %s, then start again."),
+                                           name, legacy.filename().string(), fsbridge::LongPathString(datadir),
+                                           name));
+            }
         }
     }
+#endif
 
-    #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
-        LogPrintf("Using OpenSSL version %s\n", SSLeay_version(SSLEAY_VERSION));
-    #elif defined OPENSSL_VERSION
+    #if defined OPENSSL_VERSION
         LogPrintf("Using OpenSSL version %s\n", OpenSSL_version(OPENSSL_VERSION));
     #elif defined LIBRESSL_VERSION_TEXT
         LogPrintf("Using %s\n", LIBRESSL_VERSION_TEXT);
@@ -1081,20 +1987,27 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     std::ostringstream strErrors;
 
-    fDevbuildCripple = false;
-    if ((CLIENT_VERSION_BUILD != 0) && !fTestNet)
+    // The cripple exists to keep a non-release binary from staking or spending on
+    // the live money chain. It was written when there were two networks, where
+    // !OnTestnet() did mean mainnet; regtest arrived later and inherited the
+    // mainnet branch by accident. Regtest is further from the live chain than
+    // testnet is -- private, local, and unreachable from the real networks -- so
+    // if testnet is exempt then regtest must be. Ask the question the mechanism
+    // actually means: is this the live money chain.
+    SetDevbuildCripple(false);
+    if ((CLIENT_VERSION_BUILD != 0) && OnMainnet())
     {
-        fDevbuildCripple = true;
+        SetDevbuildCripple(true);
         if ((gArgs.GetArg("-devbuild", "") == "override"))
         {
             LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
-            fDevbuildCripple = false;
-            LogPrintf("WARNING: Running development version outside of testnet in override mode!\n"
+            SetDevbuildCripple(false);
+            LogPrintf("WARNING: Running a non-release build on mainnet in override mode!\n"
                       "VERBOSE logging is enabled.");
         }
         else
         {
-            LogPrintf("WARNING: Running development version outside of testnet!\n"
+            LogPrintf("WARNING: Running a non-release build on mainnet!\n"
                       "Staking and sending transactions will be disabled.");
         }
     }
@@ -1106,7 +2019,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_timer.LogTimer("init", true);
     g_timer.GetTimes("Starting verify of database integrity", "init");
 
-    if (!bitdb.Open(GetDataDir()))
+    if (Params().IsMockableChain()) {
+        if (!bitdb.IsMock()) bitdb.MakeMock();
+    } else if (!bitdb.Open(GetDataDir()))
     {
          string msg = strprintf(_("Error initializing database environment %s!"
                                  " To recover, BACKUP THAT DIRECTORY, then remove"
@@ -1160,7 +2075,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     CService addrProxy;
     bool fProxy = false;
     if (gArgs.IsArgSet("-proxy")) {
-        CService addrProxy(LookupNumeric(gArgs.GetArg("-proxy", "").c_str(), 9050));
+        addrProxy = LookupNumeric(gArgs.GetArg("-proxy", "").c_str(), 9050);
         if (!addrProxy.IsValid())
             return InitError(strprintf(_("Invalid -proxy address: '%s'"), gArgs.GetArg("-proxy", "")));
 
@@ -1194,15 +2109,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     // see Step 2: parameter interactions for more information about these
-    fNoListen = !gArgs.GetBoolArg("-listen", true);
+    SetListenDisabled(!gArgs.GetBoolArg("-listen", true));
     fDiscover = gArgs.GetBoolArg("-discover", true);
-    fNameLookup = gArgs.GetBoolArg("-dns", true);
-#ifdef USE_UPNP
-    fUseUPnP = gArgs.GetBoolArg("-upnp", USE_UPNP);
-#endif
+    SetNameLookup(gArgs.GetBoolArg("-dns", true));
 
     bool fBound = false;
-    if (!fNoListen)
+    if (!IsListenDisabled())
     {
         std::string strError;
         if (gArgs.GetArgs("-bind").size()) {
@@ -1230,7 +2142,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         for (auto const& strAddr : gArgs.GetArgs("-externalip"))
         {
             CService addrLocal;
-            if (Lookup(strAddr.c_str(), addrLocal, GetListenPort(), fNameLookup) && addrLocal.IsValid())
+            if (Lookup(strAddr.c_str(), addrLocal, GetListenPort(), GetNameLookup()) && addrLocal.IsValid())
                 AddLocal(addrLocal, LOCAL_MANUAL);
             else
                 return InitError(strprintf(_("Cannot resolve -externalip address: '%s'"), strAddr));
@@ -1255,7 +2167,9 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 7: load blockchain
 
-    if (!bitdb.Open(GetDataDir()))
+    if (Params().IsMockableChain()) {
+        if (!bitdb.IsMock()) bitdb.MakeMock();
+    } else if (!bitdb.Open(GetDataDir()))
     {
         string msg = strprintf(_("Error initializing database environment %s!"
                                  " To recover, BACKUP THAT DIRECTORY, then remove"
@@ -1266,8 +2180,19 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (gArgs.GetBoolArg("-loadblockindextest"))
     {
         CTxDB txdb("r");
-        txdb.LoadBlockIndex();
-        PrintBlockTree();
+        {
+            // CTxDB::LoadBlockIndex is EXCLUSIVE_LOCKS_REQUIRED(cs_main) because
+            // it populates mapBlockIndex / pindexBest / hashBestChain. At
+            // init-time the lock is uncontended, but acquiring it documents
+            // the contract and satisfies the analyzer. The free LoadBlockIndex()
+            // below takes cs_main internally and does not need this wrapper.
+            LOCK(cs_main);
+            txdb.LoadBlockIndex();
+        }
+        {
+            LOCK(cs_main);
+            PrintBlockTree();
+        }
         return false;
     }
 
@@ -1287,13 +2212,13 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     uiInterface.InitMessage(_("Loading block index..."));
     LogPrintf("Loading block index...");
-    if (!LoadBlockIndex() && !fRequestShutdown)
+    if (!LoadBlockIndex() && !ShutdownRequested())
         return InitError(_("Error loading blkindex.dat"));
 
     // as LoadBlockIndex can take several minutes, it's possible the user
     // requested to kill bitcoin-qt during the last operation. If so, exit.
     // As the program has not fully started yet, Shutdown() is possibly overkill.
-    if (fRequestShutdown)
+    if (ShutdownRequested())
     {
         LogPrintf("Shutdown requested. Exiting.");
         return false;
@@ -1303,12 +2228,15 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (gArgs.GetBoolArg("-printblockindex") || gArgs.GetBoolArg("-printblocktree"))
     {
+        LOCK(cs_main);
         PrintBlockTree();
         return false;
     }
 
     if (gArgs.IsArgSet("-printblock"))
     {
+        LOCK(cs_main); // init-time iteration of mapBlockIndex; lock uncontended here but
+                       // required by Phase 1 thread-safety annotations.
         string strMatch = gArgs.GetArg("-printblock", "");
         int nFound = 0;
         for (BlockMap::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
@@ -1327,6 +2255,35 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (nFound == 0)
             LogPrintf("No blocks matching %s were found", strMatch);
         return false;
+    }
+
+    // ********************************************************* Step 7.5: Phase 2 chain-coherence recovery
+    //
+    // Phase 1 of #2865 (PR #2939) established the invariant that the on-disk
+    // LevelDB block index never references blk*.dat data that has not been
+    // fsynced. Phase 2 is the recovery code that consumes that invariant on
+    // startup: walk the chain backward from pindexBest, hash-verify each
+    // block's on-disk data against its index hash, and if a mismatch is
+    // found (Scenario C from #2865), abandon-rewind to the last consistent
+    // block, reset the beacon registry if the rewind crossed an SB boundary
+    // (otherwise clamp the four non-beacon registry bookmarks), and let
+    // P2P sync re-supply the missing blocks normally.
+    //
+    // Hook position is deliberate: AFTER LoadBlockIndex (pindexBest is
+    // populated and we can walk the chain), AFTER the -printblock* early
+    // exits (those debug-introspection paths should see the as-is state),
+    // BEFORE Step 8 wallet load and the subsequent wallet rescan (which
+    // would otherwise rescan to a tip that's about to change), and BEFORE
+    // Step 9 GRC::Initialize / InitializeContracts (so the registries
+    // have not yet loaded their LevelDB state -- this is what lets us
+    // safely Reset() the beacon registry without invalidating any in-memory
+    // state). See doc/block_corruption_recovery_design.md.
+    {
+        LOCK(cs_main);
+        if (!GRC::RunStartupCoherenceRecovery()) {
+            return InitError(_("Block file corruption detected and automatic recovery failed. "
+                               "Please restart with -reindex to rebuild the chain state."));
+        }
     }
 
     // ********************************************************* Step 8: load wallet
@@ -1379,6 +2336,10 @@ bool AppInit2(ThreadHandlerPtr threads)
         }
     }
 
+    if (Params().IsMockableChain()) {
+        PlantRegtestPremineKey(pwalletMain);
+    }
+
     LogPrintf("%s", strErrors.str());
 
     g_timer.GetTimes("Finished loading wallet file", "init");
@@ -1400,7 +2361,10 @@ bool AppInit2(ThreadHandlerPtr threads)
         }
     }
 
-    RegisterWallet(pwalletMain);
+    // Init-time wallet rescan + GRC::Initialize reads pindexBest /
+    // pindexGenesisBlock / mapBlockIndex; take cs_main for the whole block
+    // (uncontended at init, required by Phase 1 thread-safety annotations).
+    LOCK(cs_main);
 
     CBlockIndex *pindexRescan = pindexBest;
     bool mrc_request_correction_scan_complete = false;
@@ -1554,16 +2518,56 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface,
                                         gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
 
+    // Let a lifted/cleared/swept ban also reset the peer's misbehavior score,
+    // which lives in PeerManagerImpl (issue #2558 PR 8b). Route through
+    // g_peerman, constructed just below; the callback is only invoked once bans
+    // are cleared at runtime, by which point g_peerman exists (null-guarded).
+    g_banman->SetMisbehaviorClearCallback([](const CSubNet& sub_net) -> unsigned int {
+        return g_peerman ? g_peerman->ClearMisbehaviorForSubnet(sub_net) : 0u;
+    });
+
+    // Connection manager (issue #2558 PR 3). Constructed here; its net threads
+    // launch from StartNode -> g_connman->Start() in Step 12 below.
+    assert(!g_connman);
+    g_connman = std::make_unique<CConnman>(0, 0);
+
+    // Message-processing manager (issue #2558 PR 8a/8b). Constructed before the
+    // connection manager is Init'd so it can be wired in as the msgproc the net
+    // threads drive (PR 8c).
+    assert(!g_peerman);
+    g_peerman = PeerManager::make(*g_connman, g_banman.get());
+    // NOTE: g_peerman->StartScheduledTasks() is intentionally NOT called here --
+    // g_scheduler is not constructed until later in AppInit2, so the previous
+    // `if (g_scheduler) ...` call at this point was always a no-op. It is invoked
+    // below, immediately after the scheduler is created.
+
+    CConnman::Options conn_options;
+    conn_options.nMaxOutbound      = (int) gArgs.GetArg("-maxoutboundconnections", 8);
+    const int64_t requested_max    = gArgs.GetArg("-maxconnections", 125);
+    conn_options.nMaxConnections   = requested_max < 950 ? (int) requested_max : 950;
+    conn_options.m_msgproc         = g_peerman.get(); // issue #2558 PR 8c
+    g_connman->Init(conn_options);
+
+    // UPnP preference (issue #2558 PR 9d3): formerly the global fUseUPnP, set
+    // here now that g_connman exists; read by CConnman::Start -> MapPort.
+#ifdef USE_UPNP
+    // Same rule the immediate-effect handler applies: no mapping when we are not
+    // listening. The SoftSetBoolArg above only covers an unset -upnp, so an
+    // explicit upnp=1 alongside -connect or -proxy would otherwise start the
+    // port-map thread here and disagree with every later evaluation.
+    g_connman->SetUseUPnP(gArgs.GetBoolArg("-listen", true) && gArgs.GetBoolArg("-upnp", USE_UPNP));
+#endif
+
     uiInterface.InitMessage(_("Loading addresses..."));
     LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");
 
     {
         CAddrDB adb;
-        if (!adb.Read(addrman))
+        if (!adb.Read(g_connman->GetAddrMan()))
             LogPrintf("Invalid or missing peers.dat; recreating");
     }
 
-    LogPrintf("Loaded %i addresses from peers.dat.", addrman.size());
+    LogPrintf("Loaded %i addresses from peers.dat.", g_connman->GetAddrMan().size());
     g_timer.GetTimes("Load peers complete", "init");
 
     // ********************************************************* Step 12: start node
@@ -1573,11 +2577,13 @@ bool AppInit2(ThreadHandlerPtr threads)
     //// debug print
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
+        // cs_main is still held from the wallet-rescan block above; here we
+        // only need cs_wallet for the wallet-side prints. Single-threaded
+        // init context regardless.
+        LOCK(pwalletMain->cs_wallet);
+
         LogPrintf("mapBlockIndex.size() = %" PRIszu,   mapBlockIndex.size());
         LogPrintf("nBestHeight = %d",            nBestHeight);
-
-        // So Clang doesn't complain, even though we are essentially single-threaded here.
-        LOCK(pwalletMain->cs_wallet);
 
         LogPrintf("setKeyPool.size() = %" PRIszu,      pwalletMain->setKeyPool.size());
         LogPrintf("mapWallet.size() = %" PRIszu,       pwalletMain->mapWallet.size());
@@ -1587,7 +2593,40 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (!threads->createThread(StartNode, nullptr, "Start Thread"))
         InitError(_("Error: could not start node"));
 
-    if (gArgs.GetBoolArg("-server", false)) StartRPCThreads();
+    // The stake miner is a staking thread, not a network thread, so it is
+    // launched here rather than from StartNode(). It self-gates each loop
+    // iteration via IsMiningAllowed(), so starting it concurrently with the
+    // net threads is safe.
+    g_stake_miner_thread = std::thread(ThreadStakeMiner, pwalletMain);
+
+    // Start the lightweight task scheduler thread BEFORE the RPC server.
+    //
+    // A timed walletpassphrase refuses when the relock cannot be armed, because
+    // granting an unlock with nothing to end it is the failure that design
+    // exists to remove. Starting the RPC server first therefore opened a window
+    // in which an autounlock that fires as soon as the port answers would be
+    // refused and the wallet would stay locked. Measured at ~3s on a 515k
+    // transaction wallet -- small, but it is the exact moment such a script
+    // acts. The scheduler needs nothing from the RPC server, so it goes first
+    // and the window does not exist.
+    //
+    // The other end needs no fix: shutdown stops the scheduler while the RPC
+    // threads still run, so a relock armed then can be dropped -- but the
+    // unlock is ephemeral (the master key is never serialized and no startup
+    // path unlocks), so the process is exiting and the key dies with it. See
+    // the reasoning on closed issue #3388.
+    assert(!g_scheduler); // LINT-OK-ASSERT: single-threaded init invariant; a second scheduler would orphan the first
+    g_scheduler = std::make_unique<CScheduler>();
+    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, g_scheduler.get());
+    threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "grc-scheduler", serviceLoop));
+
+    // Publish it for threads other than this one. Safe before the service thread
+    // has entered serviceQueue: a task enqueued first is run when it gets there.
+    g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
+
+    const bool fStartRPC = gArgs.GetBoolArg("-server", false);
+    LogPrintf("init: -server=%d, %s RPC server\n", fStartRPC, fStartRPC ? "starting" : "skipping");
+    if (fStartRPC) StartRPCThreads();
 
     // ********************************************************* Step 13: finished
 
@@ -1597,27 +2636,198 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Add wallet transactions that aren't already in a block to mapTransactions
     pwalletMain->ReacceptWalletTransactions();
 
+    // Release spends the wallet remembers but the chain has not replayed, BEFORE
+    // FixSpentCoins. After a chain reset or rollback the wallet still believes in
+    // every spend it ever saw, so those coins read as gone and the balance
+    // under-reports for the entire resync. FixSpentCoins cannot fix that on its own
+    // -- it skips any transaction missing from the tx index, which right after a
+    // reset is all of them -- and this needs no index at all.
+    int nReleased;
+    int64_t nAmountReleased;
+    pwalletMain->ReleaseSpendsNotInActiveChain(nReleased, nAmountReleased);
+
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
 
-    // Start the lightweight task scheduler thread
-    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, &scheduler);
-    threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
+
+    // Register the PeerManager's recurring tasks now that the scheduler exists
+    // (issue #2558). This call previously sat next to the PeerManager construction
+    // above -- before g_scheduler was created -- so its `if (g_scheduler)` guard was
+    // always false and it never fired. PeerManagerImpl::StartScheduledTasks is an
+    // empty shell today, but wiring it at the correct point ensures any future
+    // recurring task is actually scheduled rather than silently dropped. g_peerman
+    // is constructed unconditionally above, so call it directly (asserting the
+    // wiring explicit -- it can no longer be silently skipped -- rather than re-introducing a guard.
+    g_peerman->StartScheduledTasks(*g_scheduler);
 
     // Gather some entropy once per minute.
-    scheduler.scheduleEvery([]{
+    g_scheduler->scheduleEvery([]{
         RandAddPeriodic();
     }, std::chrono::minutes{1});
 
-    // TODO: Do we need this? It would require porting the Bitcoin signal handler.
-    // GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
+    // Wire the validation-signal layer (CValidationInterface / CMainSignals)
+    // to the background scheduler now that g_scheduler exists, resolving the
+    // long-standing TODO here (issue #3030, workstream B). Subscribers register
+    // via RegisterValidationInterface; block/tx signals are emitted
+    // synchronously today, but CallFunctionInValidationInterfaceQueue runs on
+    // this scheduler thread.
+    GetMainSignals().RegisterBackgroundSignalScheduler(*g_scheduler);
 
-    scheduler.scheduleEvery([]{
+    // Subscribe the wallet to validation/mempool events now that the signal
+    // layer is wired (issue #3030, workstream B).
+    RegisterValidationInterface(pwalletMain);
+
+    // Bridge chain-tip updates to the legacy ui_interface block notification so
+    // the Qt models keep receiving them (issue #3030, workstream B3).
+    RegisterValidationInterface(&g_ui_notification_bridge);
+
+    // Subscribe the PSGT pool (#2910) to mempool/block events: pooled PSGTs
+    // whose inputs get spent are evicted on mempool admission (fast) and on
+    // block connection (authoritative).
+    RegisterValidationInterface(&g_psgt_pool);
+
+    // Subscribe the peer manager so the new-tip inventory relay (moved out of
+    // AcceptBlock) hangs off UpdatedBlockTip like Bitcoin's net_processing --
+    // the PeerManager-as-subscriber half of workstream B3 (#3030), issue
+    // #3125 C8. g_peerman was constructed in Step 12 above; note StartNode is
+    // already running, so a block accepted from a live peer before this point
+    // no longer relays (the pre-move AcceptBlock loop did) -- a sub-second
+    // window, registration cannot precede the scheduler wiring above.
+    RegisterValidationInterface(g_peerman.get());
+
+    // Three-layer PSGT pool notification (#2910), the -pollnotify pattern:
+    // the pool fires this hook outside its lock for every mutation; it fans
+    // out to the uiInterface signal (Qt models/toasts) and the -psgtnotify
+    // external command (headless workflows: email, SMS, webhook).
+    g_psgt_pool.m_notify_hook = [](const PSGTPoolEntry& entry, PSGTPoolChangeType change,
+                                   std::optional<PSGTRemovalReason> reason) {
+        const ChangeType status =
+            change == PSGTPoolChangeType::ADDED ? CT_NEW :
+            change == PSGTPoolChangeType::UPDATED ? CT_UPDATED : CT_DELETED;
+
+        // Carry the removal reason (as int) on a removal; -1 for add/update.
+        const int reason_code =
+            (change == PSGTPoolChangeType::ADDED || change == PSGTPoolChangeType::UPDATED)
+                ? -1
+                : static_cast<int>(reason.value_or(PSGTRemovalReason::LOCAL_REMOVE));
+        uiInterface.PSGTPoolChanged(entry.revision_hash, status, reason_code);
+
+#if HAVE_SYSTEM
+        std::string strCmd = gArgs.GetArg("-psgtnotify", std::string{});
+
+        if (!strCmd.empty()) {
+            const std::string event =
+                change == PSGTPoolChangeType::ADDED ? "added" :
+                change == PSGTPoolChangeType::UPDATED ? "updated" :
+                PSGTRemovalReasonToString(reason.value_or(PSGTRemovalReason::LOCAL_REMOVE));
+
+            ReplaceAll(strCmd, "%s1", entry.image.ToString());
+            ReplaceAll(strCmd, "%s2", event);
+            ReplaceAll(strCmd, "%s3", entry.tx_hash.ToString());
+            boost::thread t(runCommand, strCmd);
+            t.detach(); // run free; never let t's destructor join/terminate
+        }
+#endif
+    };
+
+    g_scheduler->scheduleEvery([]{
         g_banman->DumpBanlist();
     }, std::chrono::seconds{DUMP_BANS_INTERVAL});
 
-    GRC::ScheduleBackgroundJobs(scheduler);
+    // Erase misbehavior entries that have decayed to zero, on the ban list's schedule.
+    g_scheduler->scheduleEvery([]{
+        if (g_peerman) g_peerman->SweepDecayedMisbehavior();
+    }, std::chrono::seconds{DUMP_BANS_INTERVAL});
+
+    // Periodically expire stale PSGT pool entries (EXPIRY_SECONDS). The pool's
+    // capacity self-healing -- slots reopen as PSGTs complete or expire -- relies
+    // on this running; without it, entries whose funding is never spent leak their
+    // slot permanently and a full pool would reject all new images indefinitely.
+    g_scheduler->scheduleEvery([]{
+        g_psgt_pool.EraseExpired(GetAdjustedTime());
+    }, std::chrono::minutes{5});
+
+    // Periodically rebroadcast the node's own transactions still awaiting initial
+    // broadcast (the unbroadcast set). Runs on the scheduler thread, which holds no
+    // per-node locks, so relaying here cannot invert the socket handler's
+    // m_nodes_mutex -> cs_vSend order.
+    g_scheduler->scheduleEvery([]{
+        ResendUnbroadcastTransactions();
+    }, std::chrono::minutes{12});
+
+    // Sweep expired orphan transactions. The pool's count limit only applies when
+    // something new is inserted, so without this a peer can fill it and go quiet,
+    // leaving it full until unrelated traffic happens to evict entries at random.
+    // Five minutes against a twenty-minute TTL, matching the PSGT pool sweep above.
+    g_scheduler->scheduleEvery([]{
+        ExpireOrphanTransactions(GetAdjustedTime());
+    }, std::chrono::minutes{5});
+
+    // Periodically rebroadcast the wallet's own unconfirmed transactions. This
+    // was previously driven per-pass from net_processing::SendMessages via the
+    // setpwalletRegistered ResendWalletTransactions wrapper; it now self-
+    // schedules here, retiring that wrapper (issue #3030).
+    // CWallet::ResendWalletTransactions self-rate-limits (random ~10x block
+    // spacing, gated on IBD / OutOfSyncByAge / new-block-seen), so a 60s poll
+    // reproduces the old cadence. TRY_LOCK(cs_main) matches the other
+    // wallet-touching scheduled jobs (RunBackupJob, RunRenewBeaconJob): when
+    // cs_main is busy (reorg/IBD) the cycle is skipped rather than stalling the
+    // shared scheduler thread, and the next poll is 60s away. Shutdown-safe: the
+    // scheduler thread is joined (threadGroup.join_all(), see Shutdown()) before
+    // g_connman and pwalletMain
+    // are torn down, so this can never deref freed state.
+    g_scheduler->scheduleEvery([]{
+        if (!pwalletMain) return;
+        TRY_LOCK(cs_main, locked_main);
+        if (!locked_main) return;
+        pwalletMain->ResendWalletTransactions();
+    }, std::chrono::seconds{60});
+
+    GRC::ScheduleBackgroundJobs(*g_scheduler);
+
+    // Reload the node's own unbroadcast transactions as unbroadcast.dat last
+    // recorded them. Each is re-accepted through AcceptToMemoryPool (dropping
+    // anything already confirmed or now invalid) and marked unbroadcast again, so
+    // the scheduled ResendUnbroadcastTransactions() announces it. Runs after the
+    // chainstate is loaded and the node has started, so re-validation sees the
+    // current tip.
+    if (gArgs.GetBoolArg("-persistmempool", true)) {
+        const fs::path unbroadcast_path = GetDataDir() / "unbroadcast.dat";
+
+        bool persist = node::LoadUnbroadcast(mempool, unbroadcast_path);
+
+        if (!persist) {
+            // The file exists but could not be read: a format from another
+            // release, corruption, or an I/O error. Keep it for inspection, rather
+            // than let the first write below replace it. The rename replaces an
+            // earlier unreadable file, so the latest one is kept. If it cannot even
+            // be moved, leave the set unpersisted for this run.
+            fs::path unreadable_path = unbroadcast_path;
+            unreadable_path += ".bad";
+
+            boost::system::error_code ec;
+            fs::rename(unbroadcast_path, unreadable_path, ec);
+            persist = !ec;
+
+            LogPrintf("WARNING: %s: could not reload %s; %s", __func__, unbroadcast_path.string(),
+                      persist ? strprintf("moved it to %s", unreadable_path.string())
+                              : strprintf("could not move it aside (%s), so the unbroadcast set "
+                                          "is not persisted this run", ec.message()));
+        }
+
+        if (persist) {
+            // The pool now holds what the reload kept, which is nothing if the file
+            // was moved aside, so writes may start: the first pass rewrites the file
+            // with it. From here on the file follows the set pass by pass (see
+            // UNBROADCAST_PERSIST_INTERVAL), rather than only at a clean shutdown.
+            g_unbroadcast_persister.Enable(unbroadcast_path);
+
+            g_scheduler->scheduleEvery([]{
+                g_unbroadcast_persister.WriteIfChanged(mempool);
+            }, node::UNBROADCAST_PERSIST_INTERVAL);
+        }
+    }
 
     #if HAVE_SYSTEM
         StartupNotify(gArgs);

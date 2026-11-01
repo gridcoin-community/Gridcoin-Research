@@ -1,4 +1,5 @@
 #include "clientmodel.h"
+#include "qt/guilog.h"
 #include "qt/bantablemodel.h"
 #include "qt/peertablemodel.h"
 #include "guiconstants.h"
@@ -6,25 +7,28 @@
 #include "addresstablemodel.h"
 #include "transactiontablemodel.h"
 
-#include "alert.h"
 #include "clientversion.h"
-#include "main.h"
-#include "gridcoin/scraper/fwd.h"
-#include "gridcoin/staking/difficulty.h"
-#include "gridcoin/staking/status.h"
-#include "gridcoin/superblock.h"
-#include "node/ui_interface.h"
-#include "util.h"
+#include "interfaces/handler.h"
+#include "interfaces/staking.h"
+#include "util/time.h"
 
 #include <QDateTime>
 #include <QDebug>
 #include <QTimer>
 
-static const int64_t nClientStartupTime = GetTime();
-extern ConvergedScraperStats ConvergedScraperStatsCache;
+#include <boost/version.hpp>
 
-ClientModel::ClientModel(OptionsModel *optionsModel, QObject *parent)
+#include <sstream>
+
+static const int64_t nClientStartupTime = GetTime();
+
+ClientModel::ClientModel(interfaces::Node& node,
+                         interfaces::StakingStatus& staking_status,
+                         OptionsModel *optionsModel,
+                         QObject *parent)
     : QObject(parent)
+    , m_node(node)
+    , m_staking_status(staking_status)
     , optionsModel(optionsModel)
     , peerTableModel(nullptr)
     , banTableModel(nullptr)
@@ -37,7 +41,7 @@ ClientModel::ClientModel(OptionsModel *optionsModel, QObject *parent)
     , pollTimer(nullptr)
 {
     peerTableModel = new PeerTableModel(this);
-    banTableModel = new BanTableModel(this);
+    banTableModel = new BanTableModel(m_node, this);
     pollTimer = new QTimer(this);
     pollTimer->setInterval(MODEL_UPDATE_DELAY);
     pollTimer->start();
@@ -53,15 +57,13 @@ ClientModel::~ClientModel()
 
 int ClientModel::getNumConnections() const
 {
-    LOCK(cs_vNodes);
-    return vNodes.size();
+    return m_node.getNodeCount();
 }
 
 int ClientModel::getNumBlocks() const
 {
     if (m_cached_num_blocks == -1) {
-        LOCK(cs_main);
-        m_cached_num_blocks = nBestHeight;
+        m_cached_num_blocks = m_node.getNumBlocks();
     }
 
     return m_cached_num_blocks;
@@ -70,7 +72,7 @@ int ClientModel::getNumBlocks() const
 int ClientModel::getNumBlocksOfPeers() const
 {
     if (m_cached_num_blocks_of_peers == -1) {
-        m_cached_num_blocks_of_peers = GetNumBlocksOfPeers();
+        m_cached_num_blocks_of_peers = m_node.getNumBlocksOfPeers();
     }
 
     return m_cached_num_blocks_of_peers;
@@ -79,8 +81,7 @@ int ClientModel::getNumBlocksOfPeers() const
 double ClientModel::getDifficulty() const
 {
     if (m_cached_difficulty == -1) {
-        LOCK(cs_main);
-        m_cached_difficulty = GRC::GetCurrentDifficulty();
+        m_cached_difficulty = m_node.getDifficulty();
     }
 
     return m_cached_difficulty;
@@ -89,8 +90,7 @@ double ClientModel::getDifficulty() const
 double ClientModel::getNetWeight() const
 {
     if (m_cached_net_weight == -1) {
-        LOCK(cs_main);
-        m_cached_net_weight = GRC::GetEstimatedNetworkWeight() / 80.0;
+        m_cached_net_weight = m_staking_status.getNetworkWeight() / interfaces::STAKE_WEIGHT_UNITS_PER_COIN;
     }
 
     return m_cached_net_weight;
@@ -98,12 +98,12 @@ double ClientModel::getNetWeight() const
 
 quint64 ClientModel::getTotalBytesRecv() const
 {
-    return CNode::GetTotalBytesRecv();
+    return m_node.getTotalBytesRecv();
 }
 
 quint64 ClientModel::getTotalBytesSent() const
 {
-    return CNode::GetTotalBytesSent();
+    return m_node.getTotalBytesSent();
 }
 
 QDateTime ClientModel::getLastBlockDate() const
@@ -112,10 +112,8 @@ QDateTime ClientModel::getLastBlockDate() const
         return QDateTime::fromSecsSinceEpoch(m_cached_best_block_time);
     }
 
-    LOCK(cs_main);
-
-    if (pindexBest) {
-        return QDateTime::fromSecsSinceEpoch(pindexBest->GetBlockTime());
+    if (const int64_t tip_time = m_node.getLastBlockTime()) {
+        return QDateTime::fromSecsSinceEpoch(tip_time);
     }
 
     return QDateTime::fromSecsSinceEpoch(1413033777); // Genesis block's time
@@ -123,25 +121,27 @@ QDateTime ClientModel::getLastBlockDate() const
 
 void ClientModel::updateTimer()
 {
-	if (gArgs.GetArg("-suppressnetworkgraph", "false") != "true")
-	{
-		emit bytesChanged(getTotalBytesRecv(), getTotalBytesSent());
-	}
+    if (!optionsModel || !optionsModel->getSuppressNetworkGraph())
+    {
+        emit bytesChanged(getTotalBytesRecv(), getTotalBytesSent());
+    }
 }
 
 void ClientModel::updateNumBlocks(int height, int64_t best_time, uint32_t target_bits)
 {
     m_cached_num_blocks = height;
     m_cached_best_block_time = best_time;
-    m_cached_difficulty = GRC::GetBlockDifficulty(target_bits);
+    m_cached_difficulty = m_node.getBlockDifficulty(target_bits);
 
-    {
-        TRY_LOCK(cs_main, lockMain);
+    // Non-blocking: skip the refreshes rather than wait on a contended
+    // cs_main from a GUI-thread slot (same semantics as the previous
+    // TRY_LOCK).
+    if (const auto peers_height = m_node.tryGetNumBlocksOfPeers()) {
+        m_cached_num_blocks_of_peers = *peers_height;
+    }
 
-        if (lockMain) {
-            m_cached_num_blocks_of_peers = GetNumBlocksOfPeers();
-            m_cached_net_weight = GRC::GetEstimatedNetworkWeight() / 80.0;
-        }
+    if (const auto net_weight = m_staking_status.tryGetNetworkWeight()) {
+        m_cached_net_weight = *net_weight / interfaces::STAKE_WEIGHT_UNITS_PER_COIN;
     }
 
     emit difficultyChanged(getDifficulty());
@@ -160,10 +160,11 @@ void ClientModel::updateAlert(const QString &hash, int status)
     {
         uint256 hash_256;
         hash_256.SetHex(hash.toStdString());
-        CAlert alert = CAlert::getAlertByHash(hash_256);
-        if(!alert.IsNull())
+        const std::string message = m_node.getAlertStatusBarMessage(hash_256);
+
+        if (!message.empty())
         {
-            emit error(tr("Network Alert"), QString::fromStdString(alert.strStatusBar), false);
+            emit error(tr("Network Alert"), QString::fromStdString(message), false);
         }
     }
 
@@ -175,14 +176,22 @@ void ClientModel::updateAlert(const QString &hash, int status)
 void ClientModel::updateMinerStatus(bool staking, double coin_weight)
 {
     if (staking) {
-        TRY_LOCK(cs_main, lockMain);
-
-        if (lockMain) {
-            m_cached_etts_days = GRC::GetEstimatedTimetoStake();
+        // Non-blocking: keep the previous estimate when cs_main is contended
+        // (same semantics as the previous TRY_LOCK).
+        if (const auto etts_days = m_staking_status.tryGetEstimatedTimeToStake()) {
+            m_cached_etts_days = *etts_days;
         }
     }
 
     emit minerStatusChanged(staking, getNetWeight(), coin_weight, m_cached_etts_days);
+}
+
+void ClientModel::refreshMinerStatus()
+{
+    // Re-feed the current staking state and coin weight to the overview. Used
+    // when a GUI-side change (e.g. privacy mode) must refresh the staking
+    // fields that are normally pushed from the core via MinerStatusChanged.
+    updateMinerStatus(m_staking_status.isStaking(), m_staking_status.getCoinWeight());
 }
 
 void ClientModel::updateScraper(int scraperEventtype, int status, const QString message)
@@ -193,32 +202,41 @@ void ClientModel::updateScraper(int scraperEventtype, int status, const QString 
         emit updateScraperStatus(scraperEventtype, status);
 }
 
-// Requires a lock on cs_ConvergedScraperStatsCache
-const ConvergedScraperStats& ClientModel::getConvergedScraperStatsCache() const
+void ClientModel::updatePSGTPool(const QString &revision_hash, int status, int reason)
 {
-    return ConvergedScraperStatsCache;
+    emit psgtPoolChanged(revision_hash, (quint8)status, reason);
+}
+
+interfaces::ScraperConvergenceSnapshot ClientModel::getScraperConvergenceSnapshot() const
+{
+    return m_node.getScraperConvergenceSnapshot();
 }
 
 bool ClientModel::isTestNet() const
 {
-    return fTestNet;
+    return m_node.isTestNet();
+}
+
+bool ClientModel::isMainNet() const
+{
+    return m_node.isMainNet();
 }
 
 bool ClientModel::inInitialBlockDownload() const
 {
-    return IsInitialBlockDownload();
+    return m_node.isInitialBlockDownload();
 }
 
 QString ClientModel::getStatusBarWarnings() const
 {
-    QString warnings = QString::fromStdString(GetWarnings("statusbar"));
+    QString warnings = QString::fromStdString(m_node.getWarnings());
 
     if (getDifficulty() < 0.1) {
         if (!warnings.isEmpty()) warnings += "; ";
         warnings += tr("Low difficulty!; ");
     }
 
-    if (!g_miner_status.StakingActive()) {
+    if (!m_staking_status.isStaking()) {
         warnings += tr("Miner: ");
         warnings += getMinerWarnings();
     }
@@ -228,7 +246,7 @@ QString ClientModel::getStatusBarWarnings() const
 
 QString ClientModel::getMinerWarnings() const
 {
-    return QString::fromStdString(g_miner_status.FormatErrors());
+    return QString::fromStdString(m_staking_status.getErrors());
 }
 
 OptionsModel *ClientModel::getOptionsModel()
@@ -248,7 +266,7 @@ BanTableModel *ClientModel::getBanTableModel()
 
 QString ClientModel::formatFullVersion() const
 {
-    return QString::fromStdString(FormatFullVersion());
+    return QString::fromStdString(m_node.getClientVersion());
 }
 
 QString ClientModel::clientName() const
@@ -261,15 +279,14 @@ QString ClientModel::formatClientStartupTime() const
     return QDateTime::fromSecsSinceEpoch(nClientStartupTime).toString();
 }
 
-QString ClientModel::formatBoostVersion()  const
+QString ClientModel::formatBoostVersion() const
 {
-	//6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
-		std::ostringstream s;
-		s << "Using Boost "
-          << BOOST_VERSION / 100000     << "."  // major version
-          << BOOST_VERSION / 100 % 1000 << "."  // minior version
-          << BOOST_VERSION % 100;                // patch level
-		return QString::fromStdString(s.str());
+    std::ostringstream s;
+    s << "Using Boost "
+      << BOOST_VERSION / 100000     << "."  // major version
+      << BOOST_VERSION / 100 % 1000 << "."  // minor version
+      << BOOST_VERSION % 100;               // patch level
+    return QString::fromStdString(s.str());
 }
 
 void ClientModel::updateBanlist()
@@ -308,14 +325,14 @@ static void NotifyBlocksChanged(
 
 static void NotifyNumConnectionsChanged(ClientModel *clientmodel, int newNumConnections)
 {
-    LogPrint(BCLog::NOISY, "NotifyNumConnectionsChanged %i", newNumConnections);
+    GUILogPrint(GUILogCategory::NOISY, "NotifyNumConnectionsChanged %i", newNumConnections);
     QMetaObject::invokeMethod(clientmodel, "updateNumConnections", Qt::QueuedConnection,
                               Q_ARG(int, newNumConnections));
 }
 
 static void NotifyAlertChanged(ClientModel *clientmodel, const uint256 &hash, ChangeType status)
 {
-    LogPrintf("NotifyAlertChanged %s status=%i", hash.GetHex(), status);
+    GUILogPrintf("NotifyAlertChanged %s status=%i", hash.GetHex(), status);
     QMetaObject::invokeMethod(clientmodel, "updateAlert", Qt::QueuedConnection,
                               Q_ARG(QString, QString::fromStdString(hash.GetHex())),
                               Q_ARG(int, status));
@@ -344,25 +361,59 @@ static void MinerStatusChanged(ClientModel *clientmodel, bool staking, double co
                               Q_ARG(double, coin_weight));
 }
 
+static void PSGTPoolChanged(ClientModel *clientmodel, const uint256& revision_hash, ChangeType status, int reason)
+{
+    QMetaObject::invokeMethod(clientmodel, "updatePSGTPool", Qt::QueuedConnection,
+                              Q_ARG(QString, QString::fromStdString(revision_hash.GetHex())),
+                              Q_ARG(int, status),
+                              Q_ARG(int, reason));
+}
+
 void ClientModel::subscribeToCoreSignals()
 {
-    // Connect signals to client
-    uiInterface.NotifyBlocksChanged_connect(boost::bind(NotifyBlocksChanged, this,
-                                                      boost::placeholders::_1, boost::placeholders::_2,
-                                                      boost::placeholders::_3, boost::placeholders::_4));
-    uiInterface.BannedListChanged_connect(boost::bind(BannedListChanged, this));
-    uiInterface.NotifyNumConnectionsChanged_connect(boost::bind(NotifyNumConnectionsChanged, this,
-                                                              boost::placeholders::_1));
-    uiInterface.NotifyAlertChanged_connect(boost::bind(NotifyAlertChanged, this,
-                                                     boost::placeholders::_1, boost::placeholders::_2));
-    uiInterface.NotifyScraperEvent_connect(boost::bind(NotifyScraperEvent, this,
-                                                     boost::placeholders::_1, boost::placeholders::_2,
-                                                     boost::placeholders::_3));
-    uiInterface.MinerStatusChanged_connect(boost::bind(MinerStatusChanged, this,
-                                                     boost::placeholders::_1, boost::placeholders::_2));
+    // Register notification handlers, retaining each interfaces::Handler so
+    // it is disconnected in unsubscribeFromCoreSignals() (from ~ClientModel).
+    // The callbacks run on core threads and only marshal to the GUI thread --
+    // they must not take core locks or call back into the node (see the handler
+    // contract in src/interfaces/handler.h).
+    //
+    // Every callback captures `this`, and disconnecting does NOT wait for one
+    // already executing on a core thread, so each is wrapped in
+    // m_notify_lifetime.guard(): retire() (called from unsubscribeFromCoreSignals
+    // below) both stops future deliveries and blocks until any in-flight callback
+    // has finished. Without it, ThreadStakeMiner emitting MinerStatusChanged while
+    // this object is being destroyed is a use-after-free.
+    m_handlers.emplace_back(m_node.handleNotifyBlocksChanged(m_notify_lifetime.guard(
+        [this](bool syncing, int height, int64_t best_time, uint32_t target_bits) {
+            NotifyBlocksChanged(this, syncing, height, best_time, target_bits);
+        })));
+    m_handlers.emplace_back(m_node.handleBannedListChanged(m_notify_lifetime.guard(
+        [this]() { BannedListChanged(this); })));
+    m_handlers.emplace_back(m_node.handleNotifyNumConnectionsChanged(m_notify_lifetime.guard(
+        [this](int num_connections) { NotifyNumConnectionsChanged(this, num_connections); })));
+    m_handlers.emplace_back(m_node.handleNotifyAlertChanged(m_notify_lifetime.guard(
+        [this](const uint256& hash, ChangeType status) { NotifyAlertChanged(this, hash, status); })));
+    m_handlers.emplace_back(m_node.handleNotifyScraperEvent(m_notify_lifetime.guard(
+        [this](const scrapereventtypes& event_type, ChangeType status, const std::string& message) {
+            NotifyScraperEvent(this, event_type, status, message);
+        })));
+    m_handlers.emplace_back(m_node.handleMinerStatusChanged(m_notify_lifetime.guard(
+        [this](bool staking, double coin_weight) { MinerStatusChanged(this, staking, coin_weight); })));
+    m_handlers.emplace_back(m_node.handlePSGTPoolChanged(m_notify_lifetime.guard(
+        [this](const uint256& revision_hash, ChangeType status, int reason) {
+            PSGTPoolChanged(this, revision_hash, status, reason);
+        })));
 }
 
 void ClientModel::unsubscribeFromCoreSignals()
 {
-    // Disconnect signals from client
+    // Retire FIRST, and before any member of this object is destroyed: this both
+    // refuses further deliveries and waits out any callback already running on a
+    // core thread, so nothing can be touching `this` once it returns. Clearing the
+    // handlers afterwards disconnects them, but disconnecting alone never waited.
+    m_notify_lifetime.retire();
+
+    // Disconnect signals from client: clearing the retained handlers runs each
+    // interfaces::Handler destructor, which disconnects it.
+    m_handlers.clear();
 }

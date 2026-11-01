@@ -4,17 +4,27 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "alert.h"
 #include "chainparams.h"
 #include "blockchain.h"
+#include "wallet/wallet.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/project.h"
+#include "gridcoin/autogreylist.h"
 #include "gridcoin/scraper/scraper_registry.h"
 #include "gridcoin/sidestake.h"
 #include "node/blockstorage.h"
+#include "node/chainman.h"
+#include "net_processing.h"
+#include "txmempool.h"
 #include <util/string.h>
+#include <util/time.h>
 #include "gridcoin/mrc.h"
+#include "gridcoin/staking/chain_trust.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
+#include <rpc/util.h>
 
 #include <univalue.h>
 #include <stdexcept>
@@ -24,19 +34,16 @@ extern ConvergedScraperStats ConvergedScraperStatsCache;
 
 using namespace std;
 
-bool AskForOutstandingBlocks(uint256 hashStart);
-bool ForceReorganizeToHash(uint256 NewHash);
-extern UniValue MagnitudeReport(const GRC::Cpid cpid);
-extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
+extern UniValue MagnitudeReport(const GRC::Cpid cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "") EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 extern GRC::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false,
                                                     bool bContractDirectFromStatsUpdate = false,
                                                     bool bFromHousekeeping = false);
 extern ScraperPendingBeaconMap GetPendingBeaconsForReport();
 extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
-extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
-arith_uint256 GetChainTrust(const CBlockIndex* pindex);
+extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 double CoinToDouble(double surrogate);
-extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
+extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 UniValue ContractToJson(const GRC::Contract& contract);
 
 UniValue MRCToJson(const GRC::MRC& mrc) {
@@ -60,7 +67,7 @@ UniValue MRCToJson(const GRC::MRC& mrc) {
     return json;
 }
 
-UniValue ClaimToJson(const GRC::Claim& claim, CBlockIndex* pindex)
+UniValue ClaimToJson(const GRC::Claim& claim, CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     UniValue json(UniValue::VOBJ);
 
@@ -185,7 +192,7 @@ UniValue SuperblockToJson(const GRC::SuperblockPtr& superblock)
     return SuperblockToJson(*superblock);
 }
 
-UniValue blockToJSON(const CBlock& block, CBlockIndex* blockindex, bool fPrintTransactionDetail)
+UniValue blockToJSON(const CBlock& block, CBlockIndex* blockindex, bool fPrintTransactionDetail) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     UniValue result(UniValue::VOBJ);
 
@@ -275,34 +282,43 @@ UniValue blockToJSON(const CBlock& block, CBlockIndex* blockindex, bool fPrintTr
     return result;
 }
 
-UniValue dumpcontracts(const UniValue& params, bool fHelp)
+static const RPCHelpMan dumpcontracts_help{
+    "dumpcontracts",
+    "Dump serialized or minimal textual contract data gathered from the chain to a specified file.",
+    {
+        {"contract_type", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Contract type to gather data from. Use \"*\" for all. Valid contract types: "
+            "beacon, claim, message, poll, project, protocol, scraper, vote, mrc, sidestake."},
+        {"file", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Output file. A bare filename is written under the data directory; an absolute or relative path with a parent is written verbatim."},
+        {"txids_only", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, output txids and other minimal info in text. Default: false."},
+        {"low_height", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Low height. Default: genesis."},
+        {"high_height", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "High height. Default: current head."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM_TIME, "timestamp", "Block time of the high-height block."},
+            {RPCResult::Type::NUM, "low_height", "Lower bound of the scanned range."},
+            {RPCResult::Type::NUM, "high_height", "Upper bound of the scanned range."},
+            {RPCResult::Type::STR, "contract_type", "Contract type filter that was applied."},
+            {RPCResult::Type::NUM, "number_of_blocks_processed_containing_contract_type", "Count of blocks that contained at least one matching contract."},
+            {RPCResult::Type::NUM, "number_of_contracts_exported", "Count of contracts written to the output file."},
+            {RPCResult::Type::NUM, "number_of_beacons_verified", /*optional=*/true,
+                "Verified-beacon count; present only when contract_type == \"beacon\"."},
+            {RPCResult::Type::STR, "exported_to_file", "Resolved path of the output file."},
+        }},
+    RPCExamples{
+        HelpExampleCli("dumpcontracts", "\"beacon\" \"beacons.txt\"") +
+        HelpExampleCli("dumpcontracts", "\"*\" \"all_contracts.txt\" true") +
+        HelpExampleRpc("dumpcontracts", "\"beacon\", \"beacons.txt\"")},
+};
+const RPCHelpMan& dumpcontracts_helpman() { return dumpcontracts_help; }
+
+UniValue dumpcontracts(const UniValue& params)
 {
-    if (fHelp || params.size() < 2 || params.size() > 5) {
-        std::stringstream help;
-
-        help << "dumpcontracts <contract_type> <file> [txids only] [low height] [high height]\n"
-                "\n"
-                "<contract_type> Contract type to gather data from. Use \"*\" for all.\n"
-                "Valid contract types: ";
-
-        // Skip UNKNOWN here.
-        for (int type = static_cast<int>(GRC::ContractType::UNKNOWN) + 1;
-             type < static_cast<int>(GRC::ContractType::OUT_OF_BOUND); ++type) {
-            if (type > 1) help << ", ";
-            help << GRC::Contract::Type(static_cast<GRC::ContractType>(type)).ToString();
-        }
-
-        help << ".\n\n"
-                "<file>          Output file.\n"
-                "<txids only>    Optional txids only. (If specified just output txids and other minimal info in text.)\n"
-                "<low height>    Optional low height. (If not specified then from genesis.)\n"
-                "<high height>   Optional high height. (If not specified then current head.)\n "
-                "\n"
-                "Dump serialized or minimal textual contract data gathered from the chain to a specified file.\n";
-
-        throw runtime_error(help.str());
-    }
-
     std::string contract_type_string = params[0].get_str();
     std::optional<GRC::Contract::Type> contract_type;
 
@@ -494,24 +510,34 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
     return report;
 }
 
-UniValue getmrcinfo(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 4)
-        throw runtime_error(
-                "getmrcinfo [detailed MRC info [CPID [low height [high height]]]]\n"
-                "\n"
-                "[detailed MRC info]: optional boolean to output MRC details.\n"
-                "                     Defaults to false.\n"
-                "[CPID]:              optional CPID. Defaults to current wallet CPID.\n"
-                "                     Use \"*\" for all CPIDs (network wide).\n"
-                "                     Note that block level mrc summary statistics are\n"
-                "                     specific to the scope specified with CPID.\n"
-                "[low height]:        optional low height for scope.\n"
-                "                     Defaults to V12 block height.\n"
-                "[high height]:       optional high height for scope.\n"
-                "                     Defaults to current block.\n"
-                );
+static const RPCHelpMan getmrcinfo_help{
+    "getmrcinfo",
+    "Display MRC (Manual Research Claim) summary statistics for the given CPID and block range.",
+    {
+        {"detailed_mrc_info", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, output detailed per-MRC info. Default: false."},
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "CPID to scope to. Defaults to the current wallet CPID. Use \"*\" for all CPIDs "
+            "(network-wide). Block-level MRC summary statistics are specific to the scope "
+            "specified by this CPID."},
+        {"low_height", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Low height for scope. Defaults to V12 block height."},
+        {"high_height", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "High height for scope. Defaults to current block."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "MRC summary report (see getmrcinfo output for the full schema).",
+        {
+            {RPCResult::Type::ELISION, "", "report fields"},
+        }},
+    RPCExamples{
+        HelpExampleCli("getmrcinfo", "") +
+        HelpExampleCli("getmrcinfo", "true \"*\"") +
+        HelpExampleRpc("getmrcinfo", "")},
+};
+const RPCHelpMan& getmrcinfo_helpman() { return getmrcinfo_help; }
 
+UniValue getmrcinfo(const UniValue& params)
+{
     bool output_mrc_details = false;
     bool output_all_cpids = false;
 
@@ -769,21 +795,30 @@ UniValue getmrcinfo(const UniValue& params, bool fHelp)
     return report;
 }
 
-UniValue showblock(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "showblock <index>\n"
-                "\n"
-                "<index> Block number\n"
-                "\n"
-                "Returns all information about the block at <index>\n");
+static const RPCHelpMan showblock_help{
+    "showblock",
+    "Returns all information about the block at the given index.",
+    {
+        {"index", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "Block details (see blockToJSON output for the full schema).",
+        {
+            {RPCResult::Type::ELISION, "", "block fields"},
+        }},
+    RPCExamples{
+        HelpExampleCli("showblock", "1000") +
+        HelpExampleRpc("showblock", "1000")},
+};
+const RPCHelpMan& showblock_helpman() { return showblock_help; }
 
+UniValue showblock(const UniValue& params)
+{
     int nHeight = params[0].get_int();
-    if (nHeight < 0 || nHeight > nBestHeight)
-        throw runtime_error("Block number out of range\n");
 
     LOCK(cs_main);
+
+    if (nHeight < 0 || nHeight > nBestHeight)
+        throw runtime_error("Block number out of range\n");
 
     CBlockIndex* pblockindex = GRC::BlockFinder::FindByHeight(nHeight);
 
@@ -794,40 +829,98 @@ UniValue showblock(const UniValue& params, bool fHelp)
     return blockToJSON(block, pblockindex, false);
 }
 
-UniValue getbestblockhash(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getbestblockhash\n"
-                "\n"
-                "Returns the hash of the best block in the longest block chain\n");
+static const RPCHelpMan getbestblockhash_help{
+    "getbestblockhash",
+    "Returns the hash of the best block in the longest block chain.",
+    {},
+    RPCResult{RPCResult::Type::STR_HEX, "", "The block hash, hex-encoded."},
+    RPCExamples{
+        HelpExampleCli("getbestblockhash", "") +
+        HelpExampleRpc("getbestblockhash", "")},
+};
+const RPCHelpMan& getbestblockhash_helpman() { return getbestblockhash_help; }
 
+UniValue getbestblockhash(const UniValue& params)
+{
     LOCK(cs_main);
 
     return hashBestChain.GetHex();
 }
 
-UniValue getblockcount(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getblockcount\n"
-                "\n"
-                "Returns the number of blocks in the longest block chain\n");
+static const RPCHelpMan getblockcount_help{
+    "getblockcount",
+    "Returns the number of blocks in the longest block chain.",
+    {},
+    RPCResult{RPCResult::Type::NUM, "", "The current block count."},
+    RPCExamples{
+        HelpExampleCli("getblockcount", "") +
+        HelpExampleRpc("getblockcount", "")},
+};
+const RPCHelpMan& getblockcount_helpman() { return getblockcount_help; }
 
+UniValue getblockcount(const UniValue& params)
+{
     LOCK(cs_main);
 
     return nBestHeight;
 }
 
-UniValue getdifficulty(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getdifficulty\n"
-                "\n"
-                "Returns the difficulty as a multiple of the minimum difficulty\n");
+static const RPCHelpMan setmocktime_help{
+    "setmocktime",
+    "\nSet the node's mock time to the given timestamp (-regtest only).\n"
+    "Adjusts the time returned by GetTime()/GetAdjustedTime() for testing; this does\n"
+    "NOT change the system clock.",
+    {
+        {"timestamp", RPCArg::Type::NUM, RPCArg::Optional::NO, std::string(UNIX_EPOCH_TIME) + "\n"
+         "Pass 0 to go back to using the system time."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("setmocktime", "1593912000") +
+        HelpExampleRpc("setmocktime", "1593912000")},
+};
+const RPCHelpMan& setmocktime_helpman() { return setmocktime_help; }
 
+UniValue setmocktime(const UniValue& params)
+{
+    if (!Params().IsMockableChain()) {
+        // Match Gridcoin's other regtest-only RPCs (generate, generatesuperblock,
+        // stakelimit): RPC_METHOD_NOT_FOUND maps to HTTP 404, unlike upstream's
+        // std::runtime_error (HTTP 500).
+        throw JSONRPCError(RPC_METHOD_NOT_FOUND, "setmocktime is only available on -regtest");
+    }
+
+    // Don't change mocktime in the middle of validation -- as upstream notes, it can
+    // affect mempool time-based eviction, IsInitialBlockDownload() and fee estimation.
+    // Hold cs_main to serialize against those readers.
+    LOCK(cs_main);
+
+    const int64_t nMockTime = params[0].get_int64();
+    if (nMockTime < 0) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Mocktime cannot be negative");
+    }
+    SetMockTime(nMockTime);
+
+    return NullUniValue;
+}
+
+static const RPCHelpMan getdifficulty_help{
+    "getdifficulty",
+    "Returns the difficulty as a multiple of the minimum difficulty.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "current", "Current difficulty."},
+            {RPCResult::Type::NUM, "target", "Target difficulty."},
+        }},
+    RPCExamples{
+        HelpExampleCli("getdifficulty", "") +
+        HelpExampleRpc("getdifficulty", "")},
+};
+const RPCHelpMan& getdifficulty_helpman() { return getdifficulty_help; }
+
+UniValue getdifficulty(const UniValue& params)
+{
     LOCK(cs_main);
 
     UniValue obj(UniValue::VOBJ);
@@ -837,92 +930,95 @@ UniValue getdifficulty(const UniValue& params, bool fHelp)
     return obj;
 }
 
-UniValue settxfee(const UniValue& params, bool fHelp)
+static const RPCHelpMan settxfee_help{
+    "settxfee",
+    "Set the transaction fee per kB (rounded to the nearest 0.00000001 GRC). "
+    "Overwrites the paytxfee parameter.",
+    {
+        {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
+            "The transaction fee in GRC/kB."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "Returns true if successful."},
+    RPCExamples{
+        HelpExampleCli("settxfee", "0.00001") +
+        HelpExampleRpc("settxfee", "0.00001")},
+};
+const RPCHelpMan& settxfee_helpman() { return settxfee_help; }
+
+UniValue settxfee(const UniValue& params)
 {
     LOCK(cs_main);
 
     CTransaction txDummy;
+    const CAmount nMinFee = GetBaseFee(txDummy, GMF_SEND);
+    const CAmount amount = AmountFromValue(params[0]);
+    if (amount < nMinFee) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("txfee %s below minimum %s",
+                      FormatMoney(amount), FormatMoney(nMinFee)));
+    }
 
-    // Min Fee
-    CAmount nMinFee = GetBaseFee(txDummy, GMF_SEND);
-
-    if (fHelp || params.size() < 1 || params.size() > 1 || AmountFromValue(params[0]) < nMinFee)
-        throw runtime_error(
-                "settxfee <amount>\n"
-                "\n"
-                "<amount> is a real and is rounded to the nearest 0.00000001\n"
-                "\n"
-                "Sets the txfee for transactions\n");
-
-    nTransactionFee = AmountFromValue(params[0]);
-
+    nTransactionFee = amount;
     return true;
 }
 
-UniValue getrawmempool(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getrawmempool\n"
-                "\n"
-                "Returns all transaction ids in memory pool\n");
+// getrawmempool moved to rpc/mempool.cpp (mempool diagnostics, #3029 Phase 3).
 
-
-    vector<uint256> vtxid;
-
+static const RPCHelpMan getblockhash_help{
+    "getblockhash",
+    "Returns the hash of the block in the best-block-chain at the given index.",
     {
-        LOCK(mempool.cs);
+        {"index", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number for requested hash."},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "", "The block hash, hex-encoded."},
+    RPCExamples{
+        HelpExampleCli("getblockhash", "1000") +
+        HelpExampleRpc("getblockhash", "1000")},
+};
+const RPCHelpMan& getblockhash_helpman() { return getblockhash_help; }
 
-        mempool.queryHashes(vtxid);
-    }
-
-    UniValue a(UniValue::VARR);
-    for (auto const& hash : vtxid)
-        a.push_back(hash.ToString());
-
-    return a;
-}
-
-UniValue getblockhash(const UniValue& params, bool fHelp)
+UniValue getblockhash(const UniValue& params)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "getblockhash <index>\n"
-                "\n"
-                "<index> Block number for requested hash\n"
-                "\n"
-                "Returns hash of block in best-block-chain at <index>\n");
-
     int nHeight = params[0].get_int();
+
+    LOCK(cs_main);
+
     if (nHeight < 0 || nHeight > nBestHeight)
         throw runtime_error("Block number out of range.");
 
     LogPrint(BCLog::LogFlags::NOISY, "Getblockhash %d", nHeight);
-
-    LOCK(cs_main);
 
     CBlockIndex* RPCpblockindex = GRC::BlockFinder::FindByHeight(nHeight);
 
     return RPCpblockindex->phashBlock->GetHex();
 }
 
-UniValue getblock(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getblock <hash> [bool:txinfo]\n"
-                "\n"
-                "[bool:txinfo] optional to print more detailed tx info\n"
-                "\n"
-                "Returns details of a block with given block-hash\n");
+static const RPCHelpMan getblock_help{
+    "getblock",
+    "Returns details of a block with the given block-hash.",
+    {
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The block hash."},
+        {"txinfo", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Print more detailed tx info. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "Block details (see blockToJSON output for the full schema).",
+        {
+            {RPCResult::Type::ELISION, "", "block fields"},
+        }},
+    RPCExamples{
+        HelpExampleCli("getblock", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"") +
+        HelpExampleRpc("getblock", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"")},
+};
+const RPCHelpMan& getblock_helpman() { return getblock_help; }
 
+UniValue getblock(const UniValue& params)
+{
     std::string strHash = params[0].get_str();
     uint256 hash = uint256S(strHash);
 
+    LOCK(cs_main);
+
     if (mapBlockIndex.count(hash) == 0)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
-
-    LOCK(cs_main);
 
     CBlock block;
     CBlockIndex* pblockindex = mapBlockIndex[hash];
@@ -931,21 +1027,31 @@ UniValue getblock(const UniValue& params, bool fHelp)
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
 
-UniValue getblockbynumber(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getblockbynumber <number> [bool:txinfo]\n"
-                "\n"
-                "[bool:txinfo] optional to print more detailed tx info\n"
-                "\n"
-                "Returns details of a block with given block-number\n");
+static const RPCHelpMan getblockbynumber_help{
+    "getblockbynumber",
+    "Returns details of a block with the given block-number.",
+    {
+        {"number", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block height."},
+        {"txinfo", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Print more detailed tx info. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "Block details (see blockToJSON output for the full schema).",
+        {
+            {RPCResult::Type::ELISION, "", "block fields"},
+        }},
+    RPCExamples{
+        HelpExampleCli("getblockbynumber", "1000") +
+        HelpExampleRpc("getblockbynumber", "1000")},
+};
+const RPCHelpMan& getblockbynumber_helpman() { return getblockbynumber_help; }
 
+UniValue getblockbynumber(const UniValue& params)
+{
     int nHeight = params[0].get_int();
-    if (nHeight < 0 || nHeight > nBestHeight)
-        throw runtime_error("Block number out of range");
 
     LOCK(cs_main);
+
+    if (nHeight < 0 || nHeight > nBestHeight)
+        throw runtime_error("Block number out of range");
 
     CBlock block;
 
@@ -955,22 +1061,31 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
 
-UniValue getblockbymintime(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getblockbymintime <timestamp> [bool:txinfo]\n"
-                "\n"
-                "[bool:txinfo] optional to print more detailed tx info\n"
-                "\n"
-                "Returns details of the block at or just after the given timestamp\n");
+static const RPCHelpMan getblockbymintime_help{
+    "getblockbymintime",
+    "Returns details of the block at or just after the given timestamp.",
+    {
+        {"timestamp", RPCArg::Type::NUM, RPCArg::Optional::NO, "Unix timestamp (seconds)."},
+        {"txinfo", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Print more detailed tx info. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "Block details (see blockToJSON output for the full schema).",
+        {
+            {RPCResult::Type::ELISION, "", "block fields"},
+        }},
+    RPCExamples{
+        HelpExampleCli("getblockbymintime", "1577836800") +
+        HelpExampleRpc("getblockbymintime", "1577836800")},
+};
+const RPCHelpMan& getblockbymintime_helpman() { return getblockbymintime_help; }
 
+UniValue getblockbymintime(const UniValue& params)
+{
     int64_t nTimestamp = params[0].get_int64();
+
+    LOCK(cs_main);
 
     if (nTimestamp < pindexGenesisBlock->nTime || nTimestamp > pindexBest->nTime)
         throw runtime_error("Timestamp out of range. Cannot be below the time of the genesis block or above the time of the latest block");
-
-    LOCK(cs_main);
 
     CBlock block;
 
@@ -980,25 +1095,35 @@ UniValue getblockbymintime(const UniValue& params, bool fHelp)
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
 
-UniValue getblocksbatch(const UniValue& params, bool fHelp)
+static const RPCHelpMan getblocksbatch_help{
+    "getblocksbatch",
+    "Returns a JSON object with details of the requested blocks starting with the given block-number or hash.",
+    {
+        {"start", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The block number or hash for the block at the start of the batch."},
+        {"count", RPCArg::Type::NUM, RPCArg::Optional::NO,
+            "The number of blocks to return in the batch, limited to 1000."},
+        {"txinfo", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Print more detailed tx info. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "block_count",
+                "Number of blocks actually returned (may be less than the requested count if the chain head is reached)."},
+            {RPCResult::Type::ARR, "blocks", "",
+                {
+                    {RPCResult::Type::ELISION, "", "block details; see 'getblock'"},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("getblocksbatch", "1000 10") +
+        HelpExampleRpc("getblocksbatch", "1000, 10")},
+};
+const RPCHelpMan& getblocksbatch_helpman() { return getblocksbatch_help; }
+
+UniValue getblocksbatch(const UniValue& params)
 {
     g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::RPC));
-
-    if (fHelp || params.size() < 2 || params.size() > 3)
-    {
-        throw runtime_error(
-                "getblocksbatch <starting block number or hash> <number of blocks> [bool:txinfo]\n"
-                "\n"
-                "<starting block number or hash> the block number or hash for the block at the\n"
-                "start of the batch\n"
-                "\n"
-                "<number of blocks> the number of blocks to return in the batch, limited to 1000"
-                "\n"
-                "[bool:txinfo] optional to print more detailed tx info\n"
-                "\n"
-                "Returns a JSON array with details of the requested blocks starting with\n"
-                "the given block-number or hash.\n");
-    }
 
     UniValue result(UniValue::VOBJ);
     UniValue blocks(UniValue::VARR);
@@ -1031,6 +1156,12 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Either a valid block number or block hash must be provided.");
     }
 
+    // cs_main is needed for the block-validity checks below (nBestHeight /
+    // mapBlockIndex) AND for the chain walk further down. Take it once here
+    // to preserve the original error-message order (block-validity error
+    // surfaces before batch-size error).
+    LOCK(cs_main);
+
     if (!block_hash_provided)
     {
         if (nHeight < 0 || nHeight > nBestHeight)
@@ -1054,8 +1185,6 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
 
     bool transaction_details = false;
     if (params.size() > 2) transaction_details = params[2].get_bool();
-
-    LOCK(cs_main);
 
     g_timer.GetTimes("Finished validating parameters", __func__);
 
@@ -1111,23 +1240,33 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
     return result;
 }
 
-UniValue rainbymagnitude(const UniValue& params, bool fHelp)
+static const RPCHelpMan rainbymagnitude_help{
+    "rainbymagnitude",
+    "Rain coins by magnitude on the network.",
     {
-    if (fHelp || (params.size() < 2 || params.size() > 4))
-        throw runtime_error(
-                "rainbymagnitude project_id amount ( trial_run output_details )\n"
-                "\n"
-                "project_id     -> Required: Limits rain to a specific project. Use \"*\" for\n"
-                "                  network-wide. Call \"listprojects\" for the IDs of eligible\n"
-                "                  projects."
-                "amount         -> Required: Amount to rain (1000 GRC minimum).\n"
-                "trial_run      -> Optional: Boolean to specify a trial run instead of an actual\n"
-                "                  transaction (default: false).\n"
-                "output_details -> Optional: Boolean to output recipient details (default: false\n"
-                "                  if not trial run, true if trial run).\n"
-                "\n"
-                "rain coins by magnitude on network");
+        {"project_id", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Limits rain to a specific project. Use \"*\" for network-wide. "
+            "Call \"listprojects\" for the IDs of eligible projects."},
+        {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
+            "Amount to rain (1000 GRC minimum)."},
+        {"trial_run", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, perform a trial run instead of an actual transaction. Default: false."},
+        {"output_details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, output recipient details. "
+            "Default: false (or true if trial_run is true)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "Rain result (see rainbymagnitude output for the full schema).",
+        {
+            {RPCResult::Type::ELISION, "", "result fields"},
+        }},
+    RPCExamples{
+        HelpExampleCli("rainbymagnitude", "\"*\" 1000 true") +
+        HelpExampleRpc("rainbymagnitude", "\"*\", 1000, true")},
+};
+const RPCHelpMan& rainbymagnitude_helpman() { return rainbymagnitude_help; }
 
+UniValue rainbymagnitude(const UniValue& params)
+    {
     UniValue res(UniValue::VOBJ);
     UniValue details(UniValue::VARR);
 
@@ -1187,6 +1326,10 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     //------- CPID -------------- beacon address -- Mag --- payment - suppressed
     std::map<GRC::Cpid, std::tuple<CTxDestination, double, CAmount, bool>> mCPIDRain;
+
+    // BeaconRegistry::TryActive needs cs_main; held across the iteration
+    // since each loop body does a TryActive lookup.
+    LOCK(cs_main);
 
     for (const auto& entry : mScraperConvergedStats)
     {
@@ -1316,16 +1459,43 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_MISC_ERROR, "No payments above 0.01 GRC qualify. Please recheck your specified amount.");
     }
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    // Announced after this scope unlocks: the relay path reached from
+    // CommitTransaction takes a peer's cs_inventory, and SendMessages takes
+    // cs_inventory and then cs_wallet (#3391). Declared before the guard so it
+    // outlives it.
+    DeferredRelay relay;
+
+    // cs_main is already held from the beacon-lookup loop above; just take cs_wallet here.
+    LOCK(pwalletMain->cs_wallet);
 
     CWalletTx wtx;
     wtx.mapValue["comment"] = "Rain By Magnitude";
 
-    // Custom messages are no longer supported. The static "rain by magnitude" message will be replaced by an actual
-    // rain contract at the next mandatory.
-    wtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
-        GRC::ContractAction::ADD,
-        "Rain By Magnitude"));
+    // The fixed "Rain By Magnitude" MESSAGE contract is attached only while the
+    // block this transaction is bound for still accepts one.
+    //
+    // The string is not user-controlled, so it is no part of the abuse this
+    // branch closes -- but CheckContracts rejects MESSAGE by TYPE, not by
+    // payload, so carrying it past the disable height would stop rain working
+    // altogether. Dropping it unconditionally instead would change what rain puts
+    // on chain the moment this merges, and the whole branch is built the other
+    // way round: every behaviour change waits on the height.
+    //
+    // Nothing is lost when it does go. The identifying string still reaches
+    // wtx.mapValue["comment"] above -- wallet metadata, and the copy the sender
+    // could actually read back; the on-chain one was write-only in practice. A
+    // purpose-specific rain contract remains the eventual home for this and is
+    // not this change.
+    //
+    // nBestHeight is read under the cs_main held from the beacon-lookup loop
+    // above, so it cannot move between here and CreateTransaction below.
+    if (IsMessageContractEnabled(nBestHeight + 1)) {
+        CMutableTransaction mtx;
+        mtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
+            GRC::ContractAction::ADD,
+            "Rain By Magnitude"));
+        static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
+    }
 
     EnsureWalletIsUnlocked();
 
@@ -1358,7 +1528,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     if (!trial_run)
     {
         // Rain the recipients
-        if (!pwalletMain->CommitTransaction(wtx, keyChange))
+        if (!pwalletMain->CommitTransaction(wtx, keyChange, &relay))
         {
             error("%s: Rain by magnitude transaction commit failed.", __func__);
 
@@ -1386,19 +1556,31 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue advertisebeacon(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "advertisebeacon ( force )\n"
-                "\n"
-                "[force] --> If true, generate new beacon keys and send a new "
-                "beacon even when an active or pending beacon exists for your "
-                "CPID. This is useful if you lose a wallet with your original "
-                "beacon keys but not necessary otherwise.\n"
-                "\n"
-                "Advertise a beacon (Requires wallet to be fully unlocked)\n");
+static const RPCHelpMan advertisebeacon_help{
+    "advertisebeacon",
+    "Advertise a beacon. Requires wallet to be fully unlocked.",
+    {
+        {"force", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, generate new beacon keys and send a new beacon even when an active "
+            "or pending beacon exists for your CPID. Useful if you lose a wallet with your "
+            "original beacon keys; not necessary otherwise. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "result", "\"SUCCESS\" on success."},
+            {RPCResult::Type::STR, "cpid", "The CPID associated with the beacon."},
+            {RPCResult::Type::STR_HEX, "public_key", "The beacon's public key."},
+            {RPCResult::Type::STR, "verification_code", "The beacon's verification code."},
+        }},
+    RPCExamples{
+        HelpExampleCli("advertisebeacon", "") +
+        HelpExampleCli("advertisebeacon", "true") +
+        HelpExampleRpc("advertisebeacon", "")},
+};
+const RPCHelpMan& advertisebeacon_helpman() { return advertisebeacon_help; }
 
+UniValue advertisebeacon(const UniValue& params)
+{
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
     }
@@ -1462,25 +1644,40 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
         case GRC::BeaconError::ALEADY_IN_MEMPOOL:
             throw JSONRPCError(
                 RPC_INVALID_REQUEST,
-                "Beacon transaction for this CPID is already in the mempool");
+                "Beacon transaction for this CPID is already in the mempool. If it is this wallet's "
+                "advertisement, advertising again an hour after sending replaces it");
+        case GRC::BeaconError::OUT_OF_SYNC:
+            throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
     }
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
 }
 
-UniValue beaconauth(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "beaconauth\n"
-                "\n"
-                "Generate a beacon key pair and return the public key hex.\n"
-                "Use the public key to obtain a BOINC account ownership proof\n"
-                "from a project that supports the ownership proof extension,\n"
-                "then call advertisebeaconv3 with the proof to send the beacon.\n"
-                "\n"
-                "Requires wallet to be fully unlocked.\n");
+static const RPCHelpMan beaconauth_help{
+    "beaconauth",
+    "Generate a beacon key pair and return the public key hex. "
+    "Use the public key to obtain a BOINC account ownership proof from a project "
+    "that supports the ownership proof extension, then call advertisebeaconv3 with "
+    "the proof to send the beacon. Requires wallet to be fully unlocked.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "result", "\"SUCCESS\" on success."},
+            {RPCResult::Type::STR, "cpid", "The CPID associated with the beacon."},
+            {RPCResult::Type::STR_HEX, "public_key", "The beacon's public key."},
+            {RPCResult::Type::STR, "verification_code", "The beacon's verification code."},
+            {RPCResult::Type::BOOL, "covered_by_seed_phrase", /*optional=*/true,
+                "Whether the new beacon key is recoverable from the wallet's seed phrase "
+                "(present only on phrase-backed wallets)."},
+        }},
+    RPCExamples{
+        HelpExampleCli("beaconauth", "") +
+        HelpExampleRpc("beaconauth", "")},
+};
+const RPCHelpMan& beaconauth_helpman() { return beaconauth_help; }
 
+UniValue beaconauth(const UniValue& params)
+{
     EnsureWalletIsUnlocked();
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -1506,6 +1703,16 @@ UniValue beaconauth(const UniValue& params, bool fHelp)
         res.pushKV("public_key", HexStr(beacon.m_public_key));
         res.pushKV("verification_code", beacon.GetVerificationCode());
 
+        // When the wallet is phrase-backed, report whether the freshly
+        // generated beacon key is recoverable from the seed phrase, so a
+        // migrating cruncher can verify the rotation target before
+        // advertising it.
+        if (pwalletMain->HasSeedPhrase()) {
+            res.pushKV("covered_by_seed_phrase",
+                       pwalletMain->ClassifySeedPhraseKey(beacon.m_public_key.GetID())
+                           == CWallet::SeedPhraseKeyClass::COVERED);
+        }
+
         return res;
     }
 
@@ -1523,26 +1730,35 @@ UniValue beaconauth(const UniValue& params, bool fHelp)
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
 }
 
-UniValue advertisebeaconv3(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "advertisebeaconv3 <ownership_proof_xml> ( force )\n"
-                "\n"
-                "Send a v3 beacon with a BOINC account ownership proof.\n"
-                "\n"
-                "<ownership_proof_xml> --> The XML block returned by the BOINC project's\n"
-                "  proof-of-account-ownership page. Must contain <master_url>, <msg>,\n"
-                "  and <signature> elements. The <msg> field should have the format:\n"
-                "  \"{account_id} {beacon_public_key_hex}\" (the project generates this\n"
-                "  when you enter the beacon public key from beaconauth).\n"
-                "\n"
-                "[force] --> If true, send the beacon even when an active or pending\n"
-                "  beacon already exists for your CPID. This is useful if you lose a\n"
-                "  wallet with your original beacon keys but not necessary otherwise.\n"
-                "\n"
-                "Requires wallet to be fully unlocked.\n");
+static const RPCHelpMan advertisebeaconv3_help{
+    "advertisebeaconv3",
+    "Send a v3 beacon with a BOINC account ownership proof. Requires wallet to be fully unlocked.",
+    {
+        {"ownership_proof_xml", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The XML block returned by the BOINC project's proof-of-account-ownership page. "
+            "Must contain <master_url>, <msg>, and <signature> elements. The <msg> field "
+            "should have the format \"{account_id} {beacon_public_key_hex}\" "
+            "(the project generates this when you enter the beacon public key from beaconauth)."},
+        {"force", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, send the beacon even when an active or pending beacon already exists "
+            "for your CPID. Useful if you lose a wallet with your original beacon keys; not "
+            "necessary otherwise. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "result", "\"SUCCESS\" on success."},
+            {RPCResult::Type::STR, "cpid", "The CPID associated with the beacon."},
+            {RPCResult::Type::STR_HEX, "public_key", "The beacon's public key."},
+            {RPCResult::Type::STR, "verification_code", "The beacon's verification code."},
+        }},
+    RPCExamples{
+        HelpExampleCli("advertisebeaconv3", "\"<xml>...</xml>\"") +
+        HelpExampleRpc("advertisebeaconv3", "\"<xml>...</xml>\"")},
+};
+const RPCHelpMan& advertisebeaconv3_helpman() { return advertisebeaconv3_help; }
 
+UniValue advertisebeaconv3(const UniValue& params)
+{
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
     }
@@ -1672,22 +1888,36 @@ UniValue advertisebeaconv3(const UniValue& params, bool fHelp)
         case GRC::BeaconError::ALEADY_IN_MEMPOOL:
             throw JSONRPCError(
                 RPC_INVALID_REQUEST,
-                "Beacon transaction for this CPID is already in the mempool");
+                "Beacon transaction for this CPID is already in the mempool. If it is this wallet's "
+                "advertisement, advertising again an hour after sending replaces it");
+        case GRC::BeaconError::OUT_OF_SYNC:
+            throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
     }
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
 }
 
-UniValue revokebeacon(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "revokebeacon [cpid]\n"
-                "\n"
-                "[cpid] CPID associated with the beacon to revoke. If omitted, uses the current CPID.\n"
-                "\n"
-                "Revoke a beacon (Requires wallet to be fully unlocked)\n");
+static const RPCHelpMan revokebeacon_help{
+    "revokebeacon",
+    "Revoke a beacon. Requires wallet to be fully unlocked.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "CPID associated with the beacon to revoke. If omitted, uses the current CPID."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "result", "\"SUCCESS\" on success."},
+            {RPCResult::Type::STR, "cpid", "The CPID associated with the revoked beacon."},
+            {RPCResult::Type::STR_HEX, "public_key", "The revoked beacon's public key."},
+        }},
+    RPCExamples{
+        HelpExampleCli("revokebeacon", "") +
+        HelpExampleRpc("revokebeacon", "")},
+};
+const RPCHelpMan& revokebeacon_helpman() { return revokebeacon_help; }
 
+UniValue revokebeacon(const UniValue& params)
+{
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to revoke a beacon.");
     }
@@ -1749,22 +1979,43 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
             throw JSONRPCError(
                 RPC_INVALID_REQUEST,
                 "Beacon transaction for this CPID is already in the mempool");
+        case GRC::BeaconError::OUT_OF_SYNC:
+            throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to revoke a beacon.");
     }
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
 }
 
-UniValue beaconreport(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "beaconreport <active only>\n"
-                "\n"
-                "<active only> Boolean specifying whether only active beacons should be \n"
-                "              returned. Defaults to false which also includes expired beacons."
-                "\n"
-                "Displays list of valid beacons in the network\n");
+static const RPCHelpMan beaconreport_help{
+    "beaconreport",
+    "Displays the list of valid beacons in the network.",
+    {
+        {"active_only", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, return only active (non-expired) beacons. "
+            "Default: false (also includes expired beacons)."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::STR, "cpid", "CPID for the beacon."},
+                    {RPCResult::Type::STR, "address", "Beacon payout address."},
+                    {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                    {RPCResult::Type::STR_HEX, "hash", "Beacon hash."},
+                    {RPCResult::Type::STR_HEX, "prev_beacon_hash", "Previous beacon hash in the chainlet."},
+                    {RPCResult::Type::NUM, "status", "Beacon status raw value."},
+                    {RPCResult::Type::STR, "status_text", "Beacon status text."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("beaconreport", "") +
+        HelpExampleCli("beaconreport", "true") +
+        HelpExampleRpc("beaconreport", "")},
+};
+const RPCHelpMan& beaconreport_helpman() { return beaconreport_help; }
 
+UniValue beaconreport(const UniValue& params)
+{
     bool active_only = false;
 
     if (params.size() == 1)
@@ -1808,33 +2059,54 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
     return results;
 }
 
-UniValue beaconconvergence(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "beaconconvergence\n"
-                "\n"
-                "Displays verified and pending beacons from the scraper or subscriber viewpoint.\n"
-                "\n"
-                "There are three output sections:\n"
-                "\n"
-                "verified_beacons_from_scraper_global:\n"
-                "\n"
-                "Comes directly from the scraper global map for verified beacons. This is\n"
-                "for scraper monitoring of an individual scraper and will be empty if not\n"
-                "run on an actual scraper node."
-                "\n"
-                "verified_beacons_from_latest_convergence:\n"
-                "\n"
-                "From the latest convergence formed from all of the scrapers. This list\n"
-                "is what will be activated in the next superblock.\n"
-                "\n"
-                "pending_beacons_from_GetConsensusBeaconList:\n"
-                "\n"
-                "This is a list of pending beacons. Note that it is subject to a one\n"
-                "hour ladder, so it will lag the information from the\n"
-                "pendingbeaconreport rpc call.\n");
+static const RPCHelpMan beaconconvergence_help{
+    "beaconconvergence",
+    "Displays verified and pending beacons from the scraper or subscriber viewpoint. "
+    "Output has three sections: verified_beacons_from_scraper_global (the scraper's "
+    "local verified-beacon map; empty on non-scraper nodes), "
+    "verified_beacons_from_latest_convergence (verified beacons from the latest "
+    "all-scrapers convergence, to be activated in the next superblock), and "
+    "pending_beacons_from_GetConsensusBeaconList (pending beacons; subject to a one-hour "
+    "ladder, so this lags the pendingbeaconreport RPC).",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::ARR, "verified_beacons_from_scraper_global", "",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "cpid", "CPID."},
+                            {RPCResult::Type::STR, "verification_code", "Verification code."},
+                            {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                        }},
+                }},
+            {RPCResult::Type::ARR, "verified_beacons_from_latest_convergence", "",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "cpid", "CPID."},
+                            {RPCResult::Type::STR, "verification_code", "Verification code."},
+                            {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                        }},
+                }},
+            {RPCResult::Type::ARR, "pending_beacons_from_GetConsensusBeaconList", "",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "cpid", "CPID."},
+                            {RPCResult::Type::STR, "verification_code", "Verification code."},
+                            {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                        }},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("beaconconvergence", "") +
+        HelpExampleRpc("beaconconvergence", "")},
+};
+const RPCHelpMan& beaconconvergence_helpman() { return beaconconvergence_help; }
 
+UniValue beaconconvergence(const UniValue& params)
+{
     UniValue results(UniValue::VOBJ);
 
     UniValue verified_from_global(UniValue::VARR);
@@ -1888,14 +2160,28 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
     return results;
 }
 
-UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "pendingbeaconreport\n"
-                "\n"
-                "Displays pending beacons directly from the beacon registry.\n");
+static const RPCHelpMan pendingbeaconreport_help{
+    "pendingbeaconreport",
+    "Displays pending beacons directly from the beacon registry.",
+    {},
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::STR, "cpid", "CPID."},
+                    {RPCResult::Type::STR, "key_id", "Beacon key id."},
+                    {RPCResult::Type::STR, "address", "Beacon payout address."},
+                    {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("pendingbeaconreport", "") +
+        HelpExampleRpc("pendingbeaconreport", "")},
+};
+const RPCHelpMan& pendingbeaconreport_helpman() { return pendingbeaconreport_help; }
 
+UniValue pendingbeaconreport(const UniValue& params)
+{
     UniValue results(UniValue::VARR);
 
     std::vector<std::pair<CKeyID, GRC::Beacon_ptr>> pending_beacons;
@@ -1928,16 +2214,32 @@ UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
     return results;
 }
 
-UniValue beaconstatus(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "beaconstatus [cpid]\n"
-                "\n"
-                "[cpid] -> Optional parameter of cpid\n"
-                "\n"
-                "Displays status of your beacon or specified beacon on the network\n");
+static const RPCHelpMan beaconstatus_help{
+    "beaconstatus",
+    "Displays the status of your beacon, or of the specified beacon on the network.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "CPID to look up. Defaults to the current wallet CPID."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::ARR, "active", "Active beacons for this CPID.",
+                {
+                    {RPCResult::Type::ELISION, "", "beacon entry (cpid, active, pending, expired, renewable, timestamp, address, public_key, private_key_available, magnitude, verification_code, is_mine)"},
+                }},
+            {RPCResult::Type::ARR, "pending", "Pending beacons for this CPID.",
+                {
+                    {RPCResult::Type::ELISION, "", "beacon entry (same fields as active)"},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("beaconstatus", "") +
+        HelpExampleRpc("beaconstatus", "")},
+};
+const RPCHelpMan& beaconstatus_helpman() { return beaconstatus_help; }
 
+UniValue beaconstatus(const UniValue& params)
+{
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
         : GRC::Researcher::Get()->Id();
@@ -2005,20 +2307,31 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue beaconaudit(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 2)
-        throw runtime_error(
-            "beaconaudit [errors only] [cpid]\n"
-            "\n"
-            "[errors only] -> Boolean to provide errors only. Defaults to true.\n"
-            "[cpid] -> Optional parameter of cpid. Defaults to current cpid. * means all active CPIDs.\n"
-            "\n"
-            "Conducts consistency audit for beacon contracts and beacon chain for given CPID.\n"
-            "This is currently limited to looking at multiple renewals for the same CPID in\n"
-            "the same block and reporting inconsistencies between the normal contract order\n"
-            "and the historical beacon entries (beacon chainlet) for the CPID.\n");
+static const RPCHelpMan beaconaudit_help{
+    "beaconaudit",
+    "Conduct a consistency audit for beacon contracts and the beacon chain for the given CPID. "
+    "Currently limited to looking at multiple renewals for the same CPID in the same block and "
+    "reporting inconsistencies between the normal contract order and the historical beacon entries "
+    "(beacon chainlet) for the CPID.",
+    {
+        {"errors_only", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, return only errors. Default: true."},
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "CPID to audit. Defaults to the current wallet CPID. Use \"*\" for all active CPIDs."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "Audit report (see beaconaudit output for the full schema).",
+        {
+            {RPCResult::Type::ELISION, "", "audit fields"},
+        }},
+    RPCExamples{
+        HelpExampleCli("beaconaudit", "") +
+        HelpExampleCli("beaconaudit", "true \"*\"") +
+        HelpExampleRpc("beaconaudit", "")},
+};
+const RPCHelpMan& beaconaudit_helpman() { return beaconaudit_help; }
 
+UniValue beaconaudit(const UniValue& params)
+{
     bool errors_only = true;
     bool global = false;
 
@@ -2047,6 +2360,8 @@ UniValue beaconaudit(const UniValue& params, bool fHelp)
     if (!global && !cpid) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "No beacon for non-cruncher.");
     }
+
+    LOCK(cs_main);
 
     // Only allow auditing when at or above block V11 threshold.
     if (!IsV11Enabled(pindexBest->nHeight)) {
@@ -2203,16 +2518,30 @@ UniValue beaconaudit(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue explainmagnitude(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "explainmagnitude ( cpid )\n"
-                "\n"
-                "[cpid] -> Optional CPID to explain magnitude for\n"
-                "\n"
-                "Itemize your CPID magnitudes by project.\n");
+static const RPCHelpMan explainmagnitude_help{
+    "explainmagnitude",
+    "Itemize a CPID's magnitude contribution by project.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "CPID to explain magnitude for. Defaults to the current wallet CPID."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::STR, "project", "Project name (or \"total\" for the summary row)."},
+                    {RPCResult::Type::NUM, "rac", "Recent average credit for the project."},
+                    {RPCResult::Type::NUM, "magnitude", "Magnitude contribution from the project."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("explainmagnitude", "") +
+        HelpExampleRpc("explainmagnitude", "")},
+};
+const RPCHelpMan& explainmagnitude_helpman() { return explainmagnitude_help; }
 
+UniValue explainmagnitude(const UniValue& params)
+{
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
         : GRC::Researcher::Get()->Id();
@@ -2255,14 +2584,25 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue lifetime(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "lifetime [cpid]\n"
-                "\n"
-                "Displays research rewards for the lifetime of a CPID.\n");
+static const RPCHelpMan lifetime_help{
+    "lifetime",
+    "Display research rewards for the lifetime of a CPID.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "CPID to look up. Defaults to the current wallet CPID."},
+    },
+    RPCResult{RPCResult::Type::OBJ_DYN, "", "Block height -> research subsidy (GRC) for each block in which the CPID earned research rewards.",
+        {
+            {RPCResult::Type::STR_AMOUNT, "height", "Research subsidy (GRC) paid in that block."},
+        }},
+    RPCExamples{
+        HelpExampleCli("lifetime", "") +
+        HelpExampleRpc("lifetime", "")},
+};
+const RPCHelpMan& lifetime_helpman() { return lifetime_help; }
 
+UniValue lifetime(const UniValue& params)
+{
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
         : GRC::Researcher::Get()->Id();
@@ -2295,16 +2635,25 @@ UniValue lifetime(const UniValue& params, bool fHelp)
     return results;
 }
 
-UniValue magnitude(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "magnitude <cpid>\n"
-                "\n"
-                "<cpid> -> cpid to look up\n"
-                "\n"
-                "Displays information for the magnitude of all cpids or specified in the network\n");
+static const RPCHelpMan magnitude_help{
+    "magnitude",
+    "Display magnitude information for the specified CPID, or for the current wallet CPID if omitted.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "CPID to look up. Defaults to the current wallet CPID."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "Magnitude report (see MagnitudeReport output for the full schema).",
+        {
+            {RPCResult::Type::ELISION, "", "report fields"},
+        }},
+    RPCExamples{
+        HelpExampleCli("magnitude", "") +
+        HelpExampleRpc("magnitude", "")},
+};
+const RPCHelpMan& magnitude_helpman() { return magnitude_help; }
 
+UniValue magnitude(const UniValue& params)
+{
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
         : GRC::Researcher::Get()->Id();
@@ -2322,14 +2671,22 @@ UniValue magnitude(const UniValue& params, bool fHelp)
     throw JSONRPCError(RPC_INVALID_PARAMETER, "No data for non-cruncher.");
 }
 
-UniValue resetcpids(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "resetcpids\n"
-                "\n"
-                "Reloads cpids\n");
+static const RPCHelpMan resetcpids_help{
+    "resetcpids",
+    "Reload CPIDs from the config file.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "Reset", "Always 1 on success."},
+        }},
+    RPCExamples{
+        HelpExampleCli("resetcpids", "") +
+        HelpExampleRpc("resetcpids", "")},
+};
+const RPCHelpMan& resetcpids_helpman() { return resetcpids_help; }
 
+UniValue resetcpids(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
@@ -2348,38 +2705,70 @@ UniValue resetcpids(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue superblockage(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "superblockage\n"
-                "\n"
-                "Display information regarding superblock age\n");
+static const RPCHelpMan superblockage_help{
+    "superblockage",
+    "Display information regarding superblock age.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "Superblock Age", "Age in seconds of the current superblock."},
+            {RPCResult::Type::STR, "Superblock Timestamp", "Human-readable timestamp of the current superblock."},
+            {RPCResult::Type::NUM, "Superblock Block Number", "Block height at which the current superblock was committed."},
+            {RPCResult::Type::NUM, "Pending Superblock Height", "Block height of the pending superblock, if any."},
+        }},
+    RPCExamples{
+        HelpExampleCli("superblockage", "") +
+        HelpExampleRpc("superblockage", "")},
+};
+const RPCHelpMan& superblockage_helpman() { return superblockage_help; }
 
+UniValue superblockage(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
 
-    const GRC::SuperblockPtr superblock = GRC::Quorum::CurrentSuperblock();
+    // Hold cs_main only long enough to read the current and pending
+    // superblocks. SuperblockPtr is a refcounted handle to immutable data;
+    // copying it out lets the formatting / pushKV calls run lock-free.
+    GRC::SuperblockPtr superblock;
+    int64_t pending_height = 0;
+    {
+        LOCK(cs_main);
+        superblock = GRC::Quorum::CurrentSuperblock();
+        pending_height = GRC::Quorum::PendingSuperblock().m_height;
+    }
 
     res.pushKV("Superblock Age", superblock.Age(GetAdjustedTime()));
     res.pushKV("Superblock Timestamp", TimestampToHRDate(superblock.m_timestamp));
     res.pushKV("Superblock Block Number", superblock.m_height);
-    res.pushKV("Pending Superblock Height", GRC::Quorum::PendingSuperblock().m_height);
+    res.pushKV("Pending Superblock Height", pending_height);
 
     return res;
 }
 
-UniValue superblocks(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 3)
-        throw runtime_error(
-                "superblocks [lookback [displaycontract [cpid]]]\n"
-                "\n"
-                "[lookback] -> Optional: # of SB's to show (default 14)\n"
-                "[displaycontract] -> Optional true/false: display SB contract (default false)\n"
-                "[cpid] -> Optional: Shows magnitude for a cpid for recent superblocks\n"
-                "\n"
-                "Display data on recent superblocks\n");
+static const RPCHelpMan superblocks_help{
+    "superblocks",
+    "Display data on recent superblocks.",
+    {
+        {"lookback", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Number of superblocks to show. Default: 14."},
+        {"displaycontract", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Display the superblock contract. Default: false."},
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Show magnitude for a CPID across recent superblocks."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::ELISION, "", "superblock entry; shape depends on options"},
+        }},
+    RPCExamples{
+        HelpExampleCli("superblocks", "") +
+        HelpExampleCli("superblocks", "5 true") +
+        HelpExampleRpc("superblocks", "")},
+};
+const RPCHelpMan& superblocks_helpman() { return superblocks_help; }
 
+UniValue superblocks(const UniValue& params)
+{
     UniValue res(UniValue::VARR);
 
     int lookback = 14;
@@ -2458,8 +2847,71 @@ UniValue superblocks(const UniValue& params, bool fHelp)
 //! GRC will only memorize the *last* value it finds for a key in the highest
 //! block.
 //!
-UniValue addkey(const UniValue& params, bool fHelp)
+static const RPCHelpMan addkey_help{
+    "addkey",
+    "Add or delete an administrative key in the Gridcoin contract system.\n"
+    "Requires the wallet to be unlocked and the caller to hold the master key.\n"
+    "The set of required and optional parameters depends on the key type, the "
+    "action, and the currently-active protocol version. Parameter 5 carries "
+    "different meanings for project (GDPR bool) and sidestake (description); "
+    "parameters 6-7 apply only to <keytype>=project and are gated by protocol "
+    "flags (v2 project contracts, v4 project contracts, block v13). See the "
+    "per-parameter descriptions below.",
+    {
+        {"action", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "'add' or 'delete'."},
+        {"keytype", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Contract type. One of: project, scraper, protocol, sidestake."},
+        {"keyname", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Key name. For project: project short name. For scraper: Gridcoin "
+            "address. For protocol: parameter key. For sidestake: Gridcoin "
+            "destination address."},
+        {"keyvalue", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Key value. Optional for project/scraper/sidestake delete; "
+            "required otherwise. For project add: stats URL. For scraper "
+            "add: 'true'|'false'|'explorer' (v13) or 'true'|'false' "
+            "(pre-v13). For protocol: parameter value. For sidestake add: "
+            "allocation percentage (0-100)."},
+        {"type_specific", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Project add (v2 contracts and later): 'true' if GDPR "
+            "stats-export protection is enforced, otherwise 'false'. "
+            "Sidestake add: optional free-text description (any string). "
+            "Pre-v2 / delete actions: ignored."},
+        {"requires_external_adapter", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "project only, requires v4 project contracts: 'true' if the "
+            "project requires an external adapter to collect stats, otherwise "
+            "'false'. Pre-v4: reused for the manual greylist status (see next "
+            "parameter)."},
+        {"status", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "project only, requires v13 blocks: 'man_greylist' or "
+            "'auto_greylist_override'. Omit for no manual status."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::OBJ, "contract", /*optional=*/false,
+                "JSON serialization of the contract that was broadcast.", /*inner=*/{}},
+            {RPCResult::Type::STR_HEX, "txid",
+                "Transaction id of the contract-bearing transaction."},
+        }},
+    RPCExamples{
+        HelpExampleCli("addkey",
+            "add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@ true false")
+      + HelpExampleCli("addkey",
+            "delete project milkyway@home")
+      + HelpExampleRpc("addkey",
+            "\"add\", \"project\", \"milkyway@home\", "
+            "\"http://milkyway.cs.rpi.edu/milkyway/@\", \"true\", \"false\"")
+    }
+};
+const RPCHelpMan& addkey_helpman() { return addkey_help; }
+
+UniValue addkey(const UniValue& params)
 {
+    // Absolute min/max across all (action, keytype, protocol-version) shapes
+    // are enforced by `CRPCTable::execute`'s pre-dispatch IsValidNumArgs check
+    // (the helpman declares 3..7). Shape-specific enforcement happens below,
+    // once we've read the action and key type and can consult the live
+    // protocol flags.
     bool project_v2_enabled = false;
     bool project_v4_enabled = false;
     bool block_v13_enabled = false;
@@ -2477,25 +2929,21 @@ UniValue addkey(const UniValue& params, bool fHelp)
 
     GRC::ContractAction action = GRC::ContractAction::UNKNOWN;
     GRC::Contract::Type type = GRC::ContractType::UNKNOWN;
+
+    if (params[0].get_str() == "add") {
+        action = GRC::ContractAction::ADD;
+    } else if (params[0].get_str() == "delete") {
+        action = GRC::ContractAction::REMOVE;
+    }
+
+    type = GRC::Contract::Type::Parse(params[1].get_str());
+
     size_t required_param_count = 4;
     size_t param_count_max = 4;
-
-    if (params.size()) {
-        if (params[0].get_str() == "add") {
-            action = GRC::ContractAction::ADD;
-        } else if (params[0].get_str() == "delete") {
-            action = GRC::ContractAction::REMOVE;
-        }
-    }
-
-    if (params.size() >= 2) {
-        type = GRC::Contract::Type::Parse(params[1].get_str());
-    }
 
     // We only need to specify five parameters if v2 project contracts are enabled AND the action is add AND
     // the key type is project.
     if (project_v2_enabled
-            && params.size()
             && action == GRC::ContractAction::ADD
             && type == GRC::ContractType::PROJECT) {
         required_param_count = 5;
@@ -2535,69 +2983,20 @@ UniValue addkey(const UniValue& params, bool fHelp)
         }
     }
 
-    if (fHelp || params.size() < required_param_count || params.size() > param_count_max) {
-        std::string error_string;
-
-        if (block_v13_enabled) {
-            if (project_v4_enabled) {
-                error_string = "addkey <action> <keytype> <keyname> <keyvalue> <gdpr_protection_bool> "
-                               "<requires_external_adapter> <status> \n"
-                               "\n"
-                               "<action> ---> Specify add or delete of key\n"
-                               "<keytype> --> Specify keytype ex: project\n"
-                               "<keyname> --> Specify keyname ex: milky\n"
-                               "<keyvalue> -> Specify keyvalue ex: 1\n"
-                               "\n"
-                               "For project keytype only\n"
-                               "<gdpr_protection_bool> -> true if GDPR stats export protection is enforced for project\n"
-                               "<requires_external_adapter> true if project requires an external adapter to collect stats\n"
-                               "<status> -> auto_greylist_override or man_greylist. Defaults to blank."
-                               "\n"
-                               "Add a key to the network";
-            } else {
-            error_string = "addkey <action> <keytype> <keyname> <keyvalue> <gdpr_protection_bool> <status> \n"
-                           "\n"
-                           "<action> ---> Specify add or delete of key\n"
-                           "<keytype> --> Specify keytype ex: project\n"
-                           "<keyname> --> Specify keyname ex: milky\n"
-                           "<keyvalue> -> Specify keyvalue ex: 1\n"
-                           "\n"
-                           "For project keytype only\n"
-                           "<gdpr_protection_bool> -> true if GDPR stats export protection is enforced for project\n"
-                           "<status> -> auto_greylist_override or man_greylist. Defaults to blank."
-                           "\n"
-                           "Add a key to the network";
-            }
-        } else if (project_v2_enabled) {
-            error_string = "addkey <action> <keytype> <keyname> <keyvalue> <gdpr_protection_bool>\n"
-                           "\n"
-                           "<action> ---> Specify add or delete of key\n"
-                           "<keytype> --> Specify keytype ex: project\n"
-                           "<keyname> --> Specify keyname ex: milky\n"
-                           "<keyvalue> -> Specify keyvalue ex: 1\n"
-                           "\n"
-                           "For project keytype only\n"
-                           "<gdpr_protection_bool> -> true if GDPR stats export protection is enforced for project\n"
-                           "\n"
-                           "Add a key to the network";
-        } else {
-            error_string = "addkey <action> <keytype> <keyname> <keyvalue>\n"
-                           "\n"
-                           "<action> ---> Specify add or delete of key\n"
-                           "<keytype> --> Specify keytype ex: project\n"
-                           "<keyname> --> Specify keyname ex: milky\n"
-                           "<keyvalue> -> Specify keyvalue ex: 1\n"
-                           "\n"
-                           "Add a key to the network";
-        }
-
-        throw runtime_error(error_string);
+    if (params.size() < required_param_count || params.size() > param_count_max) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("addkey %s %s: expected %u..%u parameters, got %u. "
+                      "Check protocol version gating for this key type.",
+                      params[0].get_str(), params[1].get_str(),
+                      (unsigned)required_param_count, (unsigned)param_count_max,
+                      (unsigned)params.size()));
     }
 
-    if (pwalletMain->IsLocked()) {
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED,
-                           "Error: Please enter the wallet passphrase with walletpassphrase first.");
-    }
+    // The shared helper, not a bare IsLocked(): addkey builds an administrative
+    // contract, and every sibling admin RPC refuses a staking-only wallet with
+    // a message that says so. Without this it reached the builder and failed
+    // with a generic "transaction creation failed".
+    EnsureWalletIsUnlocked();
 
     if (!(type == GRC::ContractType::PROJECT
           || type == GRC::ContractType::SCRAPER
@@ -2874,6 +3273,13 @@ UniValue addkey(const UniValue& params, bool fHelp)
     case GRC::ContractType::POLL:
         [[fallthrough]];
     case GRC::ContractType::VOTE:
+        [[fallthrough]];
+    // POOL_REGISTER and POOL_APPROVE have their own dedicated RPCs
+    // (registerpool / approvepool / removepool); they are not routed through
+    // addkey. Listed here only to satisfy -Wswitch coverage.
+    case GRC::ContractType::POOL_REGISTER:
+        [[fallthrough]];
+    case GRC::ContractType::POOL_APPROVE:
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid contract type for addkey.");
     case GRC::ContractType::UNKNOWN:
         [[fallthrough]];
@@ -2885,7 +3291,14 @@ UniValue addkey(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Not an admin contract type.");
     }
 
-    std::pair<CWalletTx, std::string> result = GRC::SendContract(contract);
+    std::pair<CWalletTx, std::string> result;
+    {
+        // GRC::SendContract is EXCLUSIVE_LOCKS_REQUIRED(cs_main) (Phase 2).
+        // Scope kept narrow to avoid blocking other RPCs across the wider
+        // construction work above.
+        LOCK(cs_main);
+        result = GRC::SendContract(contract);
+    }
     std::string error = result.second;
 
     if (!error.empty()) {
@@ -2900,14 +3313,686 @@ UniValue addkey(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue currentcontractaverage(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "currentcontractaverage\n"
-                "\n"
-                "Displays information on your current contract average with regards to superblock contract\n");
+// -----------------------------------------------------------------------------
+// On-chain pool registration (issue #1783)
+// -----------------------------------------------------------------------------
 
+namespace {
+
+//!
+//! \brief Reject pool-mutating RPCs before V15 activation.
+//!
+//! Pre-V15 every POOL contract is rejected by ValidateAtHeight, but the
+//! register/approve/remove/authorize RPCs would still build, sign, and
+//! broadcast a transaction that the mempool then bounces with a generic
+//! "coins already spent" — confusing, and it leaves a dead tx in the wallet.
+//! Fail early with a precise message instead.
+//!
+void EnsurePoolRegistrationActive()
+{
+    int tip_height = 0;
+    {
+        LOCK(cs_main);
+        tip_height = nBestHeight;
+    }
+
+    if (IsV15Enabled(tip_height)) {
+        return;
+    }
+
+    const int v15_height = GetBlockV15Height();
+    if (v15_height == std::numeric_limits<int>::max()) {
+        throw JSONRPCError(RPC_INVALID_REQUEST,
+            "On-chain pool registration (block version 15) is not active on this "
+            "network yet; no activation height has been scheduled.");
+    }
+
+    throw JSONRPCError(RPC_INVALID_REQUEST,
+        strprintf("On-chain pool registration (block version 15) is not active until "
+                  "block %d (current height %d).", v15_height, tip_height));
+}
+
+GRC::Cpid ParseCpidArg(const UniValue& v)
+{
+    const std::string cpid_str = v.get_str();
+    GRC::Cpid cpid = GRC::Cpid::Parse(cpid_str);
+
+    // Cpid::Parse returns the zero CPID on malformed input. The zero CPID is
+    // technically representable but is never a real BOINC external CPID, so
+    // we reject it as an invalid argument.
+    if (cpid == GRC::Cpid()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "Invalid CPID hex (must be 32 hex characters and not all zero).");
+    }
+
+    return cpid;
+}
+
+std::string PoolStatusName(const GRC::PoolStatus status)
+{
+    switch (status) {
+        case GRC::PoolStatus::UNKNOWN:      return "UNKNOWN";
+        case GRC::PoolStatus::PENDING:      return "PENDING";
+        case GRC::PoolStatus::ACTIVE:       return "ACTIVE";
+        case GRC::PoolStatus::DELETED:      return "DELETED";
+        case GRC::PoolStatus::OUT_OF_BOUND: break;
+    }
+    return "UNKNOWN";
+}
+
+UniValue PoolToJson(const GRC::Pool& pool, int tip_height)
+{
+    UniValue out(UniValue::VOBJ);
+    out.pushKV("cpid", pool.m_cpid.ToString());
+    out.pushKV("name", pool.m_name);
+    out.pushKV("url", pool.m_url);
+    out.pushKV("operator_pubkey", pool.m_operator_key.IsValid()
+                                      ? HexStr(pool.m_operator_key)
+                                      : std::string{});
+    out.pushKV("status", PoolStatusName(pool.m_status.Value()));
+    out.pushKV("timestamp", pool.m_timestamp);
+
+    // Grandfathered builtin slots carry a SYNTHETIC anchor hash
+    // (Hash("POOL_BUILTIN_SEED:" + cpid)) rather than an on-chain transaction
+    // hash: as contract_txid for an unclaimed seed, and as previous_contract_txid
+    // on the first real claim of a builtin. getrawtransaction/gettransaction will
+    // not find such a hash. Surface "builtin" (slot is grandfathered) and
+    // "seed_anchored" (the current contract_txid is the synthetic seed, i.e. the
+    // slot is still unclaimed) so callers can tell these apart from real entries.
+    const bool is_builtin = GRC::GetPoolRegistry().IsBuiltin(pool.m_cpid);
+    out.pushKV("builtin", is_builtin);
+    out.pushKV("seed_anchored",
+               is_builtin && pool.m_hash == GRC::PoolRegistry::BuiltinSeedHash(pool.m_cpid));
+    out.pushKV("contract_txid", pool.m_hash.GetHex());
+    out.pushKV("previous_contract_txid", pool.m_previous_hash.GetHex());
+
+    // OPEN authorization fields. Empty pubkey means no OPEN has been
+    // issued (or it was consumed by a POOL_REGISTER ADD).
+    if (pool.m_authorized_operator_key.IsValid()) {
+        out.pushKV("authorized_operator_pubkey", HexStr(pool.m_authorized_operator_key));
+        out.pushKV("authorization_height", pool.m_authorization_height);
+        out.pushKV("authorization_expired",
+                   GRC::PoolRegistry::IsAuthorizationExpired(pool, tip_height));
+    }
+
+    // PENDING entries can be query-time expired after
+    // consensus.PendingPoolRetention blocks; the chained entry remains
+    // in storage but consensus treats it as absent for takeover checks.
+    if (pool.m_status == GRC::PoolStatus::PENDING) {
+        out.pushKV("pending_expired",
+                   GRC::PoolRegistry::IsPendingExpired(pool, tip_height));
+    }
+
+    return out;
+}
+
+} // anonymous namespace
+
+static const RPCHelpMan registerpool_help{
+    "registerpool",
+    "Register a Gridcoin mining pool on chain. Generates a fresh operator key "
+    "from the wallet keypool, signs the registration payload with it, and "
+    "broadcasts a POOL_REGISTER contract. The entry lands in PENDING status; "
+    "a foundation-signed approvepool is required to flip it to ACTIVE. "
+    "Requires the wallet to be unlocked.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "32-character hex CPID identifying the pool's BOINC account."},
+        {"name", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Display name (e.g. \"grcpool.com\")."},
+        {"url", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Pool website URL."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "cpid", "CPID the pool registered with."},
+            {RPCResult::Type::STR, "name", "Pool display name."},
+            {RPCResult::Type::STR, "url", "Pool website URL."},
+            {RPCResult::Type::STR_HEX, "operator_pubkey", "Operator public key generated for this registration."},
+            {RPCResult::Type::STR, "status", "Registry status of the new entry (PENDING)."},
+            {RPCResult::Type::OBJ, "contract", "The broadcast POOL_REGISTER contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "contract fields"},
+                }},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction hash carrying the contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("registerpool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\" \"grcpool.com\" \"https://grcpool.com\"") +
+        HelpExampleRpc("registerpool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\", \"grcpool.com\", \"https://grcpool.com\"")},
+};
+const RPCHelpMan& registerpool_helpman() { return registerpool_help; }
+
+UniValue registerpool(const UniValue& params)
+{
+    EnsurePoolRegistrationActive();
+    EnsureWalletIsUnlocked();
+
+    const GRC::Cpid cpid = ParseCpidArg(params[0]);
+    const std::string name = params[1].get_str();
+    const std::string url  = params[2].get_str();
+
+    if (name.empty() || name.size() > GRC::PoolRegisterPayload::MAX_NAME_SIZE) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("Name must be non-empty and at most %u characters.",
+                      (unsigned)GRC::PoolRegisterPayload::MAX_NAME_SIZE));
+    }
+    if (url.empty() || url.size() > GRC::PoolRegisterPayload::MAX_URL_SIZE) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("URL must be non-empty and at most %u characters.",
+                      (unsigned)GRC::PoolRegisterPayload::MAX_URL_SIZE));
+    }
+
+    CPubKey operator_pubkey;
+    CKey operator_privkey;
+    // Reserve (do NOT yet commit) a fresh operator key. CReserveKey returns the
+    // key to the keypool from its destructor unless KeepKey() is called, so any
+    // throw before the broadcast succeeds (the builtin pre-flight auth check
+    // below, a signing failure, or a SendContract error) leaves the keypool and
+    // address book untouched. The previous GetKeyFromPool + SetAddressBookName
+    // here committed both BEFORE those checks, so every failed attempt against a
+    // not-yet-OPENed builtin slot leaked a keypool key and a stray address-book
+    // label.
+    CReserveKey reserve_key(pwalletMain);
+
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        // GetReservedKey falls back to the wallet default key on an empty pool;
+        // reject that so we never reuse the user's default address as a pool
+        // operator identity (preserving GetKeyFromPool(..., false)'s
+        // fail-on-empty-pool behavior).
+        if (!reserve_key.GetReservedKey(operator_pubkey)
+            || operator_pubkey == pwalletMain->vchDefaultKey) {
+            throw JSONRPCError(RPC_WALLET_KEYPOOL_RAN_OUT,
+                "Failed to allocate a new operator key from the wallet keypool. "
+                "Call keypoolrefill and retry.");
+        }
+
+        if (!pwalletMain->GetKey(operator_pubkey.GetID(), operator_privkey)) {
+            throw JSONRPCError(RPC_WALLET_ERROR,
+                "Wallet returned a fresh pubkey but its private key is unavailable.");
+        }
+    }
+
+    // Pre-flight UX check (finding R): for builtin pool slots the
+    // IsBuiltin Path 2 guard in BlockValidate will reject any
+    // POOL_REGISTER ADD whose payload key doesn't match a live
+    // Foundation OPEN authorization. Surface that here so the user
+    // doesn't waste fee estimation + signing on a tx the mempool will
+    // reject anyway. Non-builtin CPIDs go through the standard first-
+    // claim path and don't need this check.
+    {
+        GRC::Pool_ptr existing = GRC::GetPoolRegistry().Try(cpid);
+        if (existing && GRC::GetPoolRegistry().IsBuiltin(cpid)) {
+            const bool path1_claimed_operational =
+                existing->m_status != GRC::PoolStatus::DELETED
+                && existing->m_operator_key.IsValid();
+
+            if (!path1_claimed_operational) {
+                int tip_height = 0;
+                {
+                    LOCK(cs_main);
+                    tip_height = nBestHeight;
+                }
+                const bool auth_present = existing->m_authorized_operator_key.IsValid();
+                const bool auth_expired = auth_present
+                    && GRC::PoolRegistry::IsAuthorizationExpired(*existing, tip_height);
+                const bool auth_matches = auth_present
+                    && existing->m_authorized_operator_key == operator_pubkey;
+
+                if (!auth_present) {
+                    throw JSONRPCError(RPC_INVALID_PARAMETER,
+                        strprintf("CPID %s is a builtin pool slot. Foundation must broadcast "
+                                  "POOL_APPROVE OPEN authorizing your operator pubkey before you "
+                                  "can register. Operator pubkey for this attempt: %s",
+                                  cpid.ToString(), HexStr(operator_pubkey)));
+                }
+                if (auth_expired) {
+                    throw JSONRPCError(RPC_INVALID_PARAMETER,
+                        strprintf("CPID %s is a builtin pool slot whose OPEN authorization has "
+                                  "expired (issued at height %d, retention %d blocks). Ask "
+                                  "Foundation to re-OPEN.",
+                                  cpid.ToString(), existing->m_authorization_height,
+                                  GetPendingPoolRetention()));
+                }
+                if (!auth_matches) {
+                    throw JSONRPCError(RPC_INVALID_PARAMETER,
+                        strprintf("CPID %s is a builtin pool slot authorized to a different "
+                                  "operator pubkey than the one this wallet just allocated. "
+                                  "Authorized: %s. This wallet: %s.",
+                                  cpid.ToString(),
+                                  HexStr(existing->m_authorized_operator_key),
+                                  HexStr(operator_pubkey)));
+                }
+            }
+        }
+    }
+
+    GRC::PoolRegisterPayload payload(cpid, name, url, operator_pubkey);
+
+    // Bind the action (ADD) and the predecessor hash into the operator
+    // signature so it can't be replayed with the action flipped or against a
+    // different predecessor state. The predecessor is the current entry's hash
+    // (the seed hash for a builtin claim, the prior entry for a rotation /
+    // re-registration) or null for a brand-new CPID — matching exactly what
+    // ApplyRegister records as m_previous_hash and what VerifyRegisterAuth
+    // recomputes at validation. (If a competing contract for this CPID lands
+    // between here and block validation, the predecessor moves and this tx is
+    // rejected — the operator simply re-issues; that is the intended freshness.)
+    uint256 register_prev_hash;
+    if (GRC::Pool_ptr existing = GRC::GetPoolRegistry().Try(cpid)) {
+        register_prev_hash = existing->m_hash;
+    }
+
+    if (!payload.Sign(operator_privkey, GRC::ContractAction::ADD, register_prev_hash)) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            "Failed to sign the pool registration payload with the operator key.");
+    }
+
+    GRC::Contract contract = GRC::MakeContract<GRC::PoolRegisterPayload>(
+        GRC::ContractAction::ADD, std::move(payload));
+
+    std::pair<CWalletTx, std::string> result;
+    {
+        LOCK(cs_main);
+        result = GRC::SendContract(contract);
+    }
+
+    if (!result.second.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, std::move(result.second));
+    }
+
+    // Broadcast succeeded — now commit the operator key: remove it from the
+    // keypool permanently and label it for the wallet UI. Doing this only after
+    // SendContract means every earlier failure path returns the key to the pool
+    // via CReserveKey's destructor (no leaked key, no stray label).
+    reserve_key.KeepKey();
+    pwalletMain->SetAddressBookName(operator_pubkey.GetID(),
+                                    "Pool operator key (" + name + ")");
+
+    UniValue res(UniValue::VOBJ);
+    res.pushKV("cpid", cpid.ToString());
+    res.pushKV("name", name);
+    res.pushKV("url", url);
+    res.pushKV("operator_pubkey", HexStr(operator_pubkey));
+    res.pushKV("status", "PENDING");
+    res.pushKV("contract", ContractToJson(contract));
+    res.pushKV("txid", result.first.GetHash().ToString());
+    return res;
+}
+
+namespace {
+
+const char* PoolApproveActionName(const GRC::ContractAction action)
+{
+    switch (action) {
+    case GRC::ContractAction::ADD:    return "approve";
+    case GRC::ContractAction::REMOVE: return "remove";
+    case GRC::ContractAction::OPEN:   return "open";
+    default:                          return "unknown";
+    }
+}
+
+UniValue SendPoolApprove(const GRC::Cpid& cpid,
+                         const GRC::ContractAction action,
+                         CPubKey authorized_operator_key = CPubKey{})
+{
+    EnsurePoolRegistrationActive();
+
+    // Use EnsureWalletIsUnlocked() rather than a bare IsLocked() check so a
+    // staking-only unlock (UnlockScope::StakingOnly) is rejected up front,
+    // matching registerpool / withdrawpool. A bare IsLocked() returns false
+    // when unlocked-for-staking-only, letting this master-key, coin-spending
+    // RPC proceed and fail with a less precise error deeper in SendContract.
+    EnsureWalletIsUnlocked();
+
+    GRC::PoolApprovePayload payload = (action == GRC::ContractAction::OPEN)
+        ? GRC::PoolApprovePayload(cpid, std::move(authorized_operator_key))
+        : GRC::PoolApprovePayload(cpid);
+
+    GRC::Contract contract = GRC::MakeContract<GRC::PoolApprovePayload>(
+        action, std::move(payload));
+
+    // POOL_APPROVE returns true from RequiresMasterKey(); the network rejects
+    // the broadcast unless the wallet holds a UTXO at the foundation master
+    // address (HasMasterKeyInput, validation.cpp). Surfacing that early would
+    // be nicer but matches addkey's behaviour of trusting SendContract to
+    // raise the failure.
+    if (!contract.RequiresMasterKey()) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR,
+            "Internal error: POOL_APPROVE contract did not opt into master-key authority.");
+    }
+
+    std::pair<CWalletTx, std::string> result;
+    {
+        LOCK(cs_main);
+        result = GRC::SendContract(contract);
+    }
+
+    if (!result.second.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, std::move(result.second));
+    }
+
+    UniValue res(UniValue::VOBJ);
+    res.pushKV("cpid", cpid.ToString());
+    res.pushKV("action", PoolApproveActionName(action));
+    res.pushKV("contract", ContractToJson(contract));
+    res.pushKV("txid", result.first.GetHash().ToString());
+    return res;
+}
+
+} // anonymous namespace
+
+static const RPCHelpMan approvepool_help{
+    "approvepool",
+    "Foundation-only. Broadcasts a POOL_APPROVE contract that flips the named "
+    "CPID's pool entry to ACTIVE. The contract requires the master key as a "
+    "transaction input (HasMasterKeyInput in validation.cpp). Requires the "
+    "wallet to be unlocked and to hold a UTXO at the foundation master address.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "32-character hex CPID of the pool to approve."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "cpid", "CPID of the approved pool."},
+            {RPCResult::Type::STR, "action", "Always \"approve\"."},
+            {RPCResult::Type::OBJ, "contract", "The broadcast POOL_APPROVE contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "contract fields"},
+                }},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction hash carrying the contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("approvepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"") +
+        HelpExampleRpc("approvepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"")},
+};
+const RPCHelpMan& approvepool_helpman() { return approvepool_help; }
+
+UniValue approvepool(const UniValue& params)
+{
+    return SendPoolApprove(ParseCpidArg(params[0]), GRC::ContractAction::ADD);
+}
+
+static const RPCHelpMan removepool_help{
+    "removepool",
+    "Foundation-only. Broadcasts a POOL_APPROVE REMOVE contract that flips the "
+    "named CPID's pool entry to DELETED. The contract requires the master key "
+    "as a transaction input. Requires the wallet to be unlocked and to hold a "
+    "UTXO at the foundation master address.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "32-character hex CPID of the pool to de-list."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "cpid", "CPID of the de-listed pool."},
+            {RPCResult::Type::STR, "action", "Always \"remove\"."},
+            {RPCResult::Type::OBJ, "contract", "The broadcast POOL_APPROVE contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "contract fields"},
+                }},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction hash carrying the contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("removepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"") +
+        HelpExampleRpc("removepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"")},
+};
+const RPCHelpMan& removepool_helpman() { return removepool_help; }
+
+UniValue removepool(const UniValue& params)
+{
+    return SendPoolApprove(ParseCpidArg(params[0]), GRC::ContractAction::REMOVE);
+}
+
+static const RPCHelpMan withdrawpool_help{
+    "withdrawpool",
+    "Operator self-withdrawal. Broadcasts an operator-signed POOL_REGISTER REMOVE "
+    "contract that flips the named CPID's pool entry to DELETED. Unlike removepool "
+    "(Foundation master-key authority), this is signed by the pool operator's own "
+    "key and requires no master key - the wallet must hold the private key for the "
+    "operator pubkey currently registered for the CPID. Requires the wallet to be "
+    "unlocked. A withdrawn builtin slot returns to requiring a fresh Foundation "
+    "POOL_APPROVE OPEN before it can be re-claimed.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "32-character hex CPID of the pool to withdraw."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "cpid", "CPID of the withdrawn pool."},
+            {RPCResult::Type::STR, "action", "Always \"remove\"."},
+            {RPCResult::Type::STR_HEX, "operator_pubkey", "Operator public key that signed the withdrawal."},
+            {RPCResult::Type::STR, "status", "Registry status of the entry after withdrawal (DELETED)."},
+            {RPCResult::Type::OBJ, "contract", "The broadcast POOL_REGISTER contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "contract fields"},
+                }},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction hash carrying the contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("withdrawpool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"") +
+        HelpExampleRpc("withdrawpool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"")},
+};
+const RPCHelpMan& withdrawpool_helpman() { return withdrawpool_help; }
+
+UniValue withdrawpool(const UniValue& params)
+{
+    EnsurePoolRegistrationActive();
+    EnsureWalletIsUnlocked();
+
+    const GRC::Cpid cpid = ParseCpidArg(params[0]);
+
+    // The withdrawal targets a live registration this wallet owns. Resolve the
+    // currently-registered operator key for the CPID: consensus
+    // (VerifyRegisterAuth's standard takeover path) verifies the REMOVE
+    // signature against THIS key, not against whatever the payload carries, so
+    // only the registering operator can withdraw.
+    GRC::Pool_ptr existing = GRC::GetPoolRegistry().Try(cpid);
+    if (!existing || existing->m_status == GRC::PoolStatus::DELETED) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("CPID %s has no active pool registration to withdraw.", cpid.ToString()));
+    }
+    if (!existing->m_operator_key.IsValid()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("CPID %s is an unclaimed builtin pool slot - there is no operator "
+                      "registration to withdraw. Foundation removepool de-lists builtins.",
+                      cpid.ToString()));
+    }
+
+    const CPubKey operator_pubkey = existing->m_operator_key;
+    CKey operator_privkey;
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        if (!pwalletMain->GetKey(operator_pubkey.GetID(), operator_privkey)) {
+            throw JSONRPCError(RPC_WALLET_ERROR,
+                strprintf("This wallet does not hold the operator private key registered for "
+                          "CPID %s (operator pubkey %s); only the registering operator can "
+                          "withdraw it.", cpid.ToString(), HexStr(operator_pubkey)));
+        }
+    }
+
+    // Carry the existing descriptive fields so the DELETED record ApplyRegister
+    // writes stays faithful to the registration being withdrawn. WellFormed
+    // (REMOVE) still requires a non-empty name and a fully-valid operator key;
+    // the URL is not required for REMOVE.
+    GRC::PoolRegisterPayload payload(cpid, existing->m_name, existing->m_url, operator_pubkey);
+
+    // Bind action (REMOVE) + predecessor hash into the signature, exactly as
+    // registerpool does for ADD and as VerifyRegisterAuth recomputes. The
+    // predecessor is the entry being superseded. (If a competing contract for
+    // this CPID lands between here and block validation, the predecessor moves
+    // and this tx is rejected — the operator simply re-issues.)
+    const uint256 register_prev_hash = existing->m_hash;
+
+    if (!payload.Sign(operator_privkey, GRC::ContractAction::REMOVE, register_prev_hash)) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            "Failed to sign the pool withdrawal payload with the operator key.");
+    }
+
+    GRC::Contract contract = GRC::MakeContract<GRC::PoolRegisterPayload>(
+        GRC::ContractAction::REMOVE, std::move(payload));
+
+    std::pair<CWalletTx, std::string> result;
+    {
+        LOCK(cs_main);
+        result = GRC::SendContract(contract);
+    }
+
+    if (!result.second.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, std::move(result.second));
+    }
+
+    UniValue res(UniValue::VOBJ);
+    res.pushKV("cpid", cpid.ToString());
+    res.pushKV("action", "remove");
+    res.pushKV("operator_pubkey", HexStr(operator_pubkey));
+    res.pushKV("status", "DELETED");
+    res.pushKV("contract", ContractToJson(contract));
+    res.pushKV("txid", result.first.GetHash().ToString());
+    return res;
+}
+
+static const RPCHelpMan authorizepool_help{
+    "authorizepool",
+    "Foundation-only. Broadcasts a POOL_APPROVE OPEN contract that pre-authorizes "
+    "the given operator pubkey to claim a builtin pool slot via a subsequent "
+    "POOL_REGISTER ADD. The contract requires the master key as a transaction "
+    "input. The authorization expires after consensus.PendingPoolRetention "
+    "blocks (~20 days at ~60s spacing) if not consumed by a matching "
+    "POOL_REGISTER ADD; Foundation may re-OPEN at any time to refresh. "
+    "Requires the wallet to be unlocked and to hold a UTXO at the foundation "
+    "master address.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "32-character hex CPID of the builtin slot to open for claim."},
+        {"operator_pubkey_hex", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "Hex-encoded compressed secp256k1 pubkey the legitimate operator will submit POOL_REGISTER with."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "cpid", "CPID of the opened builtin slot."},
+            {RPCResult::Type::STR, "action", "Always \"open\"."},
+            {RPCResult::Type::OBJ, "contract", "The broadcast POOL_APPROVE contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "contract fields"},
+                }},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction hash carrying the contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("authorizepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\" \"02a1b2...\"") +
+        HelpExampleRpc("authorizepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\", \"02a1b2...\"")},
+};
+const RPCHelpMan& authorizepool_helpman() { return authorizepool_help; }
+
+UniValue authorizepool(const UniValue& params)
+{
+    const GRC::Cpid cpid = ParseCpidArg(params[0]);
+
+    const std::string pubkey_hex = params[1].get_str();
+    if (!IsHex(pubkey_hex)) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "operator_pubkey_hex must be a hex string.");
+    }
+    const std::vector<unsigned char> pubkey_bytes = ParseHex(pubkey_hex);
+    CPubKey authorized_key(pubkey_bytes);
+    if (!authorized_key.IsValid()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "operator_pubkey_hex did not decode to a valid secp256k1 pubkey.");
+    }
+
+    return SendPoolApprove(cpid, GRC::ContractAction::OPEN, std::move(authorized_key));
+}
+
+static const RPCHelpMan listpools_help{
+    "listpools",
+    "Return every pool entry in the on-chain PoolRegistry.",
+    {
+        {"include_inactive", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, include PENDING and DELETED entries alongside ACTIVE ones. Default: false."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "Pool registry entry.",
+                {
+                    {RPCResult::Type::STR, "cpid", "CPID the pool registered with."},
+                    {RPCResult::Type::STR, "name", "Pool display name."},
+                    {RPCResult::Type::STR, "url", "Pool website URL."},
+                    {RPCResult::Type::STR_HEX, "operator_pubkey", "Operator public key."},
+                    {RPCResult::Type::STR, "status", "PENDING, ACTIVE, DELETED, or UNKNOWN."},
+                    {RPCResult::Type::NUM_TIME, "timestamp", "Contract timestamp."},
+                    {RPCResult::Type::BOOL, "builtin", "True if this is a grandfathered builtin pool slot."},
+                    {RPCResult::Type::BOOL, "seed_anchored",
+                        "True if contract_txid is a synthetic builtin-seed anchor (unclaimed builtin) rather than an on-chain txid."},
+                    {RPCResult::Type::STR_HEX, "contract_txid",
+                        "Transaction hash of the current registry entry (a synthetic seed anchor when seed_anchored is true)."},
+                    {RPCResult::Type::STR_HEX, "previous_contract_txid",
+                        "Transaction hash of the prior entry revision (a synthetic seed anchor on the first claim of a builtin)."},
+                    {RPCResult::Type::STR_HEX, "authorized_operator_pubkey", /*optional=*/true,
+                        "Operator pubkey pre-authorized by a Foundation POOL_APPROVE OPEN, when one is outstanding."},
+                    {RPCResult::Type::NUM, "authorization_height", /*optional=*/true,
+                        "Block height the OPEN authorization was recorded at."},
+                    {RPCResult::Type::BOOL, "authorization_expired", /*optional=*/true,
+                        "Whether the OPEN authorization has passed the PendingPoolRetention window."},
+                    {RPCResult::Type::BOOL, "pending_expired", /*optional=*/true,
+                        "For PENDING entries, whether the entry has passed the PendingPoolRetention window."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listpools", "") +
+        HelpExampleCli("listpools", "true") +
+        HelpExampleRpc("listpools", "true")},
+};
+const RPCHelpMan& listpools_helpman() { return listpools_help; }
+
+UniValue listpools(const UniValue& params)
+{
+    const bool include_inactive = params.size() >= 1 ? params[0].get_bool() : false;
+
+    UniValue res(UniValue::VARR);
+
+    {
+        LOCK(cs_main);
+
+        const int tip_height = nBestHeight;
+
+        for (const GRC::Pool& pool : GRC::GetPoolRegistry().Entries()) {
+            if (!include_inactive && pool.m_status != GRC::PoolStatus::ACTIVE) {
+                continue;
+            }
+
+            res.push_back(PoolToJson(pool, tip_height));
+        }
+    }
+
+    return res;
+}
+
+static const RPCHelpMan currentcontractaverage_help{
+    "currentcontractaverage",
+    "Display information on your current contract average with regards to the superblock contract.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::OBJ, "contract", "Serialized superblock contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "superblock fields"},
+                }},
+            {RPCResult::Type::NUM, "beacon_count", "Total beacon count."},
+            {RPCResult::Type::NUM, "avg_mag", "Average magnitude."},
+            {RPCResult::Type::NUM, "beacon_participant_count", "Number of participating beacons."},
+            {RPCResult::Type::BOOL, "superblock_valid", "Whether the superblock is well-formed."},
+            {RPCResult::Type::STR_HEX, "quorum_hash", "Quorum hash for the superblock."},
+            {RPCResult::Type::NUM, "size", "Serialized size of the superblock in bytes."},
+        }},
+    RPCExamples{
+        HelpExampleCli("currentcontractaverage", "") +
+        HelpExampleRpc("currentcontractaverage", "")},
+};
+const RPCHelpMan& currentcontractaverage_helpman() { return currentcontractaverage_help; }
+
+UniValue currentcontractaverage(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
 
     const GRC::Superblock superblock = GRC::Quorum::CreateSuperblock();
@@ -2923,17 +4008,25 @@ UniValue currentcontractaverage(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue debug(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "debug <bool>\n"
-                "\n"
-                "<bool> -> Specify true or false\n"
-                "\n"
-                "Enable or disable VERBOSE logging category (aka old debug) on the fly\n"
-                "This is deprecated by the \"logging verbose\" command.\n");
+static const RPCHelpMan debug_help{
+    "debug",
+    "Enable or disable the VERBOSE logging category (aka old debug) on the fly. "
+    "This is deprecated by the \"logging verbose\" command.",
+    {
+        {"enable", RPCArg::Type::BOOL, RPCArg::Optional::NO, "true to enable, false to disable."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "Logging category VERBOSE (aka old debug) ", "\"Enabled.\" or \"Disabled.\"."},
+        }},
+    RPCExamples{
+        HelpExampleCli("debug", "true") +
+        HelpExampleRpc("debug", "true")},
+};
+const RPCHelpMan& debug_helpman() { return debug_help; }
 
+UniValue debug(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
 
     if(params[0].get_bool())
@@ -2950,16 +4043,29 @@ UniValue debug(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue listprojects(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "listprojects <bool>\n"
-                "\n"
-                "<bool> -> true to show all projects, including greylisted and deleted. Defaults to false.\n"
-                "\n"
-                "Displays information about whitelisted projects.\n");
+static const RPCHelpMan listprojects_help{
+    "listprojects",
+    "Displays information about whitelisted projects.",
+    {
+        {"show_all", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "True to show all projects, including greylisted and deleted. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ_DYN, "", "",
+        {
+            {RPCResult::Type::OBJ, "project_name", "Per-project metadata.",
+                {
+                    {RPCResult::Type::ELISION, "", "version, display_name, url, base_url, display_url, stats_url, [gdpr_controls], [requires_external_adapter], time, status"},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listprojects", "") +
+        HelpExampleCli("listprojects", "true") +
+        HelpExampleRpc("listprojects", "")},
+};
+const RPCHelpMan& listprojects_helpman() { return listprojects_help; }
 
+UniValue listprojects(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
 
     GRC::Project::ProjectFilterFlag filter = GRC::Project::ProjectFilterFlag::ACTIVE;
@@ -2968,7 +4074,7 @@ UniValue listprojects(const UniValue& params, bool fHelp)
         filter = GRC::Project::ProjectFilterFlag::ALL;
     }
 
-    for (const auto& project : GRC::GetWhitelist().Snapshot(filter).Sorted()) {
+    for (const auto& project : GRC::GetWhitelist().Snapshot(GRC::GreylistState::AUTHORITATIVE, filter).Sorted()) {
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("version", (int)project.m_version);
@@ -2995,19 +4101,107 @@ UniValue listprojects(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue getautogreylist(const UniValue& params, bool fHelp)
+static const RPCHelpMan getrawprojectstatus_help{
+    "getrawprojectstatus",
+    "Displays the RAW, contract-applied status of each project, read directly from the registry's LevelDB "
+    "storage and bypassing the in-memory AutoGreylist overlay.\n"
+    "\n"
+    "listprojects reports the OVERLAID status: a project that meets auto-greylisting criteria displays as "
+    "\"Automatically Greylisted\" regardless of the status its administrative contract actually set. This "
+    "command instead reports the true contract status, the ground truth for verifying what addkey set. The raw "
+    "status is therefore never \"Automatically Greylisted\" -- that is an in-memory overlay status only.",
+    {},
+    RPCResult{RPCResult::Type::OBJ_DYN, "", "Project short name -> raw contract state.",
+        {
+            {RPCResult::Type::OBJ, "project_name", "",
+                {
+                    {RPCResult::Type::NUM, "version", "Contract payload version of the project entry."},
+                    {RPCResult::Type::STR, "display_name", "Human-readable project name."},
+                    {RPCResult::Type::STR, "url", "Project statistics URL as stored in the contract."},
+                    {RPCResult::Type::STR, "status", "Raw contract status, one of the locale-independent strings "
+                        "\"Active\", \"Manually Greylisted\", \"Active by Greylist Override\", or \"Deleted\"."},
+                    {RPCResult::Type::BOOL, "gdpr_controls", /*optional=*/true,
+                        "Whether GDPR stats-export protection is enforced (omitted for pre-v2 entries)."},
+                    {RPCResult::Type::BOOL, "requires_external_adapter", /*optional=*/true,
+                        "Whether the project requires an external adapter to collect stats (omitted for pre-v4 "
+                        "entries)."},
+                    {RPCResult::Type::STR, "time", "Timestamp of the contract that set this entry."},
+                    {RPCResult::Type::STR_HEX, "current_project_entry_tx_hash",
+                        "Transaction hash of the current (HEAD) project contract."},
+                    {RPCResult::Type::STR, "previous_project_entry_tx_hash",
+                        "Transaction hash of the previous entry in the chainlet, or \"null\" if this is the first."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("getrawprojectstatus", "")
+      + HelpExampleRpc("getrawprojectstatus", "")},
+};
+const RPCHelpMan& getrawprojectstatus_helpman() { return getrawprojectstatus_help; }
+
+UniValue getrawprojectstatus(const UniValue& params)
 {
-    if (fHelp || params.size() > 2) {
-        throw runtime_error(
-            "getautogreylist <bool> <bool> \n"
-            "\n"
-            "<bool> -> true to show all projects, including those that do not meet greylisting criteria. Defaults to false. \n"
-            "\n"
-            "<bool> -> true to show greylist history for each project. Defaults to false. \n"
-            "\n"
-            "Displays information about projects that meet auto greylisting criteria.");
+    UniValue res(UniValue::VOBJ);
+
+    for (const auto& iter : GRC::GetWhitelist().GetProjectsFromDisk()) {
+        const auto& project = iter.second;
+
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("version", (int)project->m_version);
+        entry.pushKV("display_name", project->DisplayName());
+        entry.pushKV("url", project->m_url);
+        // Emit the untranslated (locale-independent) status string: this is a machine-readable diagnostic, so the
+        // value must be stable across GUI locales (the no-arg StatusToString() defaults to the translated form).
+        entry.pushKV("status", project->StatusToString(project->m_status.Value(), false));
+
+        if (project->HasGDPRControls().has_value()) {
+            entry.pushKV("gdpr_controls", *project->HasGDPRControls());
+        }
+
+        if (project->RequiresExtAdapter().has_value()) {
+            entry.pushKV("requires_external_adapter", *project->RequiresExtAdapter());
+        }
+
+        entry.pushKV("time", DateTimeStrFormat(project->m_timestamp));
+        entry.pushKV("current_project_entry_tx_hash", project->m_hash.ToString());
+
+        if (project->m_previous_hash.IsNull()) {
+            entry.pushKV("previous_project_entry_tx_hash", "null");
+        } else {
+            entry.pushKV("previous_project_entry_tx_hash", project->m_previous_hash.ToString());
+        }
+
+        res.pushKV(iter.first, entry);
     }
 
+    return res;
+}
+
+static const RPCHelpMan getautogreylist_help{
+    "getautogreylist",
+    "Displays information about projects that meet auto greylisting criteria.",
+    {
+        {"show_all", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "True to show all projects, including those that do not meet greylisting criteria. Default: false."},
+        {"show_history", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "True to show greylist history for each project. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::ARR, "auto_greylist_projects", "Projects considered for auto-greylisting.",
+                {
+                    {RPCResult::Type::ELISION, "", "project entry; zero-credit-days, whitelist-activity-score, criteria flag, optional history"},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("getautogreylist", "") +
+        HelpExampleCli("getautogreylist", "true true") +
+        HelpExampleRpc("getautogreylist", "")},
+};
+const RPCHelpMan& getautogreylist_helpman() { return getautogreylist_help; }
+
+UniValue getautogreylist(const UniValue& params)
+{
     bool show_all_projects = false;
     bool show_history = false;
 
@@ -3021,28 +4215,31 @@ UniValue getautogreylist(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::GetAutoGreylistCache();
-
-    greylist_ptr->Refresh();
+    std::shared_ptr<GRC::AutoGreylistService> greylist_ptr = GRC::GetAutoGreylistCache();
 
     UniValue autogreylist(UniValue::VARR);
 
-    for (auto iter : *greylist_ptr) {
-        if (!show_all_projects && !iter.second.m_meets_greylisting_crit) {
-            continue;
+    // Emits one candidate entry; generic because the V1 (GreylistCandidateEntry) and V2
+    // (GreylistCandidateV2) types expose the same reporting surface. Taken by forwarding
+    // reference: V2 candidates bind const (their accessors are const), while the V1 arm
+    // passes a member of its already-copied iteration pair non-const (V1's accessors are
+    // not const) -- no additional candidate copy in either arm.
+    const auto emit_entry = [&](const std::string& name, auto& candidate) {
+        if (!show_all_projects && !candidate.m_meets_greylisting_crit) {
+            return;
         }
 
         UniValue entry(UniValue::VOBJ);
 
-        entry.pushKV("project:", iter.first);
-        entry.pushKV("zcd", iter.second.GetZCD());
-        entry.pushKV("was", iter.second.GetWAS().ToDouble());
-        entry.pushKV("meets_greylist_criteria", iter.second.m_meets_greylisting_crit);
+        entry.pushKV("project:", name);
+        entry.pushKV("zcd", candidate.GetZCD());
+        entry.pushKV("was", candidate.GetWAS().ToDouble());
+        entry.pushKV("meets_greylist_criteria", candidate.m_meets_greylisting_crit);
 
         if (show_history) {
             UniValue entry_history(UniValue::VARR);
 
-            for (const auto& hist_entry : iter.second.GetUpdateHistory()) {
+            for (const auto& hist_entry : candidate.GetUpdateHistory()) {
                 UniValue historical_entry(UniValue::VOBJ);
 
                 historical_entry.pushKV("superblocks_from_baseline", hist_entry.m_sb_from_baseline_processed);
@@ -3060,6 +4257,41 @@ UniValue getautogreylist(const UniValue& params, bool fHelp)
         }
 
         autogreylist.push_back(entry);
+    };
+
+    // Above the redesign gate ComputeReport is a value return (no shared greylist state is
+    // mutated by this RPC); below the gate it preserves the pre-redesign behavior verbatim,
+    // including the explicit V1 cache refresh that RPC always performed. It requires cs_main
+    // (it reads the current superblock and, above the gate, walks the chain) -- which the
+    // pre-redesign code needed too but never took.
+    GRC::GreylistComputation report;
+    {
+        LOCK(cs_main);
+
+        report = greylist_ptr->ComputeReport();
+
+        if (report.m_version != GRC::GreylistVersion::V2) {
+            // Below the gate: the pre-redesign display, from the freshly refreshed V1
+            // cache. The iteration stays INSIDE this cs_main scope: V1's iterators are
+            // handed out with the internal lock released, and their documented safety
+            // contract is that every V1 producer is cs_main-serialized -- which protects
+            // this loop only while cs_main is actually held across it. Const-reference
+            // iteration with ONE explicit candidate copy per emitted row (the copy is
+            // required because the frozen V1 type's reporting accessors are non-const).
+            for (const auto& iter : *greylist_ptr) {
+                auto candidate = iter.second;
+                emit_entry(iter.first, candidate);
+            }
+        }
+    }
+
+    if (report.m_version == GRC::GreylistVersion::V2) {
+        // Above the gate: fresh V2 candidate detail from the value-returned report -- no
+        // shared state, no lock needed. Doubles as an operator-visible cross-check of the
+        // recorded superblock project status.
+        for (const auto& iter : report.m_candidates) {
+            emit_entry(iter.first, iter.second);
+        }
     }
 
     res.pushKV("auto_greylist_projects", autogreylist);
@@ -3067,14 +4299,25 @@ UniValue getautogreylist(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue listscrapers(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "listscrapers\n"
-                "\n"
-                "Displays information about scrapers recognized by the network.\n");
+static const RPCHelpMan listscrapers_help{
+    "listscrapers",
+    "Displays information about scrapers recognized by the network.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::ARR, "current_scraper_entries", "Scraper registry entries.",
+                {
+                    {RPCResult::Type::ELISION, "", "scraper entry; address, transaction hashes, timestamp, status"},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listscrapers", "") +
+        HelpExampleRpc("listscrapers", "")},
+};
+const RPCHelpMan& listscrapers_helpman() { return listscrapers_help; }
 
+UniValue listscrapers(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
     UniValue scraper_entries(UniValue::VARR);
 
@@ -3103,14 +4346,25 @@ UniValue listscrapers(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue listprotocolentries(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "listprotocolentries\n"
-                "\n"
-                "Displays the protocol entries on the network.\n");
+static const RPCHelpMan listprotocolentries_help{
+    "listprotocolentries",
+    "Displays the protocol entries on the network.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::ARR, "current_protocol_entries", "Active protocol entries.",
+                {
+                    {RPCResult::Type::ELISION, "", "protocol entry; key, value, transaction hashes, timestamp, status"},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listprotocolentries", "") +
+        HelpExampleRpc("listprotocolentries", "")},
+};
+const RPCHelpMan& listprotocolentries_helpman() { return listprotocolentries_help; }
 
+UniValue listprotocolentries(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
     UniValue scraper_entries(UniValue::VARR);
 
@@ -3138,17 +4392,29 @@ UniValue listprotocolentries(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue listsidestakes(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-            "listsidestakes [type]\n"
-            "\n"
-            "Displays all active sidestakes (mandatory and local/voluntary).\n"
-            "\n"
-            "Arguments:\n"
-            "  type    (string, optional) Filter by type: \"mandatory\", \"local\", or \"all\" (default: \"all\")\n");
+static const RPCHelpMan listsidestakes_help{
+    "listsidestakes",
+    "Displays all active sidestakes (mandatory and local/voluntary).",
+    {
+        {"type", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Filter by type: \"mandatory\", \"local\", or \"all\". Default: \"all\"."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::ARR, "sidestake_entries", "Active sidestake entries.",
+                {
+                    {RPCResult::Type::ELISION, "", "sidestake entry; address, allocation, type, status, and contract metadata if mandatory"},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listsidestakes", "") +
+        HelpExampleCli("listsidestakes", "\"mandatory\"") +
+        HelpExampleRpc("listsidestakes", "\"local\"")},
+};
+const RPCHelpMan& listsidestakes_helpman() { return listsidestakes_help; }
 
+UniValue listsidestakes(const UniValue& params)
+{
     std::string type_filter = "all";
     if (params.size() == 1) {
         type_filter = params[0].get_str();
@@ -3195,30 +4461,53 @@ UniValue listsidestakes(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue listmandatorysidestakes(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "listmandatorysidestakes\n"
-            "\n"
-            "Displays the mandatory sidestakes on the network.\n"
-            "\n"
-            "This is equivalent to listsidestakes \"mandatory\".\n");
+static const RPCHelpMan listmandatorysidestakes_help{
+    "listmandatorysidestakes",
+    "Displays the mandatory sidestakes on the network. Equivalent to listsidestakes \"mandatory\".",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::ARR, "sidestake_entries", "Mandatory sidestake entries.",
+                {
+                    {RPCResult::Type::ELISION, "", "see listsidestakes for entry shape"},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listmandatorysidestakes", "") +
+        HelpExampleRpc("listmandatorysidestakes", "")},
+};
+const RPCHelpMan& listmandatorysidestakes_helpman() { return listmandatorysidestakes_help; }
 
+UniValue listmandatorysidestakes(const UniValue& params)
+{
     UniValue filter_params(UniValue::VARR);
     filter_params.push_back("mandatory");
 
-    return listsidestakes(filter_params, false);
+    return listsidestakes(filter_params);
 }
 
-UniValue network(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "network\n"
-                "\n"
-                "Display information about the network health\n");
+static const RPCHelpMan network_help{
+    "network",
+    "Display information about the network health.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "total_magnitude", "Sum of all CPID magnitudes."},
+            {RPCResult::Type::NUM, "average_magnitude", "Average CPID magnitude."},
+            {RPCResult::Type::NUM, "magnitude_unit", "Current magnitude unit."},
+            {RPCResult::Type::STR_AMOUNT, "research_paid_two_weeks", "Research subsidies paid in the past two weeks (GRC)."},
+            {RPCResult::Type::STR_AMOUNT, "research_paid_daily_average", "Average daily research subsidy over the past two weeks (GRC)."},
+            {RPCResult::Type::STR_AMOUNT, "research_paid_daily_limit", "Daily research subsidy emission limit (GRC)."},
+            {RPCResult::Type::STR_AMOUNT, "total_money_supply", "Total money supply (GRC)."},
+        }},
+    RPCExamples{
+        HelpExampleCli("network", "") +
+        HelpExampleRpc("network", "")},
+};
+const RPCHelpMan& network_helpman() { return network_help; }
 
+UniValue network(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
@@ -3248,13 +4537,38 @@ UniValue network(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue parselegacysb(const UniValue& params, bool fHelp)
+// Variadic: legacy body guarded only against params.size() < 1, so extra
+// trailing args were accepted and silently ignored. MarkVariadic() keeps
+// that lenience under M2's dispatcher pre-check.
+static const RPCHelpMan parselegacysb_help = RPCHelpMan{
+    "parselegacysb",
+    "Convert a legacy superblock contract to JSON.",
+    {
+        {"contract", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Serialized legacy superblock contract string."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::OBJ, "contract", "Parsed superblock contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "see SuperblockToJson output"},
+                }},
+            {RPCResult::Type::STR_HEX, "legacy_hash", "Hash of the legacy superblock contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("parselegacysb", "\"<serialized_contract>\"") +
+        HelpExampleRpc("parselegacysb", "\"<serialized_contract>\"")},
+}.MarkVariadic();
+const RPCHelpMan& parselegacysb_helpman() { return parselegacysb_help; }
+
+UniValue parselegacysb(const UniValue& params)
 {
-    if (fHelp || params.size() < 1)
-        throw runtime_error(
-                "parselegacysb\n"
-                "\n"
-                "Convert a legacy superblock contract to JSON.\n");
+    // Variadic positional: at least one arg (the contract) is required; the legacy body
+    // guarded only params.size() < 1, accepting and ignoring extra trailing args. The
+    // dispatcher pre-check is skipped via MarkVariadic(), so retain a body-level lower-bound
+    // check here for the underflow case.
+    if (params.size() < 1)
+        throw runtime_error(parselegacysb_helpman().ToString());
 
     UniValue json(UniValue::VOBJ);
 
@@ -3266,17 +4580,37 @@ UniValue parselegacysb(const UniValue& params, bool fHelp)
     return json;
 }
 
-UniValue projects(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "projects\n"
-                "\n"
-                "Show the status of locally attached BOINC projects.\n");
+static const RPCHelpMan projects_help{
+    "projects",
+    "Show the status of locally attached BOINC projects.",
+    {},
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::STR, "name", "Project name."},
+                    {RPCResult::Type::STR, "url", "Project URL."},
+                    {RPCResult::Type::STR, "cpid", "External CPID for the project."},
+                    {RPCResult::Type::STR, "team", "BOINC team name."},
+                    {RPCResult::Type::BOOL, "eligible", "True if the project is eligible for research rewards."},
+                    {RPCResult::Type::BOOL, "whitelisted", "True if the project is on the whitelist."},
+                    {RPCResult::Type::STR, "error", /*optional=*/true, "Reason the project is ineligible, when applicable."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("projects", "") +
+        HelpExampleRpc("projects", "")},
+};
+const RPCHelpMan& projects_helpman() { return projects_help; }
 
+UniValue projects(const UniValue& params)
+{
     UniValue res(UniValue::VARR);
     const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
-    const GRC::WhitelistSnapshot whitelist = GRC::GetWhitelist().Snapshot();
+    // AUTHORITATIVE: the rows come from the researcher's registry-backed project list, and
+    // the ACTIVE default filter selects on status, so the greylist overlay affects membership
+    // -- the committed superblock's state is the one that matches this data source.
+    const GRC::WhitelistSnapshot whitelist = GRC::GetWhitelist().Snapshot(GRC::GreylistState::AUTHORITATIVE);
 
     for (const auto& project_pair : researcher->Projects()) {
         const GRC::MiningProject& project = project_pair.second;
@@ -3301,16 +4635,27 @@ UniValue projects(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue readdata(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "readdata <key>\n"
-                "\n"
-                "<key> -> generic key\n"
-                "\n"
-                "Reads generic data from disk from a specified key\n");
+static const RPCHelpMan readdata_help{
+    "readdata",
+    "Reads generic data from disk from a specified key.",
+    {
+        {"key", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Generic key to read."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "Error", /*optional=*/true, "Error detail if the read failed."},
+            {RPCResult::Type::STR, "Key", "Key that was read."},
+            {RPCResult::Type::STR, "Result", "Stored value, or \"Failed to read from disk.\" on error."},
+        }},
+    RPCExamples{
+        HelpExampleCli("readdata", "\"mykey\"") +
+        HelpExampleRpc("readdata", "\"mykey\"")},
+};
+const RPCHelpMan& readdata_helpman() { return readdata_help; }
 
+UniValue readdata(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
 
     std::string sKey = params[0].get_str();
@@ -3332,16 +4677,25 @@ UniValue readdata(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue sendblock(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "sendblock <blockhash>\n"
-                "\n"
-                "<blockhash> Blockhash of block to send to network\n"
-                "\n"
-                "Sends a block to the network\n");
+static const RPCHelpMan sendblock_help{
+    "sendblock",
+    "Sends a block to the network.",
+    {
+        {"blockhash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hash of the block to send to the network."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "Requesting", "The block hash being requested."},
+            {RPCResult::Type::BOOL, "Result", "Whether the request was issued."},
+        }},
+    RPCExamples{
+        HelpExampleCli("sendblock", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"") +
+        HelpExampleRpc("sendblock", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"")},
+};
+const RPCHelpMan& sendblock_helpman() { return sendblock_help; }
 
+UniValue sendblock(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
 
     uint256 hash = uint256S(params[0].get_str());
@@ -3353,14 +4707,27 @@ UniValue sendblock(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue superblockaverage(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "superblockaverage\n"
-                "\n"
-                "Displays average information for current superblock\n");
+static const RPCHelpMan superblockaverage_help{
+    "superblockaverage",
+    "Displays average information for the current superblock.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "beacon_count", "Total beacons in the current superblock."},
+            {RPCResult::Type::NUM, "beacon_participant_count", "Number of beacons in the current superblock with research credit."},
+            {RPCResult::Type::NUM, "average_magnitude", "Average magnitude per participant."},
+            {RPCResult::Type::BOOL, "superblock_valid", "True if the current superblock is well-formed."},
+            {RPCResult::Type::NUM, "Superblock Age", "Age in seconds of the current superblock."},
+            {RPCResult::Type::BOOL, "Dire Need of Superblock", "True if a new superblock is overdue."},
+        }},
+    RPCExamples{
+        HelpExampleCli("superblockaverage", "") +
+        HelpExampleRpc("superblockaverage", "")},
+};
+const RPCHelpMan& superblockaverage_helpman() { return superblockaverage_help; }
 
+UniValue superblockaverage(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
@@ -3378,18 +4745,25 @@ UniValue superblockaverage(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue versionreport(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 2)
-        throw runtime_error(
-                "versionreport <lookback:int> <full:bool>\n"
-                "\n"
-                "<lookback> --> Number of blocks to tally from the chain head "
-                    "(default: " + ToString(BLOCKS_PER_DAY) + ").\n"
-                "<full> ------> Classify by commit suffix (default: false).\n"
-                "\n"
-                "Display the software versions of nodes that recently staked.\n");
+static const RPCHelpMan versionreport_help{
+    "versionreport",
+    "Display the software versions of nodes that recently staked.",
+    {
+        {"lookback", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Number of blocks to tally from the chain head. Default: BLOCKS_PER_DAY."},
+        {"full", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Classify by commit suffix. Default: false."},
+    },
+    RPCResult{RPCResult::Type::ANY, "", "Per-version tally (see GetJSONVersionReport)."},
+    RPCExamples{
+        HelpExampleCli("versionreport", "") +
+        HelpExampleCli("versionreport", "1440 true") +
+        HelpExampleRpc("versionreport", "1440, true")},
+};
+const RPCHelpMan& versionreport_helpman() { return versionreport_help; }
 
+UniValue versionreport(const UniValue& params)
+{
     const int64_t lookback = params.size() > 0
         ? std::max(params[0].get_int(), 1)
         : BLOCKS_PER_DAY;
@@ -3403,17 +4777,27 @@ UniValue versionreport(const UniValue& params, bool fHelp)
     return GetJSONVersionReport(lookback, full_version);
 }
 
-UniValue writedata(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 2)
-        throw runtime_error(
-                "writedata <key> <value>\n"
-                "\n"
-                "<key> ---> Key where value will be written\n"
-                "<value> -> Value to be written to specified key\n"
-                "\n"
-                "Writes a value to specified key\n");
+static const RPCHelpMan writedata_help{
+    "writedata",
+    "Writes a value to the specified generic-data key on disk.",
+    {
+        {"key", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Key where the value will be written."},
+        {"value", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Value to be written at the specified key."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "Result", "\"Success.\", \"Unable to write.\", or \"Unable to Commit.\""},
+        }},
+    RPCExamples{
+        HelpExampleCli("writedata", "\"mykey\" \"myvalue\"") +
+        HelpExampleRpc("writedata", "\"mykey\", \"myvalue\"")},
+};
+const RPCHelpMan& writedata_helpman() { return writedata_help; }
 
+UniValue writedata(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
 
     std::string sKey = params[0].get_str();
@@ -3436,14 +4820,22 @@ UniValue writedata(const UniValue& params, bool fHelp)
 
 // Network RPC commands
 
-UniValue askforoutstandingblocks(const UniValue& params, bool fHelp)
+static const RPCHelpMan askforoutstandingblocks_help{
+    "askforoutstandingblocks",
+    "Requests the network for outstanding blocks.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
         {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "askforoutstandingblocks\n"
-                "\n"
-                "Requests network for outstanding blocks\n");
+            {RPCResult::Type::BOOL, "Sent.", "Whether the request was issued."},
+        }},
+    RPCExamples{
+        HelpExampleCli("askforoutstandingblocks", "") +
+        HelpExampleRpc("askforoutstandingblocks", "")},
+};
+const RPCHelpMan& askforoutstandingblocks_helpman() { return askforoutstandingblocks_help; }
 
+UniValue askforoutstandingblocks(const UniValue& params)
+        {
     UniValue res(UniValue::VOBJ);
 
     bool fResult = AskForOutstandingBlocks(uint256());
@@ -3453,14 +4845,31 @@ UniValue askforoutstandingblocks(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue getblockchaininfo(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getblockchaininfo\n"
-                "\n"
-                "Displays data on current blockchain\n");
+static const RPCHelpMan getblockchaininfo_help{
+    "getblockchaininfo",
+    "Displays data on the current blockchain.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "blocks", "Current best block height."},
+            {RPCResult::Type::BOOL, "in_sync", "Whether the node is in sync."},
+            {RPCResult::Type::STR_AMOUNT, "moneysupply", "Total money supply (GRC)."},
+            {RPCResult::Type::OBJ, "difficulty", "",
+                {
+                    {RPCResult::Type::NUM, "current", "Current difficulty."},
+                    {RPCResult::Type::NUM, "target", "Target difficulty."},
+                }},
+            {RPCResult::Type::BOOL, "testnet", "Whether this node is on testnet."},
+            {RPCResult::Type::STR, "errors", "Any warnings or errors."},
+        }},
+    RPCExamples{
+        HelpExampleCli("getblockchaininfo", "") +
+        HelpExampleRpc("getblockchaininfo", "")},
+};
+const RPCHelpMan& getblockchaininfo_helpman() { return getblockchaininfo_help; }
 
+UniValue getblockchaininfo(const UniValue& params)
+{
     LOCK(cs_main);
 
     UniValue res(UniValue::VOBJ), diff(UniValue::VOBJ);
@@ -3471,21 +4880,30 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp)
     diff.pushKV("current", GRC::GetCurrentDifficulty());
     diff.pushKV("target", GRC::GetTargetDifficulty());
     res.pushKV("difficulty", diff);
-    res.pushKV("testnet", fTestNet);
+    res.pushKV("testnet", OnTestnet());
     res.pushKV("errors", GetWarnings("statusbar"));
 
     return res;
 }
 
 
-UniValue currenttime(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "currenttime\n"
-                "\n"
-                "Displays UTC Unix time as well as date and time in UTC\n");
+static const RPCHelpMan currenttime_help{
+    "currenttime",
+    "Displays the UTC Unix time as well as the date and time in UTC.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM_TIME, "Unix", "Current adjusted Unix time."},
+            {RPCResult::Type::STR, "UTC", "Human-readable UTC timestamp."},
+        }},
+    RPCExamples{
+        HelpExampleCli("currenttime", "") +
+        HelpExampleRpc("currenttime", "")},
+};
+const RPCHelpMan& currenttime_helpman() { return currenttime_help; }
 
+UniValue currenttime(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
 
     res.pushKV("Unix", GetAdjustedTime());
@@ -3494,14 +4912,22 @@ UniValue currenttime(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue networktime(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "networktime\n"
-                "\n"
-                "Displays current network time\n");
+static const RPCHelpMan networktime_help{
+    "networktime",
+    "Displays the current network time.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM_TIME, "Network Time", "Current adjusted network time."},
+        }},
+    RPCExamples{
+        HelpExampleCli("networktime", "") +
+        HelpExampleRpc("networktime", "")},
+};
+const RPCHelpMan& networktime_helpman() { return networktime_help; }
 
+UniValue networktime(const UniValue& params)
+{
     UniValue res(UniValue::VOBJ);
 
     res.pushKV("Network Time", GetAdjustedTime());
@@ -3510,6 +4936,7 @@ UniValue networktime(const UniValue& params, bool fHelp)
 }
 
 UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     UniValue results(UniValue::VARR);
 
@@ -3565,7 +4992,7 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
     return results;
 }
 
-UniValue MagnitudeReport(const GRC::Cpid cpid)
+UniValue MagnitudeReport(const GRC::Cpid cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     UniValue json(UniValue::VOBJ);
 
@@ -3597,7 +5024,12 @@ UniValue MagnitudeReport(const GRC::Cpid cpid)
     json.pushKV("Expected Earnings (Daily)", ValueFromAmount(calc->ExpectedDaily()));
 
     json.pushKV("Lifetime Research Paid", ValueFromAmount(account.m_total_research_subsidy));
-    json.pushKV("Lifetime Magnitude Sum", (int)account.m_total_magnitude);
+    // Lifetime Magnitude Sum is a uint64_t now (previously uint32_t, which
+    // overflowed for long-lived researchers and lost the high bits when
+    // narrowed to int here). UniValue::pushKV has a uint64_t overload, so
+    // push the value directly to preserve the full unsigned range without
+    // a signed-narrowing cast.
+    json.pushKV("Lifetime Magnitude Sum", account.m_total_magnitude);
     json.pushKV("Lifetime Magnitude Average", account.AverageLifetimeMagnitude());
     json.pushKV("Lifetime Payments", (int)account.m_accuracy);
 
@@ -3608,6 +5040,7 @@ UniValue MagnitudeReport(const GRC::Cpid cpid)
 }
 
 UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const int64_t min_height = std::max<int64_t>(nBestHeight - lookback, 0);
 
@@ -3652,13 +5085,24 @@ UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)
 }
 
 // ppcoin: get information of sync-checkpoint
-UniValue getcheckpoint(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getcheckpoint\n"
-                "Show info of synchronized checkpoint.\n");
+static const RPCHelpMan getcheckpoint_help{
+    "getcheckpoint",
+    "Show info of the synchronized checkpoint.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "synccheckpoint", /*optional=*/true, "Checkpoint block hash."},
+            {RPCResult::Type::NUM, "height", /*optional=*/true, "Checkpoint block height."},
+            {RPCResult::Type::STR, "timestamp", /*optional=*/true, "Checkpoint block timestamp."},
+        }},
+    RPCExamples{
+        HelpExampleCli("getcheckpoint", "") +
+        HelpExampleRpc("getcheckpoint", "")},
+};
+const RPCHelpMan& getcheckpoint_helpman() { return getcheckpoint_help; }
 
+UniValue getcheckpoint(const UniValue& params)
+{
     UniValue result(UniValue::VOBJ);
 
     LOCK(cs_main);
@@ -3674,14 +5118,26 @@ UniValue getcheckpoint(const UniValue& params, bool fHelp)
 }
 
 //Brod
-UniValue rpc_reorganize(const UniValue& params, bool fHelp)
+static const RPCHelpMan rpc_reorganize_help{
+    "reorganize",
+    "Roll back the block chain to the specified block hash. "
+    "The block hash must already be present in the block index.",
+    {
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The target block hash."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "RollbackChain", "Whether the reorganize succeeded."},
+        }},
+    RPCExamples{
+        HelpExampleCli("reorganize", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"") +
+        HelpExampleRpc("reorganize", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"")},
+};
+const RPCHelpMan& rpc_reorganize_helpman() { return rpc_reorganize_help; }
+
+UniValue rpc_reorganize(const UniValue& params)
 {
     UniValue results(UniValue::VOBJ);
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "reorganize <hash>\n"
-                "Roll back the block chain to specified block hash.\n"
-                "The block hash must already be present in block index");
 
     uint256 NewHash;
     NewHash.SetHex(params[0].get_str());
@@ -3691,13 +5147,27 @@ UniValue rpc_reorganize(const UniValue& params, bool fHelp)
     return results;
 }
 
-UniValue getburnreport(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getburnreport\n"
-                "Scan for and aggregate network-wide amounts for provably-destroyed outputs.\n");
+static const RPCHelpMan getburnreport_help{
+    "getburnreport",
+    "Scan for and aggregate network-wide amounts for provably-destroyed outputs.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_AMOUNT, "total", "Total burned amount (GRC)."},
+            {RPCResult::Type::STR_AMOUNT, "voluntary", "Voluntary burns not tied to a contract (GRC)."},
+            {RPCResult::Type::OBJ_DYN, "contracts", "Per-contract-type burn totals.",
+                {
+                    {RPCResult::Type::STR_AMOUNT, "type", "Burn total for the contract type (GRC)."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("getburnreport", "") +
+        HelpExampleRpc("getburnreport", "")},
+};
+const RPCHelpMan& getburnreport_helpman() { return getburnreport_help; }
 
+UniValue getburnreport(const UniValue& params)
+{
     CBlock block;
     CAmount total_amount = 0;
     CAmount voluntary_amount = 0;
@@ -3754,23 +5224,31 @@ UniValue getburnreport(const UniValue& params, bool fHelp)
     return json;
 }
 
-UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
-    if (fHelp || params.size() > 3) {
-        throw runtime_error("createmrcrequest [dry_run [force [fee]]]\n"
-                            "\n"
-                            "[dry_run] - If true, calculate the reward and fee but do not "
-                            "send the contract. Defaults to false.\n"
-                            "\n"
-                            "[force] - If true, create the request even if it results "
-                            "in a reward loss or ban from the network. Defaults to false. "
-                            "Only works on testnet.\n"
-                            "\n"
-                            "[fee] - If passed, use the fee provided instead of the "
-                            "calculated fee. Must not be lower than the calculated fee.\n"
-                            "\n"
-                            "Creates an MRC request. Requires an unlocked wallet.");
-    }
+static const RPCHelpMan createmrcrequest_help{
+    "createmrcrequest",
+    "Create an MRC (Manual Research Claim) request. Requires an unlocked wallet.",
+    {
+        {"dry_run", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, calculate the reward and fee but do not send the contract. Default: false."},
+        {"force", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, create the request even if it results in a reward loss or ban from the "
+            "network. Default: false. Only works on testnet."},
+        {"fee", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+            "If passed, use this fee instead of the calculated fee. Must not be lower than "
+            "the calculated fee."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "MRC request result (see createmrcrequest output for the full schema).",
+        {
+            {RPCResult::Type::ELISION, "", "request fields (outstanding_request, limit, mrcs_in_queue, head_fee, pay_limit_position_fee, tail_fee, pos, txid (if not dry_run), mrc)"},
+        }},
+    RPCExamples{
+        HelpExampleCli("createmrcrequest", "") +
+        HelpExampleCli("createmrcrequest", "true") +
+        HelpExampleRpc("createmrcrequest", "")},
+};
+const RPCHelpMan& createmrcrequest_helpman() { return createmrcrequest_help; }
 
+UniValue createmrcrequest(const UniValue& params) {
     bool dry_run{false};
     bool force{false};
     CAmount provided_fee{0};
@@ -3780,11 +5258,15 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
     }
 
     if (params.size() > 1) {
-        force = params[1].get_bool() && fTestNet;
+        force = params[1].get_bool() && OnTestnet();
     }
 
-    if (params.size() > 2 && !ParseMoney(params[2].get_str(), provided_fee)) {
-        throw runtime_error("Invalid fee.");
+    if (params.size() > 2) {
+        // AmountFromValue accepts the fee as either a JSON number or string and
+        // enforces the money range; it throws on anything invalid. A provided
+        // fee is therefore always strictly positive, so the provided_fee != 0
+        // "was a fee supplied" sentinel below still holds (the default is 0).
+        provided_fee = AmountFromValue(params[2]);
     }
 
     LOCK(cs_main);
@@ -3831,28 +5313,20 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
 
     // This sorts the MRCs in descending order of MRC fees to allow determination of the payout limit fee.
 
-    // ---------- mrc fee --- mrc ------ descending order
-    std::multimap<CAmount, GRC::MRC, std::greater<CAmount>> mrc_multimap;
+    // ---------- mrc fee --- cpid ------ descending order
+    // The fee-ordered MRC view comes straight from the mempool's m_mrc_by_fee
+    // index (it replaced a full mempool scan + local multimap build).
+    const std::vector<std::pair<CAmount, GRC::Cpid>> mrc_queue = mempool.GetMRCQueue();
 
-    for (const auto& [_, tx] : mempool.mapTx) {
-        if (!tx.GetContracts().empty()) {
-            // By protocol the MRC contract MUST be the only one in the transaction.
-            const GRC::Contract& contract = tx.GetContracts()[0];
+    GRC::Cpid mrc_cpid;
+    if (auto cpid = mrc.m_mining_id.TryCpid()) mrc_cpid = *cpid;
 
-            if (contract.m_type == GRC::ContractType::MRC) {
-                GRC::MRC mempool_mrc = contract.CopyPayloadAs<GRC::MRC>();
+    for (const auto& [mempool_fee, mempool_cpid] : mrc_queue) {
+        found |= mempool_cpid == mrc_cpid;
 
-                mrc_multimap.insert(std::make_pair(mempool_mrc.m_fee, mempool_mrc));
-            } // match to mrc contract type
-        } // contract present in transaction?
-    }
-
-    for (const auto& [_, mempool_mrc] : mrc_multimap) {
-        found |= mrc.m_mining_id == mempool_mrc.m_mining_id;
-
-        if (!found && mempool_mrc.m_fee >= mrc.m_fee) ++pos;
-        head_fee = std::max(head_fee, mempool_mrc.m_fee);
-        tail_fee = std::min(tail_fee, mempool_mrc.m_fee);
+        if (!found && mempool_fee >= mrc.m_fee) ++pos;
+        head_fee = std::max(head_fee, mempool_fee);
+        tail_fee = std::min(tail_fee, mempool_fee);
 
         ++queue_length;
     }
@@ -3862,17 +5336,13 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
     // in the loop.
     tail_fee = std::min(head_fee, tail_fee);
 
-    // Here we select the minimum of the mrc_multimap.size() - 1 in the case where the multimap does not reach the
-    // m_mrc_output_limit - 1, or the m_mrc_output_limit - 1 if the multimap indicates the queue is (over)full,
+    // Here we select the minimum of the queue size - 1 in the case where the queue does not reach the
+    // m_mrc_output_limit - 1, or the m_mrc_output_limit - 1 if the queue is (over)full,
     // i.e. the number of MRC's in the queue exceeds the m_mrc_output_limit for paying in a block.
-    int pay_limit_fee_pos = std::min<int>(mrc_multimap.size(), limit) - 1;
+    int pay_limit_fee_pos = std::min<int>(mrc_queue.size(), limit) - 1;
 
     if (pay_limit_fee_pos >= 0) {
-        std::multimap<CAmount, GRC::MRC, std::greater<CAmount>>::iterator iter = mrc_multimap.begin();
-
-        std::advance(iter, pay_limit_fee_pos);
-
-        pay_limit_fee = iter->first;
+        pay_limit_fee = mrc_queue[pay_limit_fee_pos].first;
     }
 
     pay_limit_fee = std::min(head_fee, pay_limit_fee);

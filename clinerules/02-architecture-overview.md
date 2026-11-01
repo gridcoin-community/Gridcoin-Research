@@ -87,7 +87,7 @@ Raw Stats → Manifest Creation → Convergence Analysis →
 Superblock Generation → Quorum Validation → Blockchain Commitment
 ```
 
-### 4. Proof-of-Stake Consensus (`src/miner.*, main.cpp`)
+### 4. Proof-of-Stake Consensus (`src/miner.*`, `src/validation.cpp`, `src/gridcoin/staking/`)
 
 **Key Differences from Bitcoin:**
 - **No mining**: Uses coin weight only (not coin-age, which was removed after block version 9) instead of proof-of-work
@@ -113,9 +113,9 @@ Coinstake Creation → Research Claim (if applicable) → Block Assembly → Bro
 - `RecordRewardBlock()`: Mark when CPID claims rewards
 - `GetAccrual()`: Calculate pending rewards for a CPID
 - `ApplySuperblock()`: Update magnitude assignments
-- `TallyMagnitudeAverages()`: Maintain historical averages
+- `LegacyRecount()`: Rebuild the two-week network averages (legacy mode)
 
-### 6. Scraper System (`src/scraper/`)
+### 6. Scraper System (`src/gridcoin/scraper/`)
 
 **Function:** Distributed statistics collection from BOINC projects.
 
@@ -130,10 +130,10 @@ Coinstake Creation → Research Claim (if applicable) → Block Assembly → Bro
 ## Data Persistence
 
 ### Databases
-- **Blockchain** (`blk*.dat`, `rev*.dat`): Block and undo data
-- **LevelDB** (`blocks/index/`): Block index, transaction index
+- **Blockchain** (`blk*.dat` in the data directory, named `blk%04u.dat`): Block data. Gridcoin writes no undo files.
+- **LevelDB** (`txleveldb/` in the data directory): Block index, transaction index
 - **Wallet** (`wallet.dat`): Keys, transactions, metadata
-- **Registry DBs**: Beacon, project, protocol, sidestake state
+- **Registry DBs**: Beacon, project, protocol, scraper, sidestake and pool state
 - **Note**: Registries are also persisted in LevelDB
 
 ### Configuration

@@ -4,11 +4,11 @@
 
 #include "amount.h"
 #include "chainparams.h"
-#include "main.h"
 #include "gridcoin/accrual/newbie.h"
 #include "gridcoin/accrual/null.h"
 #include "gridcoin/accrual/research_age.h"
 #include "gridcoin/accrual/snapshot.h"
+#include "gridcoin/beacon.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/cpid.h"
@@ -22,8 +22,6 @@
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
-
-extern int64_t g_v11_timestamp;
 
 namespace {
 /*
@@ -49,7 +47,7 @@ bool g_newbie_snapshot_fix_enabled;
 //!
 //! \param pindex Index of the block to repair.
 //!
-void RepairZeroCpidIndex(CBlockIndex* const pindex)
+void RepairZeroCpidIndex(CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const ClaimOption claim = GetClaimByIndex(pindex);
 
@@ -193,7 +191,7 @@ public:
     //!
     //! \return \c true if the tally initialized without an error.
     //!
-    bool Initialize(CBlockIndex* pindex, SuperblockPtr current_superblock)
+    bool Initialize(CBlockIndex* pindex, SuperblockPtr current_superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         LogPrintf("Initializing research reward tally...");
 
@@ -281,11 +279,15 @@ public:
 
         account.m_total_research_subsidy += pindex->ResearchSubsidy();
 
-        // TODO: This probably doesn't work correctly given the implicit cast and should be removed. It isn't
-        // used in accrual calculations, only reporting.
+        // m_total_magnitude / m_accuracy back the AverageLifetimeMagnitude
+        // reporting only (not accrual / consensus). m_total_magnitude was
+        // historically uint32_t; the implicit (double -> uint32_t) cast in
+        // the += overflowed once the lifetime sum passed UINT_MAX, which
+        // UBSan reports. Widened to uint64_t in account.h, and the
+        // truncating double-to-integer cast is made explicit here.
         if (pindex->Magnitude() > 0) {
             account.m_accuracy++;
-            account.m_total_magnitude += pindex->Magnitude();
+            account.m_total_magnitude += static_cast<uint64_t>(pindex->Magnitude());
         }
 
         if (account.m_first_block_ptr == nullptr) {
@@ -325,7 +327,7 @@ public:
             // used in accrual calculations, only reporting.
             if (mrc_researcher->m_magnitude > 0) {
                 account.m_accuracy++;
-                account.m_total_magnitude += pindex->pprev->Magnitude();
+                account.m_total_magnitude += static_cast<uint64_t>(pindex->pprev->Magnitude());
             }
 
             if (account.m_first_block_ptr == nullptr) {
@@ -434,7 +436,7 @@ public:
 
         if (pindex->Magnitude() > 0) {
             account.m_accuracy--;
-            account.m_total_magnitude -= pindex->Magnitude();
+            account.m_total_magnitude -= static_cast<uint64_t>(pindex->Magnitude());
         }
 
         pindex = FindLastRewardBlock(cpid, pindex);
@@ -484,7 +486,7 @@ public:
 
             if (mrc_researcher->m_magnitude > 0) {
                 account.m_accuracy--;
-                account.m_total_magnitude -= pindex->pprev->Magnitude();
+                account.m_total_magnitude -= static_cast<uint64_t>(pindex->pprev->Magnitude());
             }
 
             const CBlockIndex* last_block_pindex = FindLastRewardBlock(cpid, pindex);
@@ -509,7 +511,7 @@ public:
     //!
     //! \return \c false if an IO error occurred while processing the superblock.
     //!
-    bool ApplySuperblock(SuperblockPtr superblock)
+    bool ApplySuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // The network publishes version 2+ superblocks after the mandatory
         // switch to block version 11.
@@ -568,7 +570,7 @@ public:
     //!
     bool ActivateSnapshotAccrual(
         const CBlockIndex* const baseline_pindex,
-        SuperblockPtr superblock)
+        SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (!baseline_pindex || !IsV11Enabled(baseline_pindex->nHeight + 1)) {
             return false;
@@ -580,6 +582,42 @@ public:
         try {
             if (!m_snapshots.Initialize()) {
                 return false;
+            }
+
+            // Reconcile the on-disk snapshot registry with the current chain tip.
+            //
+            // The Phase 2 startup chain-coherence recovery hook (issue #2865)
+            // may have rewound pindexBest backward (abandonment-style rewind --
+            // bypassing the normal DisconnectBlock path). When that rewind
+            // crosses one or more superblock boundaries, the snapshot registry
+            // still carries entries at heights above the new tip. Those
+            // entries describe accrual state for blocks that no longer exist
+            // in this chain; if we leave them in place, the first SB the
+            // subsequent forward sync re-crosses will trip Register's strict-
+            // monotonic invariant (the assertion in AccrualSnapshotRegistry::
+            // Register, gridcoin/accrual/snapshot.cpp) and kill the
+            // wallet during P2P sync.
+            //
+            // Drop the stale entries here, before the forward walk's
+            // AssertMatch pass. PruneSnapshotFiles() at the end of the
+            // function then cleans up the orphaned files on disk.
+            //
+            // No-op in the common case (no rewind): LatestHeight() <=
+            // pindexBest->nHeight, the while loop in DropAboveHeight exits
+            // immediately, dropped = 0.
+            if (pindexBest) {
+                const int dropped = m_snapshots.DropAboveHeight(pindexBest->nHeight);
+                if (dropped < 0) {
+                    LogPrintf("WARN: %s: DropAboveHeight failed mid-loop; snapshot registry may be in "
+                              "a partially-trimmed state. Falling through to from-scratch rebuild.",
+                              __func__);
+                    throw SnapshotStateError("DropAboveHeight failed during post-rewind reconciliation");
+                } else if (dropped > 0) {
+                    LogPrintf("INFO: %s: dropped %d snapshot(s) at heights > pindexBest->nHeight=%d. "
+                              "Reconciled snapshot registry with rewound chain tip "
+                              "(likely Phase 2 abandonment recovery, issue #2865).",
+                              __func__, dropped, pindexBest->nHeight);
+                }
             }
 
             // If the node initialized the snapshot accrual system before, we
@@ -693,7 +731,7 @@ private:
     //! \brief Get the block index entry of the block when research accounting
     //! begins.
     //!
-    CBlockIndex* GetStartHeight()
+    CBlockIndex* GetStartHeight() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // A node syncing from zero does not know the block index entry of the
         // starting height yet, so the tally will initialize without it.
@@ -721,7 +759,7 @@ private:
     //!
     //! \param superblock Incoming superblock to calculate rewards at.
     //!
-    void TallySuperblockAccrual(const SuperblockPtr& superblock)
+    void TallySuperblockAccrual(const SuperblockPtr& superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const SnapshotCalculator calc(superblock.m_timestamp, m_current_superblock);
 
@@ -891,7 +929,7 @@ private:
     //!
     //! \return \c false if an IO error occurred.
     //!
-    bool BuildAccrualSnapshots()
+    bool BuildAccrualSnapshots() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (!BuildBaselineSnapshot()) {
             return false;
@@ -940,7 +978,7 @@ public:
     //!
     //! \return \c false if an error occurred.
     //!
-    bool RebuildAccrualSnapshots()
+    bool RebuildAccrualSnapshots() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         assert(m_snapshot_baseline_pindex != nullptr);
 
@@ -980,7 +1018,7 @@ NetworkTally g_network_tally;       //!< Tracks legacy two-week network averages
 // Class: Tally
 // -----------------------------------------------------------------------------
 
-bool Tally::Initialize(CBlockIndex* pindex)
+bool Tally::Initialize(CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!pindex || !IsResearchAgeEnabled(pindex->nHeight)) {
         LogPrintf("Tally initialization not needed.");
@@ -1018,7 +1056,7 @@ bool Tally::Initialize(CBlockIndex* pindex)
     return true;
 }
 
-bool Tally::ActivateSnapshotAccrual(const CBlockIndex* const pindex)
+bool Tally::ActivateSnapshotAccrual(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrint(LogFlags::TALLY, "Activating snapshot accrual...");
 
@@ -1063,7 +1101,7 @@ CAmount Tally::MaxEmission(const int64_t payment_time)
     return NetworkTally::MaxEmission(payment_time) * COIN;
 }
 
-double Tally::GetMagnitudeUnit(CBlockIndex* const pindex)
+double Tally::GetMagnitudeUnit(CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (pindex->nVersion >= 11) {
         return SnapshotCalculator::GetMagnitudeUnit(pindex).ToDouble();
@@ -1085,7 +1123,7 @@ const ResearchAccount& Tally::GetAccount(const Cpid cpid)
 CAmount Tally::GetAccrual(
     const Cpid cpid,
     const int64_t payment_time,
-    const CBlockIndex* const last_block_ptr)
+    const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return GetComputer(cpid, payment_time, last_block_ptr)->Accrual();
 }
@@ -1093,7 +1131,7 @@ CAmount Tally::GetAccrual(
 CAmount Tally::AccrualNearLimit(
         const Cpid cpid,
         const int64_t payment_time,
-        const CBlockIndex* const last_block_ptr)
+        const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return (GetComputer(cpid, payment_time, last_block_ptr)->NearRewardLimit()) ;
 }
@@ -1104,10 +1142,10 @@ CAmount Tally::AccrualNearLimit(
 //! \param cpid for which to calculate the accrual correction.
 //! \param superblock that is the high point of the accrual correction
 //!
-CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const SuperblockPtr& current_superblock)
+CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const SuperblockPtr& current_superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // This function was moved from the anonymous namespace and private, to public and made static, because it has
-    // to be called from ClaimValidator::CheckResearchReward() directly too. Why?
+    // to be called from BlockRewardRules::Check() directly too. Why?
 
     // The broken original newbie fix was CONDITIONAL. The initialization in Tally::Initialize was broken and would
     // never activate, yet the alternate path through AcceptBlock AddToBlockIndex could actually set the original
@@ -1131,7 +1169,7 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
     //    included. This is activated at GetNewbieSnapshotFixHeight(), and will cause this function to be used to apply
     //    the corrections to any CPID's that do not have an accrual account at that height.
     //
-    // 2. It is used in ConnectBlock (the ClaimValidator::CheckResearchReward()) to conditionally apply the accrual
+    // 2. It is used in ConnectBlock (via BlockRewardRules::Check()) to conditionally apply the accrual
     //    correction if the claimed value by the block fails the original CheckReward. If the original computed reward
     //    plus the correction equals the claimed reward, then the block is passed with a warning. This enables any
     //    node to conditionally validate a block that was staked with the accrual correction active, even if the
@@ -1239,6 +1277,12 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
     }
 
     const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();
+    // GetBaseline() is null until snapshot accrual has a baseline, which on a
+    // fresh chain (regtest) it never gets; there is no history to correct then.
+    if (!pindex_baseline) {
+        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: no accrual baseline; no correction.", __func__);
+        return accrual;
+    }
 
     // Start at the tip.
     const CBlockIndex* pindex_high = mapBlockIndex[hashBestChain];
@@ -1255,7 +1299,9 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
     SuperblockPtr superblock;
     unsigned int period_num = 0;
 
-    while (pindex->nHeight >= pindex_baseline->nHeight)
+    // The walk steps pprev and re-tests the height, so it must also stop at the
+    // end of the chain: with the baseline at genesis, the step past genesis is null.
+    while (pindex && pindex->nHeight >= pindex_baseline->nHeight)
     {
         if (pindex->IsSuperblock())
         {
@@ -1301,7 +1347,7 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
 AccrualComputer Tally::GetComputer(
     const Cpid cpid,
     const int64_t payment_time,
-    const CBlockIndex* const last_block_ptr)
+    const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!last_block_ptr) {
         return std::make_unique<NullAccrualComputer>();
@@ -1319,7 +1365,7 @@ AccrualComputer Tally::GetSnapshotComputer(
     const ResearchAccount& account,
     const int64_t payment_time,
     const CBlockIndex* const last_block_ptr,
-    const SuperblockPtr superblock)
+    const SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return std::make_unique<SnapshotAccrualComputer>(
         cpid,
@@ -1332,7 +1378,7 @@ AccrualComputer Tally::GetSnapshotComputer(
 AccrualComputer Tally::GetSnapshotComputer(
     const Cpid cpid,
     const int64_t payment_time,
-    const CBlockIndex* const last_block_ptr)
+    const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return GetSnapshotComputer(
         cpid,
@@ -1345,7 +1391,7 @@ AccrualComputer Tally::GetSnapshotComputer(
 AccrualComputer Tally::GetLegacyComputer(
     const Cpid cpid,
     const int64_t payment_time,
-    const CBlockIndex* const last_block_ptr)
+    const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const ResearchAccount& account = GetAccount(cpid);
 
@@ -1407,17 +1453,17 @@ void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
     g_researcher_tally.ForgetMRCRewardBlock(pindex);
 }
 
-bool Tally::ApplySuperblock(SuperblockPtr superblock)
+bool Tally::ApplySuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_researcher_tally.ApplySuperblock(std::move(superblock));
 }
 
-bool Tally::RevertSuperblock()
+bool Tally::RevertSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_researcher_tally.RevertSuperblock(Quorum::CurrentSuperblock());
 }
 
-void Tally::LegacyRecount(const CBlockIndex* pindex)
+void Tally::LegacyRecount(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!pindex) {
         return;
@@ -1431,7 +1477,7 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
     int64_t max_depth = consensus_depth - (consensus_depth % TALLY_GRANULARITY);
     int64_t min_depth = max_depth - lookback_depth;
 
-    if (fTestNet && !IsV9Enabled_Tally(pindex->nHeight)) {
+    if (OnTestnet() && !IsV9Enabled_Tally(pindex->nHeight)) {
         LogPrint(LogFlags::TALLY, "Tally::LegacyRecount(): retired tally");
         max_depth = consensus_depth - (consensus_depth % BLOCK_GRANULARITY);
         min_depth -= (max_depth - lookback_depth) % TALLY_GRANULARITY;

@@ -10,6 +10,8 @@
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/support/enumbytes.h"
 
+#include <type_traits>
+
 using LogFlags = BCLog::LogFlags;
 
 namespace GRC {
@@ -197,6 +199,58 @@ public:
     }
 
     //!
+    //! \brief Reads the CURRENT (HEAD) entry for each key DIRECTLY from LevelDB, bypassing the in-memory entry map.
+    //!
+    //! The in-memory entries can be mutated in place by callers -- in particular the AutoGreylist overlay rewrites a
+    //! project entry's status to AUTO_GREYLISTED while building a whitelist snapshot -- so the in-memory status is not a
+    //! reliable witness of what the administrative contracts actually set. This returns the persisted, contract-applied
+    //! state, which is the ground truth, by replaying the LevelDB records (the same source Initialize() uses) without
+    //! touching any in-memory state.
+    //!
+    //! Read-only: it opens its own CTxDB("r") and mutates nothing, so it requires no registry lock (callers may still
+    //! take the registry lock to serialize against concurrent contract application).
+    //!
+    //! \return Map of current entries keyed by Key(), carrying the raw contract status.
+    //!
+    M GetCurrentEntriesFromDisk()
+    {
+        // This straight replay (latest record per key = HEAD) is only correct for registries whose storage entry type
+        // equals the entry type. Beacons (SE != E) require the specialized HandleCurrentHistoricalEntries (pending /
+        // renewal / expiry handling), so reject that misuse at compile time rather than silently slice/mis-replay.
+        static_assert(std::is_same<E, SE>::value,
+                      "GetCurrentEntriesFromDisk supports only straight-replay registries (SE == E), not beacons");
+
+        M current;
+
+        // Keyed by record number so the replay below proceeds in contract-application order, exactly as Initialize().
+        StorageMapByRecordNum storage_by_record_num;
+
+        {
+            CTxDB txdb("r");
+
+            std::string key_type = KeyType();
+            uint256 hash_hint = uint256();
+
+            if (!txdb.ReadGenericSerializablesToMapWithForeignKey(key_type, storage_by_record_num, hash_hint)) {
+                LogPrintf("WARN: %s: ReadGenericSerializablesToMapWithForeignKey failed for key_type=%s; "
+                          "returning empty map.", __func__, key_type);
+                return M{};
+            }
+        }
+
+        // storage_by_record_num is ordered ascending by record number, and the latest record for a key is its current
+        // HEAD (cf. "GRC will only memorize the last value it finds for a key"). Overwriting as we ascend therefore
+        // leaves the HEAD entry -- with its raw contract status -- for each key.
+        for (const auto& iter : storage_by_record_num) {
+            const SE& entry = iter.second;
+
+            current[entry.Key()] = std::make_shared<E>(entry);
+        }
+
+        return current;
+    }
+
+    //!
     //! \brief Handles the insertion/deletion of entries in the current entry map and pending entry map. Note that this
     //! method is specialized for beacons, and the standard template method does not actually use pending_entries.
     //!
@@ -287,6 +341,11 @@ public:
     //!
     //! \brief Clears the LevelDB entry storage area.
     //!
+    //! The version and stored height keys go first, and reach disk before any record is erased. A clear cut short
+    //! (a crash or a power loss) then leaves no version key, so the next Initialize() finds a version mismatch and
+    //! clears the area again. Erased the other way round, an interrupted clear left the version and stored height in
+    //! place over a partial set of records, which the next start loaded as complete and did not replay.
+    //!
     //! \return Success or failure.
     //!
     bool clear_leveldb()
@@ -295,18 +354,19 @@ public:
 
         CTxDB txdb("rw");
 
+        std::string key_type_db = KeyType() + "_db";
+        std::string start_key_hint_db {};
+
+        status &= txdb.EraseGenericSerializablesByKeyType(key_type_db, start_key_hint_db);
+        status &= txdb.Sync();
+
         std::string key_type = KeyType();
         uint256 start_key_hint = uint256();
 
         status &= txdb.EraseGenericSerializablesByKeyType(key_type, start_key_hint);
 
-        key_type = KeyType() + "_db";
-        std::string start_key_hint_db {};
-
-        status &= txdb.EraseGenericSerializablesByKeyType(key_type, start_key_hint_db);
-
         // We want to write back into LevelDB the revision level of the db in the running code.
-        std::pair<std::string, std::string> key = std::make_pair(key_type, "version");
+        std::pair<std::string, std::string> key = std::make_pair(key_type_db, "version");
         status &= txdb.WriteGenericSerializable(key, m_version);
 
         m_height_stored = 0;
@@ -508,6 +568,31 @@ public:
 
             return status;
         }
+    }
+
+    //!
+    //! \brief Install an in-memory-only seed entry into the historical map,
+    //! bypassing LevelDB. Used by registries that grandfather a fixed set of
+    //! entries at construction time (e.g. PoolRegistry's pre-V15 builtin
+    //! pools): the seed must be present in m_historical so that Revert's
+    //! m_previous_hash walkback can resurrect it, but it must NOT be
+    //! persisted to LevelDB — Initialize would otherwise re-load it on the
+    //! next startup and collide with the constructor's re-seeding.
+    //!
+    //! Returns the shared_ptr to the installed entry so the caller can hold
+    //! an extra reference, pinning the entry against passivate() which would
+    //! otherwise reclaim it from m_historical (since the entry has no
+    //! LevelDB row that find() could fall back to).
+    //!
+    entry_ptr InstallInMemorySeed(const uint256& hash, const E& entry)
+    {
+        auto existing = m_historical.find(hash);
+        if (existing != m_historical.end()) {
+            return existing->second;
+        }
+        auto ptr = std::make_shared<E>(entry);
+        m_historical.insert(std::make_pair(hash, ptr));
+        return ptr;
     }
 
     //!

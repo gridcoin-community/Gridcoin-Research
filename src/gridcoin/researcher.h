@@ -7,6 +7,8 @@
 
 #include "amount.h"
 #include "key.h"
+#include "sync.h"
+#include "wallet/wallet.h"
 #include "gridcoin/cpid.h"
 
 #include <map>
@@ -14,8 +16,20 @@
 #include <string>
 #include <vector>
 
-class CWallet;
 class uint256;
+
+extern CCriticalSection cs_main;
+extern CWallet* pwalletMain;
+
+//! \brief Guards \ref msMiningErrors. Written by Researcher::StoreResearcher
+//! on the GUI / timer thread, read by getmininginfo RPC and the researcher
+//! interface on their respective threads. std::string assignment / copy is
+//! not atomic, so the writer's release of internal buffer storage can race
+//! with a reader's traversal of the same buffer — undefined behaviour
+//! without serialization. Defined in researcher.cpp (moved from
+//! main.{h,cpp}, issue #3125 C9).
+extern CCriticalSection cs_msMiningErrors;
+extern std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
 
 namespace GRC {
 
@@ -141,8 +155,8 @@ struct MiningProject
     Cpid m_cpid;        //!< CPID of the BOINC account for the project.
     std::string m_team; //!< Name of the team joined for the project.
     std::string m_url;  //!< URL of the project website.
-    double m_rac;       //!< RAC of the project.
-    Error m_error;      //!< May describe why a project is ineligible.
+    double m_rac = 0.0;             //!< RAC of the project.
+    Error m_error = Error::NONE;    //!< May describe why a project is ineligible.
 
     //!
     //! \brief Determine whether the project is eligible for reward.
@@ -283,7 +297,7 @@ private:
     //!
     //! \brief Caches whether the map contains a project attached to a pool.
     //!
-    bool m_has_pool_project;
+    bool m_has_pool_project = false;
 }; // MiningProjectMap
 
 class Researcher; // forward for ResearcherPtr
@@ -307,7 +321,8 @@ enum class BeaconError
     TX_FAILED,          //!< Beacon contract transacton failed to send.
     V14_NOT_ENABLED,    //!< v3 beacons require block version 14 or higher.
     WALLET_LOCKED,      //!< Wallet not fully unlocked.
-    ALEADY_IN_MEMPOOL   //!< A beacon contract for this CPID is already in the mempool.
+    ALEADY_IN_MEMPOOL,  //!< A beacon contract for this CPID is already in the mempool.
+    OUT_OF_SYNC         //!< The node is not in sync with the network.
 };
 
 //!
@@ -361,7 +376,7 @@ private:
     std::variant<CPubKey, BeaconError> m_result;
 };
 
-class OwnershipProof;
+struct OwnershipProof;
 
 //!
 //! \brief Generate a new beacon key pair.
@@ -371,7 +386,7 @@ class OwnershipProof;
 //! \return A variant that contains the new public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult GenerateBeaconKey(const Cpid& cpid);
+AdvertiseBeaconResult GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Send a v3 beacon contract with an ownership proof.
@@ -388,7 +403,68 @@ AdvertiseBeaconResult SendBeaconContractV3(
     const Cpid& cpid,
     Beacon beacon,
     OwnershipProof proof,
-    const bool force = false);
+    const bool force = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet);
+
+//!
+//! \brief How long this wallet's own beacon advertisement may wait in the
+//! mempool, unconfirmed, before advertising the beacon again replaces it.
+//!
+//! A beacon transaction that peers accept is normally in a block within a few
+//! blocks. One still unconfirmed after an hour most likely never reached the
+//! network, or was sent from a short-lived fork.
+//!
+constexpr int64_t STALE_BEACON_ADVERTISEMENT_AGE = 60 * 60;
+
+//!
+//! \brief Take this wallet's stale beacon advertisements for a CPID out of the
+//! mempool and abandon them.
+//!
+//! The beacon send paths refuse while the mempool holds a beacon for the CPID,
+//! and the local pool can hold this wallet's own transaction indefinitely: it
+//! has no time-based expiry, the wallet rebroadcasts only transactions the pool
+//! does not hold, abandontransaction refuses a pooled transaction,
+//! cancelunbroadcasttransaction refuses one a peer has fetched, and a restart
+//! puts it back. Without this, an advertisement that never confirmed would
+//! block every later one, the automatic renewal included.
+//!
+//! A transaction is retired when it carries a beacon advertisement for \p cpid,
+//! is in \p wallet and spends at least one of its coins, and was received at
+//! least STALE_BEACON_ADVERTISEMENT_AGE ago. Its pooled descendants leave the
+//! pool with it, relay memory stops serving any of them, and abandoning it
+//! releases the inputs it spent and abandons its wallet descendants. A beacon
+//! for the CPID from another wallet, or a recent one from this wallet, is left
+//! alone.
+//!
+//! Does nothing while the node is out of sync: it cannot tell then whether the
+//! transaction confirmed.
+//!
+//! \param wallet The wallet that sent the advertisements.
+//! \param cpid   CPID to retire the advertisements of.
+//!
+//! \return The number of advertisements retired.
+//!
+unsigned int RetireStaleBeaconAdvertisements(CWallet& wallet, const Cpid& cpid)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, wallet.cs_wallet);
+
+//!
+//! \brief Get this wallet's own beacon advertisement for a CPID that is waiting
+//! in the mempool and is not yet stale.
+//!
+//! For display: until it confirms or goes stale, the advertisement is shown as
+//! the pending beacon, as it was while waiting to confirm before a beacon was
+//! counted as pending only once on chain. A stale one is not shown, because
+//! advertising again replaces it (RetireStaleBeaconAdvertisements).
+//!
+//! The advertisement is this wallet's if it holds the beacon key, and its age
+//! is from the transaction's own time, so cs_wallet is not needed.
+//!
+//! \param wallet The wallet that holds the beacon keys.
+//! \param cpid   CPID to find the advertisement for.
+//!
+//! \return The newest such advertisement's beacon, if any.
+//!
+std::optional<Beacon> TryRecentBeaconAdvertisement(const CWallet& wallet, const Cpid& cpid)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Manages the global BOINC researcher context.
@@ -487,7 +563,7 @@ public:
     //! to mint blocks that claim Proof-of-Research rewards. Otherwise, this
     //! method resets the wallet's mining context to non-cruncher mode.
     //!
-    static void Reload();
+    static void Reload() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Reload the wallet's researcher mining context from the supplied
@@ -499,7 +575,7 @@ public:
     //!
     static void Reload(
         MiningProjectMap projects,
-        BeaconError beacon_error = GRC::BeaconError::NONE);
+        BeaconError beacon_error = GRC::BeaconError::NONE) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Rescan the set of in-memory projects for eligible CPIDs without
@@ -511,7 +587,7 @@ public:
     //! application calls this method to update the researcher context with any
     //! newly eligible or ineligible CPIDs.
     //!
-    static void Refresh();
+    static void Refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get the primary mining ID that identifies the owner of the wallet.
@@ -604,7 +680,9 @@ public:
     std::optional<Beacon> TryBeacon() const;
 
     //!
-    //! \brief Get the pending beacon for the current CPID if it exists.
+    //! \brief Get this wallet's pending beacon for the current CPID if it
+    //! exists: on chain, from the block that confirms its advertisement until a
+    //! superblock activates it or sweeps it out as expired.
     //!
     //! \return Contains the pending beacon for the CPID or does not.
     //!
@@ -647,7 +725,10 @@ public:
     //! of the following are true:
     //!
     //!  - The node obtained a valid CPID from BOINC (not a non-cruncher)
-    //!  - The node did not send a beacon transaction recently
+    //!  - The node is in sync
+    //!  - This wallet has no pending beacon for the CPID on chain
+    //!  - The mempool holds no beacon for the CPID, once this wallet's own stale
+    //!    advertisement is retired
     //!  - No beacon exists for the CPID or it expired, or...
     //!  - A beacon for the CPID exists and elapsed the renewal threshold
     //!  - The wallet generated a new beacon key successfully if needed
@@ -660,12 +741,17 @@ public:
     //! allows a user to send a beacon to recover the claim to their CPID if
     //! they lost the original private key.
     //!
-    //! \param force Ignore active and pending beacons for the current CPID.
+    //! \param force Ignore active and pending beacons for the current CPID. A
+    //! beacon in the mempool still refuses the advertisement.
     //!
     //! \return A variant that contains the new public key if successful or a
     //! description of the error that occurred.
     //!
-    AdvertiseBeaconResult AdvertiseBeacon(const bool force = false);
+    //! \p automated_renewal marks the unattended hourly renewal job, which is
+    //! the only beacon path permitted to build a transaction while the wallet
+    //! is unlocked for staking only. Every user-initiated advertisement leaves
+    //! it false and is refused on such a wallet.
+    AdvertiseBeaconResult AdvertiseBeacon(const bool force = false, const bool automated_renewal = false);
 
     //!
     //! \brief Submit a contract to the network to revoke an existing beacon.
@@ -683,8 +769,8 @@ public:
 private:
     MiningId m_mining_id;            //!< CPID or NONCRUNCHER variant.
     MiningProjectMap m_projects;     //!< Local projects loaded from BOINC.
-    GRC::BeaconError m_beacon_error; //!< Last beacon error that occurred, if any.
-    bool m_has_split_cpid;           //!< Flag that indicates project list has more than one CPID
+    GRC::BeaconError m_beacon_error = GRC::BeaconError::NONE; //!< Last beacon error that occurred, if any.
+    bool m_has_split_cpid = false;   //!< Flag that indicates project list has more than one CPID
 }; // Researcher
 }
 

@@ -60,7 +60,20 @@ namespace BCLog {
         ADDRMAN     = (1 <<  9),
         SELECTCOINS = (1 << 10),
         REINDEX     = (1 << 11),
-        CMPCTBLOCK  = (1 << 12),
+        // Bit 12 is Bitcoin Core's CMPCTBLOCK (BIP152 compact-block relay).
+        // Gridcoin has no compact-block code and the LogFlags bitfield is fully
+        // allocated (NET at bit 0 through NOISY at bit 31), so this bit was
+        // repurposed for the multiprocess IPC category rather than widening the
+        // mask. CMPCTBLOCK was never referenced at a single call site in
+        // Gridcoin's history, and reclaiming it would mean porting BIP152 onto a
+        // net_processing layer that has diverged from Core -- for a chain whose
+        // volume makes the bandwidth saving moot. Note m_categories is a
+        // runtime-only atomic -- built from -debug/-debugexclude, the logging
+        // RPC and a handful of direct EnableCategory() calls, and never written
+        // to disk -- so reusing the bit cannot remap a stored setting. The only
+        // migration cost is an "Unsupported logging category" warning for a
+        // config still carrying -debug=cmpctblock.
+        IPC         = (1 << 12),
         RAND        = (1 << 13),
         MISC        = (1 << 14),
         PROXY       = (1 << 15),
@@ -206,7 +219,7 @@ static inline void LogPrintf(const char* fmt, const Args&... args)
         try {
             log_msg = tfm::format(fmt, args...);
         } catch (tinyformat::format_error& fmterr) {
-            /* Original format string will have newline so don't add one here */
+            /* Log the raw format string; the newline appended below covers this path too. */
             log_msg = "Error \"" + std::string(fmterr.what()) + "\" while formatting log message: " + fmt;
         }
         // The \n here is for legacy formatting of Gridcoin LogPrintf's, which usually don't have \n's on them.

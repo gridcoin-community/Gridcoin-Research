@@ -1,0 +1,85 @@
+# Regression test mode (`-regtest`)
+
+Regtest is a private, instant-staking chain mode for development and automated
+testing. Unlike mainnet and testnet it has no peers, no real BOINC/research
+component, and a trivial difficulty target, so you can create blocks on demand
+and exercise wallet, mempool, P2P, and consensus code in a deterministic
+sandbox. Having no peers is enforced rather than incidental: a regtest node
+performs no DNS seeding, takes none of the peer addresses compiled into the
+binary, and is not given the bootstrap `addnode=` entries that a first run
+writes into a mainnet or testnet config -- so its peers are the ones you name,
+and there is no automatic discovery behind them. It is the chain mode the Python
+functional tests run against (see
+[`test/functional/README.md`](../test/functional/README.md)).
+
+> Regtest is enabled only on builds where the regtest chain params are compiled
+> in. It is for development and testing — never point a regtest node at the real
+> network.
+
+## Starting a node
+
+```bash
+gridcoinresearchd -regtest -daemon
+gridcoinresearchd -regtest getblockchaininfo   # chain == "regtest"
+gridcoinresearchd -regtest stop
+```
+
+The datadir is isolated under `<datadir>/regtest/`. The daemon doubles as the
+CLI (`gridcoinresearchd -regtest <command>`); there is no separate `gridcoin-cli`.
+
+## What's different from mainnet/testnet
+
+- **Mockable chain.** `IsMockableChain()` is true, which relaxes timing for
+  tests: `GetBlocksToMaturity()` returns 0 (so coinbase/coinstake outputs are
+  spendable/stakeable immediately — note `nCoinbaseMaturity` itself stays 10,
+  used only by validation) and `nStakeMinAge` is 0, and the scraper threads and
+  automatic superblock attachment are disabled.
+- **Proof-of-stake on demand.** There is no proof-of-work. Mint blocks with
+  `generatetoaddress <nblocks> <address>`; every block is a PoS block. The
+  background staker can be turned off with `-staking=0` for fully deterministic
+  height control.
+- **Genesis premine.** The genesis coinbase pays a deterministic premine
+  (10 × 100,000 GRC) to a known key that the daemon plants into the wallet, so a
+  fresh node has spendable coins immediately. `listunspent` shows the premine
+  UTXOs (note: `getbalance` reports 0 for the raw premine — it is immature for
+  balance accounting even though it is spendable).
+- **No automatic peer discovery, and no update check.** A regtest node performs
+  no DNS seeding, injects none of the compiled-in `pnSeed` addresses, gets no
+  bootstrap `addnode=` lines in its generated config, and does not check GitHub
+  for a newer release, so the peers it dials are the ones you name with
+  `-connect` / `-addnode` / `-seednode`. Read that as the scope it is: it covers
+  what the node starts on its own, not everything it can be made to do. An RPC
+  you call can still reach the network -- `walletdiagnose` issues an NTP query
+  and a port-reachability connect on every chain, which is
+  [issue #3359](https://github.com/gridcoin-community/Gridcoin-Research/issues/3359).
+- **Not treated as a development build.** The cripple that stops a binary with a
+  nonzero version tweak from staking or sending applies only on mainnet, so a
+  regtest node built from a development tree stakes and spends without
+  `-devbuild=override`.
+- **Default ports.** P2P `32747`, RPC `35715` (mainnet uses `32749`/`15715`,
+  testnet `32748`/`25715`). The functional framework allocates per-node ports
+  dynamically when running multiple instances.
+- **Researcher flows need no trust anchor.** A beacon advertised with
+  `-forcecpid=<cpid>` is activated by a `generatesuperblock` call that names its
+  public key in the `verified_beacons` argument; no scraper, project RSA key or
+  ownership proof is involved (see `test/functional/feature_beacon_activation.py`).
+  MRC payouts are covered by `test/functional/feature_mrc.py` (a two-node
+  request-and-payout round trip). Blocks staked without an active beacon are
+  non-cruncher (investor) claims.
+
+## Local sidestaking
+
+```bash
+gridcoinresearchd -regtest -enablesidestaking=1 -sidestake=<address>,<percent>
+```
+
+Each staked block's reward is split to the configured destination(s);
+`listsidestakes` shows the active entries.
+
+## Notes
+
+- Block data (LevelDB block index + chainstate) is written under
+  `<datadir>/regtest/`; remove it to start from a fresh genesis.
+- For programmatic use, the Python functional-test framework wraps all of the
+  above (node lifecycle, RPC, P2P, premine helpers) — start there rather than
+  scripting the CLI by hand.

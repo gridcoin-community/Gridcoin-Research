@@ -1,0 +1,1326 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include <psgt.h>
+
+#include <chainparams.h>
+#include <key_io.h>
+#include <net_processing.h>
+#include <node/psgt_pool.h>
+#include <rpc/server.h>
+#include <rpc/protocol.h>
+#include <rpc/util.h>
+#include <script/sign.h>
+#include <script/standard.h>
+#include <streams.h>
+#include <util/bip32.h>
+#include <util/strencodings.h>
+#include <wallet/coincontrol.h>
+#include <wallet/wallet.h>
+
+#include <univalue.h>
+
+using namespace std;
+
+extern CWallet* pwalletMain;
+
+/** Populate HD keypath info for a pubkey from wallet metadata. */
+static void AddHDKeypathIfAvailable(const CWallet& wallet,
+                                     const CPubKey& pubkey,
+                                     std::map<CPubKey, KeyOriginInfo>& hd_keypaths)
+    EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
+{
+    CKeyID keyid = pubkey.GetID();
+    auto it = wallet.mapKeyMetadata.find(keyid);
+    if (it == wallet.mapKeyMetadata.end())
+        return;
+
+    const CKeyMetadata& meta = it->second;
+    if (meta.hdKeypath.empty() || meta.hdMasterKeyID.IsNull())
+        return;
+
+    std::vector<uint32_t> path;
+    if (!ParseHDKeypath(meta.hdKeypath, path))
+        return;
+
+    KeyOriginInfo info;
+    // Fingerprint = first 4 bytes of the master key's Hash160
+    // masterKeyID IS the Hash160, so take its first 4 bytes.
+    memcpy(info.fingerprint, meta.hdMasterKeyID.begin(), 4);
+    info.path = path;
+    hd_keypaths[pubkey] = info;
+}
+
+/** Populate HD keypaths for all pubkeys involved in a scriptPubKey. */
+static void FillHDKeypaths(const CWallet& wallet,
+                            const CScript& scriptPubKey,
+                            std::map<CPubKey, KeyOriginInfo>& hd_keypaths)
+    EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
+{
+    std::vector<CKeyID> vKeys;
+    ExtractAffectedKeys(wallet, scriptPubKey, vKeys);
+    for (const CKeyID& keyid : vKeys)
+    {
+        CPubKey pubkey;
+        if (wallet.GetPubKey(keyid, pubkey))
+            AddHDKeypathIfAvailable(wallet, pubkey, hd_keypaths);
+    }
+}
+
+static const RPCHelpMan createpsgt_help{
+    "createpsgt",
+    "Creates an unsigned Partially Signed Gridcoin Transaction (PSGT).",
+    {
+        {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
+            "A JSON array of inputs.",
+            {
+                {"input", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id."},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number."},
+                    }},
+            }},
+        {"outputs", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
+            "A JSON object with addresses as keys and GRC amounts as values.",
+            {
+                {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                    "The GRC amount to send to this address."},
+            }},
+        {"ntime", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Transaction timestamp, in seconds; must not be negative (default: current adjusted time)."},
+    },
+    RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded unsigned PSGT."},
+    RPCExamples{
+        HelpExampleCli("createpsgt",
+            "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"address\\\":0.01}\"") +
+        HelpExampleRpc("createpsgt",
+            "[{\"txid\":\"myid\",\"vout\":0}], {\"address\":0.01}")},
+};
+const RPCHelpMan& createpsgt_helpman() { return createpsgt_help; }
+
+UniValue createpsgt(const UniValue& params)
+{
+    RPCTypeCheck(params, {UniValue::VARR, UniValue::VOBJ});
+
+    UniValue inputs = params[0].get_array();
+    UniValue outputs = params[1].get_obj();
+
+    CMutableTransaction mtx;
+    mtx.nVersion = CTransaction::CURRENT_VERSION;
+
+    if (params.size() > 2) {
+        // nTime is unsigned, so a negative value is refused rather than wrapped.
+        const int ntime = params[2].get_int();
+
+        if (ntime < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("ntime %d must not be negative", ntime));
+        }
+
+        mtx.nTime = ntime;
+    }
+
+    for (unsigned int idx = 0; idx < inputs.size(); idx++)
+    {
+        const UniValue& input = inputs[idx];
+        const UniValue& o = input.get_obj();
+
+        uint256 txid;
+        txid.SetHex(find_value(o, "txid").get_str());
+        int nOutput = find_value(o, "vout").get_int();
+        if (nOutput < 0)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, vout must be positive");
+
+        CTxIn in(COutPoint(txid, nOutput));
+        mtx.vin.push_back(in);
+    }
+
+    vector<string> addrList = outputs.getKeys();
+    for (const string& name_ : addrList)
+    {
+        CTxDestination dest = DecodeDestination(name_);
+        if (!IsValidDestination(dest))
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ") + name_);
+
+        CAmount nAmount = AmountFromValue(outputs[name_]);
+        CScript scriptPubKey;
+        scriptPubKey.SetDestination(dest);
+        mtx.vout.push_back(CTxOut(nAmount, scriptPubKey));
+    }
+
+    // Ensure inputs have empty scriptSigs.
+    for (auto& vin : mtx.vin)
+        vin.scriptSig.clear();
+
+    PartiallySignedTransaction psgt(mtx);
+
+    std::vector<unsigned char> data = SerializePSGT(psgt);
+    return EncodeBase64(data.data(), data.size());
+}
+
+static const RPCHelpMan decodepsgt_help{
+    "decodepsgt",
+    "Return a JSON object representing the given PSGT (Partially Signed Gridcoin Transaction).",
+    {
+        {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The base64-encoded PSGT."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::OBJ, "tx", "The decoded unsigned transaction (same shape as decoderawtransaction).",
+                {{RPCResult::Type::ELISION, "", ""}}},
+            {RPCResult::Type::ARR, "inputs", "Per-input PSGT metadata.",
+                {{RPCResult::Type::ELISION, "", "input fields: non_witness_utxo, partial_signatures, sighash, redeem_script, final_scriptSig, bip32_derivs, unknown"}}},
+            {RPCResult::Type::ARR, "outputs", "Per-output PSGT metadata.",
+                {{RPCResult::Type::ELISION, "", "output fields: redeem_script, bip32_derivs, unknown"}}},
+        }},
+    RPCExamples{
+        HelpExampleCli("decodepsgt", "\"cHNidP8B...\"") +
+        HelpExampleRpc("decodepsgt", "\"cHNidP8B...\"")},
+};
+const RPCHelpMan& decodepsgt_helpman() { return decodepsgt_help; }
+
+UniValue decodepsgt(const UniValue& params)
+{
+    PartiallySignedTransaction psgt;
+    string error;
+    if (!DecodeRawPSGT(psgt, params[0].get_str(), error))
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, error);
+
+    UniValue result(UniValue::VOBJ);
+
+    // Unsigned transaction.
+    {
+        UniValue tx_obj(UniValue::VOBJ);
+        CTransaction ctx(psgt.tx);
+        tx_obj.pushKV("txid", ctx.GetHash().GetHex());
+        tx_obj.pushKV("version", psgt.tx.nVersion);
+        tx_obj.pushKV("time", (int64_t)psgt.tx.nTime);
+        tx_obj.pushKV("locktime", (int64_t)psgt.tx.nLockTime);
+
+        UniValue vin_arr(UniValue::VARR);
+        for (const auto& txin : psgt.tx.vin)
+        {
+            UniValue in_obj(UniValue::VOBJ);
+            in_obj.pushKV("txid", txin.prevout.hash.GetHex());
+            in_obj.pushKV("vout", (int)txin.prevout.n);
+            in_obj.pushKV("sequence", (int64_t)txin.nSequence);
+            vin_arr.push_back(in_obj);
+        }
+        tx_obj.pushKV("vin", vin_arr);
+
+        UniValue vout_arr(UniValue::VARR);
+        int n = 0;
+        for (const auto& txout : psgt.tx.vout)
+        {
+            UniValue out_obj(UniValue::VOBJ);
+            out_obj.pushKV("value", ValueFromAmount(txout.nValue));
+            out_obj.pushKV("n", n++);
+
+            UniValue script_obj(UniValue::VOBJ);
+            script_obj.pushKV("asm", txout.scriptPubKey.ToString());
+            script_obj.pushKV("hex", HexStr(txout.scriptPubKey));
+
+            txnouttype type;
+            vector<CTxDestination> addresses;
+            int nRequired;
+            if (ExtractDestinations(txout.scriptPubKey, type, addresses, nRequired))
+            {
+                script_obj.pushKV("type", GetTxnOutputType(type));
+                UniValue addr_arr(UniValue::VARR);
+                for (const auto& addr : addresses)
+                    addr_arr.push_back(EncodeDestination(addr));
+                script_obj.pushKV("addresses", addr_arr);
+                if (nRequired > 1)
+                    script_obj.pushKV("reqSigs", nRequired);
+            }
+            out_obj.pushKV("scriptPubKey", script_obj);
+            vout_arr.push_back(out_obj);
+        }
+        tx_obj.pushKV("vout", vout_arr);
+
+        result.pushKV("tx", tx_obj);
+    }
+
+    // Inputs.
+    UniValue inputs_arr(UniValue::VARR);
+    for (unsigned int i = 0; i < psgt.inputs.size(); ++i)
+    {
+        const PSGTInput& input = psgt.inputs[i];
+        UniValue in_obj(UniValue::VOBJ);
+
+        if (!input.non_witness_utxo.IsNull())
+        {
+            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+            ss << input.non_witness_utxo;
+            in_obj.pushKV("non_witness_utxo_hex", HexStr(ss));
+        }
+
+        if (!input.partial_sigs.empty())
+        {
+            UniValue sigs_obj(UniValue::VOBJ);
+            for (const auto& sig : input.partial_sigs)
+                sigs_obj.pushKV(sig.first.GetHex(), HexStr(sig.second));
+            in_obj.pushKV("partial_signatures", sigs_obj);
+        }
+
+        if (input.sighash_type != 0)
+            in_obj.pushKV("sighash", input.sighash_type);
+
+        if (!input.redeem_script.empty())
+        {
+            UniValue rs_obj(UniValue::VOBJ);
+            rs_obj.pushKV("asm", input.redeem_script.ToString());
+            rs_obj.pushKV("hex", HexStr(input.redeem_script));
+            in_obj.pushKV("redeem_script", rs_obj);
+        }
+
+        if (!input.final_script_sig.empty())
+        {
+            UniValue fs_obj(UniValue::VOBJ);
+            fs_obj.pushKV("asm", input.final_script_sig.ToString());
+            fs_obj.pushKV("hex", HexStr(input.final_script_sig));
+            in_obj.pushKV("final_scriptSig", fs_obj);
+        }
+
+        if (!input.hd_keypaths.empty())
+        {
+            UniValue bip32_arr(UniValue::VARR);
+            for (const auto& kp : input.hd_keypaths)
+            {
+                UniValue kp_obj(UniValue::VOBJ);
+                kp_obj.pushKV("pubkey", HexStr(std::vector<unsigned char>(kp.first.begin(), kp.first.end())));
+                kp_obj.pushKV("master_fingerprint", HexStr(std::vector<unsigned char>(kp.second.fingerprint, kp.second.fingerprint + 4)));
+                kp_obj.pushKV("path", WriteHDKeypath(kp.second.path));
+                bip32_arr.push_back(kp_obj);
+            }
+            in_obj.pushKV("bip32_derivs", bip32_arr);
+        }
+
+        if (!input.unknown.empty())
+        {
+            UniValue unk_obj(UniValue::VOBJ);
+            for (const auto& entry : input.unknown)
+                unk_obj.pushKV(HexStr(entry.first), HexStr(entry.second));
+            in_obj.pushKV("unknown", unk_obj);
+        }
+
+        inputs_arr.push_back(in_obj);
+    }
+    result.pushKV("inputs", inputs_arr);
+
+    // Outputs.
+    UniValue outputs_arr(UniValue::VARR);
+    for (unsigned int i = 0; i < psgt.outputs.size(); ++i)
+    {
+        const PSGTOutput& output = psgt.outputs[i];
+        UniValue out_obj(UniValue::VOBJ);
+
+        if (!output.redeem_script.empty())
+        {
+            UniValue rs_obj(UniValue::VOBJ);
+            rs_obj.pushKV("asm", output.redeem_script.ToString());
+            rs_obj.pushKV("hex", HexStr(output.redeem_script));
+            out_obj.pushKV("redeem_script", rs_obj);
+        }
+
+        if (!output.hd_keypaths.empty())
+        {
+            UniValue bip32_arr(UniValue::VARR);
+            for (const auto& kp : output.hd_keypaths)
+            {
+                UniValue kp_obj(UniValue::VOBJ);
+                kp_obj.pushKV("pubkey", HexStr(std::vector<unsigned char>(kp.first.begin(), kp.first.end())));
+                kp_obj.pushKV("master_fingerprint", HexStr(std::vector<unsigned char>(kp.second.fingerprint, kp.second.fingerprint + 4)));
+                kp_obj.pushKV("path", WriteHDKeypath(kp.second.path));
+                bip32_arr.push_back(kp_obj);
+            }
+            out_obj.pushKV("bip32_derivs", bip32_arr);
+        }
+
+        if (!output.unknown.empty())
+        {
+            UniValue unk_obj(UniValue::VOBJ);
+            for (const auto& entry : output.unknown)
+                unk_obj.pushKV(HexStr(entry.first), HexStr(entry.second));
+            out_obj.pushKV("unknown", unk_obj);
+        }
+
+        outputs_arr.push_back(out_obj);
+    }
+    result.pushKV("outputs", outputs_arr);
+
+    return result;
+}
+
+static const RPCHelpMan analyzepsgt_help{
+    "analyzepsgt",
+    "Analyzes and provides information about the current status of a PSGT and its inputs.",
+    {
+        {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "A base64-encoded PSGT."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::ARR, "inputs", "Per-input analysis.",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::BOOL, "has_utxo",
+                                "Whether a matching non_witness_utxo is provided for this input."},
+                            {RPCResult::Type::BOOL, "is_final",
+                                "Whether the input has a final scriptSig."},
+                            {RPCResult::Type::OBJ, "missing", /*optional=*/true,
+                                "Material still required to complete this input (only present when something is missing).",
+                                {
+                                    {RPCResult::Type::ARR, "pubkeys", /*optional=*/true,
+                                        "Key hashes whose full public key is not in the PSGT.",
+                                        {{RPCResult::Type::STR_HEX, "keyid", "Hash160 of the public key."}}},
+                                    {RPCResult::Type::ARR, "signatures", /*optional=*/true,
+                                        "Key hashes whose signature is still required.",
+                                        {{RPCResult::Type::STR_HEX, "keyid", "Hash160 of the public key."}}},
+                                    {RPCResult::Type::BOOL, "redeemscript", /*optional=*/true,
+                                        "Whether the P2SH redeem script is missing."},
+                                }},
+                            {RPCResult::Type::STR, "next",
+                                "Role of the next person this input needs to go to."},
+                        }},
+                }},
+            {RPCResult::Type::NUM, "estimated_final_size", /*optional=*/true,
+                "Estimated size of the fully-signed transaction in bytes "
+                "(only present when every input's final size can be estimated)."},
+            {RPCResult::Type::STR_AMOUNT, "fee", /*optional=*/true,
+                "Transaction fee in GRC (only present when all input UTXOs are known)."},
+            {RPCResult::Type::STR_AMOUNT, "min_required_fee", /*optional=*/true,
+                "Minimum fee in GRC required by network policy at the estimated final size."},
+            {RPCResult::Type::STR, "next",
+                "Role of the next person this PSGT needs to go to."},
+            {RPCResult::Type::STR, "error", /*optional=*/true,
+                "Error message (only present when there is an error)."},
+        }},
+    RPCExamples{
+        HelpExampleCli("analyzepsgt", "\"cHNndP8B...\"") +
+        HelpExampleRpc("analyzepsgt", "\"cHNndP8B...\"")},
+};
+const RPCHelpMan& analyzepsgt_helpman() { return analyzepsgt_help; }
+
+UniValue analyzepsgt(const UniValue& params)
+{
+    PartiallySignedTransaction psgt;
+    string error;
+    if (!DecodeRawPSGT(psgt, params[0].get_str(), error))
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, error);
+
+    PSGTAnalysis analysis = AnalyzePSGT(psgt);
+
+    UniValue result(UniValue::VOBJ);
+
+    UniValue inputs_arr(UniValue::VARR);
+    for (const PSGTInputAnalysis& ia : analysis.inputs)
+    {
+        UniValue in_obj(UniValue::VOBJ);
+        in_obj.pushKV("has_utxo", ia.has_utxo);
+        in_obj.pushKV("is_final", ia.is_final);
+
+        if (!ia.missing_pubkeys.empty() || !ia.missing_sigs.empty() || ia.missing_redeem_script)
+        {
+            UniValue missing(UniValue::VOBJ);
+            if (!ia.missing_pubkeys.empty())
+            {
+                UniValue arr(UniValue::VARR);
+                for (const CKeyID& keyid : ia.missing_pubkeys)
+                    arr.push_back(keyid.GetHex());
+                missing.pushKV("pubkeys", arr);
+            }
+            if (!ia.missing_sigs.empty())
+            {
+                UniValue arr(UniValue::VARR);
+                for (const CKeyID& keyid : ia.missing_sigs)
+                    arr.push_back(keyid.GetHex());
+                missing.pushKV("signatures", arr);
+            }
+            if (ia.missing_redeem_script)
+                missing.pushKV("redeemscript", true);
+            in_obj.pushKV("missing", missing);
+        }
+
+        in_obj.pushKV("next", PSGTRoleName(ia.next));
+        inputs_arr.push_back(in_obj);
+    }
+    result.pushKV("inputs", inputs_arr);
+
+    if (analysis.estimated_final_size)
+        result.pushKV("estimated_final_size", (int64_t)*analysis.estimated_final_size);
+    if (analysis.fee)
+        result.pushKV("fee", ValueFromAmount(*analysis.fee));
+    if (analysis.min_required_fee)
+        result.pushKV("min_required_fee", ValueFromAmount(*analysis.min_required_fee));
+    result.pushKV("next", PSGTRoleName(analysis.next));
+    if (!analysis.error.empty())
+        result.pushKV("error", analysis.error);
+
+    return result;
+}
+
+static const RPCHelpMan combinepsgt_help{
+    "combinepsgt",
+    "Combine multiple PSGTs for the same transaction into one merged PSGT.",
+    {
+        {"psgts", RPCArg::Type::ARR, RPCArg::Optional::NO,
+            "A JSON array of base64-encoded PSGT strings to combine.",
+            {
+                {"psgt", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A base64-encoded PSGT."},
+            }},
+    },
+    RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded combined PSGT."},
+    RPCExamples{
+        HelpExampleCli("combinepsgt", "\"[\\\"cHNidP8B...\\\", \\\"cHNidP8B...\\\"]\"") +
+        HelpExampleRpc("combinepsgt", "[\"cHNidP8B...\", \"cHNidP8B...\"]")},
+};
+const RPCHelpMan& combinepsgt_helpman() { return combinepsgt_help; }
+
+UniValue combinepsgt(const UniValue& params)
+{
+    RPCTypeCheck(params, {UniValue::VARR});
+    UniValue psgtArr = params[0].get_array();
+
+    vector<PartiallySignedTransaction> psgts;
+    for (unsigned int i = 0; i < psgtArr.size(); ++i)
+    {
+        PartiallySignedTransaction psgt;
+        string error;
+        if (!DecodeRawPSGT(psgt, psgtArr[i].get_str(), error))
+            throw JSONRPCError(RPC_DESERIALIZATION_ERROR, strprintf("PSGT decode failed at index %d: %s", i, error));
+        psgts.push_back(std::move(psgt));
+    }
+
+    PartiallySignedTransaction merged;
+    if (!CombinePSGTs(merged, psgts))
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "PSGTs do not refer to the same transaction");
+
+    vector<unsigned char> data = SerializePSGT(merged);
+    return EncodeBase64(data.data(), data.size());
+}
+
+static const RPCHelpMan finalizepsgt_help{
+    "finalizepsgt",
+    "Finalize a PSGT. If all inputs have been signed, extract the complete transaction and return it as hex.",
+    {
+        {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "A base64-encoded PSGT."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "hex", /*optional=*/true,
+                "The hex-encoded raw transaction (only present when complete)."},
+            {RPCResult::Type::BOOL, "complete",
+                "Whether the transaction is fully signed and ready to broadcast."},
+        }},
+    RPCExamples{
+        HelpExampleCli("finalizepsgt", "\"cHNidP8B...\"") +
+        HelpExampleRpc("finalizepsgt", "\"cHNidP8B...\"")},
+};
+const RPCHelpMan& finalizepsgt_helpman() { return finalizepsgt_help; }
+
+UniValue finalizepsgt(const UniValue& params)
+{
+    PartiallySignedTransaction psgt;
+    string error;
+    if (!DecodeRawPSGT(psgt, params[0].get_str(), error))
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, error);
+
+    UniValue result(UniValue::VOBJ);
+
+    CMutableTransaction mtx;
+    bool complete = FinalizeAndExtractPSGT(psgt, mtx);
+
+    if (complete)
+    {
+        CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
+        ssTx << mtx;
+        result.pushKV("hex", HexStr(ssTx));
+    }
+    result.pushKV("complete", complete);
+
+    return result;
+}
+
+static const RPCHelpMan walletprocesspsgt_help{
+    "walletprocesspsgt",
+    "Sign a PSGT with keys from the wallet. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "A base64-encoded PSGT."},
+        {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "The signature hash type to sign with (default: ALL). "
+            "Valid: \"ALL\", \"ALL|ANYONECANPAY\", \"NONE\", \"NONE|ANYONECANPAY\", \"SINGLE\", \"SINGLE|ANYONECANPAY\"."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "psgt", "The base64-encoded partially-signed transaction."},
+            {RPCResult::Type::BOOL, "complete", "Whether the transaction has a complete set of signatures."},
+        }},
+    RPCExamples{
+        HelpExampleCli("walletprocesspsgt", "\"cHNidP8B...\"") +
+        HelpExampleRpc("walletprocesspsgt", "\"cHNidP8B...\", \"ALL\"")},
+};
+const RPCHelpMan& walletprocesspsgt_helpman() { return walletprocesspsgt_help; }
+
+UniValue walletprocesspsgt(const UniValue& params)
+{
+    EnsureWalletIsUnlocked();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    PartiallySignedTransaction psgt;
+    string error;
+    if (!DecodeRawPSGT(psgt, params[0].get_str(), error))
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, error);
+
+    // Parse sighash type.
+    int nHashType = SIGHASH_ALL;
+    if (params.size() > 1)
+    {
+        static map<string, int> mapSigHashValues = {
+            { "ALL"                , SIGHASH_ALL                           },
+            { "ALL|ANYONECANPAY"   , SIGHASH_ALL | SIGHASH_ANYONECANPAY    },
+            { "NONE"               , SIGHASH_NONE                          },
+            { "NONE|ANYONECANPAY"  , SIGHASH_NONE | SIGHASH_ANYONECANPAY   },
+            { "SINGLE"             , SIGHASH_SINGLE                        },
+            { "SINGLE|ANYONECANPAY", SIGHASH_SINGLE | SIGHASH_ANYONECANPAY },
+        };
+        string strHashType = params[1].get_str();
+        if (!mapSigHashValues.count(strHashType))
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid sighash param");
+        nHashType = mapSigHashValues[strHashType];
+    }
+
+    // Fill in non_witness_utxo and redeem_script for inputs that need them.
+    for (unsigned int i = 0; i < psgt.inputs.size(); ++i)
+    {
+        if (psgt.inputs[i].non_witness_utxo.IsNull())
+        {
+            const uint256& prevHash = psgt.tx.vin[i].prevout.hash;
+            CTransaction prevTx;
+            uint256 hashBlock;
+            if (GetTransaction(prevHash, prevTx, hashBlock))
+                psgt.inputs[i].non_witness_utxo = prevTx;
+        }
+
+        // Auto-fill redeem script for P2SH inputs.
+        if (psgt.inputs[i].redeem_script.empty() && !psgt.inputs[i].non_witness_utxo.IsNull())
+        {
+            const COutPoint& prevout = psgt.tx.vin[i].prevout;
+            if (prevout.n < psgt.inputs[i].non_witness_utxo.vout.size())
+            {
+                const CScript& scriptPubKey = psgt.inputs[i].non_witness_utxo.vout[prevout.n].scriptPubKey;
+                if (scriptPubKey.IsPayToScriptHash())
+                {
+                    CScriptID scriptID(uint160(std::vector<unsigned char>(
+                        scriptPubKey.begin() + 2, scriptPubKey.begin() + 22)));
+                    CScript redeemScript;
+                    if (pwalletMain->GetCScript(scriptID, redeemScript))
+                        psgt.inputs[i].redeem_script = redeemScript;
+                }
+            }
+        }
+    }
+
+    // Sign each input with wallet keys.
+    for (unsigned int i = 0; i < psgt.inputs.size(); ++i)
+    {
+        SignPSGTInput(*pwalletMain, psgt, i, nHashType);
+    }
+
+    // Determine completeness by attempting finalization on a copy.
+    PartiallySignedTransaction psgt_copy = psgt;
+    bool complete = FinalizePSGT(psgt_copy);
+
+    // Populate HD keypaths for inputs.
+    for (unsigned int i = 0; i < psgt.inputs.size(); ++i)
+    {
+        if (!psgt.inputs[i].non_witness_utxo.IsNull())
+        {
+            const COutPoint& prevout = psgt.tx.vin[i].prevout;
+            if (prevout.n < psgt.inputs[i].non_witness_utxo.vout.size())
+                FillHDKeypaths(*pwalletMain,
+                               psgt.inputs[i].non_witness_utxo.vout[prevout.n].scriptPubKey,
+                               psgt.inputs[i].hd_keypaths);
+        }
+    }
+
+    // Update outputs (redeem scripts + HD keypaths).
+    for (unsigned int i = 0; i < psgt.outputs.size(); ++i)
+    {
+        UpdatePSGTOutput(*pwalletMain, psgt, i);
+        FillHDKeypaths(*pwalletMain,
+                       psgt.tx.vout[i].scriptPubKey,
+                       psgt.outputs[i].hd_keypaths);
+    }
+
+    UniValue result(UniValue::VOBJ);
+    vector<unsigned char> data = SerializePSGT(psgt);
+    result.pushKV("psgt", EncodeBase64(data.data(), data.size()));
+    result.pushKV("complete", complete);
+
+    return result;
+}
+
+static const RPCHelpMan utxoupdatepsgt_help{
+    "utxoupdatepsgt",
+    "Update a PSGT with UTXO data from the node. "
+    "For each input where non_witness_utxo is missing, look up the previous transaction and fill it in.",
+    {
+        {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "A base64-encoded PSGT."},
+    },
+    RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded updated PSGT."},
+    RPCExamples{
+        HelpExampleCli("utxoupdatepsgt", "\"cHNidP8B...\"") +
+        HelpExampleRpc("utxoupdatepsgt", "\"cHNidP8B...\"")},
+};
+const RPCHelpMan& utxoupdatepsgt_helpman() { return utxoupdatepsgt_help; }
+
+UniValue utxoupdatepsgt(const UniValue& params)
+{
+    PartiallySignedTransaction psgt;
+    string error;
+    if (!DecodeRawPSGT(psgt, params[0].get_str(), error))
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, error);
+
+    for (unsigned int i = 0; i < psgt.inputs.size(); ++i)
+    {
+        if (psgt.inputs[i].non_witness_utxo.IsNull())
+        {
+            const uint256& prevHash = psgt.tx.vin[i].prevout.hash;
+            CTransaction prevTx;
+            uint256 hashBlock;
+            if (GetTransaction(prevHash, prevTx, hashBlock))
+                psgt.inputs[i].non_witness_utxo = prevTx;
+        }
+    }
+
+    vector<unsigned char> data = SerializePSGT(psgt);
+    return EncodeBase64(data.data(), data.size());
+}
+
+static const RPCHelpMan converttopsgt_help{
+    "converttopsgt",
+    "Convert a raw transaction to PSGT format. "
+    "The resulting PSGT will have empty input metadata; use utxoupdatepsgt to fill in UTXO information.",
+    {
+        {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "The hex-encoded raw transaction."},
+    },
+    RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded PSGT."},
+    RPCExamples{
+        HelpExampleCli("converttopsgt", "\"0200000001...\"") +
+        HelpExampleRpc("converttopsgt", "\"0200000001...\"")},
+};
+const RPCHelpMan& converttopsgt_helpman() { return converttopsgt_help; }
+
+UniValue converttopsgt(const UniValue& params)
+{
+    vector<unsigned char> txData(ParseHex(params[0].get_str()));
+    CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
+    CTransaction tx;
+    try {
+        ssData >> tx;
+    } catch (const std::exception& e) {
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
+    }
+
+    CMutableTransaction mtx(tx);
+
+    // Store any existing scriptSigs, then clear them for the unsigned tx.
+    vector<CScript> savedScriptSigs;
+    for (auto& vin : mtx.vin)
+    {
+        savedScriptSigs.push_back(vin.scriptSig);
+        vin.scriptSig.clear();
+    }
+
+    PartiallySignedTransaction psgt(mtx);
+
+    // If any inputs had scriptSigs, store them as final_script_sig.
+    for (unsigned int i = 0; i < savedScriptSigs.size(); ++i)
+    {
+        if (!savedScriptSigs[i].empty())
+            psgt.inputs[i].final_script_sig = savedScriptSigs[i];
+    }
+
+    vector<unsigned char> data = SerializePSGT(psgt);
+    return EncodeBase64(data.data(), data.size());
+}
+
+static const RPCHelpMan walletcreatefundedpsgt_help{
+    "walletcreatefundedpsgt",
+    "Create and fund a PSGT with wallet UTXOs, optionally signing it. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted and `sign` is true.",
+    {
+        {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
+            "A JSON array of inputs (empty array allows auto-selection from wallet UTXOs).",
+            {
+                {"input", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id."},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number."},
+                    }},
+            }},
+        {"outputs", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
+            "A JSON object with addresses as keys and GRC amounts as values.",
+            {
+                {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                    "The GRC amount to send to this address."},
+            }},
+        {"options", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED,
+            "Optional funding options.",
+            {
+                {"changeAddress", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                    "Address to receive change. Default: a new address from the keypool."},
+            }},
+        {"sign", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Also sign the PSGT with wallet keys. Default: true."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "psgt", "The base64-encoded PSGT."},
+            {RPCResult::Type::STR_AMOUNT, "fee", "The fee paid in GRC."},
+        }},
+    RPCExamples{
+        HelpExampleCli("walletcreatefundedpsgt",
+            "\"[]\" \"{\\\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\\\":0.1}\"") +
+        HelpExampleRpc("walletcreatefundedpsgt",
+            "[], {\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\":0.1}")},
+};
+const RPCHelpMan& walletcreatefundedpsgt_helpman() { return walletcreatefundedpsgt_help; }
+
+UniValue walletcreatefundedpsgt(const UniValue& params)
+{
+    RPCTypeCheck(params, {UniValue::VARR, UniValue::VOBJ});
+
+    EnsureWalletIsUnlocked();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // Build the raw transaction first via createpsgt logic.
+    UniValue inputs = params[0].get_array();
+    UniValue outputs = params[1].get_obj();
+
+    CMutableTransaction mtx;
+    mtx.nVersion = CTransaction::CURRENT_VERSION;
+
+    for (unsigned int idx = 0; idx < inputs.size(); idx++)
+    {
+        const UniValue& input = inputs[idx];
+        const UniValue& o = input.get_obj();
+
+        uint256 txid;
+        txid.SetHex(find_value(o, "txid").get_str());
+        int nOutput = find_value(o, "vout").get_int();
+        if (nOutput < 0)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, vout must be positive");
+
+        mtx.vin.push_back(CTxIn(COutPoint(txid, nOutput)));
+    }
+
+    vector<string> addrList = outputs.getKeys();
+    for (const string& name_ : addrList)
+    {
+        CTxDestination dest = DecodeDestination(name_);
+        if (!IsValidDestination(dest))
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ") + name_);
+
+        CAmount nAmount = AmountFromValue(outputs[name_]);
+        CScript scriptPubKey;
+        scriptPubKey.SetDestination(dest);
+        mtx.vout.push_back(CTxOut(nAmount, scriptPubKey));
+    }
+
+    // Build the send vector for CreateTransaction.
+    vector<pair<CScript, int64_t>> vecSend;
+    for (const auto& txout : mtx.vout)
+        vecSend.push_back({txout.scriptPubKey, txout.nValue});
+
+    CReserveKey reservekey(pwalletMain);
+    CAmount nFeeRequired = 0;
+    string strError;
+
+    CCoinControl coinControl;
+
+    if (params.size() > 2 && !params[2].isNull())
+    {
+        UniValue options = params[2].get_obj();
+        if (options.exists("changeAddress"))
+        {
+            CTxDestination changeDest = DecodeDestination(options["changeAddress"].get_str());
+            if (!IsValidDestination(changeDest))
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid change address");
+            coinControl.destChange = changeDest;
+        }
+    }
+
+    // Use CreateTransaction to fund it.
+    CWalletTx wtxNew;
+    if (!pwalletMain->CreateTransaction(vecSend, wtxNew, reservekey,
+                                         nFeeRequired, &coinControl))
+    {
+        throw JSONRPCError(RPC_WALLET_ERROR, "CreateTransaction failed");
+    }
+
+    CMutableTransaction fundedTx(static_cast<const CTransaction&>(wtxNew));
+
+    // Clear scriptSigs for unsigned PSGT.
+    for (auto& vin : fundedTx.vin)
+        vin.scriptSig.clear();
+
+    PartiallySignedTransaction psgt(fundedTx);
+
+    // Optionally sign.
+    bool fSign = true;
+    if (params.size() > 3)
+        fSign = params[3].get_bool();
+
+    if (fSign)
+    {
+        // Fill UTXO data.
+        for (unsigned int i = 0; i < psgt.inputs.size(); ++i)
+        {
+            const uint256& prevHash = psgt.tx.vin[i].prevout.hash;
+            CTransaction prevTx;
+            uint256 hashBlock;
+            if (GetTransaction(prevHash, prevTx, hashBlock))
+                psgt.inputs[i].non_witness_utxo = prevTx;
+        }
+
+        // Sign every input this wallet can. A failure here is not an error: the
+        // point of a PSGT is that the remaining inputs go to another signer.
+        // Whether the set came out complete is not part of this RPC's documented
+        // result ({psgt, fee}) -- walletprocesspsgt and finalizepsgt are the ones
+        // that report it -- so the per-input outcome is not accumulated.
+        for (unsigned int i = 0; i < psgt.inputs.size(); ++i)
+        {
+            SignPSGTInput(*pwalletMain, psgt, i);
+        }
+    }
+
+    // Update outputs (redeem scripts + HD keypaths).
+    for (unsigned int i = 0; i < psgt.outputs.size(); ++i)
+    {
+        UpdatePSGTOutput(*pwalletMain, psgt, i);
+        FillHDKeypaths(*pwalletMain,
+                       psgt.tx.vout[i].scriptPubKey,
+                       psgt.outputs[i].hd_keypaths);
+    }
+
+    UniValue result(UniValue::VOBJ);
+    vector<unsigned char> data = SerializePSGT(psgt);
+    result.pushKV("psgt", EncodeBase64(data.data(), data.size()));
+    result.pushKV("fee", ValueFromAmount(nFeeRequired));
+
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// PSGT pool RPCs (#2910 Phase II)
+// ---------------------------------------------------------------------------
+
+//! Throw unless the PSGT pool is active on this node (v15 gate + sync state).
+static void EnsurePSGTPoolActive() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    if (!IsV15Enabled(nBestHeight)) {
+        throw JSONRPCError(RPC_INVALID_REQUEST,
+                           "The PSGT pool is not active: block v15 has not activated on this network");
+    }
+    if (OutOfSyncByAge()) {
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD,
+                           "The PSGT pool is unavailable while the node is syncing");
+    }
+}
+
+//! Resolve an RPC "hash" argument to a pooled entry: the 40-hex-char multisig
+//! image, or a 64-hex-char unsigned transaction id or revision hash.
+static PSGTPoolEntry ResolvePoolEntry(const std::string& hash)
+{
+    if (IsHex(hash)) {
+        if (hash.size() == 40) {
+            // SetHex, not the byte-vector constructor: ToString() renders
+            // base_blob hex byte-reversed, and this must round-trip it.
+            uint160 image_bits;
+            image_bits.SetHex(hash);
+            if (const auto entry = g_psgt_pool.Get(CScriptID(image_bits))) {
+                return *entry;
+            }
+        } else if (hash.size() == 64) {
+            const uint256 h = uint256S(hash);
+            if (const auto entry = g_psgt_pool.GetByTxHash(h)) {
+                return *entry;
+            }
+            if (const auto entry = g_psgt_pool.GetByRevision(h)) {
+                return *entry;
+            }
+        }
+    }
+
+    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                       "No PSGT in the pool matches this image, transaction id or revision hash");
+}
+
+//! Does the local wallet hold a key of the entry's multisig arrangement?
+static bool PoolEntryIsMine(const PSGTPoolEntry& entry)
+{
+    if (!pwalletMain) return false;
+
+    // Decode outside the lock (pure computation); hold cs_wallet only for
+    // the key scan, as the inline predecessor did.
+    const std::vector<CPubKey> arrangement = PSGTArrangementKeys(entry.psgt);
+    if (arrangement.empty()) return false;
+
+    LOCK(pwalletMain->cs_wallet);
+    return PSGTKeyHeldBy(*pwalletMain, arrangement);
+}
+
+//! Render a pool entry for listpsgtpool/submitpsgt output.
+static UniValue PoolEntryToJSON(const PSGTPoolEntry& entry, int64_t now)
+{
+    UniValue obj(UniValue::VOBJ);
+
+    obj.pushKV("image", entry.image.ToString());
+    obj.pushKV("image_address", EncodeDestination(entry.image));
+    obj.pushKV("txid", entry.tx_hash.ToString());
+    obj.pushKV("revision", entry.revision_hash.ToString());
+    obj.pushKV("psgt", EncodeBase64(entry.serialized.data(), entry.serialized.size()));
+    obj.pushKV("time", entry.time_received);
+    obj.pushKV("expires_in", std::max<int64_t>(0, entry.time_received
+                                                      + PSGTPool::EXPIRY_SECONDS - now));
+    obj.pushKV("fee", ValueFromAmount(entry.fee));
+    obj.pushKV("sigs_valid", entry.valid_sigs);
+    obj.pushKV("sigs_required", entry.sigs_required);
+    obj.pushKV("sigs_total", entry.sigs_total);
+
+    UniValue destinations(UniValue::VARR);
+    for (const CTxOut& txout : entry.psgt.tx.vout) {
+        UniValue dest_obj(UniValue::VOBJ);
+        CTxDestination dest;
+        dest_obj.pushKV("address", ExtractDestination(txout.scriptPubKey, dest)
+                                       ? EncodeDestination(dest) : "(nonstandard)");
+        dest_obj.pushKV("amount", ValueFromAmount(txout.nValue));
+        destinations.push_back(dest_obj);
+    }
+    obj.pushKV("destinations", destinations);
+
+    UniValue initiators(UniValue::VARR);
+    for (const CKeyID& keyid : entry.initiator_keys) {
+        initiators.push_back(keyid.ToString());
+    }
+    obj.pushKV("initiator_keyids", initiators);
+
+    const bool is_mine = PoolEntryIsMine(entry);
+    obj.pushKV("ismine", is_mine);
+    obj.pushKV("awaiting_my_signature",
+               is_mine && pwalletMain
+                   && !WITH_LOCK(pwalletMain->cs_wallet,
+                                 return PSGTSignedBy(*pwalletMain, entry.psgt)));
+
+    return obj;
+}
+
+static const RPCHelpMan submitpsgt_help{
+    "submitpsgt",
+    "Submit a partially signed multisig transaction to the network PSGT pool (#2910)\n"
+    "so co-signers are notified and can sign in-band. The PSGT must be a single-\n"
+    "arrangement P2SH multisig spend carrying at least one valid signature (yours)\n"
+    "on every input, with known unspent funding outputs and a sane fee. One PSGT is\n"
+    "pooled per multisig arrangement; resubmitting with a different destination,\n"
+    "amount or fee supersedes your earlier PSGT (initiator privilege).",
+    {
+        {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO, "The base64-encoded PSGT."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "image", "Multisig image (redeem script hash) the pool keys on."},
+            {RPCResult::Type::STR, "image_address", "The multisig arrangement as a P2SH address."},
+            {RPCResult::Type::STR_HEX, "txid", "Unsigned transaction id."},
+            {RPCResult::Type::STR_HEX, "revision", "Relay identity of this revision (hash of the wire bytes)."},
+            {RPCResult::Type::STR, "psgt", "The pooled PSGT, base64-encoded."},
+            {RPCResult::Type::NUM_TIME, "time", "Time the entry entered the pool."},
+            {RPCResult::Type::NUM, "expires_in", "Seconds until pool expiry."},
+            {RPCResult::Type::STR_AMOUNT, "fee", "Transaction fee."},
+            {RPCResult::Type::NUM, "sigs_valid", "Valid signatures present (minimum across inputs)."},
+            {RPCResult::Type::NUM, "sigs_required", "Signatures required (m of m-of-n)."},
+            {RPCResult::Type::NUM, "sigs_total", "Keys in the arrangement (n of m-of-n)."},
+            {RPCResult::Type::ARR, "destinations", "Where the transaction pays.",
+                {{RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR, "address", "Destination address."},
+                        {RPCResult::Type::STR_AMOUNT, "amount", "Amount."},
+                    }}}},
+            {RPCResult::Type::ARR, "initiator_keyids", "Key ids that signed the first pooled revision.",
+                {{RPCResult::Type::STR_HEX, "", "Key id."}}},
+            {RPCResult::Type::BOOL, "ismine", "This wallet holds a key of the arrangement."},
+            {RPCResult::Type::BOOL, "awaiting_my_signature", "This wallet can still add a signature."},
+            {RPCResult::Type::BOOL, "replaced", "Whether an earlier revision was superseded."},
+        }},
+    RPCExamples{
+        HelpExampleCli("submitpsgt", "\"psgt\"") +
+        HelpExampleRpc("submitpsgt", "\"psgt\"")},
+};
+const RPCHelpMan& submitpsgt_helpman() { return submitpsgt_help; }
+
+UniValue submitpsgt(const UniValue& params)
+{
+    bool invalid = false;
+    const std::vector<unsigned char> wire_bytes =
+        DecodeBase64(params[0].get_str().c_str(), &invalid);
+    if (invalid) {
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Invalid base64");
+    }
+
+    LOCK(cs_main);
+
+    EnsurePSGTPoolActive();
+
+    const int64_t now = GetAdjustedTime();
+    PSGTPoolEntry entry;
+    std::string error;
+    const PSGTPoolReject reject = ValidatePSGTForPool(g_psgt_pool, wire_bytes, now, entry, error);
+    if (reject != PSGTPoolReject::NONE) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           strprintf("PSGT rejected (%s): %s",
+                                     PSGTPoolRejectToString(reject), error));
+    }
+
+    const uint256 revision_hash = entry.revision_hash;
+    const CScriptID image = entry.image;
+    // Keep a copy for the response: the pool takes cs_psgt_pool, not cs_main, so
+    // removepsgtfrompool or the expiry sweep can erase this image between Add and
+    // the Get below. Without a fallback that Get would dereference nullopt.
+    const PSGTPoolEntry submitted = entry;
+
+    std::string reject_reason;
+    const PSGTPoolAddResult result = g_psgt_pool.Add(std::move(entry), reject_reason);
+
+    switch (result) {
+    case PSGTPoolAddResult::ACCEPTED_NEW:
+    case PSGTPoolAddResult::ACCEPTED_REPLACEMENT:
+        RelayPSGT(revision_hash);
+        break;
+
+    case PSGTPoolAddResult::DUPLICATE:
+    case PSGTPoolAddResult::REJECTED_POOL_FULL:
+    case PSGTPoolAddResult::REJECTED_NOT_BETTER:
+    case PSGTPoolAddResult::REJECTED_NOT_INITIATOR:
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           strprintf("PSGT not pooled: %s", reject_reason));
+    }
+
+    // Prefer the freshly-pooled entry (reflects any carried-forward initiator
+    // keys on replacement); fall back to the submitted copy if it raced away.
+    const auto pooled = g_psgt_pool.Get(image);
+    UniValue obj = PoolEntryToJSON(pooled ? *pooled : submitted, now);
+    obj.pushKV("replaced", result == PSGTPoolAddResult::ACCEPTED_REPLACEMENT);
+    return obj;
+}
+
+static const RPCHelpMan listpsgtpool_help{
+    "listpsgtpool",
+    "List the partially signed multisig transactions currently in the PSGT pool (#2910).",
+    {
+        {"ismineonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Only list PSGTs whose multisig arrangement includes a key of this wallet. Default: false."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::STR_HEX, "image", "Multisig image (redeem script hash) the pool keys on."},
+                    {RPCResult::Type::STR, "image_address", "The multisig arrangement as a P2SH address."},
+                    {RPCResult::Type::STR_HEX, "txid", "Unsigned transaction id."},
+                    {RPCResult::Type::STR_HEX, "revision", "Relay identity of this revision (hash of the wire bytes)."},
+                    {RPCResult::Type::STR, "psgt", "The pooled PSGT, base64-encoded."},
+                    {RPCResult::Type::NUM_TIME, "time", "Time the entry entered the pool."},
+                    {RPCResult::Type::NUM, "expires_in", "Seconds until pool expiry."},
+                    {RPCResult::Type::STR_AMOUNT, "fee", "Transaction fee."},
+                    {RPCResult::Type::NUM, "sigs_valid", "Valid signatures present (minimum across inputs)."},
+                    {RPCResult::Type::NUM, "sigs_required", "Signatures required (m of m-of-n)."},
+                    {RPCResult::Type::NUM, "sigs_total", "Keys in the arrangement (n of m-of-n)."},
+                    {RPCResult::Type::ARR, "destinations", "Where the transaction pays.",
+                        {{RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::STR, "address", "Destination address."},
+                                {RPCResult::Type::STR_AMOUNT, "amount", "Amount."},
+                            }}}},
+                    {RPCResult::Type::ARR, "initiator_keyids", "Key ids that signed the first pooled revision.",
+                        {{RPCResult::Type::STR_HEX, "", "Key id."}}},
+                    {RPCResult::Type::BOOL, "ismine", "This wallet holds a key of the arrangement."},
+                    {RPCResult::Type::BOOL, "awaiting_my_signature", "This wallet can still add a signature."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listpsgtpool", "true") +
+        HelpExampleRpc("listpsgtpool", "true")},
+};
+const RPCHelpMan& listpsgtpool_helpman() { return listpsgtpool_help; }
+
+UniValue listpsgtpool(const UniValue& params)
+{
+    const bool mine_only = !params.empty() && !params[0].isNull() && params[0].get_bool();
+    const int64_t now = GetAdjustedTime();
+
+    UniValue result(UniValue::VARR);
+    for (const PSGTPoolEntry& entry : g_psgt_pool.GetAll()) {
+        if (mine_only && !PoolEntryIsMine(entry)) continue;
+        result.push_back(PoolEntryToJSON(entry, now));
+    }
+    return result;
+}
+
+static const RPCHelpMan signpsgtinpool_help{
+    "signpsgtinpool",
+    "Sign a pooled PSGT with this wallet's keys and advance the workflow (#2910):\n"
+    "if your signature(s) complete the m-of-n requirement, the transaction is\n"
+    "finalized and broadcast and the pool slot is freed; otherwise the enriched\n"
+    "PSGT replaces the pooled revision and is relayed to co-signers.\n"
+    "Requires the wallet passphrase to be set with walletpassphrase first if\n"
+    "the wallet is encrypted.",
+    {
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "The multisig image, unsigned transaction id, or revision hash of the pooled PSGT."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "complete", "Whether the transaction reached m-of-n and was broadcast."},
+            {RPCResult::Type::BOOL, "already_known", /*optional=*/true, "Present and true when the signed revision was already in (or recently in) the pool; the signature is present network-wide and nothing was re-relayed."},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction id (final id when complete)."},
+            {RPCResult::Type::STR_HEX, "revision", /*optional=*/true, "New pooled revision (incomplete case only)."},
+            {RPCResult::Type::NUM, "sigs_valid", /*optional=*/true, "Valid signatures after signing (incomplete case only)."},
+            {RPCResult::Type::NUM, "sigs_required", /*optional=*/true, "Signatures required (incomplete case only)."},
+        }},
+    RPCExamples{
+        HelpExampleCli("signpsgtinpool", "\"image\"") +
+        HelpExampleRpc("signpsgtinpool", "\"image\"")},
+};
+const RPCHelpMan& signpsgtinpool_helpman() { return signpsgtinpool_help; }
+
+UniValue signpsgtinpool(const UniValue& params)
+{
+    if (!pwalletMain) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Wallet is not loaded");
+    }
+
+    EnsureWalletIsUnlocked();
+
+    const CScriptID image = WITH_LOCK(cs_main, EnsurePSGTPoolActive();
+                                      return ResolvePoolEntry(params[0].get_str()).image);
+
+    std::string error;
+    uint256 txid;
+    const PSGTSignResult result = SignAndAdvancePSGT(image, error, &txid);
+
+    UniValue obj(UniValue::VOBJ);
+
+    switch (result) {
+    case PSGTSignResult::COMPLETED_AND_BROADCAST:
+        obj.pushKV("complete", true);
+        obj.pushKV("txid", txid.ToString());
+        return obj;
+
+    case PSGTSignResult::SIGNED_AND_RELAYED:
+    {
+        obj.pushKV("complete", false);
+        // txid is always available from the sign result (the unsigned tx id) and
+        // the schema documents it as always present. The pool-derived fields are
+        // optional: the entry can race away (removed/expired) after signing.
+        obj.pushKV("txid", txid.ToString());
+        const auto entry = g_psgt_pool.Get(image);
+        if (entry) {
+            obj.pushKV("revision", entry->revision_hash.ToString());
+            obj.pushKV("sigs_valid", entry->valid_sigs);
+            obj.pushKV("sigs_required", entry->sigs_required);
+        }
+        return obj;
+    }
+
+    case PSGTSignResult::ALREADY_KNOWN:
+        // The signature was added, but the resulting revision is one the network
+        // already has (an identical-key co-signer got there first, or it was
+        // pooled before). Report success: the contribution is present, nothing
+        // more to do.
+        obj.pushKV("complete", false);
+        obj.pushKV("already_known", true);
+        obj.pushKV("txid", txid.ToString());
+        return obj;
+
+    case PSGTSignResult::NO_NEW_SIGNATURES:
+        throw JSONRPCError(RPC_WALLET_ERROR, error);
+
+    case PSGTSignResult::NOT_FOUND:
+        // Never pooled, or removed/expired between resolve and signing -- a
+        // normal race/user condition, not an internal fault.
+        throw JSONRPCError(RPC_INVALID_PARAMETER, error);
+
+    case PSGTSignResult::FAILED:
+        throw JSONRPCError(RPC_INTERNAL_ERROR, error);
+    }
+
+    CHECK_NONFATAL(false); // all PSGTSignResult cases return above
+    return NullUniValue;
+}
+
+static const RPCHelpMan removepsgtfrompool_help{
+    "removepsgtfrompool",
+    "Remove a PSGT from this node's pool (local only: other nodes keep their\n"
+    "copies, and a NEW revision from the network would still be accepted).",
+    {
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "The multisig image, unsigned transaction id, or revision hash of the pooled PSGT."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "Whether an entry was removed."},
+    RPCExamples{
+        HelpExampleCli("removepsgtfrompool", "\"image\"") +
+        HelpExampleRpc("removepsgtfrompool", "\"image\"")},
+};
+const RPCHelpMan& removepsgtfrompool_helpman() { return removepsgtfrompool_help; }
+
+UniValue removepsgtfrompool(const UniValue& params)
+{
+    const PSGTPoolEntry entry = ResolvePoolEntry(params[0].get_str());
+    return g_psgt_pool.Remove(entry.image, PSGTRemovalReason::LOCAL_REMOVE);
+}
+
+static const RPCHelpMan getpsgtpoolinfo_help{
+    "getpsgtpoolinfo",
+    "Returns PSGT pool status (#2910).",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "active", "Whether the pool is active (block v15 live and node in sync)."},
+            {RPCResult::Type::NUM, "size", "Entries currently pooled."},
+            {RPCResult::Type::NUM, "orphan_count", "PSGTs held pending their (unconfirmed) funding transaction."},
+            {RPCResult::Type::NUM, "maxsize", "Pool capacity (new images are rejected when full)."},
+            {RPCResult::Type::NUM, "expiry", "Entry lifetime in seconds."},
+            {RPCResult::Type::NUM, "psgtprotocolversion", "Minimum peer protocol version PSGT inventory is relayed to."},
+        }},
+    RPCExamples{
+        HelpExampleCli("getpsgtpoolinfo", "") +
+        HelpExampleRpc("getpsgtpoolinfo", "")},
+};
+const RPCHelpMan& getpsgtpoolinfo_helpman() { return getpsgtpoolinfo_help; }
+
+UniValue getpsgtpoolinfo(const UniValue& params)
+{
+    UniValue obj(UniValue::VOBJ);
+
+    {
+        LOCK(cs_main);
+        obj.pushKV("active", IsV15Enabled(nBestHeight) && !OutOfSyncByAge());
+    }
+    obj.pushKV("size", (int64_t)g_psgt_pool.Size());
+    obj.pushKV("orphan_count", (int64_t)g_psgt_pool.OrphanCount());
+    obj.pushKV("maxsize", (int64_t)PSGTPool::MAX_ENTRIES);
+    obj.pushKV("expiry", PSGTPool::EXPIRY_SECONDS);
+    obj.pushKV("psgtprotocolversion", PSGT_PROTO_VERSION);
+
+    return obj;
+}

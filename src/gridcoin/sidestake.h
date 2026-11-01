@@ -6,11 +6,13 @@
 #define GRIDCOIN_SIDESTAKE_H
 
 #include <key_io.h>
+#include <atomic>
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/contract/registry_db.h"
 #include "gridcoin/support/enumbytes.h"
 #include "serialize.h"
+#include "util/fraction.h"
 #include "logging.h"
 
 namespace GRC {
@@ -27,13 +29,13 @@ public:
     Allocation();
 
     //!
-    //! \brief Allocation constructor from a double input. This multiplies the double by 1000, rounds, casts to int64_t,
-    //! and then constructs Fraction(x, 1000, true), which essentially creates a fraction representative of the double
-    //! to the third decimal place.
+    //! \brief Allocation constructor from a double input. This multiplies the double by 10000, rounds, casts to int64_t,
+    //! and then constructs Fraction(x, 10000, true): the double at basis-point resolution, reduced. Every allocation
+    //! denominator built this way divides 10000, which the Fraction addition fast paths are tuned for.
     //!
     //! \param double allocation
     //!
-    Allocation(const double& allocation);
+    Allocation(double allocation);
 
     //!
     //! \brief Initialize an allocation from a Fraction. This is primarily used for casting. Note that no attempt to
@@ -48,7 +50,7 @@ public:
     //! \param numerator
     //! \param denominator
     //!
-    Allocation(const int64_t& numerator, const int64_t& denominator);
+    Allocation(int64_t numerator, int64_t denominator);
 
     //!
     //! \brief Initialize an allocation directly from specifying a numerator and denominator, specifying the simplification
@@ -58,7 +60,7 @@ public:
     //! \param denominator
     //! \param simplify
     //!
-    Allocation(const int64_t& numerator, const int64_t& denominator, const bool& simplify);
+    Allocation(int64_t numerator, int64_t denominator, bool simplify);
 
     //!
     //! \brief Allocations extend the Fraction class and can also represent the result of the allocation constructed fraction
@@ -76,33 +78,33 @@ public:
     double ToPercent() const;
 
     Allocation operator+(const Allocation& rhs) const;
-    Allocation operator+(const int64_t& rhs) const;
+    Allocation operator+(int64_t rhs) const;
     Allocation operator-(const Allocation& rhs) const;
-    Allocation operator-(const int64_t& rhs) const;
+    Allocation operator-(int64_t rhs) const;
     Allocation operator*(const Allocation& rhs) const;
-    Allocation operator*(const int64_t& rhs) const;
+    Allocation operator*(int64_t rhs) const;
     Allocation operator/(const Allocation& rhs) const;
-    Allocation operator/(const int64_t& rhs) const;
+    Allocation operator/(int64_t rhs) const;
     Allocation& operator+=(const Allocation& rhs);
-    Allocation& operator+=(const int64_t& rhs);
+    Allocation& operator+=(int64_t rhs);
     Allocation& operator-=(const Allocation& rhs);
-    Allocation& operator-=(const int64_t& rhs);
+    Allocation& operator-=(int64_t rhs);
     Allocation& operator*=(const Allocation& rhs);
-    Allocation& operator*=(const int64_t& rhs);
+    Allocation& operator*=(int64_t rhs);
     Allocation& operator/=(const Allocation& rhs);
-    Allocation& operator/=(const int64_t& rhs);
+    Allocation& operator/=(int64_t rhs);
     bool operator==(const Allocation& rhs) const;
     bool operator!=(const Allocation& rhs) const;
     bool operator<=(const Allocation& rhs) const;
     bool operator>=(const Allocation& rhs) const;
     bool operator<(const Allocation& rhs) const;
     bool operator>(const Allocation& rhs) const;
-    bool operator==(const int64_t& rhs) const;
-    bool operator!=(const int64_t& rhs) const;
-    bool operator<=(const int64_t& rhs) const;
-    bool operator>=(const int64_t& rhs) const;
-    bool operator<(const int64_t& rhs) const;
-    bool operator>(const int64_t& rhs) const;
+    bool operator==(int64_t rhs) const;
+    bool operator!=(int64_t rhs) const;
+    bool operator<=(int64_t rhs) const;
+    bool operator>=(int64_t rhs) const;
+    bool operator<(int64_t rhs) const;
+    bool operator>(int64_t rhs) const;
 };
 
 //!
@@ -132,7 +134,7 @@ public:
 
     CTxDestination m_destination; //!< The destination of the sidestake.
 
-    Allocation m_allocation;      //!< The allocation is a Fraction in the form x / 1000 where x is between 0 and 1000 inclusive.
+    Allocation m_allocation;      //!< The allocation is a Fraction, by convention x / 10000 with x between 0 and 10000 inclusive.
 
     std::string m_description;    //!< The description of the sidestake (optional)
 
@@ -248,7 +250,7 @@ public:
 
     CTxDestination m_destination; //!< The destination of the sidestake.
 
-    Allocation m_allocation;      //!< The allocation is a Fraction in the form x / 1000 where x is between 0 and 1000 inclusive.
+    Allocation m_allocation;      //!< The allocation is a Fraction, by convention x / 10000 with x between 0 and 10000 inclusive.
 
     std::string m_description;    //!< The description of the sidestake (optional)
 
@@ -719,7 +721,7 @@ public:
     //! as a startup argument, because contract replay storage and full reversion has
     //! been implemented for sidestake entries.
     //!
-    void Reset() override;
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a sidestake entry contract is valid.
@@ -728,21 +730,22 @@ public:
     //! \param tx       Transaction that contains the contract.
     //! \param DoS      Misbehavior out.
     //!
-    //! \return \c true if the contract contains a valid sidestake entry.
+    //! \return \c true if the contract contains a valid sidestake entry. Judged at the next height after the
+    //! tip, the height the transaction would be mined at.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a sidestake entry contract is valid including block context. This is used
-    //! in ConnectBlock. Note that for sidestake entries this simply calls Validate as there is no
-    //! block level specific validation to be done at the current time.
+    //! in ConnectBlock. Sidestake contracts are valid only from block version 13; from there it applies the
+    //! same rules as Validate, judged at the height of the block rather than at the next height after the tip.
     //!
     //! \param ctx ContractContext containing the sidestake entry data to validate.
     //! \param DoS Misbehavior score out.
     //!
     //! \return  \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Add a sidestake entry to the registry from contract data. For the sidestake registry
@@ -751,7 +754,7 @@ public:
     //!
     //! \param ctx
     //!
-    void Add(const ContractContext& ctx) override;
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Mark a sidestake entry deleted in the registry from contract data. For the sidestake registry
@@ -759,7 +762,7 @@ public:
     //! is actually symmetric to both.
     //! \param ctx
     //!
-    void Delete(const ContractContext& ctx) override;
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Allows local (voluntary) sidestakes to be added to the in-memory local map and not persisted to
@@ -780,13 +783,55 @@ public:
     void NonContractDelete(const CTxDestination& destination, const bool& save_to_file = true);
 
     //!
+    //! \brief Change ONLY the allocation of an existing local sidestake, leaving its
+    //! description and status as currently stored.
+    //!
+    //! Exists so a caller editing one field does not have to read the whole entry,
+    //! rebuild it, and write it back through NonContractAdd(). That read-modify-write
+    //! spans two separate acquisitions of the registry lock, so a
+    //! LoadLocalSideStakesFromConfig() landing in between (RwSettingsUpdated, e.g. from
+    //! the changesettings RPC) is silently reverted by the fields the caller was not
+    //! trying to change. Here the surviving fields are read under the same lock as the
+    //! write, so there is nothing to lose.
+    //!
+    //! \param destination Map key of the entry to modify.
+    //! \param allocation New allocation.
+    //! \param save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
+    //!
+    //! \return false if no local entry exists for \p destination (nothing written).
+    //!
+    //! NOT COVERED BY TESTS: that the surviving fields are read inside THIS lock
+    //! acquisition rather than an earlier one is the whole point, and no
+    //! single-threaded test can tell the difference (see the note in
+    //! src/test/gridcoin/sidestake_tests.cpp). Keep the read where it is.
+    //!
+    bool NonContractSetAllocation(const CTxDestination& destination,
+                                  const Allocation& allocation,
+                                  const bool& save_to_file = true);
+
+    //!
+    //! \brief Change ONLY the description of an existing local sidestake, leaving its
+    //! allocation and status as currently stored. See NonContractSetAllocation() for
+    //! why this exists rather than a read-modify-write through NonContractAdd().
+    //!
+    //! \param destination Map key of the entry to modify.
+    //! \param description New description (already sanitized by the caller).
+    //! \param save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
+    //!
+    //! \return false if no local entry exists for \p destination (nothing written).
+    //!
+    bool NonContractSetDescription(const CTxDestination& destination,
+                                   const std::string& description,
+                                   const bool& save_to_file = true);
+
+    //!
     //! \brief Revert the registry state for the sidestake entry to the state prior
     //! to this ContractContext application. This is typically used
     //! during reorganizations, where blocks are disconnected.
     //!
     //! \param ctx References the sidestake entry contract and associated context.
     //!
-    void Revert(const ContractContext& ctx) override;
+    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Initialize the sidestakeRegistry, which now includes restoring the state of the sidestakeRegistry from
@@ -839,6 +884,25 @@ public:
     void LoadLocalSideStakesFromConfig();
 
     //!
+    //! \brief Monotonic in-memory revision of the LOCAL (voluntary, rwsettings-
+    //! persisted) sidestake state, advanced at every local mutation commit
+    //! (design §4.4 versioned refetch). Lets a consumer (e.g. the GUI sidestake
+    //! model via interfaces::SideStakeManager) keep a high-water mark, drop stale
+    //! RwSettingsUpdated notifications, and read-its-writes.
+    //!
+    //! Scope is deliberately local-only: the mandatory (contract) side already has
+    //! block-height ordering and does not drive the GUI's RwSettingsUpdated
+    //! refresh, so contract Add/Delete/Revert do not touch this counter. It is
+    //! memory-only (reset to 0 on restart, per §4.4 point 4), never serialized,
+    //! not consensus state. It is distinct from both SideStakePayload::m_version
+    //! (a payload serialization format version) and the SideStakeDB format version
+    //! passed to m_sidestake_db on construction — hence "revision", not "version".
+    //!
+    //! \return The current local sidestake revision.
+    //!
+    uint64_t GetLocalSideStakeRevision() const;
+
+    //!
     //! \brief Specializes the template RegistryDB for the SideStake class. Note that std::set<MandatorySideStake>
     //! is not actually used.
     //!
@@ -854,6 +918,12 @@ private:
     //!
     //! \brief Protects the registry with multithreaded access. This is implemented INTERNAL to the registry class.
     //!
+    //! Deliberately PRIVATE: the locking is a black box. Every public method that
+    //! touches the maps takes this itself, so no caller needs it — and a caller
+    //! that thinks it needs it across several calls should re-read
+    //! ActiveSideStakeEntries() first (see the note there on why the total
+    //! allocation ceiling is enforced on READ, not on write).
+    //!
     mutable CCriticalSection cs_lock;
 
     //!
@@ -863,6 +933,20 @@ private:
     //! \param ctx The contract context for the add or delete.
     //!
     void AddDelete(const ContractContext& ctx);
+
+    //!
+    //! \brief The rules Validate and BlockValidate share, judged as of \p height. From block version 15 an ADD
+    //! must also carry a positive allocation whose reduced denominator divides 10000, the form Allocation(double)
+    //! builds, and the total-allocation check counts an ADD's destination once, replacing its current allocation,
+    //! and does not judge a REMOVE.
+    //!
+    //! \param contract Contains the sidestake entry contract to validate.
+    //! \param height   Height of the block the contract is in, or would be mined in.
+    //! \param DoS      Misbehavior score out.
+    //!
+    //! \return \c true if the contract passes.
+    //!
+    bool ValidateAtHeight(const Contract& contract, const int height, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Private helper function for non-contract add and delete to align the config r-w file with
@@ -878,24 +962,45 @@ private:
     //!
     Allocation GetMandatoryAllocationsTotal() const;
 
+    //!
+    //! \brief The total allocation of the active mandatory sidestakes other than \p destination's: the total an
+    //! ADD for \p destination would replace its own allocation in.
+    //!
+    //! \param destination The destination whose active allocation, if any, is left out.
+    //!
+    //! \return The sum, over the same entries GetMandatoryAllocationsTotal() sums, of all but \p destination's.
+    //!
+    Allocation GetMandatoryAllocationsTotalExcept(const CTxDestination& destination) const;
+
     void SubscribeToCoreSignals();
     void UnsubscribeFromCoreSignals();
 
-    LocalSideStakeMap m_local_sidestake_entries;          //!< Contains the local (non-contract) sidestake entries.
-    MandatorySideStakeMap m_mandatory_sidestake_entries;  //!< Contains the mandatory sidestake entries, including DELETED.
-    PendingSideStakeMap m_pending_sidestake_entries {};   //!< Not used. Only to satisfy the template.
+    LocalSideStakeMap m_local_sidestake_entries GUARDED_BY(cs_lock);          //!< Contains the local (non-contract) sidestake entries.
+    MandatorySideStakeMap m_mandatory_sidestake_entries GUARDED_BY(cs_lock);  //!< Contains the mandatory sidestake entries, including DELETED.
+    PendingSideStakeMap m_pending_sidestake_entries GUARDED_BY(cs_lock) {};   //!< Not used. Only to satisfy the template.
 
-    std::set<SideStake> m_expired_sidestake_entries {};   //!< Not used. Only to satisfy the template.
+    std::set<SideStake> m_expired_sidestake_entries GUARDED_BY(cs_lock) {};   //!< Not used. Only to satisfy the template.
 
-    MandatorySideStakeMap m_sidestake_first_entries {};   //!< Not used. Only to satisfy the template.
+    MandatorySideStakeMap m_sidestake_first_entries GUARDED_BY(cs_lock) {};   //!< Not used. Only to satisfy the template.
 
-    SideStakeDB m_sidestake_db;                           //!< The internal sidestake db object for leveldb persistence.
+    SideStakeDB m_sidestake_db GUARDED_BY(cs_lock);                           //!< The internal sidestake db object for leveldb persistence.
 
-    bool m_local_entry_already_saved_to_config = false;   //!< Flag to prevent reload on signal if individual entry saved already.
+    //! \brief Flag to prevent reload on signal if an individual entry was saved already.
+    //!
+    //! Read at the top of LoadLocalSideStakesFromConfig() (a core-signal callback)
+    //! without cs_lock, and written by SaveLocalSideStakesToConfig() / Initialize().
+    //! A cross-thread read/write of a plain bool is undefined behaviour, so this is
+    //! std::atomic<bool>. All accesses use memory_order_relaxed: it is a pure debounce
+    //! flag, no other state is published through it. It is deliberately NOT
+    //! GUARDED_BY(cs_lock) — it is accessed outside the registry lock by design.
+    std::atomic<bool> m_local_entry_already_saved_to_config{false};
 
-public:
-
-    SideStakeDB& GetSideStakeDB();
+    //! \brief Monotonic in-memory revision of the local sidestake state (design
+    //! §4.4). Incremented at each LOCAL mutation commit while cs_lock is held (so
+    //! the bump is ordered with the map change); read lock-free via
+    //! GetLocalSideStakeRevision(). See the accessor's note — observability-only,
+    //! local-scope, never consensus state.
+    std::atomic<uint64_t> m_local_sidestake_revision{0};
 }; // sidestakeRegistry
 
 //!

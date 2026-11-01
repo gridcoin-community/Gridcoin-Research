@@ -1,4 +1,5 @@
 #include <QWidget>
+#include "qt/guilog.h"
 #include <QListView>
 
 #include "overviewpage.h"
@@ -6,26 +7,23 @@
 
 #ifndef Q_MOC_RUN
 #include "qt/decoration.h"
-#include "main.h"
 #endif
 #include "researcher/researchermodel.h"
 #include "mrcmodel.h"
 #include "walletmodel.h"
+#include "balancecopyfilter.h"
 #include "bitcoinunits.h"
 #include "optionsmodel.h"
 #include "transactiontablemodel.h"
-#include "transactionfilterproxy.h"
+#include "overviewtxmodel.h"
+#include "uint256.h"
 #include "guiutil.h"
 #include "guiconstants.h"
-#include "gridcoin/voting/fwd.h"
 
 #include <functional>
 
 #include <QAbstractItemDelegate>
-#include <QApplication>
-#include <QClipboard>
 #include <QLabel>
-#include <QMenu>
 #include <QPainter>
 
 #define DECORATION_SIZE 40
@@ -166,6 +164,7 @@ OverviewPage::OverviewPage(QWidget *parent) :
     // Recent Transactions
     ui->listTransactions->setItemDelegate(txdelegate);
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
+    ui->listTransactions->setAccessibleName(tr("Recent transactions"));
     updateTransactions();
 
     connect(ui->listTransactions, &QListView::clicked, this, &OverviewPage::handleTransactionClicked);
@@ -180,20 +179,20 @@ OverviewPage::OverviewPage(QWidget *parent) :
 
     showHideMRCToolButton();
 
-    // Set up right-click "Copy amount" context menus on balance labels
+    // Install copy-behavior handlers on the balance labels. See
+    // src/qt/balancecopyfilter.h for the rationale (issue #2994):
+    // right-click "Copy amount" copies the full formatted balance, and
+    // Ctrl-C copies the user's selection -- both with thin-space thousands
+    // separators stripped so the clipboard value is portable.
     auto setupCopyMenu = [this](QLabel* label, std::function<qint64()> getAmount) {
-        label->setContextMenuPolicy(Qt::CustomContextMenu);
-        connect(label, &QWidget::customContextMenuRequested, this, [this, label, getAmount](const QPoint& pos) {
-            if (m_privacy) return;
-            QMenu menu;
-            menu.addAction(tr("Copy amount"), this, [this, getAmount]() {
+        new BalanceCopyFilter(
+            label,
+            [this, getAmount]() {
                 int unit = walletModel->getOptionsModel()->getDisplayUnit();
-                QString text = BitcoinUnits::format(unit, getAmount());
-                text.remove(BitcoinUnits::THIN_SPACE);
-                QApplication::clipboard()->setText(text);
-            });
-            menu.exec(label->mapToGlobal(pos));
-        });
+                return BitcoinUnits::format(unit, getAmount());
+            },
+            tr("Copy amount"),
+            [this]() { return !m_privacy; });
     };
 
     setupCopyMenu(ui->headerBalanceLabel, [this]() { return currentBalance; });
@@ -208,8 +207,14 @@ OverviewPage::OverviewPage(QWidget *parent) :
 
 void OverviewPage::handleTransactionClicked(const QModelIndex &index)
 {
-    if(filter)
-        emit transactionClicked(filter->mapToSource(index));
+    // Emit the clicked row's tx identity; the detailed view re-resolves it to a
+    // row through its own windowed cursor (no full-replica index needed).
+    if (m_overviewTxModel) {
+        const uint256 txid = m_overviewTxModel->txidAt(index.row());
+        if (!txid.IsNull()) {
+            emit transactionClicked(txid);
+        }
+    }
 }
 
 void OverviewPage::handlePollLabelClicked()
@@ -240,7 +245,7 @@ int OverviewPage::getNumTransactionsForView()
     // takes up the space and would cause the calculation to be off.
     const size_t contentsHeight = std::max(ui->recentTransactionsFrame->height() - ui->recentTransLabel->height(), 0);
 
-    LogPrint(BCLog::LogFlags::QT, "INFO: %s: contentsHeight = %u, itemHeight = %u",
+    GUILogPrint(GUILogCategory::QT, "INFO: %s: contentsHeight = %u, itemHeight = %u",
              __func__, contentsHeight, itemHeight);
 
     // take one off so that there is not a "half-visible one" there, ensure not below 0.
@@ -252,46 +257,43 @@ int OverviewPage::getNumTransactionsForView()
 
 void OverviewPage::updateTransactions()
 {
-    if (filter)
+    if (m_overviewTxModel)
     {
         int numItems = getNumTransactionsForView();
 
-        LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(): numItems = %d, getLimit() = %d",
-                 numItems, filter->getLimit());
+        GUILogPrint(GUILogCategory::QT, "OverviewPage::updateTransactions(): numItems = %d, limit = %d",
+                 numItems, m_overviewTxModel->limit());
 
-        // This is a "stairstep" approach, using x3 to x6 factors to size the setLimit.
-        // Based on testing with a wallet with a large number of transactions (40k+)
-        // Using a factor of three is a good balance between the setRowHidden loop
-        // and the very high expense of the getLimit call, which invalidates the filter
-        // and sort, and implicitly redoes the sort, which can take seconds for a large
-        // wallet.
-
-        // Most main window resizes will be done without an actual call to setLimit.
-        if (filter->getLimit() < numItems)
+        // "Stairstep" the served-window cap with x3..x6 factors so most window
+        // resizes do not change the limit at all. The cap is now a cheap
+        // setViewLimit on the producer cursor (boundary Insert/Remove events,
+        // applied on the next drain) rather than the old proxy's full re-sort,
+        // but the stairstep still avoids needless churn.
+        if (m_overviewTxModel->limit() < numItems)
         {
-            filter->setLimit(numItems * 3);
-            LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
+            m_overviewTxModel->setLimit(numItems * 3);
+            GUILogPrint(GUILogCategory::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
         }
-        else if (filter->getLimit() > numItems * 6)
+        else if (m_overviewTxModel->limit() > numItems * 6)
         {
-            filter->setLimit(numItems * 3);
-            LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
+            m_overviewTxModel->setLimit(numItems * 3);
+            GUILogPrint(GUILogCategory::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
         }
 
-        for (int i = 0; i <= filter->getLimit(); ++i)
+        for (int i = 0; i <= m_overviewTxModel->limit(); ++i)
         {
             ui->listTransactions->setRowHidden(i, i >= numItems);
         }
 
         ui->listTransactions->update();
 
-        int transaction_count = filter->rowCount();
+        int transaction_count = m_overviewTxModel->rowCount();
 
         // This needs to be both here and in SetPrivacy because the trigger could come from either.
         ui->recentTransactionsNoResult->setVisible(m_privacy || !transaction_count);
         ui->listTransactions->setVisible(!m_privacy && transaction_count);
 
-        LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), end update");
+        GUILogPrint(GUILogCategory::QT, "OverviewPage::updateTransactions(), end update");
     }
 }
 
@@ -366,7 +368,7 @@ void OverviewPage::setCurrentPollTitle(const QString& title)
 void OverviewPage::setPrivacy(bool privacy)
 {
     m_privacy = privacy;
-    int transaction_count = filter->rowCount();
+    int transaction_count = m_overviewTxModel ? m_overviewTxModel->rowCount() : 0;
 
     if (currentBalance != -1) {
         setBalance(currentBalance, currentStake, currentUnconfirmedBalance, currentImmatureBalance);
@@ -382,7 +384,7 @@ void OverviewPage::setPrivacy(bool privacy)
     ui->listTransactions->setVisible(!m_privacy && transaction_count);
     if (researcherModel) researcherModel->setMaskCpidMagnitudeAccrual(m_privacy);
 
-    LogPrint(BCLog::LogFlags::QT, "INFO: %s: m_privacy = %u", __func__, m_privacy);
+    GUILogPrint(GUILogCategory::QT, "INFO: %s: m_privacy = %u", __func__, m_privacy);
 
     updateTransactions();
     updateResearcherStatus();
@@ -430,22 +432,20 @@ void OverviewPage::setWalletModel(WalletModel *model)
     this->walletModel = model;
     if(model && model->getOptionsModel())
     {
-        // Set up transaction list
-        filter.reset(new TransactionFilterProxy());
-        filter->setSourceModel(model->getTransactionTableModel());
-        filter->setDynamicSortFilter(true);
-        filter->setSortRole(Qt::EditRole);
-        filter->setShowInactive(false);
-
+        // Set up the recent-transactions list as a mini windowed model (PR3):
+        // a VIEW_OVERVIEW cursor (Status DESC, inactive masked) maintained in the
+        // producer WalletTxStore backs it, instead of a client-side
+        // QSortFilterProxyModel over the full TransactionTableModel replica.
         int num_transactions_for_view = getNumTransactionsForView();
-        filter->setLimit(num_transactions_for_view);
+        m_overviewTxModel.reset(new OverviewTxModel(model, num_transactions_for_view));
 
-        LogPrint(BCLog::LogFlags::QT, "INFO: %s: num_transactions_for_view = %i, getLimit() = %i",
-                 __func__, num_transactions_for_view, filter->getLimit());
+        GUILogPrint(GUILogCategory::QT, "INFO: %s: num_transactions_for_view = %i, limit = %i",
+                 __func__, num_transactions_for_view, m_overviewTxModel->limit());
 
-        filter->sort(TransactionTableModel::Status, Qt::DescendingOrder);
-        ui->listTransactions->setModel(filter.get());
-        ui->listTransactions->setModelColumn(TransactionTableModel::ToAddress);
+        ui->listTransactions->setModel(m_overviewTxModel.get());
+        // OverviewTxModel is a single-column list whose column already renders the
+        // ToAddress column's roles, so no setModelColumn is needed (the old proxy
+        // exposed all 5 columns and selected ToAddress here).
 
         // Keep up to date with wallet
         setBalance(model->getBalance(), model->getStake(), model->getUnconfirmedBalance(), model->getImmatureBalance());
@@ -461,6 +461,17 @@ void OverviewPage::setWalletModel(WalletModel *model)
 
         // Connect the privacy mode setting to the options dialog.
         connect(walletModel->getOptionsModel(), &OptionsModel::MaskValuesChanged, this, &OverviewPage::setPrivacy);
+    }
+    else if (!model)
+    {
+        // Detach on teardown (Phase 1c-ii-c): destroy the OverviewTxModel now, so
+        // its destructor unregisters the VIEW_OVERVIEW cursor while the previous
+        // WalletModel and its WalletTxSource are still alive. BitcoinGUI drives
+        // this on shutdown before the source is torn down; deferring to the
+        // page's own destruction (after the source is gone) would dereference a
+        // freed source.
+        ui->listTransactions->setModel(nullptr);
+        m_overviewTxModel.reset();
     }
 
     // update the display unit, to not use the default ("BTC")

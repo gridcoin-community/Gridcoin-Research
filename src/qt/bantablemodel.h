@@ -5,8 +5,7 @@
 #ifndef BITCOIN_QT_BANTABLEMODEL_H
 #define BITCOIN_QT_BANTABLEMODEL_H
 
-#include <net.h>
-#include "banman.h"
+#include "interfaces/node.h"
 
 #include <memory>
 
@@ -16,17 +15,12 @@
 class ClientModel;
 class BanTablePriv;
 
-struct CCombinedBan {
-    CSubNet subnet;
-    CBanEntry banEntry;
-};
-
 class BannedNodeLessThan
 {
 public:
     BannedNodeLessThan(int nColumn, Qt::SortOrder fOrder) :
         column(nColumn), order(fOrder) {}
-    bool operator()(const CCombinedBan& left, const CCombinedBan& right) const;
+    bool operator()(const interfaces::BannedNode& left, const interfaces::BannedNode& right) const;
 
 private:
     int column;
@@ -34,15 +28,15 @@ private:
 };
 
 /**
-   Qt model providing information about connected peers, similar to the
-   "getpeerinfo" RPC call. Used by the rpc console UI.
+   Qt model providing information about banned peers, similar to the
+   "listbanned" RPC call. Used by the rpc console UI.
  */
 class BanTableModel : public QAbstractTableModel
 {
     Q_OBJECT
 
 public:
-    explicit BanTableModel(ClientModel *parent = nullptr);
+    explicit BanTableModel(interfaces::Node& node, ClientModel *parent = nullptr);
     ~BanTableModel();
     void startAutoRefresh();
     void stopAutoRefresh();
@@ -68,7 +62,7 @@ public Q_SLOTS:
     void refresh();
 
 private:
-    //interfaces::Node& m_node;
+    interfaces::Node& m_node;
     ClientModel *clientModel;
     QStringList columns;
     std::unique_ptr<BanTablePriv> priv;

@@ -6,6 +6,9 @@
 #ifndef BITCOIN_WALLET_WALLET_H
 #define BITCOIN_WALLET_WALLET_H
 
+#include <atomic>
+#include <chrono>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -13,29 +16,62 @@
 #include <stdlib.h>
 
 #include "amount.h"
+#include "chain.h"  // cs_main, mapBlockIndex
+#include "node/shutdown.h"
 #include "consensus/tx_verify.h"
 #include "gridcoin/staking/status.h"
-#include "main.h"
+#include "validationinterface.h"
 #include "key.h"
 #include "keystore.h"
+#include "primitives/transaction.h"
 #include "script.h"
 #include "streams.h"
 #include "node/ui_interface.h"
 #include <util/string.h>
 #include "wallet/generated_type.h"
+#include "wallet/transaction.h"
 #include "wallet/walletdb.h"
 #include <wallet/walletutil.h>
 #include "wallet/ismine.h"
 
-extern bool fWalletUnlockStakingOnly;
 extern bool fConfChange;
+
+// Wallet settings, defined in wallet.cpp (moved from main.{h,cpp}, issue
+// #3125 C9). nTransactionFee is initialized to MIN_TX_FEE * 10 for block
+// version 11; -paytxfee overrides it in AppInit2.
+extern int64_t nTransactionFee;
+extern int64_t nReserveBalance;
+extern int64_t nMinimumInputValue;
+extern unsigned int nDerivationMethodIndex;
+
 class CAccountingEntry;
 class CWalletTx;
+class DeferredRelay;
 class CReserveKey;
 class COutput;
 class CCoinControl;
 
-GRC::MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout);
+//! An output the stake miner may use as a kernel, with the time of the block that confirmed it.
+struct StakeCandidate
+{
+    const CWalletTx* tx{nullptr}; //!< The transaction that created the output.
+    unsigned int n{0};            //!< The output's index in tx.
+    unsigned int block_time{0};   //!< Time of the block that confirmed tx, which the kernel hash commits to.
+};
+
+GRC::MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//! Return the height of the block confirming this state, or -1 if its block
+//! is not in mapBlockIndex. The wallet.dat format does not persist confirming-
+//! block height (CMerkleTx only stores hashBlock + nIndex), so consumers that
+//! need a height look it up from the block index on demand via this helper.
+//! Cost is a single unordered_map lookup, roughly 50 ns. Caller must hold
+//! cs_main because it touches mapBlockIndex.
+inline int GetConfirmedHeight(const TxStateConfirmed& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    auto it = mapBlockIndex.find(state.m_confirmed_block_hash);
+    return (it != mapBlockIndex.end()) ? it->second->nHeight : -1;
+}
 
 static const unsigned int DEFAULT_KEYPOOL_SIZE = 100;
 static const unsigned int DEFAULT_KEYPOOL_SIZE_PRE_HD = 1000;
@@ -73,10 +109,29 @@ public:
     }
 };
 
+/** Address book data for a destination: the user-facing label plus a purpose tag.
+ *
+ * Mirrors Bitcoin 0.17's CAddressBookData. The two fields persist as two separate
+ * walletdb records ("name" and "purpose") keyed by address and are assembled in memory at
+ * load, so this struct is intentionally not serialized as a unit (no SERIALIZE_METHODS).
+ *
+ * No implicit conversion to std::string is provided: every consumer must read .name
+ * explicitly, so the account/label disentanglement surfaces at compile time rather than
+ * silently converting.
+ */
+class CAddressBookData
+{
+public:
+    std::string name;
+    std::string purpose;
+
+    CAddressBookData() : purpose("unknown") {}
+};
+
 /** A CWallet is an extension of a keystore, which also maintains a set of transactions and balances,
  * and provides the ability to create new transactions.
  */
-class CWallet : public CCryptoKeyStore
+class CWallet : public CCryptoKeyStore, public CValidationInterface
 {
 private:
     bool SelectCoins(int64_t nTargetValue, unsigned int nSpendTime,
@@ -90,6 +145,20 @@ private:
 
     /* the HD chain data model (external chain counters) */
     CHDChain hdChain;
+
+    //! Random per-wallet identity tag (16 bytes), minted once and persisted in
+    //! wallet.dat as the "walletuuid" record. Used by the multiprocess handshake
+    //! to fingerprint *which wallet* a node is serving (independent of chain state
+    //! or datadir path). Not secret, not key-derived. Empty until loaded/minted.
+    std::vector<unsigned char> m_wallet_uuid;
+
+    /* the seed phrase record for a phrase-backed HD hierarchy */
+    CSeedPhraseData m_seed_phrase_data GUARDED_BY(cs_wallet);
+
+    //! true when m_seed_phrase_data.vchBlob holds the wallet-crypter
+    //! ciphertext (i.e. it came from or goes to a "cseedphrase" record)
+    //! rather than the plaintext enciphered blob
+    bool m_seed_phrase_blob_crypted GUARDED_BY(cs_wallet) = false;
 
 public:
     /// Main wallet lock.
@@ -175,7 +244,34 @@ public:
     int64_t nOrderPosNext GUARDED_BY(cs_wallet);
     std::map<uint256, int> mapRequestCount GUARDED_BY(cs_wallet);
 
-    std::map<CTxDestination, std::string> mapAddressBook GUARDED_BY(cs_wallet);
+    std::map<CTxDestination, CAddressBookData> mapAddressBook GUARDED_BY(cs_wallet);
+
+    //! Maps spent outpoints to the transaction that spends them.
+    //! Multimap because reorgs can temporarily create duplicates.
+    std::multimap<COutPoint, uint256> mapTxSpends GUARDED_BY(cs_wallet);
+
+    //! Hash of the last block the wallet processed. Updated by
+    //! blockConnected/blockDisconnected for incremental sync & reorg detection.
+    uint256 m_last_block_processed GUARDED_BY(cs_wallet);
+    int m_last_block_processed_height GUARDED_BY(cs_wallet) = 0;
+
+    //! Which block's connect displaced each transaction the wallet is holding
+    //! conflicted, keyed by txid. Read by TakeConflictedBy when that block is
+    //! disconnected.
+    //!
+    //! Deliberately transient. The on-disk wallet format carries one hashBlock
+    //! slot per transaction, holding the null hash for an in-mempool entry
+    //! (and CONFLICTED_HASH_SENTINEL for the inactive state),
+    //! and transaction.h reserves the sentinel range so a future state stays
+    //! downgrade-safe -- writing a real block hash into that slot is exactly
+    //! the failure the range exists to prevent, since an older client would
+    //! read the transaction as confirmed in that block. A restart therefore
+    //! starts empty, and a conflict recorded before it is not re-evaluated.
+    //! An entry leaves only when its block is disconnected, so the map holds
+    //! one record per displaced own transaction for the rest of the session.
+    //! That is the intended scope: a reorg is a within-session event, and the
+    //! conflicts worth re-evaluating are the ones this session recorded.
+    std::map<uint256, uint256> m_conflicting_block GUARDED_BY(cs_wallet);
 
     CPubKey vchDefaultKey GUARDED_BY(cs_wallet);
     int64_t nTimeFirstKey GUARDED_BY(cs_wallet);
@@ -187,21 +283,31 @@ public:
         return wallet::IsFeatureSupported(nWalletVersion, wf);
     }
 
-    void AvailableCoinsForStaking(std::vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& nBalanceOut) const;
-    bool SelectCoinsForStaking(unsigned int nSpendTime, std::vector<std::pair<const CWalletTx*,unsigned int> >& vCoinsRet,
-                               GRC::MinerStatus::ErrorFlags& not_staking_error, int64_t& balance_out, bool fMiner = false) const;
+    void AvailableCoinsForStaking(std::vector<StakeCandidate>& vCoins, unsigned int nSpendTime, int64_t& nBalanceOut,
+                                  bool fMiner = false) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool SelectCoinsForStaking(unsigned int nSpendTime, std::vector<StakeCandidate>& vCoinsRet,
+                               GRC::MinerStatus::ErrorFlags& not_staking_error, int64_t& balance_out, bool fMiner = false) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed = true, const CCoinControl* coinControl = nullptr,
                         bool fIncludeStakingCoins = false) const;
     bool SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins,
                             std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
     bool SelectSmallestCoins(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins,
                              std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
+    //! \brief Coin selection for contract transactions: prefer the smallest UTXOs
+    //! (dust consolidation) but fall back to normal target-based selection when
+    //! the smallest-first set would exceed a standard-tx-safe input budget, so a
+    //! large burn on a fragmented wallet cannot produce a >MAX_STANDARD_TX_SIZE
+    //! transaction (issue #3120). Takes \p vCoins so it is unit-testable in
+    //! isolation, mirroring SelectCoinsMinConf / SelectSmallestCoins.
+    bool SelectContractCoins(int64_t nTargetValue, unsigned int nSpendTime, std::vector<COutput> vCoins,
+                             std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
 
     // keystore implementation
     // Generate a new key
     CPubKey GenerateNewKey();
     // Adds a key to the store, and saves it to disk.
-    bool AddKey(const CKey& key);
+    bool AddKey(const CKey& key) override;
     // Adds a key to the store, without saving it to disk (used by LoadWallet)
     bool LoadKey(const CKey& key) { return CCryptoKeyStore::AddKey(key); }
     // Load metadata (used by LoadWallet)
@@ -215,17 +321,116 @@ public:
     }
 
     // Adds an encrypted key to the store, and saves it to disk.
-    bool AddCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret);
+    bool AddCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret) override;
     // Adds an encrypted key to the store, without saving it to disk (used by LoadWallet)
     bool LoadCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret);
-    bool AddCScript(const CScript& redeemScript);
+    bool AddCScript(const CScript& redeemScript) override;
     bool LoadCScript(const CScript& redeemScript);
 
-    bool Unlock(const SecureString& strWalletPassphrase);
+    //! \brief Is this wallet unlocked, but for staking only?
+    //!
+    //! Replaces the former fWalletUnlockStakingOnly global, which lived beside
+    //! the lock state rather than in it. The scope answers both questions at
+    //! once, so this can never read "unrestricted" on a wallet that was just
+    //! unlocked for staking.
+    bool IsUnlockedForStakingOnly() const
+    {
+        return GetUnlockScope() == UnlockScope::StakingOnly;
+    }
+
+    //! \brief Unlock with an explicit scope and an optional duration.
+    //!
+    //! \p relock_after, when set, is how long this unlock lasts. The deadline
+    //! is stored with the key and the scope, and a one-shot relock is armed on
+    //! the scheduler against this unlock's epoch, so setting a duration and
+    //! arming its timer are ONE operation that cannot be half-done.
+    //!
+    //! Fails if a duration is asked for and no scheduler is RUNNING, rather
+    //! than unlocking without the timer: a caller that asked for sixty seconds
+    //! and silently got forever is the failure this design exists to remove.
+    //!
+    //! It is reachable in production, which an earlier version of this note
+    //! denied. The startup half is now closed -- AppInit2 constructs the
+    //! scheduler BEFORE it starts the RPC server. A walletpassphrase during
+    //! SHUTDOWN can still land where nothing would run the relock, and that one
+    //! does not matter: the unlock does not survive the process (closed #3388).
+    //!
+    //! The decision is taken when the relock is ARMED, not before: the key
+    //! derivation in between takes a calibrated few hundred milliseconds, and
+    //! the scheduler can stop inside it. If the arming is refused, or the
+    //! deadline has already passed by then, the wallet is LOCKED and this
+    //! returns false -- never left unlocked without a timer.
+    //! Why an unlock failed, for a caller that must not report every failure as
+    //! a bad passphrase.
+    enum class UnlockFailure {
+        None,
+
+        //! The passphrase did not decrypt the master key -- or the wallet was
+        //! not in a state that can be unlocked at all.
+        Passphrase,
+
+        //! The passphrase was RIGHT, but the relock could not be armed, or the
+        //! deadline had already passed by the time the key was installed. The
+        //! wallet is locked; granting the unlock would have meant granting it
+        //! with nothing to end it.
+        RelockUnavailable,
+
+        //! Another unlock got there first. Two callers can pass the "is it
+        //! locked?" test before either takes cs_wallet, and the second would
+        //! otherwise replace the first unlock's scope, deadline and epoch --
+        //! retiring the relock armed for it and silently giving the wallet a
+        //! different lifetime than the first caller was told.
+        AlreadyUnlocked,
+    };
+
+    bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
+                std::optional<std::chrono::seconds> relock_after,
+                UnlockFailure* failure_out = nullptr);
+
+    //! \brief Unlock with an explicit scope.
+    //!
+    //! Defaults to Full, which is what an unlock that does not say otherwise has
+    //! always meant (walletpassphrase without its third argument). The scope is
+    //! installed with the master key, so the wallet is never briefly unlocked
+    //! carrying the previous unlock's restriction.
+    bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope = UnlockScope::Full);
+
+    //! \brief Widen an unlock in progress to Full for one operation.
+    //!
+    //! The counterpart of RestrictToStakingOnly(), and what a GUI action that
+    //! needs a full unlock on a staking-only wallet asks for. It re-derives the
+    //! master key from \p strWalletPassphrase and refuses unless that matches
+    //! the key already installed, so it still demands the passphrase.
+    //!
+    //! It does NOT lock and re-unlock. That is what this replaces: locking
+    //! first threw away the unlock's deadline, and the re-unlock that followed
+    //! carried none, so a wallet unlocked by walletpassphrase for a fixed time
+    //! stayed unlocked indefinitely after any GUI action that elevated. It also
+    //! meant a cancelled or mistyped prompt left a staking wallet locked and
+    //! the node no longer staking.
+    //!
+    //! False when the wallet is locked -- there is no unlock to widen, and the
+    //! caller wants Unlock() -- when it is unencrypted, or on a wrong
+    //! passphrase.
+    bool ElevateToFull(const SecureString& strWalletPassphrase);
+
+    //! \brief Hand a scoped elevation back, narrowing the unlock to staking only.
+    //!
+    //! Takes cs_wallet before narrowing, which is what serialises it against a
+    //! spend. CreateTransaction reads the scope inside LOCK2(cs_main,
+    //! cs_wallet) and holds cs_wallet for the whole build, so narrowing under
+    //! cs_KeyStore alone could land just after that read and the build would
+    //! sign anyway. With this, either the spend finishes first or the builder
+    //! sees the restriction.
+    //!
+    //! False when there is nothing to narrow, which covers BOTH a locked wallet
+    //! and an unencrypted one; do not read false as "it was locked".
+    bool RestrictToStakingOnly();
+
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 
-    void GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const;
+    void GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet);
 
 
     /** Increment the next transaction order id
@@ -233,19 +438,144 @@ public:
      */
     int64_t IncOrderPosNext(CWalletDB* pwalletdb = nullptr);
 
-    typedef std::pair<CWalletTx*, CAccountingEntry*> TxPair;
+    // Use hash-based lookup and value-based storage to avoid dangling pointers
+    // when mapWallet reallocates or acentries goes out of scope.
+    // Stores transaction hash + optional accounting entry copy (not a pointer!)
+    typedef std::pair<uint256, std::optional<CAccountingEntry>> TxPair;
     typedef std::multimap<int64_t, TxPair > TxItems;
 
     /** Get the wallet's activity log
         @return multimap of ordered transactions and accounting entries
-        @warning Returned pointers are *only* valid within the scope of passed acentries
+        @warning Transaction hashes must be looked up in mapWallet before use
      */
     TxItems OrderedTxItems(std::list<CAccountingEntry>& acentries, std::string strAccount = "");
 
     void MarkDirty();
-    bool AddToWallet(const CWalletTx& wtxIn, CWalletDB *pwalletdb);
-    bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate = false, bool fFindBlock = false);
+    bool AddToWallet(const CWalletTx& wtxIn, CWalletDB *pwalletdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    /** Record in mapTxSpends that \p tx spends each of its inputs. A row already present is not
+     *  duplicated, and a coinbase spends nothing and records nothing. Every wallet transaction that
+     *  is not abandoned must have its rows, so every path that adds a transaction with inputs to
+     *  mapWallet calls this.
+     *  AbandonTransaction removes an abandoned transaction's rows and the load does not restore
+     *  them, so a reader that must reach abandoned transactions has to walk mapWallet. */
+    void AddToSpends(const CTransaction& tx, const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
     bool EraseFromWallet(uint256 hash);
+
+    /** Central entry point for updating wallet transaction state.
+     *  Called by validation callbacks; handles mapWallet, mapTxSpends,
+     *  balance updates, UI notifications, and persistence.
+     *
+     *  cs_main is required because the producer-side NotifyTransactionChanged
+     *  handler (walletmodel.cpp) reads mapBlockIndex / pindexBest under this
+     *  lock for coinstake/coinbase visibility decisions.
+     */
+    bool SyncTransaction(const CTransactionRef& ptx,
+                        const TxState& state,
+                        bool update_tx = true,
+                        bool rescanning_old_block = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //! Legacy overload — wraps CTransaction in a shared_ptr.
+    bool SyncTransaction(const CTransaction& tx,
+                        const TxState& state,
+                        bool update_tx = true) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        return SyncTransaction(MakeTransactionRef(tx), state, update_tx, false);
+    }
+
+    // -- CValidationInterface callbacks ---------------------------------------
+    // Invoked by the validation/mempool layer through GetMainSignals() with
+    // cs_main held. Lock-order rule for all of these: callers must hold cs_main
+    // and must NOT hold cs_wallet. Most acquire cs_wallet internally;
+    // ChainStateFlushed is the exception -- it only writes the wallet DB and
+    // takes no cs_wallet. Override the (UpperCamelCase) CValidationInterface
+    // virtuals.
+    void TransactionAddedToMempool(const CTransactionRef& tx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+    void BlockConnected(const CBlock& block, int height) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+    void TransactionRemovedFromMempool(const CTransactionRef& tx,
+                                      MemPoolRemovalReason reason) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+    //! A conflicting tx replaced this one in the mempool; erase the defunct copy.
+    void TransactionReplacedInMempool(const CTransactionRef& tx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+    void BlockDisconnected(const CBlock& block, int height) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+    //! Persist the best-block locator so a restored wallet can detect its
+    //! position. Writes wallet DB only; takes no cs_wallet.
+    void ChainStateFlushed(const CBlockLocator& locator) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+
+    //!
+    //! \brief Note that a block's connect displaced these transactions from the
+    //! mempool.
+    //!
+    //! A block that spends an input of a pooled transaction evicts it through
+    //! CTxMemPool::removeConflicts. remove() emits no validation signal, so the
+    //! wallet is never told: the entry keeps TxStateInMempool and only
+    //! GetDepthInMainChain notices, turning depth 0 into -1 because the mempool
+    //! no longer holds it. Nothing anywhere records which block did it, so when
+    //! that block is disconnected the transaction stays at -1 for the rest of
+    //! the session -- rendered Conflicted by every depth-based reader, and
+    //! absent from the local mempool -- though the reason it was displaced is
+    //! gone.
+    //!
+    //! Hashes that are not the wallet's are ignored.
+    //!
+    //! \param hashes The transactions removeConflicts took out.
+    //! \param block_hash The block being connected.
+    //!
+    void RecordConflictedBy(const std::vector<uint256>& hashes, const uint256& block_hash)
+        LOCKS_EXCLUDED(cs_wallet);
+
+    //!
+    //! \brief Take the transactions a block's connect had displaced, forgetting
+    //! the records.
+    //!
+    //! The disconnect asks for its own hash back and re-offers what it gets to
+    //! the mempool, after the resurrect loop so a transaction that legitimately
+    //! still holds the outpoint gets it first. A refusal is the ordinary
+    //! answer, and leaves the wallet exactly as it was; it succeeds when
+    //! whatever displaced the transaction went with the block, which is always
+    //! the case for a coinstake.
+    //!
+    //! Only a transaction the wallet still holds and the mempool does not is
+    //! returned: one that has since confirmed, been abandoned, or found its way
+    //! back into the pool was resolved by another path.
+    //!
+    //! \param block_hash The block being disconnected.
+    //!
+    //! \return The transactions to re-offer, in no particular order.
+    //!
+    std::vector<CTransaction> TakeConflictedBy(const uint256& block_hash) LOCKS_EXCLUDED(cs_wallet);
+
+    // -- Conflict tracking & abandonment -------------------------------------
+    /** Return txids that spend the same inputs as @p txid. */
+    std::set<uint256> GetConflicts(const uint256& txid) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+    /** True if the transaction was explicitly abandoned by the user. */
+    bool IsAbandoned(const uint256& txid) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+    /** Mark an unconfirmed transaction (and its descendants) as abandoned.
+     *  Acquires cs_wallet internally (unlike GetConflicts/IsAbandoned, which
+     *  require the caller to hold it); cs_wallet is recursive so a caller that
+     *  already holds it may still call this.
+     *  Requires cs_main because the NotifyTransactionChanged signal handler
+     *  reads mapBlockIndex / pindexBest via decomposeTransaction. */
+    //! Abandon an unconfirmed transaction that is not in the mempool, along with any
+    //! wallet descendants, and release the inputs each of them consumed.
+    //!
+    //! \p inputs_released, when supplied, receives the number of this wallet's
+    //! outputs made spendable again across the whole cascade.
+    bool AbandonTransaction(const uint256& txid, unsigned int* inputs_released = nullptr)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    /** @deprecated Use SyncTransaction or BlockConnected/TransactionAddedToMempool instead.
+     *  Public compatibility wrapper with the legacy signature. */
+    bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock,
+                                  bool fUpdate = false, bool fFindBlock = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+private:
+    /** Add tx to wallet if it involves our addresses. Called by SyncTransaction. */
+    bool AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
+                                  const TxState& state,
+                                  bool fUpdate) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet);
+
+public:
     void WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* pwalletdb);
     int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false);
     int ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate = false);
@@ -259,23 +589,94 @@ public:
     //!
     //! \param fForce
     //!
-    void ResendWalletTransactions(bool fForce = false);
+    //! Re-announce own transactions that are unconfirmed and no longer in the
+    //! mempool. An inactive one that is not abandoned is offered back to the
+    //! mempool first and announced only if accepted (#3382); a coinbase or
+    //! coinstake never is. Returns how many were relayed, including those; the
+    //! rate-limit and sync guards that fForce bypasses return 0 without looking
+    //! at the wallet.
+    unsigned int ResendWalletTransactions(bool fForce = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     int64_t GetBalance() const;
     int64_t GetUnconfirmedBalance() const;
     int64_t GetImmatureBalance() const;
     int64_t GetStake() const;
+
+    //! The four balances above, as those four functions return them.
+    struct Balances
+    {
+        int64_t balance{0};
+        int64_t stake{0};
+        int64_t unconfirmed{0};
+        int64_t immature{0};
+    };
+
+    //!
+    //! \brief All four balances in one pass over the wallet, with one depth
+    //! lookup per transaction (more only for a transaction of ours less than
+    //! three blocks deep, whose dependencies IsTrusted() walks). Equal to
+    //! calling GetBalance(), GetStake(), GetUnconfirmedBalance() and
+    //! GetImmatureBalance() under one hold of the locks, at a fraction of the
+    //! cost on a large wallet.
+    //!
+    Balances GetBalances() const;
     int64_t GetNewMint() const;
+    bool FundTransaction(CTransaction& tx, int64_t& nFeeRet, int& nChangePosInOut,
+                         std::string& strFailReason, const CCoinControl* coinControl);
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
-                           int64_t& nFeeRet, const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false);
+                           int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl = nullptr,
+                           bool change_back_to_input_address = false, bool permitted_while_staking_only = false);
+    bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
+                           int64_t& nFeeRet, const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,
+                           bool permitted_while_staking_only = false);
+    //! nEnforcedMinFee, when nonzero, sets a fee floor above the normal size-based fee
+    //! (e.g. splitunspent's per-piece fee). The fee can still rise above it if required.
+    //!
+    //! Note the asymmetry below is deliberate, not an oversight: only the
+    //! overloads the exempt caller actually uses carry
+    //! permitted_while_staking_only. The setCoins overload without
+    //! nChangePosRet is reached only from consolidateunspent, splitunspent and
+    //! sweepuncoveredcoins, all user-initiated spends that must stay refused
+    //! (each calls EnsureWalletIsUnlocked first, so they are already refused
+    //! before reaching the builder), so giving it the parameter would only
+    //! widen the ways to reach the exemption.
+    //! \p permitted_while_staking_only exempts a caller from the staking-only
+    //! refusal. Exactly one caller passes it: the hourly automated beacon
+    //! renewal job, which runs unattended on exactly the wallets a researcher
+    //! unlocks for staking, and whose refusal would let their beacon expire
+    //! silently at six months.
+    //!
+    //! It is NOT "contract transactions are harmless". The GUI contract surface
+    //! has no unlock guard of its own and addkey gates only on IsLocked(), so
+    //! widening this to all contracts would re-open the very paths this check
+    //! exists to close.
+    bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
+                           CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
+                           const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,
+                           int64_t nEnforcedMinFee = 0, bool permitted_while_staking_only = false);
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl = nullptr,
-                           bool change_back_to_input_address = false);
+                           bool change_back_to_input_address = false, int64_t nEnforcedMinFee = 0);
     bool CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet,
                            const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false);
-    bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);
+    //! Commit a transaction and announce it.
+    //!
+    //! \param relay When non-null, the announcement is QUEUED here instead of
+    //! being made before returning. Callers that hold cs_wallet across this call
+    //! must pass one that outlives their own lock: this function releasing its
+    //! own guard is not enough if the caller still holds the wallet lock, which
+    //! is the case for WalletImpl::sendCoins (#3391).
+    bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey, DeferredRelay* relay = nullptr);
 
-    std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, bool fAskFee=false);
-    std::string SendMoneyToDestination(const CTxDestination &address, int64_t nValue, CWalletTx& wtxNew, bool fAskFee=false);
+    //! \param relay Forwarded to CommitTransaction. When null, SendMoney queues
+    //! the announcement itself and makes it once its own lock is released. A
+    //! caller holding cs_wallet across this call should supply one that
+    //! outlives its own guard, so the announcement is not made under the
+    //! wallet lock (#3391). Announcing under it is safe (the lock rule on
+    //! CConnman::ForEachNode, #3443); the queue only shortens the hold.
+    std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew,
+                          DeferredRelay* relay = nullptr);
+    std::string SendMoneyToDestination(const CTxDestination &address, int64_t nValue, CWalletTx& wtxNew,
+                                       DeferredRelay* relay = nullptr);
 
     bool NewKeyPool();
     bool TopUpKeyPool(unsigned int nSize = 0);
@@ -356,18 +757,15 @@ public:
         }
         return nChange;
     }
-    void SetBestChain(const CBlockLocator& loc);
 
     DBErrors LoadWallet(bool& fFirstRunRet);
     DBErrors ZapWalletTx(std::vector<CWalletTx>& vWtx);
 
     bool SetAddressBookName(const CTxDestination& address, const std::string& strName);
 
+    bool SetAddressBookPurpose(const CTxDestination& address, const std::string& strPurpose);
+
     bool DelAddressBookName(const CTxDestination& address);
-
-    void UpdatedTransaction(const uint256 &hashTx);
-
-    void PrintWallet(const CBlock& block);
 
     void Inventory(const uint256 &hash)
     {
@@ -396,7 +794,59 @@ public:
     int GetVersion() { LOCK(cs_wallet); return nWalletVersion; }
 
     void FixSpentCoins(int& nMismatchSpent, int64_t& nBalanceInQuestion, bool fCheckOnly = false);
+
+    //! Release spent flags recorded by transactions that are NOT in the active
+    //! chain -- spends the wallet remembers but the chain has not (yet) replayed.
+    //!
+    //! Needed because vfSpent is persisted in wallet.dat while the block data is
+    //! not. Reset or roll back the chain under a populated wallet and the wallet
+    //! still believes in every spend it ever saw, including ones now far above the
+    //! tip, so those coins are invisible and the balance under-reports for the
+    //! whole resync. FixSpentCoins cannot repair this: it skips any transaction
+    //! missing from the tx index (wallet.cpp), and immediately after a reset that
+    //! is every transaction in the wallet.
+    //!
+    //! Cheap by construction, unlike FixSpentCoins: no CTxDB and no per-transaction
+    //! index reads. It needs only a mapBlockIndex lookup per wallet transaction
+    //! (~50ns, see TxStateConfirmed in wallet/transaction.h) plus mapWallet lookups,
+    //! and writes only the entries it actually corrects. A wallet whose transactions
+    //! are all in the active chain -- every ordinary startup -- does no writes at all.
+    //!
+    //! Replay re-establishes the flags naturally: when a spend's block is connected
+    //! again, AddToWalletIfInvolvingMe marks its inputs spent as it always did. So
+    //! the balance tracks the chain honestly at every height instead of reading
+    //! low until the resync finishes.
+    //!
+    //! \param nReleased        Number of outputs whose spent flag was cleared.
+    //! \param nAmountReleased  Their total value.
+    //! \param fCheckOnly       Report only; change nothing.
+    void ReleaseSpendsNotInActiveChain(int& nReleased, int64_t& nAmountReleased, bool fCheckOnly = false);
     void DisableTransaction(const CTransaction &tx);
+
+    //! Clear the spent bits on the parent outputs \p tx consumed, so the coins are
+    //! selectable again. Returns how many of this wallet's outputs were released.
+    //!
+    //! Abandoning a transaction erases its mapTxSpends rows but does not touch the
+    //! parents' vfSpent bits -- and it is vfSpent, not mapTxSpends, that gates
+    //! AvailableCoins and GetAvailableCredit. Without this the coins stay locked and
+    //! the balance stays depressed until FixSpentCoins runs at startup or via
+    //! repairwallet, which is what made abandontransaction's promise that inputs
+    //! "can be respent" untrue. Mirrors the reversal BlockDisconnected performs.
+    //!
+    //! \p pwalletdb may be null for a wallet that is not file-backed. Takes the
+    //! caller's database session rather than opening its own, so a cascade writes
+    //! through one handle.
+    //!
+    //! An output another wallet transaction still spends -- one the wallet still
+    //! tags in-mempool (pooled or evicted), unrecognized, or confirmed on the
+    //! active chain -- keeps its bit: vfSpent does not record which transaction
+    //! set it, so it is not this one's alone to clear. So does an output the pool
+    //! holds a spend of, or the tx index records spent, whether or not the wallet
+    //! holds that spend.
+    //!
+    //! Fires CT_UPDATED once for each parent whose output it released.
+    unsigned int ReleaseTransactionInputs(const CTransaction& tx, CWalletDB* pwalletdb)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet);
 
     //!
     //! \brief Get the time that the wallet last created a backup.
@@ -414,18 +864,84 @@ public:
     void StoreLastBackupTime(const int64_t backup_time);
 
     /** Address book entry changed.
-     * @note called with lock cs_wallet held.
+     * @note Emitted with cs_wallet NOT held: the emitters snapshot name/purpose into locals
+     *       inside the lock scope and fire the signal after releasing it, so the by-reference
+     *       string arguments stay valid for the duration of the call. A subscriber must not
+     *       assume cs_wallet is held in its handler.
      */
-    boost::signals2::signal<void (CWallet *wallet, const CTxDestination &address, const std::string &label, bool isMine, ChangeType status)> NotifyAddressBookChanged;
+    boost::signals2::signal<void (CWallet *wallet, const CTxDestination &address, const std::string &label, bool isMine, const std::string &purpose, ChangeType status)> NotifyAddressBookChanged;
 
     /** Wallet transaction added, removed or updated.
      * @note called with lock cs_wallet held.
      */
     boost::signals2::signal<void (CWallet *wallet, const uint256 &hashTx, ChangeType status)> NotifyTransactionChanged;
 
+    /** A bulk wallet-transaction mutation pass (rescan / reaccept) completed
+     *  without emitting per-transaction NotifyTransactionChanged signals.
+     *  Subscribers that maintain derived transaction or coin state should
+     *  fully resynchronize from the wallet.
+     *  @note Lock state at emission varies by path (a rescan nested inside
+     *        ReacceptWalletTransactions fires under cs_main + cs_wallet; the
+     *        top-level emissions fire with neither held). Subscribers must not
+     *        assume either and should defer heavy resync work rather than
+     *        perform it inline.
+     */
+    boost::signals2::signal<void ()> NotifyTransactionsBulkChanged;
+
     /* Set the HD chain model (chain child index counters) */
     bool SetHDChain(const CHDChain& chain, bool memonly);
     const CHDChain& GetHDChain() { return hdChain; }
+
+    //! Load the persisted wallet UUID (called by CWalletDB during LoadWallet). No
+    //! disk write.
+    void LoadWalletUuid(const std::vector<unsigned char>& uuid) { m_wallet_uuid = uuid; }
+
+    //! The per-wallet identity tag (16 bytes), or empty if none has been minted
+    //! (e.g. a mockable-chain wallet, or a write failure at mint time). Immutable
+    //! after load; safe to read without cs_wallet.
+    std::vector<unsigned char> GetWalletUuid() const { return m_wallet_uuid; }
+
+    /* Load the seed phrase record during wallet db load (memory only) */
+    bool LoadSeedPhraseData(const CSeedPhraseData& data, bool crypted);
+
+    /* Set and persist the seed phrase record. The blob in `data` must be the
+     * plaintext enciphered blob; when the wallet is encrypted it is stored
+     * under the wallet's master keying material instead (requires unlock). */
+    bool SetSeedPhraseData(const CSeedPhraseData& data);
+
+    /* Retrieve the plaintext enciphered blob for phrase re-display
+     * (requires unlock when the wallet is encrypted) */
+    bool GetSeedPhraseBlob(CKeyingMaterial& blob_out) const;
+
+    /* Returns true if the HD hierarchy is backed by a seed phrase */
+    bool HasSeedPhrase() const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+    {
+        return !m_seed_phrase_data.IsNull();
+    }
+
+    /* Returns true if the stored blob is wallet-crypter-encrypted */
+    bool SeedPhraseBlobCrypted() const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+    {
+        return m_seed_phrase_blob_crypted;
+    }
+
+    /* Non-secret seed phrase record fields (master key id, birthday) */
+    const CSeedPhraseData& GetSeedPhraseData() const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+    {
+        return m_seed_phrase_data;
+    }
+
+    //! Coverage class of a wallet key against the seed phrase master: covered
+    //! by the phrase (the phrase-derived master itself or HD-derived from it),
+    //! derived from a prior (retired) HD master, or a legacy non-HD key. The
+    //! latter two remain usable but cannot be recovered from the phrase.
+    enum class SeedPhraseKeyClass { COVERED, PRIOR_HD, LEGACY };
+
+    //! Precondition: the wallet must have a seed phrase record
+    //! (HasSeedPhrase()); classifying against an unset master key id is
+    //! meaningless. All callers gate on it.
+    SeedPhraseKeyClass ClassifySeedPhraseKey(const CKeyID& key_id) const
+        EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
 
     /* Returns true if HD is enabled */
     bool IsHDEnabled() const;
@@ -443,6 +959,15 @@ public:
     bool UpgradeWallet(int version, std::string& error);
 };
 
+//! Pure selection math for sweepuncoveredcoins, factored out for unit
+//! testing. Given candidate output values sorted ascending, a smallest-first
+//! batch of select_count outputs is chosen; while that batch cannot pay
+//! fee_ceiling, the largest unselected candidate is swapped in for the
+//! smallest selected one. Returns the number of swaps; the resulting batch
+//! is values[swaps, select_count) plus values[size - swaps, size).
+std::size_t SweepSwapCount(const std::vector<int64_t>& values, std::size_t select_count,
+                           int64_t fee_ceiling);
+
 /** A key allocated from the key pool. */
 class CReserveKey
 {
@@ -459,7 +984,7 @@ public:
 
     ~CReserveKey()
     {
-        if (!fShutdown)
+        if (!ShutdownInProgress())
             ReturnKey();
     }
 
@@ -502,6 +1027,62 @@ struct COutputEntry
      int vout;
 };
 
+// Moved here from main.h (issue #3125, workstream C3): only CWalletTx below
+// derives from CMerkleTx, mirroring Bitcoin's relocation into the wallet.
+/** A transaction with a merkle branch linking it to the block chain. */
+class CMerkleTx : public CTransaction
+{
+protected:
+    virtual int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const;
+public:
+    uint256 hashBlock;
+    int nIndex;
+
+    CMerkleTx()
+    {
+        Init();
+    }
+
+    CMerkleTx(const CTransaction& txIn) : CTransaction(txIn)
+    {
+        Init();
+    }
+
+    virtual ~CMerkleTx() = default;
+
+    void Init()
+    {
+        hashBlock.SetNull();
+        nIndex = -1;
+    }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        std::vector<uint256> dummy_vector1; //!< Used to be vMerkleBranch
+        READWRITEAS(CTransaction, *this);
+        READWRITE(hashBlock);
+        READWRITE(dummy_vector1);
+        READWRITE(nIndex);
+    }
+
+    int SetMerkleBranch(const CBlock* pblock = nullptr);
+
+    // Return depth of transaction in blockchain:
+    // -1  : not in blockchain, and not in memory pool (conflicted transaction)
+    //  0  : in memory pool, waiting to be included in a block
+    // >=1 : this many blocks deep in the main chain
+    int GetDepthInMainChain(CBlockIndex* &pindexRet) const;
+    int GetDepthInMainChain() const { CBlockIndex *pindexRet; return GetDepthInMainChain(pindexRet); }
+    bool IsInMainChain() const { CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
+    int GetBlocksToMaturity() const;
+    //! GetBlocksToMaturity() for a depth the caller has already looked up.
+    int GetBlocksToMaturity(int depth) const;
+    bool AcceptToMemoryPool();
+};
+
 /** A transaction with a bunch of additional info that only the owner cares about.
  * It includes any unrecorded transactions needed to link it back to the block chain.
  */
@@ -509,6 +1090,14 @@ class CWalletTx : public CMerkleTx
 {
 private:
     const CWallet* pwallet;
+
+    // Uses m_state instead of legacy hashBlock/nIndex for depth calculation.
+    int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //! Canonical transaction state (replaces legacy hashBlock-based inference).
+    //! Private: every mutation must go through SetTxState(), which keeps the
+    //! legacy hashBlock/nIndex fields synced. m_state is the single source of truth.
+    TxState m_state;
 
 public:
     std::vector<CMerkleTx> vtxPrev;
@@ -581,6 +1170,56 @@ public:
 		nWatchCreditCached = 0;
         nChangeCached = 0;
         nOrderPos = -1;
+        m_state = TxStateUnrecognized{}; // Default to unrecognized
+    }
+
+    //! Get state if it matches type T, else nullptr.
+    template<typename T>
+    const T* state() const {
+        return std::get_if<T>(&m_state);
+    }
+
+    template<typename T>
+    T* state() {
+        return std::get_if<T>(&m_state);
+    }
+
+    bool isConfirmed() const {
+        return std::holds_alternative<TxStateConfirmed>(m_state);
+    }
+
+    bool isInMempool() const {
+        return std::holds_alternative<TxStateInMempool>(m_state);
+    }
+
+    bool isInactive() const {
+        return std::holds_alternative<TxStateInactive>(m_state);
+    }
+
+    bool isUnrecognized() const {
+        return std::holds_alternative<TxStateUnrecognized>(m_state);
+    }
+
+    //! Derive legacy hashBlock/nIndex from m_state.
+    //! @deprecated These fields exist only for backward-compatible serialization
+    //! and legacy code paths. m_state is the single source of truth.
+    //! Call this after any m_state mutation to keep legacy fields in sync.
+    void SyncLegacyFromState()
+    {
+        hashBlock = TxStateSerializedBlockHash(m_state);
+        nIndex = TxStateSerializedIndex(m_state);
+    }
+
+    //! Read-only access to the canonical transaction state.
+    const TxState& GetState() const { return m_state; }
+
+    //! Set the canonical transaction state. This is the only supported way to
+    //! mutate state from outside the class: it assigns m_state and immediately
+    //! syncs the legacy hashBlock/nIndex fields, so callers can never forget.
+    void SetTxState(const TxState& new_state)
+    {
+        m_state = new_state;
+        SyncLegacyFromState();
     }
 
     ADD_SERIALIZE_METHODS;
@@ -637,13 +1276,24 @@ public:
             if (!mapValue.count("timesmart") || !ParseUInt32(mapValue["timesmart"], &nTimeSmart)) {
                 nTimeSmart = 0;
             }
+
+            // Reconstruct m_state from the legacy hashBlock/nIndex fields
+            // that CMerkleTx deserialized. Works for both old and new wallets.
+            // TxStateConfirmed does not carry a height — the wallet.dat format
+            // does not persist one. Consumers that need a height call
+            // GetConfirmedHeight(state) which looks it up from mapBlockIndex
+            // on demand (single ~50 ns unordered_map lookup).
+            m_state = MigrateFromLegacyHashBlock(hashBlock, nIndex);
         }
 
-        mapValue.erase("fromaccount");
-        mapValue.erase("version");
-        mapValue.erase("spent");
-        mapValue.erase("n");
-        mapValue.erase("timesmart");
+        // Clean up temporary mapValue entries
+        if (ser_action.ForRead()) {
+            mapValue.erase("fromaccount");
+            mapValue.erase("version");
+            mapValue.erase("spent");
+            mapValue.erase("n");
+            mapValue.erase("timesmart");
+        }
     }
 
     // marks certain txout's as spent
@@ -764,8 +1414,15 @@ public:
 
     int64_t GetAvailableCredit(bool fUseCache=true) const
     {
+        return GetAvailableCredit(GetBlocksToMaturity(), fUseCache);
+    }
+
+    //! GetAvailableCredit() for a GetBlocksToMaturity() the caller has already
+    //! computed.
+    int64_t GetAvailableCredit(int blocks_to_maturity, bool fUseCache) const
+    {
         // Must wait until coinbase is safely deep enough in the chain before valuing it
-        if ((IsCoinBase() || IsCoinStake()) && GetBlocksToMaturity() > 0)
+        if ((IsCoinBase() || IsCoinStake()) && blocks_to_maturity > 0)
             return 0;
 
         if (fUseCache && fAvailableCreditCached)
@@ -777,9 +1434,13 @@ public:
             if (!IsSpent(i))
             {
                 const CTxOut &txout = vout[i];
-                nCredit += pwallet->GetCredit(txout);
-                if (!MoneyRange(nCredit))
-                    throw std::runtime_error("CWalletTx::GetAvailableCredit() : value out of range");
+                // SAFETY CHECK: Ensure pwallet is valid before dereferencing
+                if (pwallet)
+                {
+                    nCredit += pwallet->GetCredit(txout);
+                    if (!MoneyRange(nCredit))
+                        throw std::runtime_error("CWalletTx::GetAvailableCredit() : value out of range");
+                }
             }
         }
 
@@ -854,11 +1515,18 @@ public:
 
     bool IsTrusted() const
     {
-		int nMinConfirmsRequiredToSendGRC = 3;
         // Quick answer in most cases
         if (!IsFinalTx(*this))
             return false;
-        int nDepth = GetDepthInMainChain();
+        return IsTrusted(GetDepthInMainChain());
+    }
+
+    //! IsTrusted() for a GetDepthInMainChain() the caller has already looked up.
+    bool IsTrusted(int nDepth) const
+    {
+        int nMinConfirmsRequiredToSendGRC = 3;
+        if (!IsFinalTx(*this))
+            return false;
         if (nDepth >= nMinConfirmsRequiredToSendGRC)
             return true;
         if (nDepth < 0)
@@ -882,12 +1550,32 @@ public:
     bool AcceptWalletTransaction(CTxDB& txdb);
     bool AcceptWalletTransaction();
 
-    void RelayWalletTransaction(CTxDB& txdb);
-    void RelayWalletTransaction();
+    //! Queue this transaction (and its unindexed parents) for announcement.
+    //! Touches no network state. Returns false when the transaction is inactive
+    //! and nothing was queued.
+    //!
+    //! This is the overload to use while holding cs_wallet: let the caller's
+    //! DeferredRelay outlive the lock, because announcing under cs_wallet closes
+    //! an ABBA cycle with a peer's cs_inventory (#3391).
+    bool QueueRelay(CTxDB& txdb, DeferredRelay& relay) const;
 
-    bool RevalidateTransaction(CTxDB& txdb);
+    //! Announce this transaction (and its unindexed parents) to peers. Returns
+    //! false when the transaction is inactive and nothing was relayed.
+    //!
+    //! Announces before returning, so the caller must NOT hold cs_wallet; use
+    //! QueueRelay if it does.
+    bool RelayWalletTransaction(CTxDB& txdb);
+    bool RelayWalletTransaction();
 
-    GRC::MinedType GetGeneratedType(uint32_t vout_offset) const
+    //! What ResendWalletTransactions may do with a transaction it is about to
+    //! re-announce. INPUTS_UNAVAILABLE is not a verdict on the transaction: an
+    //! input is in neither the transaction index nor the mempool, which is what a
+    //! child reads after its parent was evicted with it.
+    enum class RevalidateResult { VALID, INPUTS_UNAVAILABLE, INVALID };
+
+    RevalidateResult RevalidateTransaction(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    GRC::MinedType GetGeneratedType(uint32_t vout_offset) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return ::GetGeneratedType(pwallet, GetHash(), vout_offset);
     }

@@ -1,0 +1,483 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef GRIDCOIN_INTERFACES_WALLET_H
+#define GRIDCOIN_INTERFACES_WALLET_H
+
+#include "interfaces/marshal.h"
+
+#include "interfaces/handler.h"
+#include "node/ui_interface.h" // For ChangeType.
+#include "primitives/transaction.h" // For COutPoint.
+#include "support/allocators/secure.h" // For SecureString.
+#include "uint256.h"
+
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <memory>
+#include <optional>
+#include <set>
+#include <string>
+#include <vector>
+
+class CKeyID;
+class CPubKey;
+class CWallet;
+
+namespace interfaces {
+
+//! Snapshot of the four GUI-displayed balances, filled atomically under one
+//! lock acquisition (see Wallet::tryGetBalances).
+struct WalletBalances
+{
+    int64_t balance{0};
+    int64_t stake{0};
+    int64_t unconfirmed_balance{0};
+    int64_t immature_balance{0};
+};
+
+//! Snapshot of the wallet's lock/encryption state, so a consumer that needs more
+//! than one facet -- the encryption-status enum is crypted && locked -- reads
+//! them together in one call instead of several round trips (see
+//! Wallet::getLockState).
+struct WalletLockState
+{
+    bool crypted{false};                   //!< IsCrypted(): the wallet has a passphrase.
+    bool locked{false};                    //!< IsLocked(): the keys are not in memory.
+    bool unlocked_for_staking_only{false}; //!< Unlocked but restricted to staking.
+    //! DEPRECATED and UNUSED: a duplicate of unlocked_for_staking_only. Kept
+    //! only because dropping it would hole the struct's ordinals (@3); retire
+    //! it with getUnlockStakingOnlyFlag in a dedicated renumbering change.
+    bool staking_only_flag{false};
+};
+
+//! Value snapshot of one unspent wallet output for the coin-control views.
+//! Carries no pointers into the wallet: everything the GUI renders —
+//! including the maturity flag, which needs cs_main — is computed node-side.
+struct WalletOutput
+{
+    COutPoint outpoint;
+    int64_t amount{0};
+    //! Encoded destination of the output's scriptPubKey; empty when a
+    //! destination cannot be extracted.
+    std::string address;
+    int depth{0};
+    int64_t time{0};
+    //! Coinstake still maturing: shown disabled in the views. Deliberately
+    //! matches the old GUI-side check, which tested IsCoinStake() only.
+    bool immature{false};
+};
+
+//! Value snapshot of one address-book entry for the GUI address table. The
+//! destination is carried as an already-encoded string so the GUI needs no
+//! core key_io/ismine headers.
+struct WalletAddress
+{
+    //! Encoded destination.
+    std::string address;
+    //! Address-book label (name); empty when the entry has no label.
+    std::string label;
+    //! Owned by this wallet (IsMine != ISMINE_NO): receiving vs sending.
+    bool is_mine{false};
+};
+
+//! The GUI's coin-selection value: the outpoints coin selection is pinned to,
+//! plus the change-destination override. This IS the selection container the
+//! coin-control dialogs build and mutate directly (replacing the core
+//! CCoinControl, which stays node-side); it crosses the boundary by value, and
+//! Wallet::sendCoins / computeCoinControlSummary reconstruct a node CCoinControl
+//! from it. Selection is keyed by outpoint so IsSelected() stays O(log n)
+//! regardless of how many rows the view realizes.
+struct WalletCoinControl
+{
+    //! Encoded destination for change; empty lets the wallet pick.
+    std::string dest_change;
+    bool allow_watch_only{false};
+    //! Outpoints coin selection is pinned to (a set: dedups and gives O(log n)
+    //! membership tests during the per-row tree rebuild).
+    std::set<COutPoint> selected;
+
+    void SetNull()
+    {
+        dest_change.clear();
+        allow_watch_only = false;
+        selected.clear();
+    }
+
+    bool HasSelected() const { return !selected.empty(); }
+
+    bool IsSelected(const COutPoint& output) const { return selected.count(output) > 0; }
+
+    bool IsSelected(const uint256& hash, unsigned int n) const
+    {
+        return IsSelected(COutPoint(hash, n));
+    }
+
+    void Select(const COutPoint& output) { selected.insert(output); }
+
+    void UnSelect(const COutPoint& output) { selected.erase(output); }
+
+    void UnSelectAll() { selected.clear(); }
+};
+
+//! Everything the coin-control dialogs need to render their fee/quantity
+//! labels, computed node-side in one call (Wallet::computeCoinControlSummary)
+//! to keep the boundary coarse. All the fee arithmetic (byte sizing via pubkey
+//! compression, nTransactionFee/GetMinFee, sub-CENT change absorption) runs
+//! where the wallet data lives, so the GUI does no fee math and holds no
+//! policy/consensus headers. Each dialog renders only the fields it shows.
+struct CoinControlSummary
+{
+    //! Selected inputs that still exist (vanished/conflicted coins are skipped,
+    //! matching the pre-migration getOutputs() filtering).
+    int quantity{0};
+    int64_t amount{0};      //!< sum of the selected inputs
+    int64_t fee{0};         //!< the pay fee (nPayFee)
+    int64_t after_fee{0};   //!< amount - fee, floored at 0
+    unsigned int bytes{0};  //!< estimated transaction size
+    int64_t change{0};      //!< change returned to the wallet (may be negative)
+    bool low_output{false}; //!< a recipient amount is below CENT
+    //! Mirrors the pre-migration fDust flag, which was declared but never set
+    //! true; retained so the label expression is byte-for-byte preserved.
+    bool dust{false};
+};
+
+//! One send-coins recipient (the Qt-free mirror of SendCoinsRecipient).
+struct WalletSendRecipient
+{
+    std::string address;
+    std::string label;
+    int64_t amount{0};
+    //! Optional user message, embedded as a GRC::TxMessage contract.
+    std::string message;
+    bool subtract_fee_from_amount{false};
+};
+
+//! Result of Wallet::signMessage. The GUI pre-validates the address and key
+//! type; this covers the wallet/crypto half (the private key never crosses the
+//! boundary -- the signing happens node-side).
+enum class MessageSignStatus
+{
+    OK,
+    KeyNotAvailable, //!< No private key for the address in this wallet.
+    SigningFailed,   //!< SignCompact failed.
+};
+
+//! Result of Wallet::verifyMessage (pure crypto, but kept behind the interface
+//! so the GUI needs no core message-magic/recover headers).
+enum class MessageVerifyStatus
+{
+    OK,
+    RecoverFailed,   //!< The signature did not recover a public key.
+    AddressMismatch, //!< Recovered key does not match the given address.
+};
+
+//! Result statuses for Wallet::sendCoins. GUI-detectable conditions
+//! (duplicate recipient, user abort) are pre-checked by the GUI and never
+//! reach the interface; addresses and amounts are nevertheless re-validated
+//! node-side (InvalidAddress/InvalidAmount), because the node must not rely
+//! on the client for checks whose failure would fund an empty —
+//! anyone-can-spend — output script or sign-overflow the totals.
+enum class SendCoinsStatus
+{
+    OK,
+    InvalidAddress,
+    InvalidAmount,
+    AmountExceedsBalance,
+    AmountWithFeeExceedsBalance,
+    FeeExceedsSubtractedAmount,
+    TransactionCreationFailed,
+    TransactionCommitFailed,
+    //! The required fee exceeds both the configured transaction fee and the
+    //! caller's accepted_fee, and confirmation is needed before committing.
+    //! Nothing was committed; `fee` carries the amount to confirm. Re-invoke
+    //! with accepted_fee >= fee to proceed. This replaces the eliminated
+    //! ThreadSafeAskFee modal, which used to block inside
+    //! LOCK2(cs_main, cs_wallet) (doc/multiprocess_design.md section 4.5).
+    FeeConfirmationRequired,
+    //! The wallet is unlocked, but for staking only, so it will not build a
+    //! spend. Distinct from TransactionCreationFailed because the user can act
+    //! on it: unlock fully and retry. Nothing was committed.
+    //!
+    //! APPENDED, not inserted. This enum crosses IPC as its integer value
+    //! (src/ipc/capnp/wallet.capnp), so adding a member anywhere but the end
+    //! renumbers the ones after it and a mixed-version pair would read the
+    //! wrong status. New members go here.
+    WalletUnlockedForStakingOnly,
+};
+
+//! Result of Wallet::sendCoins.
+struct SendCoinsResult
+{
+    SendCoinsStatus status{SendCoinsStatus::TransactionCreationFailed};
+    //! The fee at issue when status is AmountWithFeeExceedsBalance,
+    //! FeeExceedsSubtractedAmount, or FeeConfirmationRequired.
+    int64_t fee{0};
+    //! Committed transaction hash (hex) when status is OK.
+    std::string txid_hex{};
+};
+
+//! Wallet interface for the GUI: wallet queries plus notification
+//! registration. The same boundary rules as interfaces::Node apply (see
+//! src/interfaces/README.md); notification callbacks are bridged from
+//! CWallet's own signals, which fire on core threads and, depending on the
+//! signal, may or may not hold core locks at emission time (e.g.
+//! NotifyTransactionChanged fires with cs_wallet held while
+//! NotifyAddressBookChanged deliberately does not). Callbacks must not
+//! assume either way: enqueue and return, and never take core locks or
+//! re-enter interface methods that do.
+//!
+//! The method set covers only what the migrated consumers need (Phase 1c-i
+//! starts with WalletModel's balance/encryption surface); it grows with each
+//! migration. The wallet stays in-node in every build configuration, so this
+//! interface never carries key material.
+class Wallet
+{
+public:
+    virtual ~Wallet() = default;
+
+    //! Spendable balance.
+    virtual int64_t getBalance() = 0;
+
+    //! Balance currently staking (in coinstakes awaiting maturity).
+    virtual int64_t getStake() = 0;
+
+    //! Unconfirmed balance.
+    virtual int64_t getUnconfirmedBalance() = 0;
+
+    //! Immature (newly generated) balance.
+    virtual int64_t getImmatureBalance() = 0;
+
+    //! Fill all four balances in one shot, or return false without blocking
+    //! when the core is busy (cs_main/cs_wallet unavailable). The balance
+    //! scans are expensive on large wallets, so refresh-path callers must be
+    //! able to bow out instead of stalling the GUI thread; use the
+    //! unconditional single getters only where an initial value is required.
+    virtual bool tryGetBalances(WalletBalances& balances) = 0;
+
+    //! Number of transactions in the wallet.
+    virtual int getNumTransactions() = 0;
+
+    //! The wallet's lock/encryption state as one snapshot. Preferred over separate
+    //! reads whenever more than one facet is needed together (the encryption-status
+    //! enum is crypted && locked): the facets are read back-to-back in one call
+    //! (a narrower window than separate reads) and the split build makes one round
+    //! trip. It intentionally does not lock -- see the impl for why.
+    virtual WalletLockState getLockState() = 0;
+
+    //! Whether an unlocked wallet is restricted to staking only.
+    //!
+    //! No production callers. requestUnlock was the last one, and it justified
+    //! this accessor by re-reading the flag across its own relock/unlock
+    //! mutations -- it makes none now, because it elevates in place and reads
+    //! the whole state from getEncryptionStatus(). getLockState() carries the
+    //! same field for anyone who needs it.
+    //!
+    //! Left in place rather than deleted because removing it would leave an
+    //! ordinal hole at @8, and this project renumbers rather than holes; see the
+    //! note on getUnlockStakingOnlyFlag below, which is in the same position.
+    //! Do not add callers.
+    virtual bool isUnlockedForStakingOnly() = 0;
+
+    //! DEPRECATED and UNUSED. An exact alias of isUnlockedForStakingOnly.
+    //!
+    //! It used to report a sticky preference that outlived the unlock, which is
+    //! what let the unlock dialog pre-tick its box while the wallet was locked.
+    //! There is no such preference any more: the restriction belongs to the
+    //! unlock and a lock clears it, so this is false whenever the wallet is
+    //! locked. It now has NO production callers: WalletModel::EncryptionStatus
+    //! carries the scope, so the status icon paints from the value it was
+    //! handed and the unlock dialog no longer seeds a preference.
+    //!
+    //! Left in place rather than deleted because removing it would leave an
+    //! ordinal hole at @9, and this project renumbers rather than holes. That
+    //! renumber touches every later ordinal and deserves its own change with
+    //! its own review, not a ride-along in this one. Do not add callers.
+    virtual bool getUnlockStakingOnlyFlag() = 0;
+
+    //! Encrypt the wallet with the given passphrase.
+    virtual bool encryptWallet(const SecureString& passphrase) = 0;
+
+    //! Lock the wallet. This also clears the staking-only restriction, which
+    //! belongs to the unlock rather than outliving it.
+    virtual bool lockWallet() = 0;
+
+    //! Narrow the current unlock to staking only, without a passphrase.
+    //!
+    //! Narrowing only: it removes permission and never adds it, so it is safe
+    //! to expose. Used to hand back an elevation taken for one operation on a
+    //! wallet the user had left unlocked for staking; locking instead would
+    //! silently stop staking. False when there was nothing to narrow, which
+    //! covers both a locked wallet and an unencrypted one -- do not read false
+    //! as "it was locked".
+    virtual bool restrictToStakingOnly() = 0;
+
+    //! Widen an unlock in progress to full for one operation, given the
+    //! passphrase. The other half of restrictToStakingOnly(): a GUI action that
+    //! needs a full unlock elevates, acts, and hands the elevation back.
+    //!
+    //! Not a lock followed by an unlock. That threw away the unlock's deadline,
+    //! so a wallet unlocked by walletpassphrase for a fixed time stayed
+    //! unlocked indefinitely afterwards, and it left a staking wallet locked
+    //! when the prompt was cancelled.
+    //!
+    //! False when the wallet is locked -- there is no unlock to widen, and the
+    //! caller wants unlockWallet() -- when it is unencrypted, or on a wrong
+    //! passphrase.
+    virtual bool elevateWallet(const SecureString& passphrase) = 0;
+
+    //! Unlock the wallet; on success the staking-only preference is set to
+    //! staking_only (a full unlock clears a stale staking-only restriction).
+    virtual bool unlockWallet(const SecureString& passphrase, bool staking_only) = 0;
+
+    //! Change the wallet passphrase (locks the wallet first).
+    virtual bool changeWalletPassphrase(const SecureString& old_passphrase,
+                                        const SecureString& new_passphrase) = 0;
+
+    //! Look up the public key for a key id. Public keys only — the wallet
+    //! stays in-node in every build configuration, so this interface never
+    //! carries private key material.
+    virtual bool getPubKey(const CKeyID& address, CPubKey& pub_key_out) = 0;
+
+    //! Fetch a fresh public key from the key pool, labeling its address in
+    //! the address book when label is non-empty. Input (label) precedes the
+    //! output (pub_key_out) so the IPC proxy maps request/response fields to
+    //! these arguments in order.
+    virtual bool getKeyFromPool(const std::string& label, CPubKey& pub_key_out) = 0;
+
+    //! Value snapshots of the given outpoints; unknown or conflicted
+    //! (negative-depth) outpoints are skipped.
+    virtual std::vector<WalletOutput> getOutputs(const std::vector<COutPoint>& outpoints) = 0;
+
+
+    //! Compute the coin-control fee/quantity summary for the given selection
+    //! and recipient amounts in one call. All fee math runs node-side (see
+    //! CoinControlSummary); recipient_amounts is the full list the GUI shows
+    //! (including any zero entries, which the byte estimate counts) and
+    //! subtract_fee_from_amount mirrors the send dialog's option. Selected
+    //! outpoints that no longer exist are skipped, so the fee reflects live
+    //! wallet state.
+    virtual CoinControlSummary computeCoinControlSummary(
+        const WalletCoinControl& selection,
+        const std::vector<int64_t>& recipient_amounts,
+        bool subtract_fee_from_amount) = 0;
+
+    //! The consensus/policy cap on inputs per consolidation transaction. Behind
+    //! the interface so the consolidate wizard needs no policy header.
+    virtual unsigned int getMaxConsolidationInputs() = 0;
+
+    //! Create, fee-converge, and commit a transaction to the given
+    //! recipients. Stateless one-shot: when the required fee needs user
+    //! confirmation (it exceeds both the configured transaction fee and
+    //! accepted_fee), returns FeeConfirmationRequired without committing —
+    //! the reserved change key is released and no locks stay held while the
+    //! GUI prompts. The caller re-invokes with accepted_fee set to the
+    //! returned fee; the transaction is recreated from current wallet state,
+    //! and a fee that meanwhile grew past accepted_fee simply returns
+    //! FeeConfirmationRequired again, so no fee the user has not accepted is
+    //! ever committed.
+    virtual SendCoinsResult sendCoins(const std::vector<WalletSendRecipient>& recipients,
+                                      const std::optional<WalletCoinControl>& coin_control,
+                                      int64_t accepted_fee) = 0;
+
+    //! Back up the wallet .dat file to dest. Returns false on I/O failure.
+    virtual bool backupWallet(const std::string& dest) = 0;
+
+    //! Back up the active config file to dest. Returns false on I/O failure.
+    //! Paired with backupWallet in the GUI backup action; the config file
+    //! belongs to the same node, so it stays behind the wallet boundary
+    //! rather than requiring a separate node reach for one file copy.
+    virtual bool backupConfigFile(const std::string& dest) = 0;
+
+    //! Sign message with the private key for address (the "sign message" tool).
+    //! The wallet must already be unlocked (the GUI holds an UnlockContext). On
+    //! OK, signature_out is the base64 signature. The private key never leaves
+    //! the node.
+    virtual MessageSignStatus signMessage(const std::string& address, const std::string& message,
+                                          std::string& signature_out) = 0;
+
+    //! Verify that signature (raw bytes) over message was produced by the key
+    //! for address (the "verify message" tool). Stateless crypto; behind the
+    //! interface only so the GUI needs no core message-magic/recover headers.
+    virtual MessageVerifyStatus verifyMessage(const std::string& address, const std::string& message,
+                                              const std::vector<unsigned char>& signature) = 0;
+
+    //! Snapshot of the whole address book for the GUI address table. Each entry
+    //! carries its encoded destination, label, and ownership flag.
+    virtual std::vector<WalletAddress> getAddresses() = 0;
+
+    //! Look up an address-book entry by encoded address. Returns false (and
+    //! leaves label_out unchanged) when the address is not in the book or does
+    //! not parse; otherwise fills label_out with its label.
+    virtual bool getAddressLabel(const std::string& address, std::string& label_out) = 0;
+
+    //! Whether the encoded address is owned by this wallet (IsMine != ISMINE_NO),
+    //! regardless of whether it is in the address book.
+    virtual bool isMine(const std::string& address) = 0;
+
+    //! Set (create or overwrite) the address book label for the encoded address.
+    virtual void setAddressBook(const std::string& address, const std::string& label) = 0;
+
+    //! Remove the encoded address from the address book. Removing an entry that
+    //! is not present is treated as success by the wallet DB layer. Returns
+    //! false when the address does not parse, or when the underlying wallet
+    //! erase fails (e.g. a non-file-backed wallet or a DB write error) -- note a
+    //! false return does not necessarily mean the in-memory entry survived.
+    virtual bool delAddressBook(const std::string& address) = 0;
+
+    //! Reserve a fresh key from the pool and return its encoded destination. The
+    //! wallet must already be unlocked (the GUI holds an UnlockContext); the key
+    //! never crosses the boundary. Returns false on key-generation failure. Does
+    //! not touch the address book -- the caller labels the address separately.
+    virtual bool getNewReceiveAddress(std::string& address_out) = 0;
+
+    //! Reserve a fresh (non-reused) key from the pool, set its address-book
+    //! label, and return its encoded destination -- the CPubKey stays node-side.
+    //! For the researcher pool page, which previously reserved the key and
+    //! encoded the address GUI-side. Returns false on key-generation failure.
+    //! Distinct name (not an overload of getNewReceiveAddress) because the IPC
+    //! proxy generator takes a member-function pointer and cannot disambiguate
+    //! overloaded names.
+    virtual bool getNewReceiveAddressWithLabel(const std::string& label, std::string& address_out) = 0;
+
+    //! Owned addresses with a positive balance that are not yet in the address
+    //! book (encoded), for the "add existing receive address" picker.
+    virtual std::vector<std::string> getUnbookedReceiveAddresses() = 0;
+
+    //! Register a handler for encryption/lock status changes.
+    using StatusChangedFn = std::function<void()>;
+    virtual std::unique_ptr<Handler> handleStatusChanged(StatusChangedFn fn) = 0;
+
+    //! Register a handler for address-book changes.
+    using AddressBookChangedFn = std::function<void(const std::string& address,
+                                                    const std::string& label,
+                                                    bool is_mine,
+                                                    const std::string& purpose,
+                                                    ChangeType status)>;
+    virtual std::unique_ptr<Handler> handleAddressBookChanged(AddressBookChangedFn fn) = 0;
+
+    //! Register a handler for wallet-transaction changes.
+    using TransactionChangedFn = std::function<void(const uint256& tx_hash, ChangeType status)>;
+    virtual std::unique_ptr<Handler> handleTransactionChanged(TransactionChangedFn fn) = 0;
+};
+
+//! Return an in-process Wallet interface implementation wrapping the given
+//! wallet, which must outlive the returned object.
+std::unique_ptr<Wallet> MakeWallet(CWallet* wallet);
+
+
+// Marshalability pins (interfaces/marshal.h): each DTO above must stay a
+// copyable value type the node side can fill and ship across the boundary.
+INTERFACES_ASSERT_MARSHALABLE(WalletBalances);
+INTERFACES_ASSERT_MARSHALABLE(WalletLockState);
+INTERFACES_ASSERT_MARSHALABLE(WalletOutput);
+INTERFACES_ASSERT_MARSHALABLE(WalletAddress);
+INTERFACES_ASSERT_MARSHALABLE(WalletCoinControl);
+INTERFACES_ASSERT_MARSHALABLE(CoinControlSummary);
+INTERFACES_ASSERT_MARSHALABLE(WalletSendRecipient);
+INTERFACES_ASSERT_MARSHALABLE(SendCoinsResult);
+} // namespace interfaces
+
+#endif // GRIDCOIN_INTERFACES_WALLET_H

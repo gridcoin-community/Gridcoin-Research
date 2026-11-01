@@ -20,6 +20,34 @@ env:
   BUILD_TYPE: Release
   OS_REF: ubuntu-24.04
   USE_CCACHE: true
+  # The macOS floor the Intel job builds against, and the number its app bundle
+  # declares. The ARM64 job declares its own (see that job).
+  # share/qt/Info.plist.cmake.in substitutes CMAKE_OSX_DEPLOYMENT_TARGET
+  # rather than hardcoding one, so the declaration cannot drift from the build.
+  # CMakeLists.txt carries the same value as the project default, for builds
+  # that do not come through here.
+  #
+  # Without an explicit target CMake forces the RUNNER's OS version, so until now
+  # the shipped minimum silently tracked whichever label GitHub handed us while
+  # the plist advertised 10.8.0.
+  #
+  # 14.0 is the lowest the stack actually supports: Homebrew's Intel bottles are
+  # built on macOS 14 (the `sonoma` tag) and carry minos 14.0, the Intel kegs
+  # mirrored to S3 are built on native Intel macOS 14, and Qt 6 will not go below
+  # macOS 13 at all.
+  MACOS_DEPLOYMENT_TARGET: "14.0"
+
+  # The non-Qt Homebrew dependencies shared by both macOS jobs. The Qt head
+  # differs on purpose, but not in WHICH Qt: both jobs use the qtbase/qttools/
+  # qtsvg/qttranslations/qtdeclarative subset rather than the `qt` meta-formula,
+  # which drags in qtwebengine. They differ in WHERE it comes from -- ARM64
+  # installs the subset from Homebrew, Intel restores it from the mirror, because
+  # those formulae have no Intel bottle at any tag (see
+  # contrib/devtools/macos-pinned-kegs.txt). Most of the names below are mirrored
+  # for Intel too and the restore script drops them from what it asks Homebrew
+  # for; the ARM job installs the list as written. doc/build-macos.md carries the
+  # user-facing copy.
+  MACOS_BREW_DEPS: boost libevent miniupnpc qrencode ccache cmake capnp
 
 jobs:
   # ----------------------------------------------------------------------
@@ -39,7 +67,7 @@ jobs:
             # Pass specific flags for static linux build
             cmake_args: >
               -DSTATIC_LIBS=ON
-              -DCMAKE_CXX_FLAGS="-fPIE"
+              -DENABLE_PIE=ON
               -DCMAKE_EXE_LINKER_FLAGS="-static-libgcc -static-libstdc++ -Wl,-Bdynamic"
             cpack_generator: TGZ
 
@@ -91,15 +119,20 @@ jobs:
             depends/work
             depends/${{ matrix.host }}
             depends/sdk-sources
-          key: ${{ env.os_ref }}-depends-${{ matrix.host }}-${{ hashFiles('depends/packages/*', 'depends/Makefile', 'depends/qt.include') }}
+          # 'mp' in the key: MULTIPROCESS=1 builds extra packages, so this tree is not
+          # interchangeable with a non-multiprocess one built from the same sources.
+          key: ${{ env.os_ref }}-depends-mp-${{ matrix.host }}-${{ hashFiles('depends/packages/*', 'depends/Makefile', 'depends/qt.include') }}
 
       # 4. Build Depends
       - name: Build Depends
         if: steps.cache-depends.outputs.cache-hit != 'true'
         run: |
           cd depends
+          # MULTIPROCESS=1 adds native_capnp and capnp, which the release build needs
+          # now that it ships the multiprocess binary. Same recipe the multiprocess
+          # workflow uses for these two hosts.
           # Make (legacy) needs explicit -j flag; we use the variable if set, else nproc
-          make HOST=${{ matrix.host }} -j${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}
+          make HOST=${{ matrix.host }} MULTIPROCESS=1 -j${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}
 
       # 5. Configure CMake
       - name: Configure CMake
@@ -126,7 +159,7 @@ jobs:
             -DENABLE_GUI=ON \
             -DUSE_QT6=ON \
             -DENABLE_UPNP=ON \
-            -DDEFAULT_UPNP=ON \
+            -DENABLE_MULTIPROCESS=ON \
             -DENABLE_TESTS=ON \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DDEP_LIB="${DEP_LIB_PATH}" \
@@ -136,9 +169,12 @@ jobs:
             ${{ matrix.cmake_args }}
 
       # 6. Build
+      # check-build-warnings.sh fails the step on any compiler or linker warning in
+      # the tree's own build. Every build of the tree in these workflows goes
+      # through it.
       - name: Build
         # Removed explicit --parallel flag; CMake reads the env var automatically
-        run: cmake --build ${{ matrix.build_dir }}
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build ${{ matrix.build_dir }}
 
       # 7. Hermeticity Check
       - name: Verify Hermeticity (Linux)
@@ -147,11 +183,23 @@ jobs:
           echo "Checking binaries for unexpected shared library dependencies..."
 
           # Use readelf -d to inspect NEEDED entries from the ELF dynamic section.
-          # Allowed shared libraries: libc.so.6 and libm.so.6 only.
-          ALLOWED='libc\.so|libm\.so'
+          # Allowed shared libraries: libc and libm only. The loader is how they get
+          # loaded at all, so it is not a dependency the build pulled in.
+          #
+          # ANCHORED. The sed below leaves one bare SONAME per line, so the pattern
+          # matches a whole line rather than a substring: unanchored, a NEEDED entry
+          # merely CONTAINING an allowed fragment slipped through -- 'libmylibc.so.6'
+          # or 'unexpected-libm.so.6-plugin.so' were both accepted by a gate whose
+          # stated rule is libc/libm/loader only. The loader alternative covers every
+          # arch we build (ld-linux.so.2, ld-linux-x86-64.so.2, ld-linux-aarch64.so.1,
+          # ld-linux-armhf.so.3).
+          ALLOWED='^[[:space:]]*(libc\.so\.[0-9]+|libm\.so\.[0-9]+|ld-linux[-a-z0-9_]*\.so\.[0-9]+)[[:space:]]*$'
 
           # Check both the GUI (src/qt/) and Daemon (src/)
-          BINARIES="${{ matrix.build_dir }}/src/qt/gridcoinresearch ${{ matrix.build_dir }}/src/gridcoinresearchd"
+          # The build installs into <build_dir>/bin, not <build_dir>/src. Pointing
+          # at src/ meant neither binary was ever found, and the miss branch below
+          # only warned, so this step reported success without inspecting anything.
+          BINARIES="${{ matrix.build_dir }}/bin/gridcoinresearch ${{ matrix.build_dir }}/bin/gridcoinresearchd"
 
           fail_count=0
 
@@ -173,8 +221,10 @@ jobs:
                 echo "Verified hermetic. NEEDED: $(echo $NEEDED | tr '\n' ' ')"
               fi
             else
-              # Warn but don't fail immediately if a binary is missing (e.g. GUI disabled)
-              echo "::warning::Binary not found at expected path: $bin"
+              # A binary we expected to scan is missing: fail. Treating this as a
+              # warning is how the step came to pass while checking nothing.
+              echo "::error::Binary not found at expected path: $bin"
+              fail_count=$((fail_count+1))
             fi
           done
 
@@ -183,13 +233,18 @@ jobs:
             exit 1
           fi
 
-      # 8a. Test (Linux)
+      # 7b. Binary hardening check
+      - name: Verify Binary Hardening
+        run: ./contrib/devtools/check-binary-hardening.sh ${{ matrix.build_dir }}
       - name: Run Tests (Linux)
         if: contains(matrix.host, 'linux')
         env:
           QT_QPA_PLATFORM: offscreen
         # Removed -j flag; CTest reads env var
-        run: ctest --test-dir ${{ matrix.build_dir }} --output-on-failure
+        # See the arm64 job: bounded twice so a hang is reported rather than
+        # running to the six-hour job default.
+        timeout-minutes: 45
+        run: ctest --test-dir ${{ matrix.build_dir }} --output-on-failure --timeout 1800
 
       # 8b. Test (Windows)
       - name: Run Tests (Windows)
@@ -201,7 +256,7 @@ jobs:
         run: |
           wineboot --init || true
           # Removed -j flag; CTest reads env var
-          ctest --test-dir ${{ matrix.build_dir }} --output-on-failure
+          ctest --test-dir ${{ matrix.build_dir }} --output-on-failure --timeout 1800
 
       # 9. Package
       - name: Create Package
@@ -266,14 +321,58 @@ jobs:
   # ----------------------------------------------------------------------
   macos-native-arm64:
     name: macOS ARM64 (Homebrew Qt6)
-    runs-on: macos-14
+    # Runs on macos-15 and declares a 15.0 floor (#3366).
+    #
+    # Homebrew sets no deployment target of its own, so a bottle's minimum is
+    # whatever it was built on. On this runner every non-Qt dependency comes
+    # back at minos 15.0 -- openssl@3, boost, libevent, miniupnpc, qrencode
+    # and capnp all build for the host; only Qt sets its own target.
+    # macdeployqtplus copies those dylibs INTO the bundle (it skips only
+    # /System/Library and /usr/lib), so the bundle's real floor is 15.0 and it
+    # must declare that: a DMG declaring 14.0 would install on macOS 14 and then
+    # fail to load in dyld. The DMG check below holds the declaration to the
+    # measured floor.
+    #
+    # This job used to run on macos-14 to keep a 14.0 floor. Homebrew has since
+    # moved macOS 14 to Tier 3 and stopped building arm64_sonoma bottles, so
+    # every formula revised after that was source-built on every run, and each
+    # source build's upstream became another way for the job to fail. The
+    # macos-14 image is also being retired (brownouts from 2026-10-05,
+    # unsupported from 2026-11-02, actions/runner-images#13518). Keeping 14.0
+    # would have meant mirroring arm64 kegs built on macOS 14, as the Intel job
+    # does; #3366 records the decision not to, which drops macOS 14 on Apple
+    # Silicon. Intel keeps its 14.0 floor through its mirror.
+    #
+    # arm64_sequoia is the oldest tag Homebrew still builds bottles for when a
+    # formula is revised (qtwebengine, for one, has golden_gate, tahoe and
+    # sequoia only), so the same decay will reach this runner when Homebrew
+    # moves macOS 15 to Tier 3.
+    env:
+      MACOS_DEPLOYMENT_TARGET: "15.0"
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
 
       - name: Install Dependencies
         run: |
+          # The Qt SUBSET, not the `qt` meta-formula, as in the Intel job and
+          # doc/build-macos.md: `qt` depends on qtwebengine, a large formula that
+          # Gridcoin does not use.
           brew update
-          brew install qt boost openssl libevent miniupnpc qrencode libzip ccache cmake
+          # The image hand-links a leftover openssl@1.1 at $(brew --prefix)/bin/openssl.
+          # The link points at the opt/openssl@1.1 path, not into the Cellar keg, so
+          # `brew unlink openssl@1.1` skips it. The image's openssl@3 keg is linked, so
+          # upgrading it relinks it. Until homebrew-core f2e47cf7746c (merged 2026-09-28)
+          # openssl@3 declared link_overwrite for bin/openssl and brew moved the old
+          # link aside. That commit made openssl@3 keg-only and dropped link_overwrite,
+          # so the relink now fails and brew install exits 1. Nothing here needs 1.1:
+          # the build names openssl@3 by prefix (OPENSSL_ROOT_DIR below), and the
+          # signing step's `openssl rand` works with any openssl on PATH.
+          openssl_link="$(brew --prefix)/bin/openssl"
+          case "$(readlink "$openssl_link" 2>/dev/null)" in
+            */openssl@1.1/bin/openssl) rm -f "$openssl_link" ;;
+          esac
+          brew install qtbase qttools qtsvg qttranslations qtdeclarative openssl@3 $MACOS_BREW_DEPS
 
       - name: Configure Ccache
         uses: actions/cache@v5
@@ -348,30 +447,76 @@ jobs:
         run: |
           export CC_LAUNCHER='-DCMAKE_C_COMPILER_LAUNCHER=ccache'
           export CXX_LAUNCHER='-DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
-          QT6_PATH=$(brew --prefix qt)
-          OPENSSL_ROOT=$(brew --prefix openssl)
+          # With the split Qt kegs, qtbase's Qt6Config cannot resolve the Svg
+          # and LinguistTools components living in the qtsvg/qttools kegs;
+          # the brew prefix exposes the aggregate linked lib/cmake view.
+          QT6_PATH=$(brew --prefix)
+          OPENSSL_ROOT=$(brew --prefix openssl@3)
 
           cmake -B build \
             -DCMAKE_PREFIX_PATH="$QT6_PATH" \
             -DENABLE_GUI=ON \
             -DENABLE_QRENCODE=ON \
             -DENABLE_UPNP=ON \
-            -DDEFAULT_UPNP=ON \
+            -DENABLE_MULTIPROCESS=ON \
+            -DENABLE_PIE=ON \
             -DENABLE_TESTS=ON \
             -DENABLE_DOCS=OFF \
             -DUSE_QT6=ON \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ env.MACOS_DEPLOYMENT_TARGET }} \
             -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT" \
             -DPython3_EXECUTABLE="${RUNNER_TEMP}/venv/bin/python3" \
             $CC_LAUNCHER \
             $CXX_LAUNCHER
 
       - name: Build
-        run: cmake --build build
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        # Bounded twice on purpose. --timeout makes ctest kill and REPORT the test
+        # that overran, which is the diagnosable outcome; timeout-minutes is the
+        # backstop for a hang outside ctest itself. Without either, a stuck test
+        # ran to the six-hour job default on a runner billed at ten times the
+        # Linux rate, and produced no usable log when it was finally cancelled.
+        timeout-minutes: 45
+        run: ctest --test-dir build --output-on-failure --timeout 1800
 
+      - name: Dump crash reports on test failure
+        # macOS writes a symbolicated report to DiagnosticReports when a process
+        # aborts. Without this the only evidence of a crash is the terminate
+        # message on stderr, which names the exception type but not where it was
+        # thrown -- and three rounds of narrowing that down from the type alone
+        # each reached a different wrong answer.
+        if: failure()
+        run: |
+          echo "=== DiagnosticReports ==="
+          ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null || echo "  (none)"
+          for f in ~/Library/Logs/DiagnosticReports/*gridcoin*; do
+            [ -e "$f" ] || continue
+            echo "---------- $f"
+            # .ips reports are JSON with a leading metadata line; print raw either way.
+            head -c 20000 "$f"
+            echo
+          done
+
+      # The hardening check's lief has macOS wheels only up to CPython 3.14, and
+      # the image's Homebrew python3 can be newer. The check gets its own
+      # interpreter; update-environment: false leaves python3 on the PATH as it is.
+      - name: Set up Python for the hardening check
+        id: hardening_python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          update-environment: false
+
+      - name: Verify Binary Hardening
+        env:
+          PYTHON: ${{ steps.hardening_python.outputs.python-path }}
+        run: ./contrib/devtools/check-binary-hardening.sh build
+      # Not wrapped in check-build-warnings.sh: deploy copies Homebrew's dylibs into
+      # the bundle and rewrites them, and install_name_tool and strip warn that the
+      # rewrite invalidates their signatures -- third-party files, not the tree's build.
       - name: Package (DMG)
         run: cmake --build build --target deploy
 
@@ -423,6 +568,84 @@ jobs:
             echo "WARNING: Code signature verification failed (ad-hoc signing may not verify on CI)"
           fi
 
+          # The daemon must ship alongside the GUI: multiprocess is compiled into
+          # every macOS artifact and the IPC layer is connect-only, so a DMG without
+          # a node makes -multiprocess impossible to satisfy.
+          DAEMON="$APP/Contents/Helpers/gridcoinresearchd"
+          if [ ! -x "$DAEMON" ]; then
+            echo "FAIL: gridcoinresearchd missing from the bundle"
+            ls -la "$APP/Contents/Helpers/" "$APP/Contents/MacOS/" || true
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: gridcoinresearchd present in the bundle"
+
+          # The bundle's real macOS floor is the HIGHEST LC_BUILD_VERSION minos
+          # among every Mach-O it ships, because dyld refuses to load a library
+          # built for a newer OS than the one running -- whatever
+          # LSMinimumSystemVersion claims. Homebrew sets no deployment target, so
+          # a bottle carries the minimum of whatever machine built it, and a
+          # formula with no bottle for this architecture is source-built here and
+          # picks up the RUNNER's version. Both routes raise the floor silently,
+          # and a DMG that claims more than it can honour fails only on a user's
+          # machine. So assert it against the artifact, never against the
+          # configure flag -- that flag is set by us and proves nothing about
+          # what got linked in.
+          declared="${MACOS_DEPLOYMENT_TARGET}"
+          find "$APP" -type f > /tmp/bundle-machos.txt
+          worst="0.0"; worstfile=""; measured=0
+          while IFS= read -r macho; do
+            m=$(otool -l "$macho" 2>/dev/null | awk '/LC_BUILD_VERSION/{f=1} f&&/^[[:space:]]*minos/{print $2; exit}')
+            [ -n "$m" ] || continue
+            measured=$((measured + 1))
+            if [ "$m" != "$worst" ] && [ "$(printf '%s\n%s\n' "$worst" "$m" | sort -V | tail -1)" = "$m" ]; then
+              worst="$m"; worstfile="$macho"
+            fi
+          done < /tmp/bundle-machos.txt
+          # A check that measures nothing passes everything. The bundle ships tens
+          # of Mach-O files and we have already asserted two of them exist, so
+          # zero readings means the check broke, not that the bundle is clean.
+          if [ "$measured" -lt 10 ]; then
+            echo "FAIL: only $measured Mach-O files could be read under $APP;"
+            echo "      this check cannot vouch for the floor, so it does not pretend to."
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "Declared floor: $declared   Measured floor: $worst   ($measured Mach-O files)"
+          if [ "$(printf '%s\n%s\n' "$declared" "$worst" | sort -V | tail -1)" != "$declared" ]; then
+            echo "FAIL: the bundle requires macOS $worst but declares $declared."
+            echo "      Every library at the measured floor:"
+            while IFS= read -r macho; do
+              m=$(otool -l "$macho" 2>/dev/null | awk '/LC_BUILD_VERSION/{f=1} f&&/^[[:space:]]*minos/{print $2; exit}')
+              [ "$m" = "$worst" ] && echo "        $m  ${macho#$APP/}"
+            done < /tmp/bundle-machos.txt
+            echo "      This job has no keg mirror (see the job header). Find what built the"
+            echo "      library for a newer macOS than this runner, or raise this job's"
+            echo "      MACOS_DEPLOYMENT_TARGET to match reality. Do not just change the plist."
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: every shipped library honours the declared $declared floor (worst: ${worstfile#$APP/})"
+
+          # Neither binary may reference a build-machine library path. Homebrew is
+          # present on the runner and on most developer machines, so a missed
+          # relocation runs fine here and fails only on a clean install -- which is
+          # exactly the failure this check exists to catch, and why it asserts rather
+          # than reports.
+          leak=0
+          for b in "$BINARY" "$DAEMON"; do
+            if otool -L "$b" | tail -n +2 | grep -qE "^[[:space:]]*(/usr/local|/opt/homebrew)"; then
+              echo "FAIL: $(basename "$b") references build-machine libraries:"
+              otool -L "$b" | tail -n +2 | grep -E "^[[:space:]]*(/usr/local|/opt/homebrew)"
+              leak=1
+            fi
+          done
+          if [ "$leak" -ne 0 ]; then
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: no build-machine library paths in either binary"
+
           # Verify binary is a valid Mach-O executable (no runtime execution
           # since the GUI binary pops up dialogs that hang in headless CI)
           if file "$BINARY" | grep -q "Mach-O"; then
@@ -469,7 +692,16 @@ jobs:
             echo "$SUBMIT_OUTPUT"
             exit 0
           }
-          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          # Guarded: this step runs under the default `bash -e {0}`, so an
+          # unguarded failure here would fail the JOB, which skips Upload
+          # Artifacts and makes the deploy job skip with it -- losing the whole
+          # release over a notarization hiccup, the opposite of best-effort.
+          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || SUBMISSION_ID=""
+          if [ -z "$SUBMISSION_ID" ]; then
+            echo "::warning::Could not read a submission id from notarytool — publishing the signed (un-notarized) DMG. Staple later via contrib/macdeploy/notarize-dmg.sh."
+            echo "$SUBMIT_OUTPUT"
+            exit 0
+          fi
           echo "  Submission ID: $SUBMISSION_ID"
 
           # Best-effort 45m wait: ample for Apple's automated path. A submission
@@ -484,9 +716,15 @@ jobs:
             --team-id "$APPLE_TEAM_ID" \
             --timeout 45m; then
             echo "=== Stapling $DMG in place ==="
-            xcrun stapler staple "$DMG"
-            xcrun stapler validate "$DMG"
-            echo "=== Notarized + stapled: $DMG ==="
+            # Also guarded, for the same reason. Stapling can fail transiently
+            # after a successful notarization (the ticket takes a moment to
+            # propagate), and a signed, notarized-but-unstapled DMG is still a
+            # shippable artifact -- Gatekeeper falls back to an online check.
+            if xcrun stapler staple "$DMG" && xcrun stapler validate "$DMG"; then
+              echo "=== Notarized + stapled: $DMG ==="
+            else
+              echo "::warning::Notarization succeeded but stapling did not — publishing the signed, notarized DMG unstapled. The ticket exists; staple later via contrib/macdeploy/notarize-dmg.sh."
+            fi
           else
             echo "::warning::Notarization did not complete within 45m — publishing the signed (un-notarized) DMG. Diagnose with 'xcrun notarytool log $SUBMISSION_ID --apple-id ... --team-id ...'; staple later via contrib/macdeploy/notarize-dmg.sh."
             xcrun notarytool log "$SUBMISSION_ID" \
@@ -509,17 +747,43 @@ jobs:
 
   macos-native-intel:
     name: macOS Intel (Homebrew Qt6)
-    runs-on: macos-14
+    # A NATIVE Intel runner, not Rosetta on arm64. Homebrew removed Intel
+    # support from its installer on 2026-09-11 (Homebrew/install#1140), so a
+    # second x86_64 Homebrew can no longer be bootstrapped at /usr/local on an
+    # arm64 runner at all -- which is what this job used to do. A native Intel
+    # runner already ships Homebrew at the Intel prefix, so there is nothing to
+    # bootstrap and no `arch -x86_64` wrapper on every command.
+    #
+    # macos-15-intel is available until August 2027, after which Actions drops
+    # x86_64 entirely (actions/runner-images#13045).
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install x86_64 Homebrew and Dependencies
+      # Homebrew wound x86_64 macOS down to Tier 3, and the mirror answers three
+      # different consequences of that. The Qt stack, openssl@3, pcre2 and xz have
+      # no Intel bottle at any tag, so `brew install` would source-build them --
+      # hours per run for Qt, and the reason this job once hit the six-hour ceiling
+      # without starting a compile. zstd has one, but for a NEWER macOS tag, and
+      # Homebrew prefers the newest, which quietly yields a 15.0 binary. The rest
+      # are mirrored pre-emptively: they still have an Intel bottle today and will
+      # not forever, and capturing one costs a download now against a source build
+      # later. contrib/devtools/macos-pinned-kegs.txt records which reason applies
+      # to each entry.
+      #
+      # Every mirrored keg is built on native Intel macOS 14 and carries minos
+      # 14.0, the floor MACOS_DEPLOYMENT_TARGET declares -- and which the DMG check
+      # further down measures rather than trusts.
+      - name: Restore the pinned Intel kegs and install the rest
         run: |
-          # Install a separate x86_64 Homebrew at /usr/local (Intel prefix).
-          # The ARM64 runner has Rosetta 2, so x86_64 binaries run transparently.
-          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
-          arch -x86_64 /usr/local/bin/brew update
-          arch -x86_64 /usr/local/bin/brew install qt boost openssl libevent miniupnpc qrencode libzip ccache cmake
+          # MACOS_BREW_DEPS is passed IN rather than installed afterwards. Several
+          # of them reach a pinned formula through their own dependencies --
+          # libevent depends on openssl@3 -- so installing them after the restore
+          # would pull a pinned keg forward again, past the prune and past the
+          # verification that is supposed to catch exactly that.
+          # shellcheck disable=SC2086
+          contrib/devtools/macos-restore-pinned-kegs.sh \
+            contrib/devtools/macos-pinned-kegs.txt $MACOS_BREW_DEPS
 
       - name: Configure Ccache
         uses: actions/cache@v5
@@ -541,7 +805,7 @@ jobs:
 
       - name: Set up Python venv for DMG packaging
         run: |
-          arch -x86_64 /usr/local/bin/python3 -m venv "${RUNNER_TEMP}/venv"
+          python3 -m venv "${RUNNER_TEMP}/venv"
           "${RUNNER_TEMP}/venv/bin/pip" install ds_store mac_alias
 
       - name: Import Code Signing Certificate
@@ -591,33 +855,76 @@ jobs:
         run: |
           export CC_LAUNCHER='-DCMAKE_C_COMPILER_LAUNCHER=ccache'
           export CXX_LAUNCHER='-DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
-          QT6_PATH=$(arch -x86_64 /usr/local/bin/brew --prefix qt)
-          OPENSSL_ROOT=$(arch -x86_64 /usr/local/bin/brew --prefix openssl)
+          # With the split Qt kegs, qtbase's Qt6Config cannot resolve the Svg
+          # and LinguistTools components living in the qtsvg/qttools kegs;
+          # the brew prefix exposes the aggregate linked lib/cmake view.
+          QT6_PATH=$(brew --prefix)
+          OPENSSL_ROOT=$(brew --prefix openssl@3)
 
-          arch -x86_64 /usr/local/bin/cmake -B build \
+          cmake -B build \
             -DCMAKE_PREFIX_PATH="$QT6_PATH" \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DENABLE_GUI=ON \
             -DENABLE_QRENCODE=ON \
             -DENABLE_UPNP=ON \
-            -DDEFAULT_UPNP=ON \
+            -DENABLE_MULTIPROCESS=ON \
+            -DENABLE_PIE=ON \
             -DENABLE_TESTS=ON \
             -DENABLE_DOCS=OFF \
             -DUSE_QT6=ON \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ env.MACOS_DEPLOYMENT_TARGET }} \
             -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT" \
             -DPython3_EXECUTABLE="${RUNNER_TEMP}/venv/bin/python3" \
             $CC_LAUNCHER \
             $CXX_LAUNCHER
 
       - name: Build
-        run: arch -x86_64 /usr/local/bin/cmake --build build
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build
 
       - name: Test
-        run: arch -x86_64 /usr/local/bin/ctest --test-dir build --output-on-failure
+        # See the arm64 job: bounded twice so a hang is reported rather than
+        # running to the six-hour job default.
+        timeout-minutes: 45
+        run: ctest --test-dir build --output-on-failure --timeout 1800
 
+      - name: Dump crash reports on test failure
+        # macOS writes a symbolicated report to DiagnosticReports when a process
+        # aborts. Without this the only evidence of a crash is the terminate
+        # message on stderr, which names the exception type but not where it was
+        # thrown -- and three rounds of narrowing that down from the type alone
+        # each reached a different wrong answer.
+        if: failure()
+        run: |
+          echo "=== DiagnosticReports ==="
+          ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null || echo "  (none)"
+          for f in ~/Library/Logs/DiagnosticReports/*gridcoin*; do
+            [ -e "$f" ] || continue
+            echo "---------- $f"
+            # .ips reports are JSON with a leading metadata line; print raw either way.
+            head -c 20000 "$f"
+            echo
+          done
+
+      # The hardening check's lief has macOS wheels only up to CPython 3.14, and
+      # the image's Homebrew python3 can be newer. The check gets its own
+      # interpreter; update-environment: false leaves python3 on the PATH as it is.
+      - name: Set up Python for the hardening check
+        id: hardening_python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          update-environment: false
+
+      - name: Verify Binary Hardening
+        env:
+          PYTHON: ${{ steps.hardening_python.outputs.python-path }}
+        run: ./contrib/devtools/check-binary-hardening.sh build
+      # Not wrapped in check-build-warnings.sh: deploy copies Homebrew's dylibs into
+      # the bundle and rewrites them, and install_name_tool and strip warn that the
+      # rewrite invalidates their signatures -- third-party files, not the tree's build.
       - name: Package (DMG)
-        run: arch -x86_64 /usr/local/bin/cmake --build build --target deploy
+        run: cmake --build build --target deploy
 
       - name: Verify DMG Package
         run: |
@@ -667,6 +974,84 @@ jobs:
             echo "WARNING: Code signature verification failed (ad-hoc signing may not verify on CI)"
           fi
 
+          # The daemon must ship alongside the GUI: multiprocess is compiled into
+          # every macOS artifact and the IPC layer is connect-only, so a DMG without
+          # a node makes -multiprocess impossible to satisfy.
+          DAEMON="$APP/Contents/Helpers/gridcoinresearchd"
+          if [ ! -x "$DAEMON" ]; then
+            echo "FAIL: gridcoinresearchd missing from the bundle"
+            ls -la "$APP/Contents/Helpers/" "$APP/Contents/MacOS/" || true
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: gridcoinresearchd present in the bundle"
+
+          # The bundle's real macOS floor is the HIGHEST LC_BUILD_VERSION minos
+          # among every Mach-O it ships, because dyld refuses to load a library
+          # built for a newer OS than the one running -- whatever
+          # LSMinimumSystemVersion claims. Homebrew sets no deployment target, so
+          # a bottle carries the minimum of whatever machine built it, and a
+          # formula with no bottle for this architecture is source-built here and
+          # picks up the RUNNER's version. Both routes raise the floor silently,
+          # and a DMG that claims more than it can honour fails only on a user's
+          # machine. So assert it against the artifact, never against the
+          # configure flag -- that flag is set by us and proves nothing about
+          # what got linked in.
+          declared="${MACOS_DEPLOYMENT_TARGET}"
+          find "$APP" -type f > /tmp/bundle-machos.txt
+          worst="0.0"; worstfile=""; measured=0
+          while IFS= read -r macho; do
+            m=$(otool -l "$macho" 2>/dev/null | awk '/LC_BUILD_VERSION/{f=1} f&&/^[[:space:]]*minos/{print $2; exit}')
+            [ -n "$m" ] || continue
+            measured=$((measured + 1))
+            if [ "$m" != "$worst" ] && [ "$(printf '%s\n%s\n' "$worst" "$m" | sort -V | tail -1)" = "$m" ]; then
+              worst="$m"; worstfile="$macho"
+            fi
+          done < /tmp/bundle-machos.txt
+          # A check that measures nothing passes everything. The bundle ships tens
+          # of Mach-O files and we have already asserted two of them exist, so
+          # zero readings means the check broke, not that the bundle is clean.
+          if [ "$measured" -lt 10 ]; then
+            echo "FAIL: only $measured Mach-O files could be read under $APP;"
+            echo "      this check cannot vouch for the floor, so it does not pretend to."
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "Declared floor: $declared   Measured floor: $worst   ($measured Mach-O files)"
+          if [ "$(printf '%s\n%s\n' "$declared" "$worst" | sort -V | tail -1)" != "$declared" ]; then
+            echo "FAIL: the bundle requires macOS $worst but declares $declared."
+            echo "      Every library at the measured floor:"
+            while IFS= read -r macho; do
+              m=$(otool -l "$macho" 2>/dev/null | awk '/LC_BUILD_VERSION/{f=1} f&&/^[[:space:]]*minos/{print $2; exit}')
+              [ "$m" = "$worst" ] && echo "        $m  ${macho#$APP/}"
+            done < /tmp/bundle-machos.txt
+            echo "      Pin the offending formula in contrib/devtools/macos-pinned-kegs.txt"
+            echo "      (built on macOS ${declared%%.*}), or raise MACOS_DEPLOYMENT_TARGET to"
+            echo "      match reality. Do not just change the plist."
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: every shipped library honours the declared $declared floor (worst: ${worstfile#$APP/})"
+
+          # Neither binary may reference a build-machine library path. Homebrew is
+          # present on the runner and on most developer machines, so a missed
+          # relocation runs fine here and fails only on a clean install -- which is
+          # exactly the failure this check exists to catch, and why it asserts rather
+          # than reports.
+          leak=0
+          for b in "$BINARY" "$DAEMON"; do
+            if otool -L "$b" | tail -n +2 | grep -qE "^[[:space:]]*(/usr/local|/opt/homebrew)"; then
+              echo "FAIL: $(basename "$b") references build-machine libraries:"
+              otool -L "$b" | tail -n +2 | grep -E "^[[:space:]]*(/usr/local|/opt/homebrew)"
+              leak=1
+            fi
+          done
+          if [ "$leak" -ne 0 ]; then
+            hdiutil detach "$MOUNT_POINT" || true
+            exit 1
+          fi
+          echo "PASS: no build-machine library paths in either binary"
+
           # Verify binary is a valid Mach-O executable (no runtime execution
           # since the GUI binary pops up dialogs that hang in headless CI)
           if file "$BINARY" | grep -q "Mach-O"; then
@@ -713,7 +1098,16 @@ jobs:
             echo "$SUBMIT_OUTPUT"
             exit 0
           }
-          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          # Guarded: this step runs under the default `bash -e {0}`, so an
+          # unguarded failure here would fail the JOB, which skips Upload
+          # Artifacts and makes the deploy job skip with it -- losing the whole
+          # release over a notarization hiccup, the opposite of best-effort.
+          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || SUBMISSION_ID=""
+          if [ -z "$SUBMISSION_ID" ]; then
+            echo "::warning::Could not read a submission id from notarytool — publishing the signed (un-notarized) DMG. Staple later via contrib/macdeploy/notarize-dmg.sh."
+            echo "$SUBMIT_OUTPUT"
+            exit 0
+          fi
           echo "  Submission ID: $SUBMISSION_ID"
 
           # Best-effort 45m wait: ample for Apple's automated path. A submission
@@ -728,9 +1122,15 @@ jobs:
             --team-id "$APPLE_TEAM_ID" \
             --timeout 45m; then
             echo "=== Stapling $DMG in place ==="
-            xcrun stapler staple "$DMG"
-            xcrun stapler validate "$DMG"
-            echo "=== Notarized + stapled: $DMG ==="
+            # Also guarded, for the same reason. Stapling can fail transiently
+            # after a successful notarization (the ticket takes a moment to
+            # propagate), and a signed, notarized-but-unstapled DMG is still a
+            # shippable artifact -- Gatekeeper falls back to an online check.
+            if xcrun stapler staple "$DMG" && xcrun stapler validate "$DMG"; then
+              echo "=== Notarized + stapled: $DMG ==="
+            else
+              echo "::warning::Notarization succeeded but stapling did not — publishing the signed, notarized DMG unstapled. The ticket exists; staple later via contrib/macdeploy/notarize-dmg.sh."
+            fi
           else
             echo "::warning::Notarization did not complete within 45m — publishing the signed (un-notarized) DMG. Diagnose with 'xcrun notarytool log $SUBMISSION_ID --apple-id ... --team-id ...'; staple later via contrib/macdeploy/notarize-dmg.sh."
             xcrun notarytool log "$SUBMISSION_ID" \
@@ -763,7 +1163,8 @@ jobs:
       - name: Install Dependencies
         run: |
           source ./install_dependencies.sh
-          install_deps native true true
+          # 4th arg: system Cap'n Proto, for the multiprocess build below.
+          install_deps native true true true
 
       - name: Setup Concurrency
         run: |
@@ -786,17 +1187,20 @@ jobs:
         run: |
           cmake -B build_native \
             -DENABLE_GUI=ON \
+            -DENABLE_MULTIPROCESS=ON \
             -DUSE_QT6=ON \
             -DENABLE_UPNP=ON \
-            -DDEFAULT_UPNP=ON \
+            -DENABLE_PIE=ON \
             -DENABLE_TESTS=OFF \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build_native
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_native
 
+      - name: Verify Binary Hardening
+        run: ./contrib/devtools/check-binary-hardening.sh build_native
       - name: Prepare Artifacts
         run: |
           mkdir -p dist
@@ -823,6 +1227,12 @@ jobs:
       - name: Add ARM64 Architecture
         run: |
           sudo dpkg --add-architecture arm64
+          # Take phased updates. While an Ubuntu update is phasing, apt keeps the
+          # installed amd64 copy of a package back but can pick the new version
+          # for the arm64 copy it installs. Multi-Arch: same packages (mesa, for
+          # one) must match across architectures, so without this the install
+          # fails with "held broken packages" on any runner outside the phase.
+          echo 'APT::Get::Always-Include-Phased-Updates "true";' | sudo tee /etc/apt/apt.conf.d/99-phased-updates
           # Remove all existing sources and write clean amd64-only + arm64 config.
           # The runner image adds sources (microsoft-prod, azure-cli, ubuntu) with
           # varying formats that break when arm64 is added as an architecture.
@@ -836,16 +1246,21 @@ jobs:
           Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 
           Types: deb
-          URIs: http://security.ubuntu.com/ubuntu
+          URIs: http://azure.archive.ubuntu.com/ubuntu
           Suites: noble-security
           Components: main universe multiverse restricted
           Architectures: amd64
           Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
           EOF
+          # The arm64 sources come from Azure's ports mirror, like every amd64 pocket
+          # above. Multi-Arch: same packages (mesa, krb5, ...) must be the identical
+          # version in both architectures, and two different mirrors can be a
+          # generation apart (ports.ubuntu.com served a stale mesa for hours after
+          # Azure had the new one), which apt reports as "held broken packages".
           cat <<'EOF' | sudo tee /etc/apt/sources.list.d/arm64.list
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main universe multiverse restricted
+          deb [arch=arm64] http://azure.ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted
+          deb [arch=arm64] http://azure.ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted
+          deb [arch=arm64] http://azure.ports.ubuntu.com/ubuntu-ports noble-security main universe multiverse restricted
           EOF
           sudo apt-get update
 
@@ -855,15 +1270,16 @@ jobs:
           sudo apt-get update
           sudo apt-get -f install -y
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build zipcmp zipmerge ziptool qemu-user-static \
-            g++-aarch64-linux-gnu qt6-base-dev:arm64 qt6-charts-dev:arm64 qt6-svg-dev:arm64 \
+            build-essential cmake ninja-build qemu-user-static \
+            g++-aarch64-linux-gnu qt6-base-dev:arm64 qt6-svg-dev:arm64 \
             qt6-l10n-tools qt6-tools-dev:arm64 qt6-tools-dev-tools:arm64 \
-            libqt6core5compat6-dev:arm64 libssl-dev:arm64 libzip-dev:arm64 \
+            libssl-dev:arm64 zlib1g-dev:arm64 \
             libcurl4-openssl-dev:arm64 libboost-system-dev:arm64 libboost-filesystem-dev:arm64 \
             libboost-thread-dev:arm64 libboost-iostreams-dev:arm64 libboost-program-options-dev:arm64 \
-            libboost-serialization-dev:arm64 libboost-chrono-dev:arm64 \
+            libboost-chrono-dev:arm64 \
             libminiupnpc-dev:arm64 libxkbcommon-dev:arm64 \
             libcups2t64:arm64 \
+            libcapnp-dev:arm64 libcapnp-dev capnproto \
             ccache
 
       - name: Setup Concurrency
@@ -883,11 +1299,29 @@ jobs:
           key: ccache-prod-arm64-${{ github.sha }}
           restore-keys: ccache-prod-arm64-
 
+      # mpgen is the libmultiprocess code generator, and a cross build produces an
+      # aarch64 one that cannot run on the amd64 runner -- the build then invokes the
+      # target NAME as a command and dies with "Libmultiprocess::mpgen: not found".
+      # Build it for the host first and hand the cross configure the path via
+      # MPGEN_EXECUTABLE, which the subtree exposes for exactly this case.
+      - name: Build native mpgen (cross-build code generator)
+        run: |
+          cmake -B build_mpgen_native -S src/ipc/libmultiprocess -GNinja \
+            -DCMAKE_BUILD_TYPE=Release
+          ./contrib/devtools/check-build-warnings.sh -- cmake --build build_mpgen_native --target mpgen -j"${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}"
+          MPGEN_BIN=$(find build_mpgen_native -name mpgen -type f -perm -u+x | head -n 1)
+          if [ -z "$MPGEN_BIN" ]; then
+            echo "::error::native mpgen was not produced"; exit 1
+          fi
+          echo "MPGEN_BIN=$(pwd)/${MPGEN_BIN}" >> "$GITHUB_ENV"
+          echo "native mpgen: $(pwd)/${MPGEN_BIN}"
+
       - name: Configure CMake (Cross)
         env:
           PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig
         run: |
           cmake -B build_arm64 -GNinja \
+            -DMPGEN_EXECUTABLE="${MPGEN_BIN}" \
             -DCMAKE_SYSTEM_NAME=Linux \
             -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
@@ -899,15 +1333,18 @@ jobs:
             -DUSE_QT6=ON \
             -DQt6_DIR=/usr/lib/aarch64-linux-gnu/cmake/Qt6 \
             -DENABLE_UPNP=ON \
-            -DDEFAULT_UPNP=ON \
+            -DENABLE_MULTIPROCESS=ON \
+            -DENABLE_PIE=ON \
             -DENABLE_TESTS=OFF \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build_arm64
+        run: ./contrib/devtools/check-build-warnings.sh -- cmake --build build_arm64
 
+      - name: Verify Binary Hardening
+        run: ./contrib/devtools/check-binary-hardening.sh build_arm64
       - name: Prepare Artifacts
         run: |
           mkdir -p dist
@@ -950,9 +1387,24 @@ jobs:
           path: .flatpak-builder
           key: flatpak-builder-${{ hashFiles('contrib/flatpak/us.gridcoin.GridcoinResearch.yml') }}
 
-      - name: Build Flatpak
+      # The manifest's dependency modules are built first, on their own and outside
+      # the warning check: their warnings come from code this project does not
+      # compile. That run commits them to flatpak-builder's cache, and on exit it
+      # prunes the stages it never reached, gridcoin's included. The second run
+      # then takes the dependencies from the cache ("Cache hit for ...") and always
+      # compiles the tree, so the check sees the tree's own build and nothing else.
+      - name: Build Flatpak dependencies
         run: |
           flatpak-builder \
+            --force-clean \
+            --stop-at=gridcoin \
+            flatpak-build \
+            contrib/flatpak/us.gridcoin.GridcoinResearch.yml
+
+      - name: Build Flatpak
+        run: |
+          ./contrib/devtools/check-build-warnings.sh -- \
+            flatpak-builder \
             --force-clean \
             --repo=flatpak-repo \
             flatpak-build \
@@ -1069,20 +1521,31 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/gridcoinresearch:latest
 
   # ----------------------------------------------------------------------
-  # JOB 4: Notarize macOS DMGs (tag pushes only)
-  # Disabled — Apple notarization service consistently times out at the
-  # 2-hour mark in CI. Notarization and stapling are performed locally
-  # using contrib/macdeploy/notarize-dmg.sh and the stapled DMGs are
-  # uploaded to the release manually.
+  # There is no separate notarization job. Each macOS build notarizes and
+  # staples its own DMG in place, gated to tag builds, between DMG verification
+  # and artifact upload -- a standalone job would have to re-download the DMG,
+  # re-sign nothing, and upload it again.
+  #
+  # The step is best-effort by design: on a timeout, a submit failure, or absent
+  # credentials it warns and ships the signed but un-notarized DMG rather than
+  # failing the release, and contrib/macdeploy/notarize-dmg.sh staples it
+  # afterwards.
   # ----------------------------------------------------------------------
-  # notarize-macos:
-  #   ...
 
   # ----------------------------------------------------------------------
   # JOB 5: Deploy (GitHub Release)
   # ----------------------------------------------------------------------
   deploy:
     name: Create Release
+    # EVERY job that uploads a gridcoin-* artifact must be listed here.
+    # download-artifact takes whatever exists at the moment it runs, so a producer
+    # missing from this list is a race, not a dependency detail: if it finishes after
+    # this job, its asset is silently absent from the release and the job still
+    # reports success. That is exactly how 5.5.1.5-testnet shipped without the macOS
+    # Intel DMG -- the Intel build completed 4m48s AFTER the release was assembled,
+    # while the ARM64 build happened to finish 17 minutes before it and was included.
+    # The docker-* artifacts are deliberately NOT needed: they feed docker-publish and
+    # are excluded from the release by the gridcoin-* glob below.
     needs: [depends-builds, flatpak-build, macos-native-arm64, macos-native-intel]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
@@ -1096,17 +1559,25 @@ jobs:
 
       - name: Assemble Release Assets
         run: |
+          set -euo pipefail
           mkdir -p release_assets
 
-          # Copy all artifacts into release_assets
-          for dir in artifacts/gridcoin-*/; do
-            cp "$dir"* release_assets/ 2>/dev/null || true
+          # Copy all artifacts into release_assets. A failure here used to be
+          # swallowed by "2>/dev/null || true", which made a missing or unreadable
+          # artifact indistinguishable from a present one; the release then shipped
+          # short and still went green.
+          shopt -s nullglob
+          dirs=(artifacts/gridcoin-*/)
+          if [ ${#dirs[@]} -eq 0 ]; then
+            echo "No gridcoin-* artifacts were downloaded; nothing to release." >&2
+            exit 1
+          fi
+          for dir in "${dirs[@]}"; do
+            cp "$dir"* release_assets/
           done
 
           cd release_assets
           ls -la
-          sha256sum * > SHA256SUMS.txt
-          cat SHA256SUMS.txt
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2

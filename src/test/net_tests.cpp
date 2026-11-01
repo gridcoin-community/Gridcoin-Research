@@ -2,70 +2,29 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 #include "addrman.h"
+#include "addrman_impl.h"
 #include <string>
 #include <boost/test/unit_test.hpp>
 #include "hash.h"
 #include "serialize.h"
 #include "streams.h"
 #include "net.h"
+#include "net_processing.h"
 #include "netbase.h"
 #include "addrdb.h"
+#include "chain.h"
 #include "chainparams.h"
 #include "clientversion.h"
+#include "primitives/block.h"
 
 using namespace std;
 
 BOOST_AUTO_TEST_SUITE(net_tests)
 
-class CAddrManSerializationMock : public CAddrMan
-{
-public:
-    virtual void Serialize(CDataStream& s) const = 0;
-
-    //! Ensure that bucket placement is always the same for testing purposes.
-    void MakeDeterministic()
-    {
-        nKey.SetNull();
-        insecure_rand = FastRandomContext(true);
-    }
-};
-
-class CAddrManUncorrupted : public CAddrManSerializationMock
-{
-public:
-    void Serialize(CDataStream& s) const
-    {
-        CAddrMan::Serialize(s);
-    }
-};
-
-class CAddrManCorrupted : public CAddrManSerializationMock
-{
-public:
-    void Serialize(CDataStream& s) const
-    {
-        // Produces corrupt output that claims addrman has 20 addrs when it only has one addr.
-        unsigned char nVersion = 1;
-        s << nVersion;
-        s << ((unsigned char)32);
-        s << nKey;
-        s << 10; // nNew
-        s << 10; // nTried
-
-        int nUBuckets = ADDRMAN_NEW_BUCKET_COUNT ^ (1 << 30);
-        s << nUBuckets;
-
-        CService serv;
-        Lookup("252.1.1.1", serv, 7777, false);
-        CAddress addr = CAddress(serv, NODE_NONE);
-        CNetAddr resolved;
-        LookupHost("252.2.2.2", resolved, false);
-        CAddrInfo info = CAddrInfo(addr, resolved);
-        s << info;
-    }
-};
-
-CDataStream AddrmanToStream(CAddrManSerializationMock& addrman)
+// Serialize a (deterministic) AddrMan into a peers.dat-style stream, prefixed
+// with the network message-start bytes (issue #2558 PR 6b: the test no longer
+// subclasses AddrMan; it uses the public interface + a deterministic AddrMan).
+static CDataStream AddrmanToStream(const AddrMan& addrman)
 {
     CDataStream ssPeersIn(SER_DISK, CLIENT_VERSION);
     ssPeersIn << Params().MessageStart();
@@ -75,10 +34,41 @@ CDataStream AddrmanToStream(CAddrManSerializationMock& addrman)
     return CDataStream(vchData, SER_DISK, CLIENT_VERSION);
 }
 
+// Build a deliberately corrupt peers.dat-style stream: it claims addrman has
+// 10 "new" and 10 "tried" entries but contains only one addr. Byte-identical to
+// the pre-pimpl AddrManCorrupted serialization mock (null key included).
+static CDataStream MakeCorruptAddrmanStream()
+{
+    CDataStream ssPeersIn(SER_DISK, CLIENT_VERSION);
+    ssPeersIn << Params().MessageStart();
+
+    unsigned char nVersion = 1;
+    ssPeersIn << nVersion;
+    ssPeersIn << ((unsigned char)32);
+    uint256 nKey; // null key (the old mock was MakeDeterministic'd to a null key)
+    ssPeersIn << nKey;
+    ssPeersIn << 10; // nNew
+    ssPeersIn << 10; // nTried
+
+    int nUBuckets = ADDRMAN_NEW_BUCKET_COUNT ^ (1 << 30);
+    ssPeersIn << nUBuckets;
+
+    CService serv;
+    Lookup("252.1.1.1", serv, 7777, false);
+    CAddress addr = CAddress(serv, NODE_NONE);
+    CNetAddr resolved;
+    LookupHost("252.2.2.2", resolved, false);
+    AddrInfo info = AddrInfo(addr, resolved);
+    ssPeersIn << info;
+
+    std::string str = ssPeersIn.str();
+    vector<unsigned char> vchData(str.begin(), str.end());
+    return CDataStream(vchData, SER_DISK, CLIENT_VERSION);
+}
+
 BOOST_AUTO_TEST_CASE(caddrdb_read)
 {
-    CAddrManUncorrupted addrmanUncorrupted;
-    addrmanUncorrupted.MakeDeterministic();
+    AddrMan addrmanUncorrupted{/*deterministic=*/true};
 
     CService addr1, addr2, addr3;
     Lookup("250.7.1.1", addr1, 8333, false);
@@ -95,7 +85,7 @@ BOOST_AUTO_TEST_CASE(caddrdb_read)
     // Test that the de-serialization does not throw an exception.
     CDataStream ssPeers1 = AddrmanToStream(addrmanUncorrupted);
     bool exceptionThrown = false;
-    CAddrMan addrman1;
+    AddrMan addrman1;
 
     BOOST_CHECK(addrman1.size() == 0);
     try {
@@ -112,7 +102,7 @@ BOOST_AUTO_TEST_CASE(caddrdb_read)
     // Test that CAddrDB::Read creates an addrman with the correct number of addrs.
     CDataStream ssPeers2 = AddrmanToStream(addrmanUncorrupted);
 
-    CAddrMan addrman2;
+    AddrMan addrman2;
     CAddrDB adb;
     BOOST_CHECK(addrman2.size() == 0);
     adb.Read(addrman2, ssPeers2);
@@ -122,13 +112,10 @@ BOOST_AUTO_TEST_CASE(caddrdb_read)
 
 BOOST_AUTO_TEST_CASE(caddrdb_read_corrupted)
 {
-    CAddrManCorrupted addrmanCorrupted;
-    addrmanCorrupted.MakeDeterministic();
-
     // Test that the de-serialization of corrupted addrman throws an exception.
-    CDataStream ssPeers1 = AddrmanToStream(addrmanCorrupted);
+    CDataStream ssPeers1 = MakeCorruptAddrmanStream();
     bool exceptionThrown = false;
-    CAddrMan addrman1;
+    AddrMan addrman1;
     BOOST_CHECK(addrman1.size() == 0);
     try {
         unsigned char pchMsgTmp[4];
@@ -142,13 +129,79 @@ BOOST_AUTO_TEST_CASE(caddrdb_read_corrupted)
     BOOST_CHECK(exceptionThrown);
 
     // Test that CAddrDB::Read leaves addrman in a clean state if de-serialization fails.
-    CDataStream ssPeers2 = AddrmanToStream(addrmanCorrupted);
+    CDataStream ssPeers2 = MakeCorruptAddrmanStream();
 
-    CAddrMan addrman2;
+    AddrMan addrman2;
     CAddrDB adb;
     BOOST_CHECK(addrman2.size() == 0);
     adb.Read(addrman2, ssPeers2);
     BOOST_CHECK(addrman2.size() == 0);
+}
+
+// The PeerManager tip-relay handler (issue #3125 C8) must no-op safely on a
+// quiescent node: a null tip (defensive guard) and a non-best tip -- the
+// best-chain gate that suppresses relay when SetBestChain's trust-regression
+// path reorganizes back to the previous tip yet still emits UpdatedBlockTip
+// with the losing block. The fixture's g_connman has zero nodes, so a passing
+// gate would also no-op; what this exercises is the gate/guard path itself
+// under the handler's cs_main lock annotation.
+BOOST_AUTO_TEST_CASE(peerman_updatedblocktip_relay_gates)
+{
+    BOOST_REQUIRE(g_peerman);
+
+    LOCK(cs_main);
+
+    g_peerman->UpdatedBlockTip(nullptr, nullptr, false);
+
+    const uint256 not_best_hash = uint256S("0xdeadbeef");
+    CBlockIndex index;
+    index.phashBlock = &not_best_hash;
+    BOOST_REQUIRE(index.GetBlockHash() != hashBestChain);
+
+    g_peerman->UpdatedBlockTip(&index, nullptr, false);
+}
+
+//! DeferredRelay exists so an announcement can be decided while cs_wallet is
+//! held and made after it unlocks (#3391). The lock ordering itself is not
+//! reachable from a unit test; the bookkeeping that makes it safe is.
+//!
+//! Flushing must empty the queue rather than merely walk it, because the
+//! destructor flushes as well: a caller that flushes explicitly -- as
+//! ResendWalletTransactions does, to announce before its erase pass retakes
+//! cs_wallet -- would otherwise announce everything a second time on scope exit.
+BOOST_AUTO_TEST_CASE(deferred_relay_empties_on_flush_and_is_idempotent)
+{
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("0x01"), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    const CTransaction tx(mtx);
+
+    DeferredRelay relay;
+    BOOST_CHECK(relay.empty());
+
+    relay.AddTransaction(tx, tx.GetHash());
+    BOOST_CHECK(!relay.empty());
+
+    relay.Flush();
+    BOOST_CHECK(relay.empty());
+
+    // Flush() announces, which caches the serialized transaction in the
+    // process-global mapRelay. This suite has no state guard, so drop it again
+    // rather than leave it available to a later getdata case.
+    RemoveFromRelayMemory(tx.GetHash());
+
+    // The second flush stands in for the destructor running after the explicit
+    // one above.
+    relay.Flush();
+    BOOST_CHECK(relay.empty());
+
+    relay.AddPSGT(uint256S("0x02"));
+    BOOST_CHECK(!relay.empty());
+
+    relay.Flush();
+    BOOST_CHECK(relay.empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

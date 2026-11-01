@@ -5,6 +5,7 @@
 
 #include "node/ui_interface.h"
 #include <util/system.h>
+#include "util/dir_permissions.h"
 #include <util/strencodings.h>
 #include <util/check.h>
 #include <util/string.h>
@@ -13,11 +14,14 @@
 
 #include <chainparamsbase.h>
 
-#include <boost/algorithm/string/replace.hpp>
+#include <exception>
+#include <optional>
+#include <set>
 #include <stdexcept>
 #include <thread>
 #include <typeinfo>
 #include <univalue.h>
+#include <util/rwsettings.h>
 
 #ifdef WIN32
 #ifdef _MSC_VER
@@ -143,6 +147,34 @@ static bool CheckValid(const std::string& key, const util::SettingsValue& val, u
     }
     return true;
 }
+
+#ifdef WIN32
+/**
+ * On Windows a path is built from UTF-8 (SetupEnvironment()), and building one
+ * from anything else throws wherever the path is first used -- at startup, for a
+ * value that a configuration file saved in a legacy code page gives one of these
+ * options. Refuse such a value as the file is read instead, naming the option and
+ * the file. Other options keep their bytes as they are: a password, say, works in
+ * any encoding, as long as both ends read it from the same file.
+ */
+static bool CheckPathValueIsUtf8(const std::string& key, const util::SettingsValue& val, const std::string& filepath,
+                                 std::string& error)
+{
+    static const std::set<std::string> path_options{
+        "backupdir", "blocksdir", "boincdatadir", "conf", "datadir", "debuglogfile", "guilogfile", "loadblock",
+        "pid", "settings", "wallet",
+    };
+    if (!val.isStr() || path_options.count(key) == 0) return true;
+    try {
+        Utf8ToWide(val.get_str());
+    } catch (const std::range_error&) {
+        error = strprintf("the value of -%s in configuration file \"%s\" is not valid UTF-8; save the file as UTF-8",
+                          key, filepath);
+        return false;
+    }
+    return true;
+}
+#endif
 
 namespace {
 fs::path StripRedundantLastElementsOfPath(const fs::path& path)
@@ -296,7 +328,7 @@ std::optional<unsigned int> ArgsManager::GetArgFlags(const std::string& name) co
     return std::nullopt;
 }
 
-const fs::path& ArgsManager::GetBlocksDirPath()
+fs::path ArgsManager::GetBlocksDirPath()
 {
     LOCK(cs_args);
     fs::path& path = m_cached_blocks_path;
@@ -331,10 +363,16 @@ const fs::path& ArgsManager::GetDataDirPath(bool net_specific) const
     // this function
     if (!path.empty()) return path;
 
+    // Filesystem access here must NOT throw. This runs during early startup (config
+    // reading), where a permission-denied or otherwise unusable data directory would
+    // otherwise escape as a filesystem_error and abort the process before any error can
+    // be shown to the user. Use the non-throwing (error_code) overloads and leave the
+    // cached path empty on failure so callers can report it cleanly.
+    boost::system::error_code ec;
     std::string datadir = GetArg("-datadir", "");
     if (!datadir.empty()) {
-        path = fs::system_complete(datadir);
-        if (!fs::is_directory(path)) {
+        path = fs::system_complete(datadir, ec);
+        if (ec || !fs::is_directory(path, ec)) {
             path = "";
             return path;
         }
@@ -344,10 +382,33 @@ const fs::path& ArgsManager::GetDataDirPath(bool net_specific) const
     if (net_specific)
         path /= BaseParams().DataDir();
 
-    if (fs::create_directories(path)) {
-        // This is the first run, create wallets subdirectory too
-        // Reserved for when we move wallets to a subdir like Bitcoin
-        //fs::create_directories(path / "wallets");
+    // On the first run this creates the datadir (and parents) and restricts it to
+    // this account -- 0700 on POSIX, an owner+SYSTEM protected DACL on Windows.
+    //
+    // This is the CORE's creation point, and it matters as much as the GUI chooser's
+    // (qt/intro.cpp): in a multiprocess deployment the daemon starts first (systemd
+    // unit, Windows scheduled task) and the chooser is skipped entirely
+    // (bitcoin.cpp gates it on !-multiprocess), so this is usually the call that
+    // brings the data directory into existence. It is create-only: an existing
+    // directory is left exactly as the operator configured it.
+    std::string perm_error;
+    if (!util::CreateOwnerOnlyDirectory(path, perm_error)) {
+        // Any failure is fatal to this path. Both of the two things false can mean --
+        // could not create it, or created it and could not restrict it -- are
+        // reported the way the old code reported a failed create: an empty path,
+        // which callers already treat as "no usable datadir". Do NOT throw: this runs
+        // before logging is initialised and from paths that cannot handle one.
+        //
+        // An earlier revision carved out "the directory exists, so carry on and just
+        // warn", reasoning that the operator had configured it. That state cannot
+        // occur: a pre-existing directory returns true from the helper without being
+        // inspected. Reaching here with the directory present means this call created
+        // it moments ago and failed to protect it, so the carve-out put the wallet in
+        // a directory known to be readable by other accounts -- and on the next start
+        // it would be pre-existing, return true, and never be reported again.
+        LogPrintf("ERROR: %s: %s", __func__, perm_error);
+        path = "";
+        return path;
     }
 
     path = StripRedundantLastElementsOfPath(path);
@@ -548,6 +609,12 @@ void ArgsManager::ForceSetArg(const std::string& strArg, const std::string& strV
 {
     LOCK(cs_args);
     m_settings.forced_settings[SettingName(strArg)] = strValue;
+}
+
+void ArgsManager::ClearForcedArg(const std::string& strArg)
+{
+    LOCK(cs_args);
+    m_settings.forced_settings.erase(SettingName(strArg));
 }
 
 void ArgsManager::AddCommand(const std::string& cmd, const std::string& help, const OptionsCategory& cat)
@@ -778,11 +845,38 @@ fs::path GetDefaultDataDir()
     if (container && strcmp(container, "flatpak") == 0) {
         char* state_home = getenv("XDG_STATE_HOME");
 
-        if (!state_home) {
-            return pathRet / ".local" / "state" / "GridcoinResearch";
+        // Per the XDG base directory specification an unset OR empty value is to
+        // be treated as unset, and a value that is not absolute must be ignored.
+        // Testing only for null accepted XDG_STATE_HOME="" and produced the
+        // relative path "GridcoinResearch", which the default branch never runs
+        // through fs::system_complete -- so it would resolve against the process
+        // working directory.
+        if (state_home && *state_home != '\0' && fs::path(state_home).is_absolute()) {
+            return fs::path(state_home) / "GridcoinResearch";
         }
 
-        return fs::path(state_home) / "GridcoinResearch";
+        // Inside the sandbox HOME is the REAL home path, but almost none of it is
+        // bound through to the host: the only persistent mount under it is
+        // ~/.var/app/<app-id>. Anything else -- including ~/.local/state -- is
+        // tmpfs. Writes there succeed, never reach the host, and are gone when the
+        // application exits, which took the chain, the wallet and debug.log with
+        // them. Older flatpak releases do not export XDG_STATE_HOME, so that
+        // fallback was the live path for them.
+        //
+        // FLATPAK_ID is exported inside the sandbox, so derive the per-app
+        // persistent root from it rather than naming the application id here: it
+        // stays declared only in the manifest.
+        char* flatpak_id = getenv("FLATPAK_ID");
+
+        if (flatpak_id && *flatpak_id != '\0') {
+            return pathRet / ".var" / "app" / flatpak_id / ".local" / "state" / "GridcoinResearch";
+        }
+
+        // Neither variable is usable. Keep the previous behaviour rather than
+        // inventing a path, and let the volatile-filesystem check downstream
+        // report it: on a flatpak new enough to export XDG_STATE_HOME this is
+        // unreachable, and on older ones we have nothing better to go on.
+        return pathRet / ".local" / "state" / "GridcoinResearch";
     }
 
 #ifdef MAC_OSX
@@ -805,7 +899,11 @@ const fs::path &GetDataDir(bool fNetSpecific)
 bool CheckDataDirOption()
 {
     std::string datadir = gArgs.GetArg("-datadir", "");
-    return datadir.empty() || fs::is_directory(fs::system_complete(datadir));
+    if (datadir.empty()) return true;
+    // Non-throwing: a permission-denied -datadir must return false (invalid), not throw
+    // a filesystem_error out of startup.
+    boost::system::error_code ec;
+    return fs::is_directory(fs::system_complete(datadir, ec), ec);
 }
 
 fs::path GetConfigFile(const std::string& confPath)
@@ -892,6 +990,11 @@ bool ArgsManager::ReadConfigStream(std::istream& stream, const std::string& file
             if (!CheckValid(key, value, *flags, error)) {
                 return false;
             }
+#ifdef WIN32
+            if (!CheckPathValueIsUtf8(key, value, filepath, error)) {
+                return false;
+            }
+#endif
             m_settings.ro_config[section][key].push_back(value);
         } else {
             if (ignore_invalid_keys) {
@@ -1020,6 +1123,7 @@ std::string ArgsManager::GetChainName() const
     if ((int)is_chain_arg_set + (int)fRegTest + (int)fSigNet + (int)fTestNet > 1) {
         throw std::runtime_error("Invalid combination of -regtest, -signet, -testnet and -chain. Can use at most one.");
     }
+    if (fRegTest) return CBaseChainParams::REGTEST;
     if (fTestNet) return CBaseChainParams::TESTNET;
 
     return GetArg("-chain", CBaseChainParams::MAIN);
@@ -1146,6 +1250,87 @@ UniValue ArgsManager::OutputArgs() const
     return result;
 }
 
+namespace {
+//! Store the given read-write settings (a null value erases a key), change each
+//! key's forced value as its update says, and write the settings file, as one
+//! step under one hold of the settings lock. If the write fails or throws, every
+//! key is put back as it was before the call, forced entries included. The
+//! RwSettingsUpdated signal is emitted once, after the outcome and outside the
+//! lock, so a listener reads the final state; a throw is rethrown after it.
+bool CommitRwSettings(const std::vector<RwSettingUpdate>& changes)
+{
+    bool written = false;
+    std::exception_ptr write_error;
+    // One hold of cs_args across record, apply, write and restore (cs_args is
+    // recursive; WriteSettingsFile() locks it again and does its I/O under it),
+    // so no other writer can persist this call's values before a restore.
+    gArgs.LockSettings([&](util::Settings& settings) {
+        struct Previous {
+            std::string name;
+            std::optional<util::SettingsValue> rw;
+            bool forced_touched{false};
+            std::optional<util::SettingsValue> forced;
+        };
+        std::vector<Previous> previous;
+        previous.reserve(changes.size());
+        for (const auto& change : changes) {
+            Previous prev;
+            prev.name = change.name;
+            const auto rw_it = settings.rw_settings.find(change.name);
+            if (rw_it != settings.rw_settings.end()) prev.rw = rw_it->second;
+            if (change.forced != RwSettingUpdate::Forced::KEEP) {
+                prev.forced_touched = true;
+                const auto forced_it = settings.forced_settings.find(change.name);
+                if (forced_it != settings.forced_settings.end()) prev.forced = forced_it->second;
+            }
+            previous.push_back(std::move(prev));
+
+            if (change.value.isNull()) {
+                settings.rw_settings.erase(change.name);
+            } else {
+                settings.rw_settings[change.name] = change.value;
+            }
+
+            if (change.forced == RwSettingUpdate::Forced::CLEAR
+                || (change.forced == RwSettingUpdate::Forced::SET && change.forced_value.isNull())) {
+                settings.forced_settings.erase(change.name);
+            } else if (change.forced == RwSettingUpdate::Forced::SET) {
+                settings.forced_settings[change.name] = change.forced_value;
+            }
+        }
+        try {
+            written = gArgs.WriteSettingsFile();
+        } catch (...) {
+            write_error = std::current_exception();
+        }
+        if (!written) {
+            // Restore in reverse order, so a key given twice ends at its value
+            // from before the call.
+            for (auto it = previous.rbegin(); it != previous.rend(); ++it) {
+                if (it->rw) {
+                    settings.rw_settings[it->name] = *it->rw;
+                } else {
+                    settings.rw_settings.erase(it->name);
+                }
+                if (it->forced_touched) {
+                    if (it->forced) {
+                        settings.forced_settings[it->name] = *it->forced;
+                    } else {
+                        settings.forced_settings.erase(it->name);
+                    }
+                }
+            }
+        }
+    });
+    // Notify once, after the outcome, so a listener reads the final state, and
+    // outside cs_args: the side-stake reload takes the registry's lock, and the
+    // side-stake save takes that lock before cs_args, so emitting under cs_args
+    // would invert that order.
+    uiInterface.RwSettingsUpdated();
+    if (write_error) std::rethrow_exception(write_error);
+    return written;
+}
+} // namespace
 
 // When we port the interfaces file over from Bitcoin, these two functions should be moved there.
 util::SettingsValue getRwSetting(const std::string& name)
@@ -1159,37 +1344,28 @@ util::SettingsValue getRwSetting(const std::string& name)
     return result;
 }
 
-bool updateRwSetting(const std::string& name, const util::SettingsValue& value)
+bool updateRwSetting(const std::string& name, const util::SettingsValue& value, bool apply_to_running_args)
 {
-    gArgs.LockSettings([&](util::Settings& settings) {
-        if (value.isNull()) {
-            settings.rw_settings.erase(name);
-        } else {
-            settings.rw_settings[name] = value;
-        }
-    });
-
-    uiInterface.RwSettingsUpdated();
-
-    return gArgs.WriteSettingsFile();
+    // Applied to the running args, the forced value follows the read-write
+    // value: set to it, or dropped when it is null.
+    return CommitRwSettings({{name, value,
+                              apply_to_running_args ? RwSettingUpdate::Forced::SET : RwSettingUpdate::Forced::KEEP,
+                              value}});
 }
 
 bool updateRwSettings(const std::vector<std::pair<std::string, util::SettingsValue>>& settings_in)
 {
-    gArgs.LockSettings([&](util::Settings& settings)  {
-        for (const auto& iter : settings_in)
-        {
-            if (iter.second.isNull()) {
-                settings.rw_settings.erase(iter.first);
-            } else {
-                settings.rw_settings[iter.first] = iter.second;
-            }
-        }
-    });
+    std::vector<RwSettingUpdate> changes;
+    changes.reserve(settings_in.size());
+    for (const auto& [name, value] : settings_in) {
+        changes.push_back({name, value, RwSettingUpdate::Forced::KEEP, {}});
+    }
+    return CommitRwSettings(changes);
+}
 
-    uiInterface.RwSettingsUpdated();
-
-    return gArgs.WriteSettingsFile();
+bool updateRwSettingsAndForcedArgs(const std::vector<RwSettingUpdate>& updates)
+{
+    return CommitRwSettings(updates);
 }
 
 bool RenameOver(fs::path src, fs::path dest)
@@ -1236,6 +1412,13 @@ void SetupEnvironment()
 #ifndef WIN32
     fs::path::imbue(loc);
 #else
+    // This facet makes fs::path::string() UTF-8 on Windows, and makes a path built
+    // from a narrow string read that string as UTF-8; without it both directions
+    // use the system code page. C++17 deprecates it along with wstring_convert
+    // and C++26 removes it; libc++ marks it deprecated, libstdc++ does not yet.
+    // Boost.Filesystem's own utf8_codecvt_facet is no replacement: on Windows it
+    // decodes characters outside the BMP wrongly (U+10000 becomes 0000) and
+    // encodes a surrogate pair as two three-byte sequences.
     fs::path::imbue(std::locale(loc, new std::codecvt_utf8_utf16<wchar_t>()));
 #endif
 }
@@ -1294,11 +1477,10 @@ namespace util {
 WinCmdLineArgs::WinCmdLineArgs()
 {
     wchar_t** wargv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> utf8_cvt;
     argv = new char*[argc];
     args.resize(argc);
     for (int i = 0; i < argc; i++) {
-        args[i] = utf8_cvt.to_bytes(wargv[i]);
+        args[i] = WideToUtf8(wargv[i]);
         argv[i] = &*args[i].begin();
     }
     LocalFree(wargv);

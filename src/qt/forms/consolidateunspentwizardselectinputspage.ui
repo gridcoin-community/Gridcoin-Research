@@ -147,75 +147,16 @@
       </layout>
      </item>
      <item>
-      <widget class="CoinControlTreeWidget" name="treeWidget">
+      <widget class="CoinSelectionView" name="treeView">
        <property name="contextMenuPolicy">
         <enum>Qt::CustomContextMenu</enum>
-       </property>
-       <property name="sortingEnabled">
-        <bool>false</bool>
-       </property>
-       <property name="columnCount">
-        <number>10</number>
        </property>
        <attribute name="headerShowSortIndicator" stdset="0">
         <bool>true</bool>
        </attribute>
-       <attribute name="headerStretchLastSection">
+       <attribute name="headerStretchLastSection" stdset="0">
         <bool>false</bool>
        </attribute>
-       <column>
-        <property name="text">
-         <string/>
-        </property>
-       </column>
-       <column>
-        <property name="text">
-         <string>Amount</string>
-        </property>
-       </column>
-       <column>
-        <property name="text">
-         <string>Label</string>
-        </property>
-       </column>
-       <column>
-        <property name="text">
-         <string>Address</string>
-        </property>
-       </column>
-       <column>
-        <property name="text">
-         <string>Date</string>
-        </property>
-       </column>
-       <column>
-        <property name="text">
-         <string>Confirmations</string>
-        </property>
-        <property name="toolTip">
-         <string>Confirmed</string>
-        </property>
-       </column>
-       <column>
-        <property name="text">
-         <string/>
-        </property>
-       </column>
-       <column>
-        <property name="text">
-         <string/>
-        </property>
-       </column>
-       <column>
-        <property name="text">
-         <string/>
-        </property>
-       </column>
-       <column>
-        <property name="text">
-         <string/>
-        </property>
-       </column>
       </widget>
      </item>
      <item>
@@ -348,9 +289,9 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>CoinControlTreeWidget</class>
-   <extends>QTreeWidget</extends>
-   <header>coincontroltreewidget.h</header>
+   <class>CoinSelectionView</class>
+   <extends>QTreeView</extends>
+   <header>qt/coinselectionview.h</header>
   </customwidget>
   <customwidget>
    <class>BitcoinAmountField</class>

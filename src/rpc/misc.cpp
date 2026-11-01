@@ -3,8 +3,10 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "init.h"
 #include "protocol.h"
-#include "util.h"
+#include <rpc/util.h>
+#include <util.h>
 
 #include <univalue.h>
 #include <stdexcept>
@@ -47,29 +49,49 @@ static void EnableOrDisableLogCategories(UniValue cats, bool enable) {
     }
 }
 
-UniValue logging(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 2)
+static const RPCHelpMan logging_help{
+    "logging",
+    "Gets and sets the logging configuration.\n"
+    "\n"
+    "When called without an argument, returns the list of categories with status that are currently being\n"
+    "debug logged or not.\n"
+    "When called with arguments, adds or removes categories from debug logging and returns the lists above.\n"
+    "The arguments are evaluated in order \"include\", \"exclude\".\n"
+    "If an item is both included and excluded, it will thus end up being excluded.\n"
+    "\n"
+    "The valid logging categories are the ones reported when this command is called without arguments.\n"
+    "In addition, the following are available as category names with special meanings:\n"
+    "  all  or 1: represent all logging categories.\n"
+    "  none or 0: even if other logging categories are specified, ignore all of them.\n"
+    "\n"
+    "Note that unlike Bitcoin, we don't yet process JSON arrays correctly as arguments for the command line,\n"
+    "so, for the rpc cli, it is limited to one enable and/or one disable category. Using CURL works with the\n"
+    "full arrays.",
     {
-        throw runtime_error(
-           "logging [json array category adds] [json array category removes]\n"
-            "Gets and sets the logging configuration.\n"
-            "When called without an argument, returns the list of categories with status that are currently being debug logged or not.\n"
-            "When called with arguments, adds or removes categories from debug logging and return the lists above.\n"
-            "The arguments are evaluated in order \"include\", \"exclude\".\n"
-            "If an item is both included and excluded, it will thus end up being excluded.\n"
-            "The valid logging categories are: " + ListLogCategories() + ".\n"
-            "In addition, the following are available as category names with special meanings:\n"
-            "all or 1: represent all logging categories.\n"
-            "none or 0: even if other logging categories are specified, ignore all of them.\n\n"
-            "Examples:\n"
-            "logging all net: enables all and disables net.\n"
-            "logging \"\" all: disables all.\n\n"
-            "Note that unlike Bitcoin, we don't process JSON arrays correctly as arguments yet for the command line,\n"
-            "so, for the rpc cli, it is limited to one enable and/or one disable category. Using CURL works with the full arrays.\n"
-            );
-    }
+        {"include", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "JSON array of categories to enable (or a single category string).",
+            {
+                {"category", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A logging category name."},
+            }},
+        {"exclude", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "JSON array of categories to disable (or a single category string).",
+            {
+                {"category", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A logging category name."},
+            }},
+    },
+    RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of category name to active state",
+        {
+            {RPCResult::Type::BOOL, "category", "Whether the named category is currently logged"},
+        }},
+    RPCExamples{
+        HelpExampleCli("logging", "all net") +
+        HelpExampleCli("logging", "\"\" all") +
+        HelpExampleRpc("logging", "[\"all\"], [\"net\"]")},
+};
+const RPCHelpMan& logging_helpman() { return logging_help; }
 
+UniValue logging(const UniValue& params)
+{
     if (params.size() >= 1) EnableOrDisableLogCategories(params[0], true);
 
     if (params.size() == 2) EnableOrDisableLogCategories(params[1], false);
@@ -84,148 +106,122 @@ UniValue logging(const UniValue& params, bool fHelp)
 }
 
 
-UniValue listsettings(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size())
-    {
-        throw runtime_error(
-                    "listsettings\n"
-                    "Outputs all arguments/settings in JSON format.\n"
-                    );
-    }
+static const RPCHelpMan listsettings_help{
+    "listsettings",
+    "Outputs all arguments/settings in JSON format.",
+    {},
+    RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of setting name to its current value",
+        {
+            {RPCResult::Type::ELISION, "", "Current value (string, numeric, boolean, or array)"},
+        }},
+    RPCExamples{
+        HelpExampleCli("listsettings", "") +
+        HelpExampleRpc("listsettings", "")},
+};
+const RPCHelpMan& listsettings_helpman() { return listsettings_help; }
 
+UniValue listsettings(const UniValue& params)
+{
     return gArgs.OutputArgs();
 }
 
-UniValue changesettings(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() < 1)
+// Variadic: declared signature is a single setting=value pair but
+// callers may pass additional name=value pairs as trailing positionals.
+// The body iterates over all params; MarkVariadic() opts out of the
+// dispatcher's IsValidNumArgs pre-check.
+static const RPCHelpMan changesettings_help = RPCHelpMan{
+    "changesettings",
+    "Store or change one or more configuration settings.\n"
+    "\n"
+    "Settings must be passed in the same format as config file entries (name=value).\n"
+    "Additional name=value pairs may be supplied as further positional arguments.\n"
+    "\n"
+    "An empty value (name=) removes the stored setting, so the value from the command line\n"
+    "or config file, or else the default, applies again.",
     {
-        throw runtime_error(
-                    "changesettings <name=value> [name=value] ... [name=value]\n"
-                    "\n"
-                    "name=value: name and value pair for setting to store/change (1st mandatory, 2nd+ optional).\n"
-                    "\n"
-                    "Note that the settings should be done in the same format as config file entries.\n"
-                    "\n"
-                    "Example:"
-                    "changesettings enable enablestakesplit=1 stakingefficiency=98 minstakesplitvalue=800\n"
-                    );
-    }
+        {"setting", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Setting to store/change in the form name=value. Pass additional positional arguments "
+            "to change more than one setting in a single call."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "settings_change_requires_restart",
+                "True if at least one of the changed settings does not take effect until restart."},
+            {RPCResult::Type::ARR, "settings_stored_with_no_state_change", "",
+                {
+                    {RPCResult::Type::STR, "setting", "Stored setting whose value did not change."},
+                }},
+            {RPCResult::Type::ARR, "settings_changed_taking_immediate_effect", "",
+                {
+                    {RPCResult::Type::STR, "setting", "Setting whose change is now in effect."},
+                }},
+            {RPCResult::Type::ARR, "settings_changed_requiring_restart", "",
+                {
+                    {RPCResult::Type::STR, "setting", "Setting whose change requires a restart."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("changesettings", "enablestakesplit=1 stakingefficiency=98 minstakesplitvalue=800") +
+        HelpExampleRpc("changesettings", "\"enablestakesplit=1\"")},
+}.MarkVariadic();
+const RPCHelpMan& changesettings_helpman() { return changesettings_help; }
 
-    // -------- name ------------ value - value_changed - immediate_effect
-    std::map<std::string, std::tuple<std::string, bool, bool>> valid_settings;
+UniValue changesettings(const UniValue& params)
+{
+    // Variadic positional args: at least one setting required, no upper bound. RPCHelpMan does
+    // not model unbounded variadic, so retain a body-level lower-bound check after the dispatcher
+    // has handled the help-rendering and (best-effort) arity-upper-bound paths.
+    if (params.size() < 1)
+        throw runtime_error(changesettings_helpman().ToString());
 
-    UniValue result(UniValue::VOBJ);
-    UniValue settings_stored_with_no_state_change(UniValue::VARR);
-    UniValue settings_immediate(UniValue::VARR);
-    UniValue settings_applied_requiring_restart(UniValue::VARR);
-    //UniValue invalid_settings_ignored(UniValue::VARR);
+    // Parse the "name=value" positionals into pairs. The shared ChangeSettings()
+    // core (src/init.cpp) does validation, persistence to gridcoinsettings.json,
+    // the update of the running args, and the immediate side-effect application --
+    // the same code path interfaces::Node::changeSettings() uses for the GUI, so
+    // the two never diverge.
+    std::vector<std::pair<std::string, std::string>> settings;
+    settings.reserve(params.size());
 
-    // Validation
     for (unsigned int i = 0; i < params.size(); ++i)
     {
-        std::string param = params[i].get_str();
+        const std::string param = params[i].get_str();
+        const std::string::size_type pos = param.find('=');
 
-        if (param.size() > 0 && param[0] == '-')
+        // Reject a leading dash, a missing '=', and an empty name ("=1").
+        if (param.empty() || param[0] == '-' || pos == std::string::npos || pos == 0)
         {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Incorrectly formatted setting change: " + param);
+            // Echo only up to the '=' when there is one. "-rpcpassword=secret"
+            // is a plausible mistake -- the dash belongs on the command line but
+            // not here -- and it lands in this branch, so quoting the argument
+            // whole would put the credential in the error string and from there
+            // into whatever logs or reports the caller's error.
+            const std::string shown = (pos == std::string::npos) ? param : param.substr(0, pos + 1) + "...";
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Incorrectly formatted setting change: " + shown);
         }
 
-        std::string::size_type pos;
-        std::string name;
-        std::string value;
-
-        if ((pos = param.find('=')) != std::string::npos)
-        {
-            name = param.substr(0, pos);
-            value = param.substr(pos + 1);
-        }
-        else
-        {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Incorrectly formatted setting change: " + param);
-        }
-
-        std::optional<unsigned int> flags = gArgs.GetArgFlags('-' + name);
-
-        if (!flags)
-        {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid setting: " + param);
-        }
-
-        // TODO: Record explicit default state for settings.
-        // This currently has a problem that I am not sure yet how to solve. Settings that are defaulted to true, unless
-        // they are set to the contrary, such as -staking, will falsely indicate a change because the defaulted state is
-        // not explicitly stored for comparison. After there is an explicit entry defined in the settings file, it works
-        // correctly.
-
-        // Also, the overloading of GetArg is NOT helpful here...
-        std::string current_value;
-
-        // It is either a string or a number.... One of these will succeed.
-        try
-        {
-            current_value = gArgs.GetArg(name, "never_used_default");
-        }
-        catch (...)
-        {
-            // If it is a number convert back to a string.
-            current_value = ToString(gArgs.GetArg(name, 1));
-        }
-
-        bool value_changed = (current_value != value);
-        bool immediate_effect = *flags & ArgsManager::IMMEDIATE_EFFECT;
-
-        auto insert_pair = valid_settings.insert(std::make_pair(
-                                                     name, std::make_tuple(value, value_changed, immediate_effect)));
-
-        if (!insert_pair.second)
-        {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "changesettings does not support more than one instance of the same "
-                                                      "setting: " + param);
-        }
+        settings.emplace_back(param.substr(0, pos), param.substr(pos + 1));
     }
 
-    // Now that validation is done do the update work.
     bool restart_required = false;
+    std::vector<std::string> no_change, immediate, requiring_restart;
+    bool invalid_input = false;
+    std::string error;
 
-    for (const auto& setting : valid_settings)
+    if (!ChangeSettings(settings, restart_required, no_change, immediate, requiring_restart, invalid_input, error))
     {
-        const std::string& name = setting.first;
-        const std::string& value = std::get<0>(setting.second);
-        const bool& value_changed = std::get<1>(setting.second);
-        const bool& immediate_effect = std::get<2>(setting.second);
-
-        std::string param = name + "=" + value;
-
-        // Regardless, store in r-w settings file.
-        if (!updateRwSetting(name, value))
-        {
-            throw JSONRPCError(RPC_MISC_ERROR, "Error storing setting in read-write settings file.");
-        }
-
-        if (value_changed)
-        {
-            gArgs.ForceSetArg(name, value);
-
-            if (immediate_effect)
-            {
-                settings_immediate.push_back(param);
-            }
-            else
-            {
-                settings_applied_requiring_restart.push_back(param);
-
-                // Record if restart required.
-                restart_required |= !immediate_effect;
-            }
-        }
-        else
-        {
-            settings_stored_with_no_state_change.push_back(param);
-        }
+        // A caller/validation error is RPC_INVALID_PARAMETER; a settings-file
+        // write failure is an internal error.
+        throw JSONRPCError(invalid_input ? RPC_INVALID_PARAMETER : RPC_MISC_ERROR, error);
     }
 
+    UniValue settings_stored_with_no_state_change(UniValue::VARR);
+    for (const auto& s : no_change) settings_stored_with_no_state_change.push_back(s);
+    UniValue settings_immediate(UniValue::VARR);
+    for (const auto& s : immediate) settings_immediate.push_back(s);
+    UniValue settings_applied_requiring_restart(UniValue::VARR);
+    for (const auto& s : requiring_restart) settings_applied_requiring_restart.push_back(s);
+
+    UniValue result(UniValue::VOBJ);
     result.pushKV("settings_change_requires_restart", restart_required);
     result.pushKV("settings_stored_with_no_state_change", settings_stored_with_no_state_change);
     result.pushKV("settings_changed_taking_immediate_effect", settings_immediate);

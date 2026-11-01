@@ -3,8 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/staking/exceptions.h"
-
-extern bool fTestNet;
+#include "chainparams.h" // For OnTestnet().
 
 namespace
 {
@@ -252,7 +251,7 @@ namespace
 
 const std::set<uint256>& GRC::GetBadBlocks()
 {
-    return fTestNet
+    return OnTestnet()
             ? bad_blocks_testnet
             : bad_blocks;
 }

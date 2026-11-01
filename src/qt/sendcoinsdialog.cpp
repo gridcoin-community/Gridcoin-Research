@@ -1,7 +1,8 @@
 #include "sendcoinsdialog.h"
+#include "chainparams.h"
+#include "clientmodel.h"
 #include "ui_sendcoinsdialog.h"
 
-#include "init.h"
 #include "addresstablemodel.h"
 #include "addressbookpage.h"
 
@@ -11,13 +12,13 @@
 #include "guiutil.h"
 #include "askpassphrasedialog.h"
 
-#include "wallet/coincontrol.h"
-#include "policy/policy.h"
+#include "key_io.h"
 #include "coincontroldialog.h"
 #include "consolidateunspentdialog.h"
 #include "consolidateunspentwizard.h"
 #include "qt/decoration.h"
 
+#include <QCoreApplication>
 #include <QMessageBox>
 #include <QLocale>
 #include <QTextDocument>
@@ -27,7 +28,7 @@
 SendCoinsDialog::SendCoinsDialog(QWidget* parent)
              : QDialog(parent)
              , ui(new Ui::SendCoinsDialog)
-             , coinControl(new CCoinControl)
+             , coinControl(new interfaces::WalletCoinControl)
              , payAmounts(new QList<qint64>)
              , model(nullptr)
 {
@@ -79,6 +80,52 @@ SendCoinsDialog::SendCoinsDialog(QWidget* parent)
     ui->coinControlChangeLabel->addAction(clipboardChangeAction);
 
     fNewRecipientAllowed = true;
+}
+
+bool SendCoinsDialog::messageContractsAllowed() const
+{
+    // No client model: say yes and let the node decide. This covers both ends of
+    // the model's life -- before BitcoinGUI hands it over, and after the shutdown
+    // teardown clears it, which is when the pointer would otherwise be dangling.
+    // Hiding the field on a guess would be the wrong failure anyway: it is a
+    // convenience, and wallet/interfaces.cpp drops the message regardless if the
+    // network has disabled MESSAGE contracts.
+    if (!m_client_model) return true;
+
+    // nBestHeight + 1: the first block a transaction started now could be mined
+    // in, which is the height CheckContracts will judge its contracts by.
+    return IsMessageContractEnabled(m_client_model->getNumBlocks() + 1);
+}
+
+void SendCoinsDialog::updateMessageFieldVisibility()
+{
+    // Two conditions, deliberately in one place. A transaction can carry only one
+    // message, so only the first entry ever offers the field; and once the network
+    // disables MESSAGE contracts no entry does.
+    //
+    // TODO: separate the message field from the context of each output. Leaving
+    // this field in the first output group gives the impression that only the
+    // first recipient can see the message.
+    const bool allowed = messageContractsAllowed();
+
+    for (int i = 0; i < ui->entries->count(); ++i) {
+        auto* entry = qobject_cast<SendCoinsEntry*>(ui->entries->itemAt(i)->widget());
+        if (entry) entry->setMessageEnabled(allowed && i == 0);
+    }
+}
+
+void SendCoinsDialog::setClientModel(ClientModel *client_model)
+{
+    m_client_model = client_model;
+    if (!client_model) return;
+
+    // The disable height is a block height, so the field's visibility can change
+    // underneath an open send page. Re-evaluate as blocks arrive rather than only
+    // when entries are added or removed.
+    connect(client_model, &ClientModel::numBlocksChanged, this,
+            [this]() { updateMessageFieldVisibility(); });
+
+    updateMessageFieldVisibility();
 }
 
 void SendCoinsDialog::setModel(WalletModel *model)
@@ -184,10 +231,69 @@ void SendCoinsDialog::on_sendButton_clicked()
 
     WalletModel::SendCoinsReturn sendstatus;
 
-    if (!model->getOptionsModel() || !model->getOptionsModel()->getCoinControlFeatures())
-        sendstatus = model->sendCoins(recipients);
-    else
-        sendstatus = model->sendCoins(recipients, coinControl);
+    // The dialog's coin-control selection is already the boundary value type,
+    // so pass it straight through when coin-control features are on. dest_change
+    // is only ever set to a valid encoded address (see the change handlers), so
+    // no re-validation is needed here.
+    std::optional<interfaces::WalletCoinControl> coin_control;
+    if (model->getOptionsModel() && model->getOptionsModel()->getCoinControlFeatures())
+    {
+        coin_control = *coinControl;
+    }
+
+    // Fee-confirmation loop. When the required fee exceeds both the
+    // configured transaction fee and what the user has accepted so far,
+    // sendCoins returns FeeConfirmationRequired WITHOUT committing; we ask
+    // here — with no core locks held, unlike the eliminated ThreadSafeAskFee
+    // modal, which used to block inside the wallet's LOCK2 scope — and
+    // re-invoke with the accepted fee. The transaction is recreated from
+    // current wallet state on each pass, so a fee that meanwhile grew past
+    // the accepted amount is asked about again, never silently committed.
+    // The accepted fee only ratchets up, so re-prompts need a strictly
+    // rising fee (e.g. randomized coin selection crossing a size tier);
+    // the attempt cap keeps a pathological oscillation finite.
+    qint64 acceptedFee = 0;
+    for (int nFeePromptAttempt = 0; ; ++nFeePromptAttempt)
+    {
+        sendstatus = model->sendCoins(recipients, coin_control, acceptedFee);
+
+        if (sendstatus.status != WalletModel::FeeConfirmationRequired)
+        {
+            break;
+        }
+
+        if (nFeePromptAttempt >= 10)
+        {
+            // Surface a visible error rather than Aborted: the user has been
+            // explicitly confirming fees, so a silent no-op would read as a
+            // sent transaction. Nothing was committed.
+            sendstatus = WalletModel::TransactionCreationFailed;
+            break;
+        }
+
+        // Deliberate context pin: these strings shipped for years from
+        // BitcoinGUI::askFee, so every locale's translation lives under the
+        // BitcoinGUI context in src/qt/locale/*.ts. Look them up there
+        // rather than orphaning the translations with this dialog's own
+        // tr() context.
+        QString strMessage =
+            QCoreApplication::translate("BitcoinGUI",
+               "This transaction is over the size limit.  You can still send it for a fee of %1, "
+               "which goes to the nodes that process your transaction and helps to support the network.  "
+               "Do you want to pay the fee?").arg(
+                    BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, sendstatus.fee));
+        QMessageBox::StandardButton retval = QMessageBox::question(
+              this, QCoreApplication::translate("BitcoinGUI", "Confirm transaction fee"), strMessage,
+              QMessageBox::Yes|QMessageBox::Cancel, QMessageBox::Yes);
+
+        if (retval != QMessageBox::Yes)
+        {
+            sendstatus = WalletModel::Aborted;
+            break;
+        }
+
+        acceptedFee = sendstatus.fee;
+    }
 
     switch(sendstatus.status)
     {
@@ -229,10 +335,18 @@ void SendCoinsDialog::on_sendButton_clicked()
             tr("Error: Transaction creation failed."),
             QMessageBox::Ok, QMessageBox::Ok);
         break;
+    case WalletModel::WalletUnlockedForStakingOnly:
+        QMessageBox::warning(this, tr("Send Coins"),
+            tr("Error: The wallet is unlocked for staking only, so it will not send. "
+               "Lock the wallet and unlock it again without the staking-only option to send."),
+            QMessageBox::Ok, QMessageBox::Ok);
+        break;
     case WalletModel::TransactionCommitFailed:
         QMessageBox::warning(this, tr("Send Coins"),
             tr("Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here."),
             QMessageBox::Ok, QMessageBox::Ok);
+        break;
+    case WalletModel::FeeConfirmationRequired: // cannot reach here: consumed by the loop above
         break;
     case WalletModel::Aborted: // User aborted, nothing to do
         break;
@@ -300,17 +414,10 @@ void SendCoinsDialog::updateRemoveEnabled()
         if(entry)
         {
             entry->setRemoveEnabled(enabled);
-
-            // Transactions can only contain one message. Hide the message field
-            // for all but the first output entry.
-            //
-            // TODO: separate the message field from the context of each output.
-            // Leaving this field in the first output group gives the impression
-            // that only the first recipient can see the message.
-            //
-            entry->setMessageEnabled(i == 0);
         }
     }
+
+    updateMessageFieldVisibility();
     setupTabChain(nullptr);
     coinControlUpdateLabels();
 }
@@ -487,12 +594,12 @@ void SendCoinsDialog::coinControlResetButtonClicked()
 
 void SendCoinsDialog::coinControlConsolidateWizardButtonClicked()
 {
-    CoinControlDialog dlg(this, coinControl, payAmounts, hasSubtractFeeRecipient());
-    dlg.setModel(model);
-
-    connect(&dlg, &CoinControlDialog::selectedConsolidationRecipientSignal,
-            this, &SendCoinsDialog::selectedConsolidationRecipient);
-
+    // The throwaway un-exec'd CoinControlDialog that used to be constructed
+    // here existed only for its setModel -> updateView() side effect of
+    // reconciling the selection against the wallet's current coins. The
+    // windowed selection model performs that reconciliation itself at attach
+    // (reconcileSelection), so the extra dialog — which would now register a
+    // concurrent coin view for nothing — is gone.
     ConsolidateUnspentWizard wizard(this, coinControl, payAmounts);
     wizard.setModel(model);
 
@@ -532,10 +639,15 @@ void SendCoinsDialog::coinControlChangeChecked(int state)
 {
     if (model)
     {
+        // dest_change carries an encoded address (empty = let the wallet pick).
+        // Store only a valid address so the node never has to re-validate.
         if (state == Qt::Checked)
-            coinControl->destChange = DecodeDestination(ui->coinControlChangeEdit->text().toStdString());
+        {
+            const CTxDestination dest = DecodeDestination(ui->coinControlChangeEdit->text().toStdString());
+            coinControl->dest_change = IsValidDestination(dest) ? EncodeDestination(dest) : std::string();
+        }
         else
-            coinControl->destChange = CNoDestination();
+            coinControl->dest_change.clear();
     }
 
     ui->coinControlChangeEdit->setEnabled((state == Qt::Checked));
@@ -549,7 +661,9 @@ void SendCoinsDialog::coinControlChangeEdited(const QString & text)
 {
     if (model)
     {
-        coinControl->destChange = DecodeDestination(text.toStdString());
+        // dest_change carries an encoded address (empty = let the wallet pick).
+        const CTxDestination dest = DecodeDestination(text.toStdString());
+        coinControl->dest_change = IsValidDestination(dest) ? EncodeDestination(dest) : std::string();
 
         // label for the change address
         ui->coinControlChangeAddressLabel->setStyleSheet(QString());
@@ -644,7 +758,7 @@ void SendCoinsDialog::coinControlUpdateStatus()
 
 void SendCoinsDialog::updateIcons()
 {
-#ifdef Q_OS_MAC // Icons on push buttons are very uncommon on Mac
+#ifdef Q_OS_MACOS // Icons on push buttons are very uncommon on Mac
     ui->addButton->setIcon(QIcon());
     ui->clearButton->setIcon(QIcon());
     ui->sendButton->setIcon(QIcon());

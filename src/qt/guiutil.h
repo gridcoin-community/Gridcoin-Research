@@ -73,6 +73,24 @@ namespace GUIUtil
 
     QString getDefaultDataDirectory();
 
+    //! Namespace a QSettings key per node (datadir) so multiple wallet instances
+    //! on one machine don't overwrite each other's GUI preferences. Returns \p key
+    //! unchanged for the default datadir (preserving the existing flat keys, so the
+    //! primary node needs no migration), and prefixes a per-datadir group
+    //! ("node_<sanitized datadir>/") otherwise. Combined with the network-scoped
+    //! application name, this isolates each (network, datadir) node. MUST be called
+    //! only after the datadir is finalized (GetDataDir() valid) -- see
+    //! OptionsModel::readNodeSettings and the note in bitcoin.cpp.
+    QString nodeSettingsKey(const QString& key);
+
+    /** Extract the first suffix from a filter pattern "Description (*.foo)" or
+        "Description (*.foo *.bar ...)"; empty if none.
+
+      @param[in] filter  Filter specification such as "Comma Separated Files (*.csv)"
+      @returns the first suffix, without its "*." prefix
+     */
+    QString ExtractFirstSuffixFromFilter(const QString& filter);
+
     /** Get save filename, mimics QFileDialog::getSaveFileName, except that it appends a default suffix
         when no suffix is provided by the user.
 

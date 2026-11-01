@@ -50,6 +50,48 @@ public:
     }
 };
 
+/* Stored record for a wallet whose HD hierarchy is backed by a seed phrase
+ * (GRC::Mnemonics). Holds the enciphered blob -- whose word encoding IS the
+ * phrase, so re-display never needs the phrase password -- the phrase-derived
+ * master key id (the anchor for coverage classification, independent of the
+ * currently active hdchain), and the non-secret wallet birthday.
+ *
+ * Like private keys, the blob is written as a "seedphrase" record while the
+ * wallet is unencrypted and as a "cseedphrase" record (blob encrypted under
+ * the wallet's master keying material) once the wallet is encrypted:
+ * otherwise a phrase protected by an empty or weak password would expose the
+ * HD master seed to anyone holding an encrypted wallet.dat. */
+class CSeedPhraseData
+{
+public:
+    static const int CURRENT_VERSION = 1;
+    int nVersion;
+    //! Enciphered blob (GRC::Mnemonics::ENCIPHERED_LENGTH bytes), or its
+    //! wallet-crypter ciphertext when loaded from a "cseedphrase" record.
+    std::vector<unsigned char> vchBlob;
+    //! Hash160 of the phrase-derived HD master public key.
+    CKeyID masterKeyID;
+    //! Wallet birthday recovered from the phrase (unix time, day resolution).
+    int64_t nBirthday;
+
+    CSeedPhraseData() { SetNull(); }
+
+    SERIALIZE_METHODS(CSeedPhraseData, obj)
+    {
+        READWRITE(obj.nVersion, obj.vchBlob, obj.masterKeyID, obj.nBirthday);
+    }
+
+    void SetNull()
+    {
+        nVersion = CSeedPhraseData::CURRENT_VERSION;
+        vchBlob.clear();
+        masterKeyID.SetNull();
+        nBirthday = 0;
+    }
+
+    bool IsNull() const { return vchBlob.empty(); }
+};
+
 class CKeyMetadata
 {
 public:
@@ -110,7 +152,11 @@ public:
     bool WriteName(const std::string& strAddress, const std::string& strName);
 
     bool EraseName(const std::string& strAddress);
-    
+
+    bool WritePurpose(const std::string& strAddress, const std::string& strPurpose);
+
+    bool ErasePurpose(const std::string& strAddress);
+
     bool WriteBestBlock(const CBlockLocator& locator);
     bool ReadBestBlock(CBlockLocator& locator);
 
@@ -163,7 +209,24 @@ public:
     bool WriteCScript(const uint160& hash, const CScript& redeemScript)
     {
         nWalletDBUpdated++;
-        return Write(std::make_pair(std::string("cscript"), hash), redeemScript, false);
+        //! fOverwrite is TRUE, deliberately. The key is Hash160 of the value, so a
+        //! duplicate key means the identical script is already stored and rewriting it
+        //! leaves the record's contents unchanged. That is a SEMANTIC no-op, not an
+        //! operational one -- BDB still performs the put, wallet.dat is still written,
+        //! and nWalletDBUpdated is still bumped. The cost does not matter here: the
+        //! callers are RPC-driven and rare.
+        //!
+        //! With fOverwrite=false BDB returns DB_KEYEXIST on a repeat add,
+        //! CWallet::AddCScript returns false, and the caller reports failure even though
+        //! the wallet holds the script and can sign with it -- the in-memory
+        //! CCryptoKeyStore::AddCScript assignment is unconditional. That made
+        //! addmultisigaddress, addredeemscript and createhtlc non-idempotent: asking for
+        //! the same script twice threw "AddCScript() failed".
+        //!
+        //! Overwriting (rather than returning early on HaveCScript) is the safer repair:
+        //! it also heals a wallet whose in-memory map holds a script that never reached
+        //! disk, which an early return would mask permanently.
+        return Write(std::make_pair(std::string("cscript"), hash), redeemScript, true);
     }
 
     bool WriteOrderPosNext(int64_t nOrderPosNext)
@@ -244,6 +307,14 @@ public:
 
     //! write the hdchain model (external chain child index counter)
     bool WriteHDChain(const CHDChain& chain);
+    bool WriteWalletUuid(const std::vector<unsigned char>& uuid);
+
+    //! write the seed phrase record with a plaintext blob (unencrypted wallet)
+    bool WriteSeedPhrase(const CSeedPhraseData& data);
+
+    //! write the seed phrase record with a wallet-crypter-encrypted blob;
+    //! erases any plaintext "seedphrase" record
+    bool WriteCryptedSeedPhrase(const CSeedPhraseData& data);
 };
 
 #endif // BITCOIN_WALLET_WALLETDB_H

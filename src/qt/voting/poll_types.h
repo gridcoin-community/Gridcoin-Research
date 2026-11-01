@@ -8,6 +8,10 @@
 #include <QString>
 #include <vector>
 
+namespace interfaces {
+struct PollTypeMeta;
+} // namespace interfaces
+
 class PollTypeItem
 {
 public:
@@ -20,7 +24,10 @@ public:
 class PollTypes : public std::vector<PollTypeItem>
 {
 public:
-    PollTypes();
+    //! Build the GUI poll-type rows from the node-side poll-type metadata
+    //! (interfaces::VotingManager::getPollTypes()), preserving enum order so the
+    //! wizard's button ids still index the PollType raw values.
+    explicit PollTypes(const std::vector<interfaces::PollTypeMeta>& types);
 };
 
 #endif // GRIDCOIN_QT_VOTING_POLL_TYPES_H

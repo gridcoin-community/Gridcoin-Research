@@ -5,6 +5,11 @@
 #include <QAbstractListModel>
 #include <QDate>
 
+namespace interfaces {
+class Node;
+class SideStakeManager;
+} // namespace interfaces
+
 /** Interface from Qt to configuration data structure for Bitcoin client.
    To Qt, the options are presented as a list with the different options
    laid out vertically.
@@ -16,7 +21,12 @@ class OptionsModel : public QAbstractListModel
     Q_OBJECT
 
 public:
-    explicit OptionsModel(QObject* parent = nullptr);
+    //! \p sidestake_manager backs the sidestake table model constructed here; it
+    //! is owned by the process and must outlive this OptionsModel.
+    //! \p node is the settings command/query surface (a separate process in the
+    //! multiprocess build); the core-coupled options route reads and writes
+    //! through it instead of touching gArgs / core globals directly.
+    explicit OptionsModel(interfaces::Node& node, interfaces::SideStakeManager& sidestake_manager, QObject* parent = nullptr);
 
     enum OptionID {
         StartAtStartup,          // bool
@@ -53,13 +63,37 @@ public:
 
     void Init();
 
+    //! Read the per-node GUI preferences into the model's members. Split out of
+    //! Init() because those settings live under a per-node QSettings group keyed
+    //! on the datadir (GUIUtil::nodeSettingsKey), which is only known once the
+    //! datadir is finalized. Init() runs from the constructor -- before the
+    //! datadir is chosen (it seeds -datadir from the stored value) -- so it cannot
+    //! read them; the composition root calls this afterwards. See the ordering
+    //! note in bitcoin.cpp.
+    void readNodeSettings();
+
+    //! One-time migration of the settings that moved from Gridcoin-Qt.conf into
+    //! the core read-write settings file (proxy / UPnP / reservebalance /
+    //! update-check). Must be called from the composition root AFTER the config
+    //! and read-write settings files are loaded and the network is selected --
+    //! never from the constructor, which runs before those.
+    void migrateCoreSettings();
+
     int rowCount(const QModelIndex & parent = QModelIndex()) const;
     QVariant data(const QModelIndex & index, int role = Qt::DisplayRole) const;
     bool setData(const QModelIndex & index, const QVariant & value, int role = Qt::EditRole);
 
     /* Explicit getters */
-    qint64 getTransactionFee();
     qint64 getReserveBalance();
+    //! Whether the node is on testnet, read through the node interface
+    //! (interfaces::Node::isTestNet). Lets dialogs that hold an OptionsModel gate
+    //! testnet-only UI without calling chainparams (OnTestnet()) from GUI code.
+    bool isTestNet();
+    //! Whether the node is on mainnet, read through the node interface
+    //! (interfaces::Node::isMainNet). Distinct from !isTestNet(), which is also
+    //! true on regtest -- use this to gate UI for anything that only happens on
+    //! the live network.
+    bool isMainNet();
     bool getStartAtStartup();
     bool getStartMin();
     bool getMinimizeToTray();
@@ -71,7 +105,12 @@ public:
 	bool getDisplayAddresses();
     bool getCoinControlFeatures();
     bool getLimitTxnDisplay();
+    bool getSuppressNetworkGraph();
     bool getMaskValues();
+    //! Whether stale (orphaned) coinstake txns are shown in the transaction
+    //! list (-showorphans). Read through the node settings interface so the tx
+    //! models need not include util/system.h to reach gArgs.
+    bool getShowOrphans();
     QDate getLimitTxnDate();
     int64_t getLimitTxnDateTime();
     double getPollExpireNotification();
@@ -87,6 +126,8 @@ public:
     void toggleCoinControlFeatures();
 
 private:
+    //! Settings command/query surface; owned by the process, outlives this model.
+    interfaces::Node& m_node;
     int nDisplayUnit;
     bool fMinimizeToTray;
     bool fStartAtStartup;
@@ -104,6 +145,11 @@ private:
     QString language;
     QString walletStylesheet;
     QString dataDir;
+
+    //! The sidestake registry interface backing m_sidestake_model. Owned by the
+    //! process (created before this OptionsModel) and outlives it; held by
+    //! reference so Init() can construct the table model with it.
+    interfaces::SideStakeManager& m_sidestake_manager;
 
     SideStakeTableModel* m_sidestake_model;
 

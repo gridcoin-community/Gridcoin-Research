@@ -11,8 +11,12 @@
 #include "netaddress.h"
 #include "serialize.h"
 
-extern int nConnectTimeout;
-extern bool fNameLookup;
+// Network base config, extracted from the former externs to keep this header
+// stateless (the state lives in netbase.cpp). Set once from init.
+int GetConnectTimeout();
+void SetConnectTimeout(int timeout);
+bool GetNameLookup();
+void SetNameLookup(bool enable);
 
 #ifdef WIN32
 // In MSVC, this is defined as a macro, undefine it to prevent a compile and link error
@@ -33,7 +37,7 @@ bool Lookup(const char *pszName, CService& addr, int portDefault, bool fAllowLoo
 bool Lookup(const char *pszName, std::vector<CService>& vAddr, int portDefault, bool fAllowLookup, unsigned int nMaxSolutions);
 CService LookupNumeric(const char *pszName, int portDefault = 0);
 bool LookupSubNet(const char *pszName, CSubNet& subnet);
-bool ConnectSocket(const CService &addr, SOCKET& hSocketRet, int nTimeout = nConnectTimeout);
-bool ConnectSocketByName(CService &addr, SOCKET& hSocketRet, const char *pszDest, int portDefault = 0, int nTimeout = nConnectTimeout);
+bool ConnectSocket(const CService &addr, SOCKET& hSocketRet, int nTimeout = GetConnectTimeout());
+bool ConnectSocketByName(CService &addr, SOCKET& hSocketRet, const char *pszDest, int portDefault = 0, int nTimeout = GetConnectTimeout());
 
 #endif

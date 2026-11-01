@@ -6,6 +6,7 @@
 #include "streams.h"
 #include "wallet/walletdb.h"
 #include "wallet/wallet.h"
+#include "node/shutdown.h"
 #include "init.h"
 
 #include <stdexcept>
@@ -14,7 +15,6 @@
 using namespace std;
 
 static uint64_t nAccountingEntryNumber = 0;
-extern bool fWalletUnlockStakingOnly;
 
 //
 // CWalletDB
@@ -32,6 +32,18 @@ bool CWalletDB::EraseName(const string& strAddress)
     // receiving addresses must always have an address book entry if they're not change return.
     nWalletDBUpdated++;
     return Erase(make_pair(string("name"), strAddress));
+}
+
+bool CWalletDB::WritePurpose(const string& strAddress, const string& strPurpose)
+{
+    nWalletDBUpdated++;
+    return Write(make_pair(string("purpose"), strAddress), strPurpose);
+}
+
+bool CWalletDB::ErasePurpose(const string& strAddress)
+{
+    nWalletDBUpdated++;
+    return Erase(make_pair(string("purpose"), strAddress));
 }
 
 bool CWalletDB::WriteBestBlock(const CBlockLocator& locator)
@@ -132,20 +144,25 @@ CWalletDB::ReorderTransactions(CWallet* pwallet)
     // Probably a bad idea to change the output of this
 
     // First: get all CWalletTx and CAccountingEntry into a sorted-by-time multimap.
-    typedef pair<CWalletTx*, CAccountingEntry*> TxPair;
+    // Use value-based storage for accounting entries to avoid dangling pointers
+    // when the acentries list goes out of scope
+    typedef pair<CWalletTx*, std::optional<CAccountingEntry>> TxPair;
     typedef multimap<int64_t, TxPair > TxItems;
     TxItems txByTime;
 
     for (map<uint256, CWalletTx>::iterator it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it)
     {
         CWalletTx* wtx = &(it->second);
-        txByTime.insert(make_pair(wtx->nTimeReceived, TxPair(wtx, nullptr)));
+        txByTime.insert(make_pair(wtx->nTimeReceived, TxPair(wtx, std::nullopt)));
     }
     list<CAccountingEntry> acentries;
     ListAccountCreditDebit("", acentries);
     for (auto &entry : acentries)
     {
-        txByTime.insert(make_pair(entry.nTime, TxPair(nullptr, &entry)));
+        // Store a COPY of the accounting entry, not a pointer
+        // The acentries list is local to this function and will go out of scope
+        // Storing a pointer would result in dangling pointers later
+        txByTime.insert(make_pair(entry.nTime, TxPair(nullptr, entry)));
     }
 
     int64_t& nOrderPosNext = pwallet->nOrderPosNext;
@@ -154,18 +171,40 @@ CWalletDB::ReorderTransactions(CWallet* pwallet)
     for (TxItems::iterator it = txByTime.begin(); it != txByTime.end(); ++it)
     {
         CWalletTx* const pwtx = it->second.first;
-        CAccountingEntry* const pacentry = it->second.second;
-        int64_t& nOrderPos = (pwtx != nullptr) ? pwtx->nOrderPos : pacentry->nOrderPos;
+        const auto& pacentry_opt = it->second.second;
+
+        // Get nOrderPos from whichever source exists
+        // We use a local variable since we can't bind const optional value to non-const reference
+        int64_t nOrderPos;
+        if (pwtx != nullptr) {
+            nOrderPos = pwtx->nOrderPos;
+        } else if (pacentry_opt.has_value()) {
+            nOrderPos = pacentry_opt.value().nOrderPos;
+        } else {
+            continue; // Neither exists, skip
+        }
 
         if (nOrderPos == -1)
         {
             nOrderPos = nOrderPosNext++;
             nOrderPosOffsets.push_back(nOrderPos);
 
-            if (pacentry)
-                // Have to write accounting regardless, since we don't keep it in memory
-                if (!WriteAccountingEntry(pacentry->nEntryNo, *pacentry))
+            if (pwtx != nullptr) {
+                pwtx->nOrderPos = nOrderPos;
+
+                // Persist the repair (upstream parity): without this the
+                // record keeps -1 on disk, ReorderTransactions re-runs on
+                // every load, and every valid-position transaction sorting
+                // after this one is shifted and rewritten at each restart.
+                if (!WriteTx(pwtx->GetHash(), *pwtx))
                     return DB_LOAD_FAIL;
+            } else if (pacentry_opt.has_value()) {
+                // Have to write accounting regardless, since we don't keep it in memory
+                CAccountingEntry entry_copy = pacentry_opt.value();
+                entry_copy.nOrderPos = nOrderPos;
+                if (!WriteAccountingEntry(entry_copy.nEntryNo, entry_copy))
+                    return DB_LOAD_FAIL;
+            }
         }
         else
         {
@@ -184,12 +223,17 @@ CWalletDB::ReorderTransactions(CWallet* pwallet)
             // Since we're changing the order, write it back
             if (pwtx)
             {
+                pwtx->nOrderPos = nOrderPos;
                 if (!WriteTx(pwtx->GetHash(), *pwtx))
                     return DB_LOAD_FAIL;
             }
-            else
-                if (!WriteAccountingEntry(pacentry->nEntryNo, *pacentry))
+            else if (pacentry_opt.has_value())
+            {
+                CAccountingEntry entry_copy = pacentry_opt.value();
+                entry_copy.nOrderPos = nOrderPos;
+                if (!WriteAccountingEntry(entry_copy.nEntryNo, entry_copy))
                     return DB_LOAD_FAIL;
+            }
         }
     }
 
@@ -227,20 +271,40 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         {
             string strAddress;
             ssKey >> strAddress;
-            ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)];
+            ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)].name;
+        }
+        else if (strType == "purpose")
+        {
+            string strAddress;
+            ssKey >> strAddress;
+            ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)].purpose;
         }
         else if (strType == "tx")
         {
             uint256 hash;
             ssKey >> hash;
-            CWalletTx& wtx = pwallet->mapWallet[hash];
-            ssValue >> wtx;
-            if (CheckTransaction(wtx) && (wtx.GetHash() == hash))
-                wtx.BindWallet(pwallet);
-            else
+            // Deserialize into a temporary first to avoid leaving a partial
+            // CWalletTx in mapWallet if deserialization throws or validation fails.
+            CWalletTx wtx_tmp;
+            ssValue >> wtx_tmp;
+            CValidationState wtx_state;
+            if (!CheckTransaction(wtx_tmp, wtx_state) || (wtx_tmp.GetHash() != hash))
             {
-                pwallet->mapWallet.erase(hash);
+                // Invalid tx - do NOT insert into mapWallet
                 return false;
+            }
+            // Valid - move into mapWallet and get a reference for further processing
+            CWalletTx& wtx = pwallet->mapWallet[hash];
+            wtx = std::move(wtx_tmp);
+            wtx.BindWallet(pwallet);
+
+            // Record which outputs this transaction spends, as AddToWalletIfInvolvingMe does for one seen live.
+            // At load nothing else records the spends of an unconfirmed transaction that is not in the mempool (a
+            // rescan covers only the blocks it scans, and none on a clean restart); without them AbandonTransaction
+            // cannot find the unconfirmed descendants of what it abandons. An abandoned transaction is skipped:
+            // AbandonTransaction erased its rows, and rebuilding them here would undo that on every load.
+            if (!pwallet->IsAbandoned(hash)) {
+                pwallet->AddToSpends(wtx, hash);
             }
 
             // Undo serialize changes in 31600
@@ -412,6 +476,30 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
         }
+        else if (strType == "walletuuid")
+        {
+            std::vector<unsigned char> vchUuid;
+            ssValue >> vchUuid;
+            // The UUID is always exactly 16 bytes; reject any other size (a
+            // corrupted record) rather than binding to garbage. Treated as absent,
+            // so LoadWallet re-mints a fresh one.
+            if (vchUuid.size() == 16) {
+                pwallet->LoadWalletUuid(vchUuid);
+            } else {
+                LogPrintf("%s: WARNING: ignoring walletuuid record of unexpected size %u",
+                          __func__, static_cast<unsigned>(vchUuid.size()));
+            }
+        }
+        else if (strType == "seedphrase" || strType == "cseedphrase")
+        {
+            CSeedPhraseData seed_phrase;
+            ssValue >> seed_phrase;
+            if (!pwallet->LoadSeedPhraseData(seed_phrase, /*crypted=*/strType == "cseedphrase"))
+            {
+                strErr = "Error reading wallet database: LoadSeedPhraseData failed";
+                return false;
+            }
+        }
     } catch (...)
     {
         return false;
@@ -501,6 +589,13 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
         return result;
 
     LogPrintf("nFileVersion = %d", wss.nFileVersion);
+
+    // A wallet last written by a newer client is not corruption; genuine
+    // incompatibility is governed by the "minversion" check above.
+    if (wss.nFileVersion > CLIENT_VERSION) {
+        LogPrintf("Wallet file version %d was last written by a newer client (this client: %d)",
+                  wss.nFileVersion, CLIENT_VERSION);
+    }
 
     LogPrintf("Keys: %u plaintext, %u encrypted, %u w/ metadata, %u total",
            wss.nKeys, wss.nCKeys, wss.nKeyMeta, wss.nKeys + wss.nCKeys);
@@ -626,7 +721,7 @@ void ThreadFlushWalletDB(void* parg)
     unsigned int nLastSeen = nWalletDBUpdated;
     unsigned int nLastFlushed = nWalletDBUpdated;
     int64_t nLastWalletUpdate = GetTime();
-    while (!fShutdown)
+    while (!ShutdownInProgress())
     {
         UninterruptibleSleep(std::chrono::milliseconds{500});
 
@@ -650,7 +745,7 @@ void ThreadFlushWalletDB(void* parg)
                     mi++;
                 }
 
-                if (nRefCount == 0 && !fShutdown)
+                if (nRefCount == 0 && !ShutdownInProgress())
                 {
                     map<string, int>::iterator mi = bitdb.mapFileUseCount.find(strFile);
                     if (mi != bitdb.mapFileUseCount.end())
@@ -740,7 +835,7 @@ bool CWalletDB::Recover(CDBEnv& dbenv, std::string filename, bool fOnlyKeys)
             string strType, strErr;
             bool fReadOK = ReadKeyValue(&dummyWallet, ssKey, ssValue,
                                         wss, strType, strErr);
-            if (!IsKeyType(strType) && strType != "hdchain")
+            if (!IsKeyType(strType) && strType != "hdchain" && strType != "walletuuid")
                 continue;
             if (!fReadOK)
             {
@@ -768,4 +863,29 @@ bool CWalletDB::WriteHDChain(const CHDChain& chain)
 {
     nWalletDBUpdated++;
     return Write(std::string("hdchain"), chain);
+}
+
+bool CWalletDB::WriteWalletUuid(const std::vector<unsigned char>& uuid)
+{
+    nWalletDBUpdated++;
+    return Write(std::string("walletuuid"), uuid);
+}
+
+bool CWalletDB::WriteSeedPhrase(const CSeedPhraseData& data)
+{
+    nWalletDBUpdated++;
+    return Write(std::string("seedphrase"), data);
+}
+
+bool CWalletDB::WriteCryptedSeedPhrase(const CSeedPhraseData& data)
+{
+    nWalletDBUpdated++;
+    if (!Write(std::string("cseedphrase"), data)) {
+        return false;
+    }
+
+    // Erase returns true when the record is simply absent (DB_NOTFOUND); a
+    // false here is a real database error, and the caller must not commit a
+    // conversion that would leave the plaintext record behind.
+    return Erase(std::string("seedphrase"));
 }

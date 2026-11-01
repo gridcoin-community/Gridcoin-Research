@@ -4,12 +4,14 @@
 #include "qt/guiutil.h"
 #include "qt/peertablemodel.h"
 
-#include "net.h"
 
 #include <QDialog>
 #include <QWidget>
 #include <QCompleter>
 #include <QMenu>
+#include <QString>
+
+#include <string>
 
 namespace Ui {
     class RPCConsole;
@@ -19,7 +21,19 @@ class ClientModel;
 QT_BEGIN_NAMESPACE
 class QMenu;
 class QItemSelection;
+class QThread;
 QT_END_NAMESPACE
+
+namespace RPCConsoleDetail {
+//! First token of a command line, seeing through one layer of quoting. Used
+//! when the line does not parse, where there is no argv to consult.
+std::string LeadingCommandToken(const QString& command);
+
+//! The form of a console command line that is safe to echo, log or keep in
+//! history: "<command> (arguments not shown)" when the command's arguments
+//! are secret, otherwise the line unchanged.
+QString RedactSensitiveArgs(const QString& command);
+} // namespace RPCConsoleDetail
 
 /** Local Bitcoin RPC console. */
 class RPCConsole: public QDialog
@@ -107,16 +121,23 @@ private:
     ClientModel *clientModel;
     QStringList history;
     int historyPtr = 0;
-    QList<NodeId> cachedNodeids;
+    QList<int64_t> cachedNodeids;
     QMenu *peersTableContextMenu = nullptr;
     QMenu *banTableContextMenu = nullptr;
     QCompleter *autoCompleter;
     static QString FormatBytes(quint64 bytes);
     void setTrafficGraphRange(int mins);
     /** show detailed information on ui about selected node */
-    void updateNodeDetail(const CNodeCombinedStats *stats);
+    void updateNodeDetail(const interfaces::PeerInfo *stats);
 
     void startExecutor();
+    /** Stop the executor thread synchronously (quit + wait). Called when the
+        client model is cleared at shutdown, so a queued/in-flight command can
+        no longer dereference the interfaces::Node after it is destroyed. */
+    void stopExecutorThread();
+
+    //! The executor's worker thread, non-null once startExecutor() has run.
+    QThread *m_executorThread = nullptr;
 
     enum ColumnWidths
     {

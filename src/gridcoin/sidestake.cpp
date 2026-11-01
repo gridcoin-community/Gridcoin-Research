@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "sidestake.h"
+#include "chain.h"
 #include "node/ui_interface.h"
 #include "univalue.h"
 
@@ -40,7 +41,7 @@ Allocation::Allocation()
     : Fraction()
 {}
 
-Allocation::Allocation(const double& allocation)
+Allocation::Allocation(double allocation)
     : Fraction(static_cast<int64_t>(std::round(allocation * static_cast<double>(10000.0))), static_cast<int64_t>(10000), true)
 {}
 
@@ -48,11 +49,11 @@ Allocation::Allocation(const Fraction& f)
     : Fraction(f)
 {}
 
-Allocation::Allocation(const int64_t& numerator, const int64_t& denominator)
+Allocation::Allocation(int64_t numerator, int64_t denominator)
     : Fraction(numerator, denominator)
 {}
 
-Allocation::Allocation(const int64_t& numerator, const int64_t& denominator, const bool& simplify)
+Allocation::Allocation(int64_t numerator, int64_t denominator, bool simplify)
     : Fraction(numerator, denominator, simplify)
 {}
 
@@ -71,7 +72,7 @@ Allocation Allocation::operator+(const Allocation& rhs) const
     return static_cast<Allocation>(Fraction::operator+(rhs));
 }
 
-Allocation Allocation::operator+(const int64_t& rhs) const
+Allocation Allocation::operator+(int64_t rhs) const
 {
     return static_cast<Allocation>(Fraction::operator+(rhs));
 }
@@ -81,7 +82,7 @@ Allocation Allocation::operator-(const Allocation& rhs) const
     return static_cast<Allocation>(Fraction::operator-(rhs));
 }
 
-Allocation Allocation::operator-(const int64_t& rhs) const
+Allocation Allocation::operator-(int64_t rhs) const
 {
     return static_cast<Allocation>(Fraction::operator-(rhs));
 }
@@ -91,7 +92,7 @@ Allocation Allocation::operator*(const Allocation& rhs) const
     return static_cast<Allocation>(Fraction::operator*(rhs));
 }
 
-Allocation Allocation::operator*(const int64_t& rhs) const
+Allocation Allocation::operator*(int64_t rhs) const
 {
     return static_cast<Allocation>(Fraction::operator*(rhs));
 }
@@ -101,7 +102,7 @@ Allocation Allocation::operator/(const Allocation& rhs) const
     return static_cast<Allocation>(Fraction::operator/(rhs));
 }
 
-Allocation Allocation::operator/(const int64_t& rhs) const
+Allocation Allocation::operator/(int64_t rhs) const
 {
     return static_cast<Allocation>(Fraction::operator/(rhs));
 }
@@ -112,7 +113,7 @@ Allocation& Allocation::operator+=(const Allocation& rhs)
     return *this;
 }
 
-Allocation& Allocation::operator+=(const int64_t& rhs)
+Allocation& Allocation::operator+=(int64_t rhs)
 {
     Fraction::operator+=(rhs);
     return *this;
@@ -124,7 +125,7 @@ Allocation& Allocation::operator-=(const Allocation& rhs)
     return *this;
 }
 
-Allocation& Allocation::operator-=(const int64_t& rhs)
+Allocation& Allocation::operator-=(int64_t rhs)
 {
     Fraction::operator-=(rhs);
     return *this;
@@ -136,7 +137,7 @@ Allocation& Allocation::operator*=(const Allocation& rhs)
     return *this;
 }
 
-Allocation& Allocation::operator*=(const int64_t& rhs)
+Allocation& Allocation::operator*=(int64_t rhs)
 {
     Fraction::operator*=(rhs);
     return *this;
@@ -148,7 +149,7 @@ Allocation& Allocation::operator/=(const Allocation& rhs)
     return *this;
 }
 
-Allocation& Allocation::operator/=(const int64_t& rhs)
+Allocation& Allocation::operator/=(int64_t rhs)
 {
     Fraction::operator/=(rhs);
     return *this;
@@ -184,32 +185,32 @@ bool Allocation::operator>(const Allocation& rhs) const
     return Fraction::operator>(rhs);
 }
 
-bool Allocation::operator==(const int64_t& rhs) const
+bool Allocation::operator==(int64_t rhs) const
 {
     return Fraction::operator==(rhs);
 }
 
-bool Allocation::operator!=(const int64_t& rhs) const
+bool Allocation::operator!=(int64_t rhs) const
 {
     return Fraction::operator!=(rhs);
 }
 
-bool Allocation::operator<=(const int64_t& rhs) const
+bool Allocation::operator<=(int64_t rhs) const
 {
     return Fraction::operator<=(rhs);
 }
 
-bool Allocation::operator>=(const int64_t& rhs) const
+bool Allocation::operator>=(int64_t rhs) const
 {
     return Fraction::operator>=(rhs);
 }
 
-bool Allocation::operator<(const int64_t& rhs) const
+bool Allocation::operator<(int64_t rhs) const
 {
     return Fraction::operator<(rhs);
 }
 
-bool Allocation::operator>(const int64_t& rhs) const
+bool Allocation::operator>(int64_t rhs) const
 {
     return Fraction::operator>(rhs);
 }
@@ -585,6 +586,54 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries(const
     // occurs immediately after the settings r-w file is updated.
 
     // The loops below prevent sidestakes from being added that cause a total allocation above 1.0 (100%).
+    //
+    // WHY THE CEILING IS APPLIED ON READ AS WELL AS ON WRITE.
+    //
+    // An over-100% total is a user MISTAKE, not a configuration anyone would want.
+    // Nothing here treats it as normal; the point is that it must be handled
+    // gracefully rather than trusted away, because local sidestakes have two entry
+    // points and only one of them is ours to validate:
+    //
+    //   1. The GUI sidestake table (and the interface commands behind it), which
+    //      rejects an edit at write time if it would push the total over 100%.
+    //   2. -sidestakeaddresses / -sidestakeallocations in gridcoinresearch.conf,
+    //      hand-edited, and still common among long-time users. The node does not
+    //      own that file's sidestake content: local sidestake edits are written to
+    //      the r-w settings file, never back into the .conf, so a hand-edited
+    //      mistake there can only be complained about and coped with, never
+    //      corrected in place. (The node does rewrite the .conf for unrelated
+    //      maintenance -- GRC::CleanConfig, CreateNewConfigFile -- but never to
+    //      normalise sidestake allocations.)
+    //
+    // Entry point 2 is handled where it is read: LoadLocalSideStakesFromConfig()
+    // accumulates as it parses, and on crossing 100% it logs
+    // "allocation percentage over 100 percent, ending sidestake allocations" and
+    // stops, so the offending entries never reach the registry. That WARN is the
+    // early alert -- deliberately at load rather than at the first kernel found.
+    //
+    // This loop is the same rule applied again at the point of USE, and it is not
+    // redundant: entries can reach the registry without going through the config
+    // parse (the UI path, and any future producer), so the check has to exist
+    // where the entries are consumed too. Everything that matters comes through
+    // here -- miner.cpp (staking) and consensus/block_rewards.cpp (validation) --
+    // so what is APPLIED is bounded regardless of what is STORED.
+    // SplitCoinStakeOutput repeats it once more at coinstake construction.
+    //
+    // Consequences worth stating plainly, because they can look like bugs:
+    //
+    //   * Suppression, not rejection: once the running total would exceed the
+    //     limit, the remaining sidestakes are simply not applied. They stay in the
+    //     registry and reappear if an earlier entry is reduced or removed.
+    //   * A stored total above 100% should not arise from any current path, since
+    //     both entry points stop at the ceiling. If one is ever observed, this
+    //     clamp is what keeps it from being paid out -- treat it as a bug upstream
+    //     of here, not as a reason to weaken this loop.
+    //   * The GUI's <=100% check is therefore a user-facing guard -- it stops
+    //     someone creating an entry that would be silently suppressed at staking
+    //     time -- and not the thing that makes over-allocation safe.
+    //
+    // Which entries get suppressed is map order (destination-keyed), not priority
+    // order.
 
     LOCK(cs_lock);
 
@@ -670,7 +719,7 @@ std::vector<SideStake_ptr> SideStakeRegistry::TryActive(const CTxDestination& ke
     return result;
 }
 
-void SideStakeRegistry::Reset()
+void SideStakeRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LOCK(cs_lock);
 
@@ -750,15 +799,20 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
     // Finally, insert the new SideStake entry (payload) smart pointer into the m_sidestake_entries map.
     m_mandatory_sidestake_entries[payload.m_entry.m_destination] = m_sidestake_db.find(ctx.m_tx.GetHash())->second;
 
+    // A mandatory (contract) sidestake entry changed; nudge the GUI table with a
+    // payload-free refetch trigger. The only subscriber marshals to the GUI
+    // thread, so emitting under cs_lock is safe (see ui_interface.h).
+    uiInterface.MandatorySideStakeChanged();
+
     return;
 }
 
-void SideStakeRegistry::Add(const ContractContext& ctx)
+void SideStakeRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void SideStakeRegistry::Delete(const ContractContext& ctx)
+void SideStakeRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
@@ -770,9 +824,73 @@ void SideStakeRegistry::NonContractAdd(const LocalSideStake& sidestake, const bo
     // Using this form of insert because we want the latest record with the same key to override any previous one.
     m_local_sidestake_entries[sidestake.m_destination] = std::make_shared<LocalSideStake>(sidestake);
 
+    ++m_local_sidestake_revision;
+
     if (save_to_file) {
         SaveLocalSideStakesToConfig();
     }
+}
+
+bool SideStakeRegistry::NonContractSetAllocation(const CTxDestination& destination,
+                                                 const Allocation& allocation,
+                                                 const bool& save_to_file)
+{
+    LOCK(cs_lock);
+
+    auto iter = m_local_sidestake_entries.find(destination);
+
+    if (iter == m_local_sidestake_entries.end()) {
+        return false;
+    }
+
+    // Read the fields we are NOT changing under the same lock as the write, so a
+    // concurrent config reload cannot be undone by them. Replace the shared_ptr
+    // rather than mutating in place, matching NonContractAdd: existing readers
+    // holding a copy keep observing a consistent entry.
+    const LocalSideStake& current = *iter->second;
+
+    iter->second = std::make_shared<LocalSideStake>(destination,
+                                                    allocation,
+                                                    current.m_description,
+                                                    current.m_status.Value());
+
+    ++m_local_sidestake_revision;
+
+    if (save_to_file) {
+        SaveLocalSideStakesToConfig();
+    }
+
+    return true;
+}
+
+bool SideStakeRegistry::NonContractSetDescription(const CTxDestination& destination,
+                                                  const std::string& description,
+                                                  const bool& save_to_file)
+{
+    LOCK(cs_lock);
+
+    auto iter = m_local_sidestake_entries.find(destination);
+
+    if (iter == m_local_sidestake_entries.end()) {
+        return false;
+    }
+
+    // See NonContractSetAllocation: allocation and status are read under the same
+    // lock as the write, so editing a description cannot revert them.
+    const LocalSideStake& current = *iter->second;
+
+    iter->second = std::make_shared<LocalSideStake>(destination,
+                                                    current.m_allocation,
+                                                    description,
+                                                    current.m_status.Value());
+
+    ++m_local_sidestake_revision;
+
+    if (save_to_file) {
+        SaveLocalSideStakesToConfig();
+    }
+
+    return true;
 }
 
 void SideStakeRegistry::NonContractDelete(const CTxDestination& destination, const bool& save_to_file)
@@ -783,6 +901,8 @@ void SideStakeRegistry::NonContractDelete(const CTxDestination& destination, con
 
     if (sidestake_entry_pair_iter != m_local_sidestake_entries.end()) {
         m_local_sidestake_entries.erase(sidestake_entry_pair_iter);
+
+        ++m_local_sidestake_revision;
     }
 
     if (save_to_file) {
@@ -790,7 +910,7 @@ void SideStakeRegistry::NonContractDelete(const CTxDestination& destination, con
     }
 }
 
-void SideStakeRegistry::Revert(const ContractContext& ctx)
+void SideStakeRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const auto payload = ctx->SharePayloadAs<SideStakePayload>();
 
@@ -804,7 +924,7 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
     if (entry_to_revert == m_mandatory_sidestake_entries.end()) {
         error("%s: The SideStake entry for key %s to revert was not found in the SideStake entry map.",
               __func__,
-              EncodeDestination(entry_to_revert->second->m_destination));
+              EncodeDestination(payload->m_entry.m_destination));
 
         // If there is no record in the current m_sidestake_entries map, then there is nothing to do here. This
         // should not occur.
@@ -825,6 +945,11 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
             // If the record to revert is not found in the m_sidestake_entries map, no point in continuing.
             return;
         }
+
+        // A mandatory sidestake entry was reverted (reorg); nudge the GUI table.
+        // The queued refetch runs after this Revert completes, so it observes the
+        // final state (including any resurrected prior entry below).
+        uiInterface.MandatorySideStakeChanged();
 
                // Also erase the record from the db.
         if (!m_sidestake_db.erase(ctx.m_tx.GetHash())) {
@@ -856,7 +981,12 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
     }
 }
 
-bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const
+bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    return ValidateAtHeight(contract, nBestHeight + 1, DoS);
+}
+
+bool SideStakeRegistry::ValidateAtHeight(const Contract& contract, const int height, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const auto payload = contract.SharePayloadAs<SideStakePayload>();
 
@@ -874,21 +1004,56 @@ bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& t
 
     Allocation allocation = payload->m_entry.m_allocation;
 
+    // From version 15 a new mandatory allocation must be positive and in basis points: its reduced denominator
+    // divides 10000, which is what Allocation(double) builds and what the addition fast paths are tuned for. The reduction
+    // is computed from the pair, because the simplified flag is carried as the wire delivered it. Entries accepted
+    // before version 15 are not judged again.
+    if (IsV15Enabled(height) && contract.m_action == ContractAction::ADD) {
+        const Fraction reduced(allocation.GetNumerator(), allocation.GetDenominator(), true);
+
+        if (!reduced.IsPositive() || 10000 % reduced.GetDenominator() != 0) {
+            DoS = 25;
+            error("%s: Mandatory sidestake allocation %s refused: it must be positive and in basis points",
+                  __func__,
+                  reduced.ToString());
+            return false;
+        }
+    }
+
     // Contracts that would result in a total active mandatory sidestake allocation greater than the maximum allowed by consensus
     // protocol must be rejected. Note that this is not a perfect validation, because there could be more than one sidestake
     // contract transaction in the memory pool, and this is using already committed sidestake contracts (i.e. in blocks already
     // accepted) as a basis.
-    if (GetMandatoryAllocationsTotal() + allocation > Params().GetConsensus().MaxMandatorySideStakeTotalAlloc) {
+    //
+    // Before version 15 the contract's allocation is added to the active total whatever the action or destination, so an
+    // ADD that changes a destination's allocation counted the old one too, and a REMOVE that carried its allocation counted
+    // it twice. From version 15 an ADD is judged on the total it would leave, with its destination's current allocation
+    // replaced, and a REMOVE, which cannot raise the total, is not judged on it.
+    const Allocation max_total = Params().GetConsensus().MaxMandatorySideStakeTotalAlloc;
+
+    if (!IsV15Enabled(height)) {
+        if (GetMandatoryAllocationsTotal() + allocation > max_total) {
+            DoS = 25;
+            return false;
+        }
+    } else if (contract.m_action == ContractAction::ADD
+               && GetMandatoryAllocationsTotalExcept(payload->m_entry.m_destination) + allocation > max_total) {
         DoS = 25;
+        error("%s: Mandatory sidestake allocation %s would raise the total above %s",
+              __func__,
+              allocation.ToString(),
+              max_total.ToString());
         return false;
     }
 
     return true;
 }
 
-bool SideStakeRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
+bool SideStakeRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    return (IsV13Enabled(ctx.m_pindex->nHeight) && Validate(ctx.m_contract, ctx.m_tx, DoS));
+    const int height = ctx.m_pindex->nHeight;
+
+    return (IsV13Enabled(height) && ValidateAtHeight(ctx.m_contract, height, DoS));
 }
 
 int SideStakeRegistry::Initialize()
@@ -909,7 +1074,7 @@ int SideStakeRegistry::Initialize()
     // Add the local sidestakes specified in the config file(s) to the local sidestakes map.
     LoadLocalSideStakesFromConfig();
 
-    m_local_entry_already_saved_to_config = false;
+    m_local_entry_already_saved_to_config.store(false, std::memory_order_relaxed);
 
     return height;
 }
@@ -939,6 +1104,8 @@ void SideStakeRegistry::ResetInMemoryOnly()
     m_local_sidestake_entries.clear();
     m_mandatory_sidestake_entries.clear();
     m_sidestake_db.clear_in_memory_only();
+
+    ++m_local_sidestake_revision;
 }
 
 uint64_t SideStakeRegistry::PassivateDB()
@@ -948,14 +1115,25 @@ uint64_t SideStakeRegistry::PassivateDB()
     return m_sidestake_db.passivate_db();
 }
 
+uint64_t SideStakeRegistry::GetLocalSideStakeRevision() const
+{
+    // Lock-free read of the monotonic revision. Each LOCAL mutation bumps it
+    // while holding cs_lock, so a reader here observes a value that is at least
+    // as new as any mutation ordered before this load (design §4.4). Callers that
+    // need a revision consistent with a snapshot read the revision BEFORE the
+    // snapshot, so an interleaving mutation only makes the revision
+    // conservatively low (an extra refetch), never stale.
+    return m_local_sidestake_revision.load();
+}
+
 void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 {
     // If the m_local_entry_already_saved_to_config is set, then SaveLocalSideStakeToConfig was just called,
     // and we want to then ignore the update signal from the r-w file change that calls this function for
     // that action (only) and then reset the flag to be responsive to any changes on the core r-w file side
     // through changesettings, for example.
-    if (m_local_entry_already_saved_to_config) {
-        m_local_entry_already_saved_to_config = false;
+    if (m_local_entry_already_saved_to_config.load(std::memory_order_relaxed)) {
+        m_local_entry_already_saved_to_config.store(false, std::memory_order_relaxed);
 
         return;
     }
@@ -1096,8 +1274,17 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 
             if (iter == vLocalSideStakes.end()) {
                 // Entry in map is no longer found in config files, so mark map entry inactive.
-
-                entry.second->m_status = LocalSideStake::LocalSideStakeStatus::INACTIVE;
+                //
+                // Copy-on-write: reseat the slot to a new INACTIVE entry rather than mutating the
+                // published object in place. A by-value snapshot (SideStakeEntries/Try/etc.) shares
+                // the LocalSideStake_ptr, so mutating in place would race a lock-free snapshot reader;
+                // reseating leaves the captured object untouched. Done under cs_lock (safe). The
+                // reader may then observe slightly stale data (the "safe != correct" boundary), which
+                // is acceptable here — local sidestakes are non-consensus and self-correct next
+                // iteration. See doc/contract_registry_locking_design.md.
+                auto inactive_entry = std::make_shared<LocalSideStake>(*entry.second);
+                inactive_entry->m_status = LocalSideStake::LocalSideStakeStatus::INACTIVE;
+                entry.second = inactive_entry;
             }
         }
     }
@@ -1107,12 +1294,16 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
     if (gArgs.GetBoolArg("-enablesidestaking") && !sum_allocation)
         LogPrintf("WARN: %s: enablesidestaking was set in config but nothing has been allocated for"
                   " distribution!", __func__);
+
+    // A config-driven reload mutated the local map. Per-entry NonContractAdd
+    // already bumps the revision, but a removal that only reseats a map entry to
+    // INACTIVE (above) does not, so bump once here to guarantee any reload
+    // advances the revision (over-counting coalesces on the consumer side).
+    ++m_local_sidestake_revision;
 }
 
 bool SideStakeRegistry::SaveLocalSideStakesToConfig()
 {
-    bool status = false;
-
     std::string addresses;
     std::string allocations;
     std::string descriptions;
@@ -1140,11 +1331,35 @@ bool SideStakeRegistry::SaveLocalSideStakesToConfig()
     settings.push_back(std::make_pair("sidestakeallocations", allocations));
     settings.push_back(std::make_pair("sidestakedescriptions", descriptions));
 
-    status = updateRwSettings(settings);
+    // Arm the flag before the write. updateRwSettings() emits RwSettingsUpdated
+    // once, synchronously, after the write and any restore, so
+    // LoadLocalSideStakesFromConfig() sees this save's own signal inside the
+    // call below and skips it, whether or not the file write succeeds. Armed
+    // after the call, the flag would outlive the save and swallow the next
+    // RwSettingsUpdated from any source, such as a changesettings of the
+    // sidestake keys. One flag covers one connected slot's reload.
+    m_local_entry_already_saved_to_config.store(true, std::memory_order_relaxed);
 
-    m_local_entry_already_saved_to_config = true;
-
-    return status;
+    // A failed save leaves the read-write settings as they were (updateRwSettings
+    // restores them), but the registry already holds the edit, and this save's own
+    // RwSettingsUpdated emission was skipped by the flag armed above. So reload
+    // here from the restored settings. Clearing the flag first also covers a run
+    // with no reload slot connected, where nothing consumed it. cs_lock is
+    // recursive, and the reload takes cs_lock then cs_args, the order this save
+    // already uses.
+    bool ok = false;
+    try {
+        ok = updateRwSettings(settings);
+    } catch (...) {
+        m_local_entry_already_saved_to_config.store(false, std::memory_order_relaxed);
+        LoadLocalSideStakesFromConfig();
+        throw;
+    }
+    if (!ok) {
+        m_local_entry_already_saved_to_config.store(false, std::memory_order_relaxed);
+        LoadLocalSideStakesFromConfig();
+    }
+    return ok;
 }
 
 Allocation SideStakeRegistry::GetMandatoryAllocationsTotal() const
@@ -1159,6 +1374,20 @@ Allocation SideStakeRegistry::GetMandatoryAllocationsTotal() const
     return allocation_total;
 }
 
+Allocation SideStakeRegistry::GetMandatoryAllocationsTotalExcept(const CTxDestination& destination) const
+{
+    std::vector<SideStake_ptr> sidestakes = ActiveSideStakeEntries(SideStake::FilterFlag::MANDATORY, false);
+    Allocation allocation_total;
+
+    for (const auto& entry : sidestakes) {
+        if (entry->GetDestination() != destination) {
+            allocation_total += entry->GetAllocation();
+        }
+    }
+
+    return allocation_total;
+}
+
 void SideStakeRegistry::SubscribeToCoreSignals()
 {
     uiInterface.RwSettingsUpdated_connect(std::bind(RwSettingsUpdated, this));
@@ -1167,13 +1396,6 @@ void SideStakeRegistry::SubscribeToCoreSignals()
 void SideStakeRegistry::UnsubscribeFromCoreSignals()
 {
   // Disconnect signals from client (no-op currently)
-}
-
-SideStakeRegistry::SideStakeDB &SideStakeRegistry::GetSideStakeDB()
-{
-    LOCK(cs_lock);
-
-    return m_sidestake_db;
 }
 
 template<> const std::string SideStakeRegistry::SideStakeDB::KeyType()

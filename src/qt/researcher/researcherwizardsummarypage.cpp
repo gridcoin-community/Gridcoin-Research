@@ -2,7 +2,6 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "logging.h"
 
 #include "qt/bitcoinunits.h"
 #include "qt/decoration.h"

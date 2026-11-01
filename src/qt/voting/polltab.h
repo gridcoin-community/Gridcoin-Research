@@ -5,7 +5,8 @@
 #ifndef GRIDCOIN_QT_VOTING_POLLTAB_H
 #define GRIDCOIN_QT_VOTING_POLLTAB_H
 
-#include "gridcoin/voting/filter.h"
+#include "interfaces/voting.h"
+#include "qt/voting/votingmodel.h"
 
 #include <memory>
 #include <QDateTime>
@@ -17,7 +18,6 @@ class PollTab;
 
 class LoadingBar;
 class NoResult;
-class PollItem;
 class PollTableModel;
 class VotingModel;
 
@@ -48,7 +48,7 @@ public:
     ~PollTab();
 
     void setVotingModel(VotingModel* voting_model);
-    void setPollFilterFlags(GRC::PollFilterFlag flags);
+    void setPollFilterFlags(interfaces::PollFilterFlag flags);
 
 signals:
     void newVoteReceivedAndPollMarkedDirty();

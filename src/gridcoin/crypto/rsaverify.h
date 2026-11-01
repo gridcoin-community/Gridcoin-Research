@@ -29,6 +29,18 @@ bool VerifyRSASHA512(
     const std::vector<uint8_t>& signature,
     const std::string& pem_pubkey);
 
+//!
+//! \brief Get the DER encoding of a PEM-encoded public key.
+//!
+//! Different PEM text for the same key (line wrapping, for example) yields the same DER bytes, so this compares keys
+//! by their key material.
+//!
+//! \param pem_pubkey The PEM-encoded public key (-----BEGIN PUBLIC KEY-----).
+//!
+//! \return The DER-encoded SubjectPublicKeyInfo, or an empty vector if the key does not parse.
+//!
+std::vector<uint8_t> GetPublicKeyDER(const std::string& pem_pubkey);
+
 } // namespace GRC
 
 #endif // GRIDCOIN_CRYPTO_RSAVERIFY_H

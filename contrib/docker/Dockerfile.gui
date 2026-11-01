@@ -38,21 +38,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libboost-filesystem1.83.0 \
         libboost-thread1.83.0 \
         libboost-iostreams1.83.0 \
-        libboost-serialization1.83.0 \
         libboost-date-time1.83.0 \
         libboost-chrono1.83.0 \
         libboost-program-options1.83.0 \
         libssl3t64 \
         libcurl4t64 \
-        libzip4t64 \
         libminiupnpc17 \
         libqt6core6t64 \
         libqt6gui6t64 \
         libqt6widgets6t64 \
         libqt6network6t64 \
-        libqt6charts6 \
         libqt6svg6 \
-        libqt6core5compat6 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY entrypoint.sh /entrypoint.sh

@@ -6,9 +6,13 @@
 #include <QMenu>
 #include <stdint.h>
 #include <memory>
+#include <vector>
 #include "guiconstants.h"
+#include "guiipcinfo.h"
+#include "psgttoastdamp.h"
+#include "interfaces/wallet_tx_channel.h" // GRC::WalletEvent for processDrainedTransactions
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 #include <qt/macos_appnap.h>
 
 class MacDockShutdownHandler;
@@ -27,8 +31,14 @@ class FavoritesPage;
 class ReceiveCoinsPage;
 class SendCoinsDialog;
 class VotingPage;
+class PSGTPoolPage;
 class SignVerifyMessageDialog;
+class MultisignPSGTDialog;
 class Notificator;
+
+namespace interfaces {
+class PSGTPoolContext;
+} // namespace interfaces
 class RPCConsole;
 class DiagnosticsDialog;
 class ClickLabel;
@@ -36,12 +46,14 @@ class SyncOverlay;
 class UpdateDialog;
 
 QT_BEGIN_NAMESPACE
+class QFrame;
 class QLabel;
 class QLineEdit;
 class QTableView;
 class QAbstractItemModel;
 class QModelIndex;
 class QStackedWidget;
+class QTimer;
 class QUrl;
 class QMessageBox;
 QT_END_NAMESPACE
@@ -68,6 +80,21 @@ public:
     */
     void setWalletModel(WalletModel *walletModel);
 
+    //! Show a dismissible banner warning that the GUI and daemon were built from
+    //! different commits (the multiprocess mixed-build soft-warning). Safe to call
+    //! before the window is shown; a no-op if the banner widgets are absent.
+    void showBuildMismatchWarning(const QString& gui_commit, const QString& node_commit);
+
+    //! Provide the IPC connection facts for the About dialog's multiprocess
+    //! section (populated in main() from the connect handshake; inert in the
+    //! monolith build, where ipc_info.active is false).
+    void setIpcConnectionInfo(const GuiIpcInfo& info);
+
+    /** Provide the PSGT pool interface (Phase 1d-v) to the PSGT pool page and the
+        multisign dialog. Set before setWalletModel(), which builds the page's
+        interface-backed table model. */
+    void setPSGTPoolContext(interfaces::PSGTPoolContext *context);
+
     /** Set the researcher model.
         The researcher model provides the BOINC context for the research reward system.
     */
@@ -89,6 +116,40 @@ public:
      */
     bool isPrivacyModeActivated() const;
 
+    /**
+     * @brief Builds the tooltip for the staking icon in the status bar.
+     * @param staking Whether the miner is currently staking.
+     * @param net_weight The network weight.
+     * @param coin_weight The wallet's coin weight. When it is zero and the miner
+     * is not staking, the tooltip reports that staking is not possible.
+     * @param etts_seconds Estimated time to stake in seconds, as
+     * GetEstimatedStakingFrequency reads it.
+     * @param masked Whether mask values (privacy mode) is on. When it is, the
+     * coin weight and the staking frequency are shown as "#.##".
+     * @param warnings The miner warnings to show when not staking.
+     * @return The tooltip text.
+     */
+    static QString StakingToolTip(bool staking,
+                                  double net_weight,
+                                  double coin_weight,
+                                  unsigned int etts_seconds,
+                                  bool masked,
+                                  const QString& warnings);
+
+    /**
+     * Begin an explicit application shutdown: the menu Exit / Ctrl-Q / tray
+     * Exit, a snapshot or reset-blockchain restart, the post-encryption
+     * restart, or a core-initiated QueueShutdown. Sets a flag so closeEvent()
+     * lets the close through instead of honoring "minimize on close", then calls
+     * QApplication::quit() -- which still runs the normal closeAllWindows() /
+     * closeEvent() / aboutToQuit() shutdown sequence, unlike a blunt exit().
+     *
+     * On Qt6 quit() routes through closeAllWindows(); our closeEvent()'s
+     * minimize-on-close handling would otherwise ignore that close and veto the
+     * quit, so an explicit Exit only minimized the window. See issue #2995.
+     */
+    static void requestQuit();
+
 protected:
     void changeEvent(QEvent *e);
     void closeEvent(QCloseEvent *event);
@@ -99,11 +160,33 @@ protected:
 private:
     ClientModel *clientModel;
     WalletModel *walletModel;
+    interfaces::PSGTPoolContext *m_psgt_pool_context = nullptr;
+    //! Keeps one pending multisig spend from toasting once per co-signer's
+    //! revision while this wallet's own signature is still outstanding.
+    PSGTToastDamp m_psgt_toast_damp;
+
+    //! The pool as the damp needs to see it: revision -> unsigned transaction.
+    std::vector<PSGTToastDamp::Entry> currentPSGTPoolEntries() const;
     ResearcherModel *researcherModel;
     MRCModel *m_mrc_model;
     VotingModel *votingModel;
 
+    //! Once-a-minute refresh of the beacon icon's age/expiry tooltip. Created on
+    //! the first setResearcherModel() with a model and stopped again when the
+    //! model is detached -- it is parented to this window, so it would otherwise
+    //! outlive the model it reads. Owned by Qt (parent = this).
+    QTimer *m_beacon_status_update_timer = nullptr;
+
     QStackedWidget *centralWidget;
+
+    //! Dismissible warning banner shown above the page stack (multiprocess
+    //! mixed-build warning). Hidden until showBuildMismatchWarning().
+    QFrame *m_build_warning_banner = nullptr;
+    QLabel *m_build_warning_label = nullptr;
+
+    //! IPC connection facts shown in the About dialog's multiprocess section
+    //! (setIpcConnectionInfo()). Inactive/empty in the monolith build.
+    GuiIpcInfo m_ipc_info;
 
     OverviewPage *overviewPage;
     FavoritesPage *addressBookPage;
@@ -111,11 +194,21 @@ private:
     SendCoinsDialog *sendCoinsPage;
     TransactionView *transactionView;
     VotingPage *votingPage;
+    PSGTPoolPage *psgtPoolPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
+    MultisignPSGTDialog *multisignDialog;
     std::unique_ptr<UpdateDialog> updateMessageDialog;
 
     SyncOverlay *m_sync_overlay;
     bool m_in_sync;
+
+    //! Set by requestQuit() so closeEvent() accepts the close on an explicit
+    //! shutdown instead of minimizing; closeEvent() clears it as it reads it.
+    //! Static so the core-initiated QueueShutdown and the post-encryption
+    //! restart can set it without a BitcoinGUI instance. Only ever touched on
+    //! the GUI thread (QueueShutdown marshals through a queued connection), so a
+    //! plain bool is sufficient. See requestQuit() / issue #2995.
+    static bool m_quit_requested;
 
     QLabel *statusbarAlertsLabel;
     QLabel *labelEncryptionIcon;
@@ -127,7 +220,7 @@ private:
 
     // Windows and Linux: collapse the main application's menu bar into a menu
     // button. On macOS, we'll continue to use the system's separate menu bar.
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     QMenuBar *appMenuBar;
 #else
     QMenu *appMenuBar;
@@ -138,6 +231,8 @@ private:
     QAction *sendCoinsAction;
     QAction *addressBookAction;
     QAction *signMessageAction;
+    QAction *multisignAction;
+    QAction *psgtPoolAction;
     QAction *bxAction;
     QAction *websiteAction;
     QAction *boincAction;
@@ -159,7 +254,6 @@ private:
     QAction *unlockWalletAction;
     QAction *lockWalletAction;
     QAction *openRPCConsoleAction;
-    QAction *snapshotAction;
     QAction *resetblockchainAction;
     QAction *m_mask_values_action;
     QAction *openWikiAction;
@@ -174,14 +268,23 @@ private:
 
     QMovie *syncIconMovie;
 
-    uint64_t nWeight;
-
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     CAppNapInhibitor* m_app_nap_inhibitor = nullptr;
     MacDockShutdownHandler* m_dock_shutdown_handler = nullptr;
 #endif
     // name extension to change icons according to stylesheet
     QString sSheet;
+
+    // The image each of these status icons shows, as its resource name without
+    // the stylesheet extension, so that a theme change can redraw it.
+    QString m_connections_icon;
+    QString m_staking_icon;
+    QString m_scraper_icon;
+
+    /** Show \p icon, in the current theme, in \p label, and keep its name in \p shown. */
+    void setStatusIcon(QLabel* label, QString& shown, const QString& icon);
+    /** Redraw \p label with \p shown in the current theme, if it shows an image yet. */
+    void redrawStatusIcon(QLabel* label, const QString& shown);
 
     /** Create the main UI actions. */
     void createActions();
@@ -197,6 +300,9 @@ private:
     void setIcons();
     /** Re-check the toolbar action that matches the currently displayed page. */
     void recheckCurrentTabAction();
+
+    /** Format the staking frequency for an estimated time to stake in seconds. */
+    static QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
 
 public slots:
@@ -219,17 +325,6 @@ public slots:
 
     /** Notify the user of an error in the network or transaction handling code. */
     void error(const QString &title, const QString &message, bool modal);
-    /** Asks the user whether to pay the transaction fee or to cancel the transaction.
-       It is currently not possible to pass a return value to another thread through
-       BlockingQueuedConnection, so an indirected pointer is used.
-       https://bugreports.qt-project.org/browse/QTBUG-10440
-
-      @param[in] nFeeRequired       the required fee
-      @param[out] payFee            true to pay the fee, false to not pay the fee
-    */
-    void askFee(qint64 nFeeRequired, bool *payFee);
-
-    void askQuestion(std::string caption, std::string body, bool *result);
 
     void handleURI(QString strURI);
     void setOptionsStyleSheet(QString qssFileName);
@@ -251,6 +346,12 @@ private slots:
     void gotoSignMessageTab(QString addr = "");
     /** Show Sign/Verify Message dialog and switch to verify message tab */
     void gotoVerifyMessageTab(QString addr = "");
+    /** Show the Multisign (PSGT) dialog */
+    void gotoMultisignDialog();
+    /** Switch to the PSGT pool page (#2910) */
+    void gotoPSGTPoolPage();
+    /** Toast when a pooled PSGT relevant to this wallet needs a signature */
+    void handlePSGTPoolChanged(QString revision_hash, quint8 change_type, int reason);
     /** Show configuration dialog */
     void optionsClicked();
     /** Switch the active light/dark theme */
@@ -270,7 +371,6 @@ private slots:
     void chatClicked();
     void diagnosticsClicked();
     void peersClicked();
-    void snapshotClicked();
     void resetblockchainClicked();
     void setPrivacy();
     void openWikiClicked();
@@ -278,7 +378,7 @@ private slots:
     void openGuidesClicked();
     bool tryQuit();
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     /** Handle tray icon clicked */
     void trayIconActivated(QSystemTrayIcon::ActivationReason reason);
 #endif
@@ -286,27 +386,31 @@ private slots:
 
         The new items are those between start and end inclusive, under the given parent item.
     */
-    void incomingTransaction(const QModelIndex & parent, int start, int end);
+    //! Balloon-notify new wallet transactions from a drained wallet-event batch
+    //! (the VIEW_FULL RowsInserted records), replacing the old full-replica
+    //! TransactionTableModel::rowsInserted path.
+    void processDrainedTransactions(const std::vector<GRC::WalletEvent>& events);
     /** Encrypt the wallet */
     void encryptWallet();
     /** Backup the wallet */
     void backupWallet();
     /** Change encrypted wallet passphrase */
     void changePassphrase();
-    /** Ask for passphrase to unlock wallet temporarily */
+    /** The Unlock BUTTON: a directive, offering the staking-only choice. */
     void unlockWallet();
+
+    /** An operation needs the passphrase. \p elevate comes from the model,
+     *  which read the wallet state; do not re-derive it here. */
+    void unlockWalletForOperation(bool elevate);
 
     void lockWallet();
 
     /** Show window if hidden, unminimize when minimized, rise when obscured or show if hidden and fToggleHidden is true */
     void showNormalIfMinimized(bool fToggleHidden = false);
 
-    void updateWeight();
     void updateStakingIcon(bool staking, double net_weight, double coin_weight, double etts_days);
     void updateScraperIcon(int scraperEventtype, int status);
     void updateBeaconIcon();
-
-    QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
     void handleNewPoll();
     void extracted(QStringList& expiring_polls, QString& notification);

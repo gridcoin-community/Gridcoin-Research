@@ -5,8 +5,10 @@
 #ifndef GRIDCOIN_CONTRACT_REGISTRY_H
 #define GRIDCOIN_CONTRACT_REGISTRY_H
 
+#include "chainparams.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/project.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/sidestake.h"
@@ -47,11 +49,13 @@ public:
     static Registry& GetRegistryWithDB(const ContractType type)
     {
         switch (type) {
-        case ContractType::BEACON:      return GetBeaconRegistry();
-        case ContractType::PROJECT:     return GetWhitelist();
-        case ContractType::PROTOCOL:    return GetProtocolRegistry();
-        case ContractType::SCRAPER:     return GetScraperRegistry();
-        case ContractType::SIDESTAKE:   return GetSideStakeRegistry();
+        case ContractType::BEACON:         return GetBeaconRegistry();
+        case ContractType::PROJECT:        return GetWhitelist();
+        case ContractType::PROTOCOL:       return GetProtocolRegistry();
+        case ContractType::SCRAPER:        return GetScraperRegistry();
+        case ContractType::SIDESTAKE:      return GetSideStakeRegistry();
+        case ContractType::POOL_REGISTER:  return GetPoolRegistry();
+        case ContractType::POOL_APPROVE:   return GetPoolRegistry();
         case ContractType::UNKNOWN:
             [[fallthrough]];
         case ContractType::CLAIM:
@@ -74,13 +78,15 @@ public:
     static Registry& GetRegistryWithRevert(const ContractType type)
     {
         switch (type) {
-        case ContractType::BEACON:      return GetBeaconRegistry();
-        case ContractType::POLL:        return GetPollRegistry();
-        case ContractType::PROJECT:     return GetWhitelist();
-        case ContractType::PROTOCOL:    return GetProtocolRegistry();
-        case ContractType::SCRAPER:     return GetScraperRegistry();
-        case ContractType::VOTE:        return GetPollRegistry();
-        case ContractType::SIDESTAKE:   return GetSideStakeRegistry();
+        case ContractType::BEACON:         return GetBeaconRegistry();
+        case ContractType::POLL:           return GetPollRegistry();
+        case ContractType::PROJECT:        return GetWhitelist();
+        case ContractType::PROTOCOL:       return GetProtocolRegistry();
+        case ContractType::SCRAPER:        return GetScraperRegistry();
+        case ContractType::VOTE:           return GetPollRegistry();
+        case ContractType::SIDESTAKE:      return GetSideStakeRegistry();
+        case ContractType::POOL_REGISTER:  return GetPoolRegistry();
+        case ContractType::POOL_APPROVE:   return GetPoolRegistry();
             [[fallthrough]];
         case ContractType::UNKNOWN:
             [[fallthrough]];
@@ -170,7 +176,36 @@ public:
                 db_height = Params().GetConsensus().BlockV13Height;
             }
 
-            if (iter.second < lowest_height) {
+            //! Analogous treatment for POOL contracts (issue #1783) gated behind V15. Both contract
+            //! types share the same PoolRegistry/RegistryDB instance, so both bookmark entries get
+            //! the clamp. This is a conditional MAX — exactly the shape of the SIDESTAKE/V13 line
+            //! above (`if (db_height < V13) db_height = V13;`), just keyed to the V15 height.
+            //!
+            //! Pre-activation GetBlockV15Height() is std::numeric_limits<int>::max(), so the
+            //! comparison `db_height < ::max()` is true for any real bookmark (including the
+            //! initialization-reported 0) and clamps db_height up to ::max(). That can never lower
+            //! `lowest_height` (the comparison below never assigns it), so POOL stays out of the
+            //! floor entirely until V15 is pinned — and crucially POOL's raw bookmark (0) cannot
+            //! drag the replay floor down to ~V11.
+            //!
+            //! Post-activation it raises a too-low bookmark up to the V15 height the same way
+            //! SIDESTAKE raises it to V13, but PRESERVES the real near-tip bookmark once it has
+            //! advanced past V15. An unconditional `db_height = GetBlockV15Height()` would instead
+            //! pin the floor to the V15 height forever, discarding the real bookmark and forcing a
+            //! full V15->tip contract replay on every startup — the very regression this clamp
+            //! exists to prevent.
+            //!
+            //! Uses GetBlockV15Height() so the `-blockv15height` isolated-testnet override is
+            //! honored consistently with IsV15Enabled and the startup log line.
+            if ((iter.first == GRC::ContractType::POOL_REGISTER || iter.first == GRC::ContractType::POOL_APPROVE)
+                and db_height < GetBlockV15Height()) {
+                db_height = GetBlockV15Height();
+            }
+
+            //! Compare and assign the *clamped* db_height. (The prior form compared the unclamped
+            //! iter.second but assigned db_height, so a clamped SIDESTAKE/POOL entry could lower the
+            //! floor below its own clamp when another registry was present.)
+            if (db_height < lowest_height) {
                 lowest_height = db_height;
             }
         }

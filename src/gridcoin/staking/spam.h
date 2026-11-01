@@ -6,13 +6,17 @@
 #define GRIDCOIN_STAKING_SPAM_H
 
 #include "kernel.h"
+#include "sync.h"
 #include "uint256.h"
 #include "random.h"
 
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <map>
 #include <vector>
+
+extern CCriticalSection cs_main;
 
 namespace GRC {
 //!
@@ -49,7 +53,7 @@ public:
     //!
     //! \param Proof hash of the stake used to generate a block.
     //!
-    void Remember(uint256 hashProof)
+    void Remember(uint256 hashProof) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         m_proofs_seen[GetOffset(hashProof)] = hashProof;
     }
@@ -59,7 +63,7 @@ public:
     //!
     //! \param coinstake Coinstake transaction from the block.
     //!
-    void RememberOrphan(const CTransaction& coinstake)
+    void RememberOrphan(const CTransaction& coinstake) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const COutPoint& stake_prevout = coinstake.vin[0].prevout;
         const int64_t stake_time = MaskStakeTime(coinstake.nTime);
@@ -75,7 +79,7 @@ public:
     //!
     //! \return \c true if this container holds a matching proof hash.
     //!
-    bool ContainsProof(const uint256& hashProof) const
+    bool ContainsProof(const uint256& hashProof) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return m_proofs_seen[GetOffset(hashProof)] == hashProof;
     }
@@ -88,7 +92,7 @@ public:
     //!
     //! \return \c true if this container holds a matching proof hash.
     //!
-    bool ContainsOrphan(const CTransaction& coinstake) const
+    bool ContainsOrphan(const CTransaction& coinstake) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const COutPoint& stake_prevout = coinstake.vin[0].prevout;
         const auto iter_pair = m_orphan_proofs_seen.find(stake_prevout);
@@ -109,7 +113,7 @@ public:
     //!
     //! \param coinstake Coinstake transaction from the block.
     //!
-    void ForgetOrphan(const CTransaction& coinstake)
+    void ForgetOrphan(const CTransaction& coinstake) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const COutPoint& stake_prevout = coinstake.vin[0].prevout;
         auto iter_pair = m_orphan_proofs_seen.find(stake_prevout);
@@ -130,11 +134,25 @@ public:
     }
 
     //!
+    //! \brief Reset the kernel-proof slots to empty.
+    //!
+    //! Used by the Phase 2 startup coherence recovery path (issue #2865)
+    //! after a rewind: the proofs of abandoned blocks must be evicted
+    //! before \c Refill repopulates from the new tip, otherwise the same
+    //! blocks re-supplied via P2P would be rejected as duplicate
+    //! proof-of-stake.
+    //!
+    void Clear() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        m_proofs_seen = {};
+    }
+
+    //!
     //! \brief Fill the container with proof hashes near the chain tip.
     //!
     //! \param pindex Points to the block index for the chain tip.
     //!
-    void Refill(const CBlockIndex* pindex)
+    void Refill(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         for (size_t i = 0; pindex && i < m_proofs_seen.size(); ++i) {
             pindex = pindex->pprev;
@@ -207,15 +225,29 @@ private:
         static const size_t a = (GetRand<size_t>() * 2) + 1;
         static const size_t b = GetRand<size_t>(std::pow(2, w - M) - 1);
 
+        // x is the sum of the proof hash read as whole words. The bound is the
+        // hash's size in bytes: a bound in bits read past the end of the hash
+        // wherever size_t is narrower than 8 bytes, so the slot depended on
+        // whatever followed the hash in memory. The words are copied out rather
+        // than read in place because the hash bytes carry no alignment guarantee.
+        static_assert(sizeof(uint256) % sizeof(size_t) == 0,
+                      "the proof hash must be a whole number of words");
+
         size_t x = 0;
 
-        for (size_t i = 0; i < (256 / sizeof(size_t)); i += sizeof(size_t)) {
-            x += *reinterpret_cast<const size_t*>(hashProof.begin() + i);
+        for (size_t i = 0; i < sizeof(uint256); i += sizeof(size_t)) {
+            size_t word;
+            std::memcpy(&word, hashProof.begin() + i, sizeof(word));
+            x += word;
         }
 
         return (a * x + b) >> (w - M);
     }
 }; // SeenStakes
 } // namespace GRC
+
+//! Proof-of-stake proofs seen near the chain tip. Defined in
+//! gridcoin/staking/chain_trust.cpp (moved from main.cpp, issue #3125 C9).
+extern GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
 
 #endif // GRIDCOIN_STAKING_SPAM_H

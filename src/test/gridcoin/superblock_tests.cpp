@@ -2,6 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chain.h"
+#include "primitives/block.h"
 #include <base58.h>
 #include "compat/endian.h"
 #include <gridcoin/md5.h>
@@ -9,12 +11,13 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
 #include <key_io.h>
-#include "main.h"
 #include "streams.h"
 
 #include <array>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
 #include <iostream>
 #include <vector>
 
@@ -708,7 +711,15 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics_v3
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence)
 {
     const ScraperStatsMeta meta;
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta), 2);
+    // Built before cs_main is taken: GetTestConvergence takes the scraper
+    // locks, and FromConvergence takes none, so nesting them under cs_main
+    // would couple the two for no reason.
+    const auto convergence = GetTestConvergence(meta);
+
+    // FromConvergence documents that the call site holds cs_main: below the
+    // gate the V1 path reads pindexBest internally.
+    GRC::Superblock superblock = WITH_LOCK(cs_main, return GRC::Superblock::FromConvergence(
+        convergence, 2, /*update_pending_cache=*/true, pindexBest));
 
     BOOST_CHECK(superblock.m_version == 2);
 
@@ -751,8 +762,19 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence)
     }
 }
 
+// Tests run single-threaded and manipulate the chain-state globals directly
+// (pindexBest / pindexGenesisBlock / nBestHeight) without taking cs_main.
+// Pragma-suppress thread-safety in this case for the duration of the test.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence_v3)
 {
+    // Restores the tip globals on exit: the deletes at the end of this case
+    // free the indexes but left the pointers behind for later suites.
+    grc_test::StateGuard guard;
+
     // This needs to be initialized, because the below FromConvergence call uses the AutoGreylist class, which in turn
     // cannot have a pindex with random data.
     pindexBest = new CBlockIndex;
@@ -767,7 +789,8 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence_v3)
     nBestHeight = 1;
 
     const ScraperStatsMeta meta(3);
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta), 3);
+    GRC::Superblock superblock = GRC::Superblock::FromConvergence(
+        GetTestConvergence(meta), 3, /*update_pending_cache=*/true, pindexBest);
 
     BOOST_CHECK(superblock.m_version == 3);
 
@@ -830,12 +853,22 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence_v3)
     delete pindexBest;
     delete pindexGenesisBlock;
 }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergence)
 {
     const ScraperStatsMeta meta;
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(
-        GetTestConvergence(meta, true), 2); // Set fallback by project flag
+    // Built before cs_main is taken: GetTestConvergence takes the scraper
+    // locks, and FromConvergence takes none, so nesting them under cs_main
+    // would couple the two for no reason.
+    const auto convergence = GetTestConvergence(meta, true); // Set fallback by project flag
+
+    // FromConvergence documents that the call site holds cs_main: below the
+    // gate the V1 path reads pindexBest internally.
+    GRC::Superblock superblock = WITH_LOCK(cs_main, return GRC::Superblock::FromConvergence(
+        convergence, 2, /*update_pending_cache=*/true, pindexBest));
 
     BOOST_CHECK(superblock.m_version == 2);
     BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
@@ -892,8 +925,17 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergen
     }
 }
 
+// Same single-threaded-test rationale as the v3 test above.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergence_v3)
 {
+    // Restores the tip globals on exit: the deletes at the end of this case
+    // free the indexes but left the pointers behind for later suites.
+    grc_test::StateGuard guard;
+
     // This needs to be initialized, because the below FromConvergence call uses the AutoGreylist class, which in turn
     // cannot have a pindex with random data.
     pindexBest = new CBlockIndex;
@@ -909,7 +951,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergen
 
     const ScraperStatsMeta meta(3);
     GRC::Superblock superblock = GRC::Superblock::FromConvergence(
-        GetTestConvergence(meta, true), 3); // Set fallback by project flag
+        GetTestConvergence(meta, true), 3, /*update_pending_cache=*/true, pindexBest); // Set fallback by project flag
 
     BOOST_CHECK(superblock.m_version == 3);
     BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
@@ -986,6 +1028,9 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergen
     delete pindexBest;
     delete pindexGenesisBlock;
 }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_binary_contract)
 {
@@ -1276,7 +1321,15 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
         << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta), 2);
+    // Built before cs_main is taken: GetTestConvergence takes the scraper
+    // locks, and FromConvergence takes none, so nesting them under cs_main
+    // would couple the two for no reason.
+    const auto convergence = GetTestConvergence(meta);
+
+    // FromConvergence documents that the call site holds cs_main: below the
+    // gate the V1 path reads pindexBest internally.
+    GRC::Superblock superblock = WITH_LOCK(cs_main, return GRC::Superblock::FromConvergence(
+        convergence, 2, /*update_pending_cache=*/true, pindexBest));
 
     BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
 
@@ -1415,8 +1468,15 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
         << calc_2_convergence_hint                      // Convergence hint for project 2
         << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(
-        GetTestConvergence(meta, true), 2); // Set fallback by project flag
+    // Built before cs_main is taken: GetTestConvergence takes the scraper
+    // locks, and FromConvergence takes none, so nesting them under cs_main
+    // would couple the two for no reason.
+    const auto convergence = GetTestConvergence(meta, true); // Set fallback by project flag
+
+    // FromConvergence documents that the call site holds cs_main: below the
+    // gate the V1 path reads pindexBest internally.
+    GRC::Superblock superblock = WITH_LOCK(cs_main, return GRC::Superblock::FromConvergence(
+        convergence, 2, /*update_pending_cache=*/true, pindexBest));
 
     BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
 

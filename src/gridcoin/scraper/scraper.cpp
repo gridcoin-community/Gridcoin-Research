@@ -2,9 +2,10 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "main.h"
 #include "node/ui_interface.h"
+#include "node/shutdown.h"
 #include "random.h"
+#include "rpc/util.h"
 
 #include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
@@ -19,14 +20,15 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
+#include "consensus/consensus.h"
 
 #include <zlib.h>
+#include <limits>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/iostreams/copy.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
-#include <boost/serialization/binary_object.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/exception/exception.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -88,22 +90,41 @@ CCriticalSection cs_VerifiedBeacons;
 CCriticalSection cs_ProjectPublicKeys;
 
 /**
- * @brief Flag that indicates whether the scraper is supposed to be active
+ * @brief Flag that indicates whether the scraper is supposed to be active.
+ *
+ * Written exclusively from GRC::Initialize() (gridcoin.cpp) at startup
+ * before any scraper thread runs; read on the scraper thread inside the
+ * main loop. atomic<bool> covers the cross-thread visibility.
  */
-bool fScraperActive = false;
+std::atomic<bool> fScraperActive {false};
 /**
- * @brief Vector of usernames and passwords for access to project sites which require logins to meet GPDR requirements
+ * @brief Vector of usernames and passwords for access to project sites which require logins to meet GDPR requirements
+ *
+ * Protected by cs_Scraper. All access paths — UserpassPopulated, the userpass
+ * utility class, and the DownloadProject* helpers — are reached only from the
+ * download section of Scraper() (the LOCK(cs_Scraper) at the start of the
+ * "section to download statistics" block). This covers both the main scraper
+ * thread loop and the reentrant ScraperSingleShot path (called by
+ * ScraperGetSuperblockContract from the staking miner thread, RPC threads,
+ * and ScraperHousekeeping); the singleshot path enters the same critical
+ * section.
  */
-std::vector<std::pair<std::string, std::string>> vuserpass;
+std::vector<std::pair<std::string, std::string>> vuserpass GUARDED_BY(cs_Scraper);
 /**
  * @brief Vector of team IDs for whitelisted teams across the different whitelisted projects. When the team requirement is
  * imposed this is important to correlate teams, since each project uses an independent ID for team names. I.e. Gridcoin
  * in one project will have, in general, a different ID, than another project.
+ *
+ * Currently unused; retained for future per-project team-id correlation work.
  */
 std::vector<std::pair<std::string, int64_t>> vprojectteamids;
-std::vector<std::string> vauthenicationetags;
-int64_t ndownloadsize = 0;
-int64_t nuploadsize = 0;
+/// Cumulative download/upload byte counts. Written by ProcessProjectRacFileByCPID
+/// and read from the "download size so far..." log line in Scraper(). Both call
+/// sites are inside the LOCK(cs_Scraper) covering the download section, so the
+/// data is effectively cs_Scraper-protected (the singleshot reentrant path also
+/// enters that critical section).
+int64_t ndownloadsize GUARDED_BY(cs_Scraper) = 0;
+int64_t nuploadsize GUARDED_BY(cs_Scraper) = 0;
 
 //!
 //! \brief Normalize a project master URL for consistent map key comparison.
@@ -301,19 +322,19 @@ void ScraperSingleShot();
  * testnewsb function (if the scraper log category is enabled).
  * @return Currently returns true. The boolean is reserved for future overall status of housekeeping.
  */
-bool ScraperHousekeeping();
+bool ScraperHousekeeping() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Checks if vuserpass is populated and if empty, populates it
  * @return bool true if populated
  */
-bool UserpassPopulated();
+bool UserpassPopulated() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Checks the scraper directory structure and files against the manifest and aligns/corrects as appropriate. Also
  * loads the TeamIDMap from file if REQUIRE_TEAM_WHITELIST_MEMBERSHIP is enabled and TeamIDs were saved to disk and loads
  * the VerifiedBeacons from disk.
  * @return
  */
-bool ScraperDirectoryAndConfigSanity();
+bool ScraperDirectoryAndConfigSanity() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Stores the current beacon map to the provided file path
  * @param file
@@ -352,7 +373,7 @@ bool LoadTeamIDList(const fs::path& file);
  * manifest to the network if the scraper is active.
  * @return bool true if successful
  */
-uint256 GetmScraperFileManifestHash();
+uint256 GetmScraperFileManifestHash() EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest);
 /**
  * @brief Stores the mScraperFileManifest map to disk
  * @param file
@@ -372,21 +393,21 @@ bool LoadScraperFileManifest(const fs::path& file);
  * @param entry
  * @return bool true if successful
  */
-bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry);
+bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest);
 /**
  * @brief Deletes an entry from the mScraperFileManifest map and also deletes the corresponding file from disk, if it exists.
  * Also updates the mScraperFileManifest map hash and stores the hash in StructScraperFileManifest.nFileManifestMapHash.
  * @param entry
  * @return unsigned int of the number of elements erased
  */
-unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry);
+unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest);
 /**
  * @brief Marks a file manifest entry non-current in the mScraperFileManifest map and updates the
  * StructScraperFileManifest.nFileManifestMapHash.
  * @param entry
  * @return
  */
-bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
+bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest);
 /**
  * @brief Aligns the file manifest entries in the mScraperFileManifest map to the files present on disk. Deletes either/both
  * files and/or entries that are not present and have matching hashes in both.
@@ -403,14 +424,23 @@ void AlignScraperFileManifestEntries(const fs::path& file, const std::string& fi
  * time the function is called
  * @return ScraperStatsVerifiedBeaconsTotalCredits
  */
-ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByCurrentFileManifestState();
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByCurrentFileManifestState(const GRC::WhitelistSnapshot& greylist);
+/**
+ * @brief Diagnostic-export variant of GetScraperStatsByCurrentFileManifestState (Stats.csv.gz).
+ * Split from the consensus-path function so a future divergence between the export and the
+ * superblock-construction path is an explicit decision rather than a silent coupling.
+ * @param greylist read-only view of the current project greylist
+ * @return ScraperStatsVerifiedBeaconsTotalCredits
+ */
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsForExport(const GRC::WhitelistSnapshot& greylist);
 /**
  * @brief Computes the scraper statistics from a single CScraperManifest. This function should only be used as part of the
  * superblock validation in bv11+.
  * @param manifest
  * @return ScraperStatsVerifiedBeaconsTotalCredits
  */
-ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest);
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(const GRC::WhitelistSnapshot& greylist,
+                                                                          CScraperManifest_shared_ptr& manifest);
 /**
  * @brief Loads a project manifest file from disk and computes statistics for that project
  * @param project
@@ -469,13 +499,13 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
  * @param Key
  * @return bool true if successful
  */
-bool ScraperSendFileManifestContents(CTxDestination& Address, CKey& Key);
+bool ScraperSendFileManifestContents(CTxDestination& Address, CKey& Key) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest);
 /**
  * @brief Sorts the inventory of CScraperManifests by scraper and orders by manifest time, which is important for
  * convergence determination
  * @return mmCSManifestsBinnedByScraper
  */
-mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
+mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper() EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest);
 /**
  * @brief Sorts the inventory of CScraperManifests by scraper and orders by manifest time, which is important for
  * convergence determination. Also culls old manifest that do not meet retention rules.
@@ -501,7 +531,8 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests();
  * @param StructConvergedManifest (out parameter)
  * @return bool true if successful
  */
-bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
+bool ScraperConstructConvergedManifest(const GRC::WhitelistSnapshot& projectWhitelist,
+                                       ConvergedManifest& StructConvergedManifest);
 /**
  * @brief Attempts to construct a converged manifest at the project level from the projects which are contained in the
  * inventory of CScraperManifests on the node. Note that this function is called by ScraperConstructConvergedManifest if the
@@ -520,14 +551,14 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
  * @param projectWhitelist
  * @return bool true if successful
  */
-bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist);
+bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Download the project team files and stores in the scraper data directory. This is used when
  * REQUIRE_TEAM_WHITELIST_MEMBERSHIP is true OR explorer mode is enabled.
  * @param projectWhitelist
  * @return bool true if successful
  */
-bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist);
+bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Process project team file and populate TeamIDMap global
  * @param project
@@ -535,13 +566,13 @@ bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist);
  * @param etag
  * @return bool true if successful
  */
-bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, const std::string& etag);
+bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, const std::string& etag) EXCLUSIVE_LOCKS_REQUIRED(cs_TeamIDMap);
 /**
  * @brief Download project RAC (user) files (which have CPID level statistics) for each project on the provided whitelist.
  * @param projectWhitelist
  * @return bool true if successful
  */
-bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist);
+bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Download project public keys for account ownership proof verification from whitelisted projects.
  * Fetches get_project_config.php for each project and extracts the account_ownership_public_key element.
@@ -559,14 +590,19 @@ void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist);
  * @param all_cpid_total_credit
  * @return bool true if successful
  */
-bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
-                                 BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
-                                 ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit);
-/**
- * @brief Clears the authentication ETag auth.dat file
- */
-void AuthenticationETagClear();
+//! Longest a single statistics field may be when a part is WRITTEN.
+//!
+//! total_credit, expavg_time and expavg_credit come straight out of the
+//! project's XML, so nothing upstream bounds them. All three are numbers; 64
+//! bytes is far past any real value and far under MAX_PART_LINE_BYTES, leaving
+//! room for the rest of the record.
+constexpr size_t MAX_RAC_FIELD_BYTES = 64;
 
+bool ProcessProjectRacFileByCPID(const std::string& project, const std::string& project_master_url,
+                                 const fs::path& file, const std::string& etag,
+                                 BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
+                                 ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit)
+                                 EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 // Need to access from rpcblockchain.cpp
 extern UniValue SuperblockToJson(const Superblock& superblock);
 
@@ -611,6 +647,7 @@ BeaconConsensus GetConsensusBeaconList()
         const CBlockIndex* pMaxConsensusLadder = GetBeaconConsensusHeight();
 
         consensus.nBlockHash = pMaxConsensusLadder->GetBlockHash();
+        consensus.nBlockHeight = pMaxConsensusLadder->nHeight;
         max_time = pMaxConsensusLadder->nTime;
 
         const auto& beacon_registry = GetBeaconRegistry();
@@ -1190,7 +1227,7 @@ private:
     fsbridge::ifstream userpassfile;
 
 public:
-    userpass()
+    userpass() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
     {
         vuserpass.clear();
 
@@ -1208,7 +1245,7 @@ public:
             userpassfile.close();
     }
 
-    bool import()
+    bool import() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
     {
         vuserpass.clear();
         std::string inputdata;
@@ -1532,7 +1569,7 @@ void Scraper(bool bSingleShot)
     uint256 nmScraperFileManifestHash;
 
     // The scraper thread loop...
-    while (!fShutdown)
+    while (!ShutdownInProgress())
     {
         // Only proceed if wallet is in sync. Check every 8 seconds since no callback is available.
         // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
@@ -1635,8 +1672,14 @@ void Scraper(bool bSingleShot)
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_UPDATING, {});
 
-            // Get a read-only view of the current project whitelist:
-            const WhitelistSnapshot projectWhitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
+            // Get a read-only view of the current project whitelist. GreylistState::NONE, and
+            // the full ALL_BUT_DELETED filter, are REQUIRED here, not incidental: the scraper
+            // must collect project-level statistics for greylisted projects, because their
+            // total credit is precisely the input that decides whether they stay greylisted.
+            // If greylist status ever gated collection, greylisting would become a one-way
+            // door: excluded -> no TC -> NA -> ZCD accrues -> stays excluded, permanently.
+            const WhitelistSnapshot projectWhitelist = GetWhitelist().Snapshot(GreylistState::NONE,
+                GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
 
             // Delete manifest entries not on whitelist. Take a lock on cs_StructScraperFileManifest for this.
             {
@@ -1658,8 +1701,6 @@ void Scraper(bool bSingleShot)
                     }
                 }
             }
-
-            AuthenticationETagClear();
 
             // Note a lock on cs_StructScraperFileManifest is taken in StoreBeaconList,
             // and the block hash for the consensus block height is updated in the struct.
@@ -1688,7 +1729,9 @@ void Scraper(bool bSingleShot)
             _log(logattribute::INFO, "Scraper", "download size so far: " + ToString(ndownloadsize) + " upload size so far: "
                  + ToString(nuploadsize));
 
-            ScraperStats mScraperStats = GetScraperStatsByCurrentFileManifestState().mScraperStats;
+            ScraperStats mScraperStats = GetScraperStatsForExport(
+                GetWhitelist().Snapshot(GreylistState::PENDING,
+                                        GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED)).mScraperStats;
 
             _log(logattribute::INFO, "Scraper", "mScraperStats has the following number of elements: "
                  + ToString(mScraperStats.size()));
@@ -1781,7 +1824,7 @@ void ScraperSubscriber()
 
     auto scraper_sleep = []() { LOCK(cs_ScraperGlobals); return nScraperSleep; };
 
-    while(!fShutdown)
+    while(!ShutdownInProgress())
     {
         // Only proceed if wallet is in sync. Check every 8 seconds since no callback is available.
         // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
@@ -1815,7 +1858,7 @@ void ScraperSubscriber()
     }
 }
 
-UniValue testnewsb(const UniValue& params, bool fHelp);
+UniValue testnewsb(const UniValue& params);
 
 bool ScraperHousekeeping() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
@@ -1856,7 +1899,7 @@ bool ScraperHousekeeping() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
         int nReducedCacheBits = 5;
 
         input_params.push_back(nReducedCacheBits);
-        testnewsb(input_params, false);
+        testnewsb(input_params);
     }
 
     // Show this node's contract hash in the log.
@@ -1872,8 +1915,7 @@ bool ScraperHousekeeping() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
     return true;
 }
 
-// A lock on cs_Scraper should be taken before calling this function.
-bool ScraperDirectoryAndConfigSanity()
+bool ScraperDirectoryAndConfigSanity() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
     auto scraper_retain_noncurrent_files = []() { LOCK(cs_ScraperGlobals); return SCRAPER_RETAIN_NONCURRENT_FILES; };
@@ -2039,15 +2081,8 @@ bool ScraperDirectoryAndConfigSanity()
     return true;
 }
 
-void AuthenticationETagClear()
-{
-    fs::path file = fs::current_path() / "auth.dat";
 
-    if (fs::exists(file))
-        fs::remove(file);
-}
-
-bool UserpassPopulated()
+bool UserpassPopulated() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     if (vuserpass.empty())
     {
@@ -2072,7 +2107,7 @@ bool UserpassPopulated()
     return true;
 }
 
-bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist)
+bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
 
@@ -2187,7 +2222,7 @@ bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist)
     return true;
 }
 
-bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist)
+bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
     auto require_team_whitelist_membership = []() { LOCK(cs_ScraperGlobals); return REQUIRE_TEAM_WHITELIST_MEMBERSHIP; };
@@ -2473,6 +2508,32 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_TeamIDMap)
     return true;
 }
 
+std::vector<std::string> RemoveDuplicateProjectPublicKeys(std::map<std::string, std::string>& project_public_keys)
+{
+    std::map<std::vector<uint8_t>, std::vector<std::string>> urls_by_key;
+
+    for (const auto& [master_url, pem_key] : project_public_keys) {
+        std::vector<uint8_t> der = GRC::GetPublicKeyDER(pem_key);
+
+        if (der.empty()) continue;
+
+        urls_by_key[std::move(der)].push_back(master_url);
+    }
+
+    std::vector<std::string> removed;
+
+    for (const auto& [der, master_urls] : urls_by_key) {
+        if (master_urls.size() < 2) continue;
+
+        for (const auto& master_url : master_urls) {
+            project_public_keys.erase(master_url);
+            removed.push_back(master_url);
+        }
+    }
+
+    return removed;
+}
+
 void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist)
 {
     _log(logattribute::INFO, __func__, "Downloading project public keys for ownership proof verification.");
@@ -2529,6 +2590,13 @@ void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist)
         project_public_keys.insert(std::make_pair(std::move(master_url), std::move(pem_key)));
     }
 
+    for (const auto& master_url : RemoveDuplicateProjectPublicKeys(project_public_keys))
+    {
+        _log(logattribute::WARNING, __func__,
+             "Discarding the ownership proof public key of project " + master_url
+             + ": it duplicates the key of another whitelisted project.");
+    }
+
     // Update the global under lock.
     {
         LOCK(cs_ProjectPublicKeys);
@@ -2536,11 +2604,14 @@ void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist)
         g_project_public_keys_timestamp = GetAdjustedTime();
     }
 
-    _log(logattribute::INFO, __func__,
-         "Completed. " + ToString(g_project_public_keys.size()) + " project(s) have ownership proof public keys.");
+    {
+        LOCK(cs_ProjectPublicKeys);
+        _log(logattribute::INFO, __func__,
+             "Completed. " + ToString(g_project_public_keys.size()) + " project(s) have ownership proof public keys.");
+    }
 }
 
-bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist)
+bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
 
@@ -2707,7 +2778,7 @@ bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist)
         double all_cpid_total_credit = 0.0;
 
         // Now that the source file is handled, process the file.
-        ProcessProjectRacFileByCPID(prjs.m_name, rac_file, sRacETag, Consensus,
+        ProcessProjectRacFileByCPID(prjs.m_name, NormalizeProjectUrl(prjs.BaseUrl()), rac_file, sRacETag, Consensus,
                                     GlobalVerifiedBeaconsCopy, IncomingVerifiedBeacons, all_cpid_total_credit);
 
         // If in explorer mode, save user (rac) source xml files to file manifest map with exclude from CSManifest flag set
@@ -2757,10 +2828,43 @@ bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist)
     return true;
 }
 
+const ScraperPendingBeaconMap::value_type* FindOwnershipProofVerifiedBeacon(
+    const std::vector<const ScraperPendingBeaconMap::value_type*>& candidates,
+    const std::string& project_master_url,
+    uint32_t user_account_id,
+    const std::map<std::string, std::string>& project_public_keys,
+    unsigned int& signature_failures)
+{
+    // Look up the key of the project whose stats are being processed.
+    const auto key_iter = project_public_keys.find(project_master_url);
+
+    if (key_iter == project_public_keys.end()) return nullptr;
+
+    for (const auto* candidate : candidates)
+    {
+        const ScraperPendingBeaconEntry& entry = candidate->second;
+
+        if (entry.ownership_master_url != project_master_url || entry.ownership_account_id != user_account_id) continue;
+
+        // Reconstruct the signed message: "{account_id} {beacon_public_key_hex}"
+        const std::string signed_message = ToString(entry.ownership_account_id) + " " + entry.beacon_public_key_hex;
+
+        const std::vector<uint8_t> message_bytes(signed_message.begin(), signed_message.end());
+
+        if (GRC::VerifyRSASHA512(message_bytes, entry.ownership_rsa_signature, key_iter->second)) return candidate;
+
+        ++signature_failures;
+    }
+
+    return nullptr;
+}
+
 // This version uses a consensus beacon map (and teamid, if team filtering is specified by policy) to filter statistics.
-bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
+bool ProcessProjectRacFileByCPID(const std::string& project, const std::string& project_master_url,
+                                 const fs::path& file, const std::string& etag,
                                  BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
                                  ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit)
+                                 EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
     auto require_team_whitelist_membership = []() { LOCK(cs_ScraperGlobals); return REQUIRE_TEAM_WHITELIST_MEMBERSHIP; };
@@ -2809,13 +2913,14 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     // Build a lookup map of v3 pending beacon entries (those with ownership proofs) by CPID
     // for efficient v3 verification path lookup during user record processing. Multiple
     // pending beacons may exist for the same CPID (e.g. from different wallets or projects),
-    // so each CPID maps to a vector of candidates that are all checked during verification.
-    std::unordered_map<std::string, std::vector<const ScraperPendingBeaconEntry*>> v3_pending_by_cpid;
+    // so each CPID maps to a vector of candidates. FindOwnershipProofVerifiedBeacon() checks
+    // each against the project being processed.
+    std::unordered_map<std::string, std::vector<const ScraperPendingBeaconMap::value_type*>> v3_pending_by_cpid;
     for (const auto& entry : Consensus.mPendingMap)
     {
         if (entry.second.has_ownership_proof)
         {
-            v3_pending_by_cpid[entry.second.cpid].push_back(&entry.second);
+            v3_pending_by_cpid[entry.second.cpid].push_back(&entry);
         }
     }
 
@@ -2857,7 +2962,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
                 bool v3_verified = false;
 
                 // v3 path: ownership proof verification via RSA-SHA512 signature from the BOINC project.
-                // Multiple v3 pending beacons may exist for the same CPID, so iterate all candidates.
+                // Multiple v3 pending beacons may exist for the same CPID, so all candidates are offered.
                 auto v3_iter = v3_pending_by_cpid.find(cpid);
                 if (v3_iter != v3_pending_by_cpid.end())
                 {
@@ -2867,56 +2972,32 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
                     if (!s_user_id.empty() && ParseUInt32(s_user_id, &user_account_id))
                     {
-                        for (const auto* v3_entry : v3_iter->second)
+                        unsigned int signature_failures = 0;
+
+                        const ScraperPendingBeaconMap::value_type* verified_entry =
+                            FindOwnershipProofVerifiedBeacon(v3_iter->second, project_master_url, user_account_id,
+                                                             Consensus.mProjectPublicKeys, signature_failures);
+
+                        if (signature_failures)
                         {
-                            if (user_account_id != v3_entry->ownership_account_id) continue;
+                            _log(logattribute::WARNING, __func__,
+                                 "RSA signature verification failed for " + ToString(signature_failures)
+                                 + " ownership proof(s) for cpid " + cpid
+                                 + ", account_id " + ToString(user_account_id)
+                                 + ", project " + project_master_url);
+                        }
 
-                            // Account ID matches — look up the project RSA public key.
-                            auto key_iter = Consensus.mProjectPublicKeys.find(v3_entry->ownership_master_url);
+                        if (verified_entry)
+                        {
+                            IncomingVerifiedBeacons.mVerifiedMap[verified_entry->first] = verified_entry->second;
 
-                            if (key_iter == Consensus.mProjectPublicKeys.end()) continue;
+                            _log(logattribute::INFO, __func__,
+                                 "Verified pending beacon via ownership proof for cpid " + cpid
+                                 + ", account_id " + ToString(user_account_id)
+                                 + ", project " + project_master_url);
 
-                            // Reconstruct the signed message: "{account_id} {beacon_public_key_hex}"
-                            const std::string signed_message = ToString(v3_entry->ownership_account_id)
-                                                               + " " + v3_entry->beacon_public_key_hex;
-
-                            std::vector<uint8_t> message_bytes(signed_message.begin(), signed_message.end());
-
-                            if (GRC::VerifyRSASHA512(message_bytes, v3_entry->ownership_rsa_signature, key_iter->second))
-                            {
-                                // RSA verification succeeded. Find the pending map entry by verification code
-                                // (the key in mPendingMap) to add to verified beacons.
-                                for (const auto& pending_entry : Consensus.mPendingMap)
-                                {
-                                    if (pending_entry.second.cpid == cpid
-                                            && pending_entry.second.has_ownership_proof
-                                            && pending_entry.second.ownership_account_id == v3_entry->ownership_account_id)
-                                    {
-                                        IncomingVerifiedBeacons.mVerifiedMap[pending_entry.first] = pending_entry.second;
-
-                                        _log(logattribute::INFO, __func__,
-                                             "Verified pending beacon via ownership proof for cpid " + cpid
-                                             + ", account_id " + ToString(v3_entry->ownership_account_id)
-                                             + ", project " + v3_entry->ownership_master_url);
-
-                                        IncomingVerifiedBeacons.timestamp = GetAdjustedTime();
-                                        v3_verified = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                _log(logattribute::WARNING, __func__,
-                                     "RSA signature verification failed for cpid " + cpid
-                                     + ", account_id " + ToString(v3_entry->ownership_account_id)
-                                     + ", project " + v3_entry->ownership_master_url);
-                            }
-
-                            // If this candidate verified, no need to check remaining candidates
-                            // for this user record. Other candidates for this CPID may still verify
-                            // against different user records (different account IDs on this project).
-                            if (v3_verified) break;
+                            IncomingVerifiedBeacons.timestamp = GetAdjustedTime();
+                            v3_verified = true;
                         }
                     }
                 }
@@ -3004,9 +3085,32 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             }
 
             // User beacon verified. Append its statistics to the CSV output.
+            const std::string s_expavg_time = ExtractXML(data, "<expavg_time>", "</expavg_time>");
+            const std::string s_expavg_credit = ExtractXML(data, "<expavg_credit>", "</expavg_credit>");
+
+            // These three are lifted verbatim from the project's XML and nothing
+            // upstream bounds them. A single pathological value would produce a
+            // record that read-back refuses -- and refusing one record refuses
+            // the whole part, so one upstream oddity would drop this project out
+            // of convergence on every node that received it. Skip the record.
+            //
+            // No statistics are lost that were not lost already: all three are
+            // parsed as numbers on read-back, so a value this long has always
+            // failed there and been skipped. This only moves the skip to a place
+            // where it cannot take the part with it.
+            if (s_cpid_total_credit.size() > MAX_RAC_FIELD_BYTES
+                || s_expavg_time.size() > MAX_RAC_FIELD_BYTES
+                || s_expavg_credit.size() > MAX_RAC_FIELD_BYTES)
+            {
+                _log(logattribute::WARNING, "ProcessProjectRacFileByCPID",
+                     "Skipping CPID " + cpid + " in project " + project
+                     + ": a statistics field exceeds " + ToString(MAX_RAC_FIELD_BYTES) + " bytes.");
+                continue;
+            }
+
             out << s_cpid_total_credit << ","
-                << ExtractXML(data, "<expavg_time>", "</expavg_time>") << ","
-                << ExtractXML(data, "<expavg_credit>", "</expavg_credit>") << ","
+                << s_expavg_time << ","
+                << s_expavg_credit << ","
                 << cpid
                 << std::endl;
 
@@ -3254,7 +3358,7 @@ bool StoreBeaconList(const fs::path& file)
     BeaconConsensus Consensus = GetConsensusBeaconList();
 
     _log(logattribute::INFO, "StoreBeaconList", "ReadCacheSection element count: "
-         + ToString(GetBeaconRegistry().Beacons().size()));
+         + ToString(WITH_LOCK(cs_main, return GetBeaconRegistry().Beacons().size())));
     _log(logattribute::INFO, "StoreBeaconList", "mBeaconMap element count: "
          + ToString(Consensus.mBeaconMap.size()));
 
@@ -3264,6 +3368,7 @@ bool StoreBeaconList(const fs::path& file)
         LOCK(cs_StructScraperFileManifest);
 
         StructScraperFileManifest.nConsensusBlockHash = Consensus.nBlockHash;
+        StructScraperFileManifest.nConsensusBlockHeight = Consensus.nBlockHeight;
     }
 
     if (fs::exists(file))
@@ -3830,6 +3935,56 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeD
     return bResult;
 }
 
+//! \brief Maximum number of CPID records a project part may contain.
+//!
+//! Back-solved from the superblock, which is what actually limits how many CPIDs
+//! can carry a magnitude: a superblock is at most Superblock::MAX_SIZE and its
+//! minimum serialized entry is sizeof(Cpid) + 1 byte of magnitude -- the same
+//! bound superblock.h uses to size its own reserve. Assuming a single project
+//! consumed an entire superblock gives the ceiling on records any one part could
+//! legitimately carry.
+//!
+//! Note this is the ceiling ITSELF, not the ceiling plus a margin. A part
+//! carrying the largest record count the superblock format admits sits exactly
+//! at this limit rather than comfortably under it. That is deliberate -- the
+//! figure means something precise, and padding it would make it mean nothing in
+//! particular -- and it is tolerable because the live count is smaller by orders
+//! of magnitude: the bound is on what the FORMAT permits, not on what the
+//! network produces. Anything approaching it is already anomalous.
+//!
+//! The corollary matters when reading a rejection: tripping this is not "a
+//! slightly oversized part", it is a part claiming more CPIDs than a whole
+//! superblock could ever represent.
+//!
+//! Derived rather than hardcoded so it cannot silently disagree with
+//! Superblock::MAX_SIZE. That is convenience, NOT a guarantee: if that basis
+//! changes, re-derive rather than assume this still holds -- the per-record width
+//! below and the compression assumptions behind the wire limit were measured
+//! against today's format and do not follow automatically.
+static constexpr size_t MAX_PART_RECORDS = GRC::Superblock::MAX_SIZE / (sizeof(GRC::Cpid) + 1);
+
+//! \brief Maximum length of one record in a project part.
+//!
+//! A record is "TC,RAT,RAC,cpid": three doubles at six significant digits (widest
+//! observed on live data is 11 characters, e.g. 1.01799e+07), three separators
+//! and a 32-character CPID -- about 72 bytes. 512 is generous headroom while
+//! still bounding what a single line can cost.
+//!
+//! Together with MAX_PART_RECORDS this is what stops a decompression bomb, and it
+//! is why parsing stays STREAMING. A part arrives gzipped, so any wire limit
+//! bounds the compressed bytes only and DEFLATE reaches roughly 1032:1: a part
+//! well inside the wire limit can still expand to gigabytes. Bounding the line
+//! keeps peak memory at one record no matter what the stream produces, and
+//! bounding the record count stops the expansion continuing.
+//!
+//! std::getline cannot do this -- it grows its string until a delimiter or EOF,
+//! so an expansion with no newlines is buffered whole before any check can run.
+//! istream::getline(buf, n) bounds the length but sets failbit on a zero-length
+//! extraction, which is exactly what a blank line produces, so it would silently
+//! truncate parsing at the first empty line. Hence ReadLineBounded (util/string.h).
+static constexpr size_t MAX_PART_LINE_BYTES = 512;
+
+
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
                                          const double& projectmag, ScraperStats& mScraperStats)
 {
@@ -3838,8 +3993,31 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
     // Lets vector the user blocks
     std::string line;
     double dProjectRAC = 0.0;
-    while (std::getline(sUncompressedIn, line))
+    size_t records = 0;
+    bool overlong = false;
+    while (ReadLineBounded(sUncompressedIn, line, MAX_PART_LINE_BYTES, overlong))
     {
+        // Counts EVERY line, including blanks and comments, and does so before
+        // they are filtered below. That is deliberate: this is a bound on WORK,
+        // not on the size of the stats map. Counting only records that parse
+        // would let an expansion made entirely of blank lines run unbounded,
+        // since none of them would ever increment the counter.
+        if (++records > MAX_PART_RECORDS) {
+            _log(logattribute::ERR, __func__, "Project " + project + " part exceeds the maximum of "
+                 + ToString(MAX_PART_RECORDS) + " records; rejecting.");
+
+            // Discard what was parsed so far. Every caller merges this map into
+            // the overall stats and none of them looks at the return value, so
+            // returning false alone did not reject anything -- it stopped
+            // parsing and handed back a truncated PREFIX of the project's
+            // statistics, which is worse than the unbounded parse it replaced.
+            // Emptied here, the project contributes nothing, which is what
+            // rejecting the part has to mean.
+            mScraperStats.clear();
+
+            return false;
+        }
+
         if (line[0] == '#')
             continue;
 
@@ -3909,6 +4087,22 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
 
         // Increment project
         dProjectRAC += statsentry.statsvalue.dRAC;
+    }
+
+    // ReadLineBounded stops rather than buffering an over-long record, so this is
+    // the decompression-bomb case: an expansion with no newlines, or a record far
+    // wider than the format allows. Refuse the part rather than accept a
+    // truncated view of it.
+    if (overlong) {
+        _log(logattribute::ERR, __func__, "Project " + project + " part contains a record longer than "
+             + ToString(MAX_PART_LINE_BYTES) + " bytes; rejecting.");
+
+        // Same reason as the record-count path above: callers merge this map
+        // regardless of the return value, so it has to be emptied for the
+        // rejection to mean anything.
+        mScraperStats.clear();
+
+        return false;
     }
 
     _log(logattribute::INFO, "LoadProjectObjectToStatsByCPID",
@@ -4065,12 +4259,9 @@ bool ProcessNetworkWideFromProjectStats(ScraperStats& mScraperStats)
     return true;
 }
 
-ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByCurrentFileManifestState()
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByCurrentFileManifestState(const GRC::WhitelistSnapshot& greylist)
 {
     _log(logattribute::INFO, "GetScraperStatsByCurrentFileManifestState", "Beginning stats processing.");
-
-    // Get a read-only view of the current project greylist
-    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED);
 
     // Enumerate the count of active projects from the file manifest. Since the manifest is
     // constructed starting with the whitelist, and then using only the current files, this
@@ -4150,19 +4341,21 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByCurrentFileManifestStat
     return stats_verified_beacons_tc;
 }
 
-ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest)
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsForExport(const GRC::WhitelistSnapshot& greylist)
+{
+    // Same computation as the consensus path today, by delegation. The named split exists so
+    // that the Stats.csv.gz export and superblock construction are separate call surfaces: if
+    // they ever need to diverge, the divergence is made here explicitly instead of silently
+    // coupling a diagnostic to a consensus path.
+    return GetScraperStatsByCurrentFileManifestState(greylist);
+}
+
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const GRC::WhitelistSnapshot& greylist,
+                                                                           const ConvergedManifest& StructConvergedManifest)
 {
     _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Beginning stats processing.");
 
-    // Get a read-only view of the current project greylist
-    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED);
-
     ScraperStatsVerifiedBeaconsTotalCredits stats_verified_beacons_tc;
-
-    // Enumerate the count of active projects from the dummy converged manifest. One of the parts
-    // is the beacon list, is not a project, which is why that should not be included in the count.
-    // Populate the verified beacons map, and if it is don't count that either.
-    int exclude_parts_from_count = 1;
 
     auto iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("VerifiedBeacons");
     if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
@@ -4177,8 +4370,6 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
         {
             _log(logattribute::WARNING, __func__, "failed to deserialize verified beacons part: " + std::string(e.what()));
         }
-
-        ++exclude_parts_from_count;
     }
 
     iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectsAllCpidTotalCredits");
@@ -4194,16 +4385,28 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
         {
             _log(logattribute::WARNING, __func__, "failed to deserialize ProjectsAllCpidTotalCredits part: " + std::string(e.what()));
         }
-
-        ++exclude_parts_from_count;
     }
 
-    iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectPublicKeys");
-    if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
+    // Count the parts that are not projects, derived from the shared list rather
+    // than named here.
+    //
+    // These two things have to agree: what the loaders SKIP, and what this
+    // denominator EXCLUDES. Naming the pseudo-projects separately in each place
+    // let them disagree -- a name added to the list would be skipped as a source
+    // of statistics while still counting as an active project, which divides the
+    // network magnitude across a project that contributed none of it and quietly
+    // reduces every real project's share.
+    //
+    // The beacon list is the one that is not on the list, and is why this starts
+    // at one rather than zero.
+    int exclude_parts_from_count = 1;
+
+    for (const auto& part : StructConvergedManifest.ConvergedManifestPartPtrsMap)
     {
-        // ProjectPublicKeys is a non-project part; exclude from active project count.
-        // The data is available in the converged manifest for future use.
-        ++exclude_parts_from_count;
+        if (IsManifestPseudoProject(part.first))
+        {
+            ++exclude_parts_from_count;
+        }
     }
 
     unsigned int nActiveProjects = StructConvergedManifest.ConvergedManifestPartPtrsMap.size() - exclude_parts_from_count;
@@ -4231,8 +4434,7 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
 
         // Do not process the BeaconList, VerifiedBeacons, ProjectsAllCpidTotalCredits, or ProjectPublicKeys
         // as a project stats file.
-        if (project != "BeaconList" && project != "VerifiedBeacons" && project != "ProjectsAllCpidTotalCredits"
-                && project != "ProjectPublicKeys")
+        if (project != "BeaconList" && !IsManifestPseudoProject(project))
         {
             _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Processing stats for project: " + project);
 
@@ -4260,12 +4462,10 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
     return stats_verified_beacons_tc;
 }
 
-ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest)
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(const GRC::WhitelistSnapshot& greylist,
+                                                                          CScraperManifest_shared_ptr& manifest)
 {
     _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Beginning stats processing.");
-
-    // Get a read-only view of the current project greylist
-    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED);
 
     // Create a dummy converged manifest and fill out the dummy ConvergedManifest structure from the provided
     // manifest.
@@ -4273,12 +4473,7 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScrap
 
     ScraperStatsVerifiedBeaconsTotalCredits stats_verified_beacons_tc {};
 
-    // Enumerate the count of active projects from the dummy converged manifest. One of the parts
-    // is the beacon list, is not a project, which is why that should not be included in the count.
-    // Populate the verified beacons map, and if it is don't count that either.
     ScraperPendingBeaconMap VerifiedBeaconMap;
-
-    int exclude_parts_from_count = 1;
 
     auto iter = StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.find("VerifiedBeacons");
     if (iter != StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.end())
@@ -4293,8 +4488,6 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScrap
         {
             _log(logattribute::WARNING, __func__, "failed to deserialize verified beacons part: " + std::string(e.what()));
         }
-
-        ++exclude_parts_from_count;
     }
 
     stats_verified_beacons_tc.mVerifiedMap = VerifiedBeaconMap;
@@ -4314,16 +4507,30 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScrap
         {
             _log(logattribute::WARNING, __func__, "failed to deserialize ProjectsAllCpidTotalCredits part: " + std::string(e.what()));
         }
-
-        ++exclude_parts_from_count;
     }
 
     stats_verified_beacons_tc.m_total_credit_map = projects_all_cpid_total_credits_map;
 
-    iter = StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectPublicKeys");
-    if (iter != StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.end())
+    // Count the parts that are not projects, derived from the shared list rather
+    // than named here.
+    //
+    // These two things have to agree: what the loaders SKIP, and what this
+    // denominator EXCLUDES. Naming the pseudo-projects separately in each place
+    // let them disagree -- a name added to the list would be skipped as a source
+    // of statistics while still counting as an active project, which divides the
+    // network magnitude across a project that contributed none of it and quietly
+    // reduces every real project's share.
+    //
+    // The beacon list is the one that is not on the list, and is why this starts
+    // at one rather than zero.
+    int exclude_parts_from_count = 1;
+
+    for (const auto& part : StructDummyConvergedManifest.ConvergedManifestPartPtrsMap)
     {
-        ++exclude_parts_from_count;
+        if (IsManifestPseudoProject(part.first))
+        {
+            ++exclude_parts_from_count;
+        }
     }
 
     unsigned int nActiveProjects = StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.size()
@@ -4349,8 +4556,7 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsFromSingleManifest(CScrap
 
         // Do not process the BeaconList, VerifiedBeacons, ProjectsAllCpidTotalCredits, or ProjectPublicKeys
         // as a project stats file.
-        if (project != "BeaconList" && project != "VerifiedBeacons" && project != "ProjectsAllCpidTotalCredits"
-                && project != "ProjectPublicKeys")
+        if (project != "BeaconList" && !IsManifestPseudoProject(project))
         {
             _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Processing stats for project: " + project);
 
@@ -4846,7 +5052,17 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
         CDataStream part(std::move(vchData), SER_NETWORK, 1);
 
-        manifest->addPartData(std::move(part), true);
+        // The part index was reserved before the part existed, so a refused part
+        // would leave the manifest referencing something never created -- a
+        // manifest its own receipt check would then reject. Abandon the publish
+        // instead, and say which part was empty.
+        if (manifest->addPartData(std::move(part), true) < 0)
+        {
+            _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                 "Empty beacon list part (" + inputfile.string() + "); manifest not published.");
+
+            return false;
+        }
 
         iPartNum++;
 
@@ -4879,7 +5095,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
                 part << ScraperVerifiedBeacons.mVerifiedMap;
 
-                manifest->addPartData(std::move(part), true);
+                // See the beacon list part above: the index is already committed.
+                if (manifest->addPartData(std::move(part), true) < 0)
+                {
+                    _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                         "Empty VerifiedBeacons part; manifest not published.");
+
+                    return false;
+                }
 
                 iPartNum++;
             }
@@ -4890,14 +5113,30 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
         std::map<std::string, double> total_credit_map;
         int64_t total_credit_map_timestamp = 0;
 
+        // v15 gate (consensus-block-height anchored so all scrapers flip together): at/after the activation
+        // height, exclude a project whose user-statistics export had no usable records this cycle (no_records)
+        // from the ProjectsAllCpidTotalCredits map. Such a project's all_cpid_total_credit is a spurious zero
+        // (the user-stats part itself is already excluded below at the no_records check), and emitting it as a
+        // zero total-credit entry poisons the auto-greylist WAS baseline (a zero baseline bookmark is never
+        // greater than any historical total credit, so all deltas are skipped and WAS collapses to 0). Omitting
+        // it makes the superblock carry no entry for the project, so the auto-greylist records nullopt at the
+        // baseline (benefit-of-doubt) and computes WAS from real history. Before the gate the legacy behavior
+        // is preserved so historical superblocks remain bit-identical. NOTE: a legitimately scraped zero
+        // (no_records == false) is still emitted — only the no-records case is suppressed.
+        const bool exclude_no_records_tc =
+                IsAutoGreylistTotalCreditFixEnabled(StructScraperFileManifest.nConsensusBlockHeight);
+
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
             auto scraper_cmanifest_include_noncurrent_proj_files =
                     []() { LOCK(cs_ScraperGlobals); return SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES; };
 
             // Populate the all cpid total credit map from current entries only. Keep track of the timestamps and assign
-            // the latest manifest file entry timestamp to the total_credit_map_timestamp.
-            if (entry.second.current && !entry.second.excludefromcsmanifest) {
+            // the latest manifest file entry timestamp to the total_credit_map_timestamp. Past the v15 gate, a
+            // no_records project is excluded here too (see exclude_no_records_tc above), matching the user-stats
+            // file-part exclusion in the no_records check below.
+            if (entry.second.current && !entry.second.excludefromcsmanifest
+                    && !(exclude_no_records_tc && entry.second.no_records)) {
                 total_credit_map.insert(std::make_pair(entry.second.project, entry.second.all_cpid_total_credit));
 
                 total_credit_map_timestamp = std::max(entry.second.timestamp, total_credit_map_timestamp);
@@ -4974,7 +5213,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
             CDataStream part(vchData, SER_NETWORK, 1);
 
-            manifest->addPartData(std::move(part), true);
+            // See the beacon list part above: the index is already committed.
+            if (manifest->addPartData(std::move(part), true) < 0)
+            {
+                _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                     "Empty part for project " + ProjectEntry.project + "; manifest not published.");
+
+                return false;
+            }
 
             iPartNum++;
         }
@@ -5001,7 +5247,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
             part << total_credit_map;
 
-            manifest->addPartData(std::move(part), true);
+            // See the beacon list part above: the index is already committed.
+            if (manifest->addPartData(std::move(part), true) < 0)
+            {
+                _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                     "Empty ProjectsAllCpidTotalCredits part; manifest not published.");
+
+                return false;
+            }
 
             iPartNum++;
         }
@@ -5030,7 +5283,14 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
                 part << g_project_public_keys;
 
-                manifest->addPartData(std::move(part), true);
+                // See the beacon list part above: the index is already committed.
+                if (manifest->addPartData(std::move(part), true) < 0)
+                {
+                    _log(logattribute::ERR, "ScraperSendFileManifestContents",
+                         "Empty ProjectPublicKeys part; manifest not published.");
+
+                    return false;
+                }
 
                 iPartNum++;
             }
@@ -5152,7 +5412,8 @@ void ConvergedManifest::ComputeConvergedContentHash()
 }
 
 // ------------------------------------ This an out parameter.
-bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest)
+bool ScraperConstructConvergedManifest(const GRC::WhitelistSnapshot& projectWhitelist,
+                                       ConvergedManifest& StructConvergedManifest)
 {
     bool bConvergenceSuccessful = false;
 
@@ -5166,6 +5427,20 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
     std::multimap<uint256, std::pair<ScraperID, uint256>> mManifestsBinnedbyContent;
     std::multimap<uint256, std::pair<ScraperID, uint256>>::iterator convergence;
 
+    // The denominator for the supermajority is the LOCALLY OBSERVED scraper
+    // count -- how many scrapers this node actually holds manifests from -- and
+    // that is correct by design, not an approximation to be tightened.
+    //
+    // Using the on-chain authorized scraper count instead would stall superblock
+    // production network wide whenever an authorized scraper is merely offline,
+    // which is routine: deauthorization is a manual governance action, so an
+    // idle or failed scraper stays authorized indefinitely. Measuring who is
+    // actually publishing is what keeps convergence possible in that state.
+    //
+    // This is also why manifest ingest must not be gated on sync state (see the
+    // OutOfSyncByAge branch in CScraperManifest::UnserializeCheck): a partial
+    // manifest set reaching housekeeping would shrink this denominator and let a
+    // minority view self-converge.
     unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
 
     _log(logattribute::INFO, "ScraperConstructConvergedManifest",
@@ -5289,24 +5564,26 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
         }
     }
 
-    // Get a read-only view of the current project whitelist to fill out the
-    // excluded projects vector later on:
-    const WhitelistSnapshot projectWhitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
-
     if (bConvergenceSuccessful)
     {
         LOCK(CScraperManifest::cs_mapManifest);
 
         // Select agreed upon (converged) CScraper manifest based on converged hash.
         auto pair = CScraperManifest::mapManifest.find(convergence->second.second);
-        CScraperManifest_shared_ptr manifest = pair->second;
 
+        if (pair == CScraperManifest::mapManifest.end())
+        {
+            // The manifests were binned under an earlier hold of cs_mapManifest. Another thread (a cull, the
+            // unauthorized-manifest sweep, or the deletecscrapermanifest RPC) can have deleted this one since.
+            bConvergenceSuccessful = false;
+            _log(logattribute::WARNING, "ScraperConstructConvergedManifest",
+                 "Selected converged manifest " + convergence->second.second.GetHex()
+                 + " is no longer in the manifest map.");
+        }
         // Fill out the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
         // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one
         // manifest.
-        bool bConvergedContentHashMatches = StructConvergedManifest(manifest);
-
-        if (!bConvergedContentHashMatches)
+        else if (!StructConvergedManifest(pair->second))
         {
             bConvergenceSuccessful = false;
             _log(logattribute::ERR, "ScraperConstructConvergedManifest",
@@ -5397,6 +5674,11 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
     int64_t nConvergedConsensusTime = 0;
     uint256 nManifestHashForConvergedBeaconList;
 
+    // Holds every manifest this pass reads. Another thread can delete a manifest from mapManifest after it was binned;
+    // holding it keeps the object, and so the parts it references, alive. This function keeps raw pointers to those
+    // parts until the converged manifest takes its own references to them.
+    std::set<CScraperManifest_shared_ptr> setPinnedManifests;
+
     StructConvergedManifest.CScraperConvergedManifest_ptr = std::shared_ptr<CScraperManifest>(new CScraperManifest);
 
     // We are going to do this for each project in the whitelist.
@@ -5441,7 +5723,20 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
 
                     // Select manifest based on provided hash.
                     auto pair = CScraperManifest::mapManifest.find(nCSManifestHash);
+
+                    // The manifests were binned under an earlier hold of cs_mapManifest. Another thread can have
+                    // deleted this one since. Skip it; the project can still converge on the manifests that remain.
+                    if (pair == CScraperManifest::mapManifest.end())
+                    {
+                        _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject",
+                             "Manifest " + nCSManifestHash.GetHex() + " from scraper " + iter.first
+                             + " is no longer in the manifest map. Skipping it for project "
+                             + iWhitelistProject.m_name + ".");
+                        continue;
+                    }
+
                     CScraperManifest_shared_ptr manifest = pair->second;
+                    setPinnedManifests.insert(manifest);
 
                     LOCK(manifest->cs_manifest);
 
@@ -5528,10 +5823,22 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
                 // Get the actual part ----------------- by object hash.
 
                 std::map<uint256, CSplitBlob::CPart>::iterator iPart;
+                bool bPartFound = false;
                 {
                     LOCK(CSplitBlob::cs_mapParts);
 
                     iPart = CSplitBlob::mapParts.find(std::get<0>(iter.second));
+                    bPartFound = iPart != CSplitBlob::mapParts.end();
+                }
+
+                // The manifest the part was binned from is held in setPinnedManifests, which keeps the part in
+                // mapParts. Check anyway rather than use end().
+                if (!bPartFound)
+                {
+                    _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject",
+                         "Selected converged project object " + std::get<0>(iter.second).GetHex()
+                         + " for project " + iWhitelistProject.m_name + " is no longer in the part map.");
+                    break;
                 }
 
                 uint256 nContentHashCheck = Hash(iPart->second.data);
@@ -5589,8 +5896,17 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
 
     // If we meet the rule of CONVERGENCE_BY_PROJECT_RATIO, then proceed to fill out the rest of the map. Note that the greylisted
     // projects are excluded from the count in the denominator as it is not expected to necessarily achieve convergence on those.
-    if ((double)iCountSuccessfulConvergedProjects /
-            (double)(projectWhitelist.size() - StructConvergedManifest.vGreylistedProjects.size()) >= convergence_by_project_ratio())
+    //
+    // With every whitelisted project greylisted the denominator is zero. The ratio is then the value the division gave:
+    // +infinity if any project converged, which meets any ratio, and NaN if none did, which meets none. It is spelled
+    // out so the comparison sees exactly what it always did without dividing by zero.
+    const size_t projects_expected = projectWhitelist.size() - StructConvergedManifest.vGreylistedProjects.size();
+    const double converged_project_ratio = projects_expected > 0
+        ? (double)iCountSuccessfulConvergedProjects / (double)projects_expected
+        : (iCountSuccessfulConvergedProjects > 0 ? std::numeric_limits<double>::infinity()
+                                                 : std::numeric_limits<double>::quiet_NaN());
+
+    if (converged_project_ratio >= convergence_by_project_ratio())
     {
         AppCacheSection mScrapers = GetScrapersCache();
 
@@ -5608,169 +5924,180 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
 
         // Select manifest based on provided hash.
         auto pair = CScraperManifest::mapManifest.find(nManifestHashForConvergedBeaconList);
-        CScraperManifest_shared_ptr manifest = pair->second;
 
-        LOCK(manifest->cs_manifest);
-
-        // Bail if BeaconList is not found or empty.
-        if (pair == CScraperManifest::mapManifest.end() || manifest->vParts[0]->data.size() == 0)
+        // Bail if the manifest is not in the map. Another thread can have deleted it since the manifests were binned
+        // under an earlier hold of cs_mapManifest, and the hash is null if no converged project set it, for example
+        // when none converged under a CONVERGENCE_BY_PROJECT_RATIO of zero or less.
+        if (pair == CScraperManifest::mapManifest.end())
         {
             _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject",
-                 "BeaconList was not found in the converged manifests from the scrapers.");
+                 "BeaconList manifest " + nManifestHashForConvergedBeaconList.GetHex()
+                 + " is not in the manifest map.");
 
             bConvergenceSuccessful = false;
         }
         else
         {
-            // The vParts[0] is always the BeaconList.
-            StructConvergedManifest.ConvergedManifestPartPtrsMap.insert(std::make_pair("BeaconList", manifest->vParts[0]));
+            CScraperManifest_shared_ptr manifest = pair->second;
 
-            // Also include the VerifiedBeaconList, ProjectsAllCpidTotalCredits, and ProjectPublicKeys
-            // "projects" if present in the parts.
-            for (const auto& iter : manifest->projects)
+            LOCK(manifest->cs_manifest);
+
+            // Bail if BeaconList is empty.
+            if (manifest->vParts[0]->data.size() == 0)
             {
-                // The normal (active) beacon list is always part 0, so skip part 0 for this loop.
-                if (iter.part1 == 0) {
-                    continue;
-                }
+                _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject",
+                     "BeaconList was not found in the converged manifests from the scrapers.");
 
-                if (iter.project == "VerifiedBeacons" || iter.project == "ProjectsAllCpidTotalCredits"
-                        || iter.project == "ProjectPublicKeys") {
-                    StructConvergedManifest.ConvergedManifestPartPtrsMap.insert(std::make_pair(iter.project,
-                                                                                               manifest->vParts[iter.part1]));
-                }
+                bConvergenceSuccessful = false;
             }
-
-            _log(logattribute::INFO, __func__,
-                 "After BeaconList, VerifiedBeacons, ProjectsAllCpidTotalCredits, and ProjectPublicKeys insert "
-                 "StructConvergedManifest.ConvergedManifestPartPtrsMap.size() = "
-                 + ToString(StructConvergedManifest.ConvergedManifestPartPtrsMap.size()));
-
-            StructConvergedManifest.ConsensusBlock = nConvergedConsensusBlock;
-
-            // At this point all of the projects that meet convergence rules, along with the
-            // BeaconList and the VerfiedBeacons are now in the ConvergedManifestPartPtrsMap.
-            // We also need to populate them into the underlying CScraperConvergedManifest, because
-            // that manifest will hold the references to the part pointers to ensure they don't disappear
-            // until the converged manifest is removed from the global cache. Note that the projects vector
-            // of project dentrys is not filled out, because it is actually not used in this context.
-
-            // The BeaconList is element 0, do that first.
+            else
             {
-                LOCK(StructConvergedManifest.CScraperConvergedManifest_ptr->cs_manifest);
+                // The vParts[0] is always the BeaconList.
+                StructConvergedManifest.ConvergedManifestPartPtrsMap.insert(std::make_pair("BeaconList", manifest->vParts[0]));
 
-                auto iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("BeaconList");
-
-                StructConvergedManifest.CScraperConvergedManifest_ptr->addPart(iter->second->hash);
-
-                iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("VerifiedBeacons");
-
-                if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
+                // Also include the VerifiedBeaconList, ProjectsAllCpidTotalCredits, and ProjectPublicKeys
+                // "projects" if present in the parts.
+                for (const auto& iter : manifest->projects)
                 {
-                    StructConvergedManifest.CScraperConvergedManifest_ptr->addPart(iter->second->hash);
+                    // The normal (active) beacon list is always part 0, so skip part 0 for this loop.
+                    if (iter.part1 == 0) {
+                        continue;
+                    }
+
+                    if (IsManifestPseudoProject(iter.project)) {
+                        StructConvergedManifest.ConvergedManifestPartPtrsMap.insert(std::make_pair(iter.project,
+                                                                                                   manifest->vParts[iter.part1]));
+                    }
                 }
 
-                iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectsAllCpidTotalCredits");
+                _log(logattribute::INFO, __func__,
+                     "After BeaconList, VerifiedBeacons, ProjectsAllCpidTotalCredits, and ProjectPublicKeys insert "
+                     "StructConvergedManifest.ConvergedManifestPartPtrsMap.size() = "
+                     + ToString(StructConvergedManifest.ConvergedManifestPartPtrsMap.size()));
 
-                if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
+                StructConvergedManifest.ConsensusBlock = nConvergedConsensusBlock;
+
+                // At this point all of the projects that meet convergence rules, along with the
+                // BeaconList and the VerfiedBeacons are now in the ConvergedManifestPartPtrsMap.
+                // We also need to populate them into the underlying CScraperConvergedManifest, because
+                // that manifest will hold the references to the part pointers to ensure they don't disappear
+                // until the converged manifest is removed from the global cache. Note that the projects vector
+                // of project dentrys is not filled out, because it is actually not used in this context.
+
+                // The BeaconList is element 0, do that first.
                 {
+                    LOCK(StructConvergedManifest.CScraperConvergedManifest_ptr->cs_manifest);
+
+                    auto iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("BeaconList");
+
                     StructConvergedManifest.CScraperConvergedManifest_ptr->addPart(iter->second->hash);
-                }
 
-                iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectPublicKeys");
+                    iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("VerifiedBeacons");
 
-                if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
-                {
-                    StructConvergedManifest.CScraperConvergedManifest_ptr->addPart(iter->second->hash);
-                }
-
-                // Now the rest of the projects (parts).
-
-                for (iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.begin();
-                     iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end(); ++iter)
-                {
-                    if (iter->first != "BeaconList"
-                            && iter->first != "VerifiedBeacons"
-                            && iter->first != "ProjectsAllCpidTotalCredits"
-                            && iter->first != "ProjectPublicKeys")
+                    if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
                     {
                         StructConvergedManifest.CScraperConvergedManifest_ptr->addPart(iter->second->hash);
                     }
-                }
-            }
 
-            StructConvergedManifest.ComputeConvergedContentHash();
+                    iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectsAllCpidTotalCredits");
 
-            StructConvergedManifest.timestamp = GetAdjustedTime();
-            StructConvergedManifest.bByParts = true;
-
-            bConvergenceSuccessful = true;
-
-            _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Successful convergence by project: "
-                 + ToString(iCountSuccessfulConvergedProjects) + " out of " + ToString(projectWhitelist.size())
-                 + " projects at "
-                 + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
-
-            // Fill out the excluded projects vector and the included scraper count (by project) map
-            for (const auto& iProjects : projectWhitelist)
-            {
-                if (StructConvergedManifest.ConvergedManifestPartPtrsMap.find(iProjects.m_name)
-                        == StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
-                {
-                    // Project in whitelist was not in the map, so it goes in the exclusion vector.
-                    StructConvergedManifest.vExcludedProjects.push_back(iProjects.m_name);
-                    _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
-                         + iProjects.m_name
-                         + " was excluded because there was no convergence from the scrapers for"
-                           " this project at the project level.");
-
-                    continue;
-                }
-
-                unsigned int nScraperConvergenceCount =
-                        StructConvergedManifest.mIncludedScrapersbyProject.count(iProjects.m_name);
-                StructConvergedManifest.mScraperConvergenceCountbyProject.insert(std::make_pair(iProjects.m_name,
-                                                                                                nScraperConvergenceCount));
-
-                _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Project " + iProjects.m_name
-                                  + ": " + ToString(nScraperConvergenceCount) + " scraper(s) converged");
-            }
-
-            // Fill out the included and excluded scraper vector for scrapers that did not participate in any project
-            // level convergence.
-            for (const auto& iScraper : mMapCSManifestsBinnedByScraper)
-            {
-                if (StructConvergedManifest.mIncludedProjectsbyScraper.count(iScraper.first))
-                {
-                    StructConvergedManifest.vIncludedScrapers.push_back(iScraper.first);
-                    _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
-                                      + iScraper.first
-                                      + " was included in one or more project level convergences.");
-                }
-                else
-                {
-                    StructConvergedManifest.vExcludedScrapers.push_back(iScraper.first);
-                    _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
-                         + iScraper.first
-                         + " was excluded because it was not included in any project level convergence.");
-                }
-            }
-
-            for (const auto& iScraper : mScrapers)
-            {
-                // Only include scrapers enabled in protocol.
-                if (iScraper.second.value == "true" || iScraper.second.value == "1")
-                {
-                    if (std::find(std::begin(StructConvergedManifest.vExcludedScrapers),
-                                  std::end(StructConvergedManifest.vExcludedScrapers),
-                                  iScraper.first) == std::end(StructConvergedManifest.vExcludedScrapers)
-                        && std::find(std::begin(StructConvergedManifest.vIncludedScrapers),
-                                     std::end(StructConvergedManifest.vIncludedScrapers),
-                                     iScraper.first) == std::end(StructConvergedManifest.vIncludedScrapers))
+                    if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
                     {
-                         StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
-                         _log(logattribute::INFO, "ScraperConstructConvergedManifesByProject",
-                              "Scraper " + iScraper.first + " authorized but not publishing.");
+                        StructConvergedManifest.CScraperConvergedManifest_ptr->addPart(iter->second->hash);
+                    }
+
+                    iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectPublicKeys");
+
+                    if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
+                    {
+                        StructConvergedManifest.CScraperConvergedManifest_ptr->addPart(iter->second->hash);
+                    }
+
+                    // Now the rest of the projects (parts).
+
+                    for (iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.begin();
+                         iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end(); ++iter)
+                    {
+                        if (iter->first != "BeaconList" && !IsManifestPseudoProject(iter->first))
+                        {
+                            StructConvergedManifest.CScraperConvergedManifest_ptr->addPart(iter->second->hash);
+                        }
+                    }
+                }
+
+                StructConvergedManifest.ComputeConvergedContentHash();
+
+                StructConvergedManifest.timestamp = GetAdjustedTime();
+                StructConvergedManifest.bByParts = true;
+
+                bConvergenceSuccessful = true;
+
+                _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Successful convergence by project: "
+                     + ToString(iCountSuccessfulConvergedProjects) + " out of " + ToString(projectWhitelist.size())
+                     + " projects at "
+                     + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
+
+                // Fill out the excluded projects vector and the included scraper count (by project) map
+                for (const auto& iProjects : projectWhitelist)
+                {
+                    if (StructConvergedManifest.ConvergedManifestPartPtrsMap.find(iProjects.m_name)
+                            == StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
+                    {
+                        // Project in whitelist was not in the map, so it goes in the exclusion vector.
+                        StructConvergedManifest.vExcludedProjects.push_back(iProjects.m_name);
+                        _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
+                             + iProjects.m_name
+                             + " was excluded because there was no convergence from the scrapers for"
+                               " this project at the project level.");
+
+                        continue;
+                    }
+
+                    unsigned int nScraperConvergenceCount =
+                            StructConvergedManifest.mIncludedScrapersbyProject.count(iProjects.m_name);
+                    StructConvergedManifest.mScraperConvergenceCountbyProject.insert(std::make_pair(iProjects.m_name,
+                                                                                                    nScraperConvergenceCount));
+
+                    _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Project " + iProjects.m_name
+                                      + ": " + ToString(nScraperConvergenceCount) + " scraper(s) converged");
+                }
+
+                // Fill out the included and excluded scraper vector for scrapers that did not participate in any project
+                // level convergence.
+                for (const auto& iScraper : mMapCSManifestsBinnedByScraper)
+                {
+                    if (StructConvergedManifest.mIncludedProjectsbyScraper.count(iScraper.first))
+                    {
+                        StructConvergedManifest.vIncludedScrapers.push_back(iScraper.first);
+                        _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
+                                          + iScraper.first
+                                          + " was included in one or more project level convergences.");
+                    }
+                    else
+                    {
+                        StructConvergedManifest.vExcludedScrapers.push_back(iScraper.first);
+                        _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
+                             + iScraper.first
+                             + " was excluded because it was not included in any project level convergence.");
+                    }
+                }
+
+                for (const auto& iScraper : mScrapers)
+                {
+                    // Only include scrapers enabled in protocol.
+                    if (iScraper.second.value == "true" || iScraper.second.value == "1")
+                    {
+                        if (std::find(std::begin(StructConvergedManifest.vExcludedScrapers),
+                                      std::end(StructConvergedManifest.vExcludedScrapers),
+                                      iScraper.first) == std::end(StructConvergedManifest.vExcludedScrapers)
+                            && std::find(std::begin(StructConvergedManifest.vIncludedScrapers),
+                                         std::end(StructConvergedManifest.vIncludedScrapers),
+                                         iScraper.first) == std::end(StructConvergedManifest.vIncludedScrapers))
+                        {
+                             StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
+                             _log(logattribute::INFO, "ScraperConstructConvergedManifesByProject",
+                                  "Scraper " + iScraper.first + " authorized but not publishing.");
+                        }
                     }
                 }
             }
@@ -6160,11 +6487,15 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
             // ScraperConstructConvergedManifest also culls old CScraperManifests. If no convergence, then
             // you can't make a SB core and you can't make a contract, so return the empty string. Also check
             // to make sure the BeaconMap has been populated properly.
-            if (ScraperConstructConvergedManifest(StructConvergedManifest)
+            if (ScraperConstructConvergedManifest(GetWhitelist().Snapshot(GreylistState::PENDING,
+                                                      GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED),
+                                                  StructConvergedManifest)
                     && LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap))
             {
                 ScraperStatsVerifiedBeaconsTotalCredits mScraperConvergedStats
-                        = GetScraperStatsByConvergedManifest(StructConvergedManifest);
+                        = GetScraperStatsByConvergedManifest(GetWhitelist().Snapshot(GreylistState::PENDING,
+                                                                 GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
+                                                             StructConvergedManifest);
 
                 _log(logattribute::INFO, "ScraperGetSuperblockContract",
                      "mScraperStats has the following number of elements: "
@@ -6180,9 +6511,20 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
                 Superblock superblock_Prev;
 
+                // Narrow-anchor rule: cs_main pays for anchor capture, never for the walk.
+                // The tip pointer is captured under a brief cs_main; the V2 candidate path
+                // then binds and walks from it with no cs_main (the ancestor topology and
+                // disk blocks it reads are immutable). BELOW the redesign gate the frozen V1
+                // path still reads pindexBest internally, so that arm keeps cs_main held for
+                // the duration (canonical order cs_main -> subsystem locks, as at the
+                // testnewsb site) -- a temporary cost that ends at the gate.
+                const CBlockIndex* anchor_index;
                 {
-                    LOCK(cs_ConvergedScraperStatsCache);
+                    LOCK(cs_main);
+                    anchor_index = pindexBest;
+                }
 
+                const auto install_convergence = [&]() EXCLUSIVE_LOCKS_REQUIRED(cs_ConvergedScraperStatsCache) {
                     ConvergedScraperStatsCache.AddConvergenceToPastConvergencesMap();
 
                     superblock_Prev = ConvergedScraperStatsCache.NewFormatSuperblock;
@@ -6193,7 +6535,8 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
                     ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
 
-                    superblock = Superblock::FromConvergence(ConvergedScraperStatsCache, superblock_contract_version);
+                    superblock = Superblock::FromConvergence(ConvergedScraperStatsCache, superblock_contract_version,
+                                                         /*update_pending_cache=*/true, anchor_index);
 
                     if (!superblock.WellFormed())
                     {
@@ -6209,6 +6552,19 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
                     // If called from housekeeping, mark bMinHousekeepingComplete true
                     if (bFromHousekeeping) ConvergedScraperStatsCache.bMinHousekeepingComplete = true;
+                };
+
+                // ONE critical section per arm: the convergence fields, the pending greylist
+                // state and bClean must change atomically with respect to readers, exactly as
+                // in the original single-lock block.
+                if (anchor_index != nullptr && IsAutoGreylistRedesignEnabled(anchor_index->nHeight)) {
+                    LOCK(cs_ConvergedScraperStatsCache);
+
+                    install_convergence();
+                } else {
+                    LOCK2(cs_main, cs_ConvergedScraperStatsCache);
+
+                    install_convergence();
                 }
 
                 // Signal UI of SBContract status. cs_ConvergedScraperStatsCache is released before this, because
@@ -6249,7 +6605,9 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
             // Notice there is NO update to the ConvergedScraperStatsCache here, as that is not
             // appropriate for the single shot.
-            ScraperStatsVerifiedBeaconsTotalCredits stats_verified_beacons_tc = GetScraperStatsByCurrentFileManifestState();
+            ScraperStatsVerifiedBeaconsTotalCredits stats_verified_beacons_tc = GetScraperStatsByCurrentFileManifestState(
+                GetWhitelist().Snapshot(GreylistState::PENDING,
+                                        GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED));
             superblock = Superblock::FromStats(stats_verified_beacons_tc, superblock_contract_version);
 
             // Signal the UI there is a contract.
@@ -6285,17 +6643,21 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 /**
  * @brief Publishes a CScraperManifest to the network from the current file manifest IF the node is authorized.
  * @param params
- * @param fHelp
  * @return bool true if successful
  */
-UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0 )
-        throw std::runtime_error(
-                "sendscraperfilemanifest\n"
-                "Send a CScraperManifest object from the current ScraperFileManifest.\n"
-                );
+static const RPCHelpMan sendscraperfilemanifest_help{
+    "sendscraperfilemanifest",
+    "Send a CScraperManifest object from the current ScraperFileManifest.",
+    {},
+    RPCResult{RPCResult::Type::BOOL, "", "True if the manifest was broadcast successfully."},
+    RPCExamples{
+        HelpExampleCli("sendscraperfilemanifest", "") +
+        HelpExampleRpc("sendscraperfilemanifest", "")},
+};
+const RPCHelpMan& sendscraperfilemanifest_helpman() { return sendscraperfilemanifest_help; }
 
+UniValue sendscraperfilemanifest(const UniValue& params)
+{
     CTxDestination AddressOut;
     CKey KeyOut;
     bool ret;
@@ -6315,17 +6677,24 @@ UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
 /**
  * @brief Saves a CScraperManifest to disk
  * @param params Takes a single parameter which is the hash of the manifest to save to disk.
- * @param fHelp
  * @return bool true if successful
  */
-UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1 )
-        throw std::runtime_error(
-                "savescraperfilemanifest <hash>\n"
-                "Saves a CScraperManifest object to disk.\n"
-                );
+static const RPCHelpMan savescraperfilemanifest_help{
+    "savescraperfilemanifest",
+    "Save a CScraperManifest object to disk.",
+    {
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "Hash of the manifest to save to disk."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "True if the manifest was written successfully."},
+    RPCExamples{
+        HelpExampleCli("savescraperfilemanifest", "\"<hash>\"") +
+        HelpExampleRpc("savescraperfilemanifest", "\"<hash>\"")},
+};
+const RPCHelpMan& savescraperfilemanifest_helpman() { return savescraperfilemanifest_help; }
 
+UniValue savescraperfilemanifest(const UniValue& params)
+{
     bool ret = ScraperSaveCScraperManifestToFiles(uint256S(params[0].get_str()));
 
     return UniValue(ret);
@@ -6336,17 +6705,27 @@ UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
  * create a grace period entry in the pending deleted manifest map. It also will not delete the underlying manifest object
  * if a shared pointer to the manifest object is also held by the global convergence cache.
  * @param params Takes a single parameter which is the hash if the manifest to delete.
- * @param fHelp
  * @return bool true if successful
  */
-UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1 )
-        throw std::runtime_error(
-                "deletecscrapermanifest <hash>\n"
-                "delete manifest object.\n"
-                );
+static const RPCHelpMan deletecscrapermanifest_help{
+    "deletecscrapermanifest",
+    "Delete a CScraperManifest entry from the global mapManifest map.\n"
+    "Deletion is immediate and does not create a grace-period entry in the pending-deleted-manifest map.\n"
+    "The underlying manifest object will not be deleted if a shared pointer to it is also held by the\n"
+    "global convergence cache.",
+    {
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "Hash of the manifest to delete."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "True if the manifest entry was deleted."},
+    RPCExamples{
+        HelpExampleCli("deletecscrapermanifest", "\"<hash>\"") +
+        HelpExampleRpc("deletecscrapermanifest", "\"<hash>\"")},
+};
+const RPCHelpMan& deletecscrapermanifest_helpman() { return deletecscrapermanifest_help; }
 
+UniValue deletecscrapermanifest(const UniValue& params)
+{
     LOCK(CScraperManifest::cs_mapManifest);
 
     bool ret = CScraperManifest::DeleteManifest(uint256S(params[0].get_str()), true);
@@ -6357,17 +6736,24 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
 /**
  * @brief Immediately archives the specified log, either the debug.log of scraper.log
  * @param params Takes a single parameter specifying the log to archive, debug or scraper.
- * @param fHelp
  * @return bool true if successful
  */
-UniValue archivelog(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1 )
-        throw std::runtime_error(
-                "archivelog <log>\n"
-                "Immediately archives the specified log. Currently valid values are debug and scraper.\n"
-                );
+static const RPCHelpMan archivelog_help{
+    "archivelog",
+    "Immediately archive the specified log. Currently valid values are \"debug\" and \"scraper\".",
+    {
+        {"log", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Which log to archive: either \"debug\" or \"scraper\"."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "True if the log was archived successfully."},
+    RPCExamples{
+        HelpExampleCli("archivelog", "debug") +
+        HelpExampleRpc("archivelog", "\"scraper\"")},
+};
+const RPCHelpMan& archivelog_helpman() { return archivelog_help; }
 
+UniValue archivelog(const UniValue& params)
+{
     std::string sLogger = params[0].get_str();
 
     fs::path pfile_out;
@@ -6391,7 +6777,8 @@ UniValue archivelog(const UniValue& params, bool fHelp)
  * @param ConvergedScraperStatsIn
  * @return JSON representation of input ConvergedScraperStats
  */
-UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStatsIn)
+UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStatsIn,
+                                     const CBlockIndex* anchor_index)
 {
     UniValue ret(UniValue::VOBJ);
 
@@ -6423,9 +6810,14 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
         entry.pushKV("past_convergence_content_hash", iter.second.first.ToString());
         entry.pushKV("past_convergence_reduced_content_hash", (uint64_t) iter.first);
 
-        const ConvergedScraperStats dummy_converged_stats(PastConvergence.timestamp, PastConvergence);
+        const ConvergedScraperStats dummy_converged_stats(PastConvergence.timestamp, PastConvergence,
+                                                          GetWhitelist().Snapshot(GreylistState::PENDING,
+                                                              GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED));
 
-        Superblock superblock = Superblock::FromConvergence(dummy_converged_stats);
+        // A PAST convergence: update_pending_cache = false, so this diagnostic re-derivation
+        // cannot clobber the live pending greylist state above the redesign gate.
+        Superblock superblock = Superblock::FromConvergence(dummy_converged_stats, Superblock::CURRENT_VERSION,
+                                                            /*update_pending_cache=*/false, anchor_index);
 
         entry.pushKV("superblock_from_this_past_convergence_quorumhash", superblock.GetHash().ToString());
 
@@ -6443,21 +6835,27 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
 /**
  * @brief Reports on the state of the convergence on the local node.
  * @param params bool true to provide detailed output
- * @param fHelp
  * @return JSON report of convergence state with optional details
  */
-UniValue convergencereport(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw std::runtime_error(
-                "convergencereport [convergence_cache_details]\n"
-                "\n"
-                "convergence_cache_details: optional boolean to provide detailed output\n"
-                "from convergence cache\n"
-                "\n"
-                "Display local node report of scraper convergence.\n"
-                );
+static const RPCHelpMan convergencereport_help{
+    "convergencereport",
+    "Display the local node's report of scraper convergence.",
+    {
+        {"convergence_cache_details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, include detailed output from the convergence cache. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "",
+            "Convergence report; the shape depends on the convergence_cache_details flag. See source."}}},
+    RPCExamples{
+        HelpExampleCli("convergencereport", "") +
+        HelpExampleCli("convergencereport", "true") +
+        HelpExampleRpc("convergencereport", "true")},
+};
+const RPCHelpMan& convergencereport_helpman() { return convergencereport_help; }
 
+UniValue convergencereport(const UniValue& params)
+{
     auto scraper_sleep = []() { LOCK(cs_ScraperGlobals); return nScraperSleep; };
 
     // See if converged stats/contract update needed...
@@ -6480,14 +6878,25 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
 
     UniValue result(UniValue::VOBJ);
 
+    // Narrow-anchor rule: capture the tip under a brief cs_main; above the redesign gate the
+    // past-convergence re-derivations below then run without cs_main, while below the gate
+    // the frozen V1 path reads pindexBest internally and cs_main stays held (canonical
+    // order, cs_main before the subsystem lock).
+    const CBlockIndex* anchor_index;
     {
-        LOCK(cs_ConvergedScraperStatsCache);
+        LOCK(cs_main);
+        anchor_index = pindexBest;
+    }
 
+    const bool redesign_active = anchor_index != nullptr
+                                 && IsAutoGreylistRedesignEnabled(anchor_index->nHeight);
+
+    const auto build_report = [&]() EXCLUSIVE_LOCKS_REQUIRED(cs_ConvergedScraperStatsCache) {
         result.pushKV("superblock_well_formed", ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed());
 
         if (params.size() && params[0].get_bool())
         {
-            result.pushKV("detailed_convergence_output", ConvergedScraperStatsToJson(ConvergedScraperStatsCache));
+            result.pushKV("detailed_convergence_output", ConvergedScraperStatsToJson(ConvergedScraperStatsCache, anchor_index));
         }
         else
         {
@@ -6551,6 +6960,39 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
         }
 
         result.pushKV("scrapers_not_publishing", ScrapersNotPublishing);
+
+        // The list of projects that actually have a converged user-statistics part in the current convergence.
+        // This is the part-pointer map keyed by project, MINUS the four special side-channel parts (BeaconList,
+        // VerifiedBeacons, ProjectsAllCpidTotalCredits, ProjectPublicKeys), which are not BOINC projects.
+        //
+        // This is the airtight discriminator for the auto-greylist "no records" condition: a project that appears
+        // in the superblock's ProjectsAllCpidTotalCredits map (i.e. has a total-credit entry) but is ABSENT from
+        // this list had its user-statistics export come back with no usable records this cycle. Such a project's
+        // total credit is a spurious zero (its part was excluded from the manifest, but the total-credit entry was
+        // still emitted), and the greylist mitigation service uses the (PACTC-present, part-absent) signature to
+        // distinguish it from a legitimately scraped zero and pin it Active-by-Override.
+        UniValue ConvergedProjects(UniValue::VARR);
+
+        for (const auto& entry : ConvergedScraperStatsCache.Convergence.ConvergedManifestPartPtrsMap)
+        {
+            if (entry.first == "BeaconList" || IsManifestPseudoProject(entry.first)) {
+                continue;
+            }
+
+            ConvergedProjects.push_back(entry.first);
+        }
+
+        result.pushKV("converged_projects", ConvergedProjects);
+    };
+
+    if (redesign_active) {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        build_report();
+    } else {
+        LOCK2(cs_main, cs_ConvergedScraperStatsCache);
+
+        build_report();
     }
 
     return result;
@@ -6560,19 +7002,27 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
  * @brief Tests superblock formation
  * @param params unsigned int to specify the number of bits for the reduced hash hint to force more duplicates to check. This
  * is clamped between 4 and 32, with 32 as the default, which is the normal hint bits.
- * @param fHelp
  * @return report of test results
  */
-UniValue testnewsb(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1 )
-        throw std::runtime_error(
-                "testnewsb [hint bits]\n"
-                "Tests superblock formation. Optional parameter of the number of bits for the reduced hash hint for"
-                " uncached test.\n"
-                "This is limited to a range of 4 to 32, with 32 as the default (which is the normal hint bits).\n"
-                );
+static const RPCHelpMan testnewsb_help{
+    "testnewsb",
+    "Tests superblock formation.",
+    {
+        {"hint_bits", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Number of bits for the reduced hash hint for the uncached test. "
+            "Clamped to a range of 4 to 32; default: 32 (the normal hint bits)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Test report; see source for shape."}}},
+    RPCExamples{
+        HelpExampleCli("testnewsb", "") +
+        HelpExampleCli("testnewsb", "16") +
+        HelpExampleRpc("testnewsb", "16")},
+};
+const RPCHelpMan& testnewsb_helpman() { return testnewsb_help; }
 
+UniValue testnewsb(const UniValue& params)
+{
     unsigned int nReducedCacheBits = 32;
 
     if (params.size() == 1) nReducedCacheBits = params[0].get_int();
@@ -6605,10 +7055,13 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     uint32_t nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint;
 
     {
-        LOCK(cs_ConvergedScraperStatsCache);
+        // pindexBest read below requires cs_main; canonical order is
+        // cs_main -> subsystem locks, so acquire cs_main first.
+        LOCK2(cs_main, cs_ConvergedScraperStatsCache);
 
         NewFormatSuperblock = SuperblockPtr::BindShared(
-            Superblock::FromConvergence(ConvergedScraperStatsCache),
+            Superblock::FromConvergence(ConvergedScraperStatsCache, Superblock::CURRENT_VERSION,
+                                        /*update_pending_cache=*/true, pindexBest),
             pindexBest);
 
         _log(logattribute::INFO, "testnewsb",
@@ -6710,7 +7163,9 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     if (!bPastConvergencesEmpty)
     {
         ScraperStatsVerifiedBeaconsTotalCredits RandomPastSBStatsAndVerifiedBeacons =
-                GetScraperStatsByConvergedManifest(RandomPastConvergedManifest);
+                GetScraperStatsByConvergedManifest(GetWhitelist().Snapshot(GreylistState::PENDING,
+                                                       GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED),
+                                                   RandomPastConvergedManifest);
 
         Superblock RandomPastSB = Superblock::FromStats(RandomPastSBStatsAndVerifiedBeacons);
 
@@ -6742,9 +7197,15 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         // SuperblockValidator class tests (past convergence)
         //
 
-        SuperblockPtr RandomPastSBPtr = SuperblockPtr::BindShared(
-            std::move(RandomPastSB),
-            pindexBest);
+        SuperblockPtr RandomPastSBPtr;
+        {
+            // pindexBest read requires cs_main; scoped tight so the
+            // ValidateSuperblock calls below run without cs_main held.
+            LOCK(cs_main);
+            RandomPastSBPtr = SuperblockPtr::BindShared(
+                std::move(RandomPastSB),
+                pindexBest);
+        }
 
         if (Quorum::ValidateSuperblock(RandomPastSBPtr))
         {
@@ -6778,17 +7239,23 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
  * @brief Generates a comprehensive report of the scraper convergence, manifest and parts objects. This report is mainly
  * used for integrity checking of the scraper's internal operation
  * @param params none
- * @param fHelp
  * @return JSON report of scraper status
  */
-UniValue scraperreport(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0 )
-        throw std::runtime_error(
-                "scraperreport\n"
-                "Report containing various statistics about the scraper.\n"
-                );
+static const RPCHelpMan scraperreport_help{
+    "scraperreport",
+    "Report containing various statistics about the scraper.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "",
+            "Scraper diagnostics object including global scraper network sizes and converged-stats cache detail."}}},
+    RPCExamples{
+        HelpExampleCli("scraperreport", "") +
+        HelpExampleRpc("scraperreport", "")},
+};
+const RPCHelpMan& scraperreport_helpman() { return scraperreport_help; }
 
+UniValue scraperreport(const UniValue& params)
+{
     UniValue ret(UniValue::VOBJ);
 
     UniValue global_scraper_net(UniValue::VOBJ);

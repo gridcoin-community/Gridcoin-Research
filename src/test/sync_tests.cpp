@@ -2,10 +2,18 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include <logging.h>
 #include <sync.h>
+#include <util/threadnames.h>
 
+#include <algorithm>
+#include <functional>
+#include <list>
 #include <mutex>
 #include <stdexcept>
+#include <string>
+#include <thread>
+#include <vector>
 
 #include <boost/test/unit_test.hpp>
 
@@ -14,11 +22,11 @@ BOOST_AUTO_TEST_SUITE(sync_tests)
 BOOST_AUTO_TEST_CASE(potential_deadlock_detected)
 {
     #ifdef DEBUG_LOCKORDER
-    bool prev_lockorder_abort = g_debug_lockorder_abort;
-    bool prev_lockorder_throw_exception = g_debug_lockorder_throw_exception;
+    bool prev_lockorder_abort = GetLockOrderDebugAbort();
+    bool prev_lockorder_throw_exception = GetLockOrderDebugThrowException();
 
-    g_debug_lockorder_abort = false;
-    g_debug_lockorder_throw_exception = true;
+    SetLockOrderDebugAbort(false);
+    SetLockOrderDebugThrowException(true);
 
     #endif
 
@@ -42,9 +50,217 @@ BOOST_AUTO_TEST_CASE(potential_deadlock_detected)
     #endif
 
     #ifdef DEBUG_LOCKORDER
-    g_debug_lockorder_abort = prev_lockorder_abort;
-    g_debug_lockorder_throw_exception = prev_lockorder_throw_exception;
+    SetLockOrderDebugAbort(prev_lockorder_abort);
+    SetLockOrderDebugThrowException(prev_lockorder_throw_exception);
     #endif
 }
+
+#ifdef DEBUG_LOCKORDER
+namespace {
+//! Route the checker's verdict to an exception for the duration of a case.
+struct ThrowOnReport
+{
+    const bool m_abort;
+    const bool m_throw;
+    ThrowOnReport() : m_abort(GetLockOrderDebugAbort()), m_throw(GetLockOrderDebugThrowException())
+    {
+        SetLockOrderDebugAbort(false);
+        SetLockOrderDebugThrowException(true);
+    }
+    ~ThrowOnReport()
+    {
+        SetLockOrderDebugAbort(m_abort);
+        SetLockOrderDebugThrowException(m_throw);
+    }
+};
+
+//! Run \p f and return the checker's message, or the empty string if it
+//! reported nothing.
+template <typename F>
+std::string ReportFrom(F&& f)
+{
+    try {
+        f();
+    } catch (const std::logic_error& e) {
+        return e.what();
+    }
+    return "";
+}
+
+//! Collect the lines the logger prints while in scope. The callback runs on the
+//! thread that logs; read the lines only when no other thread is logging.
+struct CaptureLog
+{
+    std::vector<std::string> m_lines;
+    std::list<std::function<void(const std::string&)>>::iterator m_callback;
+
+    CaptureLog()
+        : m_callback(LogInstance().PushBackCallback([this](const std::string& s) { m_lines.push_back(s); }))
+    {
+    }
+    ~CaptureLog() { LogInstance().DeleteCallback(m_callback); }
+    CaptureLog(const CaptureLog&) = delete;
+    CaptureLog& operator=(const CaptureLog&) = delete;
+
+    size_t CountContaining(const std::string& needle) const
+    {
+        return std::count_if(m_lines.begin(), m_lines.end(),
+                             [&](const std::string& line) { return line.find(needle) != std::string::npos; });
+    }
+};
+
+//! Overwrite the stack below the caller, where the frames of the lock calls it
+//! has returned from were.
+[[gnu::noinline]] void OverwriteStack()
+{
+    volatile unsigned char buf[64 * 1024];
+    for (volatile unsigned char& b : buf) b = 0;
+}
+
+// Longer than any std::string keeps inline, so a copy of it is on the heap.
+const std::string RECORDER_THREAD{"sync_tests-order-recorder"};
+// Short enough for the 64-bit standard libraries to keep inline, so a copy of
+// it is in the frame that made the copy.
+const std::string HOLDER_THREAD{"sync_holder"};
+} // anonymous namespace
+
+// A plain try-lock stays in the hierarchy: the reverse order is reported even
+// though a try-lock cannot wait, as upstream chose (bitcoin/bitcoin#9674).
+BOOST_AUTO_TEST_CASE(plain_try_lock_in_the_reverse_order_is_still_reported)
+{
+    ThrowOnReport guard;
+
+    {
+        CCriticalSection mutex1, mutex2;
+        {
+            LOCK(mutex1);
+            TRY_LOCK(mutex2, taken);
+            BOOST_REQUIRE(taken.owns_lock());
+        }
+        BOOST_CHECK_EQUAL(ReportFrom([&] { LOCK2(mutex2, mutex1); }),
+                          "potential deadlock detected: mutex1 -> mutex2 -> mutex1");
+        BOOST_CHECK(LockStackEmpty());
+    }
+    {
+        CCriticalSection mutex1, mutex2;
+        {
+            LOCK2(mutex1, mutex2);
+        }
+        BOOST_CHECK_EQUAL(ReportFrom([&] {
+            LOCK(mutex2);
+            TRY_LOCK(mutex1, taken);
+            BOOST_REQUIRE(taken.owns_lock());
+        }), "potential deadlock detected: mutex1 -> mutex2 -> mutex1");
+        BOOST_CHECK(LockStackEmpty());
+    }
+}
+
+// TRY_LOCK_ORDER_EXEMPT is outside the hierarchy: no order is recorded into it
+// and none checked, so the same two shapes are silent.
+BOOST_AUTO_TEST_CASE(order_exempt_try_lock_in_the_reverse_order_is_not_reported)
+{
+    ThrowOnReport guard;
+
+    {
+        CCriticalSection mutex1, mutex2;
+        {
+            LOCK(mutex1);
+            TRY_LOCK_ORDER_EXEMPT(mutex2, taken);
+            BOOST_REQUIRE(taken.owns_lock());
+        }
+        BOOST_CHECK(LockStackEmpty());
+        BOOST_CHECK_EQUAL(ReportFrom([&] { LOCK2(mutex2, mutex1); }), "");
+        BOOST_CHECK(LockStackEmpty());
+    }
+    {
+        CCriticalSection mutex1, mutex2;
+        {
+            LOCK2(mutex1, mutex2);
+        }
+        BOOST_CHECK_EQUAL(ReportFrom([&] {
+            LOCK(mutex2);
+            TRY_LOCK_ORDER_EXEMPT(mutex1, taken);
+            BOOST_REQUIRE(taken.owns_lock());
+        }), "");
+        BOOST_CHECK(LockStackEmpty());
+    }
+}
+
+// The lock an order-exempt try acquired is held like any other: a blocking lock
+// taken while it is held is a real order, and its reverse is a real deadlock.
+BOOST_AUTO_TEST_CASE(blocking_lock_taken_while_an_order_exempt_try_lock_is_held_is_still_ordered)
+{
+    ThrowOnReport guard;
+
+    CCriticalSection mutex1, mutex2;
+    {
+        TRY_LOCK_ORDER_EXEMPT(mutex2, taken);
+        BOOST_REQUIRE(taken.owns_lock());
+        LOCK(mutex1);
+    }
+    BOOST_CHECK(LockStackEmpty());
+    BOOST_CHECK_EQUAL(ReportFrom([&] { LOCK2(mutex1, mutex2); }),
+                      "potential deadlock detected: mutex2 -> mutex1 -> mutex2");
+    BOOST_CHECK(LockStackEmpty());
+}
+
+// Seeing a pair by an order-exempt try-lock first must not stop the same pair
+// from being recorded, and later reported, when it is taken with blocking locks.
+BOOST_AUTO_TEST_CASE(a_blocking_order_is_recorded_after_the_same_exempt_order)
+{
+    ThrowOnReport guard;
+
+    CCriticalSection mutex1, mutex2;
+    {
+        LOCK(mutex1);
+        TRY_LOCK_ORDER_EXEMPT(mutex2, taken);
+        BOOST_REQUIRE(taken.owns_lock());
+    }
+    {
+        LOCK2(mutex1, mutex2);
+    }
+    BOOST_CHECK(LockStackEmpty());
+    BOOST_CHECK_EQUAL(ReportFrom([&] { LOCK2(mutex2, mutex1); }),
+                      "potential deadlock detected: mutex1 -> mutex2 -> mutex1");
+    BOOST_CHECK(LockStackEmpty());
+}
+
+// A report prints the stack that first took the order, which the checker keeps
+// after the thread that took it has exited. Each entry must still name that
+// thread.
+BOOST_AUTO_TEST_CASE(report_names_the_thread_of_a_historical_order_after_it_exits)
+{
+    ThrowOnReport guard;
+
+    CCriticalSection mutex1, mutex2;
+    std::thread([&] {
+        util::ThreadSetInternalName(std::string{RECORDER_THREAD});
+        LOCK2(mutex1, mutex2);
+    }).join();
+
+    CaptureLog log;
+    BOOST_CHECK_EQUAL(ReportFrom([&] { LOCK2(mutex2, mutex1); }),
+                      "potential deadlock detected: mutex1 -> mutex2 -> mutex1");
+    BOOST_CHECK(LockStackEmpty());
+    BOOST_CHECK_EQUAL(log.CountContaining("(in thread '" + RECORDER_THREAD + "')"), 2U);
+}
+
+// LocksHeld() prints entries pushed by lock calls that have since returned.
+BOOST_AUTO_TEST_CASE(held_locks_name_their_thread_after_the_lock_call_returns)
+{
+    CCriticalSection mutex1;
+    std::string held;
+    std::thread([&] {
+        util::ThreadSetInternalName(std::string{HOLDER_THREAD});
+        LOCK(mutex1);
+        OverwriteStack();
+        held = LocksHeld();
+    }).join();
+
+    BOOST_CHECK_MESSAGE(held.find("'mutex1' in ") != std::string::npos &&
+                            held.find("(in thread '" + HOLDER_THREAD + "')") != std::string::npos,
+                        "LocksHeld() returned: " + held);
+}
+#endif // DEBUG_LOCKORDER
 
 BOOST_AUTO_TEST_SUITE_END()

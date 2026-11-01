@@ -5,8 +5,8 @@
 #include "chainparams.h"
 #include "compat/endian.h"
 #include "gridcoin/project.h"
+#include "gridcoin/autogreylist.h"
 #include "hash.h"
-#include "main.h"
 #include <gridcoin/md5.h>
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
@@ -140,17 +140,6 @@ public:
     }
 
     //!
-    //! \brief Generate a quorum hash of the provided scraper statistics.
-    //!
-    //! \param stats The scraper statistics to generate a hash from.
-    //!
-    //! \return A hash that matches the hash of a corresponding superblock.
-    //!
-    static QuorumHash Hash(const ScraperStatsVerifiedBeaconsTotalCredits& stats)
-    {
-        return ScraperStatsQuorumHasher(stats).GetHash();
-    }
-
     //!
     //! \brief Generate a quorum hash of the wrapped scraper statistics.
     //!
@@ -596,7 +585,9 @@ Superblock::Superblock(uint32_t version)
 
 Superblock Superblock::FromConvergence(
     const ConvergedScraperStats& stats,
-    const uint32_t version)
+    const uint32_t version,
+    const bool update_pending_cache,
+    const CBlockIndex* anchor_index)
 {
     Superblock superblock = Superblock::FromStats(stats.mScraperConvergedStats, version);
 
@@ -624,10 +615,12 @@ Superblock Superblock::FromConvergence(
         // the auto greylist RefreshWithAndUpdateSuperblock is called.
         superblock.m_projects_all_cpids_total_credits.Reset(stats.mScraperConvergedStats.m_total_credit_map);
 
-        // Refresh the auto greylist and refresh this superblock with the greylist status.
-        std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::GetAutoGreylistCache();
+        // Refresh the auto greylist and refresh this superblock with the greylist status. The
+        // convergence content hash keys the pending greylist state above the redesign gate.
+        std::shared_ptr<GRC::AutoGreylistService> greylist_ptr = GRC::GetAutoGreylistCache();
 
-        greylist_ptr->RefreshWithAndUpdateSuperblock(superblock);
+        greylist_ptr->RefreshWithAndUpdateSuperblock(superblock, stats.Convergence.nContentHash,
+                                                     update_pending_cache, anchor_index);
     }
 
     return superblock;

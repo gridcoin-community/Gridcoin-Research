@@ -9,11 +9,13 @@
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/staking/status.h"
-#include "main.h"
 #include "node/blockstorage.h"
 #include "txdb.h"
 #include "wallet/wallet.h"
+#include "consensus/consensus.h"
 
+#include <algorithm>
+#include <limits>
 #include <vector>
 
 using namespace GRC;
@@ -35,6 +37,72 @@ const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfSta
 // Functions
 // -----------------------------------------------------------------------------
 
+const arith_uint256& GRC::GetProofOfStakeLimit()
+{
+    return PROOF_OF_STAKE_LIMIT;
+}
+
+namespace {
+//! Floor division for a positive divisor. C++ integer division truncates toward zero.
+int64_t FloorDiv(int64_t num, int64_t den)
+{
+    const int64_t q = num / den;
+    return (num % den != 0 && num < 0) ? q - 1 : q;
+}
+} // anonymous namespace
+
+arith_uint256 GRC::ScaleTargetExp2(const arith_uint256& target_in, int64_t exponent_q16, const arith_uint256& limit)
+{
+    const arith_uint256 target = target_in > limit ? limit : target_in;
+
+    int64_t shifts = FloorDiv(exponent_q16, 65536);
+    const uint64_t frac = static_cast<uint64_t>(exponent_q16 - shifts * 65536); // [0, 65535]
+
+    // 2^frac in Q16, the aserti3-2d cubic. The sum fits in uint64 for frac <= 65535.
+    const uint64_t factor = 65536 + ((uint64_t{195766423245049} * frac
+                                      + uint64_t{971821376} * frac * frac
+                                      + uint64_t{5127} * frac * frac * frac
+                                      + (uint64_t{1} << 47)) >> 48);
+
+    // The proof-of-stake limit is below 2^236 and factor is below 2^17, so the product fits in 256 bits.
+    arith_uint256 next = target * arith_uint256(factor);
+
+    shifts -= 16;
+    if (shifts <= 0) {
+        next = (-shifts >= 256) ? arith_uint256(0) : (next >> static_cast<unsigned int>(-shifts));
+    } else if (shifts >= 256) {
+        next = limit;
+    } else {
+        const arith_uint256 shifted = next << static_cast<unsigned int>(shifts);
+        next = ((shifted >> static_cast<unsigned int>(shifts)) == next) ? shifted : limit;
+    }
+
+    if (next == 0) return arith_uint256(1);
+    return next > limit ? limit : next;
+}
+
+arith_uint256 GRC::RetargetLogLinear(const arith_uint256& parent_target, int64_t spacing)
+{
+    // Valid chains keep the spacing at -128 s or more. The lower clamp only bounds the arithmetic for inputs no valid
+    // chain produces, so the numerator below always stays well inside int64.
+    const int64_t t = std::clamp(spacing, -V15_SPACING_CAP, V15_SPACING_CAP);
+    // Q16 exponent of 2 (t - 90) / (990 ln 2), with ln 2 taken as 0.693147.
+    const int64_t exponent_q16 = FloorDiv((t - V15_TARGET_SPACING) * 2 * 65536 * 1000000,
+                                          V15_RETARGET_TIME_CONSTANT * 693147);
+    return ScaleTargetExp2(parent_target, exponent_q16, PROOF_OF_STAKE_LIMIT);
+}
+
+arith_uint256 GRC::EaseTarget(const arith_uint256& base_target, int64_t elapsed)
+{
+    if (elapsed <= V15_EASING_THRESHOLD) {
+        return base_target > PROOF_OF_STAKE_LIMIT ? PROOF_OF_STAKE_LIMIT : base_target;
+    }
+    const int64_t e = std::min(elapsed, V15_EASING_THRESHOLD + V15_EASING_DOUBLING * V15_EASING_MAX_DOUBLINGS);
+    // The doubling time divides 65536, so the Q16 exponent is exact.
+    const int64_t exponent_q16 = (e - V15_EASING_THRESHOLD) * (65536 / V15_EASING_DOUBLING);
+    return ScaleTargetExp2(base_target, exponent_q16, PROOF_OF_STAKE_LIMIT);
+}
+
 unsigned int GRC::GetNextTargetRequired(const CBlockIndex* pindexLast) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (pindexLast == nullptr) {
@@ -49,6 +117,16 @@ unsigned int GRC::GetNextTargetRequired(const CBlockIndex* pindexLast) EXCLUSIVE
     const CBlockIndex* pindexPrevPrev = GetLastBlockIndex(pindexPrev->pprev, true);
     if (pindexPrevPrev->pprev == nullptr) {
         return PROOF_OF_STAKE_LIMIT.GetCompact(); // second block
+    }
+
+    // From v15 the retarget is log-linear in the signed parent spacing, which removes the upward bias of the linear
+    // rule and the clamp of negative spacings to the target. The difficulty valve and the GetTargetSpacing height
+    // lookup below apply only to the older rule.
+    if (IsV15Enabled(pindexLast->nHeight + 1)) {
+        arith_uint256 parent_target;
+        parent_target.SetCompact(pindexPrev->nBits);
+        const int64_t spacing = pindexPrev->GetBlockTime() - pindexPrevPrev->GetBlockTime();
+        return RetargetLogLinear(parent_target, spacing).GetCompact();
     }
 
     const int64_t nTargetSpacing = GetTargetSpacing(pindexLast->nHeight);
@@ -108,6 +186,16 @@ double GRC::GetBlockDifficulty(unsigned int nBits)
 {
     // Floating point number that is a multiple of the minimum difficulty,
     // minimum difficulty = 1.0.
+    //
+    // A zero mantissa encodes a target of zero, so the difficulty is
+    // unbounded. Return that directly rather than dividing by zero: the
+    // division gave the same +infinity, which the shifts below leave alone,
+    // so every caller, CheckBlock's difficulty ceiling among them, sees the
+    // value it always did.
+    if ((nBits & 0x00ffffff) == 0) {
+        return std::numeric_limits<double>::infinity();
+    }
+
     int nShift = (nBits >> 24) & 0xff;
     double dDiff = (double)0x0000ffff / (double)(nBits & 0x00ffffff);
 
@@ -221,38 +309,32 @@ double GRC::GetSmoothedDifficulty(int64_t nStakeableBalance) EXCLUSIVE_LOCKS_REQ
 
 uint64_t GRC::GetStakeWeight(const CWallet& wallet)
 {
-    if (wallet.GetBalance() <= nReserveBalance) {
-        return 0;
-    }
-
-    const int64_t now = GetAdjustedTime();
-
-    std::vector<std::pair<const CWalletTx*, unsigned int>> coins;
+    std::vector<StakeCandidate> coins;
     GRC::MinerStatus::ErrorFlags unused;
     int64_t balance = 0;
 
     LOCK2(cs_main, wallet.cs_wallet);
 
-    if (!wallet.SelectCoinsForStaking(now, coins, unused, balance)) {
+    // SelectCoinsForStaking returns false when there is nothing to stake: no coins, no mature coins, or a balance the
+    // reserve covers. Its reserve check uses the staking balance, which also counts immature stake outputs and
+    // receipts with fewer than ten confirmations, both of which GetBalance() leaves out. Its candidates are confirmed
+    // main-chain outputs that pass the miner's own maturity and age filters, so they need no further checks here.
+    if (!wallet.SelectCoinsForStaking(GetAdjustedTime(), coins, unused, balance)) {
         return 0;
     }
 
-    CTxDB txdb("r");
-    uint64_t weight = 0;
+    return GetStakingValue(coins);
+}
 
-    for (const auto& pcoin : coins) {
-        CTxIndex txindex;
+CAmount GRC::GetStakingValue(const std::vector<StakeCandidate>& candidates)
+{
+    int64_t weight = 0;
 
-        if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex)) {
-            continue;
-        }
-
-        if (now - pcoin.first->nTime > nStakeMinAge) {
-            weight += (pcoin.first->vout[pcoin.second].nValue);
-        }
+    for (const StakeCandidate& candidate : candidates) {
+        weight += CalculateStakeWeightV8(candidate.tx->vout[candidate.n].nValue);
     }
 
-    return weight;
+    return CalculateStakeValueV8(weight);
 }
 
 double GRC::GetEstimatedNetworkWeight(unsigned int nPoSInterval) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -265,7 +347,8 @@ double GRC::GetEstimatedNetworkWeight(unsigned int nPoSInterval) EXCLUSIVE_LOCKS
     // get the familiar 9544517.40667
     result = 763561392.533 * GetAverageDifficulty(nPoSInterval);
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedNetworkWeight debug: Network Weight = %f", result);
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedNetworkWeight debug: Network Weight in GRC = %f", result / 80.0);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedNetworkWeight debug: Network Weight in GRC = %f",
+             result / STAKE_WEIGHT_UNITS_PER_COIN);
 
     return result;
 }
@@ -409,8 +492,6 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
     int64_t nCurrentTime = GetAdjustedTime();
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nCurrentTime = %i", nCurrentTime);
 
-    CTxDB txdb("r");
-
     // Here I am defining a time mask 16 times as long as the normal stake time mask. This is to quantize the UTXO's into a maximum of
     // 16 hours * 3600 / 256 = 225 time bins for evaluation. Otherwise for a large number of UTXO's, this algorithm could become
     // really expensive.
@@ -418,7 +499,9 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: ETTS_TIMESTAMP_MASK = %x", ETTS_TIMESTAMP_MASK);
 
     CAmount BalanceAvailForStaking = 0;
-    std::vector<COutput> vCoins;
+
+    // The confirming block time and the value of each available output, read while the locks are held.
+    std::vector<std::pair<int64_t, CAmount>> coin_times;
 
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -436,7 +519,18 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
         }
 
         //reminder... void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed=true, const CCoinControl *coinControl=nullptr, bool fIncludeStakingCoins=false) const;
+        std::vector<COutput> vCoins;
         pwalletMain->AvailableCoins(vCoins, true, nullptr, true);
+
+        // The block index has each confirming block's time, so no disk read is needed. An output without a main-chain
+        // confirming block cannot stake and is left out.
+        for (const COutput& out : vCoins)
+        {
+            CBlockIndex* pindex_confirmed = nullptr;
+            if (out.tx->GetDepthInMainChain(pindex_confirmed) < 1 || !pindex_confirmed) continue;
+
+            coin_times.emplace_back(pindex_confirmed->GetBlockTime(), out.tx->vout[out.i].nValue);
+        }
     }
 
 
@@ -454,25 +548,17 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
 
     int64_t nTime = 0;
     int64_t nStakeableBalance = 0;
-    for (const auto& out : vCoins)
+    for (const auto& [block_time, value] : coin_times)
     {
-        CTxIndex txindex;
-        CBlock CoinBlock; //Block which contains CoinTx
-        if (!txdb.ReadTxIndex(out.tx->GetHash(), txindex)) continue; //Ignore transactions that can't be read.
-
-        if (!ReadBlockFromDisk(CoinBlock, txindex.pos.nFile, txindex.pos.nBlockPos, Params().GetConsensus(), false))
-            continue;
-
         // We are going to store as an event the time that the UTXO matures (is available for staking again.)
-        nTime = (CoinBlock.GetBlockTime() & ~ETTS_TIMESTAMP_MASK) + nStakeMinAge;
+        nTime = (block_time & ~ETTS_TIMESTAMP_MASK) + nStakeMinAge;
 
-        nValue = out.tx->vout[out.i].nValue;
+        nValue = value;
 
         // Only consider UTXO's that are actually stakeable - which means that each one must be less than the available balance
-        // subtracting the reserve. Each UTXO also has to be greater than 1/80 GRC to result in a weight greater than zero in the CreateCoinStake loop,
-        // so eliminate UTXO's with less than 0.0125 GRC balances right here. The test with Satoshi units for that is
-        // nValue >= 1250000.
-        if (BalanceAvailForStaking >= nValue && nValue >= 1250000)
+        // subtracting the reserve. Each UTXO also needs at least one stake weight unit (0.0125 GRC) to have a weight
+        // greater than zero in the CreateCoinStake loop.
+        if (BalanceAvailForStaking >= nValue && nValue >= STAKE_WEIGHT_UNIT_V8)
         {
         vUTXO.push_back(std::pair<int64_t, CAmount>( nTime, nValue));
         nStakeableBalance += nValue;
@@ -528,8 +614,7 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
             // accumulation for that UTXO.
             if(nTime >= iterUTXO.first)
             {
-                // The below weight calculation is just like the CalculateStakeWeightV8 in kernel.cpp.
-                nCoinWeight = iterUTXO.second / 1250000;
+                nCoinWeight = CalculateStakeWeightV8(iterUTXO.second);
 
                 dProbAccumulator = 1 - ((1 - dProbAccumulator) * (1 - (dUnitStakeProbability * nCoinWeight)));
                 LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dProbAccumulator = %e", dProbAccumulator);

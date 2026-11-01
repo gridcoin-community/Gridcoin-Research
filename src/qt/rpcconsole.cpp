@@ -1,18 +1,14 @@
 #include "rpcconsole.h"
+#include "qt/guilog.h"
 #include "ui_rpcconsole.h"
 
 #ifndef Q_MOC_RUN
 #include "clientmodel.h"
 #include "qt/bantablemodel.h"
 #include "qt/decoration.h"
-#include "rpc/server.h"
-#include "rpc/client.h"
-#include "rpc/protocol.h"
 #include "guiutil.h"
-#include "main.h"
+#include "util/strencodings.h"
 #endif
-
-#include <stdexcept>
 
 #include <QThread>
 #include <QTextEdit>
@@ -22,7 +18,6 @@
 #include <QMessageBox>
 #include <QScrollBar>
 #include <QSettings>
-#include <QSignalMapper>
 #include <QTime>
 #include <QTimer>
 #include <QStringList>
@@ -52,11 +47,15 @@ const struct {
 class RPCExecutor: public QObject
 {
     Q_OBJECT
+public:
+    explicit RPCExecutor(interfaces::Node& node) : m_node(node) {}
 public slots:
     void start();
     void request(const QString &command);
 signals:
     void reply(int category, const QString &command);
+private:
+    interfaces::Node& m_node;
 };
 
 #include "rpcconsole.moc"
@@ -161,6 +160,118 @@ bool parseCommandLine(std::vector<std::string> &args, const std::string &strComm
     }
 }
 
+namespace {
+//! Commands whose ARGUMENTS are the secret, so the command line itself must not
+//! be echoed, logged or kept in history. Arguments only: dumpprivkey takes a
+//! public address and returns a key, which is a separate concern, and
+//! importwallet takes a path rather than key material.
+//!
+//! walletpassphrasechange is the sharpest case. Getting the old passphrase wrong
+//! is exactly what makes the call fail, and the failure path is the one that
+//! writes to the log -- carrying the new passphrase with it.
+const std::set<std::string> SENSITIVE_ARG_COMMANDS = {
+    // Carries settings values, and some settings are marked SENSITIVE precisely
+    // because they are credentials -- rpcpassword and rpcuser among them. The RPC
+    // reply masks those, but that does nothing for the copy the console echoes into
+    // the pane and history, or for the verbatim line written to debug.log when the
+    // call fails. Listing the whole command hides ordinary setting changes too;
+    // that is the intended trade, because deciding per-argument here would mean
+    // re-deriving which settings are sensitive in a second place and getting it
+    // wrong silently.
+    "changesettings",
+    // Takes the HTLC preimage, which is meant to stay secret until the claim
+    // is broadcast.
+    "claimhtlc",
+    "encryptwallet",
+    "importprivkey",
+    // Takes the phrase password, which restores the wallet together with the
+    // phrase.
+    "makeseedphrase",
+    "restoreseedphrase",
+    // Both alert commands take the WIF-encoded alert master private key as an
+    // argument. The console echoes the line into the pane and the Up-arrow
+    // history, and writes it verbatim to debug.log when the call fails -- and a
+    // failed call is the common case here, since these are hand-typed by an
+    // operator under time pressure.
+    "sendalert",
+    "sendalert2",
+    "sethdseed",
+    "signrawtransaction",
+    "signrawtransactionwithkey",
+    "walletpassphrase",
+    "walletpassphrasechange",
+};
+} // namespace
+
+namespace RPCConsoleDetail {
+//! Best-effort command name for text that parseCommandLine REJECTED, where there
+//! is no parsed argv to consult. Reads the first token, seeing through one layer
+//! of quoting, because a quoted name is how the whitespace-splitting version of
+//! this guard was defeated. Used only on the failure path -- when the parser
+//! succeeds, its argv is authoritative.
+std::string LeadingCommandToken(const QString& command)
+{
+    const std::string s = command.toStdString();
+    std::string::size_type i = 0;
+
+    while (i < s.size() && IsSpace(s[i])) ++i;
+
+    char quote = 0;
+    if (i < s.size() && (s[i] == '"' || s[i] == '\'')) {
+        quote = s[i];
+        ++i;
+    }
+
+    const std::string::size_type start = i;
+    while (i < s.size()) {
+        const char c = s[i];
+        const bool ends = quote ? (c == quote)
+                                : (IsSpace(c) || c == '"' || c == '\'');
+        if (ends) break;
+        ++i;
+    }
+
+    return s.substr(start, i - start);
+}
+
+//! Replace the arguments of a secret-bearing command with a placeholder. The
+//! command still executes with its real arguments; only the copies that are
+//! displayed, logged or remembered are reduced.
+//!
+//! When the line parses, the name is taken from parseCommandLine rather than by
+//! splitting on whitespace, so it sees the command exactly as the dispatcher
+//! will. Splitting naively would leave `"walletpassphrase" secret 60` unredacted
+//! while the parser strips the quotes and runs it -- the wrong way round for a
+//! guard.
+QString RedactSensitiveArgs(const QString& command)
+{
+    std::vector<std::string> args;
+    if (parseCommandLine(args, command.toStdString()) && !args.empty()) {
+        if (!SENSITIVE_ARG_COMMANDS.count(args[0])) return command;
+        return QString::fromStdString(args[0]) + QStringLiteral(" (arguments not shown)");
+    }
+
+    // Unparseable. An earlier revision returned the text verbatim here, reasoning
+    // that it would never dispatch and no command name had been resolved, so there
+    // was nothing to redact. That inspects the wrong property. `walletpassphrase
+    // "secret 60` fails on the unbalanced quote and is returned whole -- writing
+    // the passphrase to the console pane and the Up-arrow history, which is the
+    // precise disclosure this guard exists to prevent. Whether the command would
+    // have run does not matter; the secret is in the text either way.
+    //
+    // So fall back to recognising the leading token. If it names a sensitive
+    // command the arguments are dropped even though they were malformed; the user
+    // still sees which command failed. Text whose first token is not recognised is
+    // returned unchanged, so an ordinary typo is still visible to correct.
+    const std::string token = LeadingCommandToken(command);
+    if (!token.empty() && SENSITIVE_ARG_COMMANDS.count(token)) {
+        return QString::fromStdString(token) + QStringLiteral(" (arguments not shown)");
+    }
+
+    return command;
+}
+} // namespace RPCConsoleDetail
+
 void RPCExecutor::request(const QString &command)
 {
     std::vector<std::string> args;
@@ -171,45 +282,25 @@ void RPCExecutor::request(const QString &command)
     }
     if(args.empty())
         return; // Nothing to do
-    try
+
+    // The dispatch, UniValue conversion and reply/error formatting all happen
+    // node-side; the GUI receives the already-formatted text. This runs on the
+    // executor thread, so a slow command does not block the GUI.
+    const interfaces::RpcConsoleResult result = m_node.executeRpcConsoleCommand(
+        args[0], std::vector<std::string>(args.begin() + 1, args.end()));
+
+    if (result.ok)
     {
-        std::string strPrint;
-        // Convert argument list to JSON objects in method-dependent way,
-        // and pass it along with the method name to the dispatcher.
-        UniValue result = tableRPC.execute(
-            args[0],
-            RPCConvertValues(args[0], std::vector<std::string>(args.begin() + 1, args.end())));
-
-        // Format result reply
-        if (result.isNull())
-            strPrint = "";
-        else if (result.isStr())
-            strPrint = result.get_str();
-        else
-            strPrint = result.write(2);
-
-        emit reply(RPCConsole::CMD_REPLY, QString::fromStdString(strPrint));
+        emit reply(RPCConsole::CMD_REPLY, QString::fromStdString(result.output));
     }
-    catch (UniValue& objError)
+    else
     {
-		LogPrintf("gridcoinresearch:  Handling Error [Request %s]...",command.toStdString());
-
-        try // Nice formatting for standard-format error
-        {
-            int code = find_value(objError, "code").get_int();
-            std::string message = find_value(objError, "message").get_str();
-            emit reply(RPCConsole::CMD_ERROR, QString::fromStdString(message) + " (code " + QString::number(code) + ")");
-        }
-        catch(std::runtime_error &) // raised when converting to invalid type, i.e. missing code or message
-        {   // Show raw JSON object
-            emit reply(RPCConsole::CMD_ERROR, QString::fromStdString(objError.write()));
-        }
-    }
-    catch (std::exception& e)
-    {
-		LogPrintf("gridcoinresearch:  Handling Error[2]...");
-
-        emit reply(RPCConsole::CMD_ERROR, QString("Error: ") + QString::fromStdString(e.what()));
+        // This line persists: GUILog::LogPrintf reaches LogPrintStr, i.e.
+        // debug.log. A failed command is the common case for the very commands
+        // that carry a secret, so log the name without its arguments.
+        GUILogPrintf("gridcoinresearch:  Handling Error [Request %s]...",
+                     RPCConsoleDetail::RedactSensitiveArgs(command).toStdString());
+        emit reply(RPCConsole::CMD_ERROR, QString::fromStdString(result.output));
     }
 }
 
@@ -223,7 +314,7 @@ RPCConsole::RPCConsole(QWidget *parent) :
     resize(GRC::ScaleSize(this, width(), height()));
     GRC::ScaleFontPointSize(ui->banHeading, 12);
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
     ui->openDebugLogfileButton->setIcon(QIcon(":/icons/export"));
     ui->showCLOptionsButton->setIcon(QIcon(":/icons/options"));
 #endif
@@ -235,16 +326,11 @@ RPCConsole::RPCConsole(QWidget *parent) :
     connect(ui->clearButton, &QPushButton::clicked, this, &RPCConsole::clear);
 
     // set OpenSSL version label
-    #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
-        ui->openSSLVersion->setText(SSLeay_version(SSLEAY_VERSION));
-    #else
-        ui->openSSLVersion->setText(OpenSSL_version(OPENSSL_VERSION));
-    #endif
+    ui->openSSLVersion->setText(OpenSSL_version(OPENSSL_VERSION));
 
     // set Qt version label
     ui->qtVersion->setText("Qt " + QString::fromLocal8Bit(qVersion()) + " (built against " + QString::fromStdString(QT_VERSION_STR) + ")");
 
-    startExecutor();
 	setTrafficGraphRange(INITIAL_TRAFFIC_GRAPH_MINS);
     clear();
 
@@ -253,7 +339,9 @@ RPCConsole::RPCConsole(QWidget *parent) :
 
 RPCConsole::~RPCConsole()
 {
-    emit stopExecutor();
+    // Normally the executor was already stopped on the setClientModel(nullptr)
+    // teardown path; this is an idempotent backstop.
+    stopExecutorThread();
     delete ui;
 }
 
@@ -306,6 +394,17 @@ void RPCConsole::setClientModel(ClientModel *model)
 
 	clientModel = model;
 	ui->trafficGraph->setClientModel(model);
+
+    if (!model)
+    {
+        // Client model (and the interfaces::Node it exposes) is going away on
+        // the shutdown teardown path: stop the executor thread now, before the
+        // node is destroyed, so an in-flight/queued command cannot dereference
+        // it. Safe no-op if the executor was never started.
+        stopExecutorThread();
+        return;
+    }
+
     if(model && clientModel->getPeerTableModel() && clientModel->getBanTableModel())
     {
         // Subscribe to information, replies, messages, errors
@@ -409,7 +508,7 @@ void RPCConsole::setClientModel(ClientModel *model)
 
         //Setup autocomplete and attach it
         QStringList wordList;
-        std::vector<std::string> commandList = tableRPC.listCommands();
+        std::vector<std::string> commandList = model->node().listRpcCommands();
         for (size_t i = 0; i < commandList.size(); ++i)
         {
             wordList << commandList[i].c_str();
@@ -417,6 +516,12 @@ void RPCConsole::setClientModel(ClientModel *model)
 
         autoCompleter = new QCompleter(wordList, this);
         ui->lineEdit->setCompleter(autoCompleter);
+
+        // Start the RPC executor now that we have a node to run commands
+        // against (the console is unusable without a model). Guarded so a
+        // second setClientModel(model) call cannot spawn a duplicate thread.
+        if (!m_executorThread)
+            startExecutor();
     }
 }
 
@@ -434,7 +539,9 @@ static QString categoryClass(int category)
 void RPCConsole::clear()
 {
     ui->messagesWidget->clear();
-    ui->lineEdit->clear();
+    // setText, not clear(): setText also empties the undo history, so the
+    // cleared line cannot be brought back with Ctrl+Z.
+    ui->lineEdit->setText(QString());
     ui->lineEdit->setFocus();
 
     // Add smoothly scaled icon images.
@@ -498,7 +605,7 @@ void RPCConsole::setNumBlocks(int count, int countOfPeers)
 
 void RPCConsole::displayScraperLogMessage(const QString& string)
 {
-    // LogPrintf("INFO: RPCConsole::displayScraperLogMessage: %s", string.toStdString());
+    // GUILogPrintf("INFO: RPCConsole::displayScraperLogMessage: %s", string.toStdString());
 
     ui->scraper_log->appendPlainText(string);
 }
@@ -506,16 +613,24 @@ void RPCConsole::displayScraperLogMessage(const QString& string)
 void RPCConsole::on_lineEdit_returnPressed()
 {
     QString cmd = ui->lineEdit->text();
-    ui->lineEdit->clear();
+    // As in clear(): the history keeps a redacted copy of a secret-bearing
+    // command, so the input must not keep the original on its undo stack.
+    ui->lineEdit->setText(QString());
 
     if(!cmd.isEmpty())
     {
-        message(CMD_REQUEST, cmd);
+        // The command is dispatched in full, but the pane echo and the history
+        // keep only the redacted form -- the pane ends up in screenshots pasted
+        // into bug reports, and the history is one Up-arrow away for anyone at
+        // the keyboard. This matches how upstream feeds its filtered command to
+        // both sinks.
+        const QString display_cmd = RPCConsoleDetail::RedactSensitiveArgs(cmd);
+        message(CMD_REQUEST, display_cmd);
         emit cmdRequest(cmd);
         // Remove command, if already in history
-        history.removeOne(cmd);
+        history.removeOne(display_cmd);
         // Append command to history
-        history.append(cmd);
+        history.append(display_cmd);
         // Enforce maximum history size
         while(history.size() > CONSOLE_HISTORY)
             history.removeFirst();
@@ -542,7 +657,8 @@ void RPCConsole::browseHistory(int offset)
 void RPCConsole::startExecutor()
 {
     QThread* thread = new QThread;
-    RPCExecutor *executor = new RPCExecutor();
+    m_executorThread = thread;
+    RPCExecutor *executor = new RPCExecutor(clientModel->node());
     executor->moveToThread(thread);
 
     // Notify executor when thread started (in executor thread)
@@ -562,6 +678,22 @@ void RPCConsole::startExecutor()
     // Default implementation of QThread::run() simply spins up an event loop in the thread,
     // which is what we want.
     thread->start();
+}
+
+void RPCConsole::stopExecutorThread()
+{
+    if (!m_executorThread)
+        return;
+
+    // stopExecutor quits the worker's event loop and queues the executor for
+    // deletion; wait() blocks until run() has returned so no further request()
+    // can dereference the interfaces::Node. If a command is in flight this
+    // drains it first, mirroring how the other GUI workers are quiesced on the
+    // model-teardown path. The thread object self-deletes via finished->
+    // deleteLater; drop our pointer so this is idempotent.
+    emit stopExecutor();
+    m_executorThread->wait();
+    m_executorThread = nullptr;
 }
 
 
@@ -643,7 +775,7 @@ void RPCConsole::peerSelected(const QItemSelection &selected, const QItemSelecti
     if (!clientModel || !clientModel->getPeerTableModel() || selected.indexes().isEmpty())
         return;
 
-    const CNodeCombinedStats *stats = clientModel->getPeerTableModel()->getNodeStats(selected.indexes().first().row());
+    const interfaces::PeerInfo *stats = clientModel->getPeerTableModel()->getNodeStats(selected.indexes().first().row());
     if (stats)
         updateNodeDetail(stats);
 }
@@ -654,8 +786,8 @@ void RPCConsole::peerLayoutAboutToChange()
     cachedNodeids.clear();
     for(int i = 0; i < selected.size(); i++)
     {
-        const CNodeCombinedStats *stats = clientModel->getPeerTableModel()->getNodeStats(selected.at(i).row());
-        cachedNodeids.append(stats->nodeStats.id);
+        const interfaces::PeerInfo *stats = clientModel->getPeerTableModel()->getNodeStats(selected.at(i).row());
+        cachedNodeids.append(stats->id);
     }
 }
 
@@ -664,7 +796,7 @@ void RPCConsole::peerLayoutChanged()
     if (!clientModel || !clientModel->getPeerTableModel())
         return;
 
-    const CNodeCombinedStats *stats = nullptr;
+    const interfaces::PeerInfo *stats = nullptr;
     bool fUnselect = false;
     bool fReselect = false;
 
@@ -716,55 +848,38 @@ void RPCConsole::peerLayoutChanged()
         updateNodeDetail(stats);
 }
 
-void RPCConsole::updateNodeDetail(const CNodeCombinedStats *stats)
+void RPCConsole::updateNodeDetail(const interfaces::PeerInfo *stats)
 {
     // update the detail ui with latest node information
-    QString peerAddrDetails(QString::fromStdString(stats->nodeStats.addrName) + " ");
-    peerAddrDetails += tr("(node id: %1)").arg(QString::number(stats->nodeStats.id));
-    if (!stats->nodeStats.addrLocal.empty())
-        peerAddrDetails += "<br />" + tr("via %1").arg(QString::fromStdString(stats->nodeStats.addrLocal));
+    QString peerAddrDetails(QString::fromStdString(stats->addr_name) + " ");
+    peerAddrDetails += tr("(node id: %1)").arg(QString::number(stats->id));
+    if (!stats->addr_local.empty())
+        peerAddrDetails += "<br />" + tr("via %1").arg(QString::fromStdString(stats->addr_local));
     ui->peerHeading->setText(peerAddrDetails);
-    ui->peerServices->setText(GUIUtil::formatServicesStr(stats->nodeStats.nServices));
-    ui->peerLastSend->setText(stats->nodeStats.nLastSend ? GUIUtil::formatDurationStr(GetTimeSeconds() - stats->nodeStats.nLastSend) : tr("never"));
-    ui->peerLastRecv->setText(stats->nodeStats.nLastRecv ? GUIUtil::formatDurationStr(GetTimeSeconds() - stats->nodeStats.nLastRecv) : tr("never"));
-    ui->peerBytesSent->setText(GUIUtil::formatBytes(stats->nodeStats.nSendBytes));
-    ui->peerBytesRecv->setText(GUIUtil::formatBytes(stats->nodeStats.nRecvBytes));
-    ui->peerConnTime->setText(GUIUtil::formatDurationStr(GetTimeSeconds() - stats->nodeStats.nTimeConnected));
-    ui->peerPingTime->setText(GUIUtil::formatPingTime(stats->nodeStats.dPingTime));
-    ui->peerPingWait->setText(GUIUtil::formatPingTime(stats->nodeStats.dPingWait));
-    ui->peerMinPing->setText(GUIUtil::formatPingTime(stats->nodeStats.dMinPing));
-    ui->timeoffset->setText(GUIUtil::formatTimeOffset(stats->nodeStats.nTimeOffset));
-    ui->peerVersion->setText(QString("%1").arg(QString::number(stats->nodeStats.nVersion)));
-    if (!stats->nodeStats.strSubVer.empty()) {
+    ui->peerServices->setText(GUIUtil::formatServicesStr(stats->services));
+    ui->peerLastSend->setText(stats->last_send ? GUIUtil::formatDurationStr(GetTimeSeconds() - stats->last_send) : tr("never"));
+    ui->peerLastRecv->setText(stats->last_recv ? GUIUtil::formatDurationStr(GetTimeSeconds() - stats->last_recv) : tr("never"));
+    ui->peerBytesSent->setText(GUIUtil::formatBytes(stats->send_bytes));
+    ui->peerBytesRecv->setText(GUIUtil::formatBytes(stats->recv_bytes));
+    ui->peerConnTime->setText(GUIUtil::formatDurationStr(GetTimeSeconds() - stats->time_connected));
+    ui->peerPingTime->setText(GUIUtil::formatPingTime(stats->ping_time));
+    ui->peerPingWait->setText(GUIUtil::formatPingTime(stats->ping_wait));
+    ui->peerMinPing->setText(GUIUtil::formatPingTime(stats->min_ping));
+    ui->timeoffset->setText(GUIUtil::formatTimeOffset(stats->time_offset));
+    ui->peerVersion->setText(QString("%1").arg(QString::number(stats->version)));
+    if (!stats->subversion.empty()) {
         // remove leading and trailing slash
-        ui->peerSubversion->setText(QString::fromStdString(stats->nodeStats.strSubVer.substr(1, stats->nodeStats.strSubVer.length() - 2)));
+        ui->peerSubversion->setText(QString::fromStdString(stats->subversion.substr(1, stats->subversion.length() - 2)));
     } else {
         ui->peerSubversion->clear();
     }
-    ui->peerDirection->setText(stats->nodeStats.fInbound ? tr("Inbound") : tr("Outbound"));
-    ui->peerHeight->setText(QString("%1").arg(QString::number(stats->nodeStats.nStartingHeight)));
-    // ui->peerWhitelisted->setText(stats->nodeStats.fWhitelisted ? tr("Yes") : tr("No"));
-    // Ban score is init to 0
-    ui->peerBanScore->setText(QString("%1").arg(stats->nodeStats.nMisbehavior));
+    ui->peerDirection->setText(stats->inbound ? tr("Inbound") : tr("Outbound"));
+    ui->peerHeight->setText(QString("%1").arg(QString::number(stats->starting_height)));
+    ui->peerBanScore->setText(QString("%1").arg(stats->misbehavior));
 
-    // This check fails for example if the lock was busy and
-    // nodeStateStats couldn't be fetched.
-    if (stats->fNodeStateStatsAvailable) {
-        // Ban score is init to 0
-        // ui->peerBanScore->setText(QString("%1").arg(stats->nodeStats.nMisbehavior));
-
-        // Sync height is init to -1
-        // (stats->nodeStats.nSyncHeight > -1)
-        //    ui->peerSyncHeight->setText(QString("%1").arg(stats->nodeStats.nSyncHeight));
-        //else
-            ui->peerSyncHeight->setText(tr("Unknown"));
-
-        // Common height is init to -1
-        //if (stats->nodeStateStats.nCommonHeight > -1)
-        //    ui->peerCommonHeight->setText(QString("%1").arg(stats->nodeStats.nCommonHeight));
-        //else
-            ui->peerCommonHeight->setText(tr("Unknown"));
-    }
+    // Sync/common height are not tracked yet (there is no CNodeStateStats), so
+    // the peerSyncHeight/peerCommonHeight labels keep their designer default and
+    // are intentionally left untouched here.
 
     ui->peerDetailWidget->show();
 }
@@ -822,23 +937,13 @@ void RPCConsole::banSelectedNode(int bantime)
     if (!clientModel)
         return;
 
-    // Get selected peer addresses
+    // Ban (and disconnect) each selected peer by its connection id. The node
+    // side looks the peer's address up and applies the ban + disconnect.
     QList<QModelIndex> nodes = GUIUtil::getEntryData(ui->peerWidget, PeerTableModel::NetNodeId);
     for(int i = 0; i < nodes.count(); i++)
     {
-        // Get currently selected peer address
-        NodeId id = nodes.at(i).data().toLongLong();
-
-        // Get currently selected peer address
-        int detailNodeRow = clientModel->getPeerTableModel()->getRowByNodeId(id);
-        if (detailNodeRow < 0) return;
-
-        // Find possible nodes, ban it and clear the selected node
-        const CNodeCombinedStats *stats = clientModel->getPeerTableModel()->getNodeStats(detailNodeRow);
-        if (stats) {
-            g_banman->Ban(stats->nodeStats.addr, BanReasonManuallyAdded, bantime);
-            CNode::DisconnectNode(stats->nodeStats.addr);
-        }
+        const int64_t id = nodes.at(i).data().toLongLong();
+        clientModel->node().banNode(id, bantime);
     }
     clearSelectedNode();
     clientModel->getBanTableModel()->refresh();
@@ -855,10 +960,8 @@ void RPCConsole::unbanSelectedNode()
     {
         // Get currently selected ban address
         QString strNode = nodes.at(i).data().toString();
-        CSubNet possibleSubnet;
 
-        LookupSubNet(strNode.toStdString().c_str(), possibleSubnet);
-        if (possibleSubnet.IsValid() && g_banman->Unban(possibleSubnet))
+        if (clientModel->node().unban(strNode.toStdString()))
         {
             clientModel->getBanTableModel()->refresh();
         }
@@ -885,14 +988,15 @@ void RPCConsole::showOrHideBanTableIfRequired()
 
 void RPCConsole::disconnectSelectedNode()
 {
-    // Get selected peer addresses
+    if (!clientModel)
+        return;
+
+    // Disconnect each selected peer by its connection id, node-side.
     QList<QModelIndex> nodes = GUIUtil::getEntryData(ui->peerWidget, PeerTableModel::NetNodeId);
     for(int i = 0; i < nodes.count(); i++)
     {
-        // Get currently selected peer address
-        NodeId id = nodes.at(i).data().toLongLong();
-        // Find the node, disconnect it and clear the selected node
-        if(CNode::DisconnectNode(id))
+        const int64_t id = nodes.at(i).data().toLongLong();
+        if (clientModel->node().disconnectNode(id))
             clearSelectedNode();
     }
 }

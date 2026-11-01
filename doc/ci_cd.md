@@ -43,7 +43,8 @@ The pipeline is split into four distinct workflows to separate concerns:
 ### Distro Validation (`cmake_distros.yml`)
 
   * **Goal:** Validate `install_dependencies.sh` and `build_targets.sh` on bare-metal environments.
-  * **Matrix:** Fedora Latest, Arch Linux, OpenSUSE Leap & Tumbleweed, Debian Sid, Linux Mint.
+  * **Matrix:** Fedora Latest, Arch Linux, OpenSUSE Leap & Tumbleweed, Debian Sid, Debian 12 (Bookworm), Debian 13 (Trixie) i386, Linux Mint, Alpine Linux.
+  * **Coverage it adds:** Debian 12 is the oldest toolchain (GCC 12, Boost 1.74); Debian 13 i386 is the only 32-bit x86 build, whose x87 floating point keeps extra precision.
   * **Mechanism:** Runs full native builds inside isolated Docker containers to ensure the build instructions work for end-users.
 
 -----
@@ -100,11 +101,17 @@ The `deploy` job in `cmake_production.yml` automates the release process.
 
   * **Trigger:** Pushing a tag (e.g., `git tag v5.4.9.99 && git push --tags`).
   * **Process:**
-    1.  Waits for Linux, Windows, and macOS builds to succeed.
+    1.  Waits for Linux, Windows, and macOS builds to succeed. Every job that uploads a
+        `gridcoin-*` artifact must appear in the `deploy` job's `needs:` list --
+        `download-artifact` collects whatever exists when it runs, so a producer left out
+        of `needs:` races the release and its asset is silently dropped.
     2.  Downloads all artifacts.
     3.  **Flattens** them (moves files from subfolders to root).
-    4.  Generates `SHA256SUMS.txt`.
-    5.  Creates a **Draft Release** on GitHub with all binaries attached.
+    4.  Creates a **Draft Release** on GitHub with all binaries attached.
+
+Checksums are not generated. The GitHub release page publishes a SHA-256 digest for every
+attached asset, so a separate `SHA256SUMS.txt` duplicated information the platform already
+provides.
 
 -----
 

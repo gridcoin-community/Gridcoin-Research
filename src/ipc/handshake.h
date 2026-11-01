@@ -1,0 +1,193 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef GRIDCOIN_IPC_HANDSHAKE_H
+#define GRIDCOIN_IPC_HANDSHAKE_H
+
+#include "fs.h"
+#include "interfaces/init.h"
+
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace ipc {
+
+//! IPC schema/protocol versions embedded in both binaries and compared during
+//! the connect handshake (doc/multiprocess_design.md section 4.2). Bump the minor
+//! for additive schema changes, the major for breaking ones (which also require a
+//! transition release); bump protocol for transport/handshake changes.
+//!
+//! Major 2: the NodeIdentity model was re-based onto the wallet UUID (former
+//! node_id/datadir/genesis_hash retired), a breaking wire change.
+//!
+//! Major 3: interfaces::Wallet::listCoins was retired with the windowed
+//! coin-control model (#3183) and its ordinal removed from wallet.capnp. Cap'n
+//! Proto requires consecutive ordinals, so every later Wallet method shifted
+//! down by one -- a peer built against major 2 would dispatch each call to its
+//! neighbour. Breaking, hence the major. The same release adds the coin channel's
+//! own schema (wallet_coin_source.capnp) and Init.makeWalletCoinSource @14.
+//! That addition is additive on its own, but it ships INSIDE major 3, so no
+//! build carrying major 3 lacks it and the minor restarts at 0 rather than
+//! tracking it separately.
+//!
+//! Minor 1 (under major 2): RowsChangedPayload gained `records`
+//! (wallet_tx_source.capnp @4), the changed rows sampled at emission. Additive,
+//! so an old node still talks to a new GUI -- but it degrades SILENTLY if the
+//! minor is not bumped: the field simply arrives empty, the GUI's "empty means
+//! nothing to apply" contract does exactly that, and the Overview list then
+//! shows stale rows until the process restarts. The minor is what turns that
+//! into the actionable "Update the node" hard fail in ClientHandshake.
+//!
+//! Minor 1 (under major 3): PSGTPoolRow gained `txHashHex` (psgt.capnp @11), the
+//! unsigned-transaction hash the GUI's signature-request toast damp keys on.
+//! Additive, and the same silent-degradation shape: an old node sends the field
+//! empty, every row collapses onto one key, and the damp then silences every
+//! signature request after the first.
+//!
+//! Minor 2 (under major 3): ResearcherContext gained `activePools @19`
+//! (researcher.capnp), the registry-driven pool list behind the researcher
+//! wizard's pool page. Additive, so an old node still talks to a new GUI -- until
+//! that page opens and calls a method the node does not serve: the UNIMPLEMENTED
+//! reply is rethrown client-side as std::runtime_error out of initializePage(),
+//! which the GUI can only treat as a runaway exception. The minor turns that
+//! into the "Update the node" hard fail at connect.
+//!
+//! Minor 3 (under major 3): Node gained `isMainNet @42` (node.capnp). The About
+//! dialog needs to know whether it is on the live network before it offers the
+//! version-info button, and isTestNet() cannot answer that -- there are three
+//! networks, so !isTestNet() is true on regtest. Additive, so an old node still
+//! talks to a new GUI until the About dialog opens and calls a method the node
+//! does not serve; the minor turns that into the "Update the node" hard fail at
+//! connect instead.
+//!
+//! Major 4: SendCoinsStatus gained `WalletUnlockedForStakingOnly`, so a
+//! staking-only wallet's refusal to build a spend can be reported as itself
+//! rather than as a generic creation failure.
+//!
+//! Appended, so it renumbers nothing -- and that is still not enough to make it
+//! additive, which is why this is a major and not a minor. The enum crosses as
+//! a raw integer with an unchecked cast on receipt, and the GUI's switch over it
+//! carries no `default:` arm, so an already-shipped GUI has nothing to do with
+//! the new value and runs into the `assert(false)` that closes the function --
+//! live in release, because the build strips NDEBUG globally.
+//!
+//! The missing `default:` does have a compile-time backstop again: -Wall, and
+//! with it -Wswitch, was restored to the main targets (issue #3387), so a switch
+//! that gains no arm for a new enumerator is a diagnostic once more. That covers
+//! this tree when it is built as a whole. It does nothing for the case this
+//! major exists for -- an ALREADY SHIPPED GUI meeting a newer node -- because
+//! that binary was compiled before the enumerator existed. For it the abort IS
+//! still the whole mechanism. A minor would have let that
+//! pairing connect (an older GUI against a newer node is only a soft warning),
+//! and the first staking-only send would abort the GUI. The major turns it into
+//! the "use matching builds" refusal at connect, which is the honest answer:
+//! the node can produce a value this GUI cannot name.
+//!
+//! The minor restarts at 0, as it did at major 3.
+//!
+//! Minor 1 (under major 4): Wallet gained `elevateWallet @36` (wallet.capnp),
+//! which widens an unlock in progress to full for one operation rather than
+//! locking and unlocking again. Additive, so an old node still talks to a new
+//! GUI -- until the first action that needs a full unlock on a staking-only
+//! wallet calls a method the node does not serve; the UNIMPLEMENTED reply comes
+//! back client-side as a std::runtime_error thrown out of the send, vote or
+//! claim path, where nothing catches it. The minor turns that into the "Update
+//! the node" hard fail at connect instead.
+constexpr uint32_t IPC_SCHEMA_MAJOR = 4;
+constexpr uint32_t IPC_SCHEMA_MINOR = 1;
+constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
+
+//! Domain-separation tag hashed into the node identity token. Bump the suffix if
+//! the token *algorithm* ever changes (independent of the capnp schema version).
+constexpr char IDENTITY_TOKEN_DOMAIN[] = "gridcoin-node-identity-v1";
+
+//! This process's build fingerprint (git commit, build time, schema/protocol
+//! versions) for the handshake build-info exchange.
+interfaces::BuildInfo GetLocalBuildInfo();
+
+//! Constant-time byte comparison of two strings (equal length required for a
+//! match). Used for the cookie compare so a timing side-channel can't leak it.
+bool ConstantTimeEqual(const std::string& a, const std::string& b);
+
+//! Node side: write a fresh 256-bit cookie to <dir>/ipc.cookie (0600, atomic
+//! rename) and return its hex. Called once per node startup.
+std::string WriteCookie(const fs::path& dir);
+
+//! GUI side: read the hex cookie from <dir>/ipc.cookie. Returns nullopt when the
+//! file is absent or cannot be opened. Absent means no -multiprocess node is
+//! serving <dir> (none is running with -multiprocess, one is still starting, or
+//! the last one shut down cleanly) -- do not dial.
+std::optional<std::string> ReadCookie(const fs::path& dir);
+
+//! Node side: remove <dir>/ipc.cookie at shutdown, mirroring upstream's
+//! DeleteAuthCookie(). The cookie is a live 256-bit credential for as long as the
+//! file exists, and it outlived the process that minted it: a stale file's
+//! presence is what ConnectToNode checks before dialling, so a GUI dials a socket
+//! nobody is listening on and reports a connection failure instead of asking
+//! whether the daemon is running with -multiprocess.
+//!
+//! Never throws: shutdown is the wrong place to raise, and the file legitimately
+//! may not be there (an unclean previous exit, or a user who removed it by hand).
+//! A failure to remove is logged.
+void DeleteCookie(const fs::path& dir);
+
+//! Compute the node identity token: HEX(SHA256(domain-tag ‖ LE32(len) ‖ uuid)).
+//! Deterministic in \p wallet_uuid; returns "" (identity unavailable) when the
+//! UUID is empty. The raw UUID never crosses the wire -- only this hash does.
+std::string ComputeIdentityToken(const std::vector<unsigned char>& wallet_uuid);
+
+//! Soft (non-fatal) handshake findings surfaced to the GUI.
+enum class SoftWarn {
+    GitCommitMismatch, //!< GUI and node built from different commits (banner).
+    GuiOlderMinor,     //!< GUI schema_minor < node: forward-compatible (log-only).
+};
+
+//! Result of the connect handshake. On ok==false the connection must be rejected
+//! and \p error shown/logged. On ok==true \p remote_build / \p remote_ident are
+//! valid and \p soft carries any non-fatal findings.
+struct HandshakeResult {
+    bool ok = false;
+    std::string error;
+    interfaces::BuildInfo remote_build;
+    interfaces::NodeIdentity remote_ident;
+    std::vector<SoftWarn> soft;
+};
+
+//! GUI side: the authentication + compatibility half of the connect handshake
+//! (design section 4.3). Against a freshly-connected remote Init, calls
+//! authenticate(cookie), getBuildInfo() and getIdentity() -- all inside one
+//! try/catch, so an IPC throw (daemon vanished mid-handshake) becomes a clean
+//! ok==false rather than an escaping exception. Hard-fail (ok==false) on: wrong
+//! cookie, schema_major mismatch, protocol_version mismatch, GUI schema_minor >
+//! node's, and a network mismatch vs \p local_network. Soft findings (git_commit
+//! mismatch, GUI older minor) are returned in \p soft, not failures. The identity
+//! token is returned in \p remote_ident for the caller's GUI-side binding step
+//! (CheckIdentityBinding) -- this function does not judge it.
+//! \p local defaults to this build's GetLocalBuildInfo(); it is a parameter only
+//! so tests can drive every comparison branch (e.g. GUI-newer-minor) regardless
+//! of the compiled-in schema constants.
+HandshakeResult ClientHandshake(interfaces::Init& init, const std::string& cookie,
+                                const std::string& local_network,
+                                const interfaces::BuildInfo& local = GetLocalBuildInfo());
+
+//! Outcome of comparing a node's reported identity token against the GUI's stored
+//! expectation for this datadir.
+enum class BindOutcome {
+    FirstSeen,         //!< No stored token: persist \p reported and proceed.
+    Match,             //!< Stored == reported: proceed.
+    Mismatch,          //!< Stored != reported: prompt / -autotrustidentity / exit.
+    UnavailableFresh,  //!< Reported empty, nothing stored: proceed unbound (log once).
+    UnavailableStored, //!< Reported empty but a token was stored: treat as a mismatch
+                       //!< (a downgrade signal -- never silently skip).
+};
+
+//! Pure comparison of a reported token against a stored one. No I/O; the caller
+//! owns the QSettings read/write and the prompt. See BindOutcome.
+BindOutcome CheckIdentityBinding(const std::string& reported_token, const std::string& stored_token);
+
+} // namespace ipc
+
+#endif // GRIDCOIN_IPC_HANDSHAKE_H

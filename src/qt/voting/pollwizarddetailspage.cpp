@@ -2,7 +2,6 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "main.h"
 #include "qitemdelegate.h"
 #include "qt/bitcoinunits.h"
 #include "qt/decoration.h"
@@ -24,8 +23,6 @@ namespace {
 //!
 class ChoicesListDelegate : public QStyledItemDelegate
 {
-    Q_OBJECT
-
 public:
     ChoicesListDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent)
     {
@@ -60,8 +57,6 @@ private:
 //!
 class AdditionalFieldDelegate : public QItemDelegate
 {
-    Q_OBJECT
-
 public:
     AdditionalFieldDelegate(QObject* parent = nullptr) : QItemDelegate(parent)
     {
@@ -163,6 +158,7 @@ signals:
 PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
     : QWizardPage(parent)
     , ui(new Ui::PollWizardDetailsPage)
+    , m_voting_model(nullptr)
     , m_poll_types(nullptr)
     , m_additional_fields_model(new AdditionalFieldsTableModel(this))
     , m_choices_model(new ChoicesListModel(this))
@@ -190,6 +186,7 @@ PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
 
     ui->additionalFieldsTableView->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     ui->additionalFieldsTableView->sortByColumn(AdditionalFieldsTableModel::Required, Qt::DescendingOrder);
+    ui->additionalFieldsTableView->setAccessibleName(tr("Poll additional fields"));
 
     ui->weightTypeList->addItem(tr("Balance"));
     ui->weightTypeList->addItem(tr("Magnitude+Balance"));
@@ -209,10 +206,6 @@ PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
 
     ui->additionalFieldsTableView->setItemDelegate(additonal_field_delegate);
 
-    ui->titleField->setMaxLength(m_voting_model->maxPollTitleLength());
-    ui->questionField->setMaxLength(m_voting_model->maxPollQuestionLength());
-    ui->urlField->setMaxLength(m_voting_model->maxPollUrlLength());
-
     connect(
         ui->responseTypeList, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
         [=](int index) {
@@ -228,7 +221,7 @@ PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
             ui->removeChoiceButton->setVisible(!selected.isEmpty());
         });
     connect(ui->addChoiceButton, &QAbstractButton::clicked, this, [=]() {
-        if ((size_t) ui->choicesList->model()->rowCount() >= GRC::POLL_MAX_CHOICES_SIZE - 1) {
+        if (ui->choicesList->model()->rowCount() >= interfaces::poll_limits::MAX_CHOICES - 1) {
             ui->addChoiceButton->setDisabled(true);
             ui->addChoiceButton->setToolTip(tr("Cannot have more than 20 choices in a poll."));
         }
@@ -242,7 +235,7 @@ PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
     connect(ui->removeChoiceButton, &QAbstractButton::clicked, this, [=]() {
         m_choices_model->removeItem(ui->choicesList->selectionModel()->selectedIndexes().first());
 
-        if ((size_t) ui->choicesList->model()->rowCount() < GRC::POLL_MAX_CHOICES_SIZE) {
+        if (ui->choicesList->model()->rowCount() < interfaces::poll_limits::MAX_CHOICES) {
             ui->addChoiceButton->setEnabled(true);
             ui->addChoiceButton->setToolTip("");
         }
@@ -271,7 +264,7 @@ void PollWizardDetailsPage::setPollTypes(const PollTypes* const poll_types)
 
 void PollWizardDetailsPage::initializePage()
 {
-    if (!m_poll_types) {
+    if (!m_poll_types || !m_voting_model) {
         return;
     }
 
@@ -291,7 +284,7 @@ void PollWizardDetailsPage::initializePage()
     ui->durationField->setMinimum(poll_type.m_min_duration_days);
     ui->durationField->setValue(poll_type.m_min_duration_days);
 
-    if (type_id != (int) GRC::PollType::SURVEY) {
+    if (type_id != (int) interfaces::PollType::SURVEY) {
         ui->pollTypeAlert->show();
         ui->weightTypeList->setCurrentIndex(1); // Magnitude+Balance
         ui->weightTypeList->setDisabled(true);
@@ -300,7 +293,7 @@ void PollWizardDetailsPage::initializePage()
         ui->weightTypeList->setEnabled(true);
     }
 
-    if (type_id == (int) GRC::PollType::PROJECT) {
+    if (type_id == (int) interfaces::PollType::PROJECT) {
         ui->titleField->setText(QStringLiteral("[%1] %2 %3")
             .arg(poll_type.m_name,
                  field("projectPollAddRemoveState").toString(),
@@ -308,11 +301,10 @@ void PollWizardDetailsPage::initializePage()
         ui->responseTypeList->setCurrentIndex(0); // Yes/No/Abstain
         ui->responseTypeList->setDisabled(true);
 
-        // Only populate poll additional field entries if version >= 3.
-        bool v3_enabled = false;
-        v3_enabled = IsPollV3Enabled(nBestHeight);
-
-        if (v3_enabled) {
+        // Only populate poll additional field entries if version >= 3. The node
+        // resolves the v3 activation against its own tip (the former GUI-side
+        // LOCK(cs_main) + IsPollV3Enabled(nBestHeight) read).
+        if (m_voting_model->pollV3Enabled()) {
             poll_item.m_additional_field_entries.push_back(
                         AdditionalFieldEntry("project_name", field("projectName").toString(), true));
             poll_item.m_additional_field_entries.push_back(
@@ -350,7 +342,7 @@ bool PollWizardDetailsPage::validatePage()
     }
 
     const int type_id = field("pollType").toInt();
-    const GRC::PollType& core_poll_type = GRC::Poll::POLL_TYPES[type_id];
+    const interfaces::PollType poll_type = static_cast<interfaces::PollType>(type_id);
 
     std::vector<AdditionalFieldEntry> additional_field_entries;
 
@@ -359,7 +351,7 @@ bool PollWizardDetailsPage::validatePage()
     }
 
     const VotingResult result = m_voting_model->sendPoll(
-        core_poll_type,
+        poll_type,
         field("title").toString(),
         field("durationDays").toInt(),
         field("question").toString(),

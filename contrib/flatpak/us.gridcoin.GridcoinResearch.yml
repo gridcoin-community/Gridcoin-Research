@@ -39,33 +39,17 @@ cleanup:
 
 modules:
   # ------------------------------------------------------------------
-  # Boost 1.86.0 (filesystem, iostreams, thread, serialization, etc.)
+  # Boost 1.86.0 (filesystem, iostreams, thread, date_time, etc.)
   # ------------------------------------------------------------------
   - name: boost
     buildsystem: simple
     build-commands:
-      - ./bootstrap.sh --prefix=/app --with-libraries=filesystem,iostreams,thread,serialization,date_time,system,chrono
+      - ./bootstrap.sh --prefix=/app --with-libraries=filesystem,iostreams,thread,date_time,system,chrono
       - ./b2 install --libdir=/app/lib variant=release link=shared threading=multi runtime-link=shared -j $FLATPAK_BUILDER_N_JOBS
     sources:
       - type: archive
         url: https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.bz2
         sha256: 1bed88e40401b2cb7a1f76d4bab499e352fa4d0c5f31c0dbae64e24d34d7513b
-
-  # ------------------------------------------------------------------
-  # libzip 1.11.2
-  # ------------------------------------------------------------------
-  - name: libzip
-    buildsystem: cmake-ninja
-    config-opts:
-      - -DCMAKE_INSTALL_LIBDIR=lib
-      - -DBUILD_TOOLS=OFF
-      - -DBUILD_REGRESS=OFF
-      - -DBUILD_EXAMPLES=OFF
-      - -DBUILD_DOC=OFF
-    sources:
-      - type: archive
-        url: https://libzip.org/download/libzip-1.11.2.tar.xz
-        sha256: 5d471308cef4c4752bbcf973d9cd37ba4cb53739116c30349d4764ba1410dfc1
 
   # ------------------------------------------------------------------
   # miniupnpc 2.2.8
@@ -97,6 +81,26 @@ modules:
         sha256: 5385bc1b8c2f20f3b91d258bf8ccc8cf62023935df2d2676b5b67049f31a049c
 
   # ------------------------------------------------------------------
+  # Cap'n Proto 1.5.0 -- the multiprocess (IPC) build's serialization layer and
+  # code generator. Version and hash are taken from depends/packages/native_capnp.mk
+  # rather than picked independently: that file records that Cap'n Proto must match
+  # what the pinned libmultiprocess was generated against, or the build fails with
+  # "Version mismatch between generated code and library headers". Bump both together.
+  # ------------------------------------------------------------------
+  - name: capnproto
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_INSTALL_LIBDIR=lib
+      - -DBUILD_TESTING=OFF
+      - -DWITH_OPENSSL=OFF
+      - -DWITH_ZLIB=OFF
+      - -DBUILD_SHARED_LIBS=ON
+    sources:
+      - type: archive
+        url: https://capnproto.org/capnproto-c++-1.5.0.tar.gz
+        sha256: 77dbc13ca82d9c87ddb4581dd49559d45b63096433d3dadea08b7f31b360a5ba
+
+  # ------------------------------------------------------------------
   # Gridcoin Research
   # ------------------------------------------------------------------
   - name: gridcoin
@@ -109,8 +113,14 @@ modules:
       - -DUSE_DBUS=ON
       - -DENABLE_TESTS=OFF
       - -DENABLE_UPNP=ON
-      - -DDEFAULT_UPNP=ON
       - -DENABLE_QRENCODE=ON
+      # The shipped Flatpak carries the multiprocess (GUI/node split) capability,
+      # matching the other release artifacts. The capnproto module above supplies
+      # Cap'n Proto; libmultiprocess is a vendored subtree in this repository.
+      - -DENABLE_MULTIPROCESS=ON
+      # ENABLE_PIE defaults OFF and OFF now genuinely disables PIE rather than
+      # deferring to the toolchain, so a shipped artifact has to ask for it.
+      - -DENABLE_PIE=ON
       - -DCMAKE_BUILD_TYPE=Release
     sources:
       - type: dir

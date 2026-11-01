@@ -3,8 +3,20 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/scraper/scraper_registry.h"
+#include "primitives/transaction.h"
 
 #include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
+
+// Tests are single-threaded and drive the ScraperRegistry contract
+// handler directly. The handler is EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+// suppress the analyzer for this file rather than take a lock the
+// tests do not need.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 
 // anonymous namespace
 namespace {
@@ -23,7 +35,7 @@ void AddRemoveScraperEntryV1(const std::string& address, const std::string& valu
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -45,7 +57,8 @@ void AddRemoveScraperEntryV1(const std::string& address, const std::string& valu
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, &dummy_index});
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
 }
 
 void AddRemoveScraperEntryV2(const std::string& address, const GRC::ScraperEntryStatus& status,
@@ -60,7 +73,7 @@ void AddRemoveScraperEntryV2(const std::string& address, const GRC::ScraperEntry
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -77,12 +90,14 @@ void AddRemoveScraperEntryV2(const std::string& address, const GRC::ScraperEntry
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, &dummy_index});
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
 }
 
 }// anonymous namespace
 
-BOOST_AUTO_TEST_SUITE(scraper_registry_tests)
+// Symmetric reset: the cases reset the registry on entry only.
+BOOST_AUTO_TEST_SUITE(scraper_registry_tests, *boost::unit_test::fixture<grc_test::RegistryResetFor<GRC::ContractType::SCRAPER>>())
 
 BOOST_AUTO_TEST_CASE(scraper_entries_added_to_scraper_work_correctly_legacy)
 {
@@ -90,7 +105,6 @@ BOOST_AUTO_TEST_CASE(scraper_entries_added_to_scraper_work_correctly_legacy)
     uint64_t time = 0;
 
     auto& registry = GRC::GetScraperRegistry();
-    const auto& scraper_map = registry.Scrapers();
 
     std::vector<std::string> scraper_entries { {"RxKVQ1SGpgyUfMv1zdygmiLi24mxG34k6f",
                                                "S2wGoFavFzTnpaxn6XqLmJDE9FppHiMrCn",
@@ -110,6 +124,9 @@ BOOST_AUTO_TEST_CASE(scraper_entries_added_to_scraper_work_correctly_legacy)
                                 time++,
                                 false);
     }
+
+    // Scrapers() returns a by-value snapshot under cs_lock; re-snapshot after each mutation.
+    auto scraper_map = registry.Scrapers();
 
     BOOST_CHECK(scraper_map.size() == 7);
 
@@ -143,7 +160,6 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
     uint64_t time = 0;
 
     auto& registry = GRC::GetScraperRegistry();
-    const auto& scraper_map = registry.Scrapers();
 
     std::vector<std::string> scraper_entries { {"RxKVQ1SGpgyUfMv1zdygmiLi24mxG34k6f",
                                                "S2wGoFavFzTnpaxn6XqLmJDE9FppHiMrCn",
@@ -164,6 +180,9 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
                                 false);
     }
 
+    // Scrapers() returns a by-value snapshot under cs_lock; re-snapshot after each mutation.
+    auto scraper_map = registry.Scrapers();
+
     BOOST_CHECK(scraper_map.size() == 7);
 
     // Deauthorize a scraper
@@ -173,6 +192,8 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
                             height++,
                             time++,
                             false);
+
+    scraper_map = registry.Scrapers();
 
     // Still should be 7 current elements.
     BOOST_CHECK(scraper_map.size() == 7);
@@ -214,7 +235,7 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
     height++;
     time++;
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -230,9 +251,12 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
 
     dummy_tx.vContracts.push_back(contract);
 
-    GRC::ContractContext ctx(contract, dummy_tx, &dummy_index);
+    CTransaction ctx_tx(dummy_tx);
+    GRC::ContractContext ctx(contract, ctx_tx, &dummy_index);
 
     registry.Add(ctx);
+
+    scraper_map = registry.Scrapers();
 
     // Native map should still be 7 elements
     BOOST_CHECK(scraper_map.size() == 7);
@@ -310,6 +334,8 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
     int post_revert_height = 8;
     registry.SetDBHeight(post_revert_height);
 
+    scraper_map = registry.Scrapers();
+
     // After reversion...
     // Native map should be back to 7 elements.
     BOOST_CHECK(scraper_map.size() == 7);
@@ -329,7 +355,7 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
 
     BOOST_CHECK(resurrected_scraper->first == "SLbdvKZHmtu49VUWm88rbcCo9DaC8Z2urV");
     BOOST_CHECK(resurrected_scraper->second.value == "true");
-    BOOST_CHECK(resurrected_scraper->second.timestamp = 6);
+    BOOST_CHECK(resurrected_scraper->second.timestamp == 6);
 }
 
 
@@ -339,7 +365,6 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
     uint64_t time = 0;
 
     auto& registry = GRC::GetScraperRegistry();
-    const auto& scraper_map = registry.Scrapers();
 
     std::vector<std::string> scraper_entries { {"RxKVQ1SGpgyUfMv1zdygmiLi24mxG34k6f",
                                                "S2wGoFavFzTnpaxn6XqLmJDE9FppHiMrCn",
@@ -360,6 +385,9 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
                                 false);
     }
 
+    // Scrapers() returns a by-value snapshot under cs_lock; re-snapshot after each mutation.
+    auto scraper_map = registry.Scrapers();
+
     BOOST_CHECK(scraper_map.size() == 7);
 
     // Deauthorize a scraper
@@ -369,6 +397,8 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
                             height++,
                             time++,
                             false);
+
+    scraper_map = registry.Scrapers();
 
     // Still should be 7 current elements.
     BOOST_CHECK(scraper_map.size() == 7);
@@ -410,7 +440,7 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
     height++;
     time++;
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -431,9 +461,12 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
 
     dummy_tx.vContracts.push_back(contract);
 
-    GRC::ContractContext ctx(contract, dummy_tx, &dummy_index);
+    CTransaction ctx_tx(dummy_tx);
+    GRC::ContractContext ctx(contract, ctx_tx, &dummy_index);
 
     registry.Add(ctx);
+
+    scraper_map = registry.Scrapers();
 
     // Native map should still be 7 elements
     BOOST_CHECK(scraper_map.size() == 7);
@@ -510,6 +543,8 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
     int post_revert_height = 8;
     registry.SetDBHeight(post_revert_height);
 
+    scraper_map = registry.Scrapers();
+
     // After reversion...
     // Native map should be back to 7 elements.
     BOOST_CHECK(scraper_map.size() == 7);
@@ -529,7 +564,11 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
 
     BOOST_CHECK(resurrected_scraper->first == "SLbdvKZHmtu49VUWm88rbcCo9DaC8Z2urV");
     BOOST_CHECK(resurrected_scraper->second.value == "true");
-    BOOST_CHECK(resurrected_scraper->second.timestamp = 6);
+    BOOST_CHECK(resurrected_scraper->second.timestamp == 6);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif

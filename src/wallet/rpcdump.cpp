@@ -8,11 +8,13 @@
 #include <key_io.h>
 #include "rpc/server.h"
 #include "rpc/protocol.h"
+#include "rpc/util.h"
 #include "node/ui_interface.h"
 
 #include <stdexcept>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/algorithm/string.hpp>
+#include <util/string.h>
 
 using namespace std;
 
@@ -100,17 +102,37 @@ public:
     }
 };
 
-UniValue importprivkey(const UniValue& params, bool fHelp)
+static const RPCHelpMan importprivkey_help{
+    "importprivkey",
+    "Add a private key (as returned by dumpprivkey) to your wallet.\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.\n"
+    "\n"
+    "WARNING: when rescan is true, a full rescan of the blockchain will occur. This can take up to 20 minutes.",
+    {
+        {"gridcoinprivkey", RPCArg::Type::STR, RPCArg::Optional::NO, "Base58 WIF private key."},
+        {"label", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Optional label for the imported address."},
+        {"rescan", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Whether to rescan the blockchain after import. Default: true."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("importprivkey", "\"<wif>\"") +
+        HelpExampleCli("importprivkey", "\"<wif>\" \"label\" false") +
+        HelpExampleRpc("importprivkey", "\"<wif>\", \"label\", false")},
+};
+const RPCHelpMan& importprivkey_helpman() { return importprivkey_help; }
+
+UniValue importprivkey(const UniValue& params)
 {
-    if (fHelp || params.size() < 1 || params.size() > 3)
-        throw runtime_error(
-        "importprivkey <gridcoinprivkey> [label] [bool:rescan]\n"
-        "\n"
-        "[label] -------> Optional; Label for imported address\n"
-        "[bool:rescan] -> Optional; Default true\n"
-        "WARNING: if true rescan of blockchain will occur. This could take up to 20 minutes.\n"
-        "\n"
-        "Adds a private key (as returned by dumpprivkey) to your wallet\n");
+    // Same enforce-first shape as importwallet, dumpprivkey and dumpwallet.
+    // Without it a locked wallet failed later inside AddKey with
+    // RPC_WALLET_ERROR, after MarkDirty and a mapKeyMetadata entry had
+    // already been written, and a re-import of a key the wallet already held
+    // returned success without ever consulting the lock. The check runs with
+    // cs_wallet already held (walletlock takes the same lock before Lock()),
+    // so the lock state cannot flip between this check and AddKey below.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
 
     string strSecret = params[0].get_str();
     string strLabel = "";
@@ -129,13 +151,8 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
     }
 
-    if (fWalletUnlockStakingOnly)
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is unlocked for staking only.");
-
     CKeyID vchAddress = key.GetPubKey().GetID();
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-
         pwalletMain->MarkDirty();
 
         // Don't throw error in case a key is already there
@@ -161,17 +178,23 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
     return NullUniValue;
 }
 
-UniValue importwallet(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-            "importwallet <filename>\n"
-            "\n"
-            "<filename> -> filename of the wallet to import\n"
-            "\n"
-            "Imports keys from a wallet dump file (see dumpwallet)\n"
-            "If a path is not specified in the filename, the data directory is used.");
+static const RPCHelpMan importwallet_help{
+    "importwallet",
+    "Imports keys from a wallet dump file (see dumpwallet).\n"
+    "If a path is not specified in the filename, the data directory is used.\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename of the wallet dump to import."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("importwallet", "\"wallet.dump\"") +
+        HelpExampleRpc("importwallet", "\"wallet.dump\"")},
+};
+const RPCHelpMan& importwallet_helpman() { return importwallet_help; }
 
+UniValue importwallet(const UniValue& params)
+{
     fs::path PathForImport = fs::path(params[0].get_str());
     fs::path DefaultPathDataDir = GetDataDir();
 
@@ -200,7 +223,7 @@ UniValue importwallet(const UniValue& params, bool fHelp)
             continue;
 
         std::vector<std::string> vstr;
-        boost::split(vstr, line, boost::is_any_of(" "));
+        vstr = SplitString(line, ' ');
         if (vstr.size() < 2)
             continue;
 
@@ -268,26 +291,39 @@ UniValue importwallet(const UniValue& params, bool fHelp)
 }
 
 
-UniValue dumpprivkey(const UniValue& params, bool fHelp)
+static const RPCHelpMan dumpprivkey_help{
+    "dumpprivkey",
+    "Reveals the private key corresponding to <gridcoinaddress>.\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"gridcoinaddress", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the requested key."},
+        {"dump_hex", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, also include the private and public keys as hex strings in the JSON output. "
+            "Default: false (only the base58 WIF is returned)."},
+    },
+    RPCResult{RPCResult::Type::ANY, "",
+        "When dump_hex is false (default), returns the base58 WIF private key as a string. "
+        "When dump_hex is true, returns a JSON object with base58 and hex representations."},
+    RPCExamples{
+        HelpExampleCli("dumpprivkey", "\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\"") +
+        HelpExampleCli("dumpprivkey", "\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\" true") +
+        HelpExampleRpc("dumpprivkey", "\"SBMNrHuBvrbGTwqCnZHZhQpsbTyYYmY2Dz\", true")},
+};
+const RPCHelpMan& dumpprivkey_helpman() { return dumpprivkey_help; }
+
+UniValue dumpprivkey(const UniValue& params)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-            "dumpprivkey <gridcoinaddress> [bool:dump hex]\n"
-            "<gridcoinaddress> -> Address of requested key\n"
-            "[bool:dump hex]   -> Optional; default false boolean to dump private and public key\n"
-            "                     as hex strings to JSON in addition to private key base58 encoded"
-            "\n"
-            "Reveals the private key corresponding to <gridcoinaddress>\n");
+    // Under cs_wallet before the unlock-state check, as importprivkey is
+    // (#3332): walletpassphrase and walletlock change the lock state and the
+    // staking-only flag under cs_wallet, so the check and the key access below
+    // are one step rather than a window another RPC thread can change.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     EnsureWalletIsUnlocked();
 
     CTxDestination address = DecodeDestination(params[0].get_str());
     if (!IsValidDestination(address))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-    if (fWalletUnlockStakingOnly)
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is unlocked for staking only.");
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CKeyID* keyID = std::get_if<CKeyID>(&address);
     if (!keyID)
@@ -313,17 +349,23 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp)
     return EncodeSecret(vchSecret);
 }
 
-UniValue dumpwallet(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-            "dumpwallet <filename>\n"
-            "\n"
-            "<filename> -> filename to dump wallet to\n"
-            "\n"
-            "Dumps all wallet keys in a human-readable format into the specified file.\n"
-            "If a path is not specified in the filename, the data directory is used.");
+static const RPCHelpMan dumpwallet_help{
+    "dumpwallet",
+    "Dumps all wallet keys in a human-readable format into the specified file.\n"
+    "If a path is not specified in the filename, the data directory is used.\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename to dump the wallet to."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("dumpwallet", "\"wallet.dump\"") +
+        HelpExampleRpc("dumpwallet", "\"wallet.dump\"")},
+};
+const RPCHelpMan& dumpwallet_helpman() { return dumpwallet_help; }
 
+UniValue dumpwallet(const UniValue& params)
+{
     EnsureWalletIsUnlocked();
 
     fs::path PathForDump = fs::path(params[0].get_str());
@@ -385,7 +427,7 @@ UniValue dumpwallet(const UniValue& params, bool fHelp)
         if (pwalletMain->GetKey(keyid, key)) {
             file << strprintf("%s %s ", EncodeSecret(key), strTime);
             if (pwalletMain->mapAddressBook.count(keyid)) {
-                file << strprintf("label=%s", EncodeDumpString(pwalletMain->mapAddressBook[keyid]));
+                file << strprintf("label=%s", EncodeDumpString(pwalletMain->mapAddressBook[keyid].name));
             } else if (keyid == masterKeyID) {
                 file << "hdmaster=1";
             } else if (setKeyPool.count(keyid)) {

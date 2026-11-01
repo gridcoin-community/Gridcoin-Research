@@ -22,11 +22,11 @@ This document covers these build targets:
 
 ## Prerequisites
 
-  * **CMake:** 3.18 or later
+  * **CMake:** 3.21 or later
   * **Compiler:** GCC (C++17 support required) or Clang. If your system compiler is not compliant, you will need to install
     a compiler that is C++17 compliant and use -DCMAKE_CXX_COMPILER=\< C++ compiler \> and -DCMAKE_C_COMPILER=\< C compiler \>
-  * **Qt:** Version 5.15 or 6.x
-  * **Boost:** Version 1.63 or later
+  * **Qt:** Version 6.2.0 or later (Qt 6, the default), or 5.15 or later (Qt 5, with -DUSE_QT6=OFF)
+  * **Boost:** Version 1.66 or later
   * Please refer to [link](build-dependencies.md) (build-dependencies.md) for packages that must be installed before building.
 
 -----
@@ -71,7 +71,8 @@ Options:
   --help, -h          Show this help message.
 ```
 
-This script works for all five major targets. The "native" target (Linux Native) should work across all seven major distributions that we check in continuous integration testing on Github, including the automatic installation of all the necessary dependencies. The "depends" target (Linux Static) and the "win64" target (Windows Cross-Compile) works with Ubuntu latest, Fedora, and OpenSUSE, and probably the others as well. The macOS target should work with macOS 12 "Monterey" or newer.
+This script works for all five major targets. The "native" target (Linux Native) should work across all seven major distributions that we check in continuous integration testing on Github, including the automatic installation of all the necessary dependencies. The "depends" target (Linux Static) and the "win64" target (Windows Cross-Compile) works with Ubuntu latest, Fedora, and OpenSUSE, and probably the others as well. The macOS target requires macOS 14 "Sonoma" or newer, on both Apple Silicon
+and Intel; see [doc/build-macos.md](build-macos.md) for why that is the floor.
 
 A typical example of the use of this script by someone desiring a local build dynamically linked to the system libraries would be:
 
@@ -88,6 +89,8 @@ After you build with this script with the appropriate target
 
 Please refer to [Link](cmake-options.md) (cmake-options.md) for a list of cmake configuration options.
 
+To build the **split GUI/node (multiprocess)** variant — where the GUI and daemon run as separate processes that communicate over IPC — add `-DENABLE_MULTIPROCESS=ON` to a native build, or build the depends tree with `MULTIPROCESS=1` for a static/Windows build. See [multiprocess.md](multiprocess.md) for building **and running** in multiprocess mode (including the Windows requirement that the daemon run as the same user as the GUI), and [running-unattended.md](running-unattended.md) for running the core as a **background service that stakes unattended** (Linux systemd / Windows Task Scheduler, with optional stake-only autounlock).
+
 Developers may want to use -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache to have ccache cache
 the compilation at the ccache level. In many instances it is required to do an rm -rf of the build directory, and this will speed up
 repeated compilations.
@@ -102,7 +105,7 @@ This procedure uses your operating system's installed libraries (OpenSSL, Boost,
 
 Run the following from the repository root:
 
-Note that if your distribution has Qt6, you will need to add -DUSE_QT6. You can also leave out -DENABLE_QRENCODE, -DENABLE_UPNP, and -DDEFAULT_UPNP if you don't use that functionality.
+Qt 6 is the default. If your distribution has only Qt 5, add -DUSE_QT6=OFF. You can also leave out -DENABLE_QRENCODE=ON, or pass -DENABLE_UPNP=OFF, if you do not use that functionality.
 
 ```bash
 rm -rf build
@@ -111,7 +114,6 @@ cmake -B build \
     -DENABLE_QRENCODE=ON \
     -DUSE_DBUS=ON \
     -DENABLE_UPNP=ON \
-    -DDEFAULT_UPNP=ON \
     -DENABLE_PIE=ON \
     -DENABLE_DOCS=ON \
     -DENABLE_TESTS=ON \
@@ -164,10 +166,9 @@ cmake -B build_linux_depends \
     -DUSE_QT6=ON \
     -DSTATIC_LIBS=ON \
     -DENABLE_UPNP=ON \
-    -DDEFAULT_UPNP=ON \
     -DENABLE_TESTS=ON \
     -DDEP_LIB="${DEP_LIB}" \
-    -DCMAKE_CXX_FLAGS="-fPIE" \
+    -DENABLE_PIE=ON \
     -DCMAKE_EXE_LINKER_FLAGS="-static-libgcc -static-libstdc++ -Wl,-Bdynamic" \
     -DCMAKE_BUILD_TYPE=\< Release | RelWithDebInfo | Debug - see table below \>
 ```
@@ -221,7 +222,6 @@ cmake -B build_win64 \
     -DENABLE_GUI=ON \
     -DUSE_QT6=ON \
     -DENABLE_UPNP=ON \
-    -DDEFAULT_UPNP=ON \
     -DENABLE_TESTS=ON \
     -DSYSTEM_XXD=ON \
     -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/wine \
@@ -258,11 +258,13 @@ If you are familiar with the legacy Autotools build system (`./configure`), this
 | **Release Build** | *(default + strip)* | `-DCMAKE_BUILD_TYPE=Release` |
 | **GUI** | `--with-gui` | `-DENABLE_GUI=ON` |
 | **No GUI** | `--without-gui` | `-DENABLE_GUI=OFF` |
+| **Multiprocess (split GUI/node)** | *(n/a)* | `-DENABLE_MULTIPROCESS=ON` (see [multiprocess.md](multiprocess.md)) |
 | **UPnP** | `--with-miniupnpc` | `-DENABLE_UPNP=ON` |
 | **QR Code** | `--with-qrencode` | `-DENABLE_QRENCODE=ON` |
 | **Tests** | `--enable-tests` | `-DENABLE_TESTS=ON` |
 | **DBus** | `--with-dbus` | `-DUSE_DBUS=ON` |
-| **Hardening** | `--enable-hardening` | `-DENABLE_PIE=ON` |
+| **Hardening** | `--enable-hardening` | `-DENABLE_HARDENING=ON` *(the default, as it was under Autotools)* |
+| **PIE** | *(part of `--enable-hardening`)* | `-DENABLE_PIE=ON` *(not supported on the Windows cross build)* |
 | **Static Libs** | *(implicit in depends)* | `-DSTATIC_LIBS=ON` |
 
 **Build type note:** The old Autotools default did not strip debug symbols and used `-O2` optimization, which corresponds to CMake's `-DCMAKE_BUILD_TYPE=RelWithDebInfo`. CMake's `-DCMAKE_BUILD_TYPE=Release` uses `-O2` and also strips debug symbols. Omitting `-DCMAKE_BUILD_TYPE` entirely results in no optimization and is not recommended.

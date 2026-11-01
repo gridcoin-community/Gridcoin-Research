@@ -11,9 +11,6 @@
 #include <memory>
 
 #ifdef DEBUG_LOCKCONTENTION
-#if !defined(HAVE_THREAD_LOCAL)
-static_assert(false, "thread_local is not supported");
-#endif
 void PrintLockContention(const char* pszName, const char* pszFile, int nLine)
 {
     LogPrintf("LOCKCONTENTION: %s\n", pszName);
@@ -39,19 +36,21 @@ struct CLockLocation {
         const char* pszFile,
         int nLine,
         bool fTryIn,
-        const std::string& thread_name
+        bool fOrderExemptIn,
+        std::string&& thread_name
         )
         : fTry(fTryIn),
+          fOrderExempt(fOrderExemptIn),
           mutexName(pszName),
           sourceFile(pszFile),
-          m_thread_name(thread_name),
+          m_thread_name(std::move(thread_name)),
           sourceLine(nLine) {}
 
     std::string ToString() const
     {
         return strprintf(
             "'%s' in %s:%s%s (in thread '%s')",
-            mutexName, sourceFile, sourceLine, (fTry ? " (TRY)" : "") , m_thread_name);
+            mutexName, sourceFile, sourceLine, (fTry ? (fOrderExempt ? " (TRY, order-exempt)" : " (TRY)") : ""), m_thread_name);
     }
 
     std::string Name() const
@@ -59,11 +58,21 @@ struct CLockLocation {
         return mutexName;
     }
 
+    //! A TRY_LOCK_ORDER_EXEMPT acquisition: outside the lock hierarchy. Only a
+    //! try-lock can be, whatever the second flag says: a blocking lock waits.
+    bool IsOrderExempt() const
+    {
+        return fTry && fOrderExempt;
+    }
+
 private:
     bool fTry;
+    bool fOrderExempt;
     std::string mutexName;
     std::string sourceFile;
-    const std::string& m_thread_name;
+    //! A copy: the stack entry outlives the call that pushed it, and the
+    //! lock-order map keeps it after its thread has exited.
+    const std::string m_thread_name;
     int sourceLine;
 };
 
@@ -90,6 +99,15 @@ LockData& GetLockData() {
     static LockData& lock_data = *new LockData();
     return lock_data;
 }
+
+namespace {
+// Lock-order debugging flags, extracted from the former sync.h externs so the
+// header carries only the (stateless) lock primitives and macros. Defined ahead
+// of their in-file readers below; toggled from unit tests through the
+// Get/Set accessors (defined at the bottom of the DEBUG_LOCKORDER block).
+bool g_debug_lockorder_abort = false;
+bool g_debug_lockorder_throw_exception = false;
+} // namespace
 
 static void potential_deadlock_detected(const LockPair& mismatch, const LockStack& s1, const LockStack& s2)
 {
@@ -162,6 +180,14 @@ static void push_lock(void* c, const CLockLocation& locklocation)
 
     LockStack& lock_stack = lockdata.m_lock_stacks[std::this_thread::get_id()];
     lock_stack.emplace_back(c, locklocation);
+
+    // A TRY_LOCK_ORDER_EXEMPT acquisition is outside the hierarchy: record no
+    // order into it and check none. It stays on the stack, because the lock
+    // it took is held like any other, and a blocking lock taken while it is
+    // held is a real order, recorded and checked below when that lock is
+    // pushed. A plain TRY_LOCK is deliberately still ordered (sync.h).
+    if (locklocation.IsOrderExempt()) return;
+
     for (const LockStackItem& i : lock_stack) {
         if (i.first == c)
             break;
@@ -197,9 +223,9 @@ static void pop_lock()
     }
 }
 
-void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry)
+void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry, bool fOrderExempt)
 {
-    push_lock(cs, CLockLocation(pszName, pszFile, nLine, fTry, util::ThreadGetInternalName()));
+    push_lock(cs, CLockLocation(pszName, pszFile, nLine, fTry, fOrderExempt, util::ThreadGetInternalName()));
 }
 
 void CheckLastCritical(void* cs, std::string& lockname, const char* guardname, const char* file, int line)
@@ -300,7 +326,17 @@ bool LockStackEmpty()
     return it->second.empty();
 }
 
-bool g_debug_lockorder_abort = false;
-bool g_debug_lockorder_throw_exception = false;
+bool GetLockOrderDebugAbort() { return g_debug_lockorder_abort; }
+void SetLockOrderDebugAbort(bool enable) { g_debug_lockorder_abort = enable; }
+void ResetLockOrderTracking()
+{
+    LockData& lockdata = GetLockData();
+    std::lock_guard<std::mutex> lock(lockdata.dd_mutex);
+    lockdata.lockorders.clear();
+    lockdata.invlockorders.clear();
+}
+
+bool GetLockOrderDebugThrowException() { return g_debug_lockorder_throw_exception; }
+void SetLockOrderDebugThrowException(bool enable) { g_debug_lockorder_throw_exception = enable; }
 
 #endif /* DEBUG_LOCKORDER */

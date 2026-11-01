@@ -27,6 +27,7 @@ add_library(gridcoinqt STATIC
     addressbookpage.cpp
     addresstablemodel.cpp
     askpassphrasedialog.cpp
+    balancecopyfilter.cpp
     bantablemodel.cpp
     bitcoinaddressvalidator.cpp
     bitcoinamountfield.cpp
@@ -35,7 +36,8 @@ add_library(gridcoinqt STATIC
     clicklabel.cpp
     clientmodel.cpp
     coincontroldialog.cpp
-    coincontroltreewidget.cpp
+    coinselectionmodel.cpp
+    coinselectionview.cpp
     consolidateunspentdialog.cpp
     consolidateunspentwizard.cpp
     consolidateunspentwizardselectdestinationpage.cpp
@@ -43,10 +45,12 @@ add_library(gridcoinqt STATIC
     consolidateunspentwizardsendpage.cpp
     csvmodelwriter.cpp
     decoration.cpp
+    detailedtxmodel.cpp
     diagnosticsdialog.cpp
     editaddressdialog.cpp
     editsidestakedialog.cpp
     favoritespage.cpp
+    guilog.cpp
     guiutil.cpp
     intro.cpp
     monitoreddatamapper.cpp
@@ -57,6 +61,7 @@ add_library(gridcoinqt STATIC
     optionsdialog.cpp
     optionsmodel.cpp
     overviewpage.cpp
+    overviewtxmodel.cpp
     peertablemodel.cpp
     qtipcserver.cpp
     qvalidatedlineedit.cpp
@@ -82,11 +87,13 @@ add_library(gridcoinqt STATIC
     sendcoinsentry.cpp
     sidestaketablemodel.cpp
     signverifymessagedialog.cpp
+    splashscreen.cpp
+    multisigndialog.cpp
+    psgtpoolpage.cpp
+    psgtpooltablemodel.cpp
     trafficgraphwidget.cpp
     transactiondesc.cpp
     transactiondescdialog.cpp
-    transactionfilterproxy.cpp
-    transactionrecord.cpp
     transactiontablemodel.cpp
     transactionview.cpp
     updatedialog.cpp
@@ -112,14 +119,16 @@ add_library(gridcoinqt STATIC
     voting/votingmodel.cpp
     voting/votingpage.cpp
     walletmodel.cpp
-    winshutdownmonitor.cpp
 
     bitcoin.qrc
     bitcoin_locale.qrc
 )
 
 if(WIN32)
-    target_sources(gridcoinqt PRIVATE res/gridcoinresearch.rc)
+    target_sources(gridcoinqt PRIVATE
+        res/gridcoinresearch.rc
+        winshutdownmonitor.cpp
+    )
     set_source_files_properties(res/gridcoinresearch.rc PROPERTIES
         COMPILE_DEFINITIONS WINDRES_PREPROC
     )
@@ -127,8 +136,14 @@ elseif(APPLE)
     target_sources(gridcoinqt PRIVATE
         macdockiconhandler.mm
         macnotificationhandler.mm
+        macos_appearance.mm
         macos_appnap.mm
     )
+endif()
+
+if(ENABLE_QRENCODE)
+    target_sources(gridcoinqt PRIVATE qrcodedialog.cpp)
+    target_compile_definitions(gridcoinqt PRIVATE ENABLE_QRENCODE)
 endif()
 
 set_target_properties(gridcoinqt PROPERTIES
@@ -168,11 +183,21 @@ target_link_libraries(gridcoinqt PUBLIC
     gridcoin_util
 )
 
-if(USE_QT6)
-    target_link_libraries(gridcoinqt PUBLIC ${QT}::Core5Compat)
+# Dev-only (#3183): run QAbstractItemModelTester over the coin-selection model
+# on every mutation. Needs the QtTest module; NEVER enable at pathological
+# -devsyntheticcoins scales — the tester re-walks the model per signal.
+option(COINSELECTION_MODEL_TESTER
+       "Dev: attach QAbstractItemModelTester to the coin-selection model" OFF)
+if(COINSELECTION_MODEL_TESTER)
+    find_package(${QT} REQUIRED COMPONENTS Test)
+    target_compile_definitions(gridcoinqt PUBLIC COINSELECTION_MODEL_TESTER)
+    target_link_libraries(gridcoinqt PUBLIC ${QT}::Test)
 endif()
 if(USE_DBUS)
     target_link_libraries(gridcoinqt PUBLIC ${QT}::DBus)
+endif()
+if(ENABLE_QRENCODE)
+    target_link_libraries(gridcoinqt PUBLIC PkgConfig::QRENCODE)
 endif()
 
 if(APPLE)
@@ -221,6 +246,9 @@ add_executable(gridcoinresearch bitcoin.cpp ${GRIDCOIN_RC})
 set(MACOSX_BUNDLE_RESOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/icons/gridcoin.icns")
 if(APPLE)
     target_sources(gridcoinresearch PRIVATE ${MACOSX_BUNDLE_RESOURCE_FILES})
+    set_target_properties(gridcoinresearch PROPERTIES
+        RESOURCE ${MACOSX_BUNDLE_RESOURCE_FILES}
+    )
 endif()
 
 target_link_libraries(gridcoinresearch PRIVATE
@@ -230,6 +258,14 @@ target_link_libraries(gridcoinresearch PRIVATE
     gridcoin_util
     gridcoinqt
 )
+
+# The GUI connects to a separately-started daemon over IPC when run with
+# -multiprocess (qt/bitcoin.cpp -> ipc::ConnectToNode); link the IPC layer that
+# provides it, mirroring gridcoinresearchd. gridcoin_ipc is EXCLUDE_FROM_ALL, so
+# it is only built when something (here) links it.
+if(ENABLE_MULTIPROCESS)
+    target_link_libraries(gridcoinresearch PRIVATE gridcoin_ipc)
+endif()
 
 # Linux Static Math Lib Workaround
 if(UNIX AND NOT APPLE AND DEFINED DEP_LIB)
@@ -281,7 +317,6 @@ set_target_properties(gridcoinresearch PROPERTIES
     WIN32_EXECUTABLE TRUE
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/share/qt/Info.plist.cmake.in"
-    RESOURCE ${MACOSX_BUNDLE_RESOURCE_FILES}
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
@@ -302,7 +337,7 @@ endif()
 if(UNIX AND NOT APPLE)
     include(GNUInstallDirs)
     install(TARGETS gridcoinresearch COMPONENT gui
-        DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     )
     install(DIRECTORY "${CMAKE_SOURCE_DIR}/share/icons" COMPONENT gui
         DESTINATION "${CMAKE_INSTALL_DATADIR}"
@@ -433,11 +468,58 @@ if(APPLE)
         endif()
     endif()
 
+    # Ship the daemon inside the bundle.
+    #
+    # Without this the DMG contains the GUI only, so -multiprocess is unusable from a
+    # macOS install: the IPC layer is connect-only (it attaches to a node already
+    # listening on node.sock and never spawns one), and there is no node to attach to.
+    # Every macOS artifact has multiprocess compiled in and advertises -multiprocess in
+    # --help, so shipping without the daemon leaves the option present and impossible to
+    # satisfy. The Windows installer already ships both.
+    #
+    # It goes in Contents/Helpers, not Contents/MacOS. Contents/MacOS is for the
+    # bundle's MAIN executable; codesign treats any other Mach-O there as a
+    # subcomponent that must be independently valid, and an auxiliary binary placed
+    # there fails bundle verification with "code object is not signed at all".
+    # Contents/Helpers is Apple's location for auxiliary executables, and it is a
+    # sibling of Contents/Frameworks exactly as Contents/MacOS is, so the
+    # @executable_path/../Frameworks/... install names resolve from it unchanged.
+    #
+    # It is copied in BEFORE macdeployqtplus runs, so the same pass that relocates the
+    # GUI's library references also relocates the daemon's, and so the daemon is signed
+    # in the inside-out order -- see deployFrameworksForHelpers() and step 3 of the
+    # signing sequence there. Copying it afterwards would leave the daemon pointing at
+    # Homebrew paths that do not exist on a user's machine, and unsigned.
+    # gridcoinresearchd is only a target when ENABLE_DAEMON is ON (src/CMakeLists.txt).
+    # Naming it unconditionally makes CMake fail at generate time with an "Unknown target"
+    # error that says nothing about the option that caused it, so the copy is conditional.
+    # Its absence is reported rather than silent: a bundle whose GUI advertises
+    # -multiprocess with no daemon beside it is the exact defect this target exists to
+    # prevent, and that combination is worth a warning rather than a note.
+    set(_deploy_helper_commands)
+    set(_deploy_helper_depends)
+    if(TARGET gridcoinresearchd)
+        set(_deploy_helper_commands
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${_app_bundle}/Contents/Helpers"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "$<TARGET_FILE:gridcoinresearchd>"
+                    "${_app_bundle}/Contents/Helpers/")
+        set(_deploy_helper_depends gridcoinresearchd)
+    elseif(ENABLE_MULTIPROCESS)
+        message(WARNING
+            "ENABLE_DAEMON is OFF but ENABLE_MULTIPROCESS is ON: the DMG will contain a GUI "
+            "that advertises -multiprocess with no gridcoinresearchd beside it to connect to.")
+    else()
+        message(STATUS
+            "Deploy: ENABLE_DAEMON is OFF, so the DMG will not contain gridcoinresearchd")
+    endif()
+
     add_custom_target(deploy
+        ${_deploy_helper_commands}
         COMMAND ${CMAKE_COMMAND} -E env "QTDIR=${_qt_prefix_dir}" ${_deploy_cmd}
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
         COMMENT "Deploying ${_dmg_name}.dmg via macdeployqtplus"
-        DEPENDS gridcoinresearch
+        DEPENDS gridcoinresearch ${_deploy_helper_depends}
     )
 endif()
 

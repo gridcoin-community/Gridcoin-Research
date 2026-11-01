@@ -1,0 +1,1381 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+// Phase 1 tests for the modernized mempool (#3029): verify that
+// CTxMemPoolEntry caches the right metadata, that the Gridcoin contract
+// tags are extracted from a transaction's contracts, and that adding an
+// entry keeps mapNextTx / lookup consistent.
+
+#include <boost/test/unit_test.hpp>
+
+#include "test/state_guard.h"
+
+#include <consensus/validation.h>
+#include <key.h>
+#include <primitives/transaction.h>
+#include <script/script.h>
+#include <validation.h>
+#include <txmempool.h>
+#include <uint256.h>
+#include <node/mempool_persist.h>
+#include <fs.h>
+#include <gridcoin/beacon.h>
+#include <gridcoin/cpid.h>
+#include <gridcoin/mrc.h>
+#include <gridcoin/pool.h>
+#include <gridcoin/sidestake.h>
+#include <gridcoin/tx_message.h>
+#include <gridcoin/contract/contract.h>
+#include <rpc/server.h>
+#include <test/test_gridcoin.h>
+#include <streams.h>
+#include <util.h>
+#include <util/strencodings.h>
+
+#include <univalue.h>
+
+#include <functional>
+#include <list>
+#include <set>
+#include <string>
+#include <type_traits>
+#include <vector>
+
+namespace {
+//! Build a v2 transaction carrying the supplied contracts (if any).
+CTransaction MakeTx(const std::vector<GRC::Contract>& contracts = {},
+                    const std::vector<CTxIn>& vin = {},
+                    const std::vector<CTxOut>& vout = {})
+{
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.vin = vin;
+    mtx.vout = vout;
+    mtx.vContracts = contracts;
+    return CTransaction(mtx);
+}
+
+//! Build a v2 transaction carrying a single MRC contract for the given CPID.
+CTransaction MakeMrcTx(const GRC::Cpid& cpid, CAmount fee, const uint256& last_block = uint256())
+{
+    GRC::MRC mrc;
+    mrc.m_mining_id = cpid;
+    mrc.m_fee = fee;
+    mrc.m_last_block_hash = last_block;
+    return MakeTx({GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, mrc)});
+}
+
+//! Build a v2 transaction carrying a single MESSAGE contract.
+CTransaction MakeMessageTx(const std::string& message,
+                           const std::vector<CTxIn>& vin = {},
+                           const std::vector<CTxOut>& vout = {})
+{
+    return MakeTx({GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, message)}, vin, vout);
+}
+
+CTxMemPoolEntry MakeEntry(const CTransaction& tx)
+{
+    return CTxMemPoolEntry(tx, 0, 0, 0, ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION));
+}
+} // anonymous namespace
+
+// Suite-level guard: the pool is cleared on entry and on exit, so the
+// per-case clears below defend this suite and nothing leaks out of it.
+BOOST_AUTO_TEST_SUITE(txmempool_tests, *boost::unit_test::fixture<grc_test::MempoolStateGuard>())
+
+BOOST_AUTO_TEST_CASE(entry_caches_fee_size_time_height)
+{
+    const CTransaction tx = MakeTx();
+    const size_t size = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
+
+    CTxMemPoolEntry entry(tx, /*fee=*/5000, /*time=*/111, /*height=*/222, size);
+
+    BOOST_CHECK_EQUAL(entry.GetFee(), 5000);
+    BOOST_CHECK_EQUAL(entry.GetTxSize(), size);
+    BOOST_CHECK_EQUAL(entry.GetTime(), 111);
+    BOOST_CHECK_EQUAL(entry.GetHeight(), 222);
+    BOOST_CHECK_EQUAL(entry.GetFeeRate(), size ? 5000 * 1000 / (CAmount)size : 0);
+
+    // A plain transaction has no contract tags.
+    BOOST_CHECK(entry.GetContractTypes().empty());
+    BOOST_CHECK(!entry.HasMRC());
+    BOOST_CHECK(!entry.HasBeacon());
+    BOOST_CHECK(!entry.HasMandatorySidestake());
+}
+
+BOOST_AUTO_TEST_CASE(entry_tags_mrc_contract)
+{
+    const GRC::Cpid cpid(InsecureRandBytes(16));
+
+    GRC::MRC mrc;
+    mrc.m_mining_id = cpid;
+    mrc.m_fee = 1234;
+    mrc.m_last_block_hash = uint256S("0x01");
+
+    const GRC::Contract contract = GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, mrc);
+    const CTransaction tx = MakeTx({contract});
+
+    CTxMemPoolEntry entry(tx, 0, 0, 0, ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION));
+
+    BOOST_CHECK(entry.HasMRC());
+    BOOST_CHECK(entry.GetMRCCpid() == cpid);
+    BOOST_CHECK_EQUAL(entry.GetMRCFee(), 1234);
+    BOOST_CHECK(entry.GetMRCLastBlockHash() == uint256S("0x01"));
+    BOOST_CHECK(entry.GetContractTypes().count(GRC::ContractType::MRC) == 1);
+    BOOST_CHECK(!entry.HasBeacon());
+    BOOST_CHECK(!entry.HasMandatorySidestake());
+}
+
+BOOST_AUTO_TEST_CASE(entry_tags_beacon_contract)
+{
+    const GRC::Cpid cpid(InsecureRandBytes(16));
+
+    CKey key;
+    key.MakeNewKey(false);
+
+    const GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
+        GRC::ContractAction::ADD, cpid, key.GetPubKey());
+    const CTransaction tx = MakeTx({contract});
+
+    CTxMemPoolEntry entry(tx, 0, 0, 0, ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION));
+
+    BOOST_CHECK(entry.HasBeacon());
+    BOOST_CHECK(entry.GetBeaconCpid() == cpid);
+    BOOST_CHECK(entry.GetContractTypes().count(GRC::ContractType::BEACON) == 1);
+    BOOST_CHECK(!entry.HasMRC());
+    BOOST_CHECK(!entry.HasMandatorySidestake());
+}
+
+BOOST_AUTO_TEST_CASE(entry_tags_mandatory_sidestake_contract)
+{
+    GRC::SideStakePayload payload;
+    const GRC::Contract contract = GRC::MakeContract<GRC::SideStakePayload>(
+        GRC::ContractAction::ADD, payload);
+    const CTransaction tx = MakeTx({contract});
+
+    CTxMemPoolEntry entry(tx, 0, 0, 0, ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION));
+
+    BOOST_CHECK(entry.HasMandatorySidestake());
+    BOOST_CHECK(entry.GetContractTypes().count(GRC::ContractType::SIDESTAKE) == 1);
+    BOOST_CHECK(!entry.HasMRC());
+    BOOST_CHECK(!entry.HasBeacon());
+}
+
+BOOST_AUTO_TEST_CASE(addunchecked_preserves_mapnexttx_and_lookup)
+{
+    CTxIn vin;
+    vin.prevout = COutPoint(uint256S("0xbeef"), 0);
+    CTxOut vout;
+    vout.nValue = 100;
+
+    const CTransaction tx = MakeTx({}, {vin}, {vout});
+    const uint256 hash = tx.GetHash();
+
+    CTxMemPool pool;
+    CTxMemPoolEntry entry(tx, 0, 0, 0, ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION));
+    BOOST_CHECK(pool.addUnchecked(hash, entry));
+
+    // mapNextTx points back at the stored transaction, through a pointer that
+    // cannot be used to mutate it (the entry's cached metadata depends on that).
+    static_assert(std::is_same_v<decltype(CInPoint::ptx), const CTransaction*>,
+                  "CInPoint::ptx must not grant mutable access to a pooled transaction");
+    auto it = pool.mapNextTx.find(vin.prevout);
+    BOOST_REQUIRE(it != pool.mapNextTx.end());
+    BOOST_REQUIRE(it->second.ptx != nullptr);
+    BOOST_CHECK(it->second.ptx->GetHash() == hash);
+
+    // lookup returns the original transaction byte-for-byte.
+    CTransaction result;
+    BOOST_CHECK(pool.lookup(hash, result));
+    BOOST_CHECK(result == tx);
+    BOOST_CHECK(pool.exists(hash));
+    BOOST_CHECK_EQUAL(pool.size(), 1UL);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 (#3029): contract indexes
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(indexes_populate_on_add_and_tear_down_on_remove)
+{
+    const GRC::Cpid mrc_cpid(InsecureRandBytes(16));
+    const GRC::Cpid beacon_cpid(InsecureRandBytes(16));
+
+    CKey key;
+    key.MakeNewKey(false);
+
+    const CTransaction mrc_tx = MakeMrcTx(mrc_cpid, 100);
+    const CTransaction beacon_tx = MakeTx(
+        {GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD, beacon_cpid, key.GetPubKey())});
+    GRC::SideStakePayload ss_payload;
+    const CTransaction sidestake_tx = MakeTx(
+        {GRC::MakeContract<GRC::SideStakePayload>(GRC::ContractAction::ADD, ss_payload)});
+
+    CTxMemPool pool;
+    pool.addUnchecked(mrc_tx.GetHash(), MakeEntry(mrc_tx));
+    pool.addUnchecked(beacon_tx.GetHash(), MakeEntry(beacon_tx));
+    pool.addUnchecked(sidestake_tx.GetHash(), MakeEntry(sidestake_tx));
+
+    BOOST_CHECK_EQUAL(pool.m_mrc_by_cpid.size(), 1U);
+    BOOST_CHECK_EQUAL(pool.m_mrc_by_fee.size(), 1U);
+    BOOST_CHECK_EQUAL(pool.m_beacon_by_cpid.size(), 1U);
+    BOOST_CHECK_EQUAL(pool.m_mandatory_sidestake_count, 1U);
+
+    pool.remove(mrc_tx);
+    pool.remove(beacon_tx);
+    pool.remove(sidestake_tx);
+
+    BOOST_CHECK(pool.m_mrc_by_cpid.empty());
+    BOOST_CHECK(pool.m_mrc_by_fee.empty());
+    BOOST_CHECK(pool.m_beacon_by_cpid.empty());
+    BOOST_CHECK_EQUAL(pool.m_mandatory_sidestake_count, 0U);
+    BOOST_CHECK_EQUAL(pool.size(), 0UL);
+}
+
+BOOST_AUTO_TEST_CASE(a_cpid_keeps_its_beacon_index_entry_until_its_last_beacon_leaves)
+{
+    // Two beacons for one CPID can be pooled together: acceptance does not refuse
+    // the second. The index must keep the CPID until both have gone, or
+    // HasBeaconForCpid() lets the wallet send another advertisement while one is
+    // still pooled.
+    const GRC::Cpid cpid(InsecureRandBytes(16));
+
+    CKey first_key;
+    first_key.MakeNewKey(false);
+    CKey second_key;
+    second_key.MakeNewKey(false);
+
+    const CTransaction first = MakeTx(
+        {GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD, cpid, first_key.GetPubKey())});
+    const CTransaction second = MakeTx(
+        {GRC::MakeContract<GRC::BeaconPayload>(GRC::ContractAction::ADD, cpid, second_key.GetPubKey())});
+
+    CTxMemPool pool;
+    pool.addUnchecked(first.GetHash(), MakeEntry(first));
+    pool.addUnchecked(second.GetHash(), MakeEntry(second));
+
+    BOOST_CHECK(pool.HasBeaconForCpid(cpid));
+
+    pool.remove(first);
+    BOOST_CHECK(pool.HasBeaconForCpid(cpid));
+
+    pool.remove(second);
+    BOOST_CHECK(!pool.HasBeaconForCpid(cpid));
+    BOOST_CHECK(pool.m_beacon_by_cpid.empty());
+}
+
+BOOST_AUTO_TEST_CASE(hasmrcforcpid_reports_collision_hash)
+{
+    const GRC::Cpid cpid_a(InsecureRandBytes(16));
+    const GRC::Cpid cpid_b(InsecureRandBytes(16));
+
+    const CTransaction mrc_tx = MakeMrcTx(cpid_a, 50);
+
+    CTxMemPool pool;
+    pool.addUnchecked(mrc_tx.GetHash(), MakeEntry(mrc_tx));
+
+    uint256 existing;
+    BOOST_CHECK(pool.HasMRCForCpid(cpid_a, &existing));
+    BOOST_CHECK(existing == mrc_tx.GetHash());
+    BOOST_CHECK(!pool.HasMRCForCpid(cpid_b));
+}
+
+BOOST_AUTO_TEST_CASE(getmrcqueue_is_fee_descending)
+{
+    CTxMemPool pool;
+    for (CAmount fee : {10, 30, 20}) {
+        const CTransaction tx = MakeMrcTx(GRC::Cpid(InsecureRandBytes(16)), fee);
+        pool.addUnchecked(tx.GetHash(), MakeEntry(tx));
+    }
+
+    const auto queue = pool.GetMRCQueue();
+    BOOST_REQUIRE_EQUAL(queue.size(), 3U);
+    BOOST_CHECK_EQUAL(queue[0].first, 30);
+    BOOST_CHECK_EQUAL(queue[1].first, 20);
+    BOOST_CHECK_EQUAL(queue[2].first, 10);
+}
+
+BOOST_AUTO_TEST_CASE(getstalemrcs_selects_by_anchor_block)
+{
+    const uint256 best = uint256S("0xaa");
+    const uint256 old = uint256S("0xbb");
+
+    const CTransaction fresh_tx = MakeMrcTx(GRC::Cpid(InsecureRandBytes(16)), 10, best);
+    const CTransaction stale_tx = MakeMrcTx(GRC::Cpid(InsecureRandBytes(16)), 10, old);
+
+    CTxMemPool pool;
+    pool.addUnchecked(fresh_tx.GetHash(), MakeEntry(fresh_tx));
+    pool.addUnchecked(stale_tx.GetHash(), MakeEntry(stale_tx));
+
+    const auto stale = pool.GetStaleMRCs(best);
+    BOOST_REQUIRE_EQUAL(stale.size(), 1U);
+    BOOST_CHECK(stale[0] == stale_tx.GetHash());
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 (#3029): diagnostic RPCs
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(rpc_mempool_diagnostics)
+{
+    const GRC::Cpid cpid(InsecureRandBytes(16));
+    const CTransaction mrc_tx = MakeMrcTx(cpid, 777);
+    const std::string txid = mrc_tx.GetHash().ToString();
+
+    mempool.clear();
+    mempool.addUnchecked(mrc_tx.GetHash(), MakeEntry(mrc_tx));
+
+    // getmempoolinfo
+    const UniValue info = getmempoolinfo(UniValue(UniValue::VARR));
+    BOOST_CHECK_EQUAL(info["size"].get_int(), 1);
+    BOOST_CHECK_EQUAL(info["mrc_count"].get_int(), 1);
+    BOOST_CHECK_EQUAL(info["beacon_count"].get_int(), 0);
+
+    // getrawmempool (non-verbose) -> array of txids
+    const UniValue ids = getrawmempool(UniValue(UniValue::VARR));
+    BOOST_REQUIRE_EQUAL(ids.size(), 1U);
+    BOOST_CHECK_EQUAL(ids[0].get_str(), txid);
+
+    // getrawmempool (verbose) -> object keyed by txid with metadata
+    UniValue vparams(UniValue::VARR);
+    vparams.push_back(UniValue(true));
+    const UniValue verbose = getrawmempool(vparams);
+    BOOST_REQUIRE(verbose.exists(txid));
+    BOOST_CHECK_EQUAL(verbose[txid]["mrc_cpid"].get_str(), cpid.ToString());
+
+    // getmempoolentry
+    UniValue eparams(UniValue::VARR);
+    eparams.push_back(UniValue(txid));
+    const UniValue entry = getmempoolentry(eparams);
+    BOOST_CHECK_EQUAL(entry["height"].get_int(), 0);
+    BOOST_CHECK_EQUAL(entry["mrc_cpid"].get_str(), cpid.ToString());
+
+    // getmempoolentry on a missing hash throws.
+    UniValue mparams(UniValue::VARR);
+    mparams.push_back(UniValue(uint256().ToString()));
+    BOOST_CHECK_THROW(getmempoolentry(mparams), UniValue);
+
+    mempool.clear();
+}
+
+BOOST_AUTO_TEST_CASE(rpc_mempool_reports_unbroadcast)
+{
+    // The unbroadcast flag is the only signal distinguishing "no peer has fetched
+    // my transaction" from "peers have it and simply have not mined it". It is
+    // reported both as an aggregate (getmempoolinfo.unbroadcastcount) and per entry
+    // (getrawmempool verbose / getmempoolentry); both mirror upstream fields of the
+    // same names, added by Core in a7ebe48b94.
+    // MakePlainTx is declared further down the file; build the equivalent here
+    // from MakeTx, which is in scope.
+    CTxOut vout;
+    vout.nValue = 4242;
+    const CTransaction tx = MakeTx({}, {}, {vout});
+    const std::string txid = tx.GetHash().ToString();
+
+    mempool.clear();
+    mempool.addUnchecked(tx.GetHash(), MakeEntry(tx));
+
+    UniValue vparams(UniValue::VARR);
+    vparams.push_back(UniValue(true));
+    UniValue eparams(UniValue::VARR);
+    eparams.push_back(UniValue(txid));
+
+    // A pooled tx that this node did not originate is not unbroadcast.
+    BOOST_CHECK_EQUAL(getmempoolinfo(UniValue(UniValue::VARR))["unbroadcastcount"].get_int(), 0);
+    BOOST_CHECK_EQUAL(getrawmempool(vparams)[txid]["unbroadcast"].get_bool(), false);
+    BOOST_CHECK_EQUAL(getmempoolentry(eparams)["unbroadcast"].get_bool(), false);
+    BOOST_CHECK(!mempool.IsUnbroadcastTx(tx.GetHash()));
+
+    // Marking it as locally originated flips all three surfaces.
+    mempool.AddUnbroadcast(tx.GetHash());
+    BOOST_CHECK_EQUAL(getmempoolinfo(UniValue(UniValue::VARR))["unbroadcastcount"].get_int(), 1);
+    BOOST_CHECK_EQUAL(getrawmempool(vparams)[txid]["unbroadcast"].get_bool(), true);
+    BOOST_CHECK_EQUAL(getmempoolentry(eparams)["unbroadcast"].get_bool(), true);
+    BOOST_CHECK(mempool.IsUnbroadcastTx(tx.GetHash()));
+
+    // A peer requesting the tx clears it -- this is the transition that says the
+    // transaction is actually propagating.
+    mempool.RemoveUnbroadcast(tx.GetHash());
+    BOOST_CHECK_EQUAL(getmempoolinfo(UniValue(UniValue::VARR))["unbroadcastcount"].get_int(), 0);
+    BOOST_CHECK_EQUAL(getrawmempool(vparams)[txid]["unbroadcast"].get_bool(), false);
+    BOOST_CHECK_EQUAL(getmempoolentry(eparams)["unbroadcast"].get_bool(), false);
+    BOOST_CHECK(!mempool.IsUnbroadcastTx(tx.GetHash()));
+
+    // The predicate is false for a hash that is not in the pool at all, rather
+    // than throwing or reporting stale membership.
+    BOOST_CHECK(!mempool.IsUnbroadcastTx(uint256()));
+
+    mempool.clear();
+}
+
+BOOST_AUTO_TEST_CASE(cancel_unbroadcast_transaction_gate)
+{
+    // cancelunbroadcasttransaction is only safe because of its gate: a transaction
+    // no peer has fetched can be dropped locally, whereas one that is propagating
+    // would simply be re-announced back. Each refusal path is therefore the
+    // security-relevant part of the RPC, not an afterthought.
+    CTxOut out;
+    out.nValue = 5150;
+    const CTransaction parent = MakeTx({}, {}, {out});
+
+    UniValue p(UniValue::VARR);
+    p.push_back(UniValue(parent.GetHash().ToString()));
+
+    mempool.clear();
+
+    // Not in the mempool at all.
+    BOOST_CHECK_THROW(cancelunbroadcasttransaction(p), UniValue);
+
+    // In the mempool but propagating (never marked unbroadcast, or a peer already
+    // fetched it) -- must refuse, since local removal would not cancel anything.
+    mempool.addUnchecked(parent.GetHash(), MakeEntry(parent));
+    BOOST_CHECK(!mempool.IsUnbroadcastTx(parent.GetHash()));
+    BOOST_CHECK_THROW(cancelunbroadcasttransaction(p), UniValue);
+    BOOST_CHECK(mempool.exists(parent.GetHash()));   // refusal must not remove it
+
+    // Unbroadcast, but another pooled transaction spends it -- refuse rather than
+    // cascade, because a child can have propagated even when its parent did not.
+    mempool.AddUnbroadcast(parent.GetHash());
+    CTxIn spend;
+    spend.prevout = COutPoint(parent.GetHash(), 0);
+    CTxOut child_out;
+    child_out.nValue = 5100;
+    const CTransaction child = MakeTx({}, {spend}, {child_out});
+    mempool.addUnchecked(child.GetHash(), MakeEntry(child));
+    BOOST_CHECK_THROW(cancelunbroadcasttransaction(p), UniValue);
+    BOOST_CHECK(mempool.exists(parent.GetHash()));
+    BOOST_CHECK(mempool.exists(child.GetHash()));
+
+    // With the descendant gone and the parent still unbroadcast, it cancels: the
+    // entry leaves the pool and the unbroadcast set with it.
+    mempool.remove(child);
+    BOOST_CHECK(mempool.IsUnbroadcastTx(parent.GetHash()));
+    const UniValue res = cancelunbroadcasttransaction(p);
+    BOOST_CHECK_EQUAL(res["txid"].get_str(), parent.GetHash().ToString());
+    BOOST_CHECK(!mempool.exists(parent.GetHash()));
+    BOOST_CHECK(!mempool.IsUnbroadcastTx(parent.GetHash()));
+    BOOST_CHECK_EQUAL(mempool.GetUnbroadcast().size(), 0U);
+
+    // The result reports both wallet effects. Neither fires here: the transaction
+    // was never added to pwalletMain, so there is nothing to abandon and no parent
+    // outputs to release. The fields must still be present and well-typed -- a
+    // caller distinguishes "not my transaction" from "cancelled and inputs freed"
+    // by reading them.
+    BOOST_CHECK(res.exists("wallet_abandoned"));
+    BOOST_CHECK(res.exists("inputs_released"));
+    BOOST_CHECK_EQUAL(res["wallet_abandoned"].get_bool(), false);
+    BOOST_CHECK_EQUAL(res["inputs_released"].get_int(), 0);
+
+    // Cancelling twice is not silently idempotent -- the second call reports that
+    // the transaction is no longer in the pool.
+    BOOST_CHECK_THROW(cancelunbroadcasttransaction(p), UniValue);
+
+    mempool.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 (#3029): bounded size + eviction
+// ---------------------------------------------------------------------------
+
+namespace {
+//! Distinct plain (no-contract) transaction, made unique by its output value.
+CTransaction MakePlainTx(CAmount out_value)
+{
+    CTxOut vout;
+    vout.nValue = out_value;
+    return MakeTx({}, {}, {vout});
+}
+
+CTxMemPoolEntry MakeEntryFee(const CTransaction& tx, CAmount fee)
+{
+    return CTxMemPoolEntry(tx, fee, 0, 0, ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION));
+}
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(trim_evicts_lowest_feerate_first_then_contracts_last)
+{
+    CTxMemPool pool;
+
+    const CTransaction lo = MakePlainTx(1);
+    const CTransaction mid = MakePlainTx(2);
+    const CTransaction hi = MakePlainTx(3);
+    pool.addUnchecked(lo.GetHash(), MakeEntryFee(lo, 10));
+    pool.addUnchecked(mid.GetHash(), MakeEntryFee(mid, 20));
+    pool.addUnchecked(hi.GetHash(), MakeEntryFee(hi, 30));
+
+    // A contract (MRC) tx with no fee -- lowest feerate of all, but protected.
+    const CTransaction mrc = MakeMrcTx(GRC::Cpid(InsecureRandBytes(16)), 5);
+    pool.addUnchecked(mrc.GetHash(), MakeEntryFee(mrc, 0));
+
+    BOOST_CHECK_EQUAL(pool.size(), 4UL);
+
+    std::vector<CTransaction> removed;
+    pool.TrimToSize(0, &removed);
+
+    // Order: non-contract by feerate ascending (lo, mid, hi), contract evicted last.
+    BOOST_REQUIRE_EQUAL(removed.size(), 4U);
+    BOOST_CHECK(removed[0].GetHash() == lo.GetHash());
+    BOOST_CHECK(removed[1].GetHash() == mid.GetHash());
+    BOOST_CHECK(removed[2].GetHash() == hi.GetHash());
+    BOOST_CHECK(removed[3].GetHash() == mrc.GetHash());
+
+    // Every index drained and consistent.
+    BOOST_CHECK_EQUAL(pool.size(), 0UL);
+    BOOST_CHECK_EQUAL(pool.m_total_tx_size, 0U);
+    BOOST_CHECK(pool.m_eviction_index.empty());
+    BOOST_CHECK(pool.m_mrc_by_cpid.empty());
+    BOOST_CHECK(pool.m_mrc_by_fee.empty());
+}
+
+BOOST_AUTO_TEST_CASE(trim_protects_contract_when_room_for_one)
+{
+    CTxMemPool pool;
+
+    const CTransaction plain = MakePlainTx(7);
+    const CTransaction mrc = MakeMrcTx(GRC::Cpid(InsecureRandBytes(16)), 9);
+    pool.addUnchecked(plain.GetHash(), MakeEntryFee(plain, 50)); // higher fee, but not protected
+    pool.addUnchecked(mrc.GetHash(), MakeEntryFee(mrc, 0));      // no fee, but a contract
+
+    // Leave room for exactly one entry. The non-contract plain tx is evicted even
+    // though it pays more, because contract txns are protected (evicted last).
+    const size_t mrc_size = ::GetSerializeSize(mrc, SER_NETWORK, PROTOCOL_VERSION);
+    pool.TrimToSize(mrc_size + CTxMemPool::PER_ENTRY_OVERHEAD);
+
+    BOOST_CHECK(!pool.exists(plain.GetHash()));
+    BOOST_CHECK(pool.exists(mrc.GetHash()));
+    BOOST_CHECK_EQUAL(pool.size(), 1UL);
+    BOOST_CHECK_EQUAL(pool.m_eviction_index.size(), 1U);
+    BOOST_CHECK_EQUAL(pool.m_mrc_by_cpid.size(), 1U);
+}
+
+BOOST_AUTO_TEST_CASE(trim_never_evicts_the_protected_transaction)
+{
+    CTxMemPool pool;
+
+    // Two transactions in the same feerate tier.
+    const CTransaction a = MakePlainTx(11);
+    const CTransaction b = MakePlainTx(12);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.addUnchecked(b.GetHash(), MakeEntryFee(b, 10));
+
+    // Whichever sits at the front of the eviction set is the natural first victim.
+    // Protect exactly that one: TrimToSize must evict the OTHER transaction instead
+    // and keep the protected one -- this is the AcceptToMemoryPool self-eviction
+    // guard that stops a just-accepted tx (newest, so first in the tie-break) from
+    // being dropped as its own victim.
+    const uint256 natural_victim = pool.m_eviction_index.begin()->hash;
+
+    // Room for exactly one entry (both txs serialize to the same size).
+    const size_t one_entry = ::GetSerializeSize(a, SER_NETWORK, PROTOCOL_VERSION)
+                             + CTxMemPool::PER_ENTRY_OVERHEAD;
+    pool.TrimToSize(one_entry, /*removed=*/nullptr, /*protect=*/&natural_victim);
+
+    BOOST_CHECK(pool.exists(natural_victim));
+    BOOST_CHECK_EQUAL(pool.size(), 1UL);
+    BOOST_CHECK_EQUAL(pool.m_eviction_index.size(), 1U);
+    BOOST_CHECK_EQUAL(pool.m_total_tx_size,
+                      ::GetSerializeSize(a, SER_NETWORK, PROTOCOL_VERSION));
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 (#3029): unbroadcast set + persistence
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(unbroadcast_tracks_local_origination)
+{
+    CTxMemPool pool;
+
+    const CTransaction a = MakePlainTx(21);
+    const CTransaction b = MakePlainTx(22);
+
+    // AddUnbroadcast is a no-op for a tx that is not in the pool.
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK(pool.GetUnbroadcast().empty());
+
+    // Once the tx is in the pool, it can be marked unbroadcast.
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.addUnchecked(b.GetHash(), MakeEntryFee(b, 10));
+    pool.AddUnbroadcast(a.GetHash());
+    pool.AddUnbroadcast(b.GetHash());
+    BOOST_CHECK_EQUAL(pool.GetUnbroadcast().size(), 2U);
+
+    // Removal (e.g. a peer requested it) drops just that entry.
+    pool.RemoveUnbroadcast(a.GetHash());
+    const auto set = pool.GetUnbroadcast();
+    BOOST_CHECK_EQUAL(set.size(), 1U);
+    BOOST_CHECK(set.count(b.GetHash()) == 1);
+}
+
+BOOST_AUTO_TEST_CASE(a_fetch_clears_a_never_sent_entry_but_not_a_reorganization_mark)
+{
+    // A peer's getdata is evidence that a never-sent transaction went out. It is
+    // not evidence against what a reorganization showed: peers had that one in a
+    // block. Its mark stays until it leaves the pool.
+    CTxMemPool pool;
+    const CTransaction sent = MakePlainTx(31);
+    const CTransaction reorged = MakePlainTx(32);
+    pool.addUnchecked(sent.GetHash(), MakeEntryFee(sent, 10));
+    pool.addUnchecked(reorged.GetHash(), MakeEntryFee(reorged, 10));
+    pool.AddUnbroadcast(sent.GetHash());
+    pool.AddUnbroadcast(reorged.GetHash(), UnbroadcastReason::Reannounce);
+
+    pool.ClearUnbroadcastOnFetch(sent.GetHash());
+    pool.ClearUnbroadcastOnFetch(reorged.GetHash());
+
+    BOOST_CHECK(!pool.IsUnbroadcastTx(sent.GetHash()));
+    BOOST_CHECK(pool.GetUnbroadcastReason(reorged.GetHash()) == std::optional{UnbroadcastReason::Reannounce});
+
+    pool.remove(reorged);
+    BOOST_CHECK(!pool.IsUnbroadcastTx(reorged.GetHash()));
+}
+
+//!
+//! A reorg-re-pooled transaction still wants announcing, but peers have seen it,
+//! so it must not open the cancel gate. Discriminates on the two accessors
+//! disagreeing: IsUnbroadcastTx true, IsCancellableUnbroadcast false. Were the
+//! reason ignored, both would read true and cancelunbroadcasttransaction would
+//! release the inputs of a transaction the network can still confirm.
+//!
+BOOST_AUTO_TEST_CASE(a_reannounce_entry_is_not_cancellable)
+{
+    CTxMemPool pool;
+    const CTransaction fresh = MakePlainTx(31);
+    const CTransaction repooled = MakePlainTx(32);
+
+    pool.addUnchecked(fresh.GetHash(), MakeEntryFee(fresh, 10));
+    pool.addUnchecked(repooled.GetHash(), MakeEntryFee(repooled, 10));
+
+    pool.AddUnbroadcast(fresh.GetHash());
+    pool.AddUnbroadcast(repooled.GetHash(), UnbroadcastReason::Reannounce);
+
+    // Both await announcement, so the resend must carry both.
+    BOOST_CHECK(pool.IsUnbroadcastTx(fresh.GetHash()));
+    BOOST_CHECK(pool.IsUnbroadcastTx(repooled.GetHash()));
+    BOOST_CHECK_EQUAL(pool.GetUnbroadcast().size(), 2U);
+
+    // Only the never-sent one may be cancelled.
+    BOOST_CHECK(pool.IsCancellableUnbroadcast(fresh.GetHash()));
+    BOOST_CHECK(!pool.IsCancellableUnbroadcast(repooled.GetHash()));
+
+    // And only the never-sent one is a propagation-fault signal.
+    BOOST_CHECK_EQUAL(pool.GetMempoolInfo().unbroadcast_count, 1U);
+}
+
+//!
+//! The restrictive reason wins whichever order the two calls arrive in, so a
+//! later caller that does not know peers have seen the transaction cannot
+//! re-open the gate.
+//!
+BOOST_AUTO_TEST_CASE(reannounce_is_never_relaxed_to_never_sent)
+{
+    CTxMemPool pool;
+    const CTransaction tx = MakePlainTx(33);
+    pool.addUnchecked(tx.GetHash(), MakeEntryFee(tx, 10));
+
+    pool.AddUnbroadcast(tx.GetHash(), UnbroadcastReason::Reannounce);
+    pool.AddUnbroadcast(tx.GetHash()); // default NeverSent must not win
+    BOOST_CHECK(!pool.IsCancellableUnbroadcast(tx.GetHash()));
+
+    // The reverse order upgrades, because "peers may hold this" is the safe answer.
+    const CTransaction other = MakePlainTx(34);
+    pool.addUnchecked(other.GetHash(), MakeEntryFee(other, 10));
+    pool.AddUnbroadcast(other.GetHash());
+    BOOST_CHECK(pool.IsCancellableUnbroadcast(other.GetHash()));
+    pool.AddUnbroadcast(other.GetHash(), UnbroadcastReason::Reannounce);
+    BOOST_CHECK(!pool.IsCancellableUnbroadcast(other.GetHash()));
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_cleared_when_tx_leaves_pool)
+{
+    CTxMemPool pool;
+
+    const CTransaction a = MakePlainTx(31);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK_EQUAL(pool.GetUnbroadcast().size(), 1U);
+
+    // A tx confirmed/evicted/conflicted out of the pool is no longer ours to
+    // rebroadcast: remove() -> eraseIndexes() drops it from the unbroadcast set.
+    pool.remove(a, /*fRecursive=*/true, MemPoolRemovalReason::BLOCK);
+    BOOST_CHECK(pool.GetUnbroadcast().empty());
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_persist_roundtrip)
+{
+    // The on-disk (tx, entry_time) round-trip, exercised without AcceptToMemoryPool.
+    // LoadUnbroadcast's already-pooled branch is covered further down; its
+    // re-acceptance branch needs spendable inputs and has no test of its own.
+    node::MempoolPersistEntries entries;
+    const CTransaction a = MakePlainTx(41);
+    const CTransaction b = MakePlainTx(42);
+    entries.emplace_back(a, 111);
+    entries.emplace_back(b, 222);
+
+    const fs::path path = fs::temp_directory_path()
+                          / fs::unique_path("gridcoin_unbroadcast_roundtrip_%%%%%%%%.dat");
+    BOOST_REQUIRE(node::WriteMempoolEntries(path, entries));
+
+    node::MempoolPersistEntries loaded;
+    BOOST_REQUIRE(node::ReadMempoolEntries(path, loaded));
+    BOOST_REQUIRE_EQUAL(loaded.size(), 2U);
+    BOOST_CHECK(loaded[0].first.GetHash() == a.GetHash());
+    BOOST_CHECK_EQUAL(loaded[0].second, 111);
+    BOOST_CHECK(loaded[1].first.GetHash() == b.GetHash());
+    BOOST_CHECK_EQUAL(loaded[1].second, 222);
+
+    fs::remove(path);
+}
+
+namespace {
+//! The transactions unbroadcast.dat at \p path holds, by hash.
+std::set<uint256> PersistedHashes(const fs::path& path)
+{
+    node::MempoolPersistEntries loaded;
+    BOOST_REQUIRE(node::ReadMempoolEntries(path, loaded));
+
+    std::set<uint256> hashes;
+    for (const auto& [tx, time] : loaded) hashes.insert(tx.GetHash());
+    return hashes;
+}
+
+fs::path TempUnbroadcastPath(const std::string& name)
+{
+    return fs::temp_directory_path() / fs::unique_path("gridcoin_unbroadcast_" + name + "_%%%%%%%%.dat");
+}
+
+//! Collects the logger's lines that mention \p needle while in scope, and
+//! unregisters the callback however the case exits. Left registered after a
+//! failed assertion, it would run against a vector that is gone the next time
+//! anything logs.
+struct CapturedLogLines
+{
+    std::vector<std::string> m_lines;
+    std::list<std::function<void(const std::string&)>>::iterator m_callback;
+
+    explicit CapturedLogLines(std::string needle)
+        : m_callback(LogInstance().PushBackCallback([this, needle = std::move(needle)](const std::string& s) {
+              if (s.find(needle) != std::string::npos) m_lines.push_back(s);
+          }))
+    {
+    }
+
+    ~CapturedLogLines() { LogInstance().DeleteCallback(m_callback); }
+    CapturedLogLines(const CapturedLogLines&) = delete;
+    CapturedLogLines& operator=(const CapturedLogLines&) = delete;
+};
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(unbroadcast_persister_writes_only_when_enabled)
+{
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(71);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.AddUnbroadcast(a.GetHash());
+
+    const fs::path path = TempUnbroadcastPath("enable");
+    node::UnbroadcastPersister persister;
+
+    // Before Enable(): the reload has not run, so nothing may be written.
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+    BOOST_CHECK(!persister.Write(pool));
+    BOOST_CHECK(!fs::exists(path));
+
+    // The first pass after Enable() writes whatever the set holds, and a pass
+    // with no change writes nothing.
+    persister.Enable(path);
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path) == std::set<uint256>{a.GetHash()});
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+
+    // Write() writes regardless.
+    BOOST_CHECK(persister.Write(pool));
+
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_persister_follows_each_change_to_the_never_sent_entries)
+{
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(61);
+    const CTransaction b = MakePlainTx(62);
+    const CTransaction other = MakePlainTx(63);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.addUnchecked(b.GetHash(), MakeEntryFee(b, 10));
+    pool.addUnchecked(other.GetHash(), MakeEntryFee(other, 10));
+
+    const fs::path path = TempUnbroadcastPath("follow");
+    node::UnbroadcastPersister persister;
+    persister.Enable(path);
+    BOOST_REQUIRE(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path).empty());
+
+    // A send: written.
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path) == std::set<uint256>{a.GetHash()});
+
+    // A reannounce entry is not persisted, so adding it changes nothing.
+    pool.AddUnbroadcast(b.GetHash(), UnbroadcastReason::Reannounce);
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+
+    // A peer's fetch: written without it.
+    pool.RemoveUnbroadcast(a.GetHash());
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path).empty());
+
+    // Another send, then a reorganization marks it reannounce: each written.
+    pool.AddUnbroadcast(other.GetHash());
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path) == std::set<uint256>{other.GetHash()});
+    pool.AddUnbroadcast(other.GetHash(), UnbroadcastReason::Reannounce);
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path).empty());
+
+    // A send, then the transaction leaves the pool: each written.
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path) == std::set<uint256>{a.GetHash()});
+    pool.remove(a);
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path).empty());
+
+    // A reannounce entry leaving the pool changes nothing persisted either.
+    pool.remove(b);
+    pool.remove(other);
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_persister_writes_a_changed_entry_time)
+{
+    // The file records each transaction's pool entry time, so the same
+    // transaction leaving the pool and coming back between two passes, with a
+    // new entry time, is a change too.
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(66);
+    const auto entry_at = [&](int64_t time) {
+        return CTxMemPoolEntry(a, 10, time, 0, ::GetSerializeSize(a, SER_NETWORK, PROTOCOL_VERSION));
+    };
+    pool.addUnchecked(a.GetHash(), entry_at(100));
+    pool.AddUnbroadcast(a.GetHash());
+
+    const fs::path path = TempUnbroadcastPath("time");
+    node::UnbroadcastPersister persister;
+    persister.Enable(path);
+    BOOST_REQUIRE(persister.WriteIfChanged(pool));
+
+    pool.remove(a);
+    pool.addUnchecked(a.GetHash(), entry_at(200));
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+
+    node::MempoolPersistEntries loaded;
+    BOOST_REQUIRE(node::ReadMempoolEntries(path, loaded));
+    BOOST_REQUIRE_EQUAL(loaded.size(), 1U);
+    BOOST_CHECK_EQUAL(loaded[0].second, 200);
+
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_persister_retries_a_failed_write)
+{
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(81);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.AddUnbroadcast(a.GetHash());
+
+    const fs::path dir = fs::temp_directory_path()
+                         / fs::unique_path("gridcoin_unbroadcast_dir_%%%%%%%%");
+    const fs::path path = dir / "unbroadcast.dat";
+
+    node::UnbroadcastPersister persister;
+    persister.Enable(path);
+
+    // The directory does not exist yet, so the write fails, and leaves nothing.
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+    BOOST_CHECK(!fs::exists(path));
+
+    // Nothing has changed in the pool since, but the failed write is retried. A
+    // temporary file a crash left behind mid-write is replaced by it, not left
+    // beside the file.
+    fs::create_directories(dir);
+    {
+        fsbridge::ofstream leftover(dir / "unbroadcast.dat.new");
+        leftover << "left by a crash";
+    }
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_CHECK(PersistedHashes(path) == std::set<uint256>{a.GetHash()});
+    BOOST_CHECK(!fs::exists(dir / "unbroadcast.dat.new"));
+
+    fs::remove_all(dir);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_persister_logs_each_spell_of_failures_once)
+{
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(86);
+    const CTransaction b = MakePlainTx(87);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.addUnchecked(b.GetHash(), MakeEntryFee(b, 10));
+    pool.AddUnbroadcast(a.GetHash());
+
+    const fs::path path = TempUnbroadcastPath("spell");
+    fs::path tmp = path;
+    tmp += ".new";
+
+    node::UnbroadcastPersister persister;
+    persister.Enable(path);
+    BOOST_REQUIRE(persister.WriteIfChanged(pool));
+
+    CapturedLogLines log("WriteLocked");
+    const std::vector<std::string>& lines = log.m_lines;
+
+    // A directory where the temporary file goes, so that every write fails at
+    // the open. Failing again is not logged again.
+    fs::create_directory(tmp);
+    pool.AddUnbroadcast(b.GetHash());
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+    BOOST_REQUIRE_EQUAL(lines.size(), 1U);
+    BOOST_CHECK(lines[0].find("ERROR") != std::string::npos);
+
+    // A peer fetches b: the set is back to what the file holds, which ends the
+    // spell without a write.
+    pool.RemoveUnbroadcast(b.GetHash());
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+    BOOST_REQUIRE_EQUAL(lines.size(), 2U);
+    BOOST_CHECK(lines[1].find("matches the unbroadcast set again") != std::string::npos);
+
+    // A peer fetches a as well. That write fails too, and starts a new spell,
+    // so it is logged.
+    pool.RemoveUnbroadcast(a.GetHash());
+    BOOST_CHECK(!persister.WriteIfChanged(pool));
+    BOOST_REQUIRE_EQUAL(lines.size(), 3U);
+    BOOST_CHECK(lines[2].find("ERROR") != std::string::npos);
+
+    // A successful write ends that one.
+    fs::remove(tmp);
+    BOOST_CHECK(persister.WriteIfChanged(pool));
+    BOOST_REQUIRE_EQUAL(lines.size(), 4U);
+    BOOST_CHECK(lines[3].find("written again") != std::string::npos);
+    BOOST_CHECK(PersistedHashes(path).empty());
+
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_file_after_a_crash_holds_the_current_set)
+{
+    // What the next start reloads is whatever the file holds. Written only at a
+    // clean shutdown, the file would still list a withdrawn transaction and one a
+    // peer had fetched, and miss a new send. Kept current, it holds the set.
+    CTxMemPool pool;
+    const CTransaction withdrawn = MakePlainTx(91);
+    const CTransaction fetched = MakePlainTx(92);
+    const CTransaction kept = MakePlainTx(93);
+    const CTransaction sent = MakePlainTx(94);
+    const CTransaction reorged = MakePlainTx(95);
+    for (const CTransaction* tx : {&withdrawn, &fetched, &kept}) {
+        pool.addUnchecked(tx->GetHash(), MakeEntryFee(*tx, 10));
+        pool.AddUnbroadcast(tx->GetHash());
+    }
+    pool.addUnchecked(reorged.GetHash(), MakeEntryFee(reorged, 10));
+
+    const fs::path path = TempUnbroadcastPath("crash");
+
+    node::UnbroadcastPersister persister;
+    persister.Enable(path);
+    BOOST_REQUIRE(persister.WriteIfChanged(pool));
+
+    // While running: one withdrawn from the pool (cancelunbroadcasttransaction),
+    // one fetched by a peer, one new send, and one put back by a reorganization,
+    // which is not persisted.
+    pool.remove(withdrawn);
+    pool.RemoveUnbroadcast(fetched.GetHash());
+    pool.addUnchecked(sent.GetHash(), MakeEntryFee(sent, 10));
+    pool.AddUnbroadcast(sent.GetHash());
+    pool.AddUnbroadcast(reorged.GetHash(), UnbroadcastReason::Reannounce);
+
+    // The scheduler's next pass, and then a crash: no shutdown write.
+    BOOST_REQUIRE(persister.WriteIfChanged(pool));
+
+    BOOST_CHECK(PersistedHashes(path) == (std::set<uint256>{kept.GetHash(), sent.GetHash()}));
+
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_dump_reflects_pool)
+{
+    // The persister writes exactly the pool's never-sent unbroadcast members
+    // (looked up in mapTx), with their pool entry times, and nothing else.
+    CTxMemPool pool;
+    const CTransaction ours = MakePlainTx(51);
+    const CTransaction other = MakePlainTx(52);
+    pool.addUnchecked(ours.GetHash(), MakeEntryFee(ours, 10));
+    pool.addUnchecked(other.GetHash(), MakeEntryFee(other, 10));
+    pool.AddUnbroadcast(ours.GetHash()); // only `ours` is in the unbroadcast set
+
+    const fs::path path = TempUnbroadcastPath("dump");
+    node::UnbroadcastPersister persister;
+    persister.Enable(path);
+    BOOST_REQUIRE(persister.Write(pool));
+
+    node::MempoolPersistEntries loaded;
+    BOOST_REQUIRE(node::ReadMempoolEntries(path, loaded));
+    BOOST_REQUIRE_EQUAL(loaded.size(), 1U); // `other` is in the pool but not the set
+    BOOST_CHECK(loaded[0].first.GetHash() == ours.GetHash());
+
+    fs::remove(path);
+}
+
+namespace {
+//! A transaction that AcceptToMemoryPool carries as far as its "already in the
+//! pool?" check: version 2, one input, a push-only scriptSig and one standard
+//! P2PKH output. The input spends nothing real; ATMP only looks inputs up after
+//! that check, so it is never reached for a pooled copy.
+CTransaction MakeWalletShapedTx()
+{
+    CKey key;
+    key.MakeNewKey(true);
+
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.vin.emplace_back(COutPoint(InsecureRand256(), 0));
+    mtx.vin[0].scriptSig = CScript() << std::vector<unsigned char>(72, 0x30) << key.GetPubKey();
+    mtx.vout.emplace_back();
+    mtx.vout[0].nValue = COIN;
+    mtx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
+    return CTransaction(mtx);
+}
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(unbroadcast_reload_rearms_an_already_pooled_transaction)
+{
+    // At startup the wallet re-accepts its own unconfirmed transactions into the
+    // pool before LoadUnbroadcast runs. Reloading one of them must still restore
+    // its marker, even though AcceptToMemoryPool refuses a transaction that is
+    // already pooled.
+    CTxMemPool pool;
+    const CTransaction ours = MakeWalletShapedTx();
+    const CTransaction bystander = MakeWalletShapedTx();
+    // Pooled, but a reload refuses it as invalid: it has no inputs, so
+    // CheckTransaction fails ahead of the duplicate check. Its marker must not be
+    // re-armed.
+    const CTransaction invalid = MakePlainTx(43);
+    pool.addUnchecked(ours.GetHash(), MakeEntryFee(ours, 10));
+    pool.addUnchecked(bystander.GetHash(), MakeEntryFee(bystander, 10));
+    pool.addUnchecked(invalid.GetHash(), MakeEntryFee(invalid, 10));
+
+    // The refusal the reload meets for ours is the silent already-pooled one, not
+    // a validation failure, which marks the state invalid.
+    {
+        LOCK(cs_main);
+        CValidationState state;
+        CTransaction copy = ours;
+        BOOST_REQUIRE(!AcceptToMemoryPool(pool, copy, state, nullptr));
+        BOOST_REQUIRE(!state.IsInvalid());
+
+        CValidationState invalid_state;
+        CTransaction invalid_copy = invalid;
+        BOOST_REQUIRE(!AcceptToMemoryPool(pool, invalid_copy, invalid_state, nullptr));
+        BOOST_REQUIRE(invalid_state.IsInvalid());
+    }
+
+    node::MempoolPersistEntries entries;
+    entries.emplace_back(ours, 111);
+    entries.emplace_back(invalid, 112);
+    const fs::path path = fs::temp_directory_path()
+                          / fs::unique_path("gridcoin_unbroadcast_reload_%%%%%%%%.dat");
+    BOOST_REQUIRE(node::WriteMempoolEntries(path, entries));
+
+    BOOST_REQUIRE(node::LoadUnbroadcast(pool, path));
+
+    BOOST_CHECK(pool.IsUnbroadcastTx(ours.GetHash()));
+    BOOST_CHECK(pool.IsCancellableUnbroadcast(ours.GetHash()));
+    // Only what was persisted is re-armed, not everything that happens to be pooled.
+    BOOST_CHECK(!pool.IsUnbroadcastTx(bystander.GetHash()));
+    BOOST_CHECK(!pool.IsUnbroadcastTx(invalid.GetHash()));
+    BOOST_CHECK_EQUAL(pool.GetUnbroadcast().size(), 1U);
+
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_cleared_on_size_eviction)
+{
+    // A tx evicted under the -maxmempool cap (#3093 TrimToSize) leaves the pool via
+    // remove()->eraseIndexes(), so it must also drop out of the unbroadcast set.
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(51);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK_EQUAL(pool.GetUnbroadcast().size(), 1U);
+
+    pool.TrimToSize(0); // evict everything
+    BOOST_CHECK(pool.GetUnbroadcast().empty());
+    BOOST_CHECK_EQUAL(pool.size(), 0UL);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_reset_on_clear)
+{
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(61);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK_EQUAL(pool.GetUnbroadcast().size(), 1U);
+
+    pool.clear();
+    BOOST_CHECK(pool.GetUnbroadcast().empty());
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 (#3029): testmempoolaccept
+// ---------------------------------------------------------------------------
+
+namespace {
+std::string TxToHex(const CTransaction& tx)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << tx;
+    return HexStr(ss);
+}
+
+UniValue TestAccept(const CTransaction& tx)
+{
+    UniValue rawtxs(UniValue::VARR);
+    rawtxs.push_back(TxToHex(tx));
+    UniValue params(UniValue::VARR);
+    params.push_back(rawtxs);
+    return testmempoolaccept(params);
+}
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(testmempoolaccept_reports_reject_reason)
+{
+    mempool.clear();
+    const size_t before = mempool.size();
+
+    // A legacy (v1) transaction is rejected with a precise Gridcoin reason, and a
+    // rejected tx is not pooled. (This tx fails at the first ATMP check, so it does
+    // not exercise the test_only skip of the store block on an *acceptable* tx.
+    // That accept-path no-mutation invariant needs a spendable input / real chain
+    // state, so there is no in-tree automated test for it; it is left to
+    // functional/manual testing.)
+    CMutableTransaction mtx;
+    mtx.nVersion = 1;
+    CTxOut vout;
+    vout.nValue = 1;
+    mtx.vout.push_back(vout);
+    const CTransaction legacy(mtx);
+
+    const UniValue res = TestAccept(legacy);
+    BOOST_REQUIRE_EQUAL(res.size(), 1U);
+    BOOST_CHECK_EQUAL(res[0]["txid"].get_str(), legacy.GetHash().ToString());
+    BOOST_CHECK_EQUAL(res[0]["allowed"].get_bool(), false);
+    BOOST_CHECK_EQUAL(res[0]["reject-reason"].get_str(), "bad-txns-version");
+    BOOST_CHECK_EQUAL(mempool.size(), before);
+}
+
+BOOST_AUTO_TEST_CASE(testmempoolaccept_reports_already_in_mempool)
+{
+    mempool.clear();
+
+    const CTransaction mrc = MakeMrcTx(GRC::Cpid(InsecureRandBytes(16)), 10);
+    mempool.addUnchecked(mrc.GetHash(), MakeEntry(mrc));
+
+    const UniValue res = TestAccept(mrc);
+    BOOST_REQUIRE_EQUAL(res.size(), 1U);
+    BOOST_CHECK_EQUAL(res[0]["allowed"].get_bool(), false);
+    BOOST_CHECK_EQUAL(res[0]["reject-reason"].get_str(), "txn-already-in-mempool");
+
+    mempool.clear();
+}
+
+//! The MESSAGE tag the disable-height sweep selects on. Mirrors the other
+//! entry_tags_* cases: the tag is computed once in the entry constructor, so if
+//! the constructor's switch ever stops covering MESSAGE the sweep silently stops
+//! finding anything and the whole mechanism becomes a no-op.
+BOOST_AUTO_TEST_CASE(entry_tags_message_contract)
+{
+    const CTransaction tx = MakeMessageTx("hello");
+    const CTxMemPoolEntry entry = MakeEntry(tx);
+
+    BOOST_CHECK(entry.HasMessageContract());
+    BOOST_CHECK_EQUAL(entry.GetContractTypes().count(GRC::ContractType::MESSAGE), 1U);
+
+    // A transaction with no contracts must not be tagged, or the sweep would
+    // remove the entire pool at the disable height.
+    BOOST_CHECK(!MakeEntry(MakeTx()).HasMessageContract());
+}
+
+//! The counter is what keeps GetMessageContractTxs() O(1) for a pool holding no
+//! MESSAGE contract -- which, after the transition, is every pool forever. Pin
+//! both halves: the counter tracks add/remove, and the lookup returns nothing
+//! without scanning when it is zero.
+BOOST_AUTO_TEST_CASE(message_contract_count_tracks_add_and_remove)
+{
+    const CTransaction message_tx = MakeMessageTx("hello");
+    const CTransaction plain_tx = MakePlainTx(1000);
+
+    CTxMemPool pool;
+    pool.addUnchecked(plain_tx.GetHash(), MakeEntry(plain_tx));
+
+    // A pool with entries but no MESSAGE contract: the guard, not an empty pool.
+    BOOST_CHECK_EQUAL(pool.m_message_contract_count, 0U);
+    BOOST_CHECK(pool.GetMessageContractTxs().empty());
+
+    pool.addUnchecked(message_tx.GetHash(), MakeEntry(message_tx));
+    BOOST_CHECK_EQUAL(pool.m_message_contract_count, 1U);
+
+    const std::vector<uint256> found = pool.GetMessageContractTxs();
+    BOOST_REQUIRE_EQUAL(found.size(), 1U);
+    BOOST_CHECK(found[0] == message_tx.GetHash());
+
+    pool.remove(message_tx);
+    BOOST_CHECK_EQUAL(pool.m_message_contract_count, 0U);
+    BOOST_CHECK(pool.GetMessageContractTxs().empty());
+
+    // The unrelated transaction is untouched by the sweep.
+    BOOST_CHECK_EQUAL(pool.size(), 1UL);
+}
+
+//! clear() has to zero the counter with the rest of the indexes, or a cleared
+//! pool reports MESSAGE contracts it no longer holds and the sweep scans forever.
+BOOST_AUTO_TEST_CASE(message_contract_count_reset_by_clear)
+{
+    const CTransaction message_tx = MakeMessageTx("hello");
+
+    CTxMemPool pool;
+    pool.addUnchecked(message_tx.GetHash(), MakeEntry(message_tx));
+    BOOST_CHECK_EQUAL(pool.m_message_contract_count, 1U);
+
+    pool.clear();
+    BOOST_CHECK_EQUAL(pool.m_message_contract_count, 0U);
+    BOOST_CHECK(pool.GetMessageContractTxs().empty());
+}
+
+//! The sweep removes recursively, and this is why. A child spending a MESSAGE
+//! transaction is just as unmineable once the parent can never confirm, so
+//! leaving it pooled would keep its own inputs locked for exactly the same
+//! reason. removed_out must report BOTH so the caller can abandon the pair.
+BOOST_AUTO_TEST_CASE(message_contract_removal_takes_descendants)
+{
+    CTxOut parent_out;
+    parent_out.nValue = 1000;
+    const CTransaction parent = MakeMessageTx("hello", {}, {parent_out});
+
+    CTxIn spend;
+    spend.prevout = COutPoint(parent.GetHash(), 0);
+    CTxOut child_out;
+    child_out.nValue = 900;
+    const CTransaction child = MakeTx({}, {spend}, {child_out});
+
+    CTxMemPool pool;
+    pool.addUnchecked(parent.GetHash(), MakeEntry(parent));
+    pool.addUnchecked(child.GetHash(), MakeEntry(child));
+    BOOST_CHECK_EQUAL(pool.size(), 2UL);
+
+    std::vector<CTransaction> removed;
+    pool.remove(parent, /*fRecursive=*/true, MemPoolRemovalReason::UNKNOWN, &removed);
+
+    BOOST_CHECK_EQUAL(pool.size(), 0UL);
+    BOOST_CHECK_EQUAL(pool.m_message_contract_count, 0U);
+    BOOST_REQUIRE_EQUAL(removed.size(), 2U);
+
+    std::set<uint256> removed_hashes;
+    for (const auto& tx : removed) removed_hashes.insert(tx.GetHash());
+    BOOST_CHECK_EQUAL(removed_hashes.count(parent.GetHash()), 1U);
+    BOOST_CHECK_EQUAL(removed_hashes.count(child.GetHash()), 1U);
+
+    // The child's input is released with it: a still-locked outpoint is the
+    // whole defect the sweep exists to clear.
+    BOOST_CHECK(pool.mapNextTx.empty());
+}
+
+//! The POOL_REGISTER tag and counter the expiry sweep selects on, same shape as
+//! the MESSAGE pair above. If the constructor's switch stops covering
+//! POOL_REGISTER the sweep silently finds nothing and the mechanism is a no-op.
+BOOST_AUTO_TEST_CASE(pool_register_count_tracks_add_and_remove)
+{
+    GRC::PoolRegisterPayload payload;
+    const CTransaction pool_tx = MakeTx(
+        {GRC::MakeContract<GRC::PoolRegisterPayload>(GRC::ContractAction::ADD, payload)});
+    const CTransaction plain_tx = MakePlainTx(1000);
+
+    BOOST_CHECK(MakeEntry(pool_tx).HasPoolRegister());
+    BOOST_CHECK(!MakeEntry(plain_tx).HasPoolRegister());
+
+    CTxMemPool pool;
+    pool.addUnchecked(plain_tx.GetHash(), MakeEntry(plain_tx));
+
+    // Entries present but none of them POOL_REGISTER: the guard, not an empty pool.
+    BOOST_CHECK_EQUAL(pool.m_pool_register_count, 0U);
+    BOOST_CHECK(pool.GetPoolRegisterTxs().empty());
+
+    pool.addUnchecked(pool_tx.GetHash(), MakeEntry(pool_tx));
+    BOOST_CHECK_EQUAL(pool.m_pool_register_count, 1U);
+
+    const std::vector<uint256> found = pool.GetPoolRegisterTxs();
+    BOOST_REQUIRE_EQUAL(found.size(), 1U);
+    BOOST_CHECK(found[0] == pool_tx.GetHash());
+
+    pool.remove(pool_tx);
+    BOOST_CHECK_EQUAL(pool.m_pool_register_count, 0U);
+    BOOST_CHECK(pool.GetPoolRegisterTxs().empty());
+    BOOST_CHECK_EQUAL(pool.size(), 1UL);
+
+    pool.addUnchecked(pool_tx.GetHash(), MakeEntry(pool_tx));
+    pool.clear();
+    BOOST_CHECK_EQUAL(pool.m_pool_register_count, 0U);
+    BOOST_CHECK(pool.GetPoolRegisterTxs().empty());
+}
+
+BOOST_AUTO_TEST_CASE(removeconflicts_reports_the_whole_removed_set_parents_first)
+{
+    // A block transaction S spends two outpoints. O1 is held by pooled P,
+    // whose output pooled C spends; O2 is held by pooled Q. removeConflicts
+    // must take all three out and report every one of them, with P ahead of
+    // C so a caller that re-offers the set meets the parent first.
+    mempool.clear();
+
+    const CScript script = CScript() << OP_TRUE;
+    const COutPoint o1(GetRandHash(), 0);
+    const COutPoint o2(GetRandHash(), 1);
+
+    const CTransaction p = MakeTx({}, {CTxIn(o1)}, {CTxOut(3 * COIN, script)});
+    const CTransaction c = MakeTx({}, {CTxIn(COutPoint(p.GetHash(), 0))}, {CTxOut(2 * COIN, script)});
+    const CTransaction q = MakeTx({}, {CTxIn(o2)}, {CTxOut(5 * COIN, script)});
+    const CTransaction s = MakeTx({}, {CTxIn(o1), CTxIn(o2)}, {CTxOut(7 * COIN, script)});
+
+    BOOST_REQUIRE(mempool.addUnchecked(p.GetHash(), MakeEntry(p)));
+    BOOST_REQUIRE(mempool.addUnchecked(c.GetHash(), MakeEntry(c)));
+    BOOST_REQUIRE(mempool.addUnchecked(q.GetHash(), MakeEntry(q)));
+    BOOST_REQUIRE_EQUAL(mempool.size(), 3u);
+
+    std::vector<uint256> removed;
+    BOOST_CHECK(mempool.removeConflicts(s, &removed));
+
+    const std::vector<uint256> expected{p.GetHash(), c.GetHash(), q.GetHash()};
+    BOOST_CHECK(removed == expected);
+    BOOST_CHECK(!mempool.exists(p.GetHash()));
+    BOOST_CHECK(!mempool.exists(c.GetHash()));
+    BOOST_CHECK(!mempool.exists(q.GetHash()));
+    BOOST_CHECK_EQUAL(mempool.size(), 0u);
+
+    // Without a collector the removal is the same and nothing is written.
+    BOOST_REQUIRE(mempool.addUnchecked(p.GetHash(), MakeEntry(p)));
+    BOOST_CHECK(mempool.removeConflicts(s, nullptr));
+    BOOST_CHECK(!mempool.exists(p.GetHash()));
+
+    // A transaction only conflicts with others: when S itself holds the
+    // outpoints, nothing is removed and nothing is reported.
+    BOOST_REQUIRE(mempool.addUnchecked(s.GetHash(), MakeEntry(s)));
+    removed.clear();
+    BOOST_CHECK(mempool.removeConflicts(s, &removed));
+    BOOST_CHECK(removed.empty());
+    BOOST_CHECK(mempool.exists(s.GetHash()));
+
+    mempool.clear();
+}
+
+BOOST_AUTO_TEST_SUITE_END()

@@ -1,9 +1,14 @@
 #ifndef BITCOIN_QT_CLIENTMODEL_H
 #define BITCOIN_QT_CLIENTMODEL_H
 
+#include "interfaces/node.h"
+#include "qt/notificationlifetime.h"
+
 #include <QObject>
 
 #include <atomic>
+#include <memory>
+#include <vector>
 
 class OptionsModel;
 class AddressTableModel;
@@ -11,8 +16,10 @@ class TransactionTableModel;
 class BanTableModel;
 class PeerTableModel;
 
-struct ConvergedScraperStats;
-class CWallet;
+namespace interfaces {
+class Handler;
+class StakingStatus;
+} // namespace interfaces
 
 QT_BEGIN_NAMESPACE
 class QDateTime;
@@ -24,23 +31,29 @@ class ClientModel : public QObject
 {
     Q_OBJECT
 public:
-    explicit ClientModel(OptionsModel* optionsModel, QObject* parent = nullptr);
+    explicit ClientModel(interfaces::Node& node,
+                         interfaces::StakingStatus& staking_status,
+                         OptionsModel* optionsModel,
+                         QObject* parent = nullptr);
     ~ClientModel();
 
+    interfaces::Node& node() const { return m_node; }
     OptionsModel *getOptionsModel();
     PeerTableModel *getPeerTableModel();
     BanTableModel *getBanTableModel();
 
     int getNumConnections() const;
     int getNumBlocks() const;
-	quint64 getTotalBytesRecv() const;
+    quint64 getTotalBytesRecv() const;
     quint64 getTotalBytesSent() const;
-
 
     QDateTime getLastBlockDate() const;
 
     //! Return true if client connected to testnet
     bool isTestNet() const;
+    //! Return true if client connected to mainnet. Distinct from !isTestNet(),
+    //! which is also true on regtest.
+    bool isMainNet() const;
     //! Return true if core is doing initial block download
     bool inInitialBlockDownload() const;
     //! Return conservative estimate of total number of blocks, or 0 if unknown
@@ -54,13 +67,23 @@ public:
     //! Get miner and staking status warnings
     QString getMinerWarnings() const;
 
+    //! Re-feed the current staking state and coin weight to the overview
+    //! (used when a GUI-side change, e.g. privacy mode, must refresh the
+    //! staking fields normally pushed from the core).
+    void refreshMinerStatus();
+
     QString formatFullVersion() const;
     QString clientName() const;
     QString formatClientStartupTime() const;
 
-    QString formatBoostVersion()  const;
-    const ConvergedScraperStats& getConvergedScraperStatsCache() const;
+    QString formatBoostVersion() const;
+
+    //! Value snapshot of the scraper convergence status (no locks cross this
+    //! call; the node side takes the scraper cache lock internally).
+    interfaces::ScraperConvergenceSnapshot getScraperConvergenceSnapshot() const;
 private:
+    interfaces::Node& m_node;
+    interfaces::StakingStatus& m_staking_status;
     OptionsModel *optionsModel;
     PeerTableModel *peerTableModel;
     BanTableModel *banTableModel;
@@ -74,16 +97,34 @@ private:
 
     QTimer *pollTimer;
 
+    //! Notification registrations held so they are disconnected on
+    //! destruction. Each callback captures `this`; leaving them connected
+    //! risked a core signal invoking a slot on a destroyed ClientModel during
+    //! shutdown. interfaces::Handler disconnects on destruction.
+    std::vector<std::unique_ptr<interfaces::Handler>> m_handlers;
+
+    //! Guards those callbacks against the destruction race that disconnecting
+    //! alone does not close -- neither backing implementation waits for a
+    //! callback already executing on a core thread. See qt/notificationlifetime.h.
+    NotificationLifetime m_notify_lifetime;
+
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
 signals:
     void numConnectionsChanged(int count);
     void numBlocksChanged(int count, int countOfPeers);
     void difficultyChanged(double difficulty);
-	void bytesChanged(quint64 totalBytesIn, quint64 totalBytesOut);
+    void bytesChanged(quint64 totalBytesIn, quint64 totalBytesOut);
     void minerStatusChanged(bool staking, double netWeight, double coinWeight, double etts_days);
     void updateScraperLog(QString message);
     void updateScraperStatus(int ScraperEventtype, int status);
+
+    //! The PSGT pool (#2910) changed. change_type is a ui_interface ChangeType
+    //! (CT_NEW / CT_UPDATED / CT_DELETED) narrowed to quint8 for the queued
+    //! connection; the affected revision hash is carried for reference. reason is
+    //! a PSGTRemovalReason code (as int) on a removal (CT_DELETED) and -1 for
+    //! CT_NEW / CT_UPDATED -- consumers must read it only on CT_DELETED.
+    void psgtPoolChanged(QString revision_hash, quint8 change_type, int reason);
 
     //! Asynchronous error notification
     void error(const QString &title, const QString &message, bool modal);
@@ -96,6 +137,7 @@ public slots:
     void updateAlert(const QString &hash, int status);
     void updateMinerStatus(bool staking, double coin_weight);
     void updateScraper(int scraperEventtype, int status, const QString message);
+    void updatePSGTPool(const QString &revision_hash, int status, int reason);
 };
 
 #endif // BITCOIN_QT_CLIENTMODEL_H

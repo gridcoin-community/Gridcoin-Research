@@ -7,7 +7,17 @@
 #define GRIDCOIN_STAKING_KERNEL_H
 
 #include "amount.h"
-#include "main.h"
+#include "arith_uint256.h"
+#include "chain.h"  // cs_main (required for clang's EXCLUSIVE_LOCKS_REQUIRED analyzer), CBlock, CBlockHeader, uint256
+
+class CTransaction;
+class CTxDB;
+class CValidationState;
+
+//! Gridcoin minimum/maximum stake age. Defined in
+//! gridcoin/staking/kernel.cpp (moved from main.cpp, issue #3125 C9).
+extern unsigned int nStakeMinAge;
+extern unsigned int nStakeMaxAge;
 
 namespace GRC {
 // To decrease granularity of timestamp
@@ -29,11 +39,11 @@ static const int MODIFIER_INTERVAL_RATIO = 3;
 template <typename TimeType>
 TimeType MaskStakeTime(const TimeType timestamp)
 {
-    return timestamp & (~STAKE_TIMESTAMP_MASK);
+    return timestamp & ~static_cast<TimeType>(STAKE_TIMESTAMP_MASK);
 }
 
 // Compute the hash modifier for proof-of-stake
-bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier);
+bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 // Get time weight using supplied timestamps
 int64_t GetWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd);
@@ -49,6 +59,14 @@ int64_t GetWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd);
 //! \param prevout_hash Hash of the input transaction to load from disk.
 //! \param out_header   Header of the previous transaction's block.
 //! \param out_txprev   The previous transaction data loaded from disk.
+//! \param pindexPrev   Parent of the block whose stake is being checked, or
+//! \c nullptr. From the block version 15 activation height, judged at the
+//! checked block's height (pindexPrev->nHeight + 1), the input must be in the
+//! checked block's own history, and the block that confirms it there supplies
+//! the header, rather than the main chain's copy (see doc/consensus.md,
+//! section 11.6). At
+//! every height, an input the transaction index does not hold is looked for
+//! only in the checked block's own branch.
 //!
 //! \return \c true if the previous transaction and block header were loaded
 //! from disk successfully.
@@ -58,7 +76,7 @@ bool ReadStakedInput(
     const uint256 prevout_hash,
     CBlockHeader& out_header,
     CTransaction& out_txprev,
-    CBlockIndex* pindexPrev = nullptr);
+    CBlockIndex* pindexPrev = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Calculate the provided block's proof hash with the version 3 staking
@@ -91,7 +109,8 @@ bool CalculateLegacyV3HashProof(
     CTxDB& txdb,
     const CBlock& block,
     const double por_nonce,
-    uint256& out_hash_proof);
+    CValidationState& state,
+    uint256& out_hash_proof) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //Block version 8+ Staking
 bool CheckProofOfStakeV8(
@@ -99,9 +118,18 @@ bool CheckProofOfStakeV8(
     CBlockIndex* pindexPrev, //previous block in chain index
     CBlock& Block, //block to check
     bool generated_by_me,
-    uint256& hashProofOfStake); //proof hash out-parameter
+    CValidationState& state,
+    uint256& hashProofOfStake) EXCLUSIVE_LOCKS_REQUIRED(cs_main); //proof hash out-parameter
 
-bool FindStakeModifierRev(uint64_t& StakeModifier, CBlockIndex* pindexPrev, int &nHeight);
+bool FindStakeModifierRev(uint64_t& StakeModifier, CBlockIndex* pindexPrev, int &nHeight) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//! The base kernel target, before the UTXO weight, for a block stamped \p block_time on \p pindexPrev. From v15 the
+//! nBits target is eased by the block's elapsed time since its parent; nBits itself is never eased.
+arith_uint256 GetKernelTarget(unsigned int nBits, int64_t block_time, const CBlockIndex* pindexPrev);
+
+//! The stamp a staker uses for a block on \p pindexPrev at adjusted time \p adjusted_now. From v15 it is
+//! max(parent - 48, MaskStakeTime(adjusted_now)); below v15 it is adjusted_now (unchanged).
+int64_t GetStakeTime(const CBlockIndex* pindexPrev, int64_t adjusted_now);
 
 // Kernel for V8
 uint256 CalculateStakeHashV8(
@@ -121,8 +149,19 @@ uint256 CalculateStakeHashV8(
     uint64_t StakeModifier);
 
 
+//! Halfords per unit of V8 stake weight. A UTXO's weight is its value in whole units.
+constexpr CAmount STAKE_WEIGHT_UNIT_V8 = 1250000;
+
+//! V8 stake weight units per GRC.
+constexpr int64_t STAKE_WEIGHT_UNITS_PER_COIN = COIN / STAKE_WEIGHT_UNIT_V8;
+static_assert(COIN % STAKE_WEIGHT_UNIT_V8 == 0, "a GRC must be a whole number of stake weight units");
+
 int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN);
 int64_t CalculateStakeWeightV8(const CAmount& nValueIn);
+
+//! The value of a V8 stake weight: the smallest value with that weight, so that
+//! CalculateStakeWeightV8(CalculateStakeValueV8(weight)) == weight.
+CAmount CalculateStakeValueV8(int64_t weight);
 } // namespace GRC
 
 #endif // GRIDCOIN_STAKING_KERNEL_H
