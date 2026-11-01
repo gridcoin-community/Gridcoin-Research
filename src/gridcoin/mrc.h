@@ -362,6 +362,19 @@ public:
 };
 
 //!
+//! \brief Determine whether an MRC is eligible beside a block's claim.
+//!
+//! A block's MRCs may not include its claim's CPID. The rule lives here alone: the miner selects the MRCs it binds by
+//! it.
+//!
+//! \param claim_cpid The CPID of the block's claim, or none for a non-cruncher claim.
+//! \param mrc        The MRC to check.
+//!
+//! \return \c true if the MRC names a CPID and that CPID is not the claim's.
+//!
+bool MRCEligibleForClaim(const CpidOption& claim_cpid, const MRC& mrc);
+
+//!
 //! \brief
 //!
 //! The nTime of the pindex (head of the chain) is used as the time for the accrual calculations.

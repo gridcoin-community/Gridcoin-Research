@@ -802,11 +802,13 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                             // not be the same as the stakers cpid, the cpid must be unique (i.e. the same cpid cannot
                             // have more than one MRC per block), and the MRC must validate. This prevents the situation
                             // where a researcher is staking and trying to process an MRC sent from themselves just before.
+                            // The first two are GRC::MRCEligibleForClaim. The staker's cpid stands for the claim's here:
+                            // the claim names it, or names no CPID if the staker falls back to a non-cruncher claim, and
+                            // then this is only stricter.
                             // The below also ensures that only the highest priority mrc in the mempool get processed
                             // for unique cpids, although the one MRC per cpid is also enforced in the AcceptToMemoryPool.
                             // Overflow mrc transactions beyond the output limit will also be ignored.
-                            if ((!cpid || (mrc_cpid && cpid && *mrc_cpid != *cpid))
-                                    && ValidateMRC(pindexPrev, mrc)) {
+                            if (GRC::MRCEligibleForClaim(cpid, mrc) && ValidateMRC(pindexPrev, mrc)) {
                                 // Here the insert form instead of [] is used, because we want to use the first
                                 // mrc transaction in the mempool for a given cpid in mrc fee order, not the last
                                 // for the available slots for mrc. Note that AcceptToMemoryBlock now also enforces

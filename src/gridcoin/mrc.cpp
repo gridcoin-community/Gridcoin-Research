@@ -285,6 +285,13 @@ bool GRC::MRCTermsHold(CAmount fee_now, CAmount reward_now, CAmount confirmed_fe
     return fee_now <= confirmed_fee && reward_now - fee_now >= confirmed_net;
 }
 
+bool GRC::MRCEligibleForClaim(const CpidOption& claim_cpid, const MRC& mrc)
+{
+    const CpidOption mrc_cpid = mrc.m_mining_id.TryCpid();
+
+    return mrc_cpid && (!claim_cpid || *mrc_cpid != *claim_cpid);
+}
+
 namespace {
 //!
 //! \brief Sign the mrc.

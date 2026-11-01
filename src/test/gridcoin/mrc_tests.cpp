@@ -642,4 +642,41 @@ BOOST_AUTO_TEST_CASE(mrc_snapshot_no_error_under_staking_only)
     BOOST_CHECK(snap.min_fee < snap.reward);
 }
 
+BOOST_AUTO_TEST_CASE(an_mrc_is_eligible_beside_a_claim_for_another_cpid)
+{
+    GRC::MRC mrc;
+    mrc.m_mining_id = cpid;
+
+    const GRC::Cpid other_cpid(InsecureRandBytes(16));
+    BOOST_REQUIRE(other_cpid != cpid);
+
+    BOOST_CHECK(GRC::MRCEligibleForClaim(other_cpid, mrc));
+}
+
+BOOST_AUTO_TEST_CASE(an_mrc_is_eligible_beside_a_noncruncher_claim)
+{
+    GRC::MRC mrc;
+    mrc.m_mining_id = cpid;
+
+    // A non-cruncher claim names no CPID.
+    BOOST_CHECK(GRC::MRCEligibleForClaim(GRC::MiningId::ForNoncruncher().TryCpid(), mrc));
+}
+
+BOOST_AUTO_TEST_CASE(an_mrc_is_not_eligible_beside_a_claim_for_its_own_cpid)
+{
+    GRC::MRC mrc;
+    mrc.m_mining_id = cpid;
+
+    BOOST_CHECK(!GRC::MRCEligibleForClaim(cpid, mrc));
+}
+
+BOOST_AUTO_TEST_CASE(an_mrc_that_names_no_cpid_is_not_eligible)
+{
+    GRC::MRC mrc;
+    mrc.m_mining_id = GRC::MiningId::ForNoncruncher();
+
+    BOOST_CHECK(!GRC::MRCEligibleForClaim(cpid, mrc));
+    BOOST_CHECK(!GRC::MRCEligibleForClaim(GRC::MiningId::ForNoncruncher().TryCpid(), mrc));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
