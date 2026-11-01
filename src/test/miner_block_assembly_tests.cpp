@@ -296,13 +296,15 @@ BOOST_FIXTURE_TEST_SUITE(miner_block_assembly_tests, grc_test::WalletTxScope, *b
 //! elsewhere.
 //!
 //! Asserted as the invariant that holds for the fixture's whole lifetime, not
-//! as the state at suite entry: the cases run in any order, and five of them
-//! mine. The entry state (height 0, ten unspent outputs) is the fixture
-//! constructor's own precondition, checked before the shuffle. What this case
-//! pins is that the transaction index agrees with the chain: the premine
-//! outputs it reports spendable are exactly those no transaction in a block on
-//! the active chain has consumed. The two are independent sources -- vSpent in
-//! the index against block contents read back from disk.
+//! as the state at suite entry: the cases run in any order, and the cases that
+//! mine put the chain back when they end (TipRestorer). The fixture constructor
+//! checks the entry height, 0, before the shuffle;
+//! a_case_that_mines_leaves_the_chain_as_it_found_it checks the ten unspent
+//! outputs. What this case pins, at the state every case enters, is that the
+//! transaction index reports exactly the premine outputs no block on the active
+//! chain has consumed, read against block contents walked back from the tip;
+//! a_case_that_mines_leaves_the_chain_as_it_found_it checks the index while a
+//! mined block is on the chain and again after the restorer undoes it.
 //!
 BOOST_AUTO_TEST_CASE(the_fixture_provides_spendable_coins)
 {
@@ -790,6 +792,10 @@ BOOST_AUTO_TEST_CASE(a_transaction_final_only_at_adjusted_time_is_skipped)
 //!
 namespace {
 
+//! How many SignalsForThisCase objects are alive. TipRestorer refuses to start
+//! while one is.
+int g_live_signals = 0;
+
 //! Registers the wallet with the validation signals for one case. The
 //! signals are inert in this binary until a scheduler is registered
 //! (chain_setup.cpp explains why); every signal used here is invoked
@@ -800,9 +806,11 @@ struct SignalsForThisCase {
     {
         GetMainSignals().RegisterBackgroundSignalScheduler(m_scheduler);
         RegisterValidationInterface(pwalletMain);
+        ++g_live_signals;
     }
     ~SignalsForThisCase()
     {
+        --g_live_signals;
         UnregisterValidationInterface(pwalletMain);
         GetMainSignals().UnregisterBackgroundSignalScheduler();
     }
@@ -1251,6 +1259,54 @@ void DropFromPoolSilently()
     mempool.clear();
 }
 
+//! Puts the chain back to the tip it found, however the case exits. The cases
+//! share one chain, and each block a case mines stakes one coin, often a
+//! premine output, which the transaction index then records as spent for every
+//! case after it. Every case that mines declares one before anything else, or
+//! holds one in an inner scope around its mining with no SignalsForThisCase
+//! alive, so it runs after the locals that scope holds: no SignalsForThisCase
+//! is alive then, and RegisterBackgroundSignalScheduler takes only one
+//! scheduler; the case's argument guards are already restored, as for the
+//! fixture's own rewind; and the per-case WalletTxScope runs after it, erasing
+//! the coinstakes the disconnect left inactive as it does for the
+//! orphaned-coinstake case. The constructor fails the case if a
+//! SignalsForThisCase is already alive (g_live_signals), rather than let the
+//! destructor trip that scheduler assert. The wallet hears each disconnect, as
+//! in ReorganizeWithTheWallet, which frees the outputs those coinstakes staked.
+//! A disconnect offers a block's other transactions back to the pool, and
+//! FixSpentCoins keeps an output a pooled transaction spends marked spent, so
+//! the pool is emptied afterwards.
+struct TipRestorer {
+    uint256 m_tip;
+
+    TipRestorer()
+    {
+        BOOST_REQUIRE_MESSAGE(g_live_signals == 0, "declare TipRestorer before any SignalsForThisCase");
+
+        LOCK(cs_main);
+        m_tip = hashBestChain;
+    }
+
+    ~TipRestorer()
+    {
+        {
+            LOCK(cs_main);
+            if (hashBestChain == m_tip) return;
+        }
+
+        {
+            const SignalsForThisCase signals;
+            const bool restored = ForceReorganizeToHash(m_tip);
+            BOOST_CHECK_MESSAGE(restored, "could not put the chain back to " << m_tip.ToString());
+        }
+
+        mempool.clear();
+    }
+
+    TipRestorer(const TipRestorer&) = delete;
+    TipRestorer& operator=(const TipRestorer&) = delete;
+};
+
 } // anonymous namespace
 
 //!
@@ -1426,8 +1482,6 @@ BOOST_AUTO_TEST_CASE(an_erased_transaction_takes_its_own_descendants_with_it)
         [&seen](CWallet*, const uint256& hash, ChangeType status) { seen.emplace_back(hash, status); });
 
     const std::vector<COutPoint> coins = SpendablePremineOutputs();
-    // Low indices only: five sibling cases mine and each stakes a premine kernel,
-    // so in some orders as few as five outputs remain.
     BOOST_REQUIRE_GE(coins.size(), 2u);
     const COutPoint message_coin = coins[0];
     const COutPoint co_input = coins[1];
@@ -1772,6 +1826,113 @@ void PutInWallet(const CTransaction& tx)
 }
 
 //!
+//! A case that mines leaves the chain as it found it, so every case finds all
+//! ten premine outputs unspent whatever ran before it (TipRestorer). Checks the
+//! tip, the transaction index and the wallet once the restorer around one
+//! mined block is gone, and the index while that block is on the chain.
+//!
+BOOST_AUTO_TEST_CASE(a_case_that_mines_leaves_the_chain_as_it_found_it)
+{
+    mempool.clear();
+
+    uint256 tip_before;
+    {
+        LOCK(cs_main);
+        tip_before = hashBestChain;
+    }
+
+    // Each case that mines holds a TipRestorer, so none has left a premine
+    // output spent, whatever ran before this one.
+    BOOST_REQUIRE_EQUAL(SpendablePremineOutputs().size(), PremineCoinbase().vout.size());
+
+    COutPoint kernel;
+    uint256 coinstake_hash;
+    {
+        const TipRestorer restore_tip;
+
+        CBlock block;
+        std::string err;
+        BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+        // sign-compare checked: size() is size_t; 1U is a non-negative literal, so both sides are unsigned.
+        BOOST_REQUIRE(block.vtx.size() > 1U && block.vtx[1].IsCoinStake());
+        BOOST_REQUIRE(WITH_LOCK(cs_main, return hashBestChain) != tip_before);
+
+        kernel = block.vtx[1].vin[0].prevout;
+        coinstake_hash = block.vtx[1].GetHash();
+
+        // With the block on the chain, the index records its kernel spent.
+        BOOST_REQUIRE(kernel.hash == PremineCoinbase().GetHash());
+        const std::vector<COutPoint> during = SpendablePremineOutputs();
+        BOOST_CHECK_EQUAL(during.size(), PremineCoinbase().vout.size() - 1);
+        BOOST_CHECK(std::find(during.begin(), during.end(), kernel) == during.end());
+    }
+
+    {
+        LOCK(cs_main);
+        BOOST_CHECK_EQUAL(hashBestChain.ToString(), tip_before.ToString());
+    }
+    BOOST_CHECK_EQUAL(SpendablePremineOutputs().size(), PremineCoinbase().vout.size());
+    BOOST_CHECK_MESSAGE(!OwnOutputSpent(kernel.hash, kernel.n), "the wallet still marks the staked output spent");
+    {
+        LOCK(pwalletMain->cs_wallet);
+        const auto it = pwalletMain->mapWallet.find(coinstake_hash);
+        BOOST_CHECK_MESSAGE(it == pwalletMain->mapWallet.end() || !it->second.isConfirmed(),
+                            "the wallet still holds the coinstake of the undone block as confirmed");
+    }
+}
+
+//!
+//! Undoing a block that carries a pooled spend offers the spend back to the
+//! pool. TipRestorer empties the pool afterwards, so no later case finds an
+//! output that a pooled spend still holds.
+//!
+BOOST_AUTO_TEST_CASE(a_restored_tip_leaves_no_re_offered_spend_in_the_pool)
+{
+    mempool.clear();
+
+    uint256 tip_before;
+    {
+        LOCK(cs_main);
+        tip_before = hashBestChain;
+    }
+
+    const std::vector<COutPoint> coins = SpendablePremineOutputs();
+    // sign-compare checked: size() is size_t; 1u is a non-negative literal, so both sides are unsigned.
+    BOOST_REQUIRE_GE(coins.size(), 1u);
+
+    // A fee no other case here uses, so the spend's txid is this case's own.
+    CTransaction spend = CreateSpend(PremineCoinbase(), coins[0].n, 490000, 1);
+    BOOST_REQUIRE_GE(CAmount{490000}, GetMinFee(spend));
+
+    {
+        const SignalsForThisCase signals;
+        LOCK(cs_main);
+
+        CValidationState state;
+        BOOST_CHECK_EQUAL(g_live_signals, 1);
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, spend, state, nullptr),
+                              "spend rejected: " + state.GetRejectReason());
+        BOOST_REQUIRE(OwnOutputSpent(coins[0].hash, coins[0].n));
+    }
+
+    {
+        const TipRestorer restore_tip;
+
+        CBlock block;
+        std::string err;
+        BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(block, err), "could not mine: " << err);
+        BOOST_REQUIRE_MESSAGE(Contains(block.vtx, spend), "the block left out the pooled spend");
+    }
+
+    BOOST_REQUIRE_MESSAGE(WITH_LOCK(cs_main, return hashBestChain) == tip_before,
+                          "the restorer did not rewind, so the pool check below would prove nothing");
+    BOOST_CHECK_MESSAGE(!mempool.exists(spend.GetHash()),
+                        "the restorer left the spend the disconnect re-offered in the pool");
+
+    mempool.clear();
+}
+
+//!
 //! The activation sweep, end to end through real block connection.
 //!
 //! The txmempool cases cover the pieces in isolation -- the entry tag, the
@@ -1784,6 +1945,7 @@ void PutInWallet(const CTransaction& tx)
 //!
 BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_swept_when_the_chain_crosses_the_height)
 {
+    const TipRestorer restore_tip;
     mempool.clear();
 
     int mined_height = 0;
@@ -1871,6 +2033,7 @@ BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_swept_when_the_chain_crosse
 //!
 BOOST_AUTO_TEST_CASE(a_pooled_message_transaction_is_untouched_below_the_height)
 {
+    const TipRestorer restore_tip;
     mempool.clear();
 
     int mined_height = 0;
@@ -2029,6 +2192,7 @@ BOOST_AUTO_TEST_CASE(message_contract_is_accepted_while_the_next_block_still_all
 //!
 BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_swept_when_its_authorization_expires)
 {
+    const TipRestorer restore_tip;
     mempool.clear();
     grc_test::V15HeightGuard v15(0);
     grc_test::ForcedArgGuard retention("pendingpoolretention", "1");
@@ -2102,6 +2266,7 @@ BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_swept_when_its_authorization_expi
 //! is what forbids a sweep that retires POOL contracts unconditionally.
 BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_untouched_while_its_authorization_holds)
 {
+    const TipRestorer restore_tip;
     mempool.clear();
     grc_test::V15HeightGuard v15(0);
     grc_test::ForcedArgGuard retention("pendingpoolretention", "100000");
@@ -2194,6 +2359,7 @@ BOOST_AUTO_TEST_CASE(a_pooled_pool_register_is_untouched_while_its_authorization
 //!
 BOOST_AUTO_TEST_CASE(a_stale_mrc_is_removed_when_a_block_connects)
 {
+    const TipRestorer restore_tip;
     mempool.clear();
 
     uint256 head;
@@ -2557,6 +2723,8 @@ BOOST_AUTO_TEST_CASE(the_minimum_stake_age_runs_from_the_confirming_block)
 
 BOOST_AUTO_TEST_CASE(stake_candidates_carry_their_confirming_block_time)
 {
+    const TipRestorer restore_tip;
+
     // Mine one block so that the candidates come from two confirming blocks: the genesis premine outputs and the new
     // block's coinstake.
     CBlock block;
@@ -2696,6 +2864,7 @@ struct PlantedSpend {
 //!
 BOOST_AUTO_TEST_CASE(an_orphaned_own_coinstake_adds_nothing_to_the_staking_balance)
 {
+    const TipRestorer restore_tip;
     mempool.clear();
 
     const int64_t balance_before_stake = StakingBalance();
@@ -2994,6 +3163,8 @@ BOOST_AUTO_TEST_CASE(the_resend_pass_passes_over_inactive_coinbases_and_coinstak
 
 BOOST_AUTO_TEST_CASE(kernel_detail_is_logged_only_under_the_miner_category)
 {
+    const TipRestorer restore_tip;
+
     // Restores the MINER category and removes the callback on every exit path.
     struct MinerLogCapture {
         std::vector<std::string> lines;
