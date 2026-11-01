@@ -1252,7 +1252,10 @@ public:
     boost::signals2::signal<void (CWallet *wallet, const CTxDestination &address, const std::string &label, bool isMine, const std::string &purpose, ChangeType status)> NotifyAddressBookChanged;
 
     /** Wallet transaction added, removed or updated.
-     * @note called with lock cs_wallet held.
+     * @note Emitted with cs_main held. CT_NEW and CT_UPDATED also hold cs_wallet; a
+     *       CT_DELETED may not (block connection's erase of a stale MRC fires after
+     *       EraseFromWallet has released it), so a CT_DELETED subscriber must touch
+     *       only the hash.
      */
     boost::signals2::signal<void (CWallet *wallet, const uint256 &hashTx, ChangeType status)> NotifyTransactionChanged;
 
