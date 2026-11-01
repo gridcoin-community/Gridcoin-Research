@@ -157,7 +157,7 @@ Some Gridcoin specific other entries:
 **stakingefficiency=<percentage between 75 and 98, defaults to 90>**
 **minstakesplitvalue=<value in GRC, minimum and defaults to 800>**
 
-enablestakesplit=1 will enable the automatic splitting of UTXO's in the
+enablestakesplit=1 will enable the automatic splitting of UTXOs in the
 coinstake transaction (stake outputs). Zero is the default (disabled).
 
 stakingefficiency=xx is an integer that specifies the desired staking
@@ -167,7 +167,7 @@ in case an unreasonable value is provided.
 minstakesplitvalue=xxx is an integer that specifies the minimum UTXO size
 desired post split to provide a secondary control on UTXO size. If
 difficulty drops and a high efficiency is specified, the efficiency alone
-would split UTXO's into amounts smaller than the user desires. This will
+would split UTXOs into amounts smaller than the user desires. This will
 prevent that from occurring. If a user specifies less than 800 GRC, then
 the code uses 800 GRC. Note that the stake splitter uses a 160 block
 averaging interval for calculating the difficulty to smooth out the
