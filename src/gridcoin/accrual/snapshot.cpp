@@ -367,6 +367,8 @@ bool AccrualSnapshotRegistry::Initialize()
         return false;
     }
 
+    m_upgrade_pending = false;
+
     CAutoFile registry_file(
         fsbridge::fopen(RegistryPath(), "rb"),
         SER_DISK,
@@ -389,6 +391,12 @@ bool AccrualSnapshotRegistry::Initialize()
     // Release the read handle before Rewrite() moves a new file over this
     // one: Windows refuses to replace a file that is still open.
     registry_file.fclose();
+
+    if (m_upgrade_pending) {
+        LogPrintf("Accrual snapshot registry version %u loaded; the upgrade to version %u is pending.",
+                  UPGRADABLE_VERSION,
+                  CURRENT_VERSION);
+    }
 
     LogPrintf("Accrual snapshot registry loaded. Compacting...");
 
@@ -547,10 +555,13 @@ bool AccrualSnapshotRegistry::Rewrite()
         return error("%s: failed to open %s for writing", __func__, temp_path.string());
     }
 
+    // Write the version last in effect: the new file replaces the registry
+    // only once it is complete and committed, so the version on disk always
+    // describes a whole registry.
     bool written = true;
 
     try {
-        ::Serialize(*this, CURRENT_VERSION);
+        ::Serialize(*this, m_upgrade_pending ? UPGRADABLE_VERSION : CURRENT_VERSION);
     } catch (const std::exception& e) {
         written = error("%s: %s", __func__, e.what());
     }
@@ -582,6 +593,18 @@ bool AccrualSnapshotRegistry::Rewrite()
     return ReopenForAppend();
 }
 
+bool AccrualSnapshotRegistry::UpgradePending() const
+{
+    return m_upgrade_pending;
+}
+
+bool AccrualSnapshotRegistry::CompleteUpgrade()
+{
+    m_upgrade_pending = false;
+
+    return Rewrite();
+}
+
 bool AccrualSnapshotRegistry::WriteEntry(const Action action, const Entry entry)
 {
     try {
@@ -600,7 +623,11 @@ void AccrualSnapshotRegistry::Unserialize(CAutoFile& file)
     uint32_t version;
     file >> version;
 
-    if (version != CURRENT_VERSION) {
+    if (version == UPGRADABLE_VERSION) {
+        // Same disk format. The registry keeps writing this version until the
+        // tally completes the upgrade (see UpgradePending()):
+        m_upgrade_pending = true;
+    } else if (version != CURRENT_VERSION) {
         // When this is executed by the tally's initialization routine, the
         // exception will cause the application to rebuild the snapshots:
         throw SnapshotRegistryVersionMismatchError(version, CURRENT_VERSION);
@@ -718,6 +745,16 @@ bool AccrualSnapshotRepository::HasBaseline() const
 uint64_t AccrualSnapshotRepository::LatestHeight() const
 {
     return m_registry.LatestHeight();
+}
+
+bool AccrualSnapshotRepository::UpgradePending() const
+{
+    return m_registry.UpgradePending();
+}
+
+bool AccrualSnapshotRepository::CompleteUpgrade()
+{
+    return m_registry.CompleteUpgrade();
 }
 
 bool AccrualSnapshotRepository::StoreBaseline(const uint64_t height, const ResearchAccountMap& accounts)

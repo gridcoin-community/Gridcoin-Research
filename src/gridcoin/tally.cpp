@@ -5,6 +5,7 @@
 #include "amount.h"
 #include "chainparams.h"
 #include "gridcoin/accrual/newbie.h"
+#include "gridcoin/accrual/newbie_window.h"
 #include "gridcoin/accrual/null.h"
 #include "gridcoin/accrual/research_age.h"
 #include "gridcoin/accrual/snapshot.h"
@@ -15,15 +16,73 @@
 #include "gridcoin/quorum.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/tally.h"
+#include "span.h"
 #include "util.h"
 #include "node/ui_interface.h"
 
+#include <optional>
 #include <unordered_map>
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 namespace {
+//!
+//! \brief Get the table of newbie accrual corrections that the current network
+//! applied in the newbie correction window.
+//!
+//! \return The mainnet or testnet table, or an empty table on another network.
+//!
+Span<const NewbieWindowEntry> GetNewbieWindowTable()
+{
+    if (OnMainnet()) {
+        return MAINNET_NEWBIE_WINDOW;
+    }
+
+    if (OnTestnet()) {
+        return TESTNET_NEWBIE_WINDOW;
+    }
+
+    return {};
+}
+
+//!
+//! \brief Get the newbie accrual correction that the network applied to a new
+//! research account in a superblock of the newbie correction window.
+//!
+//! The window runs from the newbie fix height to the last superblock that
+//! applied a nonzero correction. Inside it the tally takes the correction that
+//! the network applied from a table (see GetNewbieWindowTable()). Outside the
+//! window the tally computes the correction as before.
+//!
+//! \param height Height of the superblock that creates the account.
+//! \param cpid   CPID of the account.
+//!
+//! \return The correction for a superblock inside the window on a network with
+//! a table (zero for a CPID without a table entry), or nothing outside it.
+//!
+std::optional<CAmount> GetNewbieWindowCorrection(const int64_t height, const Cpid& cpid)
+{
+    const Span<const NewbieWindowEntry> table = GetNewbieWindowTable();
+
+    if (table.empty()
+        || height < GetNewbieSnapshotFixHeight()
+        || height > table.back().m_height)
+    {
+        return std::nullopt;
+    }
+
+    const std::string cpid_hex = cpid.ToString();
+
+    for (const auto& entry : table) {
+        if (entry.m_height == height && cpid_hex == entry.m_cpid) {
+            return entry.m_correction;
+        }
+    }
+
+    return 0;
+}
+
 /*
 //!
 //! \brief Determines whether the snapshot accrual system should enable the fix
@@ -626,7 +685,8 @@ public:
             // baseline snapshot and scan context for the remaining blocks:
             //
             if (!m_snapshots.HasBaseline()) {
-                return BuildAccrualSnapshots();
+                return BuildAccrualSnapshots()
+                    && (!m_snapshots.UpgradePending() || m_snapshots.CompleteUpgrade());
             }
 
             // Check the integrity of the baseline superblock snapshot:
@@ -635,6 +695,18 @@ public:
 
             if (last_superblock_pindex) {
                 m_snapshots.AssertMatch(last_superblock_pindex->nHeight);
+            }
+
+            // On a network with a newbie correction window table (mainnet and
+            // testnet), the first start after an upgrade from the previous
+            // registry version rebuilds every snapshot once; the rebuilt
+            // registry is written with the current version:
+            //
+            if (m_snapshots.UpgradePending() && !GetNewbieWindowTable().empty()) {
+                LogPrintf("INFO: %s: rebuilding the accrual snapshots once after the snapshot registry upgrade.",
+                          __func__);
+
+                return RebuildAccrualSnapshots();
             }
 
             // Finish loading the research account context for the remaining
@@ -680,7 +752,11 @@ public:
 
             EnsureCurrentSuperblockAccounts();
 
-            return true;
+            // On a network without a table a registry upgrade has no one-time
+            // rebuild. Record the upgrade last, once the snapshots are stored
+            // and applied:
+            //
+            return !m_snapshots.UpgradePending() || m_snapshots.CompleteUpgrade();
         } catch (const SnapshotStateError& e) {
             LogPrintf("%s: %s", __func__, e.what());
         }
@@ -848,33 +924,52 @@ private:
             // the normal AccrualDelta, which is the period from the current superblock to the
             // incoming one.
             for (const auto& iter : superblock->m_cpids) {
-                if (m_researchers.find(iter.Cpid()) == m_researchers.end()) {
-                    ResearchAccount& account = m_researchers[iter.Cpid()];
+                const auto account_iter = m_researchers.find(iter.Cpid());
 
-                    // Rewind from the parent of the incoming superblock's block,
-                    // which is the chain tip when the block connects, rather
-                    // than from the tip, which is far above when the tally
-                    // rebuilds or recomputes snapshots.
-                    CAmount accrual_correction = Tally::GetNewbieSuperblockAccrualCorrection(
+                // Inside the newbie correction window on mainnet and testnet the
+                // correction is the one that the network applied
+                // (GetNewbieWindowCorrection()).
+                const std::optional<CAmount> window_correction =
+                    GetNewbieWindowCorrection(superblock.m_height, iter.Cpid());
+
+                // Inside the window, a CPID with a nonzero table entry gets its
+                // account from the table:
+                const bool recreate = account_iter != m_researchers.end()
+                    && window_correction
+                    && *window_correction != 0
+                    && account_iter->second.IsNew();
+
+                if (account_iter != m_researchers.end() && !recreate) {
+                    continue;
+                }
+
+                ResearchAccount& account = m_researchers[iter.Cpid()];
+
+                // Outside the window, rewind from the parent of the incoming
+                // superblock's block, which is the chain tip when the block
+                // connects, rather than from the tip, which is far above when
+                // the tally rebuilds or recomputes snapshots.
+                CAmount accrual_correction = window_correction
+                    ? *window_correction
+                    : Tally::GetNewbieSuperblockAccrualCorrection(
                         iter.Cpid(),
                         m_current_superblock,
                         pindex ? pindex->pprev : nullptr);
-                    CAmount accrual_delta = calc.AccrualDelta(iter.Cpid(), account);
+                CAmount accrual_delta = calc.AccrualDelta(iter.Cpid(), account);
 
-                    account.m_accrual = accrual_correction + accrual_delta;
+                account.m_accrual = accrual_correction + accrual_delta;
 
-                    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: accrual account not found "
-                             "for CPID %s. Creating account with accrual %" PRId64" from "
-                             "Accrual Correction = %" PRId64 ", Accrual Delta = %" PRId64 ", "
-                             "superblock height = %" PRId64 ", m_researchers.size() = %u.",
-                             __func__,
-                             iter.Cpid().ToString(),
-                             account.m_accrual,
-                             accrual_correction,
-                             accrual_delta,
-                             superblock.m_height,
-                             m_researchers.size());
-                }
+                LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: accrual account not found "
+                         "for CPID %s. Creating account with accrual %" PRId64" from "
+                         "Accrual Correction = %" PRId64 ", Accrual Delta = %" PRId64 ", "
+                         "superblock height = %" PRId64 ", m_researchers.size() = %u.",
+                         __func__,
+                         iter.Cpid().ToString(),
+                         account.m_accrual,
+                         accrual_correction,
+                         accrual_delta,
+                         superblock.m_height,
+                         m_researchers.size());
             }
         }
     }

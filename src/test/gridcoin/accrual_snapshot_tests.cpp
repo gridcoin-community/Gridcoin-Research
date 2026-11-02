@@ -106,9 +106,27 @@ uint32_t RegistryVersionOnDisk()
     return ReadLE32(bytes.data());
 }
 
+void SetRegistryVersionOnDisk(const uint32_t version)
+{
+    FILE* file = fsbridge::fopen(RegistryPath(), "r+b");
+    BOOST_REQUIRE(file != nullptr);
+
+    std::array<unsigned char, 4> bytes{};
+    WriteLE32(bytes.data(), version);
+    const size_t written = fwrite(bytes.data(), 1, bytes.size(), file);
+    fclose(file);
+    BOOST_REQUIRE_EQUAL(written, bytes.size());
+}
 } // Anonymous namespace
 
 BOOST_FIXTURE_TEST_SUITE(accrual_snapshot_tests, SnapshotDirSetup)
+
+BOOST_AUTO_TEST_CASE(it_writes_the_current_registry_version)
+{
+    StoreThreeAndClose();
+
+    BOOST_CHECK_EQUAL(RegistryVersionOnDisk(), GRC::AccrualSnapshotRegistry::CURRENT_VERSION);
+}
 
 BOOST_AUTO_TEST_CASE(it_keeps_entries_appended_after_a_rewrite)
 {
@@ -184,6 +202,79 @@ BOOST_AUTO_TEST_CASE(a_failed_compaction_is_reported_and_keeps_the_registry)
     BOOST_CHECK(repo.HasBaseline());
     BOOST_CHECK_EQUAL(repo.LatestHeight(), 300u);
     BOOST_CHECK(repo.CloseRegistryFile());
+}
+
+BOOST_AUTO_TEST_CASE(a_previous_version_registry_loads_as_a_pending_upgrade)
+{
+    StoreThreeAndClose();
+    SetRegistryVersionOnDisk(GRC::AccrualSnapshotRegistry::UPGRADABLE_VERSION);
+
+    // Every start compacts the registry. Until the upgrade completes, the
+    // previous version stays on disk, so an interrupted upgrade runs again.
+    for (int start = 0; start < 2; ++start) {
+        GRC::AccrualSnapshotRepository repo;
+        BOOST_REQUIRE(repo.Initialize());
+        BOOST_CHECK(repo.UpgradePending());
+        BOOST_CHECK(repo.HasBaseline());
+        BOOST_CHECK_EQUAL(repo.LatestHeight(), 300u);
+        BOOST_REQUIRE(repo.CloseRegistryFile());
+        BOOST_CHECK_EQUAL(RegistryVersionOnDisk(), GRC::AccrualSnapshotRegistry::UPGRADABLE_VERSION);
+    }
+
+    {
+        // Completing the upgrade rewrites the registry; a snapshot stored
+        // afterwards goes to the reopened registry file.
+        GRC::AccrualSnapshotRepository repo;
+        BOOST_REQUIRE(repo.Initialize());
+        BOOST_REQUIRE(repo.CompleteUpgrade());
+        BOOST_CHECK(!repo.UpgradePending());
+        BOOST_REQUIRE(repo.Store(400, OneAccount()));
+        BOOST_REQUIRE(repo.CloseRegistryFile());
+    }
+
+    BOOST_CHECK_EQUAL(RegistryVersionOnDisk(), GRC::AccrualSnapshotRegistry::CURRENT_VERSION);
+
+    GRC::AccrualSnapshotRepository repo;
+    BOOST_REQUIRE(repo.Initialize());
+    BOOST_CHECK(!repo.UpgradePending());
+    BOOST_CHECK(repo.HasBaseline());
+    BOOST_CHECK_EQUAL(repo.LatestHeight(), 400u);
+    BOOST_CHECK(repo.CloseRegistryFile());
+}
+
+BOOST_AUTO_TEST_CASE(erasing_the_snapshots_writes_the_current_version_at_once)
+{
+    StoreThreeAndClose();
+    SetRegistryVersionOnDisk(GRC::AccrualSnapshotRegistry::UPGRADABLE_VERSION);
+
+    GRC::AccrualSnapshotRepository repo;
+    BOOST_REQUIRE(repo.Initialize());
+    BOOST_REQUIRE(repo.UpgradePending());
+
+    // The one-time rebuild erases the snapshots first. The new, empty registry
+    // has the current version from the start: an interrupted rebuild is
+    // finished by the startup repair from the last intact snapshot, not by the
+    // version marker.
+    BOOST_REQUIRE(repo.EraseAll());
+    BOOST_CHECK(!repo.UpgradePending());
+    BOOST_CHECK(!repo.HasBaseline());
+    BOOST_REQUIRE(repo.CloseRegistryFile());
+
+    BOOST_CHECK_EQUAL(RegistryVersionOnDisk(), GRC::AccrualSnapshotRegistry::CURRENT_VERSION);
+    BOOST_CHECK(!fs::exists(GRC::SnapshotPath(100)));
+}
+
+BOOST_AUTO_TEST_CASE(other_registry_versions_still_force_a_rebuild)
+{
+    StoreThreeAndClose();
+
+    for (const uint32_t version : {uint32_t{1}, GRC::AccrualSnapshotRegistry::CURRENT_VERSION + 1}) {
+        SetRegistryVersionOnDisk(version);
+
+        GRC::AccrualSnapshotRepository repo;
+        BOOST_CHECK_THROW(repo.Initialize(), GRC::SnapshotRegistryVersionMismatchError);
+        BOOST_CHECK(repo.CloseRegistryFile());
+    }
 }
 
 BOOST_AUTO_TEST_CASE(drop_above_height_removes_the_later_snapshots_for_good)
