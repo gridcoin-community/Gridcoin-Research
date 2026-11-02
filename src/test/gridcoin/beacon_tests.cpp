@@ -1998,7 +1998,8 @@ void ReloadRegistry(GRC::BeaconRegistry& registry)
 }
 
 //!
-//! \brief Read the beacon entry db version stored in LevelDB, or zero if none is stored.
+//! \brief Read the beacon entry db version stored in LevelDB, or zero if it cannot be read (none is stored, or the
+//! read fails), as the registry's own version check treats it.
 //!
 uint32_t StoredBeaconDBVersion()
 {
