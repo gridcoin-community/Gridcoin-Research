@@ -305,6 +305,8 @@ BASE_SCRIPTS = [
     'feature_beacon_v15_rebuild.py',
     'feature_research_reward.py',
     'feature_mrc.py',
+    # feature_mrc.py --v15: the MRC test under the block version 15 rules.
+    'feature_mrc.py --v15',
     'feature_contract_replay.py',
     'feature_beacon_pending_proofs.py',
     # feature_own_boinc_dir.py: a test node reads the BOINC data directory the

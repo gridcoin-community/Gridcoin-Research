@@ -569,6 +569,14 @@ bool BlockRewardRules::CheckMRCRewards(
                         MRC mrc = contract.CopyPayloadAs<MRC>();
 
                         if (const CpidOption cpid = mrc.m_mining_id.TryCpid()) {
+                            // From block version 15 a block's MRCs may not include its claim's CPID, the rule the
+                            // miner selects by (MRCEligibleForClaim).
+                            if (m_block_version >= 15 && !MRCEligibleForClaim(claim.m_mining_id.TryCpid(), mrc)) {
+                                error_out = strprintf("block's MRCs include its claim's CPID %s",
+                                                      cpid->ToString());
+                                return false;
+                            }
+
                             const auto mrc_it = mapBlockIndex.find(mrc.m_last_block_hash);
                             if (mrc_it == mapBlockIndex.end() || mrc_it->second == nullptr) {
                                 error_out = "MRC refers to unknown last-block hash";

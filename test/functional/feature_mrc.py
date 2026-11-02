@@ -18,6 +18,11 @@ node1's beacon address, node1's wallet sees that output, and the block minted
 block subsidy plus the whole research subsidy (payout plus the fee split between
 staker and foundation). Before the request the same node's block carried no
 such output, which is what the comparison is against.
+
+With --v15 both nodes run the block version 15 rules from block 1. From block
+version 15 block validation also requires that a block's MRCs not include its
+claim's CPID; node0's investor claim names no CPID, so both nodes accept the
+block that pays node1's request.
 """
 
 from decimal import Decimal
@@ -39,11 +44,17 @@ ACCRUAL_SPAN = 86400
 
 
 class MrcTest(GridcoinTestFramework):
+    def add_options(self, parser):
+        parser.add_argument("--v15", dest="v15", default=False, action="store_true",
+                            help="run the block version 15 rules from block 1")
+
     def set_test_params(self):
         self.num_nodes = 2
         self.chain = "regtest"
         self.setup_clean_chain = True
         common = ["-staking=0"]
+        if self.options.v15:
+            common.append("-blockv15height=1")
         self.extra_args = [common[:], common + [f"-forcecpid={CPID}"]]
 
     def setup_network(self):
@@ -134,6 +145,9 @@ class MrcTest(GridcoinTestFramework):
 
         self.log.info("node0's next coinstake pays the request to node1's beacon address")
         paid = self.stake_and_sync()
+        # stake_and_sync returns once node1 holds the block too, so both nodes
+        # accepted it, under the version 15 rules with --v15.
+        assert_equal(paid["version"], 15 if self.options.v15 else 14)
         claim = paid["claim"]
         assert_equal(claim["m_mrc_tx_map_size"], 1)
         # The bound MRC must be node1's, not merely counted: the claim decodes
