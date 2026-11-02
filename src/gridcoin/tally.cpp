@@ -16,6 +16,7 @@
 #include "gridcoin/quorum.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/tally.h"
+#include "init.h"
 #include "span.h"
 #include "util.h"
 #include "node/ui_interface.h"
@@ -588,6 +589,34 @@ public:
         // switch to block version 11.
         //
         if (superblock->m_version >= 2) {
+            // Snapshots are stored in chain order, and a disconnect drops the
+            // snapshot of the superblock that it reverts. Register() refuses a
+            // superblock at or below the latest snapshot. Nothing has changed
+            // yet, so stop the node here. The next start drops the snapshots
+            // above the chain tip and reloads the accounts from the snapshots on
+            // disk:
+            //
+            if (static_cast<uint64_t>(superblock.m_height) <= m_snapshots.LatestHeight()) {
+                const std::string message = strprintf(
+                    _("The superblock at height %d is already recorded in the research reward accounts. This "
+                      "happens when a block could not be saved after its superblock was applied, for example "
+                      "because a disk write failed. Gridcoin will shut down. Correct the cause and restart "
+                      "Gridcoin; the accounts are reloaded from disk at startup."),
+                    superblock.m_height);
+
+                LogPrintf("ERROR: %s: superblock %" PRId64 " is at or below the latest accrual snapshot %" PRIu64
+                          ". %s",
+                          __func__,
+                          superblock.m_height,
+                          m_snapshots.LatestHeight(),
+                          message);
+
+                uiInterface.ThreadSafeMessageBox(message, "Gridcoin", CClientUIInterface::MSG_ERROR);
+                StartShutdown();
+
+                return false;
+            }
+
             TallySuperblockAccrual(superblock, pindex);
 
             if (!m_snapshots.Store(superblock.m_height, m_researchers)) {

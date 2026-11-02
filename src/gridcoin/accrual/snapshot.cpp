@@ -474,6 +474,13 @@ void AccrualSnapshotRegistry::AssertHashMatches(const uint64_t height, const uin
 
 bool AccrualSnapshotRegistry::Register(const uint64_t height, const uint256 snapshot_hash)
 {
+    // The entries stay in ascending order: Unserialize() refuses a file that
+    // is out of order, StoreBaseline() registers right after ResetBaseline()
+    // cleared the entries, and the tally's ApplySuperblock() refuses a
+    // superblock at or below the latest snapshot before it stores one. The
+    // assert holds the order that the binary search in TryHeight() depends on
+    // against a new caller that registers a height without that check:
+    //
     assert(m_entries.empty() || height > m_entries.back().m_height); // LINT-OK-ASSERT: relocated unchanged
 
     const Entry entry(height, snapshot_hash);
@@ -658,6 +665,21 @@ void AccrualSnapshotRegistry::Unserialize(CAutoFile& file)
                         entry.m_height,
                         entry.m_snapshot_hash.ToString());
 
+                    // Register() adds heights in ascending order and
+                    // Deregister() removes only the latest one, so a file that
+                    // does otherwise is damaged. Refuse it here: entries out of
+                    // order break the binary search in TryHeight() and the next
+                    // Register(), and a removal from an empty registry is
+                    // undefined. The tally's initialization then rebuilds the
+                    // snapshots:
+                    //
+                    if (!m_entries.empty() && entry.m_height <= m_entries.back().m_height) {
+                        throw SnapshotStateError(strprintf(
+                            "registry adds snapshot %" PRIu64 " after snapshot %" PRIu64 ".",
+                            entry.m_height,
+                            m_entries.back().m_height));
+                    }
+
                     m_entries.emplace_back(entry);
                     break;
                 case Action::DEREGISTER:
@@ -665,6 +687,12 @@ void AccrualSnapshotRegistry::Unserialize(CAutoFile& file)
                         "  Removed: %" PRIu64 " (%s)",
                         entry.m_height,
                         entry.m_snapshot_hash.ToString());
+
+                    if (m_entries.empty() || entry.m_height != m_entries.back().m_height) {
+                        throw SnapshotStateError(strprintf(
+                            "registry removes snapshot %" PRIu64 ", which is not the latest one.",
+                            entry.m_height));
+                    }
 
                     m_entries.pop_back();
             }

@@ -8,14 +8,18 @@
 #include "gridcoin/account.h"
 #include "gridcoin/accrual/snapshot.h"
 #include "gridcoin/cpid.h"
+#include "streams.h"
 #include "test/state_guard.h"
 #include "test/test_gridcoin.h"
+#include "uint256.h"
 #include "util/system.h"
 
 #include <boost/test/unit_test.hpp>
 
 #include <array>
 #include <cstdio>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -116,6 +120,27 @@ void SetRegistryVersionOnDisk(const uint32_t version)
     const size_t written = fwrite(bytes.data(), 1, bytes.size(), file);
     fclose(file);
     BOOST_REQUIRE_EQUAL(written, bytes.size());
+}
+
+//! The registry actions as they are written to disk.
+constexpr uint8_t BASELINE = 0;
+constexpr uint8_t REGISTER = 1;
+constexpr uint8_t DEREGISTER = 2;
+
+//! Write a registry file of the current version that records the given
+//! actions and heights, in the disk format of a registry entry.
+void WriteRegistryOnDisk(const std::vector<std::pair<uint8_t, uint64_t>>& entries)
+{
+    fs::create_directories(GRC::SnapshotDirectory());
+
+    CAutoFile file(fsbridge::fopen(RegistryPath(), "wb"), SER_DISK, GRC::AccrualSnapshotRegistry::CURRENT_VERSION);
+    BOOST_REQUIRE(!file.IsNull());
+
+    file << GRC::AccrualSnapshotRegistry::CURRENT_VERSION;
+
+    for (const auto& [action, height] : entries) {
+        file << action << height << uint256();
+    }
 }
 } // Anonymous namespace
 
@@ -275,6 +300,58 @@ BOOST_AUTO_TEST_CASE(other_registry_versions_still_force_a_rebuild)
         BOOST_CHECK_THROW(repo.Initialize(), GRC::SnapshotRegistryVersionMismatchError);
         BOOST_CHECK(repo.CloseRegistryFile());
     }
+}
+
+BOOST_AUTO_TEST_CASE(it_refuses_a_registry_that_adds_a_height_out_of_order)
+{
+    // The heights in ascending order load:
+    WriteRegistryOnDisk({{BASELINE, 100}, {REGISTER, 100}, {REGISTER, 200}, {REGISTER, 300}});
+
+    {
+        GRC::AccrualSnapshotRepository repo;
+        BOOST_REQUIRE(repo.Initialize());
+        BOOST_CHECK_EQUAL(repo.LatestHeight(), 300u);
+        BOOST_REQUIRE(repo.CloseRegistryFile());
+    }
+
+    // An equal height and a lower height make the tally rebuild the
+    // snapshots:
+    for (const uint64_t height : {uint64_t{300}, uint64_t{200}}) {
+        WriteRegistryOnDisk({{BASELINE, 100}, {REGISTER, 100}, {REGISTER, 300}, {REGISTER, height}});
+
+        GRC::AccrualSnapshotRepository repo;
+        BOOST_CHECK_THROW(repo.Initialize(), GRC::SnapshotStateError);
+        BOOST_CHECK(repo.CloseRegistryFile());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(it_refuses_a_registry_that_removes_a_snapshot_it_does_not_hold)
+{
+    // Removing the latest snapshot loads:
+    WriteRegistryOnDisk({{BASELINE, 100}, {REGISTER, 100}, {REGISTER, 200}, {DEREGISTER, 200}});
+
+    {
+        GRC::AccrualSnapshotRepository repo;
+        BOOST_REQUIRE(repo.Initialize());
+        BOOST_CHECK_EQUAL(repo.LatestHeight(), 100u);
+        BOOST_REQUIRE(repo.CloseRegistryFile());
+    }
+
+    // Removing an earlier snapshot, or any snapshot from an empty registry,
+    // makes the tally rebuild the snapshots:
+    WriteRegistryOnDisk({{BASELINE, 100}, {REGISTER, 100}, {REGISTER, 200}, {DEREGISTER, 100}});
+
+    {
+        GRC::AccrualSnapshotRepository repo;
+        BOOST_CHECK_THROW(repo.Initialize(), GRC::SnapshotStateError);
+        BOOST_CHECK(repo.CloseRegistryFile());
+    }
+
+    WriteRegistryOnDisk({{BASELINE, 100}, {DEREGISTER, 100}});
+
+    GRC::AccrualSnapshotRepository repo;
+    BOOST_CHECK_THROW(repo.Initialize(), GRC::SnapshotStateError);
+    BOOST_CHECK(repo.CloseRegistryFile());
 }
 
 BOOST_AUTO_TEST_CASE(drop_above_height_removes_the_later_snapshots_for_good)
