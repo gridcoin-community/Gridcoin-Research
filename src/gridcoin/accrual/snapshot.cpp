@@ -405,11 +405,19 @@ bool AccrualSnapshotRegistry::Initialize()
 
 bool AccrualSnapshotRegistry::Close()
 {
-    if (m_file && fclose(m_file) != 0) {
-        return error("%s: failed to close snapshot registry", __func__);
+    if (!m_file) {
+        return true;
     }
 
+    // fclose() releases the stream even when it reports an error, so forget
+    // the handle first. Another Close() must not release it a second time:
+    //
+    FILE* const file = m_file;
     m_file = nullptr;
+
+    if (fclose(file) != 0) {
+        return error("%s: failed to close snapshot registry", __func__);
+    }
 
     return true;
 }
