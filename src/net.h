@@ -451,6 +451,10 @@ public:
 
     void BeginMessage(const char* pszCommand) EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
     {
+        // Invariant: ssSend is empty between messages. EndMessage() clears it
+        // after queueing, and PushMessage() calls AbortMessage() on any
+        // exception; every caller holds cs_vSend. Guards against a new caller
+        // that begins a message without ending or aborting the previous one.
         assert(ssSend.size() == 0);
         ssSend << CMessageHeader(pszCommand, 0);
     }
@@ -475,13 +479,19 @@ public:
         uint256 hash = Hash(Span{ssSend}.subspan(CMessageHeader::HEADER_SIZE));
         unsigned int nChecksum = 0;
         memcpy(&nChecksum, &hash, sizeof(nChecksum));
+        // Invariant: a non-empty ssSend starts with the header BeginMessage()
+        // wrote. Guards against a change that ends a message BeginMessage() did
+        // not begin.
         assert(ssSend.size () >= CMessageHeader::CHECKSUM_OFFSET + sizeof(nChecksum));
         memcpy((char*)&ssSend[CMessageHeader::CHECKSUM_OFFSET], &nChecksum, sizeof(nChecksum));
 
         LogPrint(BCLog::LogFlags::NOISY, "(%d bytes)", nSize);
 
-        std::deque<SerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), SerializeData());
-        it->insert(it->end(), ssSend.begin(), ssSend.end());
+        // Copy the message before queueing it, so that a failed allocation
+        // leaves the queue as it was rather than holding an empty message
+        // (PushMessage() aborts the message and rethrows).
+        SerializeData data(ssSend.begin(), ssSend.end());
+        std::deque<SerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), std::move(data));
         ssSend.clear();
         nSendSize += it->size();
 

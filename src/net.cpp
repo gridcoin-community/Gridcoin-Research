@@ -685,6 +685,11 @@ void SocketSendData(CNode *pnode) EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend)
     while (it != pnode->vSendMsg.end())
     {
         const SerializeData &data = *it;
+        // Invariant: only EndMessage() queues messages, each a complete message
+        // with its header, and nSendOffset returns to 0 when a message is fully
+        // sent, so it stays below the size of the message at the front. Guards
+        // against a change that queues an empty message or carries the offset
+        // across messages.
         assert(data.size() > pnode->nSendOffset);
         int nBytes = sock->Send(&data[pnode->nSendOffset], data.size() - pnode->nSendOffset, MSG_NOSIGNAL | MSG_DONTWAIT);
         if (nBytes > 0) {
@@ -718,6 +723,9 @@ void SocketSendData(CNode *pnode) EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend)
     }
 
     if (it == pnode->vSendMsg.end()) {
+        // Invariants: with every queued message sent, the offset was reset by the
+        // last one, and nSendSize, the sum EndMessage() adds to and the loop above
+        // subtracts from, is zero. Guards against a change to either update.
         assert(pnode->nSendOffset == 0);
         assert(pnode->nSendSize == 0);
     }

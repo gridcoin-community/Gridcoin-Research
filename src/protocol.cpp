@@ -91,6 +91,10 @@ CMessageHeader::CMessageHeader(const char* pszCommand, unsigned int nMessageSize
     // Copy the command name
     size_t i = 0;
     for (; i < COMMAND_SIZE && pszCommand[i] != 0; ++i) pchCommand[i] = pszCommand[i];
+    // Invariant: the only caller, BeginMessage(), gets a NetMsgType literal (none
+    // longer than COMMAND_SIZE) or CInv::GetCommand(), which throws for an
+    // unknown type. Guards against a new message type with a longer name, which
+    // would be truncated and sent as another command.
     assert(pszCommand[i] == 0); // Assert that the command name passed in is not longer than COMMAND_SIZE
 
     nMessageSize = nMessageSizeIn;
