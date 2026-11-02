@@ -552,6 +552,8 @@ int AddrManImpl::RandomInt(int nMax)
 void AddrManImpl::Clear()
 {
     std::vector<int>().swap(vRandom);
+    mapInfo.clear();
+    mapAddr.clear();
     nKey = GetRandHash();
     for (size_t bucket = 0; bucket < ADDRMAN_NEW_BUCKET_COUNT; bucket++) {
         for (size_t entry = 0; entry < ADDRMAN_BUCKET_SIZE; entry++) {

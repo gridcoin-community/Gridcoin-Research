@@ -267,6 +267,15 @@ public:
         s >> nNew;
         s >> nTried;
 
+        // A damaged peers.dat can hold any counts. Refuse counts that the
+        // tables cannot hold before reading any entry:
+        if (nNew < 0 || nNew > ADDRMAN_NEW_BUCKET_COUNT * ADDRMAN_BUCKET_SIZE) {
+            throw std::ios_base::failure(strprintf("Corrupt addrman serialization: nNew = %d", nNew));
+        }
+        if (nTried < 0 || nTried > ADDRMAN_TRIED_BUCKET_COUNT * ADDRMAN_BUCKET_SIZE) {
+            throw std::ios_base::failure(strprintf("Corrupt addrman serialization: nTried = %d", nTried));
+        }
+
         int nUBuckets = 0;
         s >> nUBuckets;
         if (nVersion != 0) {

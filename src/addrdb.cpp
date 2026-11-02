@@ -145,7 +145,13 @@ bool CAddrDB::Write(const AddrMan& addr)
 
 bool CAddrDB::Read(AddrMan& addr)
 {
-    return DeserializeFileDB(pathAddr, addr);
+    bool ret = DeserializeFileDB(pathAddr, addr);
+    if (!ret) {
+        // A damaged peers.dat can fail partway through, so ensure addrman is
+        // left in a clean state rather than half loaded
+        addr.Clear();
+    }
+    return ret;
 }
 
 bool CAddrDB::Read(AddrMan& addr, CDataStream& ssPeers)
