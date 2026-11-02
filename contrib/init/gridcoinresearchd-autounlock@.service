@@ -1,0 +1,72 @@
+# Opt-in stake-only wallet autounlock, companion to gridcoinresearchd@.service.
+#
+# This is gridcoinresearchd-autounlock.service for a core run as one desktop
+# user. The design, the passphrase-handling advice and the --tpm2-pcrs=""
+# trade-off are explained at the top of that file
+# (/usr/lib/systemd/system/gridcoinresearchd-autounlock.service).
+#
+# SETUP (opt-in), for the account alice. Encrypt the wallet passphrase once,
+# bound to this host, then enable. The terminal prompts for the passphrase so it
+# never appears on a command line:
+#
+#   sudo install -d -m 0700 /etc/credstore.encrypted
+#   systemd-ask-password 'Wallet passphrase:' \
+#       | sudo systemd-creds encrypt --name=wallet-passphrase --tpm2-pcrs="" \
+#             - /etc/credstore.encrypted/gridcoinresearch-alice.wallet-passphrase
+#   sudo systemctl enable --now gridcoinresearchd-autounlock@alice.service
+
+[Unit]
+Description=Gridcoin wallet stake-only autounlock for %i
+Documentation=https://github.com/gridcoin-community/Gridcoin-Research/blob/development/doc/multiprocess.md
+After=gridcoinresearchd@%i.service
+BindsTo=gridcoinresearchd@%i.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=%i
+
+LoadCredentialEncrypted=wallet-passphrase:/etc/credstore.encrypted/gridcoinresearch-%i.wallet-passphrase
+
+ExecStart=/usr/bin/python3 /usr/share/gridcoin/gridcoin_autounlock.py \
+          --datadir=/home/%i/.GridcoinResearch \
+          --passphrase-file=%d/wallet-passphrase \
+          --once
+
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=2 243
+TimeoutStartSec=120
+
+# Hardening is the same as gridcoinresearchd-autounlock.service, except that
+# /home is read-only rather than hidden, so the helper can read the config in
+# the data directory.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictNamespaces=true
+MemoryDenyWriteExecute=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+CapabilityBoundingSet=
+UMask=0077
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+Environment=no_proxy=*
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=gridcoinresearchd@%i.service

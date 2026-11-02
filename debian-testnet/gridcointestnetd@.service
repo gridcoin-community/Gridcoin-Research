@@ -1,0 +1,83 @@
+# Gridcoin testnet wallet core run as one desktop user, for the -multiprocess GUI.
+#
+# The instance name is the account that runs the GUI:
+#   sudo systemctl enable --now gridcointestnetd@alice.service
+#   gridcointestnet -testnet -multiprocess
+#
+# Use this unit instead of gridcointestnetd.service when a desktop GUI should
+# attach to the service. The GUI and the core exchange a socket and a cookie
+# that are owner-only, and both ends refuse a peer with a different uid, so
+# the core has to run as the same account as the GUI. gridcointestnetd.service
+# runs as the gridcoin system account and suits headless nodes. Do not run both:
+# they listen on the same ports.
+#
+# The data directory is the account's default, /home/<name>/.GridcoinResearch,
+# and must already exist (run the GUI once without -multiprocess to create it).
+# %h cannot be used here: under the system manager it is root's home whatever
+# User= says. For an account whose home is elsewhere, override ExecStart= and
+# ReadWritePaths= with `systemctl edit gridcointestnetd@<name>.service`.
+#
+# Hardening is the same as gridcointestnetd.service, except that /home is
+# read-only rather than hidden, with only the data directory writable.
+
+[Unit]
+Description=Gridcoin testnet daemon for %i
+Documentation=https://github.com/gridcoin-community/Gridcoin-Research/blob/development/doc/multiprocess.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/gridcointestnetd -daemonwait \
+                                    -testnet \
+                                    -multiprocess \
+                                    -pid=/run/gridcointestnetd-%i/gridcointestnetd.pid \
+                                    -datadir=/home/%i/.GridcoinResearch
+
+# Process management
+####################
+
+Type=forking
+PIDFile=/run/gridcointestnetd-%i/gridcointestnetd.pid
+Restart=on-failure
+TimeoutStartSec=infinity
+TimeoutStopSec=600
+
+# Directory creation and permissions
+####################################
+
+# Group= is left unset so the account's own primary group applies.
+User=%i
+
+# /run/gridcointestnetd-<name>
+RuntimeDirectory=gridcointestnetd-%i
+RuntimeDirectoryMode=0710
+
+# Hardening measures
+####################
+
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/%i/.GridcoinResearch
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictNamespaces=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+UMask=0077
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

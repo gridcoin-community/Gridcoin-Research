@@ -13,7 +13,13 @@ Terminal=false
 Type=Application
 Icon=gridcoinresearch
 StartupWMClass=gridcoinresearch
-Actions=Testnet;
+Actions=Multiprocess;Testnet;
+
+# Connect-only: attaches to a core that is already running, such as
+# gridcoinresearchd@<user>.service, and does not start one.
+[Desktop Action Multiprocess]
+Name=Connect to running core (multiprocess)
+Exec=gridcoinresearch -multiprocess
 
 [Desktop Action Testnet]
 Name=Testnet

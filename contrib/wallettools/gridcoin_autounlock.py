@@ -176,11 +176,13 @@ def conf_bool(value):
         return False
 
 
-def conf_chain(conf):
+def conf_chain(conf, default="main"):
     """The chain this config selects, mirroring ArgsManager::GetChainName(): the
-    regtest/testnet booleans, else chain=, else 'main'. Returns None when the config
-    is ambiguous (more than one selector -- which the core rejects outright) or names
-    a chain we have no default port for. The caller must then refuse to guess."""
+    regtest/testnet booleans, else chain=, else `default` (the core's own default is
+    'main'; a core started with -testnet on its command line selects 'test' there
+    instead, which the config cannot show). Returns None when the config is ambiguous
+    (more than one selector -- which the core rejects outright) or names a chain we
+    have no default port for. The caller must then refuse to guess."""
     selectors = [name for key, name in _CHAIN_FLAGS if conf_bool(conf.get(key))]
     chain = conf.get("chain")
     if chain:
@@ -189,7 +191,7 @@ def conf_chain(conf):
         return None
     if selectors:
         return selectors[0] if selectors[0] in DEFAULT_RPC_PORTS else None
-    return "main"
+    return default
 
 
 def resolve_connection(conf, args):
@@ -203,7 +205,12 @@ def resolve_connection(conf, args):
     if not port:
         # No explicit port: take the default of the chain the config selects, never a
         # blanket mainnet guess (see DEFAULT_RPC_PORTS).
-        chain = conf_chain(conf)
+        expected = getattr(args, "chain", None)
+        chain = conf_chain(conf, default=expected or "main")
+        if expected and chain is not None and chain != expected:
+            raise ValueError("the config selects the %s chain but --chain %s was given, so the RPC "
+                             "port cannot be chosen safely -- fix the config or set rpcport in it"
+                             % (chain, expected))
         port = DEFAULT_RPC_PORTS.get(chain) if chain else None
         if port is None:
             raise ValueError("the config omits rpcport and does not select a chain unambiguously, so the "
@@ -558,8 +565,14 @@ def build_arg_parser():
     p.add_argument("--rpcconnect", default=None)
     p.add_argument("--rpcport", type=int, default=None,
                    help="RPC port (defaults to the config's rpcport, else the default port of the chain "
-                        "the config selects: %s. When the chain is ambiguous the helper refuses to guess.)"
+                        "the config or --chain selects: %s. When the chain is ambiguous the helper refuses "
+                        "to guess.)"
                         % ", ".join("%s=%d" % kv for kv in sorted(DEFAULT_RPC_PORTS.items())))
+    p.add_argument("--chain", choices=sorted(DEFAULT_RPC_PORTS), default=None,
+                   help="Chain the core was started on, for a core that selects it on its command line "
+                        "(e.g. -testnet) rather than in the config. Used for the default RPC port when the "
+                        "config sets no rpcport and selects no chain. With no rpcport set, the helper refuses "
+                        "if the config selects a different chain.")
     p.add_argument("--rpcuser", default=None)
     p.add_argument("--rpcpassword", default=None,
                    help="RPC password (visible in the process list; prefer setting it in the config file).")
@@ -579,7 +592,13 @@ def main(argv=None):
     args = build_arg_parser().parse_args(argv)
     passphrase = read_passphrase(args.passphrase_file)
     register_secret(passphrase)
-    conn = resolve_connection(_load_conf(args), args)
+    try:
+        conn = resolve_connection(_load_conf(args), args)
+    except ValueError as e:
+        # A configuration the helper refuses (no credentials, an unusable port, a chain
+        # it cannot determine) does not fix itself, so it must not be retried.
+        warn(str(e))
+        return EXIT_UNRECOVERABLE
     register_secret(conn["password"])
     client = RpcClient(conn, allow_unverified=args.allow_unverified_listener)
     if not client.loopback:

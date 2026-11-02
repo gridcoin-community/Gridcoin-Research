@@ -5,7 +5,8 @@
  - git pull
  - git merge testnet
  - Update changelog and commit
- - Change version in CMakeLists.txt to [version] and set CLIENT_VERSION_IS_RELEASE to 'true' and commit
+ - Change version in CMakeLists.txt to [version] and set CLIENT_VERSION_IS_RELEASE to 'true'
+ - Run contrib/devtools/debian-changelog-release.sh, then commit CMakeLists.txt and the changelog changes it made (debian/changelog, debian-testnet/changelog) together
  - git push
 
 ### Merge to master

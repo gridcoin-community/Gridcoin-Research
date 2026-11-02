@@ -499,6 +499,12 @@ if(ENABLE_DAEMON)
         install(FILES "${CMAKE_SOURCE_DIR}/contrib/init/gridcoinresearchd-autounlock.service" COMPONENT daemon
             DESTINATION "lib/systemd/system"
         )
+        install(FILES "${CMAKE_SOURCE_DIR}/contrib/init/gridcoinresearchd@.service" COMPONENT daemon
+            DESTINATION "lib/systemd/system"
+        )
+        install(FILES "${CMAKE_SOURCE_DIR}/contrib/init/gridcoinresearchd-autounlock@.service" COMPONENT daemon
+            DESTINATION "lib/systemd/system"
+        )
         # The stake-only autounlock helper the unit above runs. install(PROGRAMS ...)
         # sets the executable bit; share/gridcoin is portable (share == share on
         # every distro), matching the unit's ExecStart path.

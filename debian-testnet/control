@@ -4,7 +4,6 @@ Priority: optional
 Maintainer: Gridcoin Developers <dev@gridcoin.us>
 Standards-Version: 4.6.2
 Build-Depends:
- build-essential,
  pkg-config,
  bsdmainutils,
  python3,
