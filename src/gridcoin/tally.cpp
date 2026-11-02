@@ -630,20 +630,36 @@ public:
 
             // Check the integrity of the baseline superblock snapshot:
             //
-            if (const CBlockIndex* pindex = FindBaselineSuperblockHeight()) {
-                m_snapshots.AssertMatch(pindex->nHeight);
+            const CBlockIndex* last_superblock_pindex = FindBaselineSuperblockHeight();
+
+            if (last_superblock_pindex) {
+                m_snapshots.AssertMatch(last_superblock_pindex->nHeight);
             }
 
             // Finish loading the research account context for the remaining
             // blocks after the snapshot accrual threshold. Verify snapshots
-            // along the way:
+            // along the way. From the first superblock whose snapshot is missing
+            // or damaged, or above the latest stored one, recompute that
+            // snapshot and every later one from the last intact snapshot, as
+            // BuildAccrualSnapshots() does from the baseline:
             //
+            bool recomputing = false;
+
             for (const CBlockIndex* pindex = baseline_pindex;
                 pindex;
                 pindex = pindex->pnext)
             {
                 if (pindex->IsSuperblock()) {
-                    m_snapshots.AssertMatch(pindex->nHeight);
+                    if (!recomputing && !SnapshotIsIntact(pindex->nHeight)) {
+                        StartRecompute(pindex, last_superblock_pindex);
+                        recomputing = true;
+                    }
+
+                    if (recomputing && !ApplySuperblock(SuperblockPtr::ReadFromDisk(pindex))) {
+                        return false;
+                    }
+
+                    last_superblock_pindex = pindex;
                 }
 
                 if (pindex->ResearchSubsidy() > 0) {
@@ -884,6 +900,74 @@ private:
         const CBlockIndex* pindex = FindBaselineSuperblockHeight();
 
         return SuperblockPtr::ReadFromDisk(pindex);
+    }
+
+    //!
+    //! \brief Check the stored snapshot of a superblock while loading the
+    //! tally at startup.
+    //!
+    //! \param height Height of the superblock.
+    //!
+    //! \return \c false if the superblock is above the latest stored snapshot,
+    //! or if its snapshot is missing or does not match its registry entry.
+    //!
+    bool SnapshotIsIntact(const int height) const
+    {
+        if (static_cast<uint64_t>(height) > m_snapshots.LatestHeight()) {
+            return false;
+        }
+
+        try {
+            m_snapshots.AssertMatch(static_cast<uint64_t>(height));
+        } catch (const SnapshotMissingError& e) {
+            LogPrintf("%s: %s", __func__, e.what());
+            return false;
+        } catch (const SnapshotHashMismatchError& e) {
+            LogPrintf("%s: %s", __func__, e.what());
+            return false;
+        }
+
+        return true;
+    }
+
+    //!
+    //! \brief Prepare to recompute the stored snapshots from a superblock
+    //! onward while loading the tally at startup.
+    //!
+    //! Drops the snapshot of \p pindex and every snapshot above it, then
+    //! restores the accrual of the last remaining snapshot, which must belong
+    //! to \p last_superblock_pindex, so the startup walk can recompute the rest
+    //! as BuildAccrualSnapshots() does.
+    //!
+    //! \param pindex                 The first superblock to recompute.
+    //! \param last_superblock_pindex The superblock before it.
+    //!
+    //! \throws SnapshotStateError If the snapshots cannot be dropped or the
+    //! last remaining snapshot cannot be restored.
+    //!
+    void StartRecompute(const CBlockIndex* pindex, const CBlockIndex* last_superblock_pindex)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        LogPrintf("INFO: %s: recomputing accrual snapshots from height %d.", __func__, pindex->nHeight);
+
+        if (m_snapshots.DropAboveHeight(static_cast<uint64_t>(pindex->nHeight - 1)) < 0) {
+            throw SnapshotStateError("DropAboveHeight failed while recomputing snapshots");
+        }
+
+        if (last_superblock_pindex == nullptr
+            || m_snapshots.LatestHeight() != static_cast<uint64_t>(last_superblock_pindex->nHeight)
+            || !m_snapshots.Apply(m_snapshots.LatestHeight(), m_researchers))
+        {
+            throw SnapshotStateError("no intact snapshot before the first one to recompute");
+        }
+
+        SuperblockPtr superblock = SuperblockPtr::ReadFromDisk(last_superblock_pindex);
+
+        if (!superblock->WellFormed()) {
+            throw SnapshotStateError("unable to load the superblock before the first snapshot to recompute");
+        }
+
+        m_current_superblock = std::move(superblock);
     }
 
     //!

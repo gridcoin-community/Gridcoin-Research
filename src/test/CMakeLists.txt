@@ -41,6 +41,7 @@ add_executable(test_gridcoin
     gridcoin_tests.cpp
     htlc_tests.cpp
     key_io_tests.cpp
+    gridcoin/accrual_snapshot_tests.cpp
     gridcoin/backup_tests.cpp
     gridcoin/block_finder_tests.cpp
     gridcoin/block_rewards_tests.cpp

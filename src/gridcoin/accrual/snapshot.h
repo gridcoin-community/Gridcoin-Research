@@ -819,15 +819,25 @@ private:
     static fs::path RegistryPath();
 
     //!
-    //! \brief Truncate the registry file and reopen it for writing.
+    //! \brief Get the path of the temporary file that a rewrite writes before
+    //! it replaces the registry file.
+    //!
+    static fs::path TempRegistryPath();
+
+    //!
+    //! \brief Open the registry file to append new entries.
     //!
     //! \return \c false if an IO error occurred.
     //!
-    bool ReopenForWrite();
+    bool ReopenForAppend();
 
     //!
     //! \brief Prunes the registry file of any non-current entries and opens it
     //! for writing.
+    //!
+    //! The compacted registry goes to a temporary file that is committed to
+    //! disk and then moved over the registry file, so a crash leaves either the
+    //! old registry or the new one, never a truncated file.
     //!
     //! \return \c false if an IO error occurred.
     //!
@@ -903,6 +913,13 @@ public:
     //! system.
     //!
     bool HasBaseline() const;
+
+    //!
+    //! \brief Get the height of the most recent stored accrual snapshot.
+    //!
+    //! \return Zero if no baseline snapshot exists yet.
+    //!
+    uint64_t LatestHeight() const;
 
     //!
     //! \brief Store a snapshot of accrual for each account as the baseline.

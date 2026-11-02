@@ -386,6 +386,10 @@ bool AccrualSnapshotRegistry::Initialize()
         m_entries.clear();
     }
 
+    // Release the read handle before Rewrite() moves a new file over this
+    // one: Windows refuses to replace a file that is still open.
+    registry_file.fclose();
+
     LogPrintf("Accrual snapshot registry loaded. Compacting...");
 
     return Rewrite();
@@ -510,13 +514,18 @@ fs::path AccrualSnapshotRegistry::RegistryPath()
     return SnapshotDirectory() / "registry.dat";
 }
 
-bool AccrualSnapshotRegistry::ReopenForWrite()
+fs::path AccrualSnapshotRegistry::TempRegistryPath()
+{
+    return SnapshotDirectory() / "registry.dat.tmp";
+}
+
+bool AccrualSnapshotRegistry::ReopenForAppend()
 {
     if (!Close()) {
         return false;
     }
 
-    m_file = fsbridge::fopen(RegistryPath(), "wb");
+    m_file = fsbridge::fopen(RegistryPath(), "ab");
 
     return m_file || error(
         "%s: failed to open snapshot registry for writing: %s",
@@ -526,31 +535,51 @@ bool AccrualSnapshotRegistry::ReopenForWrite()
 
 bool AccrualSnapshotRegistry::Rewrite()
 {
-    if (!ReopenForWrite()) {
+    if (!Close()) {
         return false;
     }
+
+    const fs::path temp_path = TempRegistryPath();
+
+    m_file = fsbridge::fopen(temp_path, "wb");
+
+    if (!m_file) {
+        return error("%s: failed to open %s for writing", __func__, temp_path.string());
+    }
+
+    bool written = true;
 
     try {
         ::Serialize(*this, CURRENT_VERSION);
     } catch (const std::exception& e) {
-        return error("%s: %s", __func__, e.what());
+        written = error("%s: %s", __func__, e.what());
     }
 
-    if (m_entries.empty()) {
-        return true;
-    }
+    if (written && !m_entries.empty()) {
+        written = WriteEntry(Action::BASELINE, m_entries.front());
 
-    if (!WriteEntry(Action::BASELINE, m_entries.front())) {
-        return false;
-    }
-
-    for (const auto& entry : m_entries) {
-        if (!WriteEntry(Action::REGISTER, entry)) {
-            return false;
+        for (auto iter = m_entries.begin(); written && iter != m_entries.end(); ++iter) {
+            written = WriteEntry(Action::REGISTER, *iter);
         }
     }
 
-    return true;
+    written = written && FileCommit(m_file);
+
+    if (fclose(m_file) != 0) {
+        written = false;
+    }
+
+    m_file = nullptr;
+
+    if (!written) {
+        return error("%s: failed to write %s", __func__, temp_path.string());
+    }
+
+    if (!RenameOver(temp_path, RegistryPath())) {
+        return error("%s: failed to replace %s", __func__, RegistryPath().string());
+    }
+
+    return ReopenForAppend();
 }
 
 bool AccrualSnapshotRegistry::WriteEntry(const Action action, const Entry entry)
@@ -684,6 +713,11 @@ void AccrualSnapshotRepository::PruneSnapshotFiles() const
 bool AccrualSnapshotRepository::HasBaseline() const
 {
     return m_registry.BaselineHeight() > 0;
+}
+
+uint64_t AccrualSnapshotRepository::LatestHeight() const
+{
+    return m_registry.LatestHeight();
 }
 
 bool AccrualSnapshotRepository::StoreBaseline(const uint64_t height, const ResearchAccountMap& accounts)
