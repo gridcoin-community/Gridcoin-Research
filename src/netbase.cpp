@@ -79,12 +79,16 @@ bool static LookupIntern(const char *pszName, std::vector<CNetAddr>& vIP, unsign
         CNetAddr resolved;
         if (aiTrav->ai_family == AF_INET)
         {
+            // Invariant: getaddrinfo() sets ai_addrlen from ai_family. Guards
+            // against a change to how the results are read that would cast an
+            // address of another size.
             assert(aiTrav->ai_addrlen >= sizeof(sockaddr_in));
             resolved = CNetAddr(((struct sockaddr_in*)(aiTrav->ai_addr))->sin_addr);
         }
 
         if (aiTrav->ai_family == AF_INET6)
         {
+            // Invariant: as for AF_INET above.
             assert(aiTrav->ai_addrlen >= sizeof(sockaddr_in6));
             struct sockaddr_in6* s6 = (struct sockaddr_in6*) aiTrav->ai_addr;
             resolved = CNetAddr(s6->sin6_addr, s6->sin6_scope_id);
@@ -490,6 +494,8 @@ bool static ConnectSocketDirectly(const CService &addrConnect, SOCKET& hSocketRe
 }
 
 bool SetProxy(enum Network net, const CService &addrProxy) {
+    // Invariant: every caller passes a NET_ constant. Guards against a new
+    // caller with an unchecked value, which would index past proxyInfo.
     assert(net >= 0 && net < NET_MAX);
     if (!addrProxy.IsValid())
         return false;
@@ -499,6 +505,9 @@ bool SetProxy(enum Network net, const CService &addrProxy) {
 }
 
 bool GetProxy(enum Network net, proxyType &proxyInfoOut) {
+    // Invariant: callers pass a NET_ constant or CNetAddr::GetNetwork(), which
+    // returns one of the enumerators below NET_MAX. Guards against a new caller
+    // with an unchecked value, which would read past proxyInfo.
     assert(net >= 0 && net < NET_MAX);
     LOCK(cs_proxyInfos);
     if (!proxyInfo[net].IsValid())
