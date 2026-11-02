@@ -1244,7 +1244,10 @@ bool Tally::Initialize(CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         // init below the research age enabled height, the accrual directory must be stale
         // (i.e. this is a resync.)
 
-        g_researcher_tally.EraseSnapshots();
+        if (!g_researcher_tally.EraseSnapshots()) {
+            return error("%s: failed to reset the accrual directory", __func__);
+        }
+
         LogPrintf("Accrual directory reset.");
 
         return true;
@@ -1264,7 +1267,12 @@ bool Tally::Initialize(CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     const int64_t start_time = GetTimeMillis();
 
-    g_researcher_tally.Initialize(pindex, Quorum::CurrentSuperblock());
+    // A failure here leaves the research accounts incomplete or the snapshot
+    // registry without a file to write to. Report it so that the node stops:
+    //
+    if (!g_researcher_tally.Initialize(pindex, Quorum::CurrentSuperblock())) {
+        return error("%s: failed to load the research reward accounts", __func__);
+    }
 
     LogPrintf(
         "Tally initialization complete. Scan time %15" PRId64 "ms\n",

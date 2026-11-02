@@ -192,7 +192,10 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest) EXCLUSIVE_LOCKS
     const int64_t start_height = Params().GetConsensus().ResearchAgeHeight;
 
     if (!Tally::Initialize(BlockFinder::FindByHeight(start_height))) {
-        return error("Failed to initialize tally.");
+        return InitError(_("Failed to initialize the research reward accounting. This happens when the disk is "
+                           "full, a file in the data directory cannot be read or written, or the disk has a "
+                           "hardware fault. See debug.log for the operation that failed, correct the cause, "
+                           "and restart Gridcoin."));
     }
 
     if (pindexBest->nVersion <= 10) {
