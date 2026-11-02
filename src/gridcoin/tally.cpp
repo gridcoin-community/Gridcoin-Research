@@ -573,6 +573,17 @@ public:
     //!
     bool ApplySuperblock(SuperblockPtr superblock, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
+        // A block contains a superblock only if the superblock is well formed
+        // (Claim::ContainsSuperblock()), so a superblock that is not comes from
+        // a superblock block that could not be read from disk. Applying it
+        // would store a snapshot for height zero:
+        //
+        if (!superblock->WellFormed()) {
+            return error("%s: unable to load the superblock at height %d",
+                         __func__,
+                         pindex ? pindex->nHeight : -1);
+        }
+
         // The network publishes version 2+ superblocks after the mandatory
         // switch to block version 11.
         //
