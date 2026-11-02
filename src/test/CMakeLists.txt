@@ -25,6 +25,8 @@ add_executable(test_gridcoin
     kernel_branch_lookup_tests.cpp
     # The fixture chain's own clock.
     chain_setup_tests.cpp
+    # Whole-balance subtract-fee sends on the fixture chain.
+    wallet_send_subtract_fee_tests.cpp
     addressbook_tests.cpp
     addrman_tests.cpp
     allocator_tests.cpp
