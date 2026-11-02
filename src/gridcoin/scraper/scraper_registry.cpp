@@ -166,6 +166,9 @@ ScraperEntryPayload::ScraperEntryPayload(const uint32_t version, CKeyID key_id, 
     , m_version(version)
     , m_scraper_entry(ScraperEntry(key_id, status))
 {
+    // Invariant: as for ProtocolEntryPayload's constructor, the only caller is
+    // the addkey RPC with version 2. Guards against a new caller that passes a
+    // lower version.
     assert(version > 1);
 }
 

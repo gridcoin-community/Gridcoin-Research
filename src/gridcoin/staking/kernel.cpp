@@ -782,6 +782,9 @@ bool GRC::CheckProofOfStakeV8(
     //Block Transaction 1 is coin:stake
     //First input of coinstake is the kernel
 
+    // Invariant: both callers (ConnectBlock() and AcceptBlock()) test
+    // nVersion >= 8 before calling. Guards against a new caller that would apply
+    // the v8 kernel rules to an older block.
     assert(Block.nVersion >= 8);
 
     if (!Block.IsProofOfStake())

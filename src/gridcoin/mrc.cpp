@@ -371,6 +371,9 @@ void GRC::CreateMRC(CBlockIndex* pindex,
     case GRC::ResearcherStatus::POOL:
         throw MRC_error(strprintf("%s: MRC request cannot be sent while wallet is in pool mode.", __func__));
     }
+    // Invariant: every ResearcherStatus has a case above that either clears err
+    // or throws. Guards against a new status added without a case, which would
+    // build an MRC for a researcher in an unhandled state.
     if (err) assert(false);
 
     mrc.m_mining_id = researcher->Id();
