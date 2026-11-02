@@ -398,6 +398,10 @@ public:
      */
     bool MixExtract(unsigned char* out, size_t num, CSHA512&& hasher, bool strong_seed) noexcept
     {
+        // Invariant: callers pass at most 32 bytes. ProcRand() checks it, the
+        // strengthener passes 32 and the remaining caller 0. Guards against a new
+        // caller that would be handed the new RNG state (the last 32 bytes of the
+        // hash) or bytes past buf.
         assert(num <= 32);
         unsigned char buf[64];
         static_assert(sizeof(buf) == CSHA512::OUTPUT_SIZE, "Buffer needs to have hasher's output size");
@@ -417,6 +421,9 @@ public:
         }
         // If desired, copy (up to) the first 32 bytes of the hash output as output.
         if (num) {
+            // Invariant: out is set whenever num is non-zero; the callers that pass
+            // nullptr pass num 0. Guards against a new caller that asks for bytes
+            // without a buffer.
             assert(out != nullptr);
             memcpy(out, buf, num);
         }
@@ -544,6 +551,10 @@ static void ProcRand(unsigned char* out, int num, RNGLevel level) noexcept
     // Make sure the RNG is initialized first (as all Seed* function possibly need hwrand to be available).
     RNGState& rng = GetRNGState();
 
+    // Invariant: every caller of GetRandBytes() and GetStrongRandBytes() asks for
+    // at most 32 bytes (keys, nonces, salts, RPC passwords, the IPC cookie, the
+    // wallet's master key and uuid). Guards against a new caller that asks for
+    // more, which MixExtract() cannot supply from one hash.
     assert(num <= 32);
 
     CSHA512 hasher;
