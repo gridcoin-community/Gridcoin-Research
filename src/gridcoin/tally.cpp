@@ -617,6 +617,16 @@ public:
         // switch to block version 11.
         //
         if (superblock->m_version >= 2) {
+            // Once the tally stopped the node below, it refuses every superblock
+            // until the restart reloads the accounts:
+            //
+            if (m_superblock_record_failed) {
+                return error("%s: refusing superblock %" PRId64 " until the restart: a superblock could not "
+                             "be recorded",
+                             __func__,
+                             superblock.m_height);
+            }
+
             // Snapshots are stored in chain order, and a disconnect drops the
             // snapshot of the superblock that it reverts. Register() refuses a
             // superblock at or below the latest snapshot. Nothing has changed
@@ -625,30 +635,26 @@ public:
             // disk:
             //
             if (static_cast<uint64_t>(superblock.m_height) <= m_snapshots.LatestHeight()) {
-                const std::string message = strprintf(
-                    _("The superblock at height %d is already recorded in the research reward accounts. This "
-                      "happens when a block could not be saved after its superblock was applied, for example "
-                      "because a disk write failed. Gridcoin will shut down. Correct the cause and restart "
-                      "Gridcoin; the accounts are reloaded from disk at startup."),
-                    superblock.m_height);
-
-                LogPrintf("ERROR: %s: superblock %" PRId64 " is at or below the latest accrual snapshot %" PRIu64
-                          ". %s",
-                          __func__,
-                          superblock.m_height,
-                          m_snapshots.LatestHeight(),
-                          message);
-
-                uiInterface.ThreadSafeMessageBox(message, "Gridcoin", CClientUIInterface::MSG_ERROR);
-                StartShutdown();
-
-                return false;
+                return StopOnFailedSuperblockRecord(
+                    superblock.m_height,
+                    strprintf("superblock %" PRId64 " is at or below the latest accrual snapshot %" PRIu64 ".",
+                              superblock.m_height,
+                              m_snapshots.LatestHeight()));
             }
 
             TallySuperblockAccrual(superblock, pindex);
 
+            // The accounts now hold the superblock's accrual. If its snapshot
+            // is not stored, the registry has no record of the superblock, so
+            // stop the node. The next start reloads the accounts from the
+            // registered snapshots, removes a snapshot file left for this
+            // height, and drops a registry record for it above the chain tip:
+            //
             if (!m_snapshots.Store(superblock.m_height, m_researchers)) {
-                return false;
+                return StopOnFailedSuperblockRecord(
+                    superblock.m_height,
+                    strprintf("failed to store the accrual snapshot of superblock %" PRId64 ".",
+                              superblock.m_height));
             }
         }
 
@@ -893,6 +899,41 @@ private:
     //! (the block just before protocol enforces snapshot accrual).
     //!
     const CBlockIndex* m_snapshot_baseline_pindex = nullptr;
+
+    //!
+    //! \brief Set when the tally stops the node because a superblock could not
+    //! be recorded (StopOnFailedSuperblockRecord()). ApplySuperblock() then
+    //! refuses every superblock until the restart.
+    //!
+    bool m_superblock_record_failed GUARDED_BY(cs_main) = false;
+
+    //!
+    //! \brief Stop the node because a superblock could not be recorded, and
+    //! refuse every later superblock until the restart, which reloads the
+    //! accounts from the snapshots on disk.
+    //!
+    //! \param height Height of the superblock.
+    //! \param reason What the tally found, for the log.
+    //!
+    //! \return \c false, for the caller to return.
+    //!
+    bool StopOnFailedSuperblockRecord(const int64_t height, const std::string& reason) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        m_superblock_record_failed = true;
+
+        const std::string message = strprintf(
+            _("A disk write failed while the superblock at height %d was recorded in the research reward "
+              "accounts. Gridcoin will shut down. Correct the cause and restart Gridcoin; the accounts are "
+              "reloaded from disk at startup."),
+            height);
+
+        LogPrintf("ERROR: %s: %s %s", __func__, reason, message);
+
+        uiInterface.ThreadSafeMessageBox(message, "Gridcoin", CClientUIInterface::MSG_ERROR);
+        StartShutdown();
+
+        return false;
+    }
 
     //!
     //! \brief Get the block index entry of the block when research accounting
