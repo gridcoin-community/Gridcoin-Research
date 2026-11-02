@@ -499,6 +499,14 @@ bool AccrualSnapshotRegistry::Register(const uint64_t height, const uint256 snap
 
 bool AccrualSnapshotRegistry::Deregister(const uint64_t height)
 {
+    // Both callers pass the latest height: the tally's RevertSuperblock()
+    // drops the snapshot of the current superblock, which its ApplySuperblock()
+    // stored last, and DropAboveHeight() drops LatestHeight(). (On regtest,
+    // where snapshot accrual never activates, this does not hold after a
+    // restart.) The assert protects against a new caller that removes another
+    // height, which would record that height as removed on disk while it pops
+    // the latest entry:
+    //
     assert(!m_entries.empty() && height == m_entries.back().m_height); // LINT-OK-ASSERT: relocated unchanged
 
     const Entry* entry = TryHeight(height);
@@ -1012,6 +1020,10 @@ bool SnapshotBaselineBuilder::LoadSuperblock(
     const CBlockIndex* const pindex,
     const CBlockIndex* const pindex_bind)
 {
+    // Both calls in Run() follow a check that skips blocks that are not
+    // superblocks. The assert protects against a new caller that passes
+    // another block:
+    //
     assert(pindex->IsSuperblock()); // LINT-OK-ASSERT: relocated unchanged
 
     LogPrint(LogFlags::TALLY, "  Superblock: %" PRId64, pindex->nHeight);

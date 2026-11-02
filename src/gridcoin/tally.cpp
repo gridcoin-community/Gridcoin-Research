@@ -354,6 +354,15 @@ public:
             account.m_first_block_ptr = pindex;
             account.m_last_block_ptr = pindex;
         } else {
+            // Blocks are recorded in chain order, and disconnecting a block
+            // forgets its rewards for the staker and for every MRC researcher
+            // in it, which moves m_last_block_ptr back below that block (see
+            // FindLastRewardBlock()). A block recorded here whose connect then
+            // fails to commit is never disconnected, so ReorganizeChain()
+            // stops the node at once instead. The assert protects against a
+            // change that records a block out of chain order, or a disconnect
+            // that leaves the pointer at or above the next block recorded:
+            //
             assert(pindex->nHeight > account.m_last_block_ptr->nHeight);
             account.m_last_block_ptr = pindex;
         }
@@ -477,11 +486,25 @@ public:
     {
         auto iter = m_researchers.find(cpid);
 
+        // RecordRewardBlock() created the account when the block connected.
+        // Only RebuildAccrualSnapshots() clears the accounts, and it records
+        // the whole chain again. The assert protects against a change that
+        // removes an account while its blocks are connected
+        // (Tally::RemoveAccount() is called only by the tests):
+        //
         assert(iter != m_researchers.end());
 
         ResearchAccount& account = iter->second;
 
+        // m_first_block_ptr is cleared only when a disconnect forgets a reward
+        // recorded at the CPID's first reward block. Blocks disconnect from
+        // the tip, and on mainnet ValidateMRC() refuses an MRC whose payment
+        // interval is zero, so the pointer is still set when this block is
+        // forgotten. The assert protects against a change to that rule or to
+        // the order in which a disconnect forgets rewards:
+        //
         assert(account.m_first_block_ptr != nullptr);
+
         assert(pindex == account.m_last_block_ptr);
 
         // When disconnecting a CPID's first block, reset the account, but
@@ -515,6 +538,11 @@ public:
 
             auto iter = m_researchers.find(cpid);
 
+            // RecordMRCRewardBlock() created the account when the block
+            // connected, and the accounts are cleared only as described in
+            // ForgetRewardBlock(). The assert protects against the same
+            // change:
+            //
             assert(iter != m_researchers.end());
 
             ResearchAccount& account = iter->second;
@@ -1237,6 +1265,16 @@ public:
     //!
     bool RebuildAccrualSnapshots() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
+        // Every caller runs once the baseline is set. ActivateSnapshotAccrual()
+        // sets it before anything that can rebuild. RevertSuperblock() rebuilds
+        // only when it reverts a version 2+ superblock, and the tally applies
+        // those only in version 11+ blocks, after snapshot accrual was
+        // activated at startup or at the block before version 11
+        // (GridcoinServices()). On regtest, where version 11 starts at height 0
+        // and snapshot accrual never activates, this does not hold. The assert
+        // protects against a new caller that rebuilds before snapshot accrual
+        // is active:
+        //
         assert(m_snapshot_baseline_pindex != nullptr);
 
         // Reset the research accounts and reinitialize the whole tally. We
