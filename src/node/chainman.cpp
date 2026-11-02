@@ -595,7 +595,18 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
             // Make sure it's successfully written to disk before changing memory structure
             if (!txdb.TxnCommit()) {
-                return error("%s: TxnCommit failed", __func__);
+                error("%s: TxnCommit failed. This is a fatal error. The chain state may be inconsistent. Aborting. "
+                      "Please reindex the chain and restart.", __func__);
+
+                // Stop at once, as after a failed batch disconnect above. This
+                // commit is the only write of the connect that reaches the
+                // disk: the block index, transaction index and best chain
+                // writes before it only add to the transaction's batch in
+                // memory. Returning false would leave in-memory state that the
+                // disk does not record. The contract registries store their
+                // records outside this transaction, so the reindex that the
+                // message asks for is what brings them back in step.
+                std::_Exit(EXIT_FAILURE);
             }
 
             // Mempool retirement runs AFTER the commit, deliberately.
