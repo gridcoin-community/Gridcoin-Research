@@ -334,14 +334,13 @@ UniValue dumpprivkey(const UniValue& params)
 
 
     if (params.size() == 2 && params[1].isBool() && params[1].get_bool()) {
-        CKey key_out;
-        pwalletMain->GetKey(*keyID, key_out);
-
+        // Use the key read above. A second read could find the wallet locked
+        // again by the timed relock, which takes only the keystore lock.
         UniValue result(UniValue::VOBJ);
 
         result.pushKV("private_key", EncodeSecret(vchSecret));
-        result.pushKV("private_key_hex", HexStr(key_out.GetPrivKey()));
-        result.pushKV("public_key_hex", HexStr(key_out.GetPubKey()));
+        result.pushKV("private_key_hex", HexStr(vchSecret.GetPrivKey()));
+        result.pushKV("public_key_hex", HexStr(vchSecret.GetPubKey()));
 
         return result;
     }
