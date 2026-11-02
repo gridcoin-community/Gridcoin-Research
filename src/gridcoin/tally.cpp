@@ -21,6 +21,7 @@
 #include "util.h"
 #include "node/ui_interface.h"
 
+#include <algorithm>
 #include <optional>
 #include <unordered_map>
 
@@ -507,6 +508,25 @@ public:
         //
         assert(account.m_first_block_ptr != nullptr);
 
+        // The tally records a block's stake before its MRCs, and records an
+        // MRC at the block's parent, the MRC's accrual point.
+        // ForgetMRCRewardBlock() forgets the block's MRCs after this:
+        //
+        const bool block_mrc_names_cpid = std::any_of(
+            pindex->m_mrc_researchers.begin(),
+            pindex->m_mrc_researchers.end(),
+            [&](const ResearcherContext* const mrc_researcher) { return mrc_researcher->m_cpid == cpid; });
+
+        if (block_mrc_names_cpid && pindex->pprev == account.m_last_block_ptr) {
+            account.m_last_block_ptr = pindex;
+        }
+
+        // RecordRewardBlock() pointed m_last_block_ptr at this block when it
+        // connected. Blocks disconnect from the tip, so a later reward that
+        // moved the pointer was forgotten first, and the step above covers
+        // this block's own MRCs. The assert protects against a change to the
+        // order of the disconnects or to what moves the pointer:
+        //
         assert(pindex == account.m_last_block_ptr);
 
         // When disconnecting a CPID's first block, reset the account, but
@@ -549,9 +569,23 @@ public:
 
             ResearchAccount& account = iter->second;
 
+            // ForgetRewardBlock() runs first, for the block's stake:
+            //
+            const bool block_stake_is_cpid = pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == cpid;
+
+            if (block_stake_is_cpid && account.m_first_block_ptr == nullptr) {
+                continue;
+            }
+
+            // m_first_block_ptr is cleared only when a disconnect forgets the
+            // CPID's first reward. Past the check above, that reward is at or
+            // below this MRC's accrual point, and blocks disconnect from the
+            // tip, so nothing has cleared it yet. The assert protects against a
+            // change to the order of the disconnects or of the forgets:
+            //
             assert(account.m_first_block_ptr != nullptr);
 
-            if (pindex->pprev != account.m_last_block_ptr) {
+            if (!block_stake_is_cpid && pindex->pprev != account.m_last_block_ptr) {
                 error("%s: pindex->pprev != account.m_last_block_ptr: pindex->pprev->nHeight = %u, "
                       "account.m_last_block_ptr->nHeight = %u",
                       __func__,
