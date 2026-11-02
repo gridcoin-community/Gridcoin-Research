@@ -673,7 +673,13 @@ public:
 
             m_snapshots.PruneSnapshotFiles();
 
-            return m_snapshots.ApplyLatest(m_researchers);
+            if (!m_snapshots.ApplyLatest(m_researchers)) {
+                return false;
+            }
+
+            EnsureCurrentSuperblockAccounts();
+
+            return true;
         } catch (const SnapshotStateError& e) {
             LogPrintf("%s: %s", __func__, e.what());
         }
@@ -864,6 +870,28 @@ private:
         }
     }
 
+    //!
+    //! \brief Create an account for every CPID in the current superblock that
+    //! has none.
+    //!
+    //! TallySuperblockAccrual() creates an account for each CPID in a new
+    //! superblock that has none, and the tally holds an account for every CPID
+    //! in the current superblock. Call this after the tally reloads the
+    //! snapshot of the current superblock.
+    //!
+    void EnsureCurrentSuperblockAccounts()
+    {
+        if (m_current_superblock->m_version < 2
+            || m_current_superblock.m_height < GetNewbieSnapshotFixHeight())
+        {
+            return;
+        }
+
+        for (const auto& iter : m_current_superblock->m_cpids) {
+            m_researchers.try_emplace(iter.Cpid());
+        }
+    }
+
 
     //!
     //! \brief Locate the block index entry of the superblock before the
@@ -968,6 +996,7 @@ private:
         }
 
         m_current_superblock = std::move(superblock);
+        EnsureCurrentSuperblockAccounts();
     }
 
     //!
