@@ -508,16 +508,17 @@ public:
     //! \brief Update the account data with information from a new superblock.
     //!
     //! \param superblock Refers to the current active superblock.
+    //! \param pindex     Block that contains the superblock.
     //!
     //! \return \c false if an IO error occurred while processing the superblock.
     //!
-    bool ApplySuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    bool ApplySuperblock(SuperblockPtr superblock, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // The network publishes version 2+ superblocks after the mandatory
         // switch to block version 11.
         //
         if (superblock->m_version >= 2) {
-            TallySuperblockAccrual(superblock);
+            TallySuperblockAccrual(superblock, pindex);
 
             if (!m_snapshots.Store(superblock.m_height, m_researchers)) {
                 return false;
@@ -655,7 +656,7 @@ public:
                         recomputing = true;
                     }
 
-                    if (recomputing && !ApplySuperblock(SuperblockPtr::ReadFromDisk(pindex))) {
+                    if (recomputing && !ApplySuperblock(SuperblockPtr::ReadFromDisk(pindex), pindex)) {
                         return false;
                     }
 
@@ -780,8 +781,10 @@ private:
     //! arrived for the snapshot accrual system.
     //!
     //! \param superblock Incoming superblock to calculate rewards at.
+    //! \param pindex     Block that contains the incoming superblock.
     //!
-    void TallySuperblockAccrual(const SuperblockPtr& superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    void TallySuperblockAccrual(const SuperblockPtr& superblock, const CBlockIndex* const pindex)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const SnapshotCalculator calc(superblock.m_timestamp, m_current_superblock);
 
@@ -848,8 +851,14 @@ private:
                 if (m_researchers.find(iter.Cpid()) == m_researchers.end()) {
                     ResearchAccount& account = m_researchers[iter.Cpid()];
 
-                    CAmount accrual_correction = Tally::GetNewbieSuperblockAccrualCorrection(iter.Cpid(),
-                                                                                             m_current_superblock);
+                    // Rewind from the parent of the incoming superblock's block,
+                    // which is the chain tip when the block connects, rather
+                    // than from the tip, which is far above when the tally
+                    // rebuilds or recomputes snapshots.
+                    CAmount accrual_correction = Tally::GetNewbieSuperblockAccrualCorrection(
+                        iter.Cpid(),
+                        m_current_superblock,
+                        pindex ? pindex->pprev : nullptr);
                     CAmount accrual_delta = calc.AccrualDelta(iter.Cpid(), account);
 
                     account.m_accrual = accrual_correction + accrual_delta;
@@ -1059,7 +1068,7 @@ private:
             pindex = pindex->pnext)
         {
             if (pindex->IsSuperblock()) {
-                if (!ApplySuperblock(SuperblockPtr::ReadFromDisk(pindex))) {
+                if (!ApplySuperblock(SuperblockPtr::ReadFromDisk(pindex), pindex)) {
                     return false;
                 }
             }
@@ -1254,8 +1263,13 @@ CAmount Tally::AccrualNearLimit(
 //!
 //! \param cpid for which to calculate the accrual correction.
 //! \param superblock that is the high point of the accrual correction
+//! \param pindex_start Block to rewind from to the current superblock: a
+//! descendant of it on the same chain. Null starts at the chain tip.
 //!
-CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const SuperblockPtr& current_superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+CAmount Tally::GetNewbieSuperblockAccrualCorrection(
+    const Cpid& cpid,
+    const SuperblockPtr& current_superblock,
+    const CBlockIndex* const pindex_start) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // This function was moved from the anonymous namespace and private, to public and made static, because it has
     // to be called from BlockRewardRules::Check() directly too. Why?
@@ -1397,8 +1411,8 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
         return accrual;
     }
 
-    // Start at the tip.
-    const CBlockIndex* pindex_high = mapBlockIndex[hashBestChain];
+    // Start at the block the caller gives, or at the tip.
+    const CBlockIndex* pindex_high = pindex_start ? pindex_start : mapBlockIndex[hashBestChain];
 
     // Rewind pindex_high to the current superblock.
     while (pindex_high->nHeight > current_superblock.m_height)
@@ -1566,9 +1580,9 @@ void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
     g_researcher_tally.ForgetMRCRewardBlock(pindex);
 }
 
-bool Tally::ApplySuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool Tally::ApplySuperblock(SuperblockPtr superblock, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    return g_researcher_tally.ApplySuperblock(std::move(superblock));
+    return g_researcher_tally.ApplySuperblock(std::move(superblock), pindex);
 }
 
 bool Tally::RevertSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main)

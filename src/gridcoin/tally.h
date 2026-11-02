@@ -155,8 +155,14 @@ public:
     //! \brief Compute "catch-up" accrual to correct for newbie accrual bug.
     //!
     //! \param cpid for which to calculate the accrual correction.
+    //! \param current_superblock that is the high point of the accrual correction.
+    //! \param pindex_start Block to rewind from to the current superblock: a
+    //! descendant of it on the same chain. Null starts at the chain tip.
     //!
-    static CAmount GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const SuperblockPtr& current_superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    static CAmount GetNewbieSuperblockAccrualCorrection(
+        const Cpid& cpid,
+        const SuperblockPtr& current_superblock,
+        const CBlockIndex* const pindex_start = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get an initialized research reward accrual calculator.
@@ -251,10 +257,11 @@ public:
     //! \brief Update the account data with information from a new superblock.
     //!
     //! \param superblock Refers to the current active superblock.
+    //! \param pindex     Block that contains the superblock.
     //!
     //! \return \c false if an IO error occurred while processing the superblock.
     //!
-    static bool ApplySuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    static bool ApplySuperblock(SuperblockPtr superblock, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Reset the account data to a state before the provided superblock.
