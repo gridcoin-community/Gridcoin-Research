@@ -479,7 +479,7 @@ public:
             //
             if (pindex->pprev == account.m_first_block_ptr) {
                 account = ResearchAccount(account.m_accrual);
-                return;
+                continue;
             }
 
             account.m_total_research_subsidy -= mrc_researcher->m_research_subsidy;
