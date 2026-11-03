@@ -31,6 +31,7 @@
 #include "util.h"
 #include "util/threadnames.h"
 #include "validation.h"
+#include "wallet/staking_signer.h"
 #include "wallet/wallet.h"
 #include "txmempool.h"
 
@@ -78,6 +79,17 @@ int32_t ComputeBlockVersion(int height)
     return CBlock::CURRENT_VERSION;
 }
 
+//! \brief The miner's token for the staking accessor.
+//!
+//! Defined and used only in this file; test/lint/lint-staking-key-access.py
+//! fails if it appears anywhere else. With it the miner reaches the keys that
+//! sign its coinstake, its block and its research reward claims while the
+//! wallet is unlocked for staking only.
+StakingKeyAccess MinerStakingKeyAccess()
+{
+    return StakingKeyAccess();
+}
+
 namespace {
 class COrphan
 {
@@ -115,23 +127,13 @@ struct BlockCandidate
         return other.hash < hash;
     }
 };
+} // anonymous namespace
 
-//!
-//! \brief Sign the research reward claim context for a newly-minted block.
-//!
-//! \param pwallet Supplies beacon private keys for signing.
-//! \param claim   An initialized claim to sign for a block.
-//! \param block   Block that contains the claim.
-//! \param dry_run If true, only check that the node can sign.
-//!
-//! \return \c true if the miner holds active beacon keys used to successfully
-//! sign the claim.
-//!
 bool TrySignClaim(
     CWallet* pwallet,
     GRC::Claim& claim,
     const CBlock& block,
-    const bool dry_run = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    const bool dry_run) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -156,7 +158,7 @@ bool TrySignClaim(
 
     CKey beacon_key;
 
-    if (!pwallet->GetKey(beacon->m_public_key.GetID(), beacon_key)) {
+    if (!pwallet->GetKeyForStaking(beacon->m_public_key.GetID(), beacon_key, MinerStakingKeyAccess())) {
         return error("%s: Missing beacon private key", __func__);
     }
 
@@ -183,7 +185,6 @@ bool TrySignClaim(
              HexStr(claim.m_signature));
 
     return true;
-}
 }
 
 // This is in anonymous namespace because it is only to be used by miner code here in this file.
@@ -981,7 +982,7 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
             if (whichType == TX_PUBKEYHASH) // pay to address type
             {
                 // convert to pay to public key type
-                if (!wallet.GetKey(uint160(vSolutions[0]), key))
+                if (!wallet.GetKeyForStaking(uint160(vSolutions[0]), key, MinerStakingKeyAccess()))
                 {
                     LogPrintf("CreateCoinStake: failed to get key for kernel type = %d", whichType);
                     break;  // unable to find corresponding public key
@@ -991,7 +992,7 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
             else if (whichType == TX_PUBKEY)  // pay to public key type
             {
                 valtype& vchPubKey = vSolutions[0];
-                if (!wallet.GetKey(Hash160(vchPubKey), key)
+                if (!wallet.GetKeyForStaking(Hash160(vchPubKey), key, MinerStakingKeyAccess())
                     || key.GetPubKey() != CPubKey(vchPubKey))
                 {
                     LogPrintf("CreateCoinStake: failed to get key for kernel type = %d", whichType);
@@ -1421,10 +1422,15 @@ bool SignStakeBlock(CBlock &block, CKey &key,
     //Sign the coinstake transaction. Post-F3 CTransaction fields are const, so
     //sign on a local CMutableTransaction and copy back when complete.
     CMutableTransaction mtxCoinstake(block.vtx[1]);
+
+    // Through the staking accessor, so that a wallet unlocked for staking only
+    // signs its coinstake.
+    const StakingSigningProvider provider(*pwallet, MinerStakingKeyAccess());
+
     unsigned nIn = 0;
     for (auto const& pcoin : StakeInputs)
     {
-        if (!SignSignature(*pwallet, *pcoin, mtxCoinstake, nIn++))
+        if (!SignSignature(provider, *pcoin, mtxCoinstake, nIn++))
         {
             return error("SignStakeBlock: failed to sign coinstake");
         }

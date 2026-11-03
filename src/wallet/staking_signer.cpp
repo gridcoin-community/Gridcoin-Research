@@ -10,6 +10,11 @@ StakingSigningProvider::StakingSigningProvider(const CCryptoKeyStore& store, Sta
 {
 }
 
+bool StakingSigningProvider::HaveKey(const CKeyID& id) const
+{
+    return m_store.HaveKey(id);
+}
+
 bool StakingSigningProvider::GetKey(const CKeyID& id, CKey& key) const
 {
     return m_store.GetKeyForStaking(id, key, m_access);
@@ -18,6 +23,11 @@ bool StakingSigningProvider::GetKey(const CKeyID& id, CKey& key) const
 bool StakingSigningProvider::GetPubKey(const CKeyID& id, CPubKey& pub) const
 {
     return m_store.GetPubKey(id, pub);
+}
+
+bool StakingSigningProvider::HaveCScript(const CScriptID& id) const
+{
+    return m_store.HaveCScript(id);
 }
 
 bool StakingSigningProvider::GetCScript(const CScriptID& id, CScript& script) const

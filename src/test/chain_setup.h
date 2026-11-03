@@ -16,6 +16,7 @@
 #include <vector>
 
 class CBlock;
+class CWallet;
 
 namespace grc_test {
 
@@ -262,6 +263,16 @@ void MakeBlockAndCoinstake(CBlock& block, CMutableTransaction& coinbase,
 //! output, say) should call this; the premine alone needs no mining.
 //!
 bool CreateAndProcessBlock(CBlock& block_out, std::string& err);
+
+//!
+//! \brief As CreateAndProcessBlock() above, but staking with \p staking_wallet.
+//!
+//! For a case that stakes from a wallet of its own, such as an encrypted one
+//! unlocked for staking only, rather than from pwalletMain. The block goes to
+//! pwalletMain as above, which keeps the premine outputs it holds in step with
+//! the chain for the cases after it, and to \p staking_wallet as well.
+//!
+bool CreateAndProcessBlock(CWallet& staking_wallet, CBlock& block_out, std::string& err);
 
 } // namespace grc_test
 

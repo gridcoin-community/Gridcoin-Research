@@ -1544,6 +1544,17 @@ AppCacheSectionExt GetExtendedScrapersCache()
     return GRC::GetScraperRegistry().GetScrapersLegacyExt(false);
 }
 
+//! \brief The scraper's token for the staking accessor.
+//!
+//! Defined and used only in this file; test/lint/lint-staking-key-access.py
+//! fails if it appears anywhere else. With it Scraper() reaches the key that
+//! signs the manifests it publishes while the wallet is unlocked for staking
+//! only.
+StakingKeyAccess ScraperStakingKeyAccess()
+{
+    return StakingKeyAccess();
+}
+
 // This is the "main" scraper function.
 // It will be instantiated as a separate thread if -scraper is specified as a startup argument,
 // and operate in a continuous while loop.
@@ -1567,6 +1578,11 @@ void Scraper(bool bSingleShot)
         _log(logattribute::INFO, "Scraper", "Running in single shot mode.");
 
     uint256 nmScraperFileManifestHash;
+
+    // The key that authorizes this node to publish manifests, and signs them, is
+    // reached through the staking accessor, so a scraper whose wallet is unlocked
+    // for staking only can publish.
+    const StakingKeyAccess scraper_access = ScraperStakingKeyAccess();
 
     // The scraper thread loop...
     while (!ShutdownInProgress())
@@ -1664,7 +1680,7 @@ void Scraper(bool bSingleShot)
             _log(logattribute::ERR, "Scraper", "RPC error occurred, check logs");
 
         // This is the section to download statistics. Only do if authorized.
-        else if (IsScraperAuthorized() || IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
+        else if (IsScraperAuthorized() || IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut, &scraper_access))
         {
             // Take a lock on cs_Scraper for the main activity portion of the loop.
             LOCK(cs_Scraper);
@@ -1746,7 +1762,7 @@ void Scraper(bool bSingleShot)
         }
 
         // This is the section to send out manifests. Only do if authorized.
-        if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
+        if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut, &scraper_access))
         {
             // This will push out a new CScraperManifest if the hash has changed of mScraperFileManifestHash.
             // The idea here is to run the scraper loop a number of times over a period of time approaching
@@ -4692,8 +4708,15 @@ bool IsScraperAuthorized()
     return ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD;
 }
 
-bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& KeyOut)
+bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& KeyOut, const StakingKeyAccess* access)
 {
+    // The scraper thread passes its access and reaches the key while the wallet is
+    // unlocked for staking only. Any other caller passes none and takes the general
+    // route, which on an encrypted wallet needs a full unlock.
+    const auto get_key = [access](const CKeyID& key_id, CKey& key_out) {
+        return access ? pwalletMain->GetKeyForStaking(key_id, key_out, *access)
+                      : pwalletMain->GetKey(key_id, key_out);
+    };
 
     AppCacheSection mScrapers = GetScrapersCache();
 
@@ -4729,14 +4752,14 @@ bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& K
                 // ... and it exists in the wallet...
                 LOCK(pwalletMain->cs_wallet);
 
-                if (pwalletMain->GetKey(*KeyID, KeyOut))
+                if (get_key(*KeyID, KeyOut))
                 {
                     // ... and the key returned from the wallet is valid and matches the provided public key...
-                    // Invariant: GetKey() succeeds only with a valid key: the wallet checks
-                    // keys when it loads or imports them, and the encrypted store returns
-                    // false for a key that does not decrypt to a valid one. Guards against
-                    // a change to GetKey() that returns an invalid key, with which this
-                    // node would sign manifests.
+                    // Invariant: GetKey() and GetKeyForStaking() succeed only with a valid
+                    // key: the wallet checks keys when it loads or imports them, and the
+                    // encrypted store returns false for a key that does not decrypt to a
+                    // valid one. Guards against a change to either that returns an invalid
+                    // key, with which this node would sign manifests.
                     assert(KeyOut.IsValid());
 
                     _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests",
@@ -4796,10 +4819,10 @@ bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& K
                              "(Doublecheck) The address is " + EncodeDestination(address));
 
                         // ... and it exists in the wallet... (It SHOULD here... it came from the map...)
-                        if (pwalletMain->GetKey(*KeyID, KeyOut))
+                        if (get_key(*KeyID, KeyOut))
                         {
                             // ... and the key returned from the wallet is valid ...
-                            // Invariant: as above, GetKey() succeeds only with a valid key.
+                            // Invariant: as above, either route succeeds only with a valid key.
                             assert(KeyOut.IsValid());
 
                             _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests",
@@ -6667,7 +6690,7 @@ UniValue sendscraperfilemanifest(const UniValue& params)
     CTxDestination AddressOut;
     CKey KeyOut;
     bool ret;
-    if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
+    if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut, nullptr))
     {
         LOCK2(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest);
 

@@ -155,6 +155,8 @@ bool IsScraperAuthorized();
  * @brief Returns whether this node is authorized to broadcast statistics manifests to the network as a scraper.
  * @param AddressOut
  * @param KeyOut
+ * @param access The scraper thread's staking access, with which the key is reached while the wallet is unlocked for
+ * staking only. nullptr for any other caller, which then needs a full unlock of an encrypted wallet.
  * @return bool
  *
  * The idea here is that there are two levels of authorization. The first level is whether any
@@ -175,7 +177,7 @@ bool IsScraperAuthorized();
  * modified to bypass this check, so messages sent will also be validated on receipt by the complement
  * to this function, IsManifestAuthorized(CKey& Key) in the CScraperManifest class.
  */
-bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& KeyOut);
+bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& KeyOut, const StakingKeyAccess* access);
 /**
  * @brief Returns whether the scraper with the input public key at the input time has exceeded the maximum allowable
  * manifest publishing rate. This is a DoS function and is used to issue misbehavior points, which could result in banning

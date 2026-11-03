@@ -595,15 +595,26 @@ std::optional<PendingBeacon> TryOwnPendingBeacon(const Cpid& cpid) EXCLUSIVE_LOC
 //! \brief Determine whether the wallet contains a valid private key that
 //! matches the supplied beacon public key.
 //!
+//! \param wallet     The wallet to look in.
 //! \param public_key Identifies the corresponding private key.
+//! \param access     A staking path's access, with which the key is reached
+//! while the wallet is unlocked for staking only. nullptr for any other caller,
+//! which then needs a full unlock of an encrypted wallet.
 //!
 //! \return \c true if the wallet contains a matching private key.
 //!
-bool CheckBeaconPrivateKey(const CWallet* const wallet, const CPubKey& public_key)
+bool CheckBeaconPrivateKey(
+    const CWallet* const wallet,
+    const CPubKey& public_key,
+    const StakingKeyAccess* access)
 {
     CKey out_key;
 
-    if (!wallet->GetKey(public_key.GetID(), out_key)) {
+    const CKeyID key_id = public_key.GetID();
+    const bool found = access ? wallet->GetKeyForStaking(key_id, out_key, *access)
+                              : wallet->GetKey(key_id, out_key);
+
+    if (!found) {
         return error("%s: Key not found", __func__);
     }
 
@@ -643,7 +654,7 @@ AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_R
         LogPrintf("WARNING: %s: Failed to change beacon key label", __func__);
     }
 
-    if (!CheckBeaconPrivateKey(pwalletMain, public_key)) {
+    if (!CheckBeaconPrivateKey(pwalletMain, public_key, nullptr)) {
         LogPrintf("ERROR: %s: Failed to verify new beacon key", __func__);
         return BeaconError::MISSING_KEY;
     }
@@ -661,14 +672,21 @@ namespace {
 //! \brief Sign a new beacon payload with the beacon's private key.
 //!
 //! \param payload The beacon payload to sign.
+//! \param access  A staking path's access, with which the key is reached while
+//! the wallet is unlocked for staking only. nullptr for any other caller, which
+//! then needs a full unlock of an encrypted wallet.
 //!
 //! \return \c false if the key doesn't exist or fails to sign the payload.
 //!
-bool SignBeaconPayload(BeaconPayload& payload)
+bool SignBeaconPayload(BeaconPayload& payload, const StakingKeyAccess* access)
 {
     CKey out_key;
 
-    if (!pwalletMain->GetKey(payload.m_beacon.m_public_key.GetID(), out_key)) {
+    const CKeyID key_id = payload.m_beacon.m_public_key.GetID();
+    const bool found = access ? pwalletMain->GetKeyForStaking(key_id, out_key, *access)
+                              : pwalletMain->GetKey(key_id, out_key);
+
+    if (!found) {
         return error("%s: Key not found", __func__);
     }
 
@@ -768,7 +786,7 @@ AdvertiseBeaconResult SendBeaconContract(
 
     BeaconPayload payload(cpid, beacon);
 
-    if (!SignBeaconPayload(payload)) {
+    if (!SignBeaconPayload(payload, nullptr)) {
         return BeaconError::MISSING_KEY;
     }
 
@@ -1002,7 +1020,7 @@ AdvertiseBeaconResult GRC::SendBeaconContractV3(
 
     BeaconPayload payload(cpid, beacon, std::move(proof));
 
-    if (!SignBeaconPayload(payload)) {
+    if (!SignBeaconPayload(payload, nullptr)) {
         return BeaconError::MISSING_KEY;
     }
 
@@ -1082,7 +1100,7 @@ AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon, bool a
     // the same CPID, both nodes will attempt to renew the beacon. Only allow a
     // node with the private key to send the contract:
     //
-    if (!CheckBeaconPrivateKey(pwalletMain, beacon.m_public_key)) {
+    if (!CheckBeaconPrivateKey(pwalletMain, beacon.m_public_key, nullptr)) {
         LogPrintf("WARNING: %s: Missing or invalid private key", __func__);
         return BeaconError::MISSING_KEY;
     }

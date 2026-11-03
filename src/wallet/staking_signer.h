@@ -17,14 +17,20 @@
 //! StakingOnly or Full, and never while the store is locked. Making one takes a
 //! StakingKeyAccess, which only the staking paths can make.
 //!
+//! The lookups that reveal no secret -- HaveKey, GetPubKey, HaveCScript and
+//! GetCScript -- answer as the store does, so the signing code and IsMine see
+//! the same keys and scripts through it as through the store.
+//!
 //! It borrows the store and must not outlive it.
 class StakingSigningProvider final : public SigningProvider
 {
 public:
     StakingSigningProvider(const CCryptoKeyStore& store, StakingKeyAccess access);
 
+    bool HaveKey(const CKeyID& id) const override;
     bool GetKey(const CKeyID& id, CKey& key) const override;
     bool GetPubKey(const CKeyID& id, CPubKey& pub) const override;
+    bool HaveCScript(const CScriptID& id) const override;
     bool GetCScript(const CScriptID& id, CScript& script) const override;
 
 private:

@@ -273,8 +273,12 @@ public:
     {
         LOCK(cs_main);
 
-        // wallet_locked -> no_sign: a locked wallet cannot sign the trial claim.
-        return GRC::BuildMRCSnapshot(m_wallet, fee_boost, wallet_locked, researcher_eligible);
+        // The trial claim is built unsigned when the wallet cannot use its keys:
+        // when the caller says it is locked, or it is locked or unlocked for
+        // staking only. The preview needs the fee, not a signature; submit()
+        // builds and signs the claim it sends.
+        const bool can_use_keys = !m_wallet->IsUnlockedForStakingOnly() && !m_wallet->IsLocked();
+        return GRC::BuildMRCSnapshot(m_wallet, fee_boost, wallet_locked || !can_use_keys, researcher_eligible);
     }
 
     MRCSubmitResult submit(CAmount fee_boost, bool wallet_locked) override

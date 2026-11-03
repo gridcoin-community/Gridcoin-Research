@@ -87,6 +87,23 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
 int64_t GetOptimalStakeSplitValue(int64_t& nMinStakeSplitValue, double& dEfficiency) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+//!
+//! \brief Sign the research reward claim context for a newly-minted block.
+//!
+//! \param pwallet Supplies beacon private keys for signing.
+//! \param claim   An initialized claim to sign for a block.
+//! \param block   Block that contains the claim.
+//! \param dry_run If true, only check that the node can sign.
+//!
+//! \return \c true if the miner holds active beacon keys used to successfully
+//! sign the claim.
+//!
+bool TrySignClaim(
+    CWallet* pwallet,
+    GRC::Claim& claim,
+    const CBlock& block,
+    const bool dry_run = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
 bool CreateMRCRewards(CMutableTransaction& mtxCoinbase, CMutableTransaction& mtxCoinstake,
                       CBlock &blocknew,
                       std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map,

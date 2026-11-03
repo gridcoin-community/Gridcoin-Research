@@ -7,6 +7,9 @@
 #include "keystore.h"
 #include "random.h"
 #include "script/sign.h"
+#include "script/standard.h"
+#include "test/staking_test_peers.h"
+#include "wallet/ismine.h"
 #include "wallet/staking_signer.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
@@ -19,26 +22,10 @@
 #include <type_traits>
 #include <vector>
 
-// The two test peers make tokens that elsewhere only the named factories and
-// CapabilityScope may make. They must sit at global scope, because the friend
-// declarations in keystore.h name ::StakingKeyAccessTestPeer and
-// ::ElevationGrantTestPeer.
-struct StakingKeyAccessTestPeer
-{
-    static StakingKeyAccess Make() { return StakingKeyAccess(); }
-};
-
-struct ElevationGrantTestPeer
-{
-    static ElevationGrant Make(const CCryptoKeyStore& store) { return ElevationGrant(store); }
-
-    static std::unique_ptr<ElevationGrant> MakeHeld(const CCryptoKeyStore& store)
-    {
-        return std::unique_ptr<ElevationGrant>(new ElevationGrant(store));
-    }
-};
-
 namespace {
+
+using grc_test::EncryptedWallet;
+using grc_test::SwapMainWallet;
 
 // Nothing but a friend can make either token, and a grant cannot be copied or
 // moved off the scope, and so the thread, that made it. Empty braces must not
@@ -51,53 +38,6 @@ static_assert(!std::is_copy_constructible_v<ElevationGrant>);
 static_assert(!std::is_move_constructible_v<ElevationGrant>);
 static_assert(!std::is_copy_assignable_v<ElevationGrant>);
 static_assert(!std::is_move_assignable_v<ElevationGrant>);
-
-const SecureString PASSPHRASE("staking-key-access-test");
-
-//! Swaps a wallet into pwalletMain for the life of a case, as wallet_tests does.
-struct SwapMainWallet
-{
-    CWallet* m_saved;
-
-    explicit SwapMainWallet(CWallet* replacement) : m_saved(pwalletMain) { pwalletMain = replacement; }
-    ~SwapMainWallet() { pwalletMain = m_saved; }
-};
-
-//! An in-memory wallet holding one key added before encryption, left locked.
-struct EncryptedWallet
-{
-    CWallet wallet;
-    SwapMainWallet swap{&wallet};
-    CKey key;
-    CKeyID id;
-
-    EncryptedWallet()
-    {
-        key.MakeNewKey(true);
-        id = key.GetPubKey().GetID();
-
-        {
-            LOCK(wallet.cs_wallet);
-            BOOST_REQUIRE(wallet.AddKey(key));
-        }
-
-        BOOST_REQUIRE(wallet.EncryptWallet(PASSPHRASE));
-        wallet.Lock();
-        BOOST_REQUIRE(wallet.IsLocked());
-    }
-
-    ~EncryptedWallet()
-    {
-        wallet.Lock();
-    }
-
-    void UnlockFor(UnlockScope scope)
-    {
-        wallet.Lock();
-        BOOST_REQUIRE(wallet.Unlock(PASSPHRASE, scope));
-        BOOST_REQUIRE(wallet.GetUnlockScope() == scope);
-    }
-};
 
 //! Exposes the protected keystore members the master key comparison needs.
 struct KeyStoreProbe : public CCryptoKeyStore
@@ -419,6 +359,32 @@ BOOST_AUTO_TEST_CASE(staking_signing_provider_signs_under_staking_only)
     fx.wallet.Lock();
     CMutableTransaction locked_spend = SpendOf(to_key_hash);
     BOOST_CHECK(!SignSignature(provider, to_key_hash, locked_spend, 0));
+}
+
+BOOST_AUTO_TEST_CASE(staking_signing_provider_answers_key_and_script_lookups)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    CScript to_key_hash;
+    to_key_hash.SetDestination(fx.id);
+    BOOST_REQUIRE(fx.wallet.AddCScript(to_key_hash));
+
+    const StakingSigningProvider provider(fx.wallet, StakingKeyAccessTestPeer::Make());
+
+    // Which keys and scripts the store holds is not secret, so the provider
+    // answers as the store does, and IsMine through it agrees with the store.
+    BOOST_CHECK(provider.HaveKey(fx.id));
+    BOOST_CHECK(provider.HaveCScript(CScriptID(to_key_hash)));
+    BOOST_CHECK(IsMine(provider, to_key_hash) == ISMINE_SPENDABLE);
+
+    CKey stranger;
+    stranger.MakeNewKey(true);
+    CScript to_stranger;
+    to_stranger.SetDestination(stranger.GetPubKey().GetID());
+
+    BOOST_CHECK(!provider.HaveKey(stranger.GetPubKey().GetID()));
+    BOOST_CHECK(!provider.HaveCScript(CScriptID(to_stranger)));
 }
 
 BOOST_AUTO_TEST_CASE(master_key_comparison)

@@ -127,8 +127,10 @@ public:
     virtual ~MRC() = default;
 
     //! Atomic node-side snapshot at the given fee boost. \p wallet_locked (the
-    //! GUI's WalletModel encryption state) becomes CreateMRC's no_sign flag — a
-    //! locked wallet cannot sign, so the trial claim is built unsigned. \p
+    //! GUI's WalletModel encryption state) is one source of CreateMRC's no_sign
+    //! flag: the trial claim is built unsigned when it is set, and when the
+    //! wallet itself is locked or unlocked for staking only, since a wallet that
+    //! cannot use its keys cannot sign. \p
     //! researcher_eligible is the GUI's active-beacon / not-noncruncher /
     //! not-pool determination (owned by ResearcherModel, migrated in 1d-iv); when
     //! false the snapshot skips the trial CreateMRC (which would otherwise throw

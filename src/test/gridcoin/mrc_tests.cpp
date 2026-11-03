@@ -4,8 +4,12 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <amount.h>
+#include <chain.h>
+#include <chainparams.h>
 #include <gridcoin/account.h>
 #include <gridcoin/beacon.h>
+#include <gridcoin/claim.h>
 #include <gridcoin/cpid.h>
 #include <gridcoin/mrc.h>
 #include <gridcoin/tally.h>
@@ -15,11 +19,18 @@
 #include <logging.h>
 #include <miner.h>
 #include <node/gui_cache.h>
+#include <primitives/block.h>
 #include <primitives/transaction.h>
+#include <random.h>
 #include <rpc/blockchain.h>
+#include <support/allocators/secure.h>
 #include <test/state_guard.h>
 #include <txmempool.h>
 #include <test/test_gridcoin.h>
+#include <util.h>
+#include <wallet/wallet.h>
+
+#include <memory>
 
 #include <functional>
 #include <list>
@@ -129,6 +140,23 @@ struct Setup {
 
         gArgs.ForceSetArg("forcecpid", cpid.ToString());
         GRC::Researcher::Reload({}, {});
+    }
+
+    //! Encrypt the wallet and unlock it for staking only, as a researcher who
+    //! stakes runs it.
+    void EncryptAndUnlockForStakingOnly()
+    {
+        const SecureString passphrase("mrc-tests");
+
+        BOOST_REQUIRE(wallet->EncryptWallet(passphrase));
+        wallet->Lock();
+        BOOST_REQUIRE(wallet->Unlock(passphrase, UnlockScope::StakingOnly));
+        BOOST_REQUIRE(wallet->IsUnlockedForStakingOnly());
+
+        // The general route to the beacon key is refused from here on, so a
+        // signature a case gets can only have come through a staking path.
+        CKey general;
+        BOOST_REQUIRE(!wallet->GetKey(key.GetPubKey().GetID(), general));
     }
 
     ~Setup() {
@@ -541,6 +569,77 @@ BOOST_AUTO_TEST_CASE(terms_hold_only_when_paying_no_more_and_receiving_no_less)
     BOOST_CHECK(!GRC::MRCTermsHold(10, 99, 10, 90));  // net 89 < 90
     BOOST_CHECK(GRC::MRCTermsHold(9, 100, 10, 90));   // pays less, nets more
     BOOST_CHECK(!GRC::MRCTermsHold(10, 100, 10, 91)); // net 90 < 91
+}
+
+//! A researcher staking from a wallet unlocked for staking only signs the claim
+//! in each block it stakes with its beacon key.
+BOOST_AUTO_TEST_CASE(claim_signed_under_staking_only)
+{
+    EncryptAndUnlockForStakingOnly();
+
+    CMutableTransaction coinstake;
+    coinstake.nTime = pindex->nTime;
+    coinstake.vin.resize(1);
+    coinstake.vin[0].prevout = COutPoint(GetRandHash(), 0);
+    coinstake.vout.resize(2);
+    coinstake.vout[0].SetEmpty();
+
+    CBlock block;
+    block.nTime = pindex->nTime;
+    block.hashPrevBlock = pindex->pprev->GetBlockHash();
+    block.vtx.resize(2);
+    block.vtx[1] = CTransaction(coinstake);
+
+    GRC::Claim claim;
+    claim.m_mining_id = cpid;
+
+    LOCK(cs_main);
+
+    // The dry run that CreateMRCRewards makes before it commits to a research
+    // claim checks only that the key can be had.
+    BOOST_CHECK(TrySignClaim(wallet, claim, block, /*dry_run=*/true));
+    BOOST_CHECK(claim.m_signature.empty());
+
+    BOOST_REQUIRE(TrySignClaim(wallet, claim, block, /*dry_run=*/false));
+    BOOST_CHECK(claim.VerifySignature(key.GetPubKey(), block.hashPrevBlock, block.vtx[1]));
+}
+
+//! The MRC request page's preview, on a researcher wallet unlocked for staking
+//! only, shows the fee and no error. Its trial claim is built unsigned: the
+//! preview needs the fee, not a signature, and the general route to the beacon
+//! key is refused under staking only.
+BOOST_AUTO_TEST_CASE(mrc_snapshot_no_error_under_staking_only)
+{
+    // Large enough that the fee, a small fraction of it under regtest's short
+    // zero-payout interval, is not rounded away.
+    const CAmount accrual = 1000 * COIN;
+    account.m_accrual = accrual;
+    EncryptAndUnlockForStakingOnly();
+
+    // The snapshot reaches CreateMRC only from the V12 height, which regtest
+    // puts at genesis and mainnet far above this mock chain. The fixture's
+    // guard puts the network back.
+    SelectParams(CBaseChainParams::REGTEST);
+
+    {
+        LOCK(cs_main);
+        pindexBest = pindex;
+    }
+
+    // In sync.
+    g_previous_block_time.store(GetAdjustedTime());
+
+    const std::unique_ptr<interfaces::MRC> mrc_interface = interfaces::MakeMRC(wallet);
+    const interfaces::MRCSnapshot snap = mrc_interface->snapshot(/*fee_boost=*/0,
+                                                                 /*wallet_locked=*/false,
+                                                                 /*researcher_eligible=*/true);
+
+    BOOST_REQUIRE(!snap.out_of_sync);
+    BOOST_REQUIRE(snap.block_version_valid);
+    BOOST_CHECK_MESSAGE(!snap.create_error, snap.create_error_msg);
+    BOOST_CHECK_EQUAL(snap.reward, accrual);
+    BOOST_CHECK(snap.min_fee > 0);
+    BOOST_CHECK(snap.min_fee < snap.reward);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

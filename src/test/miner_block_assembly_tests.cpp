@@ -50,8 +50,10 @@
 #include "primitives/block.h"
 #include "primitives/transaction.h"
 #include "scheduler.h"
+#include "script/interpreter.h"
 #include "script/script.h"
 #include "script/sign.h"
+#include "support/allocators/secure.h"
 #include "gridcoin/tx_message.h"
 #include "test/chain_setup.h"
 #include "test/state_guard.h"
@@ -2583,6 +2585,58 @@ BOOST_AUTO_TEST_CASE(stake_candidates_carry_their_confirming_block_time)
         block_times.insert(candidate.block_time);
     }
     BOOST_CHECK_GE(block_times.size(), 2U);
+}
+
+//!
+//! A wallet unlocked for staking only stakes. The general route to the kernel's
+//! key refuses under that scope; the miner reaches it through its own access and
+//! signs the coinstake and the block with it.
+//!
+//! The wallet is the case's own, holding the premine key, so that encrypting it
+//! leaves pwalletMain, which the other cases stake from, as it was.
+//!
+BOOST_AUTO_TEST_CASE(coinstake_signed_under_staking_only)
+{
+    CWallet staking;
+
+    // The premine key and the outputs it owns, with the spent bits the chain and
+    // the pool give them, all before the wallet is encrypted.
+    PlantRegtestPremineKey(&staking);
+    int mismatch = 0;
+    CAmount in_question = 0;
+    staking.FixSpentCoins(mismatch, in_question);
+
+    const SecureString passphrase("coinstake-staking-only");
+    BOOST_REQUIRE(staking.EncryptWallet(passphrase));
+    BOOST_REQUIRE(staking.Unlock(passphrase, UnlockScope::StakingOnly));
+    BOOST_REQUIRE(staking.IsUnlockedForStakingOnly());
+
+    {
+        CKey general;
+        BOOST_REQUIRE_MESSAGE(!staking.GetKey(grc_test::PremineKey().GetPubKey().GetID(), general),
+                              "the general route to the premine key is open under staking only");
+    }
+
+    CBlock block;
+    std::string err;
+    BOOST_REQUIRE_MESSAGE(CreateAndProcessBlock(staking, block, err), "could not stake: " << err);
+
+    BOOST_REQUIRE(block.vtx.size() >= 2);
+    const CTransaction& coinstake = block.vtx[1];
+    BOOST_REQUIRE(coinstake.IsCoinStake());
+
+    LOCK2(cs_main, staking.cs_wallet);
+
+    BOOST_CHECK(pindexBest->GetBlockHash() == block.GetHash());
+    BOOST_CHECK(CheckBlockSignature(block));
+
+    // Every input of the coinstake carries a signature that spends the output it
+    // names.
+    for (unsigned int i = 0; i < coinstake.vin.size(); ++i) {
+        const auto prev = staking.mapWallet.find(coinstake.vin[i].prevout.hash);
+        BOOST_REQUIRE(prev != staking.mapWallet.end());
+        BOOST_CHECK(VerifySignature(prev->second, coinstake, SCRIPT_VERIFY_P2SH, i, 0));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(stake_weight_is_the_staking_value_of_the_stake_candidates)

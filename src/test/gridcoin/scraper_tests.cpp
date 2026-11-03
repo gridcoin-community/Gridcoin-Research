@@ -2,10 +2,17 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chain.h"
+#include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
 #include "gridcoin/scraper/scraper.h"
 #include "gridcoin/scraper/scraper_net.h"
+#include "gridcoin/scraper/scraper_registry.h"
+#include "key_io.h"
+#include "primitives/transaction.h"
 #include "test/gridcoin/rsa_test_vectors.h"
+#include "test/staking_test_peers.h"
+#include "test/state_guard.h"
 #include <util/strencodings.h>
 #include <util/string.h>
 #include <util/system.h>
@@ -283,6 +290,63 @@ BOOST_AUTO_TEST_CASE(convergence_by_project_fails_when_the_beacon_list_manifest_
     ConvergedManifest converged;
 
     BOOST_CHECK(!ScraperConstructConvergedManifestByProject(OneProjectWhitelist(), binned, converged));
+}
+
+//! The scraper thread reaches its key while the wallet is unlocked for staking
+//! only; the RPC that publishes a manifest on request does not, and needs a full
+//! unlock.
+BOOST_AUTO_TEST_CASE(scraper_rpc_path_refused_under_staking_only)
+{
+    ScraperLogInDataDir log_in_data_dir;
+
+    // Swapped into pwalletMain, where the scraper looks for its key.
+    grc_test::EncryptedWallet fx;
+
+    // The wallet's key is an authorised scraper, and -scraperkey names it, so the
+    // check goes to that key rather than walking the address book.
+    grc_test::RegistryReset scrapers({GRC::ContractType::SCRAPER});
+    {
+        CMutableTransaction mtx;
+        mtx.vContracts.push_back(GRC::MakeContract<GRC::ScraperEntryPayload>(
+            uint32_t {3}, GRC::ContractAction::ADD, uint32_t {2}, fx.id, GRC::ScraperEntryStatus::AUTHORIZED));
+
+        const CTransaction tx(mtx);
+        CBlockIndex index {};
+
+        LOCK(cs_main);
+        GRC::GetScraperRegistry().Add({tx.vContracts[0], tx, &index});
+    }
+
+    const grc_test::ForcedArgGuard scraper_key("scraperkey", EncodeDestination(CTxDestination(fx.id)));
+
+    const StakingKeyAccess scraper_access = StakingKeyAccessTestPeer::Make();
+
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    {
+        CTxDestination address;
+        CKey key;
+        BOOST_CHECK(!IsScraperAuthorizedToBroadcastManifests(address, key, nullptr));
+        BOOST_CHECK(!key.IsValid());
+    }
+
+    {
+        CTxDestination address;
+        CKey key;
+        BOOST_CHECK(IsScraperAuthorizedToBroadcastManifests(address, key, &scraper_access));
+        BOOST_CHECK(key.IsValid() && key.GetPubKey() == fx.key.GetPubKey());
+        BOOST_CHECK(address == CTxDestination(fx.id));
+    }
+
+    // A full unlock serves the general route as it always has.
+    fx.UnlockFor(UnlockScope::Full);
+
+    {
+        CTxDestination address;
+        CKey key;
+        BOOST_CHECK(IsScraperAuthorizedToBroadcastManifests(address, key, nullptr));
+        BOOST_CHECK(key.IsValid() && key.GetPubKey() == fx.key.GetPubKey());
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
