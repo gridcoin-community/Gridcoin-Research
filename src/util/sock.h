@@ -80,18 +80,21 @@ private:
     SOCKET m_socket;
 };
 
-//! A socket no child process inherits: SOCK_CLOEXEC where defined, else FD_CLOEXEC set before
+//! A socket that child processes do not inherit: SOCK_CLOEXEC where defined, else FD_CLOEXEC set before
 //! return; Windows: WSASocketW(..., WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT).
 //! INVALID_SOCKET with the platform error set on failure.
 SOCKET CreateCloexecSocket(int domain, int type, int protocol);
 
-//! accept() whose result no child inherits: accept4(SOCK_CLOEXEC) on Linux and the BSDs,
+//! accept() whose result child processes do not inherit (see the window noted in sock.cpp): accept4(SOCK_CLOEXEC) on Linux and the BSDs,
 //! accept + FD_CLOEXEC on macOS, accept + SetHandleInformation(HANDLE_FLAG_INHERIT, 0) on Windows.
 SOCKET AcceptCloexec(SOCKET listen_socket, sockaddr* addr, socklen_t* addr_len);
 
-//! Prepare a connected socket for close: shutdown(send), read and discard until the peer closes
-//! or `bound` passes. If the bound passed (POSIX), or always (Windows), set SO_LINGER {1, 0} so the
-//! close that follows releases the connection at once. Never throws; the caller closes.
+//! Prepare a connected socket for close: shutdown(send), then wait with poll (select on Windows)
+//! and read and discard until the peer closes or `bound` passes, whatever the socket's blocking
+//! mode. If the peer did not close within the bound, set SO_LINGER {1, 0} so the close that follows
+//! releases the connection at once (this resets the connection, so unsent data may be lost).
+//! Never throws; the caller closes. Where the creation functions above note a window, a child
+//! started concurrently on another thread may still inherit the socket.
 void DrainBeforeClose(SOCKET s, std::chrono::milliseconds bound);
 
 #endif // BITCOIN_UTIL_SOCK_H

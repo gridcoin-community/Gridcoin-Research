@@ -122,6 +122,10 @@ bool Sock::WaitMany(std::chrono::milliseconds timeout, EventsPerSock& events_per
 #endif
 }
 
+// Remaining window per platform. Linux and the BSDs (SOCK_CLOEXEC) and Windows
+// (WSA_FLAG_NO_HANDLE_INHERIT) set the flag atomically, so there is none. Where SOCK_CLOEXEC is
+// undefined the flag is set by a following fcntl, so a fork+exec on another thread between socket()
+// and fcntl() can still inherit the descriptor.
 SOCKET CreateCloexecSocket(int domain, int type, int protocol)
 {
 #ifdef WIN32
@@ -144,6 +148,10 @@ SOCKET CreateCloexecSocket(int domain, int type, int protocol)
 #endif
 }
 
+// Remaining window per platform. Linux and the BSDs (accept4 with SOCK_CLOEXEC) have none. On macOS
+// the flag is set by an fcntl after accept(), and on Windows by SetHandleInformation after
+// accept(), so a fork+exec or a CreateProcess with handle inheritance on another thread in that
+// interval can still inherit the connection.
 SOCKET AcceptCloexec(SOCKET listen_socket, sockaddr* addr, socklen_t* addr_len)
 {
 #ifdef WIN32
@@ -172,24 +180,44 @@ SOCKET AcceptCloexec(SOCKET listen_socket, sockaddr* addr, socklen_t* addr_len)
 #endif
 }
 
+namespace {
+
+//! Wait until the socket is readable (or has hung up) or timeout_ms passes. Returns a positive value
+//! when ready, 0 on timeout, and a negative value on error (EINTR included on POSIX).
+int WaitReadable(SOCKET s, int timeout_ms)
+{
+#ifdef WIN32
+    fd_set recv_set;
+    FD_ZERO(&recv_set);
+    FD_SET(s, &recv_set);
+    timeval tv;
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    return ::select(0, &recv_set, nullptr, nullptr, &tv);
+#else
+    pollfd pfd{};
+    pfd.fd = s;
+    pfd.events = POLLIN;
+    return ::poll(&pfd, 1, timeout_ms);
+#endif
+}
+
+} // namespace
+
 void DrainBeforeClose(SOCKET s, std::chrono::milliseconds bound)
 {
     if (s == INVALID_SOCKET) return;
 
-    // Windows has no portable way to bound the read of an arbitrary socket mode here, so
-    // it shuts down the send side and always resets on close.
-#ifdef WIN32
-    (void)bound;
-    ::shutdown(s, SD_SEND);
-    linger lg;
-    lg.l_onoff = 1;
-    lg.l_linger = 0;
-    ::setsockopt(s, SOL_SOCKET, SO_LINGER, reinterpret_cast<const char*>(&lg), sizeof(lg));
-#else
     const auto deadline = std::chrono::steady_clock::now() + bound;
 
+#ifdef WIN32
+    ::shutdown(s, SD_SEND);
+#else
     ::shutdown(s, SHUT_WR);
+#endif
 
+    // Waiting is done with poll/select on the remaining time, so the result does not depend on the
+    // socket's blocking mode or on any receive timeout option set on it.
     bool peer_closed = false;
     char buf[4096];
     while (true) {
@@ -197,21 +225,29 @@ void DrainBeforeClose(SOCKET s, std::chrono::milliseconds bound)
             deadline - std::chrono::steady_clock::now());
         if (remaining.count() <= 0) break;
 
-        const auto ms = std::max<std::chrono::milliseconds::rep>(remaining.count(), 1);
-        timeval tv;
-        tv.tv_sec = static_cast<time_t>(ms / 1000);
-        tv.tv_usec = static_cast<suseconds_t>((ms % 1000) * 1000);
-        if (::setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) != 0) break;
+        const int ready = WaitReadable(s, static_cast<int>(std::min<std::chrono::milliseconds::rep>(
+                                              remaining.count(), 1000 * 60 * 60)));
+        if (ready == 0) break;
+        if (ready < 0) {
+#ifdef WIN32
+            break;
+#else
+            if (errno == EINTR) continue;
+            break;
+#endif
+        }
 
-        const ssize_t n = ::recv(s, buf, sizeof(buf), 0);
+        const int n = ::recv(s, buf, sizeof(buf), 0);
         if (n == 0) {
             peer_closed = true;
             break;
         }
         if (n < 0) {
-            // Interrupted reads retry against the remaining bound; any other error,
-            // including the receive timeout, ends the drain.
-            if (errno == EINTR) continue;
+#ifdef WIN32
+            if (::WSAGetLastError() == WSAEWOULDBLOCK) continue;
+#else
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+#endif
             break;
         }
     }
@@ -220,7 +256,10 @@ void DrainBeforeClose(SOCKET s, std::chrono::milliseconds bound)
         linger lg;
         lg.l_onoff = 1;
         lg.l_linger = 0;
+#ifdef WIN32
+        ::setsockopt(s, SOL_SOCKET, SO_LINGER, reinterpret_cast<const char*>(&lg), sizeof(lg));
+#else
         ::setsockopt(s, SOL_SOCKET, SO_LINGER, &lg, sizeof(lg));
-    }
 #endif
+    }
 }

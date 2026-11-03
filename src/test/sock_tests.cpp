@@ -10,6 +10,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <thread>
 
 #ifndef WIN32
 #include <fcntl.h>
@@ -85,6 +86,18 @@ bool GetLinger(SOCKET s, linger& lg)
 #endif
 }
 
+void SetNonBlocking(SOCKET s)
+{
+#ifdef WIN32
+    u_long on = 1;
+    BOOST_REQUIRE(::ioctlsocket(s, FIONBIO, &on) == 0);
+#else
+    const int flags = ::fcntl(s, F_GETFL);
+    BOOST_REQUIRE(flags != -1);
+    BOOST_REQUIRE(::fcntl(s, F_SETFL, flags | O_NONBLOCK) == 0);
+#endif
+}
+
 } // namespace
 
 BOOST_AUTO_TEST_SUITE(sock_tests)
@@ -141,13 +154,57 @@ BOOST_AUTO_TEST_CASE(drain_bounded_when_peer_idle)
     const auto start = std::chrono::steady_clock::now();
     DrainBeforeClose(p.server->Get(), std::chrono::milliseconds{200});
     const auto elapsed = std::chrono::steady_clock::now() - start;
-    BOOST_CHECK(elapsed >= std::chrono::milliseconds{200});
+    // A small tolerance below the bound covers millisecond truncation of the remaining time.
+    BOOST_CHECK(elapsed >= std::chrono::milliseconds{190});
     BOOST_CHECK(elapsed <= std::chrono::seconds{2});
 
     linger lg;
     BOOST_REQUIRE(GetLinger(p.server->Get(), lg));
     BOOST_CHECK_EQUAL(lg.l_onoff, 1);
     BOOST_CHECK_EQUAL(lg.l_linger, 0);
+}
+
+// A non-blocking socket must be drained the same way as a blocking one, waiting up to the bound
+// while the peer is idle.
+BOOST_AUTO_TEST_CASE(drain_nonblocking_waits_when_peer_idle)
+{
+    Pair p = MakePair();
+    SetNonBlocking(p.server->Get());
+
+    const auto start = std::chrono::steady_clock::now();
+    DrainBeforeClose(p.server->Get(), std::chrono::milliseconds{200});
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    BOOST_CHECK(elapsed >= std::chrono::milliseconds{190});
+    BOOST_CHECK(elapsed <= std::chrono::seconds{2});
+
+    linger lg;
+    BOOST_REQUIRE(GetLinger(p.server->Get(), lg));
+    BOOST_CHECK_EQUAL(lg.l_onoff, 1);
+    BOOST_CHECK_EQUAL(lg.l_linger, 0);
+}
+
+// A peer that closes part way through the bound ends the drain promptly with no reset.
+BOOST_AUTO_TEST_CASE(drain_nonblocking_returns_when_peer_closes)
+{
+    Pair p = MakePair();
+    SetNonBlocking(p.server->Get());
+
+    std::thread closer([&p] {
+        std::this_thread::sleep_for(std::chrono::milliseconds{150});
+        p.client->Reset();
+    });
+
+    const auto start = std::chrono::steady_clock::now();
+    DrainBeforeClose(p.server->Get(), std::chrono::milliseconds{5000});
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    closer.join();
+
+    BOOST_CHECK(elapsed >= std::chrono::milliseconds{100});
+    BOOST_CHECK(elapsed < std::chrono::seconds{2});
+
+    linger lg;
+    BOOST_REQUIRE(GetLinger(p.server->Get(), lg));
+    BOOST_CHECK_EQUAL(lg.l_onoff, 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
