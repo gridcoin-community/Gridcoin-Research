@@ -1597,6 +1597,73 @@ BOOST_FIXTURE_TEST_CASE(renewal_access_advertises_a_new_beacon_from_the_key_pool
     BOOST_CHECK_EQUAL(pwalletMain->mapAddressBook.count(CTxDestination(beacon_id)), 1U);
 }
 
+//! The job's new beacon keeps its pool key only once the advertisement is
+//! sent. A send that fails after the key was drawn returns it to the pool,
+//! unlabelled, so a run that fails every hour does not empty the pool.
+//!
+//! The send fails after the transaction is built, at a mandatory sidestake
+//! waiting in the pool, as any contract send does.
+BOOST_FIXTURE_TEST_CASE(renewal_access_returns_the_pool_key_when_the_new_beacon_fails, grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    const PoolCleared pool;
+    MineUntilReadyToAdvertise();
+
+    const std::string cpid_hex = "0e130e130e130e130e130e130e130e13";
+    const GRC::Cpid cpid = GRC::Cpid::Parse(cpid_hex);
+
+    ForcedResearcher forced(cpid_hex);
+
+    const auto key_count = [] {
+        std::set<CKeyID> keys;
+        pwalletMain->GetKeys(keys);
+        return keys.size();
+    };
+
+    unsigned int pool_before = 0;
+    size_t keys_before = 0;
+    size_t labels_before = 0;
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->TopUpKeyPool(10));
+        pool_before = pwalletMain->GetKeyPoolSize();
+        keys_before = key_count();
+        labels_before = pwalletMain->mapAddressBook.size();
+    }
+    BOOST_REQUIRE(pool_before > 0);
+
+    // A pool below its target, so that a top-up would show as keys created.
+    const grc_test::ForcedArgGuard pool_target("keypool", strprintf("%u", pool_before + 5));
+
+    // A mandatory sidestake transaction waiting in the pool. Unvalidated: only
+    // its presence matters.
+    {
+        CMutableTransaction mtx;
+        mtx.vin.resize(1);
+        mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+        mtx.vContracts.push_back(GRC::MakeContract<GRC::SideStakePayload>(
+            GRC::ContractAction::ADD, GRC::SideStakePayload()));
+        const CTransaction sidestake(mtx);
+
+        LOCK(cs_main);
+        mempool.addUnchecked(sidestake.GetHash(), CTxMemPoolEntry(
+            sidestake, /*fee=*/0, /*time=*/0, /*height=*/0,
+            ::GetSerializeSize(sidestake, SER_NETWORK, PROTOCOL_VERSION)));
+    }
+    BOOST_REQUIRE(mempool.HasMandatorySidestake());
+
+    const StakingKeyAccess renewal_access = StakingKeyAccessTestPeer::Make();
+    BOOST_CHECK(GRC::Researcher::Get()->AdvertiseBeacon(/*force=*/false, &renewal_access).Error()
+                == GRC::BeaconError::TX_FAILED);
+
+    BOOST_CHECK(PooledBeacons(cpid).empty());
+
+    LOCK(pwalletMain->cs_wallet);
+    BOOST_CHECK_EQUAL(pwalletMain->GetKeyPoolSize(), pool_before);
+    BOOST_CHECK_EQUAL(key_count(), keys_before);
+    BOOST_CHECK_EQUAL(pwalletMain->mapAddressBook.size(), labels_before);
+}
+
 //! With no key in the pool, the job's new beacon is refused with a logged
 //! reason, and nothing is left behind: no key, no label, no transaction, and
 //! this wallet's stale advertisement for the CPID is not retired.

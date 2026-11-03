@@ -726,10 +726,6 @@ public:
     void KeepKey(int64_t nIndex);
     void ReturnKey(int64_t nIndex);
     bool GetKeyFromPool(CPubKey &key, bool fAllowReuse=true);
-    //! Take the oldest key in the key pool as the pool stands: no top-up first,
-    //! and no new key when it is empty, so no key is created. False when the
-    //! pool is empty.
-    bool TakeKeyFromPool(CPubKey& result);
     int64_t GetOldestKeyPoolTime();
     void GetAllReserveKeys(std::set<CKeyID>& setAddress) const;
 
@@ -1035,6 +1031,11 @@ public:
 
     void ReturnKey();
     bool GetReservedKey(CPubKey &pubkey);
+    //! Reserve the oldest key in the key pool as the pool stands: no top-up
+    //! first, and no default key when the pool is empty, so no key is created.
+    //! False when the pool is empty. KeepKey() keeps it; ReturnKey(), or the end
+    //! of this object, puts it back in the pool.
+    bool GetReservedKeyWithoutTopUp(CPubKey& pubkey);
     void KeepKey();
 };
 

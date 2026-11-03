@@ -5168,25 +5168,6 @@ bool CWallet::GetKeyFromPool(CPubKey& result, bool fAllowReuse)
     return true;
 }
 
-bool CWallet::TakeKeyFromPool(CPubKey& result)
-{
-    int64_t nIndex = 0;
-    CKeyPool keypool;
-
-    LOCK(cs_wallet);
-
-    ReserveKeyFromKeyPool(nIndex, keypool, /*top_up=*/false);
-
-    if (nIndex == -1) {
-        return false;
-    }
-
-    KeepKey(nIndex);
-    result = keypool.vchPubKey;
-
-    return true;
-}
-
 int64_t CWallet::GetOldestKeyPoolTime()
 {
     int64_t nIndex = 0;
@@ -5899,6 +5880,24 @@ bool CReserveKey::GetReservedKey(CPubKey& pubkey) EXCLUSIVE_LOCKS_REQUIRED(pwall
         }
     }
     assert(vchPubKey.IsValid());
+    pubkey = vchPubKey;
+    return true;
+}
+
+bool CReserveKey::GetReservedKeyWithoutTopUp(CPubKey& pubkey)
+{
+    if (nIndex == -1)
+    {
+        CKeyPool keypool;
+        pwallet->ReserveKeyFromKeyPool(nIndex, keypool, /*top_up=*/false);
+
+        if (nIndex == -1) {
+            return false;
+        }
+
+        vchPubKey = keypool.vchPubKey;
+    }
+
     pubkey = vchPubKey;
     return true;
 }

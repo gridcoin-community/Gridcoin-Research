@@ -381,16 +381,12 @@ struct OwnershipProof;
 //!
 //! \brief Generate a new beacon key pair.
 //!
-//! \param cpid           The participant's current primary CPID.
-//! \param renewal_access The automated renewal's access, or nullptr. With it
-//! the key is taken from the key pool as the pool stands, and none is created;
-//! without one in the pool this fails.
+//! \param cpid The participant's current primary CPID.
 //!
 //! \return A variant that contains the new public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult GenerateBeaconKey(const Cpid& cpid, const StakingKeyAccess* renewal_access = nullptr)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+AdvertiseBeaconResult GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Send a v3 beacon contract with an ownership proof.
@@ -755,9 +751,9 @@ public:
     //! RunRenewBeaconJob() makes. With it, a beacon due for renewal is renewed
     //! while the wallet is unlocked for staking only, in a fixed shape at the
     //! minimum fee; see CWallet::CreateTransaction(). With no beacon to renew,
-    //! a new one is advertised the same way, with its key taken from the key
-    //! pool as the pool stands; no key is created. A forced advertisement does
-    //! not use it. Every other caller, the advertisebeacon RPC and the GUI among
+    //! a new one is advertised the same way, with its key reserved from the key
+    //! pool as the pool stands and kept only once the advertisement is sent; no
+    //! key is created. A forced advertisement does not use it. Every other caller, the advertisebeacon RPC and the GUI among
     //! them, passes nullptr and is refused as locked on such a wallet.
     //!
     //! \return A variant that contains the new public key if successful or a
