@@ -46,6 +46,88 @@ std::vector<std::unique_ptr<CWalletTx>> wtxn;
 
 typedef set<pair<const CWalletTx*,unsigned int> > CoinSet;
 
+// The key pool's top-up thread, which walletpassphrase starts. Defined in
+// wallet/rpcwallet.cpp, which declares it for itself; no header carries it.
+extern void ThreadTopUpKeyPool(void* parg);
+
+namespace {
+// The mock BDB env backs every wallet file name with one shared in-memory database, so a case
+// that reloads a wallet sees every record any earlier case wrote (and an earlier case's vin-less
+// records make LoadWallet fail). This moves those records aside for the life of the scope and puts
+// them back afterwards, in both directions: the case's own records are deleted again before the
+// put-back. The restore-pin case pins the second direction.
+class MockWalletDbScope : private CDB
+{
+public:
+    explicit MockWalletDbScope(const std::string& file) : CDB(file, "cr+")
+    {
+        BOOST_REQUIRE(bitdb.IsMock());
+        BOOST_REQUIRE(pdb != nullptr);
+
+        BOOST_REQUIRE(Walk(m_saved));
+
+        // From the first del on, nothing below may throw.
+        bool all_deleted = true;
+        for (const CDBEnv::KeyValPair& kv : m_saved) {
+            if (Del(kv) != 0) all_deleted = false;
+        }
+
+        std::vector<CDBEnv::KeyValPair> left;
+        const bool walked = Walk(left);
+        m_isolated = all_deleted && walked && left.empty();
+    }
+
+    ~MockWalletDbScope()
+    {
+        std::vector<CDBEnv::KeyValPair> present;
+        if (!Walk(present)) BOOST_ERROR("MockWalletDbScope: cannot walk the database to restore it");
+        for (const CDBEnv::KeyValPair& kv : present) {
+            if (Del(kv) != 0) BOOST_ERROR("MockWalletDbScope: cannot delete a case record");
+        }
+        for (const CDBEnv::KeyValPair& kv : m_saved) {
+            Dbt k(const_cast<unsigned char*>(kv.first.data()), kv.first.size());
+            Dbt v(const_cast<unsigned char*>(kv.second.data()), kv.second.size());
+            if (pdb->put(nullptr, &k, &v, 0) != 0) BOOST_ERROR("MockWalletDbScope: cannot restore a record");
+        }
+    }
+
+    bool isolated() const { return m_isolated; }
+
+private:
+    // Reads every record; the cursor is closed before returning so the caller may del and put.
+    bool Walk(std::vector<CDBEnv::KeyValPair>& out)
+    {
+        out.clear();
+        Dbc* pcursor = GetCursor();
+        if (!pcursor) return false;
+        bool ok = true;
+        while (true) {
+            CDataStream ss_key(SER_DISK, CLIENT_VERSION);
+            CDataStream ss_value(SER_DISK, CLIENT_VERSION);
+            const int ret = ReadAtCursor(pcursor, ss_key, ss_value, DB_NEXT);
+            if (ret == DB_NOTFOUND) break;
+            if (ret != 0) {
+                ok = false;
+                break;
+            }
+            out.emplace_back(std::vector<unsigned char>{UCharCast(ss_key.data()), UCharCast(ss_key.data()) + ss_key.size()},
+                             std::vector<unsigned char>{UCharCast(ss_value.data()), UCharCast(ss_value.data()) + ss_value.size()});
+        }
+        pcursor->close();
+        return ok;
+    }
+
+    int Del(const CDBEnv::KeyValPair& kv)
+    {
+        Dbt k(const_cast<unsigned char*>(kv.first.data()), kv.first.size());
+        return pdb->del(nullptr, &k, 0);
+    }
+
+    std::vector<CDBEnv::KeyValPair> m_saved;
+    bool m_isolated{false};
+};
+} // namespace
+
 BOOST_AUTO_TEST_SUITE(wallet_tests)
 
 static CWallet wallet;
@@ -1762,6 +1844,393 @@ BOOST_AUTO_TEST_CASE(dumpprivkey_staking_only_unlock_is_refused_by_the_shared_ch
     locked.Lock();
     BOOST_REQUIRE(locked.Unlock(passphrase, UnlockScope::Full));
     BOOST_CHECK_EQUAL(dumpprivkey(params).get_str(), EncodeSecret(key));
+}
+
+//! \brief An encrypted HD wallet whose key pool lives in the mock database,
+//! left locked and swapped into pwalletMain for its life.
+//!
+//! The pool's target is pinned small, so that a top-up is quick and its size
+//! known. The wallet is file-backed, so its HD chain and key pool are written
+//! and read as on a node, except while it is being encrypted: EncryptWallet
+//! rewrites a file-backed wallet's file, and in the mock environment that
+//! writes a real file into the working directory. The mock environment backs
+//! every wallet file with one shared database, so the scope moves what is there
+//! aside first and puts it back afterwards.
+struct EncryptedHdKeyPoolWallet
+{
+    static inline const SecureString PASSPHRASE{"key-creation-test"};
+    static inline const std::string WALLET_FILE{"wallet_key_creation.dat"};
+    static constexpr unsigned int TARGET{5};
+
+    grc_test::ForcedArgGuard m_target{"keypool", strprintf("%u", TARGET)};
+    MockWalletDbScope m_db{WALLET_FILE};
+    CWallet wallet{WALLET_FILE};
+    grc_test::SwapMainWallet m_swap{&wallet};
+
+    EncryptedHdKeyPoolWallet()
+    {
+        BOOST_REQUIRE(m_db.isolated());
+
+        // A loose key, so that Unlock() has a crypted key to prove the
+        // passphrase on.
+        CKey loose;
+        loose.MakeNewKey(true);
+        {
+            LOCK(wallet.cs_wallet);
+            BOOST_REQUIRE(wallet.AddKey(loose));
+        }
+
+        BOOST_REQUIRE(wallet.SetHDMasterKey(wallet.GenerateNewHDMasterKey()));
+
+        // Encryption replaces the HD seed and refills the pool from the new one
+        // under its own full unlock.
+        wallet.fFileBacked = false;
+        const bool encrypted = wallet.EncryptWallet(PASSPHRASE);
+        wallet.fFileBacked = true;
+        BOOST_REQUIRE(encrypted);
+
+        wallet.Lock();
+        BOOST_REQUIRE(wallet.IsLocked());
+        BOOST_REQUIRE(wallet.IsHDEnabled());
+        BOOST_REQUIRE_EQUAL(PoolSize(), TARGET);
+    }
+
+    ~EncryptedHdKeyPoolWallet()
+    {
+        wallet.Lock();
+    }
+
+    EncryptedHdKeyPoolWallet(const EncryptedHdKeyPoolWallet&) = delete;
+    EncryptedHdKeyPoolWallet& operator=(const EncryptedHdKeyPoolWallet&) = delete;
+
+    void UnlockFor(UnlockScope scope)
+    {
+        wallet.Lock();
+        BOOST_REQUIRE(wallet.Unlock(PASSPHRASE, scope));
+        BOOST_REQUIRE(wallet.GetUnlockScope() == scope);
+    }
+
+    //! Empties the pool, as handing out every key in it would.
+    void DrainPool()
+    {
+        LOCK(wallet.cs_wallet);
+        for (const int64_t index : wallet.setKeyPool) {
+            wallet.KeepKey(index);
+        }
+        wallet.setKeyPool.clear();
+    }
+
+    unsigned int PoolSize()
+    {
+        LOCK(wallet.cs_wallet);
+        return wallet.GetKeyPoolSize();
+    }
+
+    size_t KeyCount() const
+    {
+        std::set<CKeyID> keys;
+        wallet.GetKeys(keys);
+        return keys.size();
+    }
+
+    //! How many keys the HD chain has derived.
+    uint32_t Derived()
+    {
+        LOCK(wallet.cs_wallet);
+        return wallet.GetHDChain().nExternalChainCounter;
+    }
+};
+
+//! Runs the top-up thread's body on a thread of its own, as walletpassphrase
+//! starts it, and reports whether an exception left it. In production that
+//! thread is detached, and an exception leaving it ends the process.
+static bool TopUpThreadLetsAnExceptionOut()
+{
+    bool escaped{false};
+
+    std::thread top_up([&escaped] {
+        try {
+            ThreadTopUpKeyPool(nullptr);
+        } catch (...) {
+            escaped = true;
+        }
+    });
+    top_up.join();
+
+    return escaped;
+}
+
+//! Only an unencrypted or fully unlocked wallet, or one unlocked for staking
+//! with a grant live on the asking thread, may create keys.
+BOOST_AUTO_TEST_CASE(can_create_keys_follows_the_unlock_scope)
+{
+    {
+        CWallet plain;
+        BOOST_CHECK(plain.CanCreateKeys());
+    }
+
+    grc_test::EncryptedWallet fx;
+    BOOST_CHECK(!fx.wallet.CanCreateKeys());
+
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    BOOST_CHECK(!fx.wallet.CanCreateKeys());
+
+    {
+        const ElevationGrant grant = ElevationGrantTestPeer::Make(fx.wallet);
+        BOOST_CHECK(fx.wallet.CanCreateKeys());
+
+        // Boost.Test assertions are not thread-safe, so the other thread only
+        // records what it saw.
+        bool other_thread_may{true};
+        std::thread other([&] { other_thread_may = fx.wallet.CanCreateKeys(); });
+        other.join();
+        BOOST_CHECK(!other_thread_may);
+    }
+
+    BOOST_CHECK(!fx.wallet.CanCreateKeys());
+
+    // A grant outliving the unlock leaves no master key to make a key with.
+    {
+        const ElevationGrant grant = ElevationGrantTestPeer::Make(fx.wallet);
+        fx.wallet.Lock();
+        BOOST_CHECK(!fx.wallet.CanCreateKeys());
+    }
+
+    fx.UnlockFor(UnlockScope::Full);
+    BOOST_CHECK(fx.wallet.CanCreateKeys());
+}
+
+//! A top-up under staking only derives nothing from the HD seed, which that
+//! scope withholds. It reports false, throws nothing, and leaves the wallet as
+//! it was.
+BOOST_AUTO_TEST_CASE(topup_skipped_under_staking_only)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.DrainPool();
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    const size_t keys_before = fx.KeyCount();
+    const uint32_t derived_before = fx.Derived();
+
+    bool topped_up{true};
+    BOOST_CHECK_NO_THROW(topped_up = fx.wallet.TopUpKeyPool());
+    BOOST_CHECK(!topped_up);
+
+    BOOST_CHECK_EQUAL(fx.PoolSize(), 0U);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+    BOOST_CHECK_EQUAL(fx.Derived(), derived_before);
+}
+
+//! The same wallet fully unlocked tops its pool up as before.
+BOOST_AUTO_TEST_CASE(topup_runs_under_full)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.DrainPool();
+    fx.UnlockFor(UnlockScope::Full);
+
+    const size_t keys_before = fx.KeyCount();
+    const uint32_t derived_before = fx.Derived();
+
+    BOOST_CHECK(fx.wallet.TopUpKeyPool());
+
+    const unsigned int pool = fx.PoolSize();
+    BOOST_CHECK_GE(pool, EncryptedHdKeyPoolWallet::TARGET);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before + pool);
+    BOOST_CHECK_EQUAL(fx.Derived(), derived_before + pool);
+}
+
+//! getwalletinfo and getinfo read the oldest pool key's time, which reserves
+//! a key and so used to top the pool up first. Under staking only with an empty
+//! pool they answer without creating a key or throwing.
+BOOST_AUTO_TEST_CASE(getwalletinfo_path_no_throw_under_staking_only)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.DrainPool();
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    const size_t keys_before = fx.KeyCount();
+
+    BOOST_CHECK_NO_THROW(fx.wallet.GetOldestKeyPoolTime());
+
+    UniValue info;
+    BOOST_CHECK_NO_THROW(info = getwalletinfo(UniValue(UniValue::VARR)));
+    BOOST_REQUIRE(info.isObject());
+    BOOST_CHECK_EQUAL(find_value(info, "keypoolsize").get_int(), 0);
+
+    BOOST_CHECK_EQUAL(fx.PoolSize(), 0U);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+}
+
+//! A draw from an empty pool under staking only fails cleanly at every entry
+//! that would otherwise make the key: no key, no exception.
+BOOST_AUTO_TEST_CASE(getkeyfrompool_empty_under_staking_only_returns_false)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.DrainPool();
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    const size_t keys_before = fx.KeyCount();
+
+    {
+        LOCK(fx.wallet.cs_wallet);
+        CPubKey key;
+
+        bool got{true};
+        BOOST_CHECK_NO_THROW(got = fx.wallet.GetKeyFromPool(key, /*fAllowReuse=*/false));
+        BOOST_CHECK(!got);
+
+        // Reuse allowed, but there is no default key to reuse.
+        got = true;
+        BOOST_CHECK_NO_THROW(got = fx.wallet.GetKeyFromPool(key, /*fAllowReuse=*/true));
+        BOOST_CHECK(!got);
+
+        // A send's change key is reserved the same way.
+        CReserveKey reserve(&fx.wallet);
+        got = true;
+        BOOST_CHECK_NO_THROW(got = reserve.GetReservedKey(key));
+        BOOST_CHECK(!got);
+    }
+
+    // getnewaddress reports that the pool ran out, as it does on a locked
+    // wallet, rather than failing on the key it could not make.
+    try {
+        getnewaddress(UniValue(UniValue::VARR));
+        BOOST_ERROR("getnewaddress returned a key from an empty pool under staking only");
+    } catch (const UniValue& err) {
+        BOOST_CHECK_EQUAL(find_value(err, "code").get_int(), RPC_WALLET_KEYPOOL_RAN_OUT);
+    } catch (const std::exception& e) {
+        BOOST_ERROR(std::string("getnewaddress threw: ") + e.what());
+    }
+
+    BOOST_CHECK_EQUAL(fx.PoolSize(), 0U);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+}
+
+//! Under staking only a key the pool already holds is still handed out: that
+//! creates nothing. The pool is below its target, so a draw that topped it up
+//! first would show as keys derived.
+BOOST_AUTO_TEST_CASE(staking_only_draws_from_the_pool_without_creating_keys)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    // A top-up fills the pool to one past its target.
+    const unsigned int pool_before = fx.PoolSize();
+    BOOST_REQUIRE(pool_before > 0);
+    BOOST_REQUIRE_LT(pool_before, EncryptedHdKeyPoolWallet::TARGET + 1);
+
+    const size_t keys_before = fx.KeyCount();
+    const uint32_t derived_before = fx.Derived();
+
+    {
+        LOCK(fx.wallet.cs_wallet);
+        CPubKey drawn;
+        bool got{false};
+        BOOST_CHECK_NO_THROW(got = fx.wallet.GetKeyFromPool(drawn, /*fAllowReuse=*/false));
+        BOOST_REQUIRE(got);
+        BOOST_CHECK(fx.wallet.HaveKey(drawn.GetID()));
+    }
+
+    BOOST_CHECK_NO_THROW(fx.wallet.GetOldestKeyPoolTime());
+
+    BOOST_CHECK_EQUAL(fx.PoolSize(), pool_before - 1);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+    BOOST_CHECK_EQUAL(fx.Derived(), derived_before);
+}
+
+//! A grant on this thread is what lets an operation authorised for it create
+//! keys on a wallet unlocked for staking only. The wallet's scope does not
+//! change, and once the grant ends nothing more is made.
+BOOST_AUTO_TEST_CASE(a_grant_lets_the_pool_top_up_under_staking_only)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.DrainPool();
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    {
+        const ElevationGrant grant = ElevationGrantTestPeer::Make(fx.wallet);
+        BOOST_CHECK(fx.wallet.TopUpKeyPool());
+        BOOST_CHECK_GE(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET);
+    }
+
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+
+    fx.DrainPool();
+    const size_t keys_before = fx.KeyCount();
+
+    bool topped_up{true};
+    BOOST_CHECK_NO_THROW(topped_up = fx.wallet.TopUpKeyPool());
+    BOOST_CHECK(!topped_up);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+}
+
+//! The thread walletpassphrase starts to top the pool up lets no exception
+//! out. After a staking-only unlock it makes nothing and ends cleanly. Fully
+//! unlocked, a wallet whose HD seed is missing cannot make a key and the top-up
+//! throws; the thread catches and logs that.
+BOOST_AUTO_TEST_CASE(the_top_up_thread_lets_no_exception_out)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.DrainPool();
+
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    BOOST_CHECK(!TopUpThreadLetsAnExceptionOut());
+    BOOST_CHECK_EQUAL(fx.PoolSize(), 0U);
+
+    fx.UnlockFor(UnlockScope::Full);
+    {
+        LOCK(fx.wallet.cs_wallet);
+
+        CKey absent;
+        absent.MakeNewKey(true);
+        CHDChain orphaned = fx.wallet.GetHDChain();
+        orphaned.masterKeyID = absent.GetPubKey().GetID();
+        BOOST_REQUIRE(fx.wallet.SetHDChain(orphaned, /*memonly=*/true));
+    }
+    BOOST_CHECK_THROW(fx.wallet.TopUpKeyPool(), std::runtime_error);
+
+    BOOST_CHECK(!TopUpThreadLetsAnExceptionOut());
+}
+
+//! While the node syncs, a payment to the default key rotates it to a key from
+//! the pool. Under staking only with an empty pool there is no key to rotate to,
+//! and the transaction is recorded with the default key kept, not failed on the
+//! key that could not be made.
+BOOST_AUTO_TEST_CASE(a_paid_default_key_is_kept_under_staking_only_with_an_empty_pool)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.UnlockFor(UnlockScope::Full);
+
+    CPubKey default_key;
+    {
+        LOCK(fx.wallet.cs_wallet);
+        BOOST_REQUIRE(fx.wallet.GetKeyFromPool(default_key, /*fAllowReuse=*/false));
+        BOOST_REQUIRE(fx.wallet.SetDefaultKey(default_key));
+    }
+
+    fx.DrainPool();
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    const size_t keys_before = fx.KeyCount();
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(GetRandHash(), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = COIN;
+    mtx.vout[0].scriptPubKey.SetDestination(CTxDestination(default_key.GetID()));
+    const CTransaction tx(mtx);
+
+    {
+        LOCK2(cs_main, fx.wallet.cs_wallet);
+
+        bool synced{false};
+        BOOST_CHECK_NO_THROW(synced = fx.wallet.SyncTransaction(MakeTransactionRef(tx), TxStateInMempool{}));
+        BOOST_CHECK(synced);
+        BOOST_CHECK(fx.wallet.mapWallet.count(tx.GetHash()));
+        BOOST_CHECK(fx.wallet.vchDefaultKey == default_key);
+    }
+
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
 }
 
 //! QueueRelay is the decision half of the old RelayWalletTransaction, split out
@@ -4048,84 +4517,6 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_cascades_to_children)
 // mapTxSpends is rebuilt from what the wallet loads, so the abandon cascade
 // reaches descendants after a restart
 // ---------------------------------------------------------------------------
-
-namespace {
-// The mock BDB env backs every wallet file name with one shared in-memory database, so a case
-// that reloads a wallet sees every record any earlier case wrote (and an earlier case's vin-less
-// records make LoadWallet fail). This moves those records aside for the life of the scope and puts
-// them back afterwards, in both directions: the case's own records are deleted again before the
-// put-back. The restore-pin case pins the second direction.
-class MockWalletDbScope : private CDB
-{
-public:
-    explicit MockWalletDbScope(const std::string& file) : CDB(file, "cr+")
-    {
-        BOOST_REQUIRE(bitdb.IsMock());
-        BOOST_REQUIRE(pdb != nullptr);
-
-        BOOST_REQUIRE(Walk(m_saved));
-
-        // From the first del on, nothing below may throw.
-        bool all_deleted = true;
-        for (const CDBEnv::KeyValPair& kv : m_saved) {
-            if (Del(kv) != 0) all_deleted = false;
-        }
-
-        std::vector<CDBEnv::KeyValPair> left;
-        const bool walked = Walk(left);
-        m_isolated = all_deleted && walked && left.empty();
-    }
-
-    ~MockWalletDbScope()
-    {
-        std::vector<CDBEnv::KeyValPair> present;
-        if (!Walk(present)) BOOST_ERROR("MockWalletDbScope: cannot walk the database to restore it");
-        for (const CDBEnv::KeyValPair& kv : present) {
-            if (Del(kv) != 0) BOOST_ERROR("MockWalletDbScope: cannot delete a case record");
-        }
-        for (const CDBEnv::KeyValPair& kv : m_saved) {
-            Dbt k(const_cast<unsigned char*>(kv.first.data()), kv.first.size());
-            Dbt v(const_cast<unsigned char*>(kv.second.data()), kv.second.size());
-            if (pdb->put(nullptr, &k, &v, 0) != 0) BOOST_ERROR("MockWalletDbScope: cannot restore a record");
-        }
-    }
-
-    bool isolated() const { return m_isolated; }
-
-private:
-    // Reads every record; the cursor is closed before returning so the caller may del and put.
-    bool Walk(std::vector<CDBEnv::KeyValPair>& out)
-    {
-        out.clear();
-        Dbc* pcursor = GetCursor();
-        if (!pcursor) return false;
-        bool ok = true;
-        while (true) {
-            CDataStream ss_key(SER_DISK, CLIENT_VERSION);
-            CDataStream ss_value(SER_DISK, CLIENT_VERSION);
-            const int ret = ReadAtCursor(pcursor, ss_key, ss_value, DB_NEXT);
-            if (ret == DB_NOTFOUND) break;
-            if (ret != 0) {
-                ok = false;
-                break;
-            }
-            out.emplace_back(std::vector<unsigned char>{UCharCast(ss_key.data()), UCharCast(ss_key.data()) + ss_key.size()},
-                             std::vector<unsigned char>{UCharCast(ss_value.data()), UCharCast(ss_value.data()) + ss_value.size()});
-        }
-        pcursor->close();
-        return ok;
-    }
-
-    int Del(const CDBEnv::KeyValPair& kv)
-    {
-        Dbt k(const_cast<unsigned char*>(kv.first.data()), kv.first.size());
-        return pdb->del(nullptr, &k, 0);
-    }
-
-    std::vector<CDBEnv::KeyValPair> m_saved;
-    bool m_isolated{false};
-};
-} // namespace
 
 // Passes on the unfixed build too: it pins the guard, not the production change.
 BOOST_AUTO_TEST_CASE(mock_wallet_db_scope_restores_prior_records)

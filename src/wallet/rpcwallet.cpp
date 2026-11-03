@@ -308,7 +308,7 @@ UniValue getnewpubkey(const UniValue& params)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    if (!pwalletMain->IsLocked())
+    if (pwalletMain->CanCreateKeys())
         pwalletMain->TopUpKeyPool();
 
     // Generate a new key that is added to wallet
@@ -348,7 +348,7 @@ UniValue getnewaddress(const UniValue& params)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    if (!pwalletMain->IsLocked())
+    if (pwalletMain->CanCreateKeys())
         pwalletMain->TopUpKeyPool();
 
     // Generate a new key that is added to wallet
@@ -3408,7 +3408,16 @@ void ThreadTopUpKeyPool(void* parg)
     // Make this thread recognisable as the key-topping-up thread
     RenameThread("grc-key-top");
 
-    pwalletMain->TopUpKeyPool();
+    // The thread is detached, and an exception leaving it would end the
+    // process. After an unlock for staking only the top-up makes no key and
+    // returns false, which is not an error. This catch is for a wallet that may
+    // make keys and fails to, such as one whose HD seed is missing, or one its
+    // relock locks part way through the top-up.
+    try {
+        pwalletMain->TopUpKeyPool();
+    } catch (const std::exception& e) {
+        LogPrintf("ERROR: %s: the key pool was not topped up: %s", __func__, e.what());
+    }
 }
 
 

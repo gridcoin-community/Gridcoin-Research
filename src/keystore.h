@@ -136,9 +136,10 @@ class CapabilityScope;
 //! store is unlocked for staking only.
 //!
 //! Under StakingOnly the general routes to key material -- GetKey(),
-//! AddKeyPubKey() and DecryptSecretWithMasterKey() -- refuse unless a grant for
-//! that store is live on the calling thread. The grant changes nothing else: the
-//! store's scope stays StakingOnly, and every other thread is still refused.
+//! AddKeyPubKey(), EncryptSecretWithMasterKey() and
+//! DecryptSecretWithMasterKey() -- refuse unless a grant for that store is live
+//! on the calling thread. The grant changes nothing else: the store's scope
+//! stays StakingOnly, and every other thread is still refused.
 //!
 //! RAII. It is held for one operation and ends with the scope that holds it.
 //! Grants on one thread nest: the innermost one, when it ends, restores the
@@ -331,8 +332,9 @@ protected:
     //! phrase blob) under the store's keying material. The store must be
     //! crypted and unlocked. The IV must be deterministic and unique to the
     //! secret, mirroring the per-key pubkey-hash IV used for private keys.
-    //! Decryption is general access to a secret, so like GetKey() it refuses
-    //! under StakingOnly unless a grant for this store is live on the thread.
+    //! Encryption writes key material, as AddKeyPubKey() does, and decryption
+    //! is general access to a secret, as GetKey() is, so both refuse under
+    //! StakingOnly unless a grant for this store is live on the thread.
     bool EncryptSecretWithMasterKey(const CKeyingMaterial& plaintext, const uint256& iv,
                                     std::vector<unsigned char>& ciphertext_out) const;
     bool DecryptSecretWithMasterKey(const std::vector<unsigned char>& ciphertext, const uint256& iv,

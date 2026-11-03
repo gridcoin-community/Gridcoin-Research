@@ -288,6 +288,48 @@ BOOST_AUTO_TEST_CASE(secret_decrypt_refused_under_staking_only)
     BOOST_CHECK(granted == blob);
 }
 
+BOOST_AUTO_TEST_CASE(secret_encrypt_refused_under_staking_only)
+{
+    EncryptedWallet fx;
+
+    CSeedPhraseData data;
+    data.vchBlob.assign(GRC::Mnemonics::ENCIPHERED_LENGTH, 0x24);
+    data.masterKeyID = fx.id;
+    data.nBirthday = GRC::Mnemonics::BIRTHDAY_EPOCH;
+
+    // Storing the blob encrypts it under the master key, which writes key
+    // material. A staking-only unlock withholds that, and the wallet is left
+    // without a record.
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    BOOST_CHECK(!fx.wallet.SetSeedPhraseData(data));
+    {
+        LOCK(fx.wallet.cs_wallet);
+        BOOST_CHECK(!fx.wallet.HasSeedPhrase());
+    }
+
+    // A grant on this thread lifts the refusal.
+    {
+        const ElevationGrant grant = ElevationGrantTestPeer::Make(fx.wallet);
+        BOOST_CHECK(fx.wallet.SetSeedPhraseData(data));
+
+        LOCK(fx.wallet.cs_wallet);
+        BOOST_CHECK(fx.wallet.HasSeedPhrase());
+        BOOST_CHECK(fx.wallet.SeedPhraseBlobCrypted());
+    }
+
+    // So does a full unlock. A different blob, so that reading it back shows
+    // this write landed.
+    CSeedPhraseData replacement = data;
+    replacement.vchBlob.assign(GRC::Mnemonics::ENCIPHERED_LENGTH, 0x25);
+
+    fx.UnlockFor(UnlockScope::Full);
+    BOOST_CHECK(fx.wallet.SetSeedPhraseData(replacement));
+
+    CKeyingMaterial blob;
+    BOOST_REQUIRE(fx.wallet.GetSeedPhraseBlob(blob));
+    BOOST_CHECK(std::equal(blob.begin(), blob.end(), replacement.vchBlob.begin(), replacement.vchBlob.end()));
+}
+
 BOOST_AUTO_TEST_CASE(add_key_refused_under_staking_only)
 {
     EncryptedWallet fx;

@@ -355,6 +355,19 @@ public:
         return GetUnlockScope() == UnlockScope::StakingOnly;
     }
 
+    //! \brief May a key be created on the calling thread?
+    //!
+    //! A new key is derived from the HD seed or made fresh and written to the
+    //! store, and an unlock for staking only withholds both. True when the
+    //! wallet is unencrypted or fully unlocked, or unlocked for staking only
+    //! with an ElevationGrant for it live on this thread. False when it is
+    //! locked, grant or not: there is no master key to make a key with.
+    //!
+    //! The key pool is topped up, and a key made when the pool is empty, only
+    //! while this holds. Drawing a key the pool already holds creates nothing,
+    //! and is allowed whatever the scope.
+    bool CanCreateKeys() const;
+
     //! \brief Unlock with an explicit scope and an optional duration.
     //!
     //! \p relock_after, when set, is how long this unlock lasts. The deadline

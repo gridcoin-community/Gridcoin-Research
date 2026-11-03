@@ -434,6 +434,11 @@ CKey CWallet::MasterPrivateKey(int height) const
 CPubKey CWallet::GenerateNewKey() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
+
+    // Every caller asks CanCreateKeys() first and fails cleanly when it is
+    // false, which is the case while the wallet is locked or unlocked for
+    // staking only. The throws below are for a wallet that may create keys and
+    // still cannot, such as one whose HD seed is missing.
     bool fCompressed = CanSupportFeature(wallet::FEATURE_COMPRPUBKEY); // default to compressed public keys if we want 0.6.0 wallets
 
     CKey secret;
@@ -773,6 +778,21 @@ bool CWallet::RestrictToStakingOnly()
     LOCK(cs_wallet);
 
     return CCryptoKeyStore::RestrictToStakingOnly();
+}
+
+bool CWallet::CanCreateKeys() const
+{
+    // One read of the scope. An unencrypted wallet reads Full.
+    switch (GetUnlockScope()) {
+    case UnlockScope::Locked:
+        return false;
+    case UnlockScope::StakingOnly:
+        return ElevationGrant::IsActiveFor(this);
+    case UnlockScope::Full:
+        return true;
+    }
+
+    return false;
 }
 
 bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase)
@@ -5035,7 +5055,9 @@ bool CWallet::NewKeyPool()
             walletdb.ErasePool(nIndex);
         setKeyPool.clear();
 
-        if (IsLocked())
+        // The old pool's keys are retired in any scope. New ones are made only
+        // where keys may be created.
+        if (!CanCreateKeys())
             return false;
 
         unsigned int default_size = IsHDEnabled() ? DEFAULT_KEYPOOL_SIZE : DEFAULT_KEYPOOL_SIZE_PRE_HD;
@@ -5056,8 +5078,15 @@ bool CWallet::TopUpKeyPool(unsigned int nSize)
     {
         LOCK(cs_wallet);
 
-        if (IsLocked())
+        // A locked wallet has no master key to make a key with, and one
+        // unlocked for staking only withholds the HD seed and the key writer.
+        // The pool is topped up again once keys may be created.
+        if (!CanCreateKeys()) {
+            if (IsUnlockedForStakingOnly()) {
+                LogPrint(BCLog::LogFlags::WALLETDB, "%s: skipped, wallet unlocked for staking only", __func__);
+            }
             return false;
+        }
 
         CWalletDB walletdb(strWalletFile);
 
@@ -5091,7 +5120,9 @@ void CWallet::ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool, const bo
     {
         LOCK(cs_wallet);
 
-        if (top_up && !IsLocked())
+        // Taking a key the pool holds creates nothing, so it goes ahead in any
+        // scope. Topping the pool up first does only where keys may be created.
+        if (top_up && CanCreateKeys())
             TopUpKeyPool();
 
         // Get the oldest key
@@ -5162,7 +5193,13 @@ bool CWallet::GetKeyFromPool(CPubKey& result, bool fAllowReuse)
                 result = vchDefaultKey;
                 return true;
             }
-            if (IsLocked()) return false;
+            if (!CanCreateKeys()) {
+                if (IsUnlockedForStakingOnly()) {
+                    LogPrintf("WARNING: %s: the key pool is empty, and no key can be made while the wallet "
+                              "is unlocked for staking only. A full unlock refills the pool.", __func__);
+                }
+                return false;
+            }
             result = GenerateNewKey();
             return true;
         }
@@ -5176,6 +5213,9 @@ int64_t CWallet::GetOldestKeyPoolTime()
 {
     int64_t nIndex = 0;
     CKeyPool keypool;
+
+    // getinfo and getwalletinfo read this. The reservation tops the pool up
+    // only where keys may be created, so under staking only they create none.
     ReserveKeyFromKeyPool(nIndex, keypool);
     if (nIndex == -1)
         return  GetAdjustedTime();

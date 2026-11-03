@@ -441,6 +441,11 @@ bool CCryptoKeyStore::EncryptSecretWithMasterKey(const CKeyingMaterial& plaintex
         return false;
     }
 
+    if (RefusedForStakingOnly()) {
+        LogPrint(BCLog::LogFlags::WALLETDB, "%s: refused, wallet unlocked for staking only", __func__);
+        return false;
+    }
+
     return EncryptSecret(vMasterKey, plaintext, iv, ciphertext_out);
 }
 
