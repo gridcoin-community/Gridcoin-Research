@@ -585,6 +585,25 @@ refuses as well.) Run the client inside the container
 so on stderr. Not recommended: what the client sends, credentials included, then goes to whatever
 program holds the RPC address.
 
+### What protects the core's memory
+
+Linux: the core marks itself non-dumpable as the first statement of `main`, so other programs of the
+same user cannot attach a debugger, read `/proc/<pid>/mem`, `environ` or `fd`, or take its file
+descriptors. The service units set `LimitCORE=0` (packaging, P3); for a core you start by hand run
+`ulimit -c 0` first. On hosts with Yama `ptrace_scope=0` (Debian's default) the packages install the
+daemon execute-only (0711), so it is non-dumpable from `execve`; a hand-started core from a readable
+binary has a window of microseconds before that first statement. The core also refuses to start with a
+tracer attached unless `-debugallowtracer` is given (see `doc/developer-notes.md`), and that option makes
+the process dumpable again.
+
+Passphrases move into `SecureString` at the earliest point, and the copies the RPC server, the CLI and
+the GUI make are cleansed after use, but the HTTP path's stream buffers and JSON parser internals are
+not. The protection therefore rests on non-dumpability and disabled core dumps, not on scrubbing.
+
+Windows: a process running as you can read the memory of any other process running as you, the
+monolithic wallet's included (see section 2 of `doc/multiprocess_design.md`). macOS: the hardened
+runtime (the macOS section, P5).
+
 ## Troubleshooting
 
 - **Autounlock unit fails with `status=243/CREDENTIALS` and the journal shows

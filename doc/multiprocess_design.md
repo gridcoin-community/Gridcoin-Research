@@ -209,8 +209,11 @@ schema-diff lint against the previous release tag.
   refused connection means a stale path left by a crash, which is unlinked and
   rebound; a successful connection means a live listener, and the node refuses to
   start rather than displace it. A live socket is never unlinked.
-- Wallet passphrase crosses as bytes zeroed on both sides after the call; unlock is
-  always time-bounded.
+- A wallet passphrase crosses the socket as bytes in a `Data` field. The node scrubs the
+  bytes it receives and holds the passphrase only in a `SecureString` for the call; the
+  GUI's outgoing message buffer is freed without scrubbing, because libmultiprocess has no
+  post-send hook. Leftover copies are kept from other programs by non-dumpability and
+  disabled core dumps, not by scrubbing. Unlock is always time-bounded.
 
 The connect-time sequence, in order (steps 1–7 add ~5–10 ms to startup):
 

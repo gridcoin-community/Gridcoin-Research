@@ -12,6 +12,7 @@ Developer Notes
       - [Generating Documentation](#generating-documentation)
     - [Development tips and tricks](#development-tips-and-tricks)
         - [Compiling for debugging](#compiling-for-debugging)
+        - [Running the node under a debugger](#running-the-node-under-a-debugger)
         - [Compiling for gprof profiling](#compiling-for-gprof-profiling)
         - [`debug.log`](#debuglog)
         - [Testnet mode](#testnet-mode)
@@ -276,6 +277,23 @@ cmake --build build -j $(nproc)
 
 Note: The default build type `RelWithDebInfo` provides debug symbols with
 optimizations enabled, which is sufficient for most debugging with `gdb`.
+
+### Running the node under a debugger
+
+On Linux the node (`gridcoinresearchd`) and the GUI (`gridcoinresearch`) mark themselves non-dumpable as
+the first thing `main` does, so other programs of the same user cannot attach a debugger to them or read
+their memory, and no core dump is written. For the same reason each refuses to start when a debugger or
+tracer is already attached (`TracerPid` in `/proc/self/status` is not 0).
+
+To run under `gdb` or `strace`, pass `-debugallowtracer` on the command line:
+
+```shell
+gdb --args build/bin/gridcoinresearchd -regtest -datadir=<scratch> -debugallowtracer
+```
+
+The option lets the process start under a tracer and makes it dumpable again, which a tracer needs to
+read the process's memory after the first non-dumpable call. The process logs a warning at startup.
+Never use it with a wallet you care about.
 
 ### Compiling for gprof profiling
 

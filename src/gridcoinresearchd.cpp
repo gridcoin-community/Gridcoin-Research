@@ -33,6 +33,7 @@
 #include "ipc/serve_init.h"
 #include "wallet/wallet.h" // pwalletMain / CWallet::GetWalletUuid for the identity token
 #include <atomic>
+#include <optional>
 #include <memory>
 #endif
 
@@ -237,6 +238,7 @@ bool AppInit(int argc, char* argv[])
         gArgs.SoftSetBoolArg("-server", true);
         // Initialize logging as early as possible.
         InitLogging();
+        LogNonDumpableStatus();
 
         // Best-effort in-process privilege hardening (Linux): NO_NEW_PRIVS +
         // capability-bounding-set drop, inherited across the daemonizing fork
@@ -301,6 +303,24 @@ bool AppInit(int argc, char* argv[])
 #else
             return InitError("-daemon is not supported on this operating system\n");
 #endif // HAVE_DECL_FORK
+        }
+
+        // Refuse to run under a debugger or tracer unless the developer override is set. Done here, after the
+        // command line client form has returned and the daemonizing fork, so it sees the process that will run.
+        {
+            const std::optional<int> tracer_pid = ReadOwnTracerPid();
+            switch (DecideTracer(tracer_pid, gArgs.GetBoolArg("-debugallowtracer", false))) {
+            case TracerVerdict::Refuse:
+                return InitError(strprintf("A debugger or tracer (pid %d) is attached to this process; refusing to "
+                                           "start. See doc/developer-notes.md if you are debugging.\n",
+                                           *tracer_pid));
+            case TracerVerdict::StartDumpableForDebugging:
+                SetProcessDumpableForDebugging();
+                LogPrintf("WARNING: -debugallowtracer is set: this process is dumpable and may be traced");
+                break;
+            case TracerVerdict::Start:
+                break;
+            }
         }
 
         fRet = AppInit2(threads);
@@ -431,6 +451,8 @@ bool AppInit(int argc, char* argv[])
 extern void noui_connect();
 int main(int argc, char* argv[])
 {
+    SetProcessNonDumpable();
+
     // Before anything can create a file: debug.log, the read-write settings file
     // and the block subdirectories are all created without an explicit mode, so
     // without this they inherit a default desktop umask of 022 and land

@@ -44,6 +44,7 @@
 #include "txdb.h"
 #include "util.h"
 #include "util/dir_permissions.h"
+#include "util/proc_hardening.h"
 #include "util/strencodings.h"
 #include "util/threadnames.h"
 #include "winshutdownmonitor.h"
@@ -55,6 +56,7 @@
 #include "decoration.h"
 
 #include <atomic>
+#include <optional>
 // Not inside the WIN32 guard below: the teardown join uses QThreadPool on every
 // platform, and nothing else on this file's include path pulls it in.
 #include <QThreadPool>
@@ -736,6 +738,8 @@ static void JoinGuiArchiveThread()
 #ifndef BITCOIN_QT_TEST
 int main(int argc, char *argv[])
 {
+    SetProcessNonDumpable();
+
 #ifdef WIN32
     util::WinCmdLineArgs winArgs;
     std::tie(argc, argv) = winArgs.get();
@@ -815,6 +819,28 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    // Refuse to run under a debugger or tracer unless the developer override is set. The dialog is the earliest
+    // place this can be shown. The override warning is logged once logging is up, below.
+    bool debug_tracer_override = false;
+    {
+        const std::optional<int> tracer_pid = ReadOwnTracerPid();
+        switch (DecideTracer(tracer_pid, gArgs.GetBoolArg("-debugallowtracer", false))) {
+        case TracerVerdict::Refuse: {
+            const std::string msg = strprintf("A debugger or tracer (pid %d) is attached to this process; refusing "
+                                              "to start. See doc/developer-notes.md if you are debugging.",
+                                              *tracer_pid);
+            tfm::format(std::cerr, "%s\n", msg.c_str());
+            QMessageBox::critical(nullptr, PACKAGE_NAME, QString::fromStdString(msg));
+            return EXIT_FAILURE;
+        }
+        case TracerVerdict::StartDumpableForDebugging:
+            SetProcessDumpableForDebugging();
+            debug_tracer_override = true;
+            break;
+        case TracerVerdict::Start:
+            break;
+        }
+    }
 
     // Show help message immediately after parsing command-line options (for "-lang") and setting locale,
     // but before showing splash screen.
@@ -1072,6 +1098,10 @@ int main(int argc, char *argv[])
 
     // Initialize logging as early as possible.
     InitLogging();
+    LogNonDumpableStatus();
+    if (debug_tracer_override) {
+        LogPrintf("WARNING: -debugallowtracer is set: this process is dumpable and may be traced");
+    }
 
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);

@@ -699,6 +699,9 @@ void SetupServerArgs()
                                             "(e.g. via a setuid binary). Best-effort defence-in-depth; ignored on "
                                             "other platforms (default: %u)", DEFAULT_NO_NEW_PRIVS),
                    ArgsManager::ALLOW_BOOL, OptionsCategory::OPTIONS);
+    argsman.AddArg("-debugallowtracer", "Developers only: start under a debugger or tracer and leave the process "
+                   "dumpable so the debugger can read it. Never use with a wallet you care about.",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-wallet=<dir>", "Specify wallet file (within data directory)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-dbcache=<n>", strprintf("Set database cache size in megabytes (%d to %d, default: %d)",

@@ -762,8 +762,9 @@ type/status rendering is the client's job (only locale-free data crosses).
   gives you the decision; the persistence and prompt are yours.
 - **Passphrases cross the wire.** `encryptWallet` / `unlockWallet` /
   `changeWalletPassphrase` take a `SecureString`, which travels over the socket
-  to the node (the wallet lives there). It is zeroed on both sides after the call
-  and unlock is time-bounded, but a client author should be aware the secret
+  to the node (the wallet lives there). The node scrubs the bytes it receives; the sender's
+  message buffer is not scrubbed, so a client should hold the passphrase in its own
+  `SecureString`. Unlock is time-bounded. A client author should be aware the secret
   transits the AF_UNIX socket. Keys and signing never cross — only the
   passphrase, and only for these calls.
 - **What the node does *not* protect against.** It does not verify *which*
