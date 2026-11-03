@@ -1808,4 +1808,171 @@ BOOST_AUTO_TEST_CASE(command_line_only_options_are_ignored_in_a_config_file)
 }
 
 
+namespace {
+//! Register the probe arguments the settings file load cases use. The
+//! registrations outlive the case, outside the suite's StateGuard snapshot.
+void RegisterK3Probes()
+{
+    const auto add = [](const std::string& name, unsigned int flags) {
+        if (!gArgs.GetArgFlags("-" + name)) {
+            gArgs.AddArg("-" + name, "unit-test probe", flags, OptionsCategory::HIDDEN);
+        }
+    };
+    add("k3_free_probe", ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE);
+    add("k3_elevate_probe", ArgsManager::ALLOW_ANY);
+    add("k3_clionly_probe", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY);
+    add("k3_sensitive_probe", ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE | ArgsManager::SETTING_FREE);
+}
+
+//! Create the data directory, and on exit remove the settings file and reload the
+//! (now empty) settings, so no case leaves a value behind.
+struct SettingsFileScope
+{
+    fs::path m_path;
+
+    SettingsFileScope()
+    {
+        const fs::path datadir = gArgs.GetArg("-datadir", "");
+        BOOST_REQUIRE(!datadir.empty());
+        fs::create_directories(datadir);
+        gArgs.ClearPathCache();
+        RegisterK3Probes();
+        BOOST_REQUIRE(gArgs.GetSettingsPath(&m_path));
+    }
+
+    ~SettingsFileScope()
+    {
+        boost::system::error_code ec;
+        fs::remove(m_path, ec);
+        (void)gArgs.ReadSettingsFile();
+    }
+
+    void Write(const std::map<std::string, util::SettingsValue>& values) const
+    {
+        std::vector<std::string> errors;
+        BOOST_REQUIRE(util::WriteSettings(m_path, values, errors));
+    }
+
+    std::map<std::string, util::SettingsValue> ReadRaw() const
+    {
+        std::map<std::string, util::SettingsValue> values;
+        std::vector<std::string> errors;
+        BOOST_REQUIRE(util::ReadSettings(m_path, values, errors));
+        return values;
+    }
+};
+
+size_t CountLines(const std::vector<std::string>& lines, const std::string& needle)
+{
+    size_t n = 0;
+    for (const std::string& l : lines) {
+        if (l.find(needle) != std::string::npos) ++n;
+    }
+    return n;
+}
+
+const std::string FILE_NAME_FOR_LOG{"gridcoinsettings.json"};
+} // namespace
+
+BOOST_AUTO_TEST_CASE(refused_settings_are_ignored_at_load_and_kept_in_the_file)
+{
+    SettingsFileScope scope;
+    scope.Write({{"k3_free_probe", "a"}, {"blocknotify", "echo b"}, {"k3_clionly_probe", "c"}, {"k3_unknown_key", "d"}});
+
+    std::vector<std::string> lines;
+    {
+        const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+        BOOST_REQUIRE(gArgs.ReadSettingsFile());
+        LogInstance().DeleteCallback(callback);
+    }
+
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-k3_free_probe", ""), "a");
+    BOOST_CHECK(!gArgs.IsArgSet("-blocknotify"));
+    BOOST_CHECK(!gArgs.IsArgSet("-k3_clionly_probe"));
+    BOOST_CHECK(getRwSetting("blocknotify").isNull());
+    // An unknown key is not refused.
+    BOOST_CHECK_EQUAL(getRwSetting("k3_unknown_key").write(), UniValue("d").write());
+
+    BOOST_CHECK_EQUAL(CountLines(lines, "ignored blocknotify from " + FILE_NAME_FOR_LOG
+                                        + "; set it in gridcoinresearch.conf if you want it\n"), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "ignored k3_clionly_probe from " + FILE_NAME_FOR_LOG
+                                        + "; it is accepted only on the command line\n"), 1u);
+
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    const auto raw = scope.ReadRaw();
+    BOOST_CHECK_EQUAL(raw.size(), 4u);
+    BOOST_CHECK_EQUAL(raw.at("k3_free_probe").get_str(), "a");
+    BOOST_CHECK_EQUAL(raw.at("blocknotify").get_str(), "echo b");
+    BOOST_CHECK_EQUAL(raw.at("k3_clionly_probe").get_str(), "c");
+    BOOST_CHECK_EQUAL(raw.at("k3_unknown_key").get_str(), "d");
+}
+
+BOOST_AUTO_TEST_CASE(erasing_a_refused_setting_removes_it_from_the_file)
+{
+    SettingsFileScope scope;
+    scope.Write({{"k3_free_probe", "a"}, {"blocknotify", "echo b"}});
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_REQUIRE(updateRwSetting("blocknotify", {}));
+
+    const auto raw = scope.ReadRaw();
+    BOOST_CHECK(raw.count("blocknotify") == 0);
+    BOOST_CHECK(raw.count("k3_free_probe") == 1);
+}
+
+BOOST_AUTO_TEST_CASE(listsettings_masks_sensitive_values_and_lists_ignored_settings)
+{
+    SettingsFileScope scope;
+    BOOST_REQUIRE(updateRwSetting("k3_sensitive_probe", "secret", true));
+    // The write above is the file the load below reads; add the other keys to it.
+    auto values = scope.ReadRaw();
+    values.emplace("rpcpassword", "pw");
+    values.emplace("k3_unknown_key", "d");
+    scope.Write(values);
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    UniValue out;
+    BOOST_REQUIRE_NO_THROW(out = gArgs.OutputArgs());
+
+    bool found_sensitive = false;
+    bool unknown_not_changeable = false;
+    for (const UniValue& entry : out["setting_file_args"].getValues()) {
+        if (entry.exists("k3_sensitive_probe")) {
+            found_sensitive = true;
+            BOOST_CHECK_EQUAL(entry["k3_sensitive_probe"].get_str(), "****");
+        }
+        if (entry.exists("k3_unknown_key")) {
+            unknown_not_changeable = !entry["changeable_without_restart"].get_bool();
+        }
+    }
+    BOOST_CHECK(found_sensitive);
+    BOOST_CHECK(unknown_not_changeable);
+
+    const UniValue& ignored = out["setting_file_args_ignored"];
+    BOOST_REQUIRE_EQUAL(ignored.size(), 1u);
+    BOOST_CHECK_EQUAL(ignored[0]["rpcpassword"].get_str(), "****");
+
+    // Clear the forced value the update above applied.
+    BOOST_REQUIRE(updateRwSetting("k3_sensitive_probe", {}, true));
+}
+
+BOOST_AUTO_TEST_CASE(logargs_masks_sensitive_settings_file_values)
+{
+    SettingsFileScope scope;
+    scope.Write({{"k3_sensitive_probe", "secret"}, {"k3_free_probe", "a"}});
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    std::vector<std::string> lines;
+    {
+        const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+        gArgs.LogArgs();
+        LogInstance().DeleteCallback(callback);
+    }
+
+    BOOST_CHECK_EQUAL(CountLines(lines, "Setting file arg: k3_sensitive_probe = ****"), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "secret"), 0u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "Setting file arg: k3_free_probe = \"a\""), 1u);
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()

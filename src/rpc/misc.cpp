@@ -108,7 +108,9 @@ UniValue logging(const UniValue& params)
 
 static const RPCHelpMan listsettings_help{
     "listsettings",
-    "Outputs all arguments/settings in JSON format.",
+    "Outputs all arguments/settings in JSON format.\n"
+    "Keys in the settings file that were ignored at startup (set them in gridcoinresearch.conf or on the command\n"
+    "line instead) are listed under setting_file_args_ignored; sensitive values show as ****.",
     {},
     RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of setting name to its current value",
         {

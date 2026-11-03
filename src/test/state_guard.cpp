@@ -58,6 +58,9 @@ void SerializeSettings(const util::Settings& s, std::map<std::string, std::strin
     for (const auto& [name, value] : s.rw_settings) {
         out["rw:" + name] = value.write();
     }
+    for (const auto& [name, value] : s.refused_rw_settings) {
+        out["refused_rw:" + name] = value.write();
+    }
 }
 
 template <typename T>

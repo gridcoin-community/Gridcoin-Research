@@ -207,10 +207,11 @@ bool AppInit(int argc, char* argv[])
 
         if (fCommandLine)
         {
-            // The client reads the node's read-write settings, because a connection setting stored there with
-            // changesettings (rpcconnect, rpcport, rpcuser, ...) outranks the config file. It never writes them:
-            // InitSettings rewrites the file through a fixed temporary name, so clients calling the same node at
-            // once raced on it, and a client could write back a setting the node had just changed.
+            // The client reads the node's read-write settings file but ignores its refused keys, the connection
+            // options (rpcconnect, rpcport, rpcuser, rpcpassword, ...) included, which it takes only from the
+            // command line and the config file. It never writes the file: InitSettings rewrites it through a
+            // fixed temporary name, so clients calling the same node at once raced on it, and a client could
+            // write back a setting the node had just changed.
             std::vector<std::string> errors;
             if (!gArgs.ReadSettingsFile(&errors)) {
                 return InitError(strprintf("Failed loading settings file:\n- %s\n", Join(errors, "\n- ")));

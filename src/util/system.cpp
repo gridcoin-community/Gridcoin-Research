@@ -93,6 +93,13 @@ static std::string SettingName(const std::string& arg)
     return arg.size() > 0 && arg[0] == '-' ? arg.substr(1) : arg;
 }
 
+// The argument name of a settings file key, without its network section.
+static std::string SettingFileKeyName(const std::string& key)
+{
+    const size_t dot = key.find('.');
+    return dot == std::string::npos ? key : key.substr(dot + 1);
+}
+
 /**
  * Interpret -nofoo as if the user supplied -foo=0.
  *
@@ -579,18 +586,33 @@ bool ArgsManager::ReadSettingsFile(std::vector<std::string>* errors)
     }
 
     LOCK(cs_args);
-    m_settings.rw_settings.clear();
+    std::map<std::string, util::SettingsValue> read;
     std::vector<std::string> read_errors;
-    if (!util::ReadSettings(path, m_settings.rw_settings, read_errors)) {
+    if (!util::ReadSettings(path, read, read_errors)) {
         SaveErrors(read_errors, errors);
         return false;
     }
-    for (const auto& setting : m_settings.rw_settings) {
+    m_settings.rw_settings.clear();
+    m_settings.refused_rw_settings.clear();
+    const std::string file = path.filename().string();
+    for (auto& [name, value] : read) {
         std::string section;
-        std::string key = setting.first;
+        std::string key = name;
         (void)InterpretOption(section, key, /* value */ {}); // Split setting key into section and argname
-        if (!GetArgFlags('-' + key)) {
-            LogPrintf("Ignoring unknown rw_settings value %s\n", setting.first);
+        const std::optional<unsigned int> flags = GetArgFlags('-' + key);
+        if (!flags) {
+            LogPrintf("Ignoring unknown rw_settings value %s\n", name);
+        }
+        const bool command_line_only = flags && (*flags & COMMAND_LINE_ONLY);
+        if (IsRefusedSettingKey(name) || command_line_only) {
+            if (command_line_only) {
+                LogPrintf("ignored %s from %s; it is accepted only on the command line\n", name, file);
+            } else {
+                LogPrintf("ignored %s from %s; set it in gridcoinresearch.conf if you want it\n", name, file);
+            }
+            m_settings.refused_rw_settings.emplace(name, std::move(value));
+        } else {
+            m_settings.rw_settings.emplace(name, std::move(value));
         }
     }
     return true;
@@ -605,7 +627,10 @@ bool ArgsManager::WriteSettingsFile(std::vector<std::string>* errors) const
 
     LOCK(cs_args);
     std::vector<std::string> write_errors;
-    if (!util::WriteSettings(path_tmp, m_settings.rw_settings, write_errors)) {
+    // Refused values are written back unchanged, so ignoring them at load never deletes them.
+    std::map<std::string, util::SettingsValue> to_write = m_settings.rw_settings;
+    to_write.insert(m_settings.refused_rw_settings.begin(), m_settings.refused_rw_settings.end());
+    if (!util::WriteSettings(path_tmp, to_write, write_errors)) {
         SaveErrors(write_errors, errors);
         return false;
     }
@@ -1285,7 +1310,9 @@ void ArgsManager::LogArgs() const
         logArgsPrefix("Config file arg:", section.first, section.second);
     }
     for (const auto& setting : m_settings.rw_settings) {
-        LogPrintf("Setting file arg: %s = %s\n", setting.first, setting.second.write());
+        const std::optional<unsigned int> flags = GetArgFlags('-' + SettingFileKeyName(setting.first));
+        LogPrintf("Setting file arg: %s = %s\n", setting.first,
+                  (flags && (*flags & SENSITIVE)) ? "****" : setting.second.write());
     }
     logArgsPrefix("Command-line arg:", "", m_settings.command_line_options);
 }
@@ -1309,16 +1336,29 @@ UniValue ArgsManager::OutputArgs() const
     // There are no sections for rw_settings and the command line.
     for (const auto& setting : m_settings.rw_settings) {
         UniValue arg(UniValue::VOBJ);
-        std::optional<unsigned int> flags = GetArgFlags('-' + setting.first);
+        std::optional<unsigned int> flags = GetArgFlags('-' + SettingFileKeyName(setting.first));
 
-        arg.pushKV(setting.first, setting.second);
+        arg.pushKV(setting.first, (flags && (*flags & SENSITIVE)) ? UniValue("****") : setting.second);
 
-        arg.pushKV("changeable_without_restart", (bool)(*flags & IMMEDIATE_EFFECT));
+        // An unknown key has no flags and cannot change without a restart.
+        arg.pushKV("changeable_without_restart", flags && (*flags & IMMEDIATE_EFFECT));
 
         settings.push_back(arg);
     }
 
     result.pushKV("setting_file_args", settings);
+
+    // Values in the file that were ignored at load.
+    UniValue ignored(UniValue::VARR);
+    for (const auto& setting : m_settings.refused_rw_settings) {
+        UniValue arg(UniValue::VOBJ);
+        const std::optional<unsigned int> flags = GetArgFlags('-' + SettingFileKeyName(setting.first));
+        // An unregistered refused key has no flags to say it is not sensitive, so it is masked too.
+        const bool sensitive = !flags || (*flags & SENSITIVE);
+        arg.pushKV(setting.first, sensitive ? UniValue("****") : setting.second);
+        ignored.push_back(arg);
+    }
+    result.pushKV("setting_file_args_ignored", ignored);
 
     args_section.clear();
     args_section = OutputArgsSection("none", m_settings.command_line_options);
@@ -1345,6 +1385,7 @@ bool CommitRwSettings(const std::vector<RwSettingUpdate>& changes)
         struct Previous {
             std::string name;
             std::optional<util::SettingsValue> rw;
+            std::optional<util::SettingsValue> refused;
             bool forced_touched{false};
             std::optional<util::SettingsValue> forced;
         };
@@ -1355,6 +1396,8 @@ bool CommitRwSettings(const std::vector<RwSettingUpdate>& changes)
             prev.name = change.name;
             const auto rw_it = settings.rw_settings.find(change.name);
             if (rw_it != settings.rw_settings.end()) prev.rw = rw_it->second;
+            const auto refused_it = settings.refused_rw_settings.find(change.name);
+            if (refused_it != settings.refused_rw_settings.end()) prev.refused = refused_it->second;
             if (change.forced != RwSettingUpdate::Forced::KEEP) {
                 prev.forced_touched = true;
                 const auto forced_it = settings.forced_settings.find(change.name);
@@ -1364,6 +1407,7 @@ bool CommitRwSettings(const std::vector<RwSettingUpdate>& changes)
 
             if (change.value.isNull()) {
                 settings.rw_settings.erase(change.name);
+                settings.refused_rw_settings.erase(change.name);
             } else {
                 settings.rw_settings[change.name] = change.value;
             }
@@ -1388,6 +1432,11 @@ bool CommitRwSettings(const std::vector<RwSettingUpdate>& changes)
                     settings.rw_settings[it->name] = *it->rw;
                 } else {
                     settings.rw_settings.erase(it->name);
+                }
+                if (it->refused) {
+                    settings.refused_rw_settings[it->name] = *it->refused;
+                } else {
+                    settings.refused_rw_settings.erase(it->name);
                 }
                 if (it->forced_touched) {
                     if (it->forced) {

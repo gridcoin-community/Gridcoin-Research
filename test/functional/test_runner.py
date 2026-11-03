@@ -216,8 +216,11 @@ BASE_SCRIPTS = [
     'wallet_splitunspent.py',
     'interface_cli.py',
     # interface_cli_settings.py: the RPC client reads the node's read-write settings
-    # (a changesettings rpcconnect is honoured) but never rewrites the file.
+    # file, ignores its refused keys (connection options included) and never rewrites it.
     'interface_cli_settings.py',
+    # feature_settings_file_refused.py: refused keys in the settings file are ignored at
+    # startup, logged, listed by listsettings, and still erasable with changesettings.
+    'feature_settings_file_refused.py',
     'mempool_accept.py',
     # mempool_unbroadcast_persist.py: unbroadcast.dat follows the unbroadcast
     # set while the node runs, so a node killed without a shutdown reloads a
