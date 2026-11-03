@@ -140,6 +140,13 @@ private:
     bool shouldStop() const EXCLUSIVE_LOCKS_REQUIRED(newTaskMutex) { return stopRequested || (stopWhenEmpty && taskQueue.empty()); }
 };
 
+//! Wraps a job so an exception from it is logged and not thrown. The scheduler
+//! thread runs every job, and serviceQueue() rethrows whatever a job throws,
+//! which ends that thread, drops the job's own repeat and leaves every later job
+//! unrun. Used for the jobs that reach the wallet, whose key access can refuse by
+//! throwing. The job name appears in the one ASCII log line.
+CScheduler::Function CatchAndLogJob(const char* job_name, CScheduler::Function job);
+
 //! The process-wide background task scheduler. Constructed in AppInit2 before
 //! its serviceQueue thread is launched and destroyed at shutdown after that
 //! thread is joined. Owned via unique_ptr (mirroring g_banman) so it can be

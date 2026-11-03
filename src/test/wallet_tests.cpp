@@ -5,6 +5,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include "gridcoin/mnemonics.h"
+#include "gridcoin/researcher.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/sidestake.h"
@@ -2190,6 +2191,65 @@ BOOST_AUTO_TEST_CASE(the_top_up_thread_lets_no_exception_out)
     BOOST_CHECK_THROW(fx.wallet.TopUpKeyPool(), std::runtime_error);
 
     BOOST_CHECK(!TopUpThreadLetsAnExceptionOut());
+}
+
+//! How many address book entries carry the label a generated beacon key gets.
+static size_t BeaconLabelCount(CWallet& wallet)
+{
+    LOCK(wallet.cs_wallet);
+
+    size_t count{0};
+    for (const auto& entry : wallet.mapAddressBook) {
+        if (entry.second.name.rfind("Beacon Address for CPID", 0) == 0) ++count;
+    }
+
+    return count;
+}
+
+//! Generating a beacon key while unlocked for staking only is refused. The key
+//! the pool offered goes back to it unspent, and no address book entry claims
+//! it for a beacon that was never advertised.
+BOOST_AUTO_TEST_CASE(generate_beacon_key_refused_under_staking_only_spends_no_pool_key)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    BOOST_REQUIRE_EQUAL(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET);
+    BOOST_REQUIRE_EQUAL(BeaconLabelCount(fx.wallet), 0U);
+
+    const GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+
+    LOCK(cs_main);
+    GRC::AdvertiseBeaconResult result = GRC::GenerateBeaconKey(cpid);
+
+    BOOST_CHECK(result.TryPublicKey() == nullptr);
+    BOOST_CHECK(result.Error() == GRC::BeaconError::MISSING_KEY);
+    BOOST_CHECK_EQUAL(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET);
+    BOOST_CHECK_EQUAL(BeaconLabelCount(fx.wallet), 0U);
+}
+
+//! Fully unlocked, generating a beacon key keeps one key from the pool and
+//! labels it for the CPID.
+BOOST_AUTO_TEST_CASE(generate_beacon_key_keeps_and_labels_a_key_under_full)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.UnlockFor(UnlockScope::Full);
+
+    BOOST_REQUIRE_EQUAL(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET);
+
+    const GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+
+    LOCK(cs_main);
+    GRC::AdvertiseBeaconResult result = GRC::GenerateBeaconKey(cpid);
+
+    BOOST_REQUIRE(result.TryPublicKey() != nullptr);
+    BOOST_CHECK_EQUAL(BeaconLabelCount(fx.wallet), 1U);
+
+    // The label is on the key that was returned.
+    LOCK(fx.wallet.cs_wallet);
+    const auto it = fx.wallet.mapAddressBook.find(CTxDestination(result.TryPublicKey()->GetID()));
+    BOOST_REQUIRE(it != fx.wallet.mapAddressBook.end());
+    BOOST_CHECK(it->second.name.rfind("Beacon Address for CPID", 0) == 0);
 }
 
 //! While the node syncs, a payment to the default key rotates it to a key from

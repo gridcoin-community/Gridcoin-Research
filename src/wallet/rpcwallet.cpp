@@ -3549,7 +3549,10 @@ UniValue walletpassphrase(const UniValue& params)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Passphrase cannot be empty.");
     }
 
-    NewThread(ThreadTopUpKeyPool, nullptr);
+    // A staking-only unlock makes no keys, so there is nothing for the thread to do.
+    if (scope == UnlockScope::Full) {
+        NewThread(ThreadTopUpKeyPool, nullptr);
+    }
 
     return NullUniValue;
 }

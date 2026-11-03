@@ -655,18 +655,26 @@ AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_R
 {
     LogPrintf("%s: Generating new keys for %s...", __func__, cpid.ToString());
 
+    // Returns the key to the pool when it goes out of scope, unless it is kept.
+    CReserveKey reservation(pwalletMain);
     CPubKey public_key;
-    if (!pwalletMain->GetKeyFromPool(public_key, false)) {
+
+    // The pool is topped up first only where keys may be created, as drawing
+    // from it used to; under staking only this makes nothing.
+    pwalletMain->TopUpKeyPool();
+
+    if (!reservation.GetReservedKeyWithoutTopUp(public_key)) {
         LogPrintf("ERROR: %s: Failed to get new key from wallet", __func__);
         return BeaconError::MISSING_KEY;
     }
-
-    LabelBeaconKey(cpid, public_key);
 
     if (!CheckBeaconPrivateKey(pwalletMain, public_key, nullptr)) {
         LogPrintf("ERROR: %s: Failed to verify new beacon key", __func__);
         return BeaconError::MISSING_KEY;
     }
+
+    reservation.KeepKey();
+    LabelBeaconKey(cpid, public_key);
 
     if (!BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"))) {
         LogPrintf("WARNING: %s: Failed to backup wallet file", __func__);

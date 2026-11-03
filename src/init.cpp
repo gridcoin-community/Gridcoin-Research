@@ -2891,12 +2891,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     // scheduler thread is joined (threadGroup.join_all(), see Shutdown()) before
     // g_connman and pwalletMain
     // are torn down, so this can never deref freed state.
-    g_scheduler->scheduleEvery([]{
+    g_scheduler->scheduleEvery(CatchAndLogJob("ResendWalletTransactions", []{
         if (!pwalletMain) return;
         TRY_LOCK(cs_main, locked_main);
         if (!locked_main) return;
         pwalletMain->ResendWalletTransactions();
-    }, std::chrono::seconds{60});
+    }), std::chrono::seconds{60});
 
     GRC::ScheduleBackgroundJobs(*g_scheduler);
 

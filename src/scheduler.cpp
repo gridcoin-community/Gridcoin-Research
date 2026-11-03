@@ -4,9 +4,11 @@
 
 #include <scheduler.h>
 
+#include <logging.h>
 #include <util/time.h>
 
 #include <assert.h>
+#include <exception>
 #include <functional>
 #include <utility>
 
@@ -210,4 +212,17 @@ size_t SingleThreadedSchedulerClient::CallbacksPending()
 {
     LOCK(m_cs_callbacks_pending);
     return m_callbacks_pending.size();
+}
+
+CScheduler::Function CatchAndLogJob(const char* job_name, CScheduler::Function job)
+{
+    return [job_name, job = std::move(job)] {
+        try {
+            job();
+        } catch (const std::exception& e) {
+            // The name is written out because __func__ inside this lambda
+            // would name the lambda's call operator, not this function.
+            LogPrintf("ERROR: CatchAndLogJob: %s: %s", job_name, e.what());
+        }
+    };
 }

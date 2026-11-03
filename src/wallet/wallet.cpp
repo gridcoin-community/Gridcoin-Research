@@ -607,9 +607,9 @@ static bool SchedulerCanRelock()
 
     if (!scheduler) return false;
 
-    return scheduler->scheduleFromNowIfRunning([wallet, epoch] {
+    return scheduler->scheduleFromNowIfRunning(CatchAndLogJob("LockIfCurrent", [wallet, epoch] {
         wallet->LockIfCurrent(epoch);
-    }, delay);
+    }), delay);
 }
 
 bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope)

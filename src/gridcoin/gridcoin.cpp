@@ -588,7 +588,7 @@ void ScheduleBackups(CScheduler& scheduler)
     // a cycle when it encounters lock contention or when a cycle occurs
     // sooner than the requested interval:
     //
-    scheduler.scheduleEvery(RunBackupJob, std::chrono::seconds{GetBackupInterval() / 4});
+    scheduler.scheduleEvery(CatchAndLogJob("RunBackupJob", RunBackupJob), std::chrono::seconds{GetBackupInterval() / 4});
 
     // Run the backup job on start-up in case the wallet started after a
     // long period of downtime. Some usage patterns may cause the wallet
@@ -597,7 +597,7 @@ void ScheduleBackups(CScheduler& scheduler)
     // the wallet contains a stored backup timestamp later than the next
     // scheduled backup interval:
     //
-    scheduler.scheduleFromNow(RunBackupJob, std::chrono::seconds{60});
+    scheduler.scheduleFromNow(CatchAndLogJob("RunBackupJob", RunBackupJob), std::chrono::seconds{60});
 }
 
 //!
@@ -774,7 +774,7 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
         LogInstance().archive(false, plogfile_out);
     }, std::chrono::seconds{300});
 
-    scheduler.scheduleEvery(Researcher::RunRenewBeaconJob, std::chrono::hours{1});
+    scheduler.scheduleEvery(CatchAndLogJob("RunRenewBeaconJob", Researcher::RunRenewBeaconJob), std::chrono::hours{1});
 
     ScheduleBackups(scheduler);
     ScheduleUpdateChecks(scheduler);
