@@ -183,6 +183,7 @@ add_executable(test_gridcoin
     scrypt_tests.cpp
     serialize_tests.cpp
     sigopcount_tests.cpp
+    staking_key_access_tests.cpp
     sync_tests.cpp
     test_gridcoin.cpp
     timedata_tests.cpp

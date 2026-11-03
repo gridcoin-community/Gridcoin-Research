@@ -129,6 +129,71 @@ enum class UnlockScope : uint8_t {
     Full,
 };
 
+class CCryptoKeyStore;
+class CapabilityScope;
+
+//! \brief Lets the calling thread reach one store's private keys while that
+//! store is unlocked for staking only.
+//!
+//! Under StakingOnly the general routes to key material -- GetKey(),
+//! AddKeyPubKey() and DecryptSecretWithMasterKey() -- refuse unless a grant for
+//! that store is live on the calling thread. The grant changes nothing else: the
+//! store's scope stays StakingOnly, and every other thread is still refused.
+//!
+//! RAII. It is held for one operation and ends with the scope that holds it.
+//! Grants on one thread nest: each saves the grant it displaces and restores it
+//! when it ends, so they must end in the reverse order they began, which scoped
+//! objects do. Neither copyable nor movable, so a grant cannot leave the scope,
+//! or the thread, that took it.
+//!
+//! Only CapabilityScope makes one, after it has checked the capability it was
+//! given.
+class ElevationGrant
+{
+public:
+    ~ElevationGrant();
+
+    ElevationGrant(const ElevationGrant&) = delete;
+    ElevationGrant& operator=(const ElevationGrant&) = delete;
+
+    //! True iff a grant for \p store is live on the calling thread. False for
+    //! nullptr.
+    static bool IsActiveFor(const CCryptoKeyStore* store);
+
+private:
+    explicit ElevationGrant(const CCryptoKeyStore& store);
+
+    friend class CapabilityScope;
+    friend struct ElevationGrantTestPeer;
+
+    //! The grant this one displaced on this thread, restored when it ends.
+    const CCryptoKeyStore* m_previous{nullptr};
+};
+
+//! \brief Proof that the caller is one of the staking paths.
+//!
+//! CCryptoKeyStore::GetKeyForStaking() demands one, and it decrypts a key under
+//! StakingOnly where GetKey() refuses. It carries no state; what restricts it is
+//! who can make one. Only the factories named below can, and each belongs to one
+//! path: the miner (block and claim signing), the automated beacon renewal, and
+//! the scraper thread. test/lint/lint-staking-key-access.py fails if a factory
+//! is used outside the file of its path.
+//!
+//! Copyable, so a path can hand its token down to the code that signs for it.
+class StakingKeyAccess
+{
+private:
+    //! User-provided rather than defaulted. Under C++17 a class whose only
+    //! constructor is defaulted is still an aggregate, and empty braces would
+    //! then make a token anywhere without calling this constructor at all.
+    StakingKeyAccess() {}
+
+    friend StakingKeyAccess MinerStakingKeyAccess();
+    friend StakingKeyAccess RenewalStakingKeyAccess();
+    friend StakingKeyAccess ScraperStakingKeyAccess();
+    friend struct StakingKeyAccessTestPeer;
+};
+
 /** Keystore which keeps the private keys encrypted.
  * It derives from the basic key store, which is used if no encryption is active.
  */
@@ -167,6 +232,16 @@ private:
 
     bool fDecryptionThoroughlyChecked;
 
+    //! True when general access to key material must refuse: the store is
+    //! encrypted, unlocked for staking only, and no grant for it is live on the
+    //! calling thread.
+    bool RefusedForStakingOnly() const EXCLUSIVE_LOCKS_REQUIRED(cs_KeyStore);
+
+    //! Decrypt one key from mapCryptedKeys under the installed master key. It
+    //! applies no scope rule of its own; GetKey() and GetKeyForStaking() each
+    //! decide first whether the current unlock permits the access.
+    bool DecryptKeyLocked(const CKeyID& address, CKey& keyOut) const EXCLUSIVE_LOCKS_REQUIRED(cs_KeyStore);
+
 protected:
     bool SetCrypted();
 
@@ -194,6 +269,16 @@ protected:
     //! False when the wallet is locked (there is no unlock to widen; use
     //! Unlock()), when it is unencrypted, or when the key does not match.
     bool Elevate(const CKeyingMaterial& vMasterKeyIn);
+
+    //! \brief Whether \p key is the master key the current unlock installed.
+    //!
+    //! For a caller that has derived keying material from a passphrase and must
+    //! check it against the unlock in progress without changing that unlock. The
+    //! comparison takes the same time wherever the operands differ.
+    //!
+    //! False when the store is locked or unencrypted: there is then no installed
+    //! key to match.
+    bool MatchesMasterKey(const CKeyingMaterial& key) const;
 
     //! \brief Narrow the current unlock to staking only.
     //!
@@ -240,6 +325,8 @@ protected:
     //! phrase blob) under the store's keying material. The store must be
     //! crypted and unlocked. The IV must be deterministic and unique to the
     //! secret, mirroring the per-key pubkey-hash IV used for private keys.
+    //! Decryption is general access to a secret, so like GetKey() it refuses
+    //! under StakingOnly unless a grant for this store is live on the thread.
     bool EncryptSecretWithMasterKey(const CKeyingMaterial& plaintext, const uint256& iv,
                                     std::vector<unsigned char>& ciphertext_out) const;
     bool DecryptSecretWithMasterKey(const std::vector<unsigned char>& ciphertext, const uint256& iv,
@@ -338,6 +425,9 @@ public:
     bool Lock();
 
     virtual bool AddCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret);
+
+    //! Refuses while the store is locked, and while it is unlocked for staking
+    //! only unless an ElevationGrant for it is live on the calling thread.
     bool AddKeyPubKey(const CKey& key, const CPubKey &pubkey);
     bool HaveKey(const CKeyID &address) const
     {
@@ -349,7 +439,18 @@ public:
         }
         return false;
     }
+    //! General key access. Refuses while the store is unlocked for staking only,
+    //! unless an ElevationGrant for it is live on the calling thread; the
+    //! staking paths use GetKeyForStaking() instead.
     bool GetKey(const CKeyID &address, CKey& keyOut) const;
+
+    //! \brief Key access for the staking paths.
+    //!
+    //! Decrypts under StakingOnly as well as Full, and never while the store is
+    //! locked. An unencrypted store returns its plain key. \p access is the proof
+    //! that the caller is a staking path; see StakingKeyAccess.
+    bool GetKeyForStaking(const CKeyID& id, CKey& key_out, const StakingKeyAccess& access) const;
+
     bool GetPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
     void GetKeys(std::set<CKeyID> &setAddress) const
     {

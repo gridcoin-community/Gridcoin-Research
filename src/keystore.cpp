@@ -4,7 +4,37 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "keystore.h"
+#include "logging.h"
 #include "script.h"
+
+namespace {
+
+//! The store a grant is live for on this thread, or nullptr when none is. A
+//! plain pointer, because a thread_local must be trivially destructible (see
+//! test/lint/lint-thread-local.sh).
+thread_local const CCryptoKeyStore* g_elevated_store{nullptr};
+
+} // namespace
+
+ElevationGrant::ElevationGrant(const CCryptoKeyStore& store)
+    : m_previous(g_elevated_store)
+{
+    g_elevated_store = &store;
+}
+
+ElevationGrant::~ElevationGrant()
+{
+    // Hands back whatever this grant displaced, so an inner grant ending leaves
+    // the outer one in force rather than clearing it.
+    g_elevated_store = m_previous;
+}
+
+bool ElevationGrant::IsActiveFor(const CCryptoKeyStore* store)
+{
+    // Without the null test, a thread holding no grant would report one for a
+    // null store.
+    return store != nullptr && g_elevated_store == store;
+}
 
 bool CKeyStore::GetPubKey(const CKeyID &address, CPubKey &vchPubKeyOut) const
 {
@@ -224,6 +254,11 @@ bool CCryptoKeyStore::AddKeyPubKey(const CKey& key, const CPubKey &pubkey)
         if (IsLocked())
             return false;
 
+        if (RefusedForStakingOnly()) {
+            LogPrint(BCLog::LogFlags::WALLETDB, "%s: refused, wallet unlocked for staking only", __func__);
+            return false;
+        }
+
         std::vector<unsigned char> vchCryptedSecret;
         CKeyingMaterial vchSecret(key.begin(), key.end());
         if (!EncryptSecret(vMasterKey, vchSecret, pubkey.GetHash(), vchCryptedSecret))
@@ -248,28 +283,86 @@ bool CCryptoKeyStore::AddCryptedKey(const CPubKey &vchPubKey, const std::vector<
     return true;
 }
 
+bool CCryptoKeyStore::RefusedForStakingOnly() const
+{
+    AssertLockHeld(cs_KeyStore);
+
+    return IsCrypted()
+        && m_unlock_scope == UnlockScope::StakingOnly
+        && !ElevationGrant::IsActiveFor(this);
+}
+
+bool CCryptoKeyStore::DecryptKeyLocked(const CKeyID& address, CKey& keyOut) const
+{
+    AssertLockHeld(cs_KeyStore);
+
+    CryptedKeyMap::const_iterator mi = mapCryptedKeys.find(address);
+    if (mi == mapCryptedKeys.end())
+        return false;
+
+    const CPubKey& vchPubKey = mi->second.first;
+    const std::vector<unsigned char>& vchCryptedSecret = mi->second.second;
+    CKeyingMaterial vchSecret;
+    if (!DecryptSecret(vMasterKey, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
+        return false;
+    if (vchSecret.size() != 32)
+        return false;
+    keyOut.Set(vchSecret.begin(), vchSecret.end(), vchPubKey.IsCompressed());
+    return keyOut.IsValid();
+}
+
 bool CCryptoKeyStore::GetKey(const CKeyID &address, CKey& keyOut) const
 {
-    {
-        LOCK(cs_KeyStore);
-        if (!IsCrypted())
-            return CBasicKeyStore::GetKey(address, keyOut);
+    LOCK(cs_KeyStore);
+    if (!IsCrypted())
+        return CBasicKeyStore::GetKey(address, keyOut);
 
-        CryptedKeyMap::const_iterator mi = mapCryptedKeys.find(address);
-        if (mi != mapCryptedKeys.end())
-        {
-            const CPubKey& vchPubKey = mi->second.first;
-            const std::vector<unsigned char>& vchCryptedSecret = mi->second.second;
-            CKeyingMaterial vchSecret;
-            if (!DecryptSecret(vMasterKey, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
-                return false;
-            if (vchSecret.size() != 32)
-                return false;
-            keyOut.Set(vchSecret.begin(), vchSecret.end(), vchPubKey.IsCompressed());
-            return keyOut.IsValid();
-        }
+    if (RefusedForStakingOnly()) {
+        LogPrint(BCLog::LogFlags::WALLETDB, "%s: refused, wallet unlocked for staking only", __func__);
+        return false;
     }
-    return false;
+
+    return DecryptKeyLocked(address, keyOut);
+}
+
+bool CCryptoKeyStore::GetKeyForStaking(const CKeyID& id, CKey& key_out, const StakingKeyAccess& /* access */) const
+{
+    LOCK(cs_KeyStore);
+    if (!IsCrypted())
+        return CBasicKeyStore::GetKey(id, key_out);
+
+    // StakingOnly and Full both admit the staking paths; a locked store admits
+    // nothing. A locked store has no master key, so decryption would fail
+    // anyway; the scope is checked explicitly so the rule does not rest on that.
+    if (m_unlock_scope == UnlockScope::Locked)
+        return false;
+
+    return DecryptKeyLocked(id, key_out);
+}
+
+bool CCryptoKeyStore::MatchesMasterKey(const CKeyingMaterial& key) const
+{
+    if (!IsCrypted())
+        return false;
+
+    LOCK(cs_KeyStore);
+
+    if (m_unlock_scope == UnlockScope::Locked || vMasterKey.empty())
+        return false;
+
+    // A master key's length is fixed and public, so a length mismatch can be
+    // answered at once without saying anything about the key.
+    if (key.size() != vMasterKey.size())
+        return false;
+
+    // Every byte is examined whatever the earlier ones held, so the time taken
+    // does not depend on where the operands first differ.
+    unsigned char difference{0};
+    for (size_t i = 0; i < vMasterKey.size(); ++i) {
+        difference |= static_cast<unsigned char>(key[i] ^ vMasterKey[i]);
+    }
+
+    return difference == 0;
 }
 
 bool CCryptoKeyStore::GetPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const
@@ -331,6 +424,11 @@ bool CCryptoKeyStore::DecryptSecretWithMasterKey(const std::vector<unsigned char
     LOCK(cs_KeyStore);
 
     if (!IsCrypted() || vMasterKey.empty()) {
+        return false;
+    }
+
+    if (RefusedForStakingOnly()) {
+        LogPrint(BCLog::LogFlags::WALLETDB, "%s: refused, wallet unlocked for staking only", __func__);
         return false;
     }
 
