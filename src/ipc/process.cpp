@@ -13,12 +13,14 @@
 #include "util.h"
 #include "util/syserror.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstring>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <vector>
 #ifndef WIN32
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -32,7 +34,6 @@
 // layout ParseAddress relies on.
 #include <climits>
 #include <mutex>
-#include <vector>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <afunix.h>
@@ -272,18 +273,26 @@ void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, s
     if (!type_ok(st.st_mode)) fail(EINVAL, "unexpected file type at");
     if (st.st_uid != ::geteuid()) fail(EPERM, "not owned by this user:");
 
-    if (group && ::fchownat(fd, "", static_cast<uid_t>(-1), *group, AT_EMPTY_PATH) != 0) {
-        fail(errno, "cannot set the group of");
-    }
-
-    bool mode_set = false;
+    const auto set_mode = [&](mode_t m) {
+        bool mode_set = false;
 #ifdef SYS_fchmodat2
-    mode_set = ::syscall(SYS_fchmodat2, fd, "", mode, AT_EMPTY_PATH) == 0;
+        mode_set = ::syscall(SYS_fchmodat2, fd, "", m, AT_EMPTY_PATH) == 0;
 #endif
-    if (!mode_set) {
-        const std::string proc_path = strprintf("/proc/self/fd/%d", fd);
-        if (::chmod(proc_path.c_str(), mode) != 0) fail(errno, "cannot set the mode of");
+        if (!mode_set) {
+            const std::string proc_path = strprintf("/proc/self/fd/%d", fd);
+            if (::chmod(proc_path.c_str(), m) != 0) fail(errno, "cannot set the mode of");
+        }
+    };
+
+    if (group) {
+        // Narrow first, so the new group never holds a bit the old mode had and
+        // the final mode does not.
+        set_mode(static_cast<mode_t>(st.st_mode & mode & 07777));
+        if (::fchownat(fd, "", static_cast<uid_t>(-1), *group, AT_EMPTY_PATH) != 0) {
+            fail(errno, "cannot set the group of");
+        }
     }
+    set_mode(mode);
 
     // Verify through the same fd.
     struct stat after;
@@ -297,8 +306,15 @@ void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, s
     if (::lstat(p.c_str(), &st) != 0) fail(errno, "cannot stat");
     if (!type_ok(st.st_mode)) fail(EINVAL, "unexpected file type at");
     if (st.st_uid != ::geteuid()) fail(EPERM, "not owned by this user:");
-    if (group && ::fchownat(AT_FDCWD, p.c_str(), static_cast<uid_t>(-1), *group, AT_SYMLINK_NOFOLLOW) != 0) {
-        fail(errno, "cannot set the group of");
+    if (group) {
+        // Narrow first, so the new group never holds a bit the old mode had and
+        // the final mode does not.
+        if (::fchmodat(AT_FDCWD, p.c_str(), static_cast<mode_t>(st.st_mode & mode & 07777), AT_SYMLINK_NOFOLLOW) != 0) {
+            fail(errno, "cannot set the mode of");
+        }
+        if (::fchownat(AT_FDCWD, p.c_str(), static_cast<uid_t>(-1), *group, AT_SYMLINK_NOFOLLOW) != 0) {
+            fail(errno, "cannot set the group of");
+        }
     }
     if (::fchmodat(AT_FDCWD, p.c_str(), mode, AT_SYMLINK_NOFOLLOW) != 0) fail(errno, "cannot set the mode of");
     struct stat after;
@@ -310,6 +326,19 @@ void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, s
 #endif
 }
 
+std::optional<std::string> IpcDirWarning(const std::string& dir, mode_t mode, uid_t owner, gid_t group,
+                                         uid_t self_uid, std::optional<gid_t> attach_gid)
+{
+    if ((mode & (S_IRWXG | S_IRWXO)) == 0) return std::nullopt;
+    if (attach_gid && owner == self_uid && group == *attach_gid && (mode & 07777) == static_cast<mode_t>(0750)) {
+        return std::nullopt;
+    }
+    return strprintf("the IPC directory %s is accessible to other users (mode %03o). Leaving it as configured; "
+                     "the IPC socket and cookie inside it are %s.",
+                     dir, static_cast<unsigned>(mode & 07777),
+                     attach_gid ? "accessible to the attach group" : "owner-only");
+}
+
 void ApplyAttachGroupAccess(const fs::path& ipcdir)
 {
     const std::optional<gid_t> gid = AttachGroupGid();
@@ -317,15 +346,21 @@ void ApplyAttachGroupAccess(const fs::path& ipcdir)
     try {
         ApplyPathAccessNoFollow(ipcdir, PathKind::Directory, 0750, gid);
     } catch (const std::system_error& e) {
-        // EPERM from the group change means this account is not in the group.
-        // The other failures of ApplyPathAccessNoFollow have other causes and
-        // are passed on unchanged.
-        if (e.code() == std::error_code(EPERM, std::system_category()) &&
-            std::string(e.what()).find("cannot set the group of") != std::string::npos) {
-            throw std::system_error(e.code(), strprintf("%s (the core must run with the attach group as a "
-                                                        "supplementary group)", e.what()));
+        if (e.code() != std::error_code(EPERM, std::system_category())) throw;
+        // EPERM can also come from the ownership check, so say what to change
+        // only when the account is really outside the group. A core with
+        // CAP_CHOWN that is not a member never gets here, because the change
+        // succeeds.
+        bool member = ::getegid() == *gid;
+        const int n = ::getgroups(0, nullptr);
+        if (!member && n > 0) {
+            std::vector<gid_t> groups(static_cast<size_t>(n));
+            const int got = ::getgroups(n, groups.data());
+            if (got >= 0) member = std::find(groups.begin(), groups.begin() + got, *gid) != groups.begin() + got;
         }
-        throw;
+        if (member) throw;
+        throw std::system_error(e.code(), strprintf("cannot set the group of %s (the core must run with the "
+                                                    "attach group as a supplementary group)", ipcdir.string()));
     }
 }
 #endif // !WIN32
@@ -341,10 +376,13 @@ void PrepareIpcDirectory(const fs::path& dir)
     // no warning and no way to make it stick. So a permissive existing
     // directory is warned about but never changed.
     //
-    // This is not a hole: the two things that actually matter -- the socket
-    // and the auth cookie -- are ours, recreated on every start, and are
-    // created owner-only and fail closed (see bind and handshake.cpp). A
-    // widened directory makes it listable, not the cookie readable.
+    // The socket and the auth cookie are ours and are recreated on every start
+    // with a fixed access that fails closed (see bind and handshake.cpp):
+    // owner-only by default, and with -ipcattachgroup the socket is 0660 and the
+    // cookie 0640 in the attach group. A widened directory therefore does not
+    // change who can read the cookie. In attach-group mode the daemon sets the
+    // directory itself to 0750 in that group (ApplyAttachGroupAccess), which is
+    // the state this call does not warn about.
     //
     // When the directory is created here, restricting it fails closed: if we
     // cannot restrict a directory we just made, throw rather than expose the
@@ -373,10 +411,10 @@ void PrepareIpcDirectory(const fs::path& dir)
     } else {
 #ifndef WIN32
         struct stat st;
-        if (::stat(dir.string().c_str(), &st) == 0 && (st.st_mode & (S_IRWXG | S_IRWXO)) != 0) {
-            LogPrintf("WARN: %s: the IPC directory %s is accessible to other users (mode %03o). "
-                      "Leaving it as configured; the IPC socket and cookie inside it remain owner-only.",
-                      __func__, dir.string(), static_cast<unsigned>(st.st_mode & 07777));
+        if (::stat(dir.string().c_str(), &st) == 0) {
+            const auto warning = IpcDirWarning(dir.string(), st.st_mode, st.st_uid, st.st_gid, ::geteuid(),
+                                               AttachGroupGid());
+            if (warning) LogPrintf("WARN: %s: %s", __func__, *warning);
         }
 #else
         try {

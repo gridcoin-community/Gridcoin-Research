@@ -143,8 +143,9 @@ BOOST_AUTO_TEST_CASE(cookie_with_group_is_0640)
     BOOST_CHECK(!fs::exists(dir / "ipc.cookie.tmp"));
 
     // A group other than the effective one shows the fchown is what sets it.
-    std::vector<gid_t> groups(256);
-    const int n = ::getgroups(static_cast<int>(groups.size()), groups.data());
+    const int count = ::getgroups(0, nullptr);
+    std::vector<gid_t> groups(count > 0 ? static_cast<size_t>(count) : 0);
+    const int n = groups.empty() ? 0 : ::getgroups(count, groups.data());
     for (int i = 0; i < n; ++i) {
         if (groups[i] == ::getegid()) continue;
         ipc::WriteCookie(dir, groups[i]);

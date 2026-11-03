@@ -60,12 +60,23 @@ enum class PathKind { Socket, Directory, RegularFile };
 //! a symlink at it, through an fd of the path.
 //! Linux: open(O_PATH|O_NOFOLLOW|O_CLOEXEC), fstat, fchownat(fd,"",-1,gid,AT_EMPTY_PATH),
 //! fchmodat2(fd,"",mode,AT_EMPTY_PATH) when SYS_fchmodat2 is defined and succeeds,
-//! else chmod("/proc/self/fd/<fd>", mode).
+//! else chmod("/proc/self/fd/<fd>", mode). When a group is given, the mode is first
+//! narrowed to (current mode & mode), so the new group never holds a bit the final
+//! mode does not grant, then the group is changed, then the final mode is set.
 //! Other POSIX: fchownat/fchmodat(AT_FDCWD, path, ..., AT_SYMLINK_NOFOLLOW).
 //! Afterwards the path (fstat on the fd on Linux, lstat elsewhere) must show the expected type, st_uid == geteuid(),
 //! mode & 07777 == mode, and the group when given; otherwise throws
 //! std::system_error.
 void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, std::optional<gid_t> group);
+
+//! The warning PrepareIpcDirectory logs for an existing IPC directory with the
+//! given mode, owner and group, or nullopt when there is nothing to say: the
+//! directory gives no access to group or others, or it is exactly the state
+//! ApplyAttachGroupAccess leaves it in (mode 0750, \p attach_gid, owned by
+//! \p self_uid). The text says whether the socket and cookie inside it are
+//! owner-only or accessible to the attach group.
+std::optional<std::string> IpcDirWarning(const std::string& dir, mode_t mode, uid_t owner, gid_t group,
+                                         uid_t self_uid, std::optional<gid_t> attach_gid);
 
 //! With -ipcattachgroup configured (ipc::AttachGroupGid()), give the IPC
 //! directory \p ipcdir mode 0750 and that group through an fd, so members of the

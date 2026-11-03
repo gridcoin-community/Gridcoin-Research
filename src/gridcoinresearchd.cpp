@@ -383,6 +383,9 @@ bool AppInit(int argc, char* argv[])
             fRet = false;
             SetShutdownRequested();
         } else if (multiprocess) {
+            // Whether a failure came from the listener (bind, listen), the only
+            // step after which a stale socket file can be the cause.
+            bool listening = false;
             try {
                 // An explicit -ipcdir may not exist yet. Create it restricted to
                 // this account; a failure is fatal like the rest of this block.
@@ -424,6 +427,7 @@ bool AppInit(int argc, char* argv[])
                     };
                 ipc = interfaces::MakeIpc("gridcoinresearchd", std::move(make_serve_init));
                 std::string address = "unix";
+                listening = true;
                 ipc->listenAddress(address);
                 LogPrintf("IPC: serving GUI connections on %s\n", address);
                 // Say which access controls are actually in force, rather than
@@ -438,17 +442,21 @@ bool AppInit(int argc, char* argv[])
                 // cookie, dials a socket nobody is listening on, and fails forever
                 // with no explanation, while the one line that says why is buried
                 // in debug.log. The failures reaching here are all actionable:
-                // another process already listening, a socket path over the
-                // 108-byte sockaddr_un limit, or the socket/cookie access control
-                // (chmod / owner-only DACL) not being applicable to the IPC
-                // directory.
+                // the IPC directory cannot be created or given its access (also
+                // the attach group), the cookie cannot be written, another
+                // process is already listening, a socket path is over the
+                // 108-byte sockaddr_un limit, or the socket access control
+                // (chmod / owner-only DACL) is not applicable. Only a failure of
+                // the listener itself gets the advice about a stale socket.
+                const std::string stale_advice = listening ?
+                    strprintf("If the node was killed or crashed, a stale socket may be left in the IPC "
+                              "directory (%s): stop any running gridcoinresearchd, delete 'node.sock' "
+                              "there, and start again. Otherwise start without -multiprocess.",
+                              ipc::GetIpcDir().string()) :
+                    std::string{"Fix the cause above, or start without -multiprocess."};
                 InitError(strprintf("Failed to start the multiprocess IPC listener: %s\n\n"
-                                    "-multiprocess was requested, so this is fatal. If the node was "
-                                    "killed or crashed, a stale socket may be left in the IPC "
-                                    "directory (%s): stop any running gridcoinresearchd, delete "
-                                    "'node.sock' there, and start again. Otherwise start without "
-                                    "-multiprocess.",
-                                    e.what(), ipc::GetIpcDir().string()));
+                                    "-multiprocess was requested, so this is fatal. %s",
+                                    e.what(), stale_advice));
                 // Exit non-zero and take the normal shutdown path: the wait loop
                 // below sees the request immediately and falls through to
                 // Shutdown(), so the node stops cleanly instead of running on as a

@@ -6,6 +6,7 @@
 #include "ipc/process.h"
 
 #include "fs.h"
+#include "logging.h"
 #include "test/state_guard.h"
 #include "util.h"
 
@@ -23,9 +24,12 @@
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
+#include <list>
 #include <grp.h>
 #include <optional>
 #include <stdexcept>
+#include <tuple>
 #endif
 
 namespace {
@@ -82,17 +86,62 @@ std::optional<std::string> GroupName(gid_t gid)
     return std::string{gr->gr_name};
 }
 
+//! The supplementary groups of this process, sized by getgroups(0, nullptr).
+std::vector<gid_t> SupplementaryGroups()
+{
+    const int count = ::getgroups(0, nullptr);
+    std::vector<gid_t> groups(count > 0 ? static_cast<size_t>(count) : 0);
+    const int n = groups.empty() ? 0 : ::getgroups(count, groups.data());
+    groups.resize(n > 0 ? static_cast<size_t>(n) : 0);
+    return groups;
+}
+
 //! A group this account belongs to other than its effective group, from
 //! getgroups(), or nullopt when there is none.
 std::optional<gid_t> OtherMemberGroup()
 {
-    std::vector<gid_t> groups(256);
-    const int n = ::getgroups(static_cast<int>(groups.size()), groups.data());
-    for (int i = 0; i < n; ++i) {
-        if (groups[i] != ::getegid()) return groups[i];
+    for (const gid_t g : SupplementaryGroups()) {
+        if (g != ::getegid()) return g;
     }
     return std::nullopt;
 }
+
+//! The name of a group this account is not a member of, or nullopt.
+std::optional<std::string> ForeignGroupName()
+{
+    const std::vector<gid_t> mine = SupplementaryGroups();
+    std::optional<std::string> foreign;
+    ::setgrent();
+    while (const struct group* gr = ::getgrent()) {
+        if (gr->gr_gid == ::getegid()) continue;
+        if (std::find(mine.begin(), mine.end(), gr->gr_gid) != mine.end()) continue;
+        foreign = std::string{gr->gr_name};
+        break;
+    }
+    ::endgrent();
+    return foreign;
+}
+
+//! Collects the lines the logger prints while in scope.
+struct CaptureLog
+{
+    std::vector<std::string> lines;
+    std::list<std::function<void(const std::string&)>>::iterator callback;
+
+    CaptureLog()
+        : callback(LogInstance().PushBackCallback([this](const std::string& s) { lines.push_back(s); }))
+    {
+    }
+    ~CaptureLog() { LogInstance().DeleteCallback(callback); }
+    CaptureLog(const CaptureLog&) = delete;
+    CaptureLog& operator=(const CaptureLog&) = delete;
+
+    bool Contains(const std::string& needle) const
+    {
+        return std::any_of(lines.begin(), lines.end(),
+                           [&](const std::string& l) { return l.find(needle) != std::string::npos; });
+    }
+};
 #endif
 
 } // namespace
@@ -288,19 +337,7 @@ BOOST_AUTO_TEST_CASE(attach_group_not_a_member_names_the_remedy)
         BOOST_TEST_MESSAGE("running as root, which can set any group; skipping");
         return;
     }
-    std::vector<gid_t> mine(256);
-    const int n = ::getgroups(static_cast<int>(mine.size()), mine.data());
-    mine.resize(n > 0 ? static_cast<size_t>(n) : 0);
-
-    std::optional<std::string> foreign;
-    ::setgrent();
-    while (const struct group* gr = ::getgrent()) {
-        if (gr->gr_gid == ::getegid()) continue;
-        if (std::find(mine.begin(), mine.end(), gr->gr_gid) != mine.end()) continue;
-        foreign = std::string{gr->gr_name};
-        break;
-    }
-    ::endgrent();
+    const std::optional<std::string> foreign = ForeignGroupName();
     if (!foreign) {
         BOOST_TEST_MESSAGE("no group this account is outside of; skipping");
         return;
@@ -316,6 +353,99 @@ BOOST_AUTO_TEST_CASE(attach_group_not_a_member_names_the_remedy)
                                 "the core must run with the attach group as a supplementary group") !=
                                 std::string::npos,
                             e.what());
+    }
+}
+
+// A directory regrouped from 0770 to 0750 ends with the new group and without
+// group write.
+BOOST_AUTO_TEST_CASE(regroup_wide_directory_ends_narrow)
+{
+    const auto other = OtherMemberGroup();
+    if (!other) {
+        BOOST_TEST_MESSAGE("no supplementary group other than the primary one; skipping");
+        return;
+    }
+    TempDir dir;
+    BOOST_REQUIRE_EQUAL(::chmod(dir.path.c_str(), 0770), 0);
+    ipc::ApplyPathAccessNoFollow(dir.path, ipc::PathKind::Directory, 0750, other);
+    BOOST_CHECK_EQUAL(ModeOf(dir.path), static_cast<mode_t>(0750));
+    BOOST_CHECK_EQUAL(GroupOf(dir.path), *other);
+}
+
+// The order of the steps cannot be seen from outside without a hook, so it is
+// seen through a failure: when the group change is refused, the mode has
+// already been narrowed to what the old and the final mode share, and the group
+// is unchanged.
+BOOST_AUTO_TEST_CASE(regroup_narrows_before_the_group_change)
+{
+    if (::geteuid() == 0) {
+        BOOST_TEST_MESSAGE("running as root, which can set any group; skipping");
+        return;
+    }
+    const auto foreign_name = ForeignGroupName();
+    const struct group* gr = foreign_name ? ::getgrnam(foreign_name->c_str()) : nullptr;
+    if (gr == nullptr) {
+        BOOST_TEST_MESSAGE("no group this account is outside of; skipping");
+        return;
+    }
+    TempDir dir;
+    BOOST_REQUIRE_EQUAL(::chmod(dir.path.c_str(), 0770), 0);
+    const gid_t before = GroupOf(dir.path);
+    BOOST_CHECK_THROW(ipc::ApplyPathAccessNoFollow(dir.path, ipc::PathKind::Directory, 0750, gr->gr_gid),
+                      std::system_error);
+    BOOST_CHECK_EQUAL(ModeOf(dir.path), static_cast<mode_t>(0750));
+    BOOST_CHECK_EQUAL(GroupOf(dir.path), before);
+}
+
+BOOST_AUTO_TEST_CASE(ipc_dir_warning_by_mode_and_group)
+{
+    const uid_t self = ::geteuid();
+    const gid_t grp = 4242;
+    // No access for group or others: nothing to say, in either mode.
+    BOOST_CHECK(!ipc::IpcDirWarning("/d", 0700, self, grp, self, std::nullopt));
+    BOOST_CHECK(!ipc::IpcDirWarning("/d", 0700, self, grp, self, grp));
+    // The state ApplyAttachGroupAccess leaves: nothing to say.
+    BOOST_CHECK(!ipc::IpcDirWarning("/d", 0750, self, grp, self, grp));
+    // Without an attach group the socket and cookie are owner-only.
+    auto w = ipc::IpcDirWarning("/d", 0750, self, grp, self, std::nullopt);
+    BOOST_REQUIRE(w);
+    BOOST_CHECK(w->find("owner-only") != std::string::npos);
+    // With one, a directory that is not exactly the expected state is warned
+    // about and the text does not claim owner-only.
+    for (const auto& [mode, owner, group] : {std::tuple<mode_t, uid_t, gid_t>{0755, self, grp},
+                                              {0770, self, grp},
+                                              {0750, self, grp + 1},
+                                              {0750, self + 1, grp}}) {
+        w = ipc::IpcDirWarning("/d", mode, owner, group, self, grp);
+        BOOST_REQUIRE(w);
+        BOOST_CHECK(w->find("accessible to the attach group") != std::string::npos);
+        BOOST_CHECK(w->find("owner-only") == std::string::npos);
+    }
+}
+
+// PrepareIpcDirectory on a directory ApplyAttachGroupAccess has prepared logs no
+// warning, and does log one for the same mode without the group.
+BOOST_AUTO_TEST_CASE(prepare_ipc_directory_attach_group_state_is_quiet)
+{
+    AttachGroupReset reset;
+    const auto name = GroupName(::getegid());
+    if (!name) {
+        BOOST_TEST_MESSAGE("the effective group has no entry in the group database; skipping");
+        return;
+    }
+    TempDir dir;
+    BOOST_REQUIRE_EQUAL(::chmod(dir.path.c_str(), 0750), 0);
+    {
+        CaptureLog log;
+        ipc::PrepareIpcDirectory(dir.path);
+        BOOST_CHECK(log.Contains("accessible to other users"));
+    }
+    BOOST_REQUIRE(ipc::ConfigureAttachGroup(*name));
+    ipc::ApplyAttachGroupAccess(dir.path);
+    {
+        CaptureLog log;
+        ipc::PrepareIpcDirectory(dir.path);
+        BOOST_CHECK(!log.Contains("accessible to other users"));
     }
 }
 

@@ -120,15 +120,16 @@ PeerVerdict ClientPeerDecision(const PeerIdentity& server, const ClientPeerConte
 #endif // !WIN32
 
 //! The core's check of an accepted peer: ServerPeerDecision with this process's
-//! effective uid and AttachGroupGid(). Windows placeholder: allow unless
+//! effective uid and AttachGroupGid(). The Windows placeholder allows unless
 //! -ipcattachgroup is set.
 PeerVerdict ServerPeerPolicy(const PeerIdentity& peer);
 
 //! The GUI's check of the core it connected to, before it presents the cookie:
 //! ClientPeerDecision with this process's effective uid, the uid of the
-//! -ipcserviceuser account (looked up on each call) and lstat() of \p ipcdir,
-//! the directory that holds the socket (read on each call). Windows placeholder:
-//! allow unless -ipcserviceuser is set.
+//! -ipcserviceuser account and lstat() of \p ipcdir, the directory that holds
+//! the socket. A core at the caller's own uid is allowed at once, without the
+//! account lookup or the lstat; for any other core both are made on each call.
+//! The Windows placeholder allows unless -ipcserviceuser is set.
 PeerVerdict ClientPeerPolicy(const PeerIdentity& server, const fs::path& ipcdir);
 
 //! The value of a name-valued IPC option such as "-ipcserviceuser", or "" when

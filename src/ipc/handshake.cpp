@@ -244,6 +244,18 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents, std::opt
             ::close(fd);
             throw std::system_error(e, std::system_category(), "fchmod " + tmp_str);
         }
+        // Fail closed unless the fd shows the mode and group that were asked for.
+        struct stat st;
+        if (::fstat(fd, &st) != 0) {
+            int e = errno;
+            ::close(fd);
+            throw std::system_error(e, std::system_category(), "fstat " + tmp_str);
+        }
+        if ((st.st_mode & 07777) != static_cast<mode_t>(0640) || st.st_gid != *group) {
+            ::close(fd);
+            throw std::system_error(EPERM, std::system_category(),
+                                    "the group access was not applied to " + tmp_str);
+        }
     }
     size_t written = 0;
     while (written < contents.size()) {
