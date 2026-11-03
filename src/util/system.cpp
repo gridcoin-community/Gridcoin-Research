@@ -8,6 +8,7 @@
 #include "util/dir_permissions.h"
 #include <util/strencodings.h>
 #include <util/check.h>
+#include <util/refused_setting_keys.h>
 #include <util/string.h>
 
 #include <logging.h>
@@ -316,6 +317,48 @@ bool ArgsManager::ParseParameters(int argc, const char* const argv[], std::strin
     return true;
 }
 
+bool MatchSettingKeyPattern(std::string_view pattern, std::string_view name)
+{
+    size_t p = 0;
+    size_t n = 0;
+    // The position of the last '*' in the pattern, and the name position it matched from.
+    size_t star = std::string_view::npos;
+    size_t star_name = 0;
+
+    while (n < name.size()) {
+        if (p < pattern.size() && pattern[p] == '*') {
+            star = p++;
+            star_name = n;
+        } else if (p < pattern.size() && pattern[p] == name[n]) {
+            ++p;
+            ++n;
+        } else if (star != std::string_view::npos) {
+            // Let the last '*' take one more character and retry after it.
+            p = star + 1;
+            n = ++star_name;
+        } else {
+            return false;
+        }
+    }
+
+    // Only '*' can remain in the pattern.
+    while (p < pattern.size() && pattern[p] == '*') ++p;
+
+    return p == pattern.size();
+}
+
+bool IsRefusedSettingKey(const std::string& key)
+{
+    const size_t dot = key.find('.');
+    const std::string_view name = std::string_view(key).substr(dot == std::string::npos ? 0 : dot + 1);
+
+    for (const std::string_view pattern : util::REFUSED_SETTING_KEY_PATTERNS) {
+        if (MatchSettingKeyPattern(pattern, name)) return true;
+    }
+
+    return false;
+}
+
 std::optional<unsigned int> ArgsManager::GetArgFlags(const std::string& name) const
 {
     LOCK(cs_args);
@@ -326,6 +369,35 @@ std::optional<unsigned int> ArgsManager::GetArgFlags(const std::string& name) co
         }
     }
     return std::nullopt;
+}
+
+std::map<std::string, unsigned int> ArgsManager::GetRegisteredArgFlags() const
+{
+    LOCK(cs_args);
+    std::map<std::string, unsigned int> flags;
+    for (const auto& arg_map : m_available_args) {
+        for (const auto& arg : arg_map.second) {
+            flags[arg.first] |= arg.second.m_flags;
+        }
+    }
+    return flags;
+}
+
+SettingClass ArgsManager::GetSettingClass(const std::string& key) const
+{
+    // The patterns win over any flag, and strip the section themselves.
+    if (IsRefusedSettingKey(key)) return SettingClass::REFUSE;
+
+    const size_t dot = key.find('.');
+    const std::string name = dot == std::string::npos ? key : key.substr(dot + 1);
+
+    const std::optional<unsigned int> flags = GetArgFlags('-' + name);
+    if (!flags) return SettingClass::ELEVATE;
+
+    if (*flags & COMMAND_LINE_ONLY) return SettingClass::REFUSE;
+    if (*flags & SETTING_FREE) return SettingClass::FREE;
+
+    return SettingClass::ELEVATE;
 }
 
 fs::path ArgsManager::GetBlocksDirPath()
@@ -987,6 +1059,11 @@ bool ArgsManager::ReadConfigStream(std::istream& stream, const std::string& file
         util::SettingsValue value = InterpretOption(section, key, option.second);
         std::optional<unsigned int> flags = GetArgFlags('-' + key);
         if (flags) {
+            // A command-line-only option is not stored from a config file, and is not an error.
+            if (*flags & COMMAND_LINE_ONLY) {
+                LogPrintf("ignored %s from %s; it is accepted only on the command line\n", key, filepath);
+                continue;
+            }
             if (!CheckValid(key, value, *flags, error)) {
                 return false;
             }

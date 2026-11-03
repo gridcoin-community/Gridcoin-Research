@@ -18,6 +18,8 @@
 #include <util/rwsettings.h>
 #include <util/settings.h>
 #include <util/strencodings.h>
+#include <util/refused_setting_keys.h>
+#include <logging.h>
 #include <util/string.h>
 #include <util/syserror.h>
 
@@ -27,6 +29,9 @@
 #include <system_error>
 
 #include <sstream>
+#include <fstream>
+#include <functional>
+#include <list>
 
 // Suite-level guard: util_GetArg and util_ParseParameters leave their test
 // arguments in the global ArgsManager (ClearArgs() clears only the
@@ -1708,5 +1713,99 @@ BOOST_AUTO_TEST_CASE(syserror_string_returns_platform_message)
     BOOST_CHECK(result.find(message) != std::string::npos);
     BOOST_CHECK(result.find(strprintf("(%d)", ENOENT)) != std::string::npos);
 }
+
+BOOST_AUTO_TEST_CASE(setting_key_patterns_match_whole_names)
+{
+    // The same vectors are checked against fnmatch in test/lint/lint-refused-setting-keys.py.
+    BOOST_CHECK(MatchSettingKeyPattern("*notify", "blocknotify"));
+    BOOST_CHECK(MatchSettingKeyPattern("*notify", "notify"));
+    BOOST_CHECK(!MatchSettingKeyPattern("*notify", "notifyx"));
+    BOOST_CHECK(MatchSettingKeyPattern("rpc*", "rpc"));
+    BOOST_CHECK(MatchSettingKeyPattern("clear*history", "clearbeaconhistory"));
+    BOOST_CHECK(!MatchSettingKeyPattern("clear*history", "clearbeaconhistoryx"));
+    BOOST_CHECK(MatchSettingKeyPattern("min", "min"));
+    BOOST_CHECK(!MatchSettingKeyPattern("min", "mininput"));
+    BOOST_CHECK(!MatchSettingKeyPattern("rpc*", "RPCPORT"));
+    BOOST_CHECK(MatchSettingKeyPattern("*", ""));
+    BOOST_CHECK(!MatchSettingKeyPattern("a*b*c", "acb"));
+}
+
+BOOST_AUTO_TEST_CASE(refused_setting_keys_ignore_a_section_prefix_but_not_no)
+{
+    BOOST_CHECK(IsRefusedSettingKey("blocknotify"));
+    BOOST_CHECK(IsRefusedSettingKey("test.blocknotify"));
+    BOOST_CHECK(IsRefusedSettingKey("rpcpassword"));
+    BOOST_CHECK(!IsRefusedSettingKey("staking"));
+    BOOST_CHECK(!IsRefusedSettingKey("noncruncher"));
+    BOOST_CHECK(!IsRefusedSettingKey("printtoconsole"));
+}
+
+// The compiled list is exactly the data file's patterns, in order (drift guard for the generator).
+BOOST_AUTO_TEST_CASE(compiled_refused_patterns_follow_the_data_file)
+{
+    std::ifstream file(GRIDCOIN_REFUSED_SETTING_KEYS_FILE);
+    BOOST_REQUIRE(file.is_open());
+
+    std::vector<std::string> from_file;
+    std::string line;
+
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#') continue;
+
+        from_file.push_back(line);
+    }
+
+    BOOST_REQUIRE(!from_file.empty());
+    BOOST_CHECK_EQUAL_COLLECTIONS(from_file.begin(), from_file.end(),
+        util::REFUSED_SETTING_KEY_PATTERNS.begin(), util::REFUSED_SETTING_KEY_PATTERNS.end());
+}
+
+BOOST_AUTO_TEST_CASE(setting_class_follows_patterns_and_flags)
+{
+    TestArgsManager args;
+    args.SetupArgs({{"-free", ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE},
+                    {"-plain", ArgsManager::ALLOW_ANY},
+                    {"-clo", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-blocknotify", ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE}});
+    BOOST_CHECK(args.GetSettingClass("free") == SettingClass::FREE);
+    BOOST_CHECK(args.GetSettingClass("test.free") == SettingClass::FREE);
+    BOOST_CHECK(args.GetSettingClass("plain") == SettingClass::ELEVATE);
+    BOOST_CHECK(args.GetSettingClass("clo") == SettingClass::REFUSE);
+    BOOST_CHECK(args.GetSettingClass("blocknotify") == SettingClass::REFUSE); // the pattern wins over the flag
+    BOOST_CHECK(args.GetSettingClass("unregistered") == SettingClass::ELEVATE);
+    BOOST_CHECK_EQUAL(args.GetRegisteredArgFlags().count("-clo"), 1u);
+}
+
+BOOST_AUTO_TEST_CASE(command_line_only_options_are_ignored_in_a_config_file)
+{
+    TestArgsManager args;
+    args.SetupArgs({{"-clo", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-regular", ArgsManager::ALLOW_ANY}});
+
+    std::vector<std::string> lines;
+    auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+
+    args.ReadConfigString("clo=1\nregular=1\n[test]\nclo=2\n");
+
+    LogInstance().DeleteCallback(callback);
+
+    BOOST_CHECK(!args.IsArgSet("-clo"));
+    BOOST_CHECK(args.IsArgSet("-regular"));
+
+    size_t ignored_lines = 0;
+    for (const std::string& l : lines) {
+        if (l.find("ignored clo from") != std::string::npos
+            && l.find("it is accepted only on the command line") != std::string::npos) {
+            ++ignored_lines;
+        }
+    }
+    BOOST_CHECK_EQUAL(ignored_lines, 2u);
+
+    const char* argv[] = {"x", "-clo=3"};
+    std::string error;
+    BOOST_REQUIRE(args.ParseParameters(2, argv, error));
+    BOOST_CHECK_EQUAL(args.GetArg("-clo", ""), "3");
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()

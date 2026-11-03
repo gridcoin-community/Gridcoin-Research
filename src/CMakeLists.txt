@@ -343,6 +343,21 @@ if(USE_ASM_SCRYPT)
     target_sources(gridcoin_util PRIVATE scrypt-x86.S scrypt-x86_64.S)
 endif()
 
+# The Refuse class pattern list is compiled in from the one data file, which is
+# also installed for tools. The command is rerun whenever the file or the
+# script changes.
+set(REFUSED_SETTING_KEYS_FILE "${CMAKE_SOURCE_DIR}/share/gridcoin/refused-setting-keys.txt")
+set(REFUSED_SETTING_KEYS_HEADER "${CMAKE_BINARY_DIR}/src/util/refused_setting_keys.h")
+add_custom_command(
+    OUTPUT "${REFUSED_SETTING_KEYS_HEADER}"
+    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_SOURCE_DIR}/build-aux/cmake/refusedkeys2header.cmake"
+        "${REFUSED_SETTING_KEYS_FILE}" "${REFUSED_SETTING_KEYS_HEADER}"
+    DEPENDS "${REFUSED_SETTING_KEYS_FILE}" "${CMAKE_SOURCE_DIR}/build-aux/cmake/refusedkeys2header.cmake"
+    COMMENT "Generating util/refused_setting_keys.h"
+    VERBATIM
+)
+target_sources(gridcoin_util PRIVATE ${CMAKE_BINARY_DIR}/src/util/refused_setting_keys.h)
+
 target_include_directories(gridcoin_util PUBLIC
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_BINARY_DIR}/src
@@ -492,6 +507,9 @@ if(ENABLE_DAEMON)
         include(GNUInstallDirs)
         install(TARGETS gridcoinresearchd COMPONENT daemon
             DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        )
+        install(FILES "${CMAKE_SOURCE_DIR}/share/gridcoin/refused-setting-keys.txt" COMPONENT daemon
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/gridcoin"
         )
         install(FILES "${CMAKE_SOURCE_DIR}/doc/gridcoinresearchd.1" COMPONENT daemon
             DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"

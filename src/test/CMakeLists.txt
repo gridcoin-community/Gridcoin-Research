@@ -295,6 +295,12 @@ else()
     target_compile_definitions(test_gridcoin PRIVATE BOOST_TEST_STATIC_LINK)
 endif()
 
+# txt2header.cmake cannot embed the pattern file, because it names the variable
+# after the file and refused-setting-keys is not an identifier.
+target_compile_definitions(test_gridcoin PRIVATE
+    GRIDCOIN_REFUSED_SETTING_KEYS_FILE="${CMAKE_SOURCE_DIR}/share/gridcoin/refused-setting-keys.txt"
+)
+
 set_property(SOURCE test_gridcoin.cpp APPEND PROPERTY
     COMPILE_DEFINITIONS "BOOST_TEST_MODULE=Gridcoin Test Suite"
 )

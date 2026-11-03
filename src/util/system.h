@@ -24,6 +24,7 @@
 #include <any>
 #include <exception>
 #include <map>
+#include <string_view>
 #include <optional>
 #include <set>
 #include <stdint.h>
@@ -99,6 +100,17 @@ struct SectionInfo
     int m_line;
 };
 
+//! How changing a setting is treated: FREE is stored without elevation, ELEVATE needs it,
+//! REFUSE is honoured only in gridcoinresearch.conf or on the command line.
+enum class SettingClass { FREE, ELEVATE, REFUSE };
+
+//! '*' matches any run of characters, every other character itself.
+bool MatchSettingKeyPattern(std::string_view pattern, std::string_view name);
+
+//! The Refuse class patterns: \p key is given without '-'; a "<section>." prefix is removed;
+//! the "no" prefix is not.
+bool IsRefusedSettingKey(const std::string& key);
+
 class ArgsManager
 {
 public:
@@ -120,7 +132,11 @@ public:
         NETWORK_ONLY = 0x200,
         // This argument's value is sensitive (such as a password).
         SENSITIVE = 0x400,
-        COMMAND = 0x800
+        COMMAND = 0x800,
+        // Honoured only on the command line; a config file or the settings file is ignored.
+        COMMAND_LINE_ONLY = 0x1000,
+        // changesettings may store it without elevation.
+        SETTING_FREE = 0x2000
     };
 
 protected:
@@ -353,6 +369,17 @@ public:
      * Return nullopt for unknown arg.
      */
     std::optional<unsigned int> GetArgFlags(const std::string& name) const;
+
+    /**
+     * Every registration, "-name" -> flags OR'ed across categories.
+     */
+    std::map<std::string, unsigned int> GetRegisteredArgFlags() const;
+
+    /**
+     * Class of a registered setting. \p key is given without '-'; a
+     * "<section>." prefix is ignored. An unregistered key is ELEVATE.
+     */
+    SettingClass GetSettingClass(const std::string& key) const;
 
     /**
      * Read and update settings file with saved settings. This needs to be
