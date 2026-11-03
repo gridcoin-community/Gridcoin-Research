@@ -166,6 +166,9 @@ BASE_SCRIPTS = [
     # feature_notify_fd_inheritance.py: a notify child inherits neither the RPC listener nor an
     # accepted RPC connection.
     'feature_notify_fd_inheritance.py',
+    # feature_rpc_bounded_close.py: a client that never reads or closes cannot hold a closed RPC
+    # connection past the graceful close bound.
+    'feature_rpc_bounded_close.py',
     'p2p_version_handshake.py',
     # p2p_version_timedrift.py: the VERSION handshake's 480 s clock-drift gate,
     # including a crafted nTime that overflowed the old abs() check.

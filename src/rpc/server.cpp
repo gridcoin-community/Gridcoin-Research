@@ -984,9 +984,11 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
         // A child started on another thread between AcceptEx completing and this call can still inherit it.
         SetHandleInformation(reinterpret_cast<HANDLE>(conn->socket.native_handle()), HANDLE_FLAG_INHERIT, 0);
 #else
-        // EAGAIN is also EWOULDBLOCK on every platform built here. The acceptor is non-blocking and several workers may be woken for one connection; the one
-        // that finds nothing to accept returns. On macOS accept and FD_CLOEXEC are two calls, so a
-        // child started on another thread between them can still inherit the socket.
+        // Only one async_wait is outstanding, but readiness can be spurious and a client can reset
+        // before it is accepted, so accept may find nothing (EAGAIN, which is also EWOULDBLOCK on
+        // every platform built here) and the handler then simply returns. On macOS accept and
+        // FD_CLOEXEC are two calls, so a child started on another thread between them can still
+        // inherit the socket.
         sockaddr_storage ss;
         socklen_t ss_len = sizeof(ss);
         const SOCKET fd = AcceptCloexec(acceptor->native_handle(), reinterpret_cast<sockaddr*>(&ss), &ss_len);
