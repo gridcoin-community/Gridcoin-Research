@@ -218,9 +218,10 @@ public:
     // These three were plain int64_t historically (Bitcoin-Core-inherited).
     // ThreadSocketHandler2's inactivity-check loop reads them racily against
     // the message-handler / connection-accept paths that write them; TSan
-    // surfaced races at net.cpp:751,1144,1158,1170,1179,1188 and elsewhere
-    // tracking the same addresses. Atomicising matches the pattern already
-    // used for nSendBytes / nRecvBytes / nTimeOffset directly above.
+    // surfaced races in SocketSendData and in ThreadSocketHandler2's
+    // inactivity check (net.cpp) and elsewhere tracking the same addresses.
+    // Atomicising matches the pattern already used for nSendBytes /
+    // nRecvBytes / nTimeOffset directly above.
     std::atomic<int64_t> nLastSend{0};
     std::atomic<int64_t> nLastRecv{0};
     std::atomic<int64_t> nTimeConnected{0};
@@ -316,8 +317,9 @@ public:
     // ping-send path in SendMessages and cleared on the PONG receive path in
     // ProcessMessage; read raw from ThreadSocketHandler2's timeout check. The
     // companion nPingUsecTime / nMinPingUsecTime below were already atomic;
-    // atomicising these two closes the matching races (TSan main.cpp:2992 and
-    // net.cpp:1186).
+    // atomicising these two closes the matching races (TSan: the PONG branch
+    // of ProcessMessage in net_processing.cpp and the ping-timeout check in
+    // ThreadSocketHandler2 in net.cpp).
     std::atomic<uint64_t> nPingNonceSent{0};
     // Time (in usec) the last ping was sent, or 0 if no ping was ever sent.
     std::atomic<int64_t> nPingUsecStart{0};

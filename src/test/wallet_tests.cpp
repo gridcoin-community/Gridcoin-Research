@@ -3066,11 +3066,13 @@ BOOST_AUTO_TEST_CASE(transaction_added_to_mempool_preserves_inmempool_state)
     // Pins the invariant CWallet::CommitTransaction relies on:
     // a wtx that enters mapWallet with TxStateInMempool must remain in
     // TxStateInMempool after AcceptToMemoryPool fires the
-    // transactionAddedToMempool callback (main.cpp:576) for the originating
-    // wallet. The callback path goes through SyncTransaction ->
-    // AddToWalletIfInvolvingMe with fUpdate=false on an existing entry, so
-    // the state-assignment branch at line 1171 is skipped and the state set
-    // at CommitTransaction:3324 must survive untouched.
+    // TransactionAddedToMempool validation signal (emitted by
+    // AcceptToMemoryPool in validation.cpp) for the originating wallet. The
+    // callback path goes through SyncTransaction -> AddToWalletIfInvolvingMe
+    // with fUpdate=true (SyncTransaction's update_tx default) on an existing
+    // entry, so AddToWalletIfInvolvingMe's if (fUpdate) branch re-assigns the
+    // TxStateInMempool it is passed, and the state set by CommitTransaction's
+    // SetTxState(TxStateInMempool{}) comes out unchanged.
 
     CWallet test_wallet;
 

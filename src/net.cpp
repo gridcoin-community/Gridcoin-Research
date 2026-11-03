@@ -342,15 +342,15 @@ CNode* CConnman::FindNode(const CService& addr)
 
 void AddressCurrentlyConnected(const CService& addr)
 {
-    // Defensive null check matching the `if (g_connman)` pattern every other
-    // external g_connman consumer uses (e.g. CNode::PushGetBlocks, MapPort,
-    // StartNode, StopNode). This was the one free-function consumer still
-    // dereferencing g_connman unguarded. No null window is reachable today --
-    // its only caller is ProcessMessage on the message-handler thread, which
-    // Shutdown() joins (via StopNode() -> CConnman::Stop()) before
-    // g_connman.reset() (init.cpp) -- so this is consistency hardening that
-    // keeps it from becoming a latent null-deref if the teardown order changes
-    // or a new caller appears (issue #3068, follow-up to #2558).
+    // Defensive null check matching the `if (g_connman)` pattern the other
+    // guarded g_connman consumers use (e.g. CNode::PushGetBlocks, MapPort,
+    // StartNode, StopNode). This free function dereferenced g_connman
+    // unguarded. No null window is reachable today -- its only caller is
+    // ProcessMessage on the message-handler thread, which Shutdown() joins (via
+    // StopNode() -> CConnman::Stop()) before g_connman.reset() (init.cpp) -- so
+    // this is consistency hardening that keeps it from becoming a latent
+    // null-deref if the teardown order changes or a new caller appears (issue
+    // #3068, follow-up to #2558).
     if (g_connman) {
         g_connman->GetAddrMan().Connected(addr);
     }
