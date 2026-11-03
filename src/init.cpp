@@ -624,38 +624,39 @@ void AddLoggingArgs(ArgsManager& argsman)
     argsman.AddArg("-debug=<category>", "Output debugging information (default: -nodebug, supplying <category> is optional). "
                                         "If <category> is not supplied or if <category> = 1, output all debugging information. <category> can be: "
                    + ListLogCategories() + ". This option can be specified multiple times to output multiple categories.",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-debugexclude=<category>", strprintf("Exclude debugging information for a category. Can be used in"
                                                          " conjunction with -debug=1 to output debug logs for all categories"
                                                          " except the specified category. This option can be specified"
                                                          " multiple times to exclude multiple categories."),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logtimestamps", strprintf("Prepend debug output with timestamp (default: %u)", DEFAULT_LOGTIMESTAMPS),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logthreadnames", strprintf("Prepend debug output with name of the originating thread (default: %u)", DEFAULT_LOGTHREADNAMES),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logtimemicros", strprintf("Add microsecond precision to debug timestamps (default: %u)",
                                                DEFAULT_LOGTIMEMICROS),
-                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY | ArgsManager::SETTING_FREE,
+                   OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logips", strprintf("Include IP addresses in debug output (default: %u)", DEFAULT_LOGIPS),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-printtoconsole", "Send trace/debug info to console (default: 0) )",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-printtodebugger", "Send trace/debug info to debugger (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-shrinkdebugfile", "Shrink debug.log file on client startup (default: 1 when no -debug)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logarchivedaily", "Archive log file to compressed archive daily (default: 1)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-deleteoldlogarchives", "Delete oldest log archive files in excess of -logarchiveretainnumfiles "
                                             "setting",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logarchiveretainnumfiles=<num>", "Specify number of compressed log archive files to retain"
                                                       " (default: 30)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-org=<string>", "Set organization name for identification (default: not set). Required for use "
                                     "on testnet. Do not set this for a wallet on mainnet.",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::DEBUG_TEST);
 }
 
 void SetupServerArgs()
@@ -700,61 +701,65 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-dbcache=<n>", strprintf("Set database cache size in megabytes (%d to %d, default: %d)",
                                              nMinDbCache, nMaxDbCache, nDefaultDbCache),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-txindexdbcache=<n>", strprintf("Set txindex (leveldb) database cache size in megabytes "
                                                     "(%d to %d, default: %d)",
                                                     nMinDbCache, nMaxTxIndexCache, nDefaultDbCache),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-dblogsize=<n>", "Set database disk log size in megabytes (default: 100)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-synctime", "Sync time with other nodes (default: 1). Disabling this is strongly discouraged, even if"
                                 " this computer syncs with NTP: with -synctime=0 this node uses only its own clock, does"
                                 " not correct an error in it, and while it stakes shows a warning that it has no network"
                                 " time quorum.",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-paytxfee=<amt>", "Fee per KB to add to transactions you send",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-mintxfee=<amt>", "Minimum fee rate, per KB, a transaction must pay to be included in a block this node stakes (default: 0.001 GRC). Does not affect transactions you send; use -paytxfee for that.",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-mininput=<amt>", "When creating transactions, ignore inputs with value less than this (default: 0.01)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-testnet", "Use the test network", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
 #if HAVE_SYSTEM
     argsman.AddArg("-blocknotify=<cmd>", "Execute command when the best block changes (%s in cmd is replaced by block hash)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::OPTIONS);
     argsman.AddArg("-walletnotify=<cmd>", "Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::OPTIONS);
     argsman.AddArg("-projectnotify=<cmd>", "Execute command when a project is added to or removed from the whitelist, or "
                                            "an existing project's status changes",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::OPTIONS);
     argsman.AddArg("-pollnotify=<cmd>", "Execute command when a poll is added/deleted/expiring (%s1 in cmd is replaced by poll id,"
                                         "%s2 is replaced by status: added, deleted, expiration warning)",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SENSITIVE,
+                   OptionsCategory::OPTIONS);
     argsman.AddArg("-pollexpirewarningtime=<hours>", "Hours before poll expiration to execute notification command. Default is "
                                                      "7 days (168 hours)",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::OPTIONS);
     argsman.AddArg("-psgtnotify=<cmd>", "Execute command when the PSGT pool changes (%s1 in cmd is replaced by the multisig "
                                         "image hash, %s2 by the event: added, updated, expired, completed, "
                                         "conflict-mempool, conflict-block, removed; %s3 by the unsigned transaction id)",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SENSITIVE,
+                   OptionsCategory::OPTIONS);
 #endif
     argsman.AddArg("-confchange", "Require confirmations for change (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-enforcecanonical", "Enforce transaction scripts to use canonical PUSH operators (default: 1)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
 #if HAVE_SYSTEM
     argsman.AddArg("-alertnotify=<cmd>", "Execute command when a relevant alert is received or we see a really long fork"
                                          " (%s in cmd is replaced by message)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::OPTIONS);
 #endif
     argsman.AddArg("-blockminsize=<n>", "Set minimum block size in bytes (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-blockmaxsize=<n>", strprintf("Set maximum block size in bytes (default: %u)", MAX_BLOCK_SIZE_GEN/2),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-disableupdatecheck", "Optional: Disable update checks by wallet",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::OPTIONS);
     argsman.AddArg("-updatecheckinterval=<n>", "Optional: Check for updates every <n> hours (default: 120, minimum: 1)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-updatecheckurl=<url>", "Optional: URL for the update version checks (ex: "
                                             "https://sub.domain.com/location/latest",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -768,31 +773,33 @@ void SetupServerArgs()
     argsman.AddArg("-reindex", "Rebuild chain state and block index from the blk*.dat files on disk",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-checkblocks=<n>", "How many blocks to verify at startup, counting back from the tip (default: 1000, 0 = none)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-checklevel=<n>", "How thorough the startup block verification is (0-7, default: 1)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::OPTIONS);
     argsman.AddArg("-settings=<file>", strprintf("Specify path to dynamic settings data file. Can be disabled with"
                                                  " -nosettings. File is written at runtime and not meant to be edited by"
                                                  " users (use %s instead for custom settings). Relative paths will be"
                                                  " prefixed by datadir location. (default: %s)",
                                                  GRIDCOIN_CONF_FILENAME, GRIDCOIN_SETTINGS_FILENAME),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-startupnotify=<cmd>", "Execute command on startup.", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-startupnotify=<cmd>", "Execute command on startup.", ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE,
+                   OptionsCategory::OPTIONS);
     argsman.AddArg("-shutdownnotify=<cmd>", "Execute command immediately before beginning shutdown. The need for shutdown may be urgent,"
                                                 " so be careful not to delay it long (if the command doesn't require interaction with the"
                                                 " server, consider having it fork into the background).",
-                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                    ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::OPTIONS);
 
 
     // Staking
     argsman.AddArg("-enablesidestaking", "Enable side staking functionality (default: 0)",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-staking", "Allow wallet to stake if conditions to stake are met (default: 1)",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::STAKING);
     argsman.AddArg("-showorphans", "Include stale (orphaned) coinstake transactions in the transaction list",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::WALLET);
     argsman.AddArg("-minersleep=<n>", "Milliseconds the staking loop sleeps between rounds (default: 8000)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::STAKING);
     argsman.AddArg("-sidestake=<address,percent>", "Sidestake destination and allocation entry. There can be as many "
                                                    "specified as desired. Only six per stake can be sent. If more than "
                                                    "six are specified. Six are randomly chosen for each stake. Only active "
@@ -820,46 +827,50 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-enablestakesplit", "Enable unspent output spitting when staking to optimize staking efficiency "
                                         "(default: 0",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::STAKING);
     argsman.AddArg("-stakingefficiency=<percent>", "Specify target staking efficiency for stake splitting (default: 90, "
                                                    "clamped to [75, 98])",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::STAKING);
     argsman.AddArg("-minstakesplitvalue=<n>", strprintf("Specify minimum output value for post split output when stake "
                                                         "splitting (default: %" PRId64 "GRC)", MIN_STAKE_SPLIT_VALUE_GRC),
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::STAKING);
     argsman.AddArg("-reservebalance=<amt>", "Keep <amt> GRC unspent and unstaked (reserve). Applied live when changed.",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::STAKING);
 
     // Scraper
     argsman.AddArg("-scraper", "Activate scraper for statistics downloads. This will only work if the node has a wallet "
                                "key that is authorized by the network (default: 0).",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::SCRAPER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::SCRAPER);
     argsman.AddArg("-explorer", "Activate extended statistics file retention for the scraper. This will only work if the"
                                 "node is authorized for scraping and the scraper is activated (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::SCRAPER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::SCRAPER);
     argsman.AddArg("-scraperkey=<address>", "Manually specify scraper public key in address form. This is not necessary "
                                             "and will not work if the private key is not present in the scraper wallet file.",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::SCRAPER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::SCRAPER);
 
     // Researcher
     argsman.AddArg("-email=<email>", "Email address to use for CPID detection. Must match your BOINC account email",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::RESEARCHER);
     argsman.AddArg("-boincdatadir=<path>", "Path to the BOINC data directory for CPID detection when the BOINC client uses"
                                            " a non-default directory",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
     argsman.AddArg("-forcecpid=<cpid>", "Override automatic CPID detection with the specified CPID",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::RESEARCHER);
     argsman.AddArg("-investor", "Disable CPID detection and do not participate in the research reward system (deprecated - "
                                 "replaced by -noncruncher).",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::RESEARCHER);
     argsman.AddArg("-noncruncher", "Disable CPID detection and do not participate in the research reward system",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::RESEARCHER);
     argsman.AddArg("-pooloperator", "Skip pool CPID checks for staking nodes run by pool administrators",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::RESEARCHER);
 
     // Wallet
     argsman.AddArg("-keypool=<n>", strprintf("Set key pool size to <n> (default: %u for HD, %u for pre-HD wallets)", DEFAULT_KEYPOOL_SIZE, DEFAULT_KEYPOOL_SIZE_PRE_HD),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::WALLET);
     argsman.AddArg("-rescan", "Rescan the block chain for missing wallet transactions",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-rescanmrcrequests", "Rescan the block chain for missing mrc request transactions",
@@ -873,7 +884,8 @@ void SetupServerArgs()
                    strprintf("Cap on how far backward the Phase 2 startup chain-coherence walk will go "
                              "before giving up and requiring -reindex (default: %d). See issue #2865.",
                              GRC::DEFAULT_COHERENCE_WALK_MAX),
-                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY | ArgsManager::SETTING_FREE,
+                   OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-walletbackupinterval=<n>", "DEPRECATED: Optional: Create a wallet backup every <n> blocks. Zero"
                                                 " disables backups",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
@@ -893,22 +905,24 @@ void SetupServerArgs()
                                                   "and the other setting -walletbackupretainnumfiles.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-enableaccounts", "DEPRECATED: Enable accounting functionality (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::WALLET);
     argsman.AddArg("-maxsigcachesize=<n>", strprintf("Set maximum size for signature cache, in entries "
                                                      "(default: %d, maximum: %d)",
                                                      DEFAULT_MAX_SIG_CACHE_SIZE, MAX_SIG_CACHE_ENTRIES),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::WALLET);
     argsman.AddArg("-contractchangetoinputaddress", "Change from a contract transaction is returned to an input address "
                                                     "rather than creating a new change address (default: 0)",
-                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::WALLET);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT | ArgsManager::SETTING_FREE,
+                   OptionsCategory::WALLET);
 
     // Connections
     argsman.AddArg("-timeout=<n>", "Specify connection timeout in milliseconds (default: 5000)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-peertimeout=<n>", "Specify p2p connection timeout in seconds. This option determines the amount of time"
                                        " a peer may be inactive before the connection to it is dropped. (minimum: 1, default:"
                                        " 45)",
-                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY | ArgsManager::SETTING_FREE,
+                   OptionsCategory::CONNECTION);
     argsman.AddArg("-proxy=<ip:port>", "Connect through SOCKS5 proxy", ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::CONNECTION);
     argsman.AddArg("-tor=<ip:port>", "Use proxy to reach Tor onion services (default: same as -proxy)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
@@ -916,24 +930,24 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-addrlifespan=<n>", "Maximum age in days of the peer addresses returned in response to a getaddr "
                                         "message; older addresses are withheld (default: 7)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-port=<port>", "Listen for connections on <port> (default: 32749 or testnet: 32748)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxconnections=<n>", "Maintain at most <n> connections to peers (default: 125, upper limit of 950)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxoutboundconnections=<n>", "Maximum number of outbound connections (default: 8)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxmempool=<n>", "Keep the transaction memory pool below <n> megabytes (default: 300)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::NODE_RELAY);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::NODE_RELAY);
     argsman.AddArg("-persistmempool", "Whether to keep this node's own unbroadcast transactions on "
                    "disk as they change and reload them on startup so they survive a restart (default: 1)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::NODE_RELAY);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::NODE_RELAY);
     argsman.AddArg("-addnode=<ip>", "Add a node to connect to and attempt to keep the connection open",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-connect=<ip>", "Connect only to the specified node(s)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-seednode=<ip>", "Connect to a node to retrieve peer addresses, and disconnect",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-externalip=<ip>", "Specify your own public address",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-onlynet=<net>", "Make outgoing connections only through network <net> (IPv4, IPv6 or Tor). "
@@ -949,14 +963,14 @@ void SetupServerArgs()
     argsman.AddArg("-dnsseed", "Find peers using DNS lookup (default: 1)",
                    ArgsManager::ALLOW_BOOL, OptionsCategory::CONNECTION);
     argsman.AddArg("-banscore=<n>", "Threshold for disconnecting misbehaving peers (default: 100)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-bantime=<n>", strprintf("Default duration (in seconds) of manually configured bans (default: %u)",
                                              DEFAULT_MISBEHAVING_BANTIME),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxreceivebuffer=<n>", "Maximum per-connection receive buffer, <n>*1000 bytes (default: 5000)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxsendbuffer=<n>", "Maximum per-connection send buffer, <n>*1000 bytes (default: 1000)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+                   ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE, OptionsCategory::CONNECTION);
 #ifdef USE_UPNP
 #if USE_UPNP
     argsman.AddArg("-upnp", "Use UPnP to map the listening port. Ignored when not listening, "

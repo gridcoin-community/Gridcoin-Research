@@ -82,6 +82,7 @@ add_executable(test_gridcoin
     gridcoin/superblock_tests.cpp
     gridcoin/tally_tests.cpp
     gridcoin/voting_notify_tests.cpp
+    init_tests.cpp
     interfaces_tests.cpp
     key_tests.cpp
     limitedmap_tests.cpp
