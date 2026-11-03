@@ -659,13 +659,13 @@ public:
     //! ways to reach the renewal's build.
     //!
     //! \p renewal_access is the automated beacon renewal's, and only
-    //! Researcher::RunRenewBeaconJob() can make one. That job runs unattended,
-    //! hourly, on exactly the wallets a researcher unlocks for staking, and a
-    //! refusal would let the beacon expire silently at six months. With it the
-    //! builder:
+    //! Researcher::RunRenewBeaconJob() can make one. That job runs hourly on the
+    //! wallets a researcher unlocks for staking, and a refusal would let the
+    //! beacon expire at six months. With it the builder:
     //!  - builds while the wallet is unlocked for staking only;
-    //!  - pays the minimum fee for the transaction's size, and never consults
-    //!    nTransactionFee, which settxfee sets without an unlock;
+    //!  - pays the minimum fee for the transaction's size. When a pass's fee is
+    //!    above the minimum for the coins it selected, it keeps those coins and
+    //!    pays their minimum;
     //!  - sends any change back to the address of one of its inputs, so it
     //!    draws no key from the pool;
     //!  - checks the built transaction with GRC::IsRenewalShape() before it
@@ -721,10 +721,15 @@ public:
     bool NewKeyPool();
     bool TopUpKeyPool(unsigned int nSize = 0);
     int64_t AddReserveKey(const CKeyPool& keypool);
-    void ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool);
+    //! \p top_up false takes from the pool as it stands, creating no key.
+    void ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool, bool top_up = true);
     void KeepKey(int64_t nIndex);
     void ReturnKey(int64_t nIndex);
     bool GetKeyFromPool(CPubKey &key, bool fAllowReuse=true);
+    //! Take the oldest key in the key pool as the pool stands: no top-up first,
+    //! and no new key when it is empty, so no key is created. False when the
+    //! pool is empty.
+    bool TakeKeyFromPool(CPubKey& result);
     int64_t GetOldestKeyPoolTime();
     void GetAllReserveKeys(std::set<CKeyID>& setAddress) const;
 

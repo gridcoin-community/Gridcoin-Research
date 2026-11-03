@@ -631,12 +631,19 @@ bool CheckBeaconPrivateKey(
 
 } // anonymous namespace
 
-AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid, const StakingKeyAccess* renewal_access)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrintf("%s: Generating new keys for %s...", __func__, cpid.ToString());
 
+    // The automated renewal takes its key from the pool as the pool stands, and
+    // creates none, which a wallet unlocked for staking only must not do.
     CPubKey public_key;
-    if (!pwalletMain->GetKeyFromPool(public_key, false)) {
+    const bool drawn = renewal_access
+        ? pwalletMain->TakeKeyFromPool(public_key)
+        : pwalletMain->GetKeyFromPool(public_key, false);
+
+    if (!drawn) {
         LogPrintf("ERROR: %s: Failed to get new key from wallet", __func__);
         return BeaconError::MISSING_KEY;
     }
@@ -654,7 +661,7 @@ AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_R
         LogPrintf("WARNING: %s: Failed to change beacon key label", __func__);
     }
 
-    if (!CheckBeaconPrivateKey(pwalletMain, public_key, nullptr)) {
+    if (!CheckBeaconPrivateKey(pwalletMain, public_key, renewal_access)) {
         LogPrintf("ERROR: %s: Failed to verify new beacon key", __func__);
         return BeaconError::MISSING_KEY;
     }
@@ -1055,32 +1062,39 @@ namespace {
 //!
 //! \brief Generate keys for and send a new beacon contract.
 //!
-//! The automated renewal's access never reaches here: a new beacon takes a new
-//! key, which a wallet unlocked for staking only must not make.
-//!
-//! \param cpid The CPID to create the beacon for.
+//! \param cpid           The CPID to create the beacon for.
+//! \param renewal_access The automated renewal's access, or nullptr. With it
+//! the key is taken from the key pool as the pool stands, and none is created,
+//! and the transaction is built as the renewal's is.
 //!
 //! \return A variant that contains the new public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid)
+AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid, const StakingKeyAccess* renewal_access)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
 {
+    // With the renewal's access, refused when the key pool is empty, before
+    // anything is changed: the check below retires a stale advertisement.
+    if (renewal_access && pwalletMain->GetKeyPoolSize() == 0) {
+        LogPrintf("WARNING: %s: No key in the key pool for a new beacon. A full unlock refills it.", __func__);
+        return BeaconError::MISSING_KEY;
+    }
+
     // First, determine whether we can successfully send a beacon contract. The
     // wallet must be unlocked and hold a balance great enough to send a beacon
     // transaction. Otherwise, we may create a bogus beacon key that lingers in
     // the wallet:
     //
-    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid, /*renewal_access=*/nullptr);
+    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid, renewal_access);
 
     if (error != BeaconError::NONE) {
         return error;
     }
 
-    AdvertiseBeaconResult result = GenerateBeaconKey(cpid);
+    AdvertiseBeaconResult result = GenerateBeaconKey(cpid, renewal_access);
 
     if (auto key_option = result.TryPublicKey()) {
-        result = SendBeaconContract(cpid, std::move(*key_option), ContractAction::ADD, /*renewal_access=*/nullptr);
+        result = SendBeaconContract(cpid, std::move(*key_option), ContractAction::ADD, renewal_access);
     }
 
     return result;
@@ -1457,10 +1471,10 @@ void Researcher::RunRenewBeaconJob()
         }
 
         // The one caller permitted to build while the wallet is unlocked for
-        // staking only. It runs unattended on exactly those wallets, and a
-        // refusal would let the beacon expire silently at six months. The
-        // access renews a beacon in a fixed shape at the minimum fee, and does
-        // nothing else.
+        // staking only. It runs hourly on those wallets, and a refusal would
+        // let the beacon expire at six months. With the access it renews a
+        // beacon, or advertises a new one with a key from the key pool when
+        // there is none to renew, in a fixed shape at the minimum fee.
         const StakingKeyAccess renewal_access = RenewalStakingKeyAccess();
 
         researcher->AdvertiseBeacon(/*force=*/false, &renewal_access);
@@ -1835,15 +1849,15 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force, const Stakin
 
     AdvertiseBeaconResult result(GRC::BeaconError::NONE);
 
-    // The renewal's access goes to a renewal only. A new beacon takes a new key,
-    // and is refused on a wallet unlocked for staking only.
+    // The renewal's access goes to a renewal, and to a new beacon when there is
+    // none to renew. A forced advertisement is a user's, and does not use it.
     if (force) {
-        result = SendNewBeacon(*cpid);
+        result = SendNewBeacon(*cpid, /*renewal_access=*/nullptr);
     } else if (TryOwnPendingBeacon(*cpid)) {
         LogPrintf("%s: Beacon awaiting confirmation already", __func__);
         return GRC::BeaconError::PENDING;
     } else if (!current_beacon) {
-        result = SendNewBeacon(*cpid);
+        result = SendNewBeacon(*cpid, renewal_access);
     } else {
         result = RenewBeacon(*cpid, *current_beacon, renewal_access);
     }

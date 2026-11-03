@@ -13,9 +13,8 @@
 //! of it, and advertising again works.
 //!
 //! The automated renewal is the one advertisement a wallet unlocked for staking
-//! only sends. It is built in a fixed shape at the minimum fee, whatever fee is
-//! configured for other sends, and every other advertisement on such a wallet
-//! is refused.
+//! only sends. It is built in a fixed shape at the minimum fee for its size,
+//! and every other advertisement on such a wallet is refused.
 
 #include "chain.h"
 #include "gridcoin/beacon.h"
@@ -554,6 +553,13 @@ BOOST_FIXTURE_TEST_CASE(renewal_shape_rejects_extra_output, RenewalShapeFixture)
     Rebalance(burning_more, 1);
     BOOST_CHECK(!IsShape(burning_more, FeePaid(burning_more)));
 
+    // Nor does naming that amount as the burn pass it: the burn is the one the
+    // beacon contract requires.
+    {
+        LOCK(m_wallet.cs_wallet);
+        BOOST_CHECK(!GRC::IsRenewalShape(burning_more, m_cpid, BURN + COIN / 10, FeePaid(burning_more), m_wallet));
+    }
+
     // No burn at all.
     CMutableTransaction no_burn = Canonical();
     no_burn.vout.erase(no_burn.vout.begin());
@@ -576,10 +582,10 @@ BOOST_FIXTURE_TEST_CASE(renewal_shape_rejects_a_fee_above_the_minimum, RenewalSh
     // Nor does the minimum, stated as the fee, pass a transaction that pays more.
     BOOST_CHECK(!IsShape(overpaying, minimum));
 
-    // The fee a configured fee rate of a tenth of a coin would set.
-    CMutableTransaction configured = Canonical();
-    configured.vout[1].nValue -= COIN / 10 - minimum;
-    BOOST_CHECK(!IsShape(configured, FeePaid(configured)));
+    // A fee of a tenth of a coin.
+    CMutableTransaction tenth = Canonical();
+    tenth.vout[1].nValue -= COIN / 10 - minimum;
+    BOOST_CHECK(!IsShape(tenth, FeePaid(tenth)));
 
     // Less than the minimum fails too: the transaction would not be relayed.
     CMutableTransaction underpaying = Canonical();
@@ -1105,6 +1111,8 @@ struct StakingOnlyResearcherWallet
 
     CWallet m_wallet;
     CKey m_beacon_key;
+    //! Held, as a key the pool hands out for a new beacon would be.
+    CKey m_new_beacon_key;
     std::unique_ptr<grc_test::SwapMainWallet> m_swap;
 
     StakingOnlyResearcherWallet()
@@ -1116,9 +1124,11 @@ struct StakingOnlyResearcherWallet
         m_wallet.FixSpentCoins(mismatch, in_question);
 
         m_beacon_key.MakeNewKey(true);
+        m_new_beacon_key.MakeNewKey(true);
         {
             LOCK(m_wallet.cs_wallet);
             BOOST_REQUIRE(m_wallet.AddKey(m_beacon_key));
+            BOOST_REQUIRE(m_wallet.AddKey(m_new_beacon_key));
         }
 
         BOOST_REQUIRE(m_wallet.EncryptWallet(PASSPHRASE));
@@ -1154,19 +1164,25 @@ struct StakingOnlyResearcherWallet
         size_t transactions{0};
         size_t address_book{0};
         unsigned int key_pool{0};
+        size_t keys{0};
 
         bool operator==(const Footprint& other) const
         {
             return transactions == other.transactions
                 && address_book == other.address_book
-                && key_pool == other.key_pool;
+                && key_pool == other.key_pool
+                && keys == other.keys;
         }
     };
 
     Footprint TakeFootprint()
     {
         LOCK(m_wallet.cs_wallet);
-        return {m_wallet.mapWallet.size(), m_wallet.mapAddressBook.size(), m_wallet.GetKeyPoolSize()};
+
+        std::set<CKeyID> keys;
+        m_wallet.GetKeys(keys);
+
+        return {m_wallet.mapWallet.size(), m_wallet.mapAddressBook.size(), m_wallet.GetKeyPoolSize(), keys.size()};
     }
 };
 
@@ -1218,9 +1234,7 @@ struct RenewableBeacon
 
 } // anonymous namespace
 
-//! The automated renewal pays the minimum fee for its size, however high the
-//! fee configured for other sends. That fee is configured without unlocking the
-//! wallet, and the renewal runs unattended.
+//! The automated renewal pays the minimum fee for its size.
 //!
 //! End to end, from the renewal's access to the pool, on pwalletMain: the
 //! wallets these cases encrypt hold no database, and so cannot commit a send.
@@ -1339,6 +1353,25 @@ BOOST_FIXTURE_TEST_CASE(renewal_builds_under_staking_only_at_the_minimum_fee, gr
     BOOST_CHECK(staking.TakeFootprint() == before);
     BOOST_CHECK(staking.m_wallet.IsUnlockedForStakingOnly());
     BOOST_CHECK(!staking.GeneralKeyAccess());
+
+    // A new beacon's advertisement, for a key other than a current beacon's, as
+    // the job sends when it has no beacon to renew, builds the same way.
+    GRC::BeaconPayload new_payload(cpid, GRC::Beacon(staking.m_new_beacon_key.GetPubKey()));
+    BOOST_REQUIRE(new_payload.Sign(staking.m_new_beacon_key));
+
+    CWalletTx new_beacon;
+    CAmount new_beacon_fee = 0;
+    BOOST_REQUIRE(build(GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, new_payload),
+                        new_beacon, new_beacon_fee));
+
+    const unsigned int new_beacon_size =
+        ::GetSerializeSize(static_cast<const CTransaction&>(new_beacon), SER_NETWORK, PROTOCOL_VERSION);
+    BOOST_CHECK_EQUAL(new_beacon_fee, GetMinFee(new_beacon, 1000, GMF_SEND, new_beacon_size));
+    {
+        LOCK2(cs_main, staking.m_wallet.cs_wallet);
+        BOOST_CHECK(GRC::IsRenewalShape(CMutableTransaction(new_beacon), cpid, COIN / 2, new_beacon_fee,
+                                        staking.m_wallet));
+    }
 
     // Any other contract with the same access is refused, unsigned.
     CWalletTx message;
@@ -1492,11 +1525,14 @@ BOOST_FIXTURE_TEST_CASE(ordinary_contract_refused_under_staking_only, grc_test::
     BOOST_CHECK(staking.TakeFootprint() == before);
 }
 
-//! The renewal's access renews a beacon and does nothing else. With no beacon
-//! to renew, the job would advertise a new one, which takes a new key; on a
-//! wallet unlocked for staking only that is refused as locked, before any key
-//! is drawn.
-BOOST_FIXTURE_TEST_CASE(renewal_access_does_not_advertise_a_new_beacon, grc_test::WalletTxScope)
+//! With no beacon to renew, the job advertises a new one under the same access.
+//! Its key is taken from the key pool as the pool stands, and no key is
+//! created; the transaction has the renewal's shape at the minimum fee.
+//!
+//! End to end on pwalletMain, for the reason given above
+//! renewal_pays_minimum_fee. The pool is below its target, so a top-up before
+//! the draw would create keys.
+BOOST_FIXTURE_TEST_CASE(renewal_access_advertises_a_new_beacon_from_the_key_pool, grc_test::WalletTxScope)
 {
     const SyncTimeReset reset_sync;
     const PoolCleared pool;
@@ -1505,17 +1541,217 @@ BOOST_FIXTURE_TEST_CASE(renewal_access_does_not_advertise_a_new_beacon, grc_test
     const std::string cpid_hex = "0e110e110e110e110e110e110e110e11";
     const GRC::Cpid cpid = GRC::Cpid::Parse(cpid_hex);
 
+    ForcedResearcher forced(cpid_hex);
+    const grc_test::TransactionFeeGuard configured_fee(COIN / 10);
+
+    const auto key_count = [] {
+        std::set<CKeyID> keys;
+        pwalletMain->GetKeys(keys);
+        return keys.size();
+    };
+
+    unsigned int pool_before = 0;
+    size_t keys_before = 0;
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE(pwalletMain->TopUpKeyPool(10));
+        pool_before = pwalletMain->GetKeyPoolSize();
+        keys_before = key_count();
+    }
+    BOOST_REQUIRE(pool_before > 0);
+
+    const grc_test::ForcedArgGuard pool_target("keypool", strprintf("%u", pool_before + 5));
+
+    const StakingKeyAccess renewal_access = StakingKeyAccessTestPeer::Make();
+    const GRC::AdvertiseBeaconResult result =
+        GRC::Researcher::Get()->AdvertiseBeacon(/*force=*/false, &renewal_access);
+
+    BOOST_REQUIRE_MESSAGE(result.TryPublicKey(), "advertisement failed: " << static_cast<int>(result.Error()));
+    const CKeyID beacon_id = result.TryPublicKey()->GetID();
+
+    const std::vector<uint256> pooled = PooledBeacons(cpid);
+    BOOST_REQUIRE_EQUAL(pooled.size(), 1U);
+
+    std::optional<CMutableTransaction> advertisement;
+    CAmount fee = 0;
+    size_t size = 0;
+    {
+        LOCK(mempool.cs);
+        const CTxMemPoolEntry& entry = mempool.mapTx.at(pooled.front());
+        advertisement.emplace(entry.GetTx());
+        fee = entry.GetFee();
+        size = entry.GetTxSize();
+    }
+
+    BOOST_CHECK_EQUAL(fee, GetMinFee(CTransaction(*advertisement), 1000, GMF_SEND, size));
+    BOOST_CHECK_LT(fee, COIN);
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    BOOST_CHECK(GRC::IsRenewalShape(*advertisement, cpid, COIN / 2, fee, *pwalletMain));
+
+    // One key out of the pool, labelled as the beacon's, and none created.
+    BOOST_CHECK_EQUAL(pwalletMain->GetKeyPoolSize(), pool_before - 1);
+    BOOST_CHECK_EQUAL(key_count(), keys_before);
+    BOOST_CHECK(pwalletMain->HaveKey(beacon_id));
+    BOOST_CHECK_EQUAL(pwalletMain->mapAddressBook.count(CTxDestination(beacon_id)), 1U);
+}
+
+//! With no key in the pool, the job's new beacon is refused with a logged
+//! reason, and nothing is left behind: no key, no label, no transaction, and
+//! this wallet's stale advertisement for the CPID is not retired.
+BOOST_FIXTURE_TEST_CASE(renewal_access_with_an_empty_key_pool_leaves_nothing_behind, grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    const PoolCleared pool;
+    MineUntilReadyToAdvertise();
+
+    const std::string cpid_hex = "0e120e120e120e120e120e120e120e12";
+    const GRC::Cpid cpid = GRC::Cpid::Parse(cpid_hex);
+
     StakingOnlyResearcherWallet staking;
     ForcedResearcher forced(cpid_hex);
+
+    {
+        LOCK(staking.m_wallet.cs_wallet);
+        staking.m_wallet.setKeyPool.clear();
+    }
+
+    // This wallet's advertisement for the CPID, which never confirmed and is
+    // stale: a send that went ahead would retire it first.
+    uint256 stale;
+    {
+        LOCK2(cs_main, staking.m_wallet.cs_wallet);
+
+        std::vector<COutput> coins;
+        staking.m_wallet.AvailableCoins(coins, true, nullptr, false);
+        BOOST_REQUIRE(!coins.empty());
+
+        CKey earlier_key;
+        earlier_key.MakeNewKey(true);
+
+        CMutableTransaction mtx;
+        mtx.nVersion = 2;
+        mtx.vin.emplace_back(COutPoint(coins.front().tx->GetHash(), coins.front().i));
+        mtx.vout.emplace_back(COIN / 2, CScript() << OP_RETURN);
+        mtx.vContracts.push_back(GRC::MakeContract<GRC::BeaconPayload>(
+            GRC::ContractAction::ADD, cpid, earlier_key.GetPubKey()));
+        const CTransaction tx(mtx);
+        stale = tx.GetHash();
+
+        CWalletTx wtx(&staking.m_wallet, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        wtx.fFromMe = true;
+        wtx.nTimeReceived = GetAdjustedTime() - STALE;
+        staking.m_wallet.mapWallet[stale] = wtx;
+        staking.m_wallet.AddToSpends(tx, stale);
+
+        mempool.addUnchecked(stale, CTxMemPoolEntry(
+            tx, /*fee=*/0, /*time=*/0, /*height=*/0, ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION)));
+    }
+    BOOST_REQUIRE(mempool.HasBeaconForCpid(cpid));
 
     const StakingOnlyResearcherWallet::Footprint before = staking.TakeFootprint();
 
     const StakingKeyAccess renewal_access = StakingKeyAccessTestPeer::Make();
     BOOST_CHECK(GRC::Researcher::Get()->AdvertiseBeacon(/*force=*/false, &renewal_access).Error()
-                == GRC::BeaconError::WALLET_LOCKED);
+                == GRC::BeaconError::MISSING_KEY);
 
-    BOOST_CHECK(PooledBeacons(cpid).empty());
     BOOST_CHECK(staking.TakeFootprint() == before);
+    BOOST_CHECK(mempool.exists(stale));
+    BOOST_CHECK_EQUAL(PooledBeacons(cpid).size(), 1U);
+    {
+        LOCK(staking.m_wallet.cs_wallet);
+        BOOST_CHECK(!staking.m_wallet.IsAbandoned(stale));
+    }
+}
+
+//! A selection for a larger amount can take fewer coins than one for a smaller
+//! amount did. Past the input count a standard transaction allows, a
+//! contract's selection falls back from the smallest coins to the fewest. The
+//! renewal then keeps the coins it selected and pays their minimum fee.
+//!
+//! 420 coins of 0.0013 to this wallet, and one of 10: 385 of the small ones pay
+//! the burn alone, within the 400 inputs the smallest-first selection takes.
+//! With the minimum fee for 385 inputs added, all 420 fall short, and the
+//! selection takes the large coin, whose minimum fee is lower.
+BOOST_FIXTURE_TEST_CASE(renewal_pays_minimum_fee_when_more_fee_selects_fewer_coins, grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    const PoolCleared pool;
+    MineUntilReadyToAdvertise();
+
+    const std::string cpid_hex = "0ddc0ddc0ddc0ddc0ddc0ddc0ddc0ddc";
+    const GRC::Cpid cpid = GRC::Cpid::Parse(cpid_hex);
+    ForcedResearcher forced(cpid_hex);
+
+    constexpr size_t SMALL_COINS = 420;
+    constexpr CAmount SMALL_COIN = 13 * COIN / 10000;
+
+    CPubKey small_coin_key;
+    BOOST_REQUIRE(pwalletMain->GetKeyFromPool(small_coin_key, false));
+    CScript to_small_coin_key;
+    to_small_coin_key.SetDestination(small_coin_key.GetID());
+
+    constexpr CAmount LARGE_COIN = 10 * COIN;
+
+    CWalletTx funding;
+    {
+        std::vector<std::pair<CScript, int64_t>> recipients(SMALL_COINS, {to_small_coin_key, SMALL_COIN});
+        recipients.emplace_back(to_small_coin_key, LARGE_COIN);
+        CReserveKey reserve_key(pwalletMain);
+        int64_t funding_fee = 0;
+        BOOST_REQUIRE(pwalletMain->CreateTransaction(recipients, funding, reserve_key, funding_fee));
+        BOOST_REQUIRE(pwalletMain->CommitTransaction(funding, reserve_key));
+    }
+
+    for (int i = 0; i < 6 && mempool.exists(funding.GetHash()); ++i) {
+        MineOne();
+    }
+    BOOST_REQUIRE(!mempool.exists(funding.GetHash()));
+    g_previous_block_time.store(GetAdjustedTime());
+
+    // The small coins and the large one, without the funding transaction's
+    // change.
+    std::set<COutPoint> funding_outputs;
+    std::optional<COutPoint> large_coin;
+    for (unsigned int n = 0; n < funding.vout.size(); ++n) {
+        if (funding.vout[n].scriptPubKey != to_small_coin_key) continue;
+        funding_outputs.emplace(funding.GetHash(), n);
+        if (funding.vout[n].nValue == LARGE_COIN) large_coin = COutPoint(funding.GetHash(), n);
+    }
+    BOOST_REQUIRE_EQUAL(funding_outputs.size(), SMALL_COINS + 1);
+    BOOST_REQUIRE(large_coin);
+
+    const OnlyTheseCoins only(funding_outputs);
+
+    CKey beacon_key;
+    beacon_key.MakeNewKey(true);
+    GRC::BeaconPayload payload(cpid, GRC::Beacon(beacon_key.GetPubKey()));
+    BOOST_REQUIRE(payload.Sign(beacon_key));
+
+    CWalletTx renewal;
+    {
+        CMutableTransaction mtx;
+        mtx.vContracts.push_back(GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload));
+        static_cast<CTransaction&>(renewal) = CTransaction(std::move(mtx));
+    }
+
+    const StakingKeyAccess renewal_access = StakingKeyAccessTestPeer::Make();
+    CReserveKey reserve_key(pwalletMain);
+    CAmount fee = 0;
+    BOOST_REQUIRE(pwalletMain->CreateTransaction(
+        {std::make_pair(CScript() << OP_RETURN, COIN / 2)}, renewal, reserve_key, fee,
+        /*coinControl=*/nullptr, /*change_back_to_input_address=*/false, &renewal_access));
+
+    BOOST_REQUIRE_EQUAL(renewal.vin.size(), 1U);
+    BOOST_CHECK(renewal.vin.front().prevout == *large_coin);
+
+    const unsigned int size = ::GetSerializeSize(static_cast<const CTransaction&>(renewal), SER_NETWORK, PROTOCOL_VERSION);
+    BOOST_CHECK_EQUAL(fee, GetMinFee(renewal, 1000, GMF_SEND, size));
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    BOOST_CHECK(GRC::IsRenewalShape(CMutableTransaction(renewal), cpid, COIN / 2, fee, *pwalletMain));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

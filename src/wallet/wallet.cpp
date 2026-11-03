@@ -4159,6 +4159,10 @@ int64_t MessageBurnAmount(const CTransaction& tx)
     return 0;
 }
 
+//! How many passes the automated beacon renewal's build may make at a fee that
+//! is not its minimum before it is refused. A renewal settles in two or three.
+static constexpr int MAX_RENEWAL_FEE_PASSES = 8;
+
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins_in,
                                 CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
                                 const CCoinControl* coinControl, bool change_back_to_input_address,
@@ -4276,14 +4280,18 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
             // per-piece fee). The while loop below only ever raises nFeeRet, so the enforced
             // minimum is preserved.
             //
-            // The renewal starts from nothing and pays the minimum fee for its
-            // size, which the loop works out. It never consults nTransactionFee:
-            // settxfee sets that without an unlock, and the renewal runs
-            // unattended.
+            // The renewal pays the minimum fee for its size, which the loop works
+            // out from nothing.
             nFeeRet = renewal_access ? 0 : max(nTransactionFee, nEnforcedMinFee);
 
             // Whether setCoins_out holds the selection a subtract-fee transaction keeps.
             bool subtract_fee_coins_selected = false;
+
+            // The renewal's coins once a pass has paid more than their minimum
+            // fee, and the passes it has made at a fee that was not the minimum
+            // (both below).
+            set<pair<const CWalletTx*,unsigned int>> renewal_coins;
+            int renewal_fee_passes = 0;
 
             while (true)
             {
@@ -4345,7 +4353,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                         nValueIn += coin.first->vout[coin.second].nValue;
                     }
                 }
-                else if (!provided_coin_set)
+                else if (!provided_coin_set && renewal_coins.empty())
                 {
                     setCoins_out.clear();
 
@@ -4386,6 +4394,16 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     }
 
                 }
+                else if (!provided_coin_set)
+                {
+                    // The renewal's coins, kept from an earlier pass.
+                    setCoins_out = renewal_coins;
+
+                    for (auto const& input : setCoins_out)
+                    {
+                        nValueIn += input.first->vout[input.second].nValue;
+                    }
+                }
                 else
                 {
                     // Add up input value for the provided set of coins.
@@ -4408,7 +4426,8 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 // in the case of no provided coin set, SelectTransaction above will be given the chance to modify its
                 // selection to cover the increased fees, hopefully converging on an appropriate solution. In the case
                 // of a provided set of inputs, that set is immutable for this transaction, so no point in continuing.
-                if (provided_coin_set && nChange < 0)
+                // The renewal's kept coins are fixed in the same way.
+                if ((provided_coin_set || !renewal_coins.empty()) && nChange < 0)
                 {
                     return error("%s: Total value of inputs, %s, cannot cover the transaction fees of %s. "
                                  "CreateTransaction aborted.",
@@ -4520,14 +4539,29 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
                 // The renewal's fixed shape, checked before anything is signed.
                 // Its fee is the minimum for the size the transaction will have
-                // once signed, so a build at a lower fee goes round again at that
-                // one, as the check after signing does for every other build.
+                // once signed, so a build at another fee goes round again at that
+                // one.
+                //
+                // A build at a lower fee selects again, as the check after
+                // signing does for every other build. A build at a higher fee
+                // keeps its coins, which pay their own minimum: a selection for
+                // a larger amount can take fewer coins than one for a smaller
+                // amount did (past the input count a standard transaction
+                // allows, a contract's selection falls back from the smallest
+                // coins to the fewest), so selecting again could go back and
+                // forth. The passes are bounded all the same, and a renewal that
+                // does not settle on its minimum is refused below.
                 if (renewal_access)
                 {
                     const std::optional<CAmount> renewal_fee = GRC::RenewalMinimumFee(mtx, *this);
 
-                    if (renewal_fee && nFeeRet < *renewal_fee)
+                    if (renewal_fee && nFeeRet != *renewal_fee && ++renewal_fee_passes <= MAX_RENEWAL_FEE_PASSES)
                     {
+                        if (nFeeRet > *renewal_fee)
+                        {
+                            renewal_coins = coins;
+                        }
+
                         nFeeRet = *renewal_fee;
                         continue;
                     }
@@ -4564,9 +4598,9 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     return error("%s: tx size %d greater than standard %d", __func__, nBytes, MAX_STANDARD_TX_SIZE);
                 }
 
-                // Check that enough fee is included. The renewal's fee never
-                // consults nTransactionFee; its minimum was taken at the largest
-                // size its signatures can have, so this check passes it as built.
+                // Check that enough fee is included. The renewal's minimum fee was
+                // taken at the largest size its signatures can have, so this check
+                // passes it as built.
                 int64_t nPayFee = renewal_access ? 0 : nTransactionFee * (1 + (int64_t)nBytes / 1000);
                 int64_t nMinFee = GetMinFee(wtxNew, 1000, GMF_SEND, nBytes);
 
@@ -5046,14 +5080,14 @@ bool CWallet::TopUpKeyPool(unsigned int nSize)
     return true;
 }
 
-void CWallet::ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool)
+void CWallet::ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool, const bool top_up)
 {
     nIndex = -1;
     keypool.vchPubKey = CPubKey();
     {
         LOCK(cs_wallet);
 
-        if (!IsLocked())
+        if (top_up && !IsLocked())
             TopUpKeyPool();
 
         // Get the oldest key
@@ -5131,6 +5165,25 @@ bool CWallet::GetKeyFromPool(CPubKey& result, bool fAllowReuse)
         KeepKey(nIndex);
         result = keypool.vchPubKey;
     }
+    return true;
+}
+
+bool CWallet::TakeKeyFromPool(CPubKey& result)
+{
+    int64_t nIndex = 0;
+    CKeyPool keypool;
+
+    LOCK(cs_wallet);
+
+    ReserveKeyFromKeyPool(nIndex, keypool, /*top_up=*/false);
+
+    if (nIndex == -1) {
+        return false;
+    }
+
+    KeepKey(nIndex);
+    result = keypool.vchPubKey;
+
     return true;
 }
 

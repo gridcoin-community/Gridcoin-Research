@@ -311,8 +311,8 @@ private:
 };
 
 //!
-//! \brief Set nTransactionFee, the fee settxfee and -paytxfee configure, for a
-//! scope and put the previous value back.
+//! \brief Set nTransactionFee, the configured transaction fee, for a scope and
+//! put the previous value back.
 //!
 //! StateGuard does not restore it. Like ForcedArgGuard, this is also the one to
 //! use in a case that mines.

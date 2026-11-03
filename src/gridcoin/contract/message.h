@@ -74,7 +74,9 @@ std::optional<CAmount> RenewalMinimumFee(const CMutableTransaction& tx, const CW
 //! \brief Whether \p tx is the automated beacon renewal's fixed shape.
 //!
 //! True iff:
-//!  - its contracts are one beacon advertisement for \p cpid;
+//!  - its contracts are one beacon advertisement for \p cpid, a renewal or a
+//!    new beacon;
+//!  - \p burn_fee is the burn that contract requires;
 //!  - its outputs are one OP_RETURN burn of \p burn_fee and at most one change
 //!    output that \p wallet can spend;
 //!  - it spends only coins of \p wallet, and pays exactly \p fee, which is

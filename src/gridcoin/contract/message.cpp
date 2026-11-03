@@ -251,8 +251,7 @@ std::string SendContractTx(CWalletTx& wtx_new, const StakingKeyAccess* renewal_a
         burn_fee += contract.RequiredBurnAmount();
     }
 
-    // The renewal pays the minimum fee, never nTransactionFee, which settxfee
-    // sets without an unlock.
+    // The renewal pays the minimum fee for its size.
     const CAmount configured_fee = renewal_access ? 0 : nTransactionFee;
 
     if (balance < COIN || balance < burn_fee + configured_fee) {
@@ -389,6 +388,11 @@ bool GRC::IsRenewalShape(
         || contract.m_version < 2
         || contract.SharePayloadAs<BeaconPayload>()->m_cpid != cpid)
     {
+        return false;
+    }
+
+    // The burn is the one the contract requires, whatever the caller names.
+    if (burn_fee != contract.RequiredBurnAmount()) {
         return false;
     }
 
