@@ -1617,7 +1617,7 @@ UniValue advertisebeacon(const UniValue& params)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->AdvertiseBeacon(force);
+    GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->AdvertiseBeacon(force, /*renewal_access=*/nullptr);
 
     if (auto public_key_option = result.TryPublicKey()) {
         const GRC::Beacon beacon(std::move(*public_key_option));

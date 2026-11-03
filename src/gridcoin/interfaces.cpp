@@ -1333,7 +1333,7 @@ public:
     BeaconAdvertiseResult advertiseBeacon() override
     {
         const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
-        const GRC::AdvertiseBeaconResult result = researcher->AdvertiseBeacon();
+        const GRC::AdvertiseBeaconResult result = researcher->AdvertiseBeacon(/*force=*/false, /*renewal_access=*/nullptr);
 
         return {MapBeaconError(result.Error())};
     }

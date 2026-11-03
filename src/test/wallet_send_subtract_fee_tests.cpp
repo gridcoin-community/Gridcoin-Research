@@ -727,7 +727,7 @@ BOOST_AUTO_TEST_CASE(create_transaction_with_and_without_fee_outputs)
         CReserveKey reserve(&w.wallet);
         int64_t fee = 0;
         BOOST_CHECK(!w.wallet.CreateTransaction({{payee_script, 500 * COIN}}, wtx, reserve, fee, &coin_control,
-                                                false, false, {1}));
+                                                false, nullptr, {1}));
     }
 
     {
@@ -745,7 +745,7 @@ BOOST_AUTO_TEST_CASE(create_transaction_with_and_without_fee_outputs)
         CReserveKey reserve(&w.wallet);
         int64_t fee = 0;
         BOOST_REQUIRE(w.wallet.CreateTransaction({{payee_script, inputs}}, wtx, reserve, fee, &coin_control,
-                                                 false, false, {0}));
+                                                 false, nullptr, {0}));
         BOOST_CHECK_EQUAL(fee, BASE_FEE);
         BOOST_CHECK_EQUAL(paid_to_payee(wtx), inputs - BASE_FEE);
         BOOST_CHECK_EQUAL(change_of(wtx), 0);

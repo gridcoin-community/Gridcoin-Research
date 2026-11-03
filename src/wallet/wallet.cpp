@@ -23,14 +23,18 @@
 #include "net_processing.h"
 #include "util.h"
 #include <util/string.h>
+#include "gridcoin/contract/message.h"
 #include "gridcoin/mnemonics.h"
 #include "gridcoin/mrc.h"
+#include "gridcoin/researcher.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
 #include "policy/fees.h"
 #include "node/blockstorage.h"
+#include "wallet/staking_signer.h"
 
 #include <algorithm>
+#include <optional>
 #include <set>
 #include <stdexcept>
 
@@ -4158,7 +4162,7 @@ int64_t MessageBurnAmount(const CTransaction& tx)
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins_in,
                                 CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
                                 const CCoinControl* coinControl, bool change_back_to_input_address,
-                                int64_t nEnforcedMinFee, bool permitted_while_staking_only,
+                                int64_t nEnforcedMinFee, const StakingKeyAccess* renewal_access,
                                 const std::set<size_t>& subtract_fee_outputs)
 {
     int64_t nValueOut = 0;
@@ -4186,7 +4190,10 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
     // amounts in vecSend and the sender is debited exactly those. That target
     // does not move with the fee, which is what lets one selection serve every
     // pass of the loop below.
-    const bool subtract_fee = !subtract_fee_outputs.empty();
+    //
+    // Never for the automated beacon renewal: its outputs and its burn are fixed
+    // (GRC::IsRenewalShape() below), so with renewal_access the set is ignored.
+    const bool subtract_fee = !renewal_access && !subtract_fee_outputs.empty();
 
     if (subtract_fee && *subtract_fee_outputs.rbegin() >= vecSend.size()) {
         return error("%s: output %u to subtract the fee from is out of range (%u outputs)",
@@ -4227,10 +4234,39 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
         //
         // So a re-check at commit would add nothing, and authorisation belongs
         // at the START of an operation anyway: a send that was permitted when it
-        // began should finish. It would also need the renewal exemption
-        // threaded through commit.
-        if (IsUnlockedForStakingOnly() && !permitted_while_staking_only) {
+        // began should finish. It would also need the renewal's access threaded
+        // through commit.
+        //
+        // The automated beacon renewal's access is the one exception. What it
+        // may build is fixed below: its shape is checked before anything is
+        // signed, and it is signed through the staking accessor.
+        if (IsUnlockedForStakingOnly() && !renewal_access) {
             return error("%s: wallet is unlocked for staking only", __func__);
+        }
+
+        // The renewal signs through the staking accessor, which reaches the keys
+        // while the wallet is unlocked for staking only. Every other build signs
+        // with the wallet's own keys.
+        std::optional<StakingSigningProvider> renewal_signer;
+
+        if (renewal_access) {
+            renewal_signer.emplace(*this, *renewal_access);
+        }
+
+        const SigningProvider& signer = renewal_signer
+            ? static_cast<const SigningProvider&>(*renewal_signer)
+            : static_cast<const SigningProvider&>(*this);
+
+        // What the renewal's shape is checked against: the CPID of this node's
+        // own researcher, which cannot change while cs_main is held, and the
+        // burn its contracts require.
+        const GRC::CpidOption renewal_cpid = renewal_access ? GRC::Researcher::Get()->Id().TryCpid() : std::nullopt;
+        CAmount renewal_burn = 0;
+
+        if (renewal_access) {
+            for (const auto& contract : wtxNew.vContracts) {
+                renewal_burn += contract.RequiredBurnAmount();
+            }
         }
 
         // txdb must be opened before the mapWallet lock
@@ -4239,7 +4275,12 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
             // The caller can enforce a fee above the normal size-based fee (e.g. splitunspent's
             // per-piece fee). The while loop below only ever raises nFeeRet, so the enforced
             // minimum is preserved.
-            nFeeRet = max(nTransactionFee, nEnforcedMinFee);
+            //
+            // The renewal starts from nothing and pays the minimum fee for its
+            // size, which the loop works out. It never consults nTransactionFee:
+            // settxfee sets that without an unlock, and the renewal runs
+            // unattended.
+            nFeeRet = renewal_access ? 0 : max(nTransactionFee, nEnforcedMinFee);
 
             // Whether setCoins_out holds the selection a subtract-fee transaction keeps.
             bool subtract_fee_coins_selected = false;
@@ -4419,7 +4460,9 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
                         scriptChange.SetDestination(coinControl->destChange);
                     } else { // no coin control
-                        if (change_back_to_input_address) { // send change back to an existing input address
+                        // The renewal sends its change back to an input's address
+                        // as well, so that it draws no key from the pool.
+                        if (change_back_to_input_address || renewal_access) { // send change back to an existing input address
                             CTxDestination change_address;
 
                             if (!setCoins_out.empty()) {
@@ -4467,40 +4510,46 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     nChangePosRet = -1;
                 }
 
-                if (setCoins_in.size())
-                {
-                    // Fill vin from provided inputs
-                    for (auto const& coin : setCoins_in)
-                    {
-                        mtx.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
-                    }
+                // The provided inputs, or else the ones SelectCoins chose.
+                const set<pair<const CWalletTx*,unsigned int>>& coins = provided_coin_set ? setCoins_in : setCoins_out;
 
-                    // Sign on the mutable transaction while it's still live.
-                    // Post-F3, CTransaction fields are const, so signing can
-                    // only happen via CMutableTransaction. The copy-back to
-                    // wtxNew's CTransaction base class happens after all
-                    // signing is complete.
-                    int nIn = 0;
-                    for (auto const& coin : setCoins_in)
-                        if (!SignSignature(*this, *coin.first, mtx, nIn++)) {
-                            return error("%s: Failed to sign tx", __func__);
-                        }
+                for (auto const& coin : coins)
+                {
+                    mtx.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
                 }
-                else // use setCoins_out from SelectCoins as the inputs
+
+                // The renewal's fixed shape, checked before anything is signed.
+                // Its fee is the minimum for the size the transaction will have
+                // once signed, so a build at a lower fee goes round again at that
+                // one, as the check after signing does for every other build.
+                if (renewal_access)
                 {
-                    // Fill vin from provided inputs
-                    for (auto const& coin : setCoins_out)
+                    const std::optional<CAmount> renewal_fee = GRC::RenewalMinimumFee(mtx, *this);
+
+                    if (renewal_fee && nFeeRet < *renewal_fee)
                     {
-                        mtx.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
+                        nFeeRet = *renewal_fee;
+                        continue;
                     }
 
-                    // Sign on the mutable transaction (see note above).
-                    int nIn = 0;
-                    for (auto const& coin : setCoins_out)
-                        if (!SignSignature(*this, *coin.first, mtx, nIn++))
-                        {
-                            return error("%s: Failed to sign tx", __func__);
-                        }
+                    if (!renewal_cpid || !GRC::IsRenewalShape(mtx, *renewal_cpid, renewal_burn, nFeeRet, *this))
+                    {
+                        return error("%s: renewal transaction not in the permitted shape", __func__);
+                    }
+                }
+
+                // Sign on the mutable transaction while it's still live.
+                // Post-F3, CTransaction fields are const, so signing can
+                // only happen via CMutableTransaction. The copy-back to
+                // wtxNew's CTransaction base class happens after all
+                // signing is complete.
+                int nIn = 0;
+                for (auto const& coin : coins)
+                {
+                    if (!SignSignature(signer, *coin.first, mtx, nIn++))
+                    {
+                        return error("%s: Failed to sign tx", __func__);
+                    }
                 }
 
                 // Copy the signed mutable transaction into the CWalletTx base.
@@ -4515,8 +4564,10 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     return error("%s: tx size %d greater than standard %d", __func__, nBytes, MAX_STANDARD_TX_SIZE);
                 }
 
-                // Check that enough fee is included
-                int64_t nPayFee = nTransactionFee * (1 + (int64_t)nBytes / 1000);
+                // Check that enough fee is included. The renewal's fee never
+                // consults nTransactionFee; its minimum was taken at the largest
+                // size its signatures can have, so this check passes it as built.
+                int64_t nPayFee = renewal_access ? 0 : nTransactionFee * (1 + (int64_t)nBytes / 1000);
                 int64_t nMinFee = GetMinFee(wtxNew, 1000, GMF_SEND, nBytes);
 
                 LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: nTransactionFee = %s, nBytes = %" PRId64 ", nPayFee = %s"
@@ -4558,23 +4609,23 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
     int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl, bool change_back_to_input_address,
-    bool permitted_while_staking_only, const std::set<size_t>& subtract_fee_outputs)
+    const StakingKeyAccess* renewal_access, const std::set<size_t>& subtract_fee_outputs)
 {
     // Initialize setCoins empty to let CreateTransaction choose via SelectCoins...
     set<pair<const CWalletTx*,unsigned int>> setCoins;
 
     return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl,
-                             change_back_to_input_address, /*nEnforcedMinFee=*/0, permitted_while_staking_only,
+                             change_back_to_input_address, /*nEnforcedMinFee=*/0, renewal_access,
                              subtract_fee_outputs);
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
     int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address,
-    bool permitted_while_staking_only, const std::set<size_t>& subtract_fee_outputs)
+    const StakingKeyAccess* renewal_access, const std::set<size_t>& subtract_fee_outputs)
 {
     int nChangePosRet = -1;
     return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl,
-                             change_back_to_input_address, permitted_while_staking_only, subtract_fee_outputs);
+                             change_back_to_input_address, renewal_access, subtract_fee_outputs);
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins,

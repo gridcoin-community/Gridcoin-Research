@@ -701,7 +701,7 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
         int64_t nFeeRequired = 0;
         bool fCreated = m_wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coin_control_ptr,
                                                     /*change_back_to_input_address=*/false,
-                                                    /*permitted_while_staking_only=*/false,
+                                                    /*renewal_access=*/nullptr,
                                                     subtract_fee_outputs);
 
         if (!fCreated)

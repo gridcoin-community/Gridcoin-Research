@@ -20,6 +20,7 @@
 #include "rpc/server.h"
 #include "txdb.h"
 #include "script/sign.h"
+#include "test/staking_test_peers.h"
 #include "test/state_guard.h"
 #include "rpc/blockchain.h"
 #include "txmempool.h"
@@ -924,7 +925,9 @@ BOOST_AUTO_TEST_CASE(importprivkey_requires_an_unlocked_wallet)
 //! building. A staking-only wallet must return before that, so the caller's
 //! sentinel survives; a fully unlocked one must get past the check and clobber
 //! it, even though this coinless wallet then fails to fund. Asserting only the
-//! bool would prove nothing, since both cases return false.
+//! bool would prove nothing, since both cases return false. The automated beacon
+//! renewal's access gets past the check on the staking-only wallet in the same
+//! way.
 //!
 //! This is the regression test for a graphical send while unlocked for staking
 //! only: that path reaches the wallet through interfaces::Wallet, which had no
@@ -965,6 +968,18 @@ BOOST_AUTO_TEST_CASE(the_transaction_builder_refuses_a_staking_only_wallet)
         int64_t fee = sentinel;
         BOOST_CHECK(!staking.CreateTransaction(recipients, wtx, reservekey, fee));
         BOOST_CHECK_EQUAL(fee, sentinel); // returned before building
+    }
+
+    {
+        BOOST_REQUIRE(staking.IsUnlockedForStakingOnly());
+
+        const StakingKeyAccess renewal_access = StakingKeyAccessTestPeer::Make();
+        CWalletTx wtx;
+        CReserveKey reservekey(&staking);
+        int64_t fee = sentinel;
+        BOOST_CHECK(!staking.CreateTransaction(recipients, wtx, reservekey, fee, /*coinControl=*/nullptr,
+                                               /*change_back_to_input_address=*/false, &renewal_access));
+        BOOST_CHECK(fee != sentinel);
     }
 
     {
@@ -1182,11 +1197,12 @@ BOOST_AUTO_TEST_CASE(a_contract_send_held_off_by_a_narrowing_refuses_on_its_own_
 
     BOOST_CHECK_EQUAL(result, _("Error: Wallet unlocked for staking only, unable to create transaction."));
 
-    // The automated beacon renewal's exemption still passes the check: it goes
-    // on to the balance check, which the empty wallet fails.
+    // The automated beacon renewal's access still passes the check: it goes on
+    // to the balance check, which the empty wallet fails.
     {
+        const StakingKeyAccess renewal_access = StakingKeyAccessTestPeer::Make();
         LOCK(cs_main);
-        BOOST_CHECK_EQUAL(GRC::SendContract(make_contract(), /*permitted_while_staking_only=*/true).second,
+        BOOST_CHECK_EQUAL(GRC::SendContract(make_contract(), &renewal_access).second,
                           _("Balance too low to create a contract."));
     }
 

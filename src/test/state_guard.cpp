@@ -21,6 +21,7 @@
 #include "util/system.h"
 #include "util/time.h"
 #include "validation.h"
+#include "wallet/wallet.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -488,6 +489,17 @@ V15HeightGuard::~V15HeightGuard()
             settings.forced_settings.erase(V15_SETTING_KEY);
         }
     });
+}
+
+TransactionFeeGuard::TransactionFeeGuard(const int64_t fee)
+    : m_saved(nTransactionFee)
+{
+    nTransactionFee = fee;
+}
+
+TransactionFeeGuard::~TransactionFeeGuard()
+{
+    nTransactionFee = m_saved;
 }
 
 void RequireV15Unscheduled()

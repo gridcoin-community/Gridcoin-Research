@@ -311,6 +311,26 @@ private:
 };
 
 //!
+//! \brief Set nTransactionFee, the fee settxfee and -paytxfee configure, for a
+//! scope and put the previous value back.
+//!
+//! StateGuard does not restore it. Like ForcedArgGuard, this is also the one to
+//! use in a case that mines.
+//!
+class TransactionFeeGuard
+{
+public:
+    explicit TransactionFeeGuard(int64_t fee);
+    ~TransactionFeeGuard();
+
+    TransactionFeeGuard(const TransactionFeeGuard&) = delete;
+    TransactionFeeGuard& operator=(const TransactionFeeGuard&) = delete;
+
+private:
+    int64_t m_saved{0};
+};
+
+//!
 //! \brief Precondition for tests that rely on V15 rules being inert.
 //!
 //! Fails the case (BOOST_REQUIRE) if GetBlockV15Height() is anything other

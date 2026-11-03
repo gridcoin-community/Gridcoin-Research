@@ -641,27 +641,38 @@ public:
                          std::string& strFailReason, const CCoinControl* coinControl);
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
                            int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl = nullptr,
-                           bool change_back_to_input_address = false, bool permitted_while_staking_only = false,
+                           bool change_back_to_input_address = false, const StakingKeyAccess* renewal_access = nullptr,
                            const std::set<size_t>& subtract_fee_outputs = {});
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
                            int64_t& nFeeRet, const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,
-                           bool permitted_while_staking_only = false, const std::set<size_t>& subtract_fee_outputs = {});
+                           const StakingKeyAccess* renewal_access = nullptr, const std::set<size_t>& subtract_fee_outputs = {});
     //! nEnforcedMinFee, when nonzero, sets a fee floor above the normal size-based fee
     //! (e.g. splitunspent's per-piece fee). The fee can still rise above it if required.
     //!
     //! Note the asymmetry below is deliberate, not an oversight: only the
-    //! overloads the exempt caller actually uses carry
-    //! permitted_while_staking_only. The setCoins overload without
-    //! nChangePosRet is reached only from consolidateunspent, splitunspent and
-    //! sweepuncoveredcoins, all user-initiated spends that must stay refused
-    //! (each calls EnsureWalletIsUnlocked first, so they are already refused
-    //! before reaching the builder), so giving it the parameter would only
-    //! widen the ways to reach the exemption.
-    //! \p permitted_while_staking_only exempts a caller from the staking-only
-    //! refusal. Exactly one caller passes it: the hourly automated beacon
-    //! renewal job, which runs unattended on exactly the wallets a researcher
-    //! unlocks for staking, and whose refusal would let their beacon expire
-    //! silently at six months.
+    //! overloads the automated renewal actually uses carry renewal_access. The
+    //! setCoins overload without nChangePosRet is reached only from
+    //! consolidateunspent, splitunspent and sweepuncoveredcoins, all
+    //! user-initiated spends that must stay refused (each calls
+    //! EnsureWalletIsUnlocked first, so they are already refused before
+    //! reaching the builder), so giving it the parameter would only widen the
+    //! ways to reach the renewal's build.
+    //!
+    //! \p renewal_access is the automated beacon renewal's, and only
+    //! Researcher::RunRenewBeaconJob() can make one. That job runs unattended,
+    //! hourly, on exactly the wallets a researcher unlocks for staking, and a
+    //! refusal would let the beacon expire silently at six months. With it the
+    //! builder:
+    //!  - builds while the wallet is unlocked for staking only;
+    //!  - pays the minimum fee for the transaction's size, and never consults
+    //!    nTransactionFee, which settxfee sets without an unlock;
+    //!  - sends any change back to the address of one of its inputs, so it
+    //!    draws no key from the pool;
+    //!  - checks the built transaction with GRC::IsRenewalShape() before it
+    //!    signs anything, and fails if it is not that shape;
+    //!  - signs through a StakingSigningProvider made with the access.
+    //! Every other caller passes nullptr and is refused while the wallet is
+    //! unlocked for staking only.
     //!
     //! It is NOT "contract transactions are harmless". The GUI contract surface
     //! has no unlock guard of its own and addkey gates only on IsLocked(), so
@@ -675,10 +686,12 @@ public:
     //! the sender is debited exactly those. Empty, the default, keeps the fee
     //! and burn on top of the outputs. The same asymmetry applies: only the
     //! overloads on the GUI send path carry it, since that is its one caller.
+    //! With \p renewal_access it is ignored: the renewal's outputs and burn are
+    //! fixed, and GRC::IsRenewalShape() checks them.
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
                            const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,
-                           int64_t nEnforcedMinFee = 0, bool permitted_while_staking_only = false,
+                           int64_t nEnforcedMinFee = 0, const StakingKeyAccess* renewal_access = nullptr,
                            const std::set<size_t>& subtract_fee_outputs = {});
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl = nullptr,
