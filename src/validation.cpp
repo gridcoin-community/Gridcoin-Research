@@ -992,7 +992,7 @@ bool TryLoadSuperblock(
     // accrual taken at each superblock:
     //
     if (block.nVersion >= 11) {
-        if (!GRC::Tally::ApplySuperblock(superblock)) {
+        if (!GRC::Tally::ApplySuperblock(superblock, pindex)) {
             return false;
         }
 

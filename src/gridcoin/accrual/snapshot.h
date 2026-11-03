@@ -628,7 +628,18 @@ public:
     //! rebuild the stored snapshot state to fix a bug for v5.2.3. Disk format
     //! does not change.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 2;
+    //! Version 3: On a network with a newbie correction window table, the first
+    //! start after an upgrade from version 2 rebuilds the accrual snapshots
+    //! once. Disk format does not change.
+    //!
+    static constexpr uint32_t CURRENT_VERSION = 3;
+
+    //!
+    //! \brief The previous registry version. A registry of this version loads
+    //! as an upgrade in progress instead of forcing a rebuild (see
+    //! UpgradePending()).
+    //!
+    static constexpr uint32_t UPGRADABLE_VERSION = 2;
 
     //!
     //! \brief A record of an accrual snapshot in the registry.
@@ -714,6 +725,23 @@ public:
     //! \return Zero if no baseline snapshot exists yet.
     //!
     uint64_t LatestHeight() const;
+
+    //!
+    //! \brief Whether the registry loaded from UPGRADABLE_VERSION and the
+    //! upgrade has not completed yet.
+    //!
+    //! While this is \c true, the registry keeps writing UPGRADABLE_VERSION to
+    //! disk, so an upgrade interrupted by a crash runs again at the next start.
+    //!
+    bool UpgradePending() const;
+
+    //!
+    //! \brief Record that the upgrade completed by rewriting the registry
+    //! with CURRENT_VERSION.
+    //!
+    //! \return \c false if an IO error occurred.
+    //!
+    bool CompleteUpgrade();
 
     //!
     //! \brief Get the registry entry for the specified height if it exists.
@@ -810,8 +838,9 @@ private:
         }
     }; // DiskEntry
 
-    FILE* m_file = nullptr;       //!< Handle of the registry file.
-    std::vector<Entry> m_entries; //!< Ordered heights of each snapshot.
+    FILE* m_file = nullptr;          //!< Handle of the registry file.
+    std::vector<Entry> m_entries;    //!< Ordered heights of each snapshot.
+    bool m_upgrade_pending = false;  //!< Loaded from UPGRADABLE_VERSION.
 
     //!
     //! \brief Get the path to the accrual snapshot registry file.
@@ -819,15 +848,25 @@ private:
     static fs::path RegistryPath();
 
     //!
-    //! \brief Truncate the registry file and reopen it for writing.
+    //! \brief Get the path of the temporary file that a rewrite writes before
+    //! it replaces the registry file.
+    //!
+    static fs::path TempRegistryPath();
+
+    //!
+    //! \brief Open the registry file to append new entries.
     //!
     //! \return \c false if an IO error occurred.
     //!
-    bool ReopenForWrite();
+    bool ReopenForAppend();
 
     //!
     //! \brief Prunes the registry file of any non-current entries and opens it
     //! for writing.
+    //!
+    //! The compacted registry goes to a temporary file that is committed to
+    //! disk and then moved over the registry file, so a crash leaves either the
+    //! old registry or the new one, never a truncated file.
     //!
     //! \return \c false if an IO error occurred.
     //!
@@ -903,6 +942,26 @@ public:
     //! system.
     //!
     bool HasBaseline() const;
+
+    //!
+    //! \brief Get the height of the most recent stored accrual snapshot.
+    //!
+    //! \return Zero if no baseline snapshot exists yet.
+    //!
+    uint64_t LatestHeight() const;
+
+    //!
+    //! \brief Whether the snapshot registry loaded from its previous version
+    //! and the upgrade has not completed yet.
+    //!
+    bool UpgradePending() const;
+
+    //!
+    //! \brief Record that the upgrade completed.
+    //!
+    //! \return \c false if an IO error occurred.
+    //!
+    bool CompleteUpgrade();
 
     //!
     //! \brief Store a snapshot of accrual for each account as the baseline.

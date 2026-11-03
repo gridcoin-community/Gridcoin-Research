@@ -5,6 +5,7 @@
 #include "amount.h"
 #include "chainparams.h"
 #include "gridcoin/accrual/newbie.h"
+#include "gridcoin/accrual/newbie_window.h"
 #include "gridcoin/accrual/null.h"
 #include "gridcoin/accrual/research_age.h"
 #include "gridcoin/accrual/snapshot.h"
@@ -15,15 +16,74 @@
 #include "gridcoin/quorum.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/tally.h"
+#include "init.h"
+#include "span.h"
 #include "util.h"
 #include "node/ui_interface.h"
 
+#include <optional>
 #include <unordered_map>
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 namespace {
+//!
+//! \brief Get the table of newbie accrual corrections that the current network
+//! applied in the newbie correction window.
+//!
+//! \return The mainnet or testnet table, or an empty table on another network.
+//!
+Span<const NewbieWindowEntry> GetNewbieWindowTable()
+{
+    if (OnMainnet()) {
+        return MAINNET_NEWBIE_WINDOW;
+    }
+
+    if (OnTestnet()) {
+        return TESTNET_NEWBIE_WINDOW;
+    }
+
+    return {};
+}
+
+//!
+//! \brief Get the newbie accrual correction that the network applied to a new
+//! research account in a superblock of the newbie correction window.
+//!
+//! The window runs from the newbie fix height to the last superblock that
+//! applied a nonzero correction. Inside it the tally takes the correction that
+//! the network applied from a table (see GetNewbieWindowTable()). Outside the
+//! window the tally computes the correction as before.
+//!
+//! \param height Height of the superblock that creates the account.
+//! \param cpid   CPID of the account.
+//!
+//! \return The correction for a superblock inside the window on a network with
+//! a table (zero for a CPID without a table entry), or nothing outside it.
+//!
+std::optional<CAmount> GetNewbieWindowCorrection(const int64_t height, const Cpid& cpid)
+{
+    const Span<const NewbieWindowEntry> table = GetNewbieWindowTable();
+
+    if (table.empty()
+        || height < GetNewbieSnapshotFixHeight()
+        || height > table.back().m_height)
+    {
+        return std::nullopt;
+    }
+
+    const std::string cpid_hex = cpid.ToString();
+
+    for (const auto& entry : table) {
+        if (entry.m_height == height && cpid_hex == entry.m_cpid) {
+            return entry.m_correction;
+        }
+    }
+
+    return 0;
+}
+
 /*
 //!
 //! \brief Determines whether the snapshot accrual system should enable the fix
@@ -294,6 +354,15 @@ public:
             account.m_first_block_ptr = pindex;
             account.m_last_block_ptr = pindex;
         } else {
+            // Blocks are recorded in chain order, and disconnecting a block
+            // forgets its rewards for the staker and for every MRC researcher
+            // in it, which moves m_last_block_ptr back below that block (see
+            // FindLastRewardBlock()). A block recorded here whose connect then
+            // fails to commit is never disconnected, so ReorganizeChain()
+            // stops the node at once instead. The assert protects against a
+            // change that records a block out of chain order, or a disconnect
+            // that leaves the pointer at or above the next block recorded:
+            //
             assert(pindex->nHeight > account.m_last_block_ptr->nHeight);
             account.m_last_block_ptr = pindex;
         }
@@ -417,11 +486,25 @@ public:
     {
         auto iter = m_researchers.find(cpid);
 
+        // RecordRewardBlock() created the account when the block connected.
+        // Only RebuildAccrualSnapshots() clears the accounts, and it records
+        // the whole chain again. The assert protects against a change that
+        // removes an account while its blocks are connected
+        // (Tally::RemoveAccount() is called only by the tests):
+        //
         assert(iter != m_researchers.end());
 
         ResearchAccount& account = iter->second;
 
+        // m_first_block_ptr is cleared only when a disconnect forgets a reward
+        // recorded at the CPID's first reward block. Blocks disconnect from
+        // the tip, and on mainnet ValidateMRC() refuses an MRC whose payment
+        // interval is zero, so the pointer is still set when this block is
+        // forgotten. The assert protects against a change to that rule or to
+        // the order in which a disconnect forgets rewards:
+        //
         assert(account.m_first_block_ptr != nullptr);
+
         assert(pindex == account.m_last_block_ptr);
 
         // When disconnecting a CPID's first block, reset the account, but
@@ -455,6 +538,11 @@ public:
 
             auto iter = m_researchers.find(cpid);
 
+            // RecordMRCRewardBlock() created the account when the block
+            // connected, and the accounts are cleared only as described in
+            // ForgetRewardBlock(). The assert protects against the same
+            // change:
+            //
             assert(iter != m_researchers.end());
 
             ResearchAccount& account = iter->second;
@@ -479,7 +567,7 @@ public:
             //
             if (pindex->pprev == account.m_first_block_ptr) {
                 account = ResearchAccount(account.m_accrual);
-                return;
+                continue;
             }
 
             account.m_total_research_subsidy -= mrc_researcher->m_research_subsidy;
@@ -508,19 +596,65 @@ public:
     //! \brief Update the account data with information from a new superblock.
     //!
     //! \param superblock Refers to the current active superblock.
+    //! \param pindex     Block that contains the superblock.
     //!
     //! \return \c false if an IO error occurred while processing the superblock.
     //!
-    bool ApplySuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    bool ApplySuperblock(SuperblockPtr superblock, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
+        // A block contains a superblock only if the superblock is well formed
+        // (Claim::ContainsSuperblock()), so a superblock that is not comes from
+        // a superblock block that could not be read from disk. Applying it
+        // would store a snapshot for height zero:
+        //
+        if (!superblock->WellFormed()) {
+            return error("%s: unable to load the superblock at height %d",
+                         __func__,
+                         pindex ? pindex->nHeight : -1);
+        }
+
         // The network publishes version 2+ superblocks after the mandatory
         // switch to block version 11.
         //
         if (superblock->m_version >= 2) {
-            TallySuperblockAccrual(superblock);
+            // Once the tally stopped the node below, it refuses every superblock
+            // until the restart reloads the accounts:
+            //
+            if (m_superblock_record_failed) {
+                return error("%s: refusing superblock %" PRId64 " until the restart: a superblock could not "
+                             "be recorded",
+                             __func__,
+                             superblock.m_height);
+            }
 
+            // Snapshots are stored in chain order, and a disconnect drops the
+            // snapshot of the superblock that it reverts. Register() refuses a
+            // superblock at or below the latest snapshot. Nothing has changed
+            // yet, so stop the node here. The next start drops the snapshots
+            // above the chain tip and reloads the accounts from the snapshots on
+            // disk:
+            //
+            if (static_cast<uint64_t>(superblock.m_height) <= m_snapshots.LatestHeight()) {
+                return StopOnFailedSuperblockRecord(
+                    superblock.m_height,
+                    strprintf("superblock %" PRId64 " is at or below the latest accrual snapshot %" PRIu64 ".",
+                              superblock.m_height,
+                              m_snapshots.LatestHeight()));
+            }
+
+            TallySuperblockAccrual(superblock, pindex);
+
+            // The accounts now hold the superblock's accrual. If its snapshot
+            // is not stored, the registry has no record of the superblock, so
+            // stop the node. The next start reloads the accounts from the
+            // registered snapshots, removes a snapshot file left for this
+            // height, and drops a registry record for it above the chain tip:
+            //
             if (!m_snapshots.Store(superblock.m_height, m_researchers)) {
-                return false;
+                return StopOnFailedSuperblockRecord(
+                    superblock.m_height,
+                    strprintf("failed to store the accrual snapshot of superblock %" PRId64 ".",
+                              superblock.m_height));
             }
         }
 
@@ -625,25 +759,54 @@ public:
             // baseline snapshot and scan context for the remaining blocks:
             //
             if (!m_snapshots.HasBaseline()) {
-                return BuildAccrualSnapshots();
+                return BuildAccrualSnapshots()
+                    && (!m_snapshots.UpgradePending() || m_snapshots.CompleteUpgrade());
             }
 
             // Check the integrity of the baseline superblock snapshot:
             //
-            if (const CBlockIndex* pindex = FindBaselineSuperblockHeight()) {
-                m_snapshots.AssertMatch(pindex->nHeight);
+            const CBlockIndex* last_superblock_pindex = FindBaselineSuperblockHeight();
+
+            if (last_superblock_pindex) {
+                m_snapshots.AssertMatch(last_superblock_pindex->nHeight);
+            }
+
+            // On a network with a newbie correction window table (mainnet and
+            // testnet), the first start after an upgrade from the previous
+            // registry version rebuilds every snapshot once; the rebuilt
+            // registry is written with the current version:
+            //
+            if (m_snapshots.UpgradePending() && !GetNewbieWindowTable().empty()) {
+                LogPrintf("INFO: %s: rebuilding the accrual snapshots once after the snapshot registry upgrade.",
+                          __func__);
+
+                return RebuildAccrualSnapshots();
             }
 
             // Finish loading the research account context for the remaining
             // blocks after the snapshot accrual threshold. Verify snapshots
-            // along the way:
+            // along the way. From the first superblock whose snapshot is missing
+            // or damaged, or above the latest stored one, recompute that
+            // snapshot and every later one from the last intact snapshot, as
+            // BuildAccrualSnapshots() does from the baseline:
             //
+            bool recomputing = false;
+
             for (const CBlockIndex* pindex = baseline_pindex;
                 pindex;
                 pindex = pindex->pnext)
             {
                 if (pindex->IsSuperblock()) {
-                    m_snapshots.AssertMatch(pindex->nHeight);
+                    if (!recomputing && !SnapshotIsIntact(pindex->nHeight)) {
+                        StartRecompute(pindex, last_superblock_pindex);
+                        recomputing = true;
+                    }
+
+                    if (recomputing && !ApplySuperblock(SuperblockPtr::ReadFromDisk(pindex), pindex)) {
+                        return false;
+                    }
+
+                    last_superblock_pindex = pindex;
                 }
 
                 if (pindex->ResearchSubsidy() > 0) {
@@ -657,7 +820,17 @@ public:
 
             m_snapshots.PruneSnapshotFiles();
 
-            return m_snapshots.ApplyLatest(m_researchers);
+            if (!m_snapshots.ApplyLatest(m_researchers)) {
+                return false;
+            }
+
+            EnsureCurrentSuperblockAccounts();
+
+            // On a network without a table a registry upgrade has no one-time
+            // rebuild. Record the upgrade last, once the snapshots are stored
+            // and applied:
+            //
+            return !m_snapshots.UpgradePending() || m_snapshots.CompleteUpgrade();
         } catch (const SnapshotStateError& e) {
             LogPrintf("%s: %s", __func__, e.what());
         }
@@ -728,6 +901,41 @@ private:
     const CBlockIndex* m_snapshot_baseline_pindex = nullptr;
 
     //!
+    //! \brief Set when the tally stops the node because a superblock could not
+    //! be recorded (StopOnFailedSuperblockRecord()). ApplySuperblock() then
+    //! refuses every superblock until the restart.
+    //!
+    bool m_superblock_record_failed GUARDED_BY(cs_main) = false;
+
+    //!
+    //! \brief Stop the node because a superblock could not be recorded, and
+    //! refuse every later superblock until the restart, which reloads the
+    //! accounts from the snapshots on disk.
+    //!
+    //! \param height Height of the superblock.
+    //! \param reason What the tally found, for the log.
+    //!
+    //! \return \c false, for the caller to return.
+    //!
+    bool StopOnFailedSuperblockRecord(const int64_t height, const std::string& reason) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        m_superblock_record_failed = true;
+
+        const std::string message = strprintf(
+            _("A disk write failed while the superblock at height %d was recorded in the research reward "
+              "accounts. Gridcoin will shut down. Correct the cause and restart Gridcoin; the accounts are "
+              "reloaded from disk at startup."),
+            height);
+
+        LogPrintf("ERROR: %s: %s %s", __func__, reason, message);
+
+        uiInterface.ThreadSafeMessageBox(message, "Gridcoin", CClientUIInterface::MSG_ERROR);
+        StartShutdown();
+
+        return false;
+    }
+
+    //!
     //! \brief Get the block index entry of the block when research accounting
     //! begins.
     //!
@@ -758,8 +966,10 @@ private:
     //! arrived for the snapshot accrual system.
     //!
     //! \param superblock Incoming superblock to calculate rewards at.
+    //! \param pindex     Block that contains the incoming superblock.
     //!
-    void TallySuperblockAccrual(const SuperblockPtr& superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    void TallySuperblockAccrual(const SuperblockPtr& superblock, const CBlockIndex* const pindex)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const SnapshotCalculator calc(superblock.m_timestamp, m_current_superblock);
 
@@ -823,28 +1033,75 @@ private:
             // the normal AccrualDelta, which is the period from the current superblock to the
             // incoming one.
             for (const auto& iter : superblock->m_cpids) {
-                if (m_researchers.find(iter.Cpid()) == m_researchers.end()) {
-                    ResearchAccount& account = m_researchers[iter.Cpid()];
+                const auto account_iter = m_researchers.find(iter.Cpid());
 
-                    CAmount accrual_correction = Tally::GetNewbieSuperblockAccrualCorrection(iter.Cpid(),
-                                                                                             m_current_superblock);
-                    CAmount accrual_delta = calc.AccrualDelta(iter.Cpid(), account);
+                // Inside the newbie correction window on mainnet and testnet the
+                // correction is the one that the network applied
+                // (GetNewbieWindowCorrection()).
+                const std::optional<CAmount> window_correction =
+                    GetNewbieWindowCorrection(superblock.m_height, iter.Cpid());
 
-                    account.m_accrual = accrual_correction + accrual_delta;
+                // Inside the window, a CPID with a nonzero table entry gets its
+                // account from the table:
+                const bool recreate = account_iter != m_researchers.end()
+                    && window_correction
+                    && *window_correction != 0
+                    && account_iter->second.IsNew();
 
-                    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: accrual account not found "
-                             "for CPID %s. Creating account with accrual %" PRId64" from "
-                             "Accrual Correction = %" PRId64 ", Accrual Delta = %" PRId64 ", "
-                             "superblock height = %" PRId64 ", m_researchers.size() = %u.",
-                             __func__,
-                             iter.Cpid().ToString(),
-                             account.m_accrual,
-                             accrual_correction,
-                             accrual_delta,
-                             superblock.m_height,
-                             m_researchers.size());
+                if (account_iter != m_researchers.end() && !recreate) {
+                    continue;
                 }
+
+                ResearchAccount& account = m_researchers[iter.Cpid()];
+
+                // Outside the window, rewind from the parent of the incoming
+                // superblock's block, which is the chain tip when the block
+                // connects, rather than from the tip, which is far above when
+                // the tally rebuilds or recomputes snapshots.
+                CAmount accrual_correction = window_correction
+                    ? *window_correction
+                    : Tally::GetNewbieSuperblockAccrualCorrection(
+                        iter.Cpid(),
+                        m_current_superblock,
+                        pindex ? pindex->pprev : nullptr);
+                CAmount accrual_delta = calc.AccrualDelta(iter.Cpid(), account);
+
+                account.m_accrual = accrual_correction + accrual_delta;
+
+                LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: accrual account not found "
+                         "for CPID %s. Creating account with accrual %" PRId64" from "
+                         "Accrual Correction = %" PRId64 ", Accrual Delta = %" PRId64 ", "
+                         "superblock height = %" PRId64 ", m_researchers.size() = %u.",
+                         __func__,
+                         iter.Cpid().ToString(),
+                         account.m_accrual,
+                         accrual_correction,
+                         accrual_delta,
+                         superblock.m_height,
+                         m_researchers.size());
             }
+        }
+    }
+
+    //!
+    //! \brief Create an account for every CPID in the current superblock that
+    //! has none.
+    //!
+    //! TallySuperblockAccrual() creates an account for each CPID in a new
+    //! superblock that has none, and the tally holds an account for every CPID
+    //! in the current superblock. Call this after the tally reloads the
+    //! snapshot of the current superblock.
+    //!
+    void EnsureCurrentSuperblockAccounts()
+    {
+        if (m_current_superblock->m_version < 2
+            || m_current_superblock.m_height < GetNewbieSnapshotFixHeight())
+        {
+            return;
+        }
+
+        for (const auto& iter : m_current_superblock->m_cpids) {
+            m_researchers.try_emplace(iter.Cpid());
         }
     }
 
@@ -884,6 +1141,75 @@ private:
         const CBlockIndex* pindex = FindBaselineSuperblockHeight();
 
         return SuperblockPtr::ReadFromDisk(pindex);
+    }
+
+    //!
+    //! \brief Check the stored snapshot of a superblock while loading the
+    //! tally at startup.
+    //!
+    //! \param height Height of the superblock.
+    //!
+    //! \return \c false if the superblock is above the latest stored snapshot,
+    //! or if its snapshot is missing or does not match its registry entry.
+    //!
+    bool SnapshotIsIntact(const int height) const
+    {
+        if (static_cast<uint64_t>(height) > m_snapshots.LatestHeight()) {
+            return false;
+        }
+
+        try {
+            m_snapshots.AssertMatch(static_cast<uint64_t>(height));
+        } catch (const SnapshotMissingError& e) {
+            LogPrintf("%s: %s", __func__, e.what());
+            return false;
+        } catch (const SnapshotHashMismatchError& e) {
+            LogPrintf("%s: %s", __func__, e.what());
+            return false;
+        }
+
+        return true;
+    }
+
+    //!
+    //! \brief Prepare to recompute the stored snapshots from a superblock
+    //! onward while loading the tally at startup.
+    //!
+    //! Drops the snapshot of \p pindex and every snapshot above it, then
+    //! restores the accrual of the last remaining snapshot, which must belong
+    //! to \p last_superblock_pindex, so the startup walk can recompute the rest
+    //! as BuildAccrualSnapshots() does.
+    //!
+    //! \param pindex                 The first superblock to recompute.
+    //! \param last_superblock_pindex The superblock before it.
+    //!
+    //! \throws SnapshotStateError If the snapshots cannot be dropped or the
+    //! last remaining snapshot cannot be restored.
+    //!
+    void StartRecompute(const CBlockIndex* pindex, const CBlockIndex* last_superblock_pindex)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        LogPrintf("INFO: %s: recomputing accrual snapshots from height %d.", __func__, pindex->nHeight);
+
+        if (m_snapshots.DropAboveHeight(static_cast<uint64_t>(pindex->nHeight - 1)) < 0) {
+            throw SnapshotStateError("DropAboveHeight failed while recomputing snapshots");
+        }
+
+        if (last_superblock_pindex == nullptr
+            || m_snapshots.LatestHeight() != static_cast<uint64_t>(last_superblock_pindex->nHeight)
+            || !m_snapshots.Apply(m_snapshots.LatestHeight(), m_researchers))
+        {
+            throw SnapshotStateError("no intact snapshot before the first one to recompute");
+        }
+
+        SuperblockPtr superblock = SuperblockPtr::ReadFromDisk(last_superblock_pindex);
+
+        if (!superblock->WellFormed()) {
+            throw SnapshotStateError("unable to load the superblock before the first snapshot to recompute");
+        }
+
+        m_current_superblock = std::move(superblock);
+        EnsureCurrentSuperblockAccounts();
     }
 
     //!
@@ -946,7 +1272,7 @@ private:
             pindex = pindex->pnext)
         {
             if (pindex->IsSuperblock()) {
-                if (!ApplySuperblock(SuperblockPtr::ReadFromDisk(pindex))) {
+                if (!ApplySuperblock(SuperblockPtr::ReadFromDisk(pindex), pindex)) {
                     return false;
                 }
             }
@@ -980,6 +1306,16 @@ public:
     //!
     bool RebuildAccrualSnapshots() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
+        // Every caller runs once the baseline is set. ActivateSnapshotAccrual()
+        // sets it before anything that can rebuild. RevertSuperblock() rebuilds
+        // only when it reverts a version 2+ superblock, and the tally applies
+        // those only in version 11+ blocks, after snapshot accrual was
+        // activated at startup or at the block before version 11
+        // (GridcoinServices()). On regtest, where version 11 starts at height 0
+        // and snapshot accrual never activates, this does not hold. The assert
+        // protects against a new caller that rebuilds before snapshot accrual
+        // is active:
+        //
         assert(m_snapshot_baseline_pindex != nullptr);
 
         // Reset the research accounts and reinitialize the whole tally. We
@@ -1027,7 +1363,10 @@ bool Tally::Initialize(CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         // init below the research age enabled height, the accrual directory must be stale
         // (i.e. this is a resync.)
 
-        g_researcher_tally.EraseSnapshots();
+        if (!g_researcher_tally.EraseSnapshots()) {
+            return error("%s: failed to reset the accrual directory", __func__);
+        }
+
         LogPrintf("Accrual directory reset.");
 
         return true;
@@ -1047,7 +1386,12 @@ bool Tally::Initialize(CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     const int64_t start_time = GetTimeMillis();
 
-    g_researcher_tally.Initialize(pindex, Quorum::CurrentSuperblock());
+    // A failure here leaves the research accounts incomplete or the snapshot
+    // registry without a file to write to. Report it so that the node stops:
+    //
+    if (!g_researcher_tally.Initialize(pindex, Quorum::CurrentSuperblock())) {
+        return error("%s: failed to load the research reward accounts", __func__);
+    }
 
     LogPrintf(
         "Tally initialization complete. Scan time %15" PRId64 "ms\n",
@@ -1141,8 +1485,13 @@ CAmount Tally::AccrualNearLimit(
 //!
 //! \param cpid for which to calculate the accrual correction.
 //! \param superblock that is the high point of the accrual correction
+//! \param pindex_start Block to rewind from to the current superblock: a
+//! descendant of it on the same chain. Null starts at the chain tip.
 //!
-CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const SuperblockPtr& current_superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+CAmount Tally::GetNewbieSuperblockAccrualCorrection(
+    const Cpid& cpid,
+    const SuperblockPtr& current_superblock,
+    const CBlockIndex* const pindex_start) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // This function was moved from the anonymous namespace and private, to public and made static, because it has
     // to be called from BlockRewardRules::Check() directly too. Why?
@@ -1284,8 +1633,8 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
         return accrual;
     }
 
-    // Start at the tip.
-    const CBlockIndex* pindex_high = mapBlockIndex[hashBestChain];
+    // Start at the block the caller gives, or at the tip.
+    const CBlockIndex* pindex_high = pindex_start ? pindex_start : mapBlockIndex[hashBestChain];
 
     // Rewind pindex_high to the current superblock.
     while (pindex_high->nHeight > current_superblock.m_height)
@@ -1453,9 +1802,9 @@ void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
     g_researcher_tally.ForgetMRCRewardBlock(pindex);
 }
 
-bool Tally::ApplySuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool Tally::ApplySuperblock(SuperblockPtr superblock, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    return g_researcher_tally.ApplySuperblock(std::move(superblock));
+    return g_researcher_tally.ApplySuperblock(std::move(superblock), pindex);
 }
 
 bool Tally::RevertSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main)

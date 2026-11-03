@@ -41,6 +41,7 @@ add_executable(test_gridcoin
     gridcoin_tests.cpp
     htlc_tests.cpp
     key_io_tests.cpp
+    gridcoin/accrual_snapshot_tests.cpp
     gridcoin/backup_tests.cpp
     gridcoin/block_finder_tests.cpp
     gridcoin/block_rewards_tests.cpp
@@ -56,6 +57,7 @@ add_executable(test_gridcoin
     gridcoin/magnitude_tests.cpp
     gridcoin/mnemonics_tests.cpp
     gridcoin/mrc_tests.cpp
+    gridcoin/newbie_window_tests.cpp
     gridcoin/poll_result_cache_tests.cpp
     gridcoin/poll_registry_tests.cpp
     gridcoin/poll_result_tests.cpp
@@ -71,6 +73,7 @@ add_executable(test_gridcoin
     gridcoin/seen_stakes_tests.cpp
     gridcoin/sidestake_tests.cpp
     gridcoin/superblock_tests.cpp
+    gridcoin/tally_tests.cpp
     gridcoin/voting_notify_tests.cpp
     interfaces_tests.cpp
     key_tests.cpp
