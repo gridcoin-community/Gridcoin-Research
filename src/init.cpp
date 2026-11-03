@@ -1028,6 +1028,14 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcconnect=<ip>", "Send commands to node running on <ip> (default: 127.0.0.1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcserviceuser=<user>", "RPC client: also accept an RPC listener owned by <user>. Honoured only "
+                   "from a configuration file owned by root (Windows: SYSTEM or Administrators) that nobody else "
+                   "can write; for administering the system service.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcskiplistenercheck", "RPC client: send requests without identifying the owner of the RPC listener "
+                   "(not recommended: what the client sends, credentials included, then goes to whatever "
+                   "program holds the RPC address).",
+                   ArgsManager::ALLOW_BOOL, OptionsCategory::RPC);
     argsman.AddArg("-rpcthreads=<n>", "Set the number of threads to service RPC calls (default: 4)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcservertimeout=<n>", strprintf("Close an RPC connection that has been idle "

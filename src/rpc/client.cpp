@@ -26,6 +26,8 @@
 #include <list>
 #include <stdexcept>
 
+#include <atomic>
+#include <iostream>
 #include <memory>
 
 using namespace std;
@@ -35,7 +37,25 @@ using namespace boost::asio;
 /** The default timeout for an RPC client to wait for the RPC server to start in seconds */
 static constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
 
-UniValue CallRPC(const string& strMethod, const UniValue& params)
+//! The listener check on a connected socket. An endpoint that cannot be read refuses, as does a
+//! missing check.
+static ListenerCheckResult CheckConnectedListener(const asio::ip::tcp::socket& socket, const ListenerCheckFn& check,
+                                                  const std::string& target)
+{
+    boost::system::error_code local_error;
+    boost::system::error_code remote_error;
+    const asio::ip::tcp::endpoint local_endpoint = socket.local_endpoint(local_error);
+    const asio::ip::tcp::endpoint remote_endpoint = socket.remote_endpoint(remote_error);
+    CService local;
+    CService remote;
+    if (!check || local_error || remote_error || !local.SetSockAddr(local_endpoint.data()) ||
+        !remote.SetSockAddr(remote_endpoint.data())) {
+        return {ListenerVerdict::Refuse, UnidentifiedListenerMessage(target)};
+    }
+    return check(local, remote);
+}
+
+UniValue CallRPC(const string& strMethod, const UniValue& params, const RpcCallOptions& options)
 {
     if (!gArgs.IsArgSet("-rpcuser") || !gArgs.IsArgSet("-rpcpassword"))
         throw runtime_error(strprintf(
@@ -125,6 +145,23 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
             throw runtime_error("couldn't connect to server");
         }
     } while (true);
+
+    // The request below carries the RPC password, so identify who holds the listener before
+    // anything is written to the connection. A refusal is final: CommandLineRPC does not call
+    // again under -rpcwait.
+    if (gArgs.GetBoolArg("-rpcskiplistenercheck", false)) {
+        static std::atomic<bool> warned{false};
+        if (!warned.exchange(true)) {
+            tfm::format(std::cerr, "warning: -rpcskiplistenercheck is set; the RPC listener's owner is not checked\n");
+        }
+    } else {
+        const ListenerCheckResult check = CheckConnectedListener(socket, options.listener_check, rpc_host + ":" + rpc_port);
+        if (check.verdict != ListenerVerdict::Accept) {
+            boost::system::error_code ignored;
+            socket.close(ignored);
+            throw std::runtime_error(check.reason);
+        }
+    }
 
     // HTTP basic authentication
     string strUserPass64 = EncodeBase64(gArgs.GetArg("-rpcuser", "dummy") + ":" + gArgs.GetArg("-rpcpassword", "dummy"));

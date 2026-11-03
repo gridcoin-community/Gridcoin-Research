@@ -511,6 +511,78 @@ port, closing the same startup-squat race. Because DPAPI CurrentUser is per-acco
 must run as the account that ran setup. Remove with `.\Set-GridcoinAutounlock.ps1 -Remove`. See
 [`contrib/windows/README.md`](../contrib/windows/README.md).
 
+## The command-line client
+
+`gridcoinresearchd <command>` sends one request to a running core and prints the reply. The
+client identifies the program it connected to before it sends the request.
+
+After it connects, and before it writes a byte, the client looks up the server side of its own
+connection (both addresses and both ports) in the kernel's TCP table (`/proc/net/tcp` and
+`/proc/net/tcp6` on Linux, `GetExtendedTcpTable` on Windows) and finds the account that owns the
+listener. It sends the request only when that account is:
+
+1. the account running the client;
+2. for root (Windows: SYSTEM), the owner of the configuration file the client read, so that
+   `sudo gridcoinresearchd -datadir=/home/alice/.GridcoinResearch stop` reaches alice's core; or
+3. the account named by `rpcserviceuser=` in the configuration file. This is honoured only when
+   root (Windows: SYSTEM or Administrators) owns both the configuration file and its directory,
+   nobody else can write either, and no `includeconf` is in use. Set anywhere else (the command
+   line, the settings file, a file you own) it is ignored with a warning.
+
+On Windows the listener must also be the installed Gridcoin core: `gridcoinresearchd.exe` at the
+client's own path, or `gridcoinresearch.exe` beside it (or one directory up from the installer's
+`daemon\` directory).
+
+Otherwise the client sends nothing and exits with an error such as:
+
+```
+error: refusing to send RPC credentials: the listener at 127.0.0.1:15715 is owned by 1002, not by 1000. Pass -rpcskiplistenercheck to send anyway (not recommended: what the client sends then goes to whatever program holds that address).
+```
+
+When the server side cannot be found or its owner cannot be read, the error is `refusing to send
+RPC credentials: could not identify the owner of the listener at <address>.` A refusal is final:
+`-rpcwait` does not retry it.
+
+The check applies when the address the client connected to belongs to this host: a loopback
+address (127.0.0.0/8, `::1`), `0.0.0.0` or `::`, or an address of one of this host's interfaces.
+A listener at any other address is on another machine, outside this host's table, and the client
+sends. The check runs on Linux and Windows; on macOS and the BSDs the client has no such check.
+
+### Administering the system service
+
+Root, or an administrator, running the client against the system service reaches a listener owned
+by the service account (`gridcoin`, or `gridcointestnet` for testnet; on Windows
+`NT SERVICE\gridcoinresearchd`). The service's configuration file names that account, and the
+client honours the line while root owns that file and its directory and nobody else can write
+either:
+
+```
+# /etc/gridcoin/gridcoin.conf
+rpcserviceuser=gridcoin
+```
+
+```bash
+sudo gridcoinresearchd -conf=/etc/gridcoin/gridcoin.conf -datadir=/var/lib/gridcoinresearchd getwalletinfo
+```
+
+Running the client as the service account works without that line, since the listener is then the
+client's own: `sudo runuser -u gridcoin -- gridcoinresearchd -conf=/etc/gridcoin/gridcoin.conf
+-datadir=/var/lib/gridcoinresearchd getwalletinfo`.
+
+### A core in a Docker container
+
+A client on the host talking to a core in a container through a published port connects to
+`docker-proxy`, which runs as root, so a client run by any other account refuses. (Where Docker
+forwards the port in the kernel instead, the host has no listener for the connection and the client
+refuses as well.) Run the client inside the container
+(`docker exec <container> gridcoinresearchd getblockcount`), or pass the override below.
+
+### Skipping the check
+
+`-rpcskiplistenercheck` sends without identifying the owner of the listener, and the client says
+so on stderr. Not recommended: what the client sends, credentials included, then goes to whatever
+program holds the RPC address.
+
 ## Troubleshooting
 
 - **Autounlock unit fails with `status=243/CREDENTIALS` and the journal shows

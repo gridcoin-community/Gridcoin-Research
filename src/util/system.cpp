@@ -654,6 +654,29 @@ std::string ArgsManager::GetArg(const std::string& strArg, const std::string& st
     return value.isNull() ? strDefault : value.isFalse() ? "0" : value.isTrue() ? "1" : value.get_str();
 }
 
+std::optional<std::string> ArgsManager::GetConfigFileArg(const std::string& arg) const
+{
+    LOCK(cs_args);
+    // The same resolution as GetSetting, over the configuration file's values alone.
+    util::Settings conf_only;
+    conf_only.ro_config = m_settings.ro_config;
+    const util::SettingsValue value = util::GetSetting(
+        conf_only, m_network, SettingName(arg), !UseDefaultSection(arg), /* get_chain_name= */ false);
+    if (value.isNull() || value.isFalse()) return std::nullopt;
+    return value.isTrue() ? std::string{"1"} : value.get_str();
+}
+
+bool ArgsManager::ConfigFileUsedIncludes() const
+{
+    LOCK(cs_args);
+    for (const auto& section : m_settings.ro_config) {
+        if (const auto* values = util::FindKey(section.second, "includeconf")) {
+            if (!util::SettingsSpan(*values).empty()) return true;
+        }
+    }
+    return false;
+}
+
 int64_t ArgsManager::GetIntArg(const std::string& strArg, int64_t nDefault) const
 {
     return GetArg(strArg, nDefault);

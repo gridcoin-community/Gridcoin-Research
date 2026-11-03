@@ -7,6 +7,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include "test/state_guard.h"
+#include <chainparamsbase.h>
 #include "init.h"
 #include <node/ui_interface.h>
 #include <boost/signals2/connection.hpp>
@@ -309,6 +310,78 @@ BOOST_FIXTURE_TEST_CASE(util_NoIncludeConf, NoIncludeConfTest)
     BOOST_CHECK_EQUAL(Parse("-noincludeconf"), "");
     BOOST_CHECK_EQUAL(Parse("-includeconf"), "-includeconf cannot be used from commandline; -includeconf=\"\"");
     BOOST_CHECK_EQUAL(Parse("-includeconf=file"), "-includeconf cannot be used from commandline; -includeconf=\"file\"");
+}
+
+BOOST_AUTO_TEST_CASE(config_file_arg_only_from_conf)
+{
+    const std::vector<std::pair<std::string, unsigned int>> args{{"-rpcserviceuser", ArgsManager::ALLOW_ANY}};
+    std::array argv{"x", "-rpcserviceuser=bob"};
+    std::string error;
+
+    TestArgsManager conf_only;
+    conf_only.SetupArgs(args);
+    conf_only.ReadConfigString("rpcserviceuser=gridcoin\n");
+    BOOST_CHECK(conf_only.GetConfigFileArg("-rpcserviceuser") == std::optional<std::string>{"gridcoin"});
+    // A forced value changes GetArg, not what the file says.
+    conf_only.ForceSetArg("-rpcserviceuser", "forced");
+    BOOST_CHECK_EQUAL(conf_only.GetArg("-rpcserviceuser", ""), "forced");
+    BOOST_CHECK(conf_only.GetConfigFileArg("-rpcserviceuser") == std::optional<std::string>{"gridcoin"});
+
+    TestArgsManager command_line_only;
+    command_line_only.SetupArgs(args);
+    BOOST_REQUIRE(command_line_only.ParseParameters(argv.size(), argv.data(), error));
+    BOOST_CHECK_EQUAL(command_line_only.GetArg("-rpcserviceuser", ""), "bob");
+    BOOST_CHECK(command_line_only.GetConfigFileArg("-rpcserviceuser") == std::nullopt);
+
+    TestArgsManager both;
+    both.SetupArgs(args);
+    BOOST_REQUIRE(both.ParseParameters(argv.size(), argv.data(), error));
+    both.ReadConfigString("rpcserviceuser=gridcoin\n");
+    BOOST_CHECK_EQUAL(both.GetArg("-rpcserviceuser", ""), "bob");
+    BOOST_CHECK(both.GetConfigFileArg("-rpcserviceuser") == std::optional<std::string>{"gridcoin"});
+
+    // The network section outranks the default section, as it does for GetArg.
+    TestArgsManager sections;
+    sections.SetupArgs(args);
+    sections.SelectConfigNetwork(CBaseChainParams::TESTNET);
+    sections.ReadConfigString("rpcserviceuser=default\n[test]\nrpcserviceuser=testnet\n");
+    BOOST_CHECK_EQUAL(sections.GetArg("-rpcserviceuser", ""), "testnet");
+    BOOST_CHECK(sections.GetConfigFileArg("-rpcserviceuser") == std::optional<std::string>{"testnet"});
+
+    // A negated setting sets no value.
+    TestArgsManager negated;
+    negated.SetupArgs(args);
+    negated.ReadConfigString("norpcserviceuser=1\n");
+    BOOST_CHECK(negated.GetConfigFileArg("-rpcserviceuser") == std::nullopt);
+}
+
+BOOST_AUTO_TEST_CASE(config_file_used_includes)
+{
+    const std::vector<std::pair<std::string, unsigned int>> args{
+        {"-includeconf", ArgsManager::ALLOW_ANY},
+        {"-rpcport", ArgsManager::ALLOW_ANY},
+    };
+
+    TestArgsManager with_include;
+    with_include.SetupArgs(args);
+    with_include.ReadConfigString("includeconf=other.conf\n");
+    BOOST_CHECK(with_include.ConfigFileUsedIncludes());
+
+    TestArgsManager in_section;
+    in_section.SetupArgs(args);
+    in_section.ReadConfigString("[test]\nincludeconf=other.conf\n");
+    BOOST_CHECK(in_section.ConfigFileUsedIncludes());
+
+    TestArgsManager without;
+    without.SetupArgs(args);
+    without.ReadConfigString("rpcport=1\n");
+    BOOST_CHECK(!without.ConfigFileUsedIncludes());
+
+    // -noincludeconf after the value reads no other file.
+    TestArgsManager negated;
+    negated.SetupArgs(args);
+    negated.ReadConfigString("includeconf=other.conf\nnoincludeconf=1\n");
+    BOOST_CHECK(!negated.ConfigFileUsedIncludes());
 }
 
 BOOST_AUTO_TEST_CASE(util_ParseParameters)

@@ -279,6 +279,7 @@ add_library(gridcoin_util STATIC
     rpc/htlc.cpp
     rpc/client.cpp
     rpc/dataacq.cpp
+    rpc/listener_check.cpp
     rpc/mempool.cpp
     rpc/mining.cpp
     rpc/misc.cpp

@@ -276,6 +276,14 @@ public:
      */
     std::string GetArg(const std::string& strArg, const std::string& strDefault) const;
 
+    //! -arg as set in the configuration file(s) only: ignores the command line, the settings file and
+    //! forced values; network section first, then the default section, as GetArg resolves. nullopt
+    //! when the configuration does not set it or negates it (-noarg).
+    std::optional<std::string> GetConfigFileArg(const std::string& arg) const;
+
+    //! Any includeconf in ro_config: a value after the last negation, in any section.
+    bool ConfigFileUsedIncludes() const;
+
     /**
      * Return integer argument or default value
      *
