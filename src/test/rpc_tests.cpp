@@ -8,6 +8,8 @@
 #include <rpc/protocol.h>
 #include <rpc/server.h>
 #include <net.h>
+#include <policy/fees.h>
+#include <wallet/wallet.h>
 
 #include <univalue.h>
 
@@ -245,6 +247,23 @@ BOOST_AUTO_TEST_CASE(http_request_line_empty_proto)
     std::string method, uri;
 
     BOOST_CHECK_NO_THROW((void)ReadHTTPRequestLine(in, proto, method, uri));
+}
+
+BOOST_AUTO_TEST_CASE(settxfee_refuses_a_rate_above_the_cap)
+{
+    // nTransactionFee is a global the case changes, so put it back afterwards.
+    struct RestoreFee { int64_t saved{nTransactionFee}; ~RestoreFee() { nTransactionFee = saved; } } restore;
+    const rpcfn_type settxfee_fn = tableRPC["settxfee"]->actor;
+
+    BOOST_CHECK(settxfee_fn(RPCConvertValues("settxfee", {"0.1"})).get_bool());
+    BOOST_CHECK_EQUAL(nTransactionFee, MaxTxFeeRate());
+
+    BOOST_CHECK_EXCEPTION(settxfee_fn(RPCConvertValues("settxfee", {"0.10000001"})), UniValue,
+        [](const UniValue& e) {
+            return find_value(e, "code").get_int() == RPC_INVALID_PARAMETER
+                && find_value(e, "message").get_str().find("above maximum") != std::string::npos;
+        });
+    BOOST_CHECK_EQUAL(nTransactionFee, MaxTxFeeRate());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

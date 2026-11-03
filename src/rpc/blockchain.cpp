@@ -959,7 +959,8 @@ UniValue getdifficulty(const UniValue& params)
 static const RPCHelpMan settxfee_help{
     "settxfee",
     "Set the transaction fee per kB (rounded to the nearest 0.00000001 GRC). "
-    "Overwrites the paytxfee parameter.",
+    "Overwrites the paytxfee parameter. "
+    "At most 0.1 GRC per kB. Needs the wallet passphrase: a full unlock, or the passphrase sent with this request.",
     {
         {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
             "The transaction fee in GRC/kB."},
@@ -982,6 +983,13 @@ UniValue settxfee(const UniValue& params)
         throw JSONRPCError(RPC_INVALID_PARAMETER,
             strprintf("txfee %s below minimum %s",
                       FormatMoney(amount), FormatMoney(nMinFee)));
+    }
+
+    const CAmount max_rate = MaxTxFeeRate();
+    if (amount > max_rate) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("txfee %s above maximum %s",
+                      FormatMoney(amount), FormatMoney(max_rate)));
     }
 
     nTransactionFee = amount;

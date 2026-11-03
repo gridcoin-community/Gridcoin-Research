@@ -131,4 +131,15 @@ inline CAmount GetMinFee(const CTransaction& tx, unsigned int nBlockSize = 1, en
     return nMinFee;
 }
 
+//! A fee above this multiple of the minimum is treated as a mistake: the PSGT pool refuses it, and
+//! settxfee and a stored -paytxfee refuse a rate above it.
+static constexpr int ABSURD_FEE_MULTIPLIER = 100;
+
+//! The highest per-kB rate settxfee accepts: ABSURD_FEE_MULTIPLIER times the send base fee of a
+//! current-version transaction (0.1 GRC per kB).
+inline CAmount MaxTxFeeRate()
+{
+    return ABSURD_FEE_MULTIPLIER * GetBaseFee(CTransaction(), GMF_SEND);
+}
+
 #endif // BITCOIN_POLICY_FEES_H
