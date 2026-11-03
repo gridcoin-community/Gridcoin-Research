@@ -372,12 +372,9 @@ bool AppInit(int argc, char* argv[])
         // request, not the loss of a nice-to-have.
         if (gArgs.GetBoolArg("-multiprocess", false)) {
             try {
-                // An explicit -ipcdir may not exist yet. The daemon's owner-only
-                // umask makes a directory created here owner-only.
-                {
-                    boost::system::error_code mkdir_ec;
-                    fs::create_directories(ipc::GetIpcDir(), mkdir_ec);
-                }
+                // An explicit -ipcdir may not exist yet. Create it restricted to
+                // this account; a failure is fatal like the rest of this block.
+                ipc::PrepareIpcDirectory(ipc::GetIpcDir());
                 std::string cookie = ipc::WriteCookie(ipc::GetIpcDir());
                 cookie_written = true;
                 interfaces::NodeIdentity identity;
@@ -420,15 +417,15 @@ bool AppInit(int argc, char* argv[])
                 // in debug.log. The failures reaching here are all actionable:
                 // another process already listening, a socket path over the
                 // 108-byte sockaddr_un limit, or the socket/cookie access control
-                // (chmod / owner-only DACL) not being applicable to this data
+                // (chmod / owner-only DACL) not being applicable to the IPC
                 // directory.
                 InitError(strprintf("Failed to start the multiprocess IPC listener: %s\n\n"
                                     "-multiprocess was requested, so this is fatal. If the node was "
-                                    "killed or crashed, a stale socket may be left in the data "
-                                    "directory: stop any running gridcoinresearchd, delete "
+                                    "killed or crashed, a stale socket may be left in the IPC "
+                                    "directory (%s): stop any running gridcoinresearchd, delete "
                                     "'node.sock' there, and start again. Otherwise start without "
                                     "-multiprocess.",
-                                    e.what()));
+                                    e.what(), ipc::GetIpcDir().string()));
                 // Exit non-zero and take the normal shutdown path: the wait loop
                 // below sees the request immediately and falls through to
                 // Shutdown(), so the node stops cleanly instead of running on as a

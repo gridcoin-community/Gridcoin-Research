@@ -996,7 +996,7 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-multiprocess",
                    "Run in multiprocess mode (RFC #2937): the daemon also listens on an AF_UNIX "
-                   "socket in the data directory and serves the GUI over IPC; the GUI (started "
+                   "socket in the IPC directory (-ipcdir, default the data directory) and serves the GUI over IPC; the GUI (started "
                    "separately with -multiprocess) connects to it instead of running core in-process. "
                    "Default: off (monolithic).",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);

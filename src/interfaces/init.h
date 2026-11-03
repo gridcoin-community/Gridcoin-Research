@@ -88,7 +88,7 @@ public:
 
     //! First IPC call of the connect handshake (doc/multiprocess_design.md
     //! section 4.3, step 5): the GUI presents the 256-bit cookie it read from
-    //! <datadir>/<network>/ipc.cookie; the node compares it constant-time against
+    //! <ipcdir>/ipc.cookie; the node compares it constant-time against
     //! the cookie it wrote at startup and returns whether it matches. Build and
     //! identity information are never served to an unauthenticated peer, so the
     //! GUI hard-fails and disconnects on a false result. Authentication precedes

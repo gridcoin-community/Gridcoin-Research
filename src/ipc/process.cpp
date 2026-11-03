@@ -41,8 +41,8 @@
 namespace ipc {
 namespace {
 
-//! Default socket filename inside the (network-specific) data directory:
-//! <datadir>/<network>/node.sock (doc/multiprocess_design.md section 4.3).
+//! Default socket filename inside the IPC directory (-ipcdir, default the
+//! network-specific data directory): <ipcdir>/node.sock (doc/multiprocess_design.md section 4.3).
 const char* const DEFAULT_SOCKET_FILE = "node.sock";
 
 //! Resolve \p address ("unix" -> <ipc_dir>/node.sock, "unix:<path>" -> a custom
@@ -233,7 +233,7 @@ int TryConnect(const struct sockaddr_un& addr, int& out_errno)
 
 fs::path GetIpcDir()
 {
-    if (gArgs.IsArgSet("-ipcdir")) {
+    if (gArgs.IsArgSet("-ipcdir") && !gArgs.IsArgNegated("-ipcdir")) {
         return AbsPathForConfigVal(fs::path(gArgs.GetArg("-ipcdir", "")), /*net_specific=*/true);
     }
     return GetDataDir();
@@ -260,7 +260,7 @@ void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, s
     if (fd == -1) fail(errno, "cannot open");
 
     struct FdCloser {
-        int fd;
+        int fd{-1};
         ~FdCloser() { ::close(fd); }
     } closer{fd};
 
@@ -310,6 +310,66 @@ void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, s
 }
 #endif // !WIN32
 
+void PrepareIpcDirectory(const fs::path& dir)
+{
+    // Socket directory access control (design section 4.3).
+    //
+    // The directory is hardened ONLY when this call creates it. If it already
+    // exists its permissions are the operator's decision: an admin may have
+    // deliberately widened them (a shared group, a second account, a backup
+    // agent), and silently re-tightening on every start would undo that with
+    // no warning and no way to make it stick. So a permissive existing
+    // directory is warned about but never changed.
+    //
+    // This is not a hole: the two things that actually matter -- the socket
+    // and the auth cookie -- are ours, recreated on every start, and are
+    // created owner-only and fail closed (see bind and handshake.cpp). A
+    // widened directory makes it listable, not the cookie readable.
+    //
+    // When the directory is created here, restricting it fails closed: if we
+    // cannot restrict a directory we just made, throw rather than expose the
+    // socket in a world-accessible one. On POSIX that is an fd-based mode 0700;
+    // Windows has no chmod/umask for AF_UNIX, so the equivalent is an explicit
+    // owner-only protected DACL (ApplyOwnerOnlyDacl).
+    //
+    // The default -ipcdir is the data directory, which GetDataDir() has
+    // normally created already (owner-only, through
+    // util::CreateOwnerOnlyDirectory), so for it the create branch does not run.
+    // It runs for an explicit -ipcdir, or a custom socket path, whose directory
+    // does not exist yet.
+    boost::system::error_code ec;
+    const bool created = fs::create_directories(dir, ec);
+    if (ec) {
+        throw std::system_error(ec.value(), std::system_category(),
+                                "could not create the IPC directory " + dir.string());
+    }
+
+    if (created) {
+#ifndef WIN32
+        ApplyPathAccessNoFollow(dir, PathKind::Directory, 0700, std::nullopt);
+#else
+        util::ApplyOwnerOnlyDacl(dir, /*inheritable=*/true);
+#endif
+    } else {
+#ifndef WIN32
+        struct stat st;
+        if (::stat(dir.string().c_str(), &st) == 0 && (st.st_mode & (S_IRWXG | S_IRWXO)) != 0) {
+            LogPrintf("WARN: %s: the IPC directory %s is accessible to other users (mode %03o). "
+                      "Leaving it as configured; the IPC socket and cookie inside it remain owner-only.",
+                      __func__, dir.string(), static_cast<unsigned>(st.st_mode & 07777));
+        }
+#else
+        try {
+            util::VerifyOwnerOnlyDacl(dir);
+        } catch (const std::exception&) {
+            LogPrintf("WARN: %s: the IPC directory %s is not restricted to this account. "
+                      "Leaving it as configured; the IPC socket and cookie inside it remain owner-only.",
+                      __func__, dir.string());
+        }
+#endif
+    }
+}
+
 namespace {
 
 class ProcessImpl : public Process
@@ -334,90 +394,9 @@ public:
         struct sockaddr_un addr;
         const fs::path path = ParseAddress(address, ipc_dir, addr);
 
-        // Socket directory access control (design section 4.3).
-        //
-        // READ THIS BEFORE RELYING ON THE create BRANCH BELOW: for the DEFAULT
-        // address ("unix" -> <ipcdir>/node.sock) it does not run. GetDataDir()
-        // itself calls fs::create_directories (ArgsManager::GetDataDirPath in
-        // util/system.cpp), and AppInit2, WriteCookie(GetDataDir()) and this
-        // function's own GetDataDir() argument have all called it long before we
-        // get here -- so the directory always already exists and `created` is
-        // false. The branch is live only for a custom `unix:<path>` whose parent
-        // does not exist yet.
-        //
-        // The practical effect is that this branch does not decide the datadir's
-        // permissions. A datadir that GetDataDirPath (or the Qt first-run chooser)
-        // creates is already owner-only, because both create it through
-        // util::CreateOwnerOnlyDirectory; GetDataDirPath itself never creates a
-        // mainnet -datadir, which must already exist. One that already existed
-        // keeps the permissions it has: whatever the operator gave it, or the OS
-        // default (%APPDATA%'s inherited ACL on Windows, 0755 on macOS) if a
-        // release that predates owner-only creation made it. That is
-        // deliberate: we do not re-tighten a directory the operator may have
-        // widened on purpose. What actually protects the secret is that node.sock
-        // and ipc.cookie are created BY US, owner-only, and fail closed if that
-        // cannot be applied -- see below and in handshake.cpp.
-        //
-        // When the create branch does run, it fails closed: if we cannot restrict a
-        // directory we just made, refuse to listen rather than expose the socket in
-        // a world-accessible one.
-        // Windows has no chmod/umask for AF_UNIX, so the equivalent is an explicit
-        // owner-only *protected* DACL (ApplyOwnerOnlyDacl). The port used to
-        // rely instead on the per-user-profile datadir ACL being owner-only by
-        // default: true for a default %APPDATA% install (icacls on-device showed
-        // owner + SYSTEM + Administrators only), but nothing set or checked it, so
-        // a -datadir on a shared volume, an inherited-permissive parent or a
-        // non-ACL filesystem silently exposed the wallet IPC socket and the auth
-        // cookie.
-        //
-        // Applied ON CREATION ONLY, on both platforms. See the comment below: an
-        // existing datadir's permissions belong to the operator, not to us.
-        if (path.has_parent_path()) {
-            const fs::path parent = path.parent_path();
-
-            // Harden the datadir ONLY when we are the ones creating it. If it already
-            // exists its permissions are the operator's decision: an admin may have
-            // deliberately widened them (a shared group, a second account, a backup
-            // agent), and silently re-tightening on every start would undo that with
-            // no warning and no way to make it stick. So we warn about a permissive
-            // datadir but never change one we did not create.
-            //
-            // This is not a hole: the two things that actually matter -- the socket
-            // and the auth cookie -- are ours, recreated on every start, and are
-            // still created owner-only and fail closed below. A widened datadir makes
-            // the directory listable, not the cookie readable.
-            boost::system::error_code ec;
-            const bool created = fs::create_directories(parent, ec);
-            if (ec) {
-                throw std::system_error(ec.value(), std::system_category(),
-                                        "could not create the IPC socket directory " + parent.string());
-            }
-
-            if (created) {
-#ifndef WIN32
-                ApplyPathAccessNoFollow(parent, PathKind::Directory, 0700, std::nullopt);
-#else
-                util::ApplyOwnerOnlyDacl(parent, /*inheritable=*/true);
-#endif
-            } else {
-#ifndef WIN32
-                struct stat st;
-                if (::stat(parent.string().c_str(), &st) == 0 && (st.st_mode & (S_IRWXG | S_IRWXO)) != 0) {
-                    LogPrintf("WARN: %s: the data directory %s is accessible to other users (mode %03o). "
-                              "Leaving it as configured; the IPC socket and cookie inside it remain owner-only.",
-                              __func__, parent.string(), static_cast<unsigned>(st.st_mode & 07777));
-                }
-#else
-                try {
-                    util::VerifyOwnerOnlyDacl(parent);
-                } catch (const std::exception&) {
-                    LogPrintf("WARN: %s: the data directory %s is not restricted to this account. "
-                              "Leaving it as configured; the IPC socket and cookie inside it remain owner-only.",
-                              __func__, parent.string());
-                }
-#endif
-            }
-        }
+        // The socket's directory is prepared (created owner-only, or checked and
+        // left as configured) before the bind. See PrepareIpcDirectory.
+        if (path.has_parent_path()) PrepareIpcDirectory(path.parent_path());
 
         // Try to bind; only if the path already exists (EADDRINUSE) do we probe it.
         // A live listener means the node is already running (refuse to start rather

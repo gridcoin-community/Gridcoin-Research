@@ -43,6 +43,13 @@ std::unique_ptr<Process> MakeProcess();
 //! value. The IPC socket and cookie live here.
 fs::path GetIpcDir();
 
+//! Make sure \p dir exists. When this call creates it, it is restricted to this
+//! account (POSIX mode 0700 through an fd, Windows owner-only protected DACL)
+//! and failing to do so throws; an existing directory is left as configured,
+//! with a warning in the log if it is accessible to other users. Throws
+//! std::system_error, naming the directory, if it cannot be created.
+void PrepareIpcDirectory(const fs::path& dir);
+
 #ifndef WIN32
 //! What ApplyPathAccessNoFollow expects to find at the path.
 enum class PathKind { Socket, Directory, RegularFile };
@@ -53,7 +60,7 @@ enum class PathKind { Socket, Directory, RegularFile };
 //! fchmodat2(fd,"",mode,AT_EMPTY_PATH) when SYS_fchmodat2 is defined and succeeds,
 //! else chmod("/proc/self/fd/<fd>", mode).
 //! Other POSIX: fchownat/fchmodat(AT_FDCWD, path, ..., AT_SYMLINK_NOFOLLOW).
-//! Afterwards lstat must show the expected type, st_uid == geteuid(),
+//! Afterwards the path (fstat on the fd on Linux, lstat elsewhere) must show the expected type, st_uid == geteuid(),
 //! mode & 07777 == mode, and the group when given; otherwise throws
 //! std::system_error.
 void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, std::optional<gid_t> group);
