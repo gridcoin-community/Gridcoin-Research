@@ -163,6 +163,9 @@ BASE_SCRIPTS = [
     # feature_rpc_bind_conflict.py: an RPC loopback address held by another
     # program disables RPC with a logged error; the node keeps running.
     'feature_rpc_bind_conflict.py',
+    # feature_notify_fd_inheritance.py: a notify child inherits neither the RPC listener nor an
+    # accepted RPC connection.
+    'feature_notify_fd_inheritance.py',
     'p2p_version_handshake.py',
     # p2p_version_timedrift.py: the VERSION handshake's 480 s clock-drift gate,
     # including a crafted nTime that overflowed the old abs() check.

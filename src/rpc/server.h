@@ -32,12 +32,16 @@ class uint256;
 // where util.h is already included directly.
 class RPCHelpMan;
 
+#include <chrono>
 #include <univalue.h>
 
 //! Idle deadline for a serviced RPC connection, in seconds. One connection pins
 //! one worker thread, so this is what bounds how long a silent client can hold
 //! one of only -rpcthreads of them.
 static constexpr int DEFAULT_RPC_SERVER_TIMEOUT = 30;
+
+//! Longest a closing RPC connection waits for the client to close its side before it is reset.
+static constexpr std::chrono::milliseconds RPC_GRACEFUL_CLOSE_TIMEOUT{2000};
 
 //! Parse -rpcallowip into the RPC allow list. Called by StartRPCThreads().
 //! The overload taking entries does the parsing and is what tests drive; the

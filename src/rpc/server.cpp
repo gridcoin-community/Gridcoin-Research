@@ -34,6 +34,7 @@
 #include <boost/shared_ptr.hpp>
 #include <list>
 #include <algorithm>
+#include <cstring>
 #include <stdexcept>
 
 #include <memory>
@@ -943,6 +944,7 @@ static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > accep
     // destroys the handler without calling it.
     auto conn = std::make_shared<AcceptedConnectionImpl<Protocol>>(GetIOServiceFromPtr(acceptor));
 
+#ifdef WIN32
     acceptor->async_accept(
                 conn->socket,
                 conn->peer,
@@ -950,6 +952,16 @@ static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > accep
                             acceptor,
                             conn,
                             boost::asio::placeholders::error));
+#else
+    // Wait for the listener to become readable and accept in the handler, so the accepted descriptor
+    // is created close-on-exec by AcceptCloexec rather than by asio's plain accept.
+    acceptor->async_wait(
+                boost::asio::socket_base::wait_read,
+                boost::bind(&RPCAcceptHandler<Protocol>,
+                            acceptor,
+                            conn,
+                            boost::asio::placeholders::error));
+#endif
 }
 
 /**
@@ -967,6 +979,39 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
     // TODO : Actually handle errors
     if (!error)
     {
+#ifdef WIN32
+        // First, before anything can start a child process: make the accepted socket non-inheritable.
+        // A child started on another thread between AcceptEx completing and this call can still inherit it.
+        SetHandleInformation(reinterpret_cast<HANDLE>(conn->socket.native_handle()), HANDLE_FLAG_INHERIT, 0);
+#else
+        // EAGAIN is also EWOULDBLOCK on every platform built here. The acceptor is non-blocking and several workers may be woken for one connection; the one
+        // that finds nothing to accept returns. On macOS accept and FD_CLOEXEC are two calls, so a
+        // child started on another thread between them can still inherit the socket.
+        sockaddr_storage ss;
+        socklen_t ss_len = sizeof(ss);
+        const SOCKET fd = AcceptCloexec(acceptor->native_handle(), reinterpret_cast<sockaddr*>(&ss), &ss_len);
+        if (fd == INVALID_SOCKET) {
+            const int err = errno;
+            if (err != EAGAIN && err != ECONNABORTED && err != EINTR) {
+                LogPrintf("RPC: accept failed: %s\n", strerror(err));
+            }
+            return;
+        }
+
+        AcceptedConnectionImpl<Protocol>* accepted = dynamic_cast<AcceptedConnectionImpl<Protocol>*>(conn.get());
+        boost::system::error_code assign_ec;
+        if (accepted) {
+            accepted->socket.assign(ss.ss_family == AF_INET6 ? Protocol::v6() : Protocol::v4(), fd, assign_ec);
+        }
+        if (!accepted || assign_ec) {
+            ::close(fd);
+            return;
+        }
+
+        if (ss_len > accepted->peer.capacity()) ss_len = accepted->peer.capacity();
+        accepted->peer.resize(ss_len);
+        memcpy(accepted->peer.data(), &ss, ss_len);
+#endif
         // Restrict callers by IP.  It is important to
         // do this before starting client thread, to filter out
         // certain DoS and misbehaving clients.
@@ -1052,6 +1097,13 @@ static void OpenRpcAcceptor(boost::asio::ip::tcp::acceptor& acceptor, const boos
     }
 #else
     acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+    // The accept handler calls accept directly and must never block there.
+    acceptor.native_non_blocking(true, ec);
+    if (ec) {
+        boost::system::error_code close_ec;
+        acceptor.close(close_ec);
+        throw boost::system::system_error(ec, "RPC socket non-blocking");
+    }
 #endif
 }
 
