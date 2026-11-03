@@ -1907,7 +1907,7 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
         // cs_main is required for the AlreadyHave call (mapBlockIndex
         // lookup) and must be released before the cs_mapManifest scope
         // below to preserve the canonical cs_main -> subsystem order
-        // documented at the inv-handling site near main.cpp:2533.
+        // documented at the INV handler in ProcessMessage above.
         bool fAlreadyHave;
         {
             LOCK(cs_main);

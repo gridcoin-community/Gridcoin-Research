@@ -508,9 +508,10 @@ BOOST_AUTO_TEST_CASE(getstakinginfo_help_prints_each_object_description_once)
     BOOST_CHECK_EQUAL(occurrences("Local side-staking enabled flag and active side-stake allocations."), 1U);
 }
 
-// Invalid-subcommand path for addnode: the JSONRPCError throw at net.cpp:62-63
-// fires before any LOCK(cs_vAddedNodes) or vNodes/ConnectNode access, so this
-// is safe to exercise without a node/net fixture.
+// Invalid-subcommand path for addnode: the JSONRPCError throw at the top of
+// addnode (rpc/net.cpp) fires before any LOCK(cs_vAddedNodes) or
+// vNodes/ConnectNode access, so this is safe to exercise without a node/net
+// fixture.
 BOOST_AUTO_TEST_CASE(addnode_invalid_subcommand_throws_structured_error)
 {
     UniValue params(UniValue::VARR);
@@ -529,9 +530,9 @@ BOOST_AUTO_TEST_CASE(addnode_invalid_subcommand_throws_structured_error)
     }
 }
 
-// Invalid-subcommand path for setban: the JSONRPCError throw at net.cpp:258-259
-// fires before the g_banman null check and any lock acquisition, so this is
-// safe to exercise without a banman/net fixture.
+// Invalid-subcommand path for setban: the JSONRPCError throw at the top of
+// setban (rpc/net.cpp) fires before the g_banman null check and any lock
+// acquisition, so this is safe to exercise without a banman/net fixture.
 BOOST_AUTO_TEST_CASE(setban_invalid_subcommand_throws_structured_error)
 {
     UniValue params(UniValue::VARR);

@@ -60,7 +60,8 @@ void NotifyPoll();
 //! Called by DisconnectBlocksBatch when a runtime reorg crosses two or more
 //! superblock boundaries -- the case where BeaconRegistry::Deactivate cannot
 //! resurrect expired pending beacons from prior SBs (m_expired_pending only
-//! carries the latest SB's set, per beacon.cpp:1265-1273). Without a full
+//! carries the latest SB's set, per the limitation note in
+//! BeaconRegistry::Deactivate in beacon.cpp). Without a full
 //! rebuild the in-memory registry would be left missing prior-SB
 //! expired-pending beacons, and any subsequent ConnectBlock that referenced
 //! one of those beacons (e.g., a research-reward claim) would

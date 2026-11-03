@@ -121,11 +121,12 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
     // Count superblocks crossed during this disconnect. BeaconRegistry::Deactivate
     // is called per-SB below and is fidelity-correct for the SINGLE most recent SB
     // (it uses m_expired_pending which only carries the latest SB's expired set --
-    // see beacon.cpp:1265-1273). When the disconnect crosses 2+ SBs, expired-pending
-    // beacons from the prior SBs are lost; the recovery is an in-line beacon
-    // registry rebuild after the disconnect loop completes (call site below at the
-    // sb_cross_count >= 2 check). The full rationale for in-line vs deferred
-    // rebuild and why single-SB reorgs are NOT rebuilt lives at that call site.
+    // see the limitation note in BeaconRegistry::Deactivate in beacon.cpp). When the
+    // disconnect crosses 2+ SBs, expired-pending beacons from the prior SBs are lost;
+    // the recovery is an in-line beacon registry rebuild after the disconnect loop
+    // completes (call site below at the sb_cross_count >= 2 check). The full
+    // rationale for in-line vs deferred rebuild and why single-SB reorgs are NOT
+    // rebuilt lives at that call site.
     int sb_cross_count = 0;
 
     while(pindexBest != pcommon)
@@ -364,12 +365,12 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
         // If the reorg crossed two or more superblock boundaries, the per-SB Deactivate calls
         // above could not fully resurrect expired-pending beacons from the prior SBs
         // (m_expired_pending only carries the most recent SB's set -- the limitation
-        // acknowledged at beacon.cpp:1265-1273). Rebuild the beacon registry in-line
-        // BEFORE returning to the reconnect side of ReorganizeChain: the rebuild walks
-        // from V11_height to the current (common-ancestor) tip, leaving the registry
-        // correctly reflecting that ancestor's state, and the subsequent per-block
-        // Activate() calls on the reconnect side then bring the registry up to the
-        // new tip.
+        // acknowledged in BeaconRegistry::Deactivate in beacon.cpp). Rebuild the beacon
+        // registry in-line BEFORE returning to the reconnect side of ReorganizeChain:
+        // the rebuild walks from V11_height to the current (common-ancestor) tip,
+        // leaving the registry correctly reflecting that ancestor's state, and the
+        // subsequent per-block Activate() calls on the reconnect side then bring the
+        // registry up to the new tip.
         //
         // Doing this in-line (rather than deferring to a flag picked up on next
         // startup) trades a few seconds of frozen-wallet time for closing the fork

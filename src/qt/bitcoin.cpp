@@ -1070,7 +1070,6 @@ int main(int argc, char *argv[])
     // - First load the translator for the base language, without territory
     // - Then load the more specific locale translator
 
-// Near line 394
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     QString transPath = QLibraryInfo::path(QLibraryInfo::TranslationsPath);
 #else

@@ -50,8 +50,8 @@ CoherenceResult VerifyChainCoherence(int max_walkback)
         // NOT use ReadBlockFromDisk(block, pindex, ...) with
         // fReadTransactions=false: that overload's no-transactions branch
         // copies the header from the in-memory pindex and returns true
-        // without touching disk (blockstorage.cpp:99-104), which would make
-        // this entire coherence check a no-op.
+        // without touching disk (see that overload in blockstorage.cpp), which
+        // would make this entire coherence check a no-op.
         //
         // fReadTransactions=true is mandatory here. With header-only reads, a
         // truncation that lands mid-block (header intact at pindex->nBlockPos
@@ -299,12 +299,13 @@ bool RunStartupCoherenceRecovery()
     // The four non-beacon registries (project, protocol, scraper, sidestake)
     // get the regular clamp via RegistryBookmarks::UpdateRegistryBlockHeights().
     // This is correct because:
-    //   - RegistryDB::Initialize() (registry_db.h:76) loads ALL entries for
-    //     its key_type from LevelDB regardless of height_stored -- the read
-    //     at line 139 is unfiltered, so phantom entries from blocks past
-    //     the rewound tip WILL load into m_historical and active maps.
+    //   - RegistryDB::Initialize() (registry_db.h) loads ALL entries for
+    //     its key_type from LevelDB regardless of height_stored -- its
+    //     ReadGenericSerializablesToMapWithForeignKey read is unfiltered, so
+    //     phantom entries from blocks past the rewound tip WILL load into
+    //     m_historical and active maps.
     //   - What the clamp actually does is bring height_stored down so that
-    //     the ApplyContracts skip check at contract.cpp:535-547
+    //     the ApplyContracts skip check in contract.cpp
     //         if (db_height && pindex->nHeight < *db_height) skip
     //     no longer short-circuits the re-arriving blocks. Without the
     //     clamp, every contract in the re-download window would be silently
@@ -321,12 +322,12 @@ bool RunStartupCoherenceRecovery()
     // ties their in-memory state to superblock commits (ActivatePending) and
     // to the EXPIRED_PENDING set that is recomputed on every SB. The
     // existing Deactivate path is only fidelity-correct within a single SB
-    // interval (~960 blocks) per the limitation acknowledged at
-    // beacon.cpp:1265-1273. Phase 2 abandonment doesn't call Deactivate at
-    // all, so any SB crossing leaves m_expired_pending and the activation
-    // composite-hash entries in an inconsistent state with respect to the
-    // re-arriving chain. Rather than tolerate that drift, we Reset() the
-    // beacon registry entirely; the subsequent GRC::Initialize ->
+    // interval (~960 blocks) per the limitation acknowledged in
+    // BeaconRegistry::Deactivate (beacon.cpp). Phase 2 abandonment doesn't
+    // call Deactivate at all, so any SB crossing leaves m_expired_pending and
+    // the activation composite-hash entries in an inconsistent state with
+    // respect to the re-arriving chain. Rather than tolerate that drift, we
+    // Reset() the beacon registry entirely; the subsequent GRC::Initialize ->
     // InitializeContracts -> ApplyContracts pass will replay beacon
     // contracts from V11_height forward and rebuild the in-memory and
     // LevelDB state from scratch. Cost is a few minutes of chain walk;
@@ -457,8 +458,9 @@ void PurgeOrphanedBlockIndexEntries(CTxDB& txdb, std::vector<CBlockIndex*>& aban
     //
     //   (1) erase each entry from mapBlockIndex so AddToBlockIndex can re-add
     //       the same hashes when P2P delivers the canonical-chain blocks back
-    //       (otherwise the "already exists" guard at validation.cpp:1109 would
-    //       silently reject every re-supplied block forever);
+    //       (otherwise the "already exists" guard in AddToBlockIndex
+    //       (validation.cpp) would silently reject every re-supplied block
+    //       forever);
     //
     //   (2) erase each entry's CDiskBlockIndex record from LevelDB so the next
     //       LoadBlockIndex doesn't rebuild the ghost forward linkage from the
