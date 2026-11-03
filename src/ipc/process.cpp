@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "ipc/process.h"
+#include "ipc/peercred.h"
 #include "util/dir_permissions.h"
 #include "util/sock.h"
 
@@ -308,6 +309,25 @@ void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, s
     }
 #endif
 }
+
+void ApplyAttachGroupAccess(const fs::path& ipcdir)
+{
+    const std::optional<gid_t> gid = AttachGroupGid();
+    if (!gid) throw std::logic_error("no -ipcattachgroup is configured");
+    try {
+        ApplyPathAccessNoFollow(ipcdir, PathKind::Directory, 0750, gid);
+    } catch (const std::system_error& e) {
+        // EPERM from the group change means this account is not in the group.
+        // The other failures of ApplyPathAccessNoFollow have other causes and
+        // are passed on unchanged.
+        if (e.code() == std::error_code(EPERM, std::system_category()) &&
+            std::string(e.what()).find("cannot set the group of") != std::string::npos) {
+            throw std::system_error(e.code(), strprintf("%s (the core must run with the attach group as a "
+                                                        "supplementary group)", e.what()));
+        }
+        throw;
+    }
+}
 #endif // !WIN32
 
 void PrepareIpcDirectory(const fs::path& dir)
@@ -423,11 +443,13 @@ public:
             const int bind_errno = LastSocketError();
             if (rc == 0) {
 #ifndef WIN32
-                // Fail closed: if the socket cannot be confirmed 0600 without
-                // following a symlink, refuse to serve rather than leave the
-                // wallet IPC socket potentially accessible.
+                // Fail closed: if the socket cannot be confirmed at its final
+                // access without following a symlink, refuse to serve rather than
+                // leave the wallet IPC socket potentially accessible. That is
+                // 0600, or 0660 in the attach group when one is configured.
                 try {
-                    ApplyPathAccessNoFollow(path, PathKind::Socket, 0600, std::nullopt);
+                    const std::optional<gid_t> attach_gid = AttachGroupGid();
+                    ApplyPathAccessNoFollow(path, PathKind::Socket, attach_gid ? 0660 : 0600, attach_gid);
                 } catch (...) {
                     CloseSocket(fd);
                     throw;

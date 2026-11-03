@@ -15,6 +15,12 @@
 #include <string>
 #include <vector>
 
+#ifndef WIN32
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#endif
+
 namespace {
 //! Minimal interfaces::Init stub: drives ClientHandshake with canned responses so
 //! every matching-policy branch is exercised deterministically, no socket. Only
@@ -110,6 +116,51 @@ BOOST_AUTO_TEST_CASE(cookie_round_trip_and_delete)
 
     fs::remove_all(dir);
 }
+
+#ifndef WIN32
+// With a group the cookie is 0640 in that group, and without one 0600, both
+// readable back through ReadCookie.
+BOOST_AUTO_TEST_CASE(cookie_with_group_is_0640)
+{
+    const fs::path dir = fs::temp_directory_path() / strprintf("grc_ipc_cookie_grp_%d", GetTimeMillis());
+    fs::create_directories(dir);
+    const fs::path file = dir / "ipc.cookie";
+    const auto mode_of = [&] {
+        struct stat st;
+        BOOST_REQUIRE_EQUAL(::lstat(file.c_str(), &st), 0);
+        return static_cast<mode_t>(st.st_mode & 07777);
+    };
+    const auto group_of = [&] {
+        struct stat st;
+        BOOST_REQUIRE_EQUAL(::lstat(file.c_str(), &st), 0);
+        return st.st_gid;
+    };
+
+    const std::string with_group = ipc::WriteCookie(dir, ::getegid());
+    BOOST_CHECK_EQUAL(mode_of(), static_cast<mode_t>(0640));
+    BOOST_CHECK_EQUAL(group_of(), ::getegid());
+    BOOST_CHECK_EQUAL(ipc::ReadCookie(dir).value_or(""), with_group);
+    BOOST_CHECK(!fs::exists(dir / "ipc.cookie.tmp"));
+
+    // A group other than the effective one shows the fchown is what sets it.
+    std::vector<gid_t> groups(256);
+    const int n = ::getgroups(static_cast<int>(groups.size()), groups.data());
+    for (int i = 0; i < n; ++i) {
+        if (groups[i] == ::getegid()) continue;
+        ipc::WriteCookie(dir, groups[i]);
+        BOOST_CHECK_EQUAL(mode_of(), static_cast<mode_t>(0640));
+        BOOST_CHECK_EQUAL(group_of(), groups[i]);
+        break;
+    }
+
+    const std::string without_group = ipc::WriteCookie(dir);
+    BOOST_CHECK_EQUAL(mode_of(), static_cast<mode_t>(0600));
+    BOOST_CHECK_EQUAL(ipc::ReadCookie(dir).value_or(""), without_group);
+    BOOST_CHECK(with_group != without_group);
+
+    fs::remove_all(dir);
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(identity_token_empty_uuid_is_empty)
 {

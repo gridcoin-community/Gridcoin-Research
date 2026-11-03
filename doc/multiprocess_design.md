@@ -172,13 +172,22 @@ schema-diff lint against the previous release tag.
 
 ### 4.3 Authentication and transport (Stage 2)
 
-- Socket directory `0700`, socket `0600`. The socket and cookie are created
-  owner-only and refuse to start if that cannot be applied. The DIRECTORY is
-  hardened only when the node creates it: an existing data directory is left as
-  the operator configured it and merely warned about, so a deliberately widened
-  datadir is never silently re-tightened.
-- Cookie: node writes a fresh 256-bit cookie (`ipc.cookie`, `0600`, atomic rename)
-  each startup; first IPC call is `Init::authenticate(cookie)`, constant-time compare.
+- Default access: socket `0600`, cookie `0600`, both in the data directory (or the
+  `-ipcdir` directory), so only the account that runs the core can reach them. They
+  are created owner-only, and the core refuses to start if that cannot be applied.
+  With `-ipcattachgroup=<group>` (POSIX) the core gives the IPC directory `0750`, the
+  socket `0660` and the cookie `0640`, all owned by the core's uid with that group,
+  so a GUI running as another account in the group can reach the socket and read the
+  cookie. The core sets them through file descriptors rather than by following a
+  path, and refuses to start if it cannot, for example when its account is not a
+  member of the group (it must run with the attach group as a supplementary group).
+  The DIRECTORY is changed only when the node creates it (owner-only) or when
+  `-ipcattachgroup` is set: an existing data directory is otherwise left as the
+  operator configured it and merely warned about, so a deliberately widened datadir
+  is never silently re-tightened.
+- Cookie: node writes a fresh 256-bit cookie (`ipc.cookie`, atomic rename) each
+  startup, `0600` by default and `0640` in the attach group when one is configured;
+  first IPC call is `Init::authenticate(cookie)`, constant-time compare.
   On POSIX the cookie is an instance nonce: every process the peer check admits may
   read it, so it ties a connection to this run of the core, and the OS peer check
   below decides which accounts may connect. On Windows the owner-only DACL keeps the

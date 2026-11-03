@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "ipc/peercred.h"
 #include "ipc/process.h"
 
 #include "fs.h"
@@ -19,10 +20,12 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <grp.h>
 #include <optional>
+#include <stdexcept>
 #endif
 
 namespace {
@@ -62,6 +65,33 @@ gid_t GroupOf(const fs::path& p)
     struct stat st;
     BOOST_REQUIRE_EQUAL(::lstat(p.c_str(), &st), 0);
     return st.st_gid;
+}
+
+//! Clears the configured attach group when a case ends, on every exit path.
+struct AttachGroupReset
+{
+    ~AttachGroupReset() { ipc::ConfigureAttachGroup(""); }
+};
+
+//! The name of the group with gid \p gid, or nullopt when the group database
+//! has no entry for it.
+std::optional<std::string> GroupName(gid_t gid)
+{
+    const struct group* gr = ::getgrgid(gid);
+    if (gr == nullptr) return std::nullopt;
+    return std::string{gr->gr_name};
+}
+
+//! A group this account belongs to other than its effective group, from
+//! getgroups(), or nullopt when there is none.
+std::optional<gid_t> OtherMemberGroup()
+{
+    std::vector<gid_t> groups(256);
+    const int n = ::getgroups(static_cast<int>(groups.size()), groups.data());
+    for (int i = 0; i < n; ++i) {
+        if (groups[i] != ::getegid()) return groups[i];
+    }
+    return std::nullopt;
 }
 #endif
 
@@ -179,6 +209,114 @@ BOOST_AUTO_TEST_CASE(apply_path_access_sets_supplementary_group)
     ipc::ApplyPathAccessNoFollow(dir.path, ipc::PathKind::Directory, 0750, other);
     BOOST_CHECK_EQUAL(ModeOf(dir.path), static_cast<mode_t>(0750));
     BOOST_CHECK_EQUAL(GroupOf(dir.path), *other);
+}
+
+// With a group configured, bind leaves the socket 0660 in that group.
+BOOST_AUTO_TEST_CASE(bind_with_attach_group_sets_0660_and_group)
+{
+    AttachGroupReset reset;
+    const auto name = GroupName(::getegid());
+    if (!name) {
+        BOOST_TEST_MESSAGE("the effective group has no entry in the group database; skipping");
+        return;
+    }
+    BOOST_REQUIRE(ipc::ConfigureAttachGroup(*name));
+
+    TempDir dir;
+    std::string addr = "unix";
+    int fd = -1;
+    BOOST_CHECK_NO_THROW(fd = ipc::MakeProcess()->bind(dir.path, addr));
+    const fs::path sock = dir.path / "node.sock";
+    BOOST_CHECK_EQUAL(ModeOf(sock), static_cast<mode_t>(0660));
+    BOOST_CHECK_EQUAL(GroupOf(sock), ::getegid());
+    if (fd != -1) ::close(fd);
+}
+
+// A group that is a supplementary group of this account, not its effective
+// group, is applied as well.
+BOOST_AUTO_TEST_CASE(bind_with_supplementary_attach_group_sets_that_group)
+{
+    AttachGroupReset reset;
+    const auto other = OtherMemberGroup();
+    const auto name = other ? GroupName(*other) : std::nullopt;
+    if (!name) {
+        BOOST_TEST_MESSAGE("no named supplementary group other than the effective one; skipping");
+        return;
+    }
+    BOOST_REQUIRE(ipc::ConfigureAttachGroup(*name));
+
+    TempDir dir;
+    std::string addr = "unix";
+    int fd = -1;
+    BOOST_CHECK_NO_THROW(fd = ipc::MakeProcess()->bind(dir.path, addr));
+    BOOST_CHECK_EQUAL(ModeOf(dir.path / "node.sock"), static_cast<mode_t>(0660));
+    BOOST_CHECK_EQUAL(GroupOf(dir.path / "node.sock"), *other);
+    if (fd != -1) ::close(fd);
+}
+
+BOOST_AUTO_TEST_CASE(attach_group_dir_is_0750)
+{
+    AttachGroupReset reset;
+    const auto name = GroupName(::getegid());
+    if (!name) {
+        BOOST_TEST_MESSAGE("the effective group has no entry in the group database; skipping");
+        return;
+    }
+    BOOST_REQUIRE(ipc::ConfigureAttachGroup(*name));
+
+    TempDir dir;
+    ipc::ApplyAttachGroupAccess(dir.path);
+    BOOST_CHECK_EQUAL(ModeOf(dir.path), static_cast<mode_t>(0750));
+    BOOST_CHECK_EQUAL(GroupOf(dir.path), ::getegid());
+}
+
+// Without a configured group there is nothing to apply, which is a caller error.
+BOOST_AUTO_TEST_CASE(attach_group_access_needs_a_configured_group)
+{
+    AttachGroupReset reset;
+    BOOST_REQUIRE(ipc::ConfigureAttachGroup(""));
+    TempDir dir;
+    BOOST_CHECK_THROW(ipc::ApplyAttachGroupAccess(dir.path), std::logic_error);
+}
+
+// A group this account is not a member of cannot be applied by a non-root
+// process, and the error says what to change.
+BOOST_AUTO_TEST_CASE(attach_group_not_a_member_names_the_remedy)
+{
+    AttachGroupReset reset;
+    if (::geteuid() == 0) {
+        BOOST_TEST_MESSAGE("running as root, which can set any group; skipping");
+        return;
+    }
+    std::vector<gid_t> mine(256);
+    const int n = ::getgroups(static_cast<int>(mine.size()), mine.data());
+    mine.resize(n > 0 ? static_cast<size_t>(n) : 0);
+
+    std::optional<std::string> foreign;
+    ::setgrent();
+    while (const struct group* gr = ::getgrent()) {
+        if (gr->gr_gid == ::getegid()) continue;
+        if (std::find(mine.begin(), mine.end(), gr->gr_gid) != mine.end()) continue;
+        foreign = std::string{gr->gr_name};
+        break;
+    }
+    ::endgrent();
+    if (!foreign) {
+        BOOST_TEST_MESSAGE("no group this account is outside of; skipping");
+        return;
+    }
+    BOOST_REQUIRE(ipc::ConfigureAttachGroup(*foreign));
+
+    TempDir dir;
+    try {
+        ipc::ApplyAttachGroupAccess(dir.path);
+        BOOST_ERROR("ApplyAttachGroupAccess did not throw");
+    } catch (const std::system_error& e) {
+        BOOST_CHECK_MESSAGE(std::string(e.what()).find(
+                                "the core must run with the attach group as a supplementary group") !=
+                                std::string::npos,
+                            e.what());
+    }
 }
 
 BOOST_AUTO_TEST_CASE(apply_path_access_refuses_symlink)

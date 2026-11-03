@@ -85,7 +85,8 @@ private:
 
 //! Write \p contents to \p path atomically (temp file + rename). The temp file is
 //! created with mode 0600 from the start (no umask window that could expose the
-//! secret cookie), the write is verified, and any failure throws so the caller
+//! secret cookie; with a \p group on POSIX it is then made 0640 in that group
+//! through its fd), the write is verified, and any failure throws so the caller
 //! knows the file does not hold what it expects.
 #ifdef WIN32
 //! Windows port of the atomic cookie writer. Same guarantees as the POSIX path,
@@ -189,7 +190,7 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
     guard.release(); // renamed into place: nothing left to clean up
 }
 #else
-void WriteFileAtomic(const fs::path& path, const std::string& contents)
+void WriteFileAtomic(const fs::path& path, const std::string& contents, std::optional<gid_t> group)
 {
     fs::path tmp = path;
     tmp += ".tmp";
@@ -228,6 +229,22 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
     // The temp file now holds (or will hold) the cookie: every exit that is not
     // the successful rename must delete it rather than leave the secret on disk.
     TempFileGuard guard(tmp);
+    if (group) {
+        // The group and the group-readable mode are set on the open temp file,
+        // before the secret is written and before the rename makes it visible,
+        // so no path is followed and the cookie never appears under the final
+        // name with other access.
+        if (::fchown(fd, static_cast<uid_t>(-1), *group) != 0) {
+            int e = errno;
+            ::close(fd);
+            throw std::system_error(e, std::system_category(), "fchown " + tmp_str);
+        }
+        if (::fchmod(fd, 0640) != 0) {
+            int e = errno;
+            ::close(fd);
+            throw std::system_error(e, std::system_category(), "fchmod " + tmp_str);
+        }
+    }
     size_t written = 0;
     while (written < contents.size()) {
         ssize_t n = ::write(fd, contents.data() + written, contents.size() - written);
@@ -287,12 +304,20 @@ bool ConstantTimeEqual(const std::string& a, const std::string& b)
     return diff == 0;
 }
 
+#ifndef WIN32
+std::string WriteCookie(const fs::path& dir, std::optional<gid_t> group)
+#else
 std::string WriteCookie(const fs::path& dir)
+#endif
 {
     std::array<unsigned char, 32> buf{};
     GetStrongRandBytes(buf);
     const std::string cookie = HexStr(buf);
+#ifndef WIN32
+    WriteFileAtomic(dir / COOKIE_FILE, cookie, group);
+#else
     WriteFileAtomic(dir / COOKIE_FILE, cookie);
+#endif
     return cookie;
 }
 

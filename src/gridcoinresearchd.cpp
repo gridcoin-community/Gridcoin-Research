@@ -37,6 +37,7 @@
 #include <atomic>
 #include <optional>
 #include <memory>
+#include <optional>
 #endif
 
 #include <boost/thread.hpp>
@@ -386,7 +387,16 @@ bool AppInit(int argc, char* argv[])
                 // An explicit -ipcdir may not exist yet. Create it restricted to
                 // this account; a failure is fatal like the rest of this block.
                 ipc::PrepareIpcDirectory(ipc::GetIpcDir());
+#ifndef WIN32
+                // With an attach group, the directory, the cookie and the socket
+                // are given that group before anything is served, and a failure
+                // is fatal like the rest of this block.
+                const std::optional<gid_t> attach_gid = ipc::AttachGroupGid();
+                if (attach_gid) ipc::ApplyAttachGroupAccess(ipc::GetIpcDir());
+                std::string cookie = ipc::WriteCookie(ipc::GetIpcDir(), attach_gid);
+#else
                 std::string cookie = ipc::WriteCookie(ipc::GetIpcDir());
+#endif
                 cookie_written = true;
                 interfaces::NodeIdentity identity;
                 identity.network = Params().NetworkIDString();

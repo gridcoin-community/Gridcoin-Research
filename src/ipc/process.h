@@ -31,7 +31,9 @@ public:
 
     //! Canonicalize \p address under \p ipc_dir, create + bind a listening
     //! socket, and return its descriptor. Removes a stale socket file left by a
-    //! crash; throws if the path is already bound by a live listener.
+    //! crash; throws if the path is already bound by a live listener. On POSIX
+    //! the socket is left 0600, or 0660 in the attach group when one is
+    //! configured.
     virtual int bind(const fs::path& ipc_dir, std::string& address) = 0;
 };
 
@@ -64,6 +66,15 @@ enum class PathKind { Socket, Directory, RegularFile };
 //! mode & 07777 == mode, and the group when given; otherwise throws
 //! std::system_error.
 void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, std::optional<gid_t> group);
+
+//! With -ipcattachgroup configured (ipc::AttachGroupGid()), give the IPC
+//! directory \p ipcdir mode 0750 and that group through an fd, so members of the
+//! group can reach the socket and cookie inside it. Throws std::logic_error when
+//! no attach group is configured, and std::system_error when the access cannot be
+//! applied; when the group cannot be set because this account is not a member,
+//! the message says the core must run with the attach group as a supplementary
+//! group.
+void ApplyAttachGroupAccess(const fs::path& ipcdir);
 #endif // !WIN32
 } // namespace ipc
 

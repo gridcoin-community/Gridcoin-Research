@@ -12,6 +12,9 @@
 #include <optional>
 #include <string>
 #include <vector>
+#ifndef WIN32
+#include <sys/types.h> // gid_t
+#endif
 
 namespace ipc {
 
@@ -161,8 +164,14 @@ interfaces::BuildInfo GetLocalBuildInfo();
 bool ConstantTimeEqual(const std::string& a, const std::string& b);
 
 //! Node side: write a fresh 256-bit cookie to <dir>/ipc.cookie (0600, atomic
-//! rename) and return its hex. Called once per node startup.
+//! rename) and return its hex. Called once per node startup. On POSIX, with a
+//! \p group the file is instead 0640 in that group, set through the temp file's
+//! fd before it is renamed into place.
+#ifndef WIN32
+std::string WriteCookie(const fs::path& dir, std::optional<gid_t> group = std::nullopt);
+#else
 std::string WriteCookie(const fs::path& dir);
+#endif
 
 //! GUI side: read the hex cookie from <dir>/ipc.cookie. Returns nullopt when the
 //! file is absent or cannot be opened. Absent means no -multiprocess node is
