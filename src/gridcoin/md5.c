@@ -173,7 +173,9 @@ static inline void crypto_md32_final(crypto_md32_block_func block_func,
                                      uint32_t Nh, uint32_t Nl,
                                      int is_big_endian) {
   // |data| always has room for at least one byte. A full block would have
-  // been consumed.
+  // been consumed. Invariant kept by crypto_md32_update(), which leaves fewer
+  // than |block_size| bytes behind; guards against a change there that leaves
+  // a full block, which the write below would overrun.
   size_t n = *num;
   assert(n < block_size);
   data[n] = 0x80;

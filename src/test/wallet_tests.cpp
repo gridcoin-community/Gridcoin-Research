@@ -512,6 +512,24 @@ BOOST_AUTO_TEST_CASE(seed_phrase_crypted_blob_requires_unlock)
     BOOST_CHECK(test_wallet.GetSeedPhraseData().vchBlob == data.vchBlob);
 }
 
+BOOST_AUTO_TEST_CASE(seed_phrase_blob_of_the_wrong_length_is_refused)
+{
+    CWallet test_wallet;
+
+    // A seedphrase record whose blob is not one whole enciphered seed, as a
+    // damaged wallet.dat can hold: loading the record does not check it.
+    CSeedPhraseData data;
+    data.vchBlob.assign(GRC::Mnemonics::ENCIPHERED_LENGTH - 1, 0x42);
+    data.nBirthday = GRC::Mnemonics::BIRTHDAY_EPOCH;
+
+    LOCK(test_wallet.cs_wallet);
+    BOOST_REQUIRE(test_wallet.LoadSeedPhraseData(data, /*crypted=*/false));
+
+    CKeyingMaterial blob;
+    BOOST_CHECK(!test_wallet.GetSeedPhraseBlob(blob));
+    BOOST_CHECK(blob.empty());
+}
+
 BOOST_AUTO_TEST_CASE(seed_phrase_key_classification)
 {
     CWallet test_wallet;

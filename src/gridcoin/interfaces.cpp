@@ -1295,7 +1295,10 @@ public:
         // pwalletMain is the node's single wallet (== m_wallet); referencing it
         // directly matches SendBeaconContractV3/GenerateBeaconKey's
         // EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet) annotation.
-        // Enforce the single-wallet invariant this relies on.
+        // Enforce the single-wallet invariant this relies on. It holds until
+        // shutdown: the GUI's event loop has ended and the daemon has
+        // disconnected IPC clients before Shutdown() deletes the wallet. Guards
+        // against a change to that order, or a second wallet.
         assert(pwalletMain && pwalletMain == m_wallet);
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1346,7 +1349,8 @@ public:
 
         // pwalletMain (== the node's single wallet m_wallet) is used to satisfy
         // SendBeaconContractV3's EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
-        // annotation; enforce that single-wallet invariant.
+        // annotation; enforce that single-wallet invariant. It holds until
+        // shutdown, as in generateBeaconKeyForV3().
         assert(pwalletMain && pwalletMain == m_wallet);
         LOCK2(cs_main, pwalletMain->cs_wallet);
 

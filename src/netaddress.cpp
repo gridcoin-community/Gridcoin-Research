@@ -41,6 +41,9 @@ void CNetAddr::SetRaw(Network network, const uint8_t *ip_in)
             memcpy(ip, ip_in, 16);
             break;
         default:
+            // Invariant: the only callers, the in_addr and in6_addr constructors,
+            // pass NET_IPV4 and NET_IPV6. Guards against a new caller with another
+            // network, which would leave ip unwritten: those constructors skip Init().
             assert(!"invalid network");
     }
 }
@@ -506,11 +509,16 @@ CService::CService(const struct in6_addr& ipv6Addr, unsigned short portIn) : CNe
 
 CService::CService(const struct sockaddr_in& addr) : CNetAddr(addr.sin_addr), port(ntohs(addr.sin_port))
 {
+    // Invariant: the only caller, SetSockAddr(), switches on sa_family first, and
+    // its only caller passes an address accept() filled in. Guards against a new
+    // caller that passes another family, read here as an IPv4 address.
     assert(addr.sin_family == AF_INET);
 }
 
 CService::CService(const struct sockaddr_in6 &addr) : CNetAddr(addr.sin6_addr), port(ntohs(addr.sin6_port))
 {
+   // Invariant: as for the sockaddr_in constructor. Guards against a new caller
+   // that passes a smaller sockaddr, read here past its end.
    assert(addr.sin6_family == AF_INET6);
 }
 

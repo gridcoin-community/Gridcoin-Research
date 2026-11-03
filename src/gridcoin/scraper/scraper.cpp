@@ -4732,6 +4732,11 @@ bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& K
                 if (pwalletMain->GetKey(*KeyID, KeyOut))
                 {
                     // ... and the key returned from the wallet is valid and matches the provided public key...
+                    // Invariant: GetKey() succeeds only with a valid key: the wallet checks
+                    // keys when it loads or imports them, and the encrypted store returns
+                    // false for a key that does not decrypt to a valid one. Guards against
+                    // a change to GetKey() that returns an invalid key, with which this
+                    // node would sign manifests.
                     assert(KeyOut.IsValid());
 
                     _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests",
@@ -4794,6 +4799,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& K
                         if (pwalletMain->GetKey(*KeyID, KeyOut))
                         {
                             // ... and the key returned from the wallet is valid ...
+                            // Invariant: as above, GetKey() succeeds only with a valid key.
                             assert(KeyOut.IsValid());
 
                             _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests",

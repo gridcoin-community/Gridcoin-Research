@@ -188,6 +188,8 @@ ProtocolEntryPayload::ProtocolEntryPayload(const uint32_t version, std::string k
     , m_version(version)
     , m_entry(ProtocolEntry(key, value, status))
 {
+    // Invariant: the only caller, the addkey RPC, passes version 2. Guards
+    // against a new caller that passes a lower version.
     assert(version > 1);
 }
 

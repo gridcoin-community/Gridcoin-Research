@@ -472,6 +472,9 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
     double result = 0.0;
 
     // dDiff must be >= 0 and dConfidence must lie on the interval [0,1) otherwise this is an error.
+    // Invariant: callers pass the defaults or GetAverageDifficulty(), and the
+    // default confidence 1 - 1/e. Guards against a new caller with an unchecked
+    // value, which would reach the log() of zero or a negative number below.
     assert(dDiff >= 0 && dConfidence >= 0 && dConfidence < 1);
 
     // if dConfidence = 0, then the result must be 0.

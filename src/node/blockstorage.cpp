@@ -439,7 +439,11 @@ bool LoadBlockIndex(bool fAllowNew)
 
         CBlock block = CreateGenesisBlock();
         const bool fRegTest = Params().IsMockableChain();
-        { CValidationState genesis_state; assert(CheckBlock(block, genesis_state, 1)); }
+        {
+            CValidationState genesis_state;
+            if (!CheckBlock(block, genesis_state, 1))
+                return error("LoadBlockIndex() : genesis block failed CheckBlock");
+        }
 
         // Start new block file
         unsigned int nFile;

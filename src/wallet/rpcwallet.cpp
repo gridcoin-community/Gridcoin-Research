@@ -4892,7 +4892,7 @@ UniValue dumpseedphrase(const UniValue& params)
 
     CKeyingMaterial blob;
     if (!pwalletMain->GetSeedPhraseBlob(blob)) {
-        throw JSONRPCError(RPC_WALLET_ERROR, "Failed to decrypt the seed phrase record");
+        throw JSONRPCError(RPC_WALLET_ERROR, "Failed to read the seed phrase record: it does not decrypt or is damaged");
     }
 
     const SecureString phrase = GRC::Mnemonics::EncodeSeedPhrase(MakeByteSpan(blob));

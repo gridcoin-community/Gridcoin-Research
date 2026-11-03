@@ -109,6 +109,11 @@ CKey DecodeSecret(const std::string& str)
 
 std::string EncodeSecret(const CKey& key)
 {
+    // Invariant: every caller (dumpprivkey, dumpwallet) encodes a key from a
+    // successful GetKey(), which yields only valid keys: the wallet checks keys
+    // when it loads or imports them, and the encrypted store returns false for
+    // a key that does not decrypt to a valid one. Guards against a caller that
+    // encodes a default CKey, whose empty payload would be written as the secret.
     assert(key.IsValid());
     std::vector<unsigned char> data = Params().Base58Prefix(CChainParams::SECRET_KEY);
     data.insert(data.end(), key.begin(), key.end());

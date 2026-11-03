@@ -34,6 +34,7 @@
 #include <boost/thread.hpp>
 
 #include <atomic>
+#include <cstdlib>
 #include <list>
 #include <set>
 #include <string>
@@ -479,7 +480,19 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         if (!DisconnectBlocksBatch(txdb, vResurrect, cnt_dis, pcommon)) {
             error("%s: DisconnectBlocksBatch() failed. This is a fatal error. The chain index may be corrupt. Aborting. "
                   "Please reindex the chain and restart.", __func__);
-            exit(1); //todo
+
+            // Stop at once rather than return false or request an orderly
+            // shutdown. The disconnect failed partway: its database batch is
+            // not committed, but the in-memory chain state is partly reverted.
+            // Returning would let SetBestChain() try to reorganize back to the
+            // previous tip on that state, and other threads would go on
+            // validating blocks and contracts against it until a shutdown took
+            // effect, which would then flush it. std::_Exit() skips the
+            // shutdown sequence, its flushes and the static destructors, which
+            // would otherwise run while other threads still use the globals.
+            // The reindex the message asks for rebuilds the chain state from
+            // the block files.
+            std::_Exit(EXIT_FAILURE);
         }
 
         int nMismatchSpent;
@@ -582,7 +595,18 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
             // Make sure it's successfully written to disk before changing memory structure
             if (!txdb.TxnCommit()) {
-                return error("%s: TxnCommit failed", __func__);
+                error("%s: TxnCommit failed. This is a fatal error. The chain state may be inconsistent. Aborting. "
+                      "Please reindex the chain and restart.", __func__);
+
+                // Stop at once, as after a failed batch disconnect above. This
+                // commit is the only write of the connect that reaches the
+                // disk: the block index, transaction index and best chain
+                // writes before it only add to the transaction's batch in
+                // memory. Returning false would leave in-memory state that the
+                // disk does not record. The contract registries store their
+                // records outside this transaction, so the reindex that the
+                // message asks for is what brings them back in step.
+                std::_Exit(EXIT_FAILURE);
             }
 
             // Mempool retirement runs AFTER the commit, deliberately.

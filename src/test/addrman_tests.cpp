@@ -1,14 +1,19 @@
 // Copyright (c) 2012-2015 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
+#include "addrdb.h"
 #include "addrman.h"
 #include "addrman_impl.h"
 #include <string>
 #include <boost/test/unit_test.hpp>
 
+#include "clientversion.h"
+#include "fs.h"
 #include "hash.h"
 #include "netbase.h"
 #include "random.h"
+#include "streams.h"
+#include "util/system.h"
 
 using namespace std;
 
@@ -477,6 +482,68 @@ BOOST_AUTO_TEST_CASE(caddrinfo_get_new_bucket)
     // Test 34: IP addresses in the different source groups should map to more
     //  than 64 buckets.
     BOOST_CHECK(buckets.size() > 64);
+}
+
+BOOST_AUTO_TEST_CASE(addrman_clear_forgets_every_entry)
+{
+    AddrMan addrman{/*deterministic=*/true};
+
+    CNetAddr source = ResolveIP("252.2.2.2");
+    CService addr1 = ResolveService("250.1.1.1", 8333);
+    addrman.Add(CAddress(addr1, NODE_NONE), source);
+    BOOST_REQUIRE(addrman.Find(addr1) != nullptr);
+
+    addrman.Clear();
+    BOOST_CHECK_EQUAL(addrman.size(), 0U);
+    BOOST_CHECK(addrman.Find(addr1) == nullptr);
+
+    addrman.Add(CAddress(addr1, NODE_NONE), source);
+    BOOST_CHECK_EQUAL(addrman.size(), 1U);
+}
+
+BOOST_AUTO_TEST_CASE(addrman_load_leaves_nothing_from_a_damaged_peers_file)
+{
+    AddrMan full{/*deterministic=*/true};
+
+    CNetAddr source = ResolveIP("252.2.2.2");
+    CService addr1 = ResolveService("250.1.1.1", 8333);
+    full.Add(CAddress(addr1, NODE_NONE), source);
+
+    CAddrDB adb;
+    BOOST_REQUIRE(adb.Write(full));
+
+    // Cut the checksum short: the entries load, then the read fails.
+    const fs::path path = GetDataDir() / "peers.dat";
+    fs::resize_file(path, fs::file_size(path) - 16);
+
+    AddrMan loaded{/*deterministic=*/true};
+    BOOST_CHECK(!adb.Read(loaded));
+    BOOST_CHECK_EQUAL(loaded.size(), 0U);
+    BOOST_CHECK(loaded.Find(addr1) == nullptr);
+
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(addrman_refuses_entry_counts_the_tables_cannot_hold)
+{
+    const int max_new = ADDRMAN_NEW_BUCKET_COUNT * ADDRMAN_BUCKET_SIZE;
+    const int max_tried = ADDRMAN_TRIED_BUCKET_COUNT * ADDRMAN_BUCKET_SIZE;
+
+    // nNew and nTried, each with the other in range. The rest of the
+    // serialization is valid: no entries and no new-table buckets.
+    // Format version 1 stores the bucket count XOR 2^30, so 2^30 means none.
+    for (const auto& [n_new, n_tried] : std::vector<std::pair<int, int>>{
+             {-1, 0}, {max_new + 1, 0}, {0, -1}, {0, max_tried + 1}}) {
+        CDataStream ss(SER_DISK, CLIENT_VERSION);
+        ss << static_cast<unsigned char>(1) << static_cast<unsigned char>(32) << uint256();
+        ss << n_new << n_tried << int{1 << 30};
+
+        AddrMan addrman{/*deterministic=*/true};
+        BOOST_CHECK_EXCEPTION(ss >> addrman, std::ios_base::failure, [](const std::ios_base::failure& e) {
+            return std::string{e.what()}.find("Corrupt addrman serialization: n") != std::string::npos;
+        });
+        BOOST_CHECK_EQUAL(addrman.size(), 0U);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

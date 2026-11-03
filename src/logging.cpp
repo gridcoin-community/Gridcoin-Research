@@ -301,19 +301,20 @@ void BCLog::Logger::LogPrintStr(const std::string& str)
         cb(str_prefixed);
     }
     if (m_print_to_file) {
-        assert(m_fileout != nullptr);
-
         // reopen the log file, if requested
         if (m_reopen_file) {
             m_reopen_file = false;
             FILE* new_fileout = fsbridge::fopen(m_file_path, "a");
             if (new_fileout) {
                 setbuf(new_fileout, nullptr); // unbuffered
-                fclose(m_fileout);
+                if (m_fileout != nullptr) fclose(m_fileout);
                 m_fileout = new_fileout;
             }
         }
-        FileWriteStr(str_prefixed, m_fileout);
+
+        // The file is not open after archive() failed to reopen it. A reopen
+        // request (SIGHUP, or the next archive() call) opens it again.
+        if (m_fileout != nullptr) FileWriteStr(str_prefixed, m_fileout);
     }
 }
 
@@ -393,11 +394,22 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
     if (fImmediate || (fArchiveDaily && ArchiveCheckDate > PrevArchiveCheckDate))
     {
         std::string rename_error_msg;
+        bool reopened = true;
 
         {
             std::lock_guard<std::mutex> scoped_lock(m_cs);
 
+            // There is no log file to archive when the node runs with
+            // -nodebuglogfile, or after the reopen below failed. In the second
+            // case, ask the next log line to open the file again, as a reopen
+            // request (SIGHUP) does.
+            if (m_fileout == nullptr) {
+                if (m_print_to_file) m_reopen_file = true;
+                return false;
+            }
+
             fclose(m_fileout);
+            m_fileout = nullptr;
 
             plogfile = m_file_path;
 
@@ -424,8 +436,18 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
                 setbuf(new_fileout, nullptr); // unbuffered
                 m_fileout = new_fileout;
             }
+            else
+            {
+                reopened = false;
+            }
 
             PrevArchiveCheckDate = ArchiveCheckDate;
+        }
+
+        if (!reopened)
+        {
+            LogPrintf("ERROR: Logger: archive: Failed to reopen %s. Logging to the file stops until it is reopened.",
+                      plogfile.string());
         }
 
         if (!rename_error_msg.empty())

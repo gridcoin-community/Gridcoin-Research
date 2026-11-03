@@ -23,6 +23,7 @@
 #include "net_processing.h"
 #include "util.h"
 #include <util/string.h>
+#include "gridcoin/mnemonics.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
@@ -2264,11 +2265,22 @@ bool CWallet::GetSeedPhraseBlob(CKeyingMaterial& blob_out) const
 
     if (!m_seed_phrase_blob_crypted) {
         blob_out.assign(m_seed_phrase_data.vchBlob.begin(), m_seed_phrase_data.vchBlob.end());
-        return true;
+    } else if (!DecryptSecretWithMasterKey(m_seed_phrase_data.vchBlob,
+                                           Hash(m_seed_phrase_data.masterKeyID), blob_out)) {
+        return false;
     }
 
-    return DecryptSecretWithMasterKey(m_seed_phrase_data.vchBlob,
-                                      Hash(m_seed_phrase_data.masterKeyID), blob_out);
+    // The record comes from wallet.dat, and loading it does not check the blob's
+    // length (a decrypted blob is as long as the stored ciphertext allows). Refuse
+    // a blob that is not one whole enciphered seed rather than hand it on:
+    if (blob_out.size() != GRC::Mnemonics::ENCIPHERED_LENGTH) {
+        LogPrintf("ERROR: %s: the seed phrase record holds %u bytes, not %u",
+                  __func__, blob_out.size(), GRC::Mnemonics::ENCIPHERED_LENGTH);
+        blob_out.clear();
+        return false;
+    }
+
+    return true;
 }
 
 std::size_t SweepSwapCount(const std::vector<int64_t>& values, std::size_t select_count,

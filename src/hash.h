@@ -28,6 +28,9 @@ public:
     static const size_t OUTPUT_SIZE = CSHA256::OUTPUT_SIZE;
 
     void Finalize(Span<unsigned char> output) {
+        // Invariant: every caller passes a uint256 (Hash() and key.cpp), so the
+        // span is 32 bytes whatever data was hashed. Guards against a new caller
+        // passing a smaller buffer, which Finalize() below would overrun.
         assert(output.size() == OUTPUT_SIZE);
         unsigned char buf[CSHA256::OUTPUT_SIZE];
         sha.Finalize(buf);
@@ -53,6 +56,8 @@ public:
     static const size_t OUTPUT_SIZE = CRIPEMD160::OUTPUT_SIZE;
 
     void Finalize(Span<unsigned char> output) {
+        // Invariant: the only caller, Hash160(), passes a uint160, as for
+        // CHash256::Finalize(). Guards against a new caller with a smaller buffer.
         assert(output.size() == OUTPUT_SIZE);
         unsigned char buf[CSHA256::OUTPUT_SIZE];
         sha.Finalize(buf);

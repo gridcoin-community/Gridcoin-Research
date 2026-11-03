@@ -76,6 +76,9 @@ std::pair<int, int64_t> CalculateSequenceLocks(
     const CTransaction& tx, int flags,
     std::vector<int>& prevHeights, const CBlockIndex& block)
 {
+    // Invariant: the only caller, CheckSequenceLocks(), sizes prevHeights from
+    // this transaction's inputs. Guards against a new caller that passes a vector
+    // of another length, which the loop below would index past.
     assert(prevHeights.size() == tx.vin.size());
 
     // BIP68 sequence locks are only enforced for tx version >= 2.
@@ -125,6 +128,9 @@ std::pair<int, int64_t> CalculateSequenceLocks(
 bool EvaluateSequenceLocks(const CBlockIndex& block,
                            std::pair<int, int64_t> lockPair)
 {
+    // Invariant: the only caller, CheckSequenceLocks(), passes an index whose
+    // pprev is the chain tip it has already used. Guards against a new caller
+    // that passes the genesis block or a detached index.
     assert(block.pprev);
 
     int64_t nBlockTime = block.pprev->GetMedianTimePast();

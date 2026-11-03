@@ -98,6 +98,9 @@ CMainSignals& GetMainSignals()
 
 void CMainSignals::RegisterBackgroundSignalScheduler(CScheduler& scheduler)
 {
+    // Invariant: init registers the scheduler once, and only Shutdown()
+    // unregisters it. Guards against a second registration, which would replace
+    // the live instance and drop its connections and pending callbacks.
     assert(!m_internals);
     m_internals = std::make_unique<MainSignalsInstance>(scheduler);
 }
