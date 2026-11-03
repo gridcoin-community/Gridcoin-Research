@@ -2058,6 +2058,13 @@ bool AppInit2(ThreadHandlerPtr threads)
         return InitError(strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running."), fsbridge::LongPathString(datadir), PACKAGE_NAME));
     }
 
+    // Open the RPC listener now, while this process alone holds the datadir, rather than after
+    // the long initialisation: another local account cannot take the port in the meantime. Until
+    // initialisation finishes the server answers warmup to every method except stop.
+    const bool fStartRPC = gArgs.GetBoolArg("-server", false);
+    LogPrintf("init: -server=%d, %s RPC server\n", fStartRPC, fStartRPC ? "starting" : "skipping");
+    if (fStartRPC) StartRPCThreads();
+
 #ifdef WIN32
     // Until the bundled Berkeley DB was built with UNICODE (src/bdb53/CMakeLists.txt), it read the
     // UTF-8 of a wallet name in the system code page and created the file under that reading: on
@@ -2753,9 +2760,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     // has entered serviceQueue: a task enqueued first is run when it gets there.
     g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
 
-    const bool fStartRPC = gArgs.GetBoolArg("-server", false);
-    LogPrintf("init: -server=%d, %s RPC server\n", fStartRPC, fStartRPC ? "starting" : "skipping");
-    if (fStartRPC) StartRPCThreads();
+    // The RPC listener has been open since the datadir lock, answering warmup to everything but
+    // stop. Callers that need the scheduler above (walletpassphrase) are served from here.
+    SetRPCWarmupFinished();
+    LogPrintf("init: RPC server warmup finished\n");
 
     // ********************************************************* Step 13: finished
 

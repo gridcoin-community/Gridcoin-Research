@@ -36,6 +36,7 @@
 #include "wallet/capability.h"
 #include "wallet/wallet.h"
 
+#include <rpc/server.h>
 #include <boost/signals2/signal.hpp>
 #include <boost/test/unit_test.hpp>
 #include "consensus/consensus.h"
@@ -179,6 +180,29 @@ BOOST_AUTO_TEST_CASE(node_changesettings_reports_a_throwing_write_as_failure)
     // CommitRwSettings restored the setting before the throw.
     BOOST_CHECK_EQUAL(gArgs.GetArg("-" + probe, "unset"), before);
     BOOST_CHECK(getRwSetting(probe).isNull());
+}
+
+// The GUI console dispatches into the RPC table without the socket server, so it must
+// honour the same warmup refusal. stop is exempt, and is covered by the predicate test in
+// rpc_bind_policy_tests; running it here would shut the test process down, so an unknown
+// method stands in to show that an exempt-or-ready call gets past the gate.
+BOOST_AUTO_TEST_CASE(console_command_refused_in_warmup)
+{
+    struct RestoreWarmup {
+        ~RestoreWarmup() { SetRPCWarmupForTest(false); }
+    } restore;
+
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+
+    SetRPCWarmupForTest(true);
+    const interfaces::RpcConsoleResult refused = node->executeRpcConsoleCommand("getblockcount", {});
+    BOOST_CHECK(!refused.ok);
+    BOOST_CHECK(refused.output.find("(code -28)") != std::string::npos);
+
+    SetRPCWarmupFinished();
+    const interfaces::RpcConsoleResult open = node->executeRpcConsoleCommand("nosuchmethod", {});
+    BOOST_CHECK(!open.ok);
+    BOOST_CHECK(open.output.find("(code -28)") == std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(node_handler_bridges_ui_signal)

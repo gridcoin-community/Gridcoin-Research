@@ -3,6 +3,8 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <rpc/bind_policy.h>
+#include <rpc/client.h>
+#include <rpc/protocol.h>
 #include <rpc/server.h>
 #include <alert.h>
 #include <test/state_guard.h>
@@ -160,6 +162,41 @@ BOOST_AUTO_TEST_CASE(warning_reaches_statusbar)
     SetRPCBindWarning("");
     strMiscWarning = saved;
     BOOST_CHECK(GetRPCBindWarning().empty());
+}
+
+BOOST_AUTO_TEST_CASE(warmup_refuses_all_but_stop)
+{
+    // Warmup is process state outside StateGuard, so put it back whatever happens.
+    struct RestoreWarmup {
+        ~RestoreWarmup() { SetRPCWarmupForTest(false); }
+    } restore;
+
+    SetRPCWarmupForTest(true);
+    BOOST_CHECK(RPCIsInWarmup());
+    BOOST_CHECK(RPCRefusedInWarmup("getblockcount"));
+    BOOST_CHECK(RPCRefusedInWarmup("walletpassphrase"));
+    BOOST_CHECK(!RPCRefusedInWarmup("stop"));
+
+    SetRPCWarmupFinished();
+    BOOST_CHECK(!RPCIsInWarmup());
+    BOOST_CHECK(!RPCRefusedInWarmup("getblockcount"));
+    BOOST_CHECK(!RPCRefusedInWarmup("stop"));
+}
+
+BOOST_AUTO_TEST_CASE(cli_retries_warmup_reply)
+{
+    UniValue reply;
+    BOOST_REQUIRE(reply.read(R"({"result":null,"error":{"code":-28,"message":"x"},"id":1})"));
+    BOOST_CHECK(ShouldRetryWarmupReply(true, reply));
+    BOOST_CHECK(!ShouldRetryWarmupReply(false, reply));
+
+    UniValue other;
+    BOOST_REQUIRE(other.read(R"({"result":null,"error":{"code":-1,"message":"x"},"id":1})"));
+    BOOST_CHECK(!ShouldRetryWarmupReply(true, other));
+
+    UniValue ok;
+    BOOST_REQUIRE(ok.read(R"({"result":5,"error":null,"id":1})"));
+    BOOST_CHECK(!ShouldRetryWarmupReply(true, ok));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

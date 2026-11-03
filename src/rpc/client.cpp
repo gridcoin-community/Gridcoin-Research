@@ -409,6 +409,15 @@ UniValue ParseNonRFCJSONValue(const std::string& strVal)
     return jVal[0];
 }
 
+bool ShouldRetryWarmupReply(bool rpcwait, const UniValue& reply)
+{
+    if (!rpcwait || !reply.isObject()) return false;
+    const UniValue& error = find_value(reply, "error");
+    if (!error.isObject()) return false;
+    const UniValue& code = find_value(error, "code");
+    return code.isNum() && code.get_int() == RPC_IN_WARMUP;
+}
+
 // Convert strings to command-specific RPC representation
 UniValue RPCConvertValues(const std::string &strMethod, const std::vector<std::string> &strParams)
 {
@@ -454,7 +463,18 @@ int CommandLineRPC(int argc, char *argv[])
         UniValue params = RPCConvertValues(strMethod, strParams);
 
         // Execute
-        const UniValue reply = CallRPC(strMethod, params);
+        // Under -rpcwait a daemon that is still initialising answers RPC_IN_WARMUP; call again
+        // once a second, within the same -rpcwaittimeout that bounds the wait for the connection
+        // (0 or less waits without limit).
+        const bool rpcwait = gArgs.GetBoolArg("-rpcwait", false);
+        const int wait_timeout = gArgs.GetArg("-rpcwaittimeout", DEFAULT_WAIT_CLIENT_TIMEOUT);
+        const std::chrono::seconds warmup_deadline = GetTime<std::chrono::seconds>() + std::chrono::seconds{wait_timeout};
+        UniValue reply = CallRPC(strMethod, params);
+        while (ShouldRetryWarmupReply(rpcwait, reply) &&
+               (wait_timeout <= 0 || GetTime<std::chrono::seconds>() < warmup_deadline)) {
+            UninterruptibleSleep(std::chrono::seconds{1});
+            reply = CallRPC(strMethod, params);
+        }
 
         // Parse reply
         UniValue result = find_value(reply, "result");

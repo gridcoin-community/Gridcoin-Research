@@ -368,6 +368,7 @@ public:
         try {
             // Convert the positional string args in the command-dependent way,
             // dispatch, and format the reply -- all UniValue handling stays here.
+            ThrowIfRefusedInWarmup(method);
             UniValue result = tableRPC.execute(method, RPCConvertValues(method, args));
 
             if (result.isNull()) {

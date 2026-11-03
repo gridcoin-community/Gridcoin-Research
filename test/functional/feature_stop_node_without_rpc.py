@@ -19,11 +19,12 @@ wait_for_rpc_connection and asserts that stop_node() raises ConnectionError
 (the fallback path) rather than AssertionError, and that the daemon then exits
 cleanly. It asserts the exception type and the exit, not a duration.
 
-Why the test first waits for the moved RPC port to accept a connection: the
-RPC listener opens near the end of AppInit2, after its last check for a
-shutdown request. Once the port accepts, a SIGTERM lets the daemon exit 0.
-Before that, a SIGTERM can make AppInit2 return false and the daemon exit 1,
-which wait_until_stopped() would report as a non-zero exit code.
+Why the test first waits for the moved RPC port to serve a reply: the RPC
+listener opens early now and answers warmup (-28) until initialisation ends,
+so a bare accept proves nothing. Initialisation finishing is what follows
+AppInit2's last check for a shutdown request, and after it a SIGTERM lets the
+daemon exit 0. Before that, a SIGTERM can make AppInit2 return false and the
+daemon exit 1, which wait_until_stopped() would report as a non-zero exit code.
 
 CLI transport is not supported: under --usecli, stop_node() skips the
 never-connected guard this test exercises, so the ConnectionError it asserts
@@ -36,11 +37,12 @@ raised before the node starts, so the framework's own shutdown never reaches
 that path either.
 """
 
-import socket
+import http.client
 import sys
 
 from test_framework.test_framework import GridcoinTestFramework, SkipTest
-from test_framework.util import assert_raises_message, rpc_port
+from test_framework.authproxy import JSONRPCException
+from test_framework.util import assert_raises_message, get_rpc_proxy, rpc_port, rpc_url
 
 
 class FeatureStopNodeWithoutRpcTest(GridcoinTestFramework):
@@ -66,16 +68,17 @@ class FeatureStopNodeWithoutRpcTest(GridcoinTestFramework):
         node = self.nodes[0]
         node.start()
 
-        def moved_port_accepts():
+        def moved_port_serves():
+            # -28 (still starting up) and connection errors keep polling.
             try:
-                with socket.create_connection(('127.0.0.1', self.moved_rpc_port), timeout=1):
-                    return True
-            except OSError:
+                get_rpc_proxy(rpc_url(node.datadir, 1, node.chain, None), 1).getblockcount()
+                return True
+            except (JSONRPCException, OSError, http.client.HTTPException):
                 return False
 
         self.log.info("Waiting for the daemon to serve RPC on port %d (not polled by the framework)",
                       self.moved_rpc_port)
-        self.wait_until(moved_port_accepts)
+        self.wait_until(moved_port_serves)
         assert not node.rpc_connected
 
         self.log.info("stop_node() on a never-connected node raises ConnectionError and sends SIGTERM")

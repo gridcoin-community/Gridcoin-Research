@@ -14,6 +14,9 @@
 
 int CommandLineRPC(int argc, char *argv[]);
 
+//! The CLI should call again: -rpcwait is set and the reply's error code is RPC_IN_WARMUP.
+bool ShouldRetryWarmupReply(bool rpcwait, const UniValue& reply);
+
 UniValue RPCConvertValues(const std::string &strMethod, const std::vector<std::string> &strParams);
 
 //! The CLI client's conversion table as (method, 0-based param index) pairs;

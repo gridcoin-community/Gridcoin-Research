@@ -157,13 +157,15 @@ extern std::unique_ptr<CScheduler> g_scheduler;
 //!
 //! g_scheduler itself is a plain unique_ptr assigned during AppInit2, and other
 //! threads read it, so reading it from one of them is a data race on a
-//! non-atomic object. AppInit2 now assigns it BEFORE StartRPCThreads(), which
-//! removes the startup window in which an RPC would have found it null -- but
-//! not the race itself, since the P2P and stake-miner threads are already
-//! running by then and shutdown clears it while RPC threads still serve. This
-//! is set once the scheduler is ready to take work and cleared before it is told
-//! to stop, and the release/acquire pair is what makes reading through it
-//! well-defined.
+//! non-atomic object. StartRPCThreads() runs BEFORE the scheduler exists, early
+//! in AppInit2, so an RPC handler could find it null; only the RPC warmup gate
+//! (every method but stop is refused until AppInit2 finishes) keeps handlers
+//! away from it, so that gate must not be weakened on the assumption that the
+//! scheduler is already up. Independently, the P2P and stake-miner threads are
+//! running by the time it is assigned and shutdown clears it while RPC threads
+//! still serve, which is the race itself. This handle is set once the scheduler
+//! is ready to take work and cleared before it is told to stop, and the
+//! release/acquire pair is what makes reading through it well-defined.
 //!
 //! Null means "do not schedule": either the scheduler does not exist yet, or
 //! shutdown has begun. A caller whose task must actually run should treat null

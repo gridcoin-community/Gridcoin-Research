@@ -32,6 +32,7 @@
 #include <boost/iostreams/stream.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/shared_ptr.hpp>
+#include <atomic>
 #include <list>
 #include <algorithm>
 #include <cstring>
@@ -1225,8 +1226,41 @@ static bool StartRPCListenersOn(const std::vector<std::string>& binds, std::stri
     return any;
 }
 
+// Set when the listener opens, cleared when initialisation finishes.
+static std::atomic<bool> g_rpc_warmup{false};
+
+void SetRPCWarmupFinished()
+{
+    g_rpc_warmup.store(false, std::memory_order_release);
+}
+
+bool RPCIsInWarmup()
+{
+    return g_rpc_warmup.load(std::memory_order_acquire);
+}
+
+void SetRPCWarmupForTest(bool in_warmup)
+{
+    g_rpc_warmup.store(in_warmup, std::memory_order_release);
+}
+
+bool RPCRefusedInWarmup(const std::string& method)
+{
+    return RPCIsInWarmup() && method != "stop";
+}
+
+void ThrowIfRefusedInWarmup(const std::string& method)
+{
+    if (RPCRefusedInWarmup(method)) {
+        throw JSONRPCError(RPC_IN_WARMUP, "Gridcoin is starting up; RPC is available when initialisation finishes");
+    }
+}
+
 void StartRPCThreads()
 {
+    // Warmup is on from the moment the listener can accept, before the first bind.
+    g_rpc_warmup.store(true, std::memory_order_release);
+
     // Logged unconditionally: the absence of this line in a node's debug.log
     // distinguishes "RPC server never started" from "started but not serving"
     // when diagnosing functional-test RPC-startup timeouts.
@@ -1640,6 +1674,8 @@ static UniValue JSONRPCExecOne(const UniValue& req)
     {
         jreq.parse(req);
 
+        ThrowIfRefusedInWarmup(jreq.strMethod);
+
         UniValue result = tableRPC.execute(jreq.strMethod, jreq.params);
         rpc_result = JSONRPCReplyObj(result, NullUniValue, jreq.id);
     }
@@ -1753,6 +1789,8 @@ void ServiceConnection(AcceptedConnection *conn)
             // singleton request
             if (valRequest.isObject()) {
                 jreq.parse(valRequest);
+
+                ThrowIfRefusedInWarmup(jreq.strMethod);
 
                 UniValue result = ExecuteWithElevation(elevation, [&] {
                     return tableRPC.execute(jreq.strMethod, jreq.params);

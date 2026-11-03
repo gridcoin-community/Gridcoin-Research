@@ -55,6 +55,19 @@ bool ClientAllowed(const boost::asio::ip::address& address);
 
 void StartRPCThreads();
 
+//! StartRPCThreads() binds the listener early, while initialisation is still running, so that
+//! the port is held from the datadir lock onward. Until this is called the server answers
+//! RPC_IN_WARMUP to every method except "stop".
+void SetRPCWarmupFinished();
+bool RPCIsInWarmup();
+//! Test hook; tests restore false.
+void SetRPCWarmupForTest(bool in_warmup);
+//! True when `method` must be answered RPC_IN_WARMUP now: in warmup, every method except "stop".
+bool RPCRefusedInWarmup(const std::string& method);
+//! Throws the RPC_IN_WARMUP error when RPCRefusedInWarmup(method). Every path that dispatches into
+//! tableRPC outside the socket server (the GUI console) applies it too.
+void ThrowIfRefusedInWarmup(const std::string& method);
+
 //! Test hook for the file-static acceptor setup, so a test binds exactly as the RPC server does.
 void OpenRpcAcceptorForTest(boost::asio::ip::tcp::acceptor& acceptor, const boost::asio::ip::tcp& protocol);
 void StopRPCThreads();
