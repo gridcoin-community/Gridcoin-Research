@@ -11,6 +11,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <cstdio>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -43,13 +44,30 @@ ipc::PeerIdentity P(uid_t u, gid_t g, std::vector<gid_t> gs = {})
     return p;
 }
 
-//! The name of this process's effective group, which ConfigureAttachGroup can
-//! always resolve.
-std::string OwnGroupName()
+//! The name of this process's effective group, or nullopt, with a message, when
+//! the group database has no entry for it. The cases that need a group
+//! ConfigureAttachGroup can resolve skip in that case.
+std::optional<std::string> OwnGroupName()
 {
     const struct group* gr = ::getgrgid(::getegid());
-    BOOST_REQUIRE_MESSAGE(gr != nullptr, "the effective group has no entry in the group database");
-    return gr->gr_name;
+    if (gr == nullptr) {
+        BOOST_TEST_MESSAGE("the effective group has no entry in the group database; skipping");
+        return std::nullopt;
+    }
+    return std::string{gr->gr_name};
+}
+
+//! Make -no<name> the setting of \p arg ("-ipcserviceuser" and so on), the way
+//! -noipcserviceuser on the command line does.
+void NegateArg(const std::string& arg)
+{
+    gArgs.ClearForcedArg(arg);
+    gArgs.LockSettings([&](util::Settings& settings) {
+        util::SettingsValue negated;
+        negated.setBool(false);
+        settings.command_line_options[arg.substr(1)] = {negated};
+    });
+    BOOST_REQUIRE(gArgs.IsArgNegated(arg));
 }
 
 //! A mkdtemp directory removed when the case ends.
@@ -114,6 +132,14 @@ BOOST_AUTO_TEST_CASE(server_root_refused_even_in_group)
     BOOST_CHECK(ipc::ServerPeerDecision(P(0, 0, {5000}), {999, gid_t{5000}}) == ipc::PeerVerdict::Refuse);
 }
 
+// The same-uid rule is applied before the root refusal, so a core running as
+// root serves a root peer of its own uid.
+BOOST_AUTO_TEST_CASE(server_root_peer_of_root_core_allowed)
+{
+    BOOST_CHECK(ipc::ServerPeerDecision(P(0, 0), {0, std::nullopt}) == ipc::PeerVerdict::Allow);
+    BOOST_CHECK(ipc::ServerPeerDecision(P(0, 0), {0, gid_t{5000}}) == ipc::PeerVerdict::Allow);
+}
+
 BOOST_AUTO_TEST_CASE(client_same_uid_allowed_any_dir)
 {
     BOOST_CHECK(ipc::ClientPeerDecision(P(1000, 1000), {1000, std::nullopt, {}}) == ipc::PeerVerdict::Allow);
@@ -138,6 +164,7 @@ BOOST_AUTO_TEST_CASE(client_service_dir_must_be_owned_and_not_writable)
     BOOST_CHECK(with([](auto& d) { d.owner = 1234; }) == ipc::PeerVerdict::Refuse);
     BOOST_CHECK(with([](auto& d) { d.mode = 0770; }) == ipc::PeerVerdict::Refuse);
     BOOST_CHECK(with([](auto& d) { d.mode = 0752; }) == ipc::PeerVerdict::Refuse);
+    BOOST_CHECK(with([](auto& d) { d.is_directory = false; }) == ipc::PeerVerdict::Refuse);
     BOOST_CHECK(with([](auto& d) { d.is_symlink = true; }) == ipc::PeerVerdict::Refuse);
     BOOST_CHECK(with([](auto& d) { d.exists = false; }) == ipc::PeerVerdict::Refuse);
 }
@@ -187,10 +214,45 @@ BOOST_AUTO_TEST_CASE(read_peer_identity_bad_fd_is_nullopt)
 BOOST_FIXTURE_TEST_CASE(configure_attach_group, PeerPolicySetup)
 {
     BOOST_CHECK(!ipc::ConfigureAttachGroup("gridcoin-no-such-group-xyz"));
-    BOOST_CHECK(ipc::ConfigureAttachGroup(OwnGroupName()));
+    const auto group_name = OwnGroupName();
+    if (!group_name) return;
+    BOOST_CHECK(ipc::ConfigureAttachGroup(*group_name));
     BOOST_CHECK(ipc::AttachGroupGid() == ::getegid());
     BOOST_CHECK(ipc::ConfigureAttachGroup(""));
     BOOST_CHECK(!ipc::AttachGroupGid());
+}
+
+// ConfiguredOption is the one rule for a name-valued option: unset and negated
+// both read as "". Without the negation branch GetArg returns "0" for the
+// negated form.
+BOOST_FIXTURE_TEST_CASE(configured_option_unset_set_and_negated, PeerPolicySetup)
+{
+    gArgs.ClearForcedArg("-ipcserviceuser");
+    BOOST_CHECK_EQUAL(ipc::ConfiguredOption("-ipcserviceuser"), "");
+    gArgs.ForceSetArg("-ipcserviceuser", "svc");
+    BOOST_CHECK_EQUAL(ipc::ConfiguredOption("-ipcserviceuser"), "svc");
+    NegateArg("-ipcserviceuser");
+    BOOST_CHECK_EQUAL(ipc::ConfiguredOption("-ipcserviceuser"), "");
+}
+
+// The daemon configures the attach group from ConfiguredOption, so
+// -noipcattachgroup configures no group (and does not look for one named "0").
+BOOST_FIXTURE_TEST_CASE(negated_attach_group_configures_no_group, PeerPolicySetup)
+{
+    NegateArg("-ipcattachgroup");
+    BOOST_CHECK(ipc::ConfigureAttachGroup(ipc::ConfiguredOption("-ipcattachgroup")));
+    BOOST_CHECK(!ipc::AttachGroupGid());
+}
+
+// connectAddress takes the directory it checks from the canonical address.
+BOOST_AUTO_TEST_CASE(socket_dir_of_canonical_address)
+{
+    BOOST_CHECK(ipc::SocketDirOf("unix:/a/b/node.sock") == fs::path("/a/b"));
+    BOOST_CHECK(ipc::SocketDirOf("unix:/node.sock") == fs::path("/"));
+    BOOST_CHECK(ipc::SocketDirOf("unix").empty());
+    BOOST_CHECK(ipc::SocketDirOf("unix:").empty());
+    BOOST_CHECK(ipc::SocketDirOf("tcp:/a/b/node.sock").empty());
+    BOOST_CHECK(ipc::SocketDirOf("").empty());
 }
 
 // ServerPeerPolicy decides with this process's uid and the configured attach
@@ -205,7 +267,9 @@ BOOST_FIXTURE_TEST_CASE(server_policy_uses_own_uid_and_attach_group, PeerPolicyS
     BOOST_CHECK(ipc::ServerPeerPolicy(P(self, group)) == ipc::PeerVerdict::Allow);
     BOOST_CHECK(ipc::ServerPeerPolicy(P(other, group)) == ipc::PeerVerdict::Refuse);
 
-    BOOST_REQUIRE(ipc::ConfigureAttachGroup(OwnGroupName()));
+    const auto group_name = OwnGroupName();
+    if (!group_name) return;
+    BOOST_REQUIRE(ipc::ConfigureAttachGroup(*group_name));
     BOOST_CHECK(ipc::ServerPeerPolicy(P(other, group)) == ipc::PeerVerdict::Allow);
     BOOST_CHECK(ipc::ServerPeerPolicy(P(other, group + 1)) == ipc::PeerVerdict::Refuse);
     if (self != 0) {
@@ -236,7 +300,7 @@ BOOST_FIXTURE_TEST_CASE(client_policy_reads_service_user_and_ipcdir, PeerPolicyS
     const fs::path link = dir.path / "link";
     BOOST_REQUIRE_EQUAL(::symlink("/", link.c_str()), 0);
 
-    // Unset: only this account, wherever the socket is.
+    // With it unset, only this account is admitted, wherever the socket is.
     gArgs.ClearForcedArg("-ipcserviceuser");
     BOOST_CHECK(ipc::ClientPeerPolicy(root_core, "/") == ipc::PeerVerdict::Refuse);
     BOOST_CHECK(ipc::ClientPeerPolicy(own_core, missing) == ipc::PeerVerdict::Allow);
@@ -247,7 +311,8 @@ BOOST_FIXTURE_TEST_CASE(client_policy_reads_service_user_and_ipcdir, PeerPolicyS
     BOOST_CHECK(ipc::ClientPeerPolicy(P(::geteuid() + 1, 0), "/") == ipc::PeerVerdict::Refuse);
     // A directory owned by this account, not by root or the service account.
     BOOST_CHECK(ipc::ClientPeerPolicy(root_core, dir.path) == ipc::PeerVerdict::Refuse);
-    // lstat, not stat: a symlink to an acceptable directory is refused.
+    // A symlink to an acceptable directory is refused, because the directory is
+    // read with lstat and not stat.
     BOOST_CHECK(ipc::ClientPeerPolicy(root_core, link) == ipc::PeerVerdict::Refuse);
     BOOST_CHECK(ipc::ClientPeerPolicy(root_core, missing) == ipc::PeerVerdict::Refuse);
 
@@ -257,13 +322,7 @@ BOOST_FIXTURE_TEST_CASE(client_policy_reads_service_user_and_ipcdir, PeerPolicyS
     BOOST_CHECK(ipc::ClientPeerPolicy(own_core, "/") == ipc::PeerVerdict::Allow);
 
     // -noipcserviceuser counts as unset.
-    gArgs.ClearForcedArg("-ipcserviceuser");
-    gArgs.LockSettings([](util::Settings& settings) {
-        util::SettingsValue negated;
-        negated.setBool(false);
-        settings.command_line_options["ipcserviceuser"] = {negated};
-    });
-    BOOST_REQUIRE(gArgs.IsArgNegated("-ipcserviceuser"));
+    NegateArg("-ipcserviceuser");
     BOOST_CHECK(ipc::ClientPeerPolicy(root_core, "/") == ipc::PeerVerdict::Refuse);
 }
 

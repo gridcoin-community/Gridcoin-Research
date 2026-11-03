@@ -94,10 +94,10 @@ public:
         //
         // Process::connect rewrote address to its canonical "unix:<path>" form,
         // so the socket's directory is the parent of that path.
-        if (address.rfind("unix:", 0) != 0) {
+        const fs::path socket_dir = ipc::SocketDirOf(address);
+        if (socket_dir.empty()) {
             throw std::logic_error("Process::connect did not return a unix: address");
         }
-        const fs::path socket_dir = fs::path(address.substr(5)).parent_path();
         const std::optional<ipc::PeerIdentity> server = ipc::ReadPeerIdentity(fd);
         if (!server || ipc::ClientPeerPolicy(*server, socket_dir) == ipc::PeerVerdict::Refuse) {
             throw std::runtime_error("The process listening on the multiprocess socket belongs to "

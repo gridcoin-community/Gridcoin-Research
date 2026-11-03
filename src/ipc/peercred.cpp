@@ -21,13 +21,6 @@
 namespace ipc {
 namespace {
 
-//! The value of a name-valued IPC option, with -no<option> counted as unset.
-std::string ConfiguredName(const std::string& arg)
-{
-    if (gArgs.IsArgNegated(arg)) return {};
-    return gArgs.GetArg(arg, "");
-}
-
 #ifndef WIN32
 //! The uid of the account \p name, or nullopt when there is no such account or
 //! the account database cannot be read.
@@ -48,6 +41,21 @@ std::optional<uid_t> LookUpAccountUid(const std::string& name)
 #endif
 
 } // namespace
+
+std::string ConfiguredOption(const std::string& arg)
+{
+    if (gArgs.IsArgNegated(arg)) return {};
+    return gArgs.GetArg(arg, "");
+}
+
+fs::path SocketDirOf(const std::string& canonical_address)
+{
+    static const std::string prefix{"unix:"};
+    if (canonical_address.size() <= prefix.size() || canonical_address.compare(0, prefix.size(), prefix) != 0) {
+        return {};
+    }
+    return fs::path(canonical_address.substr(prefix.size())).parent_path();
+}
 
 #ifndef WIN32
 bool PeerInGroup(const PeerIdentity& peer, gid_t gid)
@@ -120,13 +128,16 @@ PeerVerdict ClientPeerPolicy(const PeerIdentity& server, const fs::path& ipcdir)
     ClientPeerContext ctx;
     ctx.self_uid = ::geteuid();
 
-    const std::string service_user = ConfiguredName("-ipcserviceuser");
+    // A core at this account's own uid is allowed whatever else is configured,
+    // so the common connect needs neither the account lookup nor the lstat.
+    if (server.uid == ctx.self_uid) return ClientPeerDecision(server, ctx);
+
+    const std::string service_user = ConfiguredOption("-ipcserviceuser");
     if (!service_user.empty()) {
         ctx.service_uid = LookUpAccountUid(service_user);
         // Said here rather than by ClientPeerDecision, which would report the
-        // account as not configured. A core at this account's own uid is still
-        // allowed below.
-        if (!ctx.service_uid && server.uid != ctx.self_uid) {
+        // account as not configured.
+        if (!ctx.service_uid) {
             LogPrintf("IPC: refusing the core at uid %u (this process runs as uid %u): the -ipcserviceuser "
                       "account '%s' does not exist\n",
                       server.uid, ctx.self_uid, SanitizeString(service_user));
@@ -157,14 +168,14 @@ PeerVerdict ClientPeerPolicy(const PeerIdentity& server, const fs::path& ipcdir)
 
 PeerVerdict ServerPeerPolicy(const PeerIdentity&)
 {
-    if (ConfiguredName("-ipcattachgroup").empty()) return PeerVerdict::Allow;
+    if (ConfiguredOption("-ipcattachgroup").empty()) return PeerVerdict::Allow;
     LogPrintf("IPC: the Windows peer check for a different account is not available in this build\n");
     return PeerVerdict::Refuse;
 }
 
 PeerVerdict ClientPeerPolicy(const PeerIdentity&, const fs::path&)
 {
-    if (ConfiguredName("-ipcserviceuser").empty()) return PeerVerdict::Allow;
+    if (ConfiguredOption("-ipcserviceuser").empty()) return PeerVerdict::Allow;
     LogPrintf("IPC: the Windows peer check for a different account is not available in this build\n");
     return PeerVerdict::Refuse;
 }

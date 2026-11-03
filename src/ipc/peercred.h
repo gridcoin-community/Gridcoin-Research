@@ -29,7 +29,7 @@
 //! ConfigureAttachGroup and AttachGroupGid, which live in peercred_posix.cpp and
 //! peercred_win.cpp.
 //!
-//! POSIX: the identity comes from SO_PEERCRED on Linux and getpeereid()
+//! On POSIX the identity comes from SO_PEERCRED on Linux and getpeereid()
 //! elsewhere, and a peer that cannot be read is refused. The core admits its own
 //! uid, and with -ipcattachgroup also a non-root peer in that group; root is
 //! never admitted through the group. The GUI admits a core running as its own
@@ -37,7 +37,7 @@
 //! the IPC directory is a real directory (not a symlink), owned by that account
 //! or root, and not writable by group or others.
 //!
-//! Windows: AF_UNIX exposes no peer credentials, and the server never receives
+//! On Windows AF_UNIX exposes no peer credentials, and the server never receives
 //! a socket fd from kj. Until the Windows backend exists, the owner-only DACL on
 //! node.sock and ipc.cookie is the guard, and either side refuses as soon as a
 //! different account is configured (-ipcattachgroup or -ipcserviceuser).
@@ -62,17 +62,17 @@ struct PeerIdentity
 
 enum class PeerVerdict { Allow, Refuse };
 
-//! Hook. POSIX: the identity of the peer of a connected or accepted AF_UNIX
-//! \p fd (SO_PEERCRED on Linux, getpeereid() elsewhere; groups left empty), or
-//! nullopt, with a log line, when it cannot be read. Callers refuse on nullopt.
-//! Windows placeholder: \p fd is ignored (kj gives the server -1) and the result
-//! is an empty PeerIdentity.
+//! Hook. On POSIX this is the identity of the peer of a connected or accepted
+//! AF_UNIX \p fd (SO_PEERCRED on Linux, getpeereid() elsewhere; groups left
+//! empty), or nullopt, with a log line, when it cannot be read. Callers refuse on
+//! nullopt. The Windows placeholder ignores \p fd (kj gives the server -1) and
+//! returns an empty PeerIdentity.
 std::optional<PeerIdentity> ReadPeerIdentity(int fd);
 
 //! Hook. Resolve the group \p name and remember it as the attach group; "" clears
 //! it and returns true. Returns false if the group does not exist. The daemon
-//! calls it once, with -ipcattachgroup, before it serves. Windows placeholder:
-//! true only for "".
+//! calls it once, with -ipcattachgroup, before it serves. The Windows
+//! placeholder returns true only for "".
 bool ConfigureAttachGroup(const std::string& name);
 
 #ifndef WIN32
@@ -130,6 +130,16 @@ PeerVerdict ServerPeerPolicy(const PeerIdentity& peer);
 //! the directory that holds the socket (read on each call). Windows placeholder:
 //! allow unless -ipcserviceuser is set.
 PeerVerdict ClientPeerPolicy(const PeerIdentity& server, const fs::path& ipcdir);
+
+//! The value of a name-valued IPC option such as "-ipcserviceuser", or "" when
+//! it is unset or negated (-noipcserviceuser). The daemon and the peer policies
+//! all read these options through it, so they share one rule for the -no form.
+std::string ConfiguredOption(const std::string& arg);
+
+//! The directory that holds the socket named by a canonical "unix:<path>"
+//! address (as Process::connect and Process::bind rewrite it), or an empty path
+//! when \p canonical_address is not of that form.
+fs::path SocketDirOf(const std::string& canonical_address);
 
 //! One-line description of the peer check compiled in, for the daemon's startup
 //! log, so an operator never has to guess what is enforced on this platform.

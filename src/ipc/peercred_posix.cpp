@@ -40,7 +40,14 @@ std::optional<gid_t> LookUpGroupGid(const std::string& name)
            buf.size() < 1024 * 1024) {
         buf.resize(buf.size() * 2);
     }
-    if (err != 0 || result == nullptr) return std::nullopt;
+    if (err != 0) {
+        LogPrintf("IPC: the group database lookup for the attach group failed (errno %d)\n", err);
+        return std::nullopt;
+    }
+    if (result == nullptr) {
+        LogPrintf("IPC: the attach group is not in the group database\n");
+        return std::nullopt;
+    }
     return grp.gr_gid;
 }
 

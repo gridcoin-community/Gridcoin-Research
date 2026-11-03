@@ -32,6 +32,7 @@
 #include "ipc/peercred.h"
 #include "ipc/process.h"
 #include "ipc/serve_init.h"
+#include "util/strencodings.h"
 #include "wallet/wallet.h" // pwalletMain / CWallet::GetWalletUuid for the identity token
 #include <atomic>
 #include <optional>
@@ -374,10 +375,9 @@ bool AppInit(int argc, char* argv[])
         // The attach group is resolved before anything is written or served, so
         // a group that does not exist stops the node before a cookie is written.
         // -noipcattachgroup counts as unset.
-        const std::string attach_group =
-            gArgs.IsArgNegated("-ipcattachgroup") ? std::string{} : gArgs.GetArg("-ipcattachgroup", "");
+        const std::string attach_group = ipc::ConfiguredOption("-ipcattachgroup");
         if (multiprocess && !ipc::ConfigureAttachGroup(attach_group)) {
-            InitError(strprintf("The IPC attach group '%s' does not exist.", attach_group));
+            InitError(strprintf("The IPC attach group '%s' does not exist.", SanitizeString(attach_group)));
             // The same fatal path as a failed listener below.
             fRet = false;
             SetShutdownRequested();
