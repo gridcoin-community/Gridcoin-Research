@@ -142,6 +142,10 @@ bool AppInit(int argc, char* argv[])
         if (!gArgs.ParseParameters(argc, argv, error)) {
             return InitError(strprintf("Error parsing command line arguments: %s\n", error));
         }
+
+        // The tracer override is read here, from the command line only, before the config file and the settings
+        // file are read, so a line in either cannot enable it.
+        const bool allow_tracer = gArgs.GetBoolArg("-debugallowtracer", false);
         if (HelpRequested(gArgs))
         {
             // First part of help message is specific to bitcoind / RPC client
@@ -309,7 +313,10 @@ bool AppInit(int argc, char* argv[])
         // command line client form has returned and the daemonizing fork, so it sees the process that will run.
         {
             const std::optional<int> tracer_pid = ReadOwnTracerPid();
-            switch (DecideTracer(tracer_pid, gArgs.GetBoolArg("-debugallowtracer", false))) {
+            if (!tracer_pid) {
+                LogPrintf("WARNING: could not read the tracer state of this process; the tracer check did not run");
+            }
+            switch (DecideTracer(tracer_pid, allow_tracer)) {
             case TracerVerdict::Refuse:
                 return InitError(strprintf("A debugger or tracer (pid %d) is attached to this process; refusing to "
                                            "start. See doc/developer-notes.md if you are debugging.\n",
