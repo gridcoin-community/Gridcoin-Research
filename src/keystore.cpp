@@ -7,33 +7,59 @@
 #include "logging.h"
 #include "script.h"
 
+#include <atomic>
+
 namespace {
 
-//! The store a grant is live for on this thread, or nullptr when none is. A
-//! plain pointer, because a thread_local must be trivially destructible (see
-//! test/lint/lint-thread-local.sh).
-thread_local const CCryptoKeyStore* g_elevated_store{nullptr};
+// The innermost grant live on this thread, and the store it names; both
+// nullptr when none is. Plain pointers, because a thread_local must be
+// trivially destructible (see test/lint/lint-thread-local.sh). The store is
+// kept beside the grant so that answering IsActiveFor() never dereferences a
+// grant.
+thread_local const ElevationGrant* g_top_grant{nullptr};
+thread_local const CCryptoKeyStore* g_top_store{nullptr};
+
+// Set by the first grant that ends out of order, so that the report is made
+// once per process.
+std::atomic<bool> g_out_of_order_reported{false};
 
 } // namespace
 
 ElevationGrant::ElevationGrant(const CCryptoKeyStore& store)
-    : m_previous(g_elevated_store)
+    : m_previous(g_top_grant)
+    , m_previous_store(g_top_store)
 {
-    g_elevated_store = &store;
+    g_top_grant = this;
+    g_top_store = &store;
 }
 
 ElevationGrant::~ElevationGrant()
 {
-    // Hands back whatever this grant displaced, so an inner grant ending leaves
-    // the outer one in force rather than clearing it.
-    g_elevated_store = m_previous;
+    // The innermost grant hands back whatever it displaced, so an inner grant
+    // ending leaves the outer one in force rather than clearing it.
+    if (g_top_grant == this) {
+        g_top_grant = m_previous;
+        g_top_store = m_previous_store;
+        return;
+    }
+
+    // Any other grant is ending out of order. What it displaced may itself have
+    // ended, and restoring it would leave the thread elevated with no grant
+    // alive, so every grant on this thread is withdrawn instead.
+    g_top_grant = nullptr;
+    g_top_store = nullptr;
+
+    if (!g_out_of_order_reported.exchange(true)) {
+        LogPrintf("ERROR: %s: an elevation grant ended out of order; every grant on the thread was withdrawn",
+                  __func__);
+    }
 }
 
 bool ElevationGrant::IsActiveFor(const CCryptoKeyStore* store)
 {
     // Without the null test, a thread holding no grant would report one for a
     // null store.
-    return store != nullptr && g_elevated_store == store;
+    return store != nullptr && g_top_store == store;
 }
 
 bool CKeyStore::GetPubKey(const CKeyID &address, CPubKey &vchPubKeyOut) const

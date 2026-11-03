@@ -141,10 +141,12 @@ class CapabilityScope;
 //! store's scope stays StakingOnly, and every other thread is still refused.
 //!
 //! RAII. It is held for one operation and ends with the scope that holds it.
-//! Grants on one thread nest: each saves the grant it displaces and restores it
-//! when it ends, so they must end in the reverse order they began, which scoped
-//! objects do. Neither copyable nor movable, so a grant cannot leave the scope,
-//! or the thread, that took it.
+//! Grants on one thread nest: the innermost one, when it ends, restores the
+//! grant it displaced, and scoped objects end in that order. A grant that ends
+//! while it is not the innermost, as one held on the heap can, withdraws every
+//! grant on its thread instead: what it displaced may already have ended, and
+//! restoring that would leave the thread elevated with no grant alive. Neither
+//! copyable nor movable; a holder must end it on the thread that took it.
 //!
 //! Only CapabilityScope makes one, after it has checked the capability it was
 //! given.
@@ -155,6 +157,8 @@ public:
 
     ElevationGrant(const ElevationGrant&) = delete;
     ElevationGrant& operator=(const ElevationGrant&) = delete;
+    ElevationGrant(ElevationGrant&&) = delete;
+    ElevationGrant& operator=(ElevationGrant&&) = delete;
 
     //! True iff a grant for \p store is live on the calling thread. False for
     //! nullptr.
@@ -166,8 +170,10 @@ private:
     friend class CapabilityScope;
     friend struct ElevationGrantTestPeer;
 
-    //! The grant this one displaced on this thread, restored when it ends.
-    const CCryptoKeyStore* m_previous{nullptr};
+    //! The grant this one displaced on this thread, and the store that grant
+    //! names, restored when this one ends as the innermost.
+    const ElevationGrant* m_previous{nullptr};
+    const CCryptoKeyStore* m_previous_store{nullptr};
 };
 
 //! \brief Proof that the caller is one of the staking paths.

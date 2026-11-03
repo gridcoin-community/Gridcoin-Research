@@ -19,7 +19,19 @@ this lint does:
   * The test peers, which make the same tokens for unit tests, are used only
     under src/test/ (and named in the friend declarations).
   * The friend lists of StakingKeyAccess and ElevationGrant are exactly the
-    expected ones, so a new maker cannot be added without updating this lint.
+    expected ones, so a new maker cannot be added without updating this lint,
+    and none of those friends is defined inside the class, where it would be a
+    maker no other check sees.
+
+ElevationGrant is restricted the same way. Its maker is CapabilityScope, so:
+
+  * class CapabilityScope is defined only in src/wallet/capability.h. Until
+    that file exists any definition fails, because one anywhere else would
+    become the friend and could make grants.
+  * The type ElevationGrant is named only in src/keystore.h, src/keystore.cpp,
+    src/wallet/capability.h, src/wallet/capability.cpp and under src/test/.
+    Elsewhere only its static members (ElevationGrant::IsActiveFor) may be
+    used, so a grant cannot be constructed or held anywhere else.
 
 Comments and string literals are ignored, so prose may name the factories.
 
@@ -42,6 +54,18 @@ FACTORIES = {
     "RenewalStakingKeyAccess": "src/gridcoin/researcher.cpp",
     "ScraperStakingKeyAccess": "src/gridcoin/scraper/scraper.cpp",
 }
+
+# The one file that may define class CapabilityScope, the maker of grants.
+CAPABILITY_HEADER = "src/wallet/capability.h"
+
+# The files that may name the type ElevationGrant other than to reach its
+# static members. src/test/ is allowed as well.
+GRANT_FILES = (
+    "src/keystore.h",
+    "src/keystore.cpp",
+    CAPABILITY_HEADER,
+    "src/wallet/capability.cpp",
+)
 
 # Test-only makers, confined to the unit tests.
 TEST_PEERS = ("StakingKeyAccessTestPeer", "ElevationGrantTestPeer")
@@ -73,7 +97,16 @@ NONCODE_RE = re.compile(
 
 FACTORY_RE = re.compile(r"\b({})\b".format("|".join(sorted(FACTORIES))))
 PEER_RE = re.compile(r"\b({})\b".format("|".join(TEST_PEERS)))
-FRIEND_RE = re.compile(r"\bfriend\s+([^;{]*?)\s*;")
+# A friend declaration ends at ';', a friend defined in the class at '{'.
+FRIEND_RE = re.compile(r"\bfriend\s+([^;{]*?)\s*([;{])")
+
+# A definition of class CapabilityScope: the name followed by a base clause or
+# the class body, not by ';' as in a declaration or a friend declaration.
+CAPABILITY_SCOPE_DEF_RE = re.compile(
+    r"\b(?:class|struct)\s+(?:\[\[.*?\]\]\s*)*CapabilityScope\b\s*(?:final\b\s*)?[:{]")
+
+# The type ElevationGrant named for anything but its static members.
+GRANT_RE = re.compile(r"\bElevationGrant\b(?!\s*::)")
 
 
 def strip_noncode(text):
@@ -146,7 +179,13 @@ def check_friend_lists(code, errors):
             errors.append("{}: class {} not found".format(KEYSTORE_HEADER, name))
             continue
         _, body = found
-        actual = {normalize(m.group(1)) for m in FRIEND_RE.finditer(body)}
+        actual = set()
+        for m in FRIEND_RE.finditer(body):
+            decl = normalize(m.group(1))
+            actual.add(decl)
+            if m.group(2) == "{":
+                errors.append("{}: class {} defines friend '{}' inside the class; its friends "
+                              "must be declarations only".format(KEYSTORE_HEADER, name, decl))
         for extra in sorted(actual - expected):
             errors.append("{}: class {} has an unexpected friend '{}'; a new maker must be "
                           "added to this lint deliberately".format(KEYSTORE_HEADER, name, extra))
@@ -166,8 +205,20 @@ def check_file(path, errors):
         errors.append("{}:{}: {} is used outside {}".format(
             path, line_of(code, m.start()), name, FACTORIES[name]))
 
+    if path != CAPABILITY_HEADER:
+        for m in CAPABILITY_SCOPE_DEF_RE.finditer(code):
+            errors.append("{}:{}: class CapabilityScope is defined outside {}".format(
+                path, line_of(code, m.start()), CAPABILITY_HEADER))
+
     if path.startswith(TEST_DIR):
         return
+
+    if path not in GRANT_FILES:
+        for m in GRANT_RE.finditer(code):
+            errors.append("{}:{}: ElevationGrant is used outside {} and {}; elsewhere only its "
+                          "static members may be".format(path, line_of(code, m.start()),
+                                                         ", ".join(GRANT_FILES), TEST_DIR))
+
     for m in PEER_RE.finditer(code):
         if inside(m.start(), allowed):
             continue

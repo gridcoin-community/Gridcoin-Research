@@ -14,6 +14,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
+#include <memory>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -30,6 +31,11 @@ struct StakingKeyAccessTestPeer
 struct ElevationGrantTestPeer
 {
     static ElevationGrant Make(const CCryptoKeyStore& store) { return ElevationGrant(store); }
+
+    static std::unique_ptr<ElevationGrant> MakeHeld(const CCryptoKeyStore& store)
+    {
+        return std::unique_ptr<ElevationGrant>(new ElevationGrant(store));
+    }
 };
 
 namespace {
@@ -43,6 +49,8 @@ static_assert(std::is_copy_constructible_v<StakingKeyAccess>);
 static_assert(!std::is_constructible_v<ElevationGrant, const CCryptoKeyStore&>);
 static_assert(!std::is_copy_constructible_v<ElevationGrant>);
 static_assert(!std::is_move_constructible_v<ElevationGrant>);
+static_assert(!std::is_copy_assignable_v<ElevationGrant>);
+static_assert(!std::is_move_assignable_v<ElevationGrant>);
 
 const SecureString PASSPHRASE("staking-key-access-test");
 
@@ -274,6 +282,40 @@ BOOST_AUTO_TEST_CASE(grants_nest_and_name_one_store)
     BOOST_CHECK(!ElevationGrant::IsActiveFor(&fx.wallet));
 }
 
+BOOST_AUTO_TEST_CASE(grants_ended_out_of_order_leave_none_active)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    CWallet other;
+
+    // Held on the heap, so that they can end in either order.
+    std::unique_ptr<ElevationGrant> outer = ElevationGrantTestPeer::MakeHeld(fx.wallet);
+    std::unique_ptr<ElevationGrant> inner = ElevationGrantTestPeer::MakeHeld(other);
+    BOOST_REQUIRE(ElevationGrant::IsActiveFor(&other));
+
+    // The outer grant ends first. Every grant on the thread is withdrawn.
+    outer.reset();
+    BOOST_CHECK(!ElevationGrant::IsActiveFor(&fx.wallet));
+    BOOST_CHECK(!ElevationGrant::IsActiveFor(&other));
+
+    // The inner one ending must not bring back the outer one, which no longer
+    // exists.
+    inner.reset();
+    BOOST_CHECK(!ElevationGrant::IsActiveFor(&fx.wallet));
+    BOOST_CHECK(!ElevationGrant::IsActiveFor(&other));
+
+    CKey key;
+    BOOST_CHECK(!fx.wallet.GetKey(fx.id, key));
+
+    // The thread is still usable: a grant taken afterwards works and ends cleanly.
+    {
+        const ElevationGrant grant = ElevationGrantTestPeer::Make(fx.wallet);
+        BOOST_CHECK(ElevationGrant::IsActiveFor(&fx.wallet));
+    }
+
+    BOOST_CHECK(!ElevationGrant::IsActiveFor(&fx.wallet));
+}
+
 BOOST_AUTO_TEST_CASE(secret_decrypt_refused_under_staking_only)
 {
     EncryptedWallet fx;
@@ -313,6 +355,23 @@ BOOST_AUTO_TEST_CASE(add_key_refused_under_staking_only)
 
     CKey fresh;
     fresh.MakeNewKey(true);
+
+    {
+        LOCK(fx.wallet.cs_wallet);
+        BOOST_CHECK(!fx.wallet.AddKeyPubKey(fresh, fresh.GetPubKey()));
+        BOOST_CHECK(!fx.wallet.HaveKey(fresh.GetPubKey().GetID()));
+    }
+
+    // A grant on this thread lifts the refusal, and only while it lasts.
+    CKey granted;
+    granted.MakeNewKey(true);
+
+    {
+        const ElevationGrant grant = ElevationGrantTestPeer::Make(fx.wallet);
+        LOCK(fx.wallet.cs_wallet);
+        BOOST_CHECK(fx.wallet.AddKeyPubKey(granted, granted.GetPubKey()));
+        BOOST_CHECK(fx.wallet.HaveKey(granted.GetPubKey().GetID()));
+    }
 
     {
         LOCK(fx.wallet.cs_wallet);
