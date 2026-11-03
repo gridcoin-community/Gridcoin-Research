@@ -686,8 +686,8 @@ public:
     //! the sender is debited exactly those. Empty, the default, keeps the fee
     //! and burn on top of the outputs. The same asymmetry applies: only the
     //! overloads on the GUI send path carry it, since that is its one caller.
-    //! With \p renewal_access it is ignored: the renewal's outputs and burn are
-    //! fixed, and GRC::IsRenewalShape() checks them.
+    //! A non-empty set with \p renewal_access is refused: the renewal's outputs
+    //! and burn are fixed, and GRC::IsRenewalShape() checks them.
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
                            const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,

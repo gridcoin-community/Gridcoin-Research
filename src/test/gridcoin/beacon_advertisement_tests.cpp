@@ -1380,12 +1380,12 @@ BOOST_FIXTURE_TEST_CASE(renewal_builds_under_staking_only_at_the_minimum_fee, gr
     BOOST_CHECK(message.vin.empty());
 }
 
-//! The renewal never takes its fee out of an output. With the renewal's access
-//! CreateTransaction ignores a "subtract fee from amount" set: the burn stays
-//! whole, the minimum fee is paid on top of it, and the transaction is the one
-//! built without the set. Index 0 is the burn; index 1 is past the outputs,
-//! which a build without the access refuses.
-BOOST_FIXTURE_TEST_CASE(renewal_ignores_subtract_fee_outputs, grc_test::WalletTxScope)
+//! The renewal never takes its fee out of an output. CreateTransaction refuses a
+//! "subtract fee from amount" set given with the renewal's access, before it
+//! builds or signs anything; no caller passes both. Index 0 is the burn; index 1
+//! is past the outputs. With the set empty, the renewal builds as usual: the
+//! burn whole and the minimum fee on top of it.
+BOOST_FIXTURE_TEST_CASE(renewal_refuses_subtract_fee_outputs, grc_test::WalletTxScope)
 {
     const SyncTimeReset reset_sync;
     const PoolCleared pool;
@@ -1398,6 +1398,7 @@ BOOST_FIXTURE_TEST_CASE(renewal_ignores_subtract_fee_outputs, grc_test::WalletTx
     ForcedResearcher forced(cpid_hex);
 
     const StakingKeyAccess renewal_access = StakingKeyAccessTestPeer::Make();
+    const StakingOnlyResearcherWallet::Footprint before = staking.TakeFootprint();
 
     GRC::BeaconPayload payload(cpid, GRC::Beacon(staking.m_beacon_key.GetPubKey()));
     BOOST_REQUIRE(payload.Sign(staking.m_beacon_key));
@@ -1417,34 +1418,33 @@ BOOST_FIXTURE_TEST_CASE(renewal_ignores_subtract_fee_outputs, grc_test::WalletTx
             subtract_fee_outputs);
     };
 
-    const auto burned = [&](const CTransaction& tx) {
-        CAmount total = 0;
-
-        for (const CTxOut& txout : tx.vout) {
-            if (txout.scriptPubKey == burn_script) total += txout.nValue;
-        }
-
-        return total;
-    };
-
-    CWalletTx plain;
-    CAmount plain_fee = 0;
-    BOOST_REQUIRE(build({}, plain, plain_fee));
-
     for (const std::set<size_t>& subtract_fee_outputs : {std::set<size_t>{0}, std::set<size_t>{1}}) {
-        CWalletTx renewal;
+        CWalletTx refused;
         CAmount fee = 0;
-        BOOST_REQUIRE(build(subtract_fee_outputs, renewal, fee));
-
-        const unsigned int size = ::GetSerializeSize(static_cast<const CTransaction&>(renewal), SER_NETWORK, PROTOCOL_VERSION);
-        BOOST_CHECK_EQUAL(fee, GetMinFee(renewal, 1000, GMF_SEND, size));
-        BOOST_CHECK_EQUAL(fee, plain_fee);
-        BOOST_CHECK_EQUAL(burned(renewal), COIN / 2);
-        BOOST_CHECK_EQUAL(renewal.GetValueOut(), plain.GetValueOut());
-
-        LOCK2(cs_main, staking.m_wallet.cs_wallet);
-        BOOST_CHECK(GRC::IsRenewalShape(CMutableTransaction(renewal), cpid, COIN / 2, fee, staking.m_wallet));
+        BOOST_CHECK(!build(subtract_fee_outputs, refused, fee));
+        BOOST_CHECK(refused.vin.empty());
+        BOOST_CHECK(refused.vout.empty());
     }
+
+    BOOST_CHECK(staking.TakeFootprint() == before);
+
+    CWalletTx renewal;
+    CAmount fee = 0;
+    BOOST_REQUIRE(build({}, renewal, fee));
+
+    const unsigned int size = ::GetSerializeSize(static_cast<const CTransaction&>(renewal), SER_NETWORK, PROTOCOL_VERSION);
+    BOOST_CHECK_EQUAL(fee, GetMinFee(renewal, 1000, GMF_SEND, size));
+
+    CAmount burned = 0;
+
+    for (const CTxOut& txout : renewal.vout) {
+        if (txout.scriptPubKey == burn_script) burned += txout.nValue;
+    }
+
+    BOOST_CHECK_EQUAL(burned, COIN / 2);
+
+    LOCK2(cs_main, staking.m_wallet.cs_wallet);
+    BOOST_CHECK(GRC::IsRenewalShape(CMutableTransaction(renewal), cpid, COIN / 2, fee, staking.m_wallet));
 }
 
 //! The renewal's access reaches the beacon key on a wallet unlocked for staking

@@ -4194,10 +4194,14 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
     // amounts in vecSend and the sender is debited exactly those. That target
     // does not move with the fee, which is what lets one selection serve every
     // pass of the loop below.
-    //
+    const bool subtract_fee = !subtract_fee_outputs.empty();
+
     // Never for the automated beacon renewal: its outputs and its burn are fixed
-    // (GRC::IsRenewalShape() below), so with renewal_access the set is ignored.
-    const bool subtract_fee = !renewal_access && !subtract_fee_outputs.empty();
+    // (GRC::IsRenewalShape() below). No caller passes both, so a call that does
+    // is refused.
+    if (subtract_fee && renewal_access) {
+        return error("%s: outputs to subtract the fee from given with the renewal's access", __func__);
+    }
 
     if (subtract_fee && *subtract_fee_outputs.rbegin() >= vecSend.size()) {
         return error("%s: output %u to subtract the fee from is out of range (%u outputs)",
