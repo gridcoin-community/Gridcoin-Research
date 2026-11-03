@@ -320,8 +320,8 @@ void SendCoinsDialog::on_sendButton_clicked()
         break;
     case WalletModel::FeeExceedsSubtractedAmount:
         QMessageBox::warning(this, tr("Send Coins"),
-            tr("The transaction fee (%1) exceeds the amount being sent to a recipient "
-               "with 'Subtract fee from amount' enabled. Please enter a larger amount.")
+            tr("The fee (%1), including any message burn, exceeds the amount being sent to a "
+               "recipient with 'Subtract fee from amount' enabled. Please enter a larger amount.")
             .arg(BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, sendstatus.fee)),
             QMessageBox::Ok, QMessageBox::Ok);
         break;

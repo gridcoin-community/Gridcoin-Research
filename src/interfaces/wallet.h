@@ -213,7 +213,9 @@ struct SendCoinsResult
 {
     SendCoinsStatus status{SendCoinsStatus::TransactionCreationFailed};
     //! The fee at issue when status is AmountWithFeeExceedsBalance,
-    //! FeeExceedsSubtractedAmount, or FeeConfirmationRequired.
+    //! FeeExceedsSubtractedAmount, or FeeConfirmationRequired. For
+    //! FeeExceedsSubtractedAmount it includes any message burn, since that
+    //! comes out of the same recipients.
     int64_t fee{0};
     //! Committed transaction hash (hex) when status is OK.
     std::string txid_hex{};

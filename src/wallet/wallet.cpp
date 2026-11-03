@@ -4114,10 +4114,52 @@ bool CWallet::FundTransaction(CTransaction& tx, int64_t& nFeeRet, int& nChangePo
     return true;
 }
 
+std::optional<std::vector<int64_t>> SubtractFromOutputs(const std::vector<std::pair<CScript, int64_t>>& vecSend,
+                                                        const std::set<size_t>& subtract_fee_outputs,
+                                                        int64_t deduction)
+{
+    if (subtract_fee_outputs.empty() || *subtract_fee_outputs.rbegin() >= vecSend.size()) {
+        return std::nullopt;
+    }
+
+    std::vector<int64_t> amounts;
+    amounts.reserve(vecSend.size());
+
+    for (const auto& s : vecSend) {
+        amounts.push_back(s.second);
+    }
+
+    const int64_t outputs = static_cast<int64_t>(subtract_fee_outputs.size());
+
+    for (const size_t index : subtract_fee_outputs) {
+        amounts[index] -= deduction / outputs;
+    }
+
+    amounts[*subtract_fee_outputs.begin()] -= deduction % outputs;
+
+    for (const size_t index : subtract_fee_outputs) {
+        if (amounts[index] <= 0) {
+            return std::nullopt;
+        }
+    }
+
+    return amounts;
+}
+
+int64_t MessageBurnAmount(const CTransaction& tx)
+{
+    if (!tx.vContracts.empty() && tx.vContracts[0].m_type == GRC::ContractType::MESSAGE) {
+        return tx.vContracts[0].RequiredBurnAmount();
+    }
+
+    return 0;
+}
+
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins_in,
                                 CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
                                 const CCoinControl* coinControl, bool change_back_to_input_address,
-                                int64_t nEnforcedMinFee, bool permitted_while_staking_only)
+                                int64_t nEnforcedMinFee, bool permitted_while_staking_only,
+                                const std::set<size_t>& subtract_fee_outputs)
 {
     int64_t nValueOut = 0;
     int64_t message_fee = 0;
@@ -4136,11 +4178,19 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
         return error("%s: invalid output value: %" PRId64, __func__, nValueOut);
 
     // Add the burn fee for a transaction with a custom user message:
-    if (!wtxNew.vContracts.empty()
-        && wtxNew.vContracts[0].m_type == GRC::ContractType::MESSAGE)
-    {
-        message_fee = wtxNew.vContracts[0].RequiredBurnAmount();
-        nValueOut += message_fee;
+    message_fee = MessageBurnAmount(wtxNew);
+    nValueOut += message_fee;
+
+    // "Subtract fee from amount": the listed outputs pay the fee and the message
+    // burn between them (SubtractFromOutputs), so the inputs need cover only the
+    // amounts in vecSend and the sender is debited exactly those. That target
+    // does not move with the fee, which is what lets one selection serve every
+    // pass of the loop below.
+    const bool subtract_fee = !subtract_fee_outputs.empty();
+
+    if (subtract_fee && *subtract_fee_outputs.rbegin() >= vecSend.size()) {
+        return error("%s: output %u to subtract the fee from is out of range (%u outputs)",
+                     __func__, *subtract_fee_outputs.rbegin(), vecSend.size());
     }
 
     wtxNew.BindWallet(this);
@@ -4190,6 +4240,10 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
             // per-piece fee). The while loop below only ever raises nFeeRet, so the enforced
             // minimum is preserved.
             nFeeRet = max(nTransactionFee, nEnforcedMinFee);
+
+            // Whether setCoins_out holds the selection a subtract-fee transaction keeps.
+            bool subtract_fee_coins_selected = false;
+
             while (true)
             {
                 CMutableTransaction mtx;
@@ -4197,14 +4251,39 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 mtx.nVersion = wtxNew.nVersion;
                 mtx.vContracts = wtxNew.vContracts;
 
-                setCoins_out.clear();
                 wtxNew.fFromMe = true;
 
-                int64_t nTotalValue = nValueOut + nFeeRet;
+                // With subtract_fee the outputs pay the fee and burn, so the
+                // inputs need cover only the amounts in vecSend.
+                int64_t nTotalValue = subtract_fee ? nValueOut - message_fee : nValueOut + nFeeRet;
+
+                // What this pass pays out, the burn included. Less than nValueOut
+                // by the fee and burn taken from the outputs when subtract_fee.
+                int64_t nValuePaid = nValueOut;
 
                 // vouts to the payees
-                for (auto const& s : vecSend)
-                    mtx.vout.emplace_back(s.second, s.first);
+                if (subtract_fee)
+                {
+                    const std::optional<std::vector<int64_t>> amounts =
+                        SubtractFromOutputs(vecSend, subtract_fee_outputs, nFeeRet + message_fee);
+
+                    if (!amounts) {
+                        return error("%s: the fee and burn, %s, would use up an amount they are to come out of",
+                                     __func__, FormatMoney(nFeeRet + message_fee));
+                    }
+
+                    nValuePaid = message_fee;
+
+                    for (size_t i = 0; i < vecSend.size(); ++i) {
+                        mtx.vout.emplace_back((*amounts)[i], vecSend[i].first);
+                        nValuePaid += (*amounts)[i];
+                    }
+                }
+                else
+                {
+                    for (auto const& s : vecSend)
+                        mtx.vout.emplace_back(s.second, s.first);
+                }
 
                 // Add the burn fee for a transaction with a custom user message:
                 if (message_fee > 0)
@@ -4215,8 +4294,20 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 int64_t nValueIn = 0;
 
                 // If provided coin set is empty, choose coins to use.
-                if (!provided_coin_set)
+                if (!provided_coin_set && subtract_fee_coins_selected)
                 {
+                    // A subtract-fee transaction keeps its first selection: the
+                    // target has not moved, and choosing again could only change
+                    // the input set, and with it the size the fee was raised for.
+                    for (const auto& coin : setCoins_out)
+                    {
+                        nValueIn += coin.first->vout[coin.second].nValue;
+                    }
+                }
+                else if (!provided_coin_set)
+                {
+                    setCoins_out.clear();
+
                     // If the transaction contains a contract, we want to select the
                     // smallest UTXOs available:
                     //
@@ -4233,6 +4324,8 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                         return error("%s: Failed to select coins", __func__);
                     }
 
+                    subtract_fee_coins_selected = subtract_fee;
+
                     if (LogInstance().WillLogCategory(BCLog::LogFlags::ESTIMATEFEE))
                     {
                         CAmount setcoins_total = 0;
@@ -4243,11 +4336,11 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                         }
 
                         LogPrintf("INFO %s: Just after SelectCoins: "
-                                 "nTotalValue = %s, nValueIn = %s, nValueOut = %s, setCoins total = %s.",
+                                 "nTotalValue = %s, nValueIn = %s, nValuePaid = %s, setCoins total = %s.",
                                   __func__,
                                   FormatMoney(nTotalValue),
                                   FormatMoney(nValueIn),
-                                  FormatMoney(nValueOut),
+                                  FormatMoney(nValuePaid),
                                   FormatMoney(setcoins_total));
                     }
 
@@ -4262,7 +4355,9 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     }
                 }
 
-                int64_t nChange = nValueIn - nValueOut - nFeeRet;
+                // With subtract_fee this is the inputs less the amounts in vecSend,
+                // the same on every pass: a rise in the fee comes out of the outputs.
+                int64_t nChange = nValueIn - nValuePaid - nFeeRet;
 
                 // Note: In the case where CreateTransaction is called with a provided input set of coins,
                 // if the nValueIn of those coins is sufficient to cover the minimum nTransactionFee that starts
@@ -4281,18 +4376,23 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                                  FormatMoney(nFeeRet));
                 }
 
-                LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: Before CENT test: nValueIn = %s, nValueOut = %s, "
+                LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: Before CENT test: nValueIn = %s, nValuePaid = %s, "
                         "nChange = %s, nFeeRet = %s.",
                          __func__,
                          FormatMoney(nValueIn),
-                         FormatMoney(nValueOut),
+                         FormatMoney(nValuePaid),
                          FormatMoney(nChange),
                          FormatMoney(nFeeRet));
 
                 // if sub-cent change is required, the fee must be raised to at least GetBaseFee
                 // or until nChange becomes zero
                 // NOTE: this depends on the exact behaviour of GetMinFee
-                if (nFeeRet < GetBaseFee(CTransaction(mtx)) && nChange > 0 && nChange < CENT)
+                //
+                // Not with subtract_fee: there the change is the sender's untouched
+                // remainder, and moving part of it into the fee would debit the sender
+                // more than the amounts entered. The fee check below raises the fee
+                // out of the outputs instead.
+                if (!subtract_fee && nFeeRet < GetBaseFee(CTransaction(mtx)) && nChange > 0 && nChange < CENT)
                 {
                     int64_t nMoveToFee = min(nChange, GetBaseFee(CTransaction(mtx)) - nFeeRet);
                     nChange -= nMoveToFee;
@@ -4458,22 +4558,23 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
     int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl, bool change_back_to_input_address,
-    bool permitted_while_staking_only)
+    bool permitted_while_staking_only, const std::set<size_t>& subtract_fee_outputs)
 {
     // Initialize setCoins empty to let CreateTransaction choose via SelectCoins...
     set<pair<const CWalletTx*,unsigned int>> setCoins;
 
     return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl,
-                             change_back_to_input_address, /*nEnforcedMinFee=*/0, permitted_while_staking_only);
+                             change_back_to_input_address, /*nEnforcedMinFee=*/0, permitted_while_staking_only,
+                             subtract_fee_outputs);
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
     int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address,
-    bool permitted_while_staking_only)
+    bool permitted_while_staking_only, const std::set<size_t>& subtract_fee_outputs)
 {
     int nChangePosRet = -1;
     return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl,
-                             change_back_to_input_address, permitted_while_staking_only);
+                             change_back_to_input_address, permitted_while_staking_only, subtract_fee_outputs);
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins,

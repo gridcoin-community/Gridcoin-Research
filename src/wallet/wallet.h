@@ -61,6 +61,23 @@ struct StakeCandidate
 
 GRC::MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+//!
+//! \brief The amounts \p vecSend pays once \p deduction is taken out of the
+//! outputs listed in \p subtract_fee_outputs ("subtract fee from amount").
+//!
+//! Split evenly, the first listed output (the lowest index) also paying the
+//! remainder. std::nullopt when the set is empty, lists an output vecSend does
+//! not have, or would leave a listed output with nothing. CreateTransaction
+//! builds a subtract-fee transaction's outputs with it and the GUI send path
+//! tells that failure from the others with it, so the two cannot disagree.
+//!
+std::optional<std::vector<int64_t>> SubtractFromOutputs(const std::vector<std::pair<CScript, int64_t>>& vecSend,
+                                                        const std::set<size_t>& subtract_fee_outputs,
+                                                        int64_t deduction);
+
+//! The burn CreateTransaction adds for a transaction carrying a user message, or 0.
+int64_t MessageBurnAmount(const CTransaction& tx);
+
 //! Return the height of the block confirming this state, or -1 if its block
 //! is not in mapBlockIndex. The wallet.dat format does not persist confirming-
 //! block height (CMerkleTx only stores hashBlock + nIndex), so consumers that
@@ -624,10 +641,11 @@ public:
                          std::string& strFailReason, const CCoinControl* coinControl);
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
                            int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl = nullptr,
-                           bool change_back_to_input_address = false, bool permitted_while_staking_only = false);
+                           bool change_back_to_input_address = false, bool permitted_while_staking_only = false,
+                           const std::set<size_t>& subtract_fee_outputs = {});
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
                            int64_t& nFeeRet, const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,
-                           bool permitted_while_staking_only = false);
+                           bool permitted_while_staking_only = false, const std::set<size_t>& subtract_fee_outputs = {});
     //! nEnforcedMinFee, when nonzero, sets a fee floor above the normal size-based fee
     //! (e.g. splitunspent's per-piece fee). The fee can still rise above it if required.
     //!
@@ -649,10 +667,19 @@ public:
     //! has no unlock guard of its own and addkey gates only on IsLocked(), so
     //! widening this to all contracts would re-open the very paths this check
     //! exists to close.
+    //!
+    //! \p subtract_fee_outputs lists the indices into \p vecSend of the outputs
+    //! that pay the fee and any message burn ("subtract fee from amount"). The
+    //! two are split evenly across them and the first listed index also pays
+    //! the remainder, so the inputs need cover only the amounts in vecSend and
+    //! the sender is debited exactly those. Empty, the default, keeps the fee
+    //! and burn on top of the outputs. The same asymmetry applies: only the
+    //! overloads on the GUI send path carry it, since that is its one caller.
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
                            const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false,
-                           int64_t nEnforcedMinFee = 0, bool permitted_while_staking_only = false);
+                           int64_t nEnforcedMinFee = 0, bool permitted_while_staking_only = false,
+                           const std::set<size_t>& subtract_fee_outputs = {});
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
                            CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl = nullptr,
                            bool change_back_to_input_address = false, int64_t nEnforcedMinFee = 0);
