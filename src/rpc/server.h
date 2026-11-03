@@ -10,6 +10,7 @@
 #include <support/allocators/secure.h>
 
 #include <boost/asio/ip/address.hpp>
+#include <boost/asio/ip/tcp.hpp>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -49,6 +50,9 @@ void InitRPCAllowList();
 bool ClientAllowed(const boost::asio::ip::address& address);
 
 void StartRPCThreads();
+
+//! Test hook for the file-static acceptor setup, so a test binds exactly as the RPC server does.
+void OpenRpcAcceptorForTest(boost::asio::ip::tcp::acceptor& acceptor, const boost::asio::ip::tcp& protocol);
 void StopRPCThreads();
 int CommandLineRPC(int argc, char *argv[]);
 

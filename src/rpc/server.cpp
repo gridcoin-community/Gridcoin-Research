@@ -12,6 +12,8 @@
 #include <key_io.h>
 #include "node/ui_interface.h"
 #include "server.h"
+#include <rpc/bind_policy.h>
+#include <util/sock.h>
 #include "client.h"
 #include "protocol.h"
 #include "random.h"
@@ -1011,6 +1013,53 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
     }
 }
 
+//! Open an RPC listener socket. The socket is created non-inheritable. On Windows it takes
+//! SO_EXCLUSIVEADDRUSE and no reuse_address. Elsewhere reuse_address is set, which permits a rebind
+//! over TIME_WAIT. Throws boost::system::system_error.
+static void OpenRpcAcceptor(boost::asio::ip::tcp::acceptor& acceptor, const boost::asio::ip::tcp& protocol)
+{
+    const SOCKET fd = CreateCloexecSocket(protocol.family(), SOCK_STREAM, IPPROTO_TCP);
+    if (fd == INVALID_SOCKET) {
+#ifdef WIN32
+        const int err = ::WSAGetLastError();
+#else
+        const int err = errno;
+#endif
+        throw boost::system::system_error(boost::system::error_code(err, boost::system::system_category()),
+                                          "RPC socket creation");
+    }
+
+    boost::system::error_code ec;
+    acceptor.assign(protocol, fd, ec);
+    if (ec) {
+#ifdef WIN32
+        ::closesocket(fd);
+#else
+        ::close(fd);
+#endif
+        throw boost::system::system_error(ec, "RPC socket assign");
+    }
+
+#ifdef WIN32
+    const BOOL exclusive = TRUE;
+    if (::setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&exclusive),
+                     sizeof(exclusive)) != 0) {
+        const int err = ::WSAGetLastError();
+        boost::system::error_code close_ec;
+        acceptor.close(close_ec);
+        throw boost::system::system_error(boost::system::error_code(err, boost::system::system_category()),
+                                          "SO_EXCLUSIVEADDRUSE");
+    }
+#else
+    acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+#endif
+}
+
+void OpenRpcAcceptorForTest(boost::asio::ip::tcp::acceptor& acceptor, const boost::asio::ip::tcp& protocol)
+{
+    OpenRpcAcceptor(acceptor, protocol);
+}
+
 //! Bind one acceptor per -rpcbind entry.
 //!
 //! Each entry is an address, optionally with a port ("10.0.0.5", "[::1]:1234").
@@ -1018,8 +1067,29 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
 //! operator gets exactly the addresses they named. An entry that fails to bind
 //! is reported and skipped rather than aborting the rest, so one bad line in a
 //! config does not cost the node every other listener; the caller still treats
-//! "none bound at all" as fatal.
-static bool StartRPCListenersOn(const std::vector<std::string>& binds, std::string& strerr)
+//! "none bound at all" as fatal. Every bind is recorded in `attempts` for the caller's decision.
+static std::string RpcEndpointString(const boost::asio::ip::tcp::endpoint& endpoint)
+{
+    return endpoint.address().is_v6() ? strprintf("[%s]:%u", endpoint.address().to_string(), endpoint.port())
+                                      : strprintf("%s:%u", endpoint.address().to_string(), endpoint.port());
+}
+
+//! Log one failed bind by class and record it. A skip (the address family or address is not on this host)
+//! is only informational. A conflict is an error: another program holds the address.
+static void RecordRpcBindFailure(std::vector<RpcBindAttempt>& attempts, RpcBindAttempt attempt,
+                                 const boost::system::system_error& e)
+{
+    attempt.result = ClassifyRpcBindError(e.code());
+    if (attempt.result == RpcBindError::Skip) {
+        LogPrintf("INFO: RPC: not listening on %s: %s\n", attempt.address, e.what());
+    } else if (attempt.result == RpcBindError::Conflict) {
+        LogPrintf("ERROR: RPC: %s is already in use by another program (%s)\n", attempt.address, e.what());
+    }
+    attempts.push_back(std::move(attempt));
+}
+
+static bool StartRPCListenersOn(const std::vector<std::string>& binds, std::string& strerr,
+                                std::vector<RpcBindAttempt>& attempts)
 {
     using namespace boost::asio;
 
@@ -1045,12 +1115,16 @@ static bool StartRPCListenersOn(const std::vector<std::string>& binds, std::stri
             continue;
         }
 
+        ip::tcp::endpoint endpoint(addr, static_cast<unsigned short>(port));
+        RpcBindAttempt attempt;
+        attempt.address = RpcEndpointString(endpoint);
+        // Any loopback entry is the node's own RPC address, treated like the default path.
+        attempt.conflict_disables_rpc = addr.is_loopback();
+
         try {
-            ip::tcp::endpoint endpoint(addr, static_cast<unsigned short>(port));
             boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(*rpc_io_service));
 
-            acceptor->open(endpoint.protocol());
-            acceptor->set_option(ip::tcp::acceptor::reuse_address(true));
+            OpenRpcAcceptor(*acceptor, endpoint.protocol());
 
             // One address per acceptor, so never dual-stack: a v6 entry binds v6
             // only. Otherwise listing both "::" and "0.0.0.0" -- the natural way
@@ -1082,11 +1156,15 @@ static bool StartRPCListenersOn(const std::vector<std::string>& binds, std::stri
 
             LogPrintf("RPC: bound and listening on %s:%u (-rpcbind)\n",
                       endpoint.address().to_string(), endpoint.port());
+            attempts.push_back(std::move(attempt));
             any = true;
         } catch (boost::system::system_error& e) {
             strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on %s: %s"),
                                port, host, e.what());
-            LogPrintf("ERROR: StartRPCThreads: %s\n", strerr);
+            RecordRpcBindFailure(attempts, std::move(attempt), e);
+            if (attempts.back().result == RpcBindError::Other) {
+                LogPrintf("ERROR: StartRPCThreads: %s\n", strerr);
+            }
         }
     }
 
@@ -1220,18 +1298,24 @@ void StartRPCThreads()
 
     bool fListening = false;
     std::string strerr;
+    std::vector<RpcBindAttempt> attempts;
 
     // Explicit -rpcbind replaces the implicit loopback/wildcard choice entirely.
-    // Both paths fall through to the shared "did anything bind?" check and the
-    // worker-thread startup below -- returning early here would leave the
-    // acceptors armed with nothing running io_context::run().
+    // Both paths fall through to the shared decision and the worker-thread
+    // startup below -- returning early here would leave the acceptors armed
+    // with nothing running io_context::run().
     if (bind_specified) {
-        fListening = StartRPCListenersOn(gArgs.GetArgs("-rpcbind"), strerr);
+        fListening = StartRPCListenersOn(gArgs.GetArgs("-rpcbind"), strerr, attempts);
     } else {
+    // Every bind on the implicit path is the node's own RPC address, so a conflict on any of them
+    // disables RPC.
+    RpcBindAttempt v6_attempt;
+    v6_attempt.address = RpcEndpointString(endpoint);
+    v6_attempt.conflict_disables_rpc = true;
+
     try
     {
-        acceptor->open(endpoint.protocol());
-        acceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+        OpenRpcAcceptor(*acceptor, endpoint.protocol());
 
         // Try making the socket dual IPv6/IPv4 (if listening on the "any" address)
         acceptor->set_option(boost::asio::ip::v6_only(loopback), v6_only_error);
@@ -1243,6 +1327,7 @@ void StartRPCThreads()
         rpc_acceptors.push_back(acceptor);
         LogPrintf("RPC: bound and listening on [%s]:%u\n", endpoint.address().to_string(), endpoint.port());
 
+        attempts.push_back(v6_attempt);
         fListening = true;
     }
     catch(boost::system::system_error &e)
@@ -1250,10 +1335,18 @@ void StartRPCThreads()
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s"), endpoint.port(), e.what());
 
         // Not an error on its own: a host without IPv6 lands here on every start,
-        // and the IPv4 listener below is what serves it.
-        LogPrintf("INFO: StartRPCThreads: not listening on IPv6 [%s]:%u: %s",
-                  endpoint.address().to_string(), endpoint.port(), e.what());
+        // and the IPv4 listener below is what serves it. A conflict is reported
+        // as one by the recorder.
+        RecordRpcBindFailure(attempts, v6_attempt, e);
     }
+
+    // A conflict on the IPv6 address already disables RPC, so the IPv4 bind is not tried over it.
+    const bool v6_conflict = !attempts.empty() && attempts.back().result == RpcBindError::Conflict;
+
+    if (!v6_conflict)
+    {
+    RpcBindAttempt v4_attempt;
+    v4_attempt.conflict_disables_rpc = true;
 
     try
     {
@@ -1262,10 +1355,10 @@ void StartRPCThreads()
         {
             bindAddress = loopback ? asio::ip::address_v4::loopback() : asio::ip::address_v4::any();
             endpoint.address(bindAddress);
+            v4_attempt.address = RpcEndpointString(endpoint);
 
             acceptor.reset(new ip::tcp::acceptor(*rpc_io_service));
-            acceptor->open(endpoint.protocol());
-            acceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+            OpenRpcAcceptor(*acceptor, endpoint.protocol());
             acceptor->bind(endpoint);
             acceptor->listen(socket_base::max_listen_connections);
 
@@ -1273,12 +1366,16 @@ void StartRPCThreads()
             rpc_acceptors.push_back(acceptor);
             LogPrintf("RPC: bound and listening on %s:%u\n", endpoint.address().to_string(), endpoint.port());
 
+            attempts.push_back(v4_attempt);
             fListening = true;
         }
     }
     catch(boost::system::system_error &e)
     {
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv4: %s"), endpoint.port(), e.what());
+
+        const bool v6_up = fListening;
+        RecordRpcBindFailure(attempts, v4_attempt, e);
 
         // With the IPv6 listener up the node starts anyway, and this was the only
         // trace of the failure -- strerr is read only when nothing bound. Say what
@@ -1288,8 +1385,8 @@ void StartRPCThreads()
         // only because v6_only_error is set: turning IPV6_V6ONLY off failed, so the
         // IPv6 socket may or may not already serve IPv4, and the warning says may.
         // The wildcard bind address is not one a client connects to, so it is not
-        // named as one.
-        if (fListening) {
+        // named as one. A conflict disables RPC below and is reported there.
+        if (v6_up && attempts.back().result != RpcBindError::Conflict) {
             if (loopback) {
                 LogPrintf("WARNING: StartRPCThreads: not listening on IPv4 %s:%u: %s. RPC is reachable over "
                           "IPv6 only; clients connecting to 127.0.0.1 will be refused.",
@@ -1301,9 +1398,49 @@ void StartRPCThreads()
             }
         }
     }
+    } // !v6_conflict
     } // !bind_specified
 
-    if (!fListening)
+    // Decide from what actually happened at each bind. Only a conflict (another program holds an address
+    // this host has) is acted on specially: the node keeps running without RPC rather than exiting.
+    SetRPCBindWarning("");
+    const RpcListenOutcome outcome = DecideRpcListenOutcome(attempts);
+
+    if (outcome == RpcListenOutcome::DisabledByConflict)
+    {
+        std::string first_conflict;
+        for (const RpcBindAttempt& a : attempts) {
+            if (a.result == RpcBindError::Conflict && a.conflict_disables_rpc) { first_conflict = a.address; break; }
+        }
+        if (first_conflict.empty()) {
+            for (const RpcBindAttempt& a : attempts) {
+                if (a.result == RpcBindError::Conflict) { first_conflict = a.address; break; }
+            }
+        }
+
+        // Nothing may serve: close what did bind and drop the io_service so no worker is ever started.
+        for (auto& acc : rpc_acceptors) {
+            if (acc && acc->is_open()) {
+                boost::system::error_code close_ec;
+                acc->close(close_ec);
+            }
+        }
+        rpc_acceptors.clear();
+        acceptor.reset();
+        delete rpc_io_service;
+        rpc_io_service = nullptr;
+
+        const std::string warning = strprintf("RPC server disabled: %s is in use by another program.", first_conflict);
+        SetRPCBindWarning(warning);
+        const std::string text = warning + " The node keeps running without RPC. Stop that program, then "
+                                 "restart Gridcoin to use RPC.";
+        LogPrintf("ERROR: %s\n", text);
+        uiInterface.ThreadSafeMessageBox(text, _("Warning"),
+                                         CClientUIInterface::ICON_WARNING | CClientUIInterface::BTN_OK);
+        return;
+    }
+
+    if (outcome == RpcListenOutcome::NothingBound)
     {
         // Log before the message box: ThreadSafeMessageBox has no UI in daemon
         // mode, so without this the failure reason never reaches debug.log and
@@ -1312,6 +1449,17 @@ void StartRPCThreads()
         uiInterface.ThreadSafeMessageBox(strerr, _("Error"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
+    }
+
+    // Serving, but an address that is not the node's own loopback was taken.
+    {
+        std::string not_listening;
+        for (const RpcBindAttempt& a : attempts) {
+            if (a.result != RpcBindError::Conflict) continue;
+            if (!not_listening.empty()) not_listening += "; ";
+            not_listening += strprintf("RPC is not listening on %s: in use by another program.", a.address);
+        }
+        if (!not_listening.empty()) SetRPCBindWarning(not_listening);
     }
 
     // Clamp to at least one worker. These threads are the only ones that run

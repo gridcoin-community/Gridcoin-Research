@@ -185,6 +185,7 @@ add_executable(test_gridcoin
     script_p2sh_tests.cpp
     gridcoin/connectinputs_tests.cpp
     rpc_allowlist_tests.cpp
+    rpc_bind_policy_tests.cpp
     script_tests.cpp
     scrypt_tests.cpp
     serialize_tests.cpp

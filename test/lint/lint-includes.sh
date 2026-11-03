@@ -59,6 +59,7 @@ EXPECTED_BOOST_INCLUDES=(
     boost/array.hpp
     boost/asio.hpp
     boost/asio/ip/address.hpp
+    boost/asio/ip/tcp.hpp
     boost/asio/ip/udp.hpp
     boost/asio/ip/v6_only.hpp
     boost/asio/system_timer.hpp
@@ -92,6 +93,7 @@ EXPECTED_BOOST_INCLUDES=(
     boost/test/tree/traverse.hpp
     boost/test/tree/visitor.hpp
     boost/test/unit_test.hpp
+    boost/system/error_code.hpp
     boost/thread.hpp
     boost/thread/condition_variable.hpp
     boost/tuple/tuple.hpp
