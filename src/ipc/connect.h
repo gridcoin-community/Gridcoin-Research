@@ -34,7 +34,7 @@ struct GuiConnection {
 };
 
 //! GUI side: perform the connect handshake against a node listening on
-//! <data_dir>/<network>/node.sock (doc/multiprocess_design.md section 4.3):
+//! <ipc_dir>/node.sock (doc/multiprocess_design.md section 4.3):
 //!
 //!   1. read the node's ipc.cookie -- its absence means no -multiprocess node
 //!      is serving this datadir: none is running with -multiprocess, one is
@@ -54,7 +54,7 @@ struct GuiConnection {
 //! unexpectedly (crash / SIGKILL, or a stop that raced the shutdown handshake) —
 //! the GUI uses it to quit cleanly rather than fault on the next call to a
 //! now-dead proxy.
-std::optional<GuiConnection> ConnectToNode(const fs::path& data_dir,
+std::optional<GuiConnection> ConnectToNode(const fs::path& ipc_dir,
                                            std::string& error_out,
                                            std::function<void()> on_disconnect = {});
 

@@ -37,6 +37,7 @@
 #ifdef ENABLE_MULTIPROCESS
 #include "ipc/connect.h"
 #include "ipc/handshake.h"
+#include "ipc/process.h"
 #endif
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
@@ -1173,7 +1174,7 @@ int main(int argc, char *argv[])
         // so OptionsModel can be built from the remote Init). Logging is up
         // (InitLogging above), so failures land in the GUI log file.
         std::string ipc_error;
-        node_connection = ipc::ConnectToNode(GetDataDir(), ipc_error,
+        node_connection = ipc::ConnectToNode(ipc::GetIpcDir(), ipc_error,
             /*on_disconnect=*/[] {
                 QuitOnDaemonConnectionLost("lost connection to the Gridcoin daemon");
             });
@@ -1205,7 +1206,7 @@ int main(int argc, char *argv[])
         ipc_info.node_built_at = QString::fromStdString(node_build.built_at);
         ipc_info.ipc_schema = QStringLiteral("%1.%2").arg(node_build.schema_major).arg(node_build.schema_minor);
         ipc_info.ipc_protocol = QString::number(node_build.protocol_version);
-        ipc_info.socket_path = GUIUtil::boostPathToQString(GetDataDir() / "node.sock");
+        ipc_info.socket_path = GUIUtil::boostPathToQString(ipc::GetIpcDir() / "node.sock");
         // Raw token (empty = unavailable); the dialog renders the empty case.
         ipc_info.node_identity = QString::fromStdString(node_ident.identity_token);
         ipc_info.network = QString::fromStdString(node_ident.network);

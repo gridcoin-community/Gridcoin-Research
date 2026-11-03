@@ -8,11 +8,13 @@
 
 #include "fs.h"
 #include "tinyformat.h"
+#include "util/system.h"
 #include "util.h"
 #include "util/syserror.h"
 
 #include <cerrno>
 #include <cstring>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -20,6 +22,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/un.h>
 #include <unistd.h>
 #else
@@ -42,18 +45,18 @@ namespace {
 //! <datadir>/<network>/node.sock (doc/multiprocess_design.md section 4.3).
 const char* const DEFAULT_SOCKET_FILE = "node.sock";
 
-//! Resolve \p address ("unix" -> <data_dir>/node.sock, "unix:<path>" -> a custom
+//! Resolve \p address ("unix" -> <ipc_dir>/node.sock, "unix:<path>" -> a custom
 //! path) into a sockaddr_un. Rewrites \p address to its canonical "unix:<path>"
 //! form. Throws std::invalid_argument on an unrecognized address or an
 //! over-length path.
-fs::path ParseAddress(std::string& address, const fs::path& data_dir, struct sockaddr_un& addr)
+fs::path ParseAddress(std::string& address, const fs::path& ipc_dir, struct sockaddr_un& addr)
 {
     fs::path path;
     if (address == "unix" || address == "auto") {
-        path = data_dir / DEFAULT_SOCKET_FILE;
+        path = ipc_dir / DEFAULT_SOCKET_FILE;
     } else if (address.rfind("unix:", 0) == 0 && address.size() > 5) {
         path = fs::path(address.substr(5));
-        if (!path.is_absolute()) path = data_dir / path;
+        if (!path.is_absolute()) path = ipc_dir / path;
     } else {
         throw std::invalid_argument(strprintf("Unrecognized IPC address '%s'", address));
     }
@@ -226,14 +229,97 @@ int TryConnect(const struct sockaddr_un& addr, int& out_errno)
     return -1;
 }
 
+} // namespace
+
+fs::path GetIpcDir()
+{
+    if (gArgs.IsArgSet("-ipcdir")) {
+        return AbsPathForConfigVal(fs::path(gArgs.GetArg("-ipcdir", "")), /*net_specific=*/true);
+    }
+    return GetDataDir();
+}
+
+#ifndef WIN32
+void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, std::optional<gid_t> group)
+{
+    const std::string p = path.string();
+    const auto fail = [&](int err, const char* what) {
+        throw std::system_error(err, std::system_category(), strprintf("%s %s", what, p));
+    };
+    const auto type_ok = [kind](mode_t m) {
+        switch (kind) {
+        case PathKind::Socket: return S_ISSOCK(m);
+        case PathKind::Directory: return S_ISDIR(m);
+        case PathKind::RegularFile: return S_ISREG(m);
+        }
+        return false;
+    };
+
+#ifdef __linux__
+    const int fd = ::open(p.c_str(), O_PATH | O_NOFOLLOW | O_CLOEXEC);
+    if (fd == -1) fail(errno, "cannot open");
+
+    struct FdCloser {
+        int fd;
+        ~FdCloser() { ::close(fd); }
+    } closer{fd};
+
+    struct stat st;
+    if (::fstat(fd, &st) != 0) fail(errno, "cannot stat");
+    // A symlink opens as the link itself under O_PATH|O_NOFOLLOW, so it fails
+    // the type check here.
+    if (!type_ok(st.st_mode)) fail(EINVAL, "unexpected file type at");
+    if (st.st_uid != ::geteuid()) fail(EPERM, "not owned by this user:");
+
+    if (group && ::fchownat(fd, "", static_cast<uid_t>(-1), *group, AT_EMPTY_PATH) != 0) {
+        fail(errno, "cannot set the group of");
+    }
+
+    bool mode_set = false;
+#ifdef SYS_fchmodat2
+    mode_set = ::syscall(SYS_fchmodat2, fd, "", mode, AT_EMPTY_PATH) == 0;
+#endif
+    if (!mode_set) {
+        const std::string proc_path = strprintf("/proc/self/fd/%d", fd);
+        if (::chmod(proc_path.c_str(), mode) != 0) fail(errno, "cannot set the mode of");
+    }
+
+    // Verify through the same fd.
+    struct stat after;
+    if (::fstat(fd, &after) != 0) fail(errno, "cannot stat");
+    if (!type_ok(after.st_mode) || after.st_uid != ::geteuid() || (after.st_mode & 07777) != mode ||
+        (group && after.st_gid != *group)) {
+        fail(EPERM, "access was not applied to");
+    }
+#else
+    struct stat st;
+    if (::lstat(p.c_str(), &st) != 0) fail(errno, "cannot stat");
+    if (!type_ok(st.st_mode)) fail(EINVAL, "unexpected file type at");
+    if (st.st_uid != ::geteuid()) fail(EPERM, "not owned by this user:");
+    if (group && ::fchownat(AT_FDCWD, p.c_str(), static_cast<uid_t>(-1), *group, AT_SYMLINK_NOFOLLOW) != 0) {
+        fail(errno, "cannot set the group of");
+    }
+    if (::fchmodat(AT_FDCWD, p.c_str(), mode, AT_SYMLINK_NOFOLLOW) != 0) fail(errno, "cannot set the mode of");
+    struct stat after;
+    if (::lstat(p.c_str(), &after) != 0) fail(errno, "cannot stat");
+    if (!type_ok(after.st_mode) || after.st_uid != ::geteuid() || (after.st_mode & 07777) != mode ||
+        (group && after.st_gid != *group)) {
+        fail(EPERM, "access was not applied to");
+    }
+#endif
+}
+#endif // !WIN32
+
+namespace {
+
 class ProcessImpl : public Process
 {
 public:
-    int connect(const fs::path& data_dir, std::string& address) override
+    int connect(const fs::path& ipc_dir, std::string& address) override
     {
         EnsureWinsock();
         struct sockaddr_un addr;
-        ParseAddress(address, data_dir, addr);
+        ParseAddress(address, ipc_dir, addr);
         int connect_errno = 0;
         int fd = TryConnect(addr, connect_errno);
         if (fd == -1) {
@@ -242,16 +328,16 @@ public:
         return fd;
     }
 
-    int bind(const fs::path& data_dir, std::string& address) override
+    int bind(const fs::path& ipc_dir, std::string& address) override
     {
         EnsureWinsock();
         struct sockaddr_un addr;
-        const fs::path path = ParseAddress(address, data_dir, addr);
+        const fs::path path = ParseAddress(address, ipc_dir, addr);
 
         // Socket directory access control (design section 4.3).
         //
         // READ THIS BEFORE RELYING ON THE create BRANCH BELOW: for the DEFAULT
-        // address ("unix" -> <datadir>/node.sock) it does not run. GetDataDir()
+        // address ("unix" -> <ipcdir>/node.sock) it does not run. GetDataDir()
         // itself calls fs::create_directories (ArgsManager::GetDataDirPath in
         // util/system.cpp), and AppInit2, WriteCookie(GetDataDir()) and this
         // function's own GetDataDir() argument have all called it long before we
@@ -309,9 +395,7 @@ public:
 
             if (created) {
 #ifndef WIN32
-                if (::chmod(parent.string().c_str(), 0700) != 0) {
-                    throw std::system_error(errno, std::system_category());
-                }
+                ApplyPathAccessNoFollow(parent, PathKind::Directory, 0700, std::nullopt);
 #else
                 util::ApplyOwnerOnlyDacl(parent, /*inheritable=*/true);
 #endif
@@ -348,30 +432,29 @@ public:
                 throw std::system_error(SocketErrorCode(LastSocketError()));
             }
 #ifndef WIN32
-            // Create the socket node with 0600 from the start: bind() honors the
-            // umask, so a permissive umask would otherwise leave a world-accessible
-            // window before an after-the-fact chmod. (No umask on Windows; there
-            // the fail-closed ApplyOwnerOnlyDacl after the bind below restricts
-            // the socket.)
-            const mode_t old_umask = ::umask(0177);
+            // The daemon sets an owner-only process umask at startup, so bind()
+            // creates the socket node owner-only. This function does not touch
+            // the process umask: it is process-wide state that other threads
+            // share. The mode is set explicitly below, through an fd of the path,
+            // before listen() so no peer can connect before it is final.
+            // (No umask on Windows; there the fail-closed ApplyOwnerOnlyDacl
+            // after the bind below restricts the socket.)
 #endif
             const int rc = ::bind(fd, (const struct sockaddr*)&addr, sizeof(addr));
             const int bind_errno = LastSocketError();
-#ifndef WIN32
-            ::umask(old_umask);
-#endif
             if (rc == 0) {
 #ifndef WIN32
-                // Belt-and-suspenders after the umask above. Fail closed: if the
-                // socket cannot be confirmed 0600, refuse to serve rather than
-                // leave the wallet IPC socket potentially accessible.
-                if (::chmod(path.string().c_str(), 0600) != 0) {
-                    const int chmod_errno = errno;
+                // Fail closed: if the socket cannot be confirmed 0600 without
+                // following a symlink, refuse to serve rather than leave the
+                // wallet IPC socket potentially accessible.
+                try {
+                    ApplyPathAccessNoFollow(path, PathKind::Socket, 0600, std::nullopt);
+                } catch (...) {
                     CloseSocket(fd);
-                    throw std::system_error(chmod_errno, std::system_category());
+                    throw;
                 }
 #else
-                // Same fail-closed contract as the chmod above: restrict the
+                // Same fail-closed contract as the mode set above: restrict the
                 // socket to this account and SYSTEM (non-inheritable, protected,
                 // verified by read-back), and refuse to serve rather than listen
                 // unprotected if that fails.

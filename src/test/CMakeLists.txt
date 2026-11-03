@@ -174,6 +174,7 @@ add_executable(test_gridcoin
     ipc_peercred_tests.cpp
     # Non-inheritable socket creation/accept and bounded drain (src/util/sock.cpp).
     sock_tests.cpp
+    ipc_process_tests.cpp
     # CTxDB batch-consistent reads: Exists() against a pending Delete.
     dbwrapper_tests.cpp
     proc_hardening_tests.cpp

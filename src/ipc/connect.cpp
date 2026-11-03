@@ -15,7 +15,7 @@
 
 namespace ipc {
 
-std::optional<GuiConnection> ConnectToNode(const fs::path& data_dir,
+std::optional<GuiConnection> ConnectToNode(const fs::path& ipc_dir,
                                            std::string& error_out,
                                            std::function<void()> on_disconnect)
 {
@@ -24,10 +24,10 @@ std::optional<GuiConnection> ConnectToNode(const fs::path& data_dir,
     //    this datadir (none is running with -multiprocess, one is still
     //    starting, or the last one shut down cleanly), so there is nothing to
     //    dial.
-    std::optional<std::string> cookie = ReadCookie(data_dir);
+    std::optional<std::string> cookie = ReadCookie(ipc_dir);
     if (!cookie) {
         error_out = strprintf("no IPC cookie in %s -- is the Gridcoin daemon running with -multiprocess?",
-                              data_dir.string());
+                              ipc_dir.string());
         return std::nullopt;
     }
 
@@ -36,8 +36,8 @@ std::optional<GuiConnection> ConnectToNode(const fs::path& data_dir,
     // serve-init factory (MakeIpc only ever calls it on the listen path).
     conn.ipc = interfaces::MakeIpc("gridcoinresearch", {});
 
-    // 2. Connect to the node's default socket (<data_dir>/<network>/node.sock,
-    //    resolved from GetDataDir() inside connectAddress).
+    // 2. Connect to the node's default socket (<ipc_dir>/node.sock,
+    //    resolved from GetIpcDir() inside connectAddress).
     std::string address = "unix";
     try {
         conn.init = conn.ipc->connectAddress(address, std::move(on_disconnect));

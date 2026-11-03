@@ -30,6 +30,7 @@
 #include "interfaces/ipc.h"
 #include "ipc/handshake.h"
 #include "ipc/peercred.h"
+#include "ipc/process.h"
 #include "ipc/serve_init.h"
 #include "wallet/wallet.h" // pwalletMain / CWallet::GetWalletUuid for the identity token
 #include <atomic>
@@ -371,7 +372,13 @@ bool AppInit(int argc, char* argv[])
         // request, not the loss of a nice-to-have.
         if (gArgs.GetBoolArg("-multiprocess", false)) {
             try {
-                std::string cookie = ipc::WriteCookie(GetDataDir());
+                // An explicit -ipcdir may not exist yet. The daemon's owner-only
+                // umask makes a directory created here owner-only.
+                {
+                    boost::system::error_code mkdir_ec;
+                    fs::create_directories(ipc::GetIpcDir(), mkdir_ec);
+                }
+                std::string cookie = ipc::WriteCookie(ipc::GetIpcDir());
                 cookie_written = true;
                 interfaces::NodeIdentity identity;
                 identity.network = Params().NetworkIDString();
@@ -440,7 +447,7 @@ bool AppInit(int argc, char* argv[])
         // when the socket does -- mirroring upstream's DeleteAuthCookie(). It is also
         // what ConnectToNode checks before dialling, so leaving it behind sends the
         // next GUI to a socket nobody is listening on.
-        if (cookie_written) ipc::DeleteCookie(GetDataDir());
+        if (cookie_written) ipc::DeleteCookie(ipc::GetIpcDir());
 #endif
     }
 

@@ -1000,6 +1000,10 @@ void SetupServerArgs()
                    "separately with -multiprocess) connects to it instead of running core in-process. "
                    "Default: off (monolithic).",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-ipcdir=<dir>",
+                   "Directory for the IPC socket and cookie (default: the data directory). Relative "
+                   "paths are resolved against the data directory.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-ipclogtrace",
                    "Log the full request and response payload of every IPC call. This includes "
                    "arguments, so anything passed over the wallet interfaces -- passphrases and "

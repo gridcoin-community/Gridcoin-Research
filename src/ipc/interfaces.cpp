@@ -65,7 +65,7 @@ public:
             // "auto": connect if a node is listening, otherwise return null so
             // the caller can report "no daemon" cleanly (Gridcoin does not spawn).
             try {
-                fd = m_process->connect(GetDataDir(), address);
+                fd = m_process->connect(ipc::GetIpcDir(), address);
             } catch (const std::system_error& e) {
                 if (e.code() == std::errc::connection_refused ||
                     e.code() == std::errc::no_such_file_or_directory ||
@@ -77,7 +77,7 @@ public:
                 return nullptr;
             }
         } else {
-            fd = m_process->connect(GetDataDir(), address);
+            fd = m_process->connect(ipc::GetIpcDir(), address);
         }
         FdGuard guard{fd};
         // Authenticate the NODE to US before we speak. The cookie is a bearer
@@ -122,7 +122,7 @@ public:
             throw std::logic_error("Ipc::listenAddress() called without a serve-init factory "
                                    "(this process is connect-only)");
         }
-        int fd = m_process->bind(GetDataDir(), address);
+        int fd = m_process->bind(ipc::GetIpcDir(), address);
         FdGuard guard{fd};
         m_protocol->listen(fd, m_exe_name, m_make_init);
         guard.release(); // the protocol/listener now owns the fd

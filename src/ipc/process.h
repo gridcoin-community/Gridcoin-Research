@@ -8,7 +8,11 @@
 #include "fs.h"
 
 #include <memory>
+#include <optional>
 #include <string>
+#ifndef WIN32
+#include <sys/types.h>
+#endif
 
 namespace ipc {
 
@@ -21,22 +25,39 @@ class Process
 public:
     virtual ~Process() = default;
 
-    //! Canonicalize and connect to \p address under \p data_dir, returning the
+    //! Canonicalize and connect to \p address under \p ipc_dir, returning the
     //! connected socket descriptor.
-    virtual int connect(const fs::path& data_dir, std::string& address) = 0;
+    virtual int connect(const fs::path& ipc_dir, std::string& address) = 0;
 
-    //! Canonicalize \p address under \p data_dir, create + bind a listening
+    //! Canonicalize \p address under \p ipc_dir, create + bind a listening
     //! socket, and return its descriptor. Removes a stale socket file left by a
     //! crash; throws if the path is already bound by a live listener.
-    virtual int bind(const fs::path& data_dir, std::string& address) = 0;
+    virtual int bind(const fs::path& ipc_dir, std::string& address) = 0;
 };
 
 //! Constructor for the Process interface.
 std::unique_ptr<Process> MakeProcess();
 
-#ifdef WIN32
+//! -ipcdir if set (AbsPathForConfigVal against the network datadir), else
+//! GetDataDir(). Used verbatim: no network suffix is appended to an explicit
+//! value. The IPC socket and cookie live here.
+fs::path GetIpcDir();
 
-#endif // WIN32
+#ifndef WIN32
+//! What ApplyPathAccessNoFollow expects to find at the path.
+enum class PathKind { Socket, Directory, RegularFile };
+
+//! Set the mode and (optionally) the group of an existing path without following
+//! a symlink at it, through an fd of the path.
+//! Linux: open(O_PATH|O_NOFOLLOW|O_CLOEXEC), fstat, fchownat(fd,"",-1,gid,AT_EMPTY_PATH),
+//! fchmodat2(fd,"",mode,AT_EMPTY_PATH) when SYS_fchmodat2 is defined and succeeds,
+//! else chmod("/proc/self/fd/<fd>", mode).
+//! Other POSIX: fchownat/fchmodat(AT_FDCWD, path, ..., AT_SYMLINK_NOFOLLOW).
+//! Afterwards lstat must show the expected type, st_uid == geteuid(),
+//! mode & 07777 == mode, and the group when given; otherwise throws
+//! std::system_error.
+void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, std::optional<gid_t> group);
+#endif // !WIN32
 } // namespace ipc
 
 #endif // GRIDCOIN_IPC_PROCESS_H

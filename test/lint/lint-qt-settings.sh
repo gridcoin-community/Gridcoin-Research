@@ -25,7 +25,7 @@ export LC_ALL=C
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
-PROCESS_ARGS="-conf -datadir -debugallowtracer -debuglogfile -multiprocess -resetblockchaindata -testnet -version -wallet"
+PROCESS_ARGS="-conf -datadir -debugallowtracer -debuglogfile -ipcdir -multiprocess -resetblockchaindata -testnet -version -wallet"
 
 # The options SetupUIArgs registers.
 GUI_ARGS=$(awk '/^static void SetupUIArgs\(/,/^}/' src/qt/bitcoin.cpp \
