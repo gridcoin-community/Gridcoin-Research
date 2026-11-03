@@ -128,8 +128,8 @@ static const char* GRIDCOIN_PID_FILENAME = "gridcoinresearchd.pid";
 //! one config file or command line can serve both programs without the node warning about, or rejecting, an option
 //! it does not use. They are never node settings, and ChangeSettings refuses to store them.
 static const std::vector<std::string> GUI_ONLY_ARGS{
-    "-autotrustidentity", "-choosedatadir", "-devsyntheticcoins", "-guilogfile", "-lang", "-min", "-nobuildwarn",
-    "-resetguisettings", "-splash", "-style", "-suppressnetworkgraph"};
+    "-autotrustidentity", "-choosedatadir", "-devsyntheticcoins", "-guilogfile", "-ipcserviceuser", "-lang", "-min",
+    "-nobuildwarn", "-resetguisettings", "-splash", "-style", "-suppressnetworkgraph"};
 
 static fs::path GetPidFile(const ArgsManager& args)
 {
@@ -1003,6 +1003,10 @@ void SetupServerArgs()
     argsman.AddArg("-ipcdir=<dir>",
                    "Directory for the IPC socket and cookie (default: the data directory). Relative "
                    "paths are resolved against the data directory.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-ipcattachgroup=<group>",
+                   "Also admit IPC clients in this group (the different-account service). Unset: only this "
+                   "process's own user.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-ipclogtrace",
                    "Log the full request and response payload of every IPC call. This includes "

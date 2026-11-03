@@ -4,105 +4,185 @@
 
 #include "ipc/peercred.h"
 
-#include "logging.h" // error()
-
-#include <cerrno>
+#include "logging.h"
+#include "tinyformat.h"
+#include "util/strencodings.h"
+#include "util/system.h"
 
 #ifndef WIN32
-#include <sys/socket.h>
-#include <sys/types.h>
+#include <algorithm>
+#include <cerrno>
+#include <pwd.h>
+#include <sys/stat.h>
 #include <unistd.h>
-#endif
-
-//! Linux is the only target where SO_PEERCRED carries `struct ucred`. OpenBSD ALSO
-//! defines SO_PEERCRED (sys/socket.h), but its payload is `struct sockpeercred`, so
-//! keying off the option name alone fails to compile there with "variable has
-//! incomplete type 'struct ucred'". FreeBSD and macOS do not define SO_PEERCRED at
-//! all. Every non-Linux target we support provides getpeereid(3), so that is the
-//! portable branch. Defined once because CheckPeerCredentials() and
-//! PeerCredentialEnforcement() must never disagree: the latter is what the startup
-//! log advertises as the enforcement mechanism in force.
-#if defined(__linux__) && defined(SO_PEERCRED)
-#define GRIDCOIN_PEERCRED_SO_PEERCRED 1
+#include <vector>
 #endif
 
 namespace ipc {
+namespace {
+
+//! The value of a name-valued IPC option, with -no<option> counted as unset.
+std::string ConfiguredName(const std::string& arg)
+{
+    if (gArgs.IsArgNegated(arg)) return {};
+    return gArgs.GetArg(arg, "");
+}
 
 #ifndef WIN32
-bool PeerUidAllowed(uid_t peer_uid, uid_t self_uid)
+//! The uid of the account \p name, or nullopt when there is no such account or
+//! the account database cannot be read.
+std::optional<uid_t> LookUpAccountUid(const std::string& name)
 {
-    return peer_uid == self_uid;
+    const long hint = ::sysconf(_SC_GETPW_R_SIZE_MAX);
+    std::vector<char> buf(hint > 0 ? static_cast<size_t>(hint) : 1024);
+    struct passwd pwd;
+    struct passwd* result = nullptr;
+    int err;
+    while ((err = ::getpwnam_r(name.c_str(), &pwd, buf.data(), buf.size(), &result)) == ERANGE &&
+           buf.size() < 1024 * 1024) {
+        buf.resize(buf.size() * 2);
+    }
+    if (err != 0 || result == nullptr) return std::nullopt;
+    return pwd.pw_uid;
 }
 #endif
 
-bool CheckPeerCredentials(int peer_fd, PeerCredPolicy policy)
+} // namespace
+
+#ifndef WIN32
+bool PeerInGroup(const PeerIdentity& peer, gid_t gid)
 {
-#ifdef WIN32
-    (void)policy;
-    // AF_UNIX on Windows exposes no peer-credential API (no SO_PEERCRED /
-    // getpeereid); the owner+SYSTEM PROTECTED DACLs that ipc/process.cpp applies to
-    // node.sock and ipc/handshake.cpp to ipc.cookie -- each verified by reading it
-    // back -- are the guard.
-    (void)peer_fd;
-    return true;
-#else
-    // "Cannot determine the peer's uid" is refused under Enforcing and
-    // allowed-with-a-log under Advisory; a DEFINITE mismatch is refused under both.
-    // Both callers -- the node's accept path and Ipc::connectAddress -- use
-    // Enforcing; see PeerCredPolicy for why Advisory is kept.
-    const auto undetermined = [policy](const char* what, int err) {
-        if (policy == PeerCredPolicy::Enforcing) {
-            return error("CheckPeerCredentials: refusing IPC connection: %s (errno %d), so the "
-                         "peer's uid cannot be verified", what, err);
-        }
-        LogPrintf("WARN: CheckPeerCredentials: %s (errno %d); could not verify the peer's uid, "
-                  "continuing on the cookie alone", what, err);
-        return true;
+    return peer.gid == gid || std::find(peer.groups.begin(), peer.groups.end(), gid) != peer.groups.end();
+}
+
+PeerVerdict ServerPeerDecision(const PeerIdentity& peer, const ServerPeerContext& ctx)
+{
+    if (peer.uid == ctx.self_uid) return PeerVerdict::Allow;
+
+    if (peer.uid == 0) {
+        LogPrintf("IPC: refusing peer uid 0 (this process runs as uid %u): root is not an IPC peer\n",
+                  ctx.self_uid);
+        return PeerVerdict::Refuse;
+    }
+
+    if (ctx.attach_gid && PeerInGroup(peer, *ctx.attach_gid)) return PeerVerdict::Allow;
+
+    if (ctx.attach_gid) {
+        LogPrintf("IPC: refusing peer uid %u (gid %u): not this process's uid %u and not in the "
+                  "-ipcattachgroup group (gid %u)\n",
+                  peer.uid, peer.gid, ctx.self_uid, *ctx.attach_gid);
+    } else {
+        LogPrintf("IPC: refusing peer uid %u: not this process's uid %u, and no -ipcattachgroup is "
+                  "configured\n",
+                  peer.uid, ctx.self_uid);
+    }
+    return PeerVerdict::Refuse;
+}
+
+PeerVerdict ClientPeerDecision(const PeerIdentity& server, const ClientPeerContext& ctx)
+{
+    if (server.uid == ctx.self_uid) return PeerVerdict::Allow;
+
+    const auto refuse = [&](const std::string& rule) {
+        LogPrintf("IPC: refusing the core at uid %u (this process runs as uid %u): %s\n",
+                  server.uid, ctx.self_uid, rule);
+        return PeerVerdict::Refuse;
     };
 
-    if (peer_fd < 0) {
-        return undetermined("no peer fd is available", 0);
+    if (!ctx.service_uid) {
+        return refuse("another account, and no -ipcserviceuser is configured");
+    }
+    if (server.uid != *ctx.service_uid) {
+        return refuse(strprintf("not the -ipcserviceuser account (uid %u)", *ctx.service_uid));
     }
 
-    const uid_t self_uid = ::geteuid();
-    uid_t peer_uid;
-
-#ifdef GRIDCOIN_PEERCRED_SO_PEERCRED
-    // Linux: struct ucred captured at connect time.
-    struct ucred cred;
-    socklen_t len = sizeof(cred);
-    if (::getsockopt(peer_fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0) {
-        return undetermined("SO_PEERCRED failed", errno);
+    const IpcDirFacts& dir = ctx.dir;
+    if (!dir.exists || !dir.is_directory || dir.is_symlink) {
+        return refuse("the IPC directory is missing, not a directory, or a symlink");
     }
-    if (len != sizeof(cred)) {
-        return undetermined("SO_PEERCRED returned an unexpected size", 0);
+    if (dir.owner != *ctx.service_uid && dir.owner != 0) {
+        return refuse(strprintf("the IPC directory is owned by uid %u, neither the service account nor root",
+                                dir.owner));
     }
-    peer_uid = cred.uid;
-#else
-    // OpenBSD / FreeBSD / macOS.
-    gid_t peer_gid;
-    if (::getpeereid(peer_fd, &peer_uid, &peer_gid) != 0) {
-        return undetermined("getpeereid failed", errno);
+    if ((dir.mode & 022) != 0) {
+        return refuse(strprintf("the IPC directory is writable by group or others (mode %04o)", dir.mode));
     }
-#endif
-
-    if (!PeerUidAllowed(peer_uid, self_uid)) {
-        return error("%s: rejecting IPC connection: peer uid %d does not match serving uid %d",
-                     __func__, static_cast<int>(peer_uid), static_cast<int>(self_uid));
-    }
-    return true;
-#endif // WIN32
+    return PeerVerdict::Allow;
 }
+
+PeerVerdict ServerPeerPolicy(const PeerIdentity& peer)
+{
+    return ServerPeerDecision(peer, ServerPeerContext{::geteuid(), AttachGroupGid()});
+}
+
+PeerVerdict ClientPeerPolicy(const PeerIdentity& server, const fs::path& ipcdir)
+{
+    ClientPeerContext ctx;
+    ctx.self_uid = ::geteuid();
+
+    const std::string service_user = ConfiguredName("-ipcserviceuser");
+    if (!service_user.empty()) {
+        ctx.service_uid = LookUpAccountUid(service_user);
+        // Said here rather than by ClientPeerDecision, which would report the
+        // account as not configured. A core at this account's own uid is still
+        // allowed below.
+        if (!ctx.service_uid && server.uid != ctx.self_uid) {
+            LogPrintf("IPC: refusing the core at uid %u (this process runs as uid %u): the -ipcserviceuser "
+                      "account '%s' does not exist\n",
+                      server.uid, ctx.self_uid, SanitizeString(service_user));
+            return PeerVerdict::Refuse;
+        }
+    }
+
+    // lstat, so a symlink at the directory itself is seen as one. Any failure
+    // leaves the facts at "does not exist", which refuses another account.
+    struct stat st;
+    if (::lstat(ipcdir.c_str(), &st) == 0) {
+        ctx.dir.exists = true;
+        ctx.dir.is_directory = S_ISDIR(st.st_mode);
+        ctx.dir.is_symlink = S_ISLNK(st.st_mode);
+        ctx.dir.owner = st.st_uid;
+        ctx.dir.mode = st.st_mode & 07777;
+    }
+
+    return ClientPeerDecision(server, ctx);
+}
+
+#else // WIN32
+
+// The Windows placeholders keep the owner-only DACL on node.sock and ipc.cookie
+// as the guard: with no other account configured only this account (and SYSTEM)
+// can open them. A configured other account cannot be checked yet, so it is
+// refused rather than admitted unchecked.
+
+PeerVerdict ServerPeerPolicy(const PeerIdentity&)
+{
+    if (ConfiguredName("-ipcattachgroup").empty()) return PeerVerdict::Allow;
+    LogPrintf("IPC: the Windows peer check for a different account is not available in this build\n");
+    return PeerVerdict::Refuse;
+}
+
+PeerVerdict ClientPeerPolicy(const PeerIdentity&, const fs::path&)
+{
+    if (ConfiguredName("-ipcserviceuser").empty()) return PeerVerdict::Allow;
+    LogPrintf("IPC: the Windows peer check for a different account is not available in this build\n");
+    return PeerVerdict::Refuse;
+}
+
+#endif // WIN32
 
 const char* PeerCredentialEnforcement()
 {
 #ifdef WIN32
-    return "none (Windows AF_UNIX exposes no peer credentials; the owner-only DACL on node.sock "
-           "and ipc.cookie is the guard)";
-#elif defined(GRIDCOIN_PEERCRED_SO_PEERCRED)
-    return "SO_PEERCRED (connections from another OS user are refused)";
+    return "none (Windows AF_UNIX exposes no peer credentials; the owner-only DACL on node.sock and ipc.cookie "
+           "is the guard, and -ipcattachgroup is not available)";
+#elif defined(__linux__)
+    // peercred_posix.cpp reads SO_PEERCRED under the same __linux__ test.
+    return "SO_PEERCRED (this OS user; with -ipcattachgroup also a non-root peer whose primary group is that "
+           "group)";
 #else
-    return "getpeereid (connections from another OS user are refused)";
+    return "getpeereid (this OS user; with -ipcattachgroup also a non-root peer whose primary group is that "
+           "group)";
 #endif
 }
 

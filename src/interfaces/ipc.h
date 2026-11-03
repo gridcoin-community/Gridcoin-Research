@@ -26,6 +26,17 @@ class Init;
 //! (the GUI) never listens and may pass an empty factory.
 using MakeServeInitFn = std::function<std::unique_ptr<Init>(int peer_fd)>;
 
+//! What Ipc::connectAddress learned about the connection it made.
+struct ConnectInfo
+{
+    //! The core runs as another OS account (the -ipcserviceuser account) rather
+    //! than as this process's own. Always false on Windows.
+    bool server_other_account{false};
+    //! A duplicate of the connected socket, for shutting the connection down
+    //! from another thread; -1 when not provided. The caller owns and closes it.
+    int shutdown_fd{-1};
+};
+
 //! Interprocess-communication (IPC) helper. Establishes a connection between a
 //! controlling process (the GUI) and a controlled process (the node). When a
 //! connection is established the controlled process exposes its interfaces::Init,
@@ -47,8 +58,12 @@ public:
     //! throws on an unexpected error. If \p on_disconnect is set it is invoked
     //! (on the IPC event-loop thread) when the remote drops the connection
     //! unexpectedly — the GUI uses it to quit gracefully when the node exits.
+    //! Before anything is sent, the process at the other end is checked with
+    //! ipc::ClientPeerPolicy, and a refusal throws. If \p info is set it is
+    //! filled once the connection is made.
     virtual std::unique_ptr<Init> connectAddress(std::string& address,
-                                                 std::function<void()> on_disconnect = {}) = 0;
+                                                 std::function<void()> on_disconnect = {},
+                                                 ConnectInfo* info = nullptr) = 0;
 
     //! Listen on a socket address, exposing this process's Init interface to
     //! clients. Throws on error (including a live listener already on the path).

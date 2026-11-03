@@ -36,6 +36,10 @@ add_library(gridcoin_ipc STATIC EXCLUDE_FROM_ALL
     interfaces.cpp
     handshake.cpp
     peercred.cpp
+    # The platform backends of the peer-check hooks; each compiles to nothing
+    # off its platform.
+    peercred_posix.cpp
+    peercred_win.cpp
     serve_init.cpp
     connect.cpp
     capnp/protocol.cpp

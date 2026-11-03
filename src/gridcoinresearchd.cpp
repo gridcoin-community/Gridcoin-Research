@@ -370,7 +370,18 @@ bool AppInit(int argc, char* argv[])
         // set (command line or config file). There is no implicit/optional MP mode
         // in the daemon, so a failure here is a failure to honor an explicit
         // request, not the loss of a nice-to-have.
-        if (gArgs.GetBoolArg("-multiprocess", false)) {
+        const bool multiprocess = gArgs.GetBoolArg("-multiprocess", false);
+        // The attach group is resolved before anything is written or served, so
+        // a group that does not exist stops the node before a cookie is written.
+        // -noipcattachgroup counts as unset.
+        const std::string attach_group =
+            gArgs.IsArgNegated("-ipcattachgroup") ? std::string{} : gArgs.GetArg("-ipcattachgroup", "");
+        if (multiprocess && !ipc::ConfigureAttachGroup(attach_group)) {
+            InitError(strprintf("The IPC attach group '%s' does not exist.", attach_group));
+            // The same fatal path as a failed listener below.
+            fRet = false;
+            SetShutdownRequested();
+        } else if (multiprocess) {
             try {
                 // An explicit -ipcdir may not exist yet. Create it restricted to
                 // this account; a failure is fatal like the rest of this block.
@@ -388,15 +399,17 @@ bool AppInit(int argc, char* argv[])
                 // Per-connection auth (RFC #2937 §4.3 hardening): build a FRESH
                 // ServeInit for EACH accepted connection, so every client must
                 // present the cookie itself -- no shared, sticky authentication.
-                // Reject a foreign OS user before serving (CheckPeerCredentials:
-                // SO_PEERCRED / getpeereid). Windows has no peer credentials, so
-                // there the owner-only DACLs on node.sock and ipc.cookie are the
-                // guard.
+                // Refuse a peer before serving it when its identity cannot be
+                // read or ServerPeerPolicy refuses it: another OS user outside
+                // the -ipcattachgroup group, or root. Windows has no peer
+                // credentials, so there the owner-only DACLs on node.sock and
+                // ipc.cookie are the guard.
                 // cookie + identity are captured by value and copied into each
                 // ServeInit.
                 auto make_serve_init = [cookie = std::move(cookie), identity = std::move(identity)]
                     (int peer_fd) -> std::unique_ptr<interfaces::Init> {
-                        if (!ipc::CheckPeerCredentials(peer_fd)) return nullptr;
+                        const std::optional<ipc::PeerIdentity> peer = ipc::ReadPeerIdentity(peer_fd);
+                        if (!peer || ipc::ServerPeerPolicy(*peer) == ipc::PeerVerdict::Refuse) return nullptr;
                         return ipc::MakeServeInit(interfaces::MakeGridcoinInit(), cookie, identity);
                     };
                 ipc = interfaces::MakeIpc("gridcoinresearchd", std::move(make_serve_init));
@@ -404,7 +417,7 @@ bool AppInit(int argc, char* argv[])
                 ipc->listenAddress(address);
                 LogPrintf("IPC: serving GUI connections on %s\n", address);
                 // Say which access controls are actually in force, rather than
-                // leaving an operator to infer it from the platform. The uid check
+                // leaving an operator to infer it from the platform. The peer check
                 // is real on POSIX and absent on Windows; debug.log should not
                 // require the reader to know that.
                 LogPrintf("IPC: peer-credential enforcement: %s\n", ipc::PeerCredentialEnforcement());

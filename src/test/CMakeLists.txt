@@ -167,10 +167,14 @@ add_executable(test_gridcoin
     # compiles into the ordinary test binary alongside handshake.cpp.
     ${CMAKE_SOURCE_DIR}/src/ipc/serve_init.cpp
     ipc_serve_init_tests.cpp
-    # Peer-credential check (src/ipc/peercred.cpp): SO_PEERCRED / getpeereid
-    # same-user enforcement. No Cap'n Proto, so it compiles into the ordinary
-    # test binary alongside the sources above.
+    # Peer check (src/ipc/peercred.cpp): the policy and its pure decisions, and
+    # the platform hooks (peercred_posix.cpp: SO_PEERCRED / getpeereid and the
+    # attach group; peercred_win.cpp: the Windows placeholders), each of which
+    # compiles to nothing off its platform. No Cap'n Proto, so they compile into
+    # the ordinary test binary alongside the sources above.
     ${CMAKE_SOURCE_DIR}/src/ipc/peercred.cpp
+    ${CMAKE_SOURCE_DIR}/src/ipc/peercred_posix.cpp
+    ${CMAKE_SOURCE_DIR}/src/ipc/peercred_win.cpp
     ipc_peercred_tests.cpp
     # Non-inheritable socket creation/accept and bounded drain (src/util/sock.cpp).
     sock_tests.cpp

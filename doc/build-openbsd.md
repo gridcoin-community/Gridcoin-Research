@@ -151,9 +151,9 @@ To run it, start the daemon first and then attach the GUI; the GUI does not spaw
 ```
 
 The daemon logs the peer-credential mechanism in force at startup; on OpenBSD it reads
-`getpeereid (connections from another OS user are refused)`. OpenBSD does define
-`SO_PEERCRED`, but with a different payload than Linux, so Gridcoin uses `getpeereid(3)`
-here.
+`getpeereid (this OS user; with -ipcattachgroup also a non-root peer whose primary group is that group)`.
+OpenBSD does define `SO_PEERCRED`, but with a different payload than Linux, so Gridcoin
+uses `getpeereid(3)` here.
 
 ## Notes on hardening flags
 

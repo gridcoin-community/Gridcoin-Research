@@ -206,6 +206,10 @@ static void SetupUIArgs(ArgsManager& argsman)
                    "(e.g. debug_gui.log). Must resolve to a different path than -debuglogfile. Ignored "
                    "outside -multiprocess.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-ipcserviceuser=<user>",
+                   "Accept a core running as this account when connecting to -ipcdir (the system service). "
+                   "Unset: only your own account.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
 }
 
 #ifdef ENABLE_MULTIPROCESS

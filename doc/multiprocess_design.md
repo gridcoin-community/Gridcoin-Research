@@ -84,10 +84,14 @@ These were converged in RFC #2937 and are not open for relitigation in Phase 1/2
    from the wallet during claim signing) makes a wallet process split a real staking
    risk with no compelling driver. Revisit only if a concrete driver appears.
 3. **Front-end/back-end matching policy** (§4.2).
-4. **Authentication: cookie-PSK handshake layered over filesystem permissions** (§4.3).
-   The cookie handshake is the load-bearing, platform-portable authenticator; the
-   peer-UID check is defense-in-depth that fails closed on POSIX (Windows exposes no
-   peer credentials).
+4. **Authentication: the OS peer check, then a cookie handshake** (§4.3).
+   On POSIX the boundary is the OS peer check on the socket, and it fails closed: the
+   core admits its own uid, or a non-root peer in the configured attach group
+   (`-ipcattachgroup`); the GUI admits a core running as its own uid, or as the
+   configured service account (`-ipcserviceuser`). The cookie is an instance nonce:
+   it ties a connection to this run of the core, not to an OS account. Windows
+   exposes no peer credentials, so there the owner-only DACL on the socket and the
+   cookie is the guard.
 5. **Registry-mutation ordering: monotonic versions with a consumer high-water mark**
    (§4.4).
 6. **Sequencing**: Phase 1 began after the v13/v14 mandatory (5.5.0.0 "Natasha"), the
@@ -173,13 +177,15 @@ schema-diff lint against the previous release tag.
   hardened only when the node creates it: an existing data directory is left as
   the operator configured it and merely warned about, so a deliberately widened
   datadir is never silently re-tightened.
-- Cookie-PSK: node writes a fresh 256-bit cookie (`ipc.cookie`, `0600`, atomic rename)
+- Cookie: node writes a fresh 256-bit cookie (`ipc.cookie`, `0600`, atomic rename)
   each startup; first IPC call is `Init::authenticate(cookie)`, constant-time compare.
-  The cookie is pure portable code and is the load-bearing authenticator on every
-  platform. A wrong cookie **latches the connection**: it can never authenticate
-  afterwards, even with the right cookie, so it is neither a guessing oracle nor a way
-  to hold the connection slot while retrying. Recovery is by reconnecting, which builds
-  a fresh `ServeInit`.
+  On POSIX the cookie is an instance nonce: every process the peer check admits may
+  read it, so it ties a connection to this run of the core, and the OS peer check
+  below decides which accounts may connect. On Windows the owner-only DACL keeps the
+  cookie to this account (and SYSTEM). A wrong cookie **latches the connection**: it
+  can never authenticate afterwards, even with the right cookie, so it is neither a
+  guessing oracle nor a way to hold the connection slot while retrying. Recovery is by
+  reconnecting, which builds a fresh `ServeInit`.
 - **Unauthenticated-connection deadline** (`ipc::IPC_AUTH_DEADLINE`, 30 s): the listener
   serves one connection at a time and does not re-arm `accept()` while the slot is
   taken, so a peer that connects and never authenticates would otherwise deny the real
@@ -187,17 +193,23 @@ schema-diff lint against the previous release tag.
   reclaimed. This is also how "disconnect on mismatch" is realised — as a bounded delay
   rather than an instantaneous close, because `authenticate()` runs on a server worker
   thread while closing a connection is an event-loop-thread operation.
-- Peer-identity checks (`SO_PEERCRED` / `getpeereid`) are defense-in-depth on top of the
-  cookie, and **fail closed on POSIX**: a peer whose uid cannot be read is refused, not
-  admitted, so a platform that stops exposing peer credentials turns the check off
-  loudly rather than silently. Same-uid only; root is not special-cased. Windows AF_UNIX
+- The **OS peer check** (`SO_PEERCRED` on Linux, `getpeereid` on the other POSIX
+  targets) is the boundary on POSIX, and it **fails closed**: a peer whose identity
+  cannot be read is refused, not admitted, so a platform that stops exposing peer
+  credentials turns the check off loudly rather than silently. The core
+  (`ipc::ServerPeerPolicy`) admits a peer at its own uid; with `-ipcattachgroup` it
+  also admits a non-root peer in that group. Root is never admitted through the group.
+  Each refusal is logged with the uid(s) and the rule that failed. Windows AF_UNIX
   exposes no peer-credential API at all, so there the explicit owner+SYSTEM PROTECTED
-  DACL on the socket and cookie (applied and verified by read-back) is the guard. The
-  daemon logs which mode is in force at startup. Platform asymmetry must not become a
-  security regression.
-- The **GUI performs the same check on its own end** before presenting the cookie. The
-  cookie is a bearer token and step 5 hands it to whatever answered, so a foreign-uid
-  process that won the race to bind `node.sock` would otherwise harvest it.
+  DACL on the socket and cookie (applied and verified by read-back) is the guard, and
+  `-ipcattachgroup` and `-ipcserviceuser` are refused until a Windows peer check
+  exists. The daemon logs which mode is in force at startup. Platform asymmetry must
+  not become a security regression.
+- The **GUI checks the core on its own end** (`ipc::ClientPeerPolicy`) before
+  presenting the cookie, because step 5 hands the cookie to whatever answered. It
+  admits a core at its own uid. With `-ipcserviceuser` it also admits a core running
+  as that account, provided the directory holding the socket is a directory (not a
+  symlink), owned by that account or root, and not writable by group or others.
 - **One transport everywhere: AF_UNIX**, including Windows (supported since Win10 1803;
   filesystem-path based, same endpoint code). The remaining platform delta hides behind
   a two-method port (listen/connect + peer identity) with one contract-test suite. The
@@ -222,9 +234,10 @@ The connect-time sequence, in order (steps 1–7 add ~5–10 ms to startup):
    datadir: none is running with `-multiprocess`, one is still starting, or the last
    one shut down cleanly; do not dial)
 3. `connect(node.sock)`
-4. Peer-identity check (`SO_PEERCRED` on Linux, `getpeereid` on the other POSIX
-   targets, none on Windows; defense-in-depth per the authentication layers
-   listed earlier in this section) → hard fail on mismatch, or on a uid that
+4. Peer check (`ipc::ClientPeerPolicy`: `SO_PEERCRED` on Linux, `getpeereid` on the
+   other POSIX targets, none on Windows; see the authentication layers listed
+   earlier in this section) → hard fail when the core is neither this account nor
+   the configured service account with an acceptable directory, or when its uid
    cannot be read
 5. `Init::authenticate(cookie)` → hard fail on mismatch
 6. `Init::getBuildInfo()` → schema/protocol comparison per §4.2

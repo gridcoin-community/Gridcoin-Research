@@ -206,15 +206,20 @@ just the handshake (§6).
 > implemented on both ends, before the cookie is presented. The reference client
 > checks the listening peer inside `Ipc::connectAddress()` (step 3 above) and, if
 > the check fails, refuses to send the cookie, so `ConnectToNode` fails. The node
-> checks each accepted connection and closes it before serving it. Both use
-> `ipc::CheckPeerCredentials` (`src/ipc/peercred.cpp`) and refuse a peer whose OS
-> user differs from their own, or whose user cannot be determined; root is not
-> special-cased. Linux reads `SO_PEERCRED`; macOS and the BSDs use
-> `getpeereid()`. Windows AF_UNIX exposes no peer credentials, so there is no
-> check there; the owner+SYSTEM protected DACL on `node.sock` and `ipc.cookie` is
-> the guard. The daemon logs the mode in force at startup (`IPC: peer-credential
-> enforcement: ...`). Two processes of the same OS user look identical to this
-> check, so the cookie remains the authenticator. `ClientHandshake` itself does
+> checks each accepted connection and closes it before serving it. Both read the
+> peer's identity with `ipc::ReadPeerIdentity` and refuse a peer whose identity
+> cannot be read. The node then applies `ipc::ServerPeerPolicy` (its own OS user,
+> or with `-ipcattachgroup` a non-root peer in that group) and the client
+> `ipc::ClientPeerPolicy` (its own OS user, or with `-ipcserviceuser` that account
+> when the socket's directory is a directory, not a symlink, owned by that account
+> or root and not writable by group or others); see `src/ipc/peercred.h`. Linux
+> reads `SO_PEERCRED`; macOS and the BSDs use `getpeereid()`. Windows AF_UNIX
+> exposes no peer credentials, so there is no check there; the owner+SYSTEM
+> protected DACL on `node.sock` and `ipc.cookie` is the guard, and a different
+> account cannot be configured. The daemon logs the mode in force at startup
+> (`IPC: peer-credential enforcement: ...`). Two processes of the same OS user
+> look identical to this check; the cookie ties the connection to this run of
+> the node. `ClientHandshake` itself does
 > no check (its first call hands the cookie to whatever answered), so a client
 > that does not connect through `Ipc::connectAddress()` (§9) must make the same
 > check on its connected socket before it authenticates.
@@ -785,8 +790,8 @@ type/status rendering is the client's job (only locale-free data crosses).
   passphrase, and only for these calls.
 - **What the node does *not* protect against.** It does not verify *which*
   process holds the cookie: the peer-credential check (§2.5) refuses a peer
-  running as a different OS user, but it cannot tell two processes of the same
-  user apart, and Windows has no such check. It serves one connection at a time,
+  running as a different OS user (outside the configured attach group), but it
+  cannot tell two processes of the same user apart, and Windows has no such check. It serves one connection at a time,
   and each accepted connection must authenticate on its own (§10). And identity
   binding, as above, is not enforced node-side at all.
 

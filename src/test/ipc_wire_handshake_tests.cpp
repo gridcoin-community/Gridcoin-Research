@@ -37,6 +37,7 @@
 #include "ipc/capnp/common-types.h"
 #include "ipc/capnp/protocol.h"
 #include "ipc/handshake.h"
+#include "ipc/peercred.h"
 #include "ipc/protocol.h"
 #include "ipc/serve_init.h"
 #include "key_io.h"
@@ -45,6 +46,8 @@
 #include "sync.h"
 #include "test/gui_cache_fakes.h"
 #include "test/staking_test_peers.h"
+#include "test/state_guard.h"
+#include "util.h"
 #include "wallet/capability.h"
 #include "wallet/wallet.h"
 
@@ -465,6 +468,35 @@ struct WalletServingInit : interfaces::Init {
     std::unique_ptr<interfaces::Wallet> makeWallet() override { return interfaces::MakeWallet(m_wallet); }
 
     CWallet* m_wallet{nullptr};
+};
+
+//! A daemon-shaped Ipc pair on <-ipcdir>/node.sock: the server checks each
+//! accepted peer with ServerPeerPolicy as the daemon does, and the client
+//! connects through Ipc::connectAddress as the GUI does. Teardown drops the
+//! remote Init, disconnects the server's connections, then destroys both Ipcs
+//! (each joins its loop thread) and removes the socket and the directory.
+struct IpcPair {
+    std::string dir;
+    std::unique_ptr<interfaces::Ipc> server;
+    std::unique_ptr<interfaces::Ipc> client;
+    std::unique_ptr<interfaces::Init> init;
+
+    IpcPair()
+    {
+        char tmpl[] = "/tmp/gcipcpair.XXXXXX";
+        BOOST_REQUIRE(::mkdtemp(tmpl) != nullptr);
+        dir = tmpl;
+    }
+
+    ~IpcPair()
+    {
+        init.reset();
+        if (server) server->disconnectIncoming();
+        client.reset();
+        server.reset();
+        ::unlink((dir + "/node.sock").c_str());
+        ::rmdir(dir.c_str());
+    }
 };
 
 } // namespace
@@ -1005,6 +1037,44 @@ BOOST_AUTO_TEST_CASE(wire_secret_console_command_carries_passphrases)
     BOOST_CHECK(fx.wallet.Unlock(fresh));
 
     node.reset();
+}
+
+// Ipc::connectAddress end to end over -ipcdir: the client reads the listener's
+// identity on the connected socket, checks it with ClientPeerPolicy against the
+// socket's directory, and reports through ConnectInfo that the core runs as
+// this account. The server admits the client through ServerPeerPolicy.
+BOOST_FIXTURE_TEST_CASE(wire_connect_address_reports_same_account, grc_test::StateGuard)
+{
+    // Declared before the pair, so it outlives the server's factory.
+    std::atomic<int> served{0};
+    IpcPair pair;
+    gArgs.ForceSetArg("-ipcdir", pair.dir);
+
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    auto factory = [&served, id](int peer_fd) -> std::unique_ptr<interfaces::Init> {
+        const std::optional<ipc::PeerIdentity> peer = ipc::ReadPeerIdentity(peer_fd);
+        if (!peer || ipc::ServerPeerPolicy(*peer) == ipc::PeerVerdict::Refuse) return nullptr;
+        ++served;
+        return ipc::MakeServeInit(std::make_unique<StubInner>(), "the-cookie", id);
+    };
+    pair.server = interfaces::MakeIpc("ipc-pair-server", std::move(factory));
+    std::string listen_address = "unix";
+    pair.server->listenAddress(listen_address);
+
+    pair.client = interfaces::MakeIpc("ipc-pair-client", {});
+    std::string address = "unix";
+    interfaces::ConnectInfo info;
+    // Set to the opposite of the expected answer, so the check shows it was written.
+    info.server_other_account = true;
+    pair.init = pair.client->connectAddress(address, {}, &info);
+    BOOST_REQUIRE(pair.init != nullptr);
+    BOOST_CHECK_EQUAL(address, "unix:" + pair.dir + "/node.sock");
+    BOOST_CHECK(!info.server_other_account);
+
+    ipc::HandshakeResult r = ipc::ClientHandshake(*pair.init, "the-cookie", "main");
+    BOOST_CHECK(r.ok);
+    BOOST_CHECK_EQUAL(served.load(), 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
