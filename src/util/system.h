@@ -111,6 +111,25 @@ bool MatchSettingKeyPattern(std::string_view pattern, std::string_view name);
 //! the "no" prefix is not.
 bool IsRefusedSettingKey(const std::string& key);
 
+//! A POSIX owner uid and st_mode.
+struct FileOwnerMode
+{
+    uint64_t owner{0};
+    uint32_t mode{0};
+};
+
+//! The top-level configuration file ReadConfigFiles read, as fstat reported it on the open file
+//! whose contents were read, and the directory that holds it. POSIX only; Windows records none.
+struct ConfigFileFacts
+{
+    FileOwnerMode file;
+    uint64_t device{0};
+    uint64_t inode{0};
+    //! The directory of the file after symbolic links are resolved, while the resolved path still
+    //! named the open file. nullopt when that could not be established.
+    std::optional<FileOwnerMode> dir;
+};
+
 class ArgsManager
 {
 public:
@@ -158,6 +177,7 @@ protected:
     fs::path m_cached_blocks_path GUARDED_BY(cs_args);
     mutable fs::path m_cached_datadir_path GUARDED_BY(cs_args);
     mutable fs::path m_cached_network_datadir_path GUARDED_BY(cs_args);
+    std::optional<ConfigFileFacts> m_config_file_facts GUARDED_BY(cs_args);
 
     [[nodiscard]] bool ReadConfigStream(std::istream& stream, const std::string& filepath, std::string& error, bool ignore_invalid_keys = false);
 
@@ -283,6 +303,10 @@ public:
 
     //! Any includeconf in ro_config: a value after the last negation, in any section.
     bool ConfigFileUsedIncludes() const;
+
+    //! What the last ReadConfigFiles recorded about the top-level configuration file it read.
+    //! nullopt when it read none, and on Windows.
+    std::optional<ConfigFileFacts> GetConfigFileFacts() const;
 
     /**
      * Return integer argument or default value

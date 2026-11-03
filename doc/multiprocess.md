@@ -543,10 +543,12 @@ When the server side cannot be found or its owner cannot be read, the error is `
 RPC credentials: could not identify the owner of the listener at <address>.` A refusal is final:
 `-rpcwait` does not retry it.
 
-The check applies when the address the client connected to belongs to this host: a loopback
-address (127.0.0.0/8, `::1`), `0.0.0.0` or `::`, or an address of one of this host's interfaces.
-A listener at any other address is on another machine, outside this host's table, and the client
-sends. The check runs on Linux and Windows; on macOS and the BSDs the client has no such check.
+A connection found in this host's table is checked whatever its address. One that is not there
+is taken to reach another machine, and the client sends, only when its address is none
+of this host's: not loopback (127.0.0.0/8, `::1`), not `0.0.0.0` or `::`, and not an address of
+one of this host's interfaces. Otherwise, or when this host's interface addresses cannot be read,
+the client refuses. The check runs on Linux and Windows; on macOS and the BSDs the client has no
+such check.
 
 ### Administering the system service
 

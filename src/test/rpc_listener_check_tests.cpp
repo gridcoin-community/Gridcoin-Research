@@ -344,6 +344,49 @@ BOOST_AUTO_TEST_CASE(host_interface_addresses_include_loopback)
 #endif
 }
 
+BOOST_AUTO_TEST_CASE(lookup_outcome)
+{
+    const std::vector<CNetAddr> host{Addr("192.168.1.10")};
+    // What GetHostInterfaceAddresses returns when getifaddrs fails.
+    const std::vector<CNetAddr> unknown;
+
+    // A row for the connection proves the listener is on this host, whatever the address: a locally
+    // routed address that is on no interface, or interfaces that could not be read.
+    BOOST_CHECK(ClassifyLookup(true, Addr("203.0.113.5"), host) == LookupOutcome::CheckOwner);
+    BOOST_CHECK(ClassifyLookup(true, Addr("192.168.1.10"), unknown) == LookupOutcome::CheckOwner);
+    BOOST_CHECK(ClassifyLookup(true, Addr("127.0.0.1"), host) == LookupOutcome::CheckOwner);
+
+    // No row.
+    BOOST_CHECK(ClassifyLookup(false, Addr("8.8.8.8"), host) == LookupOutcome::Remote);
+    BOOST_CHECK(ClassifyLookup(false, Addr("127.0.0.1"), host) == LookupOutcome::Unidentified);
+    BOOST_CHECK(ClassifyLookup(false, Addr("192.168.1.10"), host) == LookupOutcome::Unidentified);
+
+    // No row and getifaddrs failed: this host's own address must not pass as remote, and with the
+    // interfaces unknown no address can be told to be another host's.
+    BOOST_CHECK(ClassifyLookup(false, Addr("192.168.1.10"), unknown) == LookupOutcome::Unidentified);
+    BOOST_CHECK(ClassifyLookup(false, Addr("8.8.8.8"), unknown) == LookupOutcome::Unidentified);
+    BOOST_CHECK(ClassifyLookup(false, Addr("127.0.0.1"), unknown) == LookupOutcome::Unidentified);
+}
+
+BOOST_AUTO_TEST_CASE(posix_path_facts)
+{
+    const PathSecurityFacts root_file = PosixPathFacts(0, 0100644);
+    BOOST_CHECK_EQUAL(root_file.owner, "0");
+    BOOST_CHECK(!root_file.writable_by_others);
+    BOOST_CHECK(!PosixPathFacts(0, 040755).writable_by_others);
+    BOOST_CHECK(!PosixPathFacts(0, 0100640).writable_by_others);
+
+    // Group or world write.
+    BOOST_CHECK(PosixPathFacts(0, 0100664).writable_by_others);
+    BOOST_CHECK(PosixPathFacts(0, 0100646).writable_by_others);
+    BOOST_CHECK(PosixPathFacts(0, 041777).writable_by_others);
+
+    // An owner other than root can write it.
+    const PathSecurityFacts user_file = PosixPathFacts(1000, 0100600);
+    BOOST_CHECK_EQUAL(user_file.owner, "1000");
+    BOOST_CHECK(user_file.writable_by_others);
+}
+
 BOOST_AUTO_TEST_CASE(owner_policy_table)
 {
     const std::optional<std::string> none;

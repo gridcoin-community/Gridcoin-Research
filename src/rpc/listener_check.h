@@ -46,7 +46,16 @@ std::optional<std::vector<TcpConnEntry>> ReadTcpConnectionTables();
 bool IsLocalPeerAddress(const CNetAddr& addr, const std::vector<CNetAddr>& host_addrs);
 
 //! getifaddrs (POSIX, loopback included); gethostname + LookupHost on Windows, as net.cpp Discover().
+//! Empty when the addresses cannot be read: a host always has a loopback address.
 std::vector<CNetAddr> GetHostInterfaceAddresses();
+
+enum class LookupOutcome { CheckOwner, Remote, Unidentified };
+
+//! What the search of this host's table for the connection decides. A row for it proves the
+//! listener is on this host, whatever its address: CheckOwner. Without one the peer is Remote only
+//! when this host's addresses are known (host_addrs not empty) and IsLocalPeerAddress is false;
+//! otherwise the listener cannot be identified.
+LookupOutcome ClassifyLookup(bool server_side_found, const CNetAddr& remote, const std::vector<CNetAddr>& host_addrs);
 
 struct ListenerOwnerFacts {
     std::string caller;                          //!< decimal uid / SID string
@@ -74,6 +83,10 @@ struct PathSecurityFacts {
     bool writable_by_others{true};
 };
 
+//! A POSIX owner uid and st_mode as PathSecurityFacts: the owner as a decimal uid, writable by
+//! others when the group or world write bit is set or the owner is not root.
+PathSecurityFacts PosixPathFacts(uint64_t uid, uint32_t mode);
+
 //! The conf may name a service account: conf file and its directory owned by "0" (Windows:
 //! S-1-5-18 or S-1-5-32-544), neither writable by others, and no includeconf in use.
 bool ConfTrustedForServiceAccount(const PathSecurityFacts& conf, const PathSecurityFacts& conf_dir, bool uses_includeconf);
@@ -87,10 +100,11 @@ std::string UnidentifiedListenerMessage(const std::string& listener_address);
 
 using ListenerCheckFn = std::function<ListenerCheckResult(const CService& local, const CService& remote)>;
 
-//! Production check. Remote (non-local) peers: Accept with reason "remote". Local peers: find the
-//! server side of the exact 4-tuple (LISTENER_LOOKUP_ATTEMPTS reads, LISTENER_LOOKUP_RETRY_DELAY apart),
-//! gather the facts and apply DecideListenerOwner. Not found or unreadable: Refuse. Platforms without
-//! a backend (macOS, the BSDs): Accept with reason "unsupported" (today's behaviour).
+//! Production check. Find the server side of the exact 4-tuple (LISTENER_LOOKUP_ATTEMPTS reads,
+//! LISTENER_LOOKUP_RETRY_DELAY apart). Found: gather the facts, the configuration file's from what
+//! ReadConfigFiles recorded, and apply DecideListenerOwner, whatever the address. Not found:
+//! Accept with reason "remote" when ClassifyLookup says Remote, else Refuse. Platforms without a
+//! backend (macOS, the BSDs): Accept with reason "unsupported" (today's behaviour).
 ListenerCheckResult CheckRpcListener(const CService& local, const CService& remote);
 
 static constexpr int LISTENER_LOOKUP_ATTEMPTS{5};

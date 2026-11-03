@@ -4,7 +4,6 @@
 
 #include <rpc/listener_check.h>
 
-#include <fs.h>
 #include <netbase.h>
 #include <tinyformat.h>
 #include <util/strencodings.h>
@@ -22,7 +21,6 @@
 #if defined(__linux__)
 #include <cerrno>
 #include <pwd.h>
-#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -213,6 +211,23 @@ std::vector<CNetAddr> GetHostInterfaceAddresses()
     return addrs;
 }
 
+LookupOutcome ClassifyLookup(bool server_side_found, const CNetAddr& remote, const std::vector<CNetAddr>& host_addrs)
+{
+    if (server_side_found) return LookupOutcome::CheckOwner;
+    // Without this host's addresses, an address of this host cannot be told from another host's.
+    if (host_addrs.empty() || IsLocalPeerAddress(remote, host_addrs)) return LookupOutcome::Unidentified;
+    return LookupOutcome::Remote;
+}
+
+PathSecurityFacts PosixPathFacts(uint64_t uid, uint32_t mode)
+{
+    PathSecurityFacts facts;
+    facts.owner = ToString(uid);
+    // Others are every account but root: group or world write (022), or an owner other than root.
+    facts.writable_by_others = (mode & 022) != 0 || uid != 0;
+    return facts;
+}
+
 ListenerCheckResult DecideListenerOwner(const ListenerOwnerFacts& facts)
 {
     if (!facts.image_is_installed_core) {
@@ -284,10 +299,11 @@ struct ListenerIdentity {
 };
 
 // The backend: the caller's identity, the owner of the server side found in the table, the
-// owner and write access of a path, and an account name in the owner form.
+// owner and write access of the configuration file this process read and of its directory, and
+// an account name in the owner form.
 CallerIdentity GetCallerIdentity();
 std::optional<ListenerIdentity> IdentifyListener(const TcpConnEntry& server_side);
-std::optional<PathSecurityFacts> GetPathSecurityFacts(const fs::path& path);
+void GetConfFacts(std::optional<PathSecurityFacts>& conf, std::optional<PathSecurityFacts>& conf_dir);
 std::optional<std::string> ResolveAccountName(const std::string& name);
 
 #if defined(__linux__)
@@ -301,21 +317,20 @@ CallerIdentity GetCallerIdentity()
 
 std::optional<ListenerIdentity> IdentifyListener(const TcpConnEntry& server_side)
 {
-    // The table's uid is the account that created the listening socket; an accepted or queued
-    // connection carries the listener's.
+    // The table's uid for the server side of a connection: while it waits in the accept queue, the
+    // account that created the listening socket; once accepted, the account of the process that
+    // accepted it, which holds it.
     return ListenerIdentity{ToString(server_side.owner), true};
 }
 
-std::optional<PathSecurityFacts> GetPathSecurityFacts(const fs::path& path)
+void GetConfFacts(std::optional<PathSecurityFacts>& conf, std::optional<PathSecurityFacts>& conf_dir)
 {
-    struct stat st;
-    if (::stat(path.string().c_str(), &st) != 0) return std::nullopt;
-
-    PathSecurityFacts facts;
-    facts.owner = ToString(st.st_uid);
-    // Others are every account but root: group or world write, or an owner other than root.
-    facts.writable_by_others = (st.st_mode & (S_IWGRP | S_IWOTH)) != 0 || st.st_uid != 0;
-    return facts;
+    // What ReadConfigFiles recorded from the open file it read, not a path looked up now: by now the
+    // path can name another file, and a datadir= in the file changes where it resolves.
+    const std::optional<ConfigFileFacts> facts = gArgs.GetConfigFileFacts();
+    if (!facts) return;
+    conf = PosixPathFacts(facts->file.owner, facts->file.mode);
+    if (facts->dir) conf_dir = PosixPathFacts(facts->dir->owner, facts->dir->mode);
 }
 
 std::optional<std::string> ResolveAccountName(const std::string& name)
@@ -344,17 +359,6 @@ void WarnOnce(std::atomic<bool>& warned, const std::string& text)
     if (!warned.exchange(true)) {
         tfm::format(std::cerr, "warning: %s\n", text);
     }
-}
-
-//! The configuration file this process read and its directory, after symbolic links are resolved,
-//! so the directory examined is the one that holds the file.
-void GetConfFacts(std::optional<PathSecurityFacts>& conf, std::optional<PathSecurityFacts>& conf_dir)
-{
-    boost::system::error_code ec;
-    const fs::path path = fs::canonical(GetConfigFile(), ec);
-    if (ec) return;
-    conf = GetPathSecurityFacts(path);
-    conf_dir = GetPathSecurityFacts(path.parent_path());
 }
 
 //! The service account the listener may also belong to: -rpcserviceuser from the configuration
@@ -395,16 +399,12 @@ ListenerCheckResult CheckRpcListener(const CService& local, const CService& remo
     // No backend on this platform: the client sends as it always has.
     return {ListenerVerdict::Accept, "unsupported"};
 #else
-    // A listener on another host is not in this host's table, and no other account on this host
-    // holds it.
-    if (!IsLocalPeerAddress(remote, GetHostInterfaceAddresses())) {
-        return {ListenerVerdict::Accept, "remote"};
-    }
-
     const std::string where = remote.ToString();
 
-    // A read of the table is not atomic: a line can be skipped or repeated when the table changes
-    // during the read. A miss or a duplicate is read again a few times.
+    // The table first: a row for this connection shows the listener is on this host whatever the
+    // address, including one that is routed locally without being on an interface. A read of the
+    // table is not atomic, so a line can be skipped or repeated when the table changes during the
+    // read; a miss or a duplicate is read again a few times.
     std::optional<TcpConnEntry> server_side;
     for (int attempt = 0; attempt < LISTENER_LOOKUP_ATTEMPTS && !server_side; ++attempt) {
         if (attempt > 0) UninterruptibleSleep(LISTENER_LOOKUP_RETRY_DELAY);
@@ -412,7 +412,15 @@ ListenerCheckResult CheckRpcListener(const CService& local, const CService& remo
             server_side = FindServerSide(*tables, local, remote);
         }
     }
-    if (!server_side) return {ListenerVerdict::Refuse, UnidentifiedListenerMessage(where)};
+
+    // Only a connection missing from the table can be another host's, and only when this host's
+    // addresses are known and the address is none of them.
+    const LookupOutcome outcome = ClassifyLookup(server_side.has_value(), remote,
+                                                 server_side ? std::vector<CNetAddr>{} : GetHostInterfaceAddresses());
+    if (outcome == LookupOutcome::Remote) return {ListenerVerdict::Accept, "remote"};
+    if (outcome != LookupOutcome::CheckOwner || !server_side) {
+        return {ListenerVerdict::Refuse, UnidentifiedListenerMessage(where)};
+    }
 
     const std::optional<ListenerIdentity> listener = IdentifyListener(*server_side);
     if (!listener) return {ListenerVerdict::Refuse, UnidentifiedListenerMessage(where)};

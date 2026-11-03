@@ -37,6 +37,10 @@
 #include <functional>
 #include <list>
 
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
+
 // Suite-level guard: util_GetArg and util_ParseParameters leave their test
 // arguments in the global ArgsManager (ClearArgs() clears only the
 // registered-argument table, not the settings).
@@ -383,6 +387,82 @@ BOOST_AUTO_TEST_CASE(config_file_used_includes)
     negated.ReadConfigString("includeconf=other.conf\nnoincludeconf=1\n");
     BOOST_CHECK(!negated.ConfigFileUsedIncludes());
 }
+
+#ifndef WIN32
+BOOST_AUTO_TEST_CASE(config_file_facts_are_the_file_read)
+{
+    // base/link.conf -> base/held/real.conf, which sets datadir= to base/other, where another
+    // configuration file waits. Each file and directory has its own mode, so the recorded facts
+    // show which one they came from.
+    const fs::path base = GetDataDir(false) / "config_file_facts";
+    const fs::path held = base / "held";
+    const fs::path other = base / "other";
+    const fs::path real = held / "real.conf";
+    const fs::path link = base / "link.conf";
+    const fs::path other_conf = other / "gridcoinresearch.conf";
+    fs::remove_all(base);
+    fs::create_directories(held);
+    fs::create_directories(other);
+
+    const auto write = [](const fs::path& path, const std::string& text, mode_t mode) {
+        fsbridge::ofstream out(path);
+        out << text;
+        out.close();
+        BOOST_REQUIRE(::chmod(path.string().c_str(), mode) == 0);
+    };
+    write(real, "datadir=" + other.string() + "\nrpcport=1\n", 0640);
+    write(other_conf, "rpcport=2\n", 0600);
+    BOOST_REQUIRE(::chmod(held.string().c_str(), 0700) == 0);
+    BOOST_REQUIRE(::chmod(base.string().c_str(), 0755) == 0);
+    fs::create_symlink(real, link);
+
+    struct stat real_st;
+    struct stat held_st;
+    struct stat other_st;
+    BOOST_REQUIRE(::stat(real.string().c_str(), &real_st) == 0);
+    BOOST_REQUIRE(::stat(held.string().c_str(), &held_st) == 0);
+    BOOST_REQUIRE(::stat(other_conf.string().c_str(), &other_st) == 0);
+
+    TestArgsManager args;
+    args.SetupArgs({{"-conf", ArgsManager::ALLOW_ANY}, {"-datadir", ArgsManager::ALLOW_ANY}, {"-rpcport", ArgsManager::ALLOW_ANY}});
+    const std::string conf_arg = "-conf=" + link.string();
+    std::array argv{"x", conf_arg.c_str()};
+    std::string error;
+    BOOST_REQUIRE(args.ParseParameters(argv.size(), argv.data(), error));
+    BOOST_CHECK(!args.GetConfigFileFacts());
+    BOOST_REQUIRE_MESSAGE(args.ReadConfigFiles(error), error);
+    BOOST_CHECK_EQUAL(args.GetArg("-rpcport", ""), "1");
+    BOOST_CHECK_EQUAL(args.GetArg("-datadir", ""), other.string());
+
+    // The facts are those of the file read, through the link, and of the directory that holds it.
+    const std::optional<ConfigFileFacts> facts = args.GetConfigFileFacts();
+    BOOST_REQUIRE(facts);
+    BOOST_CHECK_EQUAL(facts->device, static_cast<uint64_t>(real_st.st_dev));
+    BOOST_CHECK_EQUAL(facts->inode, static_cast<uint64_t>(real_st.st_ino));
+    BOOST_CHECK_EQUAL(facts->file.owner, static_cast<uint64_t>(real_st.st_uid));
+    BOOST_CHECK_EQUAL(facts->file.mode, static_cast<uint32_t>(real_st.st_mode));
+    BOOST_CHECK(facts->inode != static_cast<uint64_t>(other_st.st_ino));
+    BOOST_REQUIRE(facts->dir);
+    BOOST_CHECK_EQUAL(facts->dir->owner, static_cast<uint64_t>(held_st.st_uid));
+    BOOST_CHECK_EQUAL(facts->dir->mode, static_cast<uint32_t>(held_st.st_mode));
+
+    // A file put at the same path afterwards changes nothing recorded.
+    const fs::path swap = held / "swap.conf";
+    write(swap, "rpcport=3\n", 0666);
+    fs::rename(swap, real);
+    const std::optional<ConfigFileFacts> after = args.GetConfigFileFacts();
+    BOOST_REQUIRE(after);
+    BOOST_CHECK_EQUAL(after->inode, static_cast<uint64_t>(real_st.st_ino));
+    BOOST_CHECK_EQUAL(after->file.mode, static_cast<uint32_t>(real_st.st_mode));
+
+    // A later read that finds no file leaves no facts from the earlier one.
+    fs::remove(link);
+    BOOST_CHECK(!args.ReadConfigFiles(error));
+    BOOST_CHECK(!args.GetConfigFileFacts());
+
+    fs::remove_all(base);
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(util_ParseParameters)
 {

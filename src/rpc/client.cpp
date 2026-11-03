@@ -449,9 +449,11 @@ UniValue ParseNonRFCJSONValue(const std::string& strVal)
 bool ShouldRetryWarmupReply(bool rpcwait, const UniValue& reply)
 {
     if (!rpcwait || !reply.isObject()) return false;
-    const UniValue& error = find_value(reply, "error");
+    // Held by value, since GCC's -Wdangling-reference cannot tell that find_value returns a
+    // reference into its object and not into the temporary key string.
+    const UniValue error = find_value(reply, "error");
     if (!error.isObject()) return false;
-    const UniValue& code = find_value(error, "code");
+    const UniValue code = find_value(error, "code");
     return code.isNum() && code.get_int() == RPC_IN_WARMUP;
 }
 

@@ -47,6 +47,13 @@
 # include <sys/prctl.h>
 #endif
 
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
+
+#include <cstdio>
+#include <sstream>
+
 #ifdef HAVE_MALLOPT_ARENA_MAX
 #include <malloc.h>
 #endif
@@ -666,6 +673,12 @@ std::optional<std::string> ArgsManager::GetConfigFileArg(const std::string& arg)
     return value.isTrue() ? std::string{"1"} : value.get_str();
 }
 
+std::optional<ConfigFileFacts> ArgsManager::GetConfigFileFacts() const
+{
+    LOCK(cs_args);
+    return m_config_file_facts;
+}
+
 bool ArgsManager::ConfigFileUsedIncludes() const
 {
     LOCK(cs_args);
@@ -1135,12 +1148,56 @@ bool ArgsManager::ReadConfigStream(std::istream& stream, const std::string& file
     return true;
 }
 
+enum class ConfigFileRead { NotOpened, Read, ReadError };
+
+//! The whole configuration file at path, read through one open file. On POSIX the facts recorded
+//! come from fstat on that same open file, so they describe the contents read. The directory is
+//! recorded only while the path, symbolic links resolved, still names the file that is open.
+static ConfigFileRead ReadConfigFileContents(const fs::path& path, std::string& text,
+                                             std::optional<ConfigFileFacts>& facts)
+{
+    FILE* file = fsbridge::fopen(path, "r");
+    if (file == nullptr) return ConfigFileRead::NotOpened;
+
+#ifndef WIN32
+    struct stat file_st;
+    if (::fstat(::fileno(file), &file_st) == 0) {
+        ConfigFileFacts recorded;
+        recorded.file.owner = static_cast<uint64_t>(file_st.st_uid);
+        recorded.file.mode = static_cast<uint32_t>(file_st.st_mode);
+        recorded.device = static_cast<uint64_t>(file_st.st_dev);
+        recorded.inode = static_cast<uint64_t>(file_st.st_ino);
+
+        boost::system::error_code ec;
+        const fs::path resolved = fs::canonical(path, ec);
+        struct stat resolved_st;
+        struct stat dir_st;
+        if (!ec && ::stat(resolved.string().c_str(), &resolved_st) == 0 &&
+            resolved_st.st_dev == file_st.st_dev && resolved_st.st_ino == file_st.st_ino &&
+            ::stat(resolved.parent_path().string().c_str(), &dir_st) == 0) {
+            recorded.dir = FileOwnerMode{static_cast<uint64_t>(dir_st.st_uid), static_cast<uint32_t>(dir_st.st_mode)};
+        }
+        facts = recorded;
+    }
+#endif
+
+    char buffer[4096];
+    size_t got;
+    while ((got = std::fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        text.append(buffer, got);
+    }
+    const bool read_error = std::ferror(file) != 0;
+    std::fclose(file);
+    return read_error ? ConfigFileRead::ReadError : ConfigFileRead::Read;
+}
+
 bool ArgsManager::ReadConfigFiles(std::string& error, bool ignore_invalid_keys)
 {
     {
         LOCK(cs_args);
         m_settings.ro_config.clear();
         m_config_sections.clear();
+        m_config_file_facts.reset();
     }
 
     const std::string confPath = GetArg("-conf", GRIDCOIN_CONF_FILENAME);
@@ -1148,18 +1205,29 @@ bool ArgsManager::ReadConfigFiles(std::string& error, bool ignore_invalid_keys)
     fs::path config_file_spec = GetConfigFile(confPath);
     if (config_file_spec.empty()) return false;
 
-    fsbridge::ifstream stream(config_file_spec);
+    std::string config_text;
+    std::optional<ConfigFileFacts> config_facts;
+    const ConfigFileRead read = ReadConfigFileContents(config_file_spec, config_text, config_facts);
 
     // not ok to have a config file specified that cannot be opened
-    if (IsArgSet("-conf") && !stream.good()) {
+    if (IsArgSet("-conf") && read == ConfigFileRead::NotOpened) {
         error = strprintf("specified config file \"%s\" could not be opened.", confPath);
+        return false;
+    }
+    if (read == ConfigFileRead::ReadError) {
+        error = strprintf("config file \"%s\" could not be read.", confPath);
         return false;
     }
 
     // ok to not have a config file
-    if (stream.good()) {
+    if (read == ConfigFileRead::Read) {
+        std::istringstream stream(config_text);
         if (!ReadConfigStream(stream, confPath, error, ignore_invalid_keys)) {
             return false;
+        }
+        {
+            LOCK(cs_args);
+            m_config_file_facts = config_facts;
         }
         // `-includeconf` cannot be included in the command line arguments except
         // as `-noincludeconf` (which indicates that no included conf file should be used).
