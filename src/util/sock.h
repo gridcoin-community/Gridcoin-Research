@@ -80,4 +80,18 @@ private:
     SOCKET m_socket;
 };
 
+//! A socket no child process inherits: SOCK_CLOEXEC where defined, else FD_CLOEXEC set before
+//! return; Windows: WSASocketW(..., WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT).
+//! INVALID_SOCKET with the platform error set on failure.
+SOCKET CreateCloexecSocket(int domain, int type, int protocol);
+
+//! accept() whose result no child inherits: accept4(SOCK_CLOEXEC) on Linux and the BSDs,
+//! accept + FD_CLOEXEC on macOS, accept + SetHandleInformation(HANDLE_FLAG_INHERIT, 0) on Windows.
+SOCKET AcceptCloexec(SOCKET listen_socket, sockaddr* addr, socklen_t* addr_len);
+
+//! Prepare a connected socket for close: shutdown(send), read and discard until the peer closes
+//! or `bound` passes. If the bound passed (POSIX), or always (Windows), set SO_LINGER {1, 0} so the
+//! close that follows releases the connection at once. Never throws; the caller closes.
+void DrainBeforeClose(SOCKET s, std::chrono::milliseconds bound);
+
 #endif // BITCOIN_UTIL_SOCK_H

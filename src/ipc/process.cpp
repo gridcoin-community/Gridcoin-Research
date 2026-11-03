@@ -4,6 +4,7 @@
 
 #include "ipc/process.h"
 #include "util/dir_permissions.h"
+#include "util/sock.h"
 
 #include "fs.h"
 #include "tinyformat.h"
@@ -184,21 +185,15 @@ bool IsPossiblyStaleSocketBindError(const std::error_code& ec)
 }
 
 //! Create an AF_UNIX SOCK_STREAM socket that is not inherited by child processes,
-//! so the IPC fd cannot leak into an exec'd child. POSIX uses SOCK_CLOEXEC
-//! atomically where available (Linux, the BSDs) and falls back to
-//! fcntl(FD_CLOEXEC) (notably macOS); Windows uses WSA_FLAG_NO_HANDLE_INHERIT.
+//! so the IPC fd cannot leak into an exec'd child (see CreateCloexecSocket).
 //! Returns -1 with the platform socket error set on failure.
 int MakeCloexecStreamSocket()
 {
-#ifdef WIN32
-    // WSA_FLAG_OVERLAPPED is required: libmultiprocess drives these sockets with
-    // kj's IOCP async backend (overlapped AcceptEx / WSARecv). Without it kj cannot
-    // post an async accept, so the daemon never accepts and clients get
-    // WSAECONNREFUSED even though node.sock exists and listen() succeeded.
-    // WSA_FLAG_NO_HANDLE_INHERIT is the close-on-exec equivalent.
-    SOCKET s = ::WSASocketW(AF_UNIX, SOCK_STREAM, 0, nullptr, 0,
-                            WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
+    // Windows: WSA_FLAG_OVERLAPPED is required because libmultiprocess drives these
+    // sockets with kj's IOCP async backend (overlapped AcceptEx / WSARecv).
+    SOCKET s = CreateCloexecSocket(AF_UNIX, SOCK_STREAM, 0);
     if (s == INVALID_SOCKET) return -1;
+#ifdef WIN32
     // The descriptor is carried as int (libmultiprocess SocketId) across the
     // transport. Windows AF_UNIX handles fit in the low 32 bits in practice, but
     // guard the assumption: a value that would not round-trip through int is
@@ -209,21 +204,8 @@ int MakeCloexecStreamSocket()
         ::WSASetLastError(WSAEMFILE);
         return -1;
     }
-    return static_cast<int>(s);
-#elif defined(SOCK_CLOEXEC)
-    return ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-#else
-    int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd == -1) return -1;
-    const int flags = ::fcntl(fd, F_GETFD);
-    if (flags == -1 || ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == -1) {
-        const int saved = errno;
-        ::close(fd);
-        errno = saved;
-        return -1;
-    }
-    return fd;
 #endif
+    return static_cast<int>(s);
 }
 
 //! Connect a fresh AF_UNIX SOCK_STREAM socket to \p addr. Returns the connected
