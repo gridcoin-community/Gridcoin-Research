@@ -258,6 +258,18 @@ public:
         m_start_pindex = pindex;
 
         for (; pindex; pindex = pindex->pnext) {
+            // Record each research reward block, including the block before
+            // version 11, where snapshot accrual then activates.
+            if (pindex->ResearchSubsidy() > 0) {
+                if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
+                    if (cpid->IsZero()) {
+                        RepairZeroCpidIndex(pindex);
+                    }
+
+                    RecordRewardBlock(*cpid, pindex);
+                }
+            }
+
             if (pindex->nHeight + 1 == Params().GetConsensus().BlockV11Height) {
                 // Set the timestamp for the block version 11 threshold. This
                 // is temporary. Remove this variable in a release that comes
@@ -269,16 +281,6 @@ public:
                 // This will finish loading the research accounting context
                 // for snapshot accrual (block version 11+):
                 return ActivateSnapshotAccrual(pindex, current_superblock);
-            }
-
-            if (pindex->ResearchSubsidy() > 0) {
-                if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
-                    if (cpid->IsZero()) {
-                        RepairZeroCpidIndex(pindex);
-                    }
-
-                    RecordRewardBlock(*cpid, pindex);
-                }
             }
 
             // Note there is no RecordMRCRewardBlock(pindex) here, because there
@@ -696,8 +698,12 @@ public:
     //! \brief Switch from legacy research age accrual calculations to the
     //! superblock snapshot accrual system.
     //!
-    //! \param pindex     Index of the block to enable snapshot accrual for.
-    //! \param superblock Refers to the current active superblock.
+    //! The research accounts must already reflect every block through
+    //! \p baseline_pindex.
+    //!
+    //! \param baseline_pindex The block before version 11. Snapshot accrual
+    //! applies from the next block.
+    //! \param superblock      Refers to the current active superblock.
     //!
     //! \return \c false if the snapshot system failed to initialize because of
     //! an error.
@@ -792,7 +798,7 @@ public:
             //
             bool recomputing = false;
 
-            for (const CBlockIndex* pindex = baseline_pindex;
+            for (const CBlockIndex* pindex = baseline_pindex->pnext;
                 pindex;
                 pindex = pindex->pnext)
             {
@@ -1320,7 +1326,7 @@ public:
 
         // Reset the research accounts and reinitialize the whole tally. We
         // need to make sure that an account contains the last reward block
-        // below the baseline:
+        // at or below the baseline:
         //
         m_researchers.clear();
 
