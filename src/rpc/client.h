@@ -48,6 +48,10 @@ static constexpr size_t MAX_ELEVATION_HEADER_VALUE_BYTES{8000};
 //! MAX_ELEVATION_HEADER_VALUE_BYTES.
 std::optional<std::string> EncodeElevationHeaderValue(const SecureString& passphrase);
 
+//! The prompt at `index` of a method's prompt list; a generic prompt when the list is shorter, so
+//! that a passphrase without a row of its own is still asked for and nothing is read out of range.
+std::string PassphrasePromptAt(const std::vector<std::string>& prompts, size_t index);
+
 //! Passphrase positions confirmed by a second prompt when stdin is a terminal:
 //! encryptwallet {0}, walletpassphrasechange {1}; empty otherwise.
 std::vector<int> NewPassphraseIndexes(const std::string& method);

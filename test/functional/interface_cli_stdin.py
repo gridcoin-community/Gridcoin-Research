@@ -21,12 +21,64 @@ passphrase.
   - the flags are refused for methods they do not apply to, and a short input is reported;
   - the command-line form still works and warns.
 """
+import base64
+import socket
 import subprocess
+import threading
 
 from test_framework.test_framework import GridcoinTestFramework
+from test_framework.util import assert_equal, rpc_port
 
 PASSPHRASE = "pä ss wörd"
 NEW_PASSPHRASE = "new pw"
+
+
+class CaptureServer:
+    """Accepts one connection on 127.0.0.1, keeps the request it reads and answers with a canned reply."""
+
+    def __init__(self, port):
+        self.request = b""
+        self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.listener.bind(("127.0.0.1", port))
+        self.listener.listen(1)
+        self.listener.settimeout(30)
+        self.thread = threading.Thread(target=self.serve)
+        self.thread.start()
+
+    def serve(self):
+        try:
+            conn, _ = self.listener.accept()
+        except OSError:
+            return
+        with conn:
+            conn.settimeout(30)
+            data = b""
+            while b"\r\n\r\n" not in data:
+                chunk = conn.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+            head, _, body = data.partition(b"\r\n\r\n")
+            length = 0
+            for line in head.split(b"\r\n"):
+                if line.lower().startswith(b"content-length:"):
+                    length = int(line.split(b":", 1)[1])
+            while len(body) < length:
+                chunk = conn.recv(4096)
+                if not chunk:
+                    break
+                body += chunk
+            self.request = head + b"\r\n\r\n" + body
+            reply = b'{"result":"x","error":null,"id":1}'
+            conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                         + str(len(reply)).encode() + b"\r\nConnection: close\r\n\r\n" + reply)
+
+    def finish(self):
+        """The request captured; the listener is closed."""
+        self.thread.join(timeout=35)
+        self.listener.close()
+        return self.request.decode("utf-8", "replace")
 
 
 class InterfaceCLIStdinTest(GridcoinTestFramework):
@@ -61,6 +113,19 @@ class InterfaceCLIStdinTest(GridcoinTestFramework):
         assert result.returncode != 0, result.stdout
         assert message in result.stderr, result.stderr
 
+    def capture_headers(self, address, options, input):
+        """The X-Gridcoin-Elevate lines of the request the client writes for signmessage."""
+        port = rpc_port(1)
+        server = CaptureServer(port)
+        try:
+            result = self.run_client("-rpcconnect=127.0.0.1", "-rpcport=" + str(port), *options, "signmessage",
+                                     address, "m", input=input)
+        finally:
+            request = server.finish()
+        self.assert_client_ok(result)
+        assert_equal(result.stdout.strip(), "x")
+        return [line for line in request.split("\r\n") if line.lower().startswith("x-gridcoin-elevate:")]
+
     def run_test(self):
         node = self.nodes[0]
 
@@ -70,9 +135,9 @@ class InterfaceCLIStdinTest(GridcoinTestFramework):
         node.wait_until_stopped()
 
         # The regtest wallet database is in memory, so the restarted node has an unencrypted wallet
-        # and the unlock calls below end at the wallet's own refusal. What is checked is that each
-        # passphrase reaches the server in the right place, from standard input, and not how the
-        # wallet then judges it (rpc_elevation_tests and the wallet tests cover that).
+        # and the unlock calls below end at the wallet's own refusal. What is checked is that the
+        # request, built from standard input, reaches the server and is answered by the wallet; the
+        # positions of the passphrases are pinned by the build_params_with_secrets unit test.
         self.start_node(0)
 
         self.log.info("walletpassphrase and walletpassphrasechange read their passphrases from standard input")
@@ -85,12 +150,14 @@ class InterfaceCLIStdinTest(GridcoinTestFramework):
         assert "-15" in result.stderr and "unencrypted wallet" in result.stderr, result.stderr
 
         self.log.info("-stdinelevate sends the passphrase in the request header")
+        # The node's wallet is unencrypted here, so its reply cannot show whether the header was
+        # sent; a capture listener on the port the node does not use shows what the client wrote.
+        # The call without the flag carries no such header.
         address = node.getnewaddress()
-        # A header that did not decode as base64 of a passphrase is answered with -14 before the
-        # command runs, so the command's success shows the server took the header.
-        result = self.run_client("-stdinelevate", "signmessage", address, "m", input=PASSPHRASE + "\n")
-        self.assert_client_ok(result)
-        assert node.verifymessage(address, result.stdout.strip(), "m")
+        elevate_lines = self.capture_headers(address, ["-stdinelevate"], PASSPHRASE + "\n")
+        expected = "X-Gridcoin-Elevate: " + base64.b64encode(PASSPHRASE.encode("utf-8")).decode()
+        assert_equal(elevate_lines, [expected])
+        assert_equal(self.capture_headers(address, [], None), [])
 
         self.log.info("The flags are refused where they do not apply, and a short input is reported")
         self.assert_client_fails(["-stdinwalletpassphrase", "getblockcount"],

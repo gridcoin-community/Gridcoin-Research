@@ -80,6 +80,32 @@ BOOST_AUTO_TEST_CASE(read_secure_line_keeps_nul)
     BOOST_CHECK_EQUAL(std::string(line.begin(), line.end()), std::string("a\0b", 3));
 }
 
+// A short passphrase must live in the secure allocator's memory, not inside the string object.
+BOOST_AUTO_TEST_CASE(read_secure_line_reserves_secure_capacity)
+{
+    std::istringstream in("pw\n");
+    SecureString line;
+
+    BOOST_CHECK(ReadSecureLine(in, line));
+    BOOST_CHECK_EQUAL(std::string(line.begin(), line.end()), "pw");
+    BOOST_CHECK_GE(line.capacity(), 100u);
+
+    SecureString kept;
+    kept.reserve(500);
+    std::istringstream again("x\n");
+    BOOST_CHECK(ReadSecureLine(again, kept));
+    BOOST_CHECK_GE(kept.capacity(), 500u);
+}
+
+BOOST_AUTO_TEST_CASE(passphrase_prompt_falls_back)
+{
+    const std::vector<std::string> one{"Old> "};
+
+    BOOST_CHECK_EQUAL(PassphrasePromptAt(one, 0), "Old> ");
+    BOOST_CHECK_EQUAL(PassphrasePromptAt(one, 1), "Wallet passphrase> ");
+    BOOST_CHECK_EQUAL(PassphrasePromptAt({}, 0), "Wallet passphrase> ");
+}
+
 BOOST_AUTO_TEST_CASE(build_params_with_secrets)
 {
     UniValue p = BuildParamsWithSecrets("walletpassphrase", {"60", "true"}, {SecureString{"pw"}});

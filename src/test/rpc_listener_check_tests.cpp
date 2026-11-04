@@ -508,11 +508,14 @@ BOOST_AUTO_TEST_CASE(callrpc_sends_nothing_when_refused)
     OneShotServer server(/*reply=*/false);
     ClientArgs args(server.Port());
 
+    // The request would carry a passphrase in the elevation header; a refused listener gets none of it.
+    const SecureString elevation{"test passphrase"};
+
     std::string error;
     try {
         CallRPC("getblockcount", UniValue(UniValue::VARR), {[](auto&, auto&) {
                     return ListenerCheckResult{ListenerVerdict::Refuse, "test refusal"};
-                }});
+                }, &elevation});
     } catch (const std::runtime_error& e) {
         error = e.what();
     }

@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdio>
 #include <optional>
 #include <iostream>
 #include <memory>
@@ -526,6 +527,11 @@ bool ReadSecureLine(std::istream& in, SecureString& out)
 {
     out.clear();
 
+    // Reserved past the short-string capacity first, so that even a short passphrase is held in
+    // the secure allocator's memory rather than inside the string object, where it would never
+    // be cleansed.
+    if (out.capacity() < 100) out.reserve(100);
+
     bool any_byte{false};
 
     for (;;) {
@@ -586,9 +592,16 @@ UniValue BuildParamsWithSecrets(const std::string& method, const std::vector<std
         }
 
         const SecureString& secret = secrets[next_secret++];
+        // The passphrase is copied into a named string and a named value, both overwritten once
+        // pushed. The univalue constructor and push_back copy it again into temporaries that this
+        // code cannot reach; the copy kept in params is overwritten later by
+        // PassphraseParamsCleanser.
         std::string copy(secret.begin(), secret.end());
-        params.push_back(copy);
+        UniValue value(UniValue::VSTR, copy);
+        params.push_back(value);
         CleanseString(copy);
+        const std::string& text = value.get_str();
+        if (!text.empty()) memory_cleanse(const_cast<char*>(text.data()), text.size());
     }
 
     return params;
@@ -612,6 +625,11 @@ std::vector<int> NewPassphraseIndexes(const std::string& method)
     return {};
 }
 
+std::string PassphrasePromptAt(const std::vector<std::string>& prompts, size_t index)
+{
+    return index < prompts.size() ? prompts[index] : std::string{"Wallet passphrase> "};
+}
+
 //! The prompts of a method's passphrases, in the order of PassphraseParamIndexes.
 static std::vector<std::string> PassphrasePrompts(const std::string& method)
 {
@@ -625,6 +643,15 @@ static std::vector<std::string> PassphrasePrompts(const std::string& method)
 //! at the terminal. false at end of input.
 static bool PromptSecretLine(const std::string& prompt, SecureString& out)
 {
+    // The C stream under std::cin is made unbuffered before the first passphrase is read, so
+    // that its buffer keeps no copy of the line. Changing the buffering is allowed only before
+    // the first read.
+    static bool unbuffered{false};
+    if (!unbuffered) {
+        std::setvbuf(stdin, nullptr, _IONBF, 0);
+        unbuffered = true;
+    }
+
     const bool prompting = !StdinReady();
 
     if (prompting) {
@@ -659,7 +686,7 @@ static std::vector<SecureString> ReadMethodPassphrases(const std::string& method
     for (size_t i = 0; i < indexes.size(); ++i) {
         SecureString line;
 
-        if (!PromptSecretLine(prompts[i], line)) {
+        if (!PromptSecretLine(PassphrasePromptAt(prompts, i), line)) {
             throw std::runtime_error(strprintf("expected %u passphrase line(s) on standard input, got %u",
                                                indexes.size(), secrets.size()));
         }
