@@ -520,26 +520,27 @@ if(ENABLE_DAEMON)
     # Installation
     if(UNIX AND NOT APPLE)
         include(GNUInstallDirs)
-        install(TARGETS gridcoinresearchd COMPONENT daemon
-            DESTINATION "${CMAKE_INSTALL_BINDIR}"
-        )
+        include("${CMAKE_SOURCE_DIR}/cmake/systemd_units.cmake")
+        # The daemon is installed execute-only (0711): a process that may run it cannot
+        # read it, and it is non-dumpable from execve.
+        if(GRC_DAEMON STREQUAL "gridcoinresearchd")
+            install(TARGETS gridcoinresearchd COMPONENT daemon
+                DESTINATION "${CMAKE_INSTALL_BINDIR}"
+                PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE
+            )
+        else()
+            # The testnet units name the daemon gridcointestnetd
+            install(PROGRAMS "$<TARGET_FILE:gridcoinresearchd>" COMPONENT daemon
+                DESTINATION "${CMAKE_INSTALL_BINDIR}"
+                RENAME "${GRC_DAEMON}"
+                PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE
+            )
+        endif()
         install(FILES "${CMAKE_SOURCE_DIR}/share/gridcoin/refused-setting-keys.txt" COMPONENT daemon
             DESTINATION "${CMAKE_INSTALL_DATADIR}/gridcoin"
         )
         install(FILES "${CMAKE_SOURCE_DIR}/doc/gridcoinresearchd.1" COMPONENT daemon
             DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
-        )
-        install(FILES "${CMAKE_SOURCE_DIR}/contrib/init/gridcoinresearchd.service" COMPONENT daemon
-            DESTINATION "lib/systemd/system"
-        )
-        install(FILES "${CMAKE_SOURCE_DIR}/contrib/init/gridcoinresearchd-autounlock.service" COMPONENT daemon
-            DESTINATION "lib/systemd/system"
-        )
-        # The stake-only autounlock helper the unit above runs. install(PROGRAMS ...)
-        # sets the executable bit; share/gridcoin is portable (share == share on
-        # every distro), matching the unit's ExecStart path.
-        install(PROGRAMS "${CMAKE_SOURCE_DIR}/contrib/init/gridcoin_autounlock_helper.py" COMPONENT daemon
-            DESTINATION "${CMAKE_INSTALL_DATADIR}/gridcoin"
         )
         install(FILES "${CMAKE_SOURCE_DIR}/contrib/completions/bash/gridcoinresearchd.bash" COMPONENT daemon
             DESTINATION "${CMAKE_INSTALL_DATADIR}/bash-completion/completions"

@@ -1,0 +1,22 @@
+# Wallet passphrase helper socket for the same-account core of one user (instance %i).
+# Generated from contrib/init/gridcoin-autounlock@.socket.in by CMake.
+#
+# Only that user can connect (SocketMode=0600). The helper started on a connection
+# serves the passphrase to the main process of the user's core unit and to nobody
+# else. See doc/running-unattended.md.
+
+[Unit]
+Description=Gridcoin wallet passphrase helper socket for %i
+
+[Socket]
+ListenStream=/run/@GRC_AUTOUNLOCK@/%i.sock
+SocketUser=%i
+SocketMode=0600
+DirectoryMode=0755
+Accept=no
+RemoveOnStop=yes
+TriggerLimitIntervalSec=10s
+TriggerLimitBurst=20
+
+[Install]
+WantedBy=sockets.target

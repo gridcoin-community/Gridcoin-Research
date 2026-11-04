@@ -31,6 +31,20 @@ These options toggle specific functionality within the Gridcoin client.
 | `ENABLE_MULTIPROCESS` | `OFF` | **Multiprocess (IPC) build (RFC #2937).** Builds against Cap'n Proto and the vendored libmultiprocess subtree so the `interfaces::` boundaries can be driven over IPC. Toolchain-only for now; see [multiprocess.md](multiprocess.md). | `CapnProto` (external); libmultiprocess is vendored in-tree |
 | `WITH_EXTERNAL_LIBMULTIPROCESS` | `OFF` | Build the vendored in-tree libmultiprocess subtree (default). Set to `ON` to link an external (system / depends) libmultiprocess instead — mainly useful when developing libmultiprocess itself. | `ENABLE_MULTIPROCESS` |
 
+### systemd units (Linux)
+
+The daemon install generates the systemd units, the sysusers.d entry and the tmpfiles.d entry from the templates in `contrib/init` for one network, and installs the daemon execute-only (mode 0711).
+
+| Option | Default | Why Use It? |
+| :--- | :--- | :--- |
+| `GRC_UNIT_NETWORK` | `main` | Network the generated units serve: `main` (`gridcoinresearchd`, account `gridcoin`) or `test` (`gridcointestnetd`, account `gridcointestnet`, `-testnet`). With `test` the daemon is installed as `gridcointestnetd`. |
+| `INSTALL_SYSTEMD_UNITS` | `ON` | Install the core units (system service and per-user `@` template), the sysusers.d entry and the tmpfiles.d entry. |
+| `INSTALL_SYSTEMD_AUTOUNLOCK` | `ON` | Install the autounlock helper and its four socket and service units. Needs systemd 251 or later; leave it `OFF` on older distributions. |
+| `GRC_SYSTEMD_UNITDIR` | `lib/systemd/system` | Unit directory, relative to `CMAKE_INSTALL_PREFIX`. |
+| `GRC_SYSUSERSDIR` | `lib/sysusers.d` | sysusers.d directory, relative to `CMAKE_INSTALL_PREFIX`. |
+| `GRC_TMPFILESDIR` | `lib/tmpfiles.d` | tmpfiles.d directory, relative to `CMAKE_INSTALL_PREFIX`. |
+| `GRC_UNIT_PYTHON3` | `/usr/bin/python3` | Interpreter the helper unit runs (`python3 -I`). |
+
 ---
 
 ## CPU & Assembly

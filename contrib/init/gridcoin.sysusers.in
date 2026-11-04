@@ -1,0 +1,3 @@
+# The dedicated account and the attach group of the system service.
+u @GRC_ACCOUNT@ - "Gridcoin daemon" /var/lib/@GRC_STATE_NAME@
+g @GRC_ATTACH_GROUP@ -

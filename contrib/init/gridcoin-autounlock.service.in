@@ -1,0 +1,50 @@
+# Wallet passphrase helper for the system service (different-account mode).
+# Generated from contrib/init/gridcoin-autounlock.service.in by CMake.
+#
+# Started by its socket unit on a connection. It runs as a dynamic user that holds
+# the encrypted credential, serves the passphrase to the main process of the bound
+# core unit (a child of the core is not served), and exits within a minute. It has
+# no network access. See doc/running-unattended.md.
+
+[Unit]
+Description=Gridcoin wallet passphrase helper
+Documentation=https://github.com/gridcoin-community/Gridcoin-Research/blob/development/doc/running-unattended.md
+Requires=dbus.socket
+After=dbus.socket
+RefuseManualStart=yes
+
+[Service]
+Type=exec
+ExecStart=@GRC_UNIT_PYTHON3@ -I @GRC_LIBEXECDIR@/@GRC_LIBEXEC_SUBDIR@/gridcoin-autounlock-helper --bound-unit=@GRC_DAEMON@.service --peer-user=@GRC_ACCOUNT@
+LoadCredentialEncrypted=wallet-passphrase:/etc/credstore.encrypted/@GRC_CRED_PREFIX@.wallet-passphrase
+Restart=no
+RuntimeMaxSec=60
+DynamicUser=yes
+UMask=0077
+LimitCORE=0
+
+# The helper reads the process table to see which process is connecting, so it has
+# no PrivatePIDs= and no ProtectProc=. It needs no network at all.
+ProtectHome=yes
+PrivateNetwork=yes
+IPAddressDeny=any
+RestrictAddressFamilies=AF_UNIX
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictNamespaces=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native

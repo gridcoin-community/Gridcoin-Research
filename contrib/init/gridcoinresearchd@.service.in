@@ -1,0 +1,54 @@
+# Gridcoin daemon, same-account mode: one instance per user (%i).
+# Generated from contrib/init/gridcoinresearchd@.service.in by CMake.
+#
+# Mode: the core runs as the user %i, in that user's own account and datadir, with the
+# same files and processes the user's desktop session has. This mode is for staking
+# convenience and autounlock: the core keeps running when you log out, and an
+# encrypted wallet can be unlocked for staking at start. There is no isolation from
+# your own session, and the user's supplementary groups ride along. For higher
+# security use the different-account mode, the system service @GRC_DAEMON@.service,
+# which runs the core as its own account.
+#
+# This file is a template. Run "@GRC_SERVICE_TOOL@ enable-user %i" as root, which
+# writes the drop-in that sets the real command line for the user, and then start the
+# instance. Until then the instance stops with an explanation and is not restarted.
+#
+# PrivatePIDs= is ignored with a log line before systemd 257. The full model is in
+# doc/running-unattended.md.
+#
+# It is not recommended to modify this file in-place, because it is overwritten by
+# package upgrades. Use "systemctl edit" for local changes.
+
+[Unit]
+Description=Gridcoin daemon for %i
+Documentation=https://github.com/gridcoin-community/Gridcoin-Research/blob/development/doc/running-unattended.md
+After=network-online.target
+Wants=network-online.target
+# One core per wallet: the system service and a user instance never run together.
+Conflicts=@GRC_DAEMON@.service
+
+[Service]
+User=%i
+# The drop-in from enable-user replaces this command line, which has -nodaemon
+# and -nodaemonwait. Exit status 78 is configuration error and is not restarted.
+ExecStart=/bin/sh -c 'echo "%n: run @GRC_SERVICE_TOOL@ enable-user %i first" >&2; exit 78'
+
+# Process management
+####################
+Type=notify
+NotifyAccess=main
+TimeoutStartSec=30min
+TimeoutStopSec=600
+Restart=on-failure
+RestartSec=10
+RestartPreventExitStatus=78
+
+# Memory and files
+##################
+NoNewPrivileges=true
+LimitCORE=0
+UMask=0077
+PrivatePIDs=yes
+
+[Install]
+WantedBy=multi-user.target

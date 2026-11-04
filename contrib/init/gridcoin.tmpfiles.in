@@ -1,0 +1,4 @@
+# The configuration directory is owned by root and readable by the service account;
+# the service tool keeps its own state under /var/lib/gridcoin-service.
+d @GRC_CONF_DIR@ 0710 root @GRC_ACCOUNT@ -
+d /var/lib/gridcoin-service 0700 root root -

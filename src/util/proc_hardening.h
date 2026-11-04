@@ -25,7 +25,7 @@ static const bool DEFAULT_NO_NEW_PRIVS = true;
 //! \c CapabilityBoundingSet= is the authoritative drop for packaged installs.
 //!
 //! This is defence-in-depth that complements, and is secondary to, the hardened
-//! systemd unit (contrib/init/gridcoinresearchd.service). It is deliberately NOT
+//! systemd unit (contrib/init/gridcoinresearchd.service.in). It is deliberately NOT
 //! a syscall sandbox: an in-process seccomp-bpf filter was considered and
 //! rejected (Bitcoin Core added then removed theirs as unmaintainable; the
 //! declarative systemd SystemCallFilter= is the maintained equivalent).
