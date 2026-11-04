@@ -424,15 +424,6 @@ const CTxDestination CWallet::MasterAddress(int height)
     return CPubKey(Params().MasterKey(height)).GetID();
 }
 
-CKey CWallet::MasterPrivateKey(int height) const
-{
-    CKey key_out;
-
-    GetKey(CPubKey(Params().MasterKey(height)).GetID(), key_out);
-
-    return key_out;
-}
-
 CPubKey CWallet::GenerateNewKey() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata

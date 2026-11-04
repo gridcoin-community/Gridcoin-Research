@@ -367,8 +367,8 @@ def check_sources(key_calls, listed, errors):
                               "list the file".format(path, line, name, TABLE))
         elif listed[path] != len(calls):
             errors.append("{}: {} calls of the key functions, but {} lists {}; a new call is a "
-                          "new path to the keys: add its row, then set the count".format(
-                              path, len(calls), TABLE, listed[path]))
+                          "new path to the keys: add its row, then set the count (a removed call "
+                          "needs only the count)".format(path, len(calls), TABLE, listed[path]))
 
     for path in sorted(listed):
         if path not in key_calls:

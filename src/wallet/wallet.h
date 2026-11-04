@@ -224,30 +224,6 @@ public:
     //!
     static const CTxDestination MasterAddress(int height);
 
-    //!
-    //! \brief Get the imported master private key used to sign administrative
-    //! contracts.
-    //!
-    //! A master key holder uses the master private key to sign administrative
-    //! contracts, such as project whitelist additions and removals. All nodes
-    //! verify the contracts using the embedded public key that corresponds to
-    //! this private key.
-    //!
-    //! Key holders need to import the private key into the wallet before they
-    //! can sign administrative contracts. The following RPC command imports a
-    //! private key and assigns to it the optional label of "master":
-    //!
-    //!    importprivkey <hex_key_string> master
-    //!
-    //! Note that this private key differs from the wallet keystore's "master"
-    //! key which the wallet uses to encrypt the private keys in storage.
-    //!
-    //! \param height The block height which the master key is valid for.
-    //!
-    //! \return An empty key when no master key imported.
-    //!
-    CKey MasterPrivateKey(int height) const;
-
     void SetNull() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
         nWalletVersion = wallet::FEATURE_BASE;

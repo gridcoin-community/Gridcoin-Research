@@ -117,7 +117,7 @@
     "src/wallet/rpcwallet.cpp": 2,
     "src/wallet/staking_signer.cpp": 1,
     "src/wallet/staking_signer.h": 1,
-    "src/wallet/wallet.cpp": 4,
+    "src/wallet/wallet.cpp": 3,
     "src/wallet/wallet.h": 1
   }
 }
