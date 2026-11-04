@@ -7,6 +7,11 @@
 #include "guiconstants.h"
 #include "util.h"
 
+#ifdef WIN32
+#include "crypto/sha256.h"
+#include "util/strencodings.h"
+#endif
+
 #include <atomic>
 #include <functional>
 #include <string>
@@ -15,9 +20,44 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/interprocess/ipc/message_queue.hpp>
 
+#ifdef WIN32
+#include <windows.h>
+#include <lmcons.h>
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#endif
+
 using namespace boost;
 using namespace boost::interprocess;
 using namespace boost::posix_time;
+
+std::string GetUriQueueName()
+{
+#ifdef WIN32
+    // The first 16 hex characters of the SHA256 of the UTF-8 user name
+    wchar_t wname[UNLEN + 1] = {};
+    DWORD wlen = UNLEN + 1;
+    std::string user;
+    if (GetUserNameW(wname, &wlen)) {
+        int nbytes = WideCharToMultiByte(CP_UTF8, 0, wname, -1, nullptr, 0, nullptr, nullptr);
+        if (nbytes > 1) {
+            user.resize(static_cast<size_t>(nbytes));
+            WideCharToMultiByte(CP_UTF8, 0, wname, -1, &user[0], nbytes, nullptr, nullptr);
+            // Drop the terminating NUL that the conversion counted
+            user.resize(static_cast<size_t>(nbytes) - 1);
+        }
+    }
+
+    unsigned char hash[CSHA256::OUTPUT_SIZE];
+    CSHA256().Write(reinterpret_cast<const unsigned char*>(user.data()), user.size()).Finalize(hash);
+
+    return "GridcoinURI-" + HexStr(Span<const unsigned char>(hash, CSHA256::OUTPUT_SIZE)).substr(0, 16);
+#else
+    return strprintf("GridcoinURI-%u", static_cast<unsigned int>(geteuid()));
+#endif
+}
 
 #if defined MAC_OSX || defined __FreeBSD__
 // URI handling not implemented on OSX yet
@@ -49,6 +89,35 @@ void ipcShutdown()
 
 static void ipcThread2(void* pArg);
 
+//! True if the named queue is owned by the current user with mode 0600. Only
+//! Linux exposes the queue as a file (under /dev/shm) that can be checked; on
+//! other systems the per-user name is all there is and this returns true.
+static bool UriQueueIsOurs(const std::string& name)
+{
+#ifdef __linux__
+    struct stat st;
+    if (stat(("/dev/shm/" + name).c_str(), &st) != 0) return false;
+
+    // mode_t is unsigned on this platform, compare as such
+    return st.st_uid == geteuid() && (st.st_mode & static_cast<::mode_t>(07777)) == static_cast<::mode_t>(0600);
+#else
+    return true;
+#endif
+}
+
+//! Creation permissions for the queue, owner only on POSIX.
+#ifndef WIN32
+static boost::interprocess::permissions UriQueuePermissions()
+{
+    return boost::interprocess::permissions(0600);
+}
+#else
+static boost::interprocess::permissions UriQueuePermissions()
+{
+    return boost::interprocess::permissions();
+}
+#endif
+
 static bool ipcScanCmd(int argc, char *argv[], bool fRelay)
 {
     // Check for URI in argv
@@ -59,7 +128,15 @@ static bool ipcScanCmd(int argc, char *argv[], bool fRelay)
         {
             const char *strURI = argv[i];
             try {
-                boost::interprocess::message_queue mq(boost::interprocess::open_only, BITCOINURI_QUEUE_NAME);
+                const std::string queue_name = GetUriQueueName();
+                boost::interprocess::message_queue mq(boost::interprocess::open_only, queue_name.c_str());
+
+                // Never send into a queue that belongs to another user. Treat it as if there were no queue.
+                if (!UriQueueIsOurs(queue_name)) {
+                    tfm::format(std::cerr, "URI handling disabled: the queue %s belongs to another user\n", queue_name);
+                    continue;
+                }
+
                 if (mq.try_send(strURI, strlen(strURI), 0))
                     fSent = true;
                 else if (fRelay)
@@ -125,8 +202,8 @@ static void ipcThread2(void* pArg)
             break;
     }
 
-    // Remove message queue
-    message_queue::remove(BITCOINURI_QUEUE_NAME);
+    // Remove message queue. The queue was verified as ours before this thread started.
+    message_queue::remove(GetUriQueueName().c_str());
     // Cleanup allocated memory
     delete mq;
 }
@@ -134,6 +211,9 @@ static void ipcThread2(void* pArg)
 void ipcInit(int argc, char *argv[], std::function<void(const std::string&)> uri_handler)
 {
     g_uri_handler = std::move(uri_handler);
+    g_ipc_shutdown = false;
+
+    const std::string queue_name = GetUriQueueName();
 
     message_queue* mq = nullptr;
     char buffer[MAX_URI_LENGTH + 1] = "";
@@ -141,7 +221,14 @@ void ipcInit(int argc, char *argv[], std::function<void(const std::string&)> uri
     unsigned int nPriority = 0;
 
     try {
-        mq = new message_queue(open_or_create, BITCOINURI_QUEUE_NAME, 2, MAX_URI_LENGTH);
+        mq = new message_queue(open_or_create, queue_name.c_str(), 2, MAX_URI_LENGTH, UriQueuePermissions());
+
+        // Do not use, drain or remove a queue that belongs to another user
+        if (!UriQueueIsOurs(queue_name)) {
+            GUILogPrintf("URI handling disabled: the queue %s belongs to another user", queue_name);
+            delete mq;
+            return;
+        }
 
         // Make sure we don't lose any bitcoin: URIs
         for (int i = 0; i < 2; i++)
@@ -157,10 +244,17 @@ void ipcInit(int argc, char *argv[], std::function<void(const std::string&)> uri
         }
 
         // Make sure only one bitcoin instance is listening
-        message_queue::remove(BITCOINURI_QUEUE_NAME);
+        message_queue::remove(queue_name.c_str());
         delete mq;
 
-        mq = new message_queue(open_or_create, BITCOINURI_QUEUE_NAME, 2, MAX_URI_LENGTH);
+        mq = new message_queue(open_or_create, queue_name.c_str(), 2, MAX_URI_LENGTH, UriQueuePermissions());
+
+        if (!UriQueueIsOurs(queue_name)) {
+            GUILogPrintf("URI handling disabled: the queue %s belongs to another user", queue_name);
+            delete mq;
+            mq = nullptr;
+            return;
+        }
     }
     catch (interprocess_exception &ex) {
         GUILogPrintf("ipcInit() - boost interprocess exception #%d: %s", ex.get_error_code(), ex.what());

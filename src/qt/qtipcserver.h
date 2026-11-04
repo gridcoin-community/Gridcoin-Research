@@ -4,8 +4,10 @@
 #include <functional>
 #include <string>
 
-// Define Gridcoin-Qt message queue name
-#define BITCOINURI_QUEUE_NAME "GridcoinURI"
+//! Name of the message queue used to hand "gridcoin:" URIs to the running GUI.
+//! The name is specific to the current user so that users of one machine do
+//! not share a queue.
+std::string GetUriQueueName();
 
 void ipcScanRelay(int argc, char *argv[]);
 

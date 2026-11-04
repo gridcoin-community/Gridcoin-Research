@@ -10,6 +10,7 @@ class URITests : public QObject
 
 private slots:
     void uriTests();
+    void uriQueueNameIsPerUser();
 };
 
 #endif // BITCOIN_QT_TEST_URITESTS_H
