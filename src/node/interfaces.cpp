@@ -30,12 +30,15 @@
 #include "node/gui_cache.h"
 #include "node/ui_interface.h"
 #include "rpc/client.h"
+#include "rpc/protocol.h"
 #include "rpc/server.h"
 #include "sync.h"
 #include "util.h"
 #include "util/strencodings.h"
 #include "validation.h"
+#include "wallet/capability.h"
 #include "wallet/diagnose.h"
+#include "wallet/wallet.h"
 
 #include <univalue.h>
 
@@ -353,6 +356,14 @@ public:
     {
         RpcConsoleResult out;
 
+        // The command runs under the RpcRequest capability the console began,
+        // when it began one. It begins one only after a command was refused
+        // for the keys (wallet_unlock_needed below), to run that command again.
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) {
+            scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::RpcRequest);
+        }
+
         try {
             // Convert the positional string args in the command-dependent way,
             // dispatch, and format the reply -- all UniValue handling stays here.
@@ -371,6 +382,7 @@ public:
                 const int code = find_value(objError, "code").get_int();
                 const std::string message = find_value(objError, "message").get_str();
                 out.output = strprintf("%s (code %d)", message, code);
+                out.wallet_unlock_needed = (code == RPC_WALLET_UNLOCK_NEEDED);
             } catch (const std::runtime_error&) { // missing code/message: raw JSON
                 out.output = objError.write();
             }

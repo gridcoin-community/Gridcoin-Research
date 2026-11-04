@@ -283,7 +283,7 @@ void PSGTPoolPage::sign()
     std::string image_hex;
     if (!selectedImageHex(image_hex) || !m_wallet_model || !m_psgt_context) return;
 
-    WalletModel::UnlockContext ctx(m_wallet_model->requestUnlock());
+    WalletModel::UnlockContext ctx(m_wallet_model->requestUnlock(CapabilityKind::SignPSGT));
     if (!ctx.isValid()) return; // unlock cancelled
 
     std::string error;

@@ -1,7 +1,12 @@
 #ifndef BITCOIN_QT_ASKPASSPHRASEDIALOG_H
 #define BITCOIN_QT_ASKPASSPHRASEDIALOG_H
 
+#include "interfaces/wallet.h" // For CapabilityKind.
+
 #include <QDialog>
+
+#include <atomic>
+#include <thread>
 
 namespace Ui {
     class AskPassphraseDialog;
@@ -22,21 +27,12 @@ public:
         //! ticked by default, and leaves the wallet in the state the user
         //! chose. That state outlives this dialog.
         UnlockStaking,
-        //! An operation needs a full unlock and the wallet is LOCKED. No
-        //! checkbox: staking-only would not satisfy the caller, so there is
-        //! nothing to choose. WalletModel::UnlockContext locks again when the
-        //! operation finishes.
-        Unlock,
-        //! An operation needs a full unlock and the wallet is already unlocked
-        //! FOR STAKING. Widens that unlock in place, so its deadline and the
-        //! relock armed for it survive, and UnlockContext narrows it back.
-        //!
-        //! Distinct from Unlock because the two must not be confused when the
-        //! unlock expires while the prompt is open. Treating that as an
-        //! ordinary Unlock would start a fresh indefinite unlock, which the
-        //! context would then narrow to staking-only with no deadline at all --
-        //! silently turning the time-boxed unlock the user asked for into a
-        //! permanent one. In this mode that case is reported instead.
+        //! An operation needs the wallet's keys, and the wallet is locked or
+        //! unlocked for staking only. Begins a capability for the operation's
+        //! kind (setCapabilityKind()) and widens nothing: the wallet stays as
+        //! it is for every other caller, and the deadline of a timed unlock
+        //! is untouched. WalletModel::UnlockContext ends the capability when
+        //! the operation finishes. No checkbox: there is nothing to choose.
         Elevate,
         ChangePass,    /**< Ask old passphrase + new passphrase twice */
     };
@@ -46,7 +42,15 @@ public:
 
     void accept();
 
+    //! Ignored while the passphrase is being checked: the check cannot be
+    //! called back, and closing the prompt under it would lose its outcome.
+    void reject();
+
     void setModel(WalletModel *model);
+
+    //! The kind of operation an Elevate prompt begins a capability for. Set
+    //! before exec().
+    void setCapabilityKind(CapabilityKind kind) { m_kind = kind; }
 
     //! In the -multiprocess split build the wallet lives in a separate core
     //! process, so encrypting it does not restart via this GUI (closing the GUI
@@ -60,12 +64,42 @@ private:
     WalletModel *model;
     bool fCapsLock;
     bool m_multiprocess{false};
+    CapabilityKind m_kind{CapabilityKind::Send};
+
+    //! The wallet was unlocked for staking only when the prompt opened, so a
+    //! refusal that finds it locked can say the unlock ran out meanwhile.
+    bool m_opened_staking_only{false};
+
+    //! The passphrase check for UnlockStaking and Elevate. It runs off the GUI
+    //! thread, because a wrong passphrase waits out a delay of up to 30 s and
+    //! the key derivation itself takes a moment, and the GUI must not freeze
+    //! for either. The prompt stays open, its inputs disabled, until the check
+    //! reports to checkFinished(). Joined there, or in the destructor.
+    std::thread m_check;
+
+    //! The check's outcome, written by the check's thread before it reports.
+    std::atomic<bool> m_check_accepted{false};
+
+    //! checkFinished() has acted on the outcome.
+    bool m_check_reported{false};
+
+    //! The passphrase being checked contained a null character.
+    bool m_check_had_null{false};
+
+    //! Start the check of \p passphrase on its own thread.
+    void startCheck(SecureString passphrase);
+
+    //! Disable or re-enable the inputs, and show or clear the status line.
+    void setChecking(bool checking);
 
 private slots:
     void textChanged();
     bool event(QEvent *event);
     bool eventFilter(QObject *, QEvent *event);
     void secureClearPassFields();
+
+    //! The check has reported; runs on the GUI thread.
+    void checkFinished();
 };
 
 #endif // BITCOIN_QT_ASKPASSPHRASEDIALOG_H

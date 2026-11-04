@@ -126,7 +126,7 @@ void ResearcherWizardPoolPage::openLink(int row, int column) const
 
 void ResearcherWizardPoolPage::getNewAddress()
 {
-    const WalletModel::UnlockContext unlock_context(m_wallet_model->requestUnlock());
+    const WalletModel::UnlockContext unlock_context(m_wallet_model->requestUnlock(CapabilityKind::Contract));
 
     if (!unlock_context.isValid()) {
         // Unlock wallet was cancelled

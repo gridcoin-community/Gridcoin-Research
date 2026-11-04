@@ -351,9 +351,10 @@ VotingResult VotingModel::sendPoll(
             {field.m_name.toStdString(), field.m_value.toStdString(), field.m_required});
     }
 
-    // Unlock the wallet before handing the submission to the node. The modal
-    // stays in the GUI and is raised OUTSIDE any core lock.
-    const WalletModel::UnlockContext unlock_context(m_wallet_model.requestUnlock());
+    // Ask for the passphrase before handing the submission to the node; the
+    // poll is signed under the capability the context holds. The modal stays
+    // in the GUI and is raised OUTSIDE any core lock.
+    const WalletModel::UnlockContext unlock_context(m_wallet_model.requestUnlock(CapabilityKind::Contract));
 
     if (!unlock_context.isValid()) {
         return VotingResult(tr("Please unlock the wallet."));
@@ -373,10 +374,11 @@ VotingResult VotingModel::sendVote(
     const QString& poll_id,
     const std::vector<uint8_t>& choice_offsets) const
 {
-    // Unlock the wallet before the node builds and broadcasts the vote. The modal
-    // is raised here in the GUI, no longer while holding cs_main (the node takes
+    // Ask for the passphrase before the node builds and broadcasts the vote,
+    // which is signed under the capability the context holds. The modal is
+    // raised here in the GUI, no longer while holding cs_main (the node takes
     // cs_main internally for the registry lookup and broadcast).
-    const WalletModel::UnlockContext unlock_context(m_wallet_model.requestUnlock());
+    const WalletModel::UnlockContext unlock_context(m_wallet_model.requestUnlock(CapabilityKind::Contract));
 
     if (!unlock_context.isValid()) {
         return VotingResult(tr("Please unlock the wallet."));

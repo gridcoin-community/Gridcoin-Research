@@ -24,6 +24,9 @@
 
 #include <openssl/crypto.h>
 
+#include <memory>
+#include <utility>
+
 // TODO: make it possible to filter out categories (esp debug messages when implemented)
 // TODO: receive errors and debug messages through ClientModel
 const int CONSOLE_HISTORY = 50;
@@ -52,10 +55,20 @@ public:
 public slots:
     void start();
     void request(const QString &command);
+    //! Run \p command again, once. A refusal for the wallet's keys is then
+    //! reported as an ordinary error, so it is never asked about twice.
+    void retry(const QString &command);
 signals:
     void reply(int category, const QString &command);
+    //! \p command was refused for the wallet's keys; \p error is its reply.
+    //! Sent instead of reply(), so the console can ask for the passphrase.
+    void unlockNeeded(const QString &command, const QString &error);
+    //! Sent after every request and retry, whatever its outcome.
+    void finished();
 private:
     interfaces::Node& m_node;
+
+    void run(const QString &command, bool report_unlock_needed);
 };
 
 #include "rpcconsole.moc"
@@ -274,6 +287,18 @@ QString RedactSensitiveArgs(const QString& command)
 
 void RPCExecutor::request(const QString &command)
 {
+    run(command, /*report_unlock_needed=*/true);
+    emit finished();
+}
+
+void RPCExecutor::retry(const QString &command)
+{
+    run(command, /*report_unlock_needed=*/false);
+    emit finished();
+}
+
+void RPCExecutor::run(const QString &command, bool report_unlock_needed)
+{
     std::vector<std::string> args;
     if(!parseCommandLine(args, command.toStdString()))
     {
@@ -300,7 +325,12 @@ void RPCExecutor::request(const QString &command)
         // that carry a secret, so log the name without its arguments.
         GUILogPrintf("gridcoinresearch:  Handling Error [Request %s]...",
                      RPCConsoleDetail::RedactSensitiveArgs(command).toStdString());
-        emit reply(RPCConsole::CMD_ERROR, QString::fromStdString(result.output));
+
+        if (report_unlock_needed && result.wallet_unlock_needed) {
+            emit unlockNeeded(command, QString::fromStdString(result.output));
+        } else {
+            emit reply(RPCConsole::CMD_ERROR, QString::fromStdString(result.output));
+        }
     }
 }
 
@@ -626,6 +656,9 @@ void RPCConsole::on_lineEdit_returnPressed()
         // both sinks.
         const QString display_cmd = RPCConsoleDetail::RedactSensitiveArgs(cmd);
         message(CMD_REQUEST, display_cmd);
+        if (m_executorThread) {
+            ++m_commands_in_flight;
+        }
         emit cmdRequest(cmd);
         // Remove command, if already in history
         history.removeOne(display_cmd);
@@ -667,6 +700,11 @@ void RPCConsole::startExecutor()
     connect(executor, &RPCExecutor::reply, this, [this](int cat, const QString &msg){this->message(cat, msg);});
     // Requests from this object must go to executor
     connect(this, &RPCConsole::cmdRequest, executor, &RPCExecutor::request);
+    connect(this, &RPCConsole::cmdRetry, executor, &RPCExecutor::retry);
+    // A refusal for the wallet's keys, and the end of every request, come back
+    // in the order sent: the refusal first.
+    connect(executor, &RPCExecutor::unlockNeeded, this, &RPCConsole::commandNeedsUnlock);
+    connect(executor, &RPCExecutor::finished, this, &RPCConsole::executorFinished);
     // On stopExecutor signal
     // - queue executor for deletion (in execution thread)
     // - quit the Qt event loop in the execution thread
@@ -678,6 +716,83 @@ void RPCConsole::startExecutor()
     // Default implementation of QThread::run() simply spins up an event loop in the thread,
     // which is what we want.
     thread->start();
+}
+
+void RPCConsole::setWalletModel(WalletModel *model)
+{
+    if (!model) {
+        // End a capability still held for a command run again, through the
+        // model it was begun with, which is still alive here.
+        m_retry_unlock.reset();
+        m_unlock_pending = false;
+        ui->lineEdit->setEnabled(true);
+    }
+
+    walletModel = model;
+}
+
+void RPCConsole::commandNeedsUnlock(const QString &command, const QString &error)
+{
+    // Acted on in executorFinished(), once this request is known to be the only
+    // one in flight.
+    m_unlock_pending = true;
+    m_unlock_command = command;
+    m_unlock_error = error;
+}
+
+void RPCConsole::executorFinished()
+{
+    if (m_commands_in_flight > 0) {
+        --m_commands_in_flight;
+    }
+
+    // The command run again has finished, so its capability ends now.
+    if (m_retry_unlock) {
+        m_retry_unlock.reset();
+        ui->lineEdit->setEnabled(true);
+        ui->lineEdit->setFocus();
+        return;
+    }
+
+    if (!m_unlock_pending) {
+        return;
+    }
+
+    m_unlock_pending = false;
+    const QString command = std::exchange(m_unlock_command, QString());
+    const QString error = std::exchange(m_unlock_error, QString());
+
+    // A command refused for the wallet's keys on a wallet unlocked for staking
+    // only gets one prompt. The passphrase begins an RpcRequest capability, the
+    // same command runs once more under it, and the capability ends when it has.
+    // The console never asks before a command runs, only after one is refused.
+    //
+    // Asked only when nothing else is queued behind it: every command the
+    // executor runs while the capability is held runs under it, and those were
+    // not what the user entered the passphrase for. On a locked wallet the
+    // refusal stands; walletpassphrase is the console's way to unlock it.
+    if (m_commands_in_flight != 0 || !walletModel
+            || walletModel->getEncryptionStatus() != WalletModel::UnlockedForStakingOnly) {
+        message(CMD_ERROR, error);
+        return;
+    }
+
+    // Nothing else may be entered while the capability is held.
+    ui->lineEdit->setEnabled(false);
+
+    auto unlock = std::make_unique<WalletModel::UnlockContext>(
+        walletModel->requestUnlock(CapabilityKind::RpcRequest));
+
+    if (!unlock->isValid()) {
+        ui->lineEdit->setEnabled(true);
+        ui->lineEdit->setFocus();
+        message(CMD_ERROR, error);
+        return;
+    }
+
+    m_retry_unlock = std::move(unlock);
+    ++m_commands_in_flight;
+    emit cmdRetry(command);
 }
 
 void RPCConsole::stopExecutorThread()
@@ -694,6 +809,10 @@ void RPCConsole::stopExecutorThread()
     emit stopExecutor();
     m_executorThread->wait();
     m_executorThread = nullptr;
+
+    // Requests still queued were dropped with the executor.
+    m_commands_in_flight = 0;
+    m_unlock_pending = false;
 }
 
 

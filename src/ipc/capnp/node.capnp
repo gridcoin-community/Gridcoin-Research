@@ -135,6 +135,7 @@ struct PeerInfo $Proxy.wrap("interfaces::PeerInfo") {
 struct RpcConsoleResult $Proxy.wrap("interfaces::RpcConsoleResult") {
     ok @0 :Bool;
     output @1 :Text;
+    walletUnlockNeeded @2 :Bool $Proxy.name("wallet_unlock_needed");
 }
 
 struct SettingChangeResult $Proxy.wrap("interfaces::SettingChangeResult") {

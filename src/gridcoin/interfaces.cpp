@@ -52,6 +52,7 @@
 #include "util/string.h"
 #include "validation.h"
 #include "version.h"
+#include "wallet/capability.h"
 #include "wallet/wallet.h"
 
 #include <algorithm>
@@ -215,6 +216,22 @@ static_assert(STAKE_WEIGHT_UNITS_PER_COIN == GRC::STAKE_WEIGHT_UNITS_PER_COIN,
 
 namespace {
 
+//! Run \p fn under the capability of \p kind that the client began for
+//! \p wallet (interfaces::Wallet::beginElevation()), and return what it
+//! returns. With no wallet there is nothing to authorise, and \p fn runs as it
+//! is. The scope lives on this thread for the call and ends with it.
+template <typename Fn>
+auto RunUnderIpcCapability(CWallet* wallet, CapabilityKind kind, Fn&& fn)
+{
+    if (!wallet) {
+        return fn();
+    }
+
+    CapabilityScope scope(*wallet, wallet->IpcCapability(), kind);
+
+    return fn();
+}
+
 //! In-process StakingStatus implementation wrapping g_miner_status and the
 //! staking difficulty helpers. The try* variants preserve the GUI's
 //! historical TRY_LOCK(cs_main) semantics: skip the refresh rather than
@@ -284,7 +301,8 @@ public:
 
     MRCSubmitResult submit(CAmount fee_boost, bool wallet_locked) override
     {
-        return Submit(fee_boost, wallet_locked, nullptr);
+        return RunUnderIpcCapability(m_wallet, CapabilityKind::Contract,
+                                     [&] { return SubmitGuarded(fee_boost, wallet_locked, nullptr); });
     }
 
     MRCSubmitResult submitConfirmed(CAmount fee_boost, bool wallet_locked,
@@ -292,7 +310,8 @@ public:
     {
         const std::pair<CAmount, CAmount> terms{confirmed_fee, confirmed_net};
 
-        return Submit(fee_boost, wallet_locked, &terms);
+        return RunUnderIpcCapability(m_wallet, CapabilityKind::Contract,
+                                     [&] { return SubmitGuarded(fee_boost, wallet_locked, &terms); });
     }
 
     bool isOutOfSync() override
@@ -309,7 +328,25 @@ public:
     }
 
 private:
-    //! The body of submit() and submitConfirmed(). With \p terms (the confirmed fee
+    //! submit() and submitConfirmed() sign the claim under the client's Contract
+    //! capability, which each opens itself. Nothing may escape to the caller: in
+    //! the single-process build that is the GUI thread, where an exception ends
+    //! the application.
+    MRCSubmitResult SubmitGuarded(CAmount fee_boost, bool wallet_locked, const std::pair<CAmount, CAmount>* terms)
+    {
+        try {
+            return Submit(fee_boost, wallet_locked, terms);
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: MRC submit: %s", e.what());
+
+            MRCSubmitResult res;
+            res.error = e.what();
+            return res;
+        }
+    }
+
+    //! The body of submit() and submitConfirmed(), without the capability scope and
+    //! the exception boundary. With \p terms (the confirmed fee
     //! and net payout) the rebuilt claim is broadcast only if it still meets them.
     MRCSubmitResult Submit(CAmount fee_boost, bool wallet_locked, const std::pair<CAmount, CAmount>* terms)
     {
@@ -320,11 +357,12 @@ private:
         // The GUI only reaches submit() from the ELIGIBLE state (never locked),
         // but enforce the interface contract here so a future or out-of-process
         // caller cannot broadcast an unsigned claim.
-        // Trust-boundary guard, before any signing work. The GUI asks for an
-        // elevation before submitting (MRCRequestPage::submitMRC), which is the
-        // friendly answer for a researcher who unlocked for staking: the claim
-        // proceeds and the staking-only scope is handed back afterwards. The
-        // node must not rely on the client having done that.
+        // Trust-boundary guard, before any signing work. The GUI begins a
+        // Contract capability before submitting (MRCRequestPage::submitMRC),
+        // which is the friendly answer for a researcher who unlocked for
+        // staking: the claim proceeds under it, and the wallet stays unlocked
+        // for staking only throughout. The node must not rely on the client
+        // having done that.
         //
         // Placed with the other lock check rather than at the send, so a
         // refusal costs nothing: CreateMRC signs the claim, twice on the fee
@@ -333,10 +371,9 @@ private:
         // MRCModel CAN see this state now: WalletModel's status enum carries
         // UnlockedForStakingOnly, and walletStatusChanged() receives it. It
         // deliberately does not treat that as locked, so the submit button
-        // stays enabled and the claim path asks for a temporary elevation
-        // instead of refusing. This refusal is what backstops that -- it is
-        // reached only if the elevation did not happen. A capability scope open
-        // on this thread is such an elevation.
+        // stays enabled and the claim path asks for the passphrase instead of
+        // refusing. This refusal is what backstops that -- it is reached only
+        // if no Contract capability is open for this call.
         if (m_wallet->IsUnlockedForStakingOnly() && !m_wallet->CanUseKeys()) {
             res.error = "The wallet is unlocked for staking only. Unlock it fully to submit a "
                         "manual research claim.";
@@ -813,7 +850,23 @@ public:
         return latest;
     }
 
+    // The poll and the vote are signed under the client's Contract capability,
+    // and nothing may escape to the caller (the GUI thread, in the
+    // single-process build).
     VotingSubmitResult submitPoll(const PollSubmission& poll) override
+    {
+        return RunUnderIpcCapability(pwalletMain, CapabilityKind::Contract, [&] {
+            try {
+                return SubmitPollUnderScope(poll);
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: poll submission: %s", e.what());
+                return Failed(e.what());
+            }
+        });
+    }
+
+    //! submitPoll() without its capability scope and exception boundary.
+    VotingSubmitResult SubmitPollUnderScope(const PollSubmission& poll)
     {
         // The payload version (and, pre-v3, the forced SURVEY type) depend on the
         // chain height, so they are resolved node-side rather than in the GUI.
@@ -866,6 +919,20 @@ public:
 
     VotingSubmitResult submitVote(const std::string& poll_txid,
                                   const std::vector<uint8_t>& choice_offsets) override
+    {
+        return RunUnderIpcCapability(pwalletMain, CapabilityKind::Contract, [&] {
+            try {
+                return SubmitVoteUnderScope(poll_txid, choice_offsets);
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: vote submission: %s", e.what());
+                return Failed(e.what());
+            }
+        });
+    }
+
+    //! submitVote() without its capability scope and exception boundary.
+    VotingSubmitResult SubmitVoteUnderScope(const std::string& poll_txid,
+                                            const std::vector<uint8_t>& choice_offsets)
     {
         const uint256 txid = uint256S(poll_txid);
 
@@ -1332,15 +1399,40 @@ public:
         return false;
     }
 
+    // The beacon methods below sign or make the beacon key under the client's
+    // Contract capability, and nothing may escape to the caller (the GUI
+    // thread, in the single-process build).
     BeaconAdvertiseResult advertiseBeacon() override
     {
-        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
-        const GRC::AdvertiseBeaconResult result = researcher->AdvertiseBeacon(/*force=*/false, /*renewal_access=*/nullptr);
+        return RunUnderIpcCapability(m_wallet, CapabilityKind::Contract, [&]() -> BeaconAdvertiseResult {
+            try {
+                const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+                const GRC::AdvertiseBeaconResult result =
+                    researcher->AdvertiseBeacon(/*force=*/false, /*renewal_access=*/nullptr);
 
-        return {MapBeaconError(result.Error())};
+                return {MapBeaconError(result.Error())};
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: beacon advertisement: %s", e.what());
+                return {BeaconStatus::ERROR_TX_FAILED};
+            }
+        });
     }
 
     std::string generateBeaconKeyForV3() override
+    {
+        return RunUnderIpcCapability(m_wallet, CapabilityKind::Contract, [&] {
+            try {
+                return GenerateBeaconKeyForV3UnderScope();
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: beacon key generation: %s", e.what());
+                return std::string();
+            }
+        });
+    }
+
+    //! generateBeaconKeyForV3() without its capability scope and exception
+    //! boundary.
+    std::string GenerateBeaconKeyForV3UnderScope()
     {
         const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
         const GRC::CpidOption cpid = researcher->Id().TryCpid();
@@ -1371,6 +1463,19 @@ public:
     }
 
     BeaconAdvertiseResult advertiseBeaconV3(const std::string& ownership_proof_xml) override
+    {
+        return RunUnderIpcCapability(m_wallet, CapabilityKind::Contract, [&]() -> BeaconAdvertiseResult {
+            try {
+                return AdvertiseBeaconV3UnderScope(ownership_proof_xml);
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: beacon advertisement: %s", e.what());
+                return {BeaconStatus::ERROR_TX_FAILED};
+            }
+        });
+    }
+
+    //! advertiseBeaconV3() without its capability scope and exception boundary.
+    BeaconAdvertiseResult AdvertiseBeaconV3UnderScope(const std::string& ownership_proof_xml)
     {
         const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
         const GRC::CpidOption cpid = researcher->Id().TryCpid();
@@ -1765,13 +1870,31 @@ public:
         if (!TryImageFromHex(image_hex, image)) {
             return PSGTSignStatus::NOT_FOUND;
         }
-        // SignAndAdvancePSGT takes cs_main + the wallet lock internally; the GUI
-        // holds the wallet unlocked (WalletModel::UnlockContext) around this.
-        uint256 tx_hash;
-        const PSGTSignStatus status =
-            MapPSGTSignResult(SignAndAdvancePSGT(image, error, &tx_hash));
-        txid = tx_hash.ToString(); // meaningful only for COMPLETED_AND_BROADCAST
-        return status;
+
+        // Signed under the client's SignPSGT capability; the GUI holds an
+        // UnlockContext for it around this call. Nothing may escape to the
+        // caller (the GUI thread, in the single-process build).
+        return RunUnderIpcCapability(m_wallet, CapabilityKind::SignPSGT, [&] {
+            // Refused here as well as at each key, so the caller is told why
+            // rather than finding no signature added.
+            if (m_wallet && !m_wallet->CanUseKeys()) {
+                error = SIGN_REFUSED;
+                return PSGTSignStatus::FAILED;
+            }
+
+            try {
+                // SignAndAdvancePSGT takes cs_main + the wallet lock internally.
+                uint256 tx_hash;
+                const PSGTSignStatus status =
+                    MapPSGTSignResult(SignAndAdvancePSGT(image, error, &tx_hash));
+                txid = tx_hash.ToString(); // meaningful only for COMPLETED_AND_BROADCAST
+                return status;
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: PSGT pool signing: %s", e.what());
+                error = e.what();
+                return PSGTSignStatus::FAILED;
+            }
+        });
     }
 
     bool removePoolEntry(const std::string& image_hex) override
@@ -1899,13 +2022,39 @@ public:
 
     PSGTSignResult signPSGT(const PSGTBytes& bytes) override
     {
+        // Signed under the client's SignPSGT capability; the GUI holds an
+        // UnlockContext for it around this call. Nothing may escape to the
+        // caller (the GUI thread, in the single-process build).
+        return RunUnderIpcCapability(m_wallet, CapabilityKind::SignPSGT, [&] {
+            // Refused here as well as at each key, so the caller is told why
+            // rather than handed back a PSGT with nothing signed.
+            if (!m_wallet->CanUseKeys()) {
+                PSGTSignResult res;
+                res.error = SIGN_REFUSED;
+                return res;
+            }
+
+            try {
+                return SignPSGTUnderScope(bytes);
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: PSGT signing: %s", e.what());
+
+                PSGTSignResult res;
+                res.error = e.what();
+                return res;
+            }
+        });
+    }
+
+    //! signPSGT() without its capability scope, refusal and exception boundary.
+    PSGTSignResult SignPSGTUnderScope(const PSGTBytes& bytes)
+    {
         PSGTSignResult res;
         PartiallySignedTransaction psgt;
         if (!DecodePSGTBytes(psgt, bytes, res.error)) {
             return res; // ok == false
         }
 
-        // The GUI holds the wallet unlocked (UnlockContext) around this call.
         LOCK2(cs_main, m_wallet->cs_wallet);
 
         // Updater: fill non_witness_utxo + redeem_script (mirrors walletprocesspsgt).
@@ -2129,6 +2278,11 @@ public:
 
 private:
     CWallet* m_wallet;
+
+    //! Why signPSGT() and signPoolEntry() refuse a wallet that cannot use its
+    //! keys on this call.
+    static constexpr const char* SIGN_REFUSED =
+        "The wallet is locked or unlocked for staking only. Enter the wallet passphrase to sign.";
 
     //! Parse a pool image hex into a CScriptID, rejecting anything that is not a
     //! full 20-byte hash. uint160::SetHex() silently maps malformed input to 0, so

@@ -530,8 +530,12 @@ class FakeWallet : public interfaces::Wallet
 public:
     // Recorded calls.
     int m_try_get_balances_calls = 0;
-    //! lockWallet() calls: what a relocking WalletModel::UnlockContext makes when released.
     int m_lock_wallet_calls = 0;
+    //! endElevation() calls: what a WalletModel::UnlockContext makes when released.
+    int m_end_elevation_calls = 0;
+
+    bool beginElevation(const SecureString& /*passphrase*/, CapabilityKind /*kind*/) override { return true; }
+    void endElevation() override { ++m_end_elevation_calls; }
 
     bool tryGetBalances(interfaces::WalletBalances&) override
     {

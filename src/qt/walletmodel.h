@@ -149,11 +149,13 @@ public:
     // unlock to staking (persisted node-side as the unlock preference).
     bool setWalletLocked(bool locked, const SecureString& passPhrase=SecureString(),
                          bool stakingOnly = false);
-    //! Widen an unlock in progress to full, for one operation. What an
-    //! elevation prompt calls instead of locking and unlocking again, so the
-    //! unlock's deadline and the relock armed for it survive it.
-    bool elevateWallet(const SecureString& passPhrase);
     bool changePassphrase(const SecureString& oldPass, const SecureString& newPass);
+
+    //! Record that the passphrase prompt raised by requireUnlock() began a
+    //! capability (interfaces::Wallet::beginElevation()), so the requestUnlock()
+    //! waiting on that prompt hands back a context that ends it. GUI thread
+    //! only; the prompt calls it once the check has succeeded.
+    void setElevationBegun() { m_elevation_begun = true; }
 
     // Back up the wallet .dat / config file to dest (pass-throughs to the
     // wallet interface, used by the GUI backup action). Return false on
@@ -161,11 +163,13 @@ public:
     bool backupWallet(const std::string& dest);
     bool backupConfigFile(const std::string& dest);
 
-    // RAI object for unlocking wallet, returned by requestUnlock()
+    //! RAII object for one operation's access to the wallet's keys, returned by
+    //! requestUnlock(). While it lives, the interface calls for that operation
+    //! run under the capability it began; it ends that capability when it goes.
     class UnlockContext
     {
     public:
-        UnlockContext(WalletModel *wallet, bool valid, bool relock, bool restore_staking_only = false);
+        UnlockContext(WalletModel *wallet, bool valid, bool end_elevation);
         ~UnlockContext();
 
         bool isValid() const { return valid; }
@@ -177,17 +181,26 @@ public:
         // warning.
         // UnlockContext& operator=(const UnlockContext& rhs) { CopyFrom(rhs); return *this; }
     private:
-        WalletModel *wallet;
-        bool valid;
-        mutable bool relock; // mutable, as it can be set to false by copying
-        //! The wallet was unlocked for staking when this context elevated it,
-        //! so give that scope back on expiry instead of locking.
-        mutable bool restore_staking_only;
+        WalletModel *wallet{nullptr};
+        bool valid{false};
+        //! This context began a capability and ends it when it goes. False for
+        //! a wallet that needed none (unencrypted or fully unlocked) and for a
+        //! context that was copied away. Mutable, as copying clears it.
+        mutable bool end_elevation{false};
 
         void CopyFrom(const UnlockContext& rhs);
     };
 
-    UnlockContext requestUnlock();
+    //! Get the wallet's keys for one operation of \p kind.
+    //!
+    //! An unencrypted or fully unlocked wallet needs nothing, and the context
+    //! is valid at once. A locked wallet, or one unlocked for staking only,
+    //! raises requireUnlock(): the user is asked for the passphrase, and a
+    //! capability for \p kind is begun with it. The context ends the capability
+    //! when it goes. Cancelled or
+    //! refused, the context is invalid and nothing changed. Synchronous: it
+    //! returns once the prompt has closed.
+    UnlockContext requestUnlock(CapabilityKind kind);
 
     bool getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
     bool getKeyFromPool(CPubKey& out_public_key, const std::string& label);
@@ -322,6 +335,10 @@ private:
     //! See qt/notificationlifetime.h.
     NotificationLifetime m_notify_lifetime;
 
+    //! Set by setElevationBegun() while requestUnlock() waits on its prompt,
+    //! and read and cleared by it afterwards. GUI thread only.
+    bool m_elevation_begun{false};
+
 
 public slots:
     /* Wallet status might have changed */
@@ -379,15 +396,10 @@ signals:
     // Signal emitted when wallet needs to be unlocked
     // It is valid behaviour for listeners to keep the wallet locked after this signal;
     // this means that the unlocking failed or was cancelled.
-    //! Ask the UI for the passphrase so an operation can proceed.
-    //!
-    //! \p elevate says WHICH question, decided here where the wallet state was
-    //! read: true widens an unlock that is already open for staking, false
-    //! unlocks a locked wallet. The receiver must not re-derive it from a second
-    //! status read -- the unlock can expire in between, and answering "unlock"
-    //! then starts a fresh one with no deadline, which this context would go on
-    //! to narrow to staking-only permanently.
-    void requireUnlock(bool elevate);
+    //! Ask the UI for the passphrase so an operation of \p kind can proceed.
+    //! The receiver begins a capability for \p kind with it and, on success,
+    //! calls setElevationBegun() before it returns.
+    void requireUnlock(CapabilityKind kind);
 
     // Asynchronous error notification
     void error(const QString &title, const QString &message, bool modal);

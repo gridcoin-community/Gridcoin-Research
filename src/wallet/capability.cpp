@@ -37,6 +37,24 @@ std::chrono::seconds CapabilityTtl(CapabilityKind kind)
     return std::chrono::seconds(0);
 }
 
+bool IsKnownCapabilityKind(CapabilityKind kind)
+{
+    switch (kind) {
+    case CapabilityKind::Send:
+    case CapabilityKind::SignMessage:
+    case CapabilityKind::SignPSGT:
+    case CapabilityKind::Contract:
+    case CapabilityKind::Backup:
+    case CapabilityKind::FileTransfer:
+    case CapabilityKind::Settings:
+    case CapabilityKind::AutoUnlockSetup:
+    case CapabilityKind::RpcRequest:
+        return true;
+    }
+
+    return false;
+}
+
 std::chrono::milliseconds FailedPassphraseDelay(unsigned int consecutive_failures)
 {
     const unsigned int shift = std::min(consecutive_failures, 7U);

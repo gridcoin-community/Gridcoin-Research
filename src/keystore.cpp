@@ -232,44 +232,6 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope sc
     return true;
 }
 
-bool CCryptoKeyStore::Elevate(const CKeyingMaterial& vMasterKeyIn)
-{
-    if (!IsCrypted())
-        return false;
-
-    {
-        LOCK(cs_KeyStore);
-
-        // There is no unlock to widen, and so no deadline to preserve. The
-        // caller wants Unlock(), which begins one.
-        if (m_unlock_scope == UnlockScope::Locked)
-            return false;
-
-        // The passphrase is what authorises the added permission, and this
-        // comparison is where it is checked: a caller that derived the key from
-        // a wrong passphrase must not widen the scope. A plain compare is
-        // enough here -- Elevate() is protected and the only caller derives the
-        // operand from a passphrase through the KDF, so there is no path that
-        // can feed it chosen bytes and read a timing answer.
-        if (vMasterKeyIn.size() != vMasterKey.size()
-                || std::memcmp(vMasterKeyIn.data(), vMasterKey.data(), vMasterKey.size()) != 0) {
-            return false;
-        }
-
-        // Already as wide as it goes. Nothing changed, so nothing is announced.
-        if (m_unlock_scope == UnlockScope::Full)
-            return true;
-
-        // Scope only. The key stays installed, and the deadline and the epoch
-        // belong to the unlock in progress, which this does not end -- so the
-        // relock armed for it still fires, on time.
-        m_unlock_scope = UnlockScope::Full;
-    }
-
-    NotifyStatusChanged(this);
-    return true;
-}
-
 bool CCryptoKeyStore::AddKeyPubKey(const CKey& key, const CPubKey &pubkey)
 {
     {

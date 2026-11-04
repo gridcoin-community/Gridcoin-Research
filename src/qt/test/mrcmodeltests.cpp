@@ -120,8 +120,8 @@ struct WalletFixture
         mrc.m_confirmed_result.research_subsidy = 100;
     }
 
-    //! A valid context that locks the wallet when released.
-    std::unique_ptr<WalletModel::UnlockContext> RelockingContext()
+    //! A valid context that ends its capability when released.
+    std::unique_ptr<WalletModel::UnlockContext> CapabilityContext()
     {
         return std::make_unique<WalletModel::UnlockContext>(&wallet_model, true, true);
     }
@@ -290,14 +290,14 @@ void MRCModelTests::the_submit_unlock_is_released_when_the_submit_finishes()
     MRCRequestStatus status;
     QString error;
     QVERIFY(f.model->submitMRC(status, error, f.model->getMRCTotalFee(), f.model->getMRCNetPayout(),
-                               f.RelockingContext()));
+                               f.CapabilityContext()));
     QVERIFY(f.model->isSubmitting());
 
     // Held while the submit runs and until it is reported finished.
-    QCOMPARE(f.wallet.m_lock_wallet_calls, 0);
+    QCOMPARE(f.wallet.m_end_elevation_calls, 0);
 
     QTRY_VERIFY(!f.model->isSubmitting());
-    QCOMPARE(f.wallet.m_lock_wallet_calls, 1);
+    QCOMPARE(f.wallet.m_end_elevation_calls, 1);
 }
 
 void MRCModelTests::the_submit_unlock_is_released_when_the_model_is_destroyed_mid_submit()
@@ -307,13 +307,13 @@ void MRCModelTests::the_submit_unlock_is_released_when_the_model_is_destroyed_mi
     MRCRequestStatus status;
     QString error;
     QVERIFY(f.model->submitMRC(status, error, f.model->getMRCTotalFee(), f.model->getMRCNetPayout(),
-                               f.RelockingContext()));
-    QCOMPARE(f.wallet.m_lock_wallet_calls, 0);
+                               f.CapabilityContext()));
+    QCOMPARE(f.wallet.m_end_elevation_calls, 0);
 
     // The finished signal is never delivered: the event loop does not run.
     f.model.reset();
 
-    QCOMPARE(f.wallet.m_lock_wallet_calls, 1);
+    QCOMPARE(f.wallet.m_end_elevation_calls, 1);
 }
 
 void MRCModelTests::submit_sends_the_terms_given_at_the_click()

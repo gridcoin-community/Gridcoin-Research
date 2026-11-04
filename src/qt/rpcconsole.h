@@ -3,6 +3,7 @@
 
 #include "qt/guiutil.h"
 #include "qt/peertablemodel.h"
+#include "qt/walletmodel.h"
 
 
 #include <QDialog>
@@ -11,6 +12,7 @@
 #include <QMenu>
 #include <QString>
 
+#include <memory>
 #include <string>
 
 namespace Ui {
@@ -45,6 +47,11 @@ public:
     ~RPCConsole();
 
     void setClientModel(ClientModel *model);
+
+    //! The wallet a command refused for its keys is authorised through (see
+    //! executorFinished()). Null on teardown, which ends a capability still
+    //! held for a command run again.
+    void setWalletModel(WalletModel *model);
 
     enum MessageClass {
         MC_ERROR,
@@ -81,6 +88,11 @@ private slots:
     void showOrHideBanTableIfRequired();
     /** clear the selected node */
     void clearSelectedNode();
+    //! The executor reports \p command refused for the wallet's keys, with
+    //! \p error its reply. Acted on when the request has finished.
+    void commandNeedsUnlock(const QString &command, const QString &error);
+    //! The executor has finished a request or a run again.
+    void executorFinished();
 
 public slots:
     void clear();
@@ -115,6 +127,8 @@ signals:
     // For RPC command executor
     void stopExecutor();
     void cmdRequest(const QString &command);
+    //! Run a command again, once, under the capability just begun for it.
+    void cmdRetry(const QString &command);
 
 private:
     Ui::RPCConsole *ui;
@@ -138,6 +152,22 @@ private:
 
     //! The executor's worker thread, non-null once startExecutor() has run.
     QThread *m_executorThread = nullptr;
+
+    WalletModel *walletModel = nullptr;
+
+    //! Requests sent to the executor that it has not finished.
+    int m_commands_in_flight = 0;
+
+    //! The last finished request was refused for the wallet's keys
+    //! (commandNeedsUnlock()); its command and its error reply.
+    bool m_unlock_pending = false;
+    QString m_unlock_command;
+    QString m_unlock_error;
+
+    //! The capability for a command being run again, held until the executor
+    //! has finished it. The input is disabled meanwhile, so nothing else runs
+    //! under it.
+    std::unique_ptr<WalletModel::UnlockContext> m_retry_unlock;
 
     enum ColumnWidths
     {

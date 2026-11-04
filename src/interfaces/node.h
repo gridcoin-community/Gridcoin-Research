@@ -72,6 +72,11 @@ struct RpcConsoleResult
     //! Formatted reply text on success, or the formatted error message on
     //! failure ("<message> (code <n>)", or raw JSON / "Error: <what>").
     std::string output;
+    //! The command was refused because it needs the wallet's keys
+    //! (RPC_WALLET_UNLOCK_NEEDED). On a wallet unlocked for staking only, the
+    //! console can ask for the passphrase, begin an RpcRequest capability and
+    //! run the same command again.
+    bool wallet_unlock_needed = false;
 };
 
 //! Result of Node::changeSettings, mirroring the changesettings RPC. `ok` false

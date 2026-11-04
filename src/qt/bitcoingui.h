@@ -10,6 +10,7 @@
 #include "guiconstants.h"
 #include "guiipcinfo.h"
 #include "psgttoastdamp.h"
+#include "interfaces/wallet.h" // CapabilityKind for unlockWalletForOperation
 #include "interfaces/wallet_tx_channel.h" // GRC::WalletEvent for processDrainedTransactions
 
 #ifdef Q_OS_MACOS
@@ -399,9 +400,9 @@ private slots:
     /** The Unlock BUTTON: a directive, offering the staking-only choice. */
     void unlockWallet();
 
-    /** An operation needs the passphrase. \p elevate comes from the model,
-     *  which read the wallet state; do not re-derive it here. */
-    void unlockWalletForOperation(bool elevate);
+    /** An operation of \p kind needs the wallet's keys: ask for the
+     *  passphrase and begin a capability for it. */
+    void unlockWalletForOperation(CapabilityKind kind);
 
     void lockWallet();
 

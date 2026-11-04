@@ -4,12 +4,20 @@
 #include "bitcoingui.h"
 #include "guiconstants.h"
 #include "qt/decoration.h"
+#include "support/cleanse.h"
+#include "util.h" /* for LogPrintf */
 #include "walletmodel.h"
 
 #include <QApplication>
 #include <QMessageBox>
+#include <QMetaObject>
 #include <QPushButton>
 #include <QKeyEvent>
+
+#include <exception>
+#include <string>
+#include <string_view>
+#include <utility>
 
 AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
                  : QDialog(parent)
@@ -44,21 +52,20 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
             ui->stakingCheckBox->show();
             // fallthru
             [[fallthrough]];
-        case Elevate:
-        case Unlock: // Ask passphrase
+        case Elevate: // Ask passphrase
             // Two different promises, so do not make one of them twice.
             //
             // UnlockStaking is the Unlock BUTTON: a directive that outlives this
             // dialog, and the wallet stays as chosen here until it is locked
-            // again. Unlock and Elevate are taken for ONE operation and do give
-            // the wallet back afterwards. Saying "returns to its previous state"
-            // for all three told a user pressing Unlock that their unlock was
-            // temporary, which it is not.
+            // again. Elevate authorises ONE operation and leaves the wallet as
+            // it was. Saying "returns to its previous state" for both told a
+            // user pressing Unlock that their unlock was temporary, which it is
+            // not.
             ui->warningLabel->setText(mode == UnlockStaking
                 ? tr("Enter your wallet passphrase to unlock the wallet. It stays unlocked until "
                      "you lock it again.")
-                : tr("This operation needs your wallet passphrase. The wallet is unlocked for the "
-                     "operation and returns to its previous state afterwards."));
+                : tr("This operation needs your wallet passphrase. It authorises this operation "
+                     "only, and the wallet is left as it was afterwards."));
             ui->newPassphraseLabel->hide();
             ui->newPassphraseEdit->hide();
             ui->repeatNewPassphraseLabel->hide();
@@ -79,6 +86,24 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
 
 AskPassphraseDialog::~AskPassphraseDialog()
 {
+    // A check still running holds this dialog's address, so it must finish
+    // first. That is reached only when the application quits under an open
+    // prompt; reject() refuses to close it otherwise.
+    if (m_check.joinable()) {
+        m_check.join();
+    }
+
+    // The check began a capability, and the report that would have handed it
+    // to the waiting operation never ran. End it rather than leave it to its
+    // deadline.
+    if (!m_check_reported && m_check_accepted && mode == Elevate && model) {
+        try {
+            model->wallet().endElevation();
+        } catch (const std::exception& e) {
+            LogPrintf("WARN: %s: could not end an unclaimed capability: %s", __func__, e.what());
+        }
+    }
+
     secureClearPassFields();
     delete ui;
 }
@@ -87,13 +112,16 @@ void AskPassphraseDialog::setModel(WalletModel *model)
 {
     this->model = model;
 
+    m_opened_staking_only = model && mode == Elevate
+        && model->getEncryptionStatus() == WalletModel::UnlockedForStakingOnly;
+
     // The box is no longer seeded from a remembered preference. There is no such
     // preference any more -- the restriction belongs to the unlock -- and the
     // only mode that shows the box, UnlockStaking, ticks it in the constructor
     // because staking-only is the conservative default for a directive.
     //
     // Dropping the seeding also removes a lockout. The box is invisible in the
-    // Unlock mode the operation-driven prompt uses, so a user whose last unlock
+    // Elevate mode the operation-driven prompt uses, so a user whose last unlock
     // was staking-only used to get the hidden box pre-ticked, unlock
     // staking-only again, and fail the very operation that raised the prompt.
     // Do not restore "stickiness" without solving that.
@@ -113,10 +141,24 @@ struct BusyCursor {
     BusyCursor(const BusyCursor&) = delete;
     BusyCursor& operator=(const BusyCursor&) = delete;
 };
+
+//! Copy a passphrase field's text into \p out, and overwrite the plain
+//! std::string it passed through on the way.
+void ReadPassphrase(const QLineEdit& edit, SecureString& out)
+{
+    std::string text = edit.text().toStdString();
+    out.assign(std::string_view{text});
+    memory_cleanse(text.data(), text.size());
+}
 } // namespace
 
 void AskPassphraseDialog::accept()
 {
+    // The OK button is disabled while a check runs; this covers any other
+    // route to accept().
+    if (m_check.joinable())
+        return;
+
     SecureString oldpass, newpass1, newpass2;
     if(!model)
         return;
@@ -124,9 +166,9 @@ void AskPassphraseDialog::accept()
     newpass1.reserve(MAX_PASSPHRASE_SIZE);
     newpass2.reserve(MAX_PASSPHRASE_SIZE);
 
-    oldpass.assign(std::string_view{ui->oldPassphraseEdit->text().toStdString()});
-    newpass1.assign(std::string_view{ui->newPassphraseEdit->text().toStdString()});
-    newpass2.assign(std::string_view{ui->repeatNewPassphraseEdit->text().toStdString()});
+    ReadPassphrase(*ui->oldPassphraseEdit, oldpass);
+    ReadPassphrase(*ui->newPassphraseEdit, newpass1);
+    ReadPassphrase(*ui->repeatNewPassphraseEdit, newpass2);
 
     secureClearPassFields();
 
@@ -240,8 +282,7 @@ void AskPassphraseDialog::accept()
         }
     } break;
     case UnlockStaking:
-    case Elevate:
-    case Unlock: {
+    case Elevate: {
         // Two different questions, so do not read one answer for both.
         //
         // UnlockStaking is the Unlock BUTTON: a directive that leaves the
@@ -249,57 +290,16 @@ void AskPassphraseDialog::accept()
         // checkbox is that choice, and it opens ticked because staking-only is
         // the conservative option.
         //
-        // Unlock is an ELEVATION raised by an operation that cannot proceed
-        // without a full unlock. There is nothing to choose: staking-only would
-        // not satisfy the caller, so the box is not shown and full is the only
-        // answer. Reading the hidden widget here gave the right result only
-        // because it happens to be unchecked, which is an accident rather than
-        // a decision. WalletModel::UnlockContext restores the prior scope when
-        // the operation finishes, so this elevation is temporary.
+        // Elevate is raised by an operation that needs the wallet's keys. It
+        // begins a capability for that operation's kind and nothing else: the
+        // wallet is not widened, so a cancelled or mistyped prompt changes
+        // nothing, and the deadline of a timed unlock is never touched. A
+        // locked wallet is unlocked for staking only until the capability
+        // ends, which WalletModel::UnlockContext does when the operation
+        // finishes.
         //
-        // Elevate widens the unlock already in progress rather than locking and
-        // unlocking again. The relock dance threw that unlock's deadline away,
-        // so a wallet unlocked by walletpassphrase for a fixed time stayed
-        // unlocked indefinitely after any GUI action, and a cancelled prompt
-        // left a staking node locked.
-        //
-        // It is NOT retried as an ordinary unlock when it fails. Elevate refuses
-        // a locked wallet, so the failure that matters here is the unlock having
-        // expired while this prompt sat open; unlocking instead would start a
-        // fresh unlock with no deadline, and the caller's context would narrow
-        // that to staking-only forever. Reporting it leaves the wallet locked,
-        // which is what the timer decided, and the user can unlock and retry.
-        const bool unlocked = mode == Elevate
-            ? model->elevateWallet(oldpass)
-            : model->setWalletLocked(false, oldpass,
-                                     mode == UnlockStaking && ui->stakingCheckBox->isChecked());
-
-        if (!unlocked && mode == Elevate
-                && model->getEncryptionStatus() == WalletModel::Locked) {
-            QMessageBox::critical(this, tr("Wallet unlock failed"),
-                                  tr("The wallet locked itself while you were entering your "
-                                     "passphrase, because the unlock you had asked for ran out. "
-                                     "Unlock the wallet and try again."));
-        }
-        else if(!unlocked) {
-            // Check if the passphrase has a null character
-            if (oldpass.find('\0') == std::string::npos) {
-                    QMessageBox::critical(this, tr("Wallet unlock failed"),
-                                          tr("The passphrase entered for the wallet decryption was incorrect."));
-                } else {
-                    QMessageBox::critical(this, tr("Wallet unlock failed"),
-                                          tr("The passphrase entered for the wallet decryption is incorrect. "
-                                             "It contains a null character (ie - a zero byte). "
-                                             "If the passphrase was set with a version of this software prior to 5.4.6, "
-                                             "please try again with only the characters up to — but not including — "
-                                             "the first null character. If this is successful, please set a new "
-                                             "passphrase to avoid this issue in the future."));
-                }
-        }
-        else
-        {
-            QDialog::accept(); // Success
-        }
+        // Both run the check off the GUI thread; checkFinished() reports.
+        startCheck(std::move(oldpass));
     } break;
     case ChangePass:
         if(newpass1 == newpass2)
@@ -353,6 +353,117 @@ void AskPassphraseDialog::accept()
     }
 }
 
+void AskPassphraseDialog::reject()
+{
+    if (m_check.joinable()) {
+        return;
+    }
+
+    QDialog::reject();
+}
+
+void AskPassphraseDialog::startCheck(SecureString passphrase)
+{
+    m_check_had_null = passphrase.find('\0') != std::string::npos;
+    m_check_accepted = false;
+    m_check_reported = false;
+
+    setChecking(true);
+
+    // The thread calls the wallet interface only: no Qt object is touched off
+    // the GUI thread. The passphrase moves into it and is cleansed when the
+    // thread ends.
+    interfaces::Wallet& wallet = model->wallet();
+    const bool elevate = (mode == Elevate);
+    const CapabilityKind kind = m_kind;
+    const bool staking_only = (mode == UnlockStaking && ui->stakingCheckBox->isChecked());
+
+    m_check = std::thread([this, &wallet, elevate, kind, staking_only, passphrase = std::move(passphrase)] {
+        bool accepted = false;
+
+        // Nothing may escape a thread. In the split build the call crosses
+        // IPC, and a disconnect mid-call raises.
+        try {
+            accepted = elevate ? wallet.beginElevation(passphrase, kind)
+                               : wallet.unlockWallet(passphrase, staking_only);
+        } catch (const std::exception& e) {
+            LogPrintf("WARN: AskPassphraseDialog: the passphrase check failed: %s", e.what());
+        } catch (...) {
+            LogPrintf("WARN: AskPassphraseDialog: the passphrase check failed");
+        }
+
+        m_check_accepted = accepted;
+
+        // The dialog outlives this thread (its destructor joins it), so it is
+        // still there to post to. A posted call is dropped if it is destroyed
+        // before the call runs.
+        QMetaObject::invokeMethod(this, &AskPassphraseDialog::checkFinished, Qt::QueuedConnection);
+    });
+}
+
+void AskPassphraseDialog::setChecking(bool checking)
+{
+    ui->oldPassphraseEdit->setEnabled(!checking);
+    ui->newPassphraseEdit->setEnabled(!checking);
+    ui->repeatNewPassphraseEdit->setEnabled(!checking);
+    ui->stakingCheckBox->setEnabled(!checking);
+    ui->buttonBox->setEnabled(!checking);
+
+    if (checking) {
+        ui->statusLabel->setText(tr("Checking the passphrase..."));
+        setCursor(Qt::BusyCursor);
+    } else {
+        ui->statusLabel->clear();
+        unsetCursor();
+        ui->oldPassphraseEdit->setFocus();
+    }
+}
+
+void AskPassphraseDialog::checkFinished()
+{
+    // The thread posted this as its last act, so it is finishing.
+    if (m_check.joinable()) {
+        m_check.join();
+    }
+
+    m_check_reported = true;
+    setChecking(false);
+
+    if (m_check_accepted) {
+        // The operation waiting in WalletModel::requestUnlock() takes the
+        // capability, and its context ends it.
+        if (mode == Elevate) {
+            model->setElevationBegun();
+        }
+
+        QDialog::accept(); // Success
+        return;
+    }
+
+    // A capability is begun on a locked wallet too, so a wallet that locked
+    // itself while the prompt was open is no reason to refuse. It is worth
+    // saying, though: the unlock the user had asked for ran out, so the node
+    // is no longer staking.
+    if (mode == Elevate && m_opened_staking_only
+            && model->getEncryptionStatus() == WalletModel::Locked) {
+        QMessageBox::critical(this, tr("Wallet unlock failed"),
+                              tr("The passphrase was not accepted. The wallet also locked itself "
+                                 "while you were entering it, because the unlock you had asked "
+                                 "for ran out, so it is no longer unlocked for staking."));
+    } else if (!m_check_had_null) {
+        QMessageBox::critical(this, tr("Wallet unlock failed"),
+                              tr("The passphrase entered for the wallet decryption was incorrect."));
+    } else {
+        QMessageBox::critical(this, tr("Wallet unlock failed"),
+                              tr("The passphrase entered for the wallet decryption is incorrect. "
+                                 "It contains a null character (ie - a zero byte). "
+                                 "If the passphrase was set with a version of this software prior to 5.4.6, "
+                                 "please try again with only the characters up to — but not including — "
+                                 "the first null character. If this is successful, please set a new "
+                                 "passphrase to avoid this issue in the future."));
+    }
+}
+
 void AskPassphraseDialog::textChanged()
 {
     // Validate input, set Ok button to enabled when acceptable
@@ -363,8 +474,7 @@ void AskPassphraseDialog::textChanged()
         acceptable = !ui->newPassphraseEdit->text().isEmpty() && !ui->repeatNewPassphraseEdit->text().isEmpty();
         break;
     case UnlockStaking:
-    case Elevate:
-    case Unlock: // Old passphrase x1
+    case Elevate: // Old passphrase x1
         acceptable = !ui->oldPassphraseEdit->text().isEmpty();
         break;
     case ChangePass: // Old passphrase x1, new passphrase x2

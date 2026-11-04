@@ -38,10 +38,14 @@
 #include "ipc/handshake.h"
 #include "ipc/protocol.h"
 #include "ipc/serve_init.h"
+#include "key_io.h"
 #include "logging.h"
 #include "node/gui_cache.h"
 #include "sync.h"
 #include "test/gui_cache_fakes.h"
+#include "test/staking_test_peers.h"
+#include "wallet/capability.h"
+#include "wallet/wallet.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -451,6 +455,17 @@ private:
     std::list<std::function<void(const std::string&)>>::iterator m_callback;
 };
 
+//! Serves the wallet interface over a wallet the case owns, so wallet calls
+//! cross the real wire. No ServeInit: what is under test is the wallet's
+//! methods, not the authentication gate.
+struct WalletServingInit : interfaces::Init {
+    explicit WalletServingInit(CWallet* wallet) : m_wallet(wallet) {}
+
+    std::unique_ptr<interfaces::Wallet> makeWallet() override { return interfaces::MakeWallet(m_wallet); }
+
+    CWallet* m_wallet{nullptr};
+};
+
 } // namespace
 
 BOOST_AUTO_TEST_SUITE(ipc_wire_handshake_tests)
@@ -858,6 +873,84 @@ BOOST_AUTO_TEST_CASE(a_dropped_gui_connection_ends_its_subscription)
     std::this_thread::sleep_for(TIMER_CHANCE);
     BOOST_CHECK_EQUAL(compute.chain_calls.load(), chain_calls);
     BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), runs);
+}
+
+// A capability over the real wire: the passphrase crosses as Data, the kind as a
+// byte, and the server's wallet holds the capability in its IPC slot, where the
+// signing call that follows on the same connection finds it. The wallet stays
+// unlocked for staking only throughout.
+BOOST_AUTO_TEST_CASE(wire_wallet_elevation_round_trip)
+{
+    grc_test::EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    WireLink link([&fx](int) -> std::unique_ptr<interfaces::Init> {
+        return std::make_unique<WalletServingInit>(&fx.wallet);
+    });
+
+    std::unique_ptr<interfaces::Wallet> wallet = link.client->makeWallet();
+    BOOST_REQUIRE(wallet != nullptr);
+
+    const std::string address = EncodeDestination(fx.id);
+    std::string signature;
+
+    BOOST_CHECK(wallet->signMessage(address, "over the wire", signature)
+                == interfaces::MessageSignStatus::KeyNotAvailable);
+
+    BOOST_CHECK(!wallet->beginElevation(SecureString("not the passphrase"), CapabilityKind::SignMessage));
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+
+    // The GUI checks the passphrase on a thread made for the one call and
+    // ended after it (AskPassphraseDialog). Such a call crosses like any other,
+    // the thread ends cleanly, and the capability it began serves the calls
+    // the GUI then makes from its own thread.
+    bool begun = false;
+    std::thread checker([&] {
+        begun = wallet->beginElevation(grc_test::EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage);
+    });
+    checker.join();
+
+    BOOST_REQUIRE(begun);
+    BOOST_CHECK(fx.wallet.IpcCapability().has_value());
+
+    BOOST_CHECK(wallet->signMessage(address, "over the wire", signature) == interfaces::MessageSignStatus::OK);
+    BOOST_CHECK(!signature.empty());
+
+    wallet->endElevation();
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+
+    std::string after;
+    BOOST_CHECK(wallet->signMessage(address, "over the wire", after) == interfaces::MessageSignStatus::KeyNotAvailable);
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+
+    wallet.reset();
+}
+
+// A kind byte outside the enumeration is refused when the server reads it: the
+// call fails, no capability is issued, and the connection goes on serving.
+BOOST_AUTO_TEST_CASE(wire_capability_kind_out_of_range_is_refused)
+{
+    grc_test::EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    WireLink link([&fx](int) -> std::unique_ptr<interfaces::Init> {
+        return std::make_unique<WalletServingInit>(&fx.wallet);
+    });
+
+    std::unique_ptr<interfaces::Wallet> wallet = link.client->makeWallet();
+    BOOST_REQUIRE(wallet != nullptr);
+
+    BOOST_CHECK_THROW(wallet->beginElevation(grc_test::EncryptedWallet::PASSPHRASE, static_cast<CapabilityKind>(200)),
+                      std::exception);
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+
+    BOOST_CHECK(wallet->getLockState().unlocked_for_staking_only);
+    BOOST_CHECK(wallet->beginElevation(grc_test::EncryptedWallet::PASSPHRASE, CapabilityKind::Send));
+    wallet->endElevation();
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+
+    wallet.reset();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

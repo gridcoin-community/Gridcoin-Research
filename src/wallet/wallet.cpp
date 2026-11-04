@@ -888,42 +888,6 @@ bool CWallet::UnlockWithoutDelay(const SecureString& strWalletPassphrase, Unlock
     return false;
 }
 
-bool CWallet::ElevateToFull(const SecureString& strWalletPassphrase)
-{
-    // There is no unlock to widen, so there is no deadline to preserve and
-    // nothing this can add. The caller wants Unlock(), which begins one.
-    if (IsLocked()) {
-        return false;
-    }
-
-    CCrypter crypter;
-    CKeyingMaterial vMasterKey;
-
-    LOCK(cs_wallet);
-
-    for (auto const& pMasterKey : mapMasterKeys)
-    {
-        if (!crypter.SetKeyFromPassphrase(strWalletPassphrase, pMasterKey.second.vchSalt,
-                                          pMasterKey.second.nDeriveIterations,
-                                          pMasterKey.second.nDerivationMethod)) {
-            return false;
-        }
-
-        if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey)) {
-            return false;
-        }
-
-        // Refuses unless this is the key already installed, so a wrong
-        // passphrase widens nothing. The scope moves; the key, the deadline and
-        // the epoch do not, so the relock armed for this unlock still fires.
-        if (CCryptoKeyStore::Elevate(vMasterKey)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 bool CWallet::RestrictToStakingOnly()
 {
     // cs_wallet, then cs_KeyStore inside: the canonical order, and the reason

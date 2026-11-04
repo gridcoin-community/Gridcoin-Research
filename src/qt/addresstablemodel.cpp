@@ -350,8 +350,12 @@ QString AddressTableModel::addRow(const QString &type, const QString &label, con
     }
     else if(type == Receive)
     {
-        // Generate a new address to associate with given label
-        WalletModel::UnlockContext ctx(walletModel->requestUnlock());
+        // Generate a new address to associate with given label. The address
+        // comes from the key pool, and the pool may be refilled only where keys
+        // may be made: under a capability on a wallet unlocked for staking only.
+        // No kind names a refill, so this takes the one under which a send
+        // refills the pool for its change key.
+        WalletModel::UnlockContext ctx(walletModel->requestUnlock(CapabilityKind::Send));
         if(!ctx.isValid())
         {
             // Unlock wallet failed or was cancelled

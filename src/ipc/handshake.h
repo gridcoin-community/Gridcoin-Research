@@ -120,8 +120,25 @@ namespace ipc {
 //! the GUI's hasMagnitude() was always false. Additive; an older node leaves
 //! both false, which is what it always sent, and the minor already turns the
 //! mismatch into the "Update the node" hard fail.
-constexpr uint32_t IPC_SCHEMA_MAJOR = 4;
-constexpr uint32_t IPC_SCHEMA_MINOR = 2;
+//!
+//! Major 5: Wallet gained `beginElevation @37` and `endElevation @38`
+//! (wallet.capnp), and every method that uses the wallet's keys for the GUI
+//! runs under the capability they hold, one operation kind at a time.
+//! `elevateWallet @36` stays in the schema, because a released ordinal cannot be
+//! dropped, but it always returns false. RpcConsoleResult gained
+//! `walletUnlockNeeded @2` (node.capnp), which the console reads to ask for the
+//! passphrase and run a refused command again.
+//!
+//! The new methods alone would be additive, which is why the reason for the
+//! major is the other direction. A GUI and a node of different majors disagree
+//! on how an operation is authorised, so each such action would fail with a
+//! message the user cannot act on. The major turns both pairings into the "use
+//! matching builds" refusal at connect.
+//!
+//! Major 5 carries everything major 4 had through minor 2 (above), and the
+//! minor restarts at 0.
+constexpr uint32_t IPC_SCHEMA_MAJOR = 5;
+constexpr uint32_t IPC_SCHEMA_MINOR = 0;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 
 //! Domain-separation tag hashed into the node identity token. Bump the suffix if

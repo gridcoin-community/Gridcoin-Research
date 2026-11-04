@@ -10,6 +10,7 @@
 #include "interfaces/init.h"
 #include "interfaces/mrc.h"
 #include "interfaces/node.h"
+#include "interfaces/psgt.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
 #include "key.h"
@@ -18,10 +19,15 @@
 #include "node/ui_interface.h"
 #include "gridcoin/scraper/fwd.h"
 #include "primitives/transaction.h"
+#include "psgt.h"
 #include "sync.h"
 #include "test/gui_cache_fakes.h"
+#include "test/psgt_test_helpers.h"
+#include "test/staking_test_peers.h"
 #include "txmempool.h"
 #include "util.h"
+#include "util/strencodings.h"
+#include "wallet/capability.h"
 #include "wallet/wallet.h"
 
 #include <boost/signals2/signal.hpp>
@@ -1075,6 +1081,306 @@ BOOST_FIXTURE_TEST_CASE(wallet_coin_control_summary_counts_every_recipient_entry
     BOOST_CHECK_EQUAL(summary.change, 0);
     BOOST_CHECK(!summary.low_output);
     BOOST_CHECK_EQUAL(summary.after_fee, input - BASE_FEE);
+}
+
+// The interface methods that use the wallet's keys run under a capability the
+// client began for that kind of operation, and refuse without one while the
+// wallet is unlocked for staking only. The fixture's wallet holds one key, added
+// before encryption, and is swapped into pwalletMain for the case.
+namespace {
+
+using grc_test::EncryptedWallet;
+
+//! A PSGT with one input, spending a coin paid to the fixture's key, so that
+//! only this wallet can sign it.
+interfaces::PSGTBytes PsgtSpendingTheFixtureCoin(const EncryptedWallet& fx)
+{
+    const CTransaction previous = psgt_test::MakePrevTx(fx.key, 10 * COIN);
+
+    return SerializePSGT(psgt_test::MakeSpendPSGT(previous, 9 * COIN));
+}
+
+//! Signatures on the PSGT's first input, partial or final. An empty or
+//! undecodable buffer carries none.
+size_t SignaturesOnFirstInput(const interfaces::PSGTBytes& bytes)
+{
+    PartiallySignedTransaction psgt;
+    std::string error;
+
+    if (bytes.empty() || !DecodePSGTBytes(psgt, bytes, error) || psgt.inputs.empty()) {
+        return 0;
+    }
+
+    return psgt.inputs[0].partial_sigs.size() + (psgt.inputs[0].final_script_sig.empty() ? 0 : 1);
+}
+
+//! A well-formed pool image that is not in the pool.
+const std::string ABSENT_POOL_IMAGE(40, 'a');
+
+//! The refusal MRC submit gives a wallet unlocked for staking only.
+const std::string MRC_STAKING_ONLY_REFUSAL =
+    "The wallet is unlocked for staking only. Unlock it fully to submit a manual research claim.";
+
+} // namespace
+
+BOOST_AUTO_TEST_CASE(ipc_signpsgt_needs_a_signpsgt_capability)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    std::unique_ptr<interfaces::PSGTPoolContext> psgt_context = interfaces::MakePSGTPoolContext(&fx.wallet);
+
+    const interfaces::PSGTSignResult result = psgt_context->signPSGT(PsgtSpendingTheFixtureCoin(fx));
+
+    // Refused as such, not reported as a PSGT the wallet could not sign.
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(!result.error.empty());
+    BOOST_CHECK_EQUAL(result.signed_now, 0);
+    BOOST_CHECK_EQUAL(SignaturesOnFirstInput(result.psgt), 0U);
+
+    // The pool path refuses before it looks the image up.
+    std::string error;
+    std::string txid;
+    BOOST_CHECK(psgt_context->signPoolEntry(ABSENT_POOL_IMAGE, error, txid) == interfaces::PSGTSignStatus::FAILED);
+    BOOST_CHECK(!error.empty());
+
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+BOOST_AUTO_TEST_CASE(ipc_signpsgt_runs_under_a_signpsgt_capability)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(&fx.wallet);
+    std::unique_ptr<interfaces::PSGTPoolContext> psgt_context = interfaces::MakePSGTPoolContext(&fx.wallet);
+    const interfaces::PSGTBytes unsigned_psgt = PsgtSpendingTheFixtureCoin(fx);
+
+    BOOST_REQUIRE(wallet->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignPSGT));
+
+    // The wallet's own unlock scope is unchanged.
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+    BOOST_CHECK(!fx.wallet.CanUseKeys());
+
+    const interfaces::PSGTSignResult result = psgt_context->signPSGT(unsigned_psgt);
+    BOOST_CHECK(result.ok);
+    BOOST_CHECK_EQUAL(result.signed_now, 1);
+    BOOST_CHECK_EQUAL(SignaturesOnFirstInput(result.psgt), 1U);
+
+    // The pool path gets past the refusal and finds the image absent.
+    std::string error;
+    std::string txid;
+    BOOST_CHECK(psgt_context->signPoolEntry(ABSENT_POOL_IMAGE, error, txid) == interfaces::PSGTSignStatus::NOT_FOUND);
+
+    wallet->endElevation();
+
+    const interfaces::PSGTSignResult after = psgt_context->signPSGT(unsigned_psgt);
+    BOOST_CHECK(!after.ok);
+    BOOST_CHECK_EQUAL(after.signed_now, 0);
+    BOOST_CHECK_EQUAL(SignaturesOnFirstInput(after.psgt), 0U);
+
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+BOOST_AUTO_TEST_CASE(ipc_signmessage_needs_a_signmessage_capability)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(&fx.wallet);
+
+    std::string signature;
+    BOOST_CHECK(wallet->signMessage(EncodeDestination(fx.id), "a message", signature)
+                == interfaces::MessageSignStatus::KeyNotAvailable);
+    BOOST_CHECK(signature.empty());
+}
+
+BOOST_AUTO_TEST_CASE(ipc_signmessage_runs_under_a_signmessage_capability)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(&fx.wallet);
+    const std::string address = EncodeDestination(fx.id);
+
+    BOOST_REQUIRE(wallet->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
+
+    std::string signature;
+    BOOST_REQUIRE(wallet->signMessage(address, "a message", signature) == interfaces::MessageSignStatus::OK);
+
+    bool invalid = false;
+    const std::vector<unsigned char> raw = DecodeBase64(signature.c_str(), &invalid);
+    BOOST_REQUIRE(!invalid);
+    BOOST_CHECK(wallet->verifyMessage(address, "a message", raw) == interfaces::MessageVerifyStatus::OK);
+
+    wallet->endElevation();
+
+    std::string after;
+    BOOST_CHECK(wallet->signMessage(address, "a message", after) == interfaces::MessageSignStatus::KeyNotAvailable);
+    BOOST_CHECK(after.empty());
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+BOOST_AUTO_TEST_CASE(ipc_capability_wrong_kind)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(&fx.wallet);
+    std::unique_ptr<interfaces::PSGTPoolContext> psgt_context = interfaces::MakePSGTPoolContext(&fx.wallet);
+
+    BOOST_REQUIRE(wallet->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Send));
+
+    std::string signature;
+    BOOST_CHECK(wallet->signMessage(EncodeDestination(fx.id), "a message", signature)
+                == interfaces::MessageSignStatus::KeyNotAvailable);
+    BOOST_CHECK(signature.empty());
+
+    const interfaces::PSGTSignResult result = psgt_context->signPSGT(PsgtSpendingTheFixtureCoin(fx));
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK_EQUAL(SignaturesOnFirstInput(result.psgt), 0U);
+
+    wallet->endElevation();
+}
+
+BOOST_AUTO_TEST_CASE(ipc_elevatewallet_always_false)
+{
+    EncryptedWallet fx;
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(&fx.wallet);
+
+    // Unlocked for staking: the right passphrase widens nothing.
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    BOOST_CHECK(!wallet->elevateWallet(EncryptedWallet::PASSPHRASE));
+    BOOST_CHECK(fx.wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+    BOOST_CHECK(!fx.wallet.CanUseKeys());
+
+    CKey key;
+    BOOST_CHECK(!fx.wallet.GetKey(fx.id, key));
+
+    // Locked: it unlocks nothing either.
+    fx.wallet.Lock();
+    BOOST_CHECK(!wallet->elevateWallet(EncryptedWallet::PASSPHRASE));
+    BOOST_CHECK(fx.wallet.IsLocked());
+
+    // Nor is it counted as a passphrase attempt.
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(ipc_begin_elevation_refuses_an_unknown_kind)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(&fx.wallet);
+
+    // A value past the last kind, as a client built against another enumeration
+    // could send. Refused before the passphrase is checked, so it is not
+    // counted as a failed attempt and the slot stays empty.
+    BOOST_CHECK(!wallet->beginElevation(EncryptedWallet::PASSPHRASE, static_cast<CapabilityKind>(200)));
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+
+    // A wrong passphrase is refused and counted.
+    BOOST_CHECK(!wallet->beginElevation(SecureString("not the passphrase"), CapabilityKind::Send));
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 1U);
+
+    // Ending with nothing begun is a no-op.
+    wallet->endElevation();
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+BOOST_AUTO_TEST_CASE(ipc_sendcoins_runs_under_a_send_capability)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(&fx.wallet);
+
+    interfaces::WalletSendRecipient recipient;
+    recipient.address = EncodeDestination(fx.id);
+    recipient.amount = 1 * COIN;
+
+    BOOST_CHECK(wallet->sendCoins({recipient}, std::nullopt, 0).status
+                == interfaces::SendCoinsStatus::WalletUnlockedForStakingOnly);
+
+    // A capability of another kind does not let the send through.
+    BOOST_REQUIRE(wallet->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
+    BOOST_CHECK(wallet->sendCoins({recipient}, std::nullopt, 0).status
+                == interfaces::SendCoinsStatus::WalletUnlockedForStakingOnly);
+
+    // Under a Send capability the send gets past the refusal, to the balance
+    // check the empty wallet fails.
+    BOOST_REQUIRE(wallet->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Send));
+    BOOST_CHECK(wallet->sendCoins({recipient}, std::nullopt, 0).status
+                == interfaces::SendCoinsStatus::AmountExceedsBalance);
+
+    wallet->endElevation();
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+BOOST_AUTO_TEST_CASE(ipc_mrc_submit_runs_under_a_contract_capability)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(&fx.wallet);
+    std::unique_ptr<interfaces::MRC> mrc = interfaces::MakeMRC(&fx.wallet);
+
+    BOOST_CHECK_EQUAL(mrc->submit(0, false).error, MRC_STAKING_ONLY_REFUSAL);
+
+    BOOST_REQUIRE(wallet->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Send));
+    BOOST_CHECK_EQUAL(mrc->submit(0, false).error, MRC_STAKING_ONLY_REFUSAL);
+
+    // Under a Contract capability the claim gets past the refusal and fails
+    // further on, for whatever this environment lacks.
+    BOOST_REQUIRE(wallet->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Contract));
+    const interfaces::MRCSubmitResult result = mrc->submit(0, false);
+    BOOST_CHECK(!result.success);
+    BOOST_CHECK(result.error != MRC_STAKING_ONLY_REFUSAL);
+
+    wallet->endElevation();
+    BOOST_CHECK_EQUAL(mrc->submit(0, false).error, MRC_STAKING_ONLY_REFUSAL);
+}
+
+BOOST_AUTO_TEST_CASE(ipc_console_command_runs_under_an_rpc_request_capability)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(&fx.wallet);
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+    const std::vector<std::string> args{EncodeDestination(fx.id), "a message"};
+
+    // Refused for the keys, and flagged so the console can ask for the
+    // passphrase and run the command again.
+    interfaces::RpcConsoleResult result = node->executeRpcConsoleCommand("signmessage", args);
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(result.wallet_unlock_needed);
+
+    // A capability of another kind does not let it through.
+    BOOST_REQUIRE(wallet->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Send));
+    result = node->executeRpcConsoleCommand("signmessage", args);
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(result.wallet_unlock_needed);
+
+    BOOST_REQUIRE(wallet->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::RpcRequest));
+    result = node->executeRpcConsoleCommand("signmessage", args);
+    BOOST_CHECK(result.ok);
+    BOOST_CHECK(!result.wallet_unlock_needed);
+    BOOST_CHECK(!result.output.empty());
+
+    wallet->endElevation();
+    result = node->executeRpcConsoleCommand("signmessage", args);
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(result.wallet_unlock_needed);
+
+    // Any other failure is not flagged.
+    result = node->executeRpcConsoleCommand("nosuchcommand", {});
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(!result.wallet_unlock_needed);
+
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

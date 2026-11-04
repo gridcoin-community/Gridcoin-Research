@@ -992,6 +992,7 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         receiveCoinsPage->setAddressTableModel(walletModel->getAddressTableModel());
         sendCoinsPage->setModel(walletModel);
         signVerifyMessageDialog->setModel(walletModel);
+        rpcConsole->setWalletModel(walletModel);
         multisignDialog->setModel(walletModel);
         psgtPoolPage->setWalletModel(walletModel);
 
@@ -1019,6 +1020,10 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         // state. Only the two tx-table holders own such views.
         transactionView->setModel(nullptr);
         overviewPage->setWalletModel(nullptr);
+
+        // The console may hold a capability for a command it is running
+        // again; it ends it now, while the model it ends it through lives.
+        rpcConsole->setWalletModel(nullptr);
     }
 }
 
@@ -2033,23 +2038,19 @@ void BitcoinGUI::unlockWallet()
     }
 }
 
-void BitcoinGUI::unlockWalletForOperation(bool elevate)
+void BitcoinGUI::unlockWalletForOperation(CapabilityKind kind)
 {
     if(!walletModel)
         return;
 
-    // Which question to ask is NOT re-derived from the wallet state here. The
-    // model decided it from the read it had already taken, and the unlock can
-    // expire between that read and this one: answering "unlock" then starts a
-    // fresh unlock with no deadline, which the model's UnlockContext would go on
-    // to narrow to staking-only permanently -- silently turning a time-boxed
-    // unlock into an open-ended one.
-    //
-    // Elevate refuses a locked wallet, so if that is what happened the dialog
-    // reports it and the wallet stays locked, which is what the timer decided.
-    AskPassphraseDialog dlg(elevate ? AskPassphraseDialog::Elevate
-                                    : AskPassphraseDialog::Unlock, this);
+    // One question whatever the wallet's state: the passphrase begins a
+    // capability for this operation, on a locked wallet and on one unlocked
+    // for staking alike, and widens nothing. So an unlock that expires while
+    // the prompt is open makes no difference to what is asked. On success the
+    // dialog tells the model, which hands the capability to the operation.
+    AskPassphraseDialog dlg(AskPassphraseDialog::Elevate, this);
     dlg.setModel(walletModel);
+    dlg.setCapabilityKind(kind);
     dlg.exec();
 }
 

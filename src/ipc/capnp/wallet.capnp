@@ -41,6 +41,8 @@ interface Wallet $Proxy.wrap("interfaces::Wallet") {
     unlockWallet @12 (context :Proxy.Context, passphrase :Data, stakingOnly :Bool) -> (result :Bool);
     restrictToStakingOnly @35 (context :Proxy.Context) -> (result :Bool);
     elevateWallet @36 (context :Proxy.Context, passphrase :Data) -> (result :Bool);
+    beginElevation @37 (context :Proxy.Context, passphrase :Data, kind :UInt8) -> (result :Bool);
+    endElevation @38 (context :Proxy.Context) -> ();
     changeWalletPassphrase @13 (context :Proxy.Context, oldPassphrase :Data, newPassphrase :Data) -> (result :Bool);
     getPubKey @14 (context :Proxy.Context, address :Data) -> (pubKeyOut :Data, result :Bool);
     getKeyFromPool @15 (context :Proxy.Context, label :Text) -> (pubKeyOut :Data, result :Bool);

@@ -513,30 +513,7 @@ public:
     bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope = UnlockScope::Full)
         LOCKS_EXCLUDED(cs_wallet);
 
-    //! \brief Widen an unlock in progress to Full for one operation.
-    //!
-    //! The counterpart of RestrictToStakingOnly(), and what a GUI action that
-    //! needs a full unlock on a staking-only wallet asks for. It re-derives the
-    //! master key from \p strWalletPassphrase and refuses unless that matches
-    //! the key already installed, so it still demands the passphrase.
-    //!
-    //! It does NOT lock and re-unlock. That is what this replaces: locking
-    //! first threw away the unlock's deadline, and the re-unlock that followed
-    //! carried none, so a wallet unlocked by walletpassphrase for a fixed time
-    //! stayed unlocked indefinitely after any GUI action that elevated. It also
-    //! meant a cancelled or mistyped prompt left a staking wallet locked and
-    //! the node no longer staking.
-    //!
-    //! False when the wallet is locked -- there is no unlock to widen, and the
-    //! caller wants Unlock() -- when it is unencrypted, or on a wrong
-    //! passphrase.
-    //!
-    //! Superseded by BeginElevation(), which authorises one operation on one
-    //! thread instead of widening the whole wallet. It stays only until its
-    //! last caller, the IPC and GUI elevation, moves to capabilities.
-    bool ElevateToFull(const SecureString& strWalletPassphrase);
-
-    //! \brief Hand a scoped elevation back, narrowing the unlock to staking only.
+    //! \brief Narrow a full unlock to staking only, keeping its deadline.
     //!
     //! Takes cs_wallet before narrowing, which is what serialises it against a
     //! spend. CreateTransaction reads the scope inside LOCK2(cs_main,

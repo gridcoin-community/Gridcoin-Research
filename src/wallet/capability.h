@@ -30,6 +30,13 @@ enum class CapabilityKind : uint8_t {
 //! Names one capability issued by CWallet::BeginElevation(). 0 is never issued.
 using CapabilityId = uint64_t;
 
+//! \brief Whether \p kind is one of the enumerators above.
+//!
+//! A kind that arrives from another process crosses as an integer, and every
+//! integer of the underlying type is a value of the enumeration. This tells the
+//! kinds this build knows from the rest, which are refused.
+bool IsKnownCapabilityKind(CapabilityKind kind);
+
 //! \brief How long a capability of \p kind lasts from the moment it is issued.
 //!
 //! Send, SignPSGT, Contract, Backup and RpcRequest 300 s; SignMessage, Settings

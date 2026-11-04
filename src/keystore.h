@@ -228,9 +228,9 @@ private:
     //! carries the counter it was armed with and is a no-op unless that still
     //! matches. Bumped when an unlock BEGINS and when one ENDS.
     //!
-    //! Deliberately NOT bumped by RestrictToStakingOnly: narrowing hands an
-    //! elevation back without changing when the unlock expires, so bumping
-    //! there would retire the armed relock and the wallet would never lock.
+    //! Deliberately NOT bumped by RestrictToStakingOnly: narrowing changes the
+    //! scope without changing when the unlock expires, so bumping there would
+    //! retire the armed relock and the wallet would never lock.
     uint64_t m_unlock_epoch GUARDED_BY(cs_KeyStore){0};
 
     // if fUseCrypto is true, mapKeys must be empty
@@ -258,24 +258,6 @@ protected:
     bool Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope scope,
                 std::optional<int64_t> deadline = std::nullopt,
                 uint64_t* epoch_out = nullptr);
-
-    //! \brief Widen the current unlock to Full, keeping its deadline.
-    //!
-    //! The other half of RestrictToStakingOnly(): this takes an elevation, that
-    //! hands it back. Unlike Unlock() it does not begin a new unlock -- the
-    //! master key is already installed and stays installed, so the deadline and
-    //! the epoch are both left alone and a relock armed for the unlock in
-    //! progress still fires on time. Bumping the epoch here would retire that
-    //! relock, and the wallet would never lock.
-    //!
-    //! It still demands the passphrase, because it ADDS permission. The caller
-    //! passes the keying material it derived from the passphrase, and this
-    //! refuses unless that matches the key already installed -- otherwise a
-    //! wrong passphrase would silently widen the scope.
-    //!
-    //! False when the wallet is locked (there is no unlock to widen; use
-    //! Unlock()), when it is unencrypted, or when the key does not match.
-    bool Elevate(const CKeyingMaterial& vMasterKeyIn);
 
     //! \brief Whether \p key is the master key the current unlock installed.
     //!

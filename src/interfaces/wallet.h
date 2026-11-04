@@ -12,6 +12,7 @@
 #include "primitives/transaction.h" // For COutPoint.
 #include "support/allocators/secure.h" // For SecureString.
 #include "uint256.h"
+#include "wallet/capability.h" // For CapabilityKind.
 
 #include <cstdint>
 #include <functional>
@@ -309,26 +310,39 @@ public:
     //! Narrow the current unlock to staking only, without a passphrase.
     //!
     //! Narrowing only: it removes permission and never adds it, so it is safe
-    //! to expose. Used to hand back an elevation taken for one operation on a
-    //! wallet the user had left unlocked for staking; locking instead would
-    //! silently stop staking. False when there was nothing to narrow, which
-    //! covers both a locked wallet and an unencrypted one -- do not read false
-    //! as "it was locked".
+    //! to expose. False when there was nothing to narrow, which covers both a
+    //! locked wallet and an unencrypted one -- do not read false as "it was
+    //! locked".
+    //!
+    //! No production callers. It handed back the wallet-wide elevation that
+    //! elevateWallet() made, and an operation now runs under a capability
+    //! instead. Left in place because removing
+    //! it would leave an ordinal hole at @35.
     virtual bool restrictToStakingOnly() = 0;
 
-    //! Widen an unlock in progress to full for one operation, given the
-    //! passphrase. The other half of restrictToStakingOnly(): a GUI action that
-    //! needs a full unlock elevates, acts, and hands the elevation back.
-    //!
-    //! Not a lock followed by an unlock. That threw away the unlock's deadline,
-    //! so a wallet unlocked by walletpassphrase for a fixed time stayed
-    //! unlocked indefinitely afterwards, and it left a staking wallet locked
-    //! when the prompt was cancelled.
-    //!
-    //! False when the wallet is locked -- there is no unlock to widen, and the
-    //! caller wants unlockWallet() -- when it is unencrypted, or on a wrong
-    //! passphrase.
+    //! Always false, and logged. It widened an unlock in progress to full for
+    //! the whole wallet, so every other caller could use the keys while one
+    //! operation ran. beginElevation() replaces it. Kept because wallet.capnp
+    //! cannot drop a released ordinal (@36).
     virtual bool elevateWallet(const SecureString& passphrase) = 0;
+
+    //! Begin a capability for one operation of \p kind, given the passphrase.
+    //!
+    //! The capability is held for this connection: the wallet methods that use
+    //! keys for an operation of that kind (sendCoins for Send, signMessage for
+    //! SignMessage, the PSGT and contract methods for theirs, the console for
+    //! RpcRequest) run under it until endElevation() or its deadline. A locked
+    //! wallet is unlocked for staking only until the capability ends. A second begin replaces the first.
+    //!
+    //! False on a wrong passphrase (after the failed-passphrase delay, so it can
+    //! block for up to 30 s -- never call it on the GUI thread), on a kind
+    //! outside CapabilityKind, or when the wallet cannot be unlocked for it. An
+    //! unencrypted wallet accepts any passphrase.
+    virtual bool beginElevation(const SecureString& passphrase, CapabilityKind kind) = 0;
+
+    //! End the capability beginElevation() began, if one is held. Idempotent.
+    //! An operation already running under it finishes.
+    virtual void endElevation() = 0;
 
     //! Unlock the wallet; on success the staking-only preference is set to
     //! staking_only (a full unlock clears a stale staking-only restriction).
@@ -380,6 +394,10 @@ public:
     //! and a fee that meanwhile grew past accepted_fee simply returns
     //! FeeConfirmationRequired again, so no fee the user has not accepted is
     //! ever committed.
+    //!
+    //! Runs under the client's Send capability (beginElevation()), which one
+    //! flow holds across these calls. Without it, a wallet unlocked for staking
+    //! only reports WalletUnlockedForStakingOnly.
     virtual SendCoinsResult sendCoins(const std::vector<WalletSendRecipient>& recipients,
                                       const std::optional<WalletCoinControl>& coin_control,
                                       int64_t accepted_fee) = 0;
@@ -394,9 +412,10 @@ public:
     virtual bool backupConfigFile(const std::string& dest) = 0;
 
     //! Sign message with the private key for address (the "sign message" tool).
-    //! The wallet must already be unlocked (the GUI holds an UnlockContext). On
-    //! OK, signature_out is the base64 signature. The private key never leaves
-    //! the node.
+    //! Runs under the client's SignMessage capability (beginElevation()); the
+    //! GUI holds an UnlockContext for it. Without one, a wallet unlocked for
+    //! staking only reports KeyNotAvailable. On OK, signature_out is the base64
+    //! signature. The private key never leaves the node.
     virtual MessageSignStatus signMessage(const std::string& address, const std::string& message,
                                           std::string& signature_out) = 0;
 
@@ -429,16 +448,19 @@ public:
     //! false return does not necessarily mean the in-memory entry survived.
     virtual bool delAddressBook(const std::string& address) = 0;
 
-    //! Reserve a fresh key from the pool and return its encoded destination. The
-    //! wallet must already be unlocked (the GUI holds an UnlockContext); the key
-    //! never crosses the boundary. Returns false on key-generation failure. Does
-    //! not touch the address book -- the caller labels the address separately.
+    //! Reserve a fresh key from the pool and return its encoded destination; the
+    //! key never crosses the boundary. Under the client's Send capability the
+    //! pool may be refilled; without one, a wallet unlocked for staking only
+    //! draws from the pool as it is. Returns false on key-generation failure.
+    //! Does not touch the address book -- the caller labels the address
+    //! separately.
     virtual bool getNewReceiveAddress(std::string& address_out) = 0;
 
     //! Reserve a fresh (non-reused) key from the pool, set its address-book
     //! label, and return its encoded destination -- the CPubKey stays node-side.
     //! For the researcher pool page, which previously reserved the key and
-    //! encoded the address GUI-side. Returns false on key-generation failure.
+    //! encoded the address GUI-side; under its Contract capability the pool may
+    //! be refilled. Returns false on key-generation failure.
     //! Distinct name (not an overload of getNewReceiveAddress) because the IPC
     //! proxy generator takes a member-function pointer and cannot disambiguate
     //! overloaded names.

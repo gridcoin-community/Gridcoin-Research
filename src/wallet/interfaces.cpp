@@ -144,8 +144,34 @@ public:
 
     bool elevateWallet(const SecureString& passphrase) override
     {
-        return m_wallet->ElevateToFull(passphrase);
+        // A client that still asks for this predates beginElevation(), and the
+        // handshake's schema major keeps such a client from connecting. Refused
+        // without reading the passphrase, so it is not counted as an attempt.
+        LogPrintf("WARNING: %s: refused. The wallet is no longer widened for an operation; the "
+                  "client must begin a capability for it instead.", __func__);
+        return false;
     }
+
+    bool beginElevation(const SecureString& passphrase, CapabilityKind kind) override
+    {
+        if (!IsKnownCapabilityKind(kind)) {
+            LogPrintf("WARNING: %s: refused a capability of unknown kind %u", __func__,
+                      static_cast<unsigned int>(kind));
+            return false;
+        }
+
+        try {
+            return m_wallet->BeginIpcElevation(passphrase, kind);
+        } catch (const std::exception& e) {
+            // Nothing the client could use is left behind: a capability this
+            // call may have issued before the throw is ended with the slot.
+            LogPrintf("ERROR: %s: no capability was begun: %s", __func__, e.what());
+            m_wallet->EndIpcElevation();
+            return false;
+        }
+    }
+
+    void endElevation() override { m_wallet->EndIpcElevation(); }
 
     bool unlockWallet(const SecureString& passphrase, bool staking_only) override
     {
@@ -188,22 +214,32 @@ public:
             return MessageSignStatus::KeyNotAvailable;
         }
 
-        CKey key;
-        if (!WITH_LOCK(m_wallet->cs_wallet, return m_wallet->GetKey(*key_id, key))) {
-            return MessageSignStatus::KeyNotAvailable;
-        }
+        // The key is read under the capability the client began for this. On
+        // a wallet unlocked for staking only there is none otherwise, and the
+        // keystore refuses the key.
+        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(), CapabilityKind::SignMessage);
 
-        CDataStream ss(SER_GETHASH, 0);
-        ss << strMessageMagic;
-        ss << message;
+        try {
+            CKey key;
+            if (!WITH_LOCK(m_wallet->cs_wallet, return m_wallet->GetKey(*key_id, key))) {
+                return MessageSignStatus::KeyNotAvailable;
+            }
 
-        std::vector<unsigned char> signature;
-        if (!key.SignCompact(Hash(ss), signature)) {
+            CDataStream ss(SER_GETHASH, 0);
+            ss << strMessageMagic;
+            ss << message;
+
+            std::vector<unsigned char> signature;
+            if (!key.SignCompact(Hash(ss), signature)) {
+                return MessageSignStatus::SigningFailed;
+            }
+
+            signature_out = EncodeBase64(signature.data(), signature.size());
+            return MessageSignStatus::OK;
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: %s: %s", __func__, e.what());
             return MessageSignStatus::SigningFailed;
         }
-
-        signature_out = EncodeBase64(signature.data(), signature.size());
-        return MessageSignStatus::OK;
     }
 
     MessageVerifyStatus verifyMessage(const std::string& address, const std::string& message,
@@ -297,33 +333,55 @@ public:
 
     bool getNewReceiveAddress(std::string& address_out) override
     {
-        // The wallet is unlocked by the GUI's UnlockContext before this call; the
-        // reserved key stays node-side and only its encoded address is returned.
-        // fAllowReuse=true matches the old GUI addRow() behavior.
-        CPubKey new_key;
-        if (!m_wallet->GetKeyFromPool(new_key, true)) {
+        // The reserved key stays node-side and only its encoded address is
+        // returned. fAllowReuse=true matches the old GUI addRow() behavior.
+        //
+        // The address book's new-address action holds a Send capability (the
+        // capability under which a send refills the pool for its change key),
+        // so the pool may be refilled here as well. Without one, on a wallet
+        // unlocked for staking only, the draw uses the pool as it is.
+        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(), CapabilityKind::Send);
+
+        try {
+            CPubKey new_key;
+            if (!m_wallet->GetKeyFromPool(new_key, true)) {
+                return false;
+            }
+
+            address_out = EncodeDestination(new_key.GetID());
+            return true;
+        } catch (const std::exception& e) {
+            // A refill can throw when the wallet locks while it runs.
+            LogPrintf("ERROR: %s: %s", __func__, e.what());
             return false;
         }
-
-        address_out = EncodeDestination(new_key.GetID());
-        return true;
     }
 
     bool getNewReceiveAddressWithLabel(const std::string& label, std::string& address_out) override
     {
         // fAllowReuse=false to match the researcher pool page's former
         // getKeyFromPool(..., false) call: a deliberately fresh receive key.
-        CPubKey new_key;
-        if (!m_wallet->GetKeyFromPool(new_key, false)) {
+        //
+        // That page is part of the researcher wizard and holds a Contract
+        // capability, under which the pool may be refilled for a fresh key.
+        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(), CapabilityKind::Contract);
+
+        try {
+            CPubKey new_key;
+            if (!m_wallet->GetKeyFromPool(new_key, false)) {
+                return false;
+            }
+
+            if (!label.empty()) {
+                m_wallet->SetAddressBookName(new_key.GetID(), label);
+            }
+
+            address_out = EncodeDestination(new_key.GetID());
+            return true;
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: %s: %s", __func__, e.what());
             return false;
         }
-
-        if (!label.empty()) {
-            m_wallet->SetAddressBookName(new_key.GetID(), label);
-        }
-
-        address_out = EncodeDestination(new_key.GetID());
-        return true;
     }
 
     std::vector<std::string> getUnbookedReceiveAddresses() override
@@ -480,7 +538,24 @@ public:
 
     SendCoinsResult sendCoins(const std::vector<WalletSendRecipient>& recipients,
                               const std::optional<WalletCoinControl>& coin_control,
-                              int64_t accepted_fee) override;
+                              int64_t accepted_fee) override
+    {
+        // The whole flow runs under the Send capability the client began: the
+        // build signs, and a change key can refill the key pool.
+        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(), CapabilityKind::Send);
+
+        // Nothing may escape to the caller: in the single-process build that is
+        // the GUI thread, where an exception ends the application. What can
+        // throw here is the build (a key-pool refill for the change key when
+        // the wallet locks while it runs), before anything is committed; the
+        // steps after the commit catch their own.
+        try {
+            return SendCoinsUnderScope(recipients, coin_control, accepted_fee);
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: %s: the send failed: %s", __func__, e.what());
+            return {SendCoinsStatus::TransactionCreationFailed};
+        }
+    }
 
     // NOTE: like every other uiInterface forwarder (see node/interfaces.cpp and
     // gridcoin/interfaces.cpp), these must be wrapped in GuardNotify. They are not
@@ -520,12 +595,17 @@ public:
     }
 
 private:
+    //! sendCoins() without its capability scope and exception boundary.
+    SendCoinsResult SendCoinsUnderScope(const std::vector<WalletSendRecipient>& recipients,
+                                        const std::optional<WalletCoinControl>& coin_control,
+                                        int64_t accepted_fee);
+
     CWallet* m_wallet;
 };
 
-SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& recipients,
-                                      const std::optional<WalletCoinControl>& coin_control,
-                                      int64_t accepted_fee)
+SendCoinsResult WalletImpl::SendCoinsUnderScope(const std::vector<WalletSendRecipient>& recipients,
+                                                const std::optional<WalletCoinControl>& coin_control,
+                                                int64_t accepted_fee)
 {
     // Refuse a staking-only wallet here, before the balance checks below can
     // answer first: a staking-only wallet is the reason regardless of the
@@ -808,26 +888,35 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
     // was already true, because SetAddressBookName takes and releases cs_wallet
     // per call, so the old loop was never one atomic transaction across recipients
     // either.
-    std::vector<std::pair<CTxDestination, std::string>> address_book_updates;
+    //
+    // The payment is committed by now, so a failure to record the labels must
+    // not reach sendCoins' exception boundary, which would report a payment
+    // that was made as one that was not. It is logged, and the send reports OK.
+    try {
+        std::vector<std::pair<CTxDestination, std::string>> address_book_updates;
 
-    {
-        LOCK(m_wallet->cs_wallet);
+        {
+            LOCK(m_wallet->cs_wallet);
 
-        for (const WalletSendRecipient& rcp : recipients) {
-            CTxDestination dest = DecodeDestination(rcp.address);
+            for (const WalletSendRecipient& rcp : recipients) {
+                CTxDestination dest = DecodeDestination(rcp.address);
 
-            auto mi = m_wallet->mapAddressBook.find(dest);
+                auto mi = m_wallet->mapAddressBook.find(dest);
 
-            // Check if we have a new address or an updated label
-            if (mi == m_wallet->mapAddressBook.end() || mi->second.name != rcp.label)
-            {
-                address_book_updates.emplace_back(std::move(dest), rcp.label);
+                // Check if we have a new address or an updated label
+                if (mi == m_wallet->mapAddressBook.end() || mi->second.name != rcp.label)
+                {
+                    address_book_updates.emplace_back(std::move(dest), rcp.label);
+                }
             }
         }
-    }
 
-    for (const auto& [dest, label] : address_book_updates) {
-        m_wallet->SetAddressBookName(dest, label);
+        for (const auto& [dest, label] : address_book_updates) {
+            m_wallet->SetAddressBookName(dest, label);
+        }
+    } catch (const std::exception& e) {
+        LogPrintf("ERROR: %s: the payment %s was sent, but its address book labels were not "
+                  "recorded: %s", __func__, wtx.GetHash().GetHex(), e.what());
     }
 
     SendCoinsResult result;

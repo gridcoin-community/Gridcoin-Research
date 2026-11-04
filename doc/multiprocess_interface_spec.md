@@ -227,8 +227,8 @@ Three constants are embedded in **both** binaries and compared during the
 handshake (`ipc/handshake.h`):
 
 ```cpp
-constexpr uint32_t IPC_SCHEMA_MAJOR   = 4;
-constexpr uint32_t IPC_SCHEMA_MINOR   = 2;
+constexpr uint32_t IPC_SCHEMA_MAJOR   = 5;
+constexpr uint32_t IPC_SCHEMA_MINOR   = 0;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 ```
 
@@ -278,6 +278,21 @@ companion and mapped no member to it: neither flag ever crossed, and the GUI's
 `hasMagnitude()` was always false. Additive; an older node leaves both false,
 which is what it always sent, and the minor already turns the mismatch into the
 "Update the node" hard fail.
+
+**Major 5.** `Wallet` gained `beginElevation @37 (passphrase, kind)` and
+`endElevation @38`, and every wallet method that uses the keys for the GUI (the
+send, message and PSGT signing, MRC, poll, vote and beacon methods, and the
+console) runs under the capability they hold, one operation kind at a time.
+`elevateWallet @36` stays in the schema,
+because a released ordinal cannot be dropped, but always returns false.
+`RpcConsoleResult` gained `walletUnlockNeeded @2`. The new methods alone would be
+additive; the major is for the other direction. A GUI and a node of
+different majors disagree on how an operation is authorised, so each such action
+would fail with a message the user cannot act on. A newer GUI against
+an older node gets `UNIMPLEMENTED` for `beginElevation`, from a node that would
+still widen the whole wallet for an operation. The major turns both pairings into
+the "use matching builds" refusal at connect. Major 5 carries everything major 4
+had through minor 2, and the minor restarts at 0.
 
 
 Rules a client must honor (from `ClientHandshake` and design §4.2):
@@ -388,7 +403,12 @@ by quitting its own process), `handleNotifyBlocksChanged`,
 
 `executeRpcConsoleCommand` is worth calling out for an automation client: it is
 the full RPC dispatch surface behind one method, so a headless client can drive
-essentially any RPC through `Node` without a separate HTTP-RPC port.
+essentially any RPC through `Node` without a separate HTTP-RPC port. It runs
+under the connection's `RpcRequest` capability when one is held (§4.3). A command
+refused for the wallet's keys (`RPC_WALLET_UNLOCK_NEEDED`) comes back with
+`RpcConsoleResult::wallet_unlock_needed` set; the GUI console then asks for the
+passphrase once, on a wallet unlocked for staking only, and runs the same command
+again under that capability.
 
 ### 4.2 StakingStatus — `src/interfaces/staking.h`, `staking.capnp`
 
@@ -404,13 +424,26 @@ The node's single wallet. Balances (`getBalance`, `getStake`,
 state (`getLockState -> WalletLockState`, `isUnlockedForStakingOnly`,
 `getUnlockStakingOnlyFlag`); mutation of lock state (`encryptWallet`,
 `lockWallet`, `unlockWallet`, `changeWalletPassphrase` — all taking a
-`SecureString` passphrase, §7; `elevateWallet`, which also takes one, because it
-widens an unlock already in progress to full for a single operation and so
-GRANTS permission; and `restrictToStakingOnly`, which does NOT, because it only
-narrows an existing unlock to staking-only and so removes permission rather than
-granting it. The last two are a pair: an operation needing a full unlock on a
-staking-only wallet elevates, acts, and hands the elevation back, which leaves
-the unlock's deadline and the relock armed for it untouched).
+`SecureString` passphrase, §7; and `restrictToStakingOnly`, which narrows an
+existing unlock to staking-only without one, and has no production callers).
+
+Per-operation capabilities (schema major 5): `beginElevation(passphrase, kind)`
+verifies the passphrase and begins a capability for one `CapabilityKind`
+(`Send`, `SignMessage`, `SignPSGT`, `Contract`, `RpcRequest`, ...; it crosses as
+a `UInt8`, and a value outside the enumeration is refused when the node reads it,
+which fails the call). The node holds at most one per connection, in the wallet's
+IPC slot; a second begin replaces the first, and `endElevation` ends it. The
+wallet methods that use keys for an operation of that kind run under it:
+`sendCoins` (`Send`), `signMessage` (`SignMessage`), `PSGTPoolContext::signPSGT`
+and `signPoolEntry` (`SignPSGT`), `MRC::submit`, `VotingManager::submitPoll` and
+`submitVote`, and the `ResearcherContext` beacon methods (`Contract`), and
+`Node::executeRpcConsoleCommand` (`RpcRequest`). A capability applies
+only to the operations of its kind on its connection; a locked wallet is unlocked
+for staking only until the capability ends. A wrong
+passphrase returns false after the failed-passphrase delay (up to 30 s), so a
+client must not call it on its UI thread. `elevateWallet` always returns false.
+The GUI side is `WalletModel::requestUnlock(CapabilityKind)` and its
+`UnlockContext`, which ends the capability when the operation finishes.
 
 Coin control / send: `getOutputs`, `computeCoinControlSummary(...)
 -> CoinControlSummary` (all fee math runs node-side), `getMaxConsolidationInputs`,

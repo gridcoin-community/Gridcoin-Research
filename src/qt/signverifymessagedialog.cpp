@@ -115,7 +115,7 @@ void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
         return;
     }
 
-    WalletModel::UnlockContext ctx(model->requestUnlock());
+    WalletModel::UnlockContext ctx(model->requestUnlock(CapabilityKind::SignMessage));
     if (!ctx.isValid())
     {
         ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
@@ -123,9 +123,9 @@ void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
         return;
     }
 
-    // The wallet is unlocked (UnlockContext above); signing -- including the
-    // private-key access -- happens node-side, the key never crosses the
-    // boundary. The signature comes back base64-encoded.
+    // Signed under the capability the UnlockContext above holds; signing --
+    // including the private-key access -- happens node-side, the key never
+    // crosses the boundary. The signature comes back base64-encoded.
     std::string signature;
     const interfaces::MessageSignStatus status = model->wallet().signMessage(
         ui->addressInEdit_SM->text().toStdString(),

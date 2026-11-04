@@ -1463,17 +1463,17 @@ BOOST_AUTO_TEST_CASE(a_timed_unlock_whose_relock_cannot_be_armed_locks_the_walle
 }
 
 //!
-//! An elevation WIDENS the unlock in progress; it does not replace it. The
-//! deadline and the relock armed for it both survive, so a wallet unlocked for
-//! a fixed time still locks on time after an action elevates it.
+//! A capability leaves the unlock in progress as it was. The deadline and the
+//! relock armed for it both survive the operation, so a wallet unlocked for a
+//! fixed time still locks on time after a GUI send, vote or claim.
 //!
-//! This is the discriminating case for the relock dance the GUI used to do.
+//! This is the discriminating case for the relock dance the GUI once did.
 //! Locking first and unlocking again threw the deadline away and retired the
 //! armed relock, and the re-unlock carried no duration of its own -- so the
 //! wallet stayed unlocked forever. Under that behaviour the final assertion
 //! fails: nothing is left to lock the wallet.
 //!
-BOOST_AUTO_TEST_CASE(an_elevation_keeps_the_unlock_and_its_relock)
+BOOST_AUTO_TEST_CASE(a_capability_keeps_the_unlock_and_its_relock)
 {
     CWallet wallet;
     SchedulerForThisCase scheduler;
@@ -1485,7 +1485,7 @@ BOOST_AUTO_TEST_CASE(an_elevation_keeps_the_unlock_and_its_relock)
         BOOST_REQUIRE(wallet.AddKey(key));
     }
 
-    const SecureString passphrase("elevation-keeps-deadline");
+    const SecureString passphrase("capability-keeps-deadline");
     BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
     wallet.Lock();
 
@@ -1496,65 +1496,34 @@ BOOST_AUTO_TEST_CASE(an_elevation_keeps_the_unlock_and_its_relock)
     const uint64_t epoch = wallet.GetUnlockEpoch();
     BOOST_REQUIRE(deadline.has_value());
 
-    // Elevate for one operation, as a GUI send, vote or claim does.
-    BOOST_REQUIRE(wallet.ElevateToFull(passphrase));
-    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+    // One operation's capability, as a GUI send, vote or claim takes.
+    const std::optional<CapabilityId> id = wallet.BeginElevation(passphrase, CapabilityKind::Send);
+    BOOST_REQUIRE(id.has_value());
 
-    // The unlock did not restart. Same deadline, and the same epoch -- so the
-    // relock already armed is still the current one and is still going to fire.
+    // The unlock did not restart or widen. Same scope, same deadline, and the
+    // same epoch -- so the relock already armed is still the current one and is
+    // still going to fire.
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
     BOOST_CHECK(wallet.GetUnlockDeadline() == deadline);
     BOOST_CHECK_EQUAL(wallet.GetUnlockEpoch(), epoch);
 
-    // Hand the elevation back, as ~UnlockContext does.
-    BOOST_REQUIRE(wallet.RestrictToStakingOnly());
+    {
+        CapabilityScope scope(wallet, id, CapabilityKind::Send);
+        BOOST_CHECK(scope.Active());
+        BOOST_CHECK(wallet.CanUseKeys());
+    }
+
+    // Ending it, as ~UnlockContext does, changes nothing either.
+    wallet.EndElevation(*id);
     BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
     BOOST_CHECK(wallet.GetUnlockDeadline() == deadline);
+    BOOST_CHECK_EQUAL(wallet.GetUnlockEpoch(), epoch);
 
     // And it still locks when the unlock the user asked for runs out.
     g_scheduler->MockForward(std::chrono::seconds(61));
     WaitForRelock(wallet);
 
     BOOST_CHECK(wallet.IsLocked());
-}
-
-//!
-//! An elevation adds permission, so it demands the passphrase, and it needs an
-//! unlock to widen -- on a locked wallet there is nothing to widen and no
-//! deadline to preserve, which is Unlock()'s job.
-//!
-BOOST_AUTO_TEST_CASE(an_elevation_demands_the_passphrase_and_an_unlock_to_widen)
-{
-    CWallet wallet;
-    CKey key;
-    key.MakeNewKey(true);
-    {
-        LOCK(wallet.cs_wallet);
-        BOOST_REQUIRE(wallet.AddKey(key));
-    }
-
-    const SecureString passphrase("elevation-preconditions");
-    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
-    wallet.Lock();
-
-    // Locked: refused even with the right passphrase.
-    BOOST_CHECK(!wallet.ElevateToFull(passphrase));
-    BOOST_CHECK(wallet.IsLocked());
-
-    BOOST_REQUIRE(wallet.Unlock(passphrase, UnlockScope::StakingOnly));
-
-    // Wrong passphrase widens nothing, and moves nothing.
-    BOOST_CHECK(!wallet.ElevateToFull(SecureString("wrong")));
-    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
-
-    BOOST_REQUIRE(wallet.ElevateToFull(passphrase));
-    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
-
-    // Already as wide as it goes: a no-op that still succeeds, so a nested
-    // elevation on an already-elevated wallet is not an error.
-    BOOST_CHECK(wallet.ElevateToFull(passphrase));
-    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
-
-    wallet.Lock();
 }
 
 //!

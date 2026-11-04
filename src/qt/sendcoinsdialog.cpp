@@ -221,7 +221,7 @@ void SendCoinsDialog::on_sendButton_clicked()
         return;
     }
 
-    WalletModel::UnlockContext ctx(model->requestUnlock());
+    WalletModel::UnlockContext ctx(model->requestUnlock(CapabilityKind::Send));
     if(!ctx.isValid())
     {
         // Unlock wallet was cancelled
@@ -337,8 +337,9 @@ void SendCoinsDialog::on_sendButton_clicked()
         break;
     case WalletModel::WalletUnlockedForStakingOnly:
         QMessageBox::warning(this, tr("Send Coins"),
-            tr("Error: The wallet is unlocked for staking only, so it will not send. "
-               "Lock the wallet and unlock it again without the staking-only option to send."),
+            tr("Error: The wallet is unlocked for staking only, and the passphrase entered for "
+               "this send no longer applies (it lasts five minutes). Send again, and enter the "
+               "passphrase when asked."),
             QMessageBox::Ok, QMessageBox::Ok);
         break;
     case WalletModel::TransactionCommitFailed:
