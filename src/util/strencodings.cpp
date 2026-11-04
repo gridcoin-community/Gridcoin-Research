@@ -6,6 +6,7 @@
 #include <util/strencodings.h>
 #include <util/string.h>
 
+#include <support/cleanse.h>
 #include <tinyformat.h>
 
 #include <algorithm>
@@ -192,6 +193,12 @@ std::vector<unsigned char> DecodeBase64(const char* p, bool* pf_invalid)
     }
     valid = valid && (p - e) % 4 == 0 && p - q < 4;
     if (pf_invalid) *pf_invalid = !valid;
+
+    // The 6-bit groups are the decoded data in another form, which can be a
+    // secret (the wallet passphrase an RPC request carries for itself), so
+    // they are overwritten before they are freed. Neither vector is
+    // reallocated above: each was reserved to the most it can hold.
+    if (!val.empty()) memory_cleanse(val.data(), val.size());
 
     return ret;
 }

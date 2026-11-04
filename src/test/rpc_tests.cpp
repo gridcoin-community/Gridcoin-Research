@@ -213,6 +213,29 @@ BOOST_AUTO_TEST_CASE(http_headers_bounded)
     }
 }
 
+//! Header names are lower-cased and trimmed, values are trimmed of the same
+//! whitespace at both ends and nowhere else, a value may be empty, a line
+//! without a colon is skipped, and a repeated header keeps its last value.
+BOOST_AUTO_TEST_CASE(http_headers_trimmed_and_last_repeat_kept)
+{
+    std::map<std::string, std::string> headers;
+    std::istringstream in(" X-Mixed-Case \t:  \t inner  spaces kept \t\r\n"
+                          "x-repeated: first\r\n"
+                          "X-Repeated:\tsecond value\r\n"
+                          "x-empty:   \r\n"
+                          "x-bare:\r\n"
+                          "no colon on this line\r\n"
+                          "\r\n");
+
+    BOOST_CHECK_EQUAL(ReadHTTPHeaders(in, headers), 0);
+
+    BOOST_CHECK_EQUAL(headers.size(), 4U);
+    BOOST_CHECK_EQUAL(headers["x-mixed-case"], "inner  spaces kept");
+    BOOST_CHECK_EQUAL(headers["x-repeated"], "second value");
+    BOOST_CHECK_EQUAL(headers["x-empty"], "");
+    BOOST_CHECK_EQUAL(headers["x-bare"], "");
+}
+
 //! "GET / " splits into three words whose third is empty, and pop_back() on an
 //! empty string is undefined. Reachable before authentication.
 BOOST_AUTO_TEST_CASE(http_request_line_empty_proto)
