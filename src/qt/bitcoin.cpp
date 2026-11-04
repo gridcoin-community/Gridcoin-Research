@@ -1102,8 +1102,8 @@ int main(int argc, char *argv[])
     // reader of the option, including the ones outside this function.
     gArgs.ForceSetArg("-multiprocess", multiprocess_gui ? "1" : "0");
 
-    // Refuses a datadir from a configuration file (before anything is opened there) and -resetblockchaindata,
-    // from any source. Run after each read of the configuration files.
+    // Ignores the GUI-only options a configuration file sets, and refuses -resetblockchaindata from any source,
+    // the only option the multiprocess GUI refuses. Run after each read of the configuration files.
     auto refuse_multiprocess_gui_args = [&]() {
         if (!multiprocess_gui) return false;
 
@@ -1179,7 +1179,8 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    // The per-network configuration file can carry a datadir too; refuse it before any path is derived from it.
+    // The per-network configuration file was read too: ignore its GUI-only options and refuse
+    // -resetblockchaindata again.
     if (refuse_multiprocess_gui_args()) return EXIT_FAILURE;
 
     // In -multiprocess mode the core owns gridcoinsettings.json: it reads and writes the file and announces every
