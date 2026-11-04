@@ -190,6 +190,9 @@ schema-diff lint against the previous release tag.
   opened, by its device and inode, before its mode or group is changed. An attach
   group therefore always has an IPC directory of its own. The core logs the mode and
   group that directory had when it changes them.
+  The checks on the arguments, and that the attach group exists, run before the node
+  initialises: no wallet is loaded and no RPC port is bound, and under `-daemon` the
+  starting process reports the failure.
   The DIRECTORY is changed only when the node creates it (owner-only) or when
   `-ipcattachgroup` is set: an existing directory is otherwise left as the
   operator configured it and merely warned about, so a deliberately widened datadir

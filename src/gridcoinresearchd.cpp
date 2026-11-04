@@ -258,6 +258,24 @@ bool AppInit(int argc, char* argv[])
             HardenProcess();
         }
 
+#ifdef ENABLE_MULTIPROCESS
+        // The attach group's checks need only the arguments and the data directory, so a
+        // -multiprocess start they refuse stops here: before the daemonizing fork, so a -daemon
+        // parent reports the failure, and before AppInit2 loads the wallet or binds RPC. The IPC
+        // directory itself is checked again where it is opened (ipc::ApplyAttachGroupAccess).
+        // -noipcattachgroup counts as unset.
+        if (gArgs.GetBoolArg("-multiprocess", false)) {
+            if (const std::optional<std::string> refusal = ipc::AttachGroupIpcDirRefusal()) {
+                return InitError(*refusal);
+            }
+
+            const std::string attach_group = ipc::ConfiguredOption("-ipcattachgroup");
+            if (!ipc::ConfigureAttachGroup(attach_group)) {
+                return InitError(strprintf("The IPC attach group '%s' does not exist.", SanitizeString(attach_group)));
+            }
+        }
+#endif
+
         // Check to see if the user requested to reset blockchain data -- We allow reset blockchain data on testnet.
         if (gArgs.IsArgSet("-resetblockchaindata"))
         {
@@ -382,23 +400,8 @@ bool AppInit(int argc, char* argv[])
         // in the daemon, so a failure here is a failure to honor an explicit
         // request, not the loss of a nice-to-have.
         const bool multiprocess = gArgs.GetBoolArg("-multiprocess", false);
-        // The attach group is resolved before anything is written or served, so
-        // a group that does not exist, or one without an IPC directory of its
-        // own (-ipcdir), stops the node before a cookie is written.
-        // -noipcattachgroup counts as unset.
-        const std::string attach_group = ipc::ConfiguredOption("-ipcattachgroup");
-        const std::optional<std::string> ipcdir_refusal =
-            multiprocess ? ipc::AttachGroupIpcDirRefusal() : std::nullopt;
-        if (ipcdir_refusal) {
-            InitError(*ipcdir_refusal);
-            fRet = false;
-            SetShutdownRequested();
-        } else if (multiprocess && !ipc::ConfigureAttachGroup(attach_group)) {
-            InitError(strprintf("The IPC attach group '%s' does not exist.", SanitizeString(attach_group)));
-            // The same fatal path as a failed listener below.
-            fRet = false;
-            SetShutdownRequested();
-        } else if (multiprocess) {
+        // The attach group was resolved, and its arguments checked, before AppInit2.
+        if (multiprocess) {
             // Whether a failure came from the listener (bind, listen), the only
             // step after which a stale socket file can be the cause.
             bool listening = false;
