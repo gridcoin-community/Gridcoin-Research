@@ -1792,7 +1792,7 @@ caller), `minted_by` and `note`. The file is kept exactly as
 | `elevate` + `authority: passphrase_argument` | The entry verifies a wallet passphrase given as its own argument (unlock, passphrase change, `beginElevation`). | RPC column `access_elevate_inband`: the dispatcher does not gate it; the method verifies. IPC: no kind. |
 | `elevate` + `authority: unencrypted_only` | Acts only on an unencrypted wallet, which always has its keys. | RPC: gated (it passes). IPC: no kind. |
 | `settings` | `changesettings` and `Node.changeSettings`: the class of each setting applies. | `ChangeSettings()`, per setting |
-| `dispatch` | `Node.executeRpcConsoleCommand` (and `Node.executeRpcConsoleSecretCommand` when it is added): the class of the RPC row carried applies. | the `CRPCTable::execute` gate |
+| `dispatch` | `Node.executeRpcConsoleCommand`, and `Node.executeRpcConsoleSecretCommand` for the RPCs with passphrase parameters: the class of the RPC row carried applies. | the `CRPCTable::execute` gate |
 | `elevated_handle` | A method of an object that only Elevate methods make; `minted_by` lists those methods. | the minting method's capability |
 | `refuse` | Never performed: `Wallet.elevateWallet`, and `Wallet.backupWallet` and `Wallet.backupConfigFile`, which are classed ahead of the change that makes them always return false. | the method itself |
 
