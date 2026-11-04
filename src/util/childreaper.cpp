@@ -6,6 +6,7 @@
 
 #ifndef WIN32
 
+#include <config/gridcoin-config.h>
 #include <logging.h>
 #include <util/threadnames.h>
 
@@ -48,7 +49,18 @@ int SpawnAndWait(const char* path, char* const argv[])
     int spawn_error = 0;
     {
         std::lock_guard<std::mutex> lock(g_spawn_mutex);
+#if HAVE_POSIX_SPAWN_CLOSEFROM
+        // The shell gets none of the descriptors the core holds open.
+        posix_spawn_file_actions_t actions;
+        spawn_error = posix_spawn_file_actions_init(&actions);
+        if (spawn_error == 0) {
+            spawn_error = posix_spawn_file_actions_addclosefrom_np(&actions, 3);
+            if (spawn_error == 0) spawn_error = posix_spawn(&pid, path, &actions, nullptr, argv, environ);
+            posix_spawn_file_actions_destroy(&actions);
+        }
+#else
         spawn_error = posix_spawn(&pid, path, nullptr, nullptr, argv, environ);
+#endif
         if (spawn_error == 0) g_active_spawns.insert(pid);
     }
     if (spawn_error != 0) {
@@ -140,18 +152,33 @@ void StopOrphanReaper()
     }
     g_reaper_cv.notify_all();
 
-    // The reaper may be blocked in waitid() on a child that is still running. A
-    // child that ends at once wakes it, and the stop flag is then seen.
+    // The reaper may be blocked in waitid() while a child is still running. A
+    // short-lived child that nobody waits for wakes it: the reaper sees an
+    // unregistered zombie, reaps it, loops and sees the stop flag. It must not be
+    // registered or waited for here, or this thread could take the exit the reaper
+    // is waiting for.
     char true_name[] = "true";
     char* const argv[] = {true_name, nullptr};
-    if (SpawnAndWait("/bin/true", argv) == -1) {
+    pid_t wake_pid = 0;
+    const int spawn_error = posix_spawn(&wake_pid, "/bin/true", nullptr, nullptr, argv, environ);
+    if (spawn_error != 0) {
         // Without a way to wake it the thread cannot be joined safely. It uses only
         // static state and ends at the next child event.
-        LogPrintf("StopOrphanReaper error: could not wake the reaper thread, leaving it to end on its own\n");
+        LogPrintf("StopOrphanReaper error: posix_spawn(/bin/true) failed with errno %d, leaving the reaper thread to end on its own\n", spawn_error);
         thread.detach();
         return;
     }
+
+    // The reaper may end before it reaps the wake child, so wait until the child has
+    // ended, without reaping it, and take it after the join if it is still there.
+    // The wait returns at once with ECHILD when the reaper already took it.
+    siginfo_t info;
+    while (waitid(P_PID, static_cast<id_t>(wake_pid), &info, WEXITED | WNOWAIT) != 0 && errno == EINTR) {}
+
     thread.join();
+
+    std::lock_guard<std::mutex> lock(g_spawn_mutex);
+    if (g_active_spawns.count(wake_pid) == 0) waitpid(wake_pid, nullptr, WNOHANG);
 }
 
 } // namespace util

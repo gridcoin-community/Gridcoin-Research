@@ -955,6 +955,10 @@ check_symbol_exists(fork "unistd.h" HAVE_DECL_FORK)
 list(APPEND CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 check_symbol_exists(pipe2 "unistd.h" HAVE_DECL_PIPE2)
 list(REMOVE_ITEM CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
+# Lets the spawned notify shells be started without inherited descriptors.
+list(APPEND CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
+check_symbol_exists(posix_spawn_file_actions_addclosefrom_np "spawn.h" HAVE_POSIX_SPAWN_CLOSEFROM)
+list(REMOVE_ITEM CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 check_symbol_exists(setsid "unistd.h" HAVE_DECL_SETSID)
 
 # randomenv.cpp gathers entropy from the network interface list under

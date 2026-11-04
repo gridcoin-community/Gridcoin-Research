@@ -6,9 +6,11 @@
 
 #ifdef __linux__
 
+#include <config/gridcoin-config.h>
 #include <tinyformat.h>
 #include <util/childreaper.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <fstream>
@@ -17,6 +19,8 @@
 #include <vector>
 
 #include <dirent.h>
+#include <fcntl.h>
+#include <signal.h>
 #include <sys/prctl.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -82,6 +86,28 @@ char ProcessState(long pid)
     return line[close + 2];
 }
 
+//! Kills and reaps every child that was not present at construction, on every exit
+//! path, so that a case never leaves a process behind.
+class ChildCleanup
+{
+public:
+    ChildCleanup() : m_baseline(ChildPids()) {}
+
+    ~ChildCleanup()
+    {
+        for (const long pid : ChildPids()) {
+            if (std::find(m_baseline.begin(), m_baseline.end(), pid) != m_baseline.end()) continue;
+            kill(static_cast<pid_t>(pid), SIGKILL);
+            waitpid(static_cast<pid_t>(pid), nullptr, 0);
+        }
+    }
+
+    const std::vector<long>& Baseline() const { return m_baseline; }
+
+private:
+    std::vector<long> m_baseline;
+};
+
 bool AnyZombieChild()
 {
     for (const long pid : ChildPids()) {
@@ -111,6 +137,10 @@ BOOST_AUTO_TEST_CASE(run_shell_command_returns_exit_status)
 
 BOOST_AUTO_TEST_CASE(stop_without_start_and_repeated_calls_are_safe)
 {
+    // Compared with the children present now, so a child left by another suite
+    // does not matter.
+    const std::vector<long> baseline = ChildPids();
+
     util::StopOrphanReaper();
     util::StopOrphanReaper();
 
@@ -126,7 +156,7 @@ BOOST_AUTO_TEST_CASE(stop_without_start_and_repeated_calls_are_safe)
     // The reaper can be started again after a stop.
     util::StartOrphanReaper(true);
     util::StopOrphanReaper();
-    BOOST_CHECK(ChildPids().empty());
+    BOOST_CHECK(ChildPids() == baseline);
 }
 
 BOOST_AUTO_TEST_CASE(orphans_are_reaped)
@@ -175,6 +205,40 @@ BOOST_AUTO_TEST_CASE(spawned_status_not_stolen)
     }
     for (std::thread& thread : threads) thread.join();
     BOOST_CHECK_EQUAL(failures.load(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(stop_returns_with_a_live_orphan)
+{
+    ChildCleanup cleanup;
+    ReaperGuard guard;
+    BOOST_REQUIRE(guard.SubreaperSet());
+
+    // The shell exits at once and the sleep stays alive as an orphan of this process,
+    // so the reaper has a live child and nothing else to wake it.
+    const int status = util::RunShellCommand("sleep 5 >/dev/null 2>&1 &");
+    BOOST_REQUIRE(status != -1);
+
+    const auto start = std::chrono::steady_clock::now();
+    util::StopOrphanReaper();
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+
+    BOOST_CHECK_MESSAGE(elapsed < std::chrono::seconds(3), "stop took longer than the live orphan's remaining run time");
+}
+
+BOOST_AUTO_TEST_CASE(spawned_shell_does_not_inherit_descriptors)
+{
+#if HAVE_POSIX_SPAWN_CLOSEFROM
+    // Opened without close-on-exec, as the core's own sockets and files may be.
+    const int fd = open("/dev/null", O_RDONLY);
+    BOOST_REQUIRE(fd >= 3);
+    const int status = util::RunShellCommand(strprintf("test ! -e /proc/self/fd/%d", fd));
+    close(fd);
+    BOOST_REQUIRE(status != -1);
+    BOOST_CHECK(WIFEXITED(status));
+    BOOST_CHECK_EQUAL(WEXITSTATUS(status), 0);
+#else
+    BOOST_TEST_MESSAGE("posix_spawn_file_actions_addclosefrom_np is not available, case skipped");
+#endif
 }
 
 BOOST_AUTO_TEST_SUITE_END()
