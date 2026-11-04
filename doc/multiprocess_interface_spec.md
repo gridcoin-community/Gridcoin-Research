@@ -585,6 +585,104 @@ DTOs: `WalletBalances`, `WalletLockState`, `WalletOutput`, `WalletAddress`,
 Bridges: `handleStatusChanged`, `handleAddressBookChanged`,
 `handleTransactionChanged`.
 
+#### 4.3.1 File transfer
+
+A backup and the console's file commands move file contents over the
+connection: the client reads them from a `FileSource` or writes them to a
+`FileSink` (`file_transfer.capnp`, `src/interfaces/file_transfer.h`), and the
+file at the client's end is the client's to open, write and name. Three
+`Wallet` methods begin a transfer and return its handle:
+
+- `beginBackup(items) -> (errorOut, FileSource)`. `items` is a mask of
+  `BackupItem`: `Wallet` = 1, `Config` = 2, `Settings` = 4; 0, or any other bit,
+  is refused. The core copies each requested item into its own transfer
+  directory before the call returns, so the call takes as long as copying the
+  wallet file; make it off the UI thread. The source has one entry per
+  requested item, in the order wallet, configuration file, settings file. It
+  runs under a `Backup` capability when the wallet is encrypted and not fully
+  unlocked, and ends that capability before it returns.
+- `beginConsoleDownload(method, args) -> (errorOut, FileSource)` for
+  `dumpwallet` and `dumpcontracts`. `args` are the console arguments without
+  the file; the core puts its own value where the command takes its file. The
+  source has one entry. `dumpwallet`'s is generated as it is read, so its size
+  is -1 and `size_hint` is an estimate. `dumpcontracts` runs inside this call,
+  and its entry's note is the command's reply.
+- `beginConsoleUpload(method, args, size) -> (errorOut, FileSink)` for
+  `importwallet` (at most 64 MiB) and `parseaccrualsnapshotfile` (at most
+  256 MiB). `args` are as for the download; `size` is the exact number of bytes
+  the client will send, and a size above the command's cap is refused here
+  ("too large").
+
+A begin that returns no handle sets `errorOut`: a method that is not a file
+command in that direction ("not a file command"), arguments the command does
+not take, a transfer already live on this `Wallet` interface ("a transfer is
+already in progress"), a missing capability, no room in the core's transfer
+directory, or a failure of the copy or the command.
+
+**Reading a `FileSource`.**
+
+1. `entries()` lists the entries: `name`, `size` (bytes, or -1 when the entry
+   is generated as it is read), `size_hint` (a size to check free space against
+   when `size` is -1) and `note`.
+2. An entry with `size` 0 and a non-empty `note` has nothing to send: a
+   configuration or settings file that does not exist, or a configuration file
+   the core does not send in this deployment, with the reason as the note. It
+   is not read; a read of it returns an error chunk with the note. An entry
+   with a note and content, as `dumpcontracts`' is, is read as any other.
+3. `read(entry, maxBytes)` returns the next chunk of that entry: `data`, `eof`
+   and `error`. Reads are sequential and one at a time: each entry from its
+   start to its end, and one entry after another. A read of an entry already
+   sent, or of another entry while one is part-way, is refused, and so is a
+   `maxBytes` of 0. The core returns at most 4 MiB per read
+   (`FILE_TRANSFER_CHUNK_BYTES`) whatever `maxBytes` asks. `eof` comes with the
+   last chunk, which can carry data or none. A chunk with a non-empty `error`
+   ends the download; the bundled GUI then calls `cancel` and discards what it
+   received.
+4. `trailer(entry)`, once that entry has reached `eof`, returns `ok`, `size`
+   and `sha256`, the SHA-256 of the entry's bytes, or `error`. The client
+   compares both with what it received and discards the file when either
+   differs.
+5. The client destroys the source when it is done. The core deletes each copy
+   once it has been sent, and every copy still there when the source is
+   cancelled or destroyed.
+
+**Writing a `FileSink`.**
+
+1. `write(data)` appends bytes; the bundled GUI writes at most 4 MiB at a
+   time. `false` means the sink refused the data and has stopped: a write past
+   the announced size ("the upload is larger than its announced size"), a
+   failure to hold or store the data on the core's side, or a closed
+   connection. `finish` then returns that reason as its `error`, and runs
+   nothing.
+2. `finish(size, sha256)` once every byte has been written. The core checks
+   that `size` equals the announced size and the bytes it received, and that
+   `sha256` is the SHA-256 of those bytes, and refuses a mismatch ("the
+   received data does not match the size and SHA-256 the client sent"). Then
+   the command runs: `importwallet` imports from the data, which the core holds
+   in memory; `parseaccrualsnapshotfile` reads it from a core temporary file,
+   which is deleted afterwards. The result has `ok`, `output` (the command's
+   reply) and `error`.
+3. `cancel()` before `finish` stops the upload, and the core discards what it
+   received.
+
+**One transfer at a time, once.** A `Wallet` interface has at most one live
+transfer: from the begin that returned a handle until that handle is destroyed
+(the libmultiprocess client sends `destroy` when the proxy is released). A
+handle serves one transfer. Each entry of a source is sent once, a sink
+finishes once, and once a handle has stopped (`cancel`, a refused write or a
+read error that stops it, `finish` returned, or its connection closed) every
+later call is refused with the reason it stopped, such as "the transfer was
+cancelled" or "the transfer has finished".
+
+**Bound to its connection.** A handle stops when the connection it was begun
+on closes ("the IPC connection closed"). The `dumpwallet` source and the
+`importwallet` sink hold the `FileTransfer` capability for their run (§4.3) and
+end it when they stop; the other handles hold none.
+
+**Errors.** A refusal is a value: `errorOut` from a begin, `error` in a chunk,
+a trailer or a `finish` result, and `false` from `write`. A lost connection
+surfaces as an exception from the proxy call (§6), which ends the transfer.
+
 ### 4.4 WalletTxSource — `src/interfaces/wallet_tx_source.h`, `wallet_tx_source.capnp`
 
 The windowed transaction-table channel — see §5.2 for the full model.
