@@ -177,33 +177,25 @@ public:
         // comes before the hook's exchange, and the hook ends it before the slot
         // can pass to another GUI, or it comes after, and nothing is installed:
         // the slot, and any capability the next GUI has begun, are left alone.
-        // No scope is bound in process (the monolithic build), where there is no
-        // connection.
-        const ConnectionScope* const scope = m_connection_scope.get();
-        std::function<bool()> abandoned;
-        if (scope) abandoned = [scope] { return scope->closed(); };
-
+        // In process (the monolithic build) there is no connection and no check.
         bool begun = false;
         try {
-            begun = m_wallet->BeginIpcElevation(passphrase, kind, abandoned);
+            begun = m_wallet->BeginIpcElevation(passphrase, kind, m_connection_closed);
         } catch (const std::exception& e) {
             // Nothing the client could use is left behind: a capability this
-            // call may have issued before the throw is ended with the slot.
-            // Unless the connection has closed: then the slot is the next GUI's,
-            // and a capability this call installed is ended by the slot hook.
+            // call may have issued before the throw is ended with the slot. Once
+            // the connection has closed the slot is left alone, since it may be
+            // the next GUI's, and the slot hook ended what was this one's.
             LogPrintf("ERROR: %s: no capability was begun: %s", __func__, e.what());
-            if (!scope || !scope->closed()) m_wallet->EndIpcElevation();
+            m_wallet->EndIpcElevation(m_connection_closed);
             return false;
-        }
-
-        if (!begun && scope && scope->closed()) {
-            LogPrintf("WARNING: %s: the IPC connection closed while the capability was being begun; "
-                      "it was not kept", __func__);
         }
         return begun;
     }
 
-    void endElevation() override { m_wallet->EndIpcElevation(); }
+    // Ends this connection's capability. Once the connection has closed the
+    // slot is left alone: it may hold the next GUI's capability by then.
+    void endElevation() override { m_wallet->EndIpcElevation(m_connection_closed); }
 
     bool unlockWallet(const SecureString& passphrase, bool staking_only) override
     {
@@ -247,7 +239,7 @@ public:
         // The key is read under the capability the client began for this. On
         // a wallet unlocked for staking only there is none otherwise, and the
         // keystore refuses the key.
-        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(), CapabilityKind::SignMessage);
+        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(m_connection_closed), CapabilityKind::SignMessage);
 
         try {
             CKey key;
@@ -373,7 +365,7 @@ public:
         // for the passphrase and draws again under a Send capability (the one
         // under which a send refills the pool for its change key), which lets
         // the pool refill.
-        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(), CapabilityKind::Send);
+        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(m_connection_closed), CapabilityKind::Send);
 
         try {
             CPubKey new_key;
@@ -398,7 +390,7 @@ public:
         // That page is part of the researcher wizard. It draws first with no
         // capability, and on false asks for the passphrase and draws again
         // under a Contract capability, which lets the pool refill.
-        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(), CapabilityKind::Contract);
+        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(m_connection_closed), CapabilityKind::Contract);
 
         try {
             CPubKey new_key;
@@ -576,7 +568,7 @@ public:
     {
         // The whole flow runs under the Send capability the client began: the
         // build signs, and a change key can refill the key pool.
-        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(), CapabilityKind::Send);
+        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(m_connection_closed), CapabilityKind::Send);
 
         // Nothing may escape to the caller: in the single-process build that is
         // the GUI thread, where an exception ends the application. What can
@@ -632,6 +624,7 @@ public:
     void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
     {
         m_connection_scope = std::move(scope);
+        m_connection_closed = ConnectionClosedCheck(m_connection_scope);
     }
 
 private:
@@ -646,6 +639,10 @@ private:
     //! Nothing is called on it when the wallet is destroyed: what registers a hook
     //! in it removes the hook itself.
     std::shared_ptr<ConnectionScope> m_connection_scope{nullptr};
+    //! Whether that connection has closed, asked under the wallet's capability
+    //! mutex wherever this wallet begins, reads or ends the IPC capability.
+    //! Empty in process, where there is no connection and nothing to check.
+    std::function<bool()> m_connection_closed{};
 };
 
 SendCoinsResult WalletImpl::SendCoinsUnderScope(const std::vector<WalletSendRecipient>& recipients,

@@ -1088,9 +1088,9 @@ BOOST_FIXTURE_TEST_CASE(wire_connect_address_reports_same_account, grc_test::Sta
 // A connection that authenticates while another GUI holds the attach slot is
 // dropped at the deadline like one that never authenticated, while the attached
 // GUI is kept; and the place it held is reclaimed, so a third client is accepted.
-// Without the slot half of the listener's predicate, the refused connection would
-// sit in the second of the two places for as long as it liked, and with the
-// attached GUI in the first, no other client could connect at all.
+// The listener keeps a connection past the deadline only when it is
+// authenticated and holds the slot, so of its two places, one holds the attached
+// GUI and the other is free again within the deadline.
 BOOST_AUTO_TEST_CASE(wire_slotless_connection_is_dropped_at_the_deadline)
 {
     interfaces::NodeIdentity id;
@@ -1107,14 +1107,16 @@ BOOST_AUTO_TEST_CASE(wire_slotless_connection_is_dropped_at_the_deadline)
     auto a_proto = ipc::capnp::MakeCapnpProtocol();
     auto a = a_proto->connect(sock.connectClient(), "ipc-wire-gui-a", [&a_dropped] { a_dropped = true; });
     BOOST_REQUIRE(a != nullptr);
-    BOOST_REQUIRE(ipc::ClientHandshake(*a, "cookie", "main").ok);
+    BOOST_REQUIRE_MESSAGE(ipc::ClientHandshake(*a, "cookie", "main").ok,
+                          "GUI A's handshake failed; it must finish inside the 3 s authentication deadline");
     BOOST_REQUIRE(a->holdsAttachSlot());
 
     std::atomic<bool> b_dropped{false};
     auto b_proto = ipc::capnp::MakeCapnpProtocol();
     auto b = b_proto->connect(sock.connectClient(), "ipc-wire-gui-b", [&b_dropped] { b_dropped = true; });
     BOOST_REQUIRE(b != nullptr);
-    BOOST_REQUIRE(ipc::ClientHandshake(*b, "cookie", "main").ok);
+    BOOST_REQUIRE_MESSAGE(ipc::ClientHandshake(*b, "cookie", "main").ok,
+                          "GUI B's handshake failed; it must finish inside the 3 s authentication deadline");
     BOOST_REQUIRE(!b->holdsAttachSlot());
 
     // Generous cap: this asserts the drop happens, not how promptly.

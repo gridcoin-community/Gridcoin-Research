@@ -12,6 +12,7 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/upgrade.h"
 #include "init.h"
+#include "interfaces/connection_scope.h"
 #include "interfaces/file_transfer.h"
 #include "interfaces/gui_state.h"
 #include "interfaces/handler.h"
@@ -104,17 +105,21 @@ std::string ArgSubstitute(std::string text, const std::vector<std::string>& args
 
 //! Run one console command under the console's capability and format the outcome. The command
 //! throws what the RPC throws; the reply, or the formatted error, is returned as text.
+//! \p connection_closed is the console's connection check (bindConnectionScope).
 template <typename Execute>
-static RpcConsoleResult RunRpcConsole(const std::string& method, Execute&& execute)
+static RpcConsoleResult RunRpcConsole(const std::string& method, const std::function<bool()>& connection_closed,
+                                      Execute&& execute)
 {
     RpcConsoleResult out;
 
     // The command runs under the RpcRequest capability the console began,
     // when it began one. It begins one only after a command was refused
     // for the keys (wallet_unlock_needed below), to run that command again.
+    // Once this console's connection has closed it runs under none, since
+    // the slot may hold the next GUI's capability.
     std::optional<CapabilityScope> scope;
     if (pwalletMain) {
-        scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::RpcRequest);
+        scope.emplace(*pwalletMain, pwalletMain->IpcCapability(connection_closed), CapabilityKind::RpcRequest);
     }
 
     try {
@@ -424,7 +429,7 @@ public:
             return refused;
         }
 
-        return RunRpcConsole(method, [&] {
+        return RunRpcConsole(method, m_connection_closed, [&] {
             // Convert the positional string args in the command-dependent way,
             // dispatch -- all UniValue handling stays here.
             return tableRPC.execute(method, RPCConvertValues(method, args));
@@ -441,7 +446,7 @@ public:
             return refused;
         }
 
-        RpcConsoleResult result = RunRpcConsole(method, [&] {
+        RpcConsoleResult result = RunRpcConsole(method, m_connection_closed, [&] {
             // The passphrase positions hold placeholders; the SecureStrings carry the passphrases.
             // The other parameters are converted at their real indexes.
             const std::vector<int>& indexes = *PassphraseParamIndexes(method);
@@ -610,6 +615,17 @@ public:
     {
         return MakeSignalHandler(uiInterface.NotifyScraperEvent_connect(interfaces::ForwardNotify(std::move(fn))));
     }
+
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
+    }
+
+private:
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the console reads the IPC capability.
+    //! Empty in process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
 };
 
 //! A GUI's subscription to the cache's snapshots (GuiState::handleChanged):

@@ -16,6 +16,7 @@
 #include "interfaces/wallet_coin_source.h"
 #include "interfaces/wallet_tx_source.h"
 #include "ipc/handshake.h"
+#include "key_io.h"
 #include "ipc/serve_init.h"
 #include "test/staking_test_peers.h"
 #include "wallet/capability.h"
@@ -41,12 +42,14 @@ struct StubInit : public interfaces::Init {
     bool isCoreReady() override { return true; }
 };
 
-//! Inner Init that serves the wallet in pwalletMain, as the daemon's does.
+//! Inner Init that serves the wallet in pwalletMain and the interfaces that use
+//! its capability, as the daemon's does.
 struct MainWalletInit : public interfaces::Init {
     std::unique_ptr<interfaces::Wallet> makeWallet() override
     {
         return pwalletMain ? interfaces::MakeWallet(pwalletMain) : nullptr;
     }
+    std::unique_ptr<interfaces::Node> makeNode() override { return interfaces::MakeNode(); }
 };
 
 //! The slot hook gridcoinresearchd installs: the attached GUI going away ends the
@@ -384,6 +387,42 @@ BOOST_AUTO_TEST_CASE(slot_holder_close_ends_the_ipc_capability)
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 
     wallet.reset();
+}
+
+// The serving Init binds what it hands out to its connection: once the holder's
+// connection has closed and the next GUI has attached and begun a capability,
+// the console the first connection made does not run under it.
+BOOST_AUTO_TEST_CASE(served_interfaces_are_bound_to_their_connection)
+{
+    grc_test::EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    const std::vector<std::string> args{EncodeDestination(fx.id), "a message"};
+
+    auto slot = ipc::MakeAttachSlot();
+    auto a = ipc::MakeServeInit(std::make_unique<MainWalletInit>(), "c", {}, slot, DaemonSlotHook);
+    BOOST_REQUIRE(a->authenticate("c"));
+    std::unique_ptr<interfaces::Node> a_node = a->makeNode();
+    BOOST_REQUIRE(a_node != nullptr);
+    a->connectionClosed();
+
+    auto d = ipc::MakeServeInit(std::make_unique<MainWalletInit>(), "c", {}, slot, DaemonSlotHook);
+    BOOST_REQUIRE(d->authenticate("c"));
+    BOOST_REQUIRE(d->holdsAttachSlot());
+    std::unique_ptr<interfaces::Wallet> d_wallet = d->makeWallet();
+    std::unique_ptr<interfaces::Node> d_node = d->makeNode();
+    BOOST_REQUIRE(d_wallet != nullptr);
+    BOOST_REQUIRE(d_node != nullptr);
+    BOOST_REQUIRE(d_wallet->beginElevation(grc_test::EncryptedWallet::PASSPHRASE, CapabilityKind::RpcRequest));
+
+    interfaces::RpcConsoleResult result = a_node->executeRpcConsoleCommand("signmessage", args);
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(result.wallet_unlock_needed);
+    result = d_node->executeRpcConsoleCommand("signmessage", args);
+    BOOST_CHECK(result.ok);
+
+    d->connectionClosed();
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

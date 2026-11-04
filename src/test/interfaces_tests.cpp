@@ -1510,12 +1510,11 @@ BOOST_AUTO_TEST_CASE(ipc_begin_elevation_on_a_closed_connection_ends_it)
                 == interfaces::MessageSignStatus::KeyNotAvailable);
 }
 
-// The late begin of a GUI that has gone away must not touch the slot at all: by
-// the time it would install its capability, the next GUI may have attached and
-// begun its own, and displacing that would end it (or, for an instant, serve the
-// next GUI under the late capability). Driven deterministically: A's connection
-// is closed, B then begins a capability, and only then does A's begin reach the
-// slot.
+// A begin whose connection has closed before the capability reaches the slot
+// leaves the slot exactly as it is, so a capability the next GUI has begun in the
+// meantime stays installed and live, and the late capability is never in the
+// slot. Driven deterministically: A's connection is closed, B then begins a
+// capability, and only then does A's begin reach the slot.
 BOOST_AUTO_TEST_CASE(ipc_begin_elevation_after_close_keeps_the_next_guis_capability)
 {
     EncryptedWallet fx;
@@ -1541,6 +1540,42 @@ BOOST_AUTO_TEST_CASE(ipc_begin_elevation_after_close_keeps_the_next_guis_capabil
     BOOST_CHECK(next->signMessage(EncodeDestination(fx.id), "a message", signature)
                 == interfaces::MessageSignStatus::OK);
 
+    next->endElevation();
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+// The slot is process-wide, so a wallet served on a connection that has closed
+// must neither use nor end what the slot holds: by then it may hold the next
+// GUI's capability. Its operations read the slot as empty, and its end leaves
+// the slot alone (the closed connection's own hook ended what was its). Driven
+// deterministically: A's connection is closed, B begins a capability, and then
+// A's wallet signs and ends.
+BOOST_AUTO_TEST_CASE(ipc_closed_connection_neither_uses_nor_ends_the_next_guis_capability)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    const std::string address = EncodeDestination(fx.id);
+
+    std::unique_ptr<interfaces::Wallet> gone = interfaces::MakeWallet(&fx.wallet);
+    auto gone_scope = interfaces::MakeConnectionScope();
+    gone->bindConnectionScope(gone_scope);
+    gone_scope->close();
+
+    std::unique_ptr<interfaces::Wallet> next = interfaces::MakeWallet(&fx.wallet);
+    next->bindConnectionScope(interfaces::MakeConnectionScope());
+    BOOST_REQUIRE(next->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
+    const std::optional<CapabilityId> next_id = fx.wallet.IpcCapability();
+    BOOST_REQUIRE(next_id.has_value());
+
+    std::string signature;
+    BOOST_CHECK(gone->signMessage(address, "a message", signature) == interfaces::MessageSignStatus::KeyNotAvailable);
+    BOOST_CHECK(signature.empty());
+
+    gone->endElevation();
+    BOOST_CHECK(fx.wallet.IpcCapability() == next_id);
+
+    BOOST_CHECK(next->signMessage(address, "a message", signature) == interfaces::MessageSignStatus::OK);
     next->endElevation();
     BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
@@ -1865,6 +1900,51 @@ BOOST_AUTO_TEST_CASE(sidestake_edits_need_a_settings_elevation)
     BOOST_CHECK(sidestakes->deleteLocal(address).status == interfaces::SideStakeEditStatus::OK);
     BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
     w.Lock();
+}
+
+// The other interfaces served on a connection read the slot for that connection
+// as the wallet does: once it has closed, the console, PSGT signing and MRC
+// claims run under no capability, even when the slot holds the next GUI's
+// capability of the right kind.
+BOOST_AUTO_TEST_CASE(ipc_closed_connection_interfaces_do_not_use_the_next_guis_capability)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    auto gone_scope = interfaces::MakeConnectionScope();
+    std::unique_ptr<interfaces::Node> gone_node = interfaces::MakeNode();
+    std::unique_ptr<interfaces::PSGTPoolContext> gone_psgt = interfaces::MakePSGTPoolContext(&fx.wallet);
+    std::unique_ptr<interfaces::MRC> gone_mrc = interfaces::MakeMRC(&fx.wallet);
+    gone_node->bindConnectionScope(gone_scope);
+    gone_psgt->bindConnectionScope(gone_scope);
+    gone_mrc->bindConnectionScope(gone_scope);
+    gone_scope->close();
+
+    auto next_scope = interfaces::MakeConnectionScope();
+    std::unique_ptr<interfaces::Wallet> next = interfaces::MakeWallet(&fx.wallet);
+    std::unique_ptr<interfaces::Node> next_node = interfaces::MakeNode();
+    next->bindConnectionScope(next_scope);
+    next_node->bindConnectionScope(next_scope);
+
+    const std::vector<std::string> args{EncodeDestination(fx.id), "a message"};
+    BOOST_REQUIRE(next->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::RpcRequest));
+    interfaces::RpcConsoleResult result = gone_node->executeRpcConsoleCommand("signmessage", args);
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(result.wallet_unlock_needed);
+    result = next_node->executeRpcConsoleCommand("signmessage", args);
+    BOOST_CHECK(result.ok);
+
+    BOOST_REQUIRE(next->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignPSGT));
+    const interfaces::PSGTSignResult signed_result = gone_psgt->signPSGT(PsgtSpendingTheFixtureCoin(fx));
+    BOOST_CHECK(!signed_result.ok);
+    BOOST_CHECK_EQUAL(SignaturesOnFirstInput(signed_result.psgt), 0U);
+
+    BOOST_REQUIRE(next->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Contract));
+    BOOST_CHECK_EQUAL(gone_mrc->submit(0, false).error, MRC_STAKING_ONLY_REFUSAL);
+
+    next->endElevation();
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 
 BOOST_AUTO_TEST_CASE(node_console_refuses_file_commands)

@@ -30,6 +30,8 @@
 
 namespace interfaces {
 
+class ConnectionScope;
+
 //! A banned peer, as a value row for the GUI ban table.
 struct BannedNode
 {
@@ -381,6 +383,14 @@ public:
     using NotifyScraperEventFn =
         std::function<void(const scrapereventtypes& event_type, ChangeType status, const std::string& message)>;
     virtual std::unique_ptr<Handler> handleNotifyScraperEvent(NotifyScraperEventFn fn) = 0;
+
+    //! LOCAL ONLY: not served over capnp (no ordinal), so no peer can call it,
+    //! and the GUI's proxy keeps this default, which does nothing. Binds this to
+    //! the IPC connection it is served on, so what it runs under the client's
+    //! capability reads the IPC capability for that connection: none once the
+    //! connection has closed (see Wallet::bindConnectionScope). The serving Init
+    //! calls it once, before handing it out.
+    virtual void bindConnectionScope(std::shared_ptr<ConnectionScope> /*scope*/) {}
 };
 
 //! Return an in-process Node interface implementation.

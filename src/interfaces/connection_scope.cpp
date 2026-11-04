@@ -130,6 +130,9 @@ private:
     HookId m_next_id GUARDED_BY(m_mutex){1};
     //! Written only under m_mutex (in close()); read without it by closed(), so
     //! that callers holding other locks can ask, and under it by addCloseHook().
+    //! ServeInit's re-check in ClaimAttachSlot pairs this store with its load of
+    //! the held flag (and that flag's store with the hook's load), which needs
+    //! both to stay sequentially consistent; do not relax to acquire/release.
     std::atomic<bool> m_closed{false};
     //! Whether close() is running the hooks, and on which thread.
     bool m_running GUARDED_BY(m_mutex){false};
@@ -141,6 +144,12 @@ private:
 std::shared_ptr<ConnectionScope> MakeConnectionScope()
 {
     return std::make_shared<ConnectionScopeImpl>();
+}
+
+std::function<bool()> ConnectionClosedCheck(std::shared_ptr<ConnectionScope> scope)
+{
+    if (!scope) return {};
+    return [scope = std::move(scope)] { return scope->closed(); };
 }
 
 } // namespace interfaces

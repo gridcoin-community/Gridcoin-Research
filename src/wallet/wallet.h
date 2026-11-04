@@ -428,22 +428,33 @@ public:
     //! capability. Whatever the slot held is ended, whether or not this one is
     //! issued, and false leaves the slot empty. Otherwise as BeginElevation().
     //!
-    //! \p abandoned, when set, is asked in the same capability-mutex section
-    //! that installs the capability. When it answers true (the client the
-    //! capability is for has gone away), the slot is left exactly as it is, the
-    //! new capability is ended once the mutex is released, and false is
-    //! returned. It runs under the capability mutex, so it must not lock
-    //! anything; a lock-free read is what it is for.
+    //! \p connection_closed, when set, says whether the IPC connection of the
+    //! client the capability is for has closed. It is asked in the same
+    //! capability-mutex section that installs the capability. When it answers
+    //! true, the slot is left exactly as it is, the new capability is ended once
+    //! the mutex is released, and false is returned. Here and below it runs
+    //! under the capability mutex, so it must not lock anything; a lock-free read
+    //! (interfaces::ConnectionScope::closed()) is what it is for.
     bool BeginIpcElevation(const SecureString& passphrase, CapabilityKind kind,
-                           const std::function<bool()>& abandoned = {})
+                           const std::function<bool()>& connection_closed = {})
         LOCKS_EXCLUDED(cs_wallet, m_capability_mutex);
 
     //! \brief End the IPC slot's capability, if it holds one, as EndElevation()
-    //! does. Also called when the IPC client disconnects.
-    void EndIpcElevation() LOCKS_EXCLUDED(m_capability_mutex);
+    //! does.
+    //!
+    //! When \p connection_closed is set and answers true, the slot is left
+    //! alone: it may hold the next client's capability by then, and the closed
+    //! connection's own teardown ended what was its. That teardown (the slot
+    //! hook) therefore calls this without the check.
+    void EndIpcElevation(const std::function<bool()>& connection_closed = {})
+        LOCKS_EXCLUDED(m_capability_mutex);
 
-    //! The capability in the IPC slot, or nullopt when the slot is empty.
-    std::optional<CapabilityId> IpcCapability() const LOCKS_EXCLUDED(m_capability_mutex);
+    //! The capability in the IPC slot, or nullopt when the slot is empty. When
+    //! \p connection_closed is set and answers true, nullopt: an operation for a
+    //! client whose connection has closed runs under no capability, whatever the
+    //! slot holds.
+    std::optional<CapabilityId> IpcCapability(const std::function<bool()>& connection_closed = {}) const
+        LOCKS_EXCLUDED(m_capability_mutex);
 
     //! How many passphrase attempts have failed in a row, across Unlock(),
     //! BeginElevation() and ChangeWalletPassphrase(). An accepted passphrase

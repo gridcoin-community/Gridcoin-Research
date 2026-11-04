@@ -59,14 +59,21 @@ public:
     virtual void close() = 0;
 
     //! Whether close() has been called. True from the moment close() begins,
-    //! before any hook runs. Lock-free, so it may be asked under any lock: the
-    //! wallet asks it under its capability mutex, as it installs an IPC
-    //! capability (CWallet::BeginIpcElevation).
+    //! before any hook runs. Lock-free, so it may be asked under any lock. The
+    //! wallet asks it inside its capability-mutex sections that install, read
+    //! and end the IPC capability (ConnectionClosedCheck below).
     virtual bool closed() const = 0;
 };
 
 //! Return a new, open scope.
 std::shared_ptr<ConnectionScope> MakeConnectionScope();
+
+//! The check an interface served on \p scope's connection passes to
+//! CWallet::BeginIpcElevation, EndIpcElevation and IpcCapability, which ask it
+//! under the capability mutex: whether that connection has closed. Empty (no
+//! check) when \p scope is null, as it is in process, where there is no
+//! connection.
+std::function<bool()> ConnectionClosedCheck(std::shared_ptr<ConnectionScope> scope);
 
 } // namespace interfaces
 

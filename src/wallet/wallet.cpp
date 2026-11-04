@@ -1172,26 +1172,30 @@ void CWallet::EndElevation(CapabilityId id)
 }
 
 bool CWallet::BeginIpcElevation(const SecureString& passphrase, CapabilityKind kind,
-                                const std::function<bool()>& abandoned)
+                                const std::function<bool()>& connection_closed)
 {
     const std::optional<CapabilityId> id = BeginElevation(passphrase, kind);
 
     // The slot takes the new capability, or is emptied when none was issued,
-    // and whatever it held is ended once the mutex is released. An abandoned
-    // begin is decided in this same section, so nothing can see the slot hold a
-    // capability whose client has gone away, and it leaves the slot alone.
+    // and whatever it held is ended once the mutex is released. A closed
+    // connection is seen in this same section, so nothing can see the slot hold
+    // a capability whose client has gone away, and the slot is left alone.
     std::optional<CapabilityId> displaced;
     bool installed = false;
     {
         LOCK(m_capability_mutex);
-        if (!abandoned || !abandoned()) {
+        if (!connection_closed || !connection_closed()) {
             displaced = std::exchange(m_ipc_capability, id);
             installed = true;
         }
     }
 
     if (!installed) {
-        if (id) EndElevation(*id);
+        if (id) {
+            LogPrintf("WARNING: %s: the IPC connection closed while the capability was being begun; "
+                      "it was not kept", __func__);
+            EndElevation(*id);
+        }
         return false;
     }
 
@@ -1200,20 +1204,22 @@ bool CWallet::BeginIpcElevation(const SecureString& passphrase, CapabilityKind k
     return id.has_value();
 }
 
-void CWallet::EndIpcElevation()
+void CWallet::EndIpcElevation(const std::function<bool()>& connection_closed)
 {
     std::optional<CapabilityId> id;
     {
         LOCK(m_capability_mutex);
+        if (connection_closed && connection_closed()) return;
         id = std::exchange(m_ipc_capability, std::nullopt);
     }
 
     if (id) EndElevation(*id);
 }
 
-std::optional<CapabilityId> CWallet::IpcCapability() const
+std::optional<CapabilityId> CWallet::IpcCapability(const std::function<bool()>& connection_closed) const
 {
     LOCK(m_capability_mutex);
+    if (connection_closed && connection_closed()) return std::nullopt;
     return m_ipc_capability;
 }
 

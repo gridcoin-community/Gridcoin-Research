@@ -493,7 +493,12 @@ shutdown ends the wait. `elevateWallet` always returns false.
 The GUI side is `WalletModel::requestUnlock(CapabilityKind)` and its
 `UnlockContext`, which ends the capability when the operation finishes. If the
 attached GUI goes away instead, the node ends the capability as it tears the
-connection down, before another GUI can attach (§2.1). The
+connection down, before another GUI can attach (§2.1). The interfaces served on a
+connection (the wallet, the node console, MRC, voting, researcher and PSGT) use
+the capability only while that connection is open: once it has closed, a
+`beginElevation` that had not yet reached the slot is refused, their calls run
+under no capability, and their `endElevation` leaves the slot, which may by then
+hold the next GUI's capability, alone. The
 Options dialog asks before a submit that changes UPnP, the proxy or side staking
 (`OptionsModel::needsSettingsElevation`) and holds the capability across the
 submit; declined, it saves nothing of that submit. For any other change the node

@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "interfaces/staking.h"
+#include "interfaces/connection_scope.h"
 #include "interfaces/mrc.h"
 #include "interfaces/psgt.h"
 #include "interfaces/researcher.h"
@@ -223,14 +224,18 @@ namespace {
 //! \p wallet (interfaces::Wallet::beginElevation()), and return what it
 //! returns. With no wallet there is nothing to authorise, and \p fn runs as it
 //! is. The scope lives on this thread for the call and ends with it.
+//! \p connection_closed is the check of the connection the caller is served on
+//! (bindConnectionScope): once that has closed, \p fn runs under no capability,
+//! whatever the slot holds. Empty in process.
 template <typename Fn>
-auto RunUnderIpcCapability(CWallet* wallet, CapabilityKind kind, Fn&& fn)
+auto RunUnderIpcCapability(CWallet* wallet, const std::function<bool()>& connection_closed, CapabilityKind kind,
+                           Fn&& fn)
 {
     if (!wallet) {
         return fn();
     }
 
-    CapabilityScope scope(*wallet, wallet->IpcCapability(), kind);
+    CapabilityScope scope(*wallet, wallet->IpcCapability(connection_closed), kind);
 
     return fn();
 }
@@ -304,7 +309,7 @@ public:
 
     MRCSubmitResult submit(CAmount fee_boost, bool wallet_locked) override
     {
-        return RunUnderIpcCapability(m_wallet, CapabilityKind::Contract,
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract,
                                      [&] { return SubmitGuarded(fee_boost, wallet_locked, nullptr); });
     }
 
@@ -313,7 +318,7 @@ public:
     {
         const std::pair<CAmount, CAmount> terms{confirmed_fee, confirmed_net};
 
-        return RunUnderIpcCapability(m_wallet, CapabilityKind::Contract,
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract,
                                      [&] { return SubmitGuarded(fee_boost, wallet_locked, &terms); });
     }
 
@@ -328,6 +333,11 @@ public:
     std::unique_ptr<Handler> handleMRCChanged(MRCChangedFn fn) override
     {
         return MakeSignalHandler(uiInterface.MRCChanged_connect(interfaces::ForwardNotify(std::move(fn))));
+    }
+
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
     }
 
 private:
@@ -453,6 +463,10 @@ private:
     }
 
     CWallet* m_wallet;
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
 };
 
 //! In-process SideStakeManager over the global sidestake registry (Phase 1d-ii).
@@ -886,7 +900,7 @@ public:
     // single-process build).
     VotingSubmitResult submitPoll(const PollSubmission& poll) override
     {
-        return RunUnderIpcCapability(pwalletMain, CapabilityKind::Contract, [&] {
+        return RunUnderIpcCapability(pwalletMain, m_connection_closed, CapabilityKind::Contract, [&] {
             try {
                 return SubmitPollUnderScope(poll);
             } catch (const std::exception& e) {
@@ -951,7 +965,7 @@ public:
     VotingSubmitResult submitVote(const std::string& poll_txid,
                                   const std::vector<uint8_t>& choice_offsets) override
     {
-        return RunUnderIpcCapability(pwalletMain, CapabilityKind::Contract, [&] {
+        return RunUnderIpcCapability(pwalletMain, m_connection_closed, CapabilityKind::Contract, [&] {
             try {
                 return SubmitVoteUnderScope(poll_txid, choice_offsets);
             } catch (const std::exception& e) {
@@ -1015,6 +1029,11 @@ public:
         // core type crosses the boundary.
         return MakeSignalHandler(uiInterface.NewVoteReceived_connect(
             interfaces::ForwardNotify([fn = std::move(fn)](const uint256& poll_txid) { fn(poll_txid.ToString()); })));
+    }
+
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
     }
 
 private:
@@ -1109,6 +1128,11 @@ private:
         res.error = std::move(error);
         return res;
     }
+
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
 };
 
 //! Maps a core BeaconError to the interface BeaconStatus. Ported verbatim from
@@ -1435,7 +1459,7 @@ public:
     // thread, in the single-process build).
     BeaconAdvertiseResult advertiseBeacon() override
     {
-        return RunUnderIpcCapability(m_wallet, CapabilityKind::Contract, [&]() -> BeaconAdvertiseResult {
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract, [&]() -> BeaconAdvertiseResult {
             try {
                 const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
                 const GRC::AdvertiseBeaconResult result =
@@ -1451,7 +1475,7 @@ public:
 
     std::string generateBeaconKeyForV3() override
     {
-        return RunUnderIpcCapability(m_wallet, CapabilityKind::Contract, [&] {
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract, [&] {
             try {
                 return GenerateBeaconKeyForV3UnderScope();
             } catch (const std::exception& e) {
@@ -1495,7 +1519,7 @@ public:
 
     BeaconAdvertiseResult advertiseBeaconV3(const std::string& ownership_proof_xml) override
     {
-        return RunUnderIpcCapability(m_wallet, CapabilityKind::Contract, [&]() -> BeaconAdvertiseResult {
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::Contract, [&]() -> BeaconAdvertiseResult {
             try {
                 return AdvertiseBeaconV3UnderScope(ownership_proof_xml);
             } catch (const std::exception& e) {
@@ -1597,8 +1621,17 @@ public:
         return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
+    }
+
 private:
     CWallet* m_wallet;
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
 
     //! Build the full snapshot with cs_main held. Shared by snapshot() (blocking)
     //! and trySnapshot() (TRY_LOCK). The whole snapshot is built under one cs_main
@@ -1905,7 +1938,7 @@ public:
         // Signed under the client's SignPSGT capability; the GUI holds an
         // UnlockContext for it around this call. Nothing may escape to the
         // caller (the GUI thread, in the single-process build).
-        return RunUnderIpcCapability(m_wallet, CapabilityKind::SignPSGT, [&] {
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::SignPSGT, [&] {
             // Refused here as well as at each key, so the caller is told why
             // rather than finding no signature added.
             if (m_wallet && !m_wallet->CanUseKeys()) {
@@ -2056,7 +2089,7 @@ public:
         // Signed under the client's SignPSGT capability; the GUI holds an
         // UnlockContext for it around this call. Nothing may escape to the
         // caller (the GUI thread, in the single-process build).
-        return RunUnderIpcCapability(m_wallet, CapabilityKind::SignPSGT, [&] {
+        return RunUnderIpcCapability(m_wallet, m_connection_closed, CapabilityKind::SignPSGT, [&] {
             // Refused here as well as at each key, so the caller is told why
             // rather than handed back a PSGT with nothing signed.
             if (!m_wallet->CanUseKeys()) {
@@ -2307,8 +2340,17 @@ public:
         return WITH_LOCK(m_wallet->cs_wallet, return PSGTKeyHeldBy(*m_wallet, arrangement));
     }
 
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
+    }
+
 private:
     CWallet* m_wallet;
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
 
     //! Why signPSGT() and signPoolEntry() refuse a wallet that cannot use its
     //! keys on this call.

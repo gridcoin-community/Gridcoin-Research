@@ -531,11 +531,11 @@ BOOST_AUTO_TEST_CASE(ipc_slot_dropped)
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 
-// A begin whose IPC client has gone away is abandoned where it would install
-// its capability: the check is made in the same section as the install, so the
-// slot is left exactly as it is, and the new capability is ended. The client
-// that holds the slot now keeps its capability.
-BOOST_AUTO_TEST_CASE(ipc_slot_abandoned_begin_leaves_the_slot)
+// A begin whose client's IPC connection has closed is decided where it would
+// install its capability: connection_closed is asked in the same section as the
+// install, so the slot is left exactly as it is, and the new capability is
+// ended. The client that holds the slot now keeps its capability.
+BOOST_AUTO_TEST_CASE(ipc_slot_begin_for_a_closed_connection_leaves_the_slot)
 {
     EncryptedWallet fx;
     fx.UnlockFor(UnlockScope::StakingOnly);
@@ -557,7 +557,7 @@ BOOST_AUTO_TEST_CASE(ipc_slot_abandoned_begin_leaves_the_slot)
         BOOST_CHECK(scope.Active());
     }
 
-    // Not abandoned: installed as before, replacing what the slot held.
+    // An open connection's begin is installed, replacing what the slot held.
     BOOST_CHECK(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::SignMessage, [] { return false; }));
     const std::optional<CapabilityId> replaced = fx.wallet.IpcCapability();
     BOOST_REQUIRE(replaced.has_value());
@@ -569,6 +569,41 @@ BOOST_AUTO_TEST_CASE(ipc_slot_abandoned_begin_leaves_the_slot)
 
     fx.wallet.EndIpcElevation();
     BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+// Reading and ending the slot for a client whose connection has closed are
+// decided under the capability mutex too: the read answers nullopt and the end
+// leaves the slot alone, whatever it holds. For an open connection both act on
+// the slot.
+BOOST_AUTO_TEST_CASE(ipc_slot_read_and_end_for_a_closed_connection)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send));
+    const std::optional<CapabilityId> held = fx.wallet.IpcCapability();
+    BOOST_REQUIRE(held.has_value());
+
+    const auto closed = [] { return true; };
+    const auto open = [] { return false; };
+
+    BOOST_CHECK(!fx.wallet.IpcCapability(closed).has_value());
+    BOOST_CHECK(fx.wallet.IpcCapability(open) == held);
+
+    fx.wallet.EndIpcElevation(closed);
+    BOOST_CHECK(fx.wallet.IpcCapability() == held);
+    {
+        CapabilityScope scope(fx.wallet, held, CapabilityKind::Send);
+        BOOST_CHECK(scope.Active());
+    }
+
+    fx.wallet.EndIpcElevation(open);
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    {
+        CapabilityScope scope(fx.wallet, held, CapabilityKind::Send);
+        BOOST_CHECK(!scope.Active());
+    }
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 

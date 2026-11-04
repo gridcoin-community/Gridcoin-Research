@@ -199,7 +199,7 @@ public:
     {
         RequireAuth();
         RequireAttachSlot();
-        return m_inner->makeNode();
+        return BindToConnection(m_inner->makeNode());
     }
 
     std::unique_ptr<interfaces::StakingStatus> makeStakingStatus() override
@@ -213,10 +213,8 @@ public:
     {
         RequireAuth();
         RequireAttachSlot();
-        std::unique_ptr<interfaces::Wallet> wallet = m_inner->makeWallet();
         // The wallet's transfers and capabilities end with this connection.
-        if (wallet) wallet->bindConnectionScope(m_scope);
-        return wallet;
+        return BindToConnection(m_inner->makeWallet());
     }
 
     std::shared_ptr<interfaces::WalletTxSource> makeWalletTxSource() override
@@ -237,28 +235,28 @@ public:
     {
         RequireAuth();
         RequireAttachSlot();
-        return m_inner->makeMRC();
+        return BindToConnection(m_inner->makeMRC());
     }
 
     std::unique_ptr<interfaces::VotingManager> makeVotingManager() override
     {
         RequireAuth();
         RequireAttachSlot();
-        return m_inner->makeVotingManager();
+        return BindToConnection(m_inner->makeVotingManager());
     }
 
     std::unique_ptr<interfaces::ResearcherContext> makeResearcherContext() override
     {
         RequireAuth();
         RequireAttachSlot();
-        return m_inner->makeResearcherContext();
+        return BindToConnection(m_inner->makeResearcherContext());
     }
 
     std::unique_ptr<interfaces::PSGTPoolContext> makePSGTPoolContext() override
     {
         RequireAuth();
         RequireAttachSlot();
-        return m_inner->makePSGTPoolContext();
+        return BindToConnection(m_inner->makePSGTPoolContext());
     }
 
     std::unique_ptr<interfaces::SideStakeManager> makeSideStakeManager() override
@@ -283,6 +281,16 @@ private:
         }
     }
 
+    //! Bind an interface that runs operations under the client's capability to
+    //! this connection, so once the connection has closed those operations run
+    //! under none (bindConnectionScope).
+    template <typename T>
+    std::unique_ptr<T> BindToConnection(std::unique_ptr<T> made) const
+    {
+        if (made) made->bindConnectionScope(m_scope);
+        return made;
+    }
+
     void RequireAttachSlot() const
     {
         if (!m_slot_held->load()) {
@@ -295,15 +303,17 @@ private:
     //! The listener can tear the connection down on the event-loop thread while
     //! this call is still running on its worker. What the code guarantees:
     //!  - A closed connection never keeps the slot. If the scope is closed before
-    //!    the claim, nothing is claimed; if it closes after, the claim is given
-    //!    back here once close() has run the hooks (close() on a closed scope
-    //!    waits for them). connectionClosed() may have found nothing to release.
+    //!    the claim, nothing is claimed. If it closes between the claim and the
+    //!    re-check below, the claim is given back here once close() has run the
+    //!    hooks (close() on a closed scope waits for them). If it closes after
+    //!    the re-check, connectionClosed() gives it back.
     //!  - The slot hook is registered before the claim and does its work only if
     //!    the held flag is set when it runs. If it runs after the flag is set, it
     //!    finishes before the slot is released, by connectionClosed() or here. If
     //!    it runs before, it does nothing: this connection has handed out nothing
-    //!    yet (no factory is served until authenticate() returns), and another
-    //!    GUI may hold the slot by then.
+    //!    yet (no factory is served until authenticate() has stored
+    //!    Authenticated, after this returns), and another GUI may hold the slot
+    //!    by then.
     void ClaimAttachSlot()
     {
         if (m_on_slot_closed) {
@@ -339,7 +349,10 @@ private:
     //! This connection's teardown hooks. Shared with the wallet it hands out.
     const std::shared_ptr<interfaces::ConnectionScope> m_scope{interfaces::MakeConnectionScope()};
     //! Whether this connection holds the slot. Shared with the slot hook, which
-    //! may outlive this object in the scope.
+    //! may outlive this object in the scope. ClaimAttachSlot's re-check pairs
+    //! this store with its load of the scope's closed flag (and that flag's store
+    //! with the hook's load of this one), which needs both to stay sequentially
+    //! consistent; do not relax to acquire/release.
     const std::shared_ptr<std::atomic<bool>> m_slot_held{std::make_shared<std::atomic<bool>>(false)};
     //! The connection gets exactly ONE authentication attempt, and the claim on
     //! that attempt is a single atomic transition.

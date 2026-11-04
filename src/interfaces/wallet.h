@@ -342,10 +342,14 @@ public:
     //! False on a wrong passphrase (after the failed-passphrase delay, so it can
     //! block for up to 30 s -- never call it on the GUI thread), on a kind
     //! outside CapabilityKind, or when the wallet cannot be unlocked for it. An
-    //! unencrypted wallet accepts any passphrase. Also false when the IPC
-    //! connection the wallet is served on closed while the call ran
-    //! (bindConnectionScope): the capability it began is ended, and the slot,
-    //! which may hold the next GUI's capability by then, is left as it is.
+    //! unencrypted wallet accepts any passphrase.
+    //!
+    //! Served on an IPC connection (bindConnectionScope), it is also false when
+    //! the connection had closed before the capability reached the slot: the
+    //! capability is ended, and the slot, which may hold the next GUI's
+    //! capability by then, is left as it is. A connection that closes after the
+    //! capability reached the slot gets true, and the connection's teardown hook
+    //! ends the capability.
     //!
     //! The passphrase first waits its turn behind other passphrase attempts,
     //! which are served in the order they ask. In the monolithic build a
@@ -355,7 +359,9 @@ public:
     virtual bool beginElevation(const SecureString& passphrase, CapabilityKind kind) = 0;
 
     //! End the capability beginElevation() began, if one is held. Idempotent.
-    //! An operation already running under it finishes.
+    //! An operation already running under it finishes. Once the IPC connection
+    //! the wallet is served on has closed it does nothing: the slot may hold the
+    //! next GUI's capability, and the connection's teardown ended this one's.
     virtual void endElevation() = 0;
 
     //! Unlock the wallet; on success the staking-only preference is set to
@@ -519,8 +525,9 @@ public:
     //! for that connection (transfers, capabilities) can register teardown hooks
     //! that end it when the connection goes away. The serving Init calls it once,
     //! before the wallet is handed out. The in-process wallet stores the scope and
-    //! registers nothing itself; beginElevation() asks it whether the connection
-    //! has closed, and nothing is called on it when the wallet is destroyed.
+    //! registers nothing itself; wherever it begins, reads or ends the IPC
+    //! capability it asks the scope whether the connection has closed, and
+    //! nothing is called on it when the wallet is destroyed.
     //!
     //! LOCAL ONLY: not served over capnp (no ordinal in wallet.capnp), so no peer
     //! can call it, and the GUI's proxy keeps this default, which does nothing.
