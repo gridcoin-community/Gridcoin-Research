@@ -1780,7 +1780,8 @@ caller), `minted_by` and `note`. The file is kept exactly as
 
 The effects are `read_only`, `state`, `value`, `keys` and `key_writer`. An effect of `value`,
 `keys` or `key_writer` needs class `elevate`, `settings`, `dispatch`, `elevated_handle` or
-`refuse`; an effect of `read_only` needs class `read_only`, or `free` with `"path": true`.
+`refuse`; an effect of `read_only` needs class `read_only`, or `free` with `"path": true`; and
+class `read_only` needs effect `read_only` and no `path`.
 
 **The baseline rule.** The plain GUI runs no RPC server, so `free` is limited to what a program
 of the desktop account can already do, without the passphrase, to a monolithic wallet unlocked
@@ -1796,9 +1797,13 @@ same answer.
   class matches it (`access_elevate_inband` is `elevate` with `"authority": "passphrase_argument"`;
   `access_elevate` is any other `elevate`).
 - A new capnp method takes an entry under `"ipc"`. An Elevate one without an authority names
-  its `kind`, and its method body opens `CapabilityScope` with `CapabilityKind::<kind>`. A
-  method on an interface that is not yet in the lint's `IMPLEMENTATIONS` map needs a line there
-  naming the file and class that implement the interface.
+  its `kind`, and its method body passes `CapabilityKind::<kind>` as an argument of the
+  capability it opens: a `CapabilityScope` declaration, an `emplace()` into a
+  `std::optional<CapabilityScope>`, or `RunUnderIpcCapability()`. The lint looks for the one
+  definition of the method in the implementing class; a second definition of the same name there
+  (an overload) needs an `EXEMPT` entry with the reason. A method on an interface that is not
+  yet in the lint's `IMPLEMENTATIONS` map needs a line there naming the file and class that
+  implement the interface.
 - A new argument goes into one list of `init_tests/every_registered_argument_has_its_settings_class`,
   takes `ArgsManager::SETTING_FREE` if it is Free, and, if it is Refuse (any command, path, URL,
   RPC/IPC or process-mode option), gets a pattern in `share/gridcoin/refused-setting-keys.txt`.

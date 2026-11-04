@@ -21,28 +21,36 @@ means. This lint keeps the file true against the code:
       other elevate, access_<class> otherwise. RPC classes are read_only,
       free, elevate and settings, and an RPC entry has no kind or minted_by.
    2. Every capnp interface method has an "ipc" entry and every "ipc" entry
-      has a method.
+      has a method. Method declarations are also counted without regard to
+      the name, so one the parser cannot read is reported.
    3. The class, the effect and the authority are known values, and only an
       elevate entry has an authority.
    4. An entry whose effect is value, keys or key_writer is of class elevate,
       settings, dispatch, elevated_handle or refuse.
    5. An entry whose effect is read_only is of class read_only, or of class
-      free with "path": true.
+      free with "path": true; an entry of class read_only has effect
+      read_only and no path.
    6. An "ipc" entry of class elevate without an authority names, in "kind",
       an enumerator of enum class CapabilityKind. No other entry has a kind.
    7. Class dispatch is only on Node.executeRpcConsoleCommand and
       Node.executeRpcConsoleSecretCommand; class settings only on the RPC
       changesettings and Node.changeSettings.
-   8. The implementing method body of an "ipc" elevate entry with a kind
-      names CapabilityKind::<kind>, and that of Node.changeSettings names
-      CapabilityKind::Settings. IMPLEMENTATIONS maps each interface to its
-      file and class; a new interface needs a line there before such an entry
-      is accepted. EXEMPT lists the methods excused, with the reason.
+   8. The implementing method of an "ipc" elevate entry with a kind passes
+      CapabilityKind::<kind> as an argument of the capability it opens (a
+      CapabilityScope declaration or temporary, an .emplace() of one, or
+      RunUnderIpcCapability()), and Node.changeSettings does so with
+      CapabilityKind::Settings. The method is the one definition of that name
+      in the implementing class: a name not preceded by '.', '->' or '::',
+      whose parameter list is followed only by const, override, final,
+      noexcept, & or && before its '{'. IMPLEMENTATIONS maps each interface
+      to its file and class; a new interface needs a line there before such
+      an entry is accepted. EXEMPT lists the methods excused, with the reason.
    9. An elevated_handle entry lists in "minted_by" the "ipc" entries of class
       elevate that make its object. No other entry has minted_by.
   10. When the key entry point list exists (--key-entry-points, by default
-      src/test/data/key_entry_points.json), every RPC and Interface.method in
-      its "rpc" and "ipc" lists is of class elevate or dispatch here. A
+      src/test/data/key_entry_points.json), it has non-empty "rpc" and "ipc"
+      lists, and every RPC and Interface.method in them is of class elevate
+      or dispatch here. A
       dispatch entry reaches the keys only through the RPC it carries, whose
       own row rule 1 and the dispatcher gate hold to elevate, and rule 7
       confines dispatch to the console methods.
@@ -110,8 +118,21 @@ ROW_CANDIDATE_RE = re.compile(r'^\s*\{\s*"[^"]+"\s*,\s*&', re.M)
 MEMBER_RE = re.compile(r"(?<![\w.])([a-zA-Z][a-zA-Z0-9_]*)\s*@(\d+)\s*\(", re.MULTILINE)
 SCOPE_RE = re.compile(r"\b(interface|struct|enum|union)\s+(\w+)[^{]*\{")
 CAPNP_COMMENT_RE = re.compile(r"#[^\n]*")
+# Any method declaration, counted without regard to the name: an ordinal
+# followed by a parameter list or a generic parameter list.
+CAPNP_CANDIDATE_RE = re.compile(r"@\d+\s*[\[(]")
 
 CAPABILITY_ENUM_RE = re.compile(r"\benum\s+class\s+CapabilityKind\b[^{;]*\{([^}]*)\}")
+
+# Rule 8: the calls that open a capability. The kind must be one of the call's
+# own arguments: a CapabilityScope declaration (scope(...) or scope{...}) or
+# temporary, an emplace() into a std::optional<CapabilityScope>, or
+# RunUnderIpcCapability(wallet, kind, fn).
+CAPABILITY_CALL_RE = re.compile(r"\bCapabilityScope\s*(?:[A-Za-z_]\w*\s*)?[({]"
+                                r"|\.\s*emplace\s*\("
+                                r"|\bRunUnderIpcCapability\s*\(")
+# Rule 8: what may stand between a definition's parameter list and its body.
+DEFINITION_TAIL_RE = re.compile(r"(?:\s|\bconst\b|\boverride\b|\bfinal\b|\bnoexcept\b|&&|&)*")
 
 errors = []
 
@@ -197,9 +218,21 @@ def rpc_rows():
     return rows
 
 
+def innermost_scope(spans, pos):
+    """(kind, name) of the tightest capnp scope containing pos, or None."""
+    best = None
+    best_start = -1
+    for kind, name, start, end in spans:
+        if start <= pos < end and start > best_start:
+            best, best_start = (kind, name), start
+    return best
+
+
 def capnp_methods():
     """Interface.method of every capnp interface method."""
     methods = set()
+    parsed = 0
+    candidates = 0
     for path in sorted(glob.glob(CAPNP_GLOB)):
         text = CAPNP_COMMENT_RE.sub(lambda m: " " * len(m.group(0)), read_text(path))
         spans = []
@@ -214,18 +247,22 @@ def capnp_methods():
                 i += 1
             if depth == 0:
                 spans.append((m.group(1), m.group(2), m.end(), i - 1))
+        for m in CAPNP_CANDIDATE_RE.finditer(text):
+            scope = innermost_scope(spans, m.start())
+            if scope is not None and scope[0] == "interface":
+                candidates += 1
         for m in MEMBER_RE.finditer(text):
-            best = None
-            best_start = -1
-            for kind, name, start, end in spans:
-                if start <= m.start() < end and start > best_start:
-                    best, best_start = (kind, name), start
+            best = innermost_scope(spans, m.start())
             if best is None or best[0] != "interface":
                 continue  # a struct field or an enumerant, not a method
+            parsed += 1
             key = "{}.{}".format(best[1], m.group(1))
             if key in methods:
                 fail("ipc." + key, "more than one capnp method of this name")
             methods.add(key)
+    if candidates > parsed:
+        fail(CAPNP_GLOB, "{} interface method declaration(s) did not parse (name or shape); "
+                         "they are not checked".format(candidates - parsed))
     return methods
 
 
@@ -251,20 +288,71 @@ def capability_kinds():
     return kinds
 
 
-def method_body(text, cls, method):
-    """The body of method in the block of class cls: the first occurrence of
-    'method(' in the block that is followed by '{' before ';'."""
+def matching_close(text, open_pos):
+    """The index of the bracket that closes the one at open_pos, counting
+    (), [] and {} together, or -1."""
+    depth = 0
+    for i in range(open_pos, len(text)):
+        if text[i] in "([{":
+            depth += 1
+        elif text[i] in ")]}":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def method_bodies(text, cls, method):
+    """The bodies of every definition of method in the block of class cls, or
+    None when the class is not found. A definition is an occurrence of
+    'method(' not preceded by '.', '->' or '::' whose parameter list is
+    followed only by const, override, final, noexcept, & or && before '{'."""
     m = re.search(r"\bclass\s+{}\b[^;{{]*\{{".format(re.escape(cls)), text)
     if not m:
         return None
     block = brace_block(text, m.start())
-    for call in re.finditer(r"\b{}\s*\(".format(re.escape(method)), block):
-        tail = block[call.end():]
-        semi = tail.find(";")
-        brace = tail.find("{")
-        if brace != -1 and (semi == -1 or brace < semi):
-            return brace_block(block, call.end())
-    return None
+    bodies = []
+    for name in re.finditer(r"\b{}\s*\(".format(re.escape(method)), block):
+        before = block[:name.start()].rstrip()
+        if before.endswith(".") or before.endswith("->") or before.endswith("::"):
+            continue  # a call through an object or a qualified name
+        close = matching_close(block, name.end() - 1)
+        if close < 0:
+            continue
+        tail = DEFINITION_TAIL_RE.match(block, close + 1)
+        if tail.end() < len(block) and block[tail.end()] == "{":
+            bodies.append(brace_block(block, tail.end()))
+    return bodies
+
+
+def top_level_arguments(text, open_pos):
+    """The comma-separated arguments of the call whose bracket is at open_pos."""
+    close = matching_close(text, open_pos)
+    if close < 0:
+        return []
+    args = []
+    depth = 0
+    start = open_pos + 1
+    for i in range(open_pos + 1, close):
+        if text[i] in "([{":
+            depth += 1
+        elif text[i] in ")]}":
+            depth -= 1
+        elif text[i] == "," and depth == 0:
+            args.append(text[start:i].strip())
+            start = i + 1
+    args.append(text[start:close].strip())
+    return args
+
+
+def opens_capability(body, kind):
+    """Whether body passes CapabilityKind::<kind> as an argument of a call
+    that opens a capability."""
+    want = "CapabilityKind::" + kind
+    for call in CAPABILITY_CALL_RE.finditer(body):
+        if want in top_level_arguments(body, call.end() - 1):
+            return True
+    return False
 
 
 def load_classes():
@@ -322,9 +410,11 @@ def check_entry(name, entry, is_rpc, kinds):
     # Rule 4.
     if effect in GUARDED_EFFECTS and cls not in GUARDED_CLASSES:
         fail(name, "effect {} needs class {}, not {}".format(effect, ", ".join(GUARDED_CLASSES), cls))
-    # Rule 5.
+    # Rule 5, both ways.
     if effect == "read_only" and not (cls == "read_only" or (cls == "free" and entry.get("path") is True)):
         fail(name, "effect read_only needs class read_only, or class free with \"path\": true")
+    if cls == "read_only" and (effect != "read_only" or "path" in entry):
+        fail(name, "class read_only needs effect read_only and no path")
 
     # Rule 6, and rule 1's "no kind on an RPC entry".
     wants_kind = not is_rpc and cls == "elevate" and "authority" not in entry
@@ -403,11 +493,18 @@ def check_bodies(classes):
         path, cls = IMPLEMENTATIONS[interface]
         if path not in texts:
             texts[path] = blank_comments_and_literals(read_text(path))
-        body = method_body(texts[path], cls, method)
-        if body is None:
-            fail("ipc." + key, "no body of {}::{} found in {}".format(cls, method, path))
-        elif not re.search(r"\bCapabilityKind::{}\b".format(re.escape(kind)), body):
-            fail("ipc." + key, "{}::{} in {} does not name CapabilityKind::{}".format(cls, method, path, kind))
+        bodies = method_bodies(texts[path], cls, method)
+        if bodies is None:
+            fail("ipc." + key, "class {} not found in {}".format(cls, path))
+        elif not bodies:
+            fail("ipc." + key, "no definition of {}::{} found in {}".format(cls, method, path))
+        elif len(bodies) > 1:
+            fail("ipc." + key, "{} definitions of {}::{} in {}; rule 8 cannot tell which implements the "
+                               "method (add it to EXEMPT with the reason if this is intended)"
+                               .format(len(bodies), cls, method, path))
+        elif not opens_capability(bodies[0], kind):
+            fail("ipc." + key, "{}::{} in {} does not pass CapabilityKind::{} to a CapabilityScope, an "
+                               "emplace() of one or RunUnderIpcCapability()".format(cls, method, path, kind))
 
 
 def check_handles(classes):
@@ -431,13 +528,15 @@ def check_key_entry_points(path, data):
     """Rule 10."""
     try:
         listing = json.loads(read_text(path))
-        rpc = [row["name"] for row in listing.get("rpc", [])]
-        ipc = ["{}.{}".format(row["interface"], row["method"]) for row in listing.get("ipc", [])]
+        for field in ("rpc", "ipc"):
+            if not isinstance(listing.get(field), list) or not listing[field]:
+                fail(path, "has no non-empty \"{}\" list".format(field))
+                return
+        rpc = [row["name"] for row in listing["rpc"]]
+        ipc = ["{}.{}".format(row["interface"], row["method"]) for row in listing["ipc"]]
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         fail(path, "cannot read its rpc and ipc lists: {}".format(e))
         return
-    if not rpc and not ipc:
-        fail(path, "its rpc and ipc lists are empty")
     for table, names in (("rpc", rpc), ("ipc", ipc)):
         for name in names:
             entry = data[table].get(name) if isinstance(name, str) else None

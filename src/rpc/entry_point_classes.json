@@ -658,13 +658,13 @@
     "Wallet.backupConfigFile": {
       "class": "refuse",
       "effect": "state",
-      "note": "P2c makes it always return false; until then it still writes the copy",
+      "note": "classed ahead of the change that makes it always return false; until then it still writes the copy",
       "path": true
     },
     "Wallet.backupWallet": {
       "class": "refuse",
       "effect": "state",
-      "note": "P2c makes it always return false; until then it still writes the copy",
+      "note": "classed ahead of the change that makes it always return false; until then it still writes the copy",
       "path": true
     },
     "Wallet.beginElevation": {
@@ -733,11 +733,13 @@
     },
     "Wallet.getNewReceiveAddress": {
       "class": "free",
-      "effect": "state"
+      "effect": "state",
+      "note": "draws with no capability; a pool refill runs under the Send capability the client began"
     },
     "Wallet.getNewReceiveAddressWithLabel": {
       "class": "free",
-      "effect": "state"
+      "effect": "state",
+      "note": "draws with no capability; a pool refill runs under the Contract capability the client began"
     },
     "Wallet.getNumTransactions": {
       "class": "read_only",
