@@ -1781,4 +1781,33 @@ BOOST_AUTO_TEST_CASE(sidestake_edits_need_a_settings_elevation)
     w.Lock();
 }
 
+BOOST_AUTO_TEST_CASE(node_console_refuses_file_commands)
+{
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+
+    const fs::path in_datadir = GetDataDir() / "x";
+    const fs::path in_cwd = fs::current_path() / "x";
+    BOOST_REQUIRE(!fs::exists(in_datadir));
+    BOOST_REQUIRE(!fs::exists(in_cwd));
+
+    const std::vector<std::pair<std::string, std::vector<std::string>>> calls{
+        {"dumpwallet", {"x"}},
+        {"importwallet", {"x"}},
+        {"dumpcontracts", {"*", "x"}},
+        {"parseaccrualsnapshotfile", {"x"}},
+    };
+
+    for (const auto& [method, args] : calls) {
+        const interfaces::RpcConsoleResult r = node->executeRpcConsoleCommand(method, args);
+        BOOST_CHECK_MESSAGE(!r.ok, method);
+        BOOST_CHECK_MESSAGE(r.output.find("moves a file") != std::string::npos, method + ": " + r.output);
+        BOOST_CHECK_MESSAGE(!fs::exists(in_datadir), method);
+        BOOST_CHECK_MESSAGE(!fs::exists(in_cwd), method);
+    }
+
+    // help for a file command takes no path and still works, as does an ordinary command.
+    BOOST_CHECK(node->executeRpcConsoleCommand("help", {"dumpwallet"}).ok);
+    BOOST_CHECK(node->executeRpcConsoleCommand("getblockcount", {}).ok);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

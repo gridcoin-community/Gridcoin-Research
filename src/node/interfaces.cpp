@@ -12,6 +12,7 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/upgrade.h"
 #include "init.h"
+#include "interfaces/file_transfer.h"
 #include "interfaces/gui_state.h"
 #include "interfaces/handler.h"
 #include "interfaces/notification_dispatcher.h"
@@ -408,6 +409,18 @@ public:
         if (PassphraseParamIndexes(method) != nullptr) {
             RpcConsoleResult refused;
             refused.output = "Error: " + method + " takes a passphrase; the console sends it separately";
+            return refused;
+        }
+
+        // A command that takes a file path would make this process read or write a
+        // path chosen by the caller, so the console does not dispatch it here. The
+        // GUI console runs these through the file transfer instead. The refusal is
+        // for this console entry point only; RPC over HTTP is unchanged, and help
+        // for such a command is a call to "help" and so is not affected.
+        if (interfaces::FindConsoleFileCommand(method)) {
+            RpcConsoleResult refused;
+            refused.output = method + " moves a file; the GUI console runs it through the file transfer, "
+                                      "which this client does not use.";
             return refused;
         }
 
