@@ -186,12 +186,10 @@ public:
     bool changeWalletPassphrase(const SecureString& old_passphrase,
                                 const SecureString& new_passphrase) override
     {
-        // No preliminary lock. ChangeWalletPassphrase captures the scope and the
-        // deadline under the acquisition that clears them, and restores both.
-        // Locking here threw that state away before it could be captured, so a
-        // GUI passphrase change silently ended a staking-only unlock and its
-        // timer where the RPC path preserved them. It also takes cs_wallet
-        // itself, so holding it here bought nothing.
+        // No preliminary lock. ChangeWalletPassphrase leaves the unlock as it
+        // is, so locking here would silently end a staking-only unlock and its
+        // timer that the RPC path keeps. It also takes cs_wallet itself, so
+        // holding it here would buy nothing.
         return m_wallet->ChangeWalletPassphrase(old_passphrase, new_passphrase);
     }
 

@@ -358,10 +358,11 @@ public:
     //! given up as beginElevation()'s can.
     virtual bool unlockWallet(const SecureString& passphrase, bool staking_only) = 0;
 
-    //! Change the wallet passphrase. The wallet keeps the unlock it had: a
-    //! wallet unlocked for staking only is still unlocked for staking only,
-    //! with the same relock deadline, and a locked wallet stays locked. Every
-    //! capability begun with the old passphrase ends.
+    //! Change the wallet passphrase. The wallet keeps the unlock it had,
+    //! whether or not the change succeeds: a wallet unlocked for staking only
+    //! is still unlocked for staking only, with the same relock deadline, a
+    //! full unlock stays full, and a locked wallet stays locked throughout. On
+    //! success every capability begun with the old passphrase ends.
     //!
     //! The old passphrase waits its turn and a wrong one is delayed (up to
     //! 30 s) as an unlock's is, and the new key is derived several times to

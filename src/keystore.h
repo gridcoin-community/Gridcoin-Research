@@ -258,6 +258,11 @@ private:
     //! decide first whether the current unlock permits the access.
     bool DecryptKeyLocked(const CKeyID& address, CKey& keyOut) const EXCLUSIVE_LOCKS_REQUIRED(cs_KeyStore);
 
+    //! Whether \p master_key opens the crypted keys: each key checked decrypts
+    //! to the key its public key names. One key once the store has been
+    //! checked through, every key before that.
+    bool OpensKeysLocked(const CKeyingMaterial& master_key) const EXCLUSIVE_LOCKS_REQUIRED(cs_KeyStore);
+
 protected:
     bool SetCrypted();
 
@@ -277,6 +282,16 @@ protected:
     //! False when the store is locked or unencrypted: there is then no installed
     //! key to match.
     bool MatchesMasterKey(const CKeyingMaterial& key) const;
+
+    //! \brief Whether \p master_key opens this store's keys, without
+    //! installing it.
+    //!
+    //! For a caller that has derived a master key from a passphrase and must
+    //! prove it whatever the state of the unlock, and leave that state as it
+    //! is: scope, deadline and epoch are untouched, and a locked store stays
+    //! locked. The keys are checked as Unlock() checks them. False on an
+    //! unencrypted store.
+    bool MasterKeyOpensKeys(const CKeyingMaterial& master_key) const;
 
     //! \brief Narrow the current unlock to staking only.
     //!

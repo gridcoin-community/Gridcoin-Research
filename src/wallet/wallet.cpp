@@ -1236,129 +1236,110 @@ bool CWallet::ChangeWalletPassphraseWithoutDelay(const SecureString& strOldWalle
                                                  const SecureString& strNewWalletPassphrase,
                                                  std::optional<bool>& passphrase_accepted)
 {
-    // The lock itself reports what it ended. Reading the scope first and
-    // locking afterwards is two acquisitions with a gap, and the scheduled
-    // relock takes only cs_KeyStore, so it can land in that gap: the read says
-    // StakingOnly, the timer locks, and the restore below then reopens a wallet
-    // the timer had just closed. Capturing under the acquisition that clears
-    // them removes the gap -- the relock either ran first, and this reads
-    // Locked, or it arrives later and finds an epoch that has moved on.
-    //
-    // The deadline is captured for the same reason it is restored: it belongs
-    // to the unlock, and a passphrase change must not quietly turn a wallet
-    // unlocked for an hour into one unlocked indefinitely.
-    std::optional<UnlockState> prior;
+    if (!IsCrypted()) {
+        return false;
+    }
 
+    // The unlock is left as it is throughout. The master key the old
+    // passphrase opens is proved against the keys without being installed,
+    // and the rewrite needs only that key, not an open wallet. So a wallet
+    // unlocked for staking only goes on staking whatever the outcome, with
+    // its deadline and its relock untouched, a full unlock stays full, and a
+    // locked wallet is never opened.
+    //
+    // The records are copied under cs_wallet and every key is derived from
+    // them outside it: once from the old passphrase, and three times from the
+    // new one, twice to time the derivation and once at the iteration count
+    // that sets. Block and transaction processing take cs_wallet, and must not
+    // wait behind the derivations.
+    MasterKeyMap master_keys;
     {
         LOCK(cs_wallet);
+        master_keys = mapMasterKeys;
+    }
 
-        prior = LockAndCapture();
+    // Refused until a master key record opens with the old passphrase and the
+    // keys open with that master key. Records are tried in order, and one the
+    // passphrase does not open ends the search.
+    passphrase_accepted = false;
 
-        if (!prior) {
+    CKeyingMaterial master_key;
+    std::optional<unsigned int> opened;
+
+    for (const auto& [record_id, record] : master_keys) {
+        CCrypter crypter;
+
+        if (!crypter.SetKeyFromPassphrase(strOldWalletPassphrase, record.vchSalt, record.nDeriveIterations,
+                                          record.nDerivationMethod)
+            || !crypter.Decrypt(record.vchCryptedKey, master_key)) {
             return false;
         }
 
-        const bool fWasLocked = (prior->scope == UnlockScope::Locked);
-
-        // Refused until a master key record opens with the old passphrase and
-        // the keys open with that master key.
-        passphrase_accepted = false;
-
-        CCrypter crypter;
-        CKeyingMaterial vMasterKey;
-        for (auto &pMasterKey : mapMasterKeys)
-        {
-            if(!crypter.SetKeyFromPassphrase(strOldWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod))
-                return false;
-            if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
-                return false;
-            // Restore whatever the wallet already permitted rather than
-            // widening to Full: a wallet that was unlocked for staking only
-            // must still be staking-only when the passphrase change returns.
-            //
-            // A wallet that WAS locked has no scope to restore, and the unlock
-            // needs a real one to check the old passphrase against the keys, so
-            // it takes Full and is locked again as soon as that check passes.
-            const UnlockScope working_scope =
-                fWasLocked ? UnlockScope::Full : prior->scope;
-
-            uint64_t epoch = 0;
-
-            if (CCryptoKeyStore::Unlock(vMasterKey, working_scope, prior->deadline, &epoch))
-            {
-                passphrase_accepted = true;
-
-                // The rewrite below needs the master key, not an open wallet, so
-                // a wallet that was locked on entry is locked again before it.
-                // No path out of the rewrite, the error returns included, then
-                // leaves that wallet open.
-                if (fWasLocked) {
-                    Lock();
-                }
-
-                // Put the relock back with the unlock it belongs to, and do it
-                // here rather than after the key rewrite: the capture above
-                // retired the one that was armed, and every path out of the
-                // rewrite -- the error returns included -- leaves a wallet that
-                // was open on entry open in the scope just restored.
-                if (prior->deadline) {
-                    const int64_t remaining = *prior->deadline - GetTimeSeconds();
-
-                    // The deadline passed while the key was being re-derived,
-                    // or the scheduler would not take the relock. Either way the
-                    // unlock this restored is already over, or has nothing that
-                    // will end it, so end it here rather than leave it open.
-                    if (remaining <= 0 || !ArmRelock(this, epoch, std::chrono::seconds(remaining))) {
-                        Lock();
-                    }
-                }
-
-                // Build the new master key in a copy and replace the one in
-                // memory only once the copy is written. A step that fails part
-                // way then leaves the master key as it was, still matching the
-                // wallet file and the old passphrase.
-                CMasterKey new_master_key = pMasterKey.second;
-
-                int64_t nStartTime = GetTimeMillis();
-                crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod);
-                new_master_key.nDeriveIterations = new_master_key.nDeriveIterations * (100 / ((double)(GetTimeMillis() - nStartTime)));
-
-                nStartTime = GetTimeMillis();
-                crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod);
-                new_master_key.nDeriveIterations = (new_master_key.nDeriveIterations + new_master_key.nDeriveIterations * 100 / ((double)(GetTimeMillis() - nStartTime))) / 2;
-
-                if (new_master_key.nDeriveIterations < 25000)
-                    new_master_key.nDeriveIterations = 25000;
-
-                if (!crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod))
-                    return false;
-                if (!crypter.Encrypt(vMasterKey, new_master_key.vchCryptedKey))
-                    return false;
-
-                if (fFileBacked && !CWalletDB(strWalletFile).WriteMasterKey(pMasterKey.first, new_master_key)) {
-                    LogPrintf("ERROR: %s: could not write the new master key to the wallet file", __func__);
-                    return false;
-                }
-
-                pMasterKey.second = new_master_key;
-
-                // Every capability was proved with the old passphrase, so none
-                // outlives the change. The capability mutex is a leaf, so
-                // taking it under cs_wallet keeps the lock order.
-                {
-                    LOCK(m_capability_mutex);
-                    m_capabilities.clear();
-                    m_ipc_capability.reset();
-                }
-
-                LogPrintf("Wallet passphrase changed to an nDeriveIterations of %i", pMasterKey.second.nDeriveIterations);
-
-                return true;
-            }
+        if (MasterKeyOpensKeys(master_key)) {
+            opened = record_id;
+            break;
         }
     }
 
-    return false;
+    if (!opened) {
+        return false;
+    }
+
+    passphrase_accepted = true;
+
+    // Build the new record in a copy and replace the one in memory only once
+    // the copy is written. A step that fails part way then leaves the record
+    // as it was, still matching the wallet file and the old passphrase.
+    CMasterKey new_master_key = master_keys.at(*opened);
+    CCrypter crypter;
+
+    int64_t nStartTime = GetTimeMillis();
+    crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod);
+    new_master_key.nDeriveIterations = new_master_key.nDeriveIterations * (100 / ((double)(GetTimeMillis() - nStartTime)));
+
+    nStartTime = GetTimeMillis();
+    crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod);
+    new_master_key.nDeriveIterations = (new_master_key.nDeriveIterations + new_master_key.nDeriveIterations * 100 / ((double)(GetTimeMillis() - nStartTime))) / 2;
+
+    if (new_master_key.nDeriveIterations < 25000)
+        new_master_key.nDeriveIterations = 25000;
+
+    if (!crypter.SetKeyFromPassphrase(strNewWalletPassphrase, new_master_key.vchSalt, new_master_key.nDeriveIterations, new_master_key.nDerivationMethod))
+        return false;
+    if (!crypter.Encrypt(master_key, new_master_key.vchCryptedKey))
+        return false;
+
+    LOCK(cs_wallet);
+
+    // The records changed while the keys were derived. Passphrase changes
+    // take turns, so no other change can have run meanwhile; should the
+    // records differ all the same, the old passphrase was proved against
+    // records the wallet no longer has, and it is not taken as proved.
+    if (!SameMasterKeyRecords(master_keys, mapMasterKeys)) {
+        passphrase_accepted = false;
+
+        return error("%s: the wallet passphrase changed while the new key was being derived", __func__);
+    }
+
+    if (fFileBacked && !CWalletDB(strWalletFile).WriteMasterKey(*opened, new_master_key)) {
+        LogPrintf("ERROR: %s: could not write the new master key to the wallet file", __func__);
+        return false;
+    }
+
+    mapMasterKeys[*opened] = new_master_key;
+
+    // Every capability was proved with the old passphrase, so none outlives
+    // the change. The capability mutex is a leaf, so taking it under cs_wallet
+    // keeps the lock order.
+    {
+        LOCK(m_capability_mutex);
+        m_capabilities.clear();
+        m_ipc_capability.reset();
+    }
+
+    LogPrintf("Wallet passphrase changed to an nDeriveIterations of %i", new_master_key.nDeriveIterations);
+
+    return true;
 }
 
 void CWallet::ChainStateFlushed(const CBlockLocator& loc)

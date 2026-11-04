@@ -259,36 +259,9 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn, UnlockScope sc
         if (!SetCrypted())
             return false;
 
-        bool keyPass = false;
-        bool keyFail = false;
-
-        CryptedKeyMap::const_iterator mi = mapCryptedKeys.begin();
-        for (; mi != mapCryptedKeys.end(); ++mi)
-        {
-            const CPubKey &vchPubKey = (*mi).second.first;
-            const std::vector<unsigned char> &vchCryptedSecret = (*mi).second.second;
-            CKey key;
-            if (!DecryptKey(vMasterKeyIn, vchCryptedSecret, vchPubKey, key))
-            {
-                keyFail = true;
-                break;
-            }
-            keyPass = true;
-            if (fDecryptionThoroughlyChecked)
-                break;
-        }
-        if (keyPass && keyFail)
-        {
-            error("%s: The wallet is probably corrupted: Some keys decrypt but not all.", __func__);
-            assert(false);
-        }
-        // div72: The memset below is necessary because of a GCC(seen on 12.1.0) bug where
-        // keyPass and !keyPass can both evaluate to true at the same time when the value
-        // of keyPass is other than 1.
-        static_assert(sizeof(bool) == 1);
-        if (keyPass) std::memset(&keyPass, 1, sizeof(bool));
-        if (keyFail || !keyPass)
+        if (!OpensKeysLocked(vMasterKeyIn))
             return false;
+
         // The key, what it permits, and when it expires, set together under one
         // lock. A reader between two separate writes is the defect this
         // replaces, and the deadline now belongs to this unlock rather than to
@@ -405,6 +378,49 @@ bool CCryptoKeyStore::GetKeyForStaking(const CKeyID& id, CKey& key_out, const St
         return false;
 
     return DecryptKeyLocked(id, key_out);
+}
+
+bool CCryptoKeyStore::OpensKeysLocked(const CKeyingMaterial& master_key) const
+{
+    bool keyPass = false;
+    bool keyFail = false;
+
+    CryptedKeyMap::const_iterator mi = mapCryptedKeys.begin();
+    for (; mi != mapCryptedKeys.end(); ++mi)
+    {
+        const CPubKey &vchPubKey = (*mi).second.first;
+        const std::vector<unsigned char> &vchCryptedSecret = (*mi).second.second;
+        CKey key;
+        if (!DecryptKey(master_key, vchCryptedSecret, vchPubKey, key))
+        {
+            keyFail = true;
+            break;
+        }
+        keyPass = true;
+        if (fDecryptionThoroughlyChecked)
+            break;
+    }
+    if (keyPass && keyFail)
+    {
+        error("%s: The wallet is probably corrupted: Some keys decrypt but not all.", __func__);
+        assert(false); // LINT-OK-ASSERT: moved unchanged from Unlock(); keys that only partly decrypt mean a corrupt wallet
+    }
+    // div72: The memset below is necessary because of a GCC(seen on 12.1.0) bug where
+    // keyPass and !keyPass can both evaluate to true at the same time when the value
+    // of keyPass is other than 1.
+    static_assert(sizeof(bool) == 1);
+    if (keyPass) std::memset(&keyPass, 1, sizeof(bool));
+    return !keyFail && keyPass;
+}
+
+bool CCryptoKeyStore::MasterKeyOpensKeys(const CKeyingMaterial& master_key) const
+{
+    if (!IsCrypted())
+        return false;
+
+    LOCK(cs_KeyStore);
+
+    return OpensKeysLocked(master_key);
 }
 
 bool CCryptoKeyStore::MatchesMasterKey(const CKeyingMaterial& key) const

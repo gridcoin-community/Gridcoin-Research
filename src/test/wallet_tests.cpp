@@ -1,5 +1,8 @@
 #include "random.h"
 #include "scheduler.h"
+#include <atomic>
+#include <chrono>
+#include <future>
 #include <thread>
 #include <memory>
 #include <boost/test/unit_test.hpp>
@@ -1454,9 +1457,8 @@ BOOST_AUTO_TEST_CASE(a_capability_keeps_the_unlock_and_its_relock)
 
 //!
 //! A lock reports the unlock it ended, read under the acquisition that clears
-//! it. This is what lets a caller that has to lock and restore -- the passphrase
-//! change -- put back exactly what was there without a gap the scheduled relock
-//! can land in.
+//! it. This is what lets a caller that has to lock and restore put back exactly
+//! what was there without a gap the scheduled relock can land in.
 //!
 BOOST_AUTO_TEST_CASE(locking_reports_the_unlock_it_ended)
 {
@@ -1492,9 +1494,9 @@ BOOST_AUTO_TEST_CASE(locking_reports_the_unlock_it_ended)
 }
 
 //!
-//! A passphrase change restores the unlock it interrupted, deadline included,
-//! and re-arms the relock for it. Changing the passphrase must not turn a wallet
-//! unlocked for a minute into one unlocked indefinitely.
+//! A passphrase change leaves the unlock as it was, deadline and relock
+//! included. Changing the passphrase must not turn a wallet unlocked for a
+//! minute into one unlocked indefinitely.
 //!
 BOOST_AUTO_TEST_CASE(a_passphrase_change_keeps_the_unlock_deadline)
 {
@@ -1519,12 +1521,12 @@ BOOST_AUTO_TEST_CASE(a_passphrase_change_keeps_the_unlock_deadline)
 
     BOOST_REQUIRE(wallet.ChangeWalletPassphrase(old_passphrase, new_passphrase));
 
-    // The scope came back, and so did the deadline it was unlocked with.
+    // The scope is as it was, and so is the deadline it was unlocked with.
     BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
     BOOST_REQUIRE(wallet.GetUnlockDeadline().has_value());
     BOOST_CHECK_EQUAL(*wallet.GetUnlockDeadline(), *deadline);
 
-    // And a relock was armed against the restored unlock, so it still expires.
+    // And the relock armed for the unlock still ends it.
     g_scheduler->MockForward(std::chrono::seconds(61));
     WaitForRelock(wallet);
 
@@ -1591,6 +1593,170 @@ BOOST_AUTO_TEST_CASE(a_refused_passphrase_change_keeps_the_old_passphrase)
     BOOST_CHECK(wallet.Unlock(old_passphrase, UnlockScope::Full, std::chrono::seconds(60)));
 
     wallet.Lock();
+}
+
+//!
+//! A wrong old passphrase leaves the unlock exactly as it was: a wallet
+//! unlocked for staking only goes on staking, with the same deadline and the
+//! same relock, and a full unlock stays full.
+//!
+BOOST_AUTO_TEST_CASE(a_wrong_old_passphrase_leaves_the_unlock_as_it_was)
+{
+    CWallet wallet;
+    SchedulerForThisCase scheduler;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString old_passphrase("change-wrong-old");
+    const SecureString new_passphrase("change-wrong-new");
+    BOOST_REQUIRE(wallet.EncryptWallet(old_passphrase));
+    wallet.Lock();
+
+    BOOST_REQUIRE(wallet.Unlock(old_passphrase, UnlockScope::StakingOnly, std::chrono::seconds(60)));
+    const std::optional<int64_t> deadline = wallet.GetUnlockDeadline();
+    const uint64_t epoch = wallet.GetUnlockEpoch();
+    BOOST_REQUIRE(deadline.has_value());
+
+    BOOST_CHECK(!wallet.ChangeWalletPassphrase(SecureString("change-wrong-typo"), new_passphrase));
+
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+    BOOST_CHECK(wallet.GetUnlockDeadline() == deadline);
+    BOOST_CHECK_EQUAL(wallet.GetUnlockEpoch(), epoch);
+
+    // Staking still reaches its key.
+    CKey staking_key;
+    BOOST_CHECK(wallet.GetKeyForStaking(key.GetPubKey().GetID(), staking_key, StakingKeyAccessTestPeer::Make()));
+
+    // And the unlock still ends when it was due to.
+    g_scheduler->MockForward(std::chrono::seconds(61));
+    WaitForRelock(wallet);
+    BOOST_CHECK(wallet.IsLocked());
+
+    // A full unlock stays full.
+    BOOST_REQUIRE(wallet.Unlock(old_passphrase, UnlockScope::Full));
+    BOOST_CHECK(!wallet.ChangeWalletPassphrase(SecureString("change-wrong-typo"), new_passphrase));
+    BOOST_CHECK(wallet.GetUnlockScope() == UnlockScope::Full);
+
+    // The old passphrase is still the one.
+    wallet.Lock();
+    BOOST_CHECK(wallet.Unlock(old_passphrase, UnlockScope::Full));
+    wallet.Lock();
+}
+
+//!
+//! Changing the passphrase of a locked wallet never opens it: no status the
+//! wallet reports while the change runs is a full unlock, and it is locked
+//! when the change returns.
+//!
+BOOST_AUTO_TEST_CASE(a_passphrase_change_never_unlocks_a_locked_wallet_fully)
+{
+    CWallet wallet;
+
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    const SecureString old_passphrase("change-never-full-old");
+    const SecureString new_passphrase("change-never-full-new");
+    BOOST_REQUIRE(wallet.EncryptWallet(old_passphrase));
+    wallet.Lock();
+
+    // Every unlock and lock raises NotifyStatusChanged, after it has set the
+    // scope, so each one the change makes is seen here.
+    std::vector<UnlockScope> reported;
+    const boost::signals2::scoped_connection watch(wallet.NotifyStatusChanged.connect(
+        [&reported](CCryptoKeyStore* store) { reported.push_back(store->GetUnlockScope()); }));
+
+    BOOST_REQUIRE(wallet.ChangeWalletPassphrase(old_passphrase, new_passphrase));
+
+    BOOST_CHECK(wallet.IsLocked());
+    BOOST_CHECK(std::none_of(reported.begin(), reported.end(),
+                             [](UnlockScope scope) { return scope == UnlockScope::Full; }));
+
+    BOOST_CHECK(!wallet.Unlock(old_passphrase, UnlockScope::StakingOnly));
+    BOOST_CHECK(wallet.Unlock(new_passphrase, UnlockScope::StakingOnly));
+    wallet.Lock();
+}
+
+//!
+//! The old passphrase's key is derived without cs_wallet held, as an unlock's
+//! is (capability_tests/unlock_derives_without_holding_cs_wallet), so a change
+//! never stalls block and transaction processing behind a key derivation.
+//!
+BOOST_AUTO_TEST_CASE(a_passphrase_change_derives_without_holding_cs_wallet)
+{
+    grc_test::EncryptedWallet fx;
+    BOOST_REQUIRE(fx.wallet.IsLocked());
+
+    // A long derivation, at an iteration count set here: five million
+    // iterations take a second or more on any machine. The crypted master key
+    // is cut short by a byte so that no key decrypts it (CBC refuses a
+    // ciphertext that is not a whole number of blocks), and the attempt is
+    // refused as soon as its derivation ends.
+    {
+        LOCK(fx.wallet.cs_wallet);
+        BOOST_REQUIRE(!fx.wallet.mapMasterKeys.empty());
+
+        for (auto& entry : fx.wallet.mapMasterKeys) {
+            entry.second.nDeriveIterations = 5000000;
+
+            BOOST_REQUIRE(!entry.second.vchCryptedKey.empty());
+            entry.second.vchCryptedKey.pop_back();
+        }
+    }
+
+    std::atomic<bool> began{false};
+    std::future<bool> change = std::async(std::launch::async, [&fx, &began] {
+        began = true;
+        return fx.wallet.ChangeWalletPassphrase(SecureString("wrong"), SecureString("change-derives-new"));
+    });
+
+    for (int i = 0; i < 6000 && !began; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    BOOST_REQUIRE(began);
+
+    // As in the unlock's case: this thread takes cs_wallet while the attempt is
+    // not yet counted, and holds it. The attempt can then be refused, and so
+    // counted, only if it derives without cs_wallet. It takes cs_wallet briefly
+    // to copy the records when it begins; if this thread took it before that,
+    // nothing is counted while it is held, and the round is given up for
+    // another.
+    bool refused_while_held{false};
+    bool waited_for_the_lock{false};
+
+    for (int round = 0; round < 3 && !refused_while_held; ++round) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        const auto asked = std::chrono::steady_clock::now();
+        LOCK(fx.wallet.cs_wallet);
+
+        if (std::chrono::steady_clock::now() - asked >= std::chrono::milliseconds(500)) {
+            waited_for_the_lock = true;
+        }
+
+        if (fx.wallet.FailedUnlockCount() != 0) break;
+
+        for (int i = 0; i < 2000 && fx.wallet.FailedUnlockCount() == 0; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        refused_while_held = fx.wallet.FailedUnlockCount() == 1;
+    }
+
+    BOOST_CHECK(!change.get());
+
+    BOOST_CHECK(refused_while_held);
+    BOOST_CHECK(!waited_for_the_lock);
+    BOOST_CHECK(fx.wallet.IsLocked());
 }
 
 //!

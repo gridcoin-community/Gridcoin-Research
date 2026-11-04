@@ -314,8 +314,8 @@ void AskPassphraseDialog::accept()
             // on a wrong old passphrase, and re-derives the key several times
             // to recalibrate the iteration count; none of that may freeze the
             // GUI. The dialog stays up with its inputs disabled, and
-            // checkFinished() reports. The node restores the scope and the
-            // deadline of the unlock it interrupts, so a wallet unlocked for
+            // checkFinished() reports. The node leaves the unlock as it is,
+            // whether or not the change succeeds, so a wallet unlocked for
             // staking is still unlocked for staking afterwards.
             startCheck(std::move(oldpass), std::move(newpass1));
         }
