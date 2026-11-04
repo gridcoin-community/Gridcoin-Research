@@ -7,10 +7,12 @@
 
 #include "fs.h"
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #ifndef WIN32
+#include <sys/stat.h>
 #include <sys/types.h>
 #endif
 
@@ -77,7 +79,13 @@ enum class PathKind { Socket, Directory, RegularFile };
 //! Afterwards the path (fstat on the fd on Linux, lstat elsewhere) must show the expected type, st_uid == geteuid(),
 //! mode & 07777 == mode, and the group when given; otherwise throws
 //! std::system_error.
-void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, std::optional<gid_t> group);
+//!
+//! When given, \p check is called with what that fstat (lstat) reports for the
+//! path as opened, once the type and owner have been checked and before
+//! anything is changed. It throws to refuse the path, and the exception
+//! propagates.
+void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, std::optional<gid_t> group,
+                             const std::function<void(const struct stat&)>& check = {});
 
 //! The warning PrepareIpcDirectory logs for an existing IPC directory with the
 //! given mode, owner and group, or nullopt when there is nothing to say: the
@@ -94,12 +102,17 @@ std::optional<std::string> IpcDirWarning(const std::string& dir, mode_t mode, ui
 //! no attach group is configured, and std::system_error when the access cannot be
 //! applied; when the group cannot be set because this account is not a member,
 //! the message says the core must run with the attach group as a supplementary
-//! group.
+//! group. A directory that opens as the network data directory, or the base one
+//! above it (the same device and inode), is refused before anything is changed,
+//! with a std::runtime_error naming -ipcattachgroup and -ipcdir: a spelling
+//! AttachGroupIpcDirRefusal() cannot resolve, such as "<datadir>/x/.." with no x,
+//! or a bind mount, reaches it there.
 void ApplyAttachGroupAccess(const fs::path& ipcdir);
 
 //! What the daemon prepares its IPC directory with when an attach group is
 //! configured: make sure \p dir exists, created owner-only as
-//! PrepareIpcDirectory() creates it, then give it the attach group's access
+//! PrepareIpcDirectory() creates it (refusing the data directory as
+//! ApplyAttachGroupAccess() does), then give it the attach group's access
 //! (ApplyAttachGroupAccess()). An existing directory is not warned about, since
 //! its access is set here; when that changes its mode or group, a line logs the
 //! mode and group it had. Throws as those two do.

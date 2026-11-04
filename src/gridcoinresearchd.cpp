@@ -480,8 +480,8 @@ bool AppInit(int argc, char* argv[])
                 // with no explanation, while the one line that says why is buried
                 // in debug.log. The failures reaching here are all actionable:
                 // the IPC directory cannot be created or given its access (also
-                // the attach group), the cookie cannot be written, another
-                // process is already listening, a socket path is over the
+                // the attach group, or it opens as the data directory), the
+                // cookie cannot be written, another process is already listening, a socket path is over the
                 // 108-byte sockaddr_un limit, or the socket access control
                 // (chmod / owner-only DACL) is not applicable. Only a failure of
                 // the listener itself gets the advice about a stale socket.

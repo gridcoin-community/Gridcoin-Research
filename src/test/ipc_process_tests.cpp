@@ -581,6 +581,64 @@ BOOST_FIXTURE_TEST_CASE(attach_group_with_the_data_directory_as_ipcdir_is_refuse
     BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
 }
 
+// The attach group is never given access to the data directory, however
+// -ipcdir reaches it. A spelling the canonical comparison cannot resolve, such
+// as "<datadir>/x/.." with no x (or a bind mount, or another case on a
+// case-insensitive filesystem), opens as the data directory itself. Once
+// opened, it is refused by its device and inode before its mode or group is
+// changed, and the text names both options. So is the data directory by its own
+// path.
+BOOST_AUTO_TEST_CASE(attach_group_directory_that_opens_as_the_data_directory_is_refused)
+{
+    AttachGroupReset reset;
+    const auto name = GroupName(::getegid());
+    if (!name) {
+        BOOST_TEST_MESSAGE("the effective group has no entry in the group database; skipping");
+        return;
+    }
+    BOOST_REQUIRE(ipc::ConfigureAttachGroup(*name));
+
+    const fs::path datadir = GetDataDir();
+    const fs::path missing = datadir / "ipc_process_tests_missing";
+    fs::remove_all(missing);
+
+    // What the comparison before start-up sees: a path it cannot resolve.
+    boost::system::error_code resolve_ec;
+    fs::canonical(missing / "..", resolve_ec);
+    BOOST_CHECK(resolve_ec);
+
+    struct stat before;
+    BOOST_REQUIRE_EQUAL(::stat(datadir.c_str(), &before), 0);
+
+    const auto refused_naming_both = [](const std::function<void()>& prepare) {
+        try {
+            prepare();
+        } catch (const std::exception& e) {
+            const std::string what = e.what();
+            BOOST_CHECK_MESSAGE(what.find("-ipcattachgroup") != std::string::npos, what);
+            BOOST_CHECK_MESSAGE(what.find("-ipcdir") != std::string::npos, what);
+            return;
+        }
+        BOOST_ERROR("the data directory was not refused");
+    };
+
+    refused_naming_both([&] { ipc::PrepareAttachGroupDirectory(missing / ".."); });
+    refused_naming_both([&] { ipc::ApplyAttachGroupAccess(datadir); });
+
+    struct stat after;
+    BOOST_REQUIRE_EQUAL(::stat(datadir.c_str(), &after), 0);
+    BOOST_CHECK_EQUAL(after.st_mode & 07777, before.st_mode & 07777);
+    BOOST_CHECK_EQUAL(after.st_gid, before.st_gid);
+
+    // Put back whatever a failing run changed, for the cases after this one.
+    ::chmod(datadir.c_str(), before.st_mode & 07777);
+    if (::chown(datadir.c_str(), static_cast<uid_t>(-1), before.st_gid) != 0) {
+        BOOST_TEST_MESSAGE("could not put the data directory's group back");
+    }
+    boost::system::error_code remove_ec;
+    fs::remove_all(missing, remove_ec);
+}
+
 BOOST_AUTO_TEST_CASE(apply_path_access_refuses_symlink)
 {
     TempDir dir;

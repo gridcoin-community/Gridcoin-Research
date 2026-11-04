@@ -281,7 +281,8 @@ std::optional<std::string> AttachGroupIpcDirRefusal()
 }
 
 #ifndef WIN32
-void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, std::optional<gid_t> group)
+void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, std::optional<gid_t> group,
+                             const std::function<void(const struct stat&)>& check)
 {
     const std::string p = path.string();
     const auto fail = [&](int err, const char* what) {
@@ -311,6 +312,7 @@ void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, s
     // the type check here.
     if (!type_ok(st.st_mode)) fail(EINVAL, "unexpected file type at");
     if (st.st_uid != ::geteuid()) fail(EPERM, "not owned by this user:");
+    if (check) check(st);
 
     const auto set_mode = [&](mode_t m) {
         bool mode_set = false;
@@ -345,6 +347,7 @@ void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, s
     if (::lstat(p.c_str(), &st) != 0) fail(errno, "cannot stat");
     if (!type_ok(st.st_mode)) fail(EINVAL, "unexpected file type at");
     if (st.st_uid != ::geteuid()) fail(EPERM, "not owned by this user:");
+    if (check) check(st);
     if (group) {
         // Narrow first, so the new group never holds a bit the old mode had and
         // the final mode does not.
@@ -378,12 +381,36 @@ std::optional<std::string> IpcDirWarning(const std::string& dir, mode_t mode, ui
                      attach_gid ? "accessible to the attach group" : "owner-only");
 }
 
+namespace {
+//! Refuses, by throwing std::runtime_error, \p dir opened as \p st when it is
+//! the network data directory or the base one above it: the same device and
+//! inode, which a bind mount or a spelling with ".." keeps.
+void RefuseDataDirectory(const fs::path& dir, const struct stat& st)
+{
+    for (const bool net_specific : {true, false}) {
+        const fs::path datadir = GetDataDir(net_specific);
+        struct stat data_st{};
+
+        if (::stat(datadir.string().c_str(), &data_st) != 0) continue;
+
+        if (data_st.st_dev == st.st_dev && data_st.st_ino == st.st_ino) {
+            throw std::runtime_error(
+                strprintf("-ipcattachgroup is set and -ipcdir (%s) is the data directory (%s). The attach group is "
+                          "given access to the IPC directory. Set -ipcdir to a directory of its own for the IPC "
+                          "socket and cookie.",
+                          dir.string(), datadir.string()));
+        }
+    }
+}
+} // namespace
+
 void ApplyAttachGroupAccess(const fs::path& ipcdir)
 {
     const std::optional<gid_t> gid = AttachGroupGid();
     if (!gid) throw std::logic_error("no -ipcattachgroup is configured");
     try {
-        ApplyPathAccessNoFollow(ipcdir, PathKind::Directory, 0750, gid);
+        ApplyPathAccessNoFollow(ipcdir, PathKind::Directory, 0750, gid,
+                                [&ipcdir](const struct stat& st) { RefuseDataDirectory(ipcdir, st); });
     } catch (const std::system_error& e) {
         if (e.code() != std::error_code(EPERM, std::system_category())) throw;
         // EPERM can also come from the ownership check, so say what to change
@@ -405,23 +432,16 @@ void ApplyAttachGroupAccess(const fs::path& ipcdir)
 #endif // !WIN32
 
 namespace {
-//! Make sure \p dir exists, restricting it to this account when this call
-//! creates it (PrepareIpcDirectory). Returns whether it did.
-bool CreateIpcDirectory(const fs::path& dir)
+//! Make sure \p dir exists. Returns whether this call created it, which the
+//! caller then restricts. Throws std::system_error, naming the directory, when it
+//! cannot be created.
+bool MakeIpcDirectory(const fs::path& dir)
 {
     boost::system::error_code ec;
     const bool created = fs::create_directories(dir, ec);
     if (ec) {
         throw std::system_error(ec.value(), std::system_category(),
                                 "could not create the IPC directory " + dir.string());
-    }
-
-    if (created) {
-#ifndef WIN32
-        ApplyPathAccessNoFollow(dir, PathKind::Directory, 0700, std::nullopt);
-#else
-        util::ApplyOwnerOnlyDacl(dir, /*inheritable=*/true);
-#endif
     }
 
     return created;
@@ -431,7 +451,14 @@ bool CreateIpcDirectory(const fs::path& dir)
 #ifndef WIN32
 void PrepareAttachGroupDirectory(const fs::path& dir)
 {
-    const bool created = CreateIpcDirectory(dir);
+    // "Created" also when only a part of a spelling such as "<datadir>/x/.." was
+    // made, so the restriction refuses the data directory as the group's access
+    // does.
+    const bool created = MakeIpcDirectory(dir);
+    if (created) {
+        ApplyPathAccessNoFollow(dir, PathKind::Directory, 0700, std::nullopt,
+                                [&dir](const struct stat& st) { RefuseDataDirectory(dir, st); });
+    }
 
     // A directory made just now was this account's alone; only a change to one
     // that was there already is logged.
@@ -479,7 +506,13 @@ void PrepareIpcDirectory(const fs::path& dir)
     // util::CreateOwnerOnlyDirectory), so for it the create branch does not run.
     // It runs for an explicit -ipcdir, or a custom socket path, whose directory
     // does not exist yet.
-    if (!CreateIpcDirectory(dir)) {
+    if (MakeIpcDirectory(dir)) {
+#ifndef WIN32
+        ApplyPathAccessNoFollow(dir, PathKind::Directory, 0700, std::nullopt);
+#else
+        util::ApplyOwnerOnlyDacl(dir, /*inheritable=*/true);
+#endif
+    } else {
 #ifndef WIN32
         struct stat st;
         if (::stat(dir.string().c_str(), &st) == 0) {

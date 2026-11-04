@@ -185,9 +185,11 @@ schema-diff lint against the previous release tag.
   or with an `-ipcdir` that resolves to the data directory (links resolved; on a test
   network the base data directory counts too): the `0750` directory would otherwise
   be the data directory itself, so group members could traverse it and read any file
-  inside it that is world-readable. An attach group therefore always has an IPC
-  directory of its own. The core logs the mode and group that directory had when it
-  changes them.
+  inside it that is world-readable. A spelling the comparison cannot resolve
+  (`<datadir>/x/..` with no `x`, a bind mount) is refused where the directory is
+  opened, by its device and inode, before its mode or group is changed. An attach
+  group therefore always has an IPC directory of its own. The core logs the mode and
+  group that directory had when it changes them.
   The DIRECTORY is changed only when the node creates it (owner-only) or when
   `-ipcattachgroup` is set: an existing directory is otherwise left as the
   operator configured it and merely warned about, so a deliberately widened datadir
