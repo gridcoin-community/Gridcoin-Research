@@ -293,17 +293,17 @@ private:
     //! Claim the attach slot, once, as the connection authenticates.
     //!
     //! The listener can tear the connection down on the event-loop thread while
-    //! this call is still running on its worker, so the claim is made safe against
-    //! a close() at any point:
-    //!  - The slot hook is registered before the claim and acts only once the
-    //!    claim has succeeded, so a close() that begins after the claim runs it
-    //!    before connectionClosed() gives the slot back, and one that begins
-    //!    before runs nothing (another GUI may be attached by then, and the hook
-    //!    would end its capability).
-    //!  - A claim that lands after the close began is given back here, once the
-    //!    running hooks have finished. connectionClosed() found nothing to
-    //!    release then, and without this no GUI could attach again until the
-    //!    core restarted.
+    //! this call is still running on its worker. What the code guarantees:
+    //!  - A closed connection never keeps the slot. If the scope is closed before
+    //!    the claim, nothing is claimed; if it closes after, the claim is given
+    //!    back here once close() has run the hooks (close() on a closed scope
+    //!    waits for them). connectionClosed() may have found nothing to release.
+    //!  - The slot hook is registered before the claim and does its work only if
+    //!    the held flag is set when it runs. If it runs after the flag is set, it
+    //!    finishes before the slot is released, by connectionClosed() or here. If
+    //!    it runs before, it does nothing: this connection has handed out nothing
+    //!    yet (no factory is served until authenticate() returns), and another
+    //!    GUI may hold the slot by then.
     void ClaimAttachSlot()
     {
         if (m_on_slot_closed) {

@@ -622,8 +622,10 @@ BOOST_AUTO_TEST_CASE(wire_unauthenticated_connection_is_dropped_and_slot_reclaim
     BOOST_REQUIRE_MESSAGE(squatter_dropped,
                           "the node never dropped a connection that did not authenticate");
 
-    // The slot is free and accept() is re-armed: a real client connects and
-    // completes the full handshake.
+    // With the squatter gone, a real client connects and completes the full
+    // handshake. (With the cap at two connections it could also have connected
+    // beside the squatter; wire_slotless_connection_is_dropped_at_the_deadline
+    // covers the cap being reclaimed.)
     auto gui_proto = ipc::capnp::MakeCapnpProtocol();
     auto gui = gui_proto->connect(sock.connectClient(), "ipc-wire-gui", /*on_disconnect=*/{});
     BOOST_REQUIRE(gui != nullptr);
@@ -1081,6 +1083,69 @@ BOOST_FIXTURE_TEST_CASE(wire_connect_address_reports_same_account, grc_test::Sta
     ipc::HandshakeResult r = ipc::ClientHandshake(*pair.init, "the-cookie", "main");
     BOOST_CHECK(r.ok);
     BOOST_CHECK_EQUAL(served.load(), 1);
+}
+
+// A connection that authenticates while another GUI holds the attach slot is
+// dropped at the deadline like one that never authenticated, while the attached
+// GUI is kept; and the place it held is reclaimed, so a third client is accepted.
+// Without the slot half of the listener's predicate, the refused connection would
+// sit in the second of the two places for as long as it liked, and with the
+// attached GUI in the first, no other client could connect at all.
+BOOST_AUTO_TEST_CASE(wire_slotless_connection_is_dropped_at_the_deadline)
+{
+    interfaces::NodeIdentity id;
+    id.network = "main";
+
+    UnixSocket sock;
+    auto server = ipc::capnp::MakeCapnpProtocol();
+    // Long enough that both handshakes finish inside it on a loaded machine; the
+    // case asserts what happens at the deadline, not how soon.
+    server->listen(sock.releaseBoundFd(), "ipc-wire-server", CookieServeFactory("cookie", id),
+                   /*auth_deadline=*/std::chrono::seconds{3});
+
+    std::atomic<bool> a_dropped{false};
+    auto a_proto = ipc::capnp::MakeCapnpProtocol();
+    auto a = a_proto->connect(sock.connectClient(), "ipc-wire-gui-a", [&a_dropped] { a_dropped = true; });
+    BOOST_REQUIRE(a != nullptr);
+    BOOST_REQUIRE(ipc::ClientHandshake(*a, "cookie", "main").ok);
+    BOOST_REQUIRE(a->holdsAttachSlot());
+
+    std::atomic<bool> b_dropped{false};
+    auto b_proto = ipc::capnp::MakeCapnpProtocol();
+    auto b = b_proto->connect(sock.connectClient(), "ipc-wire-gui-b", [&b_dropped] { b_dropped = true; });
+    BOOST_REQUIRE(b != nullptr);
+    BOOST_REQUIRE(ipc::ClientHandshake(*b, "cookie", "main").ok);
+    BOOST_REQUIRE(!b->holdsAttachSlot());
+
+    // Generous cap: this asserts the drop happens, not how promptly.
+    for (int i = 0; i < 400 && !b_dropped; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds{50});
+    }
+    BOOST_REQUIRE_MESSAGE(b_dropped, "the node kept an authenticated connection that holds no attach slot");
+
+    // A's deadline came first (it connected first), and A was kept: it still
+    // answers, and still holds the slot.
+    BOOST_CHECK(!a_dropped);
+    bool a_holds = false;
+    BOOST_CHECK_NO_THROW(a_holds = a->holdsAttachSlot());
+    BOOST_CHECK(a_holds);
+
+    // B's place is reclaimed: a third client is accepted and served the
+    // handshake, and is refused the slot A still holds.
+    auto c_proto = ipc::capnp::MakeCapnpProtocol();
+    auto c = c_proto->connect(sock.connectClient(), "ipc-wire-gui-c", /*on_disconnect=*/{});
+    BOOST_REQUIRE(c != nullptr);
+    BOOST_CHECK(ipc::ClientHandshake(*c, "cookie", "main").ok);
+    BOOST_CHECK(!c->holdsAttachSlot());
+
+    c.reset();
+    b.reset();
+    a.reset();
+    server->disconnectIncoming();
+    c_proto.reset();
+    b_proto.reset();
+    a_proto.reset();
+    server.reset();
 }
 
 // The attached GUI's teardown hook finishes before the core serves another GUI.
