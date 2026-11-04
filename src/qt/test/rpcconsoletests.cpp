@@ -64,7 +64,7 @@ const QString PHRASE_PASSWORD = QStringLiteral("tangerine-otter-41");
 using namespace std::chrono_literals;
 
 // "abc" and its SHA-256 as sha256sum prints it, byte by byte from the first.
-const std::string ABC{"abc"};
+const std::string ABC_TEXT{"abc"};
 const QString ABC_SHA256 = QStringLiteral("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 
 std::vector<unsigned char> BytesOf(const std::string& text)
@@ -875,7 +875,7 @@ void RPCConsoleTests::downloadRunsOnTheWorkerAndShowsWhatItWrote()
                               "  \"exported_to_file\": \"/core/data/transfers/out-0123456789abcdef.tmp\"\n}";
     fixture.wallet.m_console_download = [&](const std::string&, const std::vector<std::string>&, std::string&) {
         return std::make_unique<ConsoleSource>(log, &fixture.wallet.m_end_elevation_calls, "dumpcontracts.txt",
-                                               BytesOf(ABC), 3, reply);
+                                               BytesOf(ABC_TEXT), 3, reply);
     };
 
     RPCConsole console;
@@ -898,7 +898,7 @@ void RPCConsoleTests::downloadRunsOnTheWorkerAndShowsWhatItWrote()
     QVERIFY(log->destroyed);
     QVERIFY(log->destroyed_on == worker_thread);
 
-    QCOMPARE(ReadAll(dest), ABC);
+    QCOMPARE(ReadAll(dest), ABC_TEXT);
     QCOMPARE(EntriesIn(dir), 1);
 
     // An unencrypted wallet needs no capability, and asks nothing.
@@ -935,7 +935,7 @@ void RPCConsoleTests::downloadHoldsItsOwnCapabilityUntilTheSourceIsGone()
     fixture.wallet.m_console_download = [&](const std::string&, const std::vector<std::string>&, std::string&) {
         logs.push_back(std::make_shared<TransferLog>());
         return std::make_unique<ConsoleSource>(logs.back(), &fixture.wallet.m_end_elevation_calls, "wallet-dump.txt",
-                                               BytesOf(ABC), -1, "");
+                                               BytesOf(ABC_TEXT), -1, "");
     };
 
     RPCConsole console;
@@ -951,7 +951,7 @@ void RPCConsoleTests::downloadHoldsItsOwnCapabilityUntilTheSourceIsGone()
     QVERIFY(logs[0]->destroyed);
     QCOMPARE(logs[0]->end_elevation_calls_at_destruction, 0);
     QCOMPARE(fixture.wallet.m_end_elevation_calls, 1);
-    QCOMPARE(ReadAll(PathIn(dir, "one.txt")), ABC);
+    QCOMPARE(ReadAll(PathIn(dir, "one.txt")), ABC_TEXT);
 
     // The next command asks again, for a capability of its own.
     Enter(console, QStringLiteral("dumpwallet ") + Quoted(PathIn(dir, "two.txt")));
@@ -961,7 +961,7 @@ void RPCConsoleTests::downloadHoldsItsOwnCapabilityUntilTheSourceIsGone()
     QCOMPARE(fixture.wallet.m_console_begins[1].end_elevation_calls, 1);
     QCOMPARE(logs[1]->end_elevation_calls_at_destruction, 1);
     QCOMPARE(fixture.wallet.m_end_elevation_calls, 2);
-    QCOMPARE(ReadAll(PathIn(dir, "two.txt")), ABC);
+    QCOMPARE(ReadAll(PathIn(dir, "two.txt")), ABC_TEXT);
 
     // A fully unlocked wallet needs none.
     fixture.wallet.m_lock_state.unlocked_for_staking_only = false;
@@ -970,7 +970,7 @@ void RPCConsoleTests::downloadHoldsItsOwnCapabilityUntilTheSourceIsGone()
     QCOMPARE(fixture.prompts.size(), size_t{2});
     QCOMPARE(fixture.wallet.m_begin_elevation_calls, 2);
     QCOMPARE(fixture.wallet.m_end_elevation_calls, 2);
-    QCOMPARE(ReadAll(PathIn(dir, "three.txt")), ABC);
+    QCOMPARE(ReadAll(PathIn(dir, "three.txt")), ABC_TEXT);
 }
 
 void RPCConsoleTests::downloadNoteNamesTheLocalFile()
@@ -1068,7 +1068,7 @@ void RPCConsoleTests::downloadFirstReadErrorIsShown()
     const auto log = std::make_shared<TransferLog>();
     fixture.wallet.m_console_download = [&](const std::string&, const std::vector<std::string>&, std::string&) {
         return std::make_unique<ConsoleSource>(log, &fixture.wallet.m_end_elevation_calls, "wallet-dump.txt",
-                                               BytesOf(ABC), -1, "", "dumpwallet: cannot read the key for SAddr");
+                                               BytesOf(ABC_TEXT), -1, "", "dumpwallet: cannot read the key for SAddr");
     };
 
     RPCConsole console;
@@ -1130,7 +1130,7 @@ void RPCConsoleTests::downloadKeepsAnExistingFile()
     const auto log = std::make_shared<TransferLog>();
     fixture.wallet.m_console_download = [&](const std::string&, const std::vector<std::string>&, std::string&) {
         return std::make_unique<ConsoleSource>(log, &fixture.wallet.m_end_elevation_calls, "dumpcontracts.txt",
-                                               BytesOf(ABC), 3, "{}");
+                                               BytesOf(ABC_TEXT), 3, "{}");
     };
 
     RPCConsole console;
@@ -1223,7 +1223,7 @@ void RPCConsoleTests::downloadCancelLeavesNothing()
     std::atomic<bool> waiting{false};
     fixture.wallet.m_console_download = [&](const std::string&, const std::vector<std::string>&, std::string&) {
         return std::make_unique<ConsoleSource>(log, &fixture.wallet.m_end_elevation_calls, "wallet-dump.txt",
-                                               BytesOf(ABC), -1, "", "", &gate, &waiting);
+                                               BytesOf(ABC_TEXT), -1, "", "", &gate, &waiting);
     };
 
     RPCConsole console;
@@ -1465,7 +1465,7 @@ void RPCConsoleTests::noPromptWhileAFileCommandHoldsItsCapability()
     std::atomic<bool> waiting{false};
     fixture.wallet.m_console_download = [&](const std::string&, const std::vector<std::string>&, std::string&) {
         return std::make_unique<ConsoleSource>(log, &fixture.wallet.m_end_elevation_calls, "wallet-dump.txt",
-                                               BytesOf(ABC), -1, "", "", &gate, &waiting);
+                                               BytesOf(ABC_TEXT), -1, "", "", &gate, &waiting);
     };
 
     RPCConsole console;
@@ -1499,7 +1499,7 @@ void RPCConsoleTests::noPromptWhileAFileCommandHoldsItsCapability()
     QVERIFY(reported);
     QCOMPARE(fixture.prompts, (std::vector<CapabilityKind>{CapabilityKind::FileTransfer}));
     QCOMPARE(fixture.wallet.m_begin_elevation_calls, 1);
-    QCOMPARE(ReadAll(dest), ABC);
+    QCOMPARE(ReadAll(dest), ABC_TEXT);
     QVERIFY2(PaneText(console).contains(QStringLiteral("Error: the keys are not available")),
              qPrintable(PaneText(console)));
 

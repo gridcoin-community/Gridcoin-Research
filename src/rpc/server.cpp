@@ -992,7 +992,13 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
 #ifdef WIN32
         // First, before anything can start a child process: make the accepted socket non-inheritable.
         // A child started on another thread between AcceptEx completing and this call can still inherit it.
-        SetHandleInformation(reinterpret_cast<HANDLE>(conn->socket.native_handle()), HANDLE_FLAG_INHERIT, 0);
+        // RPCListen accepted into an AcceptedConnectionImpl<Protocol>; a connection of another type is
+        // dropped, its socket closed with it, as the accept below drops one.
+        AcceptedConnectionImpl<Protocol>* accepted = dynamic_cast<AcceptedConnectionImpl<Protocol>*>(conn.get());
+        if (!accepted) return;
+        // asio's Windows native_handle() is a class that converts to the SOCKET.
+        const SOCKET accepted_socket = accepted->socket.native_handle();
+        SetHandleInformation(reinterpret_cast<HANDLE>(accepted_socket), HANDLE_FLAG_INHERIT, 0);
 #else
         // Only one async_wait is outstanding, but readiness can be spurious and a client can reset
         // before it is accepted, so accept may find nothing (EAGAIN, which is also EWOULDBLOCK on
@@ -1075,7 +1081,8 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
 //! over TIME_WAIT. Throws boost::system::system_error.
 static void OpenRpcAcceptor(boost::asio::ip::tcp::acceptor& acceptor, const boost::asio::ip::tcp& protocol)
 {
-    const SOCKET fd = CreateCloexecSocket(protocol.family(), SOCK_STREAM, IPPROTO_TCP);
+    // Not const: closesocket() takes it by reference, to reset it.
+    SOCKET fd = CreateCloexecSocket(protocol.family(), SOCK_STREAM, IPPROTO_TCP);
     if (fd == INVALID_SOCKET) {
 #ifdef WIN32
         const int err = ::WSAGetLastError();

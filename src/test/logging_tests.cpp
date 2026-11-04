@@ -30,13 +30,16 @@
 #include <unistd.h>
 #endif
 
+#ifndef WIN32
 namespace {
+// Only the POSIX cases below read a file back.
 std::string ReadAll(const fs::path& path)
 {
     std::ifstream in(path.string(), std::ios::binary);
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 } // namespace
+#endif
 
 BOOST_AUTO_TEST_SUITE(logging_tests)
 
