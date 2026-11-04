@@ -80,7 +80,8 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
         "-privdb", "-flushwallet", "-upgradewallet", "-blockv15height", "-messagecontractdisableheight",
         "-pendingpoolretention", "-rpcssl", "-rpcsslcertificatechainfile", "-rpcsslprivatekeyfile",
         "-rpcsslciphers", "-socks", "-debugallowtracer", "-rpcserviceuser", "-rpcskiplistenercheck",
-        "-stdinwalletpassphrase", "-stdinelevate"};
+        "-stdinwalletpassphrase", "-stdinelevate", "-ipcdir", "-ipcattachgroup",
+        "-ipcserviceuser"};
     for (const auto& type : GRC::RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
         refuse.insert("-clear" + GRC::Contract::Type::ToString(type) + "history");
     }
