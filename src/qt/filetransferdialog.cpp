@@ -38,6 +38,9 @@ struct TransferJob
 {
     std::atomic<uint64_t> done{0};
     std::atomic<int64_t> total{-1};
+    //! Set once the job has reported its bytes. A job that begins its transfer first (a console
+    //! file command) has none to report until then.
+    std::atomic<bool> reported{false};
     std::atomic<bool> cancel{false};
     //! Written by the job, and read only once the job has finished. Left as it is (a failure
     //! with no message) if even the failure could not be made.
@@ -72,6 +75,7 @@ Result RunWithProgress(QWidget* parent, const QString& title, const QString& wha
                 [job](uint64_t done, int64_t total) {
                     job->done = done;
                     job->total = total;
+                    job->reported = true;
                 },
                 job->cancel);
         } catch (const std::exception& e) {
@@ -142,7 +146,7 @@ Result RunWithProgress(QWidget* parent, const QString& title, const QString& wha
             return;
         }
 
-        if (!cancelling) {
+        if (!cancelling && job->reported) {
             const uint64_t done = job->done;
             const int64_t total = job->total;
 
@@ -223,6 +227,34 @@ interfaces::FileSinkResult RunUploadWithProgress(QWidget* parent, const QString&
             out.error = message;
             return out;
         });
+}
+
+bool RunJobWithProgress(QWidget* parent, const QString& title, const QString& what, TransferJobFn job,
+                        std::string& error)
+{
+    struct JobResult
+    {
+        bool ok{false};
+        std::string error{};
+    };
+
+    const JobResult result = RunWithProgress<JobResult>(
+        parent, title, what,
+        [job = std::move(job)](const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel) {
+            job(progress, cancel);
+
+            JobResult ran;
+            ran.ok = true;
+            return ran;
+        },
+        [](const std::string& message) {
+            JobResult failed;
+            failed.error = message;
+            return failed;
+        });
+
+    error = result.error;
+    return result.ok;
 }
 
 std::vector<fs::path> BackupGuardFiles(const interfaces::CorePaths& paths)

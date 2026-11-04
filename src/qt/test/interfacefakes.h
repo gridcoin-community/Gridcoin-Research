@@ -5,6 +5,7 @@
 #ifndef BITCOIN_QT_TEST_INTERFACEFAKES_H
 #define BITCOIN_QT_TEST_INTERFACEFAKES_H
 
+#include "interfaces/file_transfer.h"
 #include "interfaces/gui_state.h"
 #include "interfaces/handler.h"
 #include "interfaces/mrc.h"
@@ -21,6 +22,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -847,8 +849,9 @@ private:
 //! and counts the capabilities begun and ended. While one lives it sets
 //! *m_capability_flag, when the test points that at the flag its FakeNode or
 //! FakeSideStakeManager reads (m_elevated), as the node then accepts what needs
-//! the passphrase. Every other call answers with an empty default and changes
-//! nothing.
+//! the passphrase. The console's file transfers begin through the factories the
+//! test sets, and each begin is recorded. Every other call answers with an
+//! empty default and changes nothing.
 class FakeLockStateWallet : public interfaces::Wallet
 {
 public:
@@ -859,6 +862,31 @@ public:
     int m_begin_elevation_calls{0};
     int m_end_elevation_calls{0};
     std::optional<CapabilityKind> m_last_elevation_kind;
+
+    //! What beginConsoleDownload() and beginConsoleUpload() return (set by the
+    //! test). Unset, they refuse as the core does a method that is not a row
+    //! in that direction.
+    std::function<std::unique_ptr<interfaces::FileSource>(const std::string& method,
+                                                          const std::vector<std::string>& args,
+                                                          std::string& error_out)>
+        m_console_download{};
+    std::function<std::unique_ptr<interfaces::FileSink>(const std::string& method,
+                                                        const std::vector<std::string>& args, uint64_t size,
+                                                        std::string& error_out)>
+        m_console_upload{};
+
+    //! A console transfer begun. Written on the thread the begin runs on, and
+    //! read by the test once the transfer has returned.
+    struct ConsoleBegin {
+        std::string method{};
+        std::vector<std::string> args{};
+        uint64_t size{0};
+        std::thread::id thread{};
+        //! The capabilities begun and ended before this begin.
+        int begin_elevation_calls{0};
+        int end_elevation_calls{0};
+    };
+    std::vector<ConsoleBegin> m_console_begins{};
 
     interfaces::WalletLockState getLockState() override { return m_lock_state; }
     bool isUnlockedForStakingOnly() override { return m_lock_state.unlocked_for_staking_only; }
@@ -920,17 +948,27 @@ public:
     {
         return nullptr;
     }
-    std::unique_ptr<interfaces::FileSource> beginConsoleDownload(const std::string& /*method*/,
-                                                                 const std::vector<std::string>& /*args*/,
-                                                                 std::string& /*error_out*/) override
+    std::unique_ptr<interfaces::FileSource> beginConsoleDownload(const std::string& method,
+                                                                 const std::vector<std::string>& args,
+                                                                 std::string& error_out) override
     {
-        return nullptr;
+        RecordConsoleBegin(method, args, 0);
+        if (!m_console_download) {
+            error_out = "not a file command";
+            return nullptr;
+        }
+        return m_console_download(method, args, error_out);
     }
-    std::unique_ptr<interfaces::FileSink> beginConsoleUpload(const std::string& /*method*/,
-                                                             const std::vector<std::string>& /*args*/,
-                                                             uint64_t /*size*/, std::string& /*error_out*/) override
+    std::unique_ptr<interfaces::FileSink> beginConsoleUpload(const std::string& method,
+                                                             const std::vector<std::string>& args, uint64_t size,
+                                                             std::string& error_out) override
     {
-        return nullptr;
+        RecordConsoleBegin(method, args, size);
+        if (!m_console_upload) {
+            error_out = "not a file command";
+            return nullptr;
+        }
+        return m_console_upload(method, args, size, error_out);
     }
     interfaces::MessageSignStatus signMessage(const std::string& /*address*/, const std::string& /*message*/,
                                               std::string& /*signature_out*/) override
@@ -966,6 +1004,19 @@ public:
     std::unique_ptr<interfaces::Handler> handleTransactionChanged(TransactionChangedFn /*fn*/) override
     {
         return interfaces::MakeCleanupHandler([] {});
+    }
+
+private:
+    void RecordConsoleBegin(const std::string& method, const std::vector<std::string>& args, uint64_t size)
+    {
+        ConsoleBegin begin;
+        begin.method = method;
+        begin.args = args;
+        begin.size = size;
+        begin.thread = std::this_thread::get_id();
+        begin.begin_elevation_calls = m_begin_elevation_calls;
+        begin.end_elevation_calls = m_end_elevation_calls;
+        m_console_begins.push_back(std::move(begin));
     }
 };
 

@@ -17,6 +17,7 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QString>
@@ -31,6 +32,7 @@
 #include <fstream>
 #include <future>
 #include <iterator>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -383,6 +385,101 @@ void FileTransferDialogTests::uploadSendsTheFile()
     QVERIFY(sink.m_finish_size == 100'000);
     QVERIFY(sink.m_finish_sha == Sha256Of(data));
     QVERIFY(!sink.m_cancelled);
+}
+
+// A job that is more than one transfer (a console file command) runs on the modal worker. Until it
+// reports bytes the dialog shows what it does alone, then the bytes as a transfer's do; Cancel sets
+// the job's flag and the dialog waits for the job to return. A job that throws is reported.
+void FileTransferDialogTests::jobShowsItsBytesOnceReportedAndIsToldOfCancel()
+{
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
+
+    std::thread::id worker_thread;
+    const std::future<void> asked = worker.Post([&worker_thread] { worker_thread = std::this_thread::get_id(); });
+    QVERIFY(asked.valid() && asked.wait_for(10s) == std::future_status::ready);
+
+    const QString what = "dumpcontracts to /backups/c.txt";
+    std::atomic<int> stage{0};
+    std::atomic<bool> go_on{false};
+    std::atomic<bool> saw_cancel{false};
+    std::thread::id job_thread;
+    QString label_before;
+    QString label_after;
+    bool clicked = false;
+    QElapsedTimer shown;
+
+    // Waits until the test lets it go on, 10 seconds at most.
+    const auto wait_for_go = [&go_on] {
+        for (int i = 0; i < 1000 && !go_on.exchange(false); ++i) {
+            std::this_thread::sleep_for(10ms);
+        }
+    };
+
+    QTimer observer;
+    connect(&observer, &QTimer::timeout, this, [&] {
+        QProgressDialog* dialog = VisibleProgressDialog();
+        if (!dialog) return;
+
+        // Stage 1: the job waits before it reports anything. Read once the dialog has had time for
+        // several of its own updates.
+        if (stage == 1 && label_before.isEmpty()) {
+            if (!shown.isValid()) shown.start();
+            if (shown.elapsed() >= 300) {
+                label_before = dialog->labelText();
+                go_on = true;
+            }
+        }
+
+        // Stage 2: the job has reported 5 of 10 bytes and waits again.
+        if (stage == 2 && dialog->labelText().contains("5 of 10")) {
+            label_after = dialog->labelText();
+            if (!clicked) {
+                if (auto* button = dialog->findChild<QPushButton*>()) {
+                    button->click();
+                    clicked = true;
+                }
+            }
+        }
+    });
+    observer.start(5);
+
+    QTimer backstop;
+    backstop.setSingleShot(true);
+    connect(&backstop, &QTimer::timeout, this, [&go_on] { go_on = true; });
+    backstop.start(10000);
+
+    std::string error;
+    const bool ran = RunJobWithProgress(
+        nullptr, "dumpcontracts", what,
+        [&](const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel) {
+            job_thread = std::this_thread::get_id();
+            stage = 1;
+            wait_for_go();
+            progress(5, 10);
+            stage = 2;
+            for (int i = 0; i < 1000 && !cancel; ++i) {
+                std::this_thread::sleep_for(10ms);
+            }
+            saw_cancel = cancel.load();
+        },
+        error);
+    observer.stop();
+    backstop.stop();
+
+    QVERIFY2(ran, error.c_str());
+    QVERIFY(job_thread == worker_thread);
+    QCOMPARE(label_before, what);
+    QCOMPARE(label_after, what + "\n" + "5 of 10 bytes");
+    QVERIFY(clicked);
+    QVERIFY(saw_cancel);
+    QVERIFY(!VisibleProgressDialog());
+
+    const bool threw = RunJobWithProgress(
+        nullptr, "dumpcontracts", what,
+        [](const interfaces::ProgressFn&, const std::atomic<bool>&) { throw std::runtime_error("connection lost"); },
+        error);
+    QVERIFY(!threw);
+    QCOMPARE(error, std::string("connection lost"));
 }
 
 void FileTransferDialogTests::guardFilesComeFromTheCorePaths()

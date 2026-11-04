@@ -145,8 +145,10 @@ FileSinkResult UploadFile(FileSink& sink, const fs::path& local, const ProgressF
 bool CheckDestination(const fs::path& dest, const std::vector<fs::path>& core_files, const fs::path& core_datadir,
                       std::string& error);
 
-//! An entry a source lists with a note has nothing to send: a configuration or settings file that
-//! does not exist. Reading it is a source error, and DownloadEntry stops the whole source on one.
+//! An entry a source lists with a note and a size of 0 has nothing to send: a configuration or
+//! settings file that does not exist, or one the core will not send. Reading it is a source error,
+//! and DownloadEntry stops the whole source on one. An entry with a note and content (a console
+//! command's file, its note the command's reply) is sent.
 bool EntryIsSkipped(const FileEntryInfo& info);
 
 //! What became of one entry of a backup.
@@ -154,7 +156,7 @@ struct BackupEntryResult
 {
     std::string name{};
     fs::path dest{};
-    //! Listed with a note (EntryIsSkipped): never read, and nothing was written.
+    //! Listed with nothing to send (EntryIsSkipped): never read, and nothing was written.
     bool skipped{false};
     std::string note{};
     //! The download's outcome; meaningless for a skipped entry.

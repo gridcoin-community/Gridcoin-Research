@@ -6,10 +6,14 @@
 #include "clientmodel.h"
 #include "qt/bantablemodel.h"
 #include "qt/decoration.h"
+#include "qt/filetransferdialog.h"
 #include "guiutil.h"
 #include "support/cleanse.h"
 #include "support/lockedpool.h"
+#include "util.h"
 #include "util/strencodings.h"
+
+#include <univalue.h>
 #endif
 
 #include <QByteArray>
@@ -153,6 +157,23 @@ SecureString ToSecureString(std::string_view text)
 
     return out;
 }
+
+//! A copy of a console line in a std::string, overwritten when this goes out of scope: the line can
+//! carry a passphrase.
+class CleansedLine
+{
+public:
+    explicit CleansedLine(std::string_view line) { m_text.assign(line.data(), line.size()); }
+    ~CleansedLine() { CleanseString(m_text); }
+
+    CleansedLine(const CleansedLine&) = delete;
+    CleansedLine& operator=(const CleansedLine&) = delete;
+
+    const std::string& text() const { return m_text; }
+
+private:
+    std::string m_text;
+};
 } // namespace
 
 /**
@@ -448,6 +469,204 @@ interfaces::RpcConsoleResult DispatchConsoleCommand(interfaces::Node& node, std:
     result.wallet_unlock_needed = false;
 
     return result;
+}
+
+std::optional<ConsoleFileRequest> ParseConsoleFileRequest(const std::string& line, std::string& error)
+{
+    error.clear();
+
+    // Every line entered is parsed here, a passphrase command's too, so the arguments are
+    // overwritten however this returns. A file command's arguments are no secret, and are copied
+    // out.
+    std::vector<std::string> args;
+    const StringsCleanser args_cleanser(args);
+
+    if (!parseCommandLine(args, line) || args.empty()) return std::nullopt;
+
+    const interfaces::ConsoleFileCommand* cmd = interfaces::FindConsoleFileCommand(args[0]);
+    if (!cmd) return std::nullopt;
+
+    const size_t path_position = 1 + cmd->path_index;
+
+    if (path_position >= args.size() || args[path_position].empty()) {
+        error = QObject::tr("usage: %1 takes the file as its argument %2, as in help %1")
+                    .arg(QString::fromStdString(args[0]), QString::number(static_cast<qulonglong>(path_position)))
+                    .toStdString();
+        return std::nullopt;
+    }
+
+    ConsoleFileRequest request;
+    request.cmd = cmd;
+
+    // The argument is UTF-8, as every console argument is.
+    fs::path path = GUIUtil::qstringToBoostPath(QString::fromStdString(args[path_position]));
+
+    // A bare name goes in the data directory, as the RPC puts it in the core's; anything else is
+    // where it says, from this process's working directory.
+    if (!path.has_parent_path()) {
+        path = GetDataDir() / path;
+    } else if (!path.is_absolute()) {
+        path = fs::absolute(path);
+    }
+
+    request.local_path = path;
+
+    for (size_t i = 1; i < args.size(); ++i) {
+        if (i != path_position) request.core_args.push_back(args[i]);
+    }
+
+    return request;
+}
+
+ConsoleFileResult RunConsoleDownload(interfaces::Wallet& wallet, const ConsoleFileRequest& request,
+                                     const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel)
+{
+    ConsoleFileResult result;
+
+    // dumpcontracts runs its command in the core inside this call, and dumpwallet begins its dump
+    // under the capability the caller holds. A call that throws (a lost connection) left no source.
+    std::unique_ptr<interfaces::FileSource> source;
+
+    try {
+        source = wallet.beginConsoleDownload(request.cmd->method, request.core_args, result.error);
+    } catch (const std::exception& e) {
+        result.error = e.what();
+        return result;
+    }
+
+    if (!source) {
+        if (result.error.empty()) result.error = strprintf("%s could not begin", request.cmd->method);
+        return result;
+    }
+
+    // The source goes as this returns, on this thread. Destroying it ends the transfer in the core,
+    // which deletes what it has not sent and ends the capability the source holds.
+    std::vector<interfaces::FileEntryInfo> infos;
+
+    try {
+        infos = source->entries();
+    } catch (const std::exception& e) {
+        result.error = e.what();
+        return result;
+    }
+
+    if (infos.size() != 1) {
+        result.error = strprintf("the core listed %u files for %s, which writes one", infos.size(),
+                                 request.cmd->method);
+        return result;
+    }
+
+    // The note of a file with content is the command's reply, and is shown with it. One with nothing
+    // in it says why there is nothing to send.
+    result.note = infos[0].note;
+
+    if (interfaces::EntryIsSkipped(infos[0])) {
+        result.skipped = true;
+        return result;
+    }
+
+    result.outcome = interfaces::DownloadEntry(*source, 0, request.local_path, progress, cancel);
+
+    return result;
+}
+
+ConsoleFileResult RunConsoleUpload(interfaces::Wallet& wallet, const ConsoleFileRequest& request, uint64_t size,
+                                   const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel)
+{
+    ConsoleFileResult result;
+    result.size = size;
+
+    std::unique_ptr<interfaces::FileSink> sink;
+
+    try {
+        sink = wallet.beginConsoleUpload(request.cmd->method, request.core_args, size, result.error);
+    } catch (const std::exception& e) {
+        result.error = e.what();
+        return result;
+    }
+
+    if (!sink) {
+        if (result.error.empty()) result.error = strprintf("%s could not begin", request.cmd->method);
+        return result;
+    }
+
+    // finish() runs the command in the core: importwallet imports the keys and rescans. The sink
+    // goes as this returns, on this thread, and with it the capability it holds.
+    result.sink_result = interfaces::UploadFile(*sink, request.local_path, progress, cancel);
+
+    return result;
+}
+
+std::string ConsoleNoteForDestination(const std::string& note, const fs::path& dest)
+{
+    // dumpcontracts' reply names the file it wrote, which is the core's temporary one: that name is
+    // never shown. The reply's other fields keep their order.
+    static const std::string FILE_KEY{"exported_to_file"};
+
+    UniValue reply;
+    if (!reply.read(note) || !reply.isObject() || !reply.exists(FILE_KEY)) return note;
+
+    UniValue shown(UniValue::VOBJ);
+    const std::vector<std::string>& keys = reply.getKeys();
+    const std::vector<UniValue>& values = reply.getValues();
+
+    for (size_t i = 0; i < keys.size(); ++i) {
+        if (keys[i] == FILE_KEY) {
+            shown.pushKV(keys[i], GUIUtil::boostPathToQString(dest).toStdString());
+        } else {
+            shown.pushKV(keys[i], values[i]);
+        }
+    }
+
+    return shown.write(2);
+}
+
+QString ConsoleFileResultText(const ConsoleFileRequest& request, const ConsoleFileResult& result, bool& failed)
+{
+    failed = true;
+    const QString path = GUIUtil::boostPathToQString(request.local_path);
+
+    if (!result.error.empty()) return QString::fromStdString(result.error);
+
+    if (request.cmd->direction == interfaces::TransferDirection::Upload) {
+        if (!result.sink_result.ok) return QString::fromStdString(result.sink_result.error);
+
+        failed = false;
+        QString text = QObject::tr("Sent %1 bytes from %2.")
+                           .arg(QString::number(static_cast<qulonglong>(result.size)), path);
+        if (!result.sink_result.output.empty()) text += "\n" + QString::fromStdString(result.sink_result.output);
+        return text;
+    }
+
+    if (result.skipped) {
+        return QObject::tr("Nothing was written to %1: %2").arg(path, QString::fromStdString(result.note));
+    }
+
+    switch (result.outcome.status) {
+    case interfaces::TransferStatus::Ok:
+        break;
+    case interfaces::TransferStatus::Cancelled:
+        failed = false;
+        return QObject::tr("Cancelled; nothing was written to %1.").arg(path);
+    case interfaces::TransferStatus::SourceError:
+    case interfaces::TransferStatus::LocalError:
+    case interfaces::TransferStatus::VerifyFailed:
+    case interfaces::TransferStatus::NoSpace:
+        return QObject::tr("Nothing was written to %1: %2").arg(path, QString::fromStdString(result.outcome.message));
+    }
+
+    failed = false;
+
+    // The SHA-256 in the order sha256sum prints it: the digest's bytes from the first.
+    QString text = QObject::tr("Wrote %1 bytes to %2 (SHA-256 %3)")
+                       .arg(QString::number(static_cast<qulonglong>(result.outcome.bytes)), path,
+                            QString::fromStdString(HexStr(result.outcome.sha256)));
+
+    if (!result.note.empty()) {
+        text += "\n" + QString::fromStdString(ConsoleNoteForDestination(result.note, request.local_path));
+    }
+
+    return text;
 }
 } // namespace RPCConsoleDetail
 
@@ -831,10 +1050,6 @@ void RPCConsole::on_lineEdit_returnPressed()
         // both sinks.
         const QString display_cmd = RPCConsoleDetail::RedactSensitiveArgs(cmd);
         message(CMD_REQUEST, display_cmd);
-        if (m_executorThread) {
-            ++m_commands_in_flight;
-        }
-        emit cmdRequest(cmd);
         // Remove command, if already in history
         history.removeOne(display_cmd);
         // Append command to history
@@ -844,6 +1059,28 @@ void RPCConsole::on_lineEdit_returnPressed()
             history.removeFirst();
         // Set pointer to end of history
         historyPtr = history.size();
+
+        // A command whose file is on this machine runs here, through the file transfer, and never
+        // reaches the node's console, which refuses it.
+        std::string file_error;
+        std::optional<RPCConsoleDetail::ConsoleFileRequest> file_request;
+        {
+            const ConsoleLineBytes bytes(cmd);
+            const CleansedLine line(bytes.view());
+            file_request = RPCConsoleDetail::ParseConsoleFileRequest(line.text(), file_error);
+        }
+
+        if (file_request) {
+            runFileCommand(*file_request);
+        } else if (!file_error.empty()) {
+            message(CMD_ERROR, QString::fromStdString(file_error));
+        } else {
+            if (m_executorThread) {
+                ++m_commands_in_flight;
+            }
+            emit cmdRequest(cmd);
+        }
+
         // Scroll console view to end
         scrollToEnd();
     }
@@ -894,6 +1131,115 @@ void RPCConsole::startExecutor()
     // Default implementation of QThread::run() simply spins up an event loop in the thread,
     // which is what we want.
     thread->start();
+}
+
+void RPCConsole::runFileCommand(const RPCConsoleDetail::ConsoleFileRequest& request)
+{
+    if (!walletModel) {
+        message(CMD_ERROR, tr("File commands need a loaded wallet."));
+        return;
+    }
+
+    const QString method = QString::fromUtf8(request.cmd->method);
+    const QString path = GUIUtil::boostPathToQString(request.local_path);
+    const bool download = request.cmd->direction == interfaces::TransferDirection::Download;
+    uint64_t size = 0;
+
+    // Everything that can refuse here does so before the passphrase is asked for.
+    if (download) {
+        // The core's own files, which a download must not replace. In the split build they were
+        // read when the GUI connected, so nothing crosses IPC on this thread. The monolith filled
+        // them before its wallet was loaded, and asks its node in this process now.
+        const interfaces::CorePaths core_paths =
+            (m_ipc_info.active || !clientModel) ? m_ipc_info.core_paths : clientModel->node().getCorePaths();
+        std::string error;
+
+        if (!interfaces::CheckDestination(request.local_path, BackupGuardFiles(core_paths),
+                                          fs::path(core_paths.datadir), error)) {
+            message(CMD_ERROR, tr("Nothing was written to %1: %2").arg(path, QString::fromStdString(error)));
+            return;
+        }
+
+        // dumpcontracts refuses to replace a file, as the RPC did when it wrote the file itself.
+        boost::system::error_code ec;
+        if (std::string_view(request.cmd->method) == "dumpcontracts" && fs::exists(request.local_path, ec)) {
+            message(CMD_ERROR, tr("File already exists at location. Please delete or rename old file first."));
+            return;
+        }
+    } else {
+        boost::system::error_code ec;
+        const bool regular = fs::is_regular_file(request.local_path, ec);
+        const uintmax_t file_size = regular ? fs::file_size(request.local_path, ec) : 0;
+
+        if (!regular || ec) {
+            message(CMD_ERROR, tr("Cannot send %1: it is not a file that can be read.").arg(path));
+            return;
+        }
+
+        size = file_size;
+
+        // The core refuses it too; this spares the prompt.
+        if (size > request.cmd->max_upload_bytes) {
+            message(CMD_ERROR, tr("%1: the file is too large (%2 bytes; at most %3)")
+                                   .arg(method, QString::number(static_cast<qulonglong>(size)),
+                                        QString::number(static_cast<qulonglong>(request.cmd->max_upload_bytes))));
+            return;
+        }
+    }
+
+    // No other command is entered, and no other prompt raised, while this one runs.
+    ui->lineEdit->setEnabled(false);
+    m_file_command_running = true;
+
+    struct Running {
+        RPCConsole& console;
+        ~Running()
+        {
+            console.m_file_command_running = false;
+            console.ui->lineEdit->setEnabled(true);
+            console.ui->lineEdit->setFocus();
+        }
+    } running{*this};
+
+    RPCConsoleDetail::ConsoleFileResult result;
+    std::string run_error;
+    bool ran = false;
+
+    {
+        // One FileTransfer capability for this command alone: a wallet that needs one asks for the
+        // passphrase, an unencrypted or fully unlocked one asks nothing and needs none. The context
+        // lives until the job below has destroyed the source or sink, since ending the capability
+        // ends the transfer; it ends the capability as it goes.
+        const WalletModel::UnlockContext ctx(walletModel->requestUnlock(CapabilityKind::FileTransfer));
+
+        if (!ctx.isValid()) {
+            message(CMD_ERROR, tr("%1 was not run: the wallet was not unlocked for it.").arg(method));
+            return;
+        }
+
+        // Every call into the core this command makes runs on the modal worker, under the progress
+        // dialog: dumpcontracts runs its command when the transfer begins, and importwallet imports
+        // and rescans when it finishes.
+        interfaces::Wallet& wallet = walletModel->wallet();
+        const QString what = download ? tr("%1 to %2").arg(method, path) : tr("%1 from %2").arg(method, path);
+
+        ran = RunJobWithProgress(
+            this, method, what,
+            [&](const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel) {
+                result = download ? RPCConsoleDetail::RunConsoleDownload(wallet, request, progress, cancel)
+                                  : RPCConsoleDetail::RunConsoleUpload(wallet, request, size, progress, cancel);
+            },
+            run_error);
+    }
+
+    if (!ran) {
+        message(CMD_ERROR, QString::fromStdString(run_error));
+        return;
+    }
+
+    bool failed = false;
+    const QString text = RPCConsoleDetail::ConsoleFileResultText(request, result, failed);
+    message(failed ? CMD_ERROR : CMD_REPLY, text);
 }
 
 void RPCConsole::setWalletModel(WalletModel *model)
@@ -953,7 +1299,11 @@ void RPCConsole::executorFinished()
     // Nor while another operation's prompt is open. This runs as a queued
     // event, so it can run inside that prompt's event loop, and a second
     // prompt would be refused there anyway.
-    if (m_commands_in_flight != 0 || !walletModel
+    //
+    // Nor while a file command runs (inside its progress dialog's event loop):
+    // the IPC slot holds one capability, and beginning this one would end the
+    // transfer's.
+    if (m_commands_in_flight != 0 || !walletModel || m_file_command_running
             || walletModel->getEncryptionStatus() != WalletModel::UnlockedForStakingOnly
             || walletModel->isUnlockPromptOpen()) {
         message(CMD_ERROR, error);

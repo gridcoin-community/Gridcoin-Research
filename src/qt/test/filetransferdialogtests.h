@@ -20,6 +20,7 @@ private slots:
     void downloadShowsProgressAndSavesTheFile();
     void cancelStopsTheDownloadAndLeavesNothing();
     void uploadSendsTheFile();
+    void jobShowsItsBytesOnceReportedAndIsToldOfCancel();
     void guardFilesComeFromTheCorePaths();
     void backupResultText();
     // Last: it tells the application to quit, then clears that again.

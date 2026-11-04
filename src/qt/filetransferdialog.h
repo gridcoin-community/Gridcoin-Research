@@ -10,6 +10,9 @@
 
 #include <QString>
 
+#include <atomic>
+#include <functional>
+#include <string>
 #include <vector>
 
 QT_BEGIN_NAMESPACE
@@ -33,6 +36,19 @@ interfaces::TransferOutcome RunDownloadWithProgress(QWidget* parent, const QStri
 //! UploadFile on the worker, with the same dialog as RunDownloadWithProgress.
 interfaces::FileSinkResult RunUploadWithProgress(QWidget* parent, const QString& title, interfaces::FileSink& sink,
                                                  const fs::path& local);
+
+//! The work of a transfer and what comes with it, run on the modal worker: \p progress is told the
+//! bytes done of the total, and \p cancel is set when the user cancels.
+using TransferJobFn = std::function<void(const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel)>;
+
+//! Runs \p job on the modal GuiIpcWorker with the dialog of RunDownloadWithProgress, for work that is
+//! more than one transfer: a console file command also begins its transfer, which can run the
+//! command in the core first, and ends it. The dialog shows \p what, and the bytes once the job
+//! reports them. Cancel sets the job's flag, and the dialog stays up, saying so, until the job has
+//! returned. The job has always finished when this returns. False, with \p error set, when there is
+//! no worker or the job threw.
+bool RunJobWithProgress(QWidget* parent, const QString& title, const QString& what, TransferJobFn job,
+                        std::string& error);
 
 //! The core's files a backup must not be written over (CheckDestination's core_files): its wallet
 //! file, configuration file, settings file and debug log. A path the core did not report is left

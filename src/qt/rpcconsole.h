@@ -1,6 +1,8 @@
 #ifndef BITCOIN_QT_RPCCONSOLE_H
 #define BITCOIN_QT_RPCCONSOLE_H
 
+#include "fs.h"
+#include "interfaces/file_transfer.h"
 #include "interfaces/node.h"
 #include "qt/guiutil.h"
 #include "qt/peertablemodel.h"
@@ -13,7 +15,10 @@
 #include <QMenu>
 #include <QString>
 
+#include <atomic>
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -51,6 +56,65 @@ QString RedactSensitiveArgs(const QString& command);
 //! too long", and the args are still cleansed. Other methods go to
 //! executeRpcConsoleCommand.
 interfaces::RpcConsoleResult DispatchConsoleCommand(interfaces::Node& node, std::vector<std::string>& args);
+
+//! A console line that runs a file command (interfaces::ConsoleFileCommands()): the file on this
+//! machine, and the arguments the core is sent, which are the others.
+struct ConsoleFileRequest
+{
+    const interfaces::ConsoleFileCommand* cmd{nullptr};
+    fs::path local_path{};
+    std::vector<std::string> core_args{};
+};
+
+//! Parses \p line as the console does (parseCommandLine). nullopt with \p error empty for a line
+//! that does not parse or names no file command, and with \p error set ("usage: ...") for a file
+//! command without its file. Otherwise the file is the argument at args[1 + path_index]: a name
+//! without a parent directory is taken in this process's data directory (GetDataDir()), as the RPC
+//! takes it in the core's, and a relative path with one is made absolute. core_args are the other
+//! arguments, in order.
+std::optional<ConsoleFileRequest> ParseConsoleFileRequest(const std::string& line, std::string& error);
+
+//! What a console file command did (RunConsoleDownload(), RunConsoleUpload()).
+struct ConsoleFileResult
+{
+    //! The core refused to begin the transfer, or its file could not be listed: why. Nothing was
+    //! downloaded or uploaded then.
+    std::string error{};
+    //! Downloads: the file the core offered was listed with nothing to send
+    //! (interfaces::EntryIsSkipped()), and note says why. Nothing was written.
+    bool skipped{false};
+    //! Downloads: the outcome, once the download ran.
+    interfaces::TransferOutcome outcome{};
+    //! Downloads: the note the core listed the file with (dumpcontracts' reply).
+    std::string note{};
+    //! Uploads: the bytes announced, and what the core's command made of them.
+    uint64_t size{0};
+    interfaces::FileSinkResult sink_result{};
+};
+
+//! Runs a download row of interfaces::ConsoleFileCommands(): begins it
+//! (interfaces::Wallet::beginConsoleDownload() with the request's core_args), lists the core's one
+//! file, downloads it to the request's local_path unless it has nothing to send, and destroys the
+//! source. Every call into the wallet interface is made on the calling thread, which is the modal
+//! GuiIpcWorker's in the console, and the source is gone when this returns.
+ConsoleFileResult RunConsoleDownload(interfaces::Wallet& wallet, const ConsoleFileRequest& request,
+                                     const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel);
+
+//! Runs an upload row: begins it (interfaces::Wallet::beginConsoleUpload() with \p size, the size
+//! of the request's local_path), sends the file, and destroys the sink, as RunConsoleDownload().
+ConsoleFileResult RunConsoleUpload(interfaces::Wallet& wallet, const ConsoleFileRequest& request, uint64_t size,
+                                   const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel);
+
+//! The note a downloaded file was listed with, as the console shows it: a JSON object reply's
+//! "exported_to_file", which names the core's own temporary file, names \p dest instead. Any other
+//! note is returned as it is.
+std::string ConsoleNoteForDestination(const std::string& note, const fs::path& dest);
+
+//! The console's reply to a file command. A download that arrived reads "Wrote <n> bytes to <path>
+//! (SHA-256 <hex>)", then its note (ConsoleNoteForDestination()). An upload the core's command
+//! accepted reads "Sent <n> bytes from <path>.", then the command's output. Otherwise the text says
+//! why nothing was written or sent, and \p failed is set; a cancelled download is not a failure.
+QString ConsoleFileResultText(const ConsoleFileRequest& request, const ConsoleFileResult& result, bool& failed);
 } // namespace RPCConsoleDetail
 
 /** Local Bitcoin RPC console. */
@@ -69,7 +133,8 @@ public:
     void setClientModel(ClientModel *model);
 
     //! The wallet a command refused for its keys is authorised through (see
-    //! executorFinished()). Null on teardown, which ends a capability still
+    //! executorFinished()), and the one the file commands transfer through
+    //! (runFileCommand()). Null on teardown, which ends a capability still
     //! held for a command run again.
     void setWalletModel(WalletModel *model);
 
@@ -152,7 +217,7 @@ signals:
 
 private:
     Ui::RPCConsole *ui;
-    ClientModel *clientModel;
+    ClientModel *clientModel = nullptr;
     GuiIpcInfo m_ipc_info;
     QStringList history;
     int historyPtr = 0;
@@ -189,6 +254,18 @@ private:
     //! has finished it. The input is disabled meanwhile, so nothing else runs
     //! under it.
     std::unique_ptr<WalletModel::UnlockContext> m_retry_unlock;
+
+    //! Run a file command through the file transfer, on this machine's file:
+    //! the destination is checked, the passphrase asked for when the wallet
+    //! needs it (a FileTransfer capability for this command alone), and the
+    //! transfer, with every call it makes into the core, runs on the modal
+    //! GuiIpcWorker under the progress dialog. The reply goes to the pane.
+    void runFileCommand(const RPCConsoleDetail::ConsoleFileRequest& request);
+
+    //! A file command holds its capability. Beginning another would end it,
+    //! as the IPC slot holds one, so no prompt is raised meanwhile, and the
+    //! input is disabled.
+    bool m_file_command_running{false};
 
     enum ColumnWidths
     {

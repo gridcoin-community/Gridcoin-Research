@@ -346,7 +346,12 @@ commands through the transfer channel (under a FileTransfer capability when
 the wallet is encrypted and not fully unlocked): a
 `FileSource` of what `dumpwallet` or `dumpcontracts` writes, and a `FileSink`
 for what `importwallet` or `parseaccrualsnapshotfile` reads. The core puts its
-own value where the command takes its file. The new methods alone would be
+own value where the command takes its file. The GUI console runs these four
+commands itself, in both builds, before anything reaches
+`executeRpcConsoleCommand` (which refuses them): the file is on the GUI's side,
+a bare file name is taken in the GUI's own data directory, each command begins a
+FileTransfer capability of its own when the wallet needs one, and every call of
+the transfer runs on the GUI's modal worker. The new methods alone would be
 additive; the major is for the other direction. A GUI and a node of
 different majors disagree on how an operation is authorised, so each such action
 would fail with a message the user cannot act on. A newer GUI against

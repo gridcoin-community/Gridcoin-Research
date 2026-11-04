@@ -865,6 +865,25 @@ BOOST_AUTO_TEST_CASE(entry_with_a_note_is_skipped)
     BOOST_CHECK(interfaces::EntryIsSkipped(e));
 }
 
+// A console download's file carries the command's reply as its note, and has content: it is sent.
+// Only an entry with nothing in it is skipped for its note.
+BOOST_AUTO_TEST_CASE(entry_with_a_note_and_content_is_not_skipped)
+{
+    interfaces::FileEntryInfo e;
+    e.name = "dumpcontracts.txt";
+    e.note = "{\"number_of_contracts_exported\": 7}";
+
+    e.size = 4096;
+    BOOST_CHECK(!interfaces::EntryIsSkipped(e));
+
+    // Generated, its size not known in advance.
+    e.size = -1;
+    BOOST_CHECK(!interfaces::EntryIsSkipped(e));
+
+    e.size = 0;
+    BOOST_CHECK(interfaces::EntryIsSkipped(e));
+}
+
 BOOST_AUTO_TEST_CASE(backup_skips_an_entry_with_a_note)
 {
     // A missing configuration file between the wallet and the settings file: the

@@ -611,7 +611,8 @@ public:
             source = wallet::MakeRpcOutputSource(method, args, command->path_index, m_connection_scope, error_out);
         } catch (...) {
             // Nothing escapes before the capability is ended below. In process
-            // this runs on the GUI's thread, where an exception would end it.
+            // this runs on a GUI thread (the console's modal worker), and an
+            // exception would reach the GUI's code directly.
             source.reset();
             error_out = strprintf("%s failed", method);
         }
@@ -685,8 +686,8 @@ public:
             sink = wallet::MakeRpcFileSink(method, args, command->path_index, size, command->max_upload_bytes,
                                            m_connection_scope);
         } catch (...) {
-            // In process this runs on the GUI's thread, where an exception
-            // would end it.
+            // In process this runs on a GUI thread (the console's modal
+            // worker), and an exception would reach the GUI's code directly.
             error_out = strprintf("%s could not begin", method);
             return nullptr;
         }

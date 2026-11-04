@@ -413,7 +413,7 @@ bool CheckDestination(const fs::path& dest, const std::vector<fs::path>& core_fi
 
 bool EntryIsSkipped(const FileEntryInfo& info)
 {
-    return !info.note.empty();
+    return info.size == 0 && !info.note.empty();
 }
 
 std::vector<BackupEntryResult> DownloadBackupEntries(FileSource& src, const std::vector<fs::path>& dests,
