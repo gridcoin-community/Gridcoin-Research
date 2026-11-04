@@ -218,8 +218,10 @@ namespace GUIUtil
 
     //! If the command line sets -multiprocess/-nomultiprocess, -ipcdir or -ipcserviceuser, store
     //! them in \p settings ("launchMultiprocess" bool, "launchIpcDir", "launchIpcServiceUser"
-    //! strings); otherwise SoftSet them from \p settings. Used on macOS, where the login item
-    //! (SMAppService.mainApp) cannot carry arguments.
+    //! strings); otherwise SoftSet them from \p settings. A negated or empty -ipcdir or
+    //! -ipcserviceuser means the default: it removes the stored value, and an empty stored value
+    //! is not SoftSet. Used on macOS, where the login item (SMAppService.mainApp) cannot carry
+    //! arguments.
     void ApplyPersistedLaunchMode(QSettings& settings, ArgsManager& args);
 
 } // namespace GUIUtil

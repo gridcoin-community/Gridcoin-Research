@@ -105,6 +105,56 @@ void GUIUtilTests::persistedLaunchModeRoundTrips()
         GUIUtil::ApplyPersistedLaunchMode(settings, args);
         QVERIFY(!args.GetBoolArg("-multiprocess", true));
     }
+
+    // -noipcdir and -noipcserviceuser mean the defaults. They clear what was remembered, so the
+    // next launch takes the defaults too, not the value "0" (which as -ipcdir names <datadir>/0).
+    {
+        ArgsManager args;
+        args.ForceSetArg("-ipcserviceuser", "gridcoin");
+        GUIUtil::ApplyPersistedLaunchMode(settings, args);
+        QCOMPARE(settings.value("launchIpcDir").toString(), QString("/x"));
+        QCOMPARE(settings.value("launchIpcServiceUser").toString(), QString("gridcoin"));
+    }
+    {
+        ArgsManager args;
+        args.LockSettings([](util::Settings& stored) {
+            util::SettingsValue negated;
+            negated.setBool(false);
+            stored.command_line_options["ipcdir"] = {negated};
+            stored.command_line_options["ipcserviceuser"] = {negated};
+        });
+        QVERIFY(args.IsArgNegated("-ipcdir"));
+        QVERIFY(args.IsArgNegated("-ipcserviceuser"));
+        GUIUtil::ApplyPersistedLaunchMode(settings, args);
+        QVERIFY(!settings.contains("launchIpcDir"));
+        QVERIFY(!settings.contains("launchIpcServiceUser"));
+        QVERIFY(args.IsArgNegated("-ipcdir"));
+    }
+    {
+        ArgsManager args;
+        GUIUtil::ApplyPersistedLaunchMode(settings, args);
+        QVERIFY(!args.IsArgSet("-ipcdir"));
+        QVERIFY(!args.IsArgSet("-ipcserviceuser"));
+    }
+
+    // An empty value means the default as well, and is not remembered.
+    {
+        ArgsManager args;
+        args.ForceSetArg("-ipcdir", "/y");
+        GUIUtil::ApplyPersistedLaunchMode(settings, args);
+        QCOMPARE(settings.value("launchIpcDir").toString(), QString("/y"));
+    }
+    {
+        ArgsManager args;
+        args.ForceSetArg("-ipcdir", "");
+        GUIUtil::ApplyPersistedLaunchMode(settings, args);
+        QVERIFY(!settings.contains("launchIpcDir"));
+    }
+    {
+        ArgsManager args;
+        GUIUtil::ApplyPersistedLaunchMode(settings, args);
+        QVERIFY(!args.IsArgSet("-ipcdir"));
+    }
 }
 
 void GUIUtilTests::coreFileOpenDecision()

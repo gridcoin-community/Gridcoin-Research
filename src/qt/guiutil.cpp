@@ -955,11 +955,22 @@ void ApplyPersistedLaunchMode(QSettings& settings, ArgsManager& args)
         const char* key;
     } string_options[] = {{"-ipcdir", "launchIpcDir"}, {"-ipcserviceuser", "launchIpcServiceUser"}};
 
+    // A negated value (-noipcdir) or an empty one means the option's default, as
+    // GetConfiguredOption() reads them. It clears what was remembered, and nothing
+    // empty is restored; GetArg() alone would store a negation as "0".
     for (const auto& entry : string_options) {
         if (args.IsArgSet(entry.option)) {
-            settings.setValue(entry.key, QString::fromStdString(args.GetArg(entry.option, "")));
+            const std::string value = args.IsArgNegated(entry.option) ? std::string() : args.GetArg(entry.option, "");
+
+            if (value.empty()) {
+                settings.remove(entry.key);
+            } else {
+                settings.setValue(entry.key, QString::fromStdString(value));
+            }
         } else if (settings.contains(entry.key)) {
-            args.SoftSetArg(entry.option, settings.value(entry.key).toString().toStdString());
+            const std::string value = settings.value(entry.key).toString().toStdString();
+
+            if (!value.empty()) args.SoftSetArg(entry.option, value);
         }
     }
 }
