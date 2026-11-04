@@ -12,6 +12,7 @@
 #include "node/ui_interface.h"
 #include <random.h>
 #include "util.h"
+#include <util/childreaper.h>
 #include <util/strencodings.h>
 #include <util/string.h>
 
@@ -575,7 +576,7 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
 void runCommand(std::string strCommand)
 {
 #ifndef WIN32
-    int nErr = ::system(strCommand.c_str());
+    int nErr = util::RunShellCommand(strCommand);
 #else
     // The callers run this on threads of their own, where an uncaught exception
     // ends the program, so a command that is not valid UTF-8, as from a
@@ -602,7 +603,7 @@ void runCommand(std::string strCommand)
     int nErr = ::_wsystem(command.c_str());
 #endif
     if (nErr)
-        LogPrintf("runCommand error: system(%s) returned %d", strCommand, nErr);
+        LogPrintf("runCommand error: shell command %s returned %d", strCommand, nErr);
 }
 #endif
 

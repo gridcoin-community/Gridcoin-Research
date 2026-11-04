@@ -310,6 +310,7 @@ add_library(gridcoin_util STATIC
     uint256.cpp
     util.cpp
     util/bip32.cpp
+    util/childreaper.cpp
     util/proc_hardening.cpp
     util/sdnotify.cpp
     util/settings.cpp

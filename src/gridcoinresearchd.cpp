@@ -14,6 +14,7 @@
 #include <util/proc_hardening.h>
 #include <util/syserror.h>
 #include "util/threadnames.h"
+#include <util/childreaper.h>
 #include <util/sdnotify.h>
 #include <util/tokenpipe.h>
 #include "net.h"
@@ -361,6 +362,10 @@ bool AppInit(int argc, char* argv[])
         init_message_connection = uiInterface.InitMessage_connect(
             [](const std::string& message) { sdnotify::ExtendStartTimeout(message); });
 
+        // The daemonizing fork is behind us. Under a PID namespace this process is
+        // process 1 and must reap what the notify commands leave behind.
+        util::StartOrphanReaper();
+
         fRet = AppInit2(threads);
 #if HAVE_DECL_FORK
         if (daemon_ep.IsOpen()) {
@@ -540,6 +545,7 @@ bool AppInit(int argc, char* argv[])
     }
 
     Shutdown(nullptr);
+    util::StopOrphanReaper();
 
     // delete thread handler
     threads->interruptAll();
