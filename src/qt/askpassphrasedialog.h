@@ -43,11 +43,13 @@ public:
 
     void accept();
 
-    //! While the passphrase is being checked, cancels the check and hides the
-    //! prompt at once. A check still waiting for its turn gives up; one already
-    //! checking finishes, and checkFinished() then ends the prompt rejected,
-    //! acting on nothing it found except to end a capability it began and to
-    //! say so if the passphrase did change.
+    //! While the passphrase is being checked, cancels the check and returns;
+    //! the prompt stays open, showing that it is cancelling, until the check
+    //! reports. A check still waiting for its turn in this process gives up at
+    //! once; one already checking, or one waiting in the node's process in the
+    //! split build, finishes first. checkFinished() then ends the prompt
+    //! rejected, acting on nothing the check found except to end a capability
+    //! it began and to say so if the passphrase did change.
     void reject();
 
     void setModel(WalletModel *model);

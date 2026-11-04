@@ -11,12 +11,20 @@
 #include "qt/walletmodel.h"
 #include "util.h"
 
+#include <QApplication>
 #include <QCoreApplication>
 #include <QDialog>
+#include <QDialogButtonBox>
 #include <QElapsedTimer>
+#include <QLabel>
 #include <QLineEdit>
-#include <QSignalSpy>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QStringList>
+#include <QTimer>
+#include <QWidget>
 
+#include <functional>
 #include <memory>
 
 namespace {
@@ -37,9 +45,8 @@ struct ModelOverFakeWallet
     }
 };
 
-//! Lets the fake's beginElevation() return however the case exits, before the
-//! dialog, which joins the check's thread, is destroyed. Declare it after the
-//! dialog.
+//! Lets the fake's waits return however the case exits, before the dialog,
+//! which joins the check's thread, is destroyed. Declare it after the dialog.
 struct ReleaseOnExit
 {
     qt_test::FakeWallet& wallet;
@@ -47,13 +54,68 @@ struct ReleaseOnExit
     ~ReleaseOnExit() { wallet.m_release = true; }
 };
 
-//! Type a passphrase into the prompt and press OK, which starts the check.
+//! What exec() returns when the case's own timeout ended it, which no path of
+//! the prompt does.
+constexpr int TIMED_OUT{2};
+
+//! Type a passphrase into the prompt, and the new one twice for a change, and
+//! press OK, which starts the check.
 void SubmitPassphrase(AskPassphraseDialog& dialog)
 {
-    QLineEdit* const edit = dialog.findChild<QLineEdit*>("oldPassphraseEdit");
-    QVERIFY(edit);
-    edit->setText(QStringLiteral("dialog-test-passphrase"));
+    for (const char* name : {"oldPassphraseEdit", "newPassphraseEdit", "repeatNewPassphraseEdit"}) {
+        QLineEdit* const edit = dialog.findChild<QLineEdit*>(name);
+        QVERIFY(edit);
+        edit->setText(QStringLiteral("dialog-test-passphrase"));
+    }
+
     dialog.accept();
+}
+
+//! What the prompt looked like when the case cancelled it.
+struct AtCancel
+{
+    bool ok_enabled{true};
+    bool cancel_enabled{false};
+    bool visible{false};
+    QString status;
+};
+
+//! Run \p dialog under exec(), as its callers do. From inside the event loop:
+//! submit the passphrase, wait for the fake's check to wait, then cancel the
+//! prompt (reject()), recording what it looked like then, and call
+//! \p after_cancel. A timeout ends the loop after ten seconds whatever happens.
+int ExecAndCancel(AskPassphraseDialog& dialog, qt_test::FakeWallet& wallet, AtCancel& at_cancel,
+                  QElapsedTimer& since_cancel, const std::function<void()>& after_cancel)
+{
+    QTimer::singleShot(0, &dialog, [&dialog] { SubmitPassphrase(dialog); });
+
+    QTimer poll;
+    poll.setInterval(5);
+    QObject::connect(&poll, &QTimer::timeout, &dialog, [&] {
+        if (!wallet.m_waiting) return;
+        poll.stop();
+
+        QDialogButtonBox* const buttons = dialog.findChild<QDialogButtonBox*>("buttonBox");
+        QLabel* const status = dialog.findChild<QLabel*>("statusLabel");
+
+        if (buttons) {
+            at_cancel.ok_enabled = buttons->button(QDialogButtonBox::Ok)->isEnabled();
+            at_cancel.cancel_enabled = buttons->button(QDialogButtonBox::Cancel)->isEnabled();
+        }
+
+        since_cancel.start();
+        dialog.reject();
+
+        at_cancel.visible = dialog.isVisible();
+        if (status) at_cancel.status = status->text();
+
+        if (after_cancel) after_cancel();
+    });
+    poll.start();
+
+    QTimer::singleShot(10000, &dialog, [&dialog] { dialog.done(TIMED_OUT); });
+
+    return dialog.exec();
 }
 
 } // namespace
@@ -101,7 +163,7 @@ void AskPassphraseDialogTests::cleanup()
     m_data_dir.reset();
 }
 
-void AskPassphraseDialogTests::cancelWhileWaitingClosesAtOnce()
+void AskPassphraseDialogTests::cancelWhileWaitingEndsTheLoopAtOnce()
 {
     qt_test::FakeWallet wallet;
     ModelOverFakeWallet fixture(wallet);
@@ -111,37 +173,36 @@ void AskPassphraseDialogTests::cancelWhileWaitingClosesAtOnce()
     dialog.setCapabilityKind(CapabilityKind::Send);
     const ReleaseOnExit release{wallet};
 
-    QSignalSpy finished(&dialog, &QDialog::finished);
+    AtCancel at_cancel;
+    QElapsedTimer since_cancel;
+    const int result = ExecAndCancel(dialog, wallet, at_cancel, since_cancel, {});
+    const qint64 took = since_cancel.elapsed();
 
-    dialog.show();
-    SubmitPassphrase(dialog);
-    QTRY_VERIFY_WITH_TIMEOUT(wallet.m_waiting.load(), 5000);
+    // While the check ran, only OK was disabled, so Cancel could be pressed.
+    QVERIFY(!at_cancel.ok_enabled);
+    QVERIFY(at_cancel.cancel_enabled);
 
-    // Cancelled while its check waits for a turn: the prompt goes at once.
-    QElapsedTimer timer;
-    timer.start();
-    dialog.reject();
-    const qint64 took = timer.elapsed();
+    // Cancelling left the prompt open, saying so, rather than hiding it, which
+    // would have ended exec() with the check still running.
+    QVERIFY(at_cancel.visible);
+    QCOMPARE(at_cancel.status, AskPassphraseDialog::tr("Cancelling..."));
 
-    QVERIFY(!dialog.isVisible());
-    QVERIFY2(took < 1000, qPrintable(QStringLiteral("reject() took %1 ms").arg(took)));
-
-    // The check stopped waiting, because the cancel reached its wait, and the
-    // prompt ends rejected, with nothing begun to end.
-    QTRY_VERIFY_WITH_TIMEOUT(wallet.m_returned.load(), 5000);
+    // The check saw the cancel and gave up, and the prompt ended through its
+    // report: rejected, within a second, with nothing begun to end.
+    QCOMPARE(result, int(QDialog::Rejected));
+    QVERIFY2(took < 1000, qPrintable(QStringLiteral("exec() returned %1 ms after the cancel").arg(took)));
     QVERIFY(wallet.m_saw_cancel.load());
-
-    QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 1, 5000);
-    QCOMPARE(finished.at(0).at(0).toInt(), int(QDialog::Rejected));
+    QVERIFY(wallet.m_returned.load());
     QCOMPARE(wallet.m_end_elevation_calls.load(), 0);
 }
 
-void AskPassphraseDialogTests::lateAcceptanceIsEnded()
+void AskPassphraseDialogTests::cancelPastTheTurnKeepsTheLoopRunning()
 {
     qt_test::FakeWallet wallet;
     ModelOverFakeWallet fixture(wallet);
 
-    // A check already past its turn finishes whatever the cancel says.
+    // A check past its turn, or one waiting in the node's process in the split
+    // build, finishes whatever the cancel says.
     wallet.m_ignore_cancel = true;
 
     AskPassphraseDialog dialog(AskPassphraseDialog::Elevate);
@@ -149,21 +210,78 @@ void AskPassphraseDialogTests::lateAcceptanceIsEnded()
     dialog.setCapabilityKind(CapabilityKind::Send);
     const ReleaseOnExit release{wallet};
 
-    QSignalSpy finished(&dialog, &QDialog::finished);
+    // Counts while the check runs on: the GUI thread is not blocked.
+    int ticks{0};
+    QTimer ticker;
+    ticker.setInterval(10);
+    QObject::connect(&ticker, &QTimer::timeout, &dialog, [&ticks] { ++ticks; });
 
-    dialog.show();
-    SubmitPassphrase(dialog);
-    QTRY_VERIFY_WITH_TIMEOUT(wallet.m_waiting.load(), 5000);
+    int ticks_before_release{0};
+    bool returned_before_release{true};
 
-    dialog.reject();
-    QVERIFY(!dialog.isVisible());
+    AtCancel at_cancel;
+    QElapsedTimer since_cancel;
+    const int result = ExecAndCancel(dialog, wallet, at_cancel, since_cancel, [&] {
+        ticker.start();
 
-    // The passphrase is then accepted. Nothing is waiting for the capability
-    // it began, so the prompt ends it, and still ends rejected.
-    wallet.m_release_result = true;
-    wallet.m_release = true;
+        // Then the passphrase is accepted.
+        QTimer::singleShot(300, &dialog, [&] {
+            ticks_before_release = ticks;
+            returned_before_release = wallet.m_returned;
+            wallet.m_release_result = true;
+            wallet.m_release = true;
+        });
+    });
 
-    QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 1, 5000);
-    QCOMPARE(finished.at(0).at(0).toInt(), int(QDialog::Rejected));
+    QVERIFY(at_cancel.visible);
+
+    // The loop ran on for the 300 ms the check took, and ended only once the
+    // check had reported: rejected, with the capability it began ended, since
+    // no operation was waiting for it.
+    QVERIFY2(ticks_before_release >= 5, qPrintable(QStringLiteral("%1 ticks").arg(ticks_before_release)));
+    QVERIFY(!returned_before_release);
+    QVERIFY(wallet.m_returned.load());
+    QCOMPARE(result, int(QDialog::Rejected));
     QCOMPARE(wallet.m_end_elevation_calls.load(), 1);
+}
+
+void AskPassphraseDialogTests::passphraseChangedAfterCancelIsReported()
+{
+    qt_test::FakeWallet wallet;
+    ModelOverFakeWallet fixture(wallet);
+    wallet.m_ignore_cancel = true;
+
+    AskPassphraseDialog dialog(AskPassphraseDialog::ChangePass);
+    dialog.setModel(&fixture.model);
+    const ReleaseOnExit release{wallet};
+
+    // Closes, and records, a message box the prompt shows.
+    QStringList shown;
+    QTimer closer;
+    closer.setInterval(20);
+    QObject::connect(&closer, &QTimer::timeout, &dialog, [&shown] {
+        for (QWidget* const widget : QApplication::topLevelWidgets()) {
+            QMessageBox* const box = qobject_cast<QMessageBox*>(widget);
+            if (box && box->isVisible()) {
+                shown << box->text();
+                box->accept();
+            }
+        }
+    });
+    closer.start();
+
+    AtCancel at_cancel;
+    QElapsedTimer since_cancel;
+    const int result = ExecAndCancel(dialog, wallet, at_cancel, since_cancel, [&] {
+        // The change goes through after the cancel.
+        QTimer::singleShot(100, &dialog, [&wallet] {
+            wallet.m_release_result = true;
+            wallet.m_release = true;
+        });
+    });
+
+    // The prompt still ends rejected, but the user is told the passphrase did
+    // change.
+    QCOMPARE(result, int(QDialog::Rejected));
+    QCOMPARE(shown, QStringList{AskPassphraseDialog::tr("Wallet passphrase was successfully changed.")});
 }

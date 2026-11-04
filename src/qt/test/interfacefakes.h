@@ -590,11 +590,11 @@ public:
 };
 
 //! Fake interfaces::Wallet: an encrypted wallet unlocked for staking only,
-//! with nothing in it, for the passphrase prompt. beginElevation() blocks, as a
-//! passphrase attempt waiting for its turn does, until the test releases it or
-//! until the attempt is cancelled on its thread (PassphraseAttemptCancel), which
-//! is how the wallet's own wait ends in the monolithic build. Everything else
-//! answers with an empty default.
+//! with nothing in it, for the passphrase prompt. beginElevation() and
+//! changeWalletPassphrase() block, as a passphrase attempt waiting for its turn
+//! does, until the test releases them or until the attempt is cancelled on its
+//! thread (PassphraseAttemptCancel), which is how the wallet's own wait ends in
+//! the monolithic build. Everything else answers with an empty default.
 class FakeWallet : public interfaces::Wallet
 {
 public:
@@ -602,7 +602,8 @@ public:
     std::atomic<bool> m_release{false};
     bool m_release_result{true};
     //! Keep waiting for the release even once cancelled, as a check already
-    //! under way does.
+    //! under way does, or as one waiting in the node's process does in the
+    //! split build, where the cancel cannot reach it.
     std::atomic<bool> m_ignore_cancel{false};
 
     // Observed.
@@ -611,31 +612,15 @@ public:
     std::atomic<bool> m_saw_cancel{false};
     std::atomic<int> m_end_elevation_calls{0};
 
-    bool beginElevation(const SecureString& /*passphrase*/, CapabilityKind /*kind*/) override
-    {
-        m_waiting = true;
-        bool result{false};
-
-        // Ten seconds at most, so that a test that never releases it still ends.
-        for (int i = 0; i < 1000; ++i) {
-            if (m_release) {
-                result = m_release_result;
-                break;
-            }
-
-            if (!m_ignore_cancel && PassphraseAttemptCancel::Requested()) {
-                m_saw_cancel = true;
-                break;
-            }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-
-        m_returned = true;
-        return result;
-    }
+    bool beginElevation(const SecureString& /*passphrase*/, CapabilityKind /*kind*/) override { return Wait(); }
 
     void endElevation() override { ++m_end_elevation_calls; }
+
+    bool changeWalletPassphrase(const SecureString& /*old_passphrase*/,
+                                const SecureString& /*new_passphrase*/) override
+    {
+        return Wait();
+    }
 
     interfaces::WalletLockState getLockState() override
     {
@@ -660,11 +645,6 @@ public:
     bool restrictToStakingOnly() override { return false; }
     bool elevateWallet(const SecureString& /*passphrase*/) override { return false; }
     bool unlockWallet(const SecureString& /*passphrase*/, bool /*staking_only*/) override { return false; }
-    bool changeWalletPassphrase(const SecureString& /*old_passphrase*/,
-                                const SecureString& /*new_passphrase*/) override
-    {
-        return false;
-    }
     bool getPubKey(const CKeyID& /*address*/, CPubKey& /*pub_key_out*/) override { return false; }
     bool getKeyFromPool(const std::string& /*label*/, CPubKey& /*pub_key_out*/) override { return false; }
     std::vector<interfaces::WalletOutput> getOutputs(const std::vector<COutPoint>& /*outpoints*/) override
@@ -721,6 +701,33 @@ public:
     std::unique_ptr<interfaces::Handler> handleTransactionChanged(TransactionChangedFn /*fn*/) override
     {
         return interfaces::MakeCleanupHandler([] {});
+    }
+
+private:
+    //! A passphrase attempt's wait: until released, with m_release_result, or
+    //! until cancelled, with false.
+    bool Wait()
+    {
+        m_waiting = true;
+        bool result{false};
+
+        // Ten seconds at most, so that a test that never releases it still ends.
+        for (int i = 0; i < 1000; ++i) {
+            if (m_release) {
+                result = m_release_result;
+                break;
+            }
+
+            if (!m_ignore_cancel && PassphraseAttemptCancel::Requested()) {
+                m_saw_cancel = true;
+                break;
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        m_returned = true;
+        return result;
     }
 };
 

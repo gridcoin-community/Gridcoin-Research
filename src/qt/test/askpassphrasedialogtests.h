@@ -14,9 +14,12 @@
 #include <memory>
 
 //! AskPassphraseDialog over a WalletModel made on qt_test::FakeWallet, whose
-//! beginElevation() waits as a passphrase attempt waits for its turn. The
-//! prompt can be cancelled while its check waits: it closes at once, and the
-//! check's outcome is not acted on.
+//! passphrase calls wait as a passphrase attempt waits for its turn. Each case
+//! runs the prompt under exec(), as its callers do, and cancels it from inside
+//! the event loop while its check waits. A check that sees the cancel gives up
+//! and the prompt ends at once; one that does not keeps the prompt open, with
+//! the event loop running, until it reports, and the prompt then acts only on
+//! what it must: ending a capability begun, reporting a passphrase changed.
 class AskPassphraseDialogTests : public QObject
 {
     Q_OBJECT
@@ -27,8 +30,9 @@ private slots:
     void init();
     void cleanup();
 
-    void cancelWhileWaitingClosesAtOnce();
-    void lateAcceptanceIsEnded();
+    void cancelWhileWaitingEndsTheLoopAtOnce();
+    void cancelPastTheTurnKeepsTheLoopRunning();
+    void passphraseChangedAfterCancelIsReported();
 
 private:
     // The QSettings redirect OptionsModel needs (as in OptionsModelTests), and

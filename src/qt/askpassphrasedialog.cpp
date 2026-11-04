@@ -88,10 +88,10 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
 AskPassphraseDialog::~AskPassphraseDialog()
 {
     // A check still running holds this dialog's address, so it must finish
-    // first. That is reached only when the application quits under an open
-    // prompt: a cancelled prompt stays until its check reports. Cancelled
-    // first, so that a check still waiting for its turn gives up rather than
-    // holding the quit up.
+    // first. The prompt stays open until its check reports, cancelled or not,
+    // so that is reached only when the application quits under an open
+    // prompt. Cancelled first, so that a check still waiting for its turn in
+    // this process gives up rather than holding the quit up.
     if (m_check.joinable()) {
         if (m_check_cancel) *m_check_cancel = true;
         m_check.join();
@@ -330,16 +330,18 @@ void AskPassphraseDialog::accept()
 
 void AskPassphraseDialog::reject()
 {
-    // The prompt goes at once, without waiting for the check. In the
-    // monolithic build a check still waiting for its turn sees the cancel and
-    // gives up; one already deriving the key, or, in the split build, one
-    // waiting in the node's process, which this cannot reach, finishes in the
-    // background. The prompt stays in being, hidden, until checkFinished()
-    // ends it, so the check's thread always has a dialog to report to.
+    // Cancels the check rather than waiting for it here, and the prompt stays
+    // open, saying so, until the check reports: checkFinished() then ends it.
+    // It must not be hidden or closed now. Hiding ends exec(), and the dialog's
+    // owner would then destroy it, which joins the check on the GUI thread. In
+    // the monolithic build a check still waiting for its turn sees the cancel
+    // and gives up at once. One already deriving the key finishes first, and
+    // so, in the split build, does one waiting in the node's process, which
+    // the cancel cannot reach; the event loop runs meanwhile.
     if (m_check.joinable()) {
         if (m_check_cancel) *m_check_cancel = true;
         m_check_cancelled = true;
-        hide();
+        ui->statusLabel->setText(tr("Cancelling..."));
         return;
     }
 
@@ -412,13 +414,17 @@ void AskPassphraseDialog::setChecking(bool checking)
     ui->newPassphraseEdit->setEnabled(!checking);
     ui->repeatNewPassphraseEdit->setEnabled(!checking);
     ui->stakingCheckBox->setEnabled(!checking);
-    ui->buttonBox->setEnabled(!checking);
 
+    // Of the buttons only OK is disabled: Cancel stays available while the
+    // check runs, and cancels it (reject()). Afterwards OK follows the fields
+    // again.
     if (checking) {
+        ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
         ui->statusLabel->setText(mode == ChangePass ? tr("Changing the passphrase...")
                                                     : tr("Checking the passphrase..."));
         setCursor(Qt::BusyCursor);
     } else {
+        textChanged();
         ui->statusLabel->clear();
         unsetCursor();
         ui->oldPassphraseEdit->setFocus();
@@ -450,7 +456,7 @@ void AskPassphraseDialog::checkFinished()
         }
 
         if (m_check_accepted && mode == ChangePass) {
-            QMessageBox::information(parentWidget(), tr("Wallet encrypted"),
+            QMessageBox::information(this, tr("Wallet encrypted"),
                                      tr("Wallet passphrase was successfully changed."));
         }
 
