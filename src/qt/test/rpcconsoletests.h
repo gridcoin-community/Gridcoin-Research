@@ -57,6 +57,7 @@ private slots:
     void downloadFirstReadErrorIsShown();
     void downloadToACoreFileIsRefusedBeforeThePrompt();
     void downloadKeepsAnExistingFile();
+    void downloadToADestinationThatCannotBeCheckedSaysSo();
     void downloadCancelLeavesNothing();
     void beginThatThrowsIsShown();
     void uploadSendsTheFileAndShowsTheOutput();

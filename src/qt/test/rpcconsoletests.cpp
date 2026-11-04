@@ -1163,6 +1163,51 @@ void RPCConsoleTests::downloadKeepsAnExistingFile()
              refusals);
 }
 
+// A destination that cannot be examined, here under a directory this account may not search, is
+// refused before the prompt as one that exists is, and the pane says why it was refused rather than
+// that a file is there.
+void RPCConsoleTests::downloadToADestinationThatCannotBeCheckedSaysSo()
+{
+#ifdef WIN32
+    QSKIP("A directory that cannot be searched is made with POSIX modes.");
+#else
+    if (::geteuid() == 0) QSKIP("Running as root, which may search any directory.");
+
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const fs::path closed = PathIn(dir, "closed");
+    QVERIFY(fs::create_directory(closed));
+    const fs::path dest = closed / "dump.txt";
+
+    // Searchable again however the case ends, so the temporary directory can be removed.
+    struct Reopen {
+        fs::path path;
+        ~Reopen() { ::chmod(path.c_str(), 0700); }
+    } reopen{closed};
+    QCOMPARE(::chmod(closed.c_str(), 0), 0);
+
+    ConsoleWallet fixture;
+    fixture.UnlockedForStakingOnly();
+    fixture.wallet.m_console_download = [](const std::string&, const std::vector<std::string>&, std::string&) {
+        return std::unique_ptr<interfaces::FileSource>();
+    };
+
+    RPCConsole console;
+    console.setWalletModel(fixture.model.get());
+    Enter(console, QStringLiteral("dumpwallet ") + Quoted(dest));
+
+    QVERIFY(fixture.prompts.empty());
+    QCOMPARE(fixture.wallet.m_begin_elevation_calls, 0);
+    QVERIFY(fixture.wallet.m_console_begins.empty());
+
+    const QString pane = PaneText(console);
+    QVERIFY2(pane.contains(QStringLiteral("Cannot check the destination %1: ").arg(GUIUtil::boostPathToQString(dest))),
+             qPrintable(pane));
+    QVERIFY2(!pane.contains(QStringLiteral("File already exists")), qPrintable(pane));
+#endif
+}
+
 // Cancel during a download stops it: nothing is at the destination, no partial file is left, and
 // the pane says so.
 void RPCConsoleTests::downloadCancelLeavesNothing()

@@ -268,10 +268,15 @@ void WriteWalletDump(CWallet& wallet, const std::string& filename)
 
     // Nothing at the path is written over: a bare name lands in the data
     // directory, among the node's own files. A symbolic link counts, also one
-    // that leads nowhere, and so does a path that cannot be examined. Refused
-    // before the file is opened, so nothing there is truncated or removed.
+    // that leads nowhere. A path that cannot be examined is refused too, with
+    // the reason it could not be. Refused before the file is opened, so nothing
+    // there is truncated or removed.
     boost::system::error_code ec;
     if (fs::symlink_status(PathForDump, ec).type() != fs::file_not_found) {
+        if (ec) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Cannot check the destination %s: %s",
+                                                                PathForDump.string(), ec.message()));
+        }
         throw JSONRPCError(RPC_INVALID_PARAMETER,
                            "File already exists at location. Please delete or rename old file first.");
     }

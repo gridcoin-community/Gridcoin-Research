@@ -1203,11 +1203,16 @@ void RPCConsole::runFileCommand(const RPCConsoleDetail::ConsoleFileRequest& requ
         }
 
         // A download never replaces what is there: a bare name lands in the data directory, among
-        // files the check above does not list. A link counts, also one that leads nowhere, and so
-        // does anything that cannot be examined.
+        // files the check above does not list. A link counts, also one that leads nowhere. A path
+        // that cannot be examined is refused too, with the reason it could not be.
         boost::system::error_code ec;
         if (fs::symlink_status(request.local_path, ec).type() != fs::file_not_found) {
-            message(CMD_ERROR, tr("File already exists at location. Please delete or rename old file first."));
+            if (ec) {
+                message(CMD_ERROR,
+                        tr("Cannot check the destination %1: %2").arg(path, QString::fromStdString(ec.message())));
+            } else {
+                message(CMD_ERROR, tr("File already exists at location. Please delete or rename old file first."));
+            }
             return;
         }
     } else {

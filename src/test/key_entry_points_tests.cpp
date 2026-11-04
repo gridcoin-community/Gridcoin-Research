@@ -1686,6 +1686,30 @@ BOOST_AUTO_TEST_CASE(dumpwallet_refuses_an_existing_destination)
         fs::remove(target);
     }
 
+    // A path that cannot be examined, under a directory this account may not
+    // search, is refused with the reason, not as a file that exists. Where the
+    // directory can still be searched (as root) this part is skipped.
+    const fs::path closed = GetDataDir() / "key_entry_points_closed";
+    const fs::path unexaminable = closed / DUMP_FILE;
+    fs::create_directories(closed);
+    fs::permissions(closed, fs::no_perms);
+
+    boost::system::error_code probe;
+    fs::symlink_status(unexaminable, probe);
+
+    if (probe) {
+        const Outcome unexamined = Call("dumpwallet", {unexaminable.string()});
+        const std::string expected = "Cannot check the destination " + unexaminable.string() + ": ";
+
+        BOOST_CHECK_MESSAGE(unexamined.code == RPC_INVALID_PARAMETER, unexamined.Describe());
+        BOOST_CHECK_MESSAGE(unexamined.message.rfind(expected, 0) == 0, unexamined.message);
+    } else {
+        BOOST_TEST_MESSAGE("the directory can still be searched; skipping");
+    }
+
+    fs::permissions(closed, fs::owner_all);
+    fs::remove_all(closed);
+
     // Where nothing is, the dump is written.
     const Outcome fresh = Call("dumpwallet", {DUMP_FILE});
     BOOST_CHECK_MESSAGE(fresh.returned, fresh.Describe());
