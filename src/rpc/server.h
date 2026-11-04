@@ -19,6 +19,7 @@
 #include <optional>
 
 class CBlockIndex;
+class CWallet;
 class uint256;
 // Forward-declare RPCHelpMan rather than #include <rpc/util.h>: the util
 // header transitively defines `enum class Optional { NO, ... }`, and on
@@ -157,6 +158,17 @@ extern UniValue ValueFromAmount(int64_t amount);
 
 extern std::string HelpRequiringPassphrase();
 extern void EnsureWalletIsUnlocked();
+
+//! \brief Everything dumpwallet does after its unlock check: write every key
+//! \p wallet holds to \p filename, a bare name resolving to the data directory.
+//!
+//! A key the wallet holds that cannot be read on this thread -- withheld while
+//! the wallet is unlocked for staking only, or one that does not decrypt --
+//! fails the dump rather than being left out of it: it throws
+//! RPC_WALLET_UNLOCK_NEEDED, or RPC_WALLET_ERROR when the wallet may use its
+//! keys. On that or any other failure part way through, the file is removed
+//! before the error leaves.
+void WriteWalletDump(CWallet& wallet, const std::string& filename);
 
 //! \brief Take a request's elevation header out of its headers.
 //!

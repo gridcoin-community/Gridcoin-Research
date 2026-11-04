@@ -56,6 +56,7 @@
 #include <algorithm>
 #include <exception>
 #include <functional>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
@@ -1299,6 +1300,105 @@ BOOST_AUTO_TEST_CASE(every_key_reaching_ipc_method_refuses_while_staking_only)
 BOOST_AUTO_TEST_CASE(ipc_pool_draws_make_no_key_while_staking_only)
 {
     DriveIpcRows(find_value(Table(), "ipc_pool_draw"));
+}
+
+//! What a call that should fail threw: its RPC error code and message, or
+//! nullopt and the exception's text when it threw something else.
+template <typename Fn>
+std::pair<std::optional<int>, std::string> RpcError(Fn&& fn)
+{
+    try {
+        fn();
+    } catch (const UniValue& error) {
+        return {find_value(error, "code").get_int(), find_value(error, "message").getValStr()};
+    } catch (const std::exception& e) {
+        return {std::nullopt, e.what()};
+    }
+
+    return {std::nullopt, "returned"};
+}
+
+//! dumpwallet writes every key the wallet holds or no dump at all: a key it
+//! cannot read fails the dump, and the file it had begun is removed.
+BOOST_AUTO_TEST_CASE(dumpwallet_writes_no_dump_with_a_key_missing)
+{
+    const fs::path path = GetDataDir() / DUMP_FILE;
+    fs::remove(path);
+
+    // Unlocked for staking only, and past the RPC's own unlock check, which
+    // refuses before the writer runs: the writer refuses at the first key it
+    // cannot read.
+    {
+        KeyReachWallet fx(WalletOptions{});
+        fx.UnlockFor(UnlockScope::StakingOnly);
+
+        // A file already there is replaced by a dump or by nothing.
+        fsbridge::ofstream(path) << "an earlier file\n";
+
+        const auto [code, message] = RpcError([&] { WriteWalletDump(fx.wallet, DUMP_FILE); });
+
+        BOOST_CHECK(code == RPC_WALLET_UNLOCK_NEEDED);
+        BOOST_CHECK_MESSAGE(message.rfind("dumpwallet: cannot read the key for ", 0) == 0, message);
+        BOOST_CHECK(!fs::exists(path));
+    }
+
+    // Fully unlocked, with one key that does not decrypt: the RPC itself fails,
+    // names the key, and leaves no file.
+    {
+        KeyReachWallet fx(WalletOptions{});
+        fx.UnlockFor(UnlockScope::Full);
+
+        // Two blocks of ciphertext decrypt to at most 31 bytes, never a key.
+        CKey broken;
+        broken.MakeNewKey(true);
+        const CKeyID broken_id = broken.GetPubKey().GetID();
+        {
+            LOCK(fx.wallet.cs_wallet);
+            BOOST_REQUIRE(fx.wallet.AddCryptedKey(broken.GetPubKey(), std::vector<unsigned char>(32, 0x5a)));
+        }
+
+        CKey read_back;
+        BOOST_REQUIRE(fx.wallet.HaveKey(broken_id));
+        BOOST_REQUIRE(!fx.wallet.GetKey(broken_id, read_back));
+
+        const Outcome outcome = Call("dumpwallet", {DUMP_FILE});
+
+        BOOST_CHECK_MESSAGE(outcome.code == RPC_WALLET_ERROR, outcome.Describe());
+        BOOST_CHECK_EQUAL(outcome.message, "dumpwallet: cannot read the key for "
+                                           + EncodeDestination(CTxDestination(broken_id)));
+        BOOST_CHECK(!fs::exists(path));
+    }
+
+    // Fully unlocked with every key readable: the dump holds each of them, the
+    // HD master's extended key and the end marker.
+    {
+        KeyReachWallet fx(WalletOptions{});
+        fx.UnlockFor(UnlockScope::Full);
+
+        const Outcome outcome = Call("dumpwallet", {DUMP_FILE});
+        BOOST_REQUIRE_MESSAGE(outcome.returned, outcome.Describe());
+
+        std::string dump;
+        {
+            fsbridge::ifstream file(path);
+            dump.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+        }
+        fs::remove(path);
+
+        std::set<CKeyID> ids;
+        fx.wallet.GetKeys(ids);
+        BOOST_REQUIRE(ids.size() > 1);
+
+        for (const CKeyID& id : ids) {
+            CKey key;
+            BOOST_REQUIRE(fx.wallet.GetKey(id, key));
+            BOOST_CHECK_MESSAGE(dump.find(EncodeSecret(key) + " ") != std::string::npos,
+                                "the dump leaves out " << EncodeDestination(CTxDestination(id)));
+        }
+
+        BOOST_CHECK(dump.find("# extended private masterkey: ") != std::string::npos);
+        BOOST_CHECK(dump.size() > 14 && dump.compare(dump.size() - 14, 14, "# End of dump\n") == 0);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

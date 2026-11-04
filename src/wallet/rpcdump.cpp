@@ -363,11 +363,53 @@ static const RPCHelpMan dumpwallet_help{
 };
 const RPCHelpMan& dumpwallet_helpman() { return dumpwallet_help; }
 
-UniValue dumpwallet(const UniValue& params)
-{
-    EnsureWalletIsUnlocked();
+namespace {
 
-    fs::path PathForDump = fs::path(params[0].get_str());
+//! Removes a dump file that was not written to the end, however the writer
+//! leaves: a dump with keys missing must not stay on disk looking complete.
+class PartialDumpRemover
+{
+public:
+    PartialDumpRemover(fsbridge::ofstream& file, const fs::path& path) : m_file(file), m_path(path) {}
+
+    ~PartialDumpRemover()
+    {
+        if (m_complete) return;
+
+        m_file.close();
+
+        // A destructor may not throw, and a file that cannot be removed leaves
+        // nothing better to do here.
+        try {
+            fs::remove(m_path);
+        } catch (const std::exception&) {
+        }
+    }
+
+    PartialDumpRemover(const PartialDumpRemover&) = delete;
+    PartialDumpRemover& operator=(const PartialDumpRemover&) = delete;
+
+    void Complete() { m_complete = true; }
+
+private:
+    fsbridge::ofstream& m_file;
+    const fs::path m_path;
+    bool m_complete{false};
+};
+
+//! The refusal for a key \p wallet holds but cannot read: the keys are withheld
+//! from this thread, or the key does not decrypt.
+UniValue UnreadableKeyError(const CWallet& wallet, const CKeyID& id)
+{
+    return JSONRPCError(wallet.CanUseKeys() ? RPC_WALLET_ERROR : RPC_WALLET_UNLOCK_NEEDED,
+                        "dumpwallet: cannot read the key for " + EncodeDestination(id));
+}
+
+} // namespace
+
+void WriteWalletDump(CWallet& wallet, const std::string& filename)
+{
+    fs::path PathForDump = fs::path(filename);
     fs::path DefaultPathDataDir = GetDataDir();
 
     // If provided filename does not have a path, then append parent path, otherwise leave alone.
@@ -379,15 +421,17 @@ UniValue dumpwallet(const UniValue& params)
     if (!file.is_open())
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
 
+    PartialDumpRemover remover(file, PathForDump);
+
     std::map<CKeyID, int64_t> mapKeyBirth;
 
     std::set<CKeyID> setKeyPool;
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, wallet.cs_wallet);
 
-    pwalletMain->GetKeyBirthTimes(mapKeyBirth);
+    wallet.GetKeyBirthTimes(mapKeyBirth);
 
-    pwalletMain->GetAllReserveKeys(setKeyPool);
+    wallet.GetAllReserveKeys(setKeyPool);
 
     // sort time/key pairs
     std::vector<std::pair<int64_t, CKeyID> > vKeyBirth;
@@ -405,16 +449,22 @@ UniValue dumpwallet(const UniValue& params)
     file << "\n";
 
     // add the base58check encoded extended master if the wallet uses HD
-    CKeyID masterKeyID = pwalletMain->GetHDChain().masterKeyID;
+    CKeyID masterKeyID = wallet.GetHDChain().masterKeyID;
     if (!masterKeyID.IsNull())
     {
         CKey key;
-        if (pwalletMain->GetKey(masterKeyID, key))
+        if (wallet.GetKey(masterKeyID, key))
         {
             CExtKey masterKey;
             masterKey.SetSeed(key);
 
             file << "# extended private masterkey: " << EncodeExtKey(masterKey) << "\n\n";
+        }
+        else if (wallet.HaveKey(masterKeyID))
+        {
+            // A master the wallet holds but cannot read fails the dump, as any
+            // other key does below.
+            throw UnreadableKeyError(wallet, masterKeyID);
         }
     }
     for (std::vector<std::pair<int64_t, CKeyID> >::const_iterator it = vKeyBirth.begin(); it != vKeyBirth.end(); it++) {
@@ -423,22 +473,36 @@ UniValue dumpwallet(const UniValue& params)
         std::string strAddr = EncodeDestination(keyid);
 
         CKey key;
-        if (pwalletMain->GetKey(keyid, key)) {
-            file << strprintf("%s %s ", EncodeSecret(key), strTime);
-            if (pwalletMain->mapAddressBook.count(keyid)) {
-                file << strprintf("label=%s", EncodeDumpString(pwalletMain->mapAddressBook[keyid].name));
-            } else if (keyid == masterKeyID) {
-                file << "hdmaster=1";
-            } else if (setKeyPool.count(keyid)) {
-                file << "reserve=1";
-            } else {
-                file << "change=1";
-            }
-            file << strprintf(" # addr=%s%s\n", strAddr, (pwalletMain->mapKeyMetadata[keyid].hdKeypath.size() > 0 ? " hdkeypath="+pwalletMain->mapKeyMetadata[keyid].hdKeypath : ""));
+        if (!wallet.GetKey(keyid, key)) {
+            // Every key listed here is one the wallet holds. Skipping it would
+            // write a dump that looks complete and is not.
+            throw UnreadableKeyError(wallet, keyid);
         }
+
+        file << strprintf("%s %s ", EncodeSecret(key), strTime);
+        if (wallet.mapAddressBook.count(keyid)) {
+            file << strprintf("label=%s", EncodeDumpString(wallet.mapAddressBook[keyid].name));
+        } else if (keyid == masterKeyID) {
+            file << "hdmaster=1";
+        } else if (setKeyPool.count(keyid)) {
+            file << "reserve=1";
+        } else {
+            file << "change=1";
+        }
+        file << strprintf(" # addr=%s%s\n", strAddr, (wallet.mapKeyMetadata[keyid].hdKeypath.size() > 0 ? " hdkeypath="+wallet.mapKeyMetadata[keyid].hdKeypath : ""));
     }
     file << "\n";
     file << "# End of dump\n";
     file.close();
+
+    remover.Complete();
+}
+
+UniValue dumpwallet(const UniValue& params)
+{
+    EnsureWalletIsUnlocked();
+
+    WriteWalletDump(*pwalletMain, params[0].get_str());
+
     return NullUniValue;
 }
