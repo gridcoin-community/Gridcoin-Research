@@ -26,12 +26,14 @@
 #include <QWidget>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <fstream>
 #include <future>
 #include <iterator>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -253,6 +255,102 @@ private:
     std::atomic<std::thread::id> m_thread{};
     std::atomic<std::thread::id> m_destroyed_on{};
     std::atomic<int> m_reads{-1};
+};
+
+//! What a TwoEntrySource and the test share: the source goes with its job, and the test's
+//! observer may still look after that.
+struct TwoEntryGates
+{
+    Mutex mutex;
+    std::condition_variable cv;
+    //! The entry whose gated read waits, or -1.
+    int waiting GUARDED_BY(mutex){-1};
+    std::array<bool, 2> released GUARDED_BY(mutex){};
+
+    int Waiting()
+    {
+        LOCK(mutex);
+        return waiting;
+    }
+
+    void Release(int entry)
+    {
+        LOCK(mutex);
+        released.at(static_cast<size_t>(entry)) = true;
+        cv.notify_all();
+    }
+};
+
+//! A source of two entries, as a backup of the wallet and its configuration file, each sent in
+//! chunks of GatedSource::CHUNK. The second read of each entry waits until the test releases it.
+class TwoEntrySource : public interfaces::FileSource
+{
+public:
+    TwoEntrySource(std::array<std::vector<unsigned char>, 2> data, std::shared_ptr<TwoEntryGates> gates)
+        : m_data(std::move(data)), m_gates(std::move(gates))
+    {
+    }
+
+    std::vector<interfaces::FileEntryInfo> entries() override
+    {
+        std::vector<interfaces::FileEntryInfo> infos;
+
+        for (size_t i = 0; i < m_data.size(); ++i) {
+            interfaces::FileEntryInfo e;
+            e.name = i == 0 ? "wallet.dat" : "gridcoinresearch.conf";
+            e.size = static_cast<int64_t>(m_data[i].size());
+            e.size_hint = m_data[i].size();
+            infos.push_back(e);
+        }
+
+        return infos;
+    }
+
+    interfaces::FileChunk read(uint32_t entry, uint32_t max_bytes) override
+    {
+        interfaces::FileChunk c;
+
+        if (entry >= m_data.size() || m_cancelled) {
+            c.error = "no such read";
+            return c;
+        }
+
+        if (++m_reads[entry] == 2) {
+            WAIT_LOCK(m_gates->mutex, lock);
+            m_gates->waiting = static_cast<int>(entry);
+            m_gates->cv.wait(lock, [this, entry]() EXCLUSIVE_LOCKS_REQUIRED(m_gates->mutex) {
+                return m_gates->released[entry];
+            });
+            m_gates->waiting = -1;
+        }
+
+        const std::vector<unsigned char>& data = m_data[entry];
+        const size_t len =
+            std::min<size_t>({static_cast<size_t>(max_bytes), GatedSource::CHUNK, data.size() - m_pos[entry]});
+        c.data.assign(data.begin() + m_pos[entry], data.begin() + m_pos[entry] + len);
+        m_pos[entry] += len;
+        c.eof = m_pos[entry] == data.size();
+        return c;
+    }
+
+    interfaces::FileTrailer trailer(uint32_t entry) override
+    {
+        interfaces::FileTrailer t;
+        t.ok = true;
+        t.size = m_data.at(entry).size();
+        t.sha256 = Sha256Of(m_data.at(entry));
+        return t;
+    }
+
+    void cancel() override { m_cancelled = true; }
+
+private:
+    const std::array<std::vector<unsigned char>, 2> m_data;
+    const std::shared_ptr<TwoEntryGates> m_gates;
+    //! Read by the worker thread only.
+    std::array<size_t, 2> m_pos{};
+    std::array<int, 2> m_reads{};
+    std::atomic<bool> m_cancelled{false};
 };
 
 //! The progress dialog, if one is showing.
@@ -642,6 +740,70 @@ void FileTransferDialogTests::cancelWhileTheBackupBeginsSavesNothing()
     QVERIFY(!fs::exists(dest));
     QCOMPARE(EntriesIn(dir), 0);
     QVERIFY(!VisibleProgressDialog());
+}
+
+// The backup's one dialog names the file being saved and its place in the run, so the byte count
+// starting again for the second file reads as a new file: "Saving <destination> (1 of 2)", then
+// "(2 of 2)".
+void FileTransferDialogTests::backupDialogNamesTheFileBeingSaved()
+{
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const fs::path wallet_dest = GUIUtil::qstringToBoostPath(dir.path()) / "wallet.dat";
+    const fs::path conf_dest = GUIUtil::qstringToBoostPath(dir.path()) / "gridcoinresearch.conf";
+
+    const std::array<std::vector<unsigned char>, 2> data{Bytes(3 * GatedSource::CHUNK),
+                                                         Bytes(2 * GatedSource::CHUNK + 7)};
+    const auto gates = std::make_shared<TwoEntryGates>();
+    std::array<QString, 2> labels;
+
+    QTimer observer;
+    connect(&observer, &QTimer::timeout, this, [&] {
+        const int entry = gates->Waiting();
+        QProgressDialog* dialog = VisibleProgressDialog();
+        if (entry < 0 || !dialog) return;
+
+        // Once the dialog shows the entry's own first chunk of its own total.
+        const QString counts = QString("%1 of %2 bytes")
+                                   .arg(GatedSource::CHUNK)
+                                   .arg(data.at(static_cast<size_t>(entry)).size());
+        if (!dialog->labelText().contains(counts)) return;
+
+        labels.at(static_cast<size_t>(entry)) = dialog->labelText();
+        gates->Release(entry);
+    });
+    observer.start(5);
+
+    QTimer backstop;
+    backstop.setSingleShot(true);
+    connect(&backstop, &QTimer::timeout, this, [&gates] {
+        gates->Release(0);
+        gates->Release(1);
+    });
+    backstop.start(5000);
+
+    std::vector<interfaces::BackupEntryResult> results;
+    std::string error;
+    const bool begun = RunBackupWithProgress(
+        nullptr, "Backup Wallet",
+        [&data, gates](std::string&) -> std::unique_ptr<interfaces::FileSource> {
+            return std::make_unique<TwoEntrySource>(data, gates);
+        },
+        {wallet_dest, conf_dest}, results, error);
+    observer.stop();
+    backstop.stop();
+
+    QVERIFY2(begun, error.c_str());
+    QCOMPARE(results.size(), size_t{2});
+    QVERIFY(results[0].outcome.status == interfaces::TransferStatus::Ok);
+    QVERIFY(results[1].outcome.status == interfaces::TransferStatus::Ok);
+
+    const QString first = QString("Saving %1 (1 of 2)").arg(GUIUtil::boostPathToQString(wallet_dest));
+    const QString second = QString("Saving %1 (2 of 2)").arg(GUIUtil::boostPathToQString(conf_dest));
+    QVERIFY2(labels[0].startsWith(first + "\n"), qPrintable(labels[0]));
+    QVERIFY2(labels[1].startsWith(second + "\n"), qPrintable(labels[1]));
+    QVERIFY(ReadAll(conf_dest) == std::string(data[1].begin(), data[1].end()));
 }
 
 void FileTransferDialogTests::guardFilesComeFromTheCorePaths()

@@ -58,7 +58,8 @@ using BackupBeginFn = std::function<std::unique_ptr<interfaces::FileSource>(std:
 //! then each entry saved to the destination at the same index of \p dests (DownloadBackupEntries),
 //! then the source's destruction, which deletes what the core has not sent. The begin makes the
 //! core copy the items, which takes as long as the wallet is large; the dialog says "Preparing the
-//! backup..." meanwhile, and shows the bytes of each entry once they arrive. A cancel while the
+//! backup..." meanwhile, then names each entry's destination and its place in the run ("Saving
+//! <path> (1 of 2)") with the bytes of that entry once they arrive. A cancel while the
 //! copies are made takes effect when the begin returns: nothing is written, and the first entry's
 //! outcome is Cancelled. The backup has always finished when this returns.
 //!

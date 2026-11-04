@@ -23,6 +23,7 @@ private slots:
     void jobShowsItsBytesOnceReportedAndIsToldOfCancel();
     void backupBeginsOnTheWorkerWhileTheWindowRuns();
     void cancelWhileTheBackupBeginsSavesNothing();
+    void backupDialogNamesTheFileBeingSaved();
     void guardFilesComeFromTheCorePaths();
     void backupResultText();
     // Last: it tells the application to quit, then clears that again.

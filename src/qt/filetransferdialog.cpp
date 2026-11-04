@@ -57,10 +57,11 @@ QString CountsText(uint64_t done, int64_t total)
 
 //! Run \p transfer on the process's worker while a modal dialog shows its progress, and
 //! return its result once it has finished. The dialog shows \p what until the transfer
-//! reports bytes, then \p reported with them. \p failed makes the result for a transfer that
-//! could not run, or that threw.
+//! reports bytes, then what \p reported says, read on the GUI thread at each update, with them.
+//! \p failed makes the result for a transfer that could not run, or that threw.
 template <typename Result>
-Result RunWithProgress(QWidget* parent, const QString& title, const QString& what, const QString& reported,
+Result RunWithProgress(QWidget* parent, const QString& title, const QString& what,
+                       const std::function<QString()>& reported,
                        std::function<Result(const interfaces::ProgressFn&, const std::atomic<bool>&)> transfer,
                        std::function<Result(const std::string&)> failed)
 {
@@ -151,7 +152,7 @@ Result RunWithProgress(QWidget* parent, const QString& title, const QString& wha
             const uint64_t done = job->done;
             const int64_t total = job->total;
 
-            dialog.setLabelText(reported + "\n" + CountsText(done, total));
+            dialog.setLabelText(reported() + "\n" + CountsText(done, total));
 
             if (total > 0) {
                 const uint64_t permille = std::min<uint64_t>(done, static_cast<uint64_t>(total)) * 1000 /
@@ -200,7 +201,7 @@ interfaces::TransferOutcome RunDownloadWithProgress(QWidget* parent, const QStri
     const QString what = QObject::tr("Saving %1").arg(GUIUtil::boostPathToQString(dest));
 
     return RunWithProgress<interfaces::TransferOutcome>(
-        parent, title, what, what,
+        parent, title, what, [what] { return what; },
         [&src, entry, dest](const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel) {
             return interfaces::DownloadEntry(src, entry, dest, progress, cancel);
         },
@@ -218,7 +219,7 @@ interfaces::FileSinkResult RunUploadWithProgress(QWidget* parent, const QString&
     const QString what = QObject::tr("Sending %1").arg(GUIUtil::boostPathToQString(local));
 
     return RunWithProgress<interfaces::FileSinkResult>(
-        parent, title, what, what,
+        parent, title, what, [what] { return what; },
         [&sink, local](const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel) {
             return interfaces::UploadFile(sink, local, progress, cancel);
         },
@@ -240,7 +241,7 @@ bool RunJobWithProgress(QWidget* parent, const QString& title, const QString& wh
     };
 
     const JobResult result = RunWithProgress<JobResult>(
-        parent, title, what, what,
+        parent, title, what, [what] { return what; },
         [job = std::move(job)](const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel) {
             job(progress, cancel);
 
@@ -272,9 +273,22 @@ bool RunBackupWithProgress(QWidget* parent, const QString& title, BackupBeginFn 
     results.clear();
     error.clear();
 
+    // The entry being saved, which the job sets as each download starts and the dialog reads.
+    const auto saving = std::make_shared<std::atomic<size_t>>(0);
+
+    const auto saving_text = [saving, dests] {
+        const size_t entry = saving->load();
+        if (entry >= dests.size()) return QObject::tr("Saving the backup");
+
+        return QObject::tr("Saving %1 (%2 of %3)")
+            .arg(GUIUtil::boostPathToQString(dests[entry]), QString::number(static_cast<qulonglong>(entry + 1)),
+                 QString::number(static_cast<qulonglong>(dests.size())));
+    };
+
     BackupResult result = RunWithProgress<BackupResult>(
-        parent, title, QObject::tr("Preparing the backup..."), QObject::tr("Saving the backup"),
-        [begin = std::move(begin), dests](const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel) {
+        parent, title, QObject::tr("Preparing the backup..."), saving_text,
+        [begin = std::move(begin), dests, saving](const interfaces::ProgressFn& progress,
+                                                  const std::atomic<bool>& cancel) {
             BackupResult ran;
 
             // The source goes as this returns, on this thread: the core deletes what it has not
@@ -289,7 +303,7 @@ bool RunBackupWithProgress(QWidget* parent, const QString& title, BackupBeginFn 
             ran.begun = true;
             ran.entries = interfaces::DownloadBackupEntries(
                 *source, dests,
-                [&progress, &cancel](interfaces::FileSource& src, uint32_t entry, const fs::path& dest) {
+                [&progress, &cancel, &saving](interfaces::FileSource& src, uint32_t entry, const fs::path& dest) {
                     // A cancel while the core made its copies takes effect here, before anything
                     // is written.
                     if (cancel.load()) {
@@ -299,6 +313,7 @@ bool RunBackupWithProgress(QWidget* parent, const QString& title, BackupBeginFn 
                         return cancelled;
                     }
 
+                    *saving = entry;
                     return interfaces::DownloadEntry(src, entry, dest, progress, cancel);
                 });
 
