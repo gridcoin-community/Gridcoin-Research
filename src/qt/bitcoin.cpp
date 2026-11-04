@@ -69,7 +69,6 @@
 #include <unistd.h>
 #endif
 #include <chrono>
-#include <optional>
 #include <stdexcept>
 #include <thread>
 

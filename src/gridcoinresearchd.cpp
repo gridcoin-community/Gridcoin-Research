@@ -36,7 +36,6 @@
 #include "util/strencodings.h"
 #include "wallet/wallet.h" // pwalletMain / CWallet::GetWalletUuid for the identity token
 #include <atomic>
-#include <optional>
 #include <memory>
 #include <optional>
 #endif
