@@ -339,7 +339,8 @@ always return false, since the core no longer writes to a path the client names.
 The new `file_transfer.capnp` declares the `FileSource` and `FileSink`
 interfaces. `Wallet` also gained `beginConsoleDownload @41 (method, args)` and
 `beginConsoleUpload @42 (method, args, size)`, which run the console's file
-commands through the transfer channel under a FileTransfer capability: a
+commands through the transfer channel (under a FileTransfer capability when
+the wallet is encrypted and not fully unlocked): a
 `FileSource` of what `dumpwallet` or `dumpcontracts` writes, and a `FileSink`
 for what `importwallet` or `parseaccrualsnapshotfile` reads. The core puts its
 own value where the command takes its file. The new methods alone would be
@@ -518,8 +519,9 @@ and `signPoolEntry` (`SignPSGT`), `MRC::submit`, `VotingManager::submitPoll` and
 `Node::executeRpcConsoleCommand` (`RpcRequest`), `Node::changeSettings` and
 the four `SideStakeManager` edits (`Settings`), `beginBackup` (`Backup`), and
 `beginConsoleDownload` and `beginConsoleUpload` (`FileTransfer`, which the
-`dumpwallet` source and the `importwallet` sink hold for their run and end
-themselves). A capability applies
+`dumpwallet` source and the `importwallet` sink hold for their run and then end,
+taking it out of the slot; like `beginBackup`, they need none on an
+unencrypted or fully unlocked wallet). A capability applies
 only to the operations of its kind on its connection; a locked wallet is unlocked
 for staking only until the capability ends. A wrong
 passphrase returns false after the failed-passphrase delay (up to 30 s), so a

@@ -149,7 +149,8 @@ namespace ipc {
 //!   their structs.
 //! - Wallet gained `beginConsoleDownload @41` and `beginConsoleUpload @42`
 //!   (wallet.capnp), which run the console's file commands through the
-//!   transfer channel under a FileTransfer capability: the first returns a
+//!   transfer channel, under a FileTransfer capability when the wallet is
+//!   encrypted and not fully unlocked: the first returns a
 //!   FileSource of what dumpwallet or dumpcontracts writes, the second a
 //!   FileSink for what importwallet or parseaccrualsnapshotfile reads. The
 //!   core puts its own value where the command takes its file.

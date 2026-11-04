@@ -49,6 +49,7 @@
 #include <boost/signals2/signal.hpp>
 #include <boost/test/unit_test.hpp>
 #include "consensus/consensus.h"
+#include "crypto/sha256.h"
 
 #include <atomic>
 #include <chrono>
@@ -2702,22 +2703,79 @@ BOOST_FIXTURE_TEST_CASE(console_download_refused_without_capability_while_stakin
     BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
 }
 
-// Every console file transfer runs under a FileTransfer capability, whatever the
-// wallet's lock state: an empty slot is refused on an unencrypted wallet too.
-BOOST_FIXTURE_TEST_CASE(console_transfer_needs_a_capability_on_an_unencrypted_wallet, BackupCase)
+// An unencrypted wallet can use its keys, so its console transfers need no
+// capability: the dump streams and the import adds the key with the slot empty,
+// which they leave empty.
+BOOST_FIXTURE_TEST_CASE(console_transfer_on_an_unencrypted_wallet_needs_no_capability, BackupCase)
 {
-    BOOST_REQUIRE(!pwalletMain->IsCrypted());
-    BOOST_REQUIRE(!pwalletMain->IpcCapability({}).has_value());
+    const grc_test::LoneBestBlock tip;
 
-    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+    CWallet plain;
+    CKey own;
+    own.MakeNewKey(true);
+    {
+        LOCK(plain.cs_wallet);
+        BOOST_REQUIRE(plain.AddKey(own));
+    }
+    BOOST_REQUIRE(!plain.IsCrypted());
+    BOOST_REQUIRE(!plain.IpcCapability({}).has_value());
+
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&plain);
+    w->bindConnectionScope(interfaces::MakeConnectionScope());
+
     std::string err;
+    std::unique_ptr<interfaces::FileSource> source = w->beginConsoleDownload("dumpwallet", {}, err);
+    BOOST_REQUIRE_MESSAGE(source, err);
+    BOOST_CHECK(ReadEntry(*source, 0).find(EncodeSecret(own) + " ") != std::string::npos);
+    source.reset();
 
-    BOOST_CHECK(!w->beginConsoleDownload("dumpwallet", {}, err));
-    BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
+    CKey fresh;
+    fresh.MakeNewKey(true);
+    const std::string dump = EncodeSecret(fresh) + " 2026-01-01T00:00:00Z label=plain\n";
+    const std::vector<unsigned char> data(dump.begin(), dump.end());
+    uint256 sha;
+    CSHA256().Write(data.data(), data.size()).Finalize(sha.begin());
+
     err.clear();
-    BOOST_CHECK(!w->beginConsoleUpload("parseaccrualsnapshotfile", {}, 10, err));
-    BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
+    std::unique_ptr<interfaces::FileSink> sink = w->beginConsoleUpload("importwallet", {}, data.size(), err);
+    BOOST_REQUIRE_MESSAGE(sink, err);
+    BOOST_REQUIRE(sink->write(data));
+    const interfaces::FileSinkResult result = sink->finish(data.size(), sha);
+    BOOST_CHECK_MESSAGE(result.ok, result.error);
+    BOOST_CHECK(plain.HaveKey(fresh.GetPubKey().GetID()));
+
+    BOOST_CHECK(!plain.IpcCapability({}).has_value());
     BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+}
+
+// On a fully unlocked wallet the transfer needs no capability, so it ends none:
+// one of another kind the client holds is left for its own operation.
+BOOST_FIXTURE_TEST_CASE(console_transfer_on_a_full_unlock_leaves_another_kinds_capability, BackupCase)
+{
+    const grc_test::LoneBestBlock tip;
+
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::Full);
+    DropKeyPool(fx.wallet);
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
+
+    BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Send));
+    const std::optional<CapabilityId> send_id = fx.wallet.IpcCapability({});
+    BOOST_REQUIRE(send_id.has_value());
+
+    std::string err;
+    std::unique_ptr<interfaces::FileSource> source = w->beginConsoleDownload("dumpwallet", {}, err);
+    BOOST_REQUIRE_MESSAGE(source, err);
+    BOOST_CHECK(ReadEntry(*source, 0).find(EncodeSecret(fx.key) + " ") != std::string::npos);
+    source.reset();
+
+    BOOST_CHECK(fx.wallet.IpcCapability({}) == send_id);
+    {
+        const CapabilityScope send(fx.wallet, send_id, CapabilityKind::Send);
+        BOOST_CHECK(send.Active());
+    }
+
+    w->endElevation();
 }
 
 BOOST_AUTO_TEST_CASE(console_download_rejects_non_file_command)
@@ -2747,7 +2805,9 @@ BOOST_AUTO_TEST_CASE(console_download_rejects_non_file_command)
 
 BOOST_AUTO_TEST_CASE(console_upload_refuses_too_large)
 {
-    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
 
     for (const char* method : {"importwallet", "parseaccrualsnapshotfile"}) {
         const interfaces::ConsoleFileCommand* command = interfaces::FindConsoleFileCommand(method);
@@ -2757,7 +2817,8 @@ BOOST_AUTO_TEST_CASE(console_upload_refuses_too_large)
         BOOST_CHECK(!w->beginConsoleUpload(method, {}, command->max_upload_bytes + 1, err));
         BOOST_CHECK_MESSAGE(err.find("too large") != std::string::npos, method << ": " << err);
 
-        // At the cap it is not too large; it is refused for want of a capability.
+        // At the cap it is not too large; this wallet, unlocked for staking only,
+        // refuses it for want of a capability.
         err.clear();
         BOOST_CHECK(!w->beginConsoleUpload(method, {}, command->max_upload_bytes, err));
         BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
@@ -2796,7 +2857,9 @@ BOOST_FIXTURE_TEST_CASE(console_download_streams_the_dump_and_ends_capability, B
     BOOST_CHECK(dump.find(EncodeSecret(fx.key) + " ") != std::string::npos);
     BOOST_CHECK(dump.find("# End of dump\n") != std::string::npos);
 
+    // Ended, and taken out of the slot, so no ended id is left there.
     BOOST_CHECK(!FileTransferLive(fx.wallet, id));
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
 
     w->endElevation();
@@ -2884,10 +2947,11 @@ BOOST_FIXTURE_TEST_CASE(second_console_transfer_refused_while_one_is_live, Backu
     BOOST_CHECK_EQUAL(err, "a transfer is already in progress");
 
     // The sink holds the capability until it goes away, and then the next
-    // transfer can begin.
+    // transfer can begin. It takes the capability out of the slot as it ends it.
     BOOST_CHECK(FileTransferLive(fx.wallet, id));
     first.reset();
     BOOST_CHECK(!FileTransferLive(fx.wallet, id));
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
 
     BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::FileTransfer));
     err.clear();

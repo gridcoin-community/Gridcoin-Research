@@ -1300,8 +1300,7 @@ BOOST_AUTO_TEST_CASE(wire_backup_snapshot_is_gone_after_the_client_goes)
 // cross as a List(Text), the core puts a file of its own where the command takes
 // one (dumpcontracts takes it second, and txids_only follows it), and the output
 // streams through the FileSource proxy with the command's reply as the entry's
-// note. Every console transfer needs a FileTransfer capability, which an
-// unencrypted wallet issues without a check.
+// note. The wallet is unencrypted, so no capability is needed.
 BOOST_AUTO_TEST_CASE(wire_console_download_streams_a_command_file)
 {
     const TransferDirReset transfers;
@@ -1315,12 +1314,6 @@ BOOST_AUTO_TEST_CASE(wire_console_download_streams_a_command_file)
     BOOST_REQUIRE(wallet != nullptr);
 
     std::string error;
-    BOOST_CHECK(!wallet->beginConsoleDownload("dumpcontracts", {"beacon", "true"}, error));
-    BOOST_CHECK_EQUAL(error, "Enter the wallet passphrase to transfer files.");
-
-    BOOST_REQUIRE(wallet->beginElevation(SecureString{}, CapabilityKind::FileTransfer));
-
-    error.clear();
     std::unique_ptr<interfaces::FileSource> source =
         wallet->beginConsoleDownload("dumpcontracts", {"beacon", "true"}, error);
     BOOST_REQUIRE_MESSAGE(source != nullptr, error);
@@ -1344,13 +1337,14 @@ BOOST_AUTO_TEST_CASE(wire_console_download_streams_a_command_file)
     BOOST_CHECK_EQUAL(TransferDirReset::Count(), 0U);
 
     source.reset();
-    wallet->endElevation();
     wallet.reset();
 }
 
 // A console file command that reads a file, over the real wire: the upload goes
 // through the FileSink proxy in small writes, the command reads it from a core
-// temporary file at finish, and its reply comes back as the output.
+// temporary file at finish, and its reply comes back as the output. The client
+// holds a FileTransfer capability, as a GUI on an encrypted wallet does; the
+// command reaches no key, so the capability is ended as the upload begins.
 BOOST_AUTO_TEST_CASE(wire_console_upload_runs_a_command_on_the_file)
 {
     const TransferDirReset transfers;
@@ -1374,6 +1368,8 @@ BOOST_AUTO_TEST_CASE(wire_console_upload_runs_a_command_on_the_file)
     std::unique_ptr<interfaces::FileSink> sink =
         wallet->beginConsoleUpload("parseaccrualsnapshotfile", {}, fs::file_size(local), error);
     BOOST_REQUIRE_MESSAGE(sink != nullptr, error);
+
+    BOOST_CHECK(!pwalletMain->IpcCapability({}).has_value());
 
     const std::atomic<bool> cancel{false};
     const interfaces::FileSinkResult result = interfaces::UploadFile(*sink, local, {}, cancel, 7);

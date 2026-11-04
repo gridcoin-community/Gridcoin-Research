@@ -570,30 +570,33 @@ public:
             return nullptr;
         }
 
-        // Every console file transfer runs under the FileTransfer capability
-        // the client began, whatever the wallet's lock state. The slot is read
-        // once, and an empty one is refused before anything is built. The
-        // scope is closed again before anything runs: the dump source opens
-        // its own for each read, and the command below reaches no key.
+        // A console file transfer runs under the FileTransfer capability the
+        // client began when the wallet is encrypted and not fully unlocked; an
+        // unencrypted or fully unlocked wallet needs none. The slot is read
+        // once, so the capability handed on or ended below is the one this
+        // call ran under. The scope is closed again before anything runs: the
+        // dump source opens its own for each read, and the command below
+        // reaches no key. A capability of another kind in the slot is left for
+        // its own operation.
         const std::optional<CapabilityId> id = m_wallet->IpcCapability(m_connection_closed);
-        if (!id) {
-            error_out = FILE_TRANSFER_REFUSAL;
-            return nullptr;
-        }
+        std::optional<CapabilityId> held;
         {
             CapabilityScope scope(*m_wallet, id, CapabilityKind::FileTransfer);
-            if (!scope.Active() || !m_wallet->CanUseKeys()) {
+            if (!m_wallet->CanUseKeys()) {
                 error_out = FILE_TRANSFER_REFUSAL;
                 return nullptr;
             }
+            if (scope.Active()) held = id;
         }
 
         // The dump is generated into the stream as it is read. The source
-        // holds the capability for its run and ends it, so the client keeps
-        // its own end of it until the download is done.
+        // holds the capability, when there is one, for its run and ends it
+        // through the slot, so the client keeps its own end of it until the
+        // download is done.
         if (method == "dumpwallet") {
-            return std::make_unique<LiveFileSource>(wallet::MakeDumpWalletSource(*m_wallet, *id, m_connection_scope),
-                                                    std::move(live));
+            return std::make_unique<LiveFileSource>(
+                wallet::MakeDumpWalletSource(*m_wallet, held, EndThroughSlot(held), m_connection_scope),
+                std::move(live));
         }
 
         // The command writes into the core's transfer directory now, and the
@@ -601,7 +604,7 @@ public:
         // its one operation, and the source holds none.
         std::unique_ptr<FileSource> source =
             wallet::MakeRpcOutputSource(method, args, command->path_index, m_connection_scope, error_out);
-        m_wallet->EndIpcElevationIf(*id, m_connection_closed);
+        if (held) m_wallet->EndIpcElevationIf(*held, m_connection_closed);
         if (!source) return nullptr;
 
         return std::make_unique<LiveFileSource>(std::move(source), std::move(live));
@@ -631,33 +634,33 @@ public:
             return nullptr;
         }
 
-        // As beginConsoleDownload(): the capability is read from the slot once
-        // and an empty slot is refused.
+        // As beginConsoleDownload(): run under the capability in the slot, read
+        // once, when there is one; an unencrypted or fully unlocked wallet
+        // needs none.
         const std::optional<CapabilityId> id = m_wallet->IpcCapability(m_connection_closed);
-        if (!id) {
-            error_out = FILE_TRANSFER_REFUSAL;
-            return nullptr;
-        }
+        std::optional<CapabilityId> held;
         {
             CapabilityScope scope(*m_wallet, id, CapabilityKind::FileTransfer);
-            if (!scope.Active() || !m_wallet->CanUseKeys()) {
+            if (!m_wallet->CanUseKeys()) {
                 error_out = FILE_TRANSFER_REFUSAL;
                 return nullptr;
             }
+            if (scope.Active()) held = id;
         }
 
         // The dump is held in memory, never on the core's disk, and imported at
         // finish under the capability, which the sink holds until then and ends.
         if (method == "importwallet") {
             return std::make_unique<LiveFileSink>(
-                wallet::MakeImportWalletSink(*m_wallet, *id, size, m_connection_scope), std::move(live));
+                wallet::MakeImportWalletSink(*m_wallet, held, EndThroughSlot(held), size, m_connection_scope),
+                std::move(live));
         }
 
         // The command reaches no key: the capability that let the upload begin
         // is ended now, and the upload waits in a core temporary file, for which
         // the transfer directory needs room.
         const bool room = util::HasFreeSpace(wallet::GetTransferDir(), size, error_out);
-        m_wallet->EndIpcElevationIf(*id, m_connection_closed);
+        if (held) m_wallet->EndIpcElevationIf(*held, m_connection_closed);
         if (!room) return nullptr;
 
         return std::make_unique<LiveFileSink>(wallet::MakeRpcFileSink(method, args, command->path_index, size,
@@ -1085,6 +1088,20 @@ private:
     {
         if (!m_connection_scope) return std::nullopt;
         return std::optional<PassphraseAttemptCancel>(std::in_place, *m_connection_closing);
+    }
+
+    //! What a source or sink calls when it is done with capability \p held:
+    //! the capability is ended and taken out of the slot when the slot still
+    //! holds it, so no ended id is left there. Nothing without one. Built
+    //! here, so the slot is reached only from this file; it holds no
+    //! reference to this interface, which the transfer may outlive.
+    wallet::EndCapabilityFn EndThroughSlot(const std::optional<CapabilityId>& held) const
+    {
+        if (!held) return {};
+
+        return [wallet = m_wallet, id = *held, closed = m_connection_closed] {
+            wallet->EndIpcElevationIf(id, closed);
+        };
     }
 
     //! sendCoins() without its capability scope and exception boundary.

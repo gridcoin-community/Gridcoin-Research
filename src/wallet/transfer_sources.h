@@ -94,24 +94,33 @@ std::optional<fs::path> SnapshotPlainFile(const fs::path& source, std::string& e
 //! The name of the dump stream's one entry.
 extern const char* const WALLET_DUMP_ENTRY_NAME;
 
+//! Called by a source or sink once it is done with the capability it was
+//! given. The wallet interface builds it: it ends the capability and takes it
+//! out of the IPC slot when the slot still holds it, so that no ended id is
+//! left there.
+using EndCapabilityFn = std::function<void()>;
+
 //! A source with one entry, "wallet-dump.txt" (size -1, its size_hint the
 //! generator's), that streams the text dumpwallet writes, generated as it is
 //! read: nothing is written to disk.
 //!
-//! The source holds capability \p cap of kind FileTransfer for its run, and
-//! makes the dump only under it: the generator is made, and each read()
-//! generates, inside a CapabilityScope(wallet, cap, FileTransfer) opened on
-//! the calling thread. Once the capability has ended (EndElevation(), its
-//! lifetime, or the client's UnlockContext ending it), every read returns an
-//! error chunk. Lines generated beyond a read's bound wait in a buffer in
-//! secure memory for the next read, and every intermediate string is
-//! cleansed.
+//! With \p cap, the FileTransfer capability the client's operation runs
+//! under, the source holds it for its run and makes the dump only under it:
+//! the generator is made, and each read() generates, inside a
+//! CapabilityScope(wallet, cap, FileTransfer) opened on the calling thread.
+//! Once the capability has ended (its lifetime, or the client's UnlockContext
+//! ending it), every read returns an error chunk. Without \p cap (an
+//! unencrypted or fully unlocked wallet, which needs none) it relies on
+//! CanUseKeys(), which the generator asks on every call. Lines generated
+//! beyond a read's bound wait in a buffer in secure memory for the next
+//! read, and every intermediate string is cleansed.
 //!
-//! The source ends \p cap itself (wallet.EndElevation()) at the dump's end,
-//! on cancel(), when \p scope closes, on a read error, and in the destructor,
+//! With \p cap, the source calls \p end_capability once, at the dump's end,
+//! on cancel(), when \p scope closes, on a read error, or in the destructor,
 //! whichever comes first. Registers one close hook on \p scope, which the
 //! destructor removes; a null \p scope (in process) registers nothing.
-std::unique_ptr<interfaces::FileSource> MakeDumpWalletSource(CWallet& wallet, CapabilityId cap,
+std::unique_ptr<interfaces::FileSource> MakeDumpWalletSource(CWallet& wallet, std::optional<CapabilityId> cap,
+                                                             EndCapabilityFn end_capability,
                                                              std::shared_ptr<interfaces::ConnectionScope> scope);
 
 //! A sink that takes an upload of a wallet dump into memory and imports it.
@@ -119,13 +128,16 @@ std::unique_ptr<interfaces::FileSource> MakeDumpWalletSource(CWallet& wallet, Ca
 //! It accepts up to \p size bytes, at most the importwallet upload cap, into
 //! a buffer in secure memory (pieces from the locked pool; never on the
 //! core's disk). finish() checks the size and SHA-256 the client sends
-//! against what arrived, then runs ImportWalletFromStream() on the buffer
+//! against what arrived, then runs ImportWalletFromStream() on the buffer,
 //! inside a CapabilityScope(wallet, cap, FileTransfer) opened on the calling
-//! thread, and reports its result as output, or its refusal as error. The
-//! buffer is cleansed on every path: finish, cancel(), a refused write, the
-//! scope's close and the destructor. \p cap is ended (wallet.EndElevation())
-//! on each of them as well. A null \p scope registers no close hook.
-std::unique_ptr<interfaces::FileSink> MakeImportWalletSink(CWallet& wallet, CapabilityId cap, uint64_t size,
+//! thread when it was given \p cap, which must still be live, and relying on
+//! CanUseKeys() otherwise. It reports the import's result as output, or its
+//! refusal as error. The buffer is cleansed on every path: finish, cancel(),
+//! a refused write, the scope's close and the destructor. With \p cap,
+//! \p end_capability is called once on the first of them. A null \p scope
+//! registers no close hook.
+std::unique_ptr<interfaces::FileSink> MakeImportWalletSink(CWallet& wallet, std::optional<CapabilityId> cap,
+                                                           EndCapabilityFn end_capability, uint64_t size,
                                                            std::shared_ptr<interfaces::ConnectionScope> scope);
 
 //! Runs one RPC and returns its reply as text: a string reply as it is, a null
