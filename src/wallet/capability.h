@@ -109,7 +109,11 @@ private:
 //! The grant begins and ends on the thread that constructs the scope, and is
 //! seen by no other. The scope is therefore neither copyable nor movable, and it
 //! cannot be allocated with new: it lives in the block of the operation it
-//! guards and ends there, on the same thread.
+//! guards and ends there, on the same thread. A scope that ends on another
+//! thread all the same, as one inside an object on the heap can, fails closed:
+//! its grant stops counting on the thread that opened it (see ElevationGrant).
+//! A holder that serves calls on more than one thread opens a scope for each
+//! call, on the thread that serves it.
 class CapabilityScope
 {
 public:

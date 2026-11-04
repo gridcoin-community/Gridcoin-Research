@@ -132,6 +132,10 @@ enum class UnlockScope : uint8_t {
 class CCryptoKeyStore;
 class CapabilityScope;
 
+//! A grant's place on the stack of grants of the thread that took it. Defined
+//! in keystore.cpp.
+struct ElevationGrantEntry;
+
 //! \brief Lets the calling thread reach one store's private keys while that
 //! store is unlocked for staking only.
 //!
@@ -148,6 +152,12 @@ class CapabilityScope;
 //! grant on its thread instead: what it displaced may already have ended, and
 //! restoring that would leave the thread elevated with no grant alive. Neither
 //! copyable nor movable; a holder must end it on the thread that took it.
+//!
+//! A grant that ends on another thread anyway, as one held on the heap or as
+//! a member of an object torn down elsewhere can, fails closed: it no longer
+//! counts on the thread that took it, which drops it when it next looks, and
+//! the end is logged as an error. It never touches the grants of the thread it
+//! ends on.
 //!
 //! Only CapabilityScope makes one, after it has checked the capability it was
 //! given.
@@ -171,10 +181,9 @@ private:
     friend class CapabilityScope;
     friend struct ElevationGrantTestPeer;
 
-    //! The grant this one displaced on this thread, and the store that grant
-    //! names, restored when this one ends as the innermost.
-    const ElevationGrant* m_previous{nullptr};
-    const CCryptoKeyStore* m_previous_store{nullptr};
+    //! This grant's place on the stack of the thread that took it, shared
+    //! with that stack, so that the grant can end on any thread.
+    ElevationGrantEntry* m_entry{nullptr};
 };
 
 //! \brief Proof that the caller is one of the staking paths.

@@ -8,58 +8,137 @@
 #include "script.h"
 
 #include <atomic>
+#include <thread>
+
+//! One grant's place on the stack of grants of the thread that took it.
+//!
+//! Held both by the grant and by that thread's stack, and freed by whichever
+//! lets go of it last, so that the stack never points at a grant that has
+//! ended elsewhere: a grant that ends on another thread clears \p live, and
+//! the thread that took it drops the entry when it next looks at its stack.
+//! If that thread ends first, the entry is never freed; it takes a grant ended
+//! on the wrong thread, which is logged as an error, to leave one behind.
+struct ElevationGrantEntry
+{
+    ElevationGrantEntry(const CCryptoKeyStore& store_in, ElevationGrantEntry* previous_in)
+        : store(&store_in)
+        , previous(previous_in)
+        , owner(std::this_thread::get_id())
+    {
+    }
+
+    //! The store the grant names.
+    const CCryptoKeyStore* const store;
+
+    //! The entry below this one on the same thread's stack.
+    ElevationGrantEntry* const previous;
+
+    //! The thread that took the grant, whose stack holds this entry.
+    const std::thread::id owner;
+
+    //! False once the grant has ended, or was withdrawn.
+    std::atomic<bool> live{true};
+
+    //! The grant and the stack.
+    std::atomic<int> holders{2};
+};
 
 namespace {
 
-// The innermost grant live on this thread, and the store it names; both
-// nullptr when none is. Plain pointers, because a thread_local must be
-// trivially destructible (see test/lint/lint-thread-local.sh). The store is
-// kept beside the grant so that answering IsActiveFor() never dereferences a
-// grant.
-thread_local const ElevationGrant* g_top_grant{nullptr};
-thread_local const CCryptoKeyStore* g_top_store{nullptr};
+// The innermost entry on this thread's stack of grants, or nullptr when there
+// is none. A plain pointer, because a thread_local must be trivially
+// destructible (see test/lint/lint-thread-local.sh).
+thread_local ElevationGrantEntry* g_top_entry{nullptr};
 
 // Set by the first grant that ends out of order, so that the report is made
 // once per process.
 std::atomic<bool> g_out_of_order_reported{false};
 
+//! Let go of \p entry for one holder, the last of which frees it.
+void LetGo(ElevationGrantEntry* entry)
+{
+    if (entry->holders.fetch_sub(1) == 1) delete entry;
+}
+
+//! Take the top entry off this thread's stack.
+void PopTop()
+{
+    ElevationGrantEntry* const top = g_top_entry;
+
+    g_top_entry = top->previous;
+    LetGo(top);
+}
+
+//! Take off this thread's stack the entries on top whose grants have ended,
+//! on another thread, so that the innermost grant still live is on top.
+void PopEnded()
+{
+    while (g_top_entry && !g_top_entry->live) {
+        PopTop();
+    }
+}
+
 } // namespace
 
 ElevationGrant::ElevationGrant(const CCryptoKeyStore& store)
-    : m_previous(g_top_grant)
-    , m_previous_store(g_top_store)
 {
-    g_top_grant = this;
-    g_top_store = &store;
+    PopEnded();
+
+    m_entry = new ElevationGrantEntry(store, g_top_entry);
+    g_top_entry = m_entry;
 }
 
 ElevationGrant::~ElevationGrant()
 {
-    // The innermost grant hands back whatever it displaced, so an inner grant
-    // ending leaves the outer one in force rather than clearing it.
-    if (g_top_grant == this) {
-        g_top_grant = m_previous;
-        g_top_store = m_previous_store;
+    // Ended on a thread other than the one that took it. That thread's stack
+    // cannot be reached from here, so the entry is marked ended, and that
+    // thread drops it, and stops counting the grant, when it next looks. The
+    // stack of this thread is left alone.
+    if (m_entry->owner != std::this_thread::get_id()) {
+        m_entry->live = false;
+        LetGo(m_entry);
+
+        LogPrintf("ERROR: %s: an elevation grant ended on a thread other than the one that took it; "
+                  "it no longer counts on either", __func__);
         return;
     }
 
-    // Any other grant is ending out of order. What it displaced may itself have
-    // ended, and restoring it would leave the thread elevated with no grant
-    // alive, so every grant on this thread is withdrawn instead.
-    g_top_grant = nullptr;
-    g_top_store = nullptr;
+    PopEnded();
 
-    if (!g_out_of_order_reported.exchange(true)) {
-        LogPrintf("ERROR: %s: an elevation grant ended out of order; every grant on the thread was withdrawn",
-                  __func__);
+    if (g_top_entry == m_entry) {
+        // The innermost grant hands back whatever it displaced, so an inner
+        // grant ending leaves the outer one in force rather than clearing it.
+        m_entry->live = false;
+        PopTop();
+        PopEnded();
+    } else if (m_entry->live) {
+        // Ending out of order. What it displaced may itself have ended, and
+        // restoring it would leave the thread elevated with no grant alive, so
+        // every grant on this thread is withdrawn instead. Their own ends then
+        // find them withdrawn and change nothing.
+        while (g_top_entry) {
+            g_top_entry->live = false;
+            PopTop();
+        }
+
+        if (!g_out_of_order_reported.exchange(true)) {
+            LogPrintf("ERROR: %s: an elevation grant ended out of order; every grant on the thread was withdrawn",
+                      __func__);
+        }
     }
+
+    LetGo(m_entry);
 }
 
 bool ElevationGrant::IsActiveFor(const CCryptoKeyStore* store)
 {
     // Without the null test, a thread holding no grant would report one for a
     // null store.
-    return store != nullptr && g_top_store == store;
+    if (store == nullptr) return false;
+
+    PopEnded();
+
+    return g_top_entry != nullptr && g_top_entry->store == store;
 }
 
 bool CKeyStore::GetPubKey(const CKeyID &address, CPubKey &vchPubKeyOut) const

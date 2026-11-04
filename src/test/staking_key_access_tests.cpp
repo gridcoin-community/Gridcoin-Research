@@ -9,6 +9,7 @@
 #include "script/sign.h"
 #include "script/standard.h"
 #include "test/staking_test_peers.h"
+#include "wallet/capability.h"
 #include "wallet/ismine.h"
 #include "wallet/staking_signer.h"
 #include "wallet/wallet.h"
@@ -18,6 +19,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -254,6 +256,74 @@ BOOST_AUTO_TEST_CASE(grants_ended_out_of_order_leave_none_active)
     }
 
     BOOST_CHECK(!ElevationGrant::IsActiveFor(&fx.wallet));
+}
+
+BOOST_AUTO_TEST_CASE(a_scope_ended_on_another_thread_leaves_no_grant_behind)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    const std::optional<CapabilityId> id = fx.wallet.BeginElevation(EncryptedWallet::PASSPHRASE,
+                                                                    CapabilityKind::Send);
+    BOOST_REQUIRE(id.has_value());
+
+    CKey key;
+
+    // Opened on this thread, held on the heap, and ended on another thread.
+    auto held = std::make_unique<std::optional<CapabilityScope>>();
+    held->emplace(fx.wallet, id, CapabilityKind::Send);
+    BOOST_REQUIRE((*held)->Active());
+    BOOST_REQUIRE(fx.wallet.GetKey(fx.id, key));
+
+    std::thread([&held] { held.reset(); }).join();
+
+    // This thread is no longer elevated.
+    BOOST_CHECK(!ElevationGrant::IsActiveFor(&fx.wallet));
+    BOOST_CHECK(!fx.wallet.CanUseKeys());
+    BOOST_CHECK(!fx.wallet.GetKey(fx.id, key));
+
+    // A fresh scope on this thread works, and ends cleanly.
+    {
+        CapabilityScope scope(fx.wallet, id, CapabilityKind::Send);
+        BOOST_CHECK(scope.Active());
+        BOOST_CHECK(fx.wallet.GetKey(fx.id, key));
+    }
+
+    BOOST_CHECK(!ElevationGrant::IsActiveFor(&fx.wallet));
+    BOOST_CHECK(!fx.wallet.GetKey(fx.id, key));
+
+    // A scope opened over one that then ends on another thread keeps working,
+    // and once it ends too, nothing is left.
+    held = std::make_unique<std::optional<CapabilityScope>>();
+    held->emplace(fx.wallet, id, CapabilityKind::Send);
+    {
+        CapabilityScope inner(fx.wallet, id, CapabilityKind::Send);
+        BOOST_REQUIRE(inner.Active());
+
+        std::thread([&held] { held.reset(); }).join();
+
+        BOOST_CHECK(ElevationGrant::IsActiveFor(&fx.wallet));
+        BOOST_CHECK(fx.wallet.GetKey(fx.id, key));
+    }
+
+    BOOST_CHECK(!ElevationGrant::IsActiveFor(&fx.wallet));
+    BOOST_CHECK(!fx.wallet.GetKey(fx.id, key));
+
+    // Scopes nested on one thread are unaffected.
+    {
+        CapabilityScope outer(fx.wallet, id, CapabilityKind::Send);
+        {
+            CapabilityScope inner(fx.wallet, id, CapabilityKind::Send);
+            BOOST_CHECK(ElevationGrant::IsActiveFor(&fx.wallet));
+        }
+
+        BOOST_CHECK(ElevationGrant::IsActiveFor(&fx.wallet));
+        BOOST_CHECK(fx.wallet.GetKey(fx.id, key));
+    }
+
+    BOOST_CHECK(!ElevationGrant::IsActiveFor(&fx.wallet));
+
+    fx.wallet.EndElevation(*id);
 }
 
 BOOST_AUTO_TEST_CASE(secret_decrypt_refused_under_staking_only)
