@@ -7,7 +7,7 @@ automation client — in place of the bundled Qt wallet.
 
 It describes the interface **as it exists on this branch** (post the
 identity-handshake work: `NodeIdentity` is `{identity_token, network}`, IPC
-schema major is `4`). It is a companion to, not a replacement for:
+schema major is `5`). It is a companion to, not a replacement for:
 
 - `doc/multiprocess_design.md` — the design of record (rules, decisions, phasing).
 - `doc/multiprocess.md` — how to build, run, and stop the split binaries.
@@ -441,7 +441,11 @@ and `signPoolEntry` (`SignPSGT`), `MRC::submit`, `VotingManager::submitPoll` and
 only to the operations of its kind on its connection; a locked wallet is unlocked
 for staking only until the capability ends. A wrong
 passphrase returns false after the failed-passphrase delay (up to 30 s), so a
-client must not call it on its UI thread. `elevateWallet` always returns false.
+client must not call it on its UI thread. Passphrase attempts from every caller
+(`unlockWallet`, `beginElevation`, `changeWalletPassphrase`, and RPC) are
+checked one at a time, in the order they arrive, so a call also waits for the
+attempts ahead of it. An IPC caller cannot give its attempt up; only the node's
+shutdown ends the wait. `elevateWallet` always returns false.
 The GUI side is `WalletModel::requestUnlock(CapabilityKind)` and its
 `UnlockContext`, which ends the capability when the operation finishes.
 

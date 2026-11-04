@@ -385,8 +385,12 @@ public:
     //!    scope is NOT changed.
     //!  - Locked: the wallet is unlocked for staking only, timed to relock
     //!    after the capability's lifetime, and EndElevation() locks it again.
-    //!    Capabilities issued while that unlock lasts rely on it too, and it is
-    //!    locked when the last of them ends.
+    //!    Capabilities issued while that unlock lasts rely on it too. It is
+    //!    locked when the last of them ends, or when the relock armed for the
+    //!    capability that made it fires, whichever comes first: a later one's
+    //!    longer lifetime does not move that relock. A capability that outlives
+    //!    the unlock then fails closed, since no key can be read once the
+    //!    wallet is locked.
     //!
     //! An encrypted wallet's attempt first waits for its turn, as Unlock()
     //! does. nullopt for a wrong passphrase. That refusal returns only after
