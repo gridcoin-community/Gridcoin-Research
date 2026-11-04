@@ -1663,9 +1663,9 @@ some RPCs are faithful ports, some share upstream's name and argument list but h
 Gridcoin-specific wrinkle inside, and many have no upstream analogue at all. To make that
 relationship explicit and *enforced* (rather than a comforting fiction of separation),
 every registered RPC carries its classification as a **column on its `vRPCCommands[]` row**
-in `src/rpc/server.cpp` — `{ "name", &impl, cat, &help, heritage_<bucket>, "<fp>" }`. The
+in `src/rpc/server.cpp` — `{ "name", &impl, cat, &help, heritage_<bucket>, "<fp>", access_<class> }`. The
 `CRPCCommand` constructor makes all fields mandatory, so a command cannot be registered
-without a bucket (classify-at-birth, compiler-enforced). `test/lint/lint-rpc-heritage.py`
+without a bucket or an access class (classify-at-birth, compiler-enforced). `test/lint/lint-rpc-heritage.py`
 (run by `lint-all.sh`) reads that column — the same table the dispatcher reads — and
 re-checks the surface fingerprint. The human-readable roll-up is
 [`doc/rpc-heritage.md`](rpc-heritage.md) (issue #3069; this supersedes the folder-isolation
@@ -1741,8 +1741,10 @@ required, documented decision.
   `diverges` note in `doc/rpc-heritage.md`. (3) update the row's `heritage_fp` to the
   recomputed value **and** the matching row in `doc/rpc-heritage.md` (the lint checks the two
   agree, per-row).
-- *new RPC won't compile* — `CRPCCommand` requires a `heritage_<bucket>` and `heritage_fp` on
-  the row; that's classify-at-birth. Pick the bucket, run the lint to get the fingerprint, fill
+- *new RPC won't compile* — `CRPCCommand` requires a `heritage_<bucket>`, a `heritage_fp` and an
+  `access_<class>` on the row; that's classify-at-birth. Pick the access class (`access_elevate` if
+  the RPC signs, reveals or writes keys, moves or redirects value or widens exposure; see the RPC
+  Heritage Ledger section of `CLAUDE.md`), pick the bucket, run the lint to get the fingerprint, fill
   both in, and add a `doc/rpc-heritage.md` row (`pure-gridcoin` takes an empty `heritage_fp`).
 - *"result-builder reachable from an RPC only at depth N > MAX_DESCENT"* — a contract-payload
   builder chain grew deeper than the descent cap; raise `MAX_DESCENT` in the lint so the

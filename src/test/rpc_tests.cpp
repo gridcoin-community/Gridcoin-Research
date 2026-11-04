@@ -7,9 +7,14 @@
 #include <rpc/client.h>
 #include <rpc/protocol.h>
 #include <rpc/server.h>
+#include <rpc/util.h>
 #include <net.h>
 #include <policy/fees.h>
+#include <wallet/capability.h>
 #include <wallet/wallet.h>
+
+#include "encrypted_wallet.h"
+#include "staking_test_peers.h"
 
 #include <univalue.h>
 
@@ -264,6 +269,167 @@ BOOST_AUTO_TEST_CASE(settxfee_refuses_a_rate_above_the_cap)
                 && find_value(e, "message").get_str().find("above maximum") != std::string::npos;
         });
     BOOST_CHECK_EQUAL(nTransactionFee, MaxTxFeeRate());
+}
+
+static bool CodeIs(const UniValue& e, int code)
+{
+    return find_value(e, "code").get_int() == code;
+}
+
+static void RunAs(const char* method, const std::vector<std::string>& args)
+{
+    tableRPC.execute(method, RPCConvertValues(method, args));
+}
+
+BOOST_AUTO_TEST_CASE(rpc_rows_carry_their_access_class)
+{
+    for (const char* name : {"settxfee", "backupwallet", "maintainbackups", "writedata", "encryptwallet"}) {
+        BOOST_CHECK_MESSAGE(tableRPC[name]->access == access_elevate, name);
+    }
+
+    for (const char* name : {"walletpassphrase", "walletpassphrasechange"}) {
+        BOOST_CHECK_MESSAGE(tableRPC[name]->access == access_elevate_inband, name);
+    }
+
+    BOOST_CHECK(tableRPC["changesettings"]->access == access_settings);
+
+    for (const char* name : {"setlabel", "setaccount", "sendrawtransaction", "stop", "addnode", "dumpcontracts",
+                             "parseaccrualsnapshotfile"}) {
+        BOOST_CHECK_MESSAGE(tableRPC[name]->access == access_free, name);
+    }
+
+    for (const char* name : {"getbalance", "listsettings", "help"}) {
+        BOOST_CHECK_MESSAGE(tableRPC[name]->access == access_read_only, name);
+    }
+
+    BOOST_CHECK_EQUAL(std::string(RpcAccessName(access_read_only)), "read_only");
+    BOOST_CHECK_EQUAL(std::string(RpcAccessName(access_free)), "free");
+    BOOST_CHECK_EQUAL(std::string(RpcAccessName(access_elevate)), "elevate");
+    BOOST_CHECK_EQUAL(std::string(RpcAccessName(access_elevate_inband)), "elevate_inband");
+    BOOST_CHECK_EQUAL(std::string(RpcAccessName(access_settings)), "settings");
+}
+
+BOOST_AUTO_TEST_CASE(every_gated_row_is_refused_without_elevation)
+{
+    struct RestoreFee { int64_t saved{nTransactionFee}; ~RestoreFee() { nTransactionFee = saved; } } restore;
+    grc_test::EncryptedWalletSwap fx;
+
+    size_t gated = 0;
+
+    // Locked first, then unlocked for staking only.
+    for (int state = 0; state < 2; ++state) {
+        fx.wallet().Lock();
+
+        if (state == 1) {
+            BOOST_REQUIRE(fx.wallet().Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
+        }
+
+        gated = 0;
+
+        for (const std::string& name : tableRPC.listCommands(true)) {
+            const CRPCCommand* cmd = tableRPC[name];
+
+            if (cmd->access != access_elevate) continue;
+
+            ++gated;
+
+            // The smallest argument count the row's help declaration accepts; a
+            // variadic row opts out of the check and gets none.
+            std::vector<std::string> args;
+
+            if (cmd->helpman != nullptr && !cmd->helpman().IsVariadic()) {
+                size_t n = 0;
+
+                while (n < 32 && !cmd->helpman().IsValidNumArgs(n)) ++n;
+
+                args.assign(n, "x");
+            }
+
+            UniValue params(UniValue::VARR);
+            for (const std::string& a : args) params.push_back(a);
+
+            BOOST_CHECK_EXCEPTION(tableRPC.execute(name, params), UniValue,
+                [](const UniValue& e) { return CodeIs(e, RPC_WALLET_UNLOCK_NEEDED); });
+        }
+    }
+
+    BOOST_CHECK_EQUAL(gated, 48U);
+}
+
+BOOST_AUTO_TEST_CASE(elevate_rows_run_with_a_full_unlock)
+{
+    struct RestoreFee { int64_t saved{nTransactionFee}; ~RestoreFee() { nTransactionFee = saved; } } restore;
+    grc_test::EncryptedWalletSwap fx;
+
+    BOOST_REQUIRE(fx.wallet().Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::Full));
+
+    UniValue result;
+    BOOST_CHECK_NO_THROW(result = tableRPC.execute("settxfee", RPCConvertValues("settxfee", {"0.002"})));
+    BOOST_CHECK(result.get_bool());
+    BOOST_CHECK_EQUAL(nTransactionFee, 200000);
+
+    fx.wallet().Lock();
+}
+
+BOOST_AUTO_TEST_CASE(rpc_request_capability_admits_one_request)
+{
+    struct RestoreFee { int64_t saved{nTransactionFee}; ~RestoreFee() { nTransactionFee = saved; } } restore;
+    grc_test::EncryptedWalletSwap fx;
+
+    BOOST_REQUIRE(fx.wallet().Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
+
+    const std::optional<CapabilityId> id =
+        fx.wallet().BeginElevation(grc_test::EncryptedWalletSwap::Passphrase(), CapabilityKind::RpcRequest);
+    BOOST_REQUIRE(id.has_value());
+
+    {
+        const CapabilityScope scope(fx.wallet(), id, CapabilityKind::RpcRequest);
+        BOOST_CHECK_NO_THROW(RunAs("settxfee", {"0.002"}));
+    }
+
+    BOOST_CHECK_EXCEPTION(RunAs("settxfee", {"0.003"}), UniValue,
+        [](const UniValue& e) { return CodeIs(e, RPC_WALLET_UNLOCK_NEEDED); });
+    BOOST_CHECK_EQUAL(nTransactionFee, 200000);
+
+    fx.wallet().EndElevation(*id);
+    fx.wallet().Lock();
+}
+
+BOOST_AUTO_TEST_CASE(inband_rows_are_not_gated)
+{
+    grc_test::EncryptedWalletSwap fx;
+
+    // walletpassphrase schedules the relock, so it needs a scheduler.
+    grc_test::SchedulerForThisCase scheduler;
+
+    BOOST_REQUIRE(fx.wallet().IsLocked());
+
+    const SecureString secure_passphrase = grc_test::EncryptedWalletSwap::Passphrase();
+    const std::string passphrase(secure_passphrase.begin(), secure_passphrase.end());
+
+    BOOST_CHECK_NO_THROW(RunAs("walletpassphrase", {passphrase, "60", "true"}));
+    BOOST_CHECK(fx.wallet().IsUnlockedForStakingOnly());
+
+    fx.wallet().Lock();
+}
+
+BOOST_AUTO_TEST_CASE(free_rows_run_without_elevation)
+{
+    grc_test::EncryptedWalletSwap fx;
+
+    BOOST_REQUIRE(fx.wallet().IsLocked());
+
+    BOOST_CHECK_NO_THROW(RunAs("reservebalance", {}));
+    BOOST_CHECK_NO_THROW(RunAs("getbalance", {}));
+}
+
+BOOST_AUTO_TEST_CASE(the_access_gate_follows_the_arity_check)
+{
+    grc_test::EncryptedWalletSwap fx;
+
+    BOOST_REQUIRE(fx.wallet().IsLocked());
+
+    BOOST_CHECK_THROW(tableRPC.execute("settxfee", UniValue(UniValue::VARR)), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

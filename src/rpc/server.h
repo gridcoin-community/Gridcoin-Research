@@ -101,15 +101,36 @@ enum rpcheritage
     heritage_pure_gridcoin,
 };
 
+// RPC access class, enforced for access_elevate by CRPCTable::execute.
+//   read_only      -- changes nothing.
+//   free           -- changes state that neither moves nor redirects value, widens
+//                     exposure, nor handles keys.
+//   elevate        -- signs or reveals keys, writes key material, moves or redirects
+//                     value, widens exposure, or exports or deletes wallet files; needs
+//                     a full unlock or the passphrase sent with the request.
+//   elevate_inband -- the method verifies a passphrase given as its own argument.
+//   settings       -- changesettings; each setting applies its own class.
+enum rpcaccess
+{
+    access_read_only,
+    access_free,
+    access_elevate,
+    access_elevate_inband,
+    access_settings,
+};
+
+//! "read_only", "free", "elevate", "elevate_inband", "settings"
+const char* RpcAccessName(rpcaccess access);
+
 class CRPCCommand
 {
 public:
     // All fields are required at construction, so a command cannot be added to
-    // vRPCCommands[] without a heritage classification (classify-at-birth).
+    // vRPCCommands[] without a heritage classification or an access class (classify-at-birth).
     CRPCCommand(std::string _name, rpcfn_type _actor, rpccategory _category,
-                rpchelpman_fn _helpman, rpcheritage _heritage, std::string _heritage_fp)
+                rpchelpman_fn _helpman, rpcheritage _heritage, std::string _heritage_fp, rpcaccess _access)
         : name(std::move(_name)), actor(_actor), category(_category), helpman(_helpman),
-          heritage(_heritage), heritage_fp(std::move(_heritage_fp)) {}
+          heritage(_heritage), heritage_fp(std::move(_heritage_fp)), access(_access) {}
 
     std::string name;
     rpcfn_type actor;
@@ -119,6 +140,7 @@ public:
     // Surface-fingerprint baseline (args + result-keys), 12 hex chars; "manual" when the
     // output isn't literal-key-trackable; empty for pure_gridcoin (not fingerprinted).
     std::string heritage_fp;
+    rpcaccess access;
 };
 
 /**
