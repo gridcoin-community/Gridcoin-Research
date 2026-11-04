@@ -46,10 +46,13 @@ std::unique_ptr<Process> MakeProcess();
 fs::path GetIpcDir();
 
 //! The reason the core refuses to start when -ipcattachgroup is set and -ipcdir
-//! is not, or nullopt. The attach group is given access to the IPC directory,
-//! and without -ipcdir that is the data directory. Both options are read as
-//! ConfiguredOption() reads them, so a negated or empty value counts as unset.
-//! nullopt on Windows, where ConfigureAttachGroup() refuses any attach group.
+//! is not, or names the data directory, or nullopt. The attach group is given
+//! access to the IPC directory, and without -ipcdir that is the data directory.
+//! Both options are read as ConfiguredOption() reads them, so a negated or empty
+//! value counts as unset. An -ipcdir is compared with the data directory, and on
+//! a test network also with the base data directory above it, with the links in
+//! both resolved; one that does not exist yet is not the data directory. nullopt
+//! on Windows, where ConfigureAttachGroup() refuses any attach group.
 std::optional<std::string> AttachGroupIpcDirRefusal();
 
 //! Make sure \p dir exists. When this call creates it, it is restricted to this

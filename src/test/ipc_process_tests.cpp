@@ -535,6 +535,52 @@ BOOST_FIXTURE_TEST_CASE(attach_group_without_ipcdir_is_refused, grc_test::StateG
     BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
 }
 
+// So is an -ipcdir that resolves to the data directory, however it is written:
+// the path itself, "." (resolved against the data directory), or a link to it.
+// On a test network the base data directory, above the network's own, counts
+// too. Another directory, or one that does not exist yet, is not refused, and
+// without an attach group the data directory is a valid -ipcdir.
+BOOST_FIXTURE_TEST_CASE(attach_group_with_the_data_directory_as_ipcdir_is_refused, grc_test::StateGuard)
+{
+    gArgs.ClearForcedArg("-ipcdir");
+    gArgs.ForceSetArg("-ipcattachgroup", "gridcoin");
+
+    const fs::path datadir = GetDataDir();
+    BOOST_REQUIRE(fs::is_directory(datadir));
+
+    gArgs.ForceSetArg("-ipcdir", datadir.string());
+    const std::optional<std::string> refusal = ipc::AttachGroupIpcDirRefusal();
+    BOOST_REQUIRE(refusal);
+    BOOST_CHECK_MESSAGE(refusal->find("-ipcattachgroup") != std::string::npos, *refusal);
+    BOOST_CHECK_MESSAGE(refusal->find("-ipcdir") != std::string::npos, *refusal);
+    BOOST_CHECK_MESSAGE(refusal->find("data directory") != std::string::npos, *refusal);
+
+    gArgs.ForceSetArg("-ipcdir", ".");
+    BOOST_CHECK(ipc::AttachGroupIpcDirRefusal());
+
+    TempDir dir;
+    const fs::path link = dir.path / "datadir-link";
+    BOOST_REQUIRE_EQUAL(::symlink(datadir.c_str(), link.c_str()), 0);
+    gArgs.ForceSetArg("-ipcdir", link.string());
+    BOOST_CHECK(ipc::AttachGroupIpcDirRefusal());
+
+    const fs::path base = GetDataDir(/*fNetSpecific=*/false);
+    if (fs::canonical(base) != fs::canonical(datadir)) {
+        gArgs.ForceSetArg("-ipcdir", base.string());
+        BOOST_CHECK(ipc::AttachGroupIpcDirRefusal());
+    }
+
+    gArgs.ForceSetArg("-ipcdir", dir.path.string());
+    BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
+
+    gArgs.ForceSetArg("-ipcdir", (dir.path / "not-yet").string());
+    BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
+
+    gArgs.ClearForcedArg("-ipcattachgroup");
+    gArgs.ForceSetArg("-ipcdir", datadir.string());
+    BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
+}
+
 BOOST_AUTO_TEST_CASE(apply_path_access_refuses_symlink)
 {
     TempDir dir;

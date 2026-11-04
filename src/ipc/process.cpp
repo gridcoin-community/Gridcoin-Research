@@ -244,11 +244,37 @@ fs::path GetIpcDir()
 std::optional<std::string> AttachGroupIpcDirRefusal()
 {
 #ifndef WIN32
-    if (ConfiguredOption("-ipcattachgroup").empty() || !ConfiguredOption("-ipcdir").empty()) return std::nullopt;
+    if (ConfiguredOption("-ipcattachgroup").empty()) return std::nullopt;
 
-    return std::string{"-ipcattachgroup is set without -ipcdir. The attach group is given access to the IPC "
-                       "directory, which without -ipcdir is the data directory. Set -ipcdir to a directory of its "
-                       "own for the IPC socket and cookie."};
+    if (ConfiguredOption("-ipcdir").empty()) {
+        return std::string{"-ipcattachgroup is set without -ipcdir. The attach group is given access to the IPC "
+                           "directory, which without -ipcdir is the data directory. Set -ipcdir to a directory of "
+                           "its own for the IPC socket and cookie."};
+    }
+
+    // Compared with the links resolved. A directory that does not exist yet, or
+    // cannot be resolved, is not the data directory, which does exist.
+    const auto resolved = [](const fs::path& path) {
+        boost::system::error_code ec;
+        const fs::path canonical = fs::canonical(path, ec);
+        return ec ? fs::path() : canonical;
+    };
+
+    const fs::path ipcdir = resolved(GetIpcDir());
+    if (ipcdir.empty()) return std::nullopt;
+
+    // The network's data directory, and on a test network also the base one
+    // above it, which holds the configuration file.
+    for (const bool net_specific : {true, false}) {
+        if (ipcdir == resolved(GetDataDir(net_specific))) {
+            return strprintf("-ipcattachgroup is set and -ipcdir names the data directory (%s). The attach group is "
+                             "given access to the IPC directory. Set -ipcdir to a directory of its own for the IPC "
+                             "socket and cookie.",
+                             GetIpcDir().string());
+        }
+    }
+
+    return std::nullopt;
 #else
     return std::nullopt;
 #endif
