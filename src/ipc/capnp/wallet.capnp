@@ -55,6 +55,8 @@ interface Wallet $Proxy.wrap("interfaces::Wallet") {
     backupWallet @20 (context :Proxy.Context, dest :Text) -> (result :Bool);
     backupConfigFile @21 (context :Proxy.Context, dest :Text) -> (result :Bool);
     beginBackup @40 (context :Proxy.Context, items :UInt8) -> (errorOut :Text, result :FileTransfer.FileSource);
+    beginConsoleDownload @41 (context :Proxy.Context, method :Text, args :List(Text)) -> (errorOut :Text, result :FileTransfer.FileSource);
+    beginConsoleUpload @42 (context :Proxy.Context, method :Text, args :List(Text), size :UInt64) -> (errorOut :Text, result :FileTransfer.FileSink);
     signMessage @22 (context :Proxy.Context, address :Text, message :Text) -> (signatureOut :Text, result :Int32);
     verifyMessage @23 (context :Proxy.Context, address :Text, message :Text, signature :Data) -> (result :Int32);
     getAddresses @24 (context :Proxy.Context) -> (result :List(WalletAddress));

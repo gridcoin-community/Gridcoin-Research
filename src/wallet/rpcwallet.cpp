@@ -100,14 +100,19 @@ std::string HelpRequiringPassphrase()
         : "";
 }
 
-void EnsureWalletIsUnlocked()
+void EnsureWalletIsUnlocked(const CWallet& wallet)
 {
-    if (pwalletMain->IsLocked())
+    if (wallet.IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
     // A capability scope open on this thread, such as one for a request that
     // carries the passphrase, lets the request through a staking-only unlock.
-    if (!pwalletMain->CanUseKeys())
+    if (!wallet.CanUseKeys())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
+}
+
+void EnsureWalletIsUnlocked()
+{
+    EnsureWalletIsUnlocked(*pwalletMain);
 }
 
 void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main)

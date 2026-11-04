@@ -136,6 +136,43 @@ private:
     std::unique_ptr<FileSource> m_inner;
 };
 
+//! A sink that keeps its wallet interface's transfer live until it is
+//! destroyed.
+class LiveFileSink final : public FileSink
+{
+public:
+    LiveFileSink(std::unique_ptr<FileSink> inner, std::unique_ptr<LiveTransfer> live)
+        : m_live(std::move(live)), m_inner(std::move(inner))
+    {
+    }
+
+    bool write(const std::vector<unsigned char>& data) override { return m_inner->write(data); }
+    FileSinkResult finish(uint64_t size, const uint256& sha256) override { return m_inner->finish(size, sha256); }
+    void cancel() override { m_inner->cancel(); }
+
+private:
+    // Declared first, so it is destroyed last: another transfer can begin only
+    // once the inner sink, and what it holds, is gone.
+    std::unique_ptr<LiveTransfer> m_live;
+    std::unique_ptr<FileSink> m_inner;
+};
+
+//! The refusals of a console file transfer: a method that is not a file
+//! command in the direction asked, and no FileTransfer capability.
+const char* const NOT_A_FILE_COMMAND = "not a file command";
+const char* const FILE_TRANSFER_REFUSAL = "Enter the wallet passphrase to transfer files.";
+
+//! Whether \p args, the console arguments without the file, has the ones the
+//! command takes before its file. The core puts its own value at path_index.
+bool ArgumentsBeforeFile(const ConsoleFileCommand& command, const std::vector<std::string>& args,
+                         std::string& error)
+{
+    if (command.path_index <= args.size()) return true;
+
+    error = strprintf("%s takes %u argument(s) before its file", command.method, command.path_index);
+    return false;
+}
+
 //! Remove the snapshots in \p entries and empty it.
 void RemoveSnapshots(std::vector<wallet::SnapshotEntry>& entries)
 {
@@ -511,6 +548,121 @@ public:
 
         return std::make_unique<LiveFileSource>(wallet::MakeSnapshotSource(std::move(entries), m_connection_scope),
                                                 std::move(live));
+    }
+
+    std::unique_ptr<FileSource> beginConsoleDownload(const std::string& method, const std::vector<std::string>& args,
+                                                     std::string& error_out) override
+    {
+        error_out.clear();
+
+        const ConsoleFileCommand* command = FindConsoleFileCommand(method);
+        if (!command || command->direction != TransferDirection::Download) {
+            error_out = NOT_A_FILE_COMMAND;
+            return nullptr;
+        }
+        if (!ArgumentsBeforeFile(*command, args, error_out)) return nullptr;
+
+        // One transfer at a time on this interface, claimed here and held by
+        // the source returned.
+        std::unique_ptr<LiveTransfer> live = LiveTransfer::Claim(m_transfer_live);
+        if (!live) {
+            error_out = "a transfer is already in progress";
+            return nullptr;
+        }
+
+        // Every console file transfer runs under the FileTransfer capability
+        // the client began, whatever the wallet's lock state. The slot is read
+        // once, and an empty one is refused before anything is built. The
+        // scope is closed again before anything runs: the dump source opens
+        // its own for each read, and the command below reaches no key.
+        const std::optional<CapabilityId> id = m_wallet->IpcCapability(m_connection_closed);
+        if (!id) {
+            error_out = FILE_TRANSFER_REFUSAL;
+            return nullptr;
+        }
+        {
+            CapabilityScope scope(*m_wallet, id, CapabilityKind::FileTransfer);
+            if (!scope.Active() || !m_wallet->CanUseKeys()) {
+                error_out = FILE_TRANSFER_REFUSAL;
+                return nullptr;
+            }
+        }
+
+        // The dump is generated into the stream as it is read. The source
+        // holds the capability for its run and ends it, so the client keeps
+        // its own end of it until the download is done.
+        if (method == "dumpwallet") {
+            return std::make_unique<LiveFileSource>(wallet::MakeDumpWalletSource(*m_wallet, *id, m_connection_scope),
+                                                    std::move(live));
+        }
+
+        // The command writes into the core's transfer directory now, and the
+        // source streams that file. The capability that let it begin has done
+        // its one operation, and the source holds none.
+        std::unique_ptr<FileSource> source =
+            wallet::MakeRpcOutputSource(method, args, command->path_index, m_connection_scope, error_out);
+        m_wallet->EndIpcElevationIf(*id, m_connection_closed);
+        if (!source) return nullptr;
+
+        return std::make_unique<LiveFileSource>(std::move(source), std::move(live));
+    }
+
+    std::unique_ptr<FileSink> beginConsoleUpload(const std::string& method, const std::vector<std::string>& args,
+                                                 uint64_t size, std::string& error_out) override
+    {
+        error_out.clear();
+
+        const ConsoleFileCommand* command = FindConsoleFileCommand(method);
+        if (!command || command->direction != TransferDirection::Upload) {
+            error_out = NOT_A_FILE_COMMAND;
+            return nullptr;
+        }
+        if (!ArgumentsBeforeFile(*command, args, error_out)) return nullptr;
+
+        if (size > command->max_upload_bytes) {
+            error_out = strprintf("%s: the file is too large (%u bytes; at most %u)", method, size,
+                                  command->max_upload_bytes);
+            return nullptr;
+        }
+
+        std::unique_ptr<LiveTransfer> live = LiveTransfer::Claim(m_transfer_live);
+        if (!live) {
+            error_out = "a transfer is already in progress";
+            return nullptr;
+        }
+
+        // As beginConsoleDownload(): the capability is read from the slot once
+        // and an empty slot is refused.
+        const std::optional<CapabilityId> id = m_wallet->IpcCapability(m_connection_closed);
+        if (!id) {
+            error_out = FILE_TRANSFER_REFUSAL;
+            return nullptr;
+        }
+        {
+            CapabilityScope scope(*m_wallet, id, CapabilityKind::FileTransfer);
+            if (!scope.Active() || !m_wallet->CanUseKeys()) {
+                error_out = FILE_TRANSFER_REFUSAL;
+                return nullptr;
+            }
+        }
+
+        // The dump is held in memory, never on the core's disk, and imported at
+        // finish under the capability, which the sink holds until then and ends.
+        if (method == "importwallet") {
+            return std::make_unique<LiveFileSink>(
+                wallet::MakeImportWalletSink(*m_wallet, *id, size, m_connection_scope), std::move(live));
+        }
+
+        // The command reaches no key: the capability that let the upload begin
+        // is ended now, and the upload waits in a core temporary file, for which
+        // the transfer directory needs room.
+        const bool room = util::HasFreeSpace(wallet::GetTransferDir(), size, error_out);
+        m_wallet->EndIpcElevationIf(*id, m_connection_closed);
+        if (!room) return nullptr;
+
+        return std::make_unique<LiveFileSink>(wallet::MakeRpcFileSink(method, args, command->path_index, size,
+                                                                      command->max_upload_bytes, m_connection_scope),
+                                              std::move(live));
     }
 
     MessageSignStatus signMessage(const std::string& address, const std::string& message,

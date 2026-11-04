@@ -146,7 +146,13 @@ namespace ipc {
 //!   `backupWallet @20` and `backupConfigFile @21` stay in the schema, but they
 //!   always return false: the core no longer writes to a path the client names.
 //! - file_transfer.capnp is new: the FileSource and FileSink interfaces and
-//!   their structs. No method returns a FileSink yet.
+//!   their structs.
+//! - Wallet gained `beginConsoleDownload @41` and `beginConsoleUpload @42`
+//!   (wallet.capnp), which run the console's file commands through the
+//!   transfer channel under a FileTransfer capability: the first returns a
+//!   FileSource of what dumpwallet or dumpcontracts writes, the second a
+//!   FileSink for what importwallet or parseaccrualsnapshotfile reads. The
+//!   core puts its own value where the command takes its file.
 //!
 //! The new methods alone would be additive, which is why the reason for the
 //! major is the other direction. A GUI and a node of different majors disagree

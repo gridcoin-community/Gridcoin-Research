@@ -216,17 +216,25 @@ extern UniValue ValueFromAmount(int64_t amount);
 extern std::string HelpRequiringPassphrase();
 extern void EnsureWalletIsUnlocked();
 
+//! EnsureWalletIsUnlocked() for \p wallet rather than pwalletMain: the same
+//! refusals, for a caller that is given the wallet it works on.
+void EnsureWalletIsUnlocked(const CWallet& wallet);
+
 //! \brief Everything dumpwallet does after its unlock check: write every key
 //! \p wallet holds to \p filename, a bare name resolving to the data directory.
 //!
-//! A key the wallet holds that cannot be read on this thread -- withheld while
-//! the wallet is unlocked for staking only, or one that does not decrypt --
-//! fails the dump rather than being left out of it: it throws
-//! RPC_WALLET_UNLOCK_NEEDED, or RPC_WALLET_ERROR when the wallet may use its
-//! keys. Metadata for a key the wallet does not hold is no key, and is left
-//! out. A dump that cannot be written throws RPC_WALLET_ERROR. On any failure
-//! part way through, a regular file at the path is removed before the error
-//! leaves; a symbolic link or a special file there is left as it is.
+//! The text is what WalletDumpGenerator (wallet/walletdump.h) generates, under
+//! LOCK2(cs_main, wallet.cs_wallet) held for the whole dump. Without the keys
+//! on this thread (the wallet unlocked for staking only, with no capability
+//! scope open) it throws RPC_WALLET_UNLOCK_NEEDED "keys are not available"
+//! before a key is read. A key the wallet holds that cannot be read fails the
+//! dump rather than being left out of it: RPC_WALLET_ERROR when the thread may
+//! still use the keys (the key does not decrypt), RPC_WALLET_UNLOCK_NEEDED when
+//! it no longer may (a timed relock during the dump). Metadata for a key the
+//! wallet does not hold is no key, and is left out. A dump that cannot
+//! be written throws RPC_WALLET_ERROR. On any failure part way through, a
+//! regular file at the path is removed before the error leaves; a symbolic
+//! link or a special file there is left as it is.
 void WriteWalletDump(CWallet& wallet, const std::string& filename);
 
 //! \brief Take a request's elevation header out of its headers.

@@ -4,14 +4,25 @@
 
 #include "crypto/sha256.h"
 #include "fs.h"
+#include "gridcoin/accrual/snapshot.h"
+#include "gridcoin/cpid.h"
 #include "interfaces/connection_scope.h"
 #include "interfaces/file_transfer.h"
+#include "key.h"
+#include "key_io.h"
+#include "rpc/protocol.h"
+#include "support/allocators/secure.h"
+#include "test/lone_best_block.h"
+#include "test/staking_test_peers.h"
 #include "test/state_guard.h"
 #include "test/wallet_file_placeholder.h"
 #include "uint256.h"
 #include "util/system.h"
+#include "util/time.h"
+#include "wallet/capability.h"
 #include "wallet/transfer_sources.h"
 #include "wallet/wallet.h"
+#include "wallet/walletdump.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -22,6 +33,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -177,6 +189,61 @@ struct TransferCase
         return *snapshot;
     }
 };
+
+using grc_test::EncryptedWallet;
+
+//! A wallet dump with one line, for \p key.
+std::string DumpOf(const CKey& key)
+{
+    return "# A wallet dump with one key in it.\n" + EncodeSecret(key) + " 2026-01-01T00:00:00Z label=transfer\n";
+}
+
+//! A FileTransfer capability begun into \p wallet's IPC slot, as a client
+//! begins one.
+CapabilityId BeginFileTransfer(CWallet& wallet)
+{
+    BOOST_REQUIRE(wallet.BeginIpcElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::FileTransfer, {}));
+    const std::optional<CapabilityId> id = wallet.IpcCapability({});
+    BOOST_REQUIRE(id.has_value());
+    return *id;
+}
+
+//! Whether capability \p id still lets a FileTransfer scope be opened.
+bool CapabilityLive(CWallet& wallet, CapabilityId id)
+{
+    const CapabilityScope scope(wallet, id, CapabilityKind::FileTransfer);
+    return scope.Active();
+}
+
+//! The dump a generator made now writes under capability \p id.
+std::string GeneratedDump(CWallet& wallet, CapabilityId id)
+{
+    const CapabilityScope scope(wallet, id, CapabilityKind::FileTransfer);
+    BOOST_REQUIRE(scope.Active());
+
+    WalletDumpGenerator generator(wallet);
+    std::string all;
+    while (generator.Next(all, 4096)) {
+    }
+    return all;
+}
+
+//! An in-memory wallet keeps key pool entries with no database to read them
+//! from, so a dump of it (GetAllReserveKeys()) would fail; a dump case on one
+//! drops the pool first. A node's wallet is file-backed.
+void DropKeyPool(CWallet& wallet)
+{
+    LOCK(wallet.cs_wallet);
+    wallet.setKeyPool.clear();
+}
+
+//! The importwallet upload cap, as the console's command table gives it.
+uint64_t ImportCap()
+{
+    const interfaces::ConsoleFileCommand* command = interfaces::FindConsoleFileCommand("importwallet");
+    BOOST_REQUIRE(command);
+    return command->max_upload_bytes;
+}
 
 } // namespace
 
@@ -761,6 +828,481 @@ BOOST_FIXTURE_TEST_CASE(snapshot_failures_leave_nothing, TransferCase)
     BOOST_CHECK(!error.empty());
 
     BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+}
+
+// dumpwallet's stream: the text the generator writes, made under the
+// capability as it is read, held for the run and ended at the dump's end.
+// Nothing is written to the transfer directory.
+BOOST_FIXTURE_TEST_CASE(dumpwallet_source_streams_and_ends_capability, TransferCase)
+{
+    const grc_test::LoneBestBlock tip;
+    SetMockTime(1700000000);
+
+    EncryptedWallet w;
+    w.UnlockFor(UnlockScope::StakingOnly);
+    DropKeyPool(w.wallet);
+
+    const CapabilityId id = BeginFileTransfer(w.wallet);
+    const std::string expected = GeneratedDump(w.wallet, id);
+    BOOST_CHECK(expected.find(EncodeSecret(w.key) + " ") != std::string::npos);
+
+    std::unique_ptr<interfaces::FileSource> source =
+        wallet::MakeDumpWalletSource(w.wallet, id, interfaces::MakeConnectionScope());
+    BOOST_REQUIRE(source);
+
+    const std::vector<interfaces::FileEntryInfo> infos = source->entries();
+    BOOST_REQUIRE_EQUAL(infos.size(), 1u);
+    BOOST_CHECK_EQUAL(infos[0].name, "wallet-dump.txt");
+    BOOST_CHECK_EQUAL(infos[0].size, -1);
+    BOOST_CHECK_GT(infos[0].size_hint, 0u);
+    BOOST_CHECK(infos[0].note.empty());
+
+    // Reads of 100 bytes, less than a key's line: the source keeps the rest of
+    // a line for the next read, and no chunk is larger than asked for.
+    size_t chunks = 0;
+    const Bytes got = ReadToEnd(*source, 0, 100, &chunks);
+    BOOST_CHECK(got == BytesOf(expected));
+    BOOST_CHECK_GT(chunks, 1u);
+
+    const interfaces::FileTrailer trailer = source->trailer(0);
+    BOOST_CHECK(trailer.ok);
+    BOOST_CHECK_EQUAL(trailer.size, got.size());
+    BOOST_CHECK(trailer.sha256 == Sha256Of(got));
+
+    BOOST_CHECK(!CapabilityLive(w.wallet, id));
+    BOOST_CHECK(!source->read(0, 100).error.empty());
+    BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+
+    w.wallet.EndIpcElevation({});
+    BOOST_CHECK(w.wallet.IsUnlockedForStakingOnly());
+}
+
+// The capability ends during a dump (its lifetime, or the client's
+// UnlockContext ending it early): the next read is an error with no data, and
+// the trailer is refused, so nothing is saved under the client's name.
+BOOST_FIXTURE_TEST_CASE(dumpwallet_source_stops_when_capability_ends, TransferCase)
+{
+    const grc_test::LoneBestBlock tip;
+
+    EncryptedWallet w;
+    w.UnlockFor(UnlockScope::StakingOnly);
+    DropKeyPool(w.wallet);
+
+    const CapabilityId id = BeginFileTransfer(w.wallet);
+    std::unique_ptr<interfaces::FileSource> source =
+        wallet::MakeDumpWalletSource(w.wallet, id, interfaces::MakeConnectionScope());
+    BOOST_REQUIRE(source);
+
+    const interfaces::FileChunk first = source->read(0, 100);
+    BOOST_REQUIRE_MESSAGE(first.error.empty(), first.error);
+    BOOST_CHECK(!first.data.empty());
+    BOOST_CHECK(!first.eof);
+
+    w.wallet.EndElevation(id);
+
+    const interfaces::FileChunk after = source->read(0, 100);
+    BOOST_CHECK(!after.error.empty());
+    BOOST_CHECK(after.data.empty());
+    BOOST_CHECK(!after.eof);
+    BOOST_CHECK(!source->trailer(0).ok);
+
+    // A capability begun since does not bring the stream back.
+    const CapabilityId again = BeginFileTransfer(w.wallet);
+    BOOST_CHECK(!source->read(0, 100).error.empty());
+
+    w.wallet.EndElevation(again);
+    w.wallet.EndIpcElevation({});
+    BOOST_CHECK(w.wallet.IsUnlockedForStakingOnly());
+
+    // An unencrypted wallet can use its keys with or without a capability, so
+    // there what stops the stream is the source's own check of it, with lines
+    // already generated waiting for the next read.
+    CWallet plain;
+    {
+        CKey key;
+        key.MakeNewKey(true);
+        LOCK(plain.cs_wallet);
+        BOOST_REQUIRE(plain.AddKey(key));
+    }
+    BOOST_REQUIRE(plain.BeginIpcElevation(SecureString{}, CapabilityKind::FileTransfer, {}));
+    const std::optional<CapabilityId> plain_id = plain.IpcCapability({});
+    BOOST_REQUIRE(plain_id.has_value());
+
+    std::unique_ptr<interfaces::FileSource> plain_source = wallet::MakeDumpWalletSource(plain, *plain_id, nullptr);
+    BOOST_REQUIRE(plain_source);
+    const interfaces::FileChunk plain_first = plain_source->read(0, 10);
+    BOOST_REQUIRE_MESSAGE(plain_first.error.empty(), plain_first.error);
+    BOOST_REQUIRE_EQUAL(plain_first.data.size(), 10u);
+
+    plain.EndElevation(*plain_id);
+
+    const interfaces::FileChunk plain_after = plain_source->read(0, 100);
+    BOOST_CHECK(!plain_after.error.empty());
+    BOOST_CHECK(plain_after.data.empty());
+    plain.EndIpcElevation({});
+}
+
+// The connection's close, cancel() and destruction each end the capability,
+// and a source made on a connection that has already closed ends it at once.
+BOOST_FIXTURE_TEST_CASE(dumpwallet_source_close_ends_capability, TransferCase)
+{
+    const grc_test::LoneBestBlock tip;
+
+    EncryptedWallet w;
+    w.UnlockFor(UnlockScope::StakingOnly);
+    DropKeyPool(w.wallet);
+
+    const auto scope = interfaces::MakeConnectionScope();
+
+    const CapabilityId id = BeginFileTransfer(w.wallet);
+    std::unique_ptr<interfaces::FileSource> source = wallet::MakeDumpWalletSource(w.wallet, id, scope);
+    BOOST_REQUIRE(source);
+    BOOST_REQUIRE(source->read(0, 100).error.empty());
+
+    scope->close();
+    BOOST_CHECK(!CapabilityLive(w.wallet, id));
+    BOOST_CHECK(!source->read(0, 100).error.empty());
+
+    const CapabilityId late_id = BeginFileTransfer(w.wallet);
+    std::unique_ptr<interfaces::FileSource> late = wallet::MakeDumpWalletSource(w.wallet, late_id, scope);
+    BOOST_REQUIRE(late);
+    BOOST_CHECK(!CapabilityLive(w.wallet, late_id));
+    BOOST_CHECK(!late->read(0, 100).error.empty());
+
+    const CapabilityId cancelled_id = BeginFileTransfer(w.wallet);
+    std::unique_ptr<interfaces::FileSource> cancelled = wallet::MakeDumpWalletSource(w.wallet, cancelled_id, nullptr);
+    BOOST_REQUIRE(cancelled);
+    cancelled->cancel();
+    BOOST_CHECK(!CapabilityLive(w.wallet, cancelled_id));
+    BOOST_CHECK(!cancelled->read(0, 100).error.empty());
+
+    const CapabilityId dropped_id = BeginFileTransfer(w.wallet);
+    {
+        std::unique_ptr<interfaces::FileSource> dropped = wallet::MakeDumpWalletSource(w.wallet, dropped_id, nullptr);
+        BOOST_REQUIRE(dropped);
+        BOOST_REQUIRE(dropped->read(0, 100).error.empty());
+        BOOST_CHECK(CapabilityLive(w.wallet, dropped_id));
+    }
+    BOOST_CHECK(!CapabilityLive(w.wallet, dropped_id));
+
+    w.wallet.EndIpcElevation({});
+    BOOST_CHECK(w.wallet.IsUnlockedForStakingOnly());
+}
+
+// importwallet's upload: held in memory and imported at finish under the
+// capability, which ends with it. A wrong SHA-256, more data than announced,
+// or an announced size above the cap imports nothing.
+BOOST_FIXTURE_TEST_CASE(import_sink_rejects_oversize_and_bad_hash, TransferCase)
+{
+    const grc_test::LoneBestBlock tip;
+
+    EncryptedWallet w;
+    w.UnlockFor(UnlockScope::StakingOnly);
+
+    CKey fresh;
+    fresh.MakeNewKey(true);
+    const CKeyID fresh_id = fresh.GetPubKey().GetID();
+    const Bytes data = BytesOf(DumpOf(fresh));
+
+    // A wrong SHA-256 at finish.
+    {
+        const CapabilityId id = BeginFileTransfer(w.wallet);
+        std::unique_ptr<interfaces::FileSink> sink =
+            wallet::MakeImportWalletSink(w.wallet, id, data.size(), interfaces::MakeConnectionScope());
+        BOOST_REQUIRE(sink);
+        BOOST_REQUIRE(sink->write(data));
+
+        uint256 wrong = Sha256Of(data);
+        *wrong.begin() ^= 0x01;
+        const interfaces::FileSinkResult result = sink->finish(data.size(), wrong);
+        BOOST_CHECK(!result.ok);
+        BOOST_CHECK(!result.error.empty());
+        BOOST_CHECK(!w.wallet.HaveKey(fresh_id));
+        BOOST_CHECK(!CapabilityLive(w.wallet, id));
+    }
+
+    // More data than announced: the write is refused, and so is the finish.
+    {
+        const CapabilityId id = BeginFileTransfer(w.wallet);
+        std::unique_ptr<interfaces::FileSink> sink =
+            wallet::MakeImportWalletSink(w.wallet, id, data.size() - 1, nullptr);
+        BOOST_REQUIRE(sink);
+        BOOST_CHECK(!sink->write(data));
+        BOOST_CHECK(!sink->finish(data.size(), Sha256Of(data)).ok);
+        BOOST_CHECK(!w.wallet.HaveKey(fresh_id));
+        BOOST_CHECK(!CapabilityLive(w.wallet, id));
+    }
+
+    // An announced size above the cap: refused before any byte is taken.
+    {
+        const CapabilityId id = BeginFileTransfer(w.wallet);
+        std::unique_ptr<interfaces::FileSink> sink = wallet::MakeImportWalletSink(w.wallet, id, ImportCap() + 1, nullptr);
+        BOOST_REQUIRE(sink);
+        BOOST_CHECK(!sink->write(data));
+        const interfaces::FileSinkResult result = sink->finish(data.size(), Sha256Of(data));
+        BOOST_CHECK(!result.ok);
+        BOOST_CHECK_MESSAGE(result.error.find("too large") != std::string::npos, result.error);
+        BOOST_CHECK(!CapabilityLive(w.wallet, id));
+    }
+
+    // Cancelled part way.
+    {
+        const CapabilityId id = BeginFileTransfer(w.wallet);
+        std::unique_ptr<interfaces::FileSink> sink = wallet::MakeImportWalletSink(w.wallet, id, data.size(), nullptr);
+        BOOST_REQUIRE(sink);
+        BOOST_REQUIRE(sink->write(Bytes(data.begin(), data.begin() + 10)));
+        sink->cancel();
+        BOOST_CHECK(!sink->write(Bytes(data.begin() + 10, data.end())));
+        BOOST_CHECK(!sink->finish(data.size(), Sha256Of(data)).ok);
+        BOOST_CHECK(!CapabilityLive(w.wallet, id));
+    }
+
+    // An unencrypted wallet can use its keys with or without a capability, so
+    // there what refuses an import whose capability has ended is the sink's
+    // own check of it.
+    {
+        CWallet plain;
+        BOOST_REQUIRE(plain.BeginIpcElevation(SecureString{}, CapabilityKind::FileTransfer, {}));
+        const std::optional<CapabilityId> plain_id = plain.IpcCapability({});
+        BOOST_REQUIRE(plain_id.has_value());
+
+        std::unique_ptr<interfaces::FileSink> sink = wallet::MakeImportWalletSink(plain, *plain_id, data.size(), nullptr);
+        BOOST_REQUIRE(sink);
+        BOOST_REQUIRE(sink->write(data));
+
+        plain.EndElevation(*plain_id);
+
+        const interfaces::FileSinkResult result = sink->finish(data.size(), Sha256Of(data));
+        BOOST_CHECK(!result.ok);
+        BOOST_CHECK_MESSAGE(result.error.find("capability") != std::string::npos, result.error);
+        BOOST_CHECK(!plain.HaveKey(fresh_id));
+        plain.EndIpcElevation({});
+    }
+
+    // In two pieces with the right SHA-256: imported, and the capability ended.
+    {
+        const CapabilityId id = BeginFileTransfer(w.wallet);
+        std::unique_ptr<interfaces::FileSink> sink =
+            wallet::MakeImportWalletSink(w.wallet, id, data.size(), interfaces::MakeConnectionScope());
+        BOOST_REQUIRE(sink);
+        BOOST_REQUIRE(sink->write(Bytes(data.begin(), data.begin() + 10)));
+        BOOST_REQUIRE(sink->write(Bytes(data.begin() + 10, data.end())));
+
+        const interfaces::FileSinkResult result = sink->finish(data.size(), Sha256Of(data));
+        BOOST_CHECK_MESSAGE(result.ok, result.error);
+        BOOST_CHECK(w.wallet.HaveKey(fresh_id));
+        BOOST_CHECK(!CapabilityLive(w.wallet, id));
+
+        // The sink is done.
+        BOOST_CHECK(!sink->write(data));
+    }
+
+    // The connection closes during an upload: the capability ends, and the
+    // finish imports nothing.
+    {
+        CKey other;
+        other.MakeNewKey(true);
+        const Bytes other_data = BytesOf(DumpOf(other));
+
+        const auto scope = interfaces::MakeConnectionScope();
+        const CapabilityId id = BeginFileTransfer(w.wallet);
+        std::unique_ptr<interfaces::FileSink> sink = wallet::MakeImportWalletSink(w.wallet, id, other_data.size(), scope);
+        BOOST_REQUIRE(sink);
+        BOOST_REQUIRE(sink->write(other_data));
+
+        scope->close();
+        BOOST_CHECK(!CapabilityLive(w.wallet, id));
+        BOOST_CHECK(!sink->finish(other_data.size(), Sha256Of(other_data)).ok);
+        BOOST_CHECK(!w.wallet.HaveKey(other.GetPubKey().GetID()));
+    }
+
+    w.wallet.EndIpcElevation({});
+    BOOST_CHECK(w.wallet.IsUnlockedForStakingOnly());
+}
+
+// parseaccrualsnapshotfile's upload: a core temporary file, which the RPC reads
+// at finish, and which is gone on every path.
+BOOST_FIXTURE_TEST_CASE(rpc_file_sink_parses_uploaded_snapshot_and_deletes_temp, TransferCase)
+{
+    const fs::path local = dir / "5000000";
+    {
+        GRC::AccrualSnapshotWriter writer(local);
+        writer.WriteHeader(5000000);
+        writer.WriteRecord(GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"), 12345);
+    }
+    const Bytes bytes = FileBytes(local);
+    BOOST_REQUIRE(!bytes.empty());
+
+    const uint64_t max = 256 * 1024 * 1024;
+
+    {
+        std::unique_ptr<interfaces::FileSink> sink = wallet::MakeRpcFileSink(
+            "parseaccrualsnapshotfile", {}, 0, bytes.size(), max, interfaces::MakeConnectionScope());
+        BOOST_REQUIRE(sink);
+
+        BOOST_REQUIRE(sink->write(Bytes(bytes.begin(), bytes.begin() + 5)));
+        BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 1u);
+        BOOST_REQUIRE(sink->write(Bytes(bytes.begin() + 5, bytes.end())));
+
+        const interfaces::FileSinkResult result = sink->finish(bytes.size(), Sha256Of(bytes));
+        BOOST_CHECK_MESSAGE(result.ok, result.error);
+        BOOST_CHECK_MESSAGE(result.output.find("\"height\": 5000000") != std::string::npos, result.output);
+        BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+    }
+
+    // Too few bytes for a snapshot's header: the RPC's error, and nothing left.
+    {
+        const Bytes junk = BytesOf("abc");
+        std::unique_ptr<interfaces::FileSink> sink =
+            wallet::MakeRpcFileSink("parseaccrualsnapshotfile", {}, 0, junk.size(), max, nullptr);
+        BOOST_REQUIRE(sink);
+        BOOST_REQUIRE(sink->write(junk));
+        const interfaces::FileSinkResult result = sink->finish(junk.size(), Sha256Of(junk));
+        BOOST_CHECK(!result.ok);
+        BOOST_CHECK(!result.error.empty());
+        BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+    }
+
+    // More than announced, and an announced size above the cap: refused.
+    {
+        std::unique_ptr<interfaces::FileSink> sink =
+            wallet::MakeRpcFileSink("parseaccrualsnapshotfile", {}, 0, bytes.size() - 1, max, nullptr);
+        BOOST_REQUIRE(sink);
+        BOOST_CHECK(!sink->write(bytes));
+        BOOST_CHECK(!sink->finish(bytes.size(), Sha256Of(bytes)).ok);
+        BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+
+        std::unique_ptr<interfaces::FileSink> over =
+            wallet::MakeRpcFileSink("parseaccrualsnapshotfile", {}, 0, 10, 9, nullptr);
+        BOOST_REQUIRE(over);
+        BOOST_CHECK(!over->write(BytesOf("123")));
+        BOOST_CHECK(!over->finish(3, Sha256Of(BytesOf("123"))).ok);
+    }
+
+    // The connection closes, cancel(), or the sink goes away part way.
+    {
+        const auto scope = interfaces::MakeConnectionScope();
+        std::unique_ptr<interfaces::FileSink> sink =
+            wallet::MakeRpcFileSink("parseaccrualsnapshotfile", {}, 0, bytes.size(), max, scope);
+        BOOST_REQUIRE(sink);
+        BOOST_REQUIRE(sink->write(Bytes(bytes.begin(), bytes.begin() + 5)));
+        scope->close();
+        BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+        BOOST_CHECK(!sink->write(Bytes(bytes.begin() + 5, bytes.end())));
+
+        std::unique_ptr<interfaces::FileSink> cancelled =
+            wallet::MakeRpcFileSink("parseaccrualsnapshotfile", {}, 0, bytes.size(), max, nullptr);
+        BOOST_REQUIRE(cancelled);
+        BOOST_REQUIRE(cancelled->write(Bytes(bytes.begin(), bytes.begin() + 5)));
+        cancelled->cancel();
+        BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+
+        {
+            std::unique_ptr<interfaces::FileSink> dropped =
+                wallet::MakeRpcFileSink("parseaccrualsnapshotfile", {}, 0, bytes.size(), max, nullptr);
+            BOOST_REQUIRE(dropped);
+            BOOST_REQUIRE(dropped->write(Bytes(bytes.begin(), bytes.begin() + 5)));
+            BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 1u);
+        }
+        BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+    }
+
+    // The file it was sent from is untouched.
+    BOOST_CHECK(FileBytes(local) == bytes);
+}
+
+// dumpcontracts' download: the command writes a fresh file the core names in
+// its transfer directory, which is streamed with the reply as its note and
+// deleted.
+BOOST_FIXTURE_TEST_CASE(rpc_output_source_streams_the_produced_file, TransferCase)
+{
+    std::vector<std::vector<std::string>> calls;
+    const wallet::RpcRunner runner = [&calls](const std::string& method, const std::vector<std::string>& args) {
+        BOOST_CHECK_EQUAL(method, "dumpcontracts");
+        calls.push_back(args);
+        BOOST_REQUIRE_GE(args.size(), 2u);
+
+        const fs::path path(args[1]);
+        BOOST_CHECK(path.parent_path() == wallet::GetTransferDir());
+        BOOST_CHECK(!Present(path));
+
+        WriteBytes(path, BytesOf("abc\n"));
+        return std::string("{\"n\":1}");
+    };
+
+    std::string error;
+    std::unique_ptr<interfaces::FileSource> source = wallet::MakeRpcOutputSource(
+        "dumpcontracts", {"beacon"}, 1, interfaces::MakeConnectionScope(), error, runner);
+    BOOST_REQUIRE_MESSAGE(source, error);
+    BOOST_CHECK(error.empty());
+
+    BOOST_REQUIRE_EQUAL(calls.size(), 1u);
+    BOOST_REQUIRE_EQUAL(calls[0].size(), 2u);
+    BOOST_CHECK_EQUAL(calls[0][0], "beacon");
+
+    const std::vector<interfaces::FileEntryInfo> infos = source->entries();
+    BOOST_REQUIRE_EQUAL(infos.size(), 1u);
+    BOOST_CHECK_EQUAL(infos[0].note, "{\"n\":1}");
+    BOOST_CHECK_EQUAL(infos[0].size, 4);
+
+    BOOST_CHECK(ReadToEnd(*source, 0, 100) == BytesOf("abc\n"));
+    BOOST_CHECK(source->trailer(0).ok);
+    BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+
+    // Arguments after the file stay after it.
+    source = wallet::MakeRpcOutputSource("dumpcontracts", {"beacon", "true"}, 1, nullptr, error, runner);
+    BOOST_REQUIRE_MESSAGE(source, error);
+    BOOST_REQUIRE_EQUAL(calls.size(), 2u);
+    BOOST_REQUIRE_EQUAL(calls[1].size(), 3u);
+    BOOST_CHECK_EQUAL(calls[1][0], "beacon");
+    BOOST_CHECK_EQUAL(calls[1][2], "true");
+    source.reset();
+    BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+}
+
+// A command that throws, part way through its file or before it, or that
+// writes no file: no source, the error said, nothing left behind.
+BOOST_FIXTURE_TEST_CASE(rpc_output_source_runner_throw_leaves_nothing, TransferCase)
+{
+    std::string error;
+
+    const wallet::RpcRunner partial_then_rpc_error = [](const std::string&,
+                                                        const std::vector<std::string>& args) -> std::string {
+        WriteBytes(fs::path(args[1]), BytesOf("half a fi"));
+        throw JSONRPCError(RPC_MISC_ERROR, "the command failed");
+    };
+    BOOST_CHECK(!wallet::MakeRpcOutputSource("dumpcontracts", {"*"}, 1, nullptr, error, partial_then_rpc_error));
+    BOOST_CHECK_MESSAGE(error.find("the command failed") != std::string::npos, error);
+    BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+
+    error.clear();
+    const wallet::RpcRunner partial_then_exception = [](const std::string&,
+                                                        const std::vector<std::string>& args) -> std::string {
+        WriteBytes(fs::path(args[1]), BytesOf("half a fi"));
+        throw std::runtime_error("the disk went away");
+    };
+    BOOST_CHECK(!wallet::MakeRpcOutputSource("dumpcontracts", {"*"}, 1, nullptr, error, partial_then_exception));
+    BOOST_CHECK_MESSAGE(error.find("the disk went away") != std::string::npos, error);
+    BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+
+    error.clear();
+    const wallet::RpcRunner no_file = [](const std::string&, const std::vector<std::string>&) {
+        return std::string("{}");
+    };
+    BOOST_CHECK(!wallet::MakeRpcOutputSource("dumpcontracts", {"*"}, 1, nullptr, error, no_file));
+    BOOST_CHECK(!error.empty());
+    BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+
+    // Too few arguments for the file's place: refused before the command runs.
+    error.clear();
+    bool ran = false;
+    const wallet::RpcRunner never = [&ran](const std::string&, const std::vector<std::string>&) {
+        ran = true;
+        return std::string();
+    };
+    BOOST_CHECK(!wallet::MakeRpcOutputSource("dumpcontracts", {}, 1, nullptr, error, never));
+    BOOST_CHECK(!ran);
+    BOOST_CHECK(!error.empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

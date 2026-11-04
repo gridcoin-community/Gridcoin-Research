@@ -23,6 +23,8 @@
 #include "node/shutdown.h"
 #include "node/ui_interface.h"
 #include "policy/fees.h"
+#include "gridcoin/accrual/snapshot.h"
+#include "gridcoin/cpid.h"
 #include "gridcoin/scraper/fwd.h"
 #include "gridcoin/sidestake.h"
 #include "primitives/transaction.h"
@@ -31,6 +33,7 @@
 #include "sync.h"
 #include "test/encrypted_wallet.h"
 #include "test/gui_cache_fakes.h"
+#include "test/lone_best_block.h"
 #include "test/psgt_test_helpers.h"
 #include "test/staking_test_peers.h"
 #include "test/state_guard.h"
@@ -2633,6 +2636,267 @@ BOOST_FIXTURE_TEST_CASE(second_transfer_refused_while_one_is_live, BackupCase)
     err.clear();
     std::unique_ptr<interfaces::FileSource> third = w->beginBackup(BACKUP_WALLET, err);
     BOOST_CHECK_MESSAGE(third, err);
+}
+
+// The console's file commands run through the transfer channel: the core
+// generates or consumes the data in a stream under the client's FileTransfer
+// capability, and no path the client names reaches the core.
+namespace {
+
+const std::string FILE_TRANSFER_REFUSAL{"Enter the wallet passphrase to transfer files."};
+
+//! An accrual snapshot file of one record, as the accrual repository writes it.
+fs::path WriteSnapshotFile(const fs::path& dir)
+{
+    const fs::path path = dir / "5000000";
+    GRC::AccrualSnapshotWriter writer(path);
+    writer.WriteHeader(5000000);
+    writer.WriteRecord(GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"), 12345);
+    return path;
+}
+
+//! An in-memory wallet keeps key pool entries with no database to read them
+//! from, so a dump of it (GetAllReserveKeys()) would fail; a dump case on one
+//! drops the pool first. A node's wallet is file-backed.
+void DropKeyPool(CWallet& wallet)
+{
+    LOCK(wallet.cs_wallet);
+    wallet.setKeyPool.clear();
+}
+
+//! Whether capability \p id still lets a FileTransfer scope be opened on \p wallet.
+bool FileTransferLive(CWallet& wallet, const std::optional<CapabilityId>& id)
+{
+    const CapabilityScope scope(wallet, id, CapabilityKind::FileTransfer);
+    return scope.Active();
+}
+
+} // namespace
+
+BOOST_FIXTURE_TEST_CASE(console_download_refused_without_capability_while_staking_only, BackupCase)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
+
+    std::string err;
+    BOOST_CHECK(!w->beginConsoleDownload("dumpwallet", {}, err));
+    BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
+    err.clear();
+    BOOST_CHECK(!w->beginConsoleUpload("importwallet", {}, 10, err));
+    BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
+
+    // A capability of another kind does not pass the gate, and the refusal
+    // leaves it in the slot.
+    BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Backup));
+    const std::optional<CapabilityId> backup_id = fx.wallet.IpcCapability({});
+    BOOST_REQUIRE(backup_id.has_value());
+
+    err.clear();
+    BOOST_CHECK(!w->beginConsoleDownload("dumpwallet", {}, err));
+    BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
+    BOOST_CHECK(fx.wallet.IpcCapability({}) == backup_id);
+
+    w->endElevation();
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+    BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+}
+
+// Every console file transfer runs under a FileTransfer capability, whatever the
+// wallet's lock state: an empty slot is refused on an unencrypted wallet too.
+BOOST_FIXTURE_TEST_CASE(console_transfer_needs_a_capability_on_an_unencrypted_wallet, BackupCase)
+{
+    BOOST_REQUIRE(!pwalletMain->IsCrypted());
+    BOOST_REQUIRE(!pwalletMain->IpcCapability({}).has_value());
+
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+    std::string err;
+
+    BOOST_CHECK(!w->beginConsoleDownload("dumpwallet", {}, err));
+    BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
+    err.clear();
+    BOOST_CHECK(!w->beginConsoleUpload("parseaccrualsnapshotfile", {}, 10, err));
+    BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
+    BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(console_download_rejects_non_file_command)
+{
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+    std::string err;
+
+    BOOST_CHECK(!w->beginConsoleDownload("getinfo", {}, err));
+    BOOST_CHECK_EQUAL(err, "not a file command");
+
+    // The wrong direction.
+    err.clear();
+    BOOST_CHECK(!w->beginConsoleDownload("importwallet", {}, err));
+    BOOST_CHECK_EQUAL(err, "not a file command");
+    err.clear();
+    BOOST_CHECK(!w->beginConsoleUpload("dumpwallet", {}, 10, err));
+    BOOST_CHECK_EQUAL(err, "not a file command");
+    err.clear();
+    BOOST_CHECK(!w->beginConsoleUpload("getblockcount", {}, 10, err));
+    BOOST_CHECK_EQUAL(err, "not a file command");
+
+    // dumpcontracts takes its contract type before the file.
+    err.clear();
+    BOOST_CHECK(!w->beginConsoleDownload("dumpcontracts", {}, err));
+    BOOST_CHECK_MESSAGE(err.find("argument") != std::string::npos, err);
+}
+
+BOOST_AUTO_TEST_CASE(console_upload_refuses_too_large)
+{
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+
+    for (const char* method : {"importwallet", "parseaccrualsnapshotfile"}) {
+        const interfaces::ConsoleFileCommand* command = interfaces::FindConsoleFileCommand(method);
+        BOOST_REQUIRE(command);
+
+        std::string err;
+        BOOST_CHECK(!w->beginConsoleUpload(method, {}, command->max_upload_bytes + 1, err));
+        BOOST_CHECK_MESSAGE(err.find("too large") != std::string::npos, method << ": " << err);
+
+        // At the cap it is not too large; it is refused for want of a capability.
+        err.clear();
+        BOOST_CHECK(!w->beginConsoleUpload(method, {}, command->max_upload_bytes, err));
+        BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
+    }
+}
+
+// dumpwallet: the source holds the capability while it streams the dump, and
+// ends it at the dump's end. Nothing goes through the core's disk.
+BOOST_FIXTURE_TEST_CASE(console_download_streams_the_dump_and_ends_capability, BackupCase)
+{
+    const grc_test::LoneBestBlock tip;
+
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    DropKeyPool(fx.wallet);
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
+    w->bindConnectionScope(interfaces::MakeConnectionScope());
+
+    BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::FileTransfer));
+    const std::optional<CapabilityId> id = fx.wallet.IpcCapability({});
+    BOOST_REQUIRE(id.has_value());
+
+    std::string err;
+    std::unique_ptr<interfaces::FileSource> source = w->beginConsoleDownload("dumpwallet", {}, err);
+    BOOST_REQUIRE_MESSAGE(source, err);
+    BOOST_CHECK(err.empty());
+
+    // Held for the run.
+    BOOST_CHECK(FileTransferLive(fx.wallet, id));
+
+    const std::vector<interfaces::FileEntryInfo> infos = source->entries();
+    BOOST_REQUIRE_EQUAL(infos.size(), 1U);
+    BOOST_CHECK_EQUAL(infos[0].name, "wallet-dump.txt");
+
+    const std::string dump = ReadEntry(*source, 0);
+    BOOST_CHECK(dump.find(EncodeSecret(fx.key) + " ") != std::string::npos);
+    BOOST_CHECK(dump.find("# End of dump\n") != std::string::npos);
+
+    BOOST_CHECK(!FileTransferLive(fx.wallet, id));
+    BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+
+    w->endElevation();
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+BOOST_FIXTURE_TEST_CASE(console_download_goes_with_the_connection, BackupCase)
+{
+    const grc_test::LoneBestBlock tip;
+
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    DropKeyPool(fx.wallet);
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
+    const auto scope = interfaces::MakeConnectionScope();
+    w->bindConnectionScope(scope);
+
+    BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::FileTransfer));
+    const std::optional<CapabilityId> id = fx.wallet.IpcCapability({});
+
+    std::string err;
+    std::unique_ptr<interfaces::FileSource> source = w->beginConsoleDownload("dumpwallet", {}, err);
+    BOOST_REQUIRE_MESSAGE(source, err);
+    BOOST_REQUIRE(source->read(0, 64).error.empty());
+
+    scope->close();
+    BOOST_CHECK(!FileTransferLive(fx.wallet, id));
+    BOOST_CHECK(!source->read(0, 64).error.empty());
+}
+
+// parseaccrualsnapshotfile: the upload goes to a core temporary file, which the
+// command reads at finish and which is then gone. The command reaches no key,
+// so the capability that let the transfer begin is ended as it begins.
+BOOST_FIXTURE_TEST_CASE(console_upload_parses_a_snapshot_and_ends_capability, BackupCase)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
+    w->bindConnectionScope(interfaces::MakeConnectionScope());
+
+    const fs::path local = WriteSnapshotFile(dir);
+    const uint64_t size = fs::file_size(local);
+
+    BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::FileTransfer));
+    const std::optional<CapabilityId> id = fx.wallet.IpcCapability({});
+
+    std::string err;
+    std::unique_ptr<interfaces::FileSink> sink = w->beginConsoleUpload("parseaccrualsnapshotfile", {}, size, err);
+    BOOST_REQUIRE_MESSAGE(sink, err);
+
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
+    BOOST_CHECK(!FileTransferLive(fx.wallet, id));
+
+    const std::atomic<bool> cancel{false};
+    const interfaces::FileSinkResult result = interfaces::UploadFile(*sink, local, {}, cancel, 7);
+    BOOST_CHECK_MESSAGE(result.ok, result.error);
+    BOOST_CHECK_MESSAGE(result.output.find("\"height\": 5000000") != std::string::npos, result.output);
+    BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+
+    // The file named on the client's side is untouched.
+    BOOST_CHECK_EQUAL(fs::file_size(local), size);
+}
+
+BOOST_FIXTURE_TEST_CASE(second_console_transfer_refused_while_one_is_live, BackupCase)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
+
+    BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::FileTransfer));
+    const std::optional<CapabilityId> id = fx.wallet.IpcCapability({});
+
+    std::string err;
+    std::unique_ptr<interfaces::FileSink> first = w->beginConsoleUpload("importwallet", {}, 100, err);
+    BOOST_REQUIRE_MESSAGE(first, err);
+
+    err.clear();
+    BOOST_CHECK(!w->beginConsoleUpload("importwallet", {}, 100, err));
+    BOOST_CHECK_EQUAL(err, "a transfer is already in progress");
+    err.clear();
+    BOOST_CHECK(!w->beginConsoleDownload("dumpwallet", {}, err));
+    BOOST_CHECK_EQUAL(err, "a transfer is already in progress");
+    err.clear();
+    BOOST_CHECK(!w->beginBackup(BACKUP_WALLET, err));
+    BOOST_CHECK_EQUAL(err, "a transfer is already in progress");
+
+    // The sink holds the capability until it goes away, and then the next
+    // transfer can begin.
+    BOOST_CHECK(FileTransferLive(fx.wallet, id));
+    first.reset();
+    BOOST_CHECK(!FileTransferLive(fx.wallet, id));
+
+    BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::FileTransfer));
+    err.clear();
+    std::unique_ptr<interfaces::FileSink> second = w->beginConsoleUpload("importwallet", {}, 100, err);
+    BOOST_CHECK_MESSAGE(second, err);
+    second.reset();
+
+    w->endElevation();
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

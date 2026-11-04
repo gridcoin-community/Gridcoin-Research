@@ -7,7 +7,11 @@
 
 #include "fs.h"
 #include "interfaces/file_transfer.h"
+#include "wallet/capability.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -86,6 +90,79 @@ std::optional<fs::path> SnapshotWallet(const CWallet& wallet, std::string& error
 //! through util::TransferTempFile (created exclusively and owner-only, then
 //! renamed). nullopt, with \p error set and nothing left behind, on failure.
 std::optional<fs::path> SnapshotPlainFile(const fs::path& source, std::string& error);
+
+//! The name of the dump stream's one entry.
+extern const char* const WALLET_DUMP_ENTRY_NAME;
+
+//! A source with one entry, "wallet-dump.txt" (size -1, its size_hint the
+//! generator's), that streams the text dumpwallet writes, generated as it is
+//! read: nothing is written to disk.
+//!
+//! The source holds capability \p cap of kind FileTransfer for its run, and
+//! makes the dump only under it: the generator is made, and each read()
+//! generates, inside a CapabilityScope(wallet, cap, FileTransfer) opened on
+//! the calling thread. Once the capability has ended (EndElevation(), its
+//! lifetime, or the client's UnlockContext ending it), every read returns an
+//! error chunk. Lines generated beyond a read's bound wait in a buffer in
+//! secure memory for the next read, and every intermediate string is
+//! cleansed.
+//!
+//! The source ends \p cap itself (wallet.EndElevation()) at the dump's end,
+//! on cancel(), when \p scope closes, on a read error, and in the destructor,
+//! whichever comes first. Registers one close hook on \p scope, which the
+//! destructor removes; a null \p scope (in process) registers nothing.
+std::unique_ptr<interfaces::FileSource> MakeDumpWalletSource(CWallet& wallet, CapabilityId cap,
+                                                             std::shared_ptr<interfaces::ConnectionScope> scope);
+
+//! A sink that takes an upload of a wallet dump into memory and imports it.
+//!
+//! It accepts up to \p size bytes, at most the importwallet upload cap, into
+//! a buffer in secure memory (pieces from the locked pool; never on the
+//! core's disk). finish() checks the size and SHA-256 the client sends
+//! against what arrived, then runs ImportWalletFromStream() on the buffer
+//! inside a CapabilityScope(wallet, cap, FileTransfer) opened on the calling
+//! thread, and reports its result as output, or its refusal as error. The
+//! buffer is cleansed on every path: finish, cancel(), a refused write, the
+//! scope's close and the destructor. \p cap is ended (wallet.EndElevation())
+//! on each of them as well. A null \p scope registers no close hook.
+std::unique_ptr<interfaces::FileSink> MakeImportWalletSink(CWallet& wallet, CapabilityId cap, uint64_t size,
+                                                           std::shared_ptr<interfaces::ConnectionScope> scope);
+
+//! Runs one RPC and returns its reply as text: a string reply as it is, a null
+//! reply as "", any other as write(2). Throws what the RPC throws.
+using RpcRunner = std::function<std::string(const std::string& method, const std::vector<std::string>& args)>;
+
+//! The runner the console uses: refused while the RPC server warms up, then
+//! tableRPC.execute(method, RPCConvertValues(method, args)).
+RpcRunner DefaultRpcRunner();
+
+//! A sink for a console command that reads a file (parseaccrualsnapshotfile).
+//!
+//! It writes the upload to a fresh core temporary file in the transfer
+//! directory through util::TransferTempFile, accepting up to \p size bytes
+//! and never more than \p max. finish() checks the size and SHA-256, renames
+//! the file into place, inserts its path into \p args at \p path_index, runs
+//! \p run and returns its text as output (or what it threw as error). The
+//! file is deleted on every path: after the command, on a refused write,
+//! cancel(), the scope's close and the destructor. A null \p scope registers
+//! no close hook.
+std::unique_ptr<interfaces::FileSink> MakeRpcFileSink(std::string method, std::vector<std::string> args,
+                                                      size_t path_index, uint64_t size, uint64_t max,
+                                                      std::shared_ptr<interfaces::ConnectionScope> scope,
+                                                      RpcRunner run = DefaultRpcRunner());
+
+//! A source for a console command that writes a file (dumpcontracts).
+//!
+//! Inserts a fresh path in the transfer directory, where nothing is yet, into
+//! \p args at \p path_index, runs \p run, and returns a snapshot source
+//! (MakeSnapshotSource()) over the file the command wrote, with the command's
+//! reply text as the entry's note. When the command throws, or writes no
+//! regular file there, returns null with \p error set and leaves nothing in
+//! the transfer directory.
+std::unique_ptr<interfaces::FileSource> MakeRpcOutputSource(const std::string& method, std::vector<std::string> args,
+                                                            size_t path_index,
+                                                            std::shared_ptr<interfaces::ConnectionScope> scope,
+                                                            std::string& error, RpcRunner run = DefaultRpcRunner());
 
 } // namespace wallet
 

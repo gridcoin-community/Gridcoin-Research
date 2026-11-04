@@ -4,6 +4,7 @@
 
 #include "chain.h"
 #include "chainparams.h"
+#include "crypto/sha256.h"
 #include "fs.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/mnemonics.h"
@@ -15,6 +16,7 @@
 #include "gridcoin/voting/fwd.h"
 #include "gridcoin/voting/poll.h"
 #include "init.h"
+#include "interfaces/file_transfer.h"
 #include "interfaces/mrc.h"
 #include "interfaces/node.h"
 #include "interfaces/psgt.h"
@@ -110,7 +112,8 @@ const std::vector<std::string> INVENTORY_RPCS{
 
 //! The same for the IPC methods, as interface.method.
 const std::vector<std::string> INVENTORY_IPC{
-    "Wallet.backupWallet", "Wallet.beginBackup", "Wallet.encryptWallet", "Wallet.lockWallet", "Wallet.elevateWallet",
+    "Wallet.backupWallet", "Wallet.beginBackup", "Wallet.beginConsoleDownload", "Wallet.beginConsoleUpload",
+    "Wallet.encryptWallet", "Wallet.lockWallet", "Wallet.elevateWallet",
     "Wallet.unlockWallet", "Wallet.changeWalletPassphrase", "Wallet.getKeyFromPool", "Wallet.sendCoins",
     "Wallet.signMessage", "Wallet.getNewReceiveAddress", "Wallet.getNewReceiveAddressWithLabel",
     "MRC.snapshot", "MRC.submit", "MRC.submitConfirmed",
@@ -978,6 +981,10 @@ using IpcDriver = std::function<DriverOutcome(KeyReachWallet&)>;
 const std::string PSGT_SIGN_REFUSAL =
     "The wallet is locked or unlocked for staking only. Enter the wallet passphrase to sign.";
 
+//! The refusal beginConsoleDownload() and beginConsoleUpload() give without a
+//! FileTransfer capability.
+const std::string FILE_TRANSFER_REFUSAL = "Enter the wallet passphrase to transfer files.";
+
 //! One driver per IPC row, by interface.method. Each calls the method as an
 //! IPC client would, through the in-process interface on the fixture's wallet,
 //! and says whether it was refused with the method's staking-only refusal and
@@ -1113,6 +1120,55 @@ std::map<std::string, IpcDriver> IpcDrivers()
             "signmessage", {EncodeDestination(CTxDestination(fx.own_id)), "x"});
         return DriverOutcome{result.wallet_unlock_needed, result.ok,
                              strprintf("ok %d: %s", result.ok, result.output), result.ok ? "ok" : result.output};
+    };
+
+    drivers["Wallet.beginConsoleDownload"] = [](KeyReachWallet& fx) {
+        std::string error;
+        std::unique_ptr<interfaces::FileSource> source =
+            interfaces::MakeWallet(&fx.wallet)->beginConsoleDownload("dumpwallet", {}, error);
+        if (!source) return DriverOutcome{error == FILE_TRANSFER_REFUSAL, false, "refused: " + error, error};
+
+        // Read to the end, as the client's download does.
+        std::string dump;
+        std::string read_error;
+        for (int i = 0; i < 10000 && read_error.empty(); ++i) {
+            const interfaces::FileChunk chunk = source->read(0, 64 * 1024);
+            read_error = chunk.error;
+            dump.append(chunk.data.begin(), chunk.data.end());
+            if (chunk.eof) break;
+        }
+        const bool trailer = read_error.empty() && source->trailer(0).ok;
+        const bool has_key = dump.find(EncodeSecret(fx.own) + " ") != std::string::npos;
+
+        const std::string said = !read_error.empty() ? "stream error: " + read_error
+                                 : has_key           ? "dumped the wallet's key"
+                                                     : "the dump lacks the wallet's key";
+        return DriverOutcome{false, trailer && has_key, said, said};
+    };
+
+    drivers["Wallet.beginConsoleUpload"] = [](KeyReachWallet& fx) {
+        CKey fresh;
+        fresh.MakeNewKey(true);
+        const std::string text = "# A wallet dump with one key in it.\n" + EncodeSecret(fresh)
+                                 + " 2026-01-01T00:00:00Z label=key-entry-points\n";
+        const std::vector<unsigned char> data(text.begin(), text.end());
+
+        std::string error;
+        std::unique_ptr<interfaces::FileSink> sink =
+            interfaces::MakeWallet(&fx.wallet)->beginConsoleUpload("importwallet", {}, data.size(), error);
+        if (!sink) return DriverOutcome{error == FILE_TRANSFER_REFUSAL, false, "refused: " + error, error};
+
+        uint256 sha;
+        CSHA256().Write(data.data(), data.size()).Finalize(sha.begin());
+
+        const bool written = sink->write(data);
+        const interfaces::FileSinkResult result = written ? sink->finish(data.size(), sha) : interfaces::FileSinkResult{};
+        const bool imported = fx.wallet.HaveKey(fresh.GetPubKey().GetID());
+
+        const std::string said = !written    ? "the upload was refused"
+                                 : result.ok ? (imported ? "imported" : "finished, but the key is not there")
+                                             : "finish: " + result.error;
+        return DriverOutcome{false, result.ok && imported, said, said};
     };
 
     drivers["Wallet.getNewReceiveAddress"] = [](KeyReachWallet& fx) {
@@ -1444,8 +1500,7 @@ BOOST_AUTO_TEST_CASE(dumpwallet_writes_no_dump_with_a_key_missing)
     fs::remove(path);
 
     // Unlocked for staking only, and past the RPC's own unlock check, which
-    // refuses before the writer runs: the writer refuses at the first key it
-    // cannot read.
+    // refuses before the writer runs: the writer refuses before it reads a key.
     {
         KeyReachWallet fx(WalletOptions{});
         fx.UnlockFor(UnlockScope::StakingOnly);
@@ -1456,7 +1511,7 @@ BOOST_AUTO_TEST_CASE(dumpwallet_writes_no_dump_with_a_key_missing)
         const auto [code, message] = RpcError([&] { WriteWalletDump(fx.wallet, DUMP_FILE); });
 
         BOOST_CHECK(code == RPC_WALLET_UNLOCK_NEEDED);
-        BOOST_CHECK_MESSAGE(message.rfind("dumpwallet: cannot read the key for ", 0) == 0, message);
+        BOOST_CHECK_EQUAL(message, "keys are not available");
         BOOST_CHECK(!fs::exists(path));
     }
 

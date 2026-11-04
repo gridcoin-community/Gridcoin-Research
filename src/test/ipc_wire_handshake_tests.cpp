@@ -17,6 +17,8 @@
 // calls cross-thread, exactly as production does. A test that constructs the loop
 // and calls ConnectStream inline on the same thread (before loop()) deadlocks.
 
+#include "gridcoin/accrual/snapshot.h"
+#include "gridcoin/cpid.h"
 #include "interfaces/file_transfer.h"
 #include "interfaces/init.h"
 #include "interfaces/ipc.h"
@@ -49,6 +51,7 @@
 #include "node/gui_cache.h"
 #include "sync.h"
 #include "test/gui_cache_fakes.h"
+#include "test/lone_best_block.h"
 #include "test/staking_test_peers.h"
 #include "test/state_guard.h"
 #include "test/wallet_file_placeholder.h"
@@ -1290,6 +1293,101 @@ BOOST_AUTO_TEST_CASE(wire_backup_snapshot_is_gone_after_the_client_goes)
                         "the snapshot was still in the core's transfer directory after the client went away");
 
     source.reset();
+    wallet.reset();
+}
+
+// A console file command that writes a file, over the real wire: its arguments
+// cross as a List(Text), the core puts a file of its own where the command takes
+// one (dumpcontracts takes it second, and txids_only follows it), and the output
+// streams through the FileSource proxy with the command's reply as the entry's
+// note. Every console transfer needs a FileTransfer capability, which an
+// unencrypted wallet issues without a check.
+BOOST_AUTO_TEST_CASE(wire_console_download_streams_a_command_file)
+{
+    const TransferDirReset transfers;
+    const grc_test::LoneBestBlock tip;
+    const TempIpcDir dest_dir;
+
+    WireLink link(MainWalletServeFactory());
+    BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "cookie", "main").ok);
+
+    std::unique_ptr<interfaces::Wallet> wallet = link.client->makeWallet();
+    BOOST_REQUIRE(wallet != nullptr);
+
+    std::string error;
+    BOOST_CHECK(!wallet->beginConsoleDownload("dumpcontracts", {"beacon", "true"}, error));
+    BOOST_CHECK_EQUAL(error, "Enter the wallet passphrase to transfer files.");
+
+    BOOST_REQUIRE(wallet->beginElevation(SecureString{}, CapabilityKind::FileTransfer));
+
+    error.clear();
+    std::unique_ptr<interfaces::FileSource> source =
+        wallet->beginConsoleDownload("dumpcontracts", {"beacon", "true"}, error);
+    BOOST_REQUIRE_MESSAGE(source != nullptr, error);
+
+    const std::vector<interfaces::FileEntryInfo> infos = source->entries();
+    BOOST_REQUIRE_EQUAL(infos.size(), 1U);
+    BOOST_CHECK_MESSAGE(infos[0].note.find("\"contract_type\": \"beacon\"") != std::string::npos, infos[0].note);
+
+    const fs::path dest = dest_dir.dir / "contracts.txt";
+    const std::atomic<bool> cancel{false};
+    const interfaces::TransferOutcome outcome = interfaces::DownloadEntry(*source, 0, dest, {}, cancel);
+    BOOST_CHECK_MESSAGE(outcome.status == interfaces::TransferStatus::Ok, outcome.message);
+
+    // The argument after the file chose the text form.
+    std::string text;
+    {
+        fsbridge::ifstream in(dest, std::ios::binary);
+        text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+    BOOST_CHECK_MESSAGE(text.rfind("high_height_time,low_height,high_height,num_blocks\n", 0) == 0, text);
+    BOOST_CHECK_EQUAL(TransferDirReset::Count(), 0U);
+
+    source.reset();
+    wallet->endElevation();
+    wallet.reset();
+}
+
+// A console file command that reads a file, over the real wire: the upload goes
+// through the FileSink proxy in small writes, the command reads it from a core
+// temporary file at finish, and its reply comes back as the output.
+BOOST_AUTO_TEST_CASE(wire_console_upload_runs_a_command_on_the_file)
+{
+    const TransferDirReset transfers;
+    const TempIpcDir local_dir;
+
+    const fs::path local = local_dir.dir / "5000000";
+    {
+        GRC::AccrualSnapshotWriter writer(local);
+        writer.WriteHeader(5000000);
+        writer.WriteRecord(GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"), 12345);
+    }
+
+    WireLink link(MainWalletServeFactory());
+    BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "cookie", "main").ok);
+
+    std::unique_ptr<interfaces::Wallet> wallet = link.client->makeWallet();
+    BOOST_REQUIRE(wallet != nullptr);
+    BOOST_REQUIRE(wallet->beginElevation(SecureString{}, CapabilityKind::FileTransfer));
+
+    std::string error;
+    std::unique_ptr<interfaces::FileSink> sink =
+        wallet->beginConsoleUpload("parseaccrualsnapshotfile", {}, fs::file_size(local), error);
+    BOOST_REQUIRE_MESSAGE(sink != nullptr, error);
+
+    const std::atomic<bool> cancel{false};
+    const interfaces::FileSinkResult result = interfaces::UploadFile(*sink, local, {}, cancel, 7);
+    BOOST_CHECK_MESSAGE(result.ok, result.error);
+    BOOST_CHECK_MESSAGE(result.output.find("\"height\": 5000000") != std::string::npos, result.output);
+    BOOST_CHECK_EQUAL(TransferDirReset::Count(), 0U);
+
+    // An upload above its command's cap is refused as it begins.
+    error.clear();
+    BOOST_CHECK(!wallet->beginConsoleUpload("importwallet", {}, 64ULL * 1024 * 1024 + 1, error));
+    BOOST_CHECK_MESSAGE(error.find("too large") != std::string::npos, error);
+
+    sink.reset();
+    wallet->endElevation();
     wallet.reset();
 }
 

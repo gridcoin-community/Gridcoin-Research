@@ -476,6 +476,53 @@ public:
     //! served on closes. Another transfer can begin once it is destroyed.
     virtual std::unique_ptr<FileSource> beginBackup(uint8_t items, std::string& error_out) = 0;
 
+    //! Run a console command that writes a file (a Download row of
+    //! ConsoleFileCommands(): dumpwallet, dumpcontracts) and return a source
+    //! that streams what it writes, for the client to save under the path it
+    //! chose. \p args are the command's console arguments without that path;
+    //! the core puts a value of its own at the row's path_index, so no path
+    //! the client names reaches the core.
+    //!
+    //! Runs under the client's FileTransfer capability (beginElevation()),
+    //! whatever the wallet's lock state: with the IPC slot empty, or holding
+    //! a capability of another kind, it is refused. dumpwallet's source holds
+    //! the capability while it streams, generates the dump under it, and ends
+    //! it at the dump's end, on cancel, when it is destroyed or when the
+    //! connection closes. So the client keeps the capability (its
+    //! UnlockContext) until the download has finished: ending it ends the
+    //! stream. dumpcontracts runs here, into the core's transfer directory,
+    //! and this call ends the capability before it returns; the source
+    //! streams that file, with the command's reply as the entry's note, and
+    //! deletes it as a backup's source does.
+    //!
+    //! Null, with \p error_out set: "not a file command" for a method that is
+    //! not a Download row; too few arguments before the file; another
+    //! transfer of this wallet interface is live; "Enter the wallet
+    //! passphrase to transfer files." without the capability; or the command
+    //! failed. Another transfer can begin once the source is destroyed.
+    virtual std::unique_ptr<FileSource> beginConsoleDownload(const std::string& method,
+                                                             const std::vector<std::string>& args,
+                                                             std::string& error_out) = 0;
+
+    //! Begin a console command that reads a file (an Upload row of
+    //! ConsoleFileCommands(): importwallet, parseaccrualsnapshotfile) and
+    //! return a sink for the file's \p size bytes. \p args are as for
+    //! beginConsoleDownload(). importwallet's upload is held in memory, never
+    //! on the core's disk, and imported at finish() under the capability,
+    //! which the sink holds until then and ends when it is done, cancelled or
+    //! destroyed, or when the connection closes. parseaccrualsnapshotfile's
+    //! upload is written to a core temporary file, which the command reads at
+    //! finish() and which is then deleted; this call ends the capability
+    //! before it returns.
+    //!
+    //! Null, with \p error_out set, as beginConsoleDownload() (with "not a
+    //! file command" for a method that is not an Upload row), and also when
+    //! \p size is above the row's max_upload_bytes ("too large") or the
+    //! transfer directory lacks room for a temporary file.
+    virtual std::unique_ptr<FileSink> beginConsoleUpload(const std::string& method,
+                                                         const std::vector<std::string>& args, uint64_t size,
+                                                         std::string& error_out) = 0;
+
     //! Sign message with the private key for address (the "sign message" tool).
     //! Runs under the client's SignMessage capability (beginElevation()); the
     //! GUI holds an UnlockContext for it. Without one, a wallet unlocked for

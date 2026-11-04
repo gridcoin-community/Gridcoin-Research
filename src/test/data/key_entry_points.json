@@ -84,7 +84,9 @@
     {"interface": "ResearcherContext", "method": "advertiseBeacon", "kind": "Contract", "reaches": "GetKey", "needs": ["in_sync", "researcher"], "stops_before_key": "The wallet has no confirmed funds for the advertisement; it stops at the balance check, before the beacon key is drawn.", "expected_stop": "ERROR_INSUFFICIENT_FUNDS"},
     {"interface": "ResearcherContext", "method": "generateBeaconKeyForV3", "kind": "Contract", "reaches": "GetKey", "needs": ["researcher"]},
     {"interface": "ResearcherContext", "method": "advertiseBeaconV3", "kind": "Contract", "reaches": "GetKey", "needs": ["in_sync", "researcher"], "stops_before_key": "The wallet has no confirmed funds for the advertisement; it stops at the balance check, before the payload is signed.", "expected_stop": "ERROR_INSUFFICIENT_FUNDS"},
-    {"interface": "Node", "method": "executeRpcConsoleCommand", "kind": "RpcRequest", "reaches": "GetKey", "note": "Dispatches any RPC; driven with signmessage. The rpc rows cover the commands it can reach."}
+    {"interface": "Node", "method": "executeRpcConsoleCommand", "kind": "RpcRequest", "reaches": "GetKey", "note": "Dispatches any RPC; driven with signmessage. The rpc rows cover the commands it can reach."},
+    {"interface": "Wallet", "method": "beginConsoleDownload", "kind": "FileTransfer", "reaches": "GetKey", "note": "Driven with dumpwallet, whose stream is generated under the capability as it is read. Its other command, dumpcontracts, reads no key."},
+    {"interface": "Wallet", "method": "beginConsoleUpload", "kind": "FileTransfer", "reaches": "AddKeyPubKey", "note": "Driven with importwallet, a dump of one fresh key, which the sink imports under the capability at finish. Its other command, parseaccrualsnapshotfile, reads no key."}
   ],
   "ipc_pool_draw": [
     {"interface": "Wallet", "method": "getNewReceiveAddress", "kind": "Send", "reaches": "AddKeyPubKey", "needs": ["empty_pool"]},
@@ -115,11 +117,12 @@
     "src/rpc/htlc.cpp": 2,
     "src/script/sign.cpp": 2,
     "src/wallet/interfaces.cpp": 1,
-    "src/wallet/rpcdump.cpp": 3,
+    "src/wallet/rpcdump.cpp": 1,
     "src/wallet/rpcwallet.cpp": 2,
     "src/wallet/staking_signer.cpp": 1,
     "src/wallet/staking_signer.h": 1,
     "src/wallet/wallet.cpp": 3,
-    "src/wallet/wallet.h": 1
+    "src/wallet/wallet.h": 1,
+    "src/wallet/walletdump.cpp": 2
   }
 }

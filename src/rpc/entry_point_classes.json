@@ -19,60 +19,69 @@
     "FileSink.cancel": {
       "class": "elevated_handle",
       "effect": "state",
-      "minted_by": [],
-      "note": "no method returns a FileSink yet; the method that mints one lists it here when it is added"
+      "minted_by": [
+        "Wallet.beginConsoleUpload"
+      ]
     },
     "FileSink.destroy": {
       "class": "elevated_handle",
       "effect": "state",
-      "minted_by": [],
-      "note": "no method returns a FileSink yet; the method that mints one lists it here when it is added"
+      "minted_by": [
+        "Wallet.beginConsoleUpload"
+      ]
     },
     "FileSink.finish": {
       "class": "elevated_handle",
-      "effect": "state",
-      "minted_by": [],
-      "note": "no method returns a FileSink yet; the method that mints one lists it here when it is added"
+      "effect": "key_writer",
+      "minted_by": [
+        "Wallet.beginConsoleUpload"
+      ]
     },
     "FileSink.write": {
       "class": "elevated_handle",
       "effect": "state",
-      "minted_by": [],
-      "note": "no method returns a FileSink yet; the method that mints one lists it here when it is added"
+      "minted_by": [
+        "Wallet.beginConsoleUpload"
+      ]
     },
     "FileSource.cancel": {
       "class": "elevated_handle",
       "effect": "state",
       "minted_by": [
-        "Wallet.beginBackup"
+        "Wallet.beginBackup",
+        "Wallet.beginConsoleDownload"
       ]
     },
     "FileSource.destroy": {
       "class": "elevated_handle",
       "effect": "state",
       "minted_by": [
-        "Wallet.beginBackup"
+        "Wallet.beginBackup",
+        "Wallet.beginConsoleDownload"
       ]
     },
     "FileSource.entries": {
       "class": "elevated_handle",
       "effect": "state",
       "minted_by": [
-        "Wallet.beginBackup"
+        "Wallet.beginBackup",
+        "Wallet.beginConsoleDownload"
       ]
     },
     "FileSource.read": {
       "class": "elevated_handle",
-      "effect": "state",
+      "effect": "keys",
       "minted_by": [
-        "Wallet.beginBackup"
+        "Wallet.beginBackup",
+        "Wallet.beginConsoleDownload"
       ]
     },
     "FileSource.trailer": {
       "class": "elevated_handle",
       "effect": "state",
       "minted_by": [
-        "Wallet.beginBackup"
+        "Wallet.beginBackup",
+        "Wallet.beginConsoleDownload"
       ]
     },
     "GuiState.current": {
@@ -739,6 +748,16 @@
       "class": "elevate",
       "effect": "state",
       "kind": "Backup"
+    },
+    "Wallet.beginConsoleDownload": {
+      "class": "elevate",
+      "effect": "keys",
+      "kind": "FileTransfer"
+    },
+    "Wallet.beginConsoleUpload": {
+      "class": "elevate",
+      "effect": "key_writer",
+      "kind": "FileTransfer"
     },
     "Wallet.beginElevation": {
       "authority": "passphrase_argument",

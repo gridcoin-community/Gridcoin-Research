@@ -12,8 +12,9 @@
 
 #include <wallet/capability.h>
 
-// The Wallet schema imports file_transfer.capnp (beginBackup returns a
-// FileSource), handler.capnp (handleX returns Handler) and node.capnp
+// The Wallet schema imports file_transfer.capnp (beginBackup and
+// beginConsoleDownload return a FileSource, beginConsoleUpload a FileSink),
+// handler.capnp (handleX returns Handler) and node.capnp
 // (handleStatusChanged reuses Node.VoidCallback); their proxy types must be in
 // scope to marshal those.
 #include <ipc/capnp/file_transfer.capnp.proxy-types.h>

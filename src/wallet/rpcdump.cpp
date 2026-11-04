@@ -10,79 +10,14 @@
 #include "rpc/protocol.h"
 #include "rpc/util.h"
 #include "node/ui_interface.h"
+#include "support/cleanse.h"
+#include "wallet/walletdump.h"
 
 #include <stdexcept>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/algorithm/string.hpp>
-#include <util/string.h>
 
 using namespace std;
 
 void EnsureWalletIsUnlocked();
-
-namespace bt = boost::posix_time;
-
-// Extended DecodeDumpTime implementation, see this page for details:
-// https://stackoverflow.com/questions/3786201/parsing-of-date-time-from-string-boost
-const std::locale formats[] = {
-    std::locale(std::locale::classic(),new bt::time_input_facet("%Y-%m-%dT%H:%M:%SZ")),
-    std::locale(std::locale::classic(),new bt::time_input_facet("%Y-%m-%d %H:%M:%S")),
-    std::locale(std::locale::classic(),new bt::time_input_facet("%Y/%m/%d %H:%M:%S")),
-    std::locale(std::locale::classic(),new bt::time_input_facet("%d.%m.%Y %H:%M:%S")),
-    std::locale(std::locale::classic(),new bt::time_input_facet("%Y-%m-%d"))
-};
-
-std::time_t pt_to_time_t(const bt::ptime& pt)
-{
-    bt::ptime timet_start(boost::gregorian::date(1970,1,1));
-    bt::time_duration diff = pt - timet_start;
-    return diff.ticks()/bt::time_duration::rep_type::ticks_per_second;
-}
-
-int64_t DecodeDumpTime(const std::string& s)
-{
-    bt::ptime pt;
-
-    for (const auto& format : formats)
-    {
-        std::istringstream is(s);
-        is.imbue(format);
-        is >> pt;
-        if(pt != bt::ptime()) break;
-    }
-
-    return pt_to_time_t(pt);
-}
-
-std::string static EncodeDumpTime(int64_t nTime) {
-    return DateTimeStrFormat("%Y-%m-%dT%H:%M:%SZ", nTime);
-}
-
-std::string static EncodeDumpString(const std::string &str) {
-    std::stringstream ret;
-    for (unsigned char c : str) {
-        if (c <= 32 || c >= 128 || c == '%') {
-            ret << '%' << HexStr({&c, 1});
-        } else {
-            ret << c;
-        }
-    }
-    return ret.str();
-}
-
-std::string DecodeDumpString(const std::string &str) {
-    std::stringstream ret;
-    for (unsigned int pos = 0; pos < str.length(); pos++) {
-        unsigned char c = str[pos];
-        if (c == '%' && pos+2 < str.length()) {
-            c = (((str[pos+1]>>6)*9+((str[pos+1]-'0')&15)) << 4) |
-                ((str[pos+2]>>6)*9+((str[pos+2]-'0')&15));
-            pos += 2;
-        }
-        ret << c;
-    }
-    return ret.str();
-}
 
 class CTxDump
 {
@@ -207,87 +142,7 @@ UniValue importwallet(const UniValue& params)
     if (!file.is_open())
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    EnsureWalletIsUnlocked();
-
-    int64_t nTimeBegin = pindexBest->nTime;
-
-    bool fGood = true;
-    bool found_hd_seed = false;
-
-    while (file.good()) {
-        std::string line;
-        std::getline(file, line);
-        if (line.empty() || line[0] == '#')
-            continue;
-
-        std::vector<std::string> vstr;
-        vstr = SplitString(line, ' ');
-        if (vstr.size() < 2)
-            continue;
-
-        CKey key = DecodeSecret(vstr[0]);
-        if (!key.IsValid())
-            continue;
-
-        CKeyID keyid = key.GetPubKey().GetID();
-
-        if (pwalletMain->HaveKey(keyid)) {
-            LogPrintf("Skipping import of %s (key already present)", EncodeDestination(keyid));
-            continue;
-        }
-        int64_t nTime = DecodeDumpTime(vstr[1]);
-        std::string strLabel;
-        bool fLabel = true;
-        for (unsigned int nStr = 2; nStr < vstr.size(); nStr++) {
-            if (boost::algorithm::starts_with(vstr[nStr], "#"))
-                break;
-            if (vstr[nStr] == "change=1")
-                fLabel = false;
-            if (vstr[nStr] == "reserve=1")
-                fLabel = false;
-            if (vstr[nStr] == "hdmaster=1") {
-                found_hd_seed = true;
-            }
-            if (boost::algorithm::starts_with(vstr[nStr], "label=")) {
-                strLabel = DecodeDumpString(vstr[nStr].substr(6));
-                fLabel = true;
-            }
-        }
-        LogPrintf("Importing %s...", EncodeDestination(keyid));
-        if (!pwalletMain->AddKey(key)) {
-            fGood = false;
-            continue;
-        }
-        pwalletMain->mapKeyMetadata[keyid].nCreateTime = nTime;
-        if (fLabel)
-            pwalletMain->SetAddressBookName(keyid, strLabel);
-        nTimeBegin = std::min(nTimeBegin, nTime);
-    }
-    file.close();
-
-    CBlockIndex *pindex = pindexBest;
-    while (pindex && pindex->pprev && pindex->nTime > nTimeBegin - 7200)
-        pindex = pindex->pprev;
-
-    if (!pwalletMain->nTimeFirstKey || nTimeBegin < pwalletMain->nTimeFirstKey)
-        pwalletMain->nTimeFirstKey = nTimeBegin;
-
-    LogPrintf("Rescanning last %i blocks", pindexBest->nHeight - pindex->nHeight + 1);
-    pwalletMain->ScanForWalletTransactions(pindex);
-    pwalletMain->ReacceptWalletTransactions();
-    pwalletMain->MarkDirty();
-
-    if (!fGood)
-        throw JSONRPCError(RPC_WALLET_ERROR, "Error adding some keys to wallet");
-
-    if (found_hd_seed) {
-        return "Warning: Encountered and imported inactive HD seed during the import. Use the 'sethdseed false <key>'"
-               "RPC command if you wish to activate it.";
-    }
-
-    return NullUniValue;
+    return ImportWalletFromStream(*pwalletMain, file);
 }
 
 
@@ -399,14 +254,6 @@ private:
     bool m_complete{false};
 };
 
-//! The refusal for a key \p wallet holds but cannot read: the keys are withheld
-//! from this thread, or the key does not decrypt.
-UniValue UnreadableKeyError(const CWallet& wallet, const CKeyID& id)
-{
-    return JSONRPCError(wallet.CanUseKeys() ? RPC_WALLET_ERROR : RPC_WALLET_UNLOCK_NEEDED,
-                        "dumpwallet: cannot read the key for " + EncodeDestination(id));
-}
-
 } // namespace
 
 void WriteWalletDump(CWallet& wallet, const std::string& filename)
@@ -425,80 +272,24 @@ void WriteWalletDump(CWallet& wallet, const std::string& filename)
 
     PartialDumpRemover remover(file, PathForDump);
 
-    std::map<CKeyID, int64_t> mapKeyBirth;
-
-    std::set<CKeyID> setKeyPool;
-
+    // Held across the generator's calls, as across the whole dump before it, so
+    // the file is one picture of the wallet.
     LOCK2(cs_main, wallet.cs_wallet);
 
-    wallet.GetKeyBirthTimes(mapKeyBirth);
+    WalletDumpGenerator generator(wallet);
 
-    wallet.GetAllReserveKeys(setKeyPool);
-
-    // sort time/key pairs
-    std::vector<std::pair<int64_t, CKeyID> > vKeyBirth;
-    for (std::map<CKeyID, int64_t>::const_iterator it = mapKeyBirth.begin(); it != mapKeyBirth.end(); it++) {
-        vKeyBirth.push_back(std::make_pair(it->second, it->first));
+    std::string lines;
+    try {
+        for (bool more = true; more;) {
+            more = generator.Next(lines, 64 * 1024);
+            file << lines;
+            memory_cleanse(lines.data(), lines.size());
+            lines.clear();
+        }
+    } catch (...) {
+        if (!lines.empty()) memory_cleanse(lines.data(), lines.size());
+        throw;
     }
-    mapKeyBirth.clear();
-    std::sort(vKeyBirth.begin(), vKeyBirth.end());
-
-    // produce output
-    file << strprintf("# Wallet dump created by Gridcoin %s\n", FormatFullVersion());
-    file << strprintf("# * Created on %s\n", EncodeDumpTime(GetTime()));
-    file << strprintf("# * Best block at time of backup was %i (%s),\n", nBestHeight, hashBestChain.ToString());
-    file << strprintf("#   mined on %s\n", EncodeDumpTime(pindexBest->nTime));
-    file << "\n";
-
-    // add the base58check encoded extended master if the wallet uses HD
-    CKeyID masterKeyID = wallet.GetHDChain().masterKeyID;
-    if (!masterKeyID.IsNull())
-    {
-        CKey key;
-        if (wallet.GetKey(masterKeyID, key))
-        {
-            CExtKey masterKey;
-            masterKey.SetSeed(key);
-
-            file << "# extended private masterkey: " << EncodeExtKey(masterKey) << "\n\n";
-        }
-        else if (wallet.HaveKey(masterKeyID))
-        {
-            // A master the wallet holds but cannot read fails the dump, as any
-            // other key does below.
-            throw UnreadableKeyError(wallet, masterKeyID);
-        }
-    }
-    for (std::vector<std::pair<int64_t, CKeyID> >::const_iterator it = vKeyBirth.begin(); it != vKeyBirth.end(); it++) {
-        const CKeyID &keyid = it->second;
-        std::string strTime = EncodeDumpTime(it->first);
-        std::string strAddr = EncodeDestination(keyid);
-
-        // The birth times also list keys that have metadata but are not in
-        // the wallet, as a failed import can leave; there is no key to dump.
-        // A key the wallet holds and cannot read fails the dump: leaving it
-        // out would write a dump that looks complete and is not.
-        CKey key;
-        if (!wallet.GetKey(keyid, key)) {
-            if (!wallet.HaveKey(keyid)) continue;
-
-            throw UnreadableKeyError(wallet, keyid);
-        }
-
-        file << strprintf("%s %s ", EncodeSecret(key), strTime);
-        if (wallet.mapAddressBook.count(keyid)) {
-            file << strprintf("label=%s", EncodeDumpString(wallet.mapAddressBook[keyid].name));
-        } else if (keyid == masterKeyID) {
-            file << "hdmaster=1";
-        } else if (setKeyPool.count(keyid)) {
-            file << "reserve=1";
-        } else {
-            file << "change=1";
-        }
-        file << strprintf(" # addr=%s%s\n", strAddr, (wallet.mapKeyMetadata[keyid].hdKeypath.size() > 0 ? " hdkeypath="+wallet.mapKeyMetadata[keyid].hdKeypath : ""));
-    }
-    file << "\n";
-    file << "# End of dump\n";
     file.close();
 
     // The close flushes what is still buffered. A write that failed leaves a
