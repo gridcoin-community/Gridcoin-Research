@@ -8,6 +8,7 @@
 #include "util.h"
 
 #include <QFile>
+#include <QMessageBox>
 #include <QSettings>
 #include <QString>
 #include <QTemporaryDir>
@@ -129,4 +130,9 @@ void GUIUtilTests::coreFileOpenDecision()
                                                       QStringLiteral("/var/lib/x/debug.log"));
     QCOMPARE(message.count(QStringLiteral("/var/lib/x/debug.log")), 2);
     QVERIFY(message.contains(QStringLiteral("debug log")));
+
+    // A path that looks like markup is shown as text.
+    const auto box = GUIUtil::MakeCoreFileBox(QMessageBox::Information, nullptr, QStringLiteral("t"),
+                                              QStringLiteral("<b>/x</b>"));
+    QVERIFY(box->textFormat() == Qt::PlainText);
 }

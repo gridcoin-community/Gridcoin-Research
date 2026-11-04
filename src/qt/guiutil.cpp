@@ -497,17 +497,28 @@ QString AdminReadMessage(const QString& what, const QString& path)
 #endif
 }
 
+std::unique_ptr<QMessageBox> MakeCoreFileBox(QMessageBox::Icon icon, QWidget* parent, const QString& title,
+                                             const QString& text)
+{
+    // A path the core reported is shown, so the text is never rendered as rich
+    // text.
+    auto box = std::make_unique<QMessageBox>(icon, title, text, QMessageBox::Ok, parent);
+    box->setTextFormat(Qt::PlainText);
+    return box;
+}
+
 void openCoreFile(const GuiIpcInfo& info, const QString& what, const std::string& path, QWidget* parent)
 {
     const QString qpath = QString::fromStdString(path);
 
     switch (DecideCoreFileOpen(info.core_other_account, fs::path(path))) {
     case OpenAction::ShowAdminMessage:
-        QMessageBox::information(parent, QObject::tr("Core file"), AdminReadMessage(what, qpath));
+        MakeCoreFileBox(QMessageBox::Information, parent, QObject::tr("Core %1").arg(what),
+                        AdminReadMessage(what, qpath))->exec();
         return;
     case OpenAction::Missing:
-        QMessageBox::information(parent, QObject::tr("Core file"),
-                                 QObject::tr("The file %1 does not exist yet.").arg(qpath));
+        MakeCoreFileBox(QMessageBox::Information, parent, QObject::tr("Core %1").arg(what),
+                        QObject::tr("The file %1 does not exist yet.").arg(qpath))->exec();
         return;
     case OpenAction::OpenFile:
         break;
@@ -530,9 +541,10 @@ void openCoreFile(const GuiIpcInfo& info, const QString& what, const std::string
 #endif
 
     if (!res) {
-        QMessageBox::critical(parent, QObject::tr("File Association Error"),
-                              QObject::tr("Unable to open the %1. Please check your operating system"
-                                          " file associations.").arg(what));
+        LogPrintf("GUI: no application could open a core file; check the operating system file associations\n");
+        MakeCoreFileBox(QMessageBox::Critical, parent, QObject::tr("File Association Error"),
+                        QObject::tr("Unable to open the %1. Please check your operating system"
+                                    " file associations.").arg(what))->exec();
     }
 }
 

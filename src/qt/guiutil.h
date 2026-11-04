@@ -4,6 +4,7 @@
 #include <QString>
 #include <QObject>
 #include <QMessageBox>
+#include <memory>
 #include "fs.h"
 #include "qt/guiipcinfo.h"
 #include "support/allocators/secure.h" // For SecureString.
@@ -138,6 +139,11 @@ namespace GUIUtil
     //! The message that tells the user how to read a core file this account
     //! cannot read. Names the path twice (where it is, and in the command).
     QString AdminReadMessage(const QString& what, const QString& path);
+
+    //! A message box for text that carries a core-reported path: plain text,
+    //! never rich text.
+    std::unique_ptr<QMessageBox> MakeCoreFileBox(QMessageBox::Icon icon, QWidget* parent, const QString& title,
+                                                 const QString& text);
 
     //! Open a file at a path the core reported with the associated application,
     //! or tell the user why it cannot be opened from here. what is the display

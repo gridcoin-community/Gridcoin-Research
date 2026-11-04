@@ -134,12 +134,28 @@ BOOST_AUTO_TEST_CASE(cleanup_handler_runs_on_destruction)
 BOOST_AUTO_TEST_CASE(node_reports_core_paths)
 {
     std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
-    const interfaces::CorePaths paths = node->getCorePaths();
 
-    BOOST_CHECK_EQUAL(paths.datadir, GetDataDir().string());
-    BOOST_CHECK_EQUAL(paths.debug_log, LogInstance().m_file_path.string());
-    BOOST_CHECK_EQUAL(paths.config_file, GetConfigFile().string());
-    BOOST_CHECK(!paths.settings_file.empty());
+    // With the fixture's wallet loaded the wallet file is under the datadir.
+    {
+        BOOST_REQUIRE(pwalletMain != nullptr);
+        const interfaces::CorePaths paths = node->getCorePaths();
+
+        BOOST_CHECK_EQUAL(paths.datadir, GetDataDir().string());
+        BOOST_CHECK(!paths.datadir.empty());
+        BOOST_CHECK_EQUAL(paths.debug_log, LogInstance().m_file_path.string());
+        BOOST_CHECK_EQUAL(paths.config_file, GetConfigFile().string());
+        BOOST_CHECK(!paths.settings_file.empty());
+        BOOST_CHECK_EQUAL(paths.wallet_file, (GetDataDir() / pwalletMain->strWalletFile).string());
+    }
+
+    // With no wallet loaded the wallet file is empty and the datadir is not.
+    CWallet* const saved_wallet = pwalletMain;
+    pwalletMain = nullptr;
+    const interfaces::CorePaths no_wallet = node->getCorePaths();
+    pwalletMain = saved_wallet;
+
+    BOOST_CHECK(no_wallet.wallet_file.empty());
+    BOOST_CHECK(!no_wallet.datadir.empty());
 }
 
 BOOST_AUTO_TEST_CASE(node_wraps_chain_globals)
