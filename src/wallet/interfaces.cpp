@@ -265,6 +265,14 @@ class WalletImpl : public Wallet
 public:
     explicit WalletImpl(CWallet* wallet) : m_wallet(wallet) {}
 
+    ~WalletImpl() override
+    {
+        if (m_connection_scope && m_closing_hook != 0) m_connection_scope->removeCloseHook(m_closing_hook);
+    }
+
+    WalletImpl(const WalletImpl&) = delete;
+    WalletImpl& operator=(const WalletImpl&) = delete;
+
     int64_t getBalance() override { return m_wallet->GetBalance(); }
 
     int64_t getStake() override { return m_wallet->GetStake(); }
@@ -402,6 +410,9 @@ public:
         // can pass to another GUI, or it comes after, and nothing is installed:
         // the slot, and any capability the next GUI has begun, are left alone.
         // In process (the monolithic build) there is no connection and no check.
+        // A wait for its turn ends, unchecked, when the connection closes.
+        const std::optional<PassphraseAttemptCancel> given_up = GiveUpWhenConnectionCloses();
+
         bool begun = false;
         try {
             begun = m_wallet->BeginIpcElevation(passphrase, kind, m_connection_closed);
@@ -423,6 +434,9 @@ public:
 
     bool unlockWallet(const SecureString& passphrase, bool staking_only) override
     {
+        // A wait for its turn ends, unchecked, when the connection closes.
+        const std::optional<PassphraseAttemptCancel> given_up = GiveUpWhenConnectionCloses();
+
         // One call. The scope is installed with the master key, so there is no
         // window in which the wallet is unlocked while still carrying the
         // previous unlock's restriction -- which, since nothing cleared that
@@ -437,7 +451,9 @@ public:
         // No preliminary lock. ChangeWalletPassphrase leaves the unlock as it
         // is, so locking here would silently end a staking-only unlock and its
         // timer that the RPC path keeps. It also takes cs_wallet itself, so
-        // holding it here would buy nothing.
+        // holding it here would buy nothing. A wait for its turn ends, unchecked,
+        // when the connection closes.
+        const std::optional<PassphraseAttemptCancel> given_up = GiveUpWhenConnectionCloses();
         return m_wallet->ChangeWalletPassphrase(old_passphrase, new_passphrase);
     }
 
@@ -893,9 +909,25 @@ public:
     {
         m_connection_scope = std::move(scope);
         m_connection_closed = ConnectionClosedCheck(m_connection_scope);
+        if (m_connection_scope) {
+            // Runs now, and returns 0, if the connection has already closed.
+            m_closing_hook = m_connection_scope->addCloseHook([closing = m_connection_closing] { *closing = true; });
+        }
     }
 
 private:
+    //! On a wallet served over IPC, the cancel token for a passphrase attempt
+    //! made on this thread: set once the connection closes, so an attempt still
+    //! waiting for its turn is given up with its passphrase unchecked (nothing
+    //! counted, no delay) rather than checked for a client that has gone. None in
+    //! process, where the caller sets its own token (the GUI's dialog does) and
+    //! this must not replace it.
+    std::optional<PassphraseAttemptCancel> GiveUpWhenConnectionCloses() const
+    {
+        if (!m_connection_scope) return std::nullopt;
+        return std::optional<PassphraseAttemptCancel>(std::in_place, *m_connection_closing);
+    }
+
     //! sendCoins() without its capability scope and exception boundary.
     SendCoinsResult SendCoinsUnderScope(const std::vector<WalletSendRecipient>& recipients,
                                         const std::optional<WalletCoinControl>& coin_control,
@@ -911,6 +943,12 @@ private:
     //! mutex wherever this wallet begins, reads or ends the IPC capability.
     //! Empty in process, where there is no connection and nothing to check.
     std::function<bool()> m_connection_closed{};
+    //! Set by a close hook on that connection, registered in
+    //! bindConnectionScope() and removed when this wallet is destroyed; the
+    //! cancel token of the passphrase attempts this wallet makes
+    //! (GiveUpWhenConnectionCloses).
+    const std::shared_ptr<std::atomic<bool>> m_connection_closing{std::make_shared<std::atomic<bool>>(false)};
+    ConnectionScope::HookId m_closing_hook{0};
     //! Whether a transfer this interface began is live (LiveTransfer). Shared
     //! with that transfer, which may outlive the interface.
     const std::shared_ptr<std::atomic<bool>> m_transfer_live{std::make_shared<std::atomic<bool>>(false)};

@@ -356,7 +356,9 @@ public:
     //! which are served in the order they ask. In the monolithic build a
     //! PassphraseAttemptCancel on the calling thread gives the attempt up while
     //! it waits, and this returns false; across IPC the attempt waits in the
-    //! node, where only the node's shutdown ends the wait.
+    //! node, where the cancel cannot reach it, and only the node's shutdown or
+    //! the closing of the client's connection (bindConnectionScope) ends the
+    //! wait. An attempt given up so is not checked and not counted.
     virtual bool beginElevation(const SecureString& passphrase, CapabilityKind kind) = 0;
 
     //! End the capability beginElevation() began, if one is held. Idempotent.

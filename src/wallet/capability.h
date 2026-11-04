@@ -62,8 +62,10 @@ std::chrono::milliseconds FailedPassphraseDelay(unsigned int consecutive_failure
 //! refused stops waiting out its delay. A check already under way finishes.
 //!
 //! It is seen only by the thread that sets it. An attempt made through IPC, as
-//! the GUI's are in the split build, runs on a thread of the node that has
-//! none, and only a shutdown of the node ends its wait. RPC sets none.
+//! the GUI's are in the split build, runs on a thread of the node, where the
+//! client's cancel cannot reach it: the served wallet sets a token there that
+//! the closing of the client's connection sets, and otherwise only a shutdown
+//! of the node ends its wait. RPC sets none.
 //!
 //! Neither copyable nor movable, and not allocated with new: it is in force
 //! for the block that holds it, on the thread that runs that block.

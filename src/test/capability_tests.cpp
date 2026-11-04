@@ -7,6 +7,8 @@
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/builders.h"
 #include "init.h"
+#include "interfaces/connection_scope.h"
+#include "interfaces/wallet.h"
 #include "keystore.h"
 #include "rpc/protocol.h"
 #include "rpc/server.h"
@@ -986,6 +988,98 @@ BOOST_AUTO_TEST_CASE(a_cancelled_attempt_gives_up_its_turn)
     BOOST_CHECK(!second.get().has_value());
 
     if (accepted) fx.wallet.EndElevation(*accepted);
+}
+
+// An attempt a client makes over IPC waits for its turn in the node, where the
+// client's own cancel cannot reach it. When the client's connection closes
+// meanwhile, the attempt is given up there: its passphrase is never checked, so
+// no failure is counted and no delay is imposed on the attempts behind it.
+BOOST_AUTO_TEST_CASE(a_waiting_ipc_attempt_gives_up_when_its_connection_closes)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    // Two refusals, the second on a thread of its own, so that the next check
+    // waits about FailedPassphraseDelay(2) behind it.
+    BOOST_REQUIRE(!fx.wallet.BeginElevation(SecureString("wrong"), CapabilityKind::Send).has_value());
+
+    std::future<std::optional<CapabilityId>> second = std::async(std::launch::async, [&fx] {
+        return fx.wallet.BeginElevation(SecureString("wrong"), CapabilityKind::Send);
+    });
+    BOOST_REQUIRE(WaitForFailures(fx.wallet, 2));
+
+    const uint64_t asked = PassphraseTurnTestPeer::AttemptsAsked(fx.wallet);
+
+    // A wrong attempt from a client whose connection closes while it waits.
+    auto scope = interfaces::MakeConnectionScope();
+    std::unique_ptr<interfaces::Wallet> served = interfaces::MakeWallet(&fx.wallet);
+    served->bindConnectionScope(scope);
+
+    std::atomic<unsigned int> failures_when_given_up{0};
+    std::future<bool> queued = std::async(std::launch::async, [&fx, &served, &failures_when_given_up] {
+        const bool begun = served->beginElevation(SecureString("wrong"), CapabilityKind::Send);
+        failures_when_given_up = fx.wallet.FailedUnlockCount();
+        return begun;
+    });
+    BOOST_REQUIRE(WaitForAttemptsAsked(fx.wallet, asked + 1));
+
+    // The right passphrase, in line behind it.
+    std::future<std::optional<CapabilityId>> right = std::async(std::launch::async, [&fx] {
+        return fx.wallet.BeginElevation(Passphrase(), CapabilityKind::Send);
+    });
+    BOOST_REQUIRE(WaitForAttemptsAsked(fx.wallet, asked + 2));
+
+    scope->close();
+
+    // Given up with its passphrase never checked, so counted neither way, and
+    // nothing installed in the slot.
+    BOOST_CHECK(!queued.get());
+    BOOST_CHECK_EQUAL(failures_when_given_up.load(), 2U);
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
+
+    // Its turn went to the attempt behind it.
+    const std::optional<CapabilityId> accepted = right.get();
+    BOOST_CHECK(accepted.has_value());
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+    BOOST_CHECK(!second.get().has_value());
+
+    if (accepted) fx.wallet.EndElevation(*accepted);
+    served.reset();
+}
+
+// In process (the monolithic build) the wallet interface is bound to no
+// connection and sets no token of its own, so the caller's cancel token, which
+// the GUI's passphrase dialog sets, still gives the attempt up.
+BOOST_AUTO_TEST_CASE(an_in_process_attempt_keeps_the_callers_cancel)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    BOOST_REQUIRE(!fx.wallet.BeginElevation(SecureString("wrong"), CapabilityKind::Send).has_value());
+
+    std::future<std::optional<CapabilityId>> second = std::async(std::launch::async, [&fx] {
+        return fx.wallet.BeginElevation(SecureString("wrong"), CapabilityKind::Send);
+    });
+    BOOST_REQUIRE(WaitForFailures(fx.wallet, 2));
+
+    const uint64_t asked = PassphraseTurnTestPeer::AttemptsAsked(fx.wallet);
+
+    std::unique_ptr<interfaces::Wallet> in_process = interfaces::MakeWallet(&fx.wallet);
+    std::atomic<bool> cancel{false};
+    std::atomic<unsigned int> failures_when_given_up{0};
+    std::future<bool> queued = std::async(std::launch::async, [&fx, &in_process, &cancel, &failures_when_given_up] {
+        const PassphraseAttemptCancel token(cancel);
+        const bool begun = in_process->beginElevation(SecureString("wrong"), CapabilityKind::Send);
+        failures_when_given_up = fx.wallet.FailedUnlockCount();
+        return begun;
+    });
+    BOOST_REQUIRE(WaitForAttemptsAsked(fx.wallet, asked + 1));
+
+    cancel = true;
+
+    BOOST_CHECK(!queued.get());
+    BOOST_CHECK_EQUAL(failures_when_given_up.load(), 2U);
+    BOOST_CHECK(!second.get().has_value());
 }
 
 BOOST_AUTO_TEST_CASE(a_waiting_attempt_gives_up_at_shutdown)

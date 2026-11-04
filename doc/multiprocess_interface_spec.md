@@ -518,8 +518,9 @@ passphrase returns false after the failed-passphrase delay (up to 30 s), so a
 client must not call it on its UI thread. Passphrase attempts from every caller
 (`unlockWallet`, `beginElevation`, `changeWalletPassphrase`, and RPC) are
 checked one at a time, in the order they arrive, so a call also waits for the
-attempts ahead of it. An IPC caller cannot give its attempt up; only the node's
-shutdown ends the wait. `elevateWallet` always returns false.
+attempts ahead of it. An IPC caller cannot give its attempt up from its side;
+the node gives it up, with the passphrase unchecked and nothing counted, when the
+caller's connection closes or the node shuts down. `elevateWallet` always returns false.
 The GUI side is `WalletModel::requestUnlock(CapabilityKind)` and its
 `UnlockContext`, which ends the capability when the operation finishes. If the
 attached GUI goes away instead, the node ends the capability as it tears the
