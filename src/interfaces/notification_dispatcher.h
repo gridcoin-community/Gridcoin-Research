@@ -24,7 +24,7 @@ enum class NotificationDelivery { Inline, Dispatched };
 
 //! The most notifications the dispatcher queue holds. A notification posted to a
 //! full queue is dropped and counted.
-static constexpr std::size_t NOTIFICATION_QUEUE_MAX = 4096;
+static constexpr std::size_t NOTIFICATION_QUEUE_MAX = 10000;
 
 //! Select the delivery mode for the whole process. The default is Inline. The mode
 //! is read each time a forwarded notification is emitted.
@@ -47,6 +47,9 @@ namespace detail {
 //! Queue a call for the dispatcher thread. Never blocks on the client. Drops and
 //! counts the call when the queue is full or the dispatcher is not running.
 void PostNotification(std::function<void()> call);
+
+//! Count a notification as dropped because posting it failed, and log why.
+void NotificationPostFailed(const char* what);
 } // namespace detail
 
 //! Wrap a one-way (void) client callback registered on a uiInterface signal.
@@ -70,10 +73,18 @@ auto ForwardNotify(Fn fn)
             return;
         }
 
-        detail::PostNotification(
-            [guarded, saved = std::tuple<std::decay_t<decltype(args)>...>(args...)]() {
-                std::apply(*guarded, saved);
-            });
+        // Copying the arguments and queueing the call can throw (bad_alloc, a
+        // throwing copy). Like the call itself, that must not reach the emitter.
+        try {
+            detail::PostNotification(
+                [guarded, saved = std::tuple<std::decay_t<decltype(args)>...>(args...)]() {
+                    std::apply(*guarded, saved);
+                });
+        } catch (const std::exception& e) {
+            detail::NotificationPostFailed(e.what());
+        } catch (...) {
+            detail::NotificationPostFailed("non-standard exception");
+        }
     };
 }
 

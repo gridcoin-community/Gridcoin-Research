@@ -46,11 +46,12 @@ public:
 //! and the GUI process deliver inline. The rules below still bind every handler,
 //! because inline delivery is the same call on the emitting thread.
 //!
-//! This is not a style preference. Notifications are ordinary request/response IPC
-//! calls, not one-way sends, so the emitting CORE thread blocks until the handler
-//! returns -- and it is usually blocked while holding a core lock (cs_main plus an
-//! open CTxDB batch for BeaconChanged/MRCChanged, cs_main+cs_wallet for
-//! NotifyTransactionChanged, cs_main+PollRegistry::cs_poll_registry for
+//! This is not a style preference. On the inline path, notifications are ordinary
+//! request/response IPC calls, not one-way sends, so the emitting CORE thread
+//! blocks until the handler returns -- and it is usually blocked while holding a
+//! core lock (cs_main plus an open CTxDB batch for BeaconChanged/MRCChanged,
+//! cs_main+cs_wallet for NotifyTransactionChanged,
+//! cs_main+PollRegistry::cs_poll_registry for
 //! NewPollReceived/NewVoteReceived (plus an open CTxDB batch when a block
 //! connects or disconnects), MinerStatus::m_cs for MinerStatusChanged -- with
 //! cs_main as well when it comes from CreateCoinStake, but not from the stake

@@ -568,10 +568,10 @@ public:
     }
 
     // NOTE: like every other uiInterface forwarder (see node/interfaces.cpp and
-    // gridcoin/interfaces.cpp), these must be wrapped in ForwardNotify (which carries the
-    // GuardNotify catch). They are not
-    // merely GUI conveniences: CWallet emits them from inside state transitions that
-    // are only half-complete at the emission point. CWallet::SetAddressBookName, for
+    // gridcoin/interfaces.cpp), these must be wrapped in ForwardNotify (which
+    // carries the GuardNotify catch). They are not merely GUI conveniences:
+    // CWallet emits them from inside state transitions that are only
+    // half-complete at the emission point. CWallet::SetAddressBookName, for
     // example, updates mapAddressBook, emits NotifyAddressBookChanged, and only THEN
     // writes the name to the wallet database -- so an unguarded throw here (in
     // multiprocess, when the GUI has gone away) unwinds before the write and loses
