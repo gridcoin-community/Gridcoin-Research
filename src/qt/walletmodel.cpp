@@ -542,14 +542,9 @@ bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase, b
     }
 }
 
-bool WalletModel::backupWallet(const std::string& dest)
+std::unique_ptr<interfaces::FileSource> WalletModel::beginBackup(uint8_t items, std::string& error_out)
 {
-    return m_wallet.backupWallet(dest);
-}
-
-bool WalletModel::backupConfigFile(const std::string& dest)
-{
-    return m_wallet.backupConfigFile(dest);
+    return m_wallet.beginBackup(items, error_out);
 }
 
 // The tx-table producer-side handlers (NotifyTransactionChanged /

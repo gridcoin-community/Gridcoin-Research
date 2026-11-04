@@ -134,6 +134,44 @@ TransferOutcome DownloadEntry(FileSource& src, uint32_t entry, const fs::path& d
 FileSinkResult UploadFile(FileSink& sink, const fs::path& local, const ProgressFn& progress,
                           const std::atomic<bool>& cancel, uint32_t chunk_bytes = FILE_TRANSFER_CHUNK_BYTES);
 
+//! Refuses (error set) when dest is a directory, or equals or fs::equivalent()s any of the core's files
+//! (core_files: wallet file, conf, settings file, debug log), or lies inside core_datadir's "database" or "transfers" directories.
+//!
+//! Paths are compared as written (made absolute), and again with the links in the part that exists
+//! resolved. A check that cannot run because this account may not examine the core's files (the
+//! core runs as another account) refuses nothing by itself, so a destination outside the core's
+//! data directory is never refused for that reason. An empty entry in core_files, or an empty
+//! core_datadir, is skipped.
+bool CheckDestination(const fs::path& dest, const std::vector<fs::path>& core_files, const fs::path& core_datadir,
+                      std::string& error);
+
+//! An entry a source lists with a note has nothing to send: a configuration or settings file that
+//! does not exist. Reading it is a source error, and DownloadEntry stops the whole source on one.
+bool EntryIsSkipped(const FileEntryInfo& info);
+
+//! What became of one entry of a backup.
+struct BackupEntryResult
+{
+    std::string name{};
+    fs::path dest{};
+    //! Listed with a note (EntryIsSkipped): never read, and nothing was written.
+    bool skipped{false};
+    std::string note{};
+    //! The download's outcome; meaningless for a skipped entry.
+    TransferOutcome outcome{};
+};
+
+//! Downloads one entry of a source to dest: DownloadEntry, or the GUI's wrapper of it.
+using BackupDownloadFn = std::function<TransferOutcome(FileSource& src, uint32_t entry, const fs::path& dest)>;
+
+//! Download each entry of src, in order, to the destination at the same index of dests, through
+//! download. A skipped entry (EntryIsSkipped) is reported with its note and never passed to
+//! download, so the entries after it still arrive. Stops after the first entry whose outcome is not
+//! Ok, and stops the source. A source that cannot list its entries, or lists a different number
+//! than dests, gives one result with a SourceError, and the source is stopped.
+std::vector<BackupEntryResult> DownloadBackupEntries(FileSource& src, const std::vector<fs::path>& dests,
+                                                     const BackupDownloadFn& download);
+
 } // namespace interfaces
 
 #endif // GRIDCOIN_INTERFACES_FILE_TRANSFER_H

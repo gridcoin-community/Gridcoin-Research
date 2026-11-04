@@ -93,8 +93,14 @@
 
 #include <boost/algorithm/string/join.hpp>
 #include "util.h"
+#include "interfaces/file_transfer.h"
+#include "interfaces/node.h"
+#include "qt/filetransferdialog.h"
 
-extern std::string FromQString(QString qs);
+#include <algorithm>
+#include <memory>
+#include <string>
+#include <vector>
 
 BitcoinGUI::BitcoinGUI(QWidget* parent)
         : QMainWindow(parent)
@@ -291,12 +297,6 @@ BitcoinGUI::~BitcoinGUI()
     delete m_dock_shutdown_handler;
     delete appMenuBar;
 #endif
-}
-
-std::string FromQString(QString qs)
-{
-    std::string sOut = qs.toUtf8().constData();
-    return sOut;
 }
 
 void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
@@ -1956,9 +1956,58 @@ void BitcoinGUI::encryptWallet()
     setEncryptionStatus(walletModel->getEncryptionStatus());
 }
 
+namespace {
+//! One file named twice: the same path as written, or one file under two names.
+bool SameBackupPath(const fs::path& a, const fs::path& b)
+{
+    if (a.lexically_normal() == b.lexically_normal()) return true;
+
+    boost::system::error_code ec;
+    const bool same = fs::equivalent(a, b, ec);
+
+    return same && !ec;
+}
+
+//! Ask where to save one file of a backup, starting at \p suggestion. A destination
+//! the guard refuses (interfaces::CheckDestination), or one already chosen for another
+//! file of this backup, is explained and asked for again. False when the user cancels.
+bool AskBackupDestination(QWidget* parent, const QString& title, QString suggestion, const QString& filter,
+                          const std::vector<fs::path>& core_files, const fs::path& core_datadir,
+                          const std::vector<fs::path>& taken, fs::path& dest)
+{
+    for (;;) {
+        const QString chosen = QFileDialog::getSaveFileName(parent, title, suggestion, filter);
+
+        if (chosen.isEmpty()) return false;
+
+        const fs::path path = GUIUtil::qstringToBoostPath(chosen);
+        std::string error;
+
+        if (!interfaces::CheckDestination(path, core_files, core_datadir, error)) {
+            QMessageBox::warning(parent, title,
+                                 QObject::tr("The backup cannot be saved there: %1").arg(QString::fromStdString(error)));
+        } else if (std::any_of(taken.begin(), taken.end(), [&path](const fs::path& t) { return SameBackupPath(path, t); })) {
+            QMessageBox::warning(parent, title,
+                                 QObject::tr("%1 is already chosen for another file of this backup.").arg(chosen));
+        } else {
+            dest = path;
+            return true;
+        }
+
+        suggestion = chosen;
+    }
+}
+} // namespace
+
 void BitcoinGUI::backupWallet()
 {
     if (!walletModel) return;
+
+    // The core's own paths, as the core sees them, read now: the monolith fills
+    // GuiIpcInfo before its wallet is loaded, so the wallet file is missing there.
+    const interfaces::CorePaths core_paths = clientModel ? clientModel->node().getCorePaths() : m_ipc_info.core_paths;
+    const std::vector<fs::path> core_files = BackupGuardFiles(core_paths);
+    const fs::path core_datadir(core_paths.datadir);
 
     // Pass a full suggested path, not a bare directory. getSaveFileName treats its
     // dir argument as a starting *file* name when the directory does not exist,
@@ -1966,36 +2015,89 @@ void BitcoinGUI::backupWallet()
     // opened pre-filled with the name "Documents". On a native build the
     // directory does exist, so the effect is milder but still wrong: no filename
     // was ever suggested.
-    QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    const QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
 
     // Suggest the names actually in use, taking only the filename component so a
     // configured path cannot leak into the suggestion. boostPathToQString keeps a
     // non-ASCII name, which a wallet or conf file is perfectly entitled to have.
-    const QString wallet_suggestion = GUIUtil::boostPathToQString(
-        fs::path(gArgs.GetArg("-wallet", "wallet.dat")).filename());
-    const QString config_suggestion = GUIUtil::boostPathToQString(
-        fs::path(gArgs.GetArg("-conf", GRIDCOIN_CONF_FILENAME)).filename());
-
     // writableLocation() returns empty when neither XDG_DOCUMENTS_DIR nor HOME is
     // set. Joining onto that would suggest "/wallet.dat" at the filesystem root,
     // so fall back to offering the bare name and letting the dialog choose where
     // to open.
-    const QString wallet_default = saveDir.isEmpty() ? wallet_suggestion : saveDir + "/" + wallet_suggestion;
-    const QString config_default = saveDir.isEmpty() ? config_suggestion : saveDir + "/" + config_suggestion;
+    const auto suggest = [&saveDir](const std::string& core_path, const char* fallback) {
+        const QString name = GUIUtil::boostPathToQString(core_path.empty() ? fs::path(fallback)
+                                                                           : fs::path(core_path).filename());
+        return saveDir.isEmpty() ? name : saveDir + "/" + name;
+    };
 
-    QString walletfilename = QFileDialog::getSaveFileName(
-        this, tr("Backup Wallet"), wallet_default, tr("Wallet Data (*.dat)"));
-    if(!walletfilename.isEmpty()) {
-        if(!walletModel->backupWallet(FromQString(walletfilename))) {
-            QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
-        }
+    fs::path wallet_dest;
+
+    if (!AskBackupDestination(this, tr("Backup Wallet"), suggest(core_paths.wallet_file, "wallet.dat"),
+                              tr("Wallet Data (*.dat)"), core_files, core_datadir, {}, wallet_dest)) {
+        return;
     }
-    QString configfilename = QFileDialog::getSaveFileName(
-        this, tr("Backup Config"), config_default, tr("Wallet Config (*.conf)"));
-    if(!configfilename.isEmpty()) {
-        if(!walletModel->backupConfigFile(FromQString(configfilename))) {
-            QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the config file to the new location."));
+
+    // When the core runs as another account, its configuration file holds the RPC
+    // password and is the administrator's, and the core will not send it
+    // (wallet::ConfigBackupPermitted). The settings file is backed up instead.
+    const bool settings_instead = m_ipc_info.core_other_account;
+    fs::path second_dest;
+
+    if (settings_instead) {
+        QMessageBox::information(this, tr("Backup Settings"),
+                                 tr("The configuration file belongs to the administrator in this mode; the settings "
+                                    "file is backed up instead."));
+
+        if (!AskBackupDestination(this, tr("Backup Settings"),
+                                  suggest(core_paths.settings_file, GRIDCOIN_SETTINGS_FILENAME),
+                                  tr("Wallet Settings (*.json)"), core_files, core_datadir, {wallet_dest}, second_dest)) {
+            return;
         }
+    } else if (!AskBackupDestination(this, tr("Backup Config"), suggest(core_paths.config_file, GRIDCOIN_CONF_FILENAME),
+                                     tr("Wallet Config (*.conf)"), core_files, core_datadir, {wallet_dest},
+                                     second_dest)) {
+        return;
+    }
+
+    const uint8_t items = static_cast<uint8_t>(interfaces::BackupItem::Wallet) |
+                          static_cast<uint8_t>(settings_instead ? interfaces::BackupItem::Settings
+                                                                : interfaces::BackupItem::Config);
+
+    // One prompt at most. A locked wallet, or one unlocked for staking only, asks for
+    // the passphrase and begins a Backup capability; an unencrypted or fully unlocked
+    // one asks nothing and needs none. The core ends the capability before
+    // beginBackup() returns and the source holds none, so the context goes with it.
+    std::unique_ptr<interfaces::FileSource> source;
+    std::string error;
+
+    {
+        WalletModel::UnlockContext ctx(walletModel->requestUnlock(CapabilityKind::Backup));
+
+        if (!ctx.isValid()) return;
+
+        source = walletModel->beginBackup(items, error);
+    }
+
+    if (!source) {
+        QMessageBox::warning(this, tr("Backup Failed"), QString::fromStdString(error));
+        return;
+    }
+
+    const std::vector<interfaces::BackupEntryResult> results = interfaces::DownloadBackupEntries(
+        *source, {wallet_dest, second_dest}, [this](interfaces::FileSource& src, uint32_t entry, const fs::path& dest) {
+            return RunDownloadWithProgress(this, tr("Backup Wallet"), src, entry, dest);
+        });
+
+    // The core deletes what it has not sent, and another transfer can begin.
+    source.reset();
+
+    bool failed = false;
+    const QString text = BackupResultText(results, failed);
+
+    if (failed) {
+        QMessageBox::warning(this, tr("Backup Failed"), text);
+    } else {
+        QMessageBox::information(this, tr("Backup Wallet"), text);
     }
 }
 

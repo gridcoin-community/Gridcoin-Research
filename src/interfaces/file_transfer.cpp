@@ -33,6 +33,65 @@ void CancelQuietly(FileSource& src)
     }
 }
 
+// The path without the "." a trailing separator leaves as its last element.
+fs::path WithoutTrailingDot(fs::path p)
+{
+    while (p.filename() == "." && p.has_parent_path()) {
+        p = p.parent_path();
+    }
+
+    return p;
+}
+
+// The path made absolute and normal as it is written, with no link resolved.
+fs::path AsWritten(const fs::path& p)
+{
+    fs::path abs = p;
+
+    if (!abs.is_absolute()) {
+        boost::system::error_code ec;
+        const fs::path cwd = fs::current_path(ec);
+        if (!ec) abs = cwd / abs;
+    }
+
+    return WithoutTrailingDot(abs.lexically_normal());
+}
+
+// The path with the links in the part of it that exists resolved. Where this account
+// cannot resolve them (a directory it may not search), the path as written.
+fs::path Resolved(const fs::path& p)
+{
+    const fs::path written = AsWritten(p);
+    boost::system::error_code ec;
+    const fs::path canonical = fs::weakly_canonical(written, ec);
+
+    return ec ? written : WithoutTrailingDot(canonical.lexically_normal());
+}
+
+// p is dir, or a path below it, element by element.
+bool IsWithin(const fs::path& p, const fs::path& dir)
+{
+    if (dir.empty()) return false;
+
+    auto e = p.begin();
+
+    for (auto d = dir.begin(); d != dir.end(); ++d, ++e) {
+        if (e == p.end() || *e != *d) return false;
+    }
+
+    return true;
+}
+
+// Whether a and b are one file. An equivalence that cannot be decided, for a file that
+// does not exist or one this account may not examine, is not one.
+bool SameFile(const fs::path& a, const fs::path& b)
+{
+    boost::system::error_code ec;
+    const bool same = fs::equivalent(a, b, ec);
+
+    return same && !ec;
+}
+
 } // namespace
 
 const std::vector<ConsoleFileCommand>& ConsoleFileCommands()
@@ -296,6 +355,118 @@ FileSinkResult UploadFile(FileSink& sink, const fs::path& local, const ProgressF
     } catch (const std::exception& e) {
         return fail(e.what());
     }
+}
+
+bool CheckDestination(const fs::path& dest, const std::vector<fs::path>& core_files, const fs::path& core_datadir,
+                      std::string& error)
+{
+    error.clear();
+
+    if (dest.empty()) {
+        error = "no destination was chosen";
+        return false;
+    }
+
+    // Follows a link, so a link to a directory is one too. A path this account cannot
+    // examine is left to the write, which reports why it fails.
+    boost::system::error_code ec;
+    if (fs::is_directory(dest, ec)) {
+        error = strprintf("%s is a directory", dest.string());
+        return false;
+    }
+
+    const fs::path dest_written = AsWritten(dest);
+    const fs::path dest_resolved = Resolved(dest);
+
+    // As written, the core's paths are refused even where this account cannot look
+    // at them (the core runs as another account). Equivalence also finds a hard link,
+    // and a spelling the comparisons miss.
+    for (const fs::path& file : core_files) {
+        if (file.empty()) continue;
+
+        if (dest_written == AsWritten(file) || dest_resolved == Resolved(file) || SameFile(dest, file)) {
+            error = strprintf("%s is one of the core's own files (%s)", dest.string(), file.string());
+            return false;
+        }
+    }
+
+    if (core_datadir.empty()) return true;
+
+    for (const char* name : {"database", "transfers"}) {
+        const fs::path dir = core_datadir / name;
+        bool inside = IsWithin(dest_written, AsWritten(dir)) || IsWithin(dest_resolved, Resolved(dir));
+
+        // A directory above dest that is dir under another name.
+        for (fs::path above = dest_written.parent_path(); !inside && !above.empty() && above != above.parent_path();
+             above = above.parent_path()) {
+            inside = SameFile(above, dir);
+        }
+
+        if (inside) {
+            error = strprintf("%s is inside the core's %s directory", dest.string(), dir.string());
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool EntryIsSkipped(const FileEntryInfo& info)
+{
+    return !info.note.empty();
+}
+
+std::vector<BackupEntryResult> DownloadBackupEntries(FileSource& src, const std::vector<fs::path>& dests,
+                                                     const BackupDownloadFn& download)
+{
+    std::vector<BackupEntryResult> results;
+
+    const auto source_failed = [&](std::string message) {
+        CancelQuietly(src);
+
+        BackupEntryResult failed;
+        failed.outcome = Fail(TransferStatus::SourceError, 0, std::move(message));
+        results.push_back(std::move(failed));
+        return results;
+    };
+
+    std::vector<FileEntryInfo> infos;
+
+    try {
+        infos = src.entries();
+    } catch (const std::exception& e) {
+        return source_failed(e.what());
+    }
+
+    if (infos.size() != dests.size()) {
+        return source_failed(strprintf("the core listed %u files for the %u requested", infos.size(), dests.size()));
+    }
+
+    for (size_t i = 0; i < infos.size(); ++i) {
+        BackupEntryResult result;
+        result.name = infos[i].name;
+        result.dest = dests[i];
+
+        if (EntryIsSkipped(infos[i])) {
+            result.skipped = true;
+            result.note = infos[i].note;
+            results.push_back(std::move(result));
+            continue;
+        }
+
+        result.outcome = download(src, static_cast<uint32_t>(i), dests[i]);
+        const bool arrived = result.outcome.status == TransferStatus::Ok;
+        results.push_back(std::move(result));
+
+        // DownloadEntry has stopped the source already, but a download can fail
+        // before it reaches the source.
+        if (!arrived) {
+            CancelQuietly(src);
+            break;
+        }
+    }
+
+    return results;
 }
 
 } // namespace interfaces

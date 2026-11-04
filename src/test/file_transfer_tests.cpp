@@ -218,6 +218,96 @@ struct FakeSink : public interfaces::FileSink
     void cancel() override { cancelled = true; }
 };
 
+// A source of several entries, as a backup's. An entry with a note has no data, and
+// reading it gives an error chunk carrying the note. Once cancelled, every read is an
+// error, as with the core's snapshot source.
+struct MultiSource : public interfaces::FileSource
+{
+    struct Item
+    {
+        std::string name{};
+        std::vector<unsigned char> data{};
+        std::string note{};
+        size_t pos{0};
+    };
+
+    std::vector<Item> items{};
+    std::vector<int> reads{};
+    bool throw_on_entries{false};
+    int error_entry{-1};
+    bool cancelled{false};
+
+    explicit MultiSource(std::vector<Item> i) : items(std::move(i)), reads(items.size(), 0) {}
+
+    std::vector<interfaces::FileEntryInfo> entries() override
+    {
+        if (throw_on_entries) {
+            throw std::runtime_error("connection lost");
+        }
+
+        std::vector<interfaces::FileEntryInfo> infos;
+
+        for (const Item& item : items) {
+            interfaces::FileEntryInfo e;
+            e.name = item.name;
+            e.size = item.note.empty() ? static_cast<int64_t>(item.data.size()) : 0;
+            e.size_hint = item.data.size();
+            e.note = item.note;
+            infos.push_back(e);
+        }
+
+        return infos;
+    }
+
+    interfaces::FileChunk read(uint32_t entry, uint32_t max_bytes) override
+    {
+        ++reads.at(entry);
+        Item& item = items.at(entry);
+        interfaces::FileChunk c;
+
+        if (cancelled) {
+            c.error = "the transfer was cancelled";
+            return c;
+        }
+
+        if (!item.note.empty()) {
+            c.error = item.note;
+            return c;
+        }
+
+        if (static_cast<int>(entry) == error_entry) {
+            c.error = "source failed";
+            return c;
+        }
+
+        const size_t n = std::min<size_t>(max_bytes, item.data.size() - item.pos);
+        c.data.assign(item.data.begin() + item.pos, item.data.begin() + item.pos + n);
+        item.pos += n;
+        c.eof = item.pos == item.data.size();
+        return c;
+    }
+
+    interfaces::FileTrailer trailer(uint32_t entry) override
+    {
+        const Item& item = items.at(entry);
+        interfaces::FileTrailer t;
+        t.ok = true;
+        t.size = item.data.size();
+        t.sha256 = Sha256Of(item.data);
+        return t;
+    }
+
+    void cancel() override { cancelled = true; }
+};
+
+// Writes a small file at p, creating its directory.
+void Touch(const fs::path& p)
+{
+    fs::create_directories(p.parent_path());
+    std::ofstream out(p.string(), std::ios::binary);
+    out << "core file";
+}
+
 struct DirFixture
 {
     fs::path dir;
@@ -627,6 +717,281 @@ BOOST_AUTO_TEST_CASE(console_file_commands_table)
     BOOST_CHECK(interfaces::FindConsoleFileCommand("parseaccrualsnapshotfile")->direction == interfaces::TransferDirection::Upload);
     BOOST_CHECK_EQUAL(interfaces::FindConsoleFileCommand("parseaccrualsnapshotfile")->max_upload_bytes, 256u * 1024 * 1024);
     BOOST_CHECK(!interfaces::FindConsoleFileCommand("backupwallet"));
+}
+
+BOOST_AUTO_TEST_CASE(destination_guard_refuses_core_files)
+{
+    const fs::path core = dir / "core";
+    const fs::path elsewhere = dir / "elsewhere";
+    const std::vector<fs::path> core_files{core / "wallet.dat", core / "gridcoinresearch.conf",
+                                           core / "gridcoinsettings.json", core / "debug.log"};
+
+    for (const fs::path& f : core_files) {
+        Touch(f);
+    }
+
+    fs::create_directories(core / "database");
+    fs::create_directories(core / "transfers");
+    fs::create_directories(elsewhere);
+
+    std::string error;
+
+    for (const fs::path& f : core_files) {
+        BOOST_CHECK_MESSAGE(!interfaces::CheckDestination(f, core_files, core, error), f.string());
+        BOOST_CHECK(!error.empty());
+    }
+
+    // The same file written another way.
+    BOOST_CHECK(!interfaces::CheckDestination(elsewhere / ".." / "core" / "wallet.dat", core_files, core, error));
+
+#ifndef WIN32
+    fs::create_symlink(core / "wallet.dat", elsewhere / "link");
+    BOOST_CHECK(!interfaces::CheckDestination(elsewhere / "link", core_files, core, error));
+#endif
+
+    BOOST_CHECK(!interfaces::CheckDestination(core / "database" / "x", core_files, core, error));
+    BOOST_CHECK(error.find("database") != std::string::npos);
+    BOOST_CHECK(!interfaces::CheckDestination(core / "transfers" / "x", core_files, core, error));
+    BOOST_CHECK(error.find("transfers") != std::string::npos);
+    BOOST_CHECK(!interfaces::CheckDestination(core / "database" / "deeper" / "x", core_files, core, error));
+    BOOST_CHECK(!interfaces::CheckDestination(elsewhere / ".." / "core" / "database" / "x", core_files, core, error));
+
+    BOOST_CHECK(!interfaces::CheckDestination(core, core_files, core, error));
+    BOOST_CHECK(error.find("directory") != std::string::npos);
+    BOOST_CHECK(!interfaces::CheckDestination(elsewhere, core_files, core, error));
+    BOOST_CHECK(!interfaces::CheckDestination(fs::path(), core_files, core, error));
+
+    // A new file elsewhere, an existing one elsewhere, and a new file beside the
+    // core's (not one of its files, nor in database or transfers) are all fine.
+    BOOST_CHECK(interfaces::CheckDestination(elsewhere / "backup.dat", core_files, core, error));
+    BOOST_CHECK(error.empty());
+    Touch(elsewhere / "old-backup.dat");
+    BOOST_CHECK(interfaces::CheckDestination(elsewhere / "old-backup.dat", core_files, core, error));
+    BOOST_CHECK(interfaces::CheckDestination(core / "backup.dat", core_files, core, error));
+    BOOST_CHECK(interfaces::CheckDestination(core / "databases" / "x", core_files, core, error));
+
+    // Empty entries are skipped, and so is the directory check without a datadir.
+    BOOST_CHECK(interfaces::CheckDestination(elsewhere / "backup.dat", {fs::path()}, fs::path(), error));
+    BOOST_CHECK(interfaces::CheckDestination(core / "database" / "x", {}, fs::path(), error));
+}
+
+#ifndef WIN32
+BOOST_AUTO_TEST_CASE(destination_guard_sees_through_links)
+{
+    const fs::path core = dir / "core";
+    const fs::path elsewhere = dir / "elsewhere";
+    const std::vector<fs::path> core_files{core / "wallet.dat", core / "debug.log"};
+
+    for (const fs::path& f : core_files) {
+        Touch(f);
+    }
+
+    fs::create_directories(core / "database");
+    fs::create_directories(elsewhere);
+
+    std::string error;
+
+    // A hard link has a path of its own, so only equivalence finds it.
+    fs::create_hard_link(core / "wallet.dat", elsewhere / "hard");
+    BOOST_CHECK(!interfaces::CheckDestination(elsewhere / "hard", core_files, core, error));
+
+    // Through a linked directory, to a new file inside database and to a core file.
+    fs::create_directory_symlink(core / "database", elsewhere / "dblink");
+    BOOST_CHECK(!interfaces::CheckDestination(elsewhere / "dblink" / "x", core_files, core, error));
+    fs::create_directory_symlink(core, elsewhere / "corelink");
+    BOOST_CHECK(!interfaces::CheckDestination(elsewhere / "corelink" / "wallet.dat", core_files, core, error));
+    BOOST_CHECK(!interfaces::CheckDestination(elsewhere / "corelink" / "database" / "x", core_files, core, error));
+    BOOST_CHECK(interfaces::CheckDestination(elsewhere / "corelink" / "backup.dat", core_files, core, error));
+}
+
+BOOST_AUTO_TEST_CASE(destination_guard_without_access_to_the_core_files)
+{
+    // The core runs as another account and this one may not look inside its data
+    // directory. Mode 0 stands in for that; root would see through it.
+    if (::geteuid() == 0) {
+        BOOST_TEST_MESSAGE("skipped: running as root, so a mode 0 directory can still be searched");
+        return;
+    }
+
+    const fs::path core = dir / "core";
+    const fs::path elsewhere = dir / "elsewhere";
+    const std::vector<fs::path> core_files{core / "wallet.dat", core / "gridcoinresearch.conf",
+                                           core / "gridcoinsettings.json", core / "debug.log"};
+
+    for (const fs::path& f : core_files) {
+        Touch(f);
+    }
+
+    fs::create_directories(core / "database");
+    fs::create_directories(elsewhere);
+    Touch(elsewhere / "old-backup.dat");
+
+    BOOST_REQUIRE_EQUAL(::chmod(core.c_str(), 0), 0);
+
+    struct RestoreMode
+    {
+        fs::path path{};
+        ~RestoreMode() { ::chmod(path.c_str(), 0700); }
+    } restore{core};
+
+    // The equivalence check cannot run, and refuses nothing by itself.
+    boost::system::error_code ec;
+    fs::equivalent(elsewhere / "backup.dat", core / "wallet.dat", ec);
+    BOOST_CHECK(ec);
+
+    std::string error;
+
+    BOOST_CHECK(interfaces::CheckDestination(elsewhere / "backup.dat", core_files, core, error));
+    BOOST_CHECK_MESSAGE(error.empty(), error);
+    BOOST_CHECK(interfaces::CheckDestination(elsewhere / "old-backup.dat", core_files, core, error));
+    BOOST_CHECK_MESSAGE(error.empty(), error);
+
+    // The core's own paths are still refused as written.
+    BOOST_CHECK(!interfaces::CheckDestination(core / "wallet.dat", core_files, core, error));
+    BOOST_CHECK(!interfaces::CheckDestination(core / "database" / "x", core_files, core, error));
+    BOOST_CHECK(!interfaces::CheckDestination(core / "transfers" / "x", core_files, core, error));
+    BOOST_CHECK(!interfaces::CheckDestination(core, core_files, core, error));
+}
+#endif // !WIN32
+
+BOOST_AUTO_TEST_CASE(entry_with_a_note_is_skipped)
+{
+    interfaces::FileEntryInfo e;
+    e.name = "gridcoinsettings.json";
+    e.size = 0;
+    BOOST_CHECK(!interfaces::EntryIsSkipped(e));
+
+    e.note = "no settings file";
+    BOOST_CHECK(interfaces::EntryIsSkipped(e));
+}
+
+BOOST_AUTO_TEST_CASE(backup_skips_an_entry_with_a_note)
+{
+    // A missing configuration file between the wallet and the settings file: the
+    // settings file must still arrive.
+    MultiSource src({{"wallet.dat", Bytes(10'000), ""},
+                     {"gridcoinresearch.conf", {}, "no configuration file"},
+                     {"gridcoinsettings.json", Bytes(300), ""}});
+    std::atomic<bool> cancel{false};
+    const std::vector<fs::path> dests{dir / "w.dat", dir / "c.conf", dir / "s.json"};
+    int downloads = 0;
+
+    const std::vector<interfaces::BackupEntryResult> results = interfaces::DownloadBackupEntries(
+        src, dests, [&](interfaces::FileSource& s, uint32_t entry, const fs::path& dest) {
+            ++downloads;
+            return interfaces::DownloadEntry(s, entry, dest, nullptr, cancel, 4096);
+        });
+
+    BOOST_REQUIRE_EQUAL(results.size(), 3u);
+    BOOST_CHECK_EQUAL(downloads, 2);
+
+    BOOST_CHECK_EQUAL(results[0].name, "wallet.dat");
+    BOOST_CHECK(results[0].dest == dests[0]);
+    BOOST_CHECK(!results[0].skipped);
+    BOOST_CHECK(results[0].outcome.status == interfaces::TransferStatus::Ok);
+    BOOST_CHECK_EQUAL(results[0].outcome.bytes, 10'000u);
+
+    BOOST_CHECK_EQUAL(results[1].name, "gridcoinresearch.conf");
+    BOOST_CHECK(results[1].dest == dests[1]);
+    BOOST_CHECK(results[1].skipped);
+    BOOST_CHECK_EQUAL(results[1].note, "no configuration file");
+
+    BOOST_CHECK(!results[2].skipped);
+    BOOST_CHECK(results[2].outcome.status == interfaces::TransferStatus::Ok);
+    BOOST_CHECK_EQUAL(results[2].outcome.bytes, 300u);
+
+    BOOST_CHECK_EQUAL(src.reads[1], 0);
+    BOOST_CHECK(!src.cancelled);
+    BOOST_CHECK(ReadAll(dests[0]) == std::string(src.items[0].data.begin(), src.items[0].data.end()));
+    BOOST_CHECK(ReadAll(dests[2]) == std::string(src.items[2].data.begin(), src.items[2].data.end()));
+    BOOST_CHECK(!fs::exists(dests[1]));
+    BOOST_CHECK_EQUAL(CountEntries(dir), 2u);
+}
+
+BOOST_AUTO_TEST_CASE(backup_stops_at_the_first_failure)
+{
+    MultiSource src({{"wallet.dat", Bytes(10'000), ""}, {"gridcoinsettings.json", Bytes(300), ""}});
+    src.error_entry = 0;
+    std::atomic<bool> cancel{false};
+    int downloads = 0;
+
+    const std::vector<interfaces::BackupEntryResult> results = interfaces::DownloadBackupEntries(
+        src, {dir / "w.dat", dir / "s.json"}, [&](interfaces::FileSource& s, uint32_t entry, const fs::path& dest) {
+            ++downloads;
+            return interfaces::DownloadEntry(s, entry, dest, nullptr, cancel, 4096);
+        });
+
+    BOOST_REQUIRE_EQUAL(results.size(), 1u);
+    BOOST_CHECK_EQUAL(downloads, 1);
+    BOOST_CHECK(results[0].outcome.status == interfaces::TransferStatus::SourceError);
+    BOOST_CHECK_EQUAL(results[0].outcome.message, "source failed");
+    BOOST_CHECK(src.cancelled);
+    BOOST_CHECK_EQUAL(src.reads[1], 0);
+    BOOST_CHECK_EQUAL(CountEntries(dir), 0u);
+
+    // A download that fails without reaching the source (the GUI has no transfer
+    // thread) still leaves the source stopped.
+    MultiSource untouched({{"wallet.dat", Bytes(10), ""}, {"gridcoinsettings.json", Bytes(10), ""}});
+    const std::vector<interfaces::BackupEntryResult> local = interfaces::DownloadBackupEntries(
+        untouched, {dir / "w.dat", dir / "s.json"}, [](interfaces::FileSource&, uint32_t, const fs::path&) {
+            interfaces::TransferOutcome out;
+            out.status = interfaces::TransferStatus::LocalError;
+            out.message = "no file transfer thread is running";
+            return out;
+        });
+
+    BOOST_REQUIRE_EQUAL(local.size(), 1u);
+    BOOST_CHECK(local[0].outcome.status == interfaces::TransferStatus::LocalError);
+    BOOST_CHECK(untouched.cancelled);
+    BOOST_CHECK_EQUAL(untouched.reads[0] + untouched.reads[1], 0);
+}
+
+BOOST_AUTO_TEST_CASE(backup_cancel_leaves_nothing_and_stops_the_rest)
+{
+    MultiSource src({{"wallet.dat", Bytes(100'000), ""}, {"gridcoinsettings.json", Bytes(300), ""}});
+    std::atomic<bool> cancel{false};
+    int chunks = 0;
+
+    const std::vector<interfaces::BackupEntryResult> results = interfaces::DownloadBackupEntries(
+        src, {dir / "w.dat", dir / "s.json"}, [&](interfaces::FileSource& s, uint32_t entry, const fs::path& dest) {
+            return interfaces::DownloadEntry(
+                s, entry, dest, [&](uint64_t, int64_t) { if (++chunks == 3) cancel = true; }, cancel, 4096);
+        });
+
+    BOOST_REQUIRE_EQUAL(results.size(), 1u);
+    BOOST_CHECK(results[0].outcome.status == interfaces::TransferStatus::Cancelled);
+    BOOST_CHECK(src.cancelled);
+    BOOST_CHECK_EQUAL(src.reads[1], 0);
+    BOOST_CHECK_EQUAL(CountEntries(dir), 0u);
+}
+
+BOOST_AUTO_TEST_CASE(backup_source_that_cannot_list_its_entries)
+{
+    int downloads = 0;
+    const interfaces::BackupDownloadFn count = [&](interfaces::FileSource&, uint32_t, const fs::path&) {
+        ++downloads;
+        return interfaces::TransferOutcome{};
+    };
+
+    MultiSource lost({{"wallet.dat", Bytes(10), ""}});
+    lost.throw_on_entries = true;
+    std::vector<interfaces::BackupEntryResult> results = interfaces::DownloadBackupEntries(lost, {dir / "w.dat"}, count);
+
+    BOOST_REQUIRE_EQUAL(results.size(), 1u);
+    BOOST_CHECK(results[0].outcome.status == interfaces::TransferStatus::SourceError);
+    BOOST_CHECK_EQUAL(results[0].outcome.message, "connection lost");
+
+    // Two entries for one destination: nothing is downloaded, and the source stops.
+    MultiSource two({{"wallet.dat", Bytes(10), ""}, {"gridcoinsettings.json", Bytes(10), ""}});
+    results = interfaces::DownloadBackupEntries(two, {dir / "w.dat"}, count);
+
+    BOOST_REQUIRE_EQUAL(results.size(), 1u);
+    BOOST_CHECK(results[0].outcome.status == interfaces::TransferStatus::SourceError);
+    BOOST_CHECK(!results[0].outcome.message.empty());
+    BOOST_CHECK(two.cancelled);
+
+    BOOST_CHECK_EQUAL(downloads, 0);
+    BOOST_CHECK_EQUAL(CountEntries(dir), 0u);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

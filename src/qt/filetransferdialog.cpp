@@ -1,0 +1,360 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include "qt/filetransferdialog.h"
+
+#include "interfaces/node.h"
+#include "qt/guiutil.h"
+#include "util.h" /* for LogPrintf */
+#include "util/threadnames.h"
+
+#include <QCoreApplication>
+#include <QDialog>
+#include <QEventLoop>
+#include <QObject>
+#include <QProgressDialog>
+#include <QPushButton>
+#include <QStringList>
+#include <QTimer>
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <exception>
+#include <future>
+#include <memory>
+#include <string>
+#include <system_error>
+#include <utility>
+
+namespace {
+//! The process's worker: FileTransferWorker::Current().
+std::atomic<FileTransferWorker*> g_transfer_worker{nullptr};
+
+//! How often the GUI thread looks at a transfer in flight.
+constexpr std::chrono::milliseconds TRANSFER_POLL{50};
+
+//! What the GUI thread and the worker share while one transfer runs. Both hold it, so it
+//! outlives whichever lets go last.
+template <typename Result>
+struct TransferJob
+{
+    std::atomic<uint64_t> done{0};
+    std::atomic<int64_t> total{-1};
+    std::atomic<bool> cancel{false};
+    //! Written by the worker before it fulfils finished, and read only after that. Left as
+    //! it is (a failure with no message) if even the failure could not be made.
+    Result result{};
+    std::promise<void> finished{};
+};
+
+QString CountsText(uint64_t done, int64_t total)
+{
+    if (total < 0) return QObject::tr("%1 bytes").arg(QString::number(static_cast<qulonglong>(done)));
+
+    return QObject::tr("%1 of %2 bytes")
+        .arg(QString::number(static_cast<qulonglong>(done)), QString::number(static_cast<qlonglong>(total)));
+}
+
+//! Run \p transfer on the process's worker while a modal dialog shows its progress, and
+//! return its result once it has finished. \p failed makes the result for a transfer that
+//! could not run, or that threw.
+template <typename Result>
+Result RunWithProgress(QWidget* parent, const QString& title, const QString& what,
+                       std::function<Result(const interfaces::ProgressFn&, const std::atomic<bool>&)> transfer,
+                       std::function<Result(const std::string&)> failed)
+{
+    FileTransferWorker* const worker = FileTransferWorker::Current();
+    if (!worker) return failed("no file transfer thread is running");
+
+    const auto job = std::make_shared<TransferJob<Result>>();
+    std::future<void> finished = job->finished.get_future();
+
+    const bool posted = worker->Post([job, transfer = std::move(transfer), failed] {
+        // The GUI thread waits for finished, so it is fulfilled however this ends, after
+        // the result is written.
+        struct Fulfil
+        {
+            std::promise<void>& finished;
+            ~Fulfil() { finished.set_value(); }
+        } fulfil{job->finished};
+
+        try {
+            job->result = transfer(
+                [job](uint64_t done, int64_t total) {
+                    job->done = done;
+                    job->total = total;
+                },
+                job->cancel);
+        } catch (const std::exception& e) {
+            job->result = failed(e.what());
+        } catch (...) {
+            job->result = failed("the transfer failed");
+        }
+    });
+
+    if (!posted) return failed("the file transfer thread could not be started");
+
+    // No cancel button from the constructor: the dialog's own is set below, so it can be
+    // disabled while cancelling.
+    QProgressDialog dialog(what, QString(), 0, 0, parent);
+    auto* const cancel_button = new QPushButton(QObject::tr("Cancel"));
+    dialog.setCancelButton(cancel_button);
+    dialog.setWindowTitle(title);
+    dialog.setWindowModality(Qt::ApplicationModal);
+    dialog.setMinimumDuration(0);
+    dialog.setAutoReset(false);
+    dialog.setAutoClose(false);
+
+    QEventLoop loop;
+    // Set when this function ends the loop itself; otherwise it was told to quit from
+    // outside.
+    bool ended_here = false;
+    bool cancelling = false;
+
+    const auto is_finished = [&finished] {
+        return finished.wait_for(std::chrono::seconds{0}) == std::future_status::ready;
+    };
+
+    const auto show_cancelling = [&] {
+        dialog.setLabelText(QObject::tr("Cancelling..."));
+        dialog.setRange(0, 0);
+        cancel_button->setEnabled(false);
+    };
+
+    const auto on_cancel = [&] {
+        if (!cancelling) {
+            cancelling = true;
+            job->cancel = true;
+            show_cancelling();
+        }
+
+        // QProgressDialog hides itself when it is cancelled, or closed. Show it again once
+        // that has happened, until the transfer has stopped.
+        QTimer::singleShot(0, &dialog, [&] {
+            if (!is_finished()) dialog.show();
+        });
+    };
+
+    QObject::connect(&dialog, &QProgressDialog::canceled, &loop, on_cancel);
+    // Escape rejects the dialog, which under Qt 5 hides it without canceled().
+    QObject::connect(&dialog, &QDialog::rejected, &loop, on_cancel);
+
+    QTimer timer;
+    timer.setSingleShot(true);
+    timer.setInterval(static_cast<int>(TRANSFER_POLL.count()));
+
+    const auto tick = [&] {
+        // A timer event can still be delivered after the loop was told to quit.
+        if (!loop.isRunning()) return;
+
+        if (is_finished()) {
+            ended_here = true;
+            loop.quit();
+            return;
+        }
+
+        if (!cancelling) {
+            const uint64_t done = job->done;
+            const int64_t total = job->total;
+
+            dialog.setLabelText(what + "\n" + CountsText(done, total));
+
+            if (total > 0) {
+                const uint64_t permille = std::min<uint64_t>(done, static_cast<uint64_t>(total)) * 1000 /
+                                          static_cast<uint64_t>(total);
+                dialog.setRange(0, 1000);
+                dialog.setValue(static_cast<int>(permille));
+            }
+        }
+
+        // Started again only once this tick is over: setValue() on a modal dialog processes
+        // events, and a timer that fired meanwhile would run this inside itself.
+        timer.start();
+    };
+
+    QObject::connect(&timer, &QTimer::timeout, &loop, tick);
+
+    dialog.show();
+    timer.start();
+    loop.exec();
+    timer.stop();
+
+    if (!ended_here) {
+        // Told to quit from outside (the application is quitting): stop the transfer, and
+        // wait for it with events still processed. A nested event loop would not run: once
+        // the application has been told to quit, QEventLoop::exec() returns at once.
+        job->cancel = true;
+        cancelling = true;
+        show_cancelling();
+        dialog.show();
+
+        while (finished.wait_for(TRANSFER_POLL) != std::future_status::ready) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, static_cast<int>(TRANSFER_POLL.count()));
+        }
+    }
+
+    dialog.hide();
+    finished.get();
+
+    return std::move(job->result);
+}
+} // namespace
+
+FileTransferWorker::FileTransferWorker()
+{
+    FileTransferWorker* none = nullptr;
+
+    if (!g_transfer_worker.compare_exchange_strong(none, this)) {
+        LogPrintf("ERROR: %s: a file transfer worker exists already; this one is not used", __func__);
+    }
+}
+
+FileTransferWorker::~FileTransferWorker()
+{
+    FileTransferWorker* self = this;
+    g_transfer_worker.compare_exchange_strong(self, nullptr);
+
+    std::thread thread;
+
+    {
+        LOCK(m_mutex);
+        m_stop = true;
+        thread = std::move(m_thread);
+    }
+
+    m_cv.notify_all();
+
+    if (thread.joinable()) thread.join();
+}
+
+FileTransferWorker* FileTransferWorker::Current()
+{
+    return g_transfer_worker.load();
+}
+
+bool FileTransferWorker::Post(std::function<void()> job)
+{
+    LOCK(m_mutex);
+
+    if (m_stop) return false;
+
+    if (!m_thread.joinable()) {
+        try {
+            m_thread = std::thread([this] { Run(); });
+        } catch (const std::system_error& e) {
+            LogPrintf("ERROR: %s: could not start the file transfer thread: %s", __func__, e.what());
+            return false;
+        }
+    }
+
+    m_jobs.push_back(std::move(job));
+    m_cv.notify_one();
+
+    return true;
+}
+
+void FileTransferWorker::Run()
+{
+    util::ThreadRename("gui-transfer");
+
+    for (;;) {
+        std::function<void()> job;
+
+        {
+            WAIT_LOCK(m_mutex, lock);
+            m_cv.wait(lock, [this]() EXCLUSIVE_LOCKS_REQUIRED(m_mutex) { return m_stop || !m_jobs.empty(); });
+
+            // Stopped, with nothing left to run.
+            if (m_jobs.empty()) return;
+
+            job = std::move(m_jobs.front());
+            m_jobs.pop_front();
+        }
+
+        // Nothing may escape the thread.
+        try {
+            job();
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: %s: a file transfer job failed: %s", __func__, e.what());
+        } catch (...) {
+            LogPrintf("ERROR: %s: a file transfer job failed", __func__);
+        }
+
+        // Destroyed outside the mutex.
+        job = nullptr;
+    }
+}
+
+interfaces::TransferOutcome RunDownloadWithProgress(QWidget* parent, const QString& title, interfaces::FileSource& src,
+                                                    uint32_t entry, const fs::path& dest)
+{
+    const QString what = QObject::tr("Saving %1").arg(GUIUtil::boostPathToQString(dest));
+
+    return RunWithProgress<interfaces::TransferOutcome>(
+        parent, title, what,
+        [&src, entry, dest](const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel) {
+            return interfaces::DownloadEntry(src, entry, dest, progress, cancel);
+        },
+        [](const std::string& message) {
+            interfaces::TransferOutcome out;
+            out.status = interfaces::TransferStatus::LocalError;
+            out.message = message;
+            return out;
+        });
+}
+
+interfaces::FileSinkResult RunUploadWithProgress(QWidget* parent, const QString& title, interfaces::FileSink& sink,
+                                                 const fs::path& local)
+{
+    const QString what = QObject::tr("Sending %1").arg(GUIUtil::boostPathToQString(local));
+
+    return RunWithProgress<interfaces::FileSinkResult>(
+        parent, title, what,
+        [&sink, local](const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel) {
+            return interfaces::UploadFile(sink, local, progress, cancel);
+        },
+        [](const std::string& message) {
+            interfaces::FileSinkResult out;
+            out.ok = false;
+            out.error = message;
+            return out;
+        });
+}
+
+std::vector<fs::path> BackupGuardFiles(const interfaces::CorePaths& paths)
+{
+    std::vector<fs::path> files;
+
+    for (const std::string* path : {&paths.wallet_file, &paths.config_file, &paths.settings_file, &paths.debug_log}) {
+        if (!path->empty()) files.emplace_back(*path);
+    }
+
+    return files;
+}
+
+QString BackupResultText(const std::vector<interfaces::BackupEntryResult>& results, bool& failed)
+{
+    failed = false;
+    QStringList lines;
+
+    for (const interfaces::BackupEntryResult& result : results) {
+        const QString dest = GUIUtil::boostPathToQString(result.dest);
+
+        if (result.skipped) {
+            lines << QObject::tr("%1 was not backed up: %2")
+                         .arg(QString::fromStdString(result.name), QString::fromStdString(result.note));
+        } else if (result.outcome.status == interfaces::TransferStatus::Ok) {
+            lines << QObject::tr("Saved %1 bytes to %2.")
+                         .arg(QString::number(static_cast<qulonglong>(result.outcome.bytes)), dest);
+        } else if (result.outcome.status == interfaces::TransferStatus::Cancelled) {
+            lines << QObject::tr("The backup was cancelled; nothing was saved to %1.").arg(dest);
+        } else {
+            failed = true;
+            lines << QString::fromStdString(result.outcome.message);
+        }
+    }
+
+    return lines.join("\n");
+}

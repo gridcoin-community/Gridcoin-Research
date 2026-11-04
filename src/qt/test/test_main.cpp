@@ -16,6 +16,7 @@
 #include "coinselectionmodeltests.h"
 #include "coinselectionviewtests.h"
 #include "coreconnectwaittests.h"
+#include "filetransferdialogtests.h"
 #include "guiutiltests.h"
 #include "optionsmodeltests.h"
 #include "psgttoastdamptests.h"
@@ -148,6 +149,10 @@ int main(int argc, char *argv[])
 
     CoreConnectWaitTests test21;
     if (QTest::qExec(&test21) != 0)
+        fInvalid = true;
+
+    FileTransferDialogTests test22;
+    if (QTest::qExec(&test22) != 0)
         fInvalid = true;
 
     return fInvalid;

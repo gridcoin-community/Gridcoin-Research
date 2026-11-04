@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <map>
+#include <memory>
 #include <thread>
 #include <optional>
 #include <string>
@@ -163,11 +164,11 @@ public:
     //! prompt's event loop) is refused. GUI thread only.
     bool isUnlockPromptOpen() const { return m_unlock_prompt_open; }
 
-    // Back up the wallet .dat / config file to dest (pass-throughs to the
-    // wallet interface, used by the GUI backup action). Return false on
-    // I/O failure.
-    bool backupWallet(const std::string& dest);
-    bool backupConfigFile(const std::string& dest);
+    //! Snapshot the backup items (a mask of interfaces::BackupItem) in the core
+    //! and return a source that streams them: interfaces::Wallet::beginBackup().
+    //! Null, with \p error_out set, when the core refuses. The GUI's backup
+    //! action calls it within a Backup context from requestUnlock().
+    std::unique_ptr<interfaces::FileSource> beginBackup(uint8_t items, std::string& error_out);
 
     //! RAII object for one operation's access to the wallet's keys, returned by
     //! requestUnlock(). While it lives, the interface calls for that operation

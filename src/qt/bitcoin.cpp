@@ -18,6 +18,7 @@
 #include "voting/votingmodel.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
+#include "qt/filetransferdialog.h"
 #include "qt/intro.h"
 #include "guiconstants.h"
 #include "interfaces/init.h"
@@ -1325,6 +1326,11 @@ int main(int argc, char *argv[])
     // only here, after the arguments are parsed, which is why the mark is not
     // beside the thread name above.
     if (!multiprocess) MarkGuiThread();
+
+    // The thread the GUI runs file transfers on. Declared before node_connection, so
+    // it is joined only after the connection is gone: a thread that has made IPC calls
+    // must not exit while its connection may be destroyed (see FileTransferWorker).
+    FileTransferWorker transfer_worker;
 #ifdef ENABLE_MULTIPROCESS
     std::optional<ipc::GuiConnection> node_connection;
     if (multiprocess)
