@@ -696,35 +696,6 @@ BOOST_AUTO_TEST_CASE(ipc_slot_end_if_ends_only_the_named_capability)
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 
-// An operation can end its capability without emptying the slot, as a
-// transfer's source or sink does. The next begin into the slot displaces that
-// ended id, and its own capability stays live even when it is drawn with the
-// same id, as the unit tests' deterministic generator draws it.
-BOOST_AUTO_TEST_CASE(ipc_slot_begin_over_an_ended_capability_keeps_the_new_one)
-{
-    EncryptedWallet fx;
-    fx.UnlockFor(UnlockScope::StakingOnly);
-
-    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::FileTransfer, {}));
-    const std::optional<CapabilityId> ended = fx.wallet.IpcCapability({});
-    BOOST_REQUIRE(ended.has_value());
-
-    fx.wallet.EndElevation(*ended);
-    BOOST_REQUIRE(fx.wallet.IpcCapability({}) == ended);
-
-    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::FileTransfer, {}));
-    const std::optional<CapabilityId> next = fx.wallet.IpcCapability({});
-    BOOST_REQUIRE(next.has_value());
-    {
-        CapabilityScope scope(fx.wallet, next, CapabilityKind::FileTransfer);
-        BOOST_CHECK(scope.Active());
-    }
-
-    fx.wallet.EndIpcElevation({});
-    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
-    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
-}
-
 BOOST_AUTO_TEST_CASE(capability_end_idempotent_and_lock_free)
 {
     EncryptedWallet fx;

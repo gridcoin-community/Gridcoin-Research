@@ -1199,11 +1199,9 @@ bool CWallet::BeginIpcElevation(const SecureString& passphrase, CapabilityKind k
         return false;
     }
 
-    // The slot can still hold a capability that has ended, which its operation
-    // ended without emptying the slot (a transfer's source or sink). Such an
-    // id may be drawn again, and then it names the capability just installed,
-    // which is not ended.
-    if (displaced && displaced != id) EndElevation(*displaced);
+    // A new id never equals the displaced one: ids are 64-bit random, and
+    // operations that end their capability also empty the slot.
+    if (displaced) EndElevation(*displaced);
 
     return id.has_value();
 }

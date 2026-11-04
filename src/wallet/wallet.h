@@ -426,9 +426,7 @@ public:
     //!
     //! The IPC server serves one client at a time, so the process keeps one IPC
     //! capability. Whatever the slot held is ended, whether or not this one is
-    //! issued, and false leaves the slot empty. An ended capability the slot
-    //! still held whose id is drawn again for this one is not ended a second
-    //! time, since that would end this one. Otherwise as BeginElevation().
+    //! issued, and false leaves the slot empty. Otherwise as BeginElevation().
     //!
     //! \p connection_closed, here and on EndIpcElevation() and IpcCapability(),
     //! has no default, so a caller cannot forget it. A caller serving an IPC
