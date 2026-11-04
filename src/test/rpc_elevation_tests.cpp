@@ -30,6 +30,7 @@ namespace {
 
 using grc_test::EncryptedWallet;
 using grc_test::SchedulerForThisCase;
+using grc_test::ShutdownRequestedForThisCase;
 using grc_test::SwapMainWallet;
 
 //! The name of the elevation header as the server's header parser stores it.
@@ -428,6 +429,52 @@ BOOST_AUTO_TEST_CASE(consolidateunspent_refused_without_the_keys)
 
     BOOST_REQUIRE(result.isObject());
     BOOST_CHECK(find_value(result, "result").isFalse());
+}
+
+BOOST_AUTO_TEST_CASE(passphrase_requests_during_shutdown_say_so)
+{
+    EncryptedWallet fx;
+    // So that walletpassphrase, which asks for a running scheduler first, gets
+    // as far as its passphrase attempt.
+    SchedulerForThisCase scheduler;
+
+    const SecureString& passphrase = EncryptedWallet::PASSPHRASE;
+    const std::string pass(passphrase.begin(), passphrase.end());
+
+    // Whether \p call fails with the shutdown refusal.
+    const auto refused_for_shutdown = [](auto&& call) {
+        try {
+            call();
+        } catch (const UniValue& error) {
+            return find_value(error, "code").get_int() == RPC_WALLET_ERROR
+                && find_value(error, "message").get_str().find("the wallet passphrase was not checked")
+                       != std::string::npos;
+        } catch (const std::exception&) {
+        }
+
+        return false;
+    };
+
+    // Each attempt is given up before its passphrase is checked, and every
+    // RPC route says the node is shutting down, not that the passphrase was
+    // wrong: walletpassphrase, walletpassphrasechange, and a request carrying
+    // the passphrase in its header.
+    {
+        const ShutdownRequestedForThisCase shutdown;
+
+        BOOST_CHECK(refused_for_shutdown([&] { CallRPC("walletpassphrase " + pass + " 60"); }));
+        BOOST_CHECK(refused_for_shutdown([&] { CallRPC("walletpassphrasechange " + pass + " rpc-shutdown-new"); }));
+
+        std::map<std::string, std::string> headers = HeadersWith(Base64(passphrase));
+        BOOST_CHECK(refused_for_shutdown([&] {
+            ExecuteWithElevation(TakeElevationHeader(headers), [&] { return CallRPC(SignRequest(fx.id)); });
+        }));
+    }
+
+    // Nothing was counted or changed: the passphrase still opens the wallet.
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+    BOOST_CHECK(fx.wallet.IsLocked());
+    BOOST_CHECK(fx.wallet.Unlock(passphrase, UnlockScope::StakingOnly));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

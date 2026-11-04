@@ -293,7 +293,15 @@ UniValue ExecuteWithElevation(const std::optional<SecureString>& header, const s
 
         // Derives a key, and after a wrong passphrase sleeps the delay, with no
         // lock held: the RPC worker holds none here.
-        id = wallet->BeginElevation(*passphrase, CapabilityKind::RpcRequest);
+        CWallet::UnlockFailure failure = CWallet::UnlockFailure::None;
+        id = wallet->BeginElevation(*passphrase, CapabilityKind::RpcRequest, &failure);
+
+        // The node began shutting down while the attempt waited its turn, as
+        // walletpassphrase reports it.
+        if (failure == CWallet::UnlockFailure::Abandoned) {
+            throw JSONRPCError(RPC_WALLET_ERROR,
+                               "Error: the node is shutting down; the wallet passphrase was not checked.");
+        }
     }
 
     if (!id) {

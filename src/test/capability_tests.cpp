@@ -8,7 +8,6 @@
 #include "gridcoin/voting/builders.h"
 #include "init.h"
 #include "keystore.h"
-#include "node/shutdown.h"
 #include "rpc/protocol.h"
 #include "rpc/server.h"
 #include "scheduler.h"
@@ -47,6 +46,7 @@ namespace {
 
 using grc_test::EncryptedWallet;
 using grc_test::SchedulerForThisCase;
+using grc_test::ShutdownRequestedForThisCase;
 using grc_test::WaitForRelock;
 
 // A scope holds a grant for the thread that made it. It can be neither copied
@@ -88,17 +88,6 @@ bool WaitForFailures(const CWallet& wallet, unsigned int count)
 
     return wallet.FailedUnlockCount() >= count;
 }
-
-//! Requests a shutdown while it lives, and clears the request however the case
-//! exits, so that the rest of the binary runs without one.
-struct ShutdownRequestedForThisCase
-{
-    ShutdownRequestedForThisCase() { SetShutdownRequested(); }
-    ~ShutdownRequestedForThisCase() { AbortShutdown(); }
-
-    ShutdownRequestedForThisCase(const ShutdownRequestedForThisCase&) = delete;
-    ShutdownRequestedForThisCase& operator=(const ShutdownRequestedForThisCase&) = delete;
-};
 
 //! The RPC error code EnsureWalletIsUnlocked() refuses the calling thread with,
 //! or nullopt when it lets the thread through.
@@ -771,10 +760,10 @@ BOOST_AUTO_TEST_CASE(a_queued_attempt_waits_out_failures_made_while_it_waited)
         }
     }
 
-    // Three attempts start together while nothing has failed, so each claims
-    // a turn spaced by the first failure's delay. The first is refused at
-    // once, and the turns of the other two come round after the count has
-    // grown.
+    // Three attempts start together while nothing has failed, and each takes
+    // a ticket. The first served is refused at once, and each of the other two
+    // is served only after the attempt ahead of it was refused, and waits out
+    // the delay that refusal earned before its passphrase is checked.
     std::promise<void> go;
     const std::shared_future<void> released = go.get_future().share();
     std::vector<std::future<std::optional<CapabilityId>>> attempts;

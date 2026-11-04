@@ -369,6 +369,9 @@ public:
     //! IsLocked() first.
     bool CanUseKeys() const;
 
+    //! Why a passphrase attempt failed. Defined with Unlock() below.
+    enum class UnlockFailure;
+
     //! \brief Issue a capability, which authorises one operation of \p kind and
     //! is proved by the wallet passphrase.
     //!
@@ -399,7 +402,13 @@ public:
     //! nullopt, with no delay, when a locked wallet's unlock cannot arm its
     //! relock, and when the attempt is given up while it waits for its turn
     //! (AwaitPassphraseTurn()).
-    std::optional<CapabilityId> BeginElevation(const SecureString& passphrase, CapabilityKind kind)
+    //!
+    //! \p failure_out, when given, says why none was issued: Passphrase,
+    //! RelockUnavailable, or Abandoned for an attempt given up while it waited,
+    //! which for a caller with no cancel token means a shutdown. None when one
+    //! was issued.
+    std::optional<CapabilityId> BeginElevation(const SecureString& passphrase, CapabilityKind kind,
+                                               UnlockFailure* failure_out = nullptr)
         LOCKS_EXCLUDED(cs_wallet, m_capability_mutex);
 
     //! \brief End a capability.
@@ -526,8 +535,11 @@ public:
     //! caller must not hold cs_wallet. False, with nothing changed, when the
     //! attempt is given up while it waits for its turn. A successful change
     //! ends every capability: they were proved with the old passphrase.
-    bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase)
-        LOCKS_EXCLUDED(cs_wallet);
+    //!
+    //! \p failure_out, when given, is Abandoned for an attempt given up while
+    //! it waited, Passphrase for a wrong old passphrase, and None otherwise.
+    bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase,
+                                UnlockFailure* failure_out = nullptr) LOCKS_EXCLUDED(cs_wallet);
 
     //! Ends every capability issued before it, since those were issued with no
     //! passphrase to check.
@@ -627,14 +639,14 @@ private:
 
         //! The passphrase was accepted: the count is reset, and the next
         //! attempt is checked at once.
-        void Accepted();
+        void Accepted() LOCKS_EXCLUDED(m_wallet.m_passphrase_turn_mutex);
 
         //! The passphrase was refused. It is counted, every later check waits
         //! out its FailedPassphraseDelay(), and this returns once that delay
         //! is over, or sooner when a shutdown is requested or the attempt is
         //! cancelled (PassphraseAttemptCancel); the attempts behind it wait the
         //! whole delay all the same. Never call it under cs_wallet.
-        void Refused();
+        void Refused() LOCKS_EXCLUDED(m_wallet.cs_wallet, m_wallet.m_passphrase_turn_mutex);
 
     private:
         CWallet& m_wallet;
@@ -643,7 +655,7 @@ private:
         std::optional<uint64_t> m_ticket;
 
         //! End the turn: serve the next ticket, and wake the attempts waiting.
-        void End();
+        void End() LOCKS_EXCLUDED(m_wallet.m_passphrase_turn_mutex);
     };
 
     //! \brief Wait for this passphrase attempt's turn.
@@ -668,7 +680,8 @@ private:
 
     //! ChangeWalletPassphrase() without the turn or the delay. \p
     //! passphrase_accepted is set once the old passphrase has been checked:
-    //! true when it opened the wallet, false when it did not. It takes
+    //! true when it opened a master key record and that key opens the keys,
+    //! false when it did not. It takes
     //! cs_wallet only to copy the master key records and to write the new one.
     bool ChangeWalletPassphraseWithoutDelay(const SecureString& strOldWalletPassphrase,
                                             const SecureString& strNewWalletPassphrase,

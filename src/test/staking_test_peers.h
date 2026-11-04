@@ -8,6 +8,7 @@
 #include "init.h"
 #include "key.h"
 #include "keystore.h"
+#include "node/shutdown.h"
 #include "scheduler.h"
 #include "support/allocators/secure.h"
 #include "sync.h"
@@ -145,6 +146,17 @@ inline void WaitForRelock(const CWallet& wallet)
         UninterruptibleSleep(std::chrono::milliseconds(10));
     }
 }
+
+//! Requests a shutdown while it lives, and clears the request however the case
+//! exits, so that the rest of the binary runs without one.
+struct ShutdownRequestedForThisCase
+{
+    ShutdownRequestedForThisCase() { SetShutdownRequested(); }
+    ~ShutdownRequestedForThisCase() { AbortShutdown(); }
+
+    ShutdownRequestedForThisCase(const ShutdownRequestedForThisCase&) = delete;
+    ShutdownRequestedForThisCase& operator=(const ShutdownRequestedForThisCase&) = delete;
+};
 
 } // namespace grc_test
 

@@ -3616,7 +3616,16 @@ UniValue walletpassphrasechange(const UniValue& params)
     // No lock is held across the call. ChangeWalletPassphrase() takes
     // cs_wallet itself, and a wrong passphrase waits before it returns, which
     // must not happen under cs_main or cs_wallet.
-    if (!pwalletMain->ChangeWalletPassphrase(strOldWalletPass, strNewWalletPass)) {
+    CWallet::UnlockFailure failure = CWallet::UnlockFailure::None;
+
+    if (!pwalletMain->ChangeWalletPassphrase(strOldWalletPass, strNewWalletPass, &failure)) {
+        // The node began shutting down while the attempt waited its turn, as
+        // walletpassphrase reports it.
+        if (failure == CWallet::UnlockFailure::Abandoned) {
+            throw JSONRPCError(RPC_WALLET_ERROR,
+                               "Error: the node is shutting down; the wallet passphrase was not checked.");
+        }
+
         // Check if the old passphrase had a null character
         if (strOldWalletPass.find('\0') == std::string::npos) {
             throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");

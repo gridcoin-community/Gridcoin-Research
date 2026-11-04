@@ -1000,8 +1000,11 @@ bool CWallet::DecryptMasterKey(const SecureString& passphrase, CKeyingMaterial& 
     return false;
 }
 
-std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphrase, CapabilityKind kind)
+std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphrase, CapabilityKind kind,
+                                                    UnlockFailure* failure_out)
 {
+    if (failure_out) *failure_out = UnlockFailure::None;
+
     // The key derivation and the failed-passphrase delay both run without
     // cs_wallet, which they can only if the caller does not hold it either
     // (the declaration excludes it).
@@ -1017,7 +1020,11 @@ std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphra
         PassphraseTurn turn = AwaitPassphraseTurn();
 
         // Given up while it waited, with the passphrase never checked.
-        if (!turn.Held()) return std::nullopt;
+        if (!turn.Held()) {
+            if (failure_out) *failure_out = UnlockFailure::Abandoned;
+
+            return std::nullopt;
+        }
 
         bool accepted = false;
 
@@ -1048,6 +1055,8 @@ std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphra
                 if (failure == UnlockFailure::RelockUnavailable) {
                     LogPrintf("WARNING: %s: no capability was issued, because the wallet's relock could not "
                               "be scheduled", __func__);
+                    if (failure_out) *failure_out = UnlockFailure::RelockUnavailable;
+
                     return std::nullopt;
                 }
 
@@ -1072,6 +1081,8 @@ std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphra
         }
 
         if (!accepted) {
+            if (failure_out) *failure_out = UnlockFailure::Passphrase;
+
             turn.Refused();
             return std::nullopt;
         }
@@ -1205,14 +1216,21 @@ bool CWallet::IsCapabilityLive(CapabilityId id, CapabilityKind kind) const
     return it != m_capabilities.end() && it->second.kind == kind && now < it->second.deadline;
 }
 
-bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase)
+bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase,
+                                     UnlockFailure* failure_out)
 {
+    if (failure_out) *failure_out = UnlockFailure::None;
+
     // The old passphrase is a passphrase attempt like any other: it waits for
     // its turn, and a wrong one is counted and delayed.
     PassphraseTurn turn = AwaitPassphraseTurn();
 
     // Given up while it waited, with nothing checked or changed.
-    if (!turn.Held()) return false;
+    if (!turn.Held()) {
+        if (failure_out) *failure_out = UnlockFailure::Abandoned;
+
+        return false;
+    }
 
     std::optional<bool> passphrase_accepted;
 
@@ -1225,6 +1243,8 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
         if (*passphrase_accepted) {
             turn.Accepted();
         } else {
+            if (failure_out) *failure_out = UnlockFailure::Passphrase;
+
             turn.Refused();
         }
     }
