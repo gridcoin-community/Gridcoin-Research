@@ -51,13 +51,17 @@ Every path to the wallet's private keys goes through GetKey(),
 DecryptSecretWithMasterKey(), GetSeedPhraseBlob() or AddKeyPubKey(). The unit
 suite key_entry_points_tests drives each entry point that reaches them, from
 the table src/test/data/key_entry_points.json. The table's "sources" object
-lists every file outside src/test/ that calls one of the four, with the number
-of calls, so:
+lists every file outside src/test/ that calls one of the four directly, with
+the number of calls, so:
 
-  * a call in a file the table does not list fails, and so does a listed file
-    whose count no longer matches. A new path to the keys therefore needs a
-    row in the table, and the suite then checks that it refuses while the
-    wallet is unlocked for staking only.
+  * a direct call in a file the table does not list fails, and so does a
+    listed file whose count no longer matches. A new direct call therefore
+    forces an update of the table, which is the prompt to add the entry
+    point's row. Calls through the wrappers -- SignSignature() and
+    ProduceSignature(), CreateTransaction(), AddKey(), GenerateNewKey() and
+    TopUpKeyPool(), SignPSGTInput() -- are not counted, so an entry point that
+    reaches the keys only through one of them changes no count; the inventory
+    in key_entry_points_tests is what catches that.
   * every IPC method the table names is declared on its interface in
     src/ipc/capnp/.
 
@@ -67,8 +71,9 @@ Comments and string literals are ignored, so prose may name any of these.
 If you are here because the lint failed: a staking path that needs keys under
 StakingOnly gets its token from its own factory and passes it down; nothing else
 should make or hold one. Code that is not a staking path uses GetKey(), which
-works under a Full unlock or inside a capability. A new caller of the four key
-functions is a new entry point: add its row to key_entry_points.json, run
+works under a Full unlock or inside a capability. A new direct caller of the
+four key functions is a new path to the keys: add a row to
+key_entry_points.json for each entry point that reaches it, run
 key_entry_points_tests, then update the file's count under "sources".
 """
 
@@ -462,49 +467,66 @@ CLEAN_FILES = {
         "bool g() { return TrySignClaim(pwallet, claim, block); }\n"),
 }
 
-# (the rule it breaks, files added to the clean ones, and the header, table and
-# capnp text when they differ from the samples above)
+# (the rule it breaks, the error that rule must report, files added to the
+# clean ones, and the header, table and capnp text when they differ from the
+# samples above)
 FAILING_SAMPLES = [
     ("a factory used outside its file",
+     "src/rpc/blockchain.cpp:1: MinerStakingKeyAccess is used outside src/miner.cpp",
      {"src/rpc/blockchain.cpp": "void f() { auto a = MinerStakingKeyAccess(); }\n"}, None, None, None),
     ("a test peer used outside src/test/",
+     "src/init.cpp:1: StakingKeyAccessTestPeer is used outside src/test/",
      {"src/init.cpp": "void f() { StakingKeyAccessTestPeer::Make(); }\n"}, None, None, None),
     ("CapabilityScope defined outside its header",
+     "src/wallet/wallet.cpp:1: class CapabilityScope is defined outside src/wallet/capability.h",
      {"src/wallet/wallet.cpp": "class CapabilityScope : public Base {};\n"}, None, None, None),
     ("ElevationGrant named outside its files",
+     "src/wallet/wallet.cpp:1: ElevationGrant is used outside",
      {"src/wallet/wallet.cpp": "std::unique_ptr<ElevationGrant> grant;\n"}, None, None, None),
     ("GetKeyForStaking called outside its consumers",
+     "src/rpc/blockchain.cpp:1: GetKeyForStaking is called outside the staking paths",
      {"src/rpc/blockchain.cpp": "bool f() { return w.GetKeyForStaking(id, key, *access); }\n"},
      None, None, None),
     ("StakingSigningProvider made outside its consumers",
+     "src/rpc/rawtransaction.cpp:1: StakingSigningProvider is named outside the staking paths",
      {"src/rpc/rawtransaction.cpp": "void f() { const StakingSigningProvider p(*w, a); }\n"},
      None, None, None),
     ("a non-null renewal_access passed outside the staking paths",
+     "src/gridcoin/interfaces.cpp:1: StakingKeyAccess is named (to hold a token, or to pass one as a "
+     "non-null renewal_access argument) outside the staking paths",
      {"src/gridcoin/interfaces.cpp":
       "void f(const StakingKeyAccess* access) { r->AdvertiseBeacon(false, access); }\n"},
      None, None, None),
     ("TrySignClaim called outside the miner",
+     "src/gridcoin/mrc.cpp:1: TrySignClaim is called outside the staking paths",
      {"src/gridcoin/mrc.cpp": "bool f() { return TrySignClaim(w, claim, block); }\n"},
      None, None, None),
     ("a key function called in a file the table does not list",
+     "src/rpc/misc.cpp:1: GetSeedPhraseBlob() reaches the wallet's keys in a file",
      {"src/rpc/misc.cpp": "bool f() { return pwalletMain->GetSeedPhraseBlob(blob); }\n"},
      None, None, None),
     ("one more key function call in a listed file",
+     "src/wallet/rpcwallet.cpp: 2 calls of the key functions, but",
      {"src/wallet/rpcwallet.cpp": CLEAN_FILES["src/wallet/rpcwallet.cpp"]
       + "bool g() { return pwalletMain->AddKeyPubKey(key, pubkey); }\n"},
      None, None, None),
     ("a listed file that calls no key function",
+     "src/net.cpp: listed under \"sources\"",
      {}, None, dict(SAMPLE_TABLE, sources={"src/wallet/rpcwallet.cpp": 1, "src/net.cpp": 1}), None),
     ("an unexpected friend of StakingKeyAccess",
+     "class StakingKeyAccess has an unexpected friend 'void UnlistedMaker()'",
      {}, SAMPLE_HEADER.replace("friend struct StakingKeyAccessTestPeer;",
-                               "friend struct StakingKeyAccessTestPeer;\n    friend void Thief();"),
+                               "friend struct StakingKeyAccessTestPeer;\n    friend void UnlistedMaker();"),
      None, None),
     ("a friend defined inside the class",
+     "class ElevationGrant defines friend 'class CapabilityScope' inside the class",
      {}, SAMPLE_HEADER.replace("friend class CapabilityScope;", "friend class CapabilityScope { };"),
      None, None),
     ("an IPC row naming a method its interface does not declare",
+     "names Wallet.removedMethod, which the interface does not declare",
      {}, None, dict(SAMPLE_TABLE, ipc=[{"interface": "Wallet", "method": "removedMethod"}]), None),
     ("an IPC row naming an interface no capnp file declares",
+     "names interface Vault, which no file in src/ipc/capnp/ declares",
      {}, None, dict(SAMPLE_TABLE, ipc=[{"interface": "Vault", "method": "signMessage"}]), None),
 ]
 
@@ -516,21 +538,22 @@ def self_test():
     if clean:
         failures.append("the clean sample fails: {}".format("; ".join(clean)))
 
-    for what, files, header, table, capnp in FAILING_SAMPLES:
+    for what, expected, files, header, table, capnp in FAILING_SAMPLES:
         merged = dict(CLEAN_FILES)
         merged.update(files)
         errors = run(merged,
                      SAMPLE_HEADER if header is None else header,
                      SAMPLE_TABLE if table is None else table,
                      [SAMPLE_CAPNP if capnp is None else capnp])
-        if not errors:
-            failures.append("no error for {}".format(what))
+        if not any(expected in e for e in errors):
+            failures.append("no error '{}' for {}; got: {}".format(
+                expected, what, "; ".join(errors) if errors else "none"))
 
     for failure in failures:
         print("lint-staking-key-access self-test: {}".format(failure), file=sys.stderr)
     if not failures:
-        print("lint-staking-key-access self-test: each of {} samples fails its rule, and the "
-              "clean sample passes".format(len(FAILING_SAMPLES)))
+        print("lint-staking-key-access self-test: each of {} samples fails with its rule's error, "
+              "and the clean sample passes".format(len(FAILING_SAMPLES)))
     return 1 if failures else 0
 
 

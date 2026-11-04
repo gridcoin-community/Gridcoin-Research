@@ -72,19 +72,26 @@ extern fs::path pathDataDir;
 // DecryptSecretWithMasterKey(), GetSeedPhraseBlob() or AddKeyPubKey() -- is a
 // row of src/test/data/key_entry_points.json. Each row is driven on an
 // encrypted wallet unlocked for staking only: without a capability it must be
-// refused, and under a capability of its kind it must not be. The lint
-// test/lint/lint-staking-key-access.py keeps the table's list of the files that
-// call the four functions current, so a new path to the keys needs a row here.
+// refused, and under a capability of its kind it must not be, and must reach
+// the key code unless the row says why the unit fixture cannot take it there.
+//
+// The lint test/lint/lint-staking-key-access.py keeps the table's count of the
+// direct calls of the four functions in each file current, so a new direct call
+// forces an update of the table, the prompt to add the entry point's row. Calls
+// through the wrappers -- SignSignature() and ProduceSignature(),
+// CreateTransaction(), AddKey(), GenerateNewKey() and TopUpKeyPool(),
+// SignPSGTInput() -- are not counted; the inventory below is what catches a new
+// entry point that reaches the keys only through one of them.
 namespace {
 
 using grc_test::MockWalletDbScope;
 using grc_test::SwapMainWallet;
 
-//! The RPCs that read, sign with or write a private key or the seed phrase, as
-//! an inventory of every command found them. Each is a row of the table or is
-//! listed there with the reason it is not, so no row can be dropped unnoticed.
+//! The RPCs found handling a private key or the seed phrase when every command
+//! was inventoried. Each is a row of the table, or is listed there with the
+//! reason it reaches no key, so none can be dropped from the table unnoticed.
 const std::vector<std::string> INVENTORY_RPCS{
-    "burn", "claimhtlc", "createhtlc", "dumpprivkey", "dumpseedphrase", "dumpwallet", "encryptwallet",
+    "backupwallet", "burn", "claimhtlc", "createhtlc", "dumpprivkey", "dumpseedphrase", "dumpwallet", "encryptwallet",
     "getaccountaddress", "getnewaddress", "getnewpubkey", "importprivkey", "importwallet", "keypoolrefill",
     "consolidateunspent", "makekeypair", "makeseedphrase", "rainbymagnitude", "refundhtlc",
     "restoreseedphrase", "sendfrom", "sendmany", "sendtoaddress", "sethdseed", "splitunspent",
@@ -99,7 +106,7 @@ const std::vector<std::string> INVENTORY_RPCS{
 
 //! The same for the IPC methods, as interface.method.
 const std::vector<std::string> INVENTORY_IPC{
-    "Wallet.encryptWallet", "Wallet.lockWallet", "Wallet.elevateWallet", "Wallet.unlockWallet",
+    "Wallet.backupWallet", "Wallet.encryptWallet", "Wallet.lockWallet", "Wallet.elevateWallet", "Wallet.unlockWallet",
     "Wallet.changeWalletPassphrase", "Wallet.getKeyFromPool", "Wallet.sendCoins", "Wallet.signMessage",
     "Wallet.getNewReceiveAddress", "Wallet.getNewReceiveAddressWithLabel",
     "MRC.snapshot", "MRC.submit", "MRC.submitConfirmed",
@@ -113,7 +120,7 @@ const std::vector<std::string> INVENTORY_IPC{
 //! The environments a row can ask for.
 const std::set<std::string> KNOWN_NEEDS{
     "in_sync", "not_ibd", "v15", "accounts", "researcher", "scraper", "import_file",
-    "premine", "no_seed_phrase", "empty_pool",
+    "premine", "no_seed_phrase", "pre_hd", "empty_pool", "own_wallet",
 };
 
 //! The narrowest functions a row can be checked at.
@@ -244,6 +251,7 @@ std::set<std::string> AllTestNames()
 //! What the wallet holds besides its own key, as the rows' needs say.
 struct WalletOptions
 {
+    bool hd{true};
     bool seed_phrase{true};
     bool empty_pool{false};
     bool premine{false};
@@ -251,7 +259,8 @@ struct WalletOptions
     static WalletOptions For(const std::set<std::string>& needs)
     {
         WalletOptions options;
-        options.seed_phrase = needs.count("no_seed_phrase") == 0;
+        options.hd = needs.count("pre_hd") == 0;
+        options.seed_phrase = options.hd && needs.count("no_seed_phrase") == 0;
         options.empty_pool = needs.count("empty_pool") != 0;
         options.premine = needs.count("premine") != 0;
         return options;
@@ -259,14 +268,41 @@ struct WalletOptions
 
     bool operator<(const WalletOptions& other) const
     {
-        return std::tie(seed_phrase, empty_pool, premine) < std::tie(other.seed_phrase, other.empty_pool, other.premine);
+        return std::tie(hd, seed_phrase, empty_pool, premine)
+               < std::tie(other.hd, other.seed_phrase, other.empty_pool, other.premine);
     }
 };
 
+//! The rows of one section, by the wallet they run on, in table order: rows
+//! with the same WalletOptions share one, and a row that needs own_wallet gets
+//! one to itself.
+std::vector<std::pair<WalletOptions, std::vector<const UniValue*>>> ByWallet(const std::vector<const UniValue*>& rows)
+{
+    std::vector<std::pair<WalletOptions, std::vector<const UniValue*>>> groups;
+    std::map<WalletOptions, size_t> shared;
+
+    for (const UniValue* row : rows) {
+        const std::set<std::string> needs = Needs(*row);
+        const WalletOptions options = WalletOptions::For(needs);
+
+        if (needs.count("own_wallet")) {
+            groups.push_back({options, {row}});
+            continue;
+        }
+
+        const auto [it, inserted] = shared.emplace(options, groups.size());
+        if (inserted) groups.push_back({options, {}});
+        groups[it->second].second.push_back(row);
+    }
+
+    return groups;
+}
+
 //! An encrypted, file-backed HD wallet with one loose key of its own, a key
 //! pool and, unless asked otherwise, a seed phrase whose master is the HD
-//! master, as makeseedphrase leaves a wallet. Swapped into pwalletMain and left
-//! locked.
+//! master, as makeseedphrase leaves a wallet. Asked for a wallet without an HD
+//! seed, it has neither the seed nor the phrase, as a wallet made before HD.
+//! Swapped into pwalletMain and left locked.
 //!
 //! File-backed on the mocked database, so that the key pool, the HD chain and
 //! the records an operation writes behave as they do on a node. The scope
@@ -295,6 +331,8 @@ struct KeyReachWallet
             LOCK(wallet.cs_wallet);
             BOOST_REQUIRE(wallet.AddKey(own));
 
+            // A wallet made before HD has neither an HD seed nor a seed phrase;
+            // a seed phrase implies an HD seed (WalletOptions::For).
             if (options.seed_phrase) {
                 CKey master;
                 const SecureString phrase = GRC::Mnemonics::GenerateSeedPhrase(SecureString(), master);
@@ -309,7 +347,7 @@ struct KeyReachWallet
 
                 BOOST_REQUIRE(wallet.SetHDMasterKey(wallet.DeriveNewMasterHDKey(master)));
                 BOOST_REQUIRE(wallet.SetSeedPhraseData(data));
-            } else {
+            } else if (options.hd) {
                 BOOST_REQUIRE(wallet.SetHDMasterKey(wallet.GenerateNewHDMasterKey()));
             }
         }
@@ -334,7 +372,7 @@ struct KeyReachWallet
 
         wallet.Lock();
         BOOST_REQUIRE(wallet.IsLocked());
-        BOOST_REQUIRE(wallet.IsHDEnabled());
+        BOOST_REQUIRE_EQUAL(wallet.IsHDEnabled(), options.hd);
         BOOST_REQUIRE_EQUAL(WITH_LOCK(wallet.cs_wallet, return wallet.HasSeedPhrase()), options.seed_phrase);
     }
 
@@ -471,7 +509,8 @@ void LeaveInitialBlockDownload()
 class Environment
 {
 public:
-    Environment(const std::set<std::string>& needs, const KeyReachWallet& fx)
+    //! \p import_line is the dump file's one key line, for import_file.
+    Environment(const std::set<std::string>& needs, const KeyReachWallet& fx, const std::string& import_line)
     {
         if (needs.count("in_sync")) m_in_sync.emplace();
         if (needs.count("not_ibd")) LeaveInitialBlockDownload();
@@ -484,7 +523,7 @@ public:
         if (needs.count("scraper")) m_scraper.emplace(fx.own_id);
         if (needs.count("import_file")) {
             fsbridge::ofstream file(GetDataDir() / IMPORT_FILE);
-            file << "# A wallet dump with no keys in it.\n";
+            file << "# A wallet dump with one key in it.\n" << import_line << "\n";
         }
     }
 
@@ -507,14 +546,23 @@ private:
     std::optional<ScraperKey> m_scraper;
 };
 
-//! The values the table's arguments name.
+//! The values the table's arguments name. A fresh private key and seed phrase
+//! each time, so a row that imports one adds a key whatever ran before it. The
+//! phrase is made only for a row that asks for one: making it is slow.
 class Corpus
 {
 public:
-    explicit Corpus(const KeyReachWallet& fx)
+    Corpus(const KeyReachWallet& fx, bool with_phrase)
     {
         CKey fresh;
         fresh.MakeNewKey(true);
+
+        // A test phrase, made as makeseedphrase makes one.
+        SecureString phrase;
+        if (with_phrase) {
+            CKey phrase_master;
+            phrase = GRC::Mnemonics::GenerateSeedPhrase(SecureString(), phrase_master);
+        }
 
         const CTransaction previous = psgt_test::MakePrevTx(fx.own, 10 * COIN);
         const PartiallySignedTransaction spend = psgt_test::MakeSpendPSGT(previous, 9 * COIN);
@@ -523,10 +571,20 @@ public:
         CDataStream raw(SER_NETWORK, PROTOCOL_VERSION);
         raw << CTransaction(spend.tx);
 
+        // The output the spend spends, as signrawtransaction takes it.
+        UniValue prevout(UniValue::VOBJ);
+        prevout.pushKV("txid", previous.GetHash().GetHex());
+        prevout.pushKV("vout", 0);
+        prevout.pushKV("scriptPubKey", HexStr(previous.vout[0].scriptPubKey));
+        UniValue prevtxs(UniValue::VARR);
+        prevtxs.push_back(prevout);
+
         // Longest first, so that $own does not match inside $own_pubkey.
         m_values = {
             {"$own_pubkey", HexStr(fx.own.GetPubKey())},
+            {"$prevtxs", prevtxs.write()},
             {"$premine", EncodeDestination(CTxDestination(grc_test::PremineKey().GetPubKey().GetID()))},
+            {"$phrase", std::string(phrase.begin(), phrase.end())},
             {"$rawtx", HexStr(raw)},
             {"$psgt", EncodeBase64(psgt.data(), psgt.size())},
             {"$hash", HASH_HEX},
@@ -607,15 +665,25 @@ std::optional<Refusal> ParseRefusal(const std::string& name)
     return std::nullopt;
 }
 
-//! A probe: true when the narrowest function the row reaches refuses. It runs
-//! on the calling thread, under whatever capability scope that thread holds.
-bool ProbeRefuses(const std::string& probe, KeyReachWallet& fx)
+//! What a driver or probe came to: whether it was refused, whether it did what
+//! it was asked, and what it said.
+struct DriverOutcome
+{
+    bool refused{false};
+    bool succeeded{false};
+    std::string detail;
+};
+
+//! A probe: the narrowest function the row reaches, run on the calling thread
+//! under whatever capability scope that thread holds.
+DriverOutcome Probe(const std::string& probe, KeyReachWallet& fx)
 {
     if (probe == "IsScraperAuthorizedToBroadcastManifests") {
         // As sendscraperfilemanifest asks: no staking access.
         CTxDestination address;
         CKey key;
-        return !IsScraperAuthorizedToBroadcastManifests(address, key, nullptr);
+        const bool authorized = IsScraperAuthorizedToBroadcastManifests(address, key, nullptr);
+        return {!authorized, authorized, authorized ? "authorised" : "not authorised"};
     }
 
     if (probe == "VoteBuilder::BuildContractTx") {
@@ -630,14 +698,14 @@ bool ProbeRefuses(const std::string& probe, KeyReachWallet& fx)
             LOCK(cs_main);
             GRC::VoteBuilder::ForPoll(poll, uint256::ONE).AddResponse(uint8_t {0}).BuildContractTx(&fx.wallet, 2);
         } catch (const std::exception& e) {
-            return e.what() == VotingStakingOnlyRefusal();
+            return {e.what() == VotingStakingOnlyRefusal(), false, e.what()};
         }
 
-        return false;
+        return {false, true, "built"};
     }
 
     BOOST_ERROR("unknown probe " << probe);
-    return false;
+    return {false, false, "unknown probe"};
 }
 
 //! The manifests a scraper row published, for its messages; nothing for the
@@ -663,41 +731,54 @@ bool IsRefusal(Refusal refusal, const Outcome& outcome, int published)
     return false;
 }
 
-//! Drive the rows of one RPC section, each refused without a capability and
-//! not refused under an RpcRequest capability. Rows that want the same wallet
-//! share one, which the rows run on in table order: a refused row changes no
-//! key material, as each checks, and a row that ran under the capability
-//! leaves the wallet unlocked for staking only, as the next one checks.
+//! Whether an RPC row's run under the capability shows it reached the key code:
+//! it returned (with a 'complete' field, if its result has one, true), or it
+//! failed after the key with the error the row names.
+bool ReachedTheKey(const UniValue& row, const Outcome& outcome)
+{
+    const UniValue error_after_key = find_value(row, "error_after_key");
+    if (error_after_key.isNum()) return outcome.code == error_after_key.get_int();
+
+    if (!outcome.returned) return false;
+    if (!outcome.result.isObject()) return true;
+
+    const UniValue complete = find_value(outcome.result, "complete");
+    return complete.isNull() || complete.isTrue();
+}
+
+//! Drive the rows of one RPC section. Each is refused without a capability,
+//! with no change to the wallet's keys, and not refused under an RpcRequest
+//! capability, where it must also reach the key code, unless the row says in
+//! stops_before_key why the unit fixture cannot take it there; a row that
+//! reaches AddKeyPubKey must then have added a key. Rows that want the same
+//! wallet share one, which the rows run on in table order: a refused row
+//! changes no key material, as each checks, and a row that ran under the
+//! capability leaves the wallet unlocked for staking only, as the next one
+//! checks.
 void DriveRpcRows(const UniValue& rows, std::optional<Refusal> section_refusal)
 {
     BOOST_REQUIRE(rows.isArray());
 
     const std::set<std::string> test_names = AllTestNames();
 
-    // Rows by the wallet they need, in table order.
-    std::map<WalletOptions, std::vector<const UniValue*>> by_wallet;
-    std::vector<const UniValue*> covered;
+    std::vector<const UniValue*> driven;
 
     for (size_t i = 0; i < rows.size(); ++i) {
         const UniValue& row = rows[i];
+        const std::string covered_by = Field(row, "covered_by");
 
-        if (!Field(row, "covered_by").empty()) {
-            covered.push_back(&row);
-        } else {
-            by_wallet[WalletOptions::For(Needs(row))].push_back(&row);
+        if (covered_by.empty()) {
+            driven.push_back(&row);
+            continue;
         }
-    }
 
-    for (const UniValue* row : covered) {
-        const std::string covered_by = Field(*row, "covered_by");
-        BOOST_CHECK_MESSAGE(test_names.count(covered_by), Field(*row, "name") << ": covered_by names "
+        BOOST_CHECK_MESSAGE(test_names.count(covered_by), Field(row, "name") << ": covered_by names "
                             << covered_by << ", which is no test case in this binary");
-        BOOST_TEST_MESSAGE(Field(*row, "name") << ": not driven here; covered by " << covered_by);
+        BOOST_TEST_MESSAGE(Field(row, "name") << ": not driven here; covered by " << covered_by);
     }
 
-    for (const auto& [options, wallet_rows] : by_wallet) {
+    for (const auto& [options, wallet_rows] : ByWallet(driven)) {
         KeyReachWallet fx(options);
-        const Corpus corpus(fx);
 
         fx.UnlockFor(UnlockScope::StakingOnly);
 
@@ -711,13 +792,22 @@ void DriveRpcRows(const UniValue& rows, std::optional<Refusal> section_refusal)
             const std::string name = Field(*row, "name");
             const std::set<std::string> needs = Needs(*row);
             const std::string probe = Field(*row, "probe");
-            const std::vector<std::string> args = corpus.Expand(Strings(find_value(*row, "args")));
+            const std::string stops_before_key = Field(*row, "stops_before_key");
+            const bool adds_a_key = Field(*row, "reaches") == "AddKeyPubKey";
+
+            const std::vector<std::string> raw_args = Strings(find_value(*row, "args"));
+            const bool with_phrase = std::any_of(raw_args.begin(), raw_args.end(), [](const std::string& arg) {
+                return arg.find("$phrase") != std::string::npos;
+            });
+
+            const Corpus corpus(fx, with_phrase);
+            const std::vector<std::string> args = corpus.Expand(raw_args);
 
             const std::optional<Refusal> refusal = section_refusal ? section_refusal
                                                                    : ParseRefusal(Field(*row, "refusal"));
             BOOST_REQUIRE_MESSAGE(refusal.has_value(), name << ": unknown refusal " << Field(*row, "refusal"));
 
-            Environment environment(needs, fx);
+            Environment environment(needs, fx, corpus.Expand({"$wif 2020-01-01T00:00:00Z label="}).front());
 
             if (needs.count("empty_pool")) fx.DrainPool();
 
@@ -731,27 +821,30 @@ void DriveRpcRows(const UniValue& rows, std::optional<Refusal> section_refusal)
                 }));
 
             // Refused without a capability, before any key material changed.
-            const size_t keys_before = fx.KeyCount();
+            const size_t keys_before_refusal = fx.KeyCount();
             const Outcome refused = Call(name, args);
-
             const int published_while_refused = published;
 
             BOOST_CHECK_MESSAGE(IsRefusal(*refusal, refused, published),
                                 name << ": not refused while unlocked for staking only: " << refused.Describe()
                                 << Published(*refusal, published));
-            BOOST_CHECK_MESSAGE(fx.KeyCount() == keys_before, name << ": a refused call changed the wallet's keys");
+            BOOST_CHECK_MESSAGE(fx.KeyCount() == keys_before_refusal,
+                                name << ": a refused call changed the wallet's keys");
 
             if (!probe.empty()) {
-                BOOST_CHECK_MESSAGE(ProbeRefuses(probe, fx), name << ": " << probe << " not refused");
+                const DriverOutcome probed = Probe(probe, fx);
+                BOOST_CHECK_MESSAGE(probed.refused, name << ": " << probe << " not refused: " << probed.detail);
             }
 
-            // Not refused under the capability.
+            // Not refused under the capability, and on to the key code.
             published = 0;
             {
                 CapabilityScope scope(fx.wallet, id, CapabilityKind::RpcRequest);
                 BOOST_REQUIRE(scope.Active());
 
+                const size_t keys_before = fx.KeyCount();
                 const Outcome allowed = Call(name, args);
+                const size_t keys_after = fx.KeyCount();
 
                 BOOST_CHECK_MESSAGE(!allowed.malformed, name << ": the corpus does not fit the command: "
                                     << allowed.Describe());
@@ -762,14 +855,31 @@ void DriveRpcRows(const UniValue& rows, std::optional<Refusal> section_refusal)
                     BOOST_CHECK_MESSAGE(published > 0, name << ": nothing published under an RpcRequest capability");
                 }
 
+                if (stops_before_key.empty()) {
+                    BOOST_CHECK_MESSAGE(ReachedTheKey(*row, allowed), name << ": did not reach the key code under "
+                                        "an RpcRequest capability, and the table gives no reason: "
+                                        << allowed.Describe());
+
+                    if (adds_a_key) {
+                        BOOST_CHECK_MESSAGE(keys_after > keys_before, name << ": added no key under an RpcRequest "
+                                            "capability (" << keys_before << " keys before, " << keys_after
+                                            << " after)");
+                    }
+                }
+
                 if (!probe.empty()) {
-                    BOOST_CHECK_MESSAGE(!ProbeRefuses(probe, fx), name << ": " << probe
-                                        << " refused under an RpcRequest capability");
+                    const DriverOutcome probed = Probe(probe, fx);
+                    BOOST_CHECK_MESSAGE(!probed.refused, name << ": " << probe
+                                        << " refused under an RpcRequest capability: " << probed.detail);
+                    BOOST_CHECK_MESSAGE(!stops_before_key.empty() || probed.succeeded,
+                                        name << ": " << probe << " did not reach the key code: " << probed.detail);
                 }
 
                 BOOST_TEST_MESSAGE(name << ": refused (" << refused.Describe()
                                    << Published(*refusal, published_while_refused) << "); under the capability: "
-                                   << allowed.Describe() << Published(*refusal, published));
+                                   << allowed.Describe() << Published(*refusal, published)
+                                   << (stops_before_key.empty() ? std::string() : "; stops before the key: " + stops_before_key)
+                                   << (adds_a_key ? strprintf("; keys %u -> %u", keys_before, keys_after) : std::string()));
             }
         }
 
@@ -778,18 +888,16 @@ void DriveRpcRows(const UniValue& rows, std::optional<Refusal> section_refusal)
     }
 }
 
-//! The result of an IPC driver: whether it was refused, and what it said.
-struct IpcOutcome
-{
-    bool refused{false};
-    std::string detail;
-};
+using IpcDriver = std::function<DriverOutcome(KeyReachWallet&)>;
 
-using IpcDriver = std::function<IpcOutcome(KeyReachWallet&)>;
+//! The staking-only refusal signPSGT() and signPoolEntry() report.
+const std::string PSGT_SIGN_REFUSAL =
+    "The wallet is locked or unlocked for staking only. Enter the wallet passphrase to sign.";
 
 //! One driver per IPC row, by interface.method. Each calls the method as an
 //! IPC client would, through the in-process interface on the fixture's wallet,
-//! and says whether it was refused.
+//! and says whether it was refused with the method's staking-only refusal and
+//! whether it did what it was asked.
 std::map<std::string, IpcDriver> IpcDrivers()
 {
     std::map<std::string, IpcDriver> drivers;
@@ -798,8 +906,9 @@ std::map<std::string, IpcDriver> IpcDrivers()
         std::string signature;
         const interfaces::MessageSignStatus status =
             interfaces::MakeWallet(&fx.wallet)->signMessage(EncodeDestination(CTxDestination(fx.own_id)), "x", signature);
-        return IpcOutcome{status == interfaces::MessageSignStatus::KeyNotAvailable,
-                          strprintf("status %d", static_cast<int>(status))};
+        return DriverOutcome{status == interfaces::MessageSignStatus::KeyNotAvailable,
+                             status == interfaces::MessageSignStatus::OK,
+                             strprintf("status %d", static_cast<int>(status))};
     };
 
     drivers["Wallet.sendCoins"] = [](KeyReachWallet& fx) {
@@ -808,15 +917,18 @@ std::map<std::string, IpcDriver> IpcDrivers()
         recipient.amount = COIN;
 
         const interfaces::SendCoinsResult result = interfaces::MakeWallet(&fx.wallet)->sendCoins({recipient}, std::nullopt, 0);
-        return IpcOutcome{result.status == interfaces::SendCoinsStatus::WalletUnlockedForStakingOnly,
-                          strprintf("status %d", static_cast<int>(result.status))};
+        return DriverOutcome{result.status == interfaces::SendCoinsStatus::WalletUnlockedForStakingOnly,
+                             result.status == interfaces::SendCoinsStatus::OK,
+                             strprintf("status %d", static_cast<int>(result.status))};
     };
 
     drivers["PSGTPoolContext.signPSGT"] = [](KeyReachWallet& fx) {
         const CTransaction previous = psgt_test::MakePrevTx(fx.own, 10 * COIN);
         const interfaces::PSGTSignResult result = interfaces::MakePSGTPoolContext(&fx.wallet)->signPSGT(
             SerializePSGT(psgt_test::MakeSpendPSGT(previous, 9 * COIN)));
-        return IpcOutcome{!result.ok, strprintf("ok %d, signed %d: %s", result.ok, result.signed_now, result.error)};
+        return DriverOutcome{!result.ok && result.error == PSGT_SIGN_REFUSAL,
+                             result.ok && result.signed_now == 1,
+                             strprintf("ok %d, signed %d: %s", result.ok, result.signed_now, result.error)};
     };
 
     drivers["PSGTPoolContext.signPoolEntry"] = [](KeyReachWallet& fx) {
@@ -824,18 +936,22 @@ std::map<std::string, IpcDriver> IpcDrivers()
         std::string txid;
         const interfaces::PSGTSignStatus status =
             interfaces::MakePSGTPoolContext(&fx.wallet)->signPoolEntry(ABSENT_POOL_IMAGE, error, txid);
-        return IpcOutcome{status == interfaces::PSGTSignStatus::FAILED,
-                          strprintf("status %d: %s", static_cast<int>(status), error)};
+        return DriverOutcome{status == interfaces::PSGTSignStatus::FAILED && error == PSGT_SIGN_REFUSAL,
+                             status == interfaces::PSGTSignStatus::SIGNED_AND_RELAYED
+                                 || status == interfaces::PSGTSignStatus::COMPLETED_AND_BROADCAST,
+                             strprintf("status %d: %s", static_cast<int>(status), error)};
     };
 
     drivers["MRC.submit"] = [](KeyReachWallet& fx) {
         const interfaces::MRCSubmitResult result = interfaces::MakeMRC(&fx.wallet)->submit(0, false);
-        return IpcOutcome{result.error == MRC_STAKING_ONLY_REFUSAL, result.success ? "submitted" : result.error};
+        return DriverOutcome{result.error == MRC_STAKING_ONLY_REFUSAL, result.success,
+                             result.success ? "submitted" : result.error};
     };
 
     drivers["MRC.submitConfirmed"] = [](KeyReachWallet& fx) {
         const interfaces::MRCSubmitResult result = interfaces::MakeMRC(&fx.wallet)->submitConfirmed(0, false, 0, 0);
-        return IpcOutcome{result.error == MRC_STAKING_ONLY_REFUSAL, result.success ? "submitted" : result.error};
+        return DriverOutcome{result.error == MRC_STAKING_ONLY_REFUSAL, result.success,
+                             result.success ? "submitted" : result.error};
     };
 
     drivers["VotingManager.submitPoll"] = [](KeyReachWallet&) {
@@ -849,9 +965,10 @@ std::map<std::string, IpcDriver> IpcDrivers()
         poll.response_type = static_cast<int>(GRC::PollResponseType::YES_NO_ABSTAIN);
 
         const interfaces::VotingSubmitResult result = interfaces::MakeVotingManager()->submitPoll(poll);
-        return IpcOutcome{result.status == interfaces::VotingSubmitStatus::FAILED
-                              && result.error == VotingStakingOnlyRefusal(),
-                          strprintf("status %d: %s", static_cast<int>(result.status), result.error)};
+        return DriverOutcome{result.status == interfaces::VotingSubmitStatus::FAILED
+                                 && result.error == VotingStakingOnlyRefusal(),
+                             result.status == interfaces::VotingSubmitStatus::OK,
+                             strprintf("status %d: %s", static_cast<int>(result.status), result.error)};
     };
 
     drivers["VotingManager.submitVote"] = [](KeyReachWallet& fx) {
@@ -860,18 +977,22 @@ std::map<std::string, IpcDriver> IpcDrivers()
             interfaces::MakeVotingManager()->submitVote(HASH_HEX, {uint8_t {0}});
         BOOST_CHECK(result.status == interfaces::VotingSubmitStatus::POLL_NOT_FOUND);
 
-        return IpcOutcome{ProbeRefuses("VoteBuilder::BuildContractTx", fx), "probe VoteBuilder::BuildContractTx"};
+        DriverOutcome probed = Probe("VoteBuilder::BuildContractTx", fx);
+        probed.detail = "probe VoteBuilder::BuildContractTx: " + probed.detail;
+        return probed;
     };
 
     drivers["ResearcherContext.advertiseBeacon"] = [](KeyReachWallet& fx) {
         const interfaces::BeaconAdvertiseResult result = interfaces::MakeResearcherContext(&fx.wallet)->advertiseBeacon();
-        return IpcOutcome{result.status == interfaces::BeaconStatus::ERROR_WALLET_LOCKED,
-                          strprintf("status %d", static_cast<int>(result.status))};
+        return DriverOutcome{result.status == interfaces::BeaconStatus::ERROR_WALLET_LOCKED,
+                             result.status == interfaces::BeaconStatus::ACTIVE,
+                             strprintf("status %d", static_cast<int>(result.status))};
     };
 
     drivers["ResearcherContext.generateBeaconKeyForV3"] = [](KeyReachWallet& fx) {
         const std::string public_key = interfaces::MakeResearcherContext(&fx.wallet)->generateBeaconKeyForV3();
-        return IpcOutcome{public_key.empty(), public_key.empty() ? "no key" : "key " + public_key};
+        return DriverOutcome{public_key.empty(), !public_key.empty(),
+                             public_key.empty() ? "no key" : "key " + public_key};
     };
 
     drivers["ResearcherContext.advertiseBeaconV3"] = [](KeyReachWallet& fx) {
@@ -880,32 +1001,34 @@ std::map<std::string, IpcDriver> IpcDrivers()
                                   "<signature>AAAA</signature>";
         const interfaces::BeaconAdvertiseResult result =
             interfaces::MakeResearcherContext(&fx.wallet)->advertiseBeaconV3(proof);
-        return IpcOutcome{result.status == interfaces::BeaconStatus::ERROR_WALLET_LOCKED,
-                          strprintf("status %d", static_cast<int>(result.status))};
+        return DriverOutcome{result.status == interfaces::BeaconStatus::ERROR_WALLET_LOCKED,
+                             result.status == interfaces::BeaconStatus::ACTIVE,
+                             strprintf("status %d", static_cast<int>(result.status))};
     };
 
     drivers["Node.executeRpcConsoleCommand"] = [](KeyReachWallet& fx) {
         const interfaces::RpcConsoleResult result = interfaces::MakeNode()->executeRpcConsoleCommand(
             "signmessage", {EncodeDestination(CTxDestination(fx.own_id)), "x"});
-        return IpcOutcome{result.wallet_unlock_needed, strprintf("ok %d: %s", result.ok, result.output)};
+        return DriverOutcome{result.wallet_unlock_needed, result.ok,
+                             strprintf("ok %d: %s", result.ok, result.output)};
     };
 
     drivers["Wallet.getNewReceiveAddress"] = [](KeyReachWallet& fx) {
         std::string address;
         const bool drawn = interfaces::MakeWallet(&fx.wallet)->getNewReceiveAddress(address);
-        return IpcOutcome{!drawn, drawn ? "drew " + address : "no address"};
+        return DriverOutcome{!drawn, drawn, drawn ? "drew " + address : "no address"};
     };
 
     drivers["Wallet.getNewReceiveAddressWithLabel"] = [](KeyReachWallet& fx) {
         std::string address;
         const bool drawn = interfaces::MakeWallet(&fx.wallet)->getNewReceiveAddressWithLabel("key entry points", address);
-        return IpcOutcome{!drawn, drawn ? "drew " + address : "no address"};
+        return DriverOutcome{!drawn, drawn, drawn ? "drew " + address : "no address"};
     };
 
     drivers["Wallet.getKeyFromPool"] = [](KeyReachWallet& fx) {
         CPubKey key;
         const bool drawn = interfaces::MakeWallet(&fx.wallet)->getKeyFromPool("", key);
-        return IpcOutcome{!drawn, drawn ? "drew a key" : "no key"};
+        return DriverOutcome{!drawn, drawn, drawn ? "drew a key" : "no key"};
     };
 
     return drivers;
@@ -913,21 +1036,22 @@ std::map<std::string, IpcDriver> IpcDrivers()
 
 //! Drive the rows of one IPC section: refused without a capability and under a
 //! capability of another kind, and not refused under one of the row's kind,
-//! each begun in the IPC slot as an IPC client begins one. A row without a kind
-//! is only checked for its refusal. Rows that want the same wallet share one,
-//! as the RPC rows do.
+//! each begun in the IPC slot as an IPC client begins one. Under the row's kind
+//! the method must also do what it was asked, and a row that reaches
+//! AddKeyPubKey must have added a key, unless the row says in
+//! stops_before_key why the unit fixture cannot take it there. A row without a
+//! kind is only checked for its refusal. Rows that want the same wallet share
+//! one, as the RPC rows do.
 void DriveIpcRows(const UniValue& rows)
 {
     BOOST_REQUIRE(rows.isArray());
 
     const std::map<std::string, IpcDriver> drivers = IpcDrivers();
 
-    std::map<WalletOptions, std::vector<const UniValue*>> by_wallet;
-    for (size_t i = 0; i < rows.size(); ++i) {
-        by_wallet[WalletOptions::For(Needs(rows[i]))].push_back(&rows[i]);
-    }
+    std::vector<const UniValue*> all;
+    for (size_t i = 0; i < rows.size(); ++i) all.push_back(&rows[i]);
 
-    for (const auto& [options, wallet_rows] : by_wallet) {
+    for (const auto& [options, wallet_rows] : ByWallet(all)) {
         KeyReachWallet fx(options);
         fx.UnlockFor(UnlockScope::StakingOnly);
 
@@ -936,23 +1060,26 @@ void DriveIpcRows(const UniValue& rows)
         for (const UniValue* row : wallet_rows) {
             const std::string name = IpcName(*row);
             const std::set<std::string> needs = Needs(*row);
+            const std::string stops_before_key = Field(*row, "stops_before_key");
+            const bool adds_a_key = Field(*row, "reaches") == "AddKeyPubKey";
 
             const auto driver = drivers.find(name);
             BOOST_REQUIRE_MESSAGE(driver != drivers.end(), name << ": no driver");
 
-            Environment environment(needs, fx);
+            Environment environment(needs, fx, std::string());
 
             if (needs.count("empty_pool")) fx.DrainPool();
 
             BOOST_REQUIRE_MESSAGE(fx.wallet.IsUnlockedForStakingOnly() && !fx.wallet.CanUseKeys(),
                                   name << ": the wallet is not unlocked for staking only");
 
-            const size_t keys_before = fx.KeyCount();
-            const IpcOutcome refused = driver->second(fx);
+            const size_t keys_before_refusal = fx.KeyCount();
+            const DriverOutcome refused = driver->second(fx);
 
             BOOST_CHECK_MESSAGE(refused.refused, name << ": not refused while unlocked for staking only: "
                                 << refused.detail);
-            BOOST_CHECK_MESSAGE(fx.KeyCount() == keys_before, name << ": a refused call changed the wallet's keys");
+            BOOST_CHECK_MESSAGE(fx.KeyCount() == keys_before_refusal,
+                                name << ": a refused call changed the wallet's keys");
 
             const UniValue kind_value = find_value(*row, "kind");
             if (kind_value.isNull()) {
@@ -967,21 +1094,37 @@ void DriveIpcRows(const UniValue& rows)
             // Backup, so that is the other kind.
             BOOST_REQUIRE(*kind != CapabilityKind::Backup);
             BOOST_REQUIRE(client->beginElevation(KeyReachWallet::PASSPHRASE, CapabilityKind::Backup));
-            const IpcOutcome other_kind = driver->second(fx);
+            const DriverOutcome other_kind = driver->second(fx);
             client->endElevation();
 
             BOOST_CHECK_MESSAGE(other_kind.refused, name << ": not refused under a Backup capability: "
                                 << other_kind.detail);
 
             BOOST_REQUIRE(client->beginElevation(KeyReachWallet::PASSPHRASE, *kind));
-            const IpcOutcome allowed = driver->second(fx);
+            const size_t keys_before = fx.KeyCount();
+            const DriverOutcome allowed = driver->second(fx);
+            const size_t keys_after = fx.KeyCount();
             client->endElevation();
 
             BOOST_CHECK_MESSAGE(!allowed.refused, name << ": refused under a " << kind_value.get_str()
                                 << " capability: " << allowed.detail);
 
+            if (stops_before_key.empty()) {
+                BOOST_CHECK_MESSAGE(allowed.succeeded, name << ": did not reach the key code under a "
+                                    << kind_value.get_str() << " capability, and the table gives no reason: "
+                                    << allowed.detail);
+
+                if (adds_a_key) {
+                    BOOST_CHECK_MESSAGE(keys_after > keys_before, name << ": added no key under a "
+                                        << kind_value.get_str() << " capability (" << keys_before
+                                        << " keys before, " << keys_after << " after)");
+                }
+            }
+
             BOOST_TEST_MESSAGE(name << ": refused (" << refused.detail << "); under the capability: "
-                               << allowed.detail);
+                               << allowed.detail
+                               << (stops_before_key.empty() ? std::string() : "; stops before the key: " + stops_before_key)
+                               << (adds_a_key ? strprintf("; keys %u -> %u", keys_before, keys_after) : std::string()));
         }
 
         BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
@@ -1026,6 +1169,14 @@ BOOST_AUTO_TEST_CASE(the_table_names_every_key_reaching_entry_point)
 
             BOOST_CHECK_MESSAGE(section != "rpc" || ParseRefusal(Field(rows[i], "refusal")).has_value(),
                                 name << ": unknown refusal " << Field(rows[i], "refusal"));
+
+            const UniValue stops = find_value(rows[i], "stops_before_key");
+            const UniValue after = find_value(rows[i], "error_after_key");
+            BOOST_CHECK_MESSAGE(stops.isNull() || (stops.isStr() && !stops.get_str().empty()),
+                                name << ": stops_before_key is not a reason");
+            BOOST_CHECK_MESSAGE(after.isNull() || after.isNum(), name << ": error_after_key is not an error code");
+            BOOST_CHECK_MESSAGE(stops.isNull() || after.isNull(),
+                                name << ": a row that stops before the key cannot fail after it");
         }
     }
 
@@ -1064,6 +1215,10 @@ BOOST_AUTO_TEST_CASE(the_table_names_every_key_reaching_entry_point)
             for (const std::string& need : Needs(rows[i])) {
                 BOOST_CHECK_MESSAGE(KNOWN_NEEDS.count(need), name << ": unknown need " << need);
             }
+
+            const UniValue stops = find_value(rows[i], "stops_before_key");
+            BOOST_CHECK_MESSAGE(stops.isNull() || (stops.isStr() && !stops.get_str().empty()),
+                                name << ": stops_before_key is not a reason");
         }
     }
 
