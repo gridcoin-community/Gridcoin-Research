@@ -109,7 +109,10 @@ def process_start_ticks(pid, proc="/proc"):
         return None
     # comm may contain spaces and parentheses, so parse after the last ')'.
     # The remainder starts at field 3 (state); field 22 is index 19 of it.
-    rest = text[text.rfind(")") + 1:].split()
+    close = text.rfind(")")
+    if close < 0:
+        return None
+    rest = text[close + 1:].split()
     try:
         return int(rest[19])
     except (IndexError, ValueError):
@@ -130,9 +133,13 @@ def query_main_pid(unit, run=subprocess.run):
     if result.returncode != 0:
         raise SystemdQueryError("systemctl failed")
     text = result.stdout.strip()
-    if not text.isdigit():
+    # str.isdigit() is true for some non-ASCII digits that int() may reject or misread
+    if not (text.isascii() and text.isdigit()):
         raise SystemdQueryError("unexpected systemctl output")
-    return int(text)
+    try:
+        return int(text)
+    except (ValueError, UnicodeDecodeError):
+        raise SystemdQueryError("unexpected systemctl output") from None
 
 
 def decide(peer_pid, peer_uid, expected_uid, pidfd, accept_ticks, main_pid_fn, start_ticks_fn, pidfd_pid_fn):
@@ -210,10 +217,11 @@ def serve_once(listen_fd, bound_unit, peer_user, env, deps):
             log_line(deps, "no connection within %s s" % deps["accept_timeout"])
             return EXIT_NO_CONNECTION
         conn, _ = listener.accept()
+        # the start-time bound for the fallback check is taken as soon as the peer is accepted
+        accept_ticks = deps["boottime_ticks"]()
     finally:
         listener.close()
     try:
-        accept_ticks = deps["boottime_ticks"]()
         peer_pid, peer_uid, _ = peer_credentials(conn)
         pidfd = deps["pidfd"](conn)
         try:

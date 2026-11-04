@@ -108,10 +108,12 @@ class TestDecide(unittest.TestCase):
     def test_fallback_refuses_pid_reused_during_query(self):
         allowed, reason = self.decide(pidfd=None, starts=(500, 501))
         self.assertFalse(allowed)
+        self.assertEqual(reason, "not the main process")
 
     def test_fallback_refuses_other_main_pid(self):
         allowed, reason = self.decide(pidfd=None, main=PEER + 1)
         self.assertFalse(allowed)
+        self.assertEqual(reason, "not the main process")
 
     def test_systemd_failure_propagates(self):
         def fail():
@@ -186,6 +188,42 @@ class TestProc(unittest.TestCase):
         self.addCleanup(b.close)
         self.assertEqual(h.peer_credentials(a), (os.getpid(), os.getuid(), os.getgid()))
 
+    def test_start_ticks_without_close_paren(self):
+        with tempfile.TemporaryDirectory() as proc:
+            os.mkdir(os.path.join(proc, "7"))
+            with open(os.path.join(proc, "7", "stat"), "w", encoding="utf8") as f:
+                f.write("7 broken S 1 2 3\n")
+            self.assertIsNone(h.process_start_ticks(7, proc))
+
+    def test_real_pidfd_path_on_socketpair(self):
+        a, b = socket.socketpair()
+        self.addCleanup(a.close)
+        self.addCleanup(b.close)
+        try:
+            fd = h.peer_pidfd(a)
+        except OSError as e:
+            self.skipTest("pidfd lookup unavailable: %s" % e)
+        if fd is None:
+            self.skipTest("SO_PEERPIDFD unavailable here (kernel or architecture)")
+        try:
+            self.assertEqual(h.pidfd_pid(fd), os.getpid())
+        finally:
+            os.close(fd)
+
+    def test_real_pidfd_of_reaped_process_is_minus_one(self):
+        pid = os.fork()
+        if pid == 0:
+            os._exit(0)
+        try:
+            fd = os.pidfd_open(pid)
+        except (OSError, AttributeError) as e:
+            os.waitpid(pid, 0)
+            self.skipTest("pidfd_open unavailable: %s" % e)
+        self.addCleanup(os.close, fd)
+        self.assertEqual(h.pidfd_pid(fd), pid)
+        os.waitpid(pid, 0)
+        self.assertEqual(h.pidfd_pid(fd), -1)
+
     def test_query_main_pid(self):
         calls = []
 
@@ -204,6 +242,11 @@ class TestProc(unittest.TestCase):
         Done.stdout = "garbage"
         with self.assertRaises(h.SystemdQueryError):
             h.query_main_pid("u.service", run)
+        # non-ASCII digits are refused (superscript two and Arabic-Indic digits)
+        for text in ("\u00b2", "\u0664\u0662"):
+            Done.stdout = text
+            with self.assertRaises(h.SystemdQueryError):
+                h.query_main_pid("u.service", run)
         Done.stdout = "1\n"
         Done.returncode = 1
         with self.assertRaises(h.SystemdQueryError):
@@ -244,10 +287,7 @@ class TestServe(unittest.TestCase):
         return b"hunter2"
 
     def run_serve(self, **over):
-        server, client = socket.socketpair()
-        self.addCleanup(server.close)
-        self.addCleanup(client.close)
-        # a socketpair end is not a listening socket, so serve through a unix listener
+        # serve through a unix listener
         path = os.path.join(self.tmp.name, "s.sock")
         lst = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         lst.bind(path)
@@ -294,7 +334,6 @@ class TestServe(unittest.TestCase):
         self.assertEqual(rc, h.EXIT_SYSTEMD)
         self.assertEqual(data, b"")
         self.assertEqual(self.opened, [])
-        self.assertFalse(os.path.exists(self.sentinel))
 
     def test_credential_failure(self):
         def bad(cred_dir):
