@@ -1790,7 +1790,7 @@ caller), `minted_by` and `note`. The file is kept exactly as
 | `free` | Changes core state that neither moves nor redirects value, nor widens who can reach the node or run code on it, nor moves secrets out. | nothing to enforce |
 | `elevate` | Signs or reveals keys, writes key material, moves or redirects value (spend, fee, side stake, change address), widens network exposure, deletes or exports wallet files. Needs a capability or a standing full unlock. | RPC: the `CRPCTable::execute` gate. IPC: `CapabilityScope(..., <kind>)` in the method body. |
 | `elevate` + `authority: passphrase_argument` | The entry verifies a wallet passphrase given as its own argument (unlock, passphrase change, `beginElevation`). | RPC column `access_elevate_inband`: the dispatcher does not gate it; the method verifies. IPC: no kind. |
-| `elevate` + `authority: unencrypted_only` | Acts only on an unencrypted wallet, which always has its keys. | RPC: gated (it passes). IPC: no kind. |
+| `elevate` + `authority: unencrypted_only` | Acts only on an unencrypted wallet, which always has its keys. | RPC column `access_elevate_unencrypted`: the dispatcher does not gate it, its help has no passphrase line, and the method refuses an encrypted wallet itself (`RPC_WALLET_WRONG_ENC_STATE`). IPC: no kind. |
 | `settings` | `changesettings` and `Node.changeSettings`: the class of each setting applies. | `ChangeSettings()`, per setting |
 | `dispatch` | `Node.executeRpcConsoleCommand`, and `Node.executeRpcConsoleSecretCommand` for the RPCs with passphrase parameters: the class of the RPC row carried applies. | the `CRPCTable::execute` gate (`CRPCTable::admit`, which the passphrase call runs before the method) |
 | `elevated_handle` | A method of an object that only Elevate methods make; `minted_by` lists those methods. | the minting method's capability |
@@ -1813,6 +1813,7 @@ same answer.
 
 - A new RPC row takes `access_<class>` as its seventh field and an entry under `"rpc"` whose
   class matches it (`access_elevate_inband` is `elevate` with `"authority": "passphrase_argument"`;
+  `access_elevate_unencrypted` is `elevate` with `"authority": "unencrypted_only"`;
   `access_elevate` is any other `elevate`). The help of an `access_elevate` row gains the line
   "Needs the wallet passphrase." from `CRPCTable`, so its description need not say so.
 - A new capnp method takes an entry under `"ipc"`. An Elevate one without an authority names

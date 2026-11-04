@@ -122,7 +122,8 @@ enum rpcheritage
     heritage_pure_gridcoin,
 };
 
-// RPC access class, enforced for access_elevate by CRPCTable::execute.
+// RPC access class, enforced for access_elevate by CRPCTable::admit(), which
+// CRPCTable::execute() and the console's passphrase call run before the method.
 //   read_only      -- changes nothing.
 //   free           -- changes state that neither moves nor redirects value, widens
 //                     exposure, nor handles keys.
@@ -130,6 +131,8 @@ enum rpcheritage
 //                     value, widens exposure, or exports or deletes wallet files; needs
 //                     a full unlock or the passphrase sent with the request.
 //   elevate_inband -- the method verifies a passphrase given as its own argument.
+//   elevate_unencrypted -- the method acts only on an unencrypted wallet, which
+//                     always has its keys, and refuses an encrypted one itself.
 //   settings       -- changesettings; each setting applies its own class.
 enum rpcaccess
 {
@@ -137,10 +140,11 @@ enum rpcaccess
     access_free,
     access_elevate,
     access_elevate_inband,
+    access_elevate_unencrypted,
     access_settings,
 };
 
-//! "read_only", "free", "elevate", "elevate_inband", "settings"
+//! "read_only", "free", "elevate", "elevate_inband", "elevate_unencrypted", "settings"
 const char* RpcAccessName(rpcaccess access);
 
 class CRPCCommand

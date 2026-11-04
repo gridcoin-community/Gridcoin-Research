@@ -17,8 +17,9 @@ means. This lint keeps the file true against the code:
 
    1. Every vRPCCommands row has an "rpc" entry and every "rpc" entry has a
       row. The row's access column matches the class: access_elevate_inband
-      for elevate with authority passphrase_argument, access_elevate for any
-      other elevate, access_<class> otherwise. RPC classes are read_only,
+      for elevate with authority passphrase_argument,
+      access_elevate_unencrypted for elevate with authority unencrypted_only,
+      access_elevate for any other elevate, access_<class> otherwise. RPC classes are read_only,
       free, elevate and settings, and an RPC entry has no kind or minted_by.
    2. Every capnp interface method has an "ipc" entry and every "ipc" entry
       has a method. Method declarations are also counted without regard to
@@ -444,6 +445,8 @@ def expected_column(entry):
     cls = entry.get("class")
     if cls == "elevate" and entry.get("authority") == "passphrase_argument":
         return "elevate_inband"
+    if cls == "elevate" and entry.get("authority") == "unencrypted_only":
+        return "elevate_unencrypted"
     return cls
 
 
@@ -457,7 +460,7 @@ def check_rpc(classes, rows):
         if not isinstance(entry, dict):
             continue
         want = expected_column(entry)
-        if want in RPC_CLASSES + ("elevate_inband",) and rows[name] != want:
+        if want in RPC_CLASSES + ("elevate_inband", "elevate_unencrypted") and rows[name] != want:
             fail("rpc." + name, "the row's column is access_{} but class {}{} needs access_{}".format(
                 rows[name], entry.get("class"),
                 " with authority " + entry["authority"] if "authority" in entry else "", want))

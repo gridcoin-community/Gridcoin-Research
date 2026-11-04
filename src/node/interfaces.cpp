@@ -444,9 +444,10 @@ public:
             const PassphraseParamsCleanser cleanser(method, params);
 
             // This path runs the method itself rather than through tableRPC.execute(), so it makes
-            // the dispatcher's checks first: the arity check, and the passphrase gate of an
-            // access_elevate row (encryptwallet). It converts a body's exception as the
-            // dispatcher does.
+            // the dispatcher's checks first through CRPCTable::admit(): the arity check, and the
+            // passphrase gate, which none of these methods is subject to (walletpassphrase and
+            // walletpassphrasechange verify their own passphrase; encryptwallet refuses an
+            // encrypted wallet itself). It converts a body's exception as the dispatcher does.
             tableRPC.admit(method, params);
 
             try {

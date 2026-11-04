@@ -427,8 +427,9 @@ The three methods with passphrase parameters (`walletpassphrase`,
 passphrase would cross as plain text. `executeRpcConsoleSecretCommand` runs
 them, with the passphrases as `SecureString` (`List(Data)` on the wire) and the
 other parameters as text, after the same checks the dispatcher makes (the
-argument count, and the passphrase gate of an elevate-class row such as
-`encryptwallet`). It never sets `wallet_unlock_needed`: a passphrase method is
+argument count, and the passphrase gate, which stops none of the three:
+`walletpassphrase` and `walletpassphrasechange` verify their own passphrase, and
+`encryptwallet` refuses an encrypted wallet itself). It never sets `wallet_unlock_needed`: a passphrase method is
 not run again under a capability. `interfaces::RpcConsolePassphraseIndexes(method)`
 names the passphrase positions, locally and with no call to the node.
 

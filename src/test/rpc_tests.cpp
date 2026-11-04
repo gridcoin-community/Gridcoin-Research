@@ -290,9 +290,11 @@ static std::string GateRefusal(const std::string& method)
 
 BOOST_AUTO_TEST_CASE(rpc_rows_carry_their_access_class)
 {
-    for (const char* name : {"settxfee", "backupwallet", "maintainbackups", "writedata", "encryptwallet"}) {
+    for (const char* name : {"settxfee", "backupwallet", "maintainbackups", "writedata"}) {
         BOOST_CHECK_MESSAGE(tableRPC[name]->access == access_elevate, name);
     }
+
+    BOOST_CHECK(tableRPC["encryptwallet"]->access == access_elevate_unencrypted);
 
     for (const char* name : {"walletpassphrase", "walletpassphrasechange"}) {
         BOOST_CHECK_MESSAGE(tableRPC[name]->access == access_elevate_inband, name);
@@ -313,6 +315,7 @@ BOOST_AUTO_TEST_CASE(rpc_rows_carry_their_access_class)
     BOOST_CHECK_EQUAL(std::string(RpcAccessName(access_free)), "free");
     BOOST_CHECK_EQUAL(std::string(RpcAccessName(access_elevate)), "elevate");
     BOOST_CHECK_EQUAL(std::string(RpcAccessName(access_elevate_inband)), "elevate_inband");
+    BOOST_CHECK_EQUAL(std::string(RpcAccessName(access_elevate_unencrypted)), "elevate_unencrypted");
     BOOST_CHECK_EQUAL(std::string(RpcAccessName(access_settings)), "settings");
 }
 
@@ -346,10 +349,14 @@ BOOST_AUTO_TEST_CASE(every_rpc_row_matches_the_classification_file)
         if (!cls.isStr()) continue;
 
         // An elevate entry whose method verifies a passphrase argument is the
-        // access_elevate_inband row; every other class names its column.
+        // access_elevate_inband row, one that acts only on an unencrypted wallet
+        // the access_elevate_unencrypted row; every other class names its column.
         std::string expected = cls.get_str();
         if (expected == "elevate" && authority.isStr() && authority.get_str() == "passphrase_argument") {
             expected = "elevate_inband";
+        }
+        if (expected == "elevate" && authority.isStr() && authority.get_str() == "unencrypted_only") {
+            expected = "elevate_unencrypted";
         }
 
         const std::string column = RpcAccessName(tableRPC[name]->access);
@@ -405,7 +412,7 @@ BOOST_AUTO_TEST_CASE(every_gated_row_is_refused_without_elevation)
         }
     }
 
-    BOOST_CHECK_EQUAL(gated, 48U);
+    BOOST_CHECK_EQUAL(gated, 47U);
 }
 
 BOOST_AUTO_TEST_CASE(elevate_rows_run_with_a_full_unlock)

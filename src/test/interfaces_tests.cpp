@@ -228,8 +228,8 @@ BOOST_AUTO_TEST_CASE(node_secret_console_changes_passphrase)
     BOOST_CHECK(fx.wallet.Unlock(SecureString("p\xc3\xa4 ss")));
 }
 
-// The secret path goes around CRPCTable::execute, so it has to enforce the argument count itself:
-// an extra argument must get the help text and change nothing.
+// The secret path runs the method itself, after the dispatcher's checks through CRPCTable::admit(),
+// the argument count among them: an extra argument must get the help text and change nothing.
 BOOST_AUTO_TEST_CASE(node_secret_console_checks_argument_count)
 {
     grc_test::EncryptedWallet fx;
@@ -265,10 +265,11 @@ BOOST_AUTO_TEST_CASE(node_secret_console_formats_a_body_exception_like_the_dispa
 }
 
 // The secret path makes the dispatcher's own checks before the method runs, as tableRPC.execute()
-// makes them for HTTP RPC and the plain console: encryptwallet, an access_elevate row, is refused on an
-// encrypted wallet that cannot use its keys, and a wrong argument count gets the dispatcher's help,
-// with the line an access_elevate row adds. Both answers are the dispatcher's, formatted as the
-// console formats them.
+// makes them for HTTP RPC and the plain console. The passphrase gate stops none of the passphrase
+// methods: encryptwallet on an encrypted wallet, locked or unlocked for staking only, is refused by
+// the method itself with -15 on every route, and a wrong argument count gets the dispatcher's help,
+// without the passphrase line. Both answers are the dispatcher's, formatted as the console formats
+// them.
 BOOST_AUTO_TEST_CASE(node_secret_console_makes_the_dispatcher_checks)
 {
     grc_test::EncryptedWallet fx;
@@ -285,22 +286,30 @@ BOOST_AUTO_TEST_CASE(node_secret_console_makes_the_dispatcher_checks)
         return std::string("returned");
     };
 
-    const interfaces::RpcConsoleResult refused =
-        node->executeRpcConsoleSecretCommand("encryptwallet", {SecureString("another")}, {});
-    BOOST_CHECK(!refused.ok);
-    BOOST_CHECK_EQUAL(refused.output, dispatched({"another"}));
-    // A passphrase method is never run again under an unlock, so nothing asks for one.
-    BOOST_CHECK(!refused.wallet_unlock_needed);
-    BOOST_CHECK(refused.output.find("encryptwallet needs the wallet passphrase") != std::string::npos);
-    BOOST_CHECK(refused.output.find("(code -13)") != std::string::npos);
+    for (const bool staking_only : {false, true}) {
+        if (staking_only) fx.UnlockFor(UnlockScope::StakingOnly);
+
+        const interfaces::RpcConsoleResult refused =
+            node->executeRpcConsoleSecretCommand("encryptwallet", {SecureString("another")}, {});
+        BOOST_CHECK(!refused.ok);
+        BOOST_CHECK_EQUAL(refused.output, dispatched({"another"}));
+        // A passphrase method is never run again under an unlock, so nothing asks for one.
+        BOOST_CHECK(!refused.wallet_unlock_needed);
+        BOOST_CHECK_EQUAL(refused.output,
+                          "Error: running with an encrypted wallet, but encryptwallet was called. (code -15)");
+    }
 
     const interfaces::RpcConsoleResult arity =
         node->executeRpcConsoleSecretCommand("encryptwallet", {SecureString("another")}, {"extra"});
     BOOST_CHECK(!arity.ok);
     BOOST_CHECK_EQUAL(arity.output, dispatched({"another", "extra"}));
-    BOOST_CHECK(arity.output.find("Needs the wallet passphrase.") != std::string::npos);
+    BOOST_CHECK(arity.output.rfind("Error: encryptwallet ", 0) == 0);
+    BOOST_CHECK(arity.output.find("Needs the wallet passphrase.") == std::string::npos);
 
-    BOOST_CHECK(fx.wallet.IsLocked());
+    // Nothing changed: still unlocked for staking only, and the passphrase still opens the wallet
+    // once it is locked (Unlock() refuses a wallet that is already unlocked).
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+    fx.wallet.Lock();
     BOOST_CHECK(fx.wallet.Unlock(grc_test::EncryptedWallet::PASSPHRASE));
 }
 

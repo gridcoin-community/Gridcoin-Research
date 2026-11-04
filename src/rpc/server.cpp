@@ -578,7 +578,7 @@ static const CRPCCommand vRPCCommands[] =
     { "dumpseedphrase",          &dumpseedphrase,          cat_wallet, &dumpseedphrase_helpman, heritage_pure_gridcoin, "", access_elevate },
     { "fundrawtransaction",      &fundrawtransaction,      cat_wallet, &fundrawtransaction_helpman, heritage_mixed, "5373087fac94", access_elevate },
     { "dumpwallet",              &dumpwallet,              cat_wallet, &dumpwallet_helpman, heritage_removed_upstream, "eaad3c94f6a6", access_elevate },
-    { "encryptwallet",           &encryptwallet,           cat_wallet, &encryptwallet_helpman, heritage_mixed, "7b0696269744", access_elevate },
+    { "encryptwallet",           &encryptwallet,           cat_wallet, &encryptwallet_helpman, heritage_mixed, "7b0696269744", access_elevate_unencrypted },
     { "getaccount",              &getaccount,              cat_wallet, &getaccount_helpman, heritage_pure_gridcoin, "", access_read_only },
     { "getaccountaddress",       &getaccountaddress,       cat_wallet, &getaccountaddress_helpman, heritage_pure_gridcoin, "", access_free },
     { "getaddressesbyaccount",   &getaddressesbyaccount,   cat_wallet, &getaddressesbyaccount_helpman, heritage_pure_gridcoin, "", access_read_only },
@@ -1875,6 +1875,7 @@ const char* RpcAccessName(rpcaccess access)
     case access_free: return "free";
     case access_elevate: return "elevate";
     case access_elevate_inband: return "elevate_inband";
+    case access_elevate_unencrypted: return "elevate_unencrypted";
     case access_settings: return "settings";
     }
 
@@ -1904,12 +1905,12 @@ const CRPCCommand& CRPCTable::admit(const std::string& strMethod, const UniValue
         }
     }
 
-    // The HTTP server, the IPC console (its passphrase call by admit() alone) and the
-    // plain GUI with -server=1 all arrive here, so this is the one place an
-    // elevate-class RPC is refused when the wallet
-    // has no full unlock and the request carries no passphrase. It follows the arity
-    // check and runs before any method body. The refusal names both ways to proceed,
-    // where EnsureWalletIsUnlocked()'s names only a standing unlock; the code is the
+    // The HTTP server, the IPC console (its passphrase call by admit() alone) and
+    // the plain GUI with -server=1 all arrive here, so this is the one place an
+    // elevate-class RPC is refused when the wallet has no full unlock and the
+    // request carries no passphrase. It follows the arity check and runs before
+    // any method body. The refusal names both ways to proceed, where
+    // EnsureWalletIsUnlocked()'s names only a standing unlock; the code is the
     // same, which the console reads to ask for the passphrase.
     if (pcmd->access == access_elevate) {
         if (!pwalletMain) throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: no wallet is loaded.");
