@@ -336,6 +336,19 @@ BOOST_AUTO_TEST_CASE(wallet_key_from_pool_labels_address_book)
     BOOST_CHECK_EQUAL(it->second.name, label);
 }
 
+BOOST_AUTO_TEST_CASE(wallet_reports_the_fee_rate_in_effect)
+{
+    BOOST_REQUIRE(pwalletMain != nullptr);
+
+    const int64_t saved_transaction_fee{nTransactionFee};
+    nTransactionFee = 123456;
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(pwalletMain);
+    BOOST_CHECK_EQUAL(wallet->getTransactionFeeRate(), 123456);
+
+    nTransactionFee = saved_transaction_fee;
+}
+
 BOOST_AUTO_TEST_CASE(wallet_address_book_handler_bridges_value_types)
 {
     BOOST_REQUIRE(pwalletMain != nullptr);

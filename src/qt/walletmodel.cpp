@@ -118,6 +118,11 @@ qint64 WalletModel::getImmatureBalance() const
     return m_wallet.getImmatureBalance();
 }
 
+CAmount WalletModel::getTransactionFeeRate() const
+{
+    return m_wallet.getTransactionFeeRate();
+}
+
 int WalletModel::getNumTransactions() const
 {
     return m_wallet.getNumTransactions();

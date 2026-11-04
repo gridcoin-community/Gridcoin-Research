@@ -129,6 +129,7 @@ namespace ipc {
 //! `walletUnlockNeeded @2` (node.capnp), which the console reads to ask for the
 //! passphrase and run a refused command again.
 //! SettingChangeResult gained `elevationRequired @7` and SideStakeEditStatus ELEVATION_REQUIRED.
+//! Wallet gained `getTransactionFeeRate @39` (wallet.capnp), which the send confirmation reads.
 //!
 //! The new methods alone would be additive, which is why the reason for the
 //! major is the other direction. A GUI and a node of different majors disagree

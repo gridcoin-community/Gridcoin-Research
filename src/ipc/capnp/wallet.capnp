@@ -43,6 +43,7 @@ interface Wallet $Proxy.wrap("interfaces::Wallet") {
     elevateWallet @36 (context :Proxy.Context, passphrase :Data) -> (result :Bool);
     beginElevation @37 (context :Proxy.Context, passphrase :Data, kind :UInt8) -> (result :Bool);
     endElevation @38 (context :Proxy.Context) -> ();
+    getTransactionFeeRate @39 (context :Proxy.Context) -> (result :Int64);
     changeWalletPassphrase @13 (context :Proxy.Context, oldPassphrase :Data, newPassphrase :Data) -> (result :Bool);
     getPubKey @14 (context :Proxy.Context, address :Data) -> (pubKeyOut :Data, result :Bool);
     getKeyFromPool @15 (context :Proxy.Context, label :Text) -> (pubKeyOut :Data, result :Bool);

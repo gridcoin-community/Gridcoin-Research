@@ -608,6 +608,7 @@ public:
     interfaces::CoinControlSummary computeCoinControlSummary(const interfaces::WalletCoinControl&,
                                                              const std::vector<int64_t>&, bool) override { return {}; }
     unsigned int getMaxConsolidationInputs() override { return 0; }
+    CAmount getTransactionFeeRate() override { return 0; }
     interfaces::SendCoinsResult sendCoins(const std::vector<interfaces::WalletSendRecipient>&,
                                           const std::optional<interfaces::WalletCoinControl>&, int64_t) override { return {}; }
     bool backupWallet(const std::string&) override { return false; }
@@ -677,6 +678,7 @@ public:
     int64_t getStake() override { return 0; }
     int64_t getUnconfirmedBalance() override { return 0; }
     int64_t getImmatureBalance() override { return 0; }
+    CAmount getTransactionFeeRate() override { return 0; }
     bool tryGetBalances(interfaces::WalletBalances& /*balances*/) override { return false; }
     int getNumTransactions() override { return 0; }
     bool encryptWallet(const SecureString& /*passphrase*/) override { return false; }
@@ -810,6 +812,7 @@ public:
     int64_t getStake() override { return 0; }
     int64_t getUnconfirmedBalance() override { return 0; }
     int64_t getImmatureBalance() override { return 0; }
+    CAmount getTransactionFeeRate() override { return 0; }
     bool tryGetBalances(interfaces::WalletBalances& /*balances*/) override { return false; }
     int getNumTransactions() override { return 0; }
     bool encryptWallet(const SecureString& /*passphrase*/) override { return false; }

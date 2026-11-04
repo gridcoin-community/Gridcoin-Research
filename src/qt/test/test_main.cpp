@@ -21,6 +21,7 @@
 #include "researchermodeltests.h"
 #include "researcherwizardpagetests.h"
 #include "rpcconsoletests.h"
+#include "sendcoinsdialogtests.h"
 #include "sidestakemodeltests.h"
 #include "uritests.h"
 
@@ -138,6 +139,10 @@ int main(int argc, char *argv[])
 
     AskPassphraseDialogTests test19;
     if (QTest::qExec(&test19) != 0)
+        fInvalid = true;
+
+    SendCoinsDialogTests test20;
+    if (QTest::qExec(&test20) != 0)
         fInvalid = true;
 
     return fInvalid;

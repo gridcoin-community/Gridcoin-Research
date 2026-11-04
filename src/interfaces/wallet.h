@@ -253,6 +253,9 @@ public:
     //! Immature (newly generated) balance.
     virtual int64_t getImmatureBalance() = 0;
 
+    //! The configured transaction fee rate (nTransactionFee), per kB.
+    virtual CAmount getTransactionFeeRate() = 0;
+
     //! Fill all four balances in one shot, or return false without blocking
     //! when the core is busy (cs_main/cs_wallet unavailable). The balance
     //! scans are expensive on large wallets, so refresh-path callers must be

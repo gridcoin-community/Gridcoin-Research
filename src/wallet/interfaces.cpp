@@ -66,6 +66,7 @@ public:
     int64_t getUnconfirmedBalance() override { return m_wallet->GetUnconfirmedBalance(); }
 
     int64_t getImmatureBalance() override { return m_wallet->GetImmatureBalance(); }
+    CAmount getTransactionFeeRate() override { return nTransactionFee; }
 
     bool tryGetBalances(WalletBalances& balances) override
     {

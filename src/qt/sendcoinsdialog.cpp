@@ -167,6 +167,33 @@ SendCoinsDialog::~SendCoinsDialog()
     delete payAmounts;
 }
 
+QString SendCoinsDialog::FormatSendConfirmation(const QList<SendCoinsRecipient>& recipients,
+                                                CAmount fee_rate_per_kb, const QString& change_address)
+{
+    QStringList formatted;
+    for (const SendCoinsRecipient& rcp : recipients) {
+        QString amountStr = BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, rcp.amount);
+        if (rcp.fSubtractFeeFromAmount)
+        {
+            amountStr += " " + tr("(minus fee)");
+        }
+        formatted.append(tr("<b>%1</b> to %2 (%3)").arg(amountStr,
+              rcp.label.toHtmlEscaped(), rcp.address.toHtmlEscaped()));
+    }
+
+    QString text = tr("Are you sure you want to send %1?").arg(formatted.join(tr(" and ")));
+
+    text += "<br><br>" + tr("Transaction fee: %1 per kB").arg(
+        BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, fee_rate_per_kb));
+
+    if (!change_address.isEmpty())
+    {
+        text += "<br>" + tr("Change to: %1").arg(change_address.toHtmlEscaped());
+    }
+
+    return text;
+}
+
 void SendCoinsDialog::on_sendButton_clicked()
 {
     QList<SendCoinsRecipient> recipients;
@@ -196,22 +223,24 @@ void SendCoinsDialog::on_sendButton_clicked()
         return;
     }
 
-    // Format confirmation message
-    QStringList formatted;
-    for (const SendCoinsRecipient& rcp : recipients) {
-        QString amountStr = BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, rcp.amount);
-        if (rcp.fSubtractFeeFromAmount)
-        {
-            amountStr += " " + tr("(minus fee)");
-        }
-        formatted.append(tr("<b>%1</b> to %2 (%3)").arg(amountStr,
-              rcp.label.toHtmlEscaped(), rcp.address));
+    // The dialog's coin-control selection is already the boundary value type,
+    // so pass it straight through when coin-control features are on. dest_change
+    // is only ever set to a valid encoded address (see the change handlers), so
+    // no re-validation is needed here.
+    std::optional<interfaces::WalletCoinControl> coin_control;
+    if (model->getOptionsModel() && model->getOptionsModel()->getCoinControlFeatures())
+    {
+        coin_control = *coinControl;
     }
+
+    // Format confirmation message
+    const QString change_address = (coin_control && !coin_control->dest_change.empty())
+        ? QString::fromStdString(coin_control->dest_change) : QString();
 
     fNewRecipientAllowed = false;
 
     QMessageBox::StandardButton retval = QMessageBox::question(this, tr("Confirm send coins"),
-                          tr("Are you sure you want to send %1?").arg(formatted.join(tr(" and "))),
+                          FormatSendConfirmation(recipients, model->getTransactionFeeRate(), change_address),
           QMessageBox::Yes|QMessageBox::Cancel,
           QMessageBox::Cancel);
 
@@ -230,16 +259,6 @@ void SendCoinsDialog::on_sendButton_clicked()
     }
 
     WalletModel::SendCoinsReturn sendstatus;
-
-    // The dialog's coin-control selection is already the boundary value type,
-    // so pass it straight through when coin-control features are on. dest_change
-    // is only ever set to a valid encoded address (see the change handlers), so
-    // no re-validation is needed here.
-    std::optional<interfaces::WalletCoinControl> coin_control;
-    if (model->getOptionsModel() && model->getOptionsModel()->getCoinControlFeatures())
-    {
-        coin_control = *coinControl;
-    }
 
     // Fee-confirmation loop. When the required fee exceeds both the
     // configured transaction fee and what the user has accepted so far,

@@ -757,6 +757,10 @@
       "class": "read_only",
       "effect": "read_only"
     },
+    "Wallet.getTransactionFeeRate": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
     "Wallet.getUnbookedReceiveAddresses": {
       "class": "read_only",
       "effect": "read_only"
