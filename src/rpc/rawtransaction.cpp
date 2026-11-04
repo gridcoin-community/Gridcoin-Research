@@ -860,6 +860,11 @@ UniValue consolidateunspent(const UniValue& params)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ") + sAddress);
     }
 
+    // Refused as the other spends are, locked or unlocked for staking only,
+    // unless this thread may use the keys, and before the wallet is searched
+    // for inputs.
+    EnsureWalletIsUnlocked();
+
     // Set the consolidation transaction address to the specified output address.
     CScript scriptDestPubKey;
     scriptDestPubKey.SetDestination(OptimizeAddress);
@@ -1064,22 +1069,6 @@ UniValue consolidateunspent(const UniValue& params)
     int64_t nFee = nTransactionFee * (1 + (int64_t) nBytes / 1000);
 
     int64_t nFeeRequired = std::max(nMinFee, nFee);
-
-
-    if (pwalletMain->IsLocked())
-    {
-        string strError = _("Error: Wallet locked, unable to create transaction.");
-        LogPrintf("consolidateunspent: %s", strError);
-        return strError;
-    }
-
-    // A capability scope open on this thread lets a staking-only wallet through.
-    if (!pwalletMain->CanUseKeys())
-    {
-        string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
-        LogPrintf("consolidateunspent: %s", strError);
-        return strError;
-    }
 
     vector<pair<CScript, int64_t> > vecSend;
 

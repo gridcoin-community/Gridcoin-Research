@@ -1447,6 +1447,14 @@ static UniValue JSONRPCExecBatch(const UniValue& vReq)
     return ret;
 }
 
+UniValue ExecuteBatchWithElevation(const UniValue& requests, const std::optional<SecureString>& header)
+{
+    // JSONRPCExecOne() answers a call that fails with an error entry rather
+    // than throwing, so one failure neither stops the batch nor ends the
+    // capability before the calls after it.
+    return ExecuteWithElevation(header, [&] { return JSONRPCExecBatch(requests); });
+}
+
 void ServiceConnection(AcceptedConnection *conn)
 {
     bool fRun = true;
@@ -1537,9 +1545,7 @@ void ServiceConnection(AcceptedConnection *conn)
 
             // array of requests, authorised once for the whole batch
             } else if (valRequest.isArray()) {
-                strReply = ExecuteWithElevation(elevation, [&] {
-                    return JSONRPCExecBatch(valRequest.get_array());
-                }).write() + "\n";
+                strReply = ExecuteBatchWithElevation(valRequest.get_array(), elevation).write() + "\n";
             } else
                 throw JSONRPCError(RPC_PARSE_ERROR, "Top-level object parse error");
 

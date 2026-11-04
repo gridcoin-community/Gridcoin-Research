@@ -188,6 +188,17 @@ std::optional<SecureString> TakeElevationHeader(std::map<std::string, std::strin
 //! delay, so the caller must hold no lock.
 UniValue ExecuteWithElevation(const std::optional<SecureString>& header, const std::function<UniValue()>& execute);
 
+//! \brief Execute a JSON-RPC batch under the capability its elevation header
+//! proves.
+//!
+//! The header is checked once for the whole batch, as ExecuteWithElevation()
+//! checks it, and every call in \p requests then runs in order under that one
+//! capability. Each call is answered by its own entry in the returned array:
+//! a call that fails gets an error entry, as without a header, and the calls
+//! after it still run under the capability. A header that is refused throws
+//! before any call runs.
+UniValue ExecuteBatchWithElevation(const UniValue& requests, const std::optional<SecureString>& header);
+
 //
 // Utilities: convert hex-encoded Values
 // (throws error if not hex).

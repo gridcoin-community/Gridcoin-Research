@@ -359,4 +359,75 @@ BOOST_AUTO_TEST_CASE(elevation_header_without_an_encrypted_wallet)
     }
 }
 
+BOOST_AUTO_TEST_CASE(batch_runs_every_call_under_one_capability)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    // A call that needs no key, one that fails after the key check passes, and
+    // one that signs, in that order, as a client would send them.
+    UniValue requests;
+    BOOST_REQUIRE(requests.read(
+        "[{\"id\": 1, \"method\": \"getblockcount\", \"params\": []},"
+        " {\"id\": 2, \"method\": \"signmessage\", \"params\": [\"not-an-address\", \"elevation-test\"]},"
+        " {\"id\": 3, \"method\": \"signmessage\", \"params\": [\"" + EncodeDestination(fx.id) + "\", \"elevation-test\"]}]"));
+
+    std::map<std::string, std::string> headers = HeadersWith(Base64(EncryptedWallet::PASSPHRASE));
+    const UniValue replies = ExecuteBatchWithElevation(requests, TakeElevationHeader(headers));
+
+    BOOST_REQUIRE(replies.isArray());
+    BOOST_REQUIRE_EQUAL(replies.size(), 3U);
+
+    const auto error_code = [&](size_t i) {
+        const UniValue error = find_value(replies[i], "error");
+        return error.isNull() ? 0 : find_value(error, "code").get_int();
+    };
+
+    BOOST_CHECK_EQUAL(error_code(0), 0);
+    BOOST_CHECK(find_value(replies[0], "result").isNum());
+
+    // The failing call is answered with its own error...
+    BOOST_CHECK_EQUAL(error_code(1), RPC_INVALID_ADDRESS_OR_KEY);
+
+    // ...and the capability still serves the call after it.
+    BOOST_CHECK_EQUAL(error_code(2), 0);
+    BOOST_CHECK(find_value(replies[2], "result").isStr());
+
+    // It ended with the batch.
+    BOOST_CHECK(!fx.wallet.CanUseKeys());
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+
+    // A wrong passphrase refuses the whole batch before any call runs.
+    headers = HeadersWith(Base64(SecureString("wrong")));
+    BOOST_CHECK(RpcErrorCode([&] {
+        ExecuteBatchWithElevation(requests, TakeElevationHeader(headers));
+    }) == RPC_WALLET_PASSPHRASE_INCORRECT);
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 1U);
+}
+
+BOOST_AUTO_TEST_CASE(consolidateunspent_refused_without_the_keys)
+{
+    EncryptedWallet fx;
+
+    const std::string consolidate = "consolidateunspent " + EncodeDestination(fx.id);
+
+    // Refused as the other spends are, before the wallet is searched for
+    // inputs: locked, and unlocked for staking only.
+    BOOST_CHECK(RpcErrorCode([&] { CallRPC(consolidate); }) == RPC_WALLET_UNLOCK_NEEDED);
+
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    BOOST_CHECK(RpcErrorCode([&] { CallRPC(consolidate); }) == RPC_WALLET_UNLOCK_NEEDED);
+
+    // A request that carries the passphrase gets past the check, to find
+    // nothing to consolidate in this empty wallet.
+    std::map<std::string, std::string> headers = HeadersWith(Base64(EncryptedWallet::PASSPHRASE));
+    const UniValue result = ExecuteWithElevation(TakeElevationHeader(headers), [&] {
+        return CallRPC(consolidate);
+    });
+
+    BOOST_REQUIRE(result.isObject());
+    BOOST_CHECK(find_value(result, "result").isFalse());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
