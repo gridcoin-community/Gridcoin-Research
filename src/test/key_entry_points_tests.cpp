@@ -118,7 +118,7 @@ const std::vector<std::string> INVENTORY_IPC{
     "ResearcherContext.advertiseBeacon", "ResearcherContext.generateBeaconKeyForV3",
     "ResearcherContext.advertiseBeaconV3",
     "PSGTPoolContext.signPoolEntry", "PSGTPoolContext.signPSGT",
-    "Node.executeRpcConsoleCommand",
+    "Node.executeRpcConsoleCommand", "Node.executeRpcConsoleSecretCommand",
 };
 
 //! The environments a row can ask for.
