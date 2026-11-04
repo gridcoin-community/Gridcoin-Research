@@ -75,6 +75,9 @@ extern fs::path pathDataDir;
 // encrypted wallet unlocked for staking only: without a capability it must be
 // refused, and under a capability of its kind it must not be, and must reach
 // the key code unless the row says why the unit fixture cannot take it there.
+// An RPC row is refused through the dispatcher, whose gate refuses an
+// access_elevate row before its method runs, and its method is also called
+// without the dispatcher, where it must refuse on its own.
 //
 // The lint test/lint/lint-staking-key-access.py keeps the table's count of the
 // direct calls of the four functions in each file current, so a new direct call
@@ -652,6 +655,35 @@ Outcome Call(const std::string& name, const std::vector<std::string>& args)
     return out;
 }
 
+//! Calls \p name's method as CRPCTable::execute() does, but without the
+//! dispatcher's own checks, the arity check and the passphrase gate of an
+//! access_elevate row, so that what the method itself does is seen.
+Outcome CallMethod(const std::string& name, const std::vector<std::string>& args)
+{
+    Outcome out;
+
+    const CRPCCommand* command = tableRPC[name];
+    if (command == nullptr) {
+        out.malformed = true;
+        out.message = "no such command";
+        return out;
+    }
+
+    try {
+        out.result = command->actor(RPCConvertValues(name, args));
+        out.returned = true;
+    } catch (const UniValue& error) {
+        out.code = find_value(error, "code").get_int();
+        out.message = find_value(error, "message").getValStr();
+    } catch (const std::exception& e) {
+        // As the dispatcher reports it.
+        out.code = RPC_MISC_ERROR;
+        out.message = e.what();
+    }
+
+    return out;
+}
+
 //! How a row is refused.
 enum class Refusal {
     UnlockNeeded,  //!< RPC_WALLET_UNLOCK_NEEDED
@@ -781,6 +813,7 @@ bool StopsAsMarked(const UniValue& row, const Outcome& outcome)
 }
 
 //! Drive the rows of one RPC section. Each is refused without a capability,
+//! through the dispatcher and by its method called without the dispatcher,
 //! with no change to the wallet's keys, and not refused under an RpcRequest
 //! capability, where it must also reach the key code, unless the row says in
 //! stops_before_key why the unit fixture cannot take it there; a row that
@@ -863,6 +896,16 @@ void DriveRpcRows(const UniValue& rows, std::optional<Refusal> section_refusal)
             BOOST_CHECK_MESSAGE(IsRefusal(*refusal, refused),
                                 name << ": not refused while unlocked for staking only: " << refused.Describe()
                                 << Published(scraper, published));
+
+            // The method refuses on its own too: the dispatcher's gate is not
+            // the only thing between a staking-only wallet and the keys.
+            const Outcome refused_by_method = CallMethod(name, args);
+            const int published_by_refused_method = published - published_while_refused;
+
+            BOOST_CHECK_MESSAGE(IsRefusal(*refusal, refused_by_method),
+                                name << ": the method, called without the dispatcher, is not refused while unlocked "
+                                "for staking only: " << refused_by_method.Describe()
+                                << Published(scraper, published_by_refused_method));
             BOOST_CHECK_MESSAGE(published == 0, name << ": a manifest was published while refused");
             BOOST_CHECK_MESSAGE(fx.KeyCount() == keys_before_refusal,
                                 name << ": a refused call changed the wallet's keys");
@@ -916,7 +959,8 @@ void DriveRpcRows(const UniValue& rows, std::optional<Refusal> section_refusal)
                 }
 
                 BOOST_TEST_MESSAGE(name << ": refused (" << refused.Describe()
-                                   << Published(scraper, published_while_refused) << "); under the capability: "
+                                   << Published(scraper, published_while_refused) << "; the method alone: "
+                                   << refused_by_method.Describe() << "); under the capability: "
                                    << allowed.Describe() << Published(scraper, published)
                                    << (stops_before_key.empty() ? std::string() : "; stops before the key: " + stops_before_key)
                                    << (adds_a_key ? strprintf("; keys %u -> %u", keys_before, keys_after) : std::string()));
