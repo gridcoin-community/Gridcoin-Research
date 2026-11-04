@@ -14,9 +14,14 @@
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 
+#include <algorithm>
+#include <cerrno>
 #include <cstring>
+#include <istream>
 #include <mutex>
+#include <ostream>
 #include <set>
+#include <streambuf>
 
 #ifndef WIN32
 #include <fcntl.h>
@@ -67,16 +72,23 @@ bool BCLog::Logger::StartLogging()
 
     if (m_print_to_file) {
         assert(!m_file_path.empty());
-        m_fileout = BCLog::OpenLogFile(m_file_path, "a", m_secure_open);
+        m_fileout = OpenOwnFile("a");
         if (!m_fileout) {
-            return false;
+            if (!m_secure_open) {
+                return false;
+            }
+
+            // The secure open refused the file. Carry on without a log file, so the lines buffered so far are
+            // delivered and later ones are not buffered without bound; the caller reports the failure.
+            m_print_to_file = false;
+            m_file_open_failed = true;
+        } else {
+            setbuf(m_fileout, nullptr); // unbuffered
+
+            // Add newlines to the logfile to distinguish this execution from the
+            // last one.
+            FileWriteStr("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n", m_fileout);
         }
-
-        setbuf(m_fileout, nullptr); // unbuffered
-
-        // Add newlines to the logfile to distinguish this execution from the
-        // last one.
-        FileWriteStr("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n", m_fileout);
     }
 
     // dump buffered messages from before we opened the log
@@ -94,7 +106,7 @@ bool BCLog::Logger::StartLogging()
     }
     if (m_print_to_console) fflush(stdout);
 
-    return true;
+    return !m_file_open_failed;
 }
 
 void BCLog::Logger::DisconnectTestLogger()
@@ -288,9 +300,17 @@ namespace BCLog {
 
 #ifdef WIN32
         boost::system::error_code ec;
-        if (fs::is_symlink(fs::symlink_status(path, ec))) return nullptr;
+        const fs::file_status status = fs::symlink_status(path, ec);
+        if (status.type() == fs::symlink_file || status.type() == fs::reparse_file) return nullptr;
         return fsbridge::fopen(path, mode);
 #else
+        return OpenLogFileAt(AT_FDCWD, path.c_str(), mode);
+#endif
+    }
+
+#ifndef WIN32
+    FILE* OpenLogFileAt(int dirfd, const char* name, const char* mode)
+    {
         int flags = O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK;
         if (std::strcmp(mode, "r") == 0) {
             flags |= O_RDONLY;
@@ -303,7 +323,7 @@ namespace BCLog {
             return nullptr;
         }
 
-        const int fd = ::open(path.c_str(), flags, static_cast<mode_t>(0600));
+        const int fd = ::openat(dirfd, name, flags, static_cast<mode_t>(0600));
         if (fd < 0) return nullptr;
 
         struct stat st;
@@ -326,8 +346,89 @@ namespace BCLog {
         FILE* file = ::fdopen(fd, mode);
         if (file == nullptr) ::close(fd);
         return file;
+    }
+
+    int OpenDirectoryUnder(const fs::path& root, const fs::path& dir)
+    {
+        // The components of dir below root, or none of root is a prefix.
+        std::vector<std::string> below;
+        bool under_root = !root.empty();
+
+        if (under_root) {
+            auto significant = [](const fs::path& p) {
+                std::vector<std::string> parts;
+                for (const fs::path& part : p) {
+                    const std::string name = part.string();
+                    if (!name.empty() && name != ".") parts.push_back(name);
+                }
+                return parts;
+            };
+
+            const std::vector<std::string> root_parts = significant(root);
+            const std::vector<std::string> dir_parts = significant(dir);
+
+            if (dir_parts.size() < root_parts.size()
+                || !std::equal(root_parts.begin(), root_parts.end(), dir_parts.begin())) {
+                under_root = false;
+            } else {
+                below.assign(dir_parts.begin() + root_parts.size(), dir_parts.end());
+            }
+        }
+
+        if (!under_root) {
+            return ::open(dir.c_str(), O_DIRECTORY | O_CLOEXEC);
+        }
+
+        int cur = ::open(root.c_str(), O_DIRECTORY | O_CLOEXEC);
+        if (cur < 0) return -1;
+
+        for (const std::string& name : below) {
+            if (name == "..") {
+                ::close(cur);
+                return -1;
+            }
+
+            const int next = ::openat(cur, name.c_str(), O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+            ::close(cur);
+            if (next < 0) return -1;
+
+            struct stat st;
+            if (::fstat(next, &st) != 0 || st.st_uid != ::geteuid()) {
+                ::close(next);
+                return -1;
+            }
+
+            cur = next;
+        }
+
+        return cur;
+    }
+#endif
+
+    FILE* OpenLogFileUnder(const fs::path& root, const fs::path& path, const char* mode)
+    {
+#ifdef WIN32
+        return OpenLogFile(path, mode, true);
+#else
+        if (root.empty()) return OpenLogFile(path, mode, true);
+
+        const int dirfd = OpenDirectoryUnder(root, path.parent_path());
+        if (dirfd < 0) return nullptr;
+
+        FILE* file = OpenLogFileAt(dirfd, path.filename().c_str(), mode);
+        ::close(dirfd);
+        return file;
 #endif
     }
+}
+
+FILE* BCLog::Logger::OpenOwnFile(const char* mode) const
+{
+    if (m_secure_open && !m_secure_root.empty()) {
+        return BCLog::OpenLogFileUnder(m_secure_root, m_file_path, mode);
+    }
+
+    return BCLog::OpenLogFile(m_file_path, mode, m_secure_open);
 }
 
 void BCLog::Logger::LogPrintStr(const std::string& str)
@@ -362,7 +463,7 @@ void BCLog::Logger::LogPrintStr(const std::string& str)
         // reopen the log file, if requested
         if (m_reopen_file) {
             m_reopen_file = false;
-            FILE* new_fileout = BCLog::OpenLogFile(m_file_path, "a", m_secure_open);
+            FILE* new_fileout = OpenOwnFile("a");
             if (new_fileout) {
                 setbuf(new_fileout, nullptr); // unbuffered
                 if (m_fileout != nullptr) fclose(m_fileout);
@@ -384,7 +485,7 @@ void BCLog::Logger::ShrinkDebugFile()
     assert(!m_file_path.empty());
 
     // Scroll debug.log if it's getting too big
-    FILE* file = BCLog::OpenLogFile(m_file_path, "r", m_secure_open);
+    FILE* file = OpenOwnFile("r");
 
     // Special files (e.g. device nodes) may not have a size.
     size_t log_size = 0;
@@ -406,7 +507,7 @@ void BCLog::Logger::ShrinkDebugFile()
         int nBytes = fread(vch.data(), 1, vch.size(), file);
         fclose(file);
 
-        file = BCLog::OpenLogFile(m_file_path, "w", m_secure_open);
+        file = OpenOwnFile("w");
         if (file)
         {
             fwrite(vch.data(), 1, nBytes, file);
@@ -416,6 +517,96 @@ void BCLog::Logger::ShrinkDebugFile()
     else if (file != nullptr)
         fclose(file);
 }
+
+#ifndef WIN32
+namespace {
+//! Closes a directory descriptor at scope exit.
+struct DirFd
+{
+    int fd{-1};
+    DirFd() = default;
+    explicit DirFd(int fd_in) : fd(fd_in) {}
+    DirFd(const DirFd&) = delete;
+    DirFd& operator=(const DirFd&) = delete;
+    ~DirFd() { if (fd >= 0) ::close(fd); }
+};
+
+//! An unbuffered output stream buffer that writes to a file descriptor it does not own.
+class FdStreamBuf : public std::streambuf
+{
+public:
+    explicit FdStreamBuf(int fd) : m_fd(fd) {}
+
+protected:
+    std::streamsize xsputn(const char* data, std::streamsize count) override
+    {
+        std::streamsize done = 0;
+        while (done < count) {
+            const ssize_t n = ::write(m_fd, data + done, static_cast<size_t>(count - done));
+            if (n < 0) {
+                if (errno == EINTR) continue;
+                break;
+            }
+            done += n;
+        }
+        return done;
+    }
+
+    int_type overflow(int_type ch) override
+    {
+        if (traits_type::eq_int_type(ch, traits_type::eof())) return traits_type::not_eof(ch);
+        const char c = traits_type::to_char_type(ch);
+        return xsputn(&c, 1) == 1 ? ch : traits_type::eof();
+    }
+
+private:
+    int m_fd;
+};
+
+//! Compresses temp_name into out_name, both entries of the directory archive_fd. The input is opened with the
+//! secure open and the output is created exclusively without following a link, so nothing that already exists
+//! under the output name is overwritten or followed. The input is removed afterwards.
+bool CompressSecure(int archive_fd, const std::string& temp_name, const std::string& out_name)
+{
+    FILE* infile = BCLog::OpenLogFileAt(archive_fd, temp_name.c_str(), "r");
+    if (infile == nullptr) {
+        LogPrintf("ERROR: Logger: Failed to open archive log file for compression %s.", temp_name);
+        return false;
+    }
+
+    const int out_fd = ::openat(archive_fd, out_name.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
+                                static_cast<mode_t>(0600));
+    if (out_fd < 0) {
+        fclose(infile);
+        LogPrintf("ERROR: Logger: Failed to create archive gzip file %s.", out_name);
+        return false;
+    }
+
+    {
+        FdStreamBuf out_buf(out_fd);
+        std::ostream out_file(&out_buf);
+        boost::iostreams::filtering_ostream out;
+        out.push(boost::iostreams::gzip_compressor());
+        out.push(out_file);
+
+        char buffer[65536];
+        size_t n;
+        while ((n = fread(buffer, 1, sizeof(buffer), infile)) > 0) {
+            out.write(buffer, static_cast<std::streamsize>(n));
+        }
+
+        // reset() flushes the compressor into the file stream.
+        out.reset();
+    }
+
+    ::close(out_fd);
+    fclose(infile);
+    ::unlinkat(archive_fd, temp_name.c_str(), 0);
+
+    return true;
+}
+} // namespace
+#endif
 
 bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
 {
@@ -435,7 +626,13 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
     fs::path LogArchiveDir = pathDataDir / "logarchive";
 
     // Check to see if the log archive directory exists and is a directory. If not create it.
-    if (fs::exists(LogArchiveDir))
+    if (m_secure_open)
+    {
+        // A link at the name is not touched here; the directory is opened without following links below.
+        boost::system::error_code ec;
+        fs::create_directory(LogArchiveDir, ec);
+    }
+    else if (fs::exists(LogArchiveDir))
     {
         // If it is a normal file, this is not right. Remove the file and replace with the log archive directory.
         if (fs::is_regular_file(LogArchiveDir))
@@ -453,6 +650,22 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
     {
         std::string rename_error_msg;
         bool reopened = true;
+
+#ifndef WIN32
+        // In secure mode the log and archive directories are opened once, each through every directory component
+        // below the data directory, and the rename and the archive file are made relative to those descriptors.
+        DirFd log_dir;
+        DirFd archive_dir;
+        if (m_secure_open) {
+            archive_dir.fd = BCLog::OpenDirectoryUnder(m_secure_root, LogArchiveDir);
+            log_dir.fd = BCLog::OpenDirectoryUnder(m_secure_root, m_file_path.parent_path());
+            if (archive_dir.fd < 0 || log_dir.fd < 0) {
+                LogPrintf("ERROR: Logger: archive: the log or archive directory could not be opened safely (%s).",
+                          LogArchiveDir.string());
+                return false;
+            }
+        }
+#endif
 
         {
             std::lock_guard<std::mutex> scoped_lock(m_cs);
@@ -476,6 +689,14 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
             pfile_out = LogArchiveDir / static_cast<fs::path>((m_file_path.filename().stem().string() + "-" + DateTimeStrFormat("%Y%m%d%H%M%S", nTime)
                                          + m_file_path.filename().extension().string() + ".gz"));
 
+#ifndef WIN32
+            if (m_secure_open) {
+                if (::renameat(log_dir.fd, plogfile.filename().c_str(), archive_dir.fd, pfile_temp.filename().c_str()) != 0) {
+                    rename_error_msg = "Failed to rename logging file: ";
+                    rename_error_msg += std::strerror(errno);
+                }
+            } else
+#endif
             try
             {
                 fs::rename(plogfile, pfile_temp);
@@ -488,7 +709,7 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
 
             // Re-open logging file. (This is subtly different than the flag based reopen above, because the file must be closed first, renamed for compression,
             // and then a new one opened.
-            FILE* new_fileout = BCLog::OpenLogFile(m_file_path, "a", m_secure_open);
+            FILE* new_fileout = OpenOwnFile("a");
             if (new_fileout)
             {
                 setbuf(new_fileout, nullptr); // unbuffered
@@ -514,33 +735,45 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
             return false;
         }
 
-        fsbridge::ifstream infile(pfile_temp, std::ios_base::in | std::ios_base::binary);
-
-        if (!infile)
-        {
-            LogPrintf("ERROR: Logger: Failed to open archive log file for compression %s.", pfile_temp.string());
-            return false;
+        bool compressed_securely = false;
+#ifndef WIN32
+        if (m_secure_open) {
+            if (!CompressSecure(archive_dir.fd, pfile_temp.filename().string(), pfile_out.filename().string())) {
+                return false;
+            }
+            compressed_securely = true;
         }
+#endif
 
-        fsbridge::ofstream outgzfile(pfile_out, std::ios_base::out | std::ios_base::binary);
+        if (!compressed_securely) {
+            fsbridge::ifstream infile(pfile_temp, std::ios_base::in | std::ios_base::binary);
 
-        if (!outgzfile)
-        {
-            LogPrintf("ERROR: Logger: Failed to open archive gzip file %s.", pfile_out.string());
-            return false;
+            if (!infile)
+            {
+                LogPrintf("ERROR: Logger: Failed to open archive log file for compression %s.", pfile_temp.string());
+                return false;
+            }
+
+            fsbridge::ofstream outgzfile(pfile_out, std::ios_base::out | std::ios_base::binary);
+
+            if (!outgzfile)
+            {
+                LogPrintf("ERROR: Logger: Failed to open archive gzip file %s.", pfile_out.string());
+                return false;
+            }
+
+            boost::iostreams::filtering_ostream out;
+            out.push(boost::iostreams::gzip_compressor());
+            out.push(outgzfile);
+
+            boost::iostreams::copy(infile, out);
+
+            infile.close();
+            outgzfile.flush();
+            outgzfile.close();
+
+            fs::remove(pfile_temp);
         }
-
-        boost::iostreams::filtering_ostream out;
-        out.push(boost::iostreams::gzip_compressor());
-        out.push(outgzfile);
-
-        boost::iostreams::copy(infile, out);
-
-        infile.close();
-        outgzfile.flush();
-        outgzfile.close();
-
-        fs::remove(pfile_temp);
 
         bool fDeleteOldLogArchives = gArgs.GetBoolArg("-deleteoldlogarchives", true);
 

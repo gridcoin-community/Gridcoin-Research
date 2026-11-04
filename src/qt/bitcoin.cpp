@@ -1001,6 +1001,15 @@ int main(int argc, char *argv[])
     const bool multiprocess_gui = gArgs.GetBoolArg("-multiprocess", false);
     if (multiprocess_gui) {
         IgnoreGuiOnlyConfigArgs(gArgs);
+
+        // This refuses a datadir from the configuration file (before anything is opened there) and
+        // -resetblockchaindata, from any source.
+        if (const auto err = MultiprocessGuiArgError(gArgs)) {
+            tfm::format(std::cerr, "%s\n", err->c_str());
+            QMessageBox::critical(nullptr, PACKAGE_NAME,
+                                  QObject::tr("The multiprocess GUI cannot start: %1").arg(QString::fromStdString(*err)));
+            return EXIT_FAILURE;
+        }
     }
 
     // Do this to pickup -testnet / -regtest from the command line.
@@ -1095,8 +1104,12 @@ int main(int argc, char *argv[])
     // GUI file exactly as it would the node's. The node is a separate process and
     // keeps its own -debuglogfile.
     if (gArgs.GetBoolArg("-multiprocess", false)) {
-        const fs::path node_log = AbsPathForConfigVal(gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
-        const fs::path gui_log = gArgs.IsArgSet("-guilogfile")
+        // The log file names come from the command line only. A debuglogfile or guilogfile in the data
+        // directory's configuration file, which the core shares, does not steer where the GUI writes.
+        const fs::path node_log = AbsPathForConfigVal(IsArgOnCommandLine(gArgs, "-debuglogfile")
+            ? fs::path(gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE))
+            : fs::path(DEFAULT_DEBUGLOGFILE));
+        const fs::path gui_log = IsArgOnCommandLine(gArgs, "-guilogfile")
             ? AbsPathForConfigVal(fs::path(gArgs.GetArg("-guilogfile", "")))
             : DeriveGuiLogPath(node_log);
 
@@ -1120,6 +1133,8 @@ int main(int argc, char *argv[])
         // from the core cannot start a new line in it.
         LogInstance().m_secure_open = true;
         LogInstance().m_escape_newlines = true;
+        // Each directory below the data directory on the way to the log and its archive is checked.
+        LogInstance().m_secure_root = GetDataDir(/*fNetSpecific=*/false);
     }
 
     // Initialize logging as early as possible.
@@ -1132,14 +1147,21 @@ int main(int argc, char *argv[])
         LogPrintf("WARNING: -debugallowtracer is set: this process is dumpable and may be traced");
     }
 
+    if (multiprocess_gui && LogInstance().m_file_open_failed) {
+        QMessageBox::warning(nullptr, PACKAGE_NAME,
+            QObject::tr("The GUI log file %1 could not be opened safely (it or a directory above it is a link, "
+                        "is not a regular file of yours, or is not accessible). The GUI will run without a log file.")
+                .arg(QString::fromStdString(LogInstance().m_file_path.string())));
+    }
+
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
 
     if (multiprocess_gui) {
         if (const auto err = MultiprocessGuiArgError(gArgs)) {
             GUILogPrintf("%s", *err);
-            ThreadSafeMessageBox(*err, _("Gridcoin"), CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
-            QMessageBox::critical(nullptr, PACKAGE_NAME, QString::fromStdString(*err));
+            QMessageBox::critical(nullptr, PACKAGE_NAME,
+                                  QObject::tr("The multiprocess GUI cannot start: %1").arg(QString::fromStdString(*err)));
             return EXIT_FAILURE;
         }
     }

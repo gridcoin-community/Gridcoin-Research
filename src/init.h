@@ -57,8 +57,12 @@ const std::vector<std::string>& GuiOnlyArgs();
 //! removed keys, each with its leading '-' and listed once however many sections held it.
 std::vector<std::string> IgnoreGuiOnlyConfigArgs(ArgsManager& args);
 
-//! The message to show when -resetblockchaindata is set, from any source, in the multiprocess GUI (the core does
-//! that job); otherwise nullopt.
+//! True when the option (e.g. "-datadir") was given on the command line.
+bool IsArgOnCommandLine(const ArgsManager& args, const std::string& name);
+
+//! The message to show when the multiprocess GUI is started with an option it refuses: -resetblockchaindata from
+//! any source (the core does that job), or datadir from the configuration file without -datadir on the command
+//! line (the data directory, which the core shares, must not steer where the GUI writes). Otherwise nullopt.
 std::optional<std::string> MultiprocessGuiArgError(const ArgsManager& args);
 
 /**

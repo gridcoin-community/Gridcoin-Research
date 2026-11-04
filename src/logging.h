@@ -131,6 +131,11 @@ namespace BCLog {
         bool m_secure_open{false};
         //! Escape every newline in a message except a final one (see LogEscapeMessage). Set before logging starts.
         bool m_escape_newlines{false};
+        //! With m_secure_open, a log file or archive under this directory is opened through each of its directory
+        //! components in turn, refusing a symlinked or foreign-owned one. Empty: the path is opened as given.
+        fs::path m_secure_root;
+        //! Set by StartLogging when the log file could not be opened in secure mode. Logging then goes on without a file.
+        bool m_file_open_failed{false};
 
         fs::path m_file_path;
         std::atomic<bool> m_reopen_file{false};
@@ -180,6 +185,10 @@ namespace BCLog {
         bool WillLogCategory(LogFlags category) const;
 
         bool DefaultShrinkDebugFile() const;
+
+    private:
+        //! Opens m_file_path for the mode, securely and anchored at m_secure_root when m_secure_open is set.
+        FILE* OpenOwnFile(const char* mode) const;
     };
 
 
@@ -195,6 +204,20 @@ namespace BCLog {
     //! already exists keeps its mode; a new file is created 0600. Windows: refuses when fs::symlink_status(path) is
     //! a symlink, else fsbridge::fopen. Supported modes are "r", "a" and "w".
     FILE* OpenLogFile(const fs::path& path, const char* mode, bool secure);
+
+    //! Secure open of path (a file below root) through each directory component below root in turn: every one is
+    //! opened with O_DIRECTORY|O_NOFOLLOW and must be owned by the effective user, so a symlinked directory is
+    //! refused. A path not below root, or an empty root, is opened as OpenLogFile(path, mode, true) does.
+    FILE* OpenLogFileUnder(const fs::path& root, const fs::path& path, const char* mode);
+
+#ifndef WIN32
+    //! The same checks as OpenLogFile(.., true), for the entry name in the directory dirfd (AT_FDCWD allowed).
+    FILE* OpenLogFileAt(int dirfd, const char* name, const char* mode);
+
+    //! Opens the directory dir through each component below root as OpenLogFileUnder does. Returns a descriptor, or
+    //! -1 when a component is a symlink, not a directory or not owned by the effective user.
+    int OpenDirectoryUnder(const fs::path& root, const fs::path& dir);
+#endif
 } // namespace BCLog
 
 BCLog::Logger& LogInstance();

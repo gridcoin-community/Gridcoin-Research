@@ -47,6 +47,8 @@
 
 #include <openssl/crypto.h>
 
+#include <iostream>
+#include <mutex>
 #include <set>
 #include <thread>
 
@@ -137,6 +139,17 @@ const std::vector<std::string>& GuiOnlyArgs()
     return GUI_ONLY_ARGS;
 }
 
+bool IsArgOnCommandLine(const ArgsManager& args, const std::string& name)
+{
+    bool found = false;
+
+    args.LockSettings([&](const util::Settings& settings) {
+        found = settings.command_line_options.count(name.substr(1)) > 0;
+    });
+
+    return found;
+}
+
 std::vector<std::string> IgnoreGuiOnlyConfigArgs(ArgsManager& args)
 {
     std::set<std::string> removed;
@@ -151,7 +164,13 @@ std::vector<std::string> IgnoreGuiOnlyConfigArgs(ArgsManager& args)
         }
     });
 
+    // The caller may run this after each read of the config files; each key is reported once per process.
+    static std::set<std::string> reported;
+    static std::mutex reported_mutex;
+    std::lock_guard<std::mutex> lock(reported_mutex);
+
     for (const std::string& name : removed) {
+        if (!reported.insert(name).second) continue;
         LogPrintf("ignored %s from the config file: in multiprocess mode GUI options come from the command line or "
                   "the GUI settings\n", name);
     }
@@ -164,6 +183,18 @@ std::optional<std::string> MultiprocessGuiArgError(const ArgsManager& args)
     if (args.IsArgSet("-resetblockchaindata")) {
         return std::string("-resetblockchaindata is not available in the multiprocess GUI. "
                            "Stop the core and run gridcoinresearchd -resetblockchaindata.");
+    }
+
+    bool datadir_in_config = false;
+    args.LockSettings([&](const util::Settings& settings) {
+        for (const auto& section : settings.ro_config) {
+            if (section.second.count("datadir") > 0) datadir_in_config = true;
+        }
+    });
+
+    if (datadir_in_config && !IsArgOnCommandLine(args, "-datadir")) {
+        return std::string("datadir in the configuration file is not used by the multiprocess GUI. "
+                           "Pass -datadir on the command line.");
     }
 
     return std::nullopt;
@@ -1380,7 +1411,12 @@ void InitLogging()
 
     if (!LogInstance().StartLogging())
     {
-       strprintf("Could not open debug log file %s", LogInstance().m_file_path.string());
+        // Only the secure open (the multiprocess GUI) goes on without a file after a failure; any other failure
+        // leaves logging buffered, as it always has.
+        if (LogInstance().m_file_open_failed) {
+            tfm::format(std::cerr, "Could not open debug log file %s; logging to the file is off.\n",
+                        LogInstance().m_file_path.string());
+        }
     }
 
     if (!LogInstance().m_log_timestamps)

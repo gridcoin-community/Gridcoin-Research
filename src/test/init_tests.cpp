@@ -26,7 +26,7 @@ public:
 
 void RegisterArgs(ArgsManager& args)
 {
-    for (const char* a : {"-guilogfile=<f>", "-autotrustidentity", "-ipclogtrace", "-staking", "-resetblockchaindata"}) {
+    for (const char* a : {"-guilogfile=<f>", "-autotrustidentity", "-ipclogtrace", "-staking", "-resetblockchaindata", "-datadir=<dir>"}) {
         args.AddArg(a, "", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     }
 }
@@ -204,6 +204,52 @@ BOOST_AUTO_TEST_CASE(resetblockchaindata_refused_in_multiprocess_gui)
         const auto msg = MultiprocessGuiArgError(args);
         BOOST_REQUIRE(msg.has_value());
         BOOST_CHECK_EQUAL(*msg, expected);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(datadir_in_config_is_refused_in_multiprocess_gui)
+{
+    const std::string expected =
+        "datadir in the configuration file is not used by the multiprocess GUI. Pass -datadir on the command line.";
+    std::string err;
+
+    {
+        // From the configuration file alone.
+        TestArgsManager args;
+        RegisterArgs(args);
+        std::istringstream conf("datadir=/somewhere/else\n");
+        BOOST_REQUIRE(args.ReadConfigStream(conf, "test.conf", err, true));
+        BOOST_CHECK(!IsArgOnCommandLine(args, "-datadir"));
+        const auto msg = MultiprocessGuiArgError(args);
+        BOOST_REQUIRE(msg.has_value());
+        BOOST_CHECK_EQUAL(*msg, expected);
+    }
+    {
+        // From a network section of the configuration file.
+        TestArgsManager args;
+        RegisterArgs(args);
+        std::istringstream conf("[test]\ndatadir=/somewhere/else\n");
+        BOOST_REQUIRE(args.ReadConfigStream(conf, "test.conf", err, true));
+        BOOST_CHECK(MultiprocessGuiArgError(args).has_value());
+    }
+    {
+        // From the command line alone.
+        TestArgsManager args;
+        RegisterArgs(args);
+        const char* argv[] = {"x", "-datadir=/tmp/dd"};
+        BOOST_REQUIRE(args.ParseParameters(2, argv, err));
+        BOOST_CHECK(IsArgOnCommandLine(args, "-datadir"));
+        BOOST_CHECK(!MultiprocessGuiArgError(args).has_value());
+    }
+    {
+        // Both: the command line wins, so the configuration file does not steer anything.
+        TestArgsManager args;
+        RegisterArgs(args);
+        const char* argv[] = {"x", "-datadir=/tmp/dd"};
+        BOOST_REQUIRE(args.ParseParameters(2, argv, err));
+        std::istringstream conf("datadir=/somewhere/else\n");
+        BOOST_REQUIRE(args.ReadConfigStream(conf, "test.conf", err, true));
+        BOOST_CHECK(!MultiprocessGuiArgError(args).has_value());
     }
 }
 

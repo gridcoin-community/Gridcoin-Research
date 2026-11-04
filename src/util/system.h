@@ -448,6 +448,14 @@ public:
         fn(m_settings);
     }
 
+    //! Read-only access to the settings with the lock held.
+    template <typename Fn>
+    void LockSettings(Fn&& fn) const
+    {
+        LOCK(cs_args);
+        fn(static_cast<const util::Settings&>(m_settings));
+    }
+
     /**
      * Log the config file options and the command line arguments,
      * useful for troubleshooting.
