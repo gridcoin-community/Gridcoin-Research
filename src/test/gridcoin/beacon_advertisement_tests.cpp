@@ -42,6 +42,7 @@
 #include "util/settings.h"
 #include "util/time.h"
 #include "validation.h"
+#include "wallet/ismine.h"
 #include "wallet/wallet.h"
 
 #include <boost/test/unit_test.hpp>
@@ -571,6 +572,33 @@ BOOST_FIXTURE_TEST_CASE(renewal_shape_rejects_extra_output, RenewalShapeFixture)
     BOOST_CHECK(IsShape(canonical, FeePaid(canonical)));
 }
 
+//! The change goes back to the script of a coin the renewal spends, the address
+//! the coins came from. Another of the wallet's own addresses is refused, and so
+//! is the same key in another script form.
+BOOST_FIXTURE_TEST_CASE(renewal_shape_rejects_change_to_another_wallet_address, RenewalShapeFixture)
+{
+    CScript to_beacon_key;
+    to_beacon_key.SetDestination(m_beacon_key.GetPubKey().GetID());
+
+    CMutableTransaction elsewhere = Canonical();
+    elsewhere.vout[1].scriptPubKey = to_beacon_key;
+    Rebalance(elsewhere, 1);
+    {
+        LOCK(m_wallet.cs_wallet);
+        BOOST_REQUIRE(m_wallet.IsMine(elsewhere.vout[1]) == ISMINE_SPENDABLE);
+    }
+    BOOST_CHECK(!IsShape(elsewhere, FeePaid(elsewhere)));
+
+    CMutableTransaction other_form = Canonical();
+    other_form.vout[1].scriptPubKey = CScript() << m_key.GetPubKey() << OP_CHECKSIG;
+    Rebalance(other_form, 1);
+    BOOST_CHECK(!IsShape(other_form, FeePaid(other_form)));
+
+    // The same check passes the transaction these were made from.
+    const CMutableTransaction canonical = Canonical();
+    BOOST_CHECK(IsShape(canonical, FeePaid(canonical)));
+}
+
 BOOST_FIXTURE_TEST_CASE(renewal_shape_rejects_a_fee_above_the_minimum, RenewalShapeFixture)
 {
     CMutableTransaction overpaying = Canonical();
@@ -667,8 +695,10 @@ BOOST_FIXTURE_TEST_CASE(renewal_shape_sizes_each_form_of_coin_the_wallet_signs, 
             m_wallet.mapWallet[funding.GetHash()] = CWalletTx(&m_wallet, funding);
         }
 
+        // The change goes back to the coin's own script.
         CMutableTransaction renewal = Canonical();
         renewal.vin[0].prevout = COutPoint(funding.GetHash(), 0);
+        renewal.vout[1].scriptPubKey = form;
         Rebalance(renewal, 1);
         BOOST_CHECK(IsShape(renewal, FeePaid(renewal)));
 
@@ -1876,6 +1906,74 @@ BOOST_FIXTURE_TEST_CASE(renewal_pays_minimum_fee_when_more_fee_selects_fewer_coi
 
     const unsigned int size = ::GetSerializeSize(static_cast<const CTransaction&>(renewal), SER_NETWORK, PROTOCOL_VERSION);
     BOOST_CHECK_EQUAL(fee, GetMinFee(renewal, 1000, GMF_SEND, size));
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    BOOST_CHECK(GRC::IsRenewalShape(CMutableTransaction(renewal), cpid, COIN / 2, fee, *pwalletMain));
+}
+
+//! A renewal that spends a coin paid to a public key, the form a coinstake pays
+//! a staker's coins in, sends its change back to that coin's own script, and
+//! so builds in the fixed shape.
+BOOST_FIXTURE_TEST_CASE(renewal_change_goes_back_to_a_pay_to_pubkey_coin, grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    const PoolCleared pool;
+    MineUntilReadyToAdvertise();
+
+    const std::string cpid_hex = "9b4b9b4b9b4b9b4b9b4b9b4b9b4b9b4b";
+    const GRC::Cpid cpid = GRC::Cpid::Parse(cpid_hex);
+    ForcedResearcher forced(cpid_hex);
+
+    CPubKey coin_key;
+    BOOST_REQUIRE(pwalletMain->GetKeyFromPool(coin_key, false));
+    const CScript pay_to_pubkey = CScript() << coin_key << OP_CHECKSIG;
+
+    constexpr CAmount COIN_VALUE = 2 * COIN;
+
+    CWalletTx funding;
+    const std::string error = pwalletMain->SendMoney(pay_to_pubkey, COIN_VALUE, funding);
+    BOOST_REQUIRE_MESSAGE(error.empty(), error);
+
+    std::optional<COutPoint> coin;
+    for (unsigned int n = 0; n < funding.vout.size(); ++n) {
+        if (funding.vout[n].scriptPubKey == pay_to_pubkey) coin = COutPoint(funding.GetHash(), n);
+    }
+    BOOST_REQUIRE(coin);
+
+    for (int i = 0; i < 6 && mempool.exists(funding.GetHash()); ++i) {
+        MineOne();
+    }
+    BOOST_REQUIRE(!mempool.exists(funding.GetHash()));
+    g_previous_block_time.store(GetAdjustedTime());
+
+    const OnlyTheseCoins only({*coin});
+
+    CKey beacon_key;
+    beacon_key.MakeNewKey(true);
+    GRC::BeaconPayload payload(cpid, GRC::Beacon(beacon_key.GetPubKey()));
+    BOOST_REQUIRE(payload.Sign(beacon_key));
+
+    CWalletTx renewal;
+    {
+        CMutableTransaction mtx;
+        mtx.vContracts.push_back(GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, payload));
+        static_cast<CTransaction&>(renewal) = CTransaction(std::move(mtx));
+    }
+
+    const StakingKeyAccess renewal_access = StakingKeyAccessTestPeer::Make();
+    CReserveKey reserve_key(pwalletMain);
+    CAmount fee = 0;
+    BOOST_REQUIRE(pwalletMain->CreateTransaction(
+        {std::make_pair(CScript() << OP_RETURN, COIN / 2)}, renewal, reserve_key, fee,
+        /*coinControl=*/nullptr, /*change_back_to_input_address=*/false, &renewal_access));
+
+    BOOST_REQUIRE_EQUAL(renewal.vin.size(), 1U);
+    BOOST_CHECK(renewal.vin.front().prevout == *coin);
+
+    // The burn and the change, which is the coin's own script.
+    BOOST_REQUIRE_EQUAL(renewal.vout.size(), 2U);
+    const bool change_first = renewal.vout[0].scriptPubKey != (CScript() << OP_RETURN);
+    BOOST_CHECK(renewal.vout[change_first ? 0 : 1].scriptPubKey == pay_to_pubkey);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
     BOOST_CHECK(GRC::IsRenewalShape(CMutableTransaction(renewal), cpid, COIN / 2, fee, *pwalletMain));

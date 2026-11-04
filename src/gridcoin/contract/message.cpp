@@ -17,6 +17,9 @@
 #include "wallet/coincontrol.h"
 #include "txmempool.h"
 
+#include <algorithm>
+#include <vector>
+
 using namespace GRC;
 
 extern CWallet* pwalletMain;
@@ -397,12 +400,41 @@ bool GRC::IsRenewalShape(
         return false;
     }
 
-    // The burn, and at most one change output that the wallet can spend. The
-    // builder puts the change at a random position.
+    // Only the wallet's own coins in. The scripts they were paid to are the
+    // only places the change may go.
+    CAmount value_in = 0;
+    std::vector<const CScript*> input_scripts;
+
+    for (const CTxIn& txin : tx.vin) {
+        const auto prev = wallet.mapWallet.find(txin.prevout.hash);
+
+        if (prev == wallet.mapWallet.end() || txin.prevout.n >= prev->second.vout.size()) {
+            return false;
+        }
+
+        const CTxOut& spent = prev->second.vout[txin.prevout.n];
+
+        value_in += spent.nValue;
+        input_scripts.push_back(&spent.scriptPubKey);
+
+        if (!MoneyRange(value_in)) {
+            return false;
+        }
+    }
+
+    // The burn, and at most one change output, paid back to the script of a
+    // coin it spends: an input's own address, in the form the coin has, and
+    // one the wallet can spend. Any other of the wallet's addresses is
+    // refused. The builder puts the change at a random position.
     const CScript burn_script = CScript() << OP_RETURN;
     bool burn_seen = false;
     bool change_seen = false;
     CAmount value_out = 0;
+
+    const auto to_an_input = [&input_scripts](const CScript& script) {
+        return std::any_of(input_scripts.begin(), input_scripts.end(),
+                           [&script](const CScript* input_script) { return *input_script == script; });
+    };
 
     for (const CTxOut& txout : tx.vout) {
         if (!MoneyRange(txout.nValue)) {
@@ -416,7 +448,8 @@ bool GRC::IsRenewalShape(
             continue;
         }
 
-        if (!change_seen && txout.nValue > 0 && wallet.IsMine(txout) == ISMINE_SPENDABLE) {
+        if (!change_seen && txout.nValue > 0 && to_an_input(txout.scriptPubKey)
+            && wallet.IsMine(txout) == ISMINE_SPENDABLE) {
             change_seen = true;
             continue;
         }
@@ -428,24 +461,8 @@ bool GRC::IsRenewalShape(
         return false;
     }
 
-    // Only the wallet's own coins in, and exactly the fee left over, which is the
-    // minimum for the transaction's size.
-    CAmount value_in = 0;
-
-    for (const CTxIn& txin : tx.vin) {
-        const auto prev = wallet.mapWallet.find(txin.prevout.hash);
-
-        if (prev == wallet.mapWallet.end() || txin.prevout.n >= prev->second.vout.size()) {
-            return false;
-        }
-
-        value_in += prev->second.vout[txin.prevout.n].nValue;
-
-        if (!MoneyRange(value_in)) {
-            return false;
-        }
-    }
-
+    // Exactly the fee left over, which is the minimum for the transaction's
+    // size.
     const std::optional<CAmount> minimum_fee = RenewalMinimumFee(tx, wallet);
 
     return minimum_fee && fee == *minimum_fee && value_in - value_out == fee;

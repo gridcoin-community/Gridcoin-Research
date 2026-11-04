@@ -78,7 +78,8 @@ std::optional<CAmount> RenewalMinimumFee(const CMutableTransaction& tx, const CW
 //!    new beacon;
 //!  - \p burn_fee is the burn that contract requires;
 //!  - its outputs are one OP_RETURN burn of \p burn_fee and at most one change
-//!    output that \p wallet can spend;
+//!    output, which \p wallet can spend and which pays the script of one of
+//!    the coins the transaction spends;
 //!  - it spends only coins of \p wallet, and pays exactly \p fee, which is
 //!    RenewalMinimumFee().
 //!

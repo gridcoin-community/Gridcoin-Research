@@ -4966,8 +4966,18 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                                 // Select the first input with a valid address as the change address. This seems as good
                                 // a choice as any, and is the fastest.
                                 for (const auto& input : setCoins_out) {
-                                    if (ExtractDestination(input.first->vout[input.second].scriptPubKey, change_address)) {
-                                        scriptChange.SetDestination(change_address);
+                                    const CScript& input_script = input.first->vout[input.second].scriptPubKey;
+
+                                    if (ExtractDestination(input_script, change_address)) {
+                                        // The renewal's change goes back to the very script the coin was paid
+                                        // to, as its fixed shape requires (GRC::IsRenewalShape()). For a coin
+                                        // paid to a public key, which a coinstake makes, that is not the script
+                                        // of the address the key has.
+                                        if (renewal_access) {
+                                            scriptChange = input_script;
+                                        } else {
+                                            scriptChange.SetDestination(change_address);
+                                        }
 
                                         break;
                                     }
