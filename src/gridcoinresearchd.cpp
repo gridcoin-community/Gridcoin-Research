@@ -24,6 +24,8 @@
 #include "rpc/client.h"
 #include "node/ui_interface.h"
 #include "gridcoin/upgrade.h"
+#include "wallet/autounlock.h"
+#include "wallet/wallet.h"
 
 #ifdef ENABLE_MULTIPROCESS
 #include "interfaces/init.h"
@@ -358,6 +360,13 @@ bool AppInit(int argc, char* argv[])
         // a multiprocess GUI's isCoreReady() (served from this process) returns
         // true once the core is up.
         bGridcoinCoreInitComplete = true;
+
+        // Unlock for staking only from the platform passphrase backend, if one is configured. No core lock is held
+        // here, and a GUI that attaches afterwards sees the result.
+        if (pwalletMain) {
+            wallet::TryAutoUnlockStakingOnly(*pwalletMain);
+        }
+
 #ifdef ENABLE_MULTIPROCESS
         // Multiprocess (RFC #2937): after core init, optionally listen on the
         // AF_UNIX socket and serve a fresh interfaces::Init to each attached GUI.

@@ -325,6 +325,7 @@ add_library(gridcoin_util STATIC
     util/transfer_file.cpp
     validation.cpp
     validationinterface.cpp
+    wallet/autounlock.cpp
     wallet/capability.cpp
     wallet/coinviews.cpp
     wallet/cursor.cpp
