@@ -1124,7 +1124,10 @@ bool ArgsManager::ReadConfigStream(std::istream& stream, const std::string& file
         if (flags) {
             // A command-line-only option is not stored from a config file, and is not an error.
             if (*flags & COMMAND_LINE_ONLY) {
-                LogPrintf("ignored %s from %s; it is accepted only on the command line\n", key, filepath);
+                // The daemon reads the configuration file more than once at startup.
+                if (m_logged_command_line_only_keys.insert(key).second) {
+                    LogPrintf("ignored %s from %s; it is accepted only on the command line\n", key, filepath);
+                }
                 continue;
             }
             if (!CheckValid(key, value, *flags, error)) {

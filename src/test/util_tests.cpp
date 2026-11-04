@@ -1957,12 +1957,61 @@ BOOST_AUTO_TEST_CASE(command_line_only_options_are_ignored_in_a_config_file)
             ++ignored_lines;
         }
     }
-    BOOST_CHECK_EQUAL(ignored_lines, 2u);
+    // The same key is logged once, whatever section it appears under.
+    BOOST_CHECK_EQUAL(ignored_lines, 1u);
 
     const char* argv[] = {"x", "-clo=3"};
     std::string error;
     BOOST_REQUIRE(args.ParseParameters(2, argv, error));
     BOOST_CHECK_EQUAL(args.GetArg("-clo", ""), "3");
+}
+
+BOOST_AUTO_TEST_CASE(command_line_only_overrides)
+{
+    // The developer and client overrides, registered as in init.cpp.
+    TestArgsManager args;
+    args.SetupArgs({{"-debugallowtracer", ArgsManager::ALLOW_BOOL | ArgsManager::DEBUG_ONLY | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-rpcskiplistenercheck", ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-stdinwalletpassphrase", ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-stdinelevate", ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY}});
+    const std::vector<std::string> names{"-debugallowtracer", "-rpcskiplistenercheck", "-stdinwalletpassphrase",
+                                         "-stdinelevate"};
+
+    args.ReadConfigString("debugallowtracer=1\nrpcskiplistenercheck=1\nstdinwalletpassphrase=1\nstdinelevate=1\n");
+    for (const std::string& name : names) BOOST_CHECK_MESSAGE(!args.GetBoolArg(name, false), name);
+
+    for (const std::string& name : names) {
+        TestArgsManager cli;
+        cli.SetupArgs({{name, ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY}});
+        const char* argv[] = {"x", name.c_str()};
+        std::string error;
+        BOOST_REQUIRE(cli.ParseParameters(2, argv, error));
+        BOOST_CHECK_MESSAGE(cli.GetBoolArg(name, false), name);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(command_line_only_option_is_logged_once_per_key)
+{
+    // The daemon reads the configuration file twice at startup.
+    TestArgsManager args;
+    args.SetupArgs({{"-clo", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY},
+                    {"-clo2", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY}});
+
+    std::vector<std::string> lines;
+    auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+    args.ReadConfigString("clo=1\n");
+    args.ReadConfigString("clo=1\n");
+    args.ReadConfigString("clo=1\nclo2=1\n");
+    LogInstance().DeleteCallback(callback);
+
+    size_t clo = 0, clo2 = 0;
+    for (const std::string& l : lines) {
+        if (l.find("it is accepted only on the command line") == std::string::npos) continue;
+        if (l.find("ignored clo from") != std::string::npos) ++clo;
+        if (l.find("ignored clo2 from") != std::string::npos) ++clo2;
+    }
+    BOOST_CHECK_EQUAL(clo, 1u);
+    BOOST_CHECK_EQUAL(clo2, 1u);
 }
 
 

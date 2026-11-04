@@ -701,7 +701,8 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_BOOL, OptionsCategory::OPTIONS);
     argsman.AddArg("-debugallowtracer", "Developers only: start under a debugger or tracer and leave the process "
                    "dumpable so the debugger can read it. Never use with a wallet you care about.",
-                   ArgsManager::ALLOW_BOOL | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+                   ArgsManager::ALLOW_BOOL | ArgsManager::DEBUG_ONLY | ArgsManager::COMMAND_LINE_ONLY,
+                   OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-wallet=<dir>", "Specify wallet file (within data directory)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-dbcache=<n>", strprintf("Set database cache size in megabytes (%d to %d, default: %d)",
@@ -1038,15 +1039,15 @@ void SetupServerArgs()
     argsman.AddArg("-rpcskiplistenercheck", "RPC client: send requests without identifying the owner of the RPC listener "
                    "(not recommended: what the client sends, credentials included, then goes to whatever "
                    "program holds the RPC address).",
-                   ArgsManager::ALLOW_BOOL, OptionsCategory::RPC);
+                   ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
     argsman.AddArg("-stdinwalletpassphrase", "RPC client: read the wallet passphrase(s) of walletpassphrase, "
                    "walletpassphrasechange or encryptwallet from standard input, one line each, instead of the "
                    "command line.",
-                   ArgsManager::ALLOW_BOOL, OptionsCategory::RPC);
+                   ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
     argsman.AddArg("-stdinelevate", "RPC client: read the wallet passphrase from standard input (one line) and send "
                    "it with the request, so this one command may use the wallet's keys while the wallet stays "
                    "unlocked for staking only.",
-                   ArgsManager::ALLOW_BOOL, OptionsCategory::RPC);
+                   ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
     argsman.AddArg("-rpcthreads=<n>", "Set the number of threads to service RPC calls (default: 4)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcservertimeout=<n>", strprintf("Close an RPC connection that has been idle "

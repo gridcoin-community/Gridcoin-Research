@@ -13,7 +13,9 @@ configuration file names with rpcserviceuser).
   - the framework's node, owned by this account, is accepted and answers;
   - -rpcserviceuser on the command line is ignored with a warning, and the call succeeds;
   - so is rpcserviceuser in a configuration file this account owns;
-  - -rpcskiplistenercheck sends without the check and says so on stderr.
+  - -rpcskiplistenercheck sends without the check and says so on stderr;
+  - rpcskiplistenercheck in a configuration file is ignored: the check still runs and the
+    client does not say it was skipped.
 
 The client runs as a subprocess so its stderr can be read. A refusal needs a listener owned
 by another account, which a test cannot create without privileges; the unit tests
@@ -97,6 +99,17 @@ class InterfaceCLIListenerCheckTest(GridcoinTestFramework):
         assert "the RPC listener's owner is not checked" in result.stderr, result.stderr
         # Once per run, not once per attempt.
         assert_equal(result.stderr.count("is not checked"), 1)
+
+        self.log.info("rpcskiplistenercheck in the configuration file is not honoured")
+        try:
+            with open(conf, "a", encoding="utf8") as f:
+                f.write("rpcskiplistenercheck=1\n")
+            result = self.run_client()
+            self.assert_answers(result, height)
+            assert "is not checked" not in result.stderr, result.stderr
+        finally:
+            with open(conf, "w", encoding="utf8") as f:
+                f.write(original)
 
 
 if __name__ == '__main__':

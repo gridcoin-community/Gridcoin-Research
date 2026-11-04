@@ -80,6 +80,11 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
         if (refuse.count(name)) BOOST_CHECK_MESSAGE(!(flags & ArgsManager::SETTING_FREE), name);
     }
 
+    // The developer and client overrides are honoured only from the command line.
+    for (const char* name : {"-debugallowtracer", "-rpcskiplistenercheck", "-stdinwalletpassphrase", "-stdinelevate"}) {
+        BOOST_CHECK_MESSAGE(all_flags.at(name) & ArgsManager::COMMAND_LINE_ONLY, name);
+    }
+
     for (const char* name : {"-blocknotify", "-walletnotify", "-projectnotify", "-pollnotify", "-psgtnotify",
                              "-alertnotify", "-startupnotify", "-shutdownnotify", "-rpcuser", "-rpcpassword"}) {
         BOOST_CHECK_MESSAGE(all_flags.at(name) & ArgsManager::SENSITIVE, name);
