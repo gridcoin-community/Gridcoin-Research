@@ -352,7 +352,12 @@ QString BackupResultText(const std::vector<interfaces::BackupEntryResult>& resul
             lines << QObject::tr("The backup was cancelled; nothing was saved to %1.").arg(dest);
         } else {
             failed = true;
-            lines << QString::fromStdString(result.outcome.message);
+
+            // A source that could not list its files names none.
+            const QString message = QString::fromStdString(result.outcome.message);
+            lines << (result.name.empty() ? message
+                                          : QObject::tr("%1 was not saved: %2")
+                                                .arg(QString::fromStdString(result.name), message));
         }
     }
 

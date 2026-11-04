@@ -491,8 +491,8 @@ void BitcoinGUI::createActions()
     encryptWalletAction = new QAction(tr("&Encrypt Wallet..."), this);
     encryptWalletAction->setToolTip(tr("Encrypt wallet"));
     encryptWalletAction->setCheckable(true);
-    backupWalletAction = new QAction(tr("&Backup Wallet/Config..."), this);
-    backupWalletAction->setToolTip(tr("Backup wallet/config to another location"));
+    backupWalletAction = new QAction(tr("&Back Up Wallet and Settings..."), this);
+    backupWalletAction->setToolTip(tr("Back up the wallet and its settings to another location"));
     changePassphraseAction = new QAction(tr("&Change Passphrase..."), this);
     changePassphraseAction->setToolTip(tr("Change the passphrase used for wallet encryption"));
     unlockWalletAction = new QAction(tr("&Unlock Wallet..."), this);

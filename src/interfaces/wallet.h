@@ -463,13 +463,15 @@ public:
     //! capability of another kind is left for its own operation.
     //!
     //! Null, with \p error_out set, while another transfer of this wallet
-    //! interface is live, without the capability, when the configuration file
-    //! is requested in a deployment where it belongs to another account
-    //! (wallet::ConfigBackupPermitted), when the wallet is requested and is not
-    //! file-backed, when the transfer directory lacks room, or when a snapshot
-    //! fails. Nothing is left in the transfer directory then. A configuration or
-    //! settings file that does not exist (or -nosettings) gives an entry with no
-    //! file and the note "no configuration file" or "no settings file".
+    //! interface is live, without the capability, when the wallet is requested
+    //! and is not file-backed, when the transfer directory lacks room, or when a
+    //! snapshot fails. Nothing is left in the transfer directory then. A
+    //! configuration or settings file that does not exist (or -nosettings) gives
+    //! an entry with no file and the note "no configuration file" or "no
+    //! settings file". So does a configuration file requested in a deployment
+    //! where it belongs to another account (wallet::ConfigBackupPermitted), with
+    //! the reason as its note: nothing of it is copied or sent, and the other
+    //! items are backed up.
     //!
     //! The source deletes each snapshot once it has streamed it, and every one
     //! left when it is cancelled or destroyed, or when the IPC connection it was

@@ -42,6 +42,7 @@
 #include "util.h"
 #include "util/strencodings.h"
 #include "wallet/capability.h"
+#include "wallet/transfer_sources.h"
 #include "wallet/wallet.h"
 
 #include <rpc/client.h>
@@ -2534,15 +2535,35 @@ BOOST_FIXTURE_TEST_CASE(begin_backup_config_refused_in_service_mode, BackupCase)
 
     std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
 
-    std::string err;
-    BOOST_CHECK(!w->beginBackup(BACKUP_WALLET | BACKUP_CONFIG, err));
-    BOOST_CHECK_MESSAGE(err.find("settings file") != std::string::npos, err);
+    std::string reason;
+    BOOST_REQUIRE(!wallet::ConfigBackupPermitted(reason));
 
-    // Nothing was snapshotted, the wallet included.
-    BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+    // The refusal does not fail the backup: the configuration file is an entry
+    // with nothing to send and the reason as its note, and the wallet arrives.
+    std::string err;
+    std::unique_ptr<interfaces::FileSource> source = w->beginBackup(BACKUP_WALLET | BACKUP_CONFIG, err);
+    BOOST_REQUIRE_MESSAGE(source, err);
+    BOOST_CHECK(err.empty());
+
+    const std::vector<interfaces::FileEntryInfo> infos = source->entries();
+    BOOST_REQUIRE_EQUAL(infos.size(), 2U);
+    BOOST_CHECK_EQUAL(infos[1].name, "service.conf");
+    BOOST_CHECK_EQUAL(infos[1].size, 0);
+    BOOST_CHECK_EQUAL(infos[1].note, reason);
+    BOOST_CHECK_MESSAGE(infos[1].note.find("settings file") != std::string::npos, infos[1].note);
+
+    // No byte of the configuration file was copied, and none is sent.
+    BOOST_CHECK_EQUAL(TransferFileCount(), 1U);
+    const interfaces::FileChunk refused = source->read(1, 4096);
+    BOOST_CHECK_EQUAL(refused.error, reason);
+    BOOST_CHECK(refused.data.empty());
+    BOOST_CHECK_EQUAL(ReadEntry(*source, 0), grc_test::WalletFilePlaceholder::CONTENT);
+
+    // One transfer at a time: the next begins once this source is gone.
+    source.reset();
 
     err.clear();
-    std::unique_ptr<interfaces::FileSource> source = w->beginBackup(BACKUP_WALLET | BACKUP_SETTINGS, err);
+    source = w->beginBackup(BACKUP_WALLET | BACKUP_SETTINGS, err);
     BOOST_REQUIRE_MESSAGE(source, err);
     BOOST_REQUIRE_EQUAL(source->entries().size(), 2U);
     BOOST_CHECK_EQUAL(ReadEntry(*source, 0), grc_test::WalletFilePlaceholder::CONTENT);

@@ -88,7 +88,7 @@ std::vector<fs::path> BackupGuardFiles(const interfaces::CorePaths& paths);
 
 //! The message a backup ends with, a line per entry: "Saved <n> bytes to <path>." for an entry that
 //! arrived, the note of one the core had nothing to send for, and the message of the one that did
-//! not arrive. \p failed is set when an entry failed; a cancel is not a failure.
+//! not arrive, after its name. \p failed is set when an entry failed; a cancel is not a failure.
 QString BackupResultText(const std::vector<interfaces::BackupEntryResult>& results, bool& failed);
 
 #endif // GRIDCOIN_QT_FILETRANSFERDIALOG_H

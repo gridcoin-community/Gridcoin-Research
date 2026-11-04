@@ -193,8 +193,10 @@ void RemoveSnapshots(std::vector<wallet::SnapshotEntry>& entries)
 //! Steps 3 to 5 of Wallet::beginBackup(): refuse what cannot be backed up,
 //! check that the transfer directory has room for it, and snapshot each
 //! requested item there, in the order wallet, configuration file, settings
-//! file. On failure the snapshots made so far are removed and \p entries is
-//! left empty.
+//! file. A configuration file that may not be sent (ConfigBackupPermitted)
+//! is listed with the reason as its note and nothing to send, so the other
+//! items are still backed up. On failure the snapshots made so far are
+//! removed and \p entries is left empty.
 bool SnapshotBackupItems(const CWallet& wallet, uint8_t items, std::vector<wallet::SnapshotEntry>& entries,
                          std::string& error)
 {
@@ -207,27 +209,20 @@ bool SnapshotBackupItems(const CWallet& wallet, uint8_t items, std::vector<walle
         return false;
     }
 
-    if (items & config_item) {
-        std::string reason;
-        if (!wallet::ConfigBackupPermitted(reason)) {
-            error = reason;
-            return false;
-        }
-    }
-
     if ((items & wallet_item) && !wallet.fFileBacked) {
         error = "the wallet is not file-backed";
         return false;
     }
 
     // What each item is copied from. A configuration or settings file that
-    // does not exist has nothing to back up; its entry carries a note instead.
+    // does not exist, or a configuration file that may not be sent, has
+    // nothing to back up; its entry carries a note instead.
     struct Item
     {
-        std::string name;
-        fs::path source;
+        std::string name{};
+        fs::path source{};
         bool is_wallet{false};
-        std::string missing_note;
+        std::string missing_note{};
     };
 
     std::vector<Item> plan;
@@ -238,7 +233,13 @@ bool SnapshotBackupItems(const CWallet& wallet, uint8_t items, std::vector<walle
 
     if (items & config_item) {
         const fs::path conf = GetConfigFile();
-        plan.push_back({conf.filename().string(), conf, false, "no configuration file"});
+        std::string refused;
+
+        if (wallet::ConfigBackupPermitted(refused)) {
+            plan.push_back({conf.filename().string(), conf, false, "no configuration file"});
+        } else {
+            plan.push_back({conf.filename().string(), fs::path(), false, refused});
+        }
     }
 
     if (items & settings_item) {
@@ -253,6 +254,9 @@ bool SnapshotBackupItems(const CWallet& wallet, uint8_t items, std::vector<walle
     uint64_t need = 0;
 
     for (Item& item : plan) {
+        // Nothing to copy: a refused configuration file, or no settings file.
+        if (item.source.empty()) continue;
+
         boost::system::error_code ec;
 
         if (!item.is_wallet && !fs::exists(item.source, ec)) {

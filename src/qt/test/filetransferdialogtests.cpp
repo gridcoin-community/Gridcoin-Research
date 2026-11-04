@@ -492,7 +492,7 @@ void FileTransferDialogTests::backupResultText()
 
     QCOMPARE(BackupResultText({wallet, settings}, failed),
              QString("Saved 123456 bytes to /backups/wallet.dat.\n"
-                     "not enough free space in /backups"));
+                     "gridcoinsettings.json was not saved: not enough free space in /backups"));
     QVERIFY(failed);
 
     interfaces::BackupEntryResult cancelled = settings;
