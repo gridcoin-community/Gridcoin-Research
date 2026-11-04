@@ -46,8 +46,11 @@ means. This lint keeps the file true against the code:
       noexcept, & or && before its '{'. IMPLEMENTATIONS maps each interface
       to its file and class; a new interface needs a line there before such
       an entry is accepted. EXEMPT lists the methods excused, with the reason.
-   9. An elevated_handle entry lists in "minted_by" the "ipc" entries of class
-      elevate that make its object. No other entry has minted_by.
+   9. An elevated_handle entry of interface X lists in "minted_by" exactly the
+      capnp methods that return an X (a result of type X or Alias.X), and each
+      of them is an "ipc" entry of class elevate. When no method returns an X
+      yet, minted_by is [] and the entry has a non-empty note saying why. No
+      other entry has minted_by.
   10. The key entry point list (--key-entry-points, by default
       src/test/data/key_entry_points.json) exists, has non-empty "rpc" and
       "ipc" lists, and every RPC and Interface.method in them is of class
@@ -128,7 +131,7 @@ CAPABILITY_ENUM_RE = re.compile(r"\benum\s+class\s+CapabilityKind\b[^{;]*\{([^}]
 # Rule 8: the calls that open a capability. The kind must be one of the call's
 # own arguments: a CapabilityScope declaration (scope(...) or scope{...}) or
 # temporary, an emplace() into a std::optional<CapabilityScope>, or
-# RunUnderIpcCapability(wallet, kind, fn).
+# RunUnderIpcCapability(wallet, connection_closed, kind, fn).
 CAPABILITY_CALL_RE = re.compile(r"\bCapabilityScope\s*(?:[A-Za-z_]\w*\s*)?[({]"
                                 r"|\.\s*emplace\s*\("
                                 r"|\bRunUnderIpcCapability\s*\(")
@@ -229,8 +232,32 @@ def innermost_scope(spans, pos):
     return best
 
 
+def closing_paren(text, open_paren):
+    """The index of the parenthesis closing the one at open_paren, or -1."""
+    depth = 0
+    for i in range(open_paren, len(text)):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+# Rule 9: a method's result list, after its parameter list.
+RESULTS_START_RE = re.compile(r"\s*->\s*\(")
+# Rule 9: the type of one result, X or Alias.X.
+RESULT_TYPE_RE = re.compile(r":\s*([A-Za-z_][\w.]*)")
+
+# Rule 9: Interface.method -> the interface names among its result types (the
+# last component of each X or Alias.X), filled in by capnp_methods().
+METHOD_RESULTS = {}
+
+
 def capnp_methods():
-    """Interface.method of every capnp interface method."""
+    """Interface.method of every capnp interface method. Also records each
+    method's result types in METHOD_RESULTS."""
     methods = set()
     parsed = 0
     candidates = 0
@@ -261,6 +288,15 @@ def capnp_methods():
             if key in methods:
                 fail("ipc." + key, "more than one capnp method of this name")
             methods.add(key)
+            types = set()
+            params_end = closing_paren(text, m.end() - 1)
+            arrow = RESULTS_START_RE.match(text, params_end + 1) if params_end >= 0 else None
+            if arrow:
+                results_end = closing_paren(text, arrow.end() - 1)
+                if results_end >= 0:
+                    for t in RESULT_TYPE_RE.findall(text[arrow.end():results_end]):
+                        types.add(t.split(".")[-1])
+            METHOD_RESULTS[key] = types
     if candidates > parsed:
         fail(CAPNP_GLOB, "{} interface method declaration(s) did not parse (name or shape); "
                          "they are not checked".format(candidates - parsed))
@@ -517,9 +553,17 @@ def check_handles(classes):
         if not isinstance(entry, dict) or entry.get("class") != "elevated_handle":
             continue
         minted_by = entry.get("minted_by")
-        if not isinstance(minted_by, list) or not minted_by:
+        if not isinstance(minted_by, list):
             fail("ipc." + key, "an elevated_handle entry lists the methods that mint it in minted_by")
             continue
+        interface = key.split(".")[0]
+        returning = sorted(method for method, types in METHOD_RESULTS.items() if interface in types)
+        if len(set(minted_by)) != len(minted_by) or sorted(minted_by) != returning:
+            fail("ipc." + key, "minted_by is {}, but the methods that return a {} are {}".format(
+                sorted(minted_by) if all(isinstance(x, str) for x in minted_by) else minted_by,
+                interface, returning))
+        if not minted_by and not (isinstance(entry.get("note"), str) and entry["note"].strip()):
+            fail("ipc." + key, "an elevated_handle entry that no method mints yet says why in its note")
         for minter in minted_by:
             target = classes.get(minter) if isinstance(minter, str) else None
             if not isinstance(target, dict) or target.get("class") != "elevate":

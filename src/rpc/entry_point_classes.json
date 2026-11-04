@@ -19,34 +19,26 @@
     "FileSink.cancel": {
       "class": "elevated_handle",
       "effect": "state",
-      "minted_by": [
-        "Wallet.beginBackup"
-      ],
-      "note": "no method mints a FileSink yet; listed under Wallet.beginBackup until the console upload that mints one is added"
+      "minted_by": [],
+      "note": "no method returns a FileSink yet; the method that mints one lists it here when it is added"
     },
     "FileSink.destroy": {
       "class": "elevated_handle",
       "effect": "state",
-      "minted_by": [
-        "Wallet.beginBackup"
-      ],
-      "note": "no method mints a FileSink yet; listed under Wallet.beginBackup until the console upload that mints one is added"
+      "minted_by": [],
+      "note": "no method returns a FileSink yet; the method that mints one lists it here when it is added"
     },
     "FileSink.finish": {
       "class": "elevated_handle",
       "effect": "state",
-      "minted_by": [
-        "Wallet.beginBackup"
-      ],
-      "note": "no method mints a FileSink yet; listed under Wallet.beginBackup until the console upload that mints one is added"
+      "minted_by": [],
+      "note": "no method returns a FileSink yet; the method that mints one lists it here when it is added"
     },
     "FileSink.write": {
       "class": "elevated_handle",
       "effect": "state",
-      "minted_by": [
-        "Wallet.beginBackup"
-      ],
-      "note": "no method mints a FileSink yet; listed under Wallet.beginBackup until the console upload that mints one is added"
+      "minted_by": [],
+      "note": "no method returns a FileSink yet; the method that mints one lists it here when it is added"
     },
     "FileSource.cancel": {
       "class": "elevated_handle",
