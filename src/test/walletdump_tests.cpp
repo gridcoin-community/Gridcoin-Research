@@ -2,10 +2,13 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chain.h"
+#include "clientversion.h"
 #include "fs.h"
 #include "init.h"
 #include "key.h"
 #include "key_io.h"
+#include "logging.h"
 #include "rpc/client.h"
 #include "rpc/protocol.h"
 #include "rpc/server.h"
@@ -15,6 +18,7 @@
 #include "test/mock_wallet_db.h"
 #include "test/staking_test_peers.h"
 #include "test/state_guard.h"
+#include "tinyformat.h"
 #include "util/time.h"
 #include "wallet/capability.h"
 #include "wallet/wallet.h"
@@ -75,30 +79,43 @@ struct DumpWallet
     SwapMainWallet m_swap{&wallet};
 
     CKeyID labelled_id;
+    CKeyID change_id;
     CKeyID orphan_id;
+    std::set<CKeyID> pool;
 
+    //! Every key it makes is born now, the labelled one included: AddKey()
+    //! gives a key no birth time of its own, so the case sets it.
     DumpWallet()
     {
         BOOST_REQUIRE(m_db.isolated());
 
-        LOCK(wallet.cs_wallet);
+        {
+            LOCK(wallet.cs_wallet);
 
-        BOOST_REQUIRE(wallet.SetHDMasterKey(wallet.GenerateNewHDMasterKey()));
-        BOOST_REQUIRE(wallet.TopUpKeyPool());
+            BOOST_REQUIRE(wallet.SetHDMasterKey(wallet.GenerateNewHDMasterKey()));
+            BOOST_REQUIRE(wallet.TopUpKeyPool());
 
-        CKey labelled;
-        labelled.MakeNewKey(true);
-        labelled_id = labelled.GetPubKey().GetID();
-        BOOST_REQUIRE(wallet.AddKey(labelled));
-        BOOST_REQUIRE(wallet.SetAddressBookName(labelled_id, LABEL));
+            CKey labelled;
+            labelled.MakeNewKey(true);
+            labelled_id = labelled.GetPubKey().GetID();
+            BOOST_REQUIRE(wallet.AddKey(labelled));
+            wallet.mapKeyMetadata[labelled_id].nCreateTime = GetTime();
+            BOOST_REQUIRE(wallet.SetAddressBookName(labelled_id, LABEL));
 
-        // Made fresh, and neither in the pool nor in the address book.
-        BOOST_REQUIRE(wallet.GenerateNewKey().IsValid());
+            // Made fresh, and neither in the pool nor in the address book.
+            const CPubKey change = wallet.GenerateNewKey();
+            BOOST_REQUIRE(change.IsValid());
+            change_id = change.GetID();
 
-        CKey orphan;
-        orphan.MakeNewKey(true);
-        orphan_id = orphan.GetPubKey().GetID();
-        wallet.mapKeyMetadata[orphan_id] = CKeyMetadata(GetTime());
+            CKey orphan;
+            orphan.MakeNewKey(true);
+            orphan_id = orphan.GetPubKey().GetID();
+            wallet.mapKeyMetadata[orphan_id] = CKeyMetadata(GetTime());
+        }
+
+        // Outside cs_wallet: it takes cs_main and then cs_wallet itself.
+        wallet.GetAllReserveKeys(pool);
+        BOOST_REQUIRE(!pool.empty());
     }
 
     DumpWallet(const DumpWallet&) = delete;
@@ -146,6 +163,64 @@ void DropKeyPool(CWallet& wallet)
     wallet.setKeyPool.clear();
 }
 
+//! The dump \p fx's wallet should give, written out from what the fixture
+//! knows, in the dump format: the header for the best block and \p now, the HD
+//! master's extended key, and one line for each key it made, with its kind and
+//! key path. Every key was born at \p now, so the lines are in key-id order.
+std::string ExpectedDump(DumpWallet& fx, int64_t now)
+{
+    const auto time = [](int64_t t) { return DateTimeStrFormat("%Y-%m-%dT%H:%M:%SZ", t); };
+
+    std::string out;
+    {
+        LOCK(cs_main);
+        out += "# Wallet dump created by Gridcoin " + FormatFullVersion() + "\n";
+        out += "# * Created on " + time(now) + "\n";
+        out += strprintf("# * Best block at time of backup was %i (%s),\n", nBestHeight, hashBestChain.ToString());
+        out += "#   mined on " + time(pindexBest->nTime) + "\n";
+        out += "\n";
+    }
+
+    LOCK(fx.wallet.cs_wallet);
+
+    const CKeyID master = fx.wallet.GetHDChain().masterKeyID;
+    CKey master_key;
+    BOOST_REQUIRE(fx.wallet.GetKey(master, master_key));
+    CExtKey extended;
+    extended.SetSeed(master_key);
+    out += "# extended private masterkey: " + EncodeExtKey(extended) + "\n\n";
+
+    // The pool, the master, the labelled key and the change key.
+    std::set<CKeyID> ids;
+    fx.wallet.GetKeys(ids);
+    BOOST_REQUIRE_EQUAL(ids.size(), fx.pool.size() + 3);
+
+    for (const CKeyID& id : ids) {
+        CKey key;
+        BOOST_REQUIRE(fx.wallet.GetKey(id, key));
+
+        std::string kind;
+        if (id == fx.labelled_id) {
+            kind = "label=a%20label,%20with%20%25%20and%20spaces";
+        } else if (id == master) {
+            kind = "hdmaster=1";
+        } else if (fx.pool.count(id)) {
+            kind = "reserve=1";
+        } else if (id == fx.change_id) {
+            kind = "change=1";
+        } else {
+            BOOST_FAIL("the wallet holds a key the fixture did not make");
+        }
+
+        const std::string path = fx.wallet.mapKeyMetadata[id].hdKeypath;
+        out += EncodeSecret(key) + " " + time(now) + " " + kind + " # addr=" + EncodeDestination(CTxDestination(id))
+               + (path.empty() ? "" : " hdkeypath=" + path) + "\n";
+    }
+
+    out += "\n# End of dump\n";
+    return out;
+}
+
 //! What \p fn threw: an RPC error as "message (code n)", any other exception
 //! as its text, or nullopt when it returned.
 std::optional<std::string> Thrown(const std::function<void()>& fn)
@@ -165,29 +240,27 @@ std::optional<std::string> Thrown(const std::function<void()>& fn)
 
 BOOST_AUTO_TEST_SUITE(walletdump_tests, *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
 
-// The generator writes what dumpwallet writes, byte for byte. The clock is fixed,
-// so both dumps carry the same "Created on" line.
+// The generator and dumpwallet both write the dump the fixture's wallet should
+// give, byte for byte, as written out from the fixture's own keys and labels:
+// every kind of line, and none for the metadata without a key. The clock is
+// fixed, so the "Created on" line and the birth times are known.
 BOOST_FIXTURE_TEST_CASE(generator_matches_rpc_dumpwallet_output, DumpCase)
 {
     const grc_test::StateGuard state;
-    SetMockTime(1700000000);
+    const int64_t now = 1700000000;
+    SetMockTime(now);
 
     DumpWallet fx;
+    const std::string expected = ExpectedDump(fx, now);
+
+    BOOST_CHECK(expected.find(" hdkeypath=m/") != std::string::npos);
+    BOOST_CHECK(expected.find("addr=" + EncodeDestination(CTxDestination(fx.orphan_id))) == std::string::npos);
 
     const fs::path path = dir / "rpc.txt";
     tableRPC.execute("dumpwallet", RPCConvertValues("dumpwallet", {path.string()}));
-    const std::string rpc = ReadAll(path);
+    BOOST_CHECK_EQUAL(ReadAll(path), expected);
 
-    // Every kind of line is there, so the comparison covers each.
-    BOOST_CHECK(rpc.find("# extended private masterkey: ") != std::string::npos);
-    BOOST_CHECK(rpc.find(" hdmaster=1 # addr=") != std::string::npos);
-    BOOST_CHECK(rpc.find(" reserve=1 # addr=") != std::string::npos);
-    BOOST_CHECK(rpc.find(" change=1 # addr=") != std::string::npos);
-    BOOST_CHECK(rpc.find(" label=a%20label,%20with%20%25%20and%20spaces # addr=") != std::string::npos);
-    BOOST_CHECK(rpc.find(" hdkeypath=m/") != std::string::npos);
-    BOOST_CHECK(rpc.find("addr=" + EncodeDestination(CTxDestination(fx.orphan_id))) == std::string::npos);
-
-    BOOST_CHECK_EQUAL(Generate(fx.wallet, 100), rpc);
+    BOOST_CHECK_EQUAL(Generate(fx.wallet, 100), expected);
 }
 
 // Next() appends whole lines, at least one a call, and no more than it is asked

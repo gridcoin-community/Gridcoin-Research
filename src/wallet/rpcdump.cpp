@@ -278,7 +278,11 @@ void WriteWalletDump(CWallet& wallet, const std::string& filename)
 
     WalletDumpGenerator generator(wallet);
 
+    // Room for a whole chunk and a line past it up front, so the buffer does
+    // not grow, which would leave a copy of the keys in it behind. A line
+    // longer than that is appended to an empty buffer, which copies nothing.
     std::string lines;
+    lines.reserve(64 * 1024 + 4096);
     try {
         for (bool more = true; more;) {
             more = generator.Next(lines, 64 * 1024);

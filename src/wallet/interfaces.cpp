@@ -602,8 +602,15 @@ public:
         // The command writes into the core's transfer directory now, and the
         // source streams that file. The capability that let it begin has done
         // its one operation, and the source holds none.
-        std::unique_ptr<FileSource> source =
-            wallet::MakeRpcOutputSource(method, args, command->path_index, m_connection_scope, error_out);
+        std::unique_ptr<FileSource> source;
+        try {
+            source = wallet::MakeRpcOutputSource(method, args, command->path_index, m_connection_scope, error_out);
+        } catch (...) {
+            // Nothing escapes before the capability is ended below. In process
+            // this runs on the GUI's thread, where an exception would end it.
+            source.reset();
+            error_out = strprintf("%s failed", method);
+        }
         if (held) m_wallet->EndIpcElevationIf(*held, m_connection_closed);
         if (!source) return nullptr;
 
@@ -659,13 +666,28 @@ public:
         // The command reaches no key: the capability that let the upload begin
         // is ended now, and the upload waits in a core temporary file, for which
         // the transfer directory needs room.
-        const bool room = util::HasFreeSpace(wallet::GetTransferDir(), size, error_out);
+        bool room = false;
+        try {
+            room = util::HasFreeSpace(wallet::GetTransferDir(), size, error_out);
+        } catch (...) {
+            // Nothing escapes before the capability is ended below.
+            error_out = strprintf("%s could not begin", method);
+        }
         if (held) m_wallet->EndIpcElevationIf(*held, m_connection_closed);
         if (!room) return nullptr;
 
-        return std::make_unique<LiveFileSink>(wallet::MakeRpcFileSink(method, args, command->path_index, size,
-                                                                      command->max_upload_bytes, m_connection_scope),
-                                              std::move(live));
+        std::unique_ptr<FileSink> sink;
+        try {
+            sink = wallet::MakeRpcFileSink(method, args, command->path_index, size, command->max_upload_bytes,
+                                           m_connection_scope);
+        } catch (...) {
+            // In process this runs on the GUI's thread, where an exception
+            // would end it.
+            error_out = strprintf("%s could not begin", method);
+            return nullptr;
+        }
+
+        return std::make_unique<LiveFileSink>(std::move(sink), std::move(live));
     }
 
     MessageSignStatus signMessage(const std::string& address, const std::string& message,

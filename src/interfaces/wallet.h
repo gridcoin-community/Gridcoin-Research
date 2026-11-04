@@ -488,9 +488,10 @@ public:
     //! fully unlocked wallet needs none, and a capability of another kind the
     //! client holds is then left for its own operation. dumpwallet's source
     //! holds the capability, when there is one, while it streams, generates
-    //! the dump under it, and ends it (taking it out of the slot) at the
-    //! dump's end, on cancel, when it is destroyed or when the connection
-    //! closes. So the client keeps the capability (its UnlockContext) until
+    //! the dump under it, and ends it at the dump's end, on cancel, when
+    //! destroyed (taking it out of the slot), or when the connection closes
+    //! (the slot is then left as it is). So the client keeps the capability
+    //! (its UnlockContext) until
     //! the download has finished: ending it ends the stream. dumpcontracts
     //! runs here, into the core's transfer directory, and this call ends the
     //! capability before it returns; the source streams that file, with the
@@ -513,8 +514,9 @@ public:
     //! beginConsoleDownload(), and so is the capability it runs under.
     //! importwallet's upload is held in memory, never on the core's disk, and
     //! imported at finish() under the capability, when there is one, which
-    //! the sink holds until then and ends (taking it out of the slot) when it
-    //! is done, cancelled or destroyed, or when the connection closes.
+    //! the sink holds until then and ends when it is done, cancelled or
+    //! destroyed (taking it out of the slot), or when the connection closes
+    //! (the slot is then left as it is).
     //! parseaccrualsnapshotfile's upload is written to a core temporary file,
     //! which the command reads at finish() and which is then deleted; this
     //! call ends the capability before it returns.

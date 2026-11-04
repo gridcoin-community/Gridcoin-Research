@@ -173,8 +173,13 @@ bool WalletDumpGenerator::LineHere(std::string& line)
                     CExtKey masterKey;
                     masterKey.SetSeed(key);
 
+                    // Reserved in full before the key is copied in, so the
+                    // line never grows and leaves no copy of it behind.
+                    static const std::string prefix = "# extended private masterkey: ";
                     std::string encoded = EncodeExtKey(masterKey);
-                    line = "# extended private masterkey: ";
+                    line.clear();
+                    line.reserve(prefix.size() + encoded.size() + 1);
+                    line += prefix;
                     line += encoded;
                     line += "\n";
                     Cleanse(encoded);
@@ -216,26 +221,30 @@ bool WalletDumpGenerator::LineHere(std::string& line)
                     throw UnreadableKeyError(m_wallet, keyid);
                 }
 
-                // As strprintf("%s %s ", secret, time), built in place so the
+                // The line is strprintf("%s %s ", secret, time) and then the
+                // rest. The rest holds no secret and is built first; the line
+                // is then reserved in full before the secret is copied in, so
+                // it never grows and leaves no copy of the secret behind. The
                 // secret is in no buffer but this line and its own, which is
                 // cleansed.
-                std::string secret = EncodeSecret(key);
-                line = secret;
-                line += ' ';
-                line += strTime;
-                line += ' ';
-                Cleanse(secret);
-
+                std::string tail = " " + strTime + " ";
                 if (m_wallet.mapAddressBook.count(keyid)) {
-                    line += strprintf("label=%s", EncodeDumpString(m_wallet.mapAddressBook[keyid].name));
+                    tail += strprintf("label=%s", EncodeDumpString(m_wallet.mapAddressBook[keyid].name));
                 } else if (keyid == m_master_id) {
-                    line += "hdmaster=1";
+                    tail += "hdmaster=1";
                 } else if (m_key_pool.count(keyid)) {
-                    line += "reserve=1";
+                    tail += "reserve=1";
                 } else {
-                    line += "change=1";
+                    tail += "change=1";
                 }
-                line += strprintf(" # addr=%s%s\n", strAddr, (m_wallet.mapKeyMetadata[keyid].hdKeypath.size() > 0 ? " hdkeypath="+m_wallet.mapKeyMetadata[keyid].hdKeypath : ""));
+                tail += strprintf(" # addr=%s%s\n", strAddr, (m_wallet.mapKeyMetadata[keyid].hdKeypath.size() > 0 ? " hdkeypath="+m_wallet.mapKeyMetadata[keyid].hdKeypath : ""));
+
+                std::string secret = EncodeSecret(key);
+                line.clear();
+                line.reserve(secret.size() + tail.size());
+                line += secret;
+                line += tail;
+                Cleanse(secret);
                 return true;
             }
             m_part = Part::Blank;

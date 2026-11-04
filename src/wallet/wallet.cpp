@@ -1199,8 +1199,9 @@ bool CWallet::BeginIpcElevation(const SecureString& passphrase, CapabilityKind k
         return false;
     }
 
-    // A new id never equals the displaced one: ids are 64-bit random, and
-    // operations that end their capability also empty the slot.
+    // Ids are 64-bit random, so a new id equals the displaced one with
+    // negligible odds; operations that end their capability while connected
+    // also empty the slot.
     if (displaced) EndElevation(*displaced);
 
     return id.has_value();

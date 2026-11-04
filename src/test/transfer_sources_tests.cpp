@@ -1078,6 +1078,34 @@ BOOST_FIXTURE_TEST_CASE(dumpwallet_source_close_ends_capability, TransferCase)
     BOOST_CHECK(w.wallet.IsUnlockedForStakingOnly());
 }
 
+// Without a capability the source relies on the wallet's own CanUseKeys(), and
+// asks it on every read, so lines it generated while the keys were usable are
+// not handed out once they no longer are: a fully unlocked wallet is locked
+// between two short reads.
+BOOST_FIXTURE_TEST_CASE(dumpwallet_source_without_a_capability_stops_when_the_keys_go, TransferCase)
+{
+    const grc_test::LoneBestBlock tip;
+
+    EncryptedWallet w;
+    w.UnlockFor(UnlockScope::Full);
+    DropKeyPool(w.wallet);
+
+    std::unique_ptr<interfaces::FileSource> source = wallet::MakeDumpWalletSource(w.wallet, std::nullopt, {}, nullptr);
+    BOOST_REQUIRE(source);
+
+    // Less than the first line, so the rest of it waits for the next read.
+    const interfaces::FileChunk first = source->read(0, 10);
+    BOOST_REQUIRE_MESSAGE(first.error.empty(), first.error);
+    BOOST_REQUIRE_EQUAL(first.data.size(), 10u);
+
+    w.wallet.Lock();
+
+    const interfaces::FileChunk after = source->read(0, 10);
+    BOOST_CHECK_MESSAGE(after.error.find("keys are not available") != std::string::npos, after.error);
+    BOOST_CHECK(after.data.empty());
+    BOOST_CHECK(!source->trailer(0).ok);
+}
+
 // importwallet's upload: held in memory and imported at finish under the
 // capability, which ends with it. A wrong SHA-256, more data than announced,
 // or an announced size above the cap imports nothing.
@@ -1258,6 +1286,22 @@ BOOST_FIXTURE_TEST_CASE(rpc_file_sink_parses_uploaded_snapshot_and_deletes_temp,
         BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
     }
 
+    // A command that throws something that is no exception: its error, and
+    // nothing left.
+    {
+        const wallet::RpcRunner other = [](const std::string&, const std::vector<std::string>&) -> std::string {
+            throw 42;
+        };
+        std::unique_ptr<interfaces::FileSink> sink =
+            wallet::MakeRpcFileSink("parseaccrualsnapshotfile", {}, 0, bytes.size(), max, nullptr, other);
+        BOOST_REQUIRE(sink);
+        BOOST_REQUIRE(sink->write(bytes));
+        const interfaces::FileSinkResult result = sink->finish(bytes.size(), Sha256Of(bytes));
+        BOOST_CHECK(!result.ok);
+        BOOST_CHECK(!result.error.empty());
+        BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+    }
+
     // More than announced, and an announced size above the cap: refused.
     {
         std::unique_ptr<interfaces::FileSink> sink =
@@ -1378,6 +1422,17 @@ BOOST_FIXTURE_TEST_CASE(rpc_output_source_runner_throw_leaves_nothing, TransferC
     };
     BOOST_CHECK(!wallet::MakeRpcOutputSource("dumpcontracts", {"*"}, 1, nullptr, error, partial_then_exception));
     BOOST_CHECK_MESSAGE(error.find("the disk went away") != std::string::npos, error);
+    BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+
+    // Something thrown that is no exception at all.
+    error.clear();
+    const wallet::RpcRunner partial_then_other = [](const std::string&,
+                                                    const std::vector<std::string>& args) -> std::string {
+        WriteBytes(fs::path(args[1]), BytesOf("half a fi"));
+        throw 42;
+    };
+    BOOST_CHECK(!wallet::MakeRpcOutputSource("dumpcontracts", {"*"}, 1, nullptr, error, partial_then_other));
+    BOOST_CHECK(!error.empty());
     BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
 
     error.clear();

@@ -658,6 +658,10 @@ namespace {
 //! has ended.
 const char* const CAPABILITY_ENDED = "the file transfer capability has ended";
 
+//! What a read reports when, with no capability, the wallet no longer lets the
+//! calling thread use its keys.
+const char* const KEYS_NOT_AVAILABLE = "keys are not available";
+
 //! Bytes in secure memory: locked while the locked pool can lock them, and
 //! cleansed when freed.
 using SecureBytes = std::vector<unsigned char, secure_allocator<unsigned char>>;
@@ -925,6 +929,11 @@ interfaces::FileChunk DumpWalletSource::read(uint32_t entry, uint32_t max_bytes)
 
         if (m_cap && !capability.Active()) {
             error = CAPABILITY_ENDED;
+        } else if (!m_cap && !m_wallet.CanUseKeys()) {
+            // Without a capability the wallet's own state is what lets the
+            // dump through, so lines generated while it did are not handed
+            // out once it no longer does.
+            error = KEYS_NOT_AVAILABLE;
         } else {
             data.reserve(want);
 
@@ -1254,6 +1263,8 @@ interfaces::FileSinkResult ImportWalletSink::finish(uint64_t size, const uint256
             result.error = DescribeRpcError(e);
         } catch (const std::exception& e) {
             result.error = strprintf("the import failed: %s", e.what());
+        } catch (...) {
+            result.error = "the import failed";
         }
     }
 
@@ -1496,6 +1507,9 @@ interfaces::FileSinkResult RpcFileSink::finish(uint64_t size, const uint256& sha
             result.error = DescribeRpcError(e);
         } catch (const std::exception& e) {
             result.error = e.what();
+        } catch (...) {
+            // Whatever the command throws, the file goes below.
+            result.error = strprintf("%s failed", m_method);
         }
 
         RemoveFile(m_dest);
@@ -1606,6 +1620,9 @@ std::unique_ptr<interfaces::FileSource> MakeRpcOutputSource(const std::string& m
         error = DescribeRpcError(e);
     } catch (const std::exception& e) {
         error = e.what();
+    } catch (...) {
+        // Whatever the command throws, what it left goes below.
+        error = strprintf("%s failed", method);
     }
 
     boost::system::error_code ec;

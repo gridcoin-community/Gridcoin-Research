@@ -95,9 +95,10 @@ std::optional<fs::path> SnapshotPlainFile(const fs::path& source, std::string& e
 extern const char* const WALLET_DUMP_ENTRY_NAME;
 
 //! Called by a source or sink once it is done with the capability it was
-//! given. The wallet interface builds it: it ends the capability and takes it
-//! out of the IPC slot when the slot still holds it, so that no ended id is
-//! left there.
+//! given. The wallet interface builds it: it ends the capability, and takes it
+//! out of the IPC slot when the slot still holds it and the connection is
+//! open, so that no ended id is left there. When the connection has closed the
+//! slot is left as it is.
 using EndCapabilityFn = std::function<void()>;
 
 //! A source with one entry, "wallet-dump.txt" (size -1, its size_hint the
@@ -117,7 +118,9 @@ using EndCapabilityFn = std::function<void()>;
 //!
 //! With \p cap, the source calls \p end_capability once, at the dump's end,
 //! on cancel(), when \p scope closes, on a read error, or in the destructor,
-//! whichever comes first. Registers one close hook on \p scope, which the
+//! whichever comes first. Without one it asks CanUseKeys() on every read, so
+//! lines generated earlier are not handed out once the keys may no longer be
+//! used. Registers one close hook on \p scope, which the
 //! destructor removes; a null \p scope (in process) registers nothing.
 std::unique_ptr<interfaces::FileSource> MakeDumpWalletSource(CWallet& wallet, std::optional<CapabilityId> cap,
                                                              EndCapabilityFn end_capability,

@@ -519,9 +519,10 @@ and `signPoolEntry` (`SignPSGT`), `MRC::submit`, `VotingManager::submitPoll` and
 `Node::executeRpcConsoleCommand` (`RpcRequest`), `Node::changeSettings` and
 the four `SideStakeManager` edits (`Settings`), `beginBackup` (`Backup`), and
 `beginConsoleDownload` and `beginConsoleUpload` (`FileTransfer`, which the
-`dumpwallet` source and the `importwallet` sink hold for their run and then end,
-taking it out of the slot; like `beginBackup`, they need none on an
-unencrypted or fully unlocked wallet). A capability applies
+`dumpwallet` source and the `importwallet` sink hold for their run and end at
+its end, on cancel or when destroyed (taking it out of the slot), or when the
+connection closes (the slot is then left as it is); like `beginBackup`, they
+need none on an unencrypted or fully unlocked wallet). A capability applies
 only to the operations of its kind on its connection; a locked wallet is unlocked
 for staking only until the capability ends. A wrong
 passphrase returns false after the failed-passphrase delay (up to 30 s), so a
