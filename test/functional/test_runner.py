@@ -230,6 +230,9 @@ BASE_SCRIPTS = [
     # interface_cli_listener_check.py: the RPC client identifies the owner of the RPC
     # listener before it sends credentials; -rpcserviceuser and -rpcskiplistenercheck.
     'interface_cli_listener_check.py',
+    # interface_cli_stdin.py: the RPC client reads wallet passphrases from standard input
+    # (-stdinwalletpassphrase) and sends one for a single request (-stdinelevate).
+    'interface_cli_stdin.py',
     'mempool_accept.py',
     # mempool_unbroadcast_persist.py: unbroadcast.dat follows the unbroadcast
     # set while the node runs, so a node killed without a shutdown reloads a

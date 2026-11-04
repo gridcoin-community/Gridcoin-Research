@@ -188,6 +188,7 @@ add_library(gridcoin_util STATIC
     chainparamsbase.cpp
     checkpoints.cpp
     clientversion.cpp
+    compat/stdin.cpp
     consensus/merkle.cpp
     consensus/tx_verify.cpp
     crypter.cpp
@@ -280,6 +281,7 @@ add_library(gridcoin_util STATIC
     rpc/client.cpp
     rpc/dataacq.cpp
     rpc/listener_check.cpp
+    rpc/passphrase_params.cpp
     rpc/mempool.cpp
     rpc/mining.cpp
     rpc/misc.cpp

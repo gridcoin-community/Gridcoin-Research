@@ -4,6 +4,9 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include <compat/stdin.h>
+#include <rpc/passphrase_params.h>
+#include <support/cleanse.h>
 #include "init.h"
 #include "sync.h"
 #include "node/ui_interface.h"
@@ -26,7 +29,9 @@
 #include <list>
 #include <stdexcept>
 
+#include <algorithm>
 #include <atomic>
+#include <optional>
 #include <iostream>
 #include <memory>
 
@@ -53,6 +58,12 @@ static ListenerCheckResult CheckConnectedListener(const asio::ip::tcp::socket& s
         return {ListenerVerdict::Refuse, UnidentifiedListenerMessage(target)};
     }
     return check(local, remote);
+}
+
+//! Overwrites the bytes of a string in place; its size is kept.
+static void CleanseString(std::string& text)
+{
+    if (!text.empty()) memory_cleanse(&text[0], text.size());
 }
 
 UniValue CallRPC(const string& strMethod, const UniValue& params, const RpcCallOptions& options)
@@ -168,10 +179,42 @@ UniValue CallRPC(const string& strMethod, const UniValue& params, const RpcCallO
     map<string, string> mapRequestHeaders;
     mapRequestHeaders["Authorization"] = string("Basic ") + strUserPass64;
 
+    // The elevation header carries the passphrase, and the request body the passphrase
+    // parameters, so every buffer that holds either is overwritten once the request is sent,
+    // however this function leaves.
+    std::string strRequest;
+    std::string strPost;
+
+    struct RequestCleanser {
+        std::string& request;
+        std::string& post;
+        std::map<std::string, std::string>& headers;
+
+        ~RequestCleanser()
+        {
+            CleanseString(request);
+            CleanseString(post);
+            for (auto& header : headers) CleanseString(header.second);
+        }
+    } request_cleanser{strRequest, strPost, mapRequestHeaders};
+
+    if (options.elevate_passphrase != nullptr) {
+        std::optional<std::string> elevation = EncodeElevationHeaderValue(*options.elevate_passphrase);
+        if (!elevation) {
+            throw std::runtime_error("the passphrase cannot be sent in a request header");
+        }
+        mapRequestHeaders["X-Gridcoin-Elevate"] = *elevation;
+        CleanseString(*elevation);
+    }
+
     // Send request
-    std::string strRequest = JSONRPCRequest(strMethod, params, 1);
-    std::string strPost = HTTPPost(strRequest, mapRequestHeaders);
+    strRequest = JSONRPCRequest(strMethod, params, 1);
+    strPost = HTTPPost(strRequest, mapRequestHeaders);
     stream << strPost << std::flush;
+
+    CleanseString(strRequest);
+    CleanseString(strPost);
+    for (auto& header : mapRequestHeaders) CleanseString(header.second);
 
     // Receive HTTP reply status
     int nProto = 0;
@@ -479,6 +522,162 @@ UniValue RPCConvertValues(const std::string &strMethod, const std::vector<std::s
     return params;
 }
 
+bool ReadSecureLine(std::istream& in, SecureString& out)
+{
+    out.clear();
+
+    bool any_byte{false};
+
+    for (;;) {
+        const std::istream::int_type c = in.get();
+
+        if (c == std::istream::traits_type::eof()) return any_byte;
+
+        any_byte = true;
+
+        if (c == '\n') {
+            if (!out.empty() && out.back() == '\r') out.pop_back();
+
+            return true;
+        }
+
+        out.push_back(std::istream::traits_type::to_char_type(c));
+    }
+}
+
+UniValue BuildParamsWithSecrets(const std::string& method, const std::vector<std::string>& visible_args,
+                                const std::vector<SecureString>& secrets)
+{
+    const std::vector<int>* indexes = PassphraseParamIndexes(method);
+
+    if (indexes == nullptr) {
+        throw std::runtime_error(strprintf("%s has no passphrase parameters", method));
+    }
+
+    if (secrets.size() != indexes->size()) {
+        throw std::runtime_error(strprintf("%s takes %u passphrase(s), got %u", method, indexes->size(), secrets.size()));
+    }
+
+    // The positions of the passphrases hold placeholders while the other arguments are converted
+    // at their final indexes, then the passphrases take the placeholders' places.
+    const size_t total = visible_args.size() + secrets.size();
+    std::vector<std::string> slots;
+    slots.reserve(total);
+
+    size_t next_visible{0};
+
+    for (size_t position = 0; position < total; ++position) {
+        const bool is_secret = std::find(indexes->begin(), indexes->end(), static_cast<int>(position)) != indexes->end();
+
+        slots.push_back(is_secret ? std::string{} : visible_args[next_visible++]);
+    }
+
+    const UniValue converted = RPCConvertValues(method, slots);
+
+    UniValue params(UniValue::VARR);
+    size_t next_secret{0};
+
+    for (size_t position = 0; position < total; ++position) {
+        const bool is_secret = std::find(indexes->begin(), indexes->end(), static_cast<int>(position)) != indexes->end();
+
+        if (!is_secret) {
+            params.push_back(converted[position]);
+            continue;
+        }
+
+        const SecureString& secret = secrets[next_secret++];
+        std::string copy(secret.begin(), secret.end());
+        params.push_back(copy);
+        CleanseString(copy);
+    }
+
+    return params;
+}
+
+std::optional<std::string> EncodeElevationHeaderValue(const SecureString& passphrase)
+{
+    if (passphrase.empty()) return std::nullopt;
+
+    // Checked before encoding, so that an oversized passphrase is not copied at all.
+    if ((passphrase.size() + 2) / 3 * 4 > MAX_ELEVATION_HEADER_VALUE_BYTES) return std::nullopt;
+
+    return EncodeBase64(reinterpret_cast<const unsigned char*>(passphrase.data()), passphrase.size());
+}
+
+std::vector<int> NewPassphraseIndexes(const std::string& method)
+{
+    if (method == "encryptwallet") return {0};
+    if (method == "walletpassphrasechange") return {1};
+
+    return {};
+}
+
+//! The prompts of a method's passphrases, in the order of PassphraseParamIndexes.
+static std::vector<std::string> PassphrasePrompts(const std::string& method)
+{
+    if (method == "walletpassphrasechange") return {"Old wallet passphrase> ", "New wallet passphrase> "};
+    if (method == "encryptwallet") return {"New wallet passphrase> "};
+
+    return {"Wallet passphrase> "};
+}
+
+//! One line from standard input into `out` with echo off, prompting on stderr when a person is
+//! at the terminal. false at end of input.
+static bool PromptSecretLine(const std::string& prompt, SecureString& out)
+{
+    const bool prompting = !StdinReady();
+
+    if (prompting) {
+        tfm::format(std::cerr, "%s", prompt);
+        std::cerr.flush();
+    }
+
+    bool got;
+    {
+        NO_STDIN_ECHO();
+        got = ReadSecureLine(std::cin, out);
+    }
+
+    // Echo was off, so the person's Enter did not move the cursor.
+    if (prompting) tfm::format(std::cerr, "\n");
+
+    return got;
+}
+
+//! Reads the passphrases of `method` from standard input, one line each. When standard input is
+//! a terminal the new passphrases are asked for twice. Throws the pinned error text on a short
+//! input or a mismatch.
+static std::vector<SecureString> ReadMethodPassphrases(const std::string& method)
+{
+    const std::vector<int>& indexes = *PassphraseParamIndexes(method);
+    const std::vector<std::string> prompts = PassphrasePrompts(method);
+    const std::vector<int> confirmed = StdinTerminal() ? NewPassphraseIndexes(method) : std::vector<int>{};
+
+    std::vector<SecureString> secrets;
+    secrets.reserve(indexes.size());
+
+    for (size_t i = 0; i < indexes.size(); ++i) {
+        SecureString line;
+
+        if (!PromptSecretLine(prompts[i], line)) {
+            throw std::runtime_error(strprintf("expected %u passphrase line(s) on standard input, got %u",
+                                               indexes.size(), secrets.size()));
+        }
+
+        if (std::find(confirmed.begin(), confirmed.end(), indexes[i]) != confirmed.end()) {
+            SecureString again;
+
+            if (!PromptSecretLine("Repeat new wallet passphrase> ", again) || again != line) {
+                throw std::runtime_error("the two entries of the new passphrase do not match; nothing was sent");
+            }
+        }
+
+        secrets.push_back(std::move(line));
+    }
+
+    return secrets;
+}
+
 int CommandLineRPC(int argc, char *argv[])
 {
     string strPrint;
@@ -499,7 +698,56 @@ int CommandLineRPC(int argc, char *argv[])
 
         // Parameters default to strings
         std::vector<std::string> strParams(&argv[2], &argv[argc]);
-        UniValue params = RPCConvertValues(strMethod, strParams);
+
+        const bool stdin_passphrase = gArgs.GetBoolArg("-stdinwalletpassphrase", false);
+        const bool stdin_elevate = gArgs.GetBoolArg("-stdinelevate", false);
+        const bool passphrase_method = PassphraseParamIndexes(strMethod) != nullptr;
+
+        if (stdin_passphrase && !passphrase_method) {
+            throw runtime_error("-stdinwalletpassphrase applies only to walletpassphrase, walletpassphrasechange and encryptwallet");
+        }
+
+        if (stdin_elevate && passphrase_method) {
+            throw runtime_error(strprintf("-stdinelevate is not used with %s; give its passphrases with -stdinwalletpassphrase",
+                                          strMethod));
+        }
+
+        // Everything is read from standard input before the connection is made.
+        SecureString elevate_passphrase;
+        RpcCallOptions call_options;
+
+        UniValue params;
+
+        if (stdin_passphrase) {
+            std::vector<SecureString> secrets = ReadMethodPassphrases(strMethod);
+            params = BuildParamsWithSecrets(strMethod, strParams, secrets);
+        } else {
+            if (passphrase_method && !strParams.empty()) {
+                tfm::format(std::cerr, "warning: the passphrase was given on the command line, where other users and "
+                                       "the shell history can see it; use -stdinwalletpassphrase\n");
+            }
+
+            params = RPCConvertValues(strMethod, strParams);
+        }
+
+        // Cleanses the passphrases in the params however this scope is left.
+        const PassphraseParamsCleanser params_cleanser(strMethod, params);
+
+        if (stdin_elevate) {
+            if (!PromptSecretLine("Wallet passphrase for this request> ", elevate_passphrase)) {
+                throw runtime_error("expected 1 passphrase line(s) on standard input, got 0");
+            }
+
+            std::optional<std::string> encoded = EncodeElevationHeaderValue(elevate_passphrase);
+
+            if (!encoded) {
+                throw runtime_error("this passphrase cannot be sent in a request header (it is empty or longer than "
+                                    "what a header line holds); unlock with walletpassphrase instead");
+            }
+
+            CleanseString(*encoded);
+            call_options.elevate_passphrase = &elevate_passphrase;
+        }
 
         // Execute
         // Under -rpcwait a daemon that is still initialising answers RPC_IN_WARMUP; call again
@@ -508,11 +756,11 @@ int CommandLineRPC(int argc, char *argv[])
         const bool rpcwait = gArgs.GetBoolArg("-rpcwait", false);
         const int wait_timeout = gArgs.GetArg("-rpcwaittimeout", DEFAULT_WAIT_CLIENT_TIMEOUT);
         const std::chrono::seconds warmup_deadline = GetTime<std::chrono::seconds>() + std::chrono::seconds{wait_timeout};
-        UniValue reply = CallRPC(strMethod, params);
+        UniValue reply = CallRPC(strMethod, params, call_options);
         while (ShouldRetryWarmupReply(rpcwait, reply) &&
                (wait_timeout <= 0 || GetTime<std::chrono::seconds>() < warmup_deadline)) {
             UninterruptibleSleep(std::chrono::seconds{1});
-            reply = CallRPC(strMethod, params);
+            reply = CallRPC(strMethod, params, call_options);
         }
 
         // Parse reply

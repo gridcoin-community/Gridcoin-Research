@@ -550,6 +550,43 @@ one of this host's interfaces. Otherwise, or when this host's interface addresse
 the client refuses. The check runs on Linux and Windows; on macOS and the BSDs the client has no
 such check.
 
+### Typing a passphrase
+
+A passphrase given as a command-line argument is visible to other users of the machine
+(`ps`, `/proc/<pid>/cmdline`) and stays in the shell history. The client reads it from standard
+input instead, with echo off at a terminal, when told to:
+
+```bash
+# unlock for staking only, for 600 seconds
+gridcoinresearchd -stdinwalletpassphrase walletpassphrase 600 true
+
+# change the passphrase: the old one on the first line, the new one on the second
+gridcoinresearchd -stdinwalletpassphrase walletpassphrasechange
+
+# encrypt the wallet
+gridcoinresearchd -stdinwalletpassphrase encryptwallet
+
+# send one command with the passphrase for that request alone
+gridcoinresearchd -stdinelevate sendtoaddress <address> <amount>
+```
+
+With `-stdinwalletpassphrase` the passphrases of `walletpassphrase`, `walletpassphrasechange` and
+`encryptwallet` are read one per line, in the order of the method's parameters, and the remaining
+arguments (the timeout, the staking-only flag) stay on the command line. A terminal shows a prompt
+on stderr (`Wallet passphrase> `) and, for a new passphrase (`encryptwallet`, and the second line of
+`walletpassphrasechange`), asks twice and sends nothing if the two entries differ. From a pipe or a
+file there are no prompts and no repeat: `printf '%s\n' "$PASSPHRASE" | gridcoinresearchd
+-stdinwalletpassphrase walletpassphrase 600 true`. A line ends at the line feed; one carriage return
+before it is dropped, and nothing else is trimmed. A passphrase given on the command line still
+works and prints a warning on stderr.
+
+With `-stdinelevate` the client reads one passphrase line and sends it with the request in the
+`X-Gridcoin-Elevate` header (base64), so that one command may use the wallet's keys while the wallet
+stays unlocked for staking only; `getwalletinfo` reports the wallet's `unlock_scope`. The option is
+not used with the three passphrase methods above. The passphrase cannot be sent this way when it is
+empty or when its encoded form is longer than 8000 bytes (a passphrase of more than 6000 bytes); the
+client then says so and sends nothing, and `walletpassphrase` is the way to unlock.
+
 ### Administering the system service
 
 Root, or an administrator, running the client against the system service reaches a listener owned

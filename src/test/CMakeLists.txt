@@ -188,6 +188,7 @@ add_executable(test_gridcoin
     rpc_allowlist_tests.cpp
     rpc_bind_policy_tests.cpp
     rpc_listener_check_tests.cpp
+    rpc_passphrase_tests.cpp
     script_tests.cpp
     scrypt_tests.cpp
     serialize_tests.cpp
