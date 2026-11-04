@@ -4,6 +4,9 @@
 
 #include "qt/test/walletmodeltests.h"
 
+#include "interfaces/wallet_coin_channel.h"
+#include "interfaces/wallet_coin_source.h"
+#include "qt/coinselectionmodel.h"
 #include "qt/guiipcworker.h"
 #include "qt/optionsmodel.h"
 #include "qt/test/interfacefakes.h"
@@ -12,6 +15,7 @@
 
 #include <QCoreApplication>
 #include <QSignalSpy>
+#include <QTest>
 
 #include <chrono>
 #include <future>
@@ -178,4 +182,57 @@ void WalletModelTests::destructionWaitsForTheCoinLoad()
     QCoreApplication::processEvents();
 
     QCOMPARE(ended_when_destroyed, 1);
+}
+
+// A forced reload asked for while a scan runs is owed one more pass. When the
+// scan fails, that pass still runs, once, and a failure of its own owes
+// nothing more.
+void WalletModelTests::failureWithAForcedReloadOwedRunsItOnce()
+{
+    GuiIpcWorker worker(GuiIpcWorker::Role::CoinLoad);
+    ModelOverFakeCoins fixture;
+    fixture.coin_source.m_throw = true;
+    fixture.coin_source.m_hold = true;
+
+    QSignalSpy finished(fixture.model.get(), &WalletModel::coinSourceLoadFinished);
+    QSignalSpy failed(fixture.model.get(), &WalletModel::coinSourceLoadFailed);
+
+    fixture.model->ensureCoinSourceLoaded();
+    QTRY_VERIFY_WITH_TIMEOUT(fixture.coin_source.m_reload_waiting.load(), 10000);
+
+    fixture.model->ensureCoinSourceLoaded(/*force=*/true);
+
+    fixture.coin_source.m_hold = false;
+    fixture.coin_source.m_release = true;
+
+    QTRY_COMPARE_WITH_TIMEOUT(failed.count(), 2, 10000);
+
+    // No third pass.
+    QTest::qWait(300);
+    QCOMPARE(fixture.coin_source.m_reloads.load(), 2);
+    QCOMPARE(failed.count(), 2);
+    QCOMPARE(finished.count(), 0);
+    QVERIFY(!fixture.model->isCoinSourceLoaded());
+}
+
+// A coin view loading when the scan fails is told why, and stays loading.
+void WalletModelTests::coinSelectionModelReportsAFailedLoad()
+{
+    GuiIpcWorker worker(GuiIpcWorker::Role::CoinLoad);
+    ModelOverFakeCoins fixture;
+    fixture.coin_source.m_throw = true;
+
+    interfaces::WalletCoinControl coin_control;
+    CoinSelectionModel selection(fixture.model.get(), &coin_control, GRC::VIEW_COIN_CONTROL);
+    QVERIFY(selection.isLoading());
+
+    QSignalSpy failed(&selection, &CoinSelectionModel::loadingFailed);
+    QSignalSpy finished(&selection, &CoinSelectionModel::loadingFinished);
+
+    QVERIFY(failed.wait(10000));
+    QCOMPARE(failed.count(), 1);
+    const QString message = failed.at(0).at(0).toString();
+    QVERIFY2(message.contains("the core dropped the connection"), qPrintable(message));
+    QCOMPARE(finished.count(), 0);
+    QVERIFY(selection.isLoading());
 }

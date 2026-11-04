@@ -201,6 +201,10 @@ signals:
     //! The store's wallet scan completed and was applied (isLoading() flipped
     //! false).
     void loadingFinished();
+    //! The store's wallet scan failed with \p message, while this model was
+    //! loading. Nothing was loaded and isLoading() stays true; a model made
+    //! afterwards (the window opened again) asks for the scan again.
+    void loadingFailed(const QString& message);
     //! Groups the user had expanded were RE-SLOTTED within a drained batch and
     //! came back collapsed (#3228 item 3). A sort-key move is published as
     //! GroupRemove + GroupInsert -- an in-place GroupChange would desynchronize
@@ -233,6 +237,8 @@ private slots:
     void onFetchTimeout();
     //! WalletModel announcing a completed (and drained) coin-store scan.
     void onCoinSourceLoadFinished();
+    //! WalletModel announcing a coin-store scan that failed.
+    void onCoinSourceLoadFailed(const QString& message);
 
 private:
     struct GroupSlot {

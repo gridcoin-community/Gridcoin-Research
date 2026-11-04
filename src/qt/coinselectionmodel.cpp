@@ -111,6 +111,8 @@ CoinSelectionModel::CoinSelectionModel(WalletModel* wallet_model,
     if (m_loading) {
         connect(m_wallet_model, &WalletModel::coinSourceLoadFinished,
                 this, &CoinSelectionModel::onCoinSourceLoadFinished);
+        connect(m_wallet_model, &WalletModel::coinSourceLoadFailed,
+                this, &CoinSelectionModel::onCoinSourceLoadFailed);
     }
 
     m_wallet_model->ensureCoinSourceLoaded();
@@ -153,6 +155,14 @@ void CoinSelectionModel::onCoinSourceLoadFinished()
     if (!m_loading) return;
     m_loading = false;
     emit loadingFinished();
+}
+
+void CoinSelectionModel::onCoinSourceLoadFailed(const QString& message)
+{
+    // Nothing was loaded, so the model stays loading. A scan that fails after
+    // this model has loaded leaves what it shows as it is.
+    if (!m_loading) return;
+    emit loadingFailed(message);
 }
 
 CoinSelectionModel::~CoinSelectionModel()

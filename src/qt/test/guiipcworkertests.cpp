@@ -117,6 +117,24 @@ void GuiIpcWorkerTests::eachRoleHasItsOwnThread()
 
     GuiIpcWorker modal(Role::Modal);
     GuiIpcWorker coin_load(Role::CoinLoad);
+
+    // Lets the modal job go however the case ends, before the workers go.
+    struct ReleaseOnExit
+    {
+        std::promise<void>& promise;
+        bool released{false};
+
+        void Now()
+        {
+            if (!released) {
+                released = true;
+                promise.set_value();
+            }
+        }
+
+        ~ReleaseOnExit() { Now(); }
+    } release_on_exit{release};
+
     QVERIFY(GuiIpcWorker::Current(Role::Modal) == &modal);
     QVERIFY(GuiIpcWorker::Current(Role::CoinLoad) == &coin_load);
 
@@ -131,15 +149,17 @@ void GuiIpcWorkerTests::eachRoleHasItsOwnThread()
         released.wait_for(10s);
     });
 
+    // The modal job has begun, and holds its worker.
+    QTRY_VERIFY_WITH_TIMEOUT(modal_busy.load(), 10000);
+
     const std::future<void> coin_done = coin_load.Post([&coin_thread] { coin_thread = std::this_thread::get_id(); });
 
     // The coin load finished while the modal job still waits.
     QVERIFY(ReadySoon(coin_done));
-    QVERIFY(modal_busy.load());
     QVERIFY(modal_done.valid());
     QVERIFY(modal_done.wait_for(0s) != std::future_status::ready);
 
-    release.set_value();
+    release_on_exit.Now();
     QVERIFY(ReadySoon(modal_done));
 
     const std::thread::id modal_thread = ThreadOf(modal);
@@ -200,4 +220,30 @@ void GuiIpcWorkerTests::runsQueuedJobsBeforeItGoes()
         QVERIFY(future.valid());
         QVERIFY(future.wait_for(0s) == std::future_status::ready);
     }
+}
+
+// A job posted while the worker is being destroyed is refused: its future is
+// invalid and it never runs.
+void GuiIpcWorkerTests::postWhileGoingIsRefused()
+{
+    std::atomic<bool> second_ran{false};
+    std::atomic<int> second_valid{-1};
+    std::future<void> first;
+
+    {
+        GuiIpcWorker worker(Role::CoinLoad);
+
+        first = worker.Post([&worker, &second_ran, &second_valid] {
+            // Long enough for the destructor below to have begun.
+            std::this_thread::sleep_for(100ms);
+
+            const std::future<void> second = worker.Post([&second_ran] { second_ran = true; });
+            second_valid = second.valid() ? 1 : 0;
+        });
+    }
+
+    QVERIFY(first.valid());
+    QVERIFY(first.wait_for(0s) == std::future_status::ready);
+    QCOMPARE(second_valid.load(), 0);
+    QVERIFY(!second_ran.load());
 }

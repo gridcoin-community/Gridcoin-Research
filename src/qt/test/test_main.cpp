@@ -47,6 +47,10 @@ Q_IMPORT_PLUGIN(QCocoaIntegrationPlugin);
 // This is all you need to run all the tests
 int main(int argc, char *argv[])
 {
+    // A test that crashes must not have QtTest attach a debugger to it or write a core.
+    qputenv("QTEST_DISABLE_STACK_DUMP", "1");
+    qputenv("QTEST_DISABLE_CORE_DUMP", "1");
+
     // CoinSelectionViewTests drives a real QTreeView, which needs a
     // QApplication and a platform plugin. Default to offscreen so the suite
     // still runs headless -- ctest invokes it with no display on every CI

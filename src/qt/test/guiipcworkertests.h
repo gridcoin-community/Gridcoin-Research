@@ -19,6 +19,7 @@ private slots:
     void eachRoleHasItsOwnThread();
     void futureIsReadyOnceTheJobIsGone();
     void runsQueuedJobsBeforeItGoes();
+    void postWhileGoingIsRefused();
 };
 
 #endif // BITCOIN_QT_TEST_GUIIPCWORKERTESTS_H

@@ -40,6 +40,8 @@ private slots:
     void checkRunsOnTheModalWorker();
     void cancelWhileQueuedEndsAtOnceAndTriesNothing();
     void destroyedUnderARunningCheckEndsItsCapability();
+    void deletedAfterCancelWhileQueuedReturnsAtOnce();
+    void deletedWhileQueuedGivesTheCheckUp();
 
 private:
     std::unique_ptr<GuiIpcWorker> m_worker;

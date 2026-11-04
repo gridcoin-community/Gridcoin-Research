@@ -61,7 +61,9 @@
 #include <atomic>
 #include <optional>
 // Not inside the WIN32 guard below: main() sets the pool's expiry and the teardown
-// joins it on every platform, and nothing else on this file's include path pulls it in.
+// waits for its tasks on every platform, and nothing else on this file's include
+// path pulls them in.
+#include <QThread>
 #include <QThreadPool>
 #ifndef WIN32
 #include <QSocketNotifier>
@@ -904,10 +906,10 @@ int main(int argc, char *argv[])
     // dialog's version check, the poll table's refresh), and a pool thread ends by
     // default after 30 s idle: at any moment, so also while the connection to the core
     // is being destroyed, which a thread that has made IPC calls must not do (see
-    // GuiIpcWorker). With no expiry they end only when the pool is drained, at teardown
-    // while the connection is still open, or when ~QCoreApplication deletes the pool,
-    // after the connection is gone. Set before the pool starts a thread: the timeout
-    // applies only to threads started after it is set.
+    // GuiIpcWorker). With no expiry they end only when ~QCoreApplication deletes the
+    // pool, after node_connection, declared after `app`, is gone; the teardown waits
+    // for the pool's tasks without ending its threads. Set before the pool starts a
+    // thread: the timeout applies only to threads started after it is set.
     QThreadPool::globalInstance()->setExpiryTimeout(-1);
 
 #if defined(WIN32) && defined(QT_GUI)
@@ -1879,13 +1881,20 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // it has to be reaped.
                 //
                 // MUST be inside this block: `node` and the other interfaces are
-                // declared here and destroyed at the closing brace below, so joining
-                // after it would join AFTER the worker's Node is already gone --
+                // declared here and destroyed at the closing brace below, so waiting
+                // after it would wait only AFTER the worker's Node is already gone --
                 // which is the exact use-after-free this is here to prevent.
                 //
-                // waitForDone() also ends the pool's threads. The connection to the
-                // core is still open here and stays open until main() unwinds.
-                QThreadPool::globalInstance()->waitForDone();
+                // Not waitForDone(): it also ends the pool's threads, here, where the
+                // connection may be open, or may have been dropped and still be
+                // being destroyed on the loop thread. Wait for the tasks alone: a
+                // pool thread is counted active from when it is handed a task until
+                // it is idle again with the queue empty. Its threads end in
+                // ~QCoreApplication, after node_connection is gone (main() sets
+                // them never to expire).
+                while (QThreadPool::globalInstance()->activeThreadCount() > 0) {
+                    QThread::msleep(5);
+                }
             }
             // Shut down the core and its threads (but don't exit Bitcoin-Qt
             // here). Only in the monolithic build: there the core runs in this

@@ -137,6 +137,50 @@ int ExecAndCancel(AskPassphraseDialog& dialog, qt_test::FakeWallet& wallet, AtCa
     return dialog.exec();
 }
 
+//! Holds the process's modal worker with a job of its own until released, or
+//! until \p backstop has passed, so that a check posted meanwhile waits behind
+//! it.
+class WorkerBlocker
+{
+public:
+    explicit WorkerBlocker(std::chrono::milliseconds backstop)
+    {
+        GuiIpcWorker* const worker = GuiIpcWorker::Current(GuiIpcWorker::Role::Modal);
+        if (!worker) return;
+
+        const std::shared_future<void> unblocked = m_unblock.get_future().share();
+        m_done = worker->Post([unblocked, backstop] { unblocked.wait_for(backstop); });
+    }
+
+    ~WorkerBlocker() { Release(); }
+
+    bool Holding() const { return m_done.valid(); }
+
+    void Release()
+    {
+        if (!m_released) {
+            m_released = true;
+            m_unblock.set_value();
+        }
+    }
+
+    //! The blocker, and every job posted before this call, has run.
+    bool Drained()
+    {
+        GuiIpcWorker* const worker = GuiIpcWorker::Current(GuiIpcWorker::Role::Modal);
+        if (!worker || !m_done.valid()) return false;
+        if (m_done.wait_for(std::chrono::seconds{10}) != std::future_status::ready) return false;
+
+        const std::future<void> after = worker->Post([] {});
+        return after.valid() && after.wait_for(std::chrono::seconds{10}) == std::future_status::ready;
+    }
+
+private:
+    std::promise<void> m_unblock;
+    std::future<void> m_done;
+    bool m_released{false};
+};
+
 } // namespace
 
 void AskPassphraseDialogTests::initTestCase()
@@ -464,4 +508,70 @@ void AskPassphraseDialogTests::destroyedUnderARunningCheckEndsItsCapability()
     QVERIFY(returned_when_destroyed);
     QCOMPARE(ended_when_destroyed, 1);
     QCOMPARE(wallet.m_end_elevation_calls.load(), 1);
+}
+
+// A prompt deleted after Cancel gave up its queued check, before the report of
+// that was delivered, does not wait for the check's turn: given up, the check
+// never runs. Nothing is tried when its turn comes.
+void AskPassphraseDialogTests::deletedAfterCancelWhileQueuedReturnsAtOnce()
+{
+    qt_test::FakeWallet wallet;
+    ModelOverFakeWallet fixture(wallet);
+
+    // Two seconds at most, so that a deletion that waits for the check's turn
+    // shows as a slow one rather than a hang.
+    WorkerBlocker blocker(std::chrono::milliseconds{2000});
+    QVERIFY(blocker.Holding());
+
+    auto* dialog = new AskPassphraseDialog(AskPassphraseDialog::Elevate);
+    dialog->setModel(&fixture.model);
+    dialog->setCapabilityKind(CapabilityKind::Send);
+
+    SubmitPassphrase(*dialog);
+    dialog->reject();
+
+    QElapsedTimer timer;
+    timer.start();
+    delete dialog;
+    const qint64 took = timer.elapsed();
+
+    blocker.Release();
+    QVERIFY(blocker.Drained());
+
+    // The report posted to the deleted prompt is dropped.
+    QCoreApplication::processEvents();
+
+    QVERIFY2(took < 1000, qPrintable(QStringLiteral("the deletion took %1 ms").arg(took)));
+    QVERIFY(!wallet.m_waiting.load());
+    QCOMPARE(wallet.m_end_elevation_calls.load(), 0);
+}
+
+// A prompt deleted while its check still waits for its turn on the worker,
+// with no Cancel first, gives the check up and does not wait for its turn.
+void AskPassphraseDialogTests::deletedWhileQueuedGivesTheCheckUp()
+{
+    qt_test::FakeWallet wallet;
+    ModelOverFakeWallet fixture(wallet);
+
+    WorkerBlocker blocker(std::chrono::milliseconds{2000});
+    QVERIFY(blocker.Holding());
+
+    auto* dialog = new AskPassphraseDialog(AskPassphraseDialog::Elevate);
+    dialog->setModel(&fixture.model);
+    dialog->setCapabilityKind(CapabilityKind::Send);
+
+    SubmitPassphrase(*dialog);
+
+    QElapsedTimer timer;
+    timer.start();
+    delete dialog;
+    const qint64 took = timer.elapsed();
+
+    blocker.Release();
+    QVERIFY(blocker.Drained());
+    QCoreApplication::processEvents();
+
+    QVERIFY2(took < 1000, qPrintable(QStringLiteral("the deletion took %1 ms").arg(took)));
+    QVERIFY(!wallet.m_waiting.load());
+    QCOMPARE(wallet.m_end_elevation_calls.load(), 0);
 }

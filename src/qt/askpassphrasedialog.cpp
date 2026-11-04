@@ -126,12 +126,13 @@ AskPassphraseDialog::~AskPassphraseDialog()
     // so that is reached only when the application quits under an open
     // prompt. Cancelled first, so that a check waiting for its turn in the
     // wallet gives up rather than holding the quit up. A check still waiting
-    // for its turn on the worker is given up and never runs, so it is not
-    // waited for.
+    // for its turn on the worker never runs once given up, here or by a
+    // Cancel whose report has not been delivered yet, so only one that is
+    // running is waited for.
     if (m_check_in_flight) {
         m_check->cancel = true;
 
-        if (!m_check->GiveUp() && m_check_done.valid()) {
+        if (!m_check->GiveUp() && m_check->phase == CheckState::RUNNING && m_check_done.valid()) {
             m_check_done.wait();
         }
     }

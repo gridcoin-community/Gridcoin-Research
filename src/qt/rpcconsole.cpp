@@ -864,7 +864,9 @@ void RPCConsole::browseHistory(int offset)
 
 void RPCConsole::startExecutor()
 {
-    // Long-lived like a GuiIpcWorker: it ends only at teardown (stopExecutorThread), while the connection to the core is still open.
+    // Long-lived like a GuiIpcWorker: it ends only at teardown (stopExecutorThread), while the connection to the
+    // core is open, or after a drop already destroyed it on the loop thread. Its one exposure: a drop whose
+    // destruction of the connection is still running on the loop thread as teardown stops this thread.
     QThread* thread = new QThread;
     m_executorThread = thread;
     RPCExecutor *executor = new RPCExecutor(clientModel->node());
