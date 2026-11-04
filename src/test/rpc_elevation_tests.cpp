@@ -407,6 +407,52 @@ BOOST_AUTO_TEST_CASE(batch_runs_every_call_under_one_capability)
     BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 1U);
 }
 
+// The RPC listener opens before initialisation finishes, so a request can arrive while the node
+// warms up, before the wallet is set up. Each call of a batch is then answered -28 on its own, and
+// the elevation header is not checked: no passphrase attempt is made or counted, and no capability
+// is begun.
+BOOST_AUTO_TEST_CASE(a_batch_during_warmup_makes_no_elevation_attempt)
+{
+    struct RestoreWarmup {
+        ~RestoreWarmup() { SetRPCWarmupForTest(false); }
+    } restore;
+
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    UniValue requests;
+    BOOST_REQUIRE(requests.read(
+        "[{\"id\": 1, \"method\": \"getblockcount\", \"params\": []},"
+        " {\"id\": 2, \"method\": \"signmessage\", \"params\": [\"" + EncodeDestination(fx.id) + "\", \"elevation-test\"]}]"));
+
+    SetRPCWarmupForTest(true);
+
+    // A wrong passphrase, which a check would refuse for the whole batch, and count.
+    std::map<std::string, std::string> headers = HeadersWith(Base64(SecureString("wrong")));
+    UniValue replies;
+    BOOST_CHECK_NO_THROW(replies = ExecuteBatchWithElevation(requests, TakeElevationHeader(headers)));
+
+    BOOST_REQUIRE(replies.isArray());
+    BOOST_REQUIRE_EQUAL(replies.size(), 2U);
+    for (size_t i = 0; i < replies.size(); ++i) {
+        const UniValue error = find_value(replies[i], "error");
+        BOOST_CHECK_MESSAGE(error.isObject() && find_value(error, "code").get_int() == RPC_IN_WARMUP,
+                            "call " << i << ": " << replies[i].write());
+    }
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+
+    // The right passphrase begins no capability either.
+    headers = HeadersWith(Base64(EncryptedWallet::PASSPHRASE));
+    bool could_use_keys{true};
+    BOOST_CHECK_NO_THROW(ExecuteWithElevation(TakeElevationHeader(headers), [&] {
+        could_use_keys = fx.wallet.CanUseKeys();
+        return UniValue();
+    }));
+    BOOST_CHECK(!could_use_keys);
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+}
+
 BOOST_AUTO_TEST_CASE(consolidateunspent_refused_without_the_keys)
 {
     EncryptedWallet fx;

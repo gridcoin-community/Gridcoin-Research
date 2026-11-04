@@ -281,10 +281,18 @@ private:
 
 UniValue ExecuteWithElevation(const std::optional<SecureString>& header, const std::function<UniValue()>& execute)
 {
+    // The listener opens before initialisation finishes, so a request can come
+    // while the wallet is still being set up. Then every call execute() runs is
+    // answered -28 (a batch's in JSONRPCExecOne()), and the header is not
+    // checked. Once warmup has ended, pwalletMain is set and visible here:
+    // initialisation sets it before it ends warmup, and the warmup flag is
+    // released and acquired.
+    if (!header || RPCIsInWarmup()) return execute();
+
     CWallet* const wallet = pwalletMain;
 
     // With no wallet there is nothing to authorise, and a header is ignored.
-    if (!header || !wallet) return execute();
+    if (!wallet) return execute();
 
     std::optional<CapabilityId> id;
     {
