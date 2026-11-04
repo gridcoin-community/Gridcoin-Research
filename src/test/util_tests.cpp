@@ -1917,6 +1917,44 @@ BOOST_AUTO_TEST_CASE(refused_settings_are_ignored_at_load_and_kept_in_the_file)
     BOOST_CHECK_EQUAL(raw.at("unknown_key").get_str(), "d");
 }
 
+BOOST_AUTO_TEST_CASE(an_unregistered_refused_key_is_logged_once_at_load)
+{
+    SettingsFileScope scope;
+
+    // Matches the rpc* pattern and is no argument, so gridcoinresearch.conf
+    // would not take it either.
+    const std::string unregistered = "rpcunregistered_probe";
+    BOOST_REQUIRE(!gArgs.GetArgFlags("-" + unregistered));
+    BOOST_REQUIRE(IsRefusedSettingKey(unregistered));
+
+    scope.Write({{unregistered, "x"}, {"blocknotify", "echo b"}});
+
+    std::vector<std::string> lines;
+    {
+        const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+        BOOST_REQUIRE(gArgs.ReadSettingsFile());
+        LogInstance().DeleteCallback(callback);
+    }
+
+    // The unknown-value line only, without advice to move it to the config file.
+    BOOST_CHECK_EQUAL(CountLines(lines, unregistered), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "Ignoring unknown rw_settings value " + unregistered + "\n"), 1u);
+
+    // A registered refused key still gets the advice, once.
+    BOOST_CHECK_EQUAL(CountLines(lines, "blocknotify"), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "ignored blocknotify from " + FILE_NAME_FOR_LOG
+                                        + "; set it in gridcoinresearch.conf if you want it\n"), 1u);
+
+    // Both are still refused, and kept in the file.
+    BOOST_CHECK(getRwSetting(unregistered).isNull());
+    BOOST_CHECK(getRwSetting("blocknotify").isNull());
+
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    const auto raw = scope.ReadRaw();
+    BOOST_CHECK_EQUAL(raw.at(unregistered).get_str(), "x");
+    BOOST_CHECK_EQUAL(raw.at("blocknotify").get_str(), "echo b");
+}
+
 BOOST_AUTO_TEST_CASE(erasing_a_refused_setting_removes_it_from_the_file)
 {
     SettingsFileScope scope;

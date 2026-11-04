@@ -605,9 +605,11 @@ bool ArgsManager::ReadSettingsFile(std::vector<std::string>* errors)
         }
         const bool command_line_only = flags && (*flags & COMMAND_LINE_ONLY);
         if (IsRefusedSettingKey(name) || command_line_only) {
+            // An unknown key has had its line above. The config file would not
+            // take it either, so it is not advised there.
             if (command_line_only) {
                 LogPrintf("ignored %s from %s; it is accepted only on the command line\n", name, file);
-            } else {
+            } else if (flags) {
                 LogPrintf("ignored %s from %s; set it in gridcoinresearch.conf if you want it\n", name, file);
             }
             m_settings.refused_rw_settings.emplace(name, std::move(value));
