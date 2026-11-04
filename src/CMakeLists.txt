@@ -244,6 +244,7 @@ add_library(gridcoin_util STATIC
     hash.cpp
     init.cpp
     interfaces/handler.cpp
+    interfaces/file_transfer.cpp
     interfaces/init.cpp
     interfaces/notification_dispatcher.cpp
     key.cpp
@@ -314,6 +315,7 @@ add_library(gridcoin_util STATIC
     util/strencodings.cpp
     util/string.cpp
     util/syserror.cpp
+    util/transfer_file.cpp
     util/dir_permissions.cpp
     util/system.cpp
     util/threadinterrupt.cpp

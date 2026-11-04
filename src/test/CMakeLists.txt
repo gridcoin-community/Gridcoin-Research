@@ -94,6 +94,8 @@ add_executable(test_gridcoin
     netbase_tests.cpp
     net_tests.cpp
     notification_dispatcher_tests.cpp
+    transfer_file_tests.cpp
+    file_transfer_tests.cpp
     orphan_block_tests.cpp
     psgt_pool_tests.cpp
     psgt_tests.cpp
