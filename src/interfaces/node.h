@@ -286,13 +286,17 @@ public:
     //! Run one RPC-console command: convert the positional string args per the
     //! command's conversion table, dispatch it, and format the reply/error. All
     //! UniValue handling stays node-side. Blocks while the command runs, so the
-    //! GUI calls it from its off-thread RPC executor.
+    //! GUI calls it from its off-thread RPC executor. The methods with passphrase
+    //! parameters (RpcConsolePassphraseIndexes) are refused before anything runs:
+    //! ok = false, output "Error: <method> takes a passphrase; the console sends it
+    //! separately". They go to executeRpcConsoleSecretCommand.
     virtual RpcConsoleResult executeRpcConsoleCommand(const std::string& method,
                                                       const std::vector<std::string>& args) = 0;
 
-    //! As executeRpcConsoleCommand, for the methods with passphrase parameters. The
-    //! passphrases cross as SecureString; args are the other parameters in order.
-    //! Any other method: ok = false, output "Error: <method> takes no passphrase".
+    //! As executeRpcConsoleCommand, for the methods with passphrase parameters
+    //! (RpcConsolePassphraseIndexes). The passphrases cross as SecureString; args
+    //! are the other parameters in order. Any other method: ok = false, output
+    //! "Error: <method> takes no passphrase".
     virtual RpcConsoleResult executeRpcConsoleSecretCommand(const std::string& method,
                                                             const std::vector<SecureString>& passphrases,
                                                             const std::vector<std::string>& args) = 0;
@@ -380,6 +384,14 @@ public:
 
 //! Return an in-process Node interface implementation.
 std::unique_ptr<Node> MakeNode();
+
+//! The positions of a console command's passphrase parameters, counted from 0
+//! after the method name, in parameter order: walletpassphrase {0},
+//! walletpassphrasechange {0, 1}, encryptwallet {0}. These are the methods
+//! Node::executeRpcConsoleSecretCommand runs and Node::executeRpcConsoleCommand
+//! refuses. nullptr for every other method. It reads the RPC server's table
+//! (PassphraseParamIndexes) in the calling process, with no call to the node.
+const std::vector<int>* RpcConsolePassphraseIndexes(const std::string& method);
 
 
 // Marshalability pins (interfaces/marshal.h): each DTO above must stay a

@@ -7,9 +7,11 @@
 #include "qt/bantablemodel.h"
 #include "qt/decoration.h"
 #include "guiutil.h"
+#include "support/cleanse.h"
 #include "util/strencodings.h"
 #endif
 
+#include <QByteArray>
 #include <QThread>
 #include <QTextEdit>
 #include <QUrl>
@@ -24,7 +26,9 @@
 
 #include <openssl/crypto.h>
 
+#include <algorithm>
 #include <memory>
+#include <string_view>
 #include <utility>
 
 // TODO: make it possible to filter out categories (esp debug messages when implemented)
@@ -90,6 +94,66 @@ QString toqstring(int o)
 
 
 
+namespace {
+//! Overwrite a string's bytes in place; its size is kept.
+void CleanseString(std::string& text)
+{
+    memory_cleanse(text.data(), text.size());
+}
+
+//! CleanseString over every string in a vector, however the scope that owns
+//! the vector is left.
+class StringsCleanser
+{
+public:
+    explicit StringsCleanser(std::vector<std::string>& strings) : m_strings(strings) {}
+    ~StringsCleanser()
+    {
+        for (std::string& text : m_strings) CleanseString(text);
+    }
+
+    StringsCleanser(const StringsCleanser&) = delete;
+    StringsCleanser& operator=(const StringsCleanser&) = delete;
+
+private:
+    std::vector<std::string>& m_strings;
+};
+
+//! The UTF-8 bytes of a console line, the bytes toStdString() gives, overwritten
+//! when this goes out of scope: the line can carry a passphrase. A QByteArray,
+//! not a SecureString, because the secure pool refuses a buffer over 256 KiB,
+//! and a pasted raw transaction can be longer than that.
+class ConsoleLineBytes
+{
+public:
+    explicit ConsoleLineBytes(const QString& line) : m_utf8(line.toUtf8()) {}
+    ~ConsoleLineBytes()
+    {
+        if (!m_utf8.isEmpty()) memory_cleanse(m_utf8.data(), static_cast<size_t>(m_utf8.size()));
+    }
+
+    ConsoleLineBytes(const ConsoleLineBytes&) = delete;
+    ConsoleLineBytes& operator=(const ConsoleLineBytes&) = delete;
+
+    std::string_view view() const { return {m_utf8.constData(), static_cast<size_t>(m_utf8.size())}; }
+
+private:
+    QByteArray m_utf8;
+};
+
+//! \p text in a SecureString whose buffer is reserved before the bytes go in,
+//! past the inline capacity of every standard library, so a short text is in
+//! secure memory too and moving the string copies nothing.
+SecureString ToSecureString(std::string_view text)
+{
+    SecureString out;
+    out.reserve(std::max<size_t>(text.size(), 100));
+    out.assign(text.data(), text.size());
+
+    return out;
+}
+} // namespace
+
 /**
  * Split shell command line into a list of arguments. Aims to emulate \c bash and friends.
  *
@@ -104,7 +168,7 @@ QString toqstring(int o)
  * @param[out]   args        Parsed arguments will be appended to this list
  * @param[in]    strCommand  Command line to split
  */
-bool parseCommandLine(std::vector<std::string> &args, const std::string &strCommand)
+bool parseCommandLine(std::vector<std::string> &args, std::string_view strCommand)
 {
     enum CmdParseState
     {
@@ -115,7 +179,26 @@ bool parseCommandLine(std::vector<std::string> &args, const std::string &strComm
         STATE_ESCAPE_OUTER,
         STATE_ESCAPE_DOUBLEQUOTED
     } state = STATE_EATING_SPACES;
+
+    // The line can carry a passphrase, so no copy of an argument may be left
+    // in memory that is freed without being overwritten. The argument being
+    // built has room for the whole line, so it never moves to a larger buffer,
+    // and it is overwritten as each argument is taken and on return. args has
+    // a slot for every argument the line can hold (each but the last ends at a
+    // space, tab or newline), so it never moves its strings either: a short one
+    // is held in the vector's own block, and a move would leave it in the freed
+    // one.
     std::string curarg;
+    curarg.reserve(strCommand.size());
+    struct CurargCleanser {
+        std::string& text;
+        ~CurargCleanser() { CleanseString(text); }
+    } curarg_cleanser{curarg};
+
+    const auto is_separator = [](char ch) { return ch == ' ' || ch == '\n' || ch == '\t'; };
+    // A count is never negative, so the cast loses nothing.
+    args.reserve(args.size() + static_cast<size_t>(std::count_if(strCommand.begin(), strCommand.end(), is_separator)) + 1);
+
     for (char ch : strCommand) {
         switch(state)
         {
@@ -130,6 +213,7 @@ bool parseCommandLine(std::vector<std::string> &args, const std::string &strComm
                 if(state == STATE_ARGUMENT) // Space ends argument
                 {
                     args.push_back(curarg);
+                    CleanseString(curarg);
                     curarg.clear();
                 }
                 state = STATE_EATING_SPACES;
@@ -224,8 +308,9 @@ namespace RPCConsoleDetail {
 //! succeeds, its argv is authoritative.
 std::string LeadingCommandToken(const QString& command)
 {
-    const std::string s = command.toStdString();
-    std::string::size_type i = 0;
+    const ConsoleLineBytes line(command);
+    const std::string_view s = line.view();
+    std::string_view::size_type i = 0;
 
     while (i < s.size() && IsSpace(s[i])) ++i;
 
@@ -235,7 +320,7 @@ std::string LeadingCommandToken(const QString& command)
         ++i;
     }
 
-    const std::string::size_type start = i;
+    const std::string_view::size_type start = i;
     while (i < s.size()) {
         const char c = s[i];
         const bool ends = quote ? (c == quote)
@@ -244,7 +329,7 @@ std::string LeadingCommandToken(const QString& command)
         ++i;
     }
 
-    return s.substr(start, i - start);
+    return std::string(s.substr(start, i - start));
 }
 
 //! Replace the arguments of a secret-bearing command with a placeholder. The
@@ -258,8 +343,13 @@ std::string LeadingCommandToken(const QString& command)
 //! guard.
 QString RedactSensitiveArgs(const QString& command)
 {
+    // The line can carry a passphrase, so the arguments parsed out of it are
+    // overwritten however this returns, as are the line's bytes.
     std::vector<std::string> args;
-    if (parseCommandLine(args, command.toStdString()) && !args.empty()) {
+    const StringsCleanser args_cleanser(args);
+
+    const ConsoleLineBytes line(command);
+    if (parseCommandLine(args, line.view()) && !args.empty()) {
         if (!SENSITIVE_ARG_COMMANDS.count(args[0])) return command;
         return QString::fromStdString(args[0]) + QStringLiteral(" (arguments not shown)");
     }
@@ -283,6 +373,60 @@ QString RedactSensitiveArgs(const QString& command)
 
     return command;
 }
+
+interfaces::RpcConsoleResult DispatchConsoleCommand(interfaces::Node& node, std::vector<std::string>& args)
+{
+    if (args.empty()) return {};
+
+    const std::string& method = args[0];
+    const std::vector<int>* indexes = interfaces::RpcConsolePassphraseIndexes(method);
+
+    if (indexes == nullptr) {
+        return node.executeRpcConsoleCommand(method, std::vector<std::string>(args.begin() + 1, args.end()));
+    }
+
+    // The parsed passphrases are overwritten however this returns. In the
+    // split build the call below crosses IPC, and a disconnect raises.
+    struct PassphraseArgsCleanser {
+        std::vector<std::string>& args;
+        const std::vector<int>& indexes;
+
+        ~PassphraseArgsCleanser()
+        {
+            for (const int index : indexes) {
+                const size_t position = static_cast<size_t>(index) + 1;
+                if (position < args.size()) CleanseString(args[position]);
+            }
+        }
+    } passphrase_cleanser{args, *indexes};
+
+    // The vector is reserved first and each passphrase is built in a secure
+    // buffer of its own, so no move copies one out of a string's inline storage,
+    // which nothing cleanses. Fewer passphrases than the method takes go as
+    // they are, and the node refuses the count.
+    std::vector<SecureString> passphrases;
+    passphrases.reserve(indexes->size());
+    std::vector<std::string> others;
+
+    for (size_t i = 1; i < args.size(); ++i) {
+        const int position = static_cast<int>(i - 1);
+
+        if (std::find(indexes->begin(), indexes->end(), position) == indexes->end()) {
+            others.push_back(args[i]);
+        } else {
+            passphrases.push_back(ToSecureString(args[i]));
+        }
+    }
+
+    interfaces::RpcConsoleResult result = node.executeRpcConsoleSecretCommand(method, passphrases, others);
+
+    // The command carries its own passphrase, so a refusal for the wallet's
+    // keys is not one the console's unlock prompt answers, and the command line
+    // is not kept to be run again.
+    result.wallet_unlock_needed = false;
+
+    return result;
+}
 } // namespace RPCConsoleDetail
 
 void RPCExecutor::request(const QString &command)
@@ -299,8 +443,18 @@ void RPCExecutor::retry(const QString &command)
 
 void RPCExecutor::run(const QString &command, bool report_unlock_needed)
 {
+    // The line can carry a passphrase, so every argument parsed out of it is
+    // overwritten however this returns, and the line's bytes once it is parsed.
+    // DispatchConsoleCommand sends the passphrases on as SecureStrings.
     std::vector<std::string> args;
-    if(!parseCommandLine(args, command.toStdString()))
+    const StringsCleanser args_cleanser(args);
+
+    bool parsed = false;
+    {
+        const ConsoleLineBytes line(command);
+        parsed = parseCommandLine(args, line.view());
+    }
+    if(!parsed)
     {
         emit reply(RPCConsole::CMD_ERROR, QString("Parse error: unbalanced ' or \""));
         return;
@@ -311,8 +465,7 @@ void RPCExecutor::run(const QString &command, bool report_unlock_needed)
     // The dispatch, UniValue conversion and reply/error formatting all happen
     // node-side; the GUI receives the already-formatted text. This runs on the
     // executor thread, so a slow command does not block the GUI.
-    const interfaces::RpcConsoleResult result = m_node.executeRpcConsoleCommand(
-        args[0], std::vector<std::string>(args.begin() + 1, args.end()));
+    const interfaces::RpcConsoleResult result = RPCConsoleDetail::DispatchConsoleCommand(m_node, args);
 
     if (result.ok)
     {

@@ -1,6 +1,7 @@
 #ifndef BITCOIN_QT_RPCCONSOLE_H
 #define BITCOIN_QT_RPCCONSOLE_H
 
+#include "interfaces/node.h"
 #include "qt/guiutil.h"
 #include "qt/peertablemodel.h"
 #include "qt/walletmodel.h"
@@ -14,6 +15,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace Ui {
     class RPCConsole;
@@ -35,6 +37,17 @@ std::string LeadingCommandToken(const QString& command);
 //! history: "<command> (arguments not shown)" when the command's arguments
 //! are secret, otherwise the line unchanged.
 QString RedactSensitiveArgs(const QString& command);
+
+//! Run a parsed console command (args[0] is the method; an empty args runs
+//! nothing). The passphrase methods (interfaces::RpcConsolePassphraseIndexes) go
+//! to executeRpcConsoleSecretCommand with their passphrases copied into
+//! SecureStrings, and every std::string in args that held a passphrase is
+//! cleansed in place (its size kept) before return, a throw included. Their
+//! result never has wallet_unlock_needed set: the command carries its own
+//! passphrase, so the console does not keep it to run again under an unlock.
+//! A passphrase past the secure pool's 256 KiB throws std::bad_alloc, as any
+//! SecureString does. Other methods go to executeRpcConsoleCommand.
+interfaces::RpcConsoleResult DispatchConsoleCommand(interfaces::Node& node, std::vector<std::string>& args);
 } // namespace RPCConsoleDetail
 
 /** Local Bitcoin RPC console. */

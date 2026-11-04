@@ -386,7 +386,9 @@ never wait on a core lock.
 
 Command/action methods: `startShutdown`, `banNode`, `unban`, `disconnectNode`,
 `executeRpcConsoleCommand(method, args) -> RpcConsoleResult` (the whole UniValue
-round trip happens node-side; only formatted text crosses), `listRpcCommands`,
+round trip happens node-side; only formatted text crosses),
+`executeRpcConsoleSecretCommand(method, passphrases, args) -> RpcConsoleResult`,
+`listRpcCommands`,
 the typed settings getters (`getSettingBool/Int/Str`, `isSettingSet`) and
 `changeSettings(...) -> SettingChangeResult`, plus `checkForLatestUpdate` and
 `runDiagnostics`. The getters answer only for the settings the GUI reads
@@ -416,6 +418,14 @@ refused for the wallet's keys (`RPC_WALLET_UNLOCK_NEEDED`) comes back with
 `RpcConsoleResult::wallet_unlock_needed` set; the GUI console then asks for the
 passphrase once, on a wallet unlocked for staking only, and runs the same command
 again under that capability.
+
+The three methods with passphrase parameters (`walletpassphrase`,
+`walletpassphrasechange`, `encryptwallet`) are the exception:
+`executeRpcConsoleCommand` refuses them before anything runs, because there the
+passphrase would cross as plain text. `executeRpcConsoleSecretCommand` runs
+them, with the passphrases as `SecureString` (`List(Data)` on the wire) and the
+other parameters as text. `interfaces::RpcConsolePassphraseIndexes(method)`
+names the passphrase positions, locally and with no call to the node.
 
 ### 4.2 StakingStatus — `src/interfaces/staking.h`, `staking.capnp`
 

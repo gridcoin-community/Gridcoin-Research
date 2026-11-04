@@ -403,14 +403,18 @@ public:
     RpcConsoleResult executeRpcConsoleCommand(const std::string& method,
                                               const std::vector<std::string>& args) override
     {
+        // Here a passphrase would cross as a plain string. The console sends
+        // these methods with executeRpcConsoleSecretCommand.
+        if (PassphraseParamIndexes(method) != nullptr) {
+            RpcConsoleResult refused;
+            refused.output = "Error: " + method + " takes a passphrase; the console sends it separately";
+            return refused;
+        }
+
         return RunRpcConsole(method, [&] {
             // Convert the positional string args in the command-dependent way,
-            // dispatch -- all UniValue handling stays here. The converted params
-            // are overwritten at the passphrase positions when the call is done.
-            const UniValue params = RPCConvertValues(method, args);
-            const PassphraseParamsCleanser cleanser(method, params);
-
-            return tableRPC.execute(method, params);
+            // dispatch -- all UniValue handling stays here.
+            return tableRPC.execute(method, RPCConvertValues(method, args));
         });
     }
 
@@ -726,6 +730,11 @@ std::unique_ptr<GuiState> MakeGuiState()
 std::unique_ptr<Node> MakeNode()
 {
     return std::make_unique<NodeImpl>();
+}
+
+const std::vector<int>* RpcConsolePassphraseIndexes(const std::string& method)
+{
+    return PassphraseParamIndexes(method);
 }
 
 std::unique_ptr<Init> MakeGridcoinInit()

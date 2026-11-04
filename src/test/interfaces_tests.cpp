@@ -36,6 +36,7 @@
 #include "wallet/capability.h"
 #include "wallet/wallet.h"
 
+#include <rpc/client.h>
 #include <rpc/server.h>
 #include <boost/signals2/signal.hpp>
 #include <boost/test/unit_test.hpp>
@@ -243,17 +244,51 @@ BOOST_AUTO_TEST_CASE(node_secret_console_checks_argument_count)
     BOOST_CHECK(fx.wallet.Unlock(grc_test::EncryptedWallet::PASSPHRASE));
 }
 
-// A body's runtime_error comes back formatted as the dispatcher formats it, as the plain console shows it.
+// A body's runtime_error comes back formatted as the dispatcher formats it, as the plain console
+// formats a dispatcher error.
 BOOST_AUTO_TEST_CASE(node_secret_console_formats_a_body_exception_like_the_dispatcher)
 {
     std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
 
     const interfaces::RpcConsoleResult secret = node->executeRpcConsoleSecretCommand("encryptwallet", {SecureString("")}, {});
-    const interfaces::RpcConsoleResult plain = node->executeRpcConsoleCommand("encryptwallet", {""});
+
+    std::string dispatched;
+    try {
+        tableRPC.execute("encryptwallet", RPCConvertValues("encryptwallet", {""}));
+    } catch (const UniValue& error) {
+        dispatched = strprintf("%s (code %d)", find_value(error, "message").get_str(), find_value(error, "code").get_int());
+    }
 
     BOOST_CHECK(!secret.ok);
     BOOST_CHECK(secret.output.size() > 9 && secret.output.rfind("(code -1)") == secret.output.size() - 9);
-    BOOST_CHECK_EQUAL(secret.output, plain.output);
+    BOOST_CHECK_EQUAL(secret.output, dispatched);
+}
+
+// The plain console call carries its arguments as plain strings, so it refuses the three passphrase
+// methods before anything runs: the right old passphrase sent this way changes nothing, and the
+// wallet stays locked.
+BOOST_AUTO_TEST_CASE(node_plain_console_refuses_passphrase_methods)
+{
+    grc_test::EncryptedWallet fx;
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+    const std::string passphrase(grc_test::EncryptedWallet::PASSPHRASE.begin(), grc_test::EncryptedWallet::PASSPHRASE.end());
+
+    const interfaces::RpcConsoleResult change = node->executeRpcConsoleCommand("walletpassphrasechange", {passphrase, "changed"});
+    BOOST_CHECK(!change.ok);
+    BOOST_CHECK(!change.wallet_unlock_needed);
+    BOOST_CHECK_EQUAL(change.output, "Error: walletpassphrasechange takes a passphrase; the console sends it separately");
+    BOOST_CHECK(!fx.wallet.Unlock(SecureString("changed")));
+
+    const interfaces::RpcConsoleResult unlock = node->executeRpcConsoleCommand("walletpassphrase", {passphrase, "60", "true"});
+    BOOST_CHECK(!unlock.ok);
+    BOOST_CHECK_EQUAL(unlock.output, "Error: walletpassphrase takes a passphrase; the console sends it separately");
+    BOOST_CHECK(fx.wallet.IsLocked());
+
+    const interfaces::RpcConsoleResult encrypt = node->executeRpcConsoleCommand("encryptwallet", {"another"});
+    BOOST_CHECK(!encrypt.ok);
+    BOOST_CHECK_EQUAL(encrypt.output, "Error: encryptwallet takes a passphrase; the console sends it separately");
+
+    BOOST_CHECK(fx.wallet.Unlock(grc_test::EncryptedWallet::PASSPHRASE));
 }
 
 BOOST_AUTO_TEST_CASE(node_handler_bridges_ui_signal)

@@ -5,11 +5,17 @@
 #include "qt/test/rpcconsoletests.h"
 
 #include "qt/rpcconsole.h"
+#include "qt/test/interfacefakes.h"
 
 #include <QLineEdit>
 #include <QPushButton>
 #include <QString>
+#include <QTextEdit>
 
+#include <string>
+#include <vector>
+
+using RPCConsoleDetail::DispatchConsoleCommand;
 using RPCConsoleDetail::RedactSensitiveArgs;
 
 namespace {
@@ -100,4 +106,148 @@ void RPCConsoleTests::clearedInputLeavesNoUndoStep()
 
     input->undo();
     QVERIFY2(!input->text().contains(PHRASE_PASSWORD), qPrintable(input->text()));
+}
+
+// The pane and the Up-arrow history keep the redacted form of each passphrase command. No client
+// model is set, so no executor runs the command.
+void RPCConsoleTests::passphraseCommandsKeepNoSecretInHistoryOrPane()
+{
+    const std::vector<QString> commands{
+        QStringLiteral("walletpassphrase ") + PHRASE_PASSWORD + QStringLiteral(" 60 true"),
+        QStringLiteral("walletpassphrasechange old-") + PHRASE_PASSWORD + QStringLiteral(" new-") + PHRASE_PASSWORD,
+        QStringLiteral("encryptwallet ") + PHRASE_PASSWORD,
+    };
+
+    for (const QString& command : commands) {
+        RPCConsole console;
+        auto* input = console.findChild<QLineEdit*>(QStringLiteral("lineEdit"));
+        auto* pane = console.findChild<QTextEdit*>(QStringLiteral("messagesWidget"));
+        QVERIFY(input);
+        QVERIFY(pane);
+
+        input->setText(command);
+        QTest::keyClick(input, Qt::Key_Return);
+        QTest::keyClick(input, Qt::Key_Up);
+
+        QVERIFY2(input->text().endsWith(QStringLiteral(" (arguments not shown)")), qPrintable(input->text()));
+        QVERIFY2(!input->text().contains(PHRASE_PASSWORD), qPrintable(input->text()));
+        QVERIFY(!pane->toPlainText().contains(PHRASE_PASSWORD));
+    }
+}
+
+// The console line is cleansed without going through the secure pool, which refuses a buffer over
+// 256 KiB: a pasted raw transaction can be that long.
+void RPCConsoleTests::handlesLineLongerThanSecurePool()
+{
+    const QString hex(300 * 1024, QLatin1Char('a'));
+
+    const QString parsed = QStringLiteral("sendrawtransaction ") + hex;
+    QCOMPARE(RedactSensitiveArgs(parsed), parsed);
+
+    const QString unparsed = QStringLiteral("sendrawtransaction \"") + hex;
+    QCOMPARE(RPCConsoleDetail::LeadingCommandToken(unparsed), std::string("sendrawtransaction"));
+    QCOMPARE(RedactSensitiveArgs(unparsed), unparsed);
+}
+
+void RPCConsoleTests::routesPassphraseCommandsOverSecretPath()
+{
+    qt_test::FakeNode node;
+    std::vector<std::string> args{"walletpassphrase", "hunter2", "60", "true"};
+
+    DispatchConsoleCommand(node, args);
+
+    QVERIFY(node.m_console_calls.empty());
+    QCOMPARE(node.m_secret_calls.size(), size_t{1});
+
+    const qt_test::FakeNode::SecretCall& call = node.m_secret_calls.front();
+    QCOMPARE(call.method, std::string("walletpassphrase"));
+    QCOMPARE(call.passphrases, (std::vector<std::string>{"hunter2"}));
+    QCOMPARE(call.args, (std::vector<std::string>{"60", "true"}));
+
+    // The parsed copy is overwritten in place, and a short passphrase still went over in the
+    // SecureString's secure buffer rather than its inline storage.
+    QCOMPARE(args[1], std::string(7, '\0'));
+    QCOMPARE(call.passphrase_capacities.size(), size_t{1});
+    QVERIFY(call.passphrase_capacities[0] > SecureString().capacity());
+}
+
+void RPCConsoleTests::routesPassphraseChangeWithTwoSecrets()
+{
+    qt_test::FakeNode node;
+    std::vector<std::string> args{"walletpassphrasechange", "old pw", "new pw"};
+
+    DispatchConsoleCommand(node, args);
+
+    QVERIFY(node.m_console_calls.empty());
+    QCOMPARE(node.m_secret_calls.size(), size_t{1});
+
+    const qt_test::FakeNode::SecretCall& call = node.m_secret_calls.front();
+    QCOMPARE(call.method, std::string("walletpassphrasechange"));
+    QCOMPARE(call.passphrases, (std::vector<std::string>{"old pw", "new pw"}));
+    QVERIFY(call.args.empty());
+
+    QCOMPARE(args[1], std::string(6, '\0'));
+    QCOMPARE(args[2], std::string(6, '\0'));
+}
+
+void RPCConsoleTests::routesEncryptWalletOverSecretPath()
+{
+    qt_test::FakeNode node;
+    std::vector<std::string> args{"encryptwallet", "p\xc3\xa4 ss"};
+
+    DispatchConsoleCommand(node, args);
+
+    QVERIFY(node.m_console_calls.empty());
+    QCOMPARE(node.m_secret_calls.size(), size_t{1});
+    QCOMPARE(node.m_secret_calls.front().passphrases, (std::vector<std::string>{"p\xc3\xa4 ss"}));
+    QVERIFY(node.m_secret_calls.front().args.empty());
+    QCOMPARE(args[1], std::string(6, '\0'));
+}
+
+void RPCConsoleTests::routesOrdinaryCommandOverPlainPath()
+{
+    qt_test::FakeNode node;
+    node.m_console_result.ok = true;
+    node.m_console_result.output = "42";
+    std::vector<std::string> args{"getblockcount"};
+
+    const interfaces::RpcConsoleResult result = DispatchConsoleCommand(node, args);
+
+    QVERIFY(node.m_secret_calls.empty());
+    QCOMPARE(node.m_console_calls.size(), size_t{1});
+    QCOMPARE(node.m_console_calls.front().first, std::string("getblockcount"));
+    QVERIFY(node.m_console_calls.front().second.empty());
+    QVERIFY(result.ok);
+    QCOMPARE(result.output, std::string("42"));
+}
+
+// The node refuses the count; the GUI must not fall back to the plain path.
+void RPCConsoleTests::passphraseCommandWithoutArgsStaysOnSecretPath()
+{
+    qt_test::FakeNode node;
+    std::vector<std::string> args{"walletpassphrase"};
+
+    DispatchConsoleCommand(node, args);
+
+    QVERIFY(node.m_console_calls.empty());
+    QCOMPARE(node.m_secret_calls.size(), size_t{1});
+    QCOMPARE(node.m_secret_calls.front().method, std::string("walletpassphrase"));
+    QVERIFY(node.m_secret_calls.front().passphrases.empty());
+    QVERIFY(node.m_secret_calls.front().args.empty());
+}
+
+// A passphrase command carries its own passphrase, so a refusal for the wallet's keys is not one the
+// console's unlock prompt answers, and the command line is not kept to run again. An ordinary
+// command's refusal still reaches the console.
+void RPCConsoleTests::passphraseCommandIsNeverRunAgainUnderUnlock()
+{
+    qt_test::FakeNode node;
+    node.m_secret_result.wallet_unlock_needed = true;
+    node.m_console_result.wallet_unlock_needed = true;
+
+    std::vector<std::string> secret_args{"walletpassphrase", "hunter2", "60"};
+    QVERIFY(!DispatchConsoleCommand(node, secret_args).wallet_unlock_needed);
+
+    std::vector<std::string> plain_args{"sendtoaddress", "SBvCq9hD7WtYpRk3mXnJ5fLgZ2aEu8VsQo", "1"};
+    QVERIFY(DispatchConsoleCommand(node, plain_args).wallet_unlock_needed);
 }

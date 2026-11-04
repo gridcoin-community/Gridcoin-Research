@@ -3,8 +3,8 @@
 
 #include "bitcoingui.h"
 #include "guiconstants.h"
+#include "guiutil.h"
 #include "qt/decoration.h"
-#include "support/cleanse.h"
 #include "util.h" /* for LogPrintf */
 #include "walletmodel.h"
 
@@ -17,7 +17,6 @@
 #include <exception>
 #include <memory>
 #include <string>
-#include <string_view>
 #include <utility>
 
 AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
@@ -146,15 +145,6 @@ struct BusyCursor {
     BusyCursor(const BusyCursor&) = delete;
     BusyCursor& operator=(const BusyCursor&) = delete;
 };
-
-//! Copy a passphrase field's text into \p out, and overwrite the plain
-//! std::string it passed through on the way.
-void ReadPassphrase(const QLineEdit& edit, SecureString& out)
-{
-    std::string text = edit.text().toStdString();
-    out.assign(std::string_view{text});
-    memory_cleanse(text.data(), text.size());
-}
 } // namespace
 
 void AskPassphraseDialog::accept()
@@ -164,16 +154,15 @@ void AskPassphraseDialog::accept()
     if (m_check.joinable())
         return;
 
-    SecureString oldpass, newpass1, newpass2;
     if(!model)
         return;
-    oldpass.reserve(MAX_PASSPHRASE_SIZE);
-    newpass1.reserve(MAX_PASSPHRASE_SIZE);
-    newpass2.reserve(MAX_PASSPHRASE_SIZE);
 
-    ReadPassphrase(*ui->oldPassphraseEdit, oldpass);
-    ReadPassphrase(*ui->newPassphraseEdit, newpass1);
-    ReadPassphrase(*ui->repeatNewPassphraseEdit, newpass2);
+    // No plain copy of a passphrase is left behind by the conversion, and each
+    // one is in a secure buffer of its own whatever its length, so moving it
+    // into the check below moves that buffer.
+    SecureString oldpass = GUIUtil::SecureStringFromQString(ui->oldPassphraseEdit->text());
+    SecureString newpass1 = GUIUtil::SecureStringFromQString(ui->newPassphraseEdit->text());
+    SecureString newpass2 = GUIUtil::SecureStringFromQString(ui->repeatNewPassphraseEdit->text());
 
     secureClearPassFields();
 

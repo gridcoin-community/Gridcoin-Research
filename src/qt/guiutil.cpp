@@ -14,9 +14,11 @@
 // outside lint-qt-includes.sh's forbidden list.
 #include "chainparams.h"
 #include "clientversion.h"
+#include "support/cleanse.h"
 #include "util/strencodings.h" // For SanitizeString (per-node QSettings key).
-#include <algorithm>           // For std::replace.
+#include <algorithm>           // For std::replace and std::max.
 
+#include <QByteArray>
 #include <QString>
 #include <QDateTime>
 #include <QDoubleValidator>
@@ -286,6 +288,22 @@ QString HtmlEscape(const QString& str, bool fMultiLine)
 QString HtmlEscape(const std::string& str, bool fMultiLine)
 {
     return HtmlEscape(QString::fromStdString(str), fMultiLine);
+}
+
+SecureString SecureStringFromQString(const QString& text)
+{
+    QByteArray utf8 = text.toUtf8();
+    const size_t size = static_cast<size_t>(utf8.size());
+
+    // The buffer is reserved before the bytes go in, past the inline capacity of
+    // every standard library, so a short text is in secure memory too.
+    SecureString out;
+    out.reserve(std::max<size_t>(size, 100));
+    out.assign(utf8.constData(), size);
+
+    if (size > 0) memory_cleanse(utf8.data(), size);
+
+    return out;
 }
 
 void copyEntryData(QAbstractItemView *view, int column, int role)

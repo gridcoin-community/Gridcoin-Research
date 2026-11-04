@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QMessageBox>
 #include "fs.h"
+#include "support/allocators/secure.h" // For SecureString.
 
 QT_BEGIN_NAMESPACE
 class QFont;
@@ -56,6 +57,13 @@ namespace GUIUtil
     // HTML escaping for rich text controls
     QString HtmlEscape(const QString& str, bool fMultiLine=false);
     QString HtmlEscape(const std::string& str, bool fMultiLine=false);
+
+    //! The UTF-8 bytes of \p text, the same bytes as text.toStdString(), in a
+    //! SecureString. The QByteArray used for the conversion is cleansed before
+    //! return, and the bytes are in the string's secure buffer whatever their
+    //! length, so moving the result moves that buffer and copies nothing. Like
+    //! any SecureString, it throws std::bad_alloc past the secure pool's 256 KiB.
+    SecureString SecureStringFromQString(const QString& text);
 
     /** Copy a field of the currently selected entry of a view to the clipboard. Does nothing if nothing
         is selected.

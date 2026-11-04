@@ -266,8 +266,9 @@ public:
 //! OptionsModel::setData persists a core setting). getSettingStr, getSettingInt
 //! and isSettingSet match the node for the string values held here;
 //! getSettingBool is an approximation (the node reads "true"/"false" as false).
-//! Everything else answers with an empty default. m_fail_changes makes
-//! changeSettings fail without applying anything.
+//! The two console calls are recorded and answer canned results. Everything
+//! else answers with an empty default. m_fail_changes makes changeSettings fail
+//! without applying anything.
 class FakeNode : public interfaces::Node
 {
 public:
@@ -291,6 +292,24 @@ public:
     // not refused.
     std::set<std::string> m_needs_elevation;
     bool m_elevated{false};
+
+    // The console commands run: the method and arguments of each
+    // executeRpcConsoleCommand call, and each executeRpcConsoleSecretCommand
+    // call with its passphrases read back as plain strings. A passphrase's
+    // capacity is kept as well: one larger than an empty SecureString's means
+    // its bytes were in the string's secure buffer, not its inline storage.
+    std::vector<std::pair<std::string, std::vector<std::string>>> m_console_calls;
+    struct SecretCall {
+        std::string method;
+        std::vector<std::string> passphrases;
+        std::vector<std::string> args;
+        std::vector<size_t> passphrase_capacities;
+    };
+    std::vector<SecretCall> m_secret_calls;
+
+    // What the two console calls answer (set by the test).
+    interfaces::RpcConsoleResult m_console_result{};
+    interfaces::RpcConsoleResult m_secret_result{};
 
     std::string getSettingStr(const std::string& name, const std::string& default_val) override
     {
@@ -374,16 +393,25 @@ public:
     void banNode(int64_t /*node_id*/, int64_t /*ban_time_seconds*/) override {}
     bool unban(const std::string& /*subnet*/) override { return false; }
     bool disconnectNode(int64_t /*node_id*/) override { return false; }
-    interfaces::RpcConsoleResult executeRpcConsoleCommand(const std::string& /*method*/,
-                                                          const std::vector<std::string>& /*args*/) override
+    interfaces::RpcConsoleResult executeRpcConsoleCommand(const std::string& method,
+                                                          const std::vector<std::string>& args) override
     {
-        return {};
+        m_console_calls.emplace_back(method, args);
+        return m_console_result;
     }
-    interfaces::RpcConsoleResult executeRpcConsoleSecretCommand(const std::string& /*method*/,
-                                                                const std::vector<SecureString>& /*passphrases*/,
-                                                                const std::vector<std::string>& /*args*/) override
+    interfaces::RpcConsoleResult executeRpcConsoleSecretCommand(const std::string& method,
+                                                                const std::vector<SecureString>& passphrases,
+                                                                const std::vector<std::string>& args) override
     {
-        return {};
+        SecretCall call;
+        call.method = method;
+        call.args = args;
+        for (const SecureString& passphrase : passphrases) {
+            call.passphrases.emplace_back(passphrase.begin(), passphrase.end());
+            call.passphrase_capacities.push_back(passphrase.capacity());
+        }
+        m_secret_calls.push_back(std::move(call));
+        return m_secret_result;
     }
     std::vector<std::string> listRpcCommands() override { return {}; }
     interfaces::ScraperConvergenceSnapshot getScraperConvergenceSnapshot() override { return {}; }

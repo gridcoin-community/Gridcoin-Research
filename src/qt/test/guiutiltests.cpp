@@ -8,6 +8,8 @@
 
 #include <QString>
 
+#include <string>
+
 void GUIUtilTests::extractFirstSuffixFromFilter_data()
 {
     QTest::addColumn<QString>("filter");
@@ -27,4 +29,35 @@ void GUIUtilTests::extractFirstSuffixFromFilter()
     QFETCH(QString, expected);
 
     QCOMPARE(GUIUtil::ExtractFirstSuffixFromFilter(filter), expected);
+}
+
+void GUIUtilTests::secureStringFromQStringMatchesToStdString_data()
+{
+    QTest::addColumn<QString>("text");
+
+    QTest::newRow("ascii") << QStringLiteral("hunter2");
+    QTest::newRow("non-ascii") << QString::fromUtf8("p\xc3\xa4 ss w\xc3\xb6rd \xe2\x82\xac");
+    QTest::newRow("empty") << QString();
+    QTest::newRow("spaces") << QStringLiteral(" lead and trail ");
+}
+
+// The passphrase dialog used to convert with toStdString(), so the bytes must be the same ones, or
+// a passphrase set before would no longer unlock the wallet.
+void GUIUtilTests::secureStringFromQStringMatchesToStdString()
+{
+    QFETCH(QString, text);
+
+    const SecureString converted = GUIUtil::SecureStringFromQString(text);
+
+    QCOMPARE(std::string(converted.begin(), converted.end()), text.toStdString());
+}
+
+// A short text must still be in the secure buffer: in the string's inline storage it would be copied
+// by every move, and nothing cleanses those copies.
+void GUIUtilTests::secureStringFromQStringUsesSecureBuffer()
+{
+    const size_t inline_capacity = SecureString().capacity();
+
+    QVERIFY(GUIUtil::SecureStringFromQString(QStringLiteral("hunter2")).capacity() > inline_capacity);
+    QVERIFY(GUIUtil::SecureStringFromQString(QString()).capacity() > inline_capacity);
 }

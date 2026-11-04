@@ -20,6 +20,14 @@ private slots:
     void redactsMakeSeedPhrasePassword();
     void enteredCommandLeavesNoUndoStep();
     void clearedInputLeavesNoUndoStep();
+    void passphraseCommandsKeepNoSecretInHistoryOrPane();
+    void handlesLineLongerThanSecurePool();
+    void routesPassphraseCommandsOverSecretPath();
+    void routesPassphraseChangeWithTwoSecrets();
+    void routesEncryptWalletOverSecretPath();
+    void routesOrdinaryCommandOverPlainPath();
+    void passphraseCommandWithoutArgsStaysOnSecretPath();
+    void passphraseCommandIsNeverRunAgainUnderUnlock();
 };
 
 #endif // BITCOIN_QT_TEST_RPCCONSOLETESTS_H
