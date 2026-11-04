@@ -20,6 +20,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <future>
@@ -27,6 +28,7 @@
 #include <string>
 #include <thread>
 #include <type_traits>
+#include <vector>
 
 namespace {
 
@@ -599,42 +601,68 @@ BOOST_AUTO_TEST_CASE(unlock_derives_without_holding_cs_wallet)
     EncryptedWallet fx;
     BOOST_REQUIRE(fx.wallet.IsLocked());
 
-    // A long derivation: the records ask for many times the iterations they
-    // were calibrated at. No passphrase opens them now, so the unlock below is
-    // refused after deriving for seconds.
+    // A long derivation, at an iteration count set here rather than scaled
+    // from the calibrated one: five million iterations take a second or more
+    // on any machine. No passphrase opens the records with it, so the unlock
+    // below is refused once the derivation ends, and the refusal is counted
+    // before its delay is slept.
     {
         LOCK(fx.wallet.cs_wallet);
         BOOST_REQUIRE(!fx.wallet.mapMasterKeys.empty());
 
         for (auto& entry : fx.wallet.mapMasterKeys) {
-            entry.second.nDeriveIterations *= 30;
+            entry.second.nDeriveIterations = 5000000;
         }
     }
 
-    const auto started = std::chrono::steady_clock::now();
-    std::future<bool> unlock = std::async(std::launch::async, [&fx] {
+    std::atomic<bool> began{false};
+    std::future<bool> unlock = std::async(std::launch::async, [&fx, &began] {
+        began = true;
         return fx.wallet.Unlock(SecureString("wrong"), UnlockScope::Full);
     });
 
-    // Let the derivation get under way, then take cs_wallet beside it.
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
-
-    const auto asked = std::chrono::steady_clock::now();
-    bool still_unlocking{false};
-    {
-        LOCK(fx.wallet.cs_wallet);
-        still_unlocking = unlock.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
+    for (int i = 0; i < 6000 && !began; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    const auto waited = std::chrono::steady_clock::now() - asked;
+    BOOST_REQUIRE(began);
+
+    // This thread takes cs_wallet while the attempt is not yet counted, and
+    // holds it. The attempt can then be refused, and so counted, only if it
+    // derives without cs_wallet. The attempt takes cs_wallet briefly to copy
+    // the records first, at once when it begins; if this thread still took it
+    // before that, the attempt waits for it, nothing is counted while it is
+    // held, and the round is given up for another. A round waits long before
+    // it gives up, so that an attempt that is only slow is not mistaken for
+    // one that waits.
+    bool refused_while_held{false};
+    bool waited_for_the_lock{false};
+
+    for (int round = 0; round < 3 && !refused_while_held; ++round) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        const auto asked = std::chrono::steady_clock::now();
+        LOCK(fx.wallet.cs_wallet);
+
+        if (std::chrono::steady_clock::now() - asked >= std::chrono::milliseconds(500)) {
+            waited_for_the_lock = true;
+        }
+
+        // Counted before this thread held the lock, so nothing is left to show.
+        if (fx.wallet.FailedUnlockCount() != 0) break;
+
+        for (int i = 0; i < 12000 && fx.wallet.FailedUnlockCount() == 0; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        refused_while_held = fx.wallet.FailedUnlockCount() == 1;
+    }
 
     BOOST_CHECK(!unlock.get());
-    const auto lasted = std::chrono::steady_clock::now() - started;
 
-    // The derivation was long, the lock was taken while it ran, and taking it
-    // did not wait for it.
-    BOOST_CHECK(lasted > std::chrono::seconds(1));
-    BOOST_CHECK(still_unlocking);
-    BOOST_CHECK(waited < std::chrono::milliseconds(500));
+    // The attempt finished deriving while this thread held cs_wallet, and
+    // taking cs_wallet never waited for a derivation.
+    BOOST_CHECK(refused_while_held);
+    BOOST_CHECK(!waited_for_the_lock);
     BOOST_CHECK(fx.wallet.IsLocked());
 }
 
@@ -671,6 +699,70 @@ BOOST_AUTO_TEST_CASE(an_attempt_waits_out_a_concurrent_refusal)
     BOOST_CHECK(waited >= std::chrono::milliseconds(1000));
     BOOST_CHECK(!refused.get().has_value());
     BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(a_queued_attempt_waits_out_failures_made_while_it_waited)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    // A short derivation, at an iteration count set here, so that each check
+    // is brief beside the half-second turns. No passphrase opens the records
+    // with it, so every attempt below is refused.
+    {
+        LOCK(fx.wallet.cs_wallet);
+        BOOST_REQUIRE(!fx.wallet.mapMasterKeys.empty());
+
+        for (auto& entry : fx.wallet.mapMasterKeys) {
+            entry.second.nDeriveIterations = 1000;
+        }
+    }
+
+    // Three attempts start together while nothing has failed, so each claims
+    // a turn spaced by the first failure's delay. The first is refused at
+    // once, and the turns of the other two come round after the count has
+    // grown.
+    std::promise<void> go;
+    const std::shared_future<void> released = go.get_future().share();
+    std::vector<std::future<std::optional<CapabilityId>>> attempts;
+
+    for (int i = 0; i < 3; ++i) {
+        attempts.push_back(std::async(std::launch::async, [&fx, released] {
+            released.wait();
+            return fx.wallet.BeginElevation(SecureString("wrong"), CapabilityKind::Send);
+        }));
+    }
+
+    // When the count was first seen at 1, 2 and 3, which is when the first,
+    // second and third passphrase checks failed, as closely as polling tells.
+    std::array<std::chrono::steady_clock::time_point, 3> failed_at{};
+    unsigned int seen{0};
+
+    go.set_value();
+
+    for (int i = 0; i < 60000 && seen < failed_at.size(); ++i) {
+        const unsigned int count = fx.wallet.FailedUnlockCount();
+        const auto now = std::chrono::steady_clock::now();
+
+        while (seen < count && seen < failed_at.size()) {
+            failed_at[seen++] = now;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    for (auto& attempt : attempts) {
+        BOOST_CHECK(!attempt.get().has_value());
+    }
+
+    BOOST_REQUIRE_EQUAL(seen, 3U);
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 3U);
+
+    // Each check came no sooner after the failure before it than the delay
+    // that failure earned, as when one caller makes the attempts in turn.
+    // Lower bounds only: a loaded machine makes every gap longer.
+    BOOST_CHECK(failed_at[1] - failed_at[0] >= FailedPassphraseDelay(1));
+    BOOST_CHECK(failed_at[2] - failed_at[1] >= FailedPassphraseDelay(2));
 }
 
 BOOST_AUTO_TEST_CASE(a_failed_passphrase_change_counts_and_waits)

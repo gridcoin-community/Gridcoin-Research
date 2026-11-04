@@ -655,25 +655,35 @@ static int64_t SteadyMicros()
 
 int64_t CWallet::AwaitPassphraseTurn()
 {
-    // Claim the next turn. It starts no sooner than the turn claimed before
-    // it, and pushes the one after back by the delay this attempt would earn
-    // if it failed. Concurrent callers therefore take turns, one passphrase
-    // check per delay, as a single caller would: waiting until a shared time
-    // instead would release every waiter at that time at once.
-    const int64_t now = SteadyMicros();
-    int64_t claimed = m_next_passphrase_attempt.load();
-    int64_t start = 0;
-    int64_t next = 0;
+    while (true) {
+        // Claim the next turn. It starts no sooner than the turn claimed
+        // before it, and pushes the one after back by the delay this attempt
+        // would earn if it failed. Concurrent callers therefore take turns,
+        // one passphrase check per delay, as a single caller would: waiting
+        // until a shared time instead would release every waiter at that time
+        // at once.
+        const int64_t now = SteadyMicros();
+        const unsigned int failures = m_failed_unlocks.load();
+        int64_t claimed = m_next_passphrase_attempt.load();
+        int64_t start = 0;
+        int64_t next = 0;
 
-    do {
-        start = std::max(now, claimed);
-        next = start + std::chrono::microseconds(FailedPassphraseDelay(m_failed_unlocks.load() + 1)).count();
-    } while (!m_next_passphrase_attempt.compare_exchange_weak(claimed, next));
+        do {
+            start = std::max(now, claimed);
+            next = start + std::chrono::microseconds(FailedPassphraseDelay(failures + 1)).count();
+        } while (!m_next_passphrase_attempt.compare_exchange_weak(claimed, next));
 
-    // Never under cs_wallet (the declaration excludes it).
-    if (start > now) UninterruptibleSleep(std::chrono::microseconds(start - now));
+        // Never under cs_wallet (the declaration excludes it).
+        if (start > now) UninterruptibleSleep(std::chrono::microseconds(start - now));
 
-    return next;
+        // The turn was spaced for the failures counted when it was claimed.
+        // If attempts ahead of it have failed since, its start is too soon for
+        // the delay they earned, and so is the spacing of every turn behind
+        // it: claim again, which waits out that delay and spaces the turns
+        // after this one by the delay it would earn now. The turns claimed
+        // meanwhile go first.
+        if (m_failed_unlocks.load() <= failures) return next;
+    }
 }
 
 void CWallet::ReleasePassphraseTurn(int64_t turn)

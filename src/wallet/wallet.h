@@ -618,8 +618,10 @@ private:
     //! A turn starts no sooner than the one claimed before it, and moves the
     //! next one on by the delay this attempt would earn by failing, so callers
     //! on several threads check one passphrase per delay, as one caller would.
-    //! Returns the time the turn moved the next one to, for
-    //! ReleasePassphraseTurn().
+    //! An attempt whose turn comes round after attempts ahead of it have
+    //! failed claims a new turn, spaced for the failures counted now, behind
+    //! the turns claimed meanwhile. Returns the time the last turn claimed
+    //! moved the next one to, for ReleasePassphraseTurn().
     int64_t AwaitPassphraseTurn() LOCKS_EXCLUDED(cs_wallet);
 
     //! Hand a turn back unused, when the attempt never checked the passphrase.
