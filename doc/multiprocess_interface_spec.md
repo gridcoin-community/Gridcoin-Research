@@ -605,7 +605,7 @@ file at the client's end is the client's to open, write and name. Three
   `dumpwallet` and `dumpcontracts`. `args` are the console arguments without
   the file; the core puts its own value where the command takes its file. The
   source has one entry. `dumpwallet`'s is generated as it is read, so its size
-  is -1 and `size_hint` is an estimate. `dumpcontracts` runs inside this call,
+  is -1 and `sizeHint` is an estimate. `dumpcontracts` runs inside this call,
   and its entry's note is the command's reply.
 - `beginConsoleUpload(method, args, size) -> (errorOut, FileSink)` for
   `importwallet` (at most 64 MiB) and `parseaccrualsnapshotfile` (at most
@@ -622,8 +622,8 @@ directory, or a failure of the copy or the command.
 **Reading a `FileSource`.**
 
 1. `entries()` lists the entries: `name`, `size` (bytes, or -1 when the entry
-   is generated as it is read), `size_hint` (a size to check free space against
-   when `size` is -1) and `note`.
+   is generated as it is read), `sizeHint` (`size_hint` in the C++ struct; a
+   size to check free space against when `size` is -1) and `note`.
 2. An entry with `size` 0 and a non-empty `note` has nothing to send: a
    configuration or settings file that does not exist, or a configuration file
    the core does not send in this deployment, with the reason as the note. It
@@ -655,13 +655,15 @@ directory, or a failure of the copy or the command.
    connection. `finish` then returns that reason as its `error`, and runs
    nothing.
 2. `finish(size, sha256)` once every byte has been written. The core checks
-   that `size` equals the announced size and the bytes it received, and that
-   `sha256` is the SHA-256 of those bytes, and refuses a mismatch ("the
-   received data does not match the size and SHA-256 the client sent"). Then
-   the command runs: `importwallet` imports from the data, which the core holds
-   in memory; `parseaccrualsnapshotfile` reads it from a core temporary file,
-   which is deleted afterwards. The result has `ok`, `output` (the command's
-   reply) and `error`.
+   that `size` equals the announced size and the bytes it received, and
+   refuses a mismatch ("the received data does not match the size and SHA-256
+   the client sent"). It also checks that `sha256` is the SHA-256 of those
+   bytes: `importwallet` refuses a mismatch with the same text, and
+   `parseaccrualsnapshotfile` with "SHA-256 mismatch". Then the command runs:
+   `importwallet` imports from the data, which the core holds in memory;
+   `parseaccrualsnapshotfile` reads it from a core temporary file, which is
+   deleted afterwards. The result has `ok`, `output` (the command's reply) and
+   `error`.
 3. `cancel()` before `finish` stops the upload, and the core discards what it
    received.
 
@@ -670,9 +672,12 @@ transfer: from the begin that returned a handle until that handle is destroyed
 (the libmultiprocess client sends `destroy` when the proxy is released). A
 handle serves one transfer. Each entry of a source is sent once, a sink
 finishes once, and once a handle has stopped (`cancel`, a refused write or a
-read error that stops it, `finish` returned, or its connection closed) every
-later call is refused with the reason it stopped, such as "the transfer was
-cancelled" or "the transfer has finished".
+read error that stops it, `finish` returned, or its connection closed) its
+later `read`, `write` and `finish` calls are refused with the reason it
+stopped, such as "the transfer was cancelled" or "the transfer has finished".
+`entries()` still answers. A `trailer` call is refused as well, except on the
+`dumpwallet` source once its dump has been sent to its end: that source stops
+itself there, and the trailer stays available.
 
 **Bound to its connection.** A handle stops when the connection it was begun
 on closes ("the IPC connection closed"). The `dumpwallet` source and the
