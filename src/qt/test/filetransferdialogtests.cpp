@@ -191,6 +191,70 @@ public:
     bool m_cancelled{false};
 };
 
+//! A GatedSource that records how often it was read, and on which thread it was destroyed.
+class RecordingSource : public GatedSource
+{
+public:
+    RecordingSource(std::vector<unsigned char> data, std::atomic<int>& reads,
+                    std::atomic<std::thread::id>& destroyed_on)
+        : GatedSource(std::move(data)), m_reads_out(reads), m_destroyed_on(destroyed_on)
+    {
+    }
+
+    ~RecordingSource() override
+    {
+        m_reads_out = Reads();
+        m_destroyed_on = std::this_thread::get_id();
+    }
+
+private:
+    std::atomic<int>& m_reads_out;
+    std::atomic<std::thread::id>& m_destroyed_on;
+};
+
+//! A backup's begin that waits, as the core's does while it copies the wallet, until the test
+//! releases it or five seconds have passed, and then hands over a RecordingSource of \p data.
+class SlowBegin
+{
+public:
+    explicit SlowBegin(std::vector<unsigned char> data) : m_data(std::move(data)) {}
+
+    BackupBeginFn Fn()
+    {
+        return [this](std::string&) -> std::unique_ptr<interfaces::FileSource> {
+            m_thread = std::this_thread::get_id();
+            m_copying = true;
+            m_released.wait_for(5s);
+            m_copying = false;
+            return std::make_unique<RecordingSource>(m_data, m_reads, m_destroyed_on);
+        };
+    }
+
+    //! GUI thread only.
+    void Release()
+    {
+        if (m_release_set) return;
+        m_release_set = true;
+        m_release.set_value();
+    }
+
+    bool Copying() const { return m_copying; }
+    std::thread::id Thread() const { return m_thread; }
+    std::thread::id DestroyedOn() const { return m_destroyed_on; }
+    int Reads() const { return m_reads; }
+    const std::vector<unsigned char>& Data() const { return m_data; }
+
+private:
+    const std::vector<unsigned char> m_data;
+    std::promise<void> m_release;
+    const std::shared_future<void> m_released{m_release.get_future().share()};
+    bool m_release_set{false};
+    std::atomic<bool> m_copying{false};
+    std::atomic<std::thread::id> m_thread{};
+    std::atomic<std::thread::id> m_destroyed_on{};
+    std::atomic<int> m_reads{-1};
+};
+
 //! The progress dialog, if one is showing.
 QProgressDialog* VisibleProgressDialog()
 {
@@ -480,6 +544,104 @@ void FileTransferDialogTests::jobShowsItsBytesOnceReportedAndIsToldOfCancel()
         error);
     QVERIFY(!threw);
     QCOMPARE(error, std::string("connection lost"));
+}
+
+// The backup's begin, in which the core copies the wallet, runs on the modal worker under the
+// dialog, which says "Preparing the backup..." while the GUI thread keeps running its event loop.
+// The entry is saved after it, and the source is destroyed on the worker too.
+void FileTransferDialogTests::backupBeginsOnTheWorkerWhileTheWindowRuns()
+{
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
+
+    std::thread::id worker_thread;
+    const std::future<void> asked = worker.Post([&worker_thread] { worker_thread = std::this_thread::get_id(); });
+    QVERIFY(asked.valid() && asked.wait_for(10s) == std::future_status::ready);
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const fs::path dest = GUIUtil::qstringToBoostPath(dir.path()) / "wallet.dat";
+
+    SlowBegin begin(Bytes(3 * GatedSource::CHUNK + 5));
+    int ticks_while_copying = 0;
+    QString label_while_copying;
+
+    QTimer observer;
+    connect(&observer, &QTimer::timeout, this, [&] {
+        if (!begin.Copying()) return;
+        ++ticks_while_copying;
+        if (QProgressDialog* dialog = VisibleProgressDialog()) label_while_copying = dialog->labelText();
+        if (ticks_while_copying >= 5 && !label_while_copying.isEmpty()) begin.Release();
+    });
+    observer.start(5);
+
+    std::vector<interfaces::BackupEntryResult> results;
+    std::string error;
+    const bool begun = RunBackupWithProgress(nullptr, "Backup Wallet", begin.Fn(), {dest}, results, error);
+    observer.stop();
+    begin.Release();
+
+    QVERIFY2(begun, error.c_str());
+    QVERIFY(begin.Thread() == worker_thread);
+    QVERIFY2(ticks_while_copying >= 5, "the GUI thread's event loop did not run while the core copied the wallet");
+    QCOMPARE(label_while_copying, QString("Preparing the backup..."));
+    QCOMPARE(results.size(), size_t{1});
+    QVERIFY2(results[0].outcome.status == interfaces::TransferStatus::Ok, results[0].outcome.message.c_str());
+    QVERIFY(ReadAll(dest) == std::string(begin.Data().begin(), begin.Data().end()));
+    QVERIFY(begin.DestroyedOn() == worker_thread);
+    QVERIFY(!VisibleProgressDialog());
+}
+
+// Cancel while the core makes its copies takes effect when the begin returns: the dialog says
+// "Cancelling..." meanwhile, the source is never read and nothing is written to the destination,
+// and the source is destroyed, which deletes the core's copies.
+void FileTransferDialogTests::cancelWhileTheBackupBeginsSavesNothing()
+{
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const fs::path dest = GUIUtil::qstringToBoostPath(dir.path()) / "wallet.dat";
+
+    SlowBegin begin(Bytes(1000));
+    bool clicked = false;
+    bool saw_cancelling = false;
+
+    QTimer observer;
+    connect(&observer, &QTimer::timeout, this, [&] {
+        if (!begin.Copying()) return;
+        QProgressDialog* dialog = VisibleProgressDialog();
+        if (!dialog) return;
+
+        if (!clicked) {
+            if (auto* button = dialog->findChild<QPushButton*>()) {
+                button->click();
+                clicked = true;
+            }
+            return;
+        }
+
+        if (dialog->labelText() == CANCELLING_TEXT) {
+            saw_cancelling = true;
+            begin.Release();
+        }
+    });
+    observer.start(5);
+
+    std::vector<interfaces::BackupEntryResult> results;
+    std::string error;
+    const bool begun = RunBackupWithProgress(nullptr, "Backup Wallet", begin.Fn(), {dest}, results, error);
+    observer.stop();
+    begin.Release();
+
+    QVERIFY(clicked);
+    QVERIFY(saw_cancelling);
+    QVERIFY2(begun, error.c_str());
+    QCOMPARE(results.size(), size_t{1});
+    QVERIFY(results[0].outcome.status == interfaces::TransferStatus::Cancelled);
+    QCOMPARE(begin.Reads(), 0);
+    QVERIFY(begin.DestroyedOn() != std::thread::id{});
+    QVERIFY(!fs::exists(dest));
+    QCOMPARE(EntriesIn(dir), 0);
+    QVERIFY(!VisibleProgressDialog());
 }
 
 void FileTransferDialogTests::guardFilesComeFromTheCorePaths()

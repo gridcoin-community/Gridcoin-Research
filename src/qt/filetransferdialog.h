@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -49,6 +50,23 @@ using TransferJobFn = std::function<void(const interfaces::ProgressFn& progress,
 //! no worker or the job threw.
 bool RunJobWithProgress(QWidget* parent, const QString& title, const QString& what, TransferJobFn job,
                         std::string& error);
+
+//! Makes the core begin a backup, and returns the source of its copies, or null with \p error set.
+using BackupBeginFn = std::function<std::unique_ptr<interfaces::FileSource>(std::string& error)>;
+
+//! Runs a whole backup on the modal GuiIpcWorker under one dialog of RunJobWithProgress: \p begin,
+//! then each entry saved to the destination at the same index of \p dests (DownloadBackupEntries),
+//! then the source's destruction, which deletes what the core has not sent. The begin makes the
+//! core copy the items, which takes as long as the wallet is large; the dialog says "Preparing the
+//! backup..." meanwhile, and shows the bytes of each entry once they arrive. A cancel while the
+//! copies are made takes effect when the begin returns: nothing is written, and the first entry's
+//! outcome is Cancelled. The backup has always finished when this returns.
+//!
+//! False, with \p error set and \p results empty, when the begin returned no source, there is no
+//! worker, or the job threw (a lost connection).
+bool RunBackupWithProgress(QWidget* parent, const QString& title, BackupBeginFn begin,
+                           const std::vector<fs::path>& dests, std::vector<interfaces::BackupEntryResult>& results,
+                           std::string& error);
 
 //! The core's files a backup must not be written over (CheckDestination's core_files): its wallet
 //! file, configuration file, settings file and debug log. A path the core did not report is left

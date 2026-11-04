@@ -2066,30 +2066,33 @@ void BitcoinGUI::backupWallet()
     // One prompt at most. A locked wallet, or one unlocked for staking only, asks for
     // the passphrase and begins a Backup capability; an unencrypted or fully unlocked
     // one asks nothing and needs none. The core ends the capability before
-    // beginBackup() returns and the source holds none, so the context goes with it.
-    std::unique_ptr<interfaces::FileSource> source;
+    // beginBackup() returns and the source holds none, so the context has nothing
+    // left to end when the backup is over.
+    std::vector<interfaces::BackupEntryResult> results;
     std::string error;
+    bool begun = false;
 
     {
         WalletModel::UnlockContext ctx(walletModel->requestUnlock(CapabilityKind::Backup));
 
         if (!ctx.isValid()) return;
 
-        source = walletModel->beginBackup(items, error);
+        // beginBackup() makes the core copy the wallet and the second file before it
+        // returns, which takes as long as the wallet is large. So it runs on the modal
+        // worker under the progress dialog, with the downloads and the source's
+        // destruction after it, and the window stays responsive meanwhile.
+        WalletModel* const model = walletModel;
+
+        begun = RunBackupWithProgress(
+            this, tr("Backup Wallet"),
+            [model, items](std::string& begin_error) { return model->beginBackup(items, begin_error); },
+            {wallet_dest, second_dest}, results, error);
     }
 
-    if (!source) {
+    if (!begun) {
         QMessageBox::warning(this, tr("Backup Failed"), QString::fromStdString(error));
         return;
     }
-
-    const std::vector<interfaces::BackupEntryResult> results = interfaces::DownloadBackupEntries(
-        *source, {wallet_dest, second_dest}, [this](interfaces::FileSource& src, uint32_t entry, const fs::path& dest) {
-            return RunDownloadWithProgress(this, tr("Backup Wallet"), src, entry, dest);
-        });
-
-    // The core deletes what it has not sent, and another transfer can begin.
-    source.reset();
 
     bool failed = false;
     const QString text = BackupResultText(results, failed);

@@ -56,10 +56,11 @@ QString CountsText(uint64_t done, int64_t total)
 }
 
 //! Run \p transfer on the process's worker while a modal dialog shows its progress, and
-//! return its result once it has finished. \p failed makes the result for a transfer that
+//! return its result once it has finished. The dialog shows \p what until the transfer
+//! reports bytes, then \p reported with them. \p failed makes the result for a transfer that
 //! could not run, or that threw.
 template <typename Result>
-Result RunWithProgress(QWidget* parent, const QString& title, const QString& what,
+Result RunWithProgress(QWidget* parent, const QString& title, const QString& what, const QString& reported,
                        std::function<Result(const interfaces::ProgressFn&, const std::atomic<bool>&)> transfer,
                        std::function<Result(const std::string&)> failed)
 {
@@ -150,7 +151,7 @@ Result RunWithProgress(QWidget* parent, const QString& title, const QString& wha
             const uint64_t done = job->done;
             const int64_t total = job->total;
 
-            dialog.setLabelText(what + "\n" + CountsText(done, total));
+            dialog.setLabelText(reported + "\n" + CountsText(done, total));
 
             if (total > 0) {
                 const uint64_t permille = std::min<uint64_t>(done, static_cast<uint64_t>(total)) * 1000 /
@@ -199,7 +200,7 @@ interfaces::TransferOutcome RunDownloadWithProgress(QWidget* parent, const QStri
     const QString what = QObject::tr("Saving %1").arg(GUIUtil::boostPathToQString(dest));
 
     return RunWithProgress<interfaces::TransferOutcome>(
-        parent, title, what,
+        parent, title, what, what,
         [&src, entry, dest](const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel) {
             return interfaces::DownloadEntry(src, entry, dest, progress, cancel);
         },
@@ -217,7 +218,7 @@ interfaces::FileSinkResult RunUploadWithProgress(QWidget* parent, const QString&
     const QString what = QObject::tr("Sending %1").arg(GUIUtil::boostPathToQString(local));
 
     return RunWithProgress<interfaces::FileSinkResult>(
-        parent, title, what,
+        parent, title, what, what,
         [&sink, local](const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel) {
             return interfaces::UploadFile(sink, local, progress, cancel);
         },
@@ -239,7 +240,7 @@ bool RunJobWithProgress(QWidget* parent, const QString& title, const QString& wh
     };
 
     const JobResult result = RunWithProgress<JobResult>(
-        parent, title, what,
+        parent, title, what, what,
         [job = std::move(job)](const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel) {
             job(progress, cancel);
 
@@ -255,6 +256,67 @@ bool RunJobWithProgress(QWidget* parent, const QString& title, const QString& wh
 
     error = result.error;
     return result.ok;
+}
+
+bool RunBackupWithProgress(QWidget* parent, const QString& title, BackupBeginFn begin,
+                           const std::vector<fs::path>& dests, std::vector<interfaces::BackupEntryResult>& results,
+                           std::string& error)
+{
+    struct BackupResult
+    {
+        bool begun{false};
+        std::string error{};
+        std::vector<interfaces::BackupEntryResult> entries{};
+    };
+
+    results.clear();
+    error.clear();
+
+    BackupResult result = RunWithProgress<BackupResult>(
+        parent, title, QObject::tr("Preparing the backup..."), QObject::tr("Saving the backup"),
+        [begin = std::move(begin), dests](const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel) {
+            BackupResult ran;
+
+            // The source goes as this returns, on this thread: the core deletes what it has not
+            // sent, and another transfer can begin.
+            const std::unique_ptr<interfaces::FileSource> source = begin(ran.error);
+
+            if (!source) {
+                if (ran.error.empty()) ran.error = QObject::tr("The backup could not begin.").toStdString();
+                return ran;
+            }
+
+            ran.begun = true;
+            ran.entries = interfaces::DownloadBackupEntries(
+                *source, dests,
+                [&progress, &cancel](interfaces::FileSource& src, uint32_t entry, const fs::path& dest) {
+                    // A cancel while the core made its copies takes effect here, before anything
+                    // is written.
+                    if (cancel.load()) {
+                        interfaces::TransferOutcome cancelled;
+                        cancelled.status = interfaces::TransferStatus::Cancelled;
+                        cancelled.message = "cancelled";
+                        return cancelled;
+                    }
+
+                    return interfaces::DownloadEntry(src, entry, dest, progress, cancel);
+                });
+
+            return ran;
+        },
+        [](const std::string& message) {
+            BackupResult failed;
+            failed.error = message;
+            return failed;
+        });
+
+    if (!result.begun) {
+        error = std::move(result.error);
+        return false;
+    }
+
+    results = std::move(result.entries);
+    return true;
 }
 
 std::vector<fs::path> BackupGuardFiles(const interfaces::CorePaths& paths)
