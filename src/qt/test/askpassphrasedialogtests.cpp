@@ -6,6 +6,7 @@
 
 #include "interfaces/wallet_coin_source.h"
 #include "qt/askpassphrasedialog.h"
+#include "qt/bitcoingui.h"
 #include "qt/optionsmodel.h"
 #include "qt/test/interfacefakes.h"
 #include "qt/walletmodel.h"
@@ -64,6 +65,16 @@ constexpr int TIMED_OUT{2};
 //! What exec() returns when the case ended the prompt's loop from outside, as
 //! an application quitting under the prompt does.
 constexpr int ENDED_OUTSIDE{3};
+
+//! The message box on screen, if one is.
+QMessageBox* VisibleMessageBox()
+{
+    for (QWidget* widget : QApplication::topLevelWidgets()) {
+        auto* box = qobject_cast<QMessageBox*>(widget);
+        if (box && box->isVisible()) return box;
+    }
+    return nullptr;
+}
 
 //! The thread the process's modal worker runs its jobs on.
 std::thread::id ModalWorkerThread()
@@ -574,4 +585,81 @@ void AskPassphraseDialogTests::deletedWhileQueuedGivesTheCheckUp()
     QVERIFY2(took < 1000, qPrintable(QStringLiteral("the deletion took %1 ms").arg(took)));
     QVERIFY(!wallet.m_waiting.load());
     QCOMPARE(wallet.m_end_elevation_calls.load(), 0);
+}
+
+// After an encryption in the split build the core stops, when the GUI's
+// connection closes or by itself a while after the encryption, and the GUI then
+// sees the connection drop, which asks for a quit (BitcoinGUI::requestQuit(),
+// posted from the disconnect hook). The message after the encryption, which
+// holds the warning about earlier backups, stays until the user closes it, and
+// the quit happens then. Run under the application's own event loop, as in the
+// GUI: outside it a quit does nothing.
+void AskPassphraseDialogTests::encryptionMessageOutlivesTheCore()
+{
+    qt_test::FakeWallet wallet;
+    wallet.m_encrypt_result = true;
+    ModelOverFakeWallet fixture(wallet);
+
+    AskPassphraseDialog dialog(AskPassphraseDialog::Encrypt);
+    dialog.setModel(&fixture.model);
+    dialog.setMultiprocess(true);
+
+    bool confirmed = false;
+    bool dropped = false;
+    int ticks_after_drop = 0;
+    bool open_after_drop = false;
+    bool closed = false;
+
+    QTimer observer;
+    observer.setInterval(5);
+    QObject::connect(&observer, &QTimer::timeout, this, [&] {
+        QMessageBox* const box = VisibleMessageBox();
+        if (!box || closed) return;
+
+        if (!confirmed) {
+            if (box->windowTitle() != QStringLiteral("Confirm wallet encryption")) return;
+            confirmed = true;
+            box->button(QMessageBox::Yes)->click();
+            return;
+        }
+
+        if (box->windowTitle() != QStringLiteral("Wallet encrypted")) return;
+
+        if (!dropped) {
+            dropped = true;
+            // What the disconnect hook posts when the connection to the core is lost.
+            QMetaObject::invokeMethod(qApp, [] { BitcoinGUI::requestQuit(); }, Qt::QueuedConnection);
+            return;
+        }
+
+        // The quit posted above has been delivered well before this.
+        if (++ticks_after_drop < 20) return;
+
+        open_after_drop = true;
+        closed = true;
+        box->button(QMessageBox::Ok)->click();
+    });
+    observer.start();
+
+    // Ends the application's loop if nothing else does, so a regression fails rather than hangs.
+    QTimer backstop;
+    backstop.setSingleShot(true);
+    QObject::connect(&backstop, &QTimer::timeout, qApp, [] { QCoreApplication::exit(TIMED_OUT); });
+    backstop.start(15000);
+
+    QTimer::singleShot(0, &dialog, [&dialog] {
+        QTimer::singleShot(0, &dialog, [&dialog] { SubmitPassphrase(dialog); });
+        dialog.exec();
+    });
+
+    const int app_result = QCoreApplication::exec();
+    observer.stop();
+    backstop.stop();
+
+    QVERIFY(confirmed);
+    QVERIFY(dropped);
+    QVERIFY2(open_after_drop, "the message closed when the connection to the core was lost");
+    QVERIFY(closed);
+    QCOMPARE(app_result, 0);
+    QVERIFY(!VisibleMessageBox());
 }

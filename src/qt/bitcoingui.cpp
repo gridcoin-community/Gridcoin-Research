@@ -100,6 +100,7 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 BitcoinGUI::BitcoinGUI(QWidget* parent)
@@ -1578,6 +1579,8 @@ bool BitcoinGUI::tryQuit()
 }
 
 bool BitcoinGUI::m_quit_requested = false;
+int BitcoinGUI::m_quit_holds = 0;
+bool BitcoinGUI::m_quit_deferred = false;
 
 void BitcoinGUI::requestQuit()
 {
@@ -1587,8 +1590,26 @@ void BitcoinGUI::requestQuit()
     // exit() that would short-circuit it; on Qt5 quit() is exit(0) and skips that
     // sequence, which is fine because Qt5 never hits the minimize-on-close veto.
     // See the requestQuit() doc and issue #2995.
+    //
+    // A message that must stay up until the user closes it holds the quit until
+    // then (QuitHold).
+    if (m_quit_holds > 0) {
+        m_quit_deferred = true;
+        return;
+    }
+
     m_quit_requested = true;
     QApplication::quit();
+}
+
+BitcoinGUI::QuitHold::QuitHold()
+{
+    ++m_quit_holds;
+}
+
+BitcoinGUI::QuitHold::~QuitHold()
+{
+    if (--m_quit_holds == 0 && std::exchange(m_quit_deferred, false)) requestQuit();
 }
 
 void BitcoinGUI::diagnosticsClicked()

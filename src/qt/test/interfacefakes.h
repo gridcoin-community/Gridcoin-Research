@@ -698,6 +698,8 @@ public:
     //! under way does, or as one waiting in the node's process does in the
     //! split build, where the cancel cannot reach it.
     std::atomic<bool> m_ignore_cancel{false};
+    //! What encryptWallet() answers.
+    std::atomic<bool> m_encrypt_result{false};
 
     // Observed.
     std::atomic<bool> m_waiting{false};
@@ -736,7 +738,7 @@ public:
     CAmount getTransactionFeeRate() override { return 0; }
     bool tryGetBalances(interfaces::WalletBalances& /*balances*/) override { return false; }
     int getNumTransactions() override { return 0; }
-    bool encryptWallet(const SecureString& /*passphrase*/) override { return false; }
+    bool encryptWallet(const SecureString& /*passphrase*/) override { return m_encrypt_result; }
     bool lockWallet() override { return false; }
     bool restrictToStakingOnly() override { return false; }
     bool elevateWallet(const SecureString& /*passphrase*/) override { return false; }

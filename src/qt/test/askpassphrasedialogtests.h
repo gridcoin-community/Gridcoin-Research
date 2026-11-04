@@ -42,6 +42,8 @@ private slots:
     void destroyedUnderARunningCheckEndsItsCapability();
     void deletedAfterCancelWhileQueuedReturnsAtOnce();
     void deletedWhileQueuedGivesTheCheckUp();
+    // Last: it quits the application under the application's own event loop.
+    void encryptionMessageOutlivesTheCore();
 
 private:
     std::unique_ptr<GuiIpcWorker> m_worker;

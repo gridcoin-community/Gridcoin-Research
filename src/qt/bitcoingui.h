@@ -148,8 +148,26 @@ public:
      * On Qt6 quit() routes through closeAllWindows(); our closeEvent()'s
      * minimize-on-close handling would otherwise ignore that close and veto the
      * quit, so an explicit Exit only minimized the window. See issue #2995.
+     *
+     * While a QuitHold exists the quit waits, and is made when the last one
+     * goes.
      */
     static void requestQuit();
+
+    //! While one exists, requestQuit() does not quit, from any caller: the quit
+    //! asked for is made when the last one goes. For a message the user must be
+    //! able to read to its end although the core may go away meanwhile, which
+    //! asks for a quit when the connection drops: the one after an encryption in
+    //! the split build. GUI thread only.
+    class QuitHold
+    {
+    public:
+        QuitHold();
+        ~QuitHold();
+
+        QuitHold(const QuitHold&) = delete;
+        QuitHold& operator=(const QuitHold&) = delete;
+    };
 
 protected:
     void changeEvent(QEvent *e);
@@ -210,6 +228,11 @@ private:
     //! the GUI thread (QueueShutdown marshals through a queued connection), so a
     //! plain bool is sufficient. See requestQuit() / issue #2995.
     static bool m_quit_requested;
+
+    //! The QuitHolds that exist, and whether requestQuit() was called while one
+    //! did. GUI thread only, as m_quit_requested.
+    static int m_quit_holds;
+    static bool m_quit_deferred;
 
     QLabel *statusbarAlertsLabel;
     QLabel *labelEncryptionIcon;
