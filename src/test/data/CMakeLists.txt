@@ -20,6 +20,7 @@ endif()
 
 set(JSON_TEST_FILES
     base58_encode_decode.json
+    key_entry_points.json
     key_io_invalid.json
     key_io_valid.json
     script_valid.json

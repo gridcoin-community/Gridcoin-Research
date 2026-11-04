@@ -23,6 +23,20 @@ this lint does:
     and none of those friends is defined inside the class, where it would be a
     maker no other check sees.
 
+Who makes a token is half of it; who uses one is the other. Outside src/test/
+(CONSUMERS below):
+
+  * GetKeyForStaking() is called only in the files of the staking paths and of
+    the signing provider that wraps it.
+  * StakingSigningProvider, which signs with GetKeyForStaking(), is named only
+    in its own files and in the two paths that sign with it: the miner's block
+    signing and the automated beacon renewal's transaction.
+  * The type StakingKeyAccess is named only in the files that hold or pass a
+    token. A non-null renewal_access argument needs a token to point at, so
+    those are also the only files that can pass one.
+  * TrySignClaim(), which signs a claim with the miner's token, is called only
+    by the miner.
+
 ElevationGrant is restricted the same way. Its maker is CapabilityScope, so:
 
   * class CapabilityScope is defined only in src/wallet/capability.h. Until
@@ -33,14 +47,32 @@ ElevationGrant is restricted the same way. Its maker is CapabilityScope, so:
     Elsewhere only its static members (ElevationGrant::IsActiveFor) may be
     used, so a grant cannot be constructed or held anywhere else.
 
-Comments and string literals are ignored, so prose may name the factories.
+Every path to the wallet's private keys goes through GetKey(),
+DecryptSecretWithMasterKey(), GetSeedPhraseBlob() or AddKeyPubKey(). The unit
+suite key_entry_points_tests drives each entry point that reaches them, from
+the table src/test/data/key_entry_points.json. The table's "sources" object
+lists every file outside src/test/ that calls one of the four, with the number
+of calls, so:
+
+  * a call in a file the table does not list fails, and so does a listed file
+    whose count no longer matches. A new path to the keys therefore needs a
+    row in the table, and the suite then checks that it refuses while the
+    wallet is unlocked for staking only.
+  * every IPC method the table names is declared on its interface in
+    src/ipc/capnp/.
+
+Comments and string literals are ignored, so prose may name any of these.
+`--self-test` runs every rule against a sample that must fail it.
 
 If you are here because the lint failed: a staking path that needs keys under
 StakingOnly gets its token from its own factory and passes it down; nothing else
-should make one. Code that is not a staking path uses GetKey(), which works
-under a Full unlock or inside a capability.
+should make or hold one. Code that is not a staking path uses GetKey(), which
+works under a Full unlock or inside a capability. A new caller of the four key
+functions is a new entry point: add its row to key_entry_points.json, run
+key_entry_points_tests, then update the file's count under "sources".
 """
 
+import json
 import os
 import re
 import subprocess
@@ -85,6 +117,71 @@ EXPECTED_FRIENDS = {
     },
 }
 
+# The users of a token: the name, how a use of it is found, the files that may
+# use it, and how the use reads in an error. src/test/ is allowed as well.
+CONSUMERS = {
+    "GetKeyForStaking": (
+        re.compile(r"\bGetKeyForStaking\s*\("),
+        (
+            "src/keystore.h",
+            "src/keystore.cpp",
+            "src/miner.cpp",
+            "src/gridcoin/researcher.cpp",
+            "src/gridcoin/scraper/scraper.cpp",
+            "src/wallet/staking_signer.cpp",
+        ),
+        "called",
+    ),
+    "StakingSigningProvider": (
+        re.compile(r"\bStakingSigningProvider\b"),
+        (
+            "src/wallet/staking_signer.h",
+            "src/wallet/staking_signer.cpp",
+            "src/miner.cpp",
+            "src/wallet/wallet.cpp",
+        ),
+        "named",
+    ),
+    "StakingKeyAccess": (
+        re.compile(r"\bStakingKeyAccess\b"),
+        (
+            "src/keystore.h",
+            "src/keystore.cpp",
+            "src/miner.cpp",
+            "src/gridcoin/researcher.h",
+            "src/gridcoin/researcher.cpp",
+            "src/gridcoin/scraper/scraper.h",
+            "src/gridcoin/scraper/scraper.cpp",
+            "src/gridcoin/contract/message.h",
+            "src/gridcoin/contract/message.cpp",
+            "src/wallet/staking_signer.h",
+            "src/wallet/staking_signer.cpp",
+            "src/wallet/wallet.h",
+            "src/wallet/wallet.cpp",
+        ),
+        "named (to hold a token, or to pass one as a non-null renewal_access argument)",
+    ),
+    "TrySignClaim": (
+        re.compile(r"\bTrySignClaim\s*\("),
+        (
+            "src/miner.h",
+            "src/miner.cpp",
+        ),
+        "called",
+    ),
+}
+
+# The table the unit suite key_entry_points_tests drives.
+TABLE = "src/test/data/key_entry_points.json"
+
+# A call or declaration of one of the four routes to key material. It needs an
+# argument, so the argument-less GetKey() of CService and the address manager
+# is not counted.
+KEY_FUNCTION_RE = re.compile(
+    r"\b(GetKey|DecryptSecretWithMasterKey|GetSeedPhraseBlob|AddKeyPubKey)\s*\(\s*[^)\s]")
+
+CAPNP_DIR = "src/ipc/capnp/"
+
 # Subtrees that are not ours.
 EXCLUDE_RE = re.compile(
     r"^src/(crypto/ctaes|leveldb|secp256k1|univalue|bdb53|ipc/libmultiprocess|minisketch|crc32c)/")
@@ -94,6 +191,9 @@ EXCLUDE_RE = re.compile(
 # a string, is then handled correctly.
 NONCODE_RE = re.compile(
     r"//[^\n]*|/\*.*?\*/|\"(?:[^\"\\\n]|\\.)*\"|'(?:[^'\\\n]|\\.)*'", re.DOTALL)
+
+# Cap'n Proto comments run from # to the end of the line.
+CAPNP_COMMENT_RE = re.compile(r"#[^\n]*")
 
 FACTORY_RE = re.compile(r"\b({})\b".format("|".join(sorted(FACTORIES))))
 PEER_RE = re.compile(r"\b({})\b".format("|".join(TEST_PEERS)))
@@ -126,13 +226,10 @@ def line_of(text, pos):
     return text.count("\n", 0, pos) + 1
 
 
-def class_body(text, name):
-    """Return (start, body) of `class name { ... }`, or None."""
-    m = re.search(r"\bclass\s+{}\b[^{{;]*\{{".format(re.escape(name)), text)
-    if not m:
-        return None
+def braced(text, start):
+    """The text from start up to the brace closing the one just before start, or None."""
     depth = 1
-    i = m.end()
+    i = start
     while i < len(text) and depth:
         if text[i] == "{":
             depth += 1
@@ -141,7 +238,18 @@ def class_body(text, name):
         i += 1
     if depth:
         return None
-    return m.end(), text[m.end():i - 1]
+    return text[start:i - 1]
+
+
+def class_body(text, name):
+    """Return (start, body) of `class name { ... }`, or None."""
+    m = re.search(r"\bclass\s+{}\b[^{{;]*\{{".format(re.escape(name)), text)
+    if not m:
+        return None
+    body = braced(text, m.end())
+    if body is None:
+        return None
+    return m.end(), body
 
 
 def friend_spans(code):
@@ -161,14 +269,17 @@ def inside(pos, spans):
     return any(lo <= pos < hi for lo, hi in spans)
 
 
+def git_files(*patterns):
+    out = subprocess.check_output(["git", "ls-files", "--"] + list(patterns), text=True)
+    return [f for f in out.splitlines() if f]
+
+
 def source_files():
-    out = subprocess.check_output(
-        ["git", "ls-files", "--", "src/*.cpp", "src/*.h", "src/*.mm"], text=True)
-    return [f for f in out.splitlines() if f and not EXCLUDE_RE.match(f)]
+    return [f for f in git_files("src/*.cpp", "src/*.h", "src/*.mm") if not EXCLUDE_RE.match(f)]
 
 
 def read(path):
-    with open(path, "r", encoding="utf-8", errors="replace") as f:
+    with open(path, "r", encoding="utf8", errors="replace") as f:
         return f.read()
 
 
@@ -194,8 +305,12 @@ def check_friend_lists(code, errors):
                           "to match".format(KEYSTORE_HEADER, name, missing))
 
 
-def check_file(path, errors):
-    code = strip_noncode(read(path))
+def check_code(path, code, errors, key_calls):
+    """Check one file's code, its comments and literals already blanked.
+
+    The calls of the four key functions it makes outside src/test/ are recorded
+    in key_calls[path], as (line, name), for check_sources().
+    """
     allowed = friend_spans(code) if path == KEYSTORE_HEADER else []
 
     for m in FACTORY_RE.finditer(code):
@@ -225,15 +340,216 @@ def check_file(path, errors):
         errors.append("{}:{}: {} is used outside {}".format(
             path, line_of(code, m.start()), m.group(1), TEST_DIR))
 
+    for name, (pattern, files, how) in CONSUMERS.items():
+        if path in files:
+            continue
+        for m in pattern.finditer(code):
+            errors.append("{}:{}: {} is {} outside the staking paths ({} and {})".format(
+                path, line_of(code, m.start()), name, how, ", ".join(files), TEST_DIR))
+
+    for m in KEY_FUNCTION_RE.finditer(code):
+        key_calls.setdefault(path, []).append((line_of(code, m.start()), m.group(1)))
+
+
+def check_sources(key_calls, listed, errors):
+    """Compare the key-function calls found with the table's "sources"."""
+    for path in sorted(key_calls):
+        calls = key_calls[path]
+        if path not in listed:
+            for line, name in calls:
+                errors.append("{}:{}: {}() reaches the wallet's keys in a file {} does not list "
+                              "under \"sources\"; add a row for the entry point it serves, then "
+                              "list the file".format(path, line, name, TABLE))
+        elif listed[path] != len(calls):
+            errors.append("{}: {} calls of the key functions, but {} lists {}; a new call is a "
+                          "new path to the keys: add its row, then set the count".format(
+                              path, len(calls), TABLE, listed[path]))
+
+    for path in sorted(listed):
+        if path not in key_calls:
+            errors.append("{}: listed under \"sources\" in {}, but it calls none of the key "
+                          "functions; remove it".format(path, TABLE))
+
+
+def capnp_methods(texts):
+    """Interface name -> the names of its methods, from capnp file texts."""
+    methods = {}
+    for text in texts:
+        code = CAPNP_COMMENT_RE.sub("", text)
+        for m in re.finditer(r"\binterface\s+(\w+)[^{]*\{", code):
+            body = braced(code, m.end())
+            if body is None:
+                continue
+            methods.setdefault(m.group(1), set()).update(
+                re.findall(r"^\s*(\w+)\s*@\d+", body, re.MULTILINE))
+    return methods
+
+
+def check_ipc_rows(table, methods, errors):
+    for section in ("ipc", "ipc_pool_draw", "ipc_not_rows"):
+        for row in table.get(section, []):
+            interface = row.get("interface")
+            method = row.get("method")
+            if interface not in methods:
+                errors.append("{}: \"{}\" names interface {}, which no file in {} declares".format(
+                    TABLE, section, interface, CAPNP_DIR))
+            elif method not in methods[interface]:
+                errors.append("{}: \"{}\" names {}.{}, which the interface does not declare".format(
+                    TABLE, section, interface, method))
+
+
+def run(files, header, table, capnp_texts):
+    """Every check, over the source texts {path: text}, the text of
+    src/keystore.h, the table and the capnp file texts. Returns the errors."""
+    errors = []
+    check_friend_lists(strip_noncode(header), errors)
+
+    key_calls = {}
+    for path in sorted(files):
+        check_code(path, strip_noncode(files[path]), errors, key_calls)
+
+    listed = table.get("sources", {})
+    if not isinstance(listed, dict):
+        errors.append("{}: \"sources\" must be an object of file -> number of calls".format(TABLE))
+        listed = {}
+    check_sources(key_calls, listed, errors)
+    check_ipc_rows(table, capnp_methods(capnp_texts), errors)
+
+    return errors
+
+
+# The self-test. Each failing sample breaks one rule of a clean tree.
+
+SAMPLE_HEADER = """
+class ElevationGrant
+{
+    friend class CapabilityScope;
+    friend struct ElevationGrantTestPeer;
+};
+class StakingKeyAccess
+{
+    friend StakingKeyAccess MinerStakingKeyAccess();
+    friend StakingKeyAccess RenewalStakingKeyAccess();
+    friend StakingKeyAccess ScraperStakingKeyAccess();
+    friend struct StakingKeyAccessTestPeer;
+};
+"""
+
+SAMPLE_CAPNP = """
+interface Wallet $Proxy.wrap("interfaces::Wallet") {
+    signMessage @22 (context :Proxy.Context, address :Text) -> (result :Int32);
+    # removedMethod @23 () -> ();
+}
+"""
+
+SAMPLE_TABLE = {
+    "ipc": [{"interface": "Wallet", "method": "signMessage"}],
+    "sources": {"src/wallet/rpcwallet.cpp": 1},
+}
+
+# Code every rule accepts: prose and literals naming everything, the address
+# manager's argument-less GetKey(), the miner's own factory and claim signing,
+# and the one key call the sample table lists.
+CLEAN_FILES = {
+    "src/wallet/rpcwallet.cpp": (
+        "// MinerStakingKeyAccess(), GetKeyForStaking(id, key, access), TrySignClaim(a)\n"
+        "/* StakingSigningProvider p(store, access); ElevationGrant g; */\n"
+        "const char* s = \"GetKey(id, key) StakingKeyAccess\";\n"
+        "bool f() { CKey key; return pwalletMain->GetKey(id, key); }\n"),
+    "src/addrman.cpp": "uint64_t h = (CHashWriter(SER_GETHASH, 0) << GetKey()).GetCheapHash();\n",
+    "src/miner.cpp": (
+        "StakingKeyAccess MinerStakingKeyAccess() { return StakingKeyAccess(); }\n"
+        "bool g() { return TrySignClaim(pwallet, claim, block); }\n"),
+}
+
+# (the rule it breaks, files added to the clean ones, and the header, table and
+# capnp text when they differ from the samples above)
+FAILING_SAMPLES = [
+    ("a factory used outside its file",
+     {"src/rpc/blockchain.cpp": "void f() { auto a = MinerStakingKeyAccess(); }\n"}, None, None, None),
+    ("a test peer used outside src/test/",
+     {"src/init.cpp": "void f() { StakingKeyAccessTestPeer::Make(); }\n"}, None, None, None),
+    ("CapabilityScope defined outside its header",
+     {"src/wallet/wallet.cpp": "class CapabilityScope : public Base {};\n"}, None, None, None),
+    ("ElevationGrant named outside its files",
+     {"src/wallet/wallet.cpp": "std::unique_ptr<ElevationGrant> grant;\n"}, None, None, None),
+    ("GetKeyForStaking called outside its consumers",
+     {"src/rpc/blockchain.cpp": "bool f() { return w.GetKeyForStaking(id, key, *access); }\n"},
+     None, None, None),
+    ("StakingSigningProvider made outside its consumers",
+     {"src/rpc/rawtransaction.cpp": "void f() { const StakingSigningProvider p(*w, a); }\n"},
+     None, None, None),
+    ("a non-null renewal_access passed outside the staking paths",
+     {"src/gridcoin/interfaces.cpp":
+      "void f(const StakingKeyAccess* access) { r->AdvertiseBeacon(false, access); }\n"},
+     None, None, None),
+    ("TrySignClaim called outside the miner",
+     {"src/gridcoin/mrc.cpp": "bool f() { return TrySignClaim(w, claim, block); }\n"},
+     None, None, None),
+    ("a key function called in a file the table does not list",
+     {"src/rpc/misc.cpp": "bool f() { return pwalletMain->GetSeedPhraseBlob(blob); }\n"},
+     None, None, None),
+    ("one more key function call in a listed file",
+     {"src/wallet/rpcwallet.cpp": CLEAN_FILES["src/wallet/rpcwallet.cpp"]
+      + "bool g() { return pwalletMain->AddKeyPubKey(key, pubkey); }\n"},
+     None, None, None),
+    ("a listed file that calls no key function",
+     {}, None, dict(SAMPLE_TABLE, sources={"src/wallet/rpcwallet.cpp": 1, "src/net.cpp": 1}), None),
+    ("an unexpected friend of StakingKeyAccess",
+     {}, SAMPLE_HEADER.replace("friend struct StakingKeyAccessTestPeer;",
+                               "friend struct StakingKeyAccessTestPeer;\n    friend void Thief();"),
+     None, None),
+    ("a friend defined inside the class",
+     {}, SAMPLE_HEADER.replace("friend class CapabilityScope;", "friend class CapabilityScope { };"),
+     None, None),
+    ("an IPC row naming a method its interface does not declare",
+     {}, None, dict(SAMPLE_TABLE, ipc=[{"interface": "Wallet", "method": "removedMethod"}]), None),
+    ("an IPC row naming an interface no capnp file declares",
+     {}, None, dict(SAMPLE_TABLE, ipc=[{"interface": "Vault", "method": "signMessage"}]), None),
+]
+
+
+def self_test():
+    failures = []
+
+    clean = run(dict(CLEAN_FILES), SAMPLE_HEADER, SAMPLE_TABLE, [SAMPLE_CAPNP])
+    if clean:
+        failures.append("the clean sample fails: {}".format("; ".join(clean)))
+
+    for what, files, header, table, capnp in FAILING_SAMPLES:
+        merged = dict(CLEAN_FILES)
+        merged.update(files)
+        errors = run(merged,
+                     SAMPLE_HEADER if header is None else header,
+                     SAMPLE_TABLE if table is None else table,
+                     [SAMPLE_CAPNP if capnp is None else capnp])
+        if not errors:
+            failures.append("no error for {}".format(what))
+
+    for failure in failures:
+        print("lint-staking-key-access self-test: {}".format(failure), file=sys.stderr)
+    if not failures:
+        print("lint-staking-key-access self-test: each of {} samples fails its rule, and the "
+              "clean sample passes".format(len(FAILING_SAMPLES)))
+    return 1 if failures else 0
+
 
 def main():
     top = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
     os.chdir(top)
 
-    errors = []
-    check_friend_lists(strip_noncode(read(KEYSTORE_HEADER)), errors)
-    for path in source_files():
-        check_file(path, errors)
+    if sys.argv[1:] == ["--self-test"]:
+        return self_test()
+    if sys.argv[1:]:
+        print("usage: {} [--self-test]".format(sys.argv[0]), file=sys.stderr)
+        return 2
+
+    with open(TABLE, "r", encoding="utf8") as f:
+        table = json.load(f)
+
+    files = {path: read(path) for path in source_files()}
+    errors = run(files, files[KEYSTORE_HEADER], table,
+                 [read(path) for path in git_files(CAPNP_DIR + "*.capnp")])
 
     for e in errors:
         print("lint-staking-key-access: {}".format(e), file=sys.stderr)
