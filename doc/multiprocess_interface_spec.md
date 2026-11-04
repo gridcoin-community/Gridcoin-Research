@@ -156,7 +156,9 @@ full ordered sequence a client must perform:
    `network`). Steps 5 and 6 are fetched in **one guarded round-trip**.
 7. **Compatibility checks** (all inside one `try`; see §2.5).
 8. **`Init::holdsAttachSlot()`** — `false` means another GUI is attached and every
-   factory will be refused (§2.1).
+   factory will be refused (§2.1). `ClientHandshake` asks it after the
+   compatibility checks (a core of another schema may not serve it) and fails
+   with `already_attached` set.
 9. **`Init::makeNode()` / `makeWallet()` / …** — proceed to the interface tree.
 
 Only after a successful handshake may the client call the `makeX` factories.
@@ -204,16 +206,37 @@ change — do not silently drop the guard.
 | `protocol_version` mismatch | `remote.protocol_version != local.protocol_version` | **Hard fail** |
 | Client `schema_minor` **>** node's | `local.schema_minor > remote.schema_minor` | **Hard fail** — "update the node" |
 | `network` mismatch | `ident.network != local_network` | **Hard fail** — wrong chain |
+| Another GUI is attached | `holdsAttachSlot()` returns false | **Hard fail** — `already_attached`; "close the other one first" |
 | Node `schema_minor` **>** client's | (soft) | `SoftWarn::GuiOlderMinor` — forward-compatible, log only |
 | `git_commit` mismatch | (soft) | `SoftWarn::GitCommitMismatch` — mixed-build banner |
 | Identity token change | client-side `CheckIdentityBinding` | prompt / rebind / quit |
 | **Daemon vanished mid-handshake** | any IPC call throws | **Hard fail** — `ClientHandshake` catches `std::exception`, clears soft findings, returns `ok=false` with "lost connection …" |
 
 That last row is the critical robustness point: **any IPC call can throw** if the
-daemon disconnects mid-flight. `ClientHandshake` wraps steps 4–7 in one
+daemon disconnects mid-flight. `ClientHandshake` wraps steps 4–8 in one
 `try/catch` so a throw becomes a clean `ok=false` rather than an escaping
 exception. A client must apply the same discipline to *every* later call, not
 just the handshake (§6).
+
+`ConnectToNode` reports each failure as an `ipc::ConnectFailure` whose kind says
+what happened: `NoCookie` (step 2), `NotListening` (no socket file, or one a
+stopped node left; connection refused), `PeerRefused` (the peer check below),
+`AlreadyAttached`, `Timeout`, or `Handshake` (anything else). It bounds the
+round trips, from libmultiprocess's bootstrap call (`Init.construct`, made
+inside `connectAddress`, which a node whose listener has not accepted the
+connection does not answer) to the end of the handshake: a watchdog shuts the
+connection's socket down if the node has not answered within
+`ipc::IPC_CLIENT_HANDSHAKE_TIMEOUT` (30 s), which fails the pending call as a
+disconnect and gives `Timeout`. The `connect()` before it is not bounded: on
+Linux a blocking `connect()` to a listener whose backlog is full waits until the
+node accepts or exits, and only then does the watchdog act (at once, if the
+deadline has passed). `ipc::NextConnectStep` is the retry policy:
+only `NoCookie` and `NotListening`, how a node that is still starting looks, are
+retried, every `IPC_CONNECT_RETRY_INTERVAL` (2 s), until `IPC_CONNECT_WAIT_MAX`
+(300 s) after the first attempt. The bundled GUI runs each attempt off its GUI
+thread and shows a cancellable "Waiting for the Gridcoin core to start..."
+dialog after the first failure it retries, or once an attempt has been waiting
+for 2 s.
 
 > **Peer-credential check.** The peer-identity check in design §4.3 is
 > implemented on both ends, before the cookie is presented. The reference client
@@ -306,8 +329,14 @@ because a released ordinal cannot be dropped, but always returns false.
 `RpcConsoleResult` gained `walletUnlockNeeded @2`, `SettingChangeResult` gained
 `elevationRequired @7`, `SideStakeEditStatus` gained `ELEVATION_REQUIRED`,
 `Wallet` gained `getTransactionFeeRate @39`, which the send confirmation reads,
-and `Node` gained `executeRpcConsoleSecretCommand @43`, which carries the
-console's wallet passphrases as `SecureString`. The new methods alone would be
+`Node` gained `executeRpcConsoleSecretCommand @43`, which carries the
+console's wallet passphrases as `SecureString`, and `Init` gained
+`holdsAttachSlot @15`, which tells a second GUI that another is attached.
+`Wallet` also gained `beginBackup @40 (items)`, which returns a `FileSource` (the
+new `file_transfer.capnp`) streaming copies the core makes in its own transfer
+directory under a Backup capability; `backupWallet @20` and `backupConfigFile
+@21` stay in the schema but always return false, since the core no longer writes
+to a path the client names. The new methods alone would be
 additive; the major is for the other direction. A GUI and a node of
 different majors disagree on how an operation is authorised, so each such action
 would fail with a message the user cannot act on. A newer GUI against
@@ -494,8 +523,9 @@ The GUI side is `WalletModel::requestUnlock(CapabilityKind)` and its
 `UnlockContext`, which ends the capability when the operation finishes. If the
 attached GUI goes away instead, the node ends the capability as it tears the
 connection down, before another GUI can attach (§2.1). The interfaces served on a
-connection (the wallet, the node console, MRC, voting, researcher and PSGT) use
-the capability only while that connection is open: once it has closed, a
+connection (the wallet, the node console and settings changes, MRC, voting,
+researcher, PSGT and the side-stake manager) use the capability only while that
+connection is open: once it has closed, a
 `beginElevation` that had not yet reached the slot is refused, their calls run
 under no capability, and their `endElevation` leaves the slot, which may by then
 hold the next GUI's capability, alone. The
@@ -770,8 +800,10 @@ type/status rendering is the client's job (only locale-free data crosses).
   There are two client-side hooks:
   - The **`on_disconnect` callback** passed to `connectAddress` /
     `ConnectToNode`, invoked *on the IPC event-loop thread* when the connection
-    drops unexpectedly. The bundled GUI routes it to a graceful quit
-    (`QuitOnDaemonConnectionLost`, `src/qt/bitcoin.cpp`).
+    drops unexpectedly. `ConnectToNode` passes it on only once the handshake has
+    succeeded; a drop before that is the connect failure it returns. The bundled
+    GUI routes it to a graceful quit (`QuitOnDaemonConnectionLost`,
+    `src/qt/bitcoin.cpp`).
   - A **top-level exception guard** around your event loop: the GUI wraps its Qt
     event dispatch (`GridcoinApplication::notify`) to treat the "called after
     disconnect" exception as "node went away" rather than letting it escape (Qt
@@ -825,14 +857,18 @@ The smallest sequence to connect, authenticate, and read the balance, using the
 real symbols (C++/libmultiprocess client):
 
 ```cpp
-// 1-3, 4-7. ConnectToNode does the whole handshake: read cookie, connect,
+// 1-3, 4-8. ConnectToNode does the whole handshake: read cookie, connect,
 //    check the peer's OS user, authenticate(cookie), getBuildInfo()/getIdentity(),
-//    compatibility checks. A connect-only client serves no Init of its own.
-std::string err;
+//    compatibility checks, holdsAttachSlot(). A connect-only client serves no
+//    Init of its own.
+ipc::ConnectFailure failure;
 std::optional<ipc::GuiConnection> conn =
-    ipc::ConnectToNode(GetDataDir(), err,
+    ipc::ConnectToNode(ipc::GetIpcDir(), failure,
         /*on_disconnect=*/[]{ /* node went away: quit your loop */ });
-if (!conn) { /* err explains the hard fail */ return; }
+if (!conn) {
+    // failure.message explains it; retry while NextConnectStep says Retry.
+    return;
+}
 
 // 2.4. Identity binding is yours: compare conn->handshake.remote_ident against
 //    what you stored for this datadir.

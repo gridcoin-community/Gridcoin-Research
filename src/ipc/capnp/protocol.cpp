@@ -24,6 +24,7 @@
 #include <string>
 #ifndef WIN32
 #include <sys/socket.h>
+#include <unistd.h> // close
 #else
 #include <winsock2.h>
 #endif
@@ -166,7 +167,21 @@ public:
     std::unique_ptr<interfaces::Init> connect(int fd, const char* exe_name,
                                               std::function<void()> on_disconnect) override
     {
-        startLoop(exe_name);
+        // This owns fd from here (Protocol::connect). Until MakeStream wraps it,
+        // a failure closes it here; from then on the stream closes it, also when
+        // ConnectStream's bootstrap round trip throws.
+        try {
+            startLoop(exe_name);
+        } catch (...) {
+#ifdef WIN32
+            // An lvalue: compat.h's closesocket() takes a SOCKET&.
+            SOCKET s = static_cast<SOCKET>(fd);
+            closesocket(s);
+#else
+            ::close(fd);
+#endif
+            throw;
+        }
         auto client = mp::ConnectStream<messages::Init>(*m_loop, mp::MakeStream(*m_loop, fd));
         if (on_disconnect && client) {
             // Register a caller-facing disconnect handler ALONGSIDE ConnectStream's

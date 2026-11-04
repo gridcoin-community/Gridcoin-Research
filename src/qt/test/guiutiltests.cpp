@@ -5,8 +5,11 @@
 #include "qt/test/guiutiltests.h"
 
 #include "qt/guiutil.h"
+#include "util.h"
 
+#include <QSettings>
 #include <QString>
+#include <QTemporaryDir>
 
 #include <string>
 
@@ -60,4 +63,44 @@ void GUIUtilTests::secureStringFromQStringUsesSecureBuffer()
 
     QVERIFY(GUIUtil::SecureStringFromQString(QStringLiteral("hunter2")).capacity() > inline_capacity);
     QVERIFY(GUIUtil::SecureStringFromQString(QString()).capacity() > inline_capacity);
+}
+
+void GUIUtilTests::persistedLaunchModeRoundTrips()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QSettings settings(dir.filePath("launch.ini"), QSettings::IniFormat);
+
+    // A command line that sets the mode stores it.
+    {
+        ArgsManager args;
+        args.ForceSetArg("-multiprocess", "1");
+        args.ForceSetArg("-ipcdir", "/x");
+        GUIUtil::ApplyPersistedLaunchMode(settings, args);
+        QVERIFY(settings.value("launchMultiprocess").toBool());
+        QCOMPARE(settings.value("launchIpcDir").toString(), QString("/x"));
+    }
+
+    // A fresh command line without them takes the stored values.
+    {
+        ArgsManager args;
+        GUIUtil::ApplyPersistedLaunchMode(settings, args);
+        QVERIFY(args.GetBoolArg("-multiprocess", false));
+        QCOMPARE(QString::fromStdString(args.GetArg("-ipcdir", "")), QString("/x"));
+        QVERIFY(!args.IsArgSet("-ipcserviceuser"));
+    }
+
+    // -nomultiprocess overrides and stores false.
+    {
+        ArgsManager args;
+        args.ForceSetArg("-multiprocess", "0");
+        GUIUtil::ApplyPersistedLaunchMode(settings, args);
+        QVERIFY(!settings.value("launchMultiprocess").toBool());
+        QVERIFY(!args.GetBoolArg("-multiprocess", true));
+    }
+    {
+        ArgsManager args;
+        GUIUtil::ApplyPersistedLaunchMode(settings, args);
+        QVERIFY(!args.GetBoolArg("-multiprocess", true));
+    }
 }

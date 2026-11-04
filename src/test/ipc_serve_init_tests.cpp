@@ -9,6 +9,7 @@
 #include "interfaces/node.h"
 #include "interfaces/psgt.h"
 #include "interfaces/researcher.h"
+#include "interfaces/connection_scope.h"
 #include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
 #include "interfaces/voting.h"
@@ -16,8 +17,8 @@
 #include "interfaces/wallet_coin_source.h"
 #include "interfaces/wallet_tx_source.h"
 #include "ipc/handshake.h"
-#include "key_io.h"
 #include "ipc/serve_init.h"
+#include "key_io.h"
 #include "test/staking_test_peers.h"
 #include "wallet/capability.h"
 #include "wallet/wallet.h"
@@ -53,10 +54,11 @@ struct MainWalletInit : public interfaces::Init {
 };
 
 //! The slot hook gridcoinresearchd installs: the attached GUI going away ends the
-//! wallet's IPC capability.
+//! wallet's IPC capability. Unchecked, as there: it runs as the connection is torn
+//! down, and its job is to end the slot.
 void DaemonSlotHook()
 {
-    if (pwalletMain) pwalletMain->EndIpcElevation();
+    if (pwalletMain) pwalletMain->EndIpcElevation({});
 }
 
 //! Long enough that only a hang reaches it, so a loaded machine cannot turn a
@@ -377,13 +379,13 @@ BOOST_AUTO_TEST_CASE(slot_holder_close_ends_the_ipc_capability)
     std::unique_ptr<interfaces::Wallet> wallet = a->makeWallet();
     BOOST_REQUIRE(wallet != nullptr);
     BOOST_REQUIRE(wallet->beginElevation(grc_test::EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
-    BOOST_REQUIRE(fx.wallet.IpcCapability().has_value());
+    BOOST_REQUIRE(fx.wallet.IpcCapability({}).has_value());
 
     b->connectionClosed();
-    BOOST_CHECK(fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(fx.wallet.IpcCapability({}).has_value());
 
     a->connectionClosed();
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 
     wallet.reset();
@@ -391,17 +393,21 @@ BOOST_AUTO_TEST_CASE(slot_holder_close_ends_the_ipc_capability)
 
 // The serving Init binds what it hands out to its connection: once the holder's
 // connection has closed and the next GUI has attached and begun a capability,
-// the console the first connection made does not run under it.
+// the wallet and the console the first connection made neither use nor end it,
+// and that wallet cannot begin one in its place.
 BOOST_AUTO_TEST_CASE(served_interfaces_are_bound_to_their_connection)
 {
     grc_test::EncryptedWallet fx;
     fx.UnlockFor(UnlockScope::StakingOnly);
-    const std::vector<std::string> args{EncodeDestination(fx.id), "a message"};
+    const std::string address = EncodeDestination(fx.id);
+    const std::vector<std::string> args{address, "a message"};
 
     auto slot = ipc::MakeAttachSlot();
     auto a = ipc::MakeServeInit(std::make_unique<MainWalletInit>(), "c", {}, slot, DaemonSlotHook);
     BOOST_REQUIRE(a->authenticate("c"));
+    std::unique_ptr<interfaces::Wallet> a_wallet = a->makeWallet();
     std::unique_ptr<interfaces::Node> a_node = a->makeNode();
+    BOOST_REQUIRE(a_wallet != nullptr);
     BOOST_REQUIRE(a_node != nullptr);
     a->connectionClosed();
 
@@ -412,8 +418,28 @@ BOOST_AUTO_TEST_CASE(served_interfaces_are_bound_to_their_connection)
     std::unique_ptr<interfaces::Node> d_node = d->makeNode();
     BOOST_REQUIRE(d_wallet != nullptr);
     BOOST_REQUIRE(d_node != nullptr);
-    BOOST_REQUIRE(d_wallet->beginElevation(grc_test::EncryptedWallet::PASSPHRASE, CapabilityKind::RpcRequest));
 
+    BOOST_REQUIRE(d_wallet->beginElevation(grc_test::EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
+    const std::optional<CapabilityId> d_id = fx.wallet.IpcCapability({});
+    BOOST_REQUIRE(d_id.has_value());
+
+    std::string signature;
+    BOOST_CHECK(a_wallet->signMessage(address, "a message", signature) == interfaces::MessageSignStatus::KeyNotAvailable);
+    a_wallet->endElevation();
+    BOOST_CHECK(fx.wallet.IpcCapability({}) == d_id);
+
+    // A begins another kind, so what the slot holds afterwards tells the two
+    // apart. Comparing ids alone would not: the unit tests' generator repeats
+    // its draws, so a new capability can take a freed id's number.
+    BOOST_CHECK(!a_wallet->beginElevation(grc_test::EncryptedWallet::PASSPHRASE, CapabilityKind::Send));
+    BOOST_CHECK(fx.wallet.IpcCapability({}) == d_id);
+    {
+        CapabilityScope scope(fx.wallet, fx.wallet.IpcCapability({}), CapabilityKind::SignMessage);
+        BOOST_CHECK(scope.Active());
+    }
+    BOOST_CHECK(d_wallet->signMessage(address, "a message", signature) == interfaces::MessageSignStatus::OK);
+
+    BOOST_REQUIRE(d_wallet->beginElevation(grc_test::EncryptedWallet::PASSPHRASE, CapabilityKind::RpcRequest));
     interfaces::RpcConsoleResult result = a_node->executeRpcConsoleCommand("signmessage", args);
     BOOST_CHECK(!result.ok);
     BOOST_CHECK(result.wallet_unlock_needed);
@@ -421,8 +447,66 @@ BOOST_AUTO_TEST_CASE(served_interfaces_are_bound_to_their_connection)
     BOOST_CHECK(result.ok);
 
     d->connectionClosed();
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+//! A side-stake manager that only records the connection it is bound to.
+struct BindRecordingSideStakeManager : public interfaces::SideStakeManager {
+    std::shared_ptr<std::shared_ptr<interfaces::ConnectionScope>> m_bound;
+
+    explicit BindRecordingSideStakeManager(std::shared_ptr<std::shared_ptr<interfaces::ConnectionScope>> bound)
+        : m_bound(std::move(bound)) {}
+
+    interfaces::SideStakeSnapshot entries() override { return {}; }
+    uint64_t localRevision() override { return 0; }
+    interfaces::SideStakeEditResult addLocal(const std::string&, double, const std::string&) override { return {}; }
+    interfaces::SideStakeEditResult setAllocation(const std::string&, double) override { return {}; }
+    interfaces::SideStakeEditResult setDescription(const std::string&, const std::string&) override { return {}; }
+    interfaces::SideStakeEditResult deleteLocal(const std::string&) override { return {}; }
+    std::unique_ptr<interfaces::Handler> handleRwSettingsUpdated(interfaces::RwSettingsUpdatedFn) override
+    {
+        return nullptr;
+    }
+    std::unique_ptr<interfaces::Handler> handleMandatorySideStakeChanged(
+        interfaces::MandatorySideStakeChangedFn) override
+    {
+        return nullptr;
+    }
+    void bindConnectionScope(std::shared_ptr<interfaces::ConnectionScope> scope) override
+    {
+        *m_bound = std::move(scope);
+    }
+};
+
+// The side-stake manager runs its edits under the client's Settings capability,
+// so the serving Init binds it to its connection as it binds the wallet: the
+// manager sees the connection close.
+BOOST_AUTO_TEST_CASE(served_side_stake_manager_is_bound_to_its_connection)
+{
+    auto bound = std::make_shared<std::shared_ptr<interfaces::ConnectionScope>>();
+
+    struct SideStakeInit : public interfaces::Init {
+        std::shared_ptr<std::shared_ptr<interfaces::ConnectionScope>> m_bound;
+        std::unique_ptr<interfaces::SideStakeManager> makeSideStakeManager() override
+        {
+            return std::make_unique<BindRecordingSideStakeManager>(m_bound);
+        }
+    };
+    auto inner = std::make_unique<SideStakeInit>();
+    inner->m_bound = bound;
+
+    auto slot = ipc::MakeAttachSlot();
+    auto served = ipc::MakeServeInit(std::move(inner), "c", {}, slot, DaemonSlotHook);
+    BOOST_REQUIRE(served->authenticate("c"));
+
+    std::unique_ptr<interfaces::SideStakeManager> sidestakes = served->makeSideStakeManager();
+    BOOST_REQUIRE(sidestakes != nullptr);
+    BOOST_REQUIRE(*bound != nullptr);
+    BOOST_CHECK(!(*bound)->closed());
+
+    served->connectionClosed();
+    BOOST_CHECK((*bound)->closed());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

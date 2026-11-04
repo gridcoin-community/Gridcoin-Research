@@ -7,6 +7,9 @@
 #include "fs.h"
 #include "support/allocators/secure.h" // For SecureString.
 
+class ArgsManager;
+class QSettings;
+
 QT_BEGIN_NAMESPACE
 class QFont;
 class QLineEdit;
@@ -188,6 +191,12 @@ namespace GUIUtil
      * QDate::startOfDay() was introduced in Qt 5.14.
      */
     QDateTime StartOfDay(const QDate& date);
+
+    //! If the command line sets -multiprocess/-nomultiprocess, -ipcdir or -ipcserviceuser, store
+    //! them in \p settings ("launchMultiprocess" bool, "launchIpcDir", "launchIpcServiceUser"
+    //! strings); otherwise SoftSet them from \p settings. Used on macOS, where the login item
+    //! (SMAppService.mainApp) cannot carry arguments.
+    void ApplyPersistedLaunchMode(QSettings& settings, ArgsManager& args);
 
 } // namespace GUIUtil
 

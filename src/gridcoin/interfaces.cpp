@@ -478,7 +478,8 @@ private:
 //!
 //! Every mutation changes side stakes, which needs the wallet passphrase. Each
 //! runs under the Settings capability the client began for the wallet, when it
-//! began one. It validates first, so an edit that would change nothing (invalid
+//! began one and its connection is still open (bindConnectionScope). It
+//! validates first, so an edit that would change nothing (invalid
 //! input, no such entry, the value already set) gets its own answer without the
 //! passphrase. Then, before it changes anything, it answers ELEVATION_REQUIRED
 //! unless the wallet's keys are usable: a capability, a full unlock, or no
@@ -522,7 +523,7 @@ public:
                                  const std::string& description) override
     {
         std::optional<CapabilityScope> scope;
-        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
 
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
@@ -582,7 +583,7 @@ public:
                                       double allocation_percent) override
     {
         std::optional<CapabilityScope> scope;
-        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
 
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
@@ -627,7 +628,7 @@ public:
                                        const std::string& description) override
     {
         std::optional<CapabilityScope> scope;
-        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
 
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
@@ -660,7 +661,7 @@ public:
     SideStakeEditResult deleteLocal(const std::string& address) override
     {
         std::optional<CapabilityScope> scope;
-        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
 
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
@@ -694,7 +695,17 @@ public:
         return MakeSignalHandler(uiInterface.MandatorySideStakeChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_closed = ConnectionClosedCheck(std::move(scope));
+    }
+
 private:
+    //! Whether the IPC connection this is served on has closed
+    //! (bindConnectionScope), asked as the IPC capability is read. Empty in
+    //! process, where there is no connection.
+    std::function<bool()> m_connection_closed{};
+
     //! Build a result stamped with the current local sidestake revision.
     static SideStakeEditResult Result(SideStakeEditStatus status, std::string address = {})
     {

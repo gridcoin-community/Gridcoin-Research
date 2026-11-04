@@ -94,11 +94,11 @@ BOOST_AUTO_TEST_CASE(rpc_request_without_the_header_runs_without_a_capability)
     EncryptedWallet fx;
     fx.UnlockFor(UnlockScope::StakingOnly);
 
-    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Send));
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Send, {}));
 
     // The IPC client's send is in progress: it runs under the slot's
     // capability on the IPC server's thread, which this one stands for.
-    CapabilityScope ipc_send(fx.wallet, fx.wallet.IpcCapability(), CapabilityKind::Send);
+    CapabilityScope ipc_send(fx.wallet, fx.wallet.IpcCapability({}), CapabilityKind::Send);
     BOOST_REQUIRE(ipc_send.Active());
 
     const std::string address = EncodeDestination(fx.id);
@@ -120,7 +120,7 @@ BOOST_AUTO_TEST_CASE(rpc_request_without_the_header_runs_without_a_capability)
 
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 
-    fx.wallet.EndIpcElevation();
+    fx.wallet.EndIpcElevation({});
 }
 
 BOOST_AUTO_TEST_CASE(rpc_request_scope_executes_under_capability)

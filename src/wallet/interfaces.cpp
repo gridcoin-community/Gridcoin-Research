@@ -4,22 +4,30 @@
 
 #include "interfaces/wallet.h"
 
-#include "gridcoin/backup.h"
 #include "gridcoin/tx_message.h"
 #include "hash.h"
+#include "init.h"
 #include "interfaces/connection_scope.h"
 #include "interfaces/handler.h"
 #include "interfaces/notification_dispatcher.h"
 #include "key_io.h"
 #include "policy/fees.h"
 #include "policy/policy.h"
+#include "scheduler.h"
 #include "streams.h"
 #include "util/strencodings.h"
+#include "util/system.h"
+#include "util/transfer_file.h"
 #include "wallet/coincontrol.h"
 #include "net_processing.h"
+#include "wallet/transfer_sources.h"
 #include "wallet/wallet.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <functional>
+#include <mutex>
 #include <map>
 #include <memory>
 #include <set>
@@ -29,6 +37,38 @@
 #include <vector>
 
 namespace interfaces {
+
+//! How long after a successful IPC encryption the core stops by itself, when the
+//! GUI's connection has not closed by then.
+static constexpr std::chrono::seconds ENCRYPT_SHUTDOWN_FALLBACK{60};
+
+namespace {
+std::mutex g_encryption_shutdown_mutex;
+std::function<void()> g_encryption_shutdown_fn;
+} // namespace
+
+void SetEncryptionShutdownFnForTesting(std::function<void()> fn)
+{
+    std::lock_guard<std::mutex> lock(g_encryption_shutdown_mutex);
+    g_encryption_shutdown_fn = std::move(fn);
+}
+
+void RequestShutdownAfterEncryption()
+{
+    // Copied out so the test function runs outside the leaf mutex.
+    std::function<void()> fn;
+    {
+        std::lock_guard<std::mutex> lock(g_encryption_shutdown_mutex);
+        fn = g_encryption_shutdown_fn;
+    }
+
+    if (fn) {
+        fn();
+    } else {
+        StartShutdown();
+    }
+}
+
 namespace {
 
 //! Build the value snapshot of one wallet output. The maturity flag needs
@@ -50,6 +90,170 @@ WalletOutput MakeWalletOutput(const CWalletTx& wtx, unsigned int n, int depth)
     output.immature = wtx.IsCoinStake() && wtx.GetBlocksToMaturity() > 0 && depth > 0;
 
     return output;
+}
+
+//! Marks one wallet interface's transfer as live for as long as it exists.
+class LiveTransfer
+{
+public:
+    //! Null when a transfer of the interface owning \p flag is already live.
+    static std::unique_ptr<LiveTransfer> Claim(const std::shared_ptr<std::atomic<bool>>& flag)
+    {
+        if (flag->exchange(true)) return nullptr;
+        return std::unique_ptr<LiveTransfer>(new LiveTransfer(flag));
+    }
+
+    ~LiveTransfer() { m_flag->store(false); }
+
+    LiveTransfer(const LiveTransfer&) = delete;
+    LiveTransfer& operator=(const LiveTransfer&) = delete;
+
+private:
+    explicit LiveTransfer(std::shared_ptr<std::atomic<bool>> flag) : m_flag(std::move(flag)) {}
+
+    const std::shared_ptr<std::atomic<bool>> m_flag;
+};
+
+//! A source that keeps its wallet interface's transfer live until it is
+//! destroyed.
+class LiveFileSource final : public FileSource
+{
+public:
+    LiveFileSource(std::unique_ptr<FileSource> inner, std::unique_ptr<LiveTransfer> live)
+        : m_live(std::move(live)), m_inner(std::move(inner))
+    {
+    }
+
+    std::vector<FileEntryInfo> entries() override { return m_inner->entries(); }
+    FileChunk read(uint32_t entry, uint32_t max_bytes) override { return m_inner->read(entry, max_bytes); }
+    FileTrailer trailer(uint32_t entry) override { return m_inner->trailer(entry); }
+    void cancel() override { m_inner->cancel(); }
+
+private:
+    // Declared first, so it is destroyed last: another transfer can begin only
+    // once the inner source, and with it every snapshot, is gone.
+    std::unique_ptr<LiveTransfer> m_live;
+    std::unique_ptr<FileSource> m_inner;
+};
+
+//! Remove the snapshots in \p entries and empty it.
+void RemoveSnapshots(std::vector<wallet::SnapshotEntry>& entries)
+{
+    for (const wallet::SnapshotEntry& entry : entries) {
+        if (entry.path.empty()) continue;
+
+        boost::system::error_code ec;
+        fs::remove(entry.path, ec);
+
+        if (ec) {
+            LogPrintf("WARNING: %s: could not remove %s: %s", __func__, entry.path.string(), ec.message());
+        }
+    }
+
+    entries.clear();
+}
+
+//! Steps 3 to 5 of Wallet::beginBackup(): refuse what cannot be backed up,
+//! check that the transfer directory has room for it, and snapshot each
+//! requested item there, in the order wallet, configuration file, settings
+//! file. On failure the snapshots made so far are removed and \p entries is
+//! left empty.
+bool SnapshotBackupItems(const CWallet& wallet, uint8_t items, std::vector<wallet::SnapshotEntry>& entries,
+                         std::string& error)
+{
+    const uint8_t wallet_item = static_cast<uint8_t>(BackupItem::Wallet);
+    const uint8_t config_item = static_cast<uint8_t>(BackupItem::Config);
+    const uint8_t settings_item = static_cast<uint8_t>(BackupItem::Settings);
+
+    if (items == 0 || (items & ~(wallet_item | config_item | settings_item)) != 0) {
+        error = strprintf("unknown backup items 0x%02x", static_cast<unsigned int>(items));
+        return false;
+    }
+
+    if (items & config_item) {
+        std::string reason;
+        if (!wallet::ConfigBackupPermitted(reason)) {
+            error = reason;
+            return false;
+        }
+    }
+
+    if ((items & wallet_item) && !wallet.fFileBacked) {
+        error = "the wallet is not file-backed";
+        return false;
+    }
+
+    // What each item is copied from. A configuration or settings file that
+    // does not exist has nothing to back up; its entry carries a note instead.
+    struct Item
+    {
+        std::string name;
+        fs::path source;
+        bool is_wallet{false};
+        std::string missing_note;
+    };
+
+    std::vector<Item> plan;
+
+    if (items & wallet_item) {
+        plan.push_back({wallet.strWalletFile, GetDataDir() / wallet.strWalletFile, true, ""});
+    }
+
+    if (items & config_item) {
+        const fs::path conf = GetConfigFile();
+        plan.push_back({conf.filename().string(), conf, false, "no configuration file"});
+    }
+
+    if (items & settings_item) {
+        fs::path settings;
+        if (gArgs.GetSettingsPath(&settings)) {
+            plan.push_back({settings.filename().string(), settings, false, "no settings file"});
+        } else {
+            plan.push_back({GRIDCOIN_SETTINGS_FILENAME, fs::path(), false, "no settings file"});
+        }
+    }
+
+    uint64_t need = 0;
+
+    for (Item& item : plan) {
+        boost::system::error_code ec;
+
+        if (!item.is_wallet && !fs::exists(item.source, ec)) {
+            item.source.clear();
+            continue;
+        }
+
+        const uintmax_t size = fs::file_size(item.source, ec);
+        if (!ec) need += size;
+    }
+
+    if (!util::HasFreeSpace(wallet::GetTransferDir(), need, error)) return false;
+
+    try {
+        for (const Item& item : plan) {
+            if (item.source.empty()) {
+                entries.push_back({item.name, fs::path(), item.missing_note});
+                continue;
+            }
+
+            const std::optional<fs::path> snapshot = item.is_wallet ? wallet::SnapshotWallet(wallet, error)
+                                                                    : wallet::SnapshotPlainFile(item.source, error);
+            if (!snapshot) {
+                RemoveSnapshots(entries);
+                return false;
+            }
+
+            entries.push_back({item.name, *snapshot, ""});
+        }
+    } catch (const std::exception& e) {
+        // In process this runs on the GUI's thread, where an exception would end
+        // the application.
+        RemoveSnapshots(entries);
+        error = strprintf("the backup failed: %s", e.what());
+        return false;
+    }
+
+    return true;
 }
 
 //! In-process Wallet implementation: thin wrappers over CWallet. Balance
@@ -145,7 +349,27 @@ public:
 
     bool encryptWallet(const SecureString& passphrase) override
     {
-        return m_wallet->EncryptWallet(passphrase);
+        if (!m_wallet->EncryptWallet(passphrase)) return false;
+
+        // Served on an IPC connection, the GUI cannot restart the core, and the
+        // wallet database still holds plaintext residue until the core stops, as
+        // the RPC encryptwallet makes it stop. The core stops when this
+        // connection closes (the GUI closes it after telling the user), and the
+        // scheduler stops it after a delay if the GUI never does. In process
+        // (no scope) the monolithic GUI quits itself.
+        if (m_connection_scope) {
+            m_connection_scope->addCloseHook(&RequestShutdownAfterEncryption);
+
+            // A null handle means shutdown has begun: nothing to add.
+            if (CScheduler* scheduler = g_scheduler_handle.load(std::memory_order_acquire)) {
+                // A refusal means the scheduler is stopping, which is shutdown
+                // already under way, so the result is not needed.
+                (void)scheduler->scheduleFromNowIfRunning(&RequestShutdownAfterEncryption,
+                                                          ENCRYPT_SHUTDOWN_FALLBACK);
+            }
+        }
+
+        return true;
     }
 
     bool lockWallet() override { return m_wallet->Lock(); }
@@ -217,14 +441,58 @@ public:
         return m_wallet->ChangeWalletPassphrase(old_passphrase, new_passphrase);
     }
 
-    bool backupWallet(const std::string& dest) override
+    // The core no longer writes to a path the client names. A client that
+    // still asks predates beginBackup(), and the handshake's schema major keeps
+    // such a client from connecting.
+    bool backupWallet(const std::string& /*dest*/) override
     {
-        return GRC::BackupWallet(*m_wallet, dest);
+        LogPrintf("WARNING: %s: refused. IPC: use the transfer channel.", __func__);
+        return false;
     }
 
-    bool backupConfigFile(const std::string& dest) override
+    bool backupConfigFile(const std::string& /*dest*/) override
     {
-        return GRC::BackupConfigFile(dest);
+        LogPrintf("WARNING: %s: refused. IPC: use the transfer channel.", __func__);
+        return false;
+    }
+
+    std::unique_ptr<FileSource> beginBackup(uint8_t items, std::string& error_out) override
+    {
+        error_out.clear();
+
+        // One transfer at a time on this interface. The claim is made here and
+        // held by the source returned, so two calls cannot both pass it.
+        std::unique_ptr<LiveTransfer> live = LiveTransfer::Claim(m_transfer_live);
+        if (!live) {
+            error_out = "a transfer is already in progress";
+            return nullptr;
+        }
+
+        // A copy of the wallet file is the keys, so the snapshots are made under
+        // the Backup capability the client began. An unencrypted or fully
+        // unlocked wallet needs none.
+        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(m_connection_closed), CapabilityKind::Backup);
+        if (!m_wallet->CanUseKeys()) {
+            error_out = "Enter the wallet passphrase to back up the wallet.";
+            return nullptr;
+        }
+
+        std::vector<wallet::SnapshotEntry> entries;
+        const bool made = SnapshotBackupItems(*m_wallet, items, entries, error_out);
+
+        // A capability authorises one operation, and this attempt was it,
+        // whether the snapshots were made or not. Ended now, so the source holds
+        // none. Only when this call ran under it: on an unencrypted or fully
+        // unlocked wallet the gate passes without one, and a capability of
+        // another kind the client holds stays for its own operation. Once the connection has
+        // closed the slot is left alone: it may hold the next GUI's capability
+        // by then.
+        if (scope.Active()) m_wallet->EndIpcElevation(m_connection_closed);
+
+        if (!made) return nullptr;
+
+        return std::make_unique<LiveFileSource>(wallet::MakeSnapshotSource(std::move(entries), m_connection_scope),
+                                                std::move(live));
     }
 
     MessageSignStatus signMessage(const std::string& address, const std::string& message,
@@ -643,6 +911,9 @@ private:
     //! mutex wherever this wallet begins, reads or ends the IPC capability.
     //! Empty in process, where there is no connection and nothing to check.
     std::function<bool()> m_connection_closed{};
+    //! Whether a transfer this interface began is live (LiveTransfer). Shared
+    //! with that transfer, which may outlive the interface.
+    const std::shared_ptr<std::atomic<bool>> m_transfer_live{std::make_shared<std::atomic<bool>>(false)};
 };
 
 SendCoinsResult WalletImpl::SendCoinsUnderScope(const std::vector<WalletSendRecipient>& recipients,

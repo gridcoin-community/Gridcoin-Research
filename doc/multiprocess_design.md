@@ -258,7 +258,21 @@ The connect-time sequence, in order (steps 1–7 add ~5–10 ms to startup):
    stored expectation per §4.2 (prompt / `-autotrustidentity` re-bind). Fetched
    together with step 6 in one guarded round-trip; an IPC throw here is a clean
    failure, distinct from an empty token
-8. `Init::makeNode()` / `makeWallet()` / … → proceed
+8. `Init::holdsAttachSlot()` → hard fail "another Gridcoin GUI is already attached"
+   when another GUI holds the core's one attach slot
+9. `Init::makeNode()` / `makeWallet()` / … → proceed
+
+The round trips from libmultiprocess's bootstrap call after step 4 through step 8
+are bounded: if the core has not answered them within
+`ipc::IPC_CLIENT_HANDSHAKE_TIMEOUT` (30 s), the GUI shuts the connection down and
+reports that the core did not answer. A missing cookie (step 2) or nothing
+listening (step 3) is how a core that is still starting looks, so the GUI then
+shows a cancellable "Waiting for the Gridcoin core to start..." dialog and tries
+again every `IPC_CONNECT_RETRY_INTERVAL` (2 s), for up to `IPC_CONNECT_WAIT_MAX`
+(300 s); every other failure is reported at once (`ipc::NextConnectStep`). Each
+attempt runs off the GUI thread, and the dialog also comes up once an attempt has
+been waiting for 2 s, so a busy core is waited for visibly. Cancel waits for the
+attempt in flight with the dialog saying "Canceling...".
 
 Authentication (step 5) precedes every exchange on the `interfaces::Init` surface —
 build info, identity, and every `make*()` factory are refused until it succeeds, and

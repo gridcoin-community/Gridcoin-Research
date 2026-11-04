@@ -5,6 +5,7 @@
 #include "gridcoin/backup.h"
 #include "init.h"
 #include "test/state_guard.h"
+#include "test/wallet_file_placeholder.h"
 #include "wallet/db.h"
 #include "wallet/wallet.h"
 #include <fs.h>
@@ -14,19 +15,8 @@
 
 namespace {
 
-//! BackupWallet copies the wallet only when the wallet is file-backed and
-//! nothing has its file open, and returns false without trying otherwise.
-//! Checked first so that a case cannot pass without reaching the copy.
-void RequireWalletFileNotInUse()
-{
-    BOOST_REQUIRE(pwalletMain->fFileBacked);
-
-    LOCK(bitdb.cs_db);
-
-    const auto use_count = bitdb.mapFileUseCount.find(pwalletMain->strWalletFile);
-
-    BOOST_REQUIRE(use_count == bitdb.mapFileUseCount.end() || use_count->second == 0);
-}
+using grc_test::RequireWalletFileNotInUse;
+using grc_test::WalletFilePlaceholder;
 
 //! A directory for one case's backups, removed when the case ends.
 struct BackupDir
@@ -39,26 +29,6 @@ struct BackupDir
     {
         boost::system::error_code ec;
         fs::remove_all(m_path, ec);
-    }
-};
-
-//! A file with the wallet's name in the data directory for one case, removed
-//! when the case ends. The fixture's mock database never reads it.
-struct WalletFilePlaceholder
-{
-    const fs::path m_path = GetDataDir() / pwalletMain->strWalletFile;
-
-    WalletFilePlaceholder()
-    {
-        BOOST_REQUIRE(!fs::exists(m_path));
-        fsbridge::ofstream stream(m_path);
-        stream << "wallet placeholder";
-    }
-
-    ~WalletFilePlaceholder()
-    {
-        boost::system::error_code ec;
-        fs::remove(m_path, ec);
     }
 };
 

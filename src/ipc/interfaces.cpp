@@ -9,7 +9,9 @@
 #include "ipc/process.h"
 #include "ipc/protocol.h"
 #include "util.h"
+#include "util/syserror.h"
 
+#include <cerrno>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -18,9 +20,10 @@
 #include <system_error>
 #include <typeindex>
 #ifndef WIN32
+#include <fcntl.h> // F_DUPFD_CLOEXEC
 #include <unistd.h>
 #else
-#include <winsock2.h> // closesocket
+#include <winsock2.h> // closesocket, WSADuplicateSocketW, WSASocketW
 #endif
 #include <utility>
 
@@ -47,6 +50,35 @@ struct FdGuard
     }
     void release() { fd = -1; }
 };
+
+//! A second handle on the connected socket \p fd, for ConnectInfo::shutdown_fd,
+//! that a child process does not inherit. Returns -1, and logs why, when none can
+//! be made.
+int DuplicateSocket(int fd)
+{
+#ifdef WIN32
+    WSAPROTOCOL_INFOW protocol_info;
+    if (::WSADuplicateSocketW(static_cast<SOCKET>(fd), ::GetCurrentProcessId(), &protocol_info) != 0) {
+        LogPrintf("WARN: IPC: could not duplicate the connection's socket (WSA error %d)", ::WSAGetLastError());
+        return -1;
+    }
+    // The flags of every socket this layer makes (MakeCloexecStreamSocket in
+    // process.cpp): overlapped, and not inherited by a child process.
+    const SOCKET duplicate = ::WSASocketW(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, &protocol_info, 0,
+                                          WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
+    if (duplicate == INVALID_SOCKET) {
+        LogPrintf("WARN: IPC: could not duplicate the connection's socket (WSA error %d)", ::WSAGetLastError());
+        return -1;
+    }
+    return static_cast<int>(duplicate);
+#else
+    const int duplicate = ::fcntl(fd, F_DUPFD_CLOEXEC, 0);
+    if (duplicate == -1) {
+        LogPrintf("WARN: IPC: could not duplicate the connection's socket: %s", SysErrorString(errno));
+    }
+    return duplicate;
+#endif
+}
 
 class IpcImpl : public interfaces::Ipc
 {
@@ -100,10 +132,10 @@ public:
         }
         const std::optional<ipc::PeerIdentity> server = ipc::ReadPeerIdentity(fd);
         if (!server || ipc::ClientPeerPolicy(*server, socket_dir) == ipc::PeerVerdict::Refuse) {
-            throw std::runtime_error("The process listening on the multiprocess socket belongs to "
-                                     "a different OS user, or its owner could not be determined, "
-                                     "or it is not the configured service account; refusing to "
-                                     "send the authentication cookie to it.");
+            throw interfaces::PeerRefusedError("The process listening on the multiprocess socket belongs to "
+                                               "a different OS user, or its owner could not be determined, "
+                                               "or it is not the configured service account; refusing to "
+                                               "send the authentication cookie to it.");
         }
         if (info) {
 #ifndef WIN32
@@ -112,9 +144,19 @@ public:
             info->server_other_account = false;
 #endif
         }
-        auto init = m_protocol->connect(fd, m_exe_name, std::move(on_disconnect));
-        guard.release(); // the protocol/stream now owns the fd
-        return init;
+        // A second handle on the socket lets the caller shut the connection down
+        // from another thread (ConnectToNode's handshake watchdog). shutdown()
+        // acts on the socket, not on one handle, and the caller closes this one
+        // whatever the protocol does with its own. It is handed over before the
+        // protocol's bootstrap round trip below, which a peer that does not
+        // answer never completes.
+        if (info) {
+            info->shutdown_fd = DuplicateSocket(fd);
+            if (info->shutdown_fd != -1 && info->on_shutdown_fd) info->on_shutdown_fd(info->shutdown_fd);
+        }
+        // Protocol::connect owns fd from here, also when it throws.
+        guard.release();
+        return m_protocol->connect(fd, m_exe_name, std::move(on_disconnect));
     }
 
     void listenAddress(std::string& address) override

@@ -12,6 +12,7 @@
 #include "node/shutdown.h"
 #include "util/threadnames.h"
 #include "net.h"
+#include "wallet/transfer_sources.h"
 #include "wallet/walletdb.h"
 #include <key_io.h>
 #include "banman.h"
@@ -2138,6 +2139,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (!LockDirectory(datadir, ".lock", false)) {
         return InitError(strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running."), fsbridge::LongPathString(datadir), PACKAGE_NAME));
     }
+
+    // A core that stopped during a transfer left its snapshots behind. With the
+    // lock held, no transfer of this process has begun yet.
+    wallet::CleanTransferDir();
 
     // Open the RPC listener now, while this process alone holds the datadir, rather than after
     // the long initialisation: another local account cannot take the port in the meantime. Until

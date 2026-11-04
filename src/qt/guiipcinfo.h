@@ -18,6 +18,7 @@ struct GuiIpcInfo
 {
     bool active = false;               //!< Split (-multiprocess) build: show the section.
     bool git_commit_mismatch = false;  //!< GUI and node built from different commits (banner).
+    bool core_other_account = false;   //!< The core runs as another OS account (-ipcserviceuser).
     QString gui_version;               //!< The GUI process's own version (FormatFullVersion).
     QString node_version;              //!< The connected daemon's version.
     QString node_built_at;             //!< The daemon's build timestamp.

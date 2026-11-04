@@ -513,6 +513,13 @@ fs::path GetConfigFile();
 
 bool IsConfigFileEmpty();
 
+//! The value of a name-valued option such as "-ipcattachgroup", or "" when it
+//! is unset or negated (-noipcattachgroup). GetArg alone returns "0" for the
+//! negated form. The IPC options are read through it (ipc::ConfiguredOption),
+//! and so is the wallet backup's configuration-file rule, so both builds share
+//! one rule for the -no form.
+std::string GetConfiguredOption(const std::string& arg);
+
 /**
  * @return true if help has been requested via a command-line arg
  */

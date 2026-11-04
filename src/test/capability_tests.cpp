@@ -505,20 +505,20 @@ BOOST_AUTO_TEST_CASE(ipc_slot_dropped)
 {
     EncryptedWallet fx;
     fx.UnlockFor(UnlockScope::StakingOnly);
-    BOOST_REQUIRE(!fx.wallet.IpcCapability().has_value());
+    BOOST_REQUIRE(!fx.wallet.IpcCapability({}).has_value());
 
-    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send));
-    const std::optional<CapabilityId> id = fx.wallet.IpcCapability();
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send, {}));
+    const std::optional<CapabilityId> id = fx.wallet.IpcCapability({});
     BOOST_REQUIRE(id.has_value());
 
     {
-        CapabilityScope scope(fx.wallet, fx.wallet.IpcCapability(), CapabilityKind::Send);
+        CapabilityScope scope(fx.wallet, fx.wallet.IpcCapability({}), CapabilityKind::Send);
         BOOST_CHECK(scope.Active());
         BOOST_CHECK(KeyReachable(fx));
     }
 
-    fx.wallet.EndIpcElevation();
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    fx.wallet.EndIpcElevation({});
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
 
     {
         CapabilityScope scope(fx.wallet, id, CapabilityKind::Send);
@@ -526,8 +526,8 @@ BOOST_AUTO_TEST_CASE(ipc_slot_dropped)
     }
 
     // Ending an empty slot is a no-op.
-    fx.wallet.EndIpcElevation();
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    fx.wallet.EndIpcElevation({});
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 
@@ -540,8 +540,8 @@ BOOST_AUTO_TEST_CASE(ipc_slot_begin_for_a_closed_connection_leaves_the_slot)
     EncryptedWallet fx;
     fx.UnlockFor(UnlockScope::StakingOnly);
 
-    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send));
-    const std::optional<CapabilityId> held = fx.wallet.IpcCapability();
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send, {}));
+    const std::optional<CapabilityId> held = fx.wallet.IpcCapability({});
     BOOST_REQUIRE(held.has_value());
 
     int asked = 0;
@@ -550,7 +550,7 @@ BOOST_AUTO_TEST_CASE(ipc_slot_begin_for_a_closed_connection_leaves_the_slot)
         return true;
     }));
     BOOST_CHECK_EQUAL(asked, 1);
-    BOOST_CHECK(fx.wallet.IpcCapability() == held);
+    BOOST_CHECK(fx.wallet.IpcCapability({}) == held);
     BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
     {
         CapabilityScope scope(fx.wallet, held, CapabilityKind::Send);
@@ -559,7 +559,7 @@ BOOST_AUTO_TEST_CASE(ipc_slot_begin_for_a_closed_connection_leaves_the_slot)
 
     // An open connection's begin is installed, replacing what the slot held.
     BOOST_CHECK(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::SignMessage, [] { return false; }));
-    const std::optional<CapabilityId> replaced = fx.wallet.IpcCapability();
+    const std::optional<CapabilityId> replaced = fx.wallet.IpcCapability({});
     BOOST_REQUIRE(replaced.has_value());
     BOOST_CHECK(*replaced != *held);
     {
@@ -567,8 +567,8 @@ BOOST_AUTO_TEST_CASE(ipc_slot_begin_for_a_closed_connection_leaves_the_slot)
         BOOST_CHECK(!scope.Active());
     }
 
-    fx.wallet.EndIpcElevation();
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    fx.wallet.EndIpcElevation({});
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 
@@ -581,8 +581,8 @@ BOOST_AUTO_TEST_CASE(ipc_slot_read_and_end_for_a_closed_connection)
     EncryptedWallet fx;
     fx.UnlockFor(UnlockScope::StakingOnly);
 
-    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send));
-    const std::optional<CapabilityId> held = fx.wallet.IpcCapability();
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send, {}));
+    const std::optional<CapabilityId> held = fx.wallet.IpcCapability({});
     BOOST_REQUIRE(held.has_value());
 
     const auto closed = [] { return true; };
@@ -592,14 +592,14 @@ BOOST_AUTO_TEST_CASE(ipc_slot_read_and_end_for_a_closed_connection)
     BOOST_CHECK(fx.wallet.IpcCapability(open) == held);
 
     fx.wallet.EndIpcElevation(closed);
-    BOOST_CHECK(fx.wallet.IpcCapability() == held);
+    BOOST_CHECK(fx.wallet.IpcCapability({}) == held);
     {
         CapabilityScope scope(fx.wallet, held, CapabilityKind::Send);
         BOOST_CHECK(scope.Active());
     }
 
     fx.wallet.EndIpcElevation(open);
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     {
         CapabilityScope scope(fx.wallet, held, CapabilityKind::Send);
         BOOST_CHECK(!scope.Active());
@@ -612,13 +612,13 @@ BOOST_AUTO_TEST_CASE(ipc_slot_holds_one_capability)
     EncryptedWallet fx;
     fx.UnlockFor(UnlockScope::StakingOnly);
 
-    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send));
-    const std::optional<CapabilityId> first = fx.wallet.IpcCapability();
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send, {}));
+    const std::optional<CapabilityId> first = fx.wallet.IpcCapability({});
     BOOST_REQUIRE(first.has_value());
 
     // A second begin replaces the first, which ends.
-    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::SignMessage));
-    const std::optional<CapabilityId> second = fx.wallet.IpcCapability();
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::SignMessage, {}));
+    const std::optional<CapabilityId> second = fx.wallet.IpcCapability({});
     BOOST_REQUIRE(second.has_value());
     BOOST_CHECK(*first != *second);
 
@@ -628,8 +628,8 @@ BOOST_AUTO_TEST_CASE(ipc_slot_holds_one_capability)
     }
 
     // A refused begin empties the slot too, so nothing earlier stays usable.
-    BOOST_CHECK(!fx.wallet.BeginIpcElevation(SecureString("wrong"), CapabilityKind::Send));
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(!fx.wallet.BeginIpcElevation(SecureString("wrong"), CapabilityKind::Send, {}));
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
 
     {
         CapabilityScope scope(fx.wallet, second, CapabilityKind::SignMessage);
@@ -1060,13 +1060,13 @@ BOOST_AUTO_TEST_CASE(a_passphrase_change_ends_every_capability)
 
     const std::optional<CapabilityId> id = fx.wallet.BeginElevation(Passphrase(), CapabilityKind::FileTransfer);
     BOOST_REQUIRE(id.has_value());
-    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send));
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send, {}));
 
     BOOST_REQUIRE(fx.wallet.ChangeWalletPassphrase(Passphrase(), changed));
 
     // The unlock is as it was; what the old passphrase issued is not.
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     {
         CapabilityScope scope(fx.wallet, id, CapabilityKind::FileTransfer);
         BOOST_CHECK(!scope.Active());

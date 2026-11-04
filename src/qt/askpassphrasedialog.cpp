@@ -241,29 +241,18 @@ void AskPassphraseDialog::accept()
                     // vetoed by minimize-on-close on Qt6 (issue #2995).
                     BitcoinGUI::requestQuit();
                 } else {
-                    // Multiprocess: the wallet lives in the separate core process, which
-                    // keeps running -- closing this GUI would NOT restart it. The on-disk
-                    // encryption is already complete (the wallet database was rewritten and
-                    // the keypool regenerated in the core); the core just needs a restart to
-                    // drop the pre-encryption database state it still holds in memory and
-                    // reload cleanly. Deliberately no requestQuit() here.
-                    QMessageBox::warning(this, tr("Wallet encrypted - restart the core to finish"),
+                    // Multiprocess: the wallet lives in the separate core process. The
+                    // core stops when this connection closes, to finish the encryption
+                    // (as the RPC encryptwallet does), so the GUI quits after the user
+                    // has read this.
+                    QMessageBox::warning(this, tr("Wallet encrypted"),
                                          "<qt>" +
-                                             tr("Your wallet is now fully encrypted and has been locked.") +
-                                             "<br><br>" +
-                                             tr("You are running in multiprocess mode, so the wallet lives in the "
-                                                "separate Gridcoin core process, which is still running. To finish the "
-                                                "encryption cleanly, restart the core process now (the running "
-                                                "<code>gridcoinresearchd</code>). The encryption on disk is already "
-                                                "complete; the restart is only so the core drops the pre-encryption "
-                                                "database state it still holds in memory and reloads the encrypted "
-                                                "wallet fresh.") +
-                                             "<br><br>" +
-                                             tr("Note: closing this window will not restart the core. Only "
-                                                "stopping and starting the core process does that; stopping it "
-                                                "will also close this window, so reopen the wallet once the core "
-                                                "is back up.") +
+                                             tr("Your wallet is now encrypted and locked. The Gridcoin core stops "
+                                                "when you close this message, to finish the encryption. If it runs "
+                                                "as a service it starts again by itself; otherwise start it again, "
+                                                "then reopen the wallet.") +
                                              "<br><br>" + backupWarning + "</qt>");
+                    BitcoinGUI::requestQuit();
                 }
             }
             else {

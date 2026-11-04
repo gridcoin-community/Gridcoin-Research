@@ -647,6 +647,7 @@ public:
                                           const std::optional<interfaces::WalletCoinControl>&, int64_t) override { return {}; }
     bool backupWallet(const std::string&) override { return false; }
     bool backupConfigFile(const std::string&) override { return false; }
+    std::unique_ptr<interfaces::FileSource> beginBackup(uint8_t, std::string&) override { return nullptr; }
     interfaces::MessageSignStatus signMessage(const std::string&, const std::string&, std::string&) override { return {}; }
     interfaces::MessageVerifyStatus verifyMessage(const std::string&, const std::string&,
                                                   const std::vector<unsigned char>&) override { return {}; }
@@ -741,6 +742,10 @@ public:
     }
     bool backupWallet(const std::string& /*dest*/) override { return false; }
     bool backupConfigFile(const std::string& /*dest*/) override { return false; }
+    std::unique_ptr<interfaces::FileSource> beginBackup(uint8_t /*items*/, std::string& /*error_out*/) override
+    {
+        return nullptr;
+    }
     interfaces::MessageSignStatus signMessage(const std::string& /*address*/, const std::string& /*message*/,
                                               std::string& /*signature_out*/) override
     {
@@ -880,6 +885,10 @@ public:
     }
     bool backupWallet(const std::string& /*dest*/) override { return false; }
     bool backupConfigFile(const std::string& /*dest*/) override { return false; }
+    std::unique_ptr<interfaces::FileSource> beginBackup(uint8_t /*items*/, std::string& /*error_out*/) override
+    {
+        return nullptr;
+    }
     interfaces::MessageSignStatus signMessage(const std::string& /*address*/, const std::string& /*message*/,
                                               std::string& /*signature_out*/) override
     {

@@ -152,3 +152,41 @@ void AutoStartTests::regtestLeavesTheMainnetLoginItemAlone()
     QVERIFY(!GUIUtil::GetStartOnSystemStartup());
 #endif
 }
+
+void AutoStartTests::multiprocessLoginItemCarriesMultiprocess()
+{
+#ifndef Q_OS_LINUX
+    QSKIP("The login item is checked end to end on Linux only.");
+#else
+    UseChain(CBaseChainParams::MAIN, MakeDataDir(*m_data_root, "main"));
+
+    // Restore the three options however the case exits.
+    struct ArgsRestore {
+        ~ArgsRestore()
+        {
+            gArgs.ForceSetArg("-multiprocess", "");
+            gArgs.ForceSetArg("-ipcdir", "");
+            gArgs.ForceSetArg("-ipcserviceuser", "");
+        }
+    } restore;
+
+    // Without -multiprocess the login item carries none of the three.
+    gArgs.ForceSetArg("-multiprocess", "0");
+    gArgs.ForceSetArg("-ipcdir", "/run/gridcoinresearchd");
+    gArgs.ForceSetArg("-ipcserviceuser", "gridcoin");
+    QVERIFY(GUIUtil::SetStartOnSystemStartup(true, false));
+    QByteArray entry = ReadEntry(*m_config_home, "gridcoin-mainnet.desktop");
+    QVERIFY(!entry.isEmpty());
+    QVERIFY(!entry.contains(" -multiprocess"));
+    QVERIFY(!entry.contains(" -ipcdir="));
+    QVERIFY(!entry.contains(" -ipcserviceuser="));
+
+    // With it, all three are carried.
+    gArgs.ForceSetArg("-multiprocess", "1");
+    QVERIFY(GUIUtil::SetStartOnSystemStartup(true, false));
+    entry = ReadEntry(*m_config_home, "gridcoin-mainnet.desktop");
+    QVERIFY(entry.contains(" -multiprocess"));
+    QVERIFY(entry.contains(" -ipcdir=/run/gridcoinresearchd"));
+    QVERIFY(entry.contains(" -ipcserviceuser=gridcoin"));
+#endif
+}

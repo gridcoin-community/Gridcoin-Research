@@ -1063,6 +1063,12 @@ bool IsConfigFileEmpty()
 
 }
 
+std::string GetConfiguredOption(const std::string& arg)
+{
+    if (gArgs.IsArgNegated(arg)) return {};
+    return gArgs.GetArg(arg, "");
+}
+
 static bool GetConfigOptions(std::istream& stream, const std::string& filepath, std::string& error,
                              std::vector<std::pair<std::string, std::string>>& options, std::list<SectionInfo>& sections)
 {

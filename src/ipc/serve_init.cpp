@@ -263,7 +263,7 @@ public:
     {
         RequireAuth();
         RequireAttachSlot();
-        return m_inner->makeSideStakeManager();
+        return BindToConnection(m_inner->makeSideStakeManager());
     }
 
     std::unique_ptr<interfaces::GuiState> makeGuiState() override
@@ -349,10 +349,11 @@ private:
     //! This connection's teardown hooks. Shared with the wallet it hands out.
     const std::shared_ptr<interfaces::ConnectionScope> m_scope{interfaces::MakeConnectionScope()};
     //! Whether this connection holds the slot. Shared with the slot hook, which
-    //! may outlive this object in the scope. ClaimAttachSlot's re-check pairs
-    //! this store with its load of the scope's closed flag (and that flag's store
-    //! with the hook's load of this one), which needs both to stay sequentially
-    //! consistent; do not relax to acquire/release.
+    //! may outlive this object in the scope. ClaimAttachSlot stores this before
+    //! its re-check loads the scope's closed flag; close() stores that flag
+    //! before the slot hook loads this. Each side's store-then-load must stay
+    //! seq_cst so at least one sees the other's store; do not relax to
+    //! acquire/release.
     const std::shared_ptr<std::atomic<bool>> m_slot_held{std::make_shared<std::atomic<bool>>(false)};
     //! The connection gets exactly ONE authentication attempt, and the claim on
     //! that attempt is a single atomic transition.

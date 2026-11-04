@@ -38,6 +38,7 @@
 #include "ipc/connect.h"
 #include "ipc/handshake.h"
 #include "ipc/process.h"
+#include "qt/coreconnectwait.h"
 #endif
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
@@ -67,6 +68,8 @@
 #include <signal.h>
 #include <unistd.h>
 #endif
+#include <chrono>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 
@@ -509,6 +512,94 @@ static bool ResolveNodeIdentity(const ipc::HandshakeResult& hs)
     }
     return true;
 }
+
+//! What one connect attempt produced.
+struct CoreConnectAttempt
+{
+    std::optional<ipc::GuiConnection> connection;
+    ipc::ConnectFailure failure;
+};
+
+//! One connect attempt to the core in \p ipc_dir. If the core later drops the
+//! connection, the GUI quits.
+static CoreConnectAttempt AttemptCoreConnect(const fs::path& ipc_dir)
+{
+    CoreConnectAttempt attempt;
+    attempt.connection = ipc::ConnectToNode(ipc_dir, attempt.failure, /*on_disconnect=*/[] {
+        QuitOnDaemonConnectionLost("lost connection to the Gridcoin daemon");
+    });
+    return attempt;
+}
+
+//! Connect to the core in \p ipc_dir, waiting for one that is still starting.
+//!
+//! Every attempt runs on a thread of its own while WaitForCore keeps the GUI
+//! thread's event loop running (qt/coreconnectwait.h). NextConnectStep decides
+//! which failures are retried (no cookie yet, or nothing listening), every
+//! IPC_CONNECT_RETRY_INTERVAL, for up to IPC_CONNECT_WAIT_MAX. On failure,
+//! including a canceled wait, \p failure says why.
+static std::optional<ipc::GuiConnection> ConnectToCore(const fs::path& ipc_dir, ipc::ConnectFailure& failure)
+{
+    CoreWaitTimings timings;
+    timings.retry_interval = ipc::IPC_CONNECT_RETRY_INTERVAL;
+    CoreWaitOutcome<CoreConnectAttempt> outcome = WaitForCore<CoreConnectAttempt>(
+        [ipc_dir] { return AttemptCoreConnect(ipc_dir); },
+        [](const CoreConnectAttempt& attempt) { return attempt.connection.has_value(); },
+        [logged = false](const CoreConnectAttempt& attempt, std::chrono::seconds elapsed) mutable {
+            if (ipc::NextConnectStep(attempt.failure, elapsed) != ipc::ConnectStep::Retry) return false;
+            if (!logged) {
+                GUILogPrintf("IPC: waiting for the Gridcoin core to start: %s", attempt.failure.message);
+                logged = true;
+            }
+            return true;
+        },
+        timings, PACKAGE_NAME);
+
+    if (!outcome.error.empty()) {
+        GUIError("IPC: a connect attempt failed unexpectedly: %s", outcome.error);
+    }
+    if (outcome.canceled) {
+        GUILogPrintf("IPC: stopped waiting for the Gridcoin core: canceled");
+        // A connection the attempt in flight made as the wait was canceled is
+        // not used.
+        outcome.last.connection.reset();
+    }
+    if (outcome.last.connection) return std::move(outcome.last.connection);
+
+    failure = outcome.last.failure;
+    // The last attempt left no reason when it threw, or when the wait was
+    // canceled as it connected.
+    if (failure.message.empty()) {
+        if (!outcome.error.empty()) {
+            failure = {ipc::ConnectFailureKind::Handshake, "a connect attempt failed unexpectedly: " + outcome.error};
+        } else if (outcome.canceled) {
+            failure = {ipc::ConnectFailureKind::Handshake, "waiting for the Gridcoin core was canceled"};
+        } else {
+            failure = {ipc::ConnectFailureKind::Handshake, "the connect attempt gave no reason"};
+        }
+    }
+    return std::nullopt;
+}
+
+//! The text the GUI shows for a failed connect.
+static QString ConnectFailureText(const ipc::ConnectFailure& failure)
+{
+    switch (failure.kind) {
+    case ipc::ConnectFailureKind::AlreadyAttached:
+        return QObject::tr("Another Gridcoin GUI is already attached to this core. Only one GUI can attach at a "
+                           "time; close the other one first.");
+    case ipc::ConnectFailureKind::Timeout:
+        return QObject::tr("The Gridcoin core did not answer within %1 seconds. It may be busy, or another "
+                           "program may be holding its IPC connection.")
+            .arg(ipc::IPC_CLIENT_HANDSHAKE_TIMEOUT.count());
+    case ipc::ConnectFailureKind::NoCookie:
+    case ipc::ConnectFailureKind::NotListening:
+    case ipc::ConnectFailureKind::PeerRefused:
+    case ipc::ConnectFailureKind::Handshake:
+        break;
+    } // no default case, so the compiler can warn about a kind left out
+    return QObject::tr("Could not connect to the Gridcoin daemon:\n%1").arg(QString::fromStdString(failure.message));
+}
 #endif // ENABLE_MULTIPROCESS
 
 //! QApplication subclass that contains exceptions escaping Qt event handlers.
@@ -882,6 +973,14 @@ int main(int argc, char *argv[])
     else
         app.setApplicationName("Gridcoin-Qt");
 
+#ifdef Q_OS_MACOS
+    // The login item cannot carry arguments, so the launch mode is remembered
+    // from the last command line that set it. Before the config files are read,
+    // so only command-line values count as set.
+    QSettings launch_settings;
+    GUIUtil::ApplyPersistedLaunchMode(launch_settings, gArgs);
+#endif
+
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     // Apply Qt's built-in "Fusion" theme as the application's base styles to
     // normalize layout discrepancies between platforms and fix some high-DPI
@@ -1231,18 +1330,15 @@ int main(int argc, char *argv[])
     if (multiprocess)
     {
         // Connect to the separately-started daemon (moved here from StartGridcoinQt
-        // so OptionsModel can be built from the remote Init). Logging is up
-        // (InitLogging above), so failures land in the GUI log file.
-        std::string ipc_error;
-        node_connection = ipc::ConnectToNode(ipc::GetIpcDir(), ipc_error,
-            /*on_disconnect=*/[] {
-                QuitOnDaemonConnectionLost("lost connection to the Gridcoin daemon");
-            });
+        // so OptionsModel can be built from the remote Init), waiting for one that
+        // is still starting. Logging is up (InitLogging above), so failures land
+        // in the GUI log file.
+        ipc::ConnectFailure connect_failure;
+        node_connection = ConnectToCore(ipc::GetIpcDir(), connect_failure);
         if (!node_connection)
         {
-            GUIError("IPC: could not connect to the Gridcoin daemon: %s", ipc_error);
-            QMessageBox::critical(nullptr, PACKAGE_NAME,
-                    QObject::tr("Could not connect to the Gridcoin daemon:\n%1").arg(QString::fromStdString(ipc_error)));
+            GUIError("IPC: could not connect to the Gridcoin daemon: %s", connect_failure.message);
+            QMessageBox::critical(nullptr, PACKAGE_NAME, ConnectFailureText(connect_failure));
             return EXIT_FAILURE;
         }
         interface_init = node_connection->init.get();
@@ -1261,6 +1357,7 @@ int main(int argc, char *argv[])
         const interfaces::BuildInfo& node_build = node_connection->handshake.remote_build;
         const interfaces::NodeIdentity& node_ident = node_connection->handshake.remote_ident;
         ipc_info.active = true;
+        ipc_info.core_other_account = node_connection->core_other_account;
         ipc_info.gui_version = QString::fromStdString(local_build.git_commit);
         ipc_info.node_version = QString::fromStdString(node_build.git_commit);
         ipc_info.node_built_at = QString::fromStdString(node_build.built_at);

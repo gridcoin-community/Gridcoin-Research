@@ -11,6 +11,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -24,11 +25,12 @@
 namespace {
 //! Minimal interfaces::Init stub: drives ClientHandshake with canned responses so
 //! every matching-policy branch is exercised deterministically, no socket. Only
-//! the three handshake methods are overridden; the base Init defaults (return
+//! the four handshake methods are overridden; the base Init defaults (return
 //! nullptr) cover the makeX factories.
 struct FakeInit : public interfaces::Init {
     bool auth_ok{true};
     bool throw_on_identity{false};
+    bool slot_held{true};
     interfaces::BuildInfo build;
     interfaces::NodeIdentity ident;
 
@@ -39,7 +41,12 @@ struct FakeInit : public interfaces::Init {
         if (throw_on_identity) throw std::runtime_error("daemon vanished mid-handshake");
         return ident;
     }
+    bool holdsAttachSlot() override { return slot_held; }
 };
+
+//! What ClientHandshake reports when another GUI holds the core's attach slot.
+const std::string ALREADY_ATTACHED_MESSAGE{"Another Gridcoin GUI is already attached to this core. Only one GUI can "
+                                           "attach at a time; close the other one first."};
 
 //! A local build the fakes below match for a clean handshake. schema_minor is 1 so
 //! both the GUI-newer (hard) and GUI-older (soft) minor branches are reachable.
@@ -318,6 +325,68 @@ BOOST_AUTO_TEST_CASE(handshake_clean_match_no_soft)
     BOOST_CHECK(r.soft.empty());
     BOOST_CHECK_EQUAL(r.remote_ident.identity_token, "deadbeef");
     BOOST_CHECK_EQUAL(r.remote_build.git_commit, local.git_commit);
+    BOOST_CHECK(!r.already_attached);
+}
+
+// ---- ClientHandshake (attach slot) ----
+
+// A compatible core that another GUI is attached to: the handshake fails and
+// says so, in the words the GUI shows.
+BOOST_AUTO_TEST_CASE(handshake_reports_already_attached)
+{
+    const auto local = MakeLocal();
+    FakeInit fake;
+    fake.build = local;
+    fake.ident.network = "main";
+    fake.slot_held = false;
+    const auto r = ipc::ClientHandshake(fake, "c", "main", local);
+    BOOST_CHECK(!r.ok);
+    BOOST_CHECK(r.already_attached);
+    BOOST_CHECK(r.error.find("already attached") != std::string::npos);
+    BOOST_CHECK_EQUAL(r.error, ALREADY_ATTACHED_MESSAGE);
+}
+
+// The slot is asked for only after the compatibility checks: an older core
+// does not serve holdsAttachSlot, so a mismatch must be reported as itself.
+BOOST_AUTO_TEST_CASE(handshake_schema_error_precedes_slot_check)
+{
+    const auto local = MakeLocal();
+    FakeInit fake;
+    fake.build = local;
+    fake.ident.network = "main";
+    fake.slot_held = false;
+    fake.build.schema_major += 1;
+    const auto r = ipc::ClientHandshake(fake, "c", "main", local);
+    BOOST_CHECK(!r.ok);
+    BOOST_CHECK(!r.already_attached);
+    BOOST_CHECK(r.error.find("schema major") != std::string::npos);
+}
+
+// ---- Connect retry policy ----
+
+// Only a core that may still be starting (no cookie yet, or nothing listening)
+// is waited for, and only for IPC_CONNECT_WAIT_MAX.
+BOOST_AUTO_TEST_CASE(retry_policy)
+{
+    using K = ipc::ConnectFailureKind;
+    using S = ipc::ConnectStep;
+
+    BOOST_CHECK(ipc::IPC_CLIENT_HANDSHAKE_TIMEOUT == std::chrono::seconds{30});
+    BOOST_CHECK(ipc::IPC_CONNECT_RETRY_INTERVAL == std::chrono::seconds{2});
+    BOOST_CHECK(ipc::IPC_CONNECT_WAIT_MAX == std::chrono::seconds{300});
+
+    BOOST_CHECK(ipc::NextConnectStep({K::NoCookie, ""}, std::chrono::seconds{10}) == S::Retry);
+    BOOST_CHECK(ipc::NextConnectStep({K::NoCookie, ""}, std::chrono::seconds{299}) == S::Retry);
+    BOOST_CHECK(ipc::NextConnectStep({K::NoCookie, ""}, std::chrono::seconds{300}) == S::GiveUp);
+    BOOST_CHECK(ipc::NextConnectStep({K::NotListening, ""}, std::chrono::seconds{0}) == S::Retry);
+    BOOST_CHECK(ipc::NextConnectStep({K::NotListening, ""}, std::chrono::seconds{299}) == S::Retry);
+    BOOST_CHECK(ipc::NextConnectStep({K::NotListening, ""}, std::chrono::seconds{300}) == S::GiveUp);
+    for (auto k : {K::PeerRefused, K::AlreadyAttached, K::Timeout, K::Handshake}) {
+        BOOST_CHECK(ipc::NextConnectStep({k, ""}, std::chrono::seconds{0}) == S::GiveUp);
+    }
+
+    // A default failure is a handshake failure, which is never retried.
+    BOOST_CHECK(ipc::ConnectFailure{}.kind == K::Handshake);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

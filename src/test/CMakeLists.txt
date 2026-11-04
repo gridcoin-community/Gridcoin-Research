@@ -208,6 +208,7 @@ add_executable(test_gridcoin
     transaction_identity_tests.cpp
     transaction_tests.cpp
     transfer_file_tests.cpp
+    transfer_sources_tests.cpp
     txmempool_tests.cpp
     uint256_tests.cpp
     util_fraction_tests.cpp

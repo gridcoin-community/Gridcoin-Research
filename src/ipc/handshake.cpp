@@ -424,6 +424,15 @@ HandshakeResult ClientHandshake(interfaces::Init& init, const std::string& cooki
             return result;
         }
 
+        // Asked only once the core is known to speak this schema: a core of
+        // another schema may not serve it, and its mismatch is reported above.
+        if (!init.holdsAttachSlot()) {
+            result.already_attached = true;
+            result.error = "Another Gridcoin GUI is already attached to this core. Only one GUI can attach at a "
+                           "time; close the other one first.";
+            return result;
+        }
+
         // Soft findings (non-fatal). GUI schema_minor < node is forward-compatible
         // (log-only); a git_commit mismatch is the mixed-build banner.
         if (local.schema_minor < remote.schema_minor) {
@@ -457,6 +466,21 @@ BindOutcome CheckIdentityBinding(const std::string& reported_token, const std::s
     }
     if (stored_token.empty()) return BindOutcome::FirstSeen;
     return reported_token == stored_token ? BindOutcome::Match : BindOutcome::Mismatch;
+}
+
+ConnectStep NextConnectStep(const ConnectFailure& f, std::chrono::seconds elapsed)
+{
+    switch (f.kind) {
+    case ConnectFailureKind::NoCookie:
+    case ConnectFailureKind::NotListening:
+        return elapsed < IPC_CONNECT_WAIT_MAX ? ConnectStep::Retry : ConnectStep::GiveUp;
+    case ConnectFailureKind::PeerRefused:
+    case ConnectFailureKind::AlreadyAttached:
+    case ConnectFailureKind::Timeout:
+    case ConnectFailureKind::Handshake:
+        return ConnectStep::GiveUp;
+    } // no default case, so the compiler can warn about a kind left out
+    return ConnectStep::GiveUp;
 }
 
 } // namespace ipc

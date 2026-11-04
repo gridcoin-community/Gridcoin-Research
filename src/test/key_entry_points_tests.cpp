@@ -751,7 +751,7 @@ DriverOutcome Probe(const std::string& probe, KeyReachWallet& fx)
                              "Question?", GRC::Poll::ChoiceList(), GetAdjustedTime(), Fraction());
 
         // Under the IPC slot's capability, as submitVote builds its vote.
-        CapabilityScope scope(fx.wallet, fx.wallet.IpcCapability(), CapabilityKind::Contract);
+        CapabilityScope scope(fx.wallet, fx.wallet.IpcCapability({}), CapabilityKind::Contract);
 
         try {
             LOCK(cs_main);

@@ -19,6 +19,7 @@
 #include <algorithm>           // For std::replace and std::max.
 
 #include <QByteArray>
+#include <QSettings>
 #include <QString>
 #include <QDateTime>
 #include <QDoubleValidator>
@@ -590,6 +591,21 @@ AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
         }
     }
 
+    // The login item keeps the multiprocess mode this process runs in, and the
+    // directory and service account it connects to.
+    if (gArgs.GetBoolArg("-multiprocess", false))
+    {
+        result.arguments += " -multiprocess";
+
+        for (const auto& option : { "-ipcdir", "-ipcserviceuser" })
+        {
+            if (gArgs.IsArgSet(option) && !gArgs.IsArgNegated(option))
+            {
+                (((result.arguments += " ") += option) += "=") += gArgs.GetArg(option, "");
+            }
+        }
+    }
+
     return result;
 }
 
@@ -851,6 +867,32 @@ QDateTime StartOfDay(const QDate& date)
 #else
     return QDateTime(date);
 #endif
+}
+
+void ApplyPersistedLaunchMode(QSettings& settings, ArgsManager& args)
+{
+    // Called before the config files are read, so only command-line values are
+    // seen as set. A value the command line sets is remembered for the next
+    // launch from a login item that cannot carry arguments; one it leaves out is
+    // taken from what was remembered.
+    if (args.IsArgSet("-multiprocess")) {
+        settings.setValue("launchMultiprocess", args.GetBoolArg("-multiprocess", false));
+    } else if (settings.contains("launchMultiprocess")) {
+        args.SoftSetBoolArg("-multiprocess", settings.value("launchMultiprocess").toBool());
+    }
+
+    const struct {
+        const char* option;
+        const char* key;
+    } string_options[] = {{"-ipcdir", "launchIpcDir"}, {"-ipcserviceuser", "launchIpcServiceUser"}};
+
+    for (const auto& entry : string_options) {
+        if (args.IsArgSet(entry.option)) {
+            settings.setValue(entry.key, QString::fromStdString(args.GetArg(entry.option, "")));
+        } else if (settings.contains(entry.key)) {
+            args.SoftSetArg(entry.option, settings.value(entry.key).toString().toStdString());
+        }
+    }
 }
 
 } // namespace GUIUtil

@@ -44,8 +44,7 @@ std::optional<uid_t> LookUpAccountUid(const std::string& name)
 
 std::string ConfiguredOption(const std::string& arg)
 {
-    if (gArgs.IsArgNegated(arg)) return {};
-    return gArgs.GetArg(arg, "");
+    return ::GetConfiguredOption(arg);
 }
 
 fs::path SocketDirOf(const std::string& canonical_address)

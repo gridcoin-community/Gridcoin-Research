@@ -336,6 +336,7 @@ add_library(gridcoin_util STATIC
     wallet/staking_signer.cpp
     wallet/synthetic_coin_source.cpp
     wallet/transactionrecord.cpp
+    wallet/transfer_sources.cpp
     wallet/txdetail.cpp
     wallet/txfilter.cpp
     wallet/txorder.cpp

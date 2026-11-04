@@ -15,6 +15,7 @@
 #include "bitcoinunitstests.h"
 #include "coinselectionmodeltests.h"
 #include "coinselectionviewtests.h"
+#include "coreconnectwaittests.h"
 #include "guiutiltests.h"
 #include "optionsmodeltests.h"
 #include "psgttoastdamptests.h"
@@ -143,6 +144,10 @@ int main(int argc, char *argv[])
 
     SendCoinsDialogTests test20;
     if (QTest::qExec(&test20) != 0)
+        fInvalid = true;
+
+    CoreConnectWaitTests test21;
+    if (QTest::qExec(&test21) != 0)
         fInvalid = true;
 
     return fInvalid;

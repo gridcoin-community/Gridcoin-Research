@@ -135,6 +135,8 @@ PeerVerdict ClientPeerPolicy(const PeerIdentity& server, const fs::path& ipcdir)
 //! The value of a name-valued IPC option such as "-ipcserviceuser", or "" when
 //! it is unset or negated (-noipcserviceuser). The daemon and the peer policies
 //! all read these options through it, so they share one rule for the -no form.
+//! The rule is ::GetConfiguredOption (util/system.h), which the wallet backup
+//! outside the IPC library reads -ipcattachgroup through as well.
 std::string ConfiguredOption(const std::string& arg);
 
 //! The directory that holds the socket named by a canonical "unix:<path>"

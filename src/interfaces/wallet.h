@@ -7,6 +7,7 @@
 
 #include "interfaces/marshal.h"
 
+#include "interfaces/file_transfer.h" // For FileSource.
 #include "interfaces/handler.h"
 #include "node/ui_interface.h" // For ChangeType.
 #include "primitives/transaction.h" // For COutPoint.
@@ -436,14 +437,41 @@ public:
                                       const std::optional<WalletCoinControl>& coin_control,
                                       int64_t accepted_fee) = 0;
 
-    //! Back up the wallet .dat file to dest. Returns false on I/O failure.
+    //! Always false, and logged: the core no longer writes to a path the client
+    //! names. A client backs up through beginBackup() and the transfer channel.
+    //! Kept because wallet.capnp cannot drop a released ordinal (@20).
     virtual bool backupWallet(const std::string& dest) = 0;
 
-    //! Back up the active config file to dest. Returns false on I/O failure.
-    //! Paired with backupWallet in the GUI backup action; the config file
-    //! belongs to the same node, so it stays behind the wallet boundary
-    //! rather than requiring a separate node reach for one file copy.
+    //! Always false, and logged, as backupWallet(). Kept for its released
+    //! ordinal (@21).
     virtual bool backupConfigFile(const std::string& dest) = 0;
+
+    //! Snapshot the requested items (a mask of BackupItem) into the core's
+    //! transfer directory and return a source that streams them, one entry per
+    //! requested item in the order wallet, configuration file, settings file.
+    //!
+    //! Runs under the client's Backup capability (beginElevation()) when the
+    //! wallet is encrypted and not fully unlocked; an unencrypted or fully
+    //! unlocked wallet needs none. A capability authorises one operation, so
+    //! the Backup capability this call ran under is ended when it returns,
+    //! whether the snapshots were made or not, and the returned source holds
+    //! none. A refusal before that point (a live transfer, no capability)
+    //! leaves the slot as it was, and so does a call that ran under none: a
+    //! capability of another kind is left for its own operation.
+    //!
+    //! Null, with \p error_out set, while another transfer of this wallet
+    //! interface is live, without the capability, when the configuration file
+    //! is requested in a deployment where it belongs to another account
+    //! (wallet::ConfigBackupPermitted), when the wallet is requested and is not
+    //! file-backed, when the transfer directory lacks room, or when a snapshot
+    //! fails. Nothing is left in the transfer directory then. A configuration or
+    //! settings file that does not exist (or -nosettings) gives an entry with no
+    //! file and the note "no configuration file" or "no settings file".
+    //!
+    //! The source deletes each snapshot once it has streamed it, and every one
+    //! left when it is cancelled or destroyed, or when the IPC connection it was
+    //! served on closes. Another transfer can begin once it is destroyed.
+    virtual std::unique_ptr<FileSource> beginBackup(uint8_t items, std::string& error_out) = 0;
 
     //! Sign message with the private key for address (the "sign message" tool).
     //! Runs under the client's SignMessage capability (beginElevation()); the
@@ -537,6 +565,18 @@ public:
 //! Return an in-process Wallet interface implementation wrapping the given
 //! wallet, which must outlive the returned object.
 std::unique_ptr<Wallet> MakeWallet(CWallet* wallet);
+
+//! Replace what a served wallet's encryptWallet() calls to stop the core once
+//! the encryption has succeeded (StartShutdown() by default), so a test never
+//! sets the process's real shutdown flag. An empty function restores the default.
+void SetEncryptionShutdownFnForTesting(std::function<void()> fn);
+
+//! Ask the core to stop so the wallet database drops the plaintext residue the
+//! encryption leaves behind, as the RPC encryptwallet does. Runs as a connection
+//! close hook on the IPC event-loop thread and as a scheduler fallback, so it only
+//! requests shutdown: it never blocks, takes a lock or makes an IPC call, and
+//! requesting shutdown twice is harmless.
+void RequestShutdownAfterEncryption();
 
 
 // Marshalability pins (interfaces/marshal.h): each DTO above must stay a

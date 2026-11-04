@@ -130,9 +130,10 @@ private:
     HookId m_next_id GUARDED_BY(m_mutex){1};
     //! Written only under m_mutex (in close()); read without it by closed(), so
     //! that callers holding other locks can ask, and under it by addCloseHook().
-    //! ServeInit's re-check in ClaimAttachSlot pairs this store with its load of
-    //! the held flag (and that flag's store with the hook's load), which needs
-    //! both to stay sequentially consistent; do not relax to acquire/release.
+    //! close() stores this before the slot hook loads the held flag;
+    //! ClaimAttachSlot stores the held flag before its re-check loads this. Each
+    //! side's store-then-load must stay seq_cst so at least one sees the other's
+    //! store; do not relax to acquire/release.
     std::atomic<bool> m_closed{false};
     //! Whether close() is running the hooks, and on which thread.
     bool m_running GUARDED_BY(m_mutex){false};

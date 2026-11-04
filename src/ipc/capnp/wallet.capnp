@@ -11,6 +11,7 @@ using Proxy = import "/mp/proxy.capnp";
 $Proxy.include("interfaces/wallet.h");
 $Proxy.includeTypes("ipc/capnp/wallet-types.h");
 
+using FileTransfer = import "file_transfer.capnp";
 using Handler = import "handler.capnp";
 using Node = import "node.capnp";
 
@@ -53,6 +54,7 @@ interface Wallet $Proxy.wrap("interfaces::Wallet") {
     sendCoins @19 (context :Proxy.Context, recipients :List(WalletSendRecipient), coinControl :WalletCoinControl, acceptedFee :Int64) -> (result :SendCoinsResult);
     backupWallet @20 (context :Proxy.Context, dest :Text) -> (result :Bool);
     backupConfigFile @21 (context :Proxy.Context, dest :Text) -> (result :Bool);
+    beginBackup @40 (context :Proxy.Context, items :UInt8) -> (errorOut :Text, result :FileTransfer.FileSource);
     signMessage @22 (context :Proxy.Context, address :Text, message :Text) -> (signatureOut :Text, result :Int32);
     verifyMessage @23 (context :Proxy.Context, address :Text, message :Text, signature :Data) -> (result :Int32);
     getAddresses @24 (context :Proxy.Context) -> (result :List(WalletAddress));

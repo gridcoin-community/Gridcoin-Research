@@ -624,7 +624,29 @@ ProxyClientBase<Interface, Impl>::ProxyClientBase(typename Interface::Client cli
         });
     }
     });
-    Sub::construct(*this);
+    // GRIDCOIN: Init's construct() is a round trip (the bootstrap), and it
+    // throws when the connection drops while it waits, as it does when a client
+    // gives up on a peer that never answers and shuts the socket down. This
+    // object then never finishes constructing and its destructor never runs, so
+    // run the cleanup the destructor would: disconnect_cb is not left on the
+    // connection pointing at this object, the capability is released on the
+    // event-loop thread, and a connection this object owns is deleted.
+    //
+    // That cleanup deletes the connection only if it still exists, and the
+    // check is sound only under an assumption about kj's ordering, which the
+    // destructor's own path shares: ConnectStream's onDisconnect handler, which
+    // also deletes the connection, runs before the loop->sync() the cleanup
+    // posts. The end of stream that fails construct() is handled in one drain
+    // of the event queue, which needs no I/O while no write is pending, and that
+    // drain queues and runs the handler (evalLater); a posted sync is seen only
+    // when the loop next polls, after the drain. Re-check this on every upstream
+    // sync of this subtree.
+    try {
+        Sub::construct(*this);
+    } catch (...) {
+        CleanupRun(m_context.cleanup_fns);
+        throw;
+    }
 }
 
 template <typename Interface, typename Impl>

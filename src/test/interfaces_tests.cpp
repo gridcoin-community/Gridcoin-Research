@@ -6,6 +6,7 @@
 #include "chain.h"
 #include "clientversion.h"
 #include "interfaces/connection_scope.h"
+#include "interfaces/file_transfer.h"
 #include "interfaces/gui_state.h"
 #include "interfaces/handler.h"
 #include "interfaces/init.h"
@@ -19,18 +20,21 @@
 #include "key_io.h"
 #include "node/access_policy.h"
 #include "node/gui_cache.h"
+#include "node/shutdown.h"
 #include "node/ui_interface.h"
 #include "policy/fees.h"
 #include "gridcoin/scraper/fwd.h"
 #include "gridcoin/sidestake.h"
 #include "primitives/transaction.h"
 #include "psgt.h"
+#include "scheduler.h"
 #include "sync.h"
 #include "test/encrypted_wallet.h"
 #include "test/gui_cache_fakes.h"
 #include "test/psgt_test_helpers.h"
 #include "test/staking_test_peers.h"
 #include "test/state_guard.h"
+#include "test/wallet_file_placeholder.h"
 #include "txmempool.h"
 #include "util.h"
 #include "util/strencodings.h"
@@ -1470,12 +1474,12 @@ BOOST_AUTO_TEST_CASE(ipc_begin_elevation_refuses_an_unknown_kind)
     // could send. Refused before the passphrase is checked, so it is not
     // counted as a failed attempt and the slot stays empty.
     BOOST_CHECK(!wallet->beginElevation(EncryptedWallet::PASSPHRASE, static_cast<CapabilityKind>(200)));
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
 
     // A wrong passphrase is refused and counted.
     BOOST_CHECK(!wallet->beginElevation(SecureString("not the passphrase"), CapabilityKind::Send));
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 1U);
 
     // Ending with nothing begun is a no-op.
@@ -1499,7 +1503,7 @@ BOOST_AUTO_TEST_CASE(ipc_begin_elevation_on_a_closed_connection_ends_it)
     scope->close();
 
     BOOST_CHECK(!wallet->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 
     // The passphrase was right, so it is not counted as a failed attempt.
@@ -1528,11 +1532,11 @@ BOOST_AUTO_TEST_CASE(ipc_begin_elevation_after_close_keeps_the_next_guis_capabil
     std::unique_ptr<interfaces::Wallet> next = interfaces::MakeWallet(&fx.wallet);
     next->bindConnectionScope(interfaces::MakeConnectionScope());
     BOOST_REQUIRE(next->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
-    const std::optional<CapabilityId> next_id = fx.wallet.IpcCapability();
+    const std::optional<CapabilityId> next_id = fx.wallet.IpcCapability({});
     BOOST_REQUIRE(next_id.has_value());
 
     BOOST_CHECK(!gone->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Send));
-    BOOST_CHECK(fx.wallet.IpcCapability() == next_id);
+    BOOST_CHECK(fx.wallet.IpcCapability({}) == next_id);
     BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
 
     // The next GUI's capability is still live.
@@ -1541,7 +1545,7 @@ BOOST_AUTO_TEST_CASE(ipc_begin_elevation_after_close_keeps_the_next_guis_capabil
                 == interfaces::MessageSignStatus::OK);
 
     next->endElevation();
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 
@@ -1565,7 +1569,7 @@ BOOST_AUTO_TEST_CASE(ipc_closed_connection_neither_uses_nor_ends_the_next_guis_c
     std::unique_ptr<interfaces::Wallet> next = interfaces::MakeWallet(&fx.wallet);
     next->bindConnectionScope(interfaces::MakeConnectionScope());
     BOOST_REQUIRE(next->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
-    const std::optional<CapabilityId> next_id = fx.wallet.IpcCapability();
+    const std::optional<CapabilityId> next_id = fx.wallet.IpcCapability({});
     BOOST_REQUIRE(next_id.has_value());
 
     std::string signature;
@@ -1573,11 +1577,11 @@ BOOST_AUTO_TEST_CASE(ipc_closed_connection_neither_uses_nor_ends_the_next_guis_c
     BOOST_CHECK(signature.empty());
 
     gone->endElevation();
-    BOOST_CHECK(fx.wallet.IpcCapability() == next_id);
+    BOOST_CHECK(fx.wallet.IpcCapability({}) == next_id);
 
     BOOST_CHECK(next->signMessage(address, "a message", signature) == interfaces::MessageSignStatus::OK);
     next->endElevation();
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 
@@ -1591,16 +1595,118 @@ BOOST_AUTO_TEST_CASE(ipc_begin_elevation_on_an_open_or_no_connection_is_unchange
     std::unique_ptr<interfaces::Wallet> served = interfaces::MakeWallet(&fx.wallet);
     served->bindConnectionScope(interfaces::MakeConnectionScope());
     BOOST_CHECK(served->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
-    BOOST_CHECK(fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(fx.wallet.IpcCapability({}).has_value());
     served->endElevation();
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
 
     std::unique_ptr<interfaces::Wallet> monolith = interfaces::MakeWallet(&fx.wallet);
     BOOST_CHECK(monolith->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
-    BOOST_CHECK(fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(fx.wallet.IpcCapability({}).has_value());
     monolith->endElevation();
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+namespace {
+//! Replaces the encryption shutdown function with a counter for a case, and
+//! puts the real one back however the case exits.
+struct EncryptionShutdownCounter
+{
+    int calls{0};
+    EncryptionShutdownCounter() { interfaces::SetEncryptionShutdownFnForTesting([this] { ++calls; }); }
+    ~EncryptionShutdownCounter() { interfaces::SetEncryptionShutdownFnForTesting({}); }
+};
+
+//! A scheduler nobody services, published as the node's for a case, so a queued
+//! task can be inspected without waiting for it. The previous handle is put back.
+struct UnservicedSchedulerHandle
+{
+    CScheduler scheduler;
+    CScheduler* saved;
+    UnservicedSchedulerHandle() : saved(g_scheduler_handle.exchange(&scheduler, std::memory_order_acq_rel)) {}
+    ~UnservicedSchedulerHandle() { g_scheduler_handle.store(saved, std::memory_order_release); }
+};
+
+//! An in-memory wallet with one key, not yet encrypted, swapped into pwalletMain.
+struct PlainWallet
+{
+    CWallet wallet;
+    grc_test::SwapMainWallet swap{&wallet};
+
+    PlainWallet()
+    {
+        CKey key;
+        key.MakeNewKey(true);
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+};
+} // namespace
+
+BOOST_AUTO_TEST_CASE(ipc_encryptwallet_stops_core_on_disconnect)
+{
+    PlainWallet fx;
+    EncryptionShutdownCounter counter;
+
+    auto w = interfaces::MakeWallet(&fx.wallet);
+    auto s = interfaces::MakeConnectionScope();
+    w->bindConnectionScope(s);
+
+    BOOST_REQUIRE(w->encryptWallet(SecureString("pp")));
+    BOOST_CHECK_EQUAL(counter.calls, 0);
+
+    s->close();
+    BOOST_CHECK_EQUAL(counter.calls, 1);
+    BOOST_CHECK(!ShutdownRequested());
+}
+
+BOOST_AUTO_TEST_CASE(ipc_encryptwallet_schedules_the_shutdown_fallback)
+{
+    PlainWallet fx;
+    EncryptionShutdownCounter counter;
+
+    // A scheduler nobody services, published as the node's for this case, so the
+    // queued task can be inspected without waiting for it.
+    UnservicedSchedulerHandle handle;
+
+    auto w = interfaces::MakeWallet(&fx.wallet);
+    auto s = interfaces::MakeConnectionScope();
+    w->bindConnectionScope(s);
+
+    const auto before = std::chrono::system_clock::now();
+    BOOST_REQUIRE(w->encryptWallet(SecureString("pp")));
+
+    std::chrono::system_clock::time_point first, last;
+    BOOST_REQUIRE_EQUAL(handle.scheduler.getQueueInfo(first, last), 1U);
+    BOOST_CHECK(first >= before + std::chrono::seconds{59});
+    BOOST_CHECK(first <= std::chrono::system_clock::now() + std::chrono::seconds{61});
+
+    // Nothing has stopped the core yet, and the connection still stands.
+    BOOST_CHECK_EQUAL(counter.calls, 0);
+
+    // Unbound wallets schedule nothing.
+    PlainWallet other;
+    auto monolith = interfaces::MakeWallet(&other.wallet);
+    BOOST_REQUIRE(monolith->encryptWallet(SecureString("pp")));
+    BOOST_CHECK_EQUAL(handle.scheduler.getQueueInfo(first, last), 1U);
+}
+
+BOOST_AUTO_TEST_CASE(encryptwallet_without_scope_does_not_stop)
+{
+    PlainWallet fx;
+    EncryptionShutdownCounter counter;
+    UnservicedSchedulerHandle handle;
+
+    {
+        auto w = interfaces::MakeWallet(&fx.wallet);
+        BOOST_REQUIRE(w->encryptWallet(SecureString("pp")));
+    }
+    BOOST_CHECK_EQUAL(counter.calls, 0);
+
+    // No scope: no fallback task was queued either.
+    std::chrono::system_clock::time_point first, last;
+    BOOST_CHECK_EQUAL(handle.scheduler.getQueueInfo(first, last), 0U);
+    BOOST_CHECK(!ShutdownRequested());
 }
 
 BOOST_AUTO_TEST_CASE(ipc_sendcoins_runs_under_a_send_capability)
@@ -1943,8 +2049,84 @@ BOOST_AUTO_TEST_CASE(ipc_closed_connection_interfaces_do_not_use_the_next_guis_c
     BOOST_CHECK_EQUAL(gone_mrc->submit(0, false).error, MRC_STAKING_ONLY_REFUSAL);
 
     next->endElevation();
-    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+// A settings change and a side-stake edit read the slot for their own connection,
+// as the wallet does: once it has closed, they run under no capability, even when
+// the slot holds the next GUI's Settings capability.
+BOOST_AUTO_TEST_CASE(ipc_closed_connection_settings_do_not_use_the_next_guis_capability)
+{
+    grc_test::StateGuard state_guard;
+    EnsureDataDir();
+    gArgs.ForceSetArg("-enablesidestaking", "1");
+
+    const std::string probe = "elevate_probe";
+    if (!gArgs.GetArgFlags("-" + probe)) {
+        gArgs.AddArg("-" + probe, "unit-test probe", ArgsManager::ALLOW_ANY, OptionsCategory::HIDDEN);
+    }
+    const RwSettingsEraser eraser({probe});
+
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+    uint160 hash;
+    *(hash.begin()) = 0x62;
+    const CTxDestination dest = CKeyID(hash);
+    const std::string address = EncodeDestination(dest);
+
+    struct Cleanup {
+        GRC::SideStakeRegistry& registry;
+        CTxDestination dest;
+        void Run() const
+        {
+            registry.NonContractDelete(dest, /*save_to_file=*/false);
+            BOOST_CHECK(updateRwSettings({{"sidestakeaddresses", util::SettingsValue{}},
+                                          {"sidestakeallocations", util::SettingsValue{}},
+                                          {"sidestakedescriptions", util::SettingsValue{}}}));
+        }
+        ~Cleanup() { Run(); }
+    } cleanup{registry, dest};
+    cleanup.Run();
+
+    grc_test::EncryptedWalletSwap swap;
+    BOOST_REQUIRE(swap.wallet().Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
+
+    auto gone_scope = interfaces::MakeConnectionScope();
+    std::unique_ptr<interfaces::Node> gone_node = interfaces::MakeNode();
+    std::unique_ptr<interfaces::SideStakeManager> gone_sidestakes = interfaces::MakeSideStakeManager();
+    gone_node->bindConnectionScope(gone_scope);
+    gone_sidestakes->bindConnectionScope(gone_scope);
+    gone_scope->close();
+
+    auto next_scope = interfaces::MakeConnectionScope();
+    std::unique_ptr<interfaces::Wallet> next = interfaces::MakeWallet(&swap.wallet());
+    std::unique_ptr<interfaces::Node> next_node = interfaces::MakeNode();
+    std::unique_ptr<interfaces::SideStakeManager> next_sidestakes = interfaces::MakeSideStakeManager();
+    next->bindConnectionScope(next_scope);
+    next_node->bindConnectionScope(next_scope);
+    next_sidestakes->bindConnectionScope(next_scope);
+
+    BOOST_REQUIRE(next->beginElevation(grc_test::EncryptedWalletSwap::Passphrase(), CapabilityKind::Settings));
+
+    interfaces::SettingChangeResult result = gone_node->changeSettings({{probe, "1"}});
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(result.elevation_required);
+    BOOST_CHECK(getRwSetting(probe).isNull());
+
+    BOOST_CHECK(gone_sidestakes->addLocal(address, 10, "a").status
+                == interfaces::SideStakeEditStatus::ELEVATION_REQUIRED);
+    BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+
+    // The open connection's own interfaces use it.
+    result = next_node->changeSettings({{probe, "1"}});
+    BOOST_CHECK(result.ok);
+    BOOST_CHECK_EQUAL(getRwSetting(probe).write(), "\"1\"");
+    BOOST_CHECK(next_sidestakes->addLocal(address, 10, "a").status == interfaces::SideStakeEditStatus::OK);
+    BOOST_CHECK_EQUAL(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).size(), 1u);
+
+    next->endElevation();
+    BOOST_CHECK(!swap.wallet().IpcCapability({}).has_value());
+    BOOST_CHECK(swap.wallet().IsUnlockedForStakingOnly());
 }
 
 BOOST_AUTO_TEST_CASE(node_console_refuses_file_commands)
@@ -1974,6 +2156,420 @@ BOOST_AUTO_TEST_CASE(node_console_refuses_file_commands)
     // help for a file command takes no path and still works, as does an ordinary command.
     BOOST_CHECK(node->executeRpcConsoleCommand("help", {"dumpwallet"}).ok);
     BOOST_CHECK(node->executeRpcConsoleCommand("getblockcount", {}).ok);
+}
+
+// The GUI backs up through beginBackup(): the core snapshots into its own
+// transfer directory and streams the copies. The file-backed cases copy the
+// fixture's pwalletMain, whose mock database never reads the placeholder that
+// stands in for its file.
+namespace {
+
+const uint8_t BACKUP_WALLET = static_cast<uint8_t>(interfaces::BackupItem::Wallet);
+const uint8_t BACKUP_CONFIG = static_cast<uint8_t>(interfaces::BackupItem::Config);
+const uint8_t BACKUP_SETTINGS = static_cast<uint8_t>(interfaces::BackupItem::Settings);
+
+//! A directory of the case's own under the data directory, and the transfer
+//! directory. Both are removed when the case ends, and the transfer directory
+//! also when it begins.
+struct BackupCase
+{
+    const fs::path dir = GetDataDir() / "interfaces_tests_backup";
+
+    BackupCase()
+    {
+        RemoveTransferDir();
+        fs::create_directories(dir);
+    }
+
+    ~BackupCase()
+    {
+        boost::system::error_code ec;
+        fs::remove_all(dir, ec);
+        RemoveTransferDir();
+        // A case that fails before beginBackup() ends it must not leave
+        // pwalletMain's IPC slot holding a capability.
+        pwalletMain->EndIpcElevation({});
+    }
+
+    static void RemoveTransferDir()
+    {
+        boost::system::error_code ec;
+        fs::remove_all(GetDataDir() / "transfers", ec);
+    }
+
+    //! Files in the transfer directory, or 0 when it does not exist.
+    static size_t TransferFileCount()
+    {
+        const fs::path tdir = GetDataDir() / "transfers";
+        if (!fs::exists(tdir)) return 0;
+
+        size_t n = 0;
+        for (fs::directory_iterator it(tdir); it != fs::directory_iterator(); ++it) {
+            ++n;
+        }
+        return n;
+    }
+
+    static void Write(const fs::path& path, const std::string& text)
+    {
+        fsbridge::ofstream stream(path);
+        stream << text;
+    }
+};
+
+//! Makes an in-memory wallet read as file-backed, with \p name as its file, for
+//! a case, and in-memory again when the case ends. EncryptWallet on a
+//! file-backed wallet rewrites the wallet file, which this binary's mock
+//! database refuses, so a case encrypts an in-memory wallet first and then
+//! names it after the placeholder file. Nothing in such a case writes to the
+//! wallet's database.
+struct ReadAsFileBacked
+{
+    CWallet& m_wallet;
+
+    ReadAsFileBacked(CWallet& wallet, const std::string& name) : m_wallet(wallet)
+    {
+        m_wallet.strWalletFile = name;
+        m_wallet.fFileBacked = true;
+    }
+
+    ~ReadAsFileBacked()
+    {
+        m_wallet.fFileBacked = false;
+        m_wallet.strWalletFile.clear();
+    }
+
+    ReadAsFileBacked(const ReadAsFileBacked&) = delete;
+    ReadAsFileBacked& operator=(const ReadAsFileBacked&) = delete;
+};
+
+//! Read an entry to its end, requiring every chunk to be error-free and the
+//! trailer to be there.
+std::string ReadEntry(interfaces::FileSource& source, uint32_t entry)
+{
+    std::string all;
+
+    // Bounds a source that never reaches eof.
+    for (int i = 0; i < 1000; ++i) {
+        const interfaces::FileChunk chunk = source.read(entry, 4096);
+        BOOST_REQUIRE_MESSAGE(chunk.error.empty(), chunk.error);
+        all.append(chunk.data.begin(), chunk.data.end());
+        if (chunk.eof) {
+            BOOST_REQUIRE(source.trailer(entry).ok);
+            return all;
+        }
+    }
+
+    BOOST_FAIL("the source never reached the end of the entry");
+    return all;
+}
+
+} // namespace
+
+BOOST_FIXTURE_TEST_CASE(begin_backup_refused_while_staking_only_without_capability, BackupCase)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
+
+    std::string err;
+    BOOST_CHECK(!w->beginBackup(BACKUP_WALLET, err));
+    BOOST_CHECK_MESSAGE(err.find("passphrase") != std::string::npos, err);
+    BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+}
+
+BOOST_FIXTURE_TEST_CASE(begin_backup_with_capability_passes_the_gate, BackupCase)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
+
+    BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Backup));
+
+    // The in-memory wallet passes the gate, and the next step reports that it
+    // has no file to back up.
+    std::string err;
+    BOOST_CHECK(!w->beginBackup(BACKUP_WALLET, err));
+    BOOST_CHECK_MESSAGE(err.find("file-backed") != std::string::npos, err);
+
+    // A capability authorises one operation, and that attempt was it, failed or
+    // not.
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
+
+    // A capability of another kind does not pass the gate, and the refusal
+    // leaves it in place.
+    BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Send));
+    const std::optional<CapabilityId> send_id = fx.wallet.IpcCapability({});
+    BOOST_REQUIRE(send_id.has_value());
+    BOOST_CHECK(!w->beginBackup(BACKUP_WALLET, err));
+    BOOST_CHECK_MESSAGE(err.find("passphrase") != std::string::npos, err);
+    BOOST_CHECK(fx.wallet.IpcCapability({}) == send_id);
+
+    w->endElevation();
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+BOOST_FIXTURE_TEST_CASE(begin_backup_unencrypted_streams_wallet_and_ends_capability, BackupCase)
+{
+    const grc_test::WalletFilePlaceholder wallet_file;
+    grc_test::RequireWalletFileNotInUse();
+
+    // A settings file of the case's own, so the settings entry has bytes to send.
+    grc_test::ForcedArgGuard settings_arg("settings", "interfaces_tests_settings.json");
+    fs::path settings;
+    BOOST_REQUIRE(gArgs.GetSettingsPath(&settings));
+    const std::string settings_text = "{\"interfaces_tests\": true}\n";
+    Write(settings, settings_text);
+    struct RemoveOnExit
+    {
+        fs::path path;
+        ~RemoveOnExit()
+        {
+            boost::system::error_code ec;
+            fs::remove(path, ec);
+        }
+    } remove_settings{settings};
+
+    // An unencrypted wallet still gets an id, which beginBackup() ends.
+    BOOST_REQUIRE(pwalletMain->BeginIpcElevation(SecureString{}, CapabilityKind::Backup, {}));
+    const std::optional<CapabilityId> id = pwalletMain->IpcCapability({});
+    BOOST_REQUIRE(id.has_value());
+
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+    std::string err;
+    std::unique_ptr<interfaces::FileSource> source = w->beginBackup(BACKUP_WALLET | BACKUP_SETTINGS, err);
+    BOOST_REQUIRE_MESSAGE(source, err);
+    BOOST_CHECK(err.empty());
+
+    // The capability is gone as soon as the snapshots exist.
+    {
+        const CapabilityScope after(*pwalletMain, id, CapabilityKind::Backup);
+        BOOST_CHECK(!after.Active());
+    }
+    BOOST_CHECK(!pwalletMain->IpcCapability({}).has_value());
+
+    const std::vector<interfaces::FileEntryInfo> infos = source->entries();
+    BOOST_REQUIRE_EQUAL(infos.size(), 2U);
+    BOOST_CHECK_EQUAL(infos[0].name, pwalletMain->strWalletFile);
+    BOOST_CHECK_EQUAL(infos[0].size, static_cast<int64_t>(grc_test::WalletFilePlaceholder::CONTENT.size()));
+    BOOST_CHECK_EQUAL(infos[1].name, "interfaces_tests_settings.json");
+
+    BOOST_CHECK_EQUAL(ReadEntry(*source, 0), grc_test::WalletFilePlaceholder::CONTENT);
+    BOOST_CHECK_EQUAL(ReadEntry(*source, 1), settings_text);
+    BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+
+    // The originals are untouched.
+    BOOST_CHECK(fs::exists(wallet_file.m_path));
+    BOOST_CHECK(fs::exists(settings));
+}
+
+// A locked, encrypted, file-backed wallet: the Backup capability unlocks it for
+// staking only, the copy is made under it, and ending the capability once the
+// copy exists locks the wallet again, on the calling thread and while that
+// thread's scope for the capability is still open.
+BOOST_FIXTURE_TEST_CASE(begin_backup_locked_wallet_relocks_once_the_copy_exists, BackupCase)
+{
+    // Read before EncryptedWallet swaps pwalletMain.
+    const std::string file_name = pwalletMain->strWalletFile;
+    const grc_test::WalletFilePlaceholder wallet_file;
+    grc_test::RequireWalletFileNotInUse();
+
+    EncryptedWallet fx;
+    const ReadAsFileBacked file_backed(fx.wallet, file_name);
+    // After the wallet, so it is destroyed first (see SchedulerForThisCase).
+    grc_test::SchedulerForThisCase scheduler;
+    BOOST_REQUIRE(fx.wallet.IsLocked());
+
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
+    BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Backup));
+    BOOST_REQUIRE(fx.wallet.IsUnlockedForStakingOnly());
+
+    std::string err;
+    std::unique_ptr<interfaces::FileSource> source = w->beginBackup(BACKUP_WALLET, err);
+    BOOST_REQUIRE_MESSAGE(source, err);
+
+    BOOST_CHECK(fx.wallet.IsLocked());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
+
+    // The copy streams with the wallet locked.
+    BOOST_CHECK_EQUAL(ReadEntry(*source, 0), grc_test::WalletFilePlaceholder::CONTENT);
+    BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+}
+
+// On a fully unlocked wallet the backup needs no capability, so it ends none:
+// one of another kind the client holds is left for its own operation.
+BOOST_FIXTURE_TEST_CASE(begin_backup_on_a_full_unlock_leaves_another_kinds_capability, BackupCase)
+{
+    const std::string file_name = pwalletMain->strWalletFile;
+    const grc_test::WalletFilePlaceholder wallet_file;
+    grc_test::RequireWalletFileNotInUse();
+
+    EncryptedWallet fx;
+    const ReadAsFileBacked file_backed(fx.wallet, file_name);
+    fx.UnlockFor(UnlockScope::Full);
+
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
+    BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Send));
+    const std::optional<CapabilityId> send_id = fx.wallet.IpcCapability({});
+    BOOST_REQUIRE(send_id.has_value());
+
+    std::string err;
+    std::unique_ptr<interfaces::FileSource> source = w->beginBackup(BACKUP_WALLET, err);
+    BOOST_REQUIRE_MESSAGE(source, err);
+    BOOST_CHECK_EQUAL(ReadEntry(*source, 0), grc_test::WalletFilePlaceholder::CONTENT);
+
+    BOOST_CHECK(fx.wallet.IpcCapability({}) == send_id);
+    {
+        const CapabilityScope send(fx.wallet, send_id, CapabilityKind::Send);
+        BOOST_CHECK(send.Active());
+    }
+
+    w->endElevation();
+}
+
+BOOST_FIXTURE_TEST_CASE(begin_backup_config_refused_in_service_mode, BackupCase)
+{
+    const grc_test::WalletFilePlaceholder wallet_file;
+    grc_test::RequireWalletFileNotInUse();
+
+    // This account's own configuration file: the attach group alone refuses it.
+    const fs::path conf = dir / "service.conf";
+    Write(conf, "# interfaces_tests\n");
+    grc_test::ForcedArgGuard conf_arg("conf", conf.string());
+    grc_test::ForcedArgGuard group("ipcattachgroup", "x");
+
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+
+    std::string err;
+    BOOST_CHECK(!w->beginBackup(BACKUP_WALLET | BACKUP_CONFIG, err));
+    BOOST_CHECK_MESSAGE(err.find("settings file") != std::string::npos, err);
+
+    // Nothing was snapshotted, the wallet included.
+    BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+
+    err.clear();
+    std::unique_ptr<interfaces::FileSource> source = w->beginBackup(BACKUP_WALLET | BACKUP_SETTINGS, err);
+    BOOST_REQUIRE_MESSAGE(source, err);
+    BOOST_REQUIRE_EQUAL(source->entries().size(), 2U);
+    BOOST_CHECK_EQUAL(ReadEntry(*source, 0), grc_test::WalletFilePlaceholder::CONTENT);
+}
+
+BOOST_FIXTURE_TEST_CASE(begin_backup_lists_a_missing_file_with_a_note, BackupCase)
+{
+    const grc_test::WalletFilePlaceholder wallet_file;
+    grc_test::RequireWalletFileNotInUse();
+
+    grc_test::ForcedArgGuard conf_arg("conf", (dir / "missing.conf").string());
+    grc_test::ForcedArgGuard settings_arg("settings", "interfaces_tests_missing.json");
+
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+    std::string err;
+    std::unique_ptr<interfaces::FileSource> source =
+        w->beginBackup(BACKUP_WALLET | BACKUP_CONFIG | BACKUP_SETTINGS, err);
+    BOOST_REQUIRE_MESSAGE(source, err);
+
+    const std::vector<interfaces::FileEntryInfo> infos = source->entries();
+    BOOST_REQUIRE_EQUAL(infos.size(), 3U);
+    BOOST_CHECK_EQUAL(infos[1].name, "missing.conf");
+    BOOST_CHECK_EQUAL(infos[1].size, 0);
+    BOOST_CHECK_EQUAL(infos[1].note, "no configuration file");
+    BOOST_CHECK_EQUAL(infos[2].name, "interfaces_tests_missing.json");
+    BOOST_CHECK_EQUAL(infos[2].note, "no settings file");
+
+    BOOST_CHECK_EQUAL(source->read(1, 4096).error, "no configuration file");
+    BOOST_CHECK_EQUAL(source->read(2, 4096).error, "no settings file");
+
+    // Only the wallet was snapshotted, and it still streams.
+    BOOST_CHECK_EQUAL(TransferFileCount(), 1U);
+    BOOST_CHECK_EQUAL(ReadEntry(*source, 0), grc_test::WalletFilePlaceholder::CONTENT);
+}
+
+BOOST_FIXTURE_TEST_CASE(begin_backup_failure_removes_the_snapshots_made, BackupCase)
+{
+    const grc_test::WalletFilePlaceholder wallet_file;
+    grc_test::RequireWalletFileNotInUse();
+
+    // -conf names a directory: the wallet is snapshotted first, and then the
+    // configuration file cannot be.
+    const fs::path conf_dir = dir / "conf.d";
+    fs::create_directories(conf_dir);
+    grc_test::ForcedArgGuard conf_arg("conf", conf_dir.string());
+
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+    std::string err;
+    BOOST_CHECK(!w->beginBackup(BACKUP_WALLET | BACKUP_CONFIG, err));
+    BOOST_CHECK(!err.empty());
+    BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+
+    // The failed attempt left no transfer live.
+    err.clear();
+    BOOST_CHECK_MESSAGE(w->beginBackup(BACKUP_WALLET, err), err);
+}
+
+BOOST_FIXTURE_TEST_CASE(begin_backup_snapshot_goes_with_the_connection, BackupCase)
+{
+    const grc_test::WalletFilePlaceholder wallet_file;
+    grc_test::RequireWalletFileNotInUse();
+
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+    auto scope = interfaces::MakeConnectionScope();
+    w->bindConnectionScope(scope);
+
+    std::string err;
+    std::unique_ptr<interfaces::FileSource> source = w->beginBackup(BACKUP_WALLET, err);
+    BOOST_REQUIRE_MESSAGE(source, err);
+    BOOST_CHECK_EQUAL(TransferFileCount(), 1U);
+
+    scope->close();
+    BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+    BOOST_CHECK(!source->read(0, 4096).error.empty());
+}
+
+BOOST_FIXTURE_TEST_CASE(old_backup_methods_always_false, BackupCase)
+{
+    // A wallet file and a configuration file that a copy would succeed with.
+    const grc_test::WalletFilePlaceholder wallet_file;
+    grc_test::RequireWalletFileNotInUse();
+    const fs::path conf = dir / "old.conf";
+    Write(conf, "# interfaces_tests\n");
+    grc_test::ForcedArgGuard conf_arg("conf", conf.string());
+
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+    const fs::path wallet_dest = dir / "old-wallet.dat";
+    const fs::path conf_dest = dir / "old-copy.conf";
+
+    BOOST_CHECK(!w->backupWallet(wallet_dest.string()));
+    BOOST_CHECK(!w->backupConfigFile(conf_dest.string()));
+    BOOST_CHECK(!fs::exists(wallet_dest));
+    BOOST_CHECK(!fs::exists(conf_dest));
+}
+
+BOOST_FIXTURE_TEST_CASE(second_transfer_refused_while_one_is_live, BackupCase)
+{
+    const grc_test::WalletFilePlaceholder wallet_file;
+    grc_test::RequireWalletFileNotInUse();
+
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+    std::string err;
+
+    std::unique_ptr<interfaces::FileSource> first = w->beginBackup(BACKUP_WALLET, err);
+    BOOST_REQUIRE_MESSAGE(first, err);
+
+    std::unique_ptr<interfaces::FileSource> second = w->beginBackup(BACKUP_WALLET, err);
+    BOOST_CHECK(!second);
+    BOOST_CHECK_EQUAL(err, "a transfer is already in progress");
+    BOOST_CHECK_EQUAL(TransferFileCount(), 1U);
+
+    // Still live once read to its end and cancelled: what ends it is the source
+    // going away.
+    BOOST_CHECK_EQUAL(ReadEntry(*first, 0), grc_test::WalletFilePlaceholder::CONTENT);
+    first->cancel();
+    BOOST_CHECK(!w->beginBackup(BACKUP_WALLET, err));
+
+    first.reset();
+    err.clear();
+    std::unique_ptr<interfaces::FileSource> third = w->beginBackup(BACKUP_WALLET, err);
+    BOOST_CHECK_MESSAGE(third, err);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

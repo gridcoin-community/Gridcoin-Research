@@ -8,6 +8,7 @@
 #include "fs.h"
 #include "interfaces/init.h"
 
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -140,6 +141,11 @@ namespace ipc {
 //!   carries the console's wallet passphrases as SecureString.
 //! - Init gained `holdsAttachSlot @16` (init.capnp), which tells a second GUI
 //!   that another is attached.
+//! - Wallet gained `beginBackup @40` (wallet.capnp), which returns a FileSource
+//!   (file_transfer.capnp, new) streaming a snapshot the core makes in its own
+//!   transfer directory. `backupWallet @20` and `backupConfigFile @21` stay in
+//!   the schema, but they always return false: the core no longer writes to a
+//!   path the client names.
 //!
 //! The new methods alone would be additive, which is why the reason for the
 //! major is the other direction. A GUI and a node of different majors disagree
@@ -156,6 +162,43 @@ constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 //! Domain-separation tag hashed into the node identity token. Bump the suffix if
 //! the token *algorithm* ever changes (independent of the capnp schema version).
 constexpr char IDENTITY_TOKEN_DOMAIN[] = "gridcoin-node-identity-v1";
+
+//! How long ConnectToNode waits for the core to answer, from the transport's
+//! bootstrap round trip to the end of the client handshake, before it shuts the
+//! connection down and reports a timeout.
+constexpr std::chrono::seconds IPC_CLIENT_HANDSHAKE_TIMEOUT{30};
+//! How often the GUI tries again while it waits for a core that is starting.
+constexpr std::chrono::seconds IPC_CONNECT_RETRY_INTERVAL{2};
+//! How long, from its first attempt, the GUI waits for a core that is starting.
+constexpr std::chrono::seconds IPC_CONNECT_WAIT_MAX{300};
+
+//! Why ConnectToNode did not connect.
+enum class ConnectFailureKind {
+    NoCookie,        //!< No ipc.cookie: no core serves the directory, or it is still starting.
+    NotListening,    //!< Nothing listens on node.sock: no socket file, or one a stopped core left.
+    PeerRefused,     //!< The listening process failed the client peer check (ClientPeerPolicy).
+    AlreadyAttached, //!< Another GUI holds the core's attach slot.
+    Timeout,         //!< The core did not finish the handshake within the timeout.
+    Handshake,       //!< Any other connect or handshake failure.
+};
+
+//! A failed connect: its kind, and a message to log and show.
+struct ConnectFailure {
+    ConnectFailureKind kind{ConnectFailureKind::Handshake};
+    std::string message;
+};
+
+//! What the GUI does after a failed connect.
+enum class ConnectStep {
+    Retry,  //!< Try again after IPC_CONNECT_RETRY_INTERVAL.
+    GiveUp, //!< Report the failure.
+};
+
+//! Retry only NoCookie and NotListening, and only while elapsed < IPC_CONNECT_WAIT_MAX.
+//! Those two are how a core that is still starting looks; every other kind is a
+//! core that answered, or one that cannot be reached, and waiting does not change
+//! it. \p elapsed counts from the first attempt.
+ConnectStep NextConnectStep(const ConnectFailure& f, std::chrono::seconds elapsed);
 
 //! This process's build fingerprint (git commit, build time, schema/protocol
 //! versions) for the handshake build-info exchange.
@@ -209,6 +252,8 @@ enum class SoftWarn {
 //! valid and \p soft carries any non-fatal findings.
 struct HandshakeResult {
     bool ok = false;
+    //! The core is compatible, but another GUI holds its attach slot (ok is false).
+    bool already_attached = false;
     std::string error;
     interfaces::BuildInfo remote_build;
     interfaces::NodeIdentity remote_ident;
@@ -217,12 +262,16 @@ struct HandshakeResult {
 
 //! GUI side: the authentication + compatibility half of the connect handshake
 //! (design section 4.3). Against a freshly-connected remote Init, calls
-//! authenticate(cookie), getBuildInfo() and getIdentity() -- all inside one
-//! try/catch, so an IPC throw (daemon vanished mid-handshake) becomes a clean
-//! ok==false rather than an escaping exception. Hard-fail (ok==false) on: wrong
-//! cookie, schema_major mismatch, protocol_version mismatch, GUI schema_minor >
-//! node's, and a network mismatch vs \p local_network. Soft findings (git_commit
-//! mismatch, GUI older minor) are returned in \p soft, not failures. The identity
+//! authenticate(cookie), getBuildInfo(), getIdentity() and holdsAttachSlot() --
+//! all inside one try/catch, so an IPC throw (daemon vanished mid-handshake)
+//! becomes a clean ok==false rather than an escaping exception. Hard-fail
+//! (ok==false) on: wrong cookie, schema_major mismatch, protocol_version
+//! mismatch, GUI schema_minor > node's, a network mismatch vs \p local_network,
+//! and, after all of those, another GUI holding the core's attach slot
+//! (already_attached). The slot is asked for last because a core of another
+//! schema may not serve holdsAttachSlot; its mismatch is reported as itself.
+//! Soft findings (git_commit mismatch, GUI older minor) are returned in \p soft,
+//! not failures. The identity
 //! token is returned in \p remote_ident for the caller's GUI-side binding step
 //! (CheckIdentityBinding) -- this function does not judge it.
 //! \p local defaults to this build's GetLocalBuildInfo(); it is a parameter only

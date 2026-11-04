@@ -523,10 +523,11 @@ public:
 
         // The change runs under the Settings capability the client began, when
         // it began one, which lets an Elevate-class setting through on a wallet
-        // without a full unlock.
+        // without a full unlock. Once this client's connection has closed it runs
+        // under none, since the slot may hold the next GUI's capability.
         std::optional<CapabilityScope> scope;
         if (pwalletMain) {
-            scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
+            scope.emplace(*pwalletMain, pwalletMain->IpcCapability(m_connection_closed), CapabilityKind::Settings);
         }
 
         // ChangeSettings() can throw: with dynamic settings disabled (-nosettings)

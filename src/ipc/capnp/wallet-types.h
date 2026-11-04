@@ -12,9 +12,11 @@
 
 #include <wallet/capability.h>
 
-// The Wallet schema imports handler.capnp (handleX returns Handler) and
-// node.capnp (handleStatusChanged reuses Node.VoidCallback); their proxy types
-// must be in scope to marshal those.
+// The Wallet schema imports file_transfer.capnp (beginBackup returns a
+// FileSource), handler.capnp (handleX returns Handler) and node.capnp
+// (handleStatusChanged reuses Node.VoidCallback); their proxy types must be in
+// scope to marshal those.
+#include <ipc/capnp/file_transfer.capnp.proxy-types.h>
 #include <ipc/capnp/handler.capnp.proxy-types.h>
 #include <ipc/capnp/node.capnp.proxy-types.h>
 
