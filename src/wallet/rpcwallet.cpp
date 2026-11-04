@@ -3973,14 +3973,29 @@ static UniValue EncryptWalletBody(const SecureString& strWalletPass, const UniVa
     return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet. The keypool has been flushed and a new HD seed was generated (if you are using HD). You need to make a new backup.";
 }
 
-//! A passphrase parameter moved into a SecureString.
-static SecureString PassphraseParam(const UniValue& params, size_t index)
+std::vector<SecureString> ReadPassphraseParams(const std::string& method, const UniValue& params)
 {
-    SecureString passphrase;
-    passphrase.reserve(100);
-    passphrase = std::string_view{params[index].get_str()};
+    const std::vector<int>* indexes = PassphraseParamIndexes(method);
 
-    return passphrase;
+    if (indexes == nullptr) {
+        throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
+    }
+
+    // Each passphrase is built in its own reserved secure buffer and moved into the vector, which
+    // is reserved first. Constructing the elements from an initializer list would copy them, and a
+    // short passphrase would then sit in the string's inline storage, which nothing cleanses.
+    std::vector<SecureString> passphrases;
+    passphrases.reserve(indexes->size());
+
+    for (const int index : *indexes) {
+        SecureString passphrase;
+        passphrase.reserve(100);
+        passphrase = std::string_view{params[static_cast<size_t>(index)].get_str()};
+
+        passphrases.push_back(std::move(passphrase));
+    }
+
+    return passphrases;
 }
 
 UniValue ExecutePassphraseCommand(const std::string& method, const std::vector<SecureString>& passphrases, const UniValue& params)
@@ -3998,29 +4013,24 @@ UniValue ExecutePassphraseCommand(const std::string& method, const std::vector<S
 
     if (method == "walletpassphrase") return WalletPassphraseBody(passphrases[0], params);
     if (method == "walletpassphrasechange") return WalletPassphraseChangeBody(passphrases[0], passphrases[1], params);
+    if (method == "encryptwallet") return EncryptWalletBody(passphrases[0], params);
 
-    return EncryptWalletBody(passphrases[0], params);
+    throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
 }
 
 UniValue walletpassphrase(const UniValue& params)
 {
-    const std::vector<SecureString> passphrases{PassphraseParam(params, 0)};
-
-    return ExecutePassphraseCommand("walletpassphrase", passphrases, params);
+    return ExecutePassphraseCommand("walletpassphrase", ReadPassphraseParams("walletpassphrase", params), params);
 }
 
 UniValue walletpassphrasechange(const UniValue& params)
 {
-    const std::vector<SecureString> passphrases{PassphraseParam(params, 0), PassphraseParam(params, 1)};
-
-    return ExecutePassphraseCommand("walletpassphrasechange", passphrases, params);
+    return ExecutePassphraseCommand("walletpassphrasechange", ReadPassphraseParams("walletpassphrasechange", params), params);
 }
 
 UniValue encryptwallet(const UniValue& params)
 {
-    const std::vector<SecureString> passphrases{PassphraseParam(params, 0)};
-
-    return ExecutePassphraseCommand("encryptwallet", passphrases, params);
+    return ExecutePassphraseCommand("encryptwallet", ReadPassphraseParams("encryptwallet", params), params);
 }
 
 class DescribeAddressVisitor

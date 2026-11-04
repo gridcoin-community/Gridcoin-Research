@@ -1657,7 +1657,10 @@ void JSONRequest::parse(const UniValue& valRequest)
         LogPrint(BCLog::LogFlags::NOISY, "ThreadRPCServer method=%s", strMethod);
 
     // Parse params
-    UniValue valParams = find_value(request, "params");
+    // No copy of the params here: they may hold a passphrase. The key is a named string only to
+    // keep the compiler from taking the returned reference for one into a temporary.
+    const std::string params_key = "params";
+    const UniValue& valParams = find_value(request, params_key);
     if (valParams.isArray())
         params = valParams.get_array();
     else if (valParams.isNull())

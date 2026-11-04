@@ -34,6 +34,7 @@
 #include "rpc/passphrase_params.h"
 #include "rpc/protocol.h"
 #include "rpc/server.h"
+#include "rpc/util.h"
 #include "sync.h"
 #include "util.h"
 #include "util/strencodings.h"
@@ -439,7 +440,21 @@ public:
             const UniValue params = RPCConvertValues(method, full);
             const PassphraseParamsCleanser cleanser(method, params);
 
-            return ExecutePassphraseCommand(method, passphrases, params);
+            // The arity check and the conversion of a body's exception are the dispatcher's, which
+            // this path does not go through.
+            const CRPCCommand* command = tableRPC[method];
+            if (command != nullptr && command->helpman != nullptr) {
+                const RPCHelpMan& help = command->helpman();
+                if (!help.IsVariadic() && !help.IsValidNumArgs(params.size())) {
+                    throw std::runtime_error(help.ToString());
+                }
+            }
+
+            try {
+                return ExecutePassphraseCommand(method, passphrases, params);
+            } catch (const std::exception& e) {
+                throw JSONRPCError(RPC_MISC_ERROR, e.what());
+            }
         });
     }
 

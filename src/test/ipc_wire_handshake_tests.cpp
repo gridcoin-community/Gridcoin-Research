@@ -34,6 +34,7 @@
 #include "interfaces/wallet.h"
 #include "interfaces/wallet_coin_source.h"
 #include "interfaces/wallet_tx_source.h"
+#include "ipc/capnp/common-types.h"
 #include "ipc/capnp/protocol.h"
 #include "ipc/handshake.h"
 #include "ipc/protocol.h"
@@ -951,6 +952,27 @@ BOOST_AUTO_TEST_CASE(wire_capability_kind_out_of_range_is_refused)
     BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
 
     wallet.reset();
+}
+
+// A short passphrase read off the wire lands in a secure buffer of its own, and the wire bytes
+// are cleansed.
+BOOST_AUTO_TEST_CASE(secure_string_read_hook_reserves_secure_capacity)
+{
+    std::string wire = "short";
+    struct Input {
+        ::capnp::Data::Reader m_data;
+        ::capnp::Data::Reader get() const { return m_data; }
+    } input{::capnp::Data::Reader(reinterpret_cast<const ::kj::byte*>(wire.data()), wire.size())};
+
+    // The hook never touches the context, so a connection is not needed to call it.
+    alignas(std::max_align_t) static char unused_connection[1];
+    mp::InvokeContext invoke_context{*reinterpret_cast<mp::Connection*>(unused_connection)};
+    SecureString result = mp::CustomReadField(mp::TypeList<SecureString>(), mp::Priority<1>(), invoke_context, input,
+                                              mp::ReadDestTemp<SecureString>());
+
+    BOOST_CHECK_EQUAL(std::string(result.begin(), result.end()), "short");
+    BOOST_CHECK_GE(result.capacity(), 100U);
+    BOOST_CHECK_EQUAL(wire, std::string(5, '\0'));
 }
 
 // The passphrases of a console command cross as raw bytes, whitespace and all.

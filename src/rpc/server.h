@@ -256,6 +256,11 @@ UniValue ExecuteWithElevation(const std::optional<SecureString>& header, const s
 //! before any call runs.
 UniValue ExecuteBatchWithElevation(const UniValue& requests, const std::optional<SecureString>& header);
 
+//! The passphrase parameters of `method` (walletpassphrase, walletpassphrasechange or encryptwallet)
+//! moved out of `params` into SecureStrings, in parameter order, each in a secure buffer of its own
+//! (capacity at least 100), whatever its length. Throws what get_str() throws for a non-string.
+std::vector<SecureString> ReadPassphraseParams(const std::string& method, const UniValue& params);
+
 //! walletpassphrase, walletpassphrasechange or encryptwallet with the passphrases already in
 //! SecureStrings (parameter order). `params` holds the other parameters at their real indexes; the
 //! passphrase positions are ignored. Throws exactly what the RPCs throw; a wrong passphrase count

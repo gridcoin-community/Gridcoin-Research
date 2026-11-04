@@ -241,7 +241,50 @@ BOOST_AUTO_TEST_CASE(execute_passphrase_command_wrong_count)
         BOOST_ERROR("no exception for a wrong passphrase count");
     } catch (const UniValue& error) {
         BOOST_CHECK_EQUAL(find_value(error, "code").get_int(), RPC_INVALID_PARAMETER);
+        BOOST_CHECK_EQUAL(find_value(error, "message").get_str(), "walletpassphrasechange takes 2 passphrases");
     }
+}
+
+// A short passphrase must still land in a secure buffer of its own, not in the inline storage of
+// the string object, which is freed without being cleansed.
+BOOST_AUTO_TEST_CASE(read_passphrase_params_short_passphrases_get_secure_capacity)
+{
+    UniValue params(UniValue::VARR);
+    params.push_back("abc");
+    params.push_back("de");
+
+    const std::vector<SecureString> passphrases = ReadPassphraseParams("walletpassphrasechange", params);
+
+    BOOST_REQUIRE_EQUAL(passphrases.size(), 2U);
+    BOOST_CHECK_EQUAL(std::string(passphrases[0].begin(), passphrases[0].end()), "abc");
+    BOOST_CHECK_EQUAL(std::string(passphrases[1].begin(), passphrases[1].end()), "de");
+    BOOST_CHECK_GE(passphrases[0].capacity(), 100U);
+    BOOST_CHECK_GE(passphrases[1].capacity(), 100U);
+}
+
+BOOST_AUTO_TEST_CASE(batch_cleanses_request_passphrases)
+{
+    grc_test::EncryptedWallet fx;
+    const std::string old_pass(grc_test::EncryptedWallet::PASSPHRASE.begin(), grc_test::EncryptedWallet::PASSPHRASE.end());
+    const std::string new_pass = "newpass_9";
+    BOOST_REQUIRE_EQUAL(new_pass.size(), 9U);
+
+    UniValue requests;
+    BOOST_REQUIRE(requests.read("[{\"method\":\"walletpassphrasechange\",\"params\":[\"" + old_pass + "\",\"" + new_pass +
+                                "\"],\"id\":1}]"));
+
+    const UniValue replies = ExecuteBatchWithElevation(requests, std::nullopt);
+
+    BOOST_REQUIRE_EQUAL(replies.size(), 1U);
+    BOOST_CHECK(find_value(replies[0], "error").isNull());
+    BOOST_CHECK(fx.wallet.Unlock(SecureString(new_pass.data(), new_pass.size())));
+
+    // The request's own copy of the passphrases is overwritten with NULs, size kept.
+    const std::string params_key = "params";
+    const UniValue& request_params = find_value(requests[0], params_key);
+    BOOST_REQUIRE_EQUAL(request_params.size(), 2U);
+    BOOST_CHECK_EQUAL(request_params[0].get_str(), std::string(old_pass.size(), '\0'));
+    BOOST_CHECK_EQUAL(request_params[1].get_str(), std::string(9, '\0'));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

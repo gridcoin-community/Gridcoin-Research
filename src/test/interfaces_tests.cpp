@@ -227,6 +227,35 @@ BOOST_AUTO_TEST_CASE(node_secret_console_changes_passphrase)
     BOOST_CHECK(fx.wallet.Unlock(SecureString("p\xc3\xa4 ss")));
 }
 
+// The secret path goes around CRPCTable::execute, so it has to enforce the argument count itself:
+// an extra argument must get the help text and change nothing.
+BOOST_AUTO_TEST_CASE(node_secret_console_checks_argument_count)
+{
+    grc_test::EncryptedWallet fx;
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+
+    const interfaces::RpcConsoleResult result = node->executeRpcConsoleSecretCommand(
+        "walletpassphrasechange", {grc_test::EncryptedWallet::PASSPHRASE, SecureString("changed")}, {"extra"});
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(result.output.find("walletpassphrasechange") != std::string::npos);
+
+    BOOST_CHECK(!fx.wallet.Unlock(SecureString("changed")));
+    BOOST_CHECK(fx.wallet.Unlock(grc_test::EncryptedWallet::PASSPHRASE));
+}
+
+// A body's runtime_error comes back formatted as the dispatcher formats it, as the plain console shows it.
+BOOST_AUTO_TEST_CASE(node_secret_console_formats_a_body_exception_like_the_dispatcher)
+{
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+
+    const interfaces::RpcConsoleResult secret = node->executeRpcConsoleSecretCommand("encryptwallet", {SecureString("")}, {});
+    const interfaces::RpcConsoleResult plain = node->executeRpcConsoleCommand("encryptwallet", {""});
+
+    BOOST_CHECK(!secret.ok);
+    BOOST_CHECK(secret.output.size() > 9 && secret.output.rfind("(code -1)") == secret.output.size() - 9);
+    BOOST_CHECK_EQUAL(secret.output, plain.output);
+}
+
 BOOST_AUTO_TEST_CASE(node_handler_bridges_ui_signal)
 {
     std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
