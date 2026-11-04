@@ -603,15 +603,24 @@ BOOST_AUTO_TEST_CASE(unlock_derives_without_holding_cs_wallet)
 
     // A long derivation, at an iteration count set here rather than scaled
     // from the calibrated one: five million iterations take a second or more
-    // on any machine. No passphrase opens the records with it, so the unlock
-    // below is refused once the derivation ends, and the refusal is counted
-    // before its delay is slept.
+    // on any machine.
+    //
+    // The crypted master key is also cut short by a byte, so that no key
+    // decrypts it: CBC decryption refuses a ciphertext that is not a whole
+    // number of blocks. A wrong key would otherwise pass the padding check
+    // about once in 255 tries, and the attempt would then take cs_wallet again
+    // to install it, which this thread holds. As it is, the unlock below is
+    // refused as soon as the derivation ends, without taking cs_wallet, and
+    // the refusal is counted before its delay is slept.
     {
         LOCK(fx.wallet.cs_wallet);
         BOOST_REQUIRE(!fx.wallet.mapMasterKeys.empty());
 
         for (auto& entry : fx.wallet.mapMasterKeys) {
             entry.second.nDeriveIterations = 5000000;
+
+            BOOST_REQUIRE(!entry.second.vchCryptedKey.empty());
+            entry.second.vchCryptedKey.pop_back();
         }
     }
 
@@ -629,11 +638,11 @@ BOOST_AUTO_TEST_CASE(unlock_derives_without_holding_cs_wallet)
     // This thread takes cs_wallet while the attempt is not yet counted, and
     // holds it. The attempt can then be refused, and so counted, only if it
     // derives without cs_wallet. The attempt takes cs_wallet briefly to copy
-    // the records first, at once when it begins; if this thread still took it
-    // before that, the attempt waits for it, nothing is counted while it is
-    // held, and the round is given up for another. A round waits long before
-    // it gives up, so that an attempt that is only slow is not mistaken for
-    // one that waits.
+    // the records first, at once when it begins. In the rare case that this
+    // thread still took it before that, the attempt waits for it and nothing
+    // is counted while it is held, so the round is given up for another. A
+    // round lasts several times the derivation on a loaded machine, so that an
+    // attempt that is only slow is not mistaken for one that waits.
     bool refused_while_held{false};
     bool waited_for_the_lock{false};
 
@@ -650,7 +659,7 @@ BOOST_AUTO_TEST_CASE(unlock_derives_without_holding_cs_wallet)
         // Counted before this thread held the lock, so nothing is left to show.
         if (fx.wallet.FailedUnlockCount() != 0) break;
 
-        for (int i = 0; i < 12000 && fx.wallet.FailedUnlockCount() == 0; ++i) {
+        for (int i = 0; i < 2000 && fx.wallet.FailedUnlockCount() == 0; ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
