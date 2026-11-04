@@ -127,7 +127,8 @@ std::optional<PeerIdentity> ReadPeerIdentity(int fd)
             static std::once_flag logged;
             std::call_once(logged, [] {
                 LogPrintf("IPC: this kernel does not report peer supplementary groups (SO_PEERGROUPS); "
-                          "attach group membership is unavailable and only same-account peers are admitted\n");
+                          "attach group membership is unavailable and only same-account peers and peers whose "
+                          "primary group is the attach group are admitted\n");
             });
             peer.groups.clear();
             return peer;

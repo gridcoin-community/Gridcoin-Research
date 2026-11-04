@@ -221,6 +221,45 @@ BOOST_AUTO_TEST_CASE(symlink_not_followed)
     BOOST_CHECK_EQUAL(ModeOf(target), 0644U);
 }
 
+BOOST_AUTO_TEST_CASE(symlinked_datadir_root_is_followed)
+{
+    const ScratchDir scratch;
+
+    // A data directory moved to another disk through a link is a legitimate setup. The link
+    // itself is not reported, and the normal rule applies to its target.
+    const fs::path narrow = scratch.m_path / "narrow";
+    MakeDir(narrow, 0700);
+    const fs::path narrow_link = scratch.m_path / "narrow_link";
+    fs::create_symlink(narrow, narrow_link);
+
+    BOOST_CHECK(fsmodes::CheckOwnerOnlyModes(narrow_link, {}, {}, {}, {}, {}).empty());
+
+    const fs::path wide = scratch.m_path / "wide";
+    MakeDir(wide, 0755);
+    const fs::path wide_link = scratch.m_path / "wide_link";
+    fs::create_symlink(wide, wide_link);
+
+    const auto findings = fsmodes::CheckOwnerOnlyModes(wide_link, {}, {}, {}, {}, {});
+
+    BOOST_REQUIRE_EQUAL(findings.size(), 1U);
+    BOOST_CHECK(findings[0].path == wide_link);
+    BOOST_CHECK(findings[0].kind == fsmodes::ModeFinding::Kind::WideMode);
+    BOOST_CHECK_EQUAL(findings[0].mode, 0755U);
+    BOOST_CHECK(findings[0].message.find("chmod 700 " + wide_link.string()) != std::string::npos);
+
+    // Inside a linked data directory a symlinked wallet file is still reported and not followed.
+    const fs::path real_wallet = narrow / "real_wallet";
+    MakeFile(real_wallet, 0644);
+    const fs::path wallet = narrow / "wallet.dat";
+    fs::create_symlink(real_wallet, wallet);
+
+    const auto inner = fsmodes::CheckOwnerOnlyModes(narrow_link, {}, {}, wallet, {}, {});
+
+    BOOST_REQUIRE_EQUAL(inner.size(), 1U);
+    BOOST_CHECK(inner[0].path == wallet);
+    BOOST_CHECK(inner[0].kind == fsmodes::ModeFinding::Kind::Symlink);
+}
+
 BOOST_AUTO_TEST_CASE(backupdir_not_writable_reported)
 {
     const ScratchDir scratch;

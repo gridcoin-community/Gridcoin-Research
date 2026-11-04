@@ -38,14 +38,16 @@ struct ModeFinding
     Kind kind;
     //! The permission bits (st_mode & 07777) of the path itself, 0 for a symbolic link.
     unsigned mode;
-    //! One line, ASCII only, ready for the log.
+    //! One line ready for the log. The fixed text is ASCII; the path is shown as given.
     std::string message;
 };
 
 //! Checks the data directory, the wallet file, database/ and database/log.*, the
 //! configuration file, the settings file, the backup directory and the regular files
 //! directly in it, and the debug log. An empty path, and a path that does not exist,
-//! is skipped. Nothing is modified.
+//! is skipped. Nothing is modified. The data directory itself may be a symbolic link (a data
+//! directory moved to another disk): the link is followed and the rule applies to its target.
+//! Every other path that is a symbolic link is reported and not followed.
 std::vector<ModeFinding> CheckOwnerOnlyModes(const fs::path& datadir, const fs::path& conf,
                                              const fs::path& settings, const fs::path& wallet_file,
                                              const fs::path& backupdir, const fs::path& debuglog);

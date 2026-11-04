@@ -7,6 +7,8 @@
 #include "util/fsmodes.h"
 
 #include "util/dir_permissions.h"
+#include "tinyformat.h"
+#include "util/string.h"
 #include "util/syserror.h"
 
 #include <fcntl.h>
@@ -15,7 +17,6 @@
 
 #include <atomic>
 #include <cerrno>
-#include <cstdio>
 #include <set>
 
 namespace fsmodes {
@@ -46,12 +47,14 @@ class ModeChecker
 public:
     std::vector<ModeFinding> m_findings;
 
-    void Check(const fs::path& path)
+    //! follow_link is for the data directory root only, which may be a link to another disk. Every
+    //! other path keeps the rule that a symbolic link is reported and not followed.
+    void Check(const fs::path& path, bool follow_link = false)
     {
         if (path.empty() || !m_seen.insert(path).second) return;
 
         struct stat st;
-        if (::lstat(path.string().c_str(), &st) != 0) return;
+        if ((follow_link ? ::stat(path.string().c_str(), &st) : ::lstat(path.string().c_str(), &st)) != 0) return;
 
         if (S_ISLNK(st.st_mode)) {
             m_findings.push_back({path, ModeFinding::Kind::Symlink, 0,
@@ -67,10 +70,7 @@ public:
         const bool ours = st.st_uid == ::geteuid();
         const std::string fix = std::string("chmod ") + (S_ISDIR(st.st_mode) ? "700 " : "600 ") + ShellQuote(path.string());
 
-        char mode_text[16];
-        ::snprintf(mode_text, sizeof(mode_text), "%04o", mode);
-
-        std::string message = "WARNING: " + path.string() + " has mode " + mode_text
+        std::string message = "WARNING: " + path.string() + " has mode " + strprintf("%04o", mode)
                             + ", which gives other accounts access to wallet data. ";
         if (ours) {
             message += "To make it owner-only run: " + fix;
@@ -114,7 +114,7 @@ std::vector<ModeFinding> CheckOwnerOnlyModes(const fs::path& datadir, const fs::
 {
     ModeChecker checker;
 
-    checker.Check(datadir);
+    checker.Check(datadir, /*follow_link=*/true);
     checker.Check(wallet_file);
 
     if (!datadir.empty()) {
@@ -155,8 +155,8 @@ std::optional<std::string> CheckBackupDirWritable(const fs::path& backupdir)
 
     static std::atomic<unsigned> counter{0};
 
-    const fs::path probe = backupdir / (".gridcoin-write-test-" + std::to_string(::getpid()) + "-"
-                                        + std::to_string(counter.fetch_add(1)));
+    const fs::path probe = backupdir / (".gridcoin-write-test-" + ToString(::getpid()) + "-"
+                                        + ToString(counter.fetch_add(1)));
 
     const int fd = ::open(probe.string().c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
     if (fd < 0) return SysErrorString(errno);
