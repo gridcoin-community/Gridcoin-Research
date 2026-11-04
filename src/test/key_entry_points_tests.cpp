@@ -656,13 +656,11 @@ Outcome Call(const std::string& name, const std::vector<std::string>& args)
 enum class Refusal {
     UnlockNeeded,  //!< RPC_WALLET_UNLOCK_NEEDED
     KeypoolRanOut, //!< RPC_WALLET_KEYPOOL_RAN_OUT, for a pool draw that would make a key
-    NotAuthorized, //!< the scraper finds no key it may publish with: nothing published, false
 };
 
 std::optional<Refusal> ParseRefusal(const std::string& name)
 {
     if (name.empty() || name == "unlock_needed") return Refusal::UnlockNeeded;
-    if (name == "not_authorized") return Refusal::NotAuthorized;
     return std::nullopt;
 }
 
@@ -739,22 +737,19 @@ DriverOutcome Probe(const std::string& probe, KeyReachWallet& fx)
 
 //! The manifests a scraper row published, for its messages; nothing for the
 //! other rows.
-std::string Published(Refusal refusal, int published)
+std::string Published(bool scraper, int published)
 {
-    return refusal == Refusal::NotAuthorized ? strprintf(", manifests published %d", published) : std::string();
+    return scraper ? strprintf(", manifests published %d", published) : std::string();
 }
 
-//! Whether \p outcome is the refusal \p refusal names. \p published counts the
-//! manifests the scraper published meanwhile.
-bool IsRefusal(Refusal refusal, const Outcome& outcome, int published)
+//! Whether \p outcome is the refusal \p refusal names.
+bool IsRefusal(Refusal refusal, const Outcome& outcome)
 {
     switch (refusal) {
     case Refusal::UnlockNeeded:
         return outcome.code == RPC_WALLET_UNLOCK_NEEDED;
     case Refusal::KeypoolRanOut:
         return outcome.code == RPC_WALLET_KEYPOOL_RAN_OUT;
-    case Refusal::NotAuthorized:
-        return outcome.returned && outcome.result.isFalse() && published == 0;
     }
 
     return false;
@@ -833,6 +828,7 @@ void DriveRpcRows(const UniValue& rows, std::optional<Refusal> section_refusal)
             const std::string probe = Field(*row, "probe");
             const std::string stops_before_key = Field(*row, "stops_before_key");
             const bool adds_a_key = Field(*row, "reaches") == "AddKeyPubKey";
+            const bool scraper = needs.count("scraper") > 0;
 
             const std::vector<std::string> raw_args = Strings(find_value(*row, "args"));
             const bool with_phrase = std::any_of(raw_args.begin(), raw_args.end(), [](const std::string& arg) {
@@ -864,9 +860,10 @@ void DriveRpcRows(const UniValue& rows, std::optional<Refusal> section_refusal)
             const Outcome refused = Call(name, args);
             const int published_while_refused = published;
 
-            BOOST_CHECK_MESSAGE(IsRefusal(*refusal, refused, published),
+            BOOST_CHECK_MESSAGE(IsRefusal(*refusal, refused),
                                 name << ": not refused while unlocked for staking only: " << refused.Describe()
-                                << Published(*refusal, published));
+                                << Published(scraper, published));
+            BOOST_CHECK_MESSAGE(published == 0, name << ": a manifest was published while refused");
             BOOST_CHECK_MESSAGE(fx.KeyCount() == keys_before_refusal,
                                 name << ": a refused call changed the wallet's keys");
 
@@ -887,10 +884,10 @@ void DriveRpcRows(const UniValue& rows, std::optional<Refusal> section_refusal)
 
                 BOOST_CHECK_MESSAGE(!allowed.malformed, name << ": the corpus does not fit the command: "
                                     << allowed.Describe());
-                BOOST_CHECK_MESSAGE(allowed.code != RPC_WALLET_UNLOCK_NEEDED && !IsRefusal(*refusal, allowed, published),
+                BOOST_CHECK_MESSAGE(allowed.code != RPC_WALLET_UNLOCK_NEEDED && !IsRefusal(*refusal, allowed),
                                     name << ": refused under an RpcRequest capability: " << allowed.Describe());
 
-                if (*refusal == Refusal::NotAuthorized) {
+                if (scraper) {
                     BOOST_CHECK_MESSAGE(published > 0, name << ": nothing published under an RpcRequest capability");
                 }
 
@@ -919,8 +916,8 @@ void DriveRpcRows(const UniValue& rows, std::optional<Refusal> section_refusal)
                 }
 
                 BOOST_TEST_MESSAGE(name << ": refused (" << refused.Describe()
-                                   << Published(*refusal, published_while_refused) << "); under the capability: "
-                                   << allowed.Describe() << Published(*refusal, published)
+                                   << Published(scraper, published_while_refused) << "); under the capability: "
+                                   << allowed.Describe() << Published(scraper, published)
                                    << (stops_before_key.empty() ? std::string() : "; stops before the key: " + stops_before_key)
                                    << (adds_a_key ? strprintf("; keys %u -> %u", keys_before, keys_after) : std::string()));
             }

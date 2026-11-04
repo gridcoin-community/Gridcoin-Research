@@ -5,6 +5,7 @@
 #include "node/ui_interface.h"
 #include "node/shutdown.h"
 #include "random.h"
+#include "rpc/server.h"
 #include "rpc/util.h"
 
 #include "gridcoin/appcache.h"
@@ -4778,8 +4779,9 @@ bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& K
                 else
                 {
                     _log(logattribute::WARNING, "IsScraperAuthorizedToBroadcastManifests",
-                         "Key not found in the wallet for matching address. Please check that the wallet is unlocked "
-                         "(preferably for staking only).");
+                         "Key not found in the wallet for matching address, or the wallet is locked. The scraper "
+                         "thread needs the wallet unlocked; unlocking for staking only is enough. "
+                         "sendscraperfilemanifest needs the wallet passphrase.");
                 }
             }
         }
@@ -4841,8 +4843,9 @@ bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& K
                         else
                         {
                             _log(logattribute::WARNING, "IsScraperAuthorizedToBroadcastManifests",
-                                 "Key not found in the wallet for matching address. Please check that the wallet is "
-                                 "unlocked (preferably for staking only).");
+                                 "Key not found in the wallet for matching address, or the wallet is locked. The "
+                                 "scraper thread needs the wallet unlocked; unlocking for staking only is enough. "
+                                 "sendscraperfilemanifest needs the wallet passphrase.");
                         }
                     }
                 }
@@ -6687,6 +6690,11 @@ const RPCHelpMan& sendscraperfilemanifest_helpman() { return sendscraperfilemani
 
 UniValue sendscraperfilemanifest(const UniValue& params)
 {
+    // The scraper thread signs with its staking access, which a request does
+    // not have. On an encrypted wallet the request needs the keys: a full
+    // unlock, or the wallet passphrase sent with it.
+    EnsureWalletIsUnlocked();
+
     CTxDestination AddressOut;
     CKey KeyOut;
     bool ret;
