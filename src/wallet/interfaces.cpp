@@ -8,6 +8,7 @@
 #include "gridcoin/tx_message.h"
 #include "hash.h"
 #include "interfaces/handler.h"
+#include "interfaces/notification_dispatcher.h"
 #include "key_io.h"
 #include "policy/fees.h"
 #include "policy/policy.h"
@@ -567,7 +568,8 @@ public:
     }
 
     // NOTE: like every other uiInterface forwarder (see node/interfaces.cpp and
-    // gridcoin/interfaces.cpp), these must be wrapped in GuardNotify. They are not
+    // gridcoin/interfaces.cpp), these must be wrapped in ForwardNotify (which carries the
+    // GuardNotify catch). They are not
     // merely GUI conveniences: CWallet emits them from inside state transitions that
     // are only half-complete at the emission point. CWallet::SetAddressBookName, for
     // example, updates mapAddressBook, emits NotifyAddressBookChanged, and only THEN
@@ -579,13 +581,13 @@ public:
     std::unique_ptr<Handler> handleStatusChanged(StatusChangedFn fn) override
     {
         return MakeSignalHandler(m_wallet->NotifyStatusChanged.connect(
-            interfaces::GuardNotify([fn = std::move(fn)](CCryptoKeyStore*) { fn(); })));
+            interfaces::ForwardNotify([fn = std::move(fn)](CCryptoKeyStore*) { fn(); })));
     }
 
     std::unique_ptr<Handler> handleAddressBookChanged(AddressBookChangedFn fn) override
     {
         return MakeSignalHandler(m_wallet->NotifyAddressBookChanged.connect(
-            interfaces::GuardNotify([fn = std::move(fn)](CWallet*,
+            interfaces::ForwardNotify([fn = std::move(fn)](CWallet*,
                                  const CTxDestination& address,
                                  const std::string& label,
                                  bool is_mine,
@@ -598,7 +600,7 @@ public:
     std::unique_ptr<Handler> handleTransactionChanged(TransactionChangedFn fn) override
     {
         return MakeSignalHandler(m_wallet->NotifyTransactionChanged.connect(
-            interfaces::GuardNotify([fn = std::move(fn)](CWallet*, const uint256& tx_hash, ChangeType status) {
+            interfaces::ForwardNotify([fn = std::move(fn)](CWallet*, const uint256& tx_hash, ChangeType status) {
                 fn(tx_hash, status);
             })));
     }

@@ -38,6 +38,14 @@ public:
 //! QMetaObject::invokeMethod(..., Qt::QueuedConnection) and nothing else. It must
 //! not make a synchronous interface call, and it must not take a node lock.
 //!
+//! In the multiprocess core the forwarders are wrapped in ForwardNotify
+//! (interfaces/notification_dispatcher.h), which posts each notification to one
+//! dispatcher thread: a client handler runs there, off the emitting thread and with
+//! none of the core locks listed below held, and a client that stops taking
+//! notifications causes drops instead of stalling the core. The monolithic build
+//! and the GUI process deliver inline. The rules below still bind every handler,
+//! because inline delivery is the same call on the emitting thread.
+//!
 //! This is not a style preference. Notifications are ordinary request/response IPC
 //! calls, not one-way sends, so the emitting CORE thread blocks until the handler
 //! returns -- and it is usually blocked while holding a core lock (cs_main plus an

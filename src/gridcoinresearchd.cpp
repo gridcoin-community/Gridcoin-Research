@@ -28,6 +28,7 @@
 #ifdef ENABLE_MULTIPROCESS
 #include "interfaces/init.h"
 #include "interfaces/ipc.h"
+#include "interfaces/notification_dispatcher.h"
 #include "ipc/handshake.h"
 #include "ipc/peercred.h"
 #include "ipc/process.h"
@@ -425,6 +426,10 @@ bool AppInit(int argc, char* argv[])
                         if (!peer || ipc::ServerPeerPolicy(*peer) == ipc::PeerVerdict::Refuse) return nullptr;
                         return ipc::MakeServeInit(interfaces::MakeGridcoinInit(), cookie, identity);
                     };
+                // Client notifications are posted to one dispatcher thread, so the
+                // core thread that emits one never waits for the GUI.
+                interfaces::SetNotificationDelivery(interfaces::NotificationDelivery::Dispatched);
+                interfaces::StartNotificationDispatcher();
                 ipc = interfaces::MakeIpc("gridcoinresearchd", std::move(make_serve_init));
                 std::string address = "unix";
                 listening = true;
@@ -471,6 +476,9 @@ bool AppInit(int argc, char* argv[])
         }
 #ifdef ENABLE_MULTIPROCESS
         if (ipc) ipc->disconnectIncoming();
+        // Also reached on the fatal-error path above, so the thread is never left
+        // running at shutdown. A no-op when it was never started.
+        interfaces::StopNotificationDispatcher();
         // The cookie is a live credential for as long as the file exists, so it goes
         // when the socket does -- mirroring upstream's DeleteAuthCookie(). It is also
         // what ConnectToNode checks before dialling, so leaving it behind sends the

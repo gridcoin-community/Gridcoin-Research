@@ -245,6 +245,7 @@ add_library(gridcoin_util STATIC
     init.cpp
     interfaces/handler.cpp
     interfaces/init.cpp
+    interfaces/notification_dispatcher.cpp
     key.cpp
     key_io.cpp
     keystore.cpp

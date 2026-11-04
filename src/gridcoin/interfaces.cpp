@@ -37,6 +37,7 @@
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
 #include "interfaces/handler.h"
+#include "interfaces/notification_dispatcher.h"
 #include "key_io.h"
 #include "chain.h"
 #include "net_processing.h"
@@ -326,7 +327,7 @@ public:
 
     std::unique_ptr<Handler> handleMRCChanged(MRCChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.MRCChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.MRCChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
 private:
@@ -671,12 +672,12 @@ public:
         // emission-time revision could predate the reload. The consumer reads
         // localRevision() itself when handling the notification — see
         // interfaces/sidestake.h.
-        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleMandatorySideStakeChanged(MandatorySideStakeChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.MandatorySideStakeChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.MandatorySideStakeChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
 private:
@@ -1005,7 +1006,7 @@ public:
 
     std::unique_ptr<Handler> handleNewPollReceived(NewPollReceivedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NewPollReceived_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NewPollReceived_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleNewVoteReceived(NewVoteReceivedFn fn) override
@@ -1013,7 +1014,7 @@ public:
         // The core signal carries a uint256; hand the consumer its hex form so no
         // core type crosses the boundary.
         return MakeSignalHandler(uiInterface.NewVoteReceived_connect(
-            interfaces::GuardNotify([fn = std::move(fn)](const uint256& poll_txid) { fn(poll_txid.ToString()); })));
+            interfaces::ForwardNotify([fn = std::move(fn)](const uint256& poll_txid) { fn(poll_txid.ToString()); })));
     }
 
 private:
@@ -1578,22 +1579,22 @@ public:
 
     std::unique_ptr<Handler> handleResearcherChanged(ResearcherChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.ResearcherChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.ResearcherChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleBeaconChanged(BeaconChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.BeaconChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.BeaconChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleAccrualChanged(AccrualChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.AccrualChangedFromStakeOrMRC_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.AccrualChangedFromStakeOrMRC_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleBlocksChanged(BlocksChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
 private:

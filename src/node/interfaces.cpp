@@ -14,6 +14,7 @@
 #include "init.h"
 #include "interfaces/gui_state.h"
 #include "interfaces/handler.h"
+#include "interfaces/notification_dispatcher.h"
 #include "interfaces/init.h"
 #include "interfaces/mrc.h"
 #include "interfaces/psgt.h"
@@ -535,12 +536,12 @@ public:
 
     std::unique_ptr<Handler> handleRwSettingsUpdated(RwSettingsUpdatedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleInitShutdown(InitShutdownFn fn) override
     {
-        return MakeSignalHandler(uiInterface.QueueShutdown_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.QueueShutdown_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     ScraperConvergenceSnapshot getScraperConvergenceSnapshot() override
@@ -564,37 +565,37 @@ public:
 
     std::unique_ptr<Handler> handleNotifyBlocksChanged(NotifyBlocksChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleNotifyNumConnectionsChanged(NotifyNumConnectionsChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyNumConnectionsChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NotifyNumConnectionsChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleBannedListChanged(BannedListChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.BannedListChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.BannedListChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleNotifyAlertChanged(NotifyAlertChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyAlertChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NotifyAlertChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleMinerStatusChanged(MinerStatusChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.MinerStatusChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.MinerStatusChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handlePSGTPoolChanged(PSGTPoolChangedFn fn) override
     {
-        return MakeSignalHandler(uiInterface.PSGTPoolChanged_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.PSGTPoolChanged_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
     std::unique_ptr<Handler> handleNotifyScraperEvent(NotifyScraperEventFn fn) override
     {
-        return MakeSignalHandler(uiInterface.NotifyScraperEvent_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.NotifyScraperEvent_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 };
 
@@ -641,7 +642,7 @@ public:
         // Connected before it counts, so the update the first subscription asks
         // for reaches this fn too.
         std::unique_ptr<Handler> connection =
-            MakeSignalHandler(uiInterface.GuiStateChanged_connect(interfaces::GuardNotify(std::move(fn))));
+            MakeSignalHandler(uiInterface.GuiStateChanged_connect(interfaces::ForwardNotify(std::move(fn))));
 
         // Nothing was computed while no GUI was subscribed, so the first asks for
         // a forced update: it gets a computed snapshot within one timer cycle.
@@ -660,7 +661,7 @@ public:
 
     std::unique_ptr<Handler> handleMRCQuote(MRCQuoteFn fn) override
     {
-        return MakeSignalHandler(uiInterface.GuiStateMRCQuote_connect(interfaces::GuardNotify(std::move(fn))));
+        return MakeSignalHandler(uiInterface.GuiStateMRCQuote_connect(interfaces::ForwardNotify(std::move(fn))));
     }
 
 private:
