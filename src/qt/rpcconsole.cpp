@@ -771,8 +771,13 @@ void RPCConsole::executorFinished()
     // executor runs while the capability is held runs under it, and those were
     // not what the user entered the passphrase for. On a locked wallet the
     // refusal stands; walletpassphrase is the console's way to unlock it.
+    //
+    // Nor while another operation's prompt is open. This runs as a queued
+    // event, so it can run inside that prompt's event loop, and a second
+    // prompt would be refused there anyway.
     if (m_commands_in_flight != 0 || !walletModel
-            || walletModel->getEncryptionStatus() != WalletModel::UnlockedForStakingOnly) {
+            || walletModel->getEncryptionStatus() != WalletModel::UnlockedForStakingOnly
+            || walletModel->isUnlockPromptOpen()) {
         message(CMD_ERROR, error);
         return;
     }

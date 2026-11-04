@@ -70,11 +70,12 @@ private:
     //! refusal that finds it locked can say the unlock ran out meanwhile.
     bool m_opened_staking_only{false};
 
-    //! The passphrase check for UnlockStaking and Elevate. It runs off the GUI
-    //! thread, because a wrong passphrase waits out a delay of up to 30 s and
-    //! the key derivation itself takes a moment, and the GUI must not freeze
-    //! for either. The prompt stays open, its inputs disabled, until the check
-    //! reports to checkFinished(). Joined there, or in the destructor.
+    //! The passphrase check for UnlockStaking, Elevate and ChangePass. It runs
+    //! off the GUI thread, because a wrong passphrase waits out a delay of up
+    //! to 30 s and the key derivation itself takes a moment, and the GUI must
+    //! not freeze for either. The dialog stays open, its inputs disabled, until
+    //! the check reports to checkFinished(). Joined there, or in the
+    //! destructor. Encrypt checks no passphrase and stays on the GUI thread.
     std::thread m_check;
 
     //! The check's outcome, written by the check's thread before it reports.
@@ -83,11 +84,13 @@ private:
     //! checkFinished() has acted on the outcome.
     bool m_check_reported{false};
 
-    //! The passphrase being checked contained a null character.
+    //! The passphrase being checked (the old one, for ChangePass) contained a
+    //! null character.
     bool m_check_had_null{false};
 
-    //! Start the check of \p passphrase on its own thread.
-    void startCheck(SecureString passphrase);
+    //! Start the check of \p passphrase on its own thread. For ChangePass,
+    //! \p new_passphrase is the one to change it to.
+    void startCheck(SecureString passphrase, SecureString new_passphrase = SecureString());
 
     //! Disable or re-enable the inputs, and show or clear the status line.
     void setChecking(bool checking);

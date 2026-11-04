@@ -314,16 +314,15 @@ public:
     //! locked wallet and an unencrypted one -- do not read false as "it was
     //! locked".
     //!
-    //! No production callers. It handed back the wallet-wide elevation that
-    //! elevateWallet() made, and an operation now runs under a capability
-    //! instead. Left in place because removing
-    //! it would leave an ordinal hole at @35.
+    //! No production callers. It was the other half of elevateWallet(), which
+    //! is retired. Left in place because removing it would leave an ordinal
+    //! hole at @35.
     virtual bool restrictToStakingOnly() = 0;
 
-    //! Always false, and logged. It widened an unlock in progress to full for
-    //! the whole wallet, so every other caller could use the keys while one
-    //! operation ran. beginElevation() replaces it. Kept because wallet.capnp
-    //! cannot drop a released ordinal (@36).
+    //! Always false, and logged. elevateWallet is retired: a client begins a
+    //! capability for each operation with beginElevation() and ends it with
+    //! endElevation(). Kept because wallet.capnp cannot drop a released
+    //! ordinal (@36).
     virtual bool elevateWallet(const SecureString& passphrase) = 0;
 
     //! Begin a capability for one operation of \p kind, given the passphrase.
@@ -346,9 +345,21 @@ public:
 
     //! Unlock the wallet; on success the staking-only preference is set to
     //! staking_only (a full unlock clears a stale staking-only restriction).
+    //!
+    //! The passphrase waits its turn behind other passphrase attempts, and a
+    //! wrong one is followed by the failed-passphrase delay (up to 30 s), so
+    //! this can block -- never call it on the GUI thread.
     virtual bool unlockWallet(const SecureString& passphrase, bool staking_only) = 0;
 
-    //! Change the wallet passphrase (locks the wallet first).
+    //! Change the wallet passphrase. The wallet keeps the unlock it had: a
+    //! wallet unlocked for staking only is still unlocked for staking only,
+    //! with the same relock deadline, and a locked wallet stays locked. Every
+    //! capability begun with the old passphrase ends.
+    //!
+    //! The old passphrase waits its turn and a wrong one is delayed (up to
+    //! 30 s) as an unlock's is, and the new key is derived several times to
+    //! set its iteration count, so this can block -- never call it on the GUI
+    //! thread.
     virtual bool changeWalletPassphrase(const SecureString& old_passphrase,
                                         const SecureString& new_passphrase) = 0;
 
@@ -451,9 +462,10 @@ public:
     //! Reserve a fresh key from the pool and return its encoded destination; the
     //! key never crosses the boundary. Under the client's Send capability the
     //! pool may be refilled; without one, a wallet unlocked for staking only
-    //! draws from the pool as it is. Returns false on key-generation failure.
-    //! Does not touch the address book -- the caller labels the address
-    //! separately.
+    //! draws from the pool as it is. Returns false when no fresh key is
+    //! available -- an empty pool that may not be refilled -- and never falls
+    //! back on a key the wallet has already handed out. Does not touch the
+    //! address book -- the caller labels the address separately.
     virtual bool getNewReceiveAddress(std::string& address_out) = 0;
 
     //! Reserve a fresh (non-reused) key from the pool, set its address-book

@@ -289,10 +289,10 @@ because a released ordinal cannot be dropped, but always returns false.
 additive; the major is for the other direction. A GUI and a node of
 different majors disagree on how an operation is authorised, so each such action
 would fail with a message the user cannot act on. A newer GUI against
-an older node gets `UNIMPLEMENTED` for `beginElevation`, from a node that would
-still widen the whole wallet for an operation. The major turns both pairings into
-the "use matching builds" refusal at connect. Major 5 carries everything major 4
-had through minor 2, and the minor restarts at 0.
+an older node gets `UNIMPLEMENTED` for `beginElevation`, so the same actions
+fail. The major turns both pairings into the "use matching builds" refusal at
+connect. Major 5 carries everything major 4 had through minor 2, and the minor
+restarts at 0.
 
 
 Rules a client must honor (from `ClientHandshake` and design §4.2):

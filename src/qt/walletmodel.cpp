@@ -14,6 +14,7 @@
 
 #include <cassert>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource& tx_source,
@@ -522,14 +523,6 @@ bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase, b
     }
 }
 
-bool WalletModel::changePassphrase(const SecureString &oldPass, const SecureString &newPass)
-{
-    // The node side locks, rewrites the master key records and restores the
-    // scope and deadline it captured, so a wallet unlocked for staking is still
-    // unlocked for staking, and still expires when it would have.
-    return m_wallet.changeWalletPassphrase(oldPass, newPass);
-}
-
 bool WalletModel::backupWallet(const std::string& dest)
 {
     return m_wallet.backupWallet(dest);
@@ -612,11 +605,30 @@ WalletModel::UnlockContext WalletModel::requestUnlock(CapabilityKind kind)
     // this one kind of operation; a locked wallet is unlocked for staking only
     // until the capability ends. So a cancelled or mistyped prompt changes
     // nothing, and the deadline of a timed unlock is never touched.
-    //
+
+    // One prompt at a time. The prompt runs an event loop, and a queued event
+    // run inside it (the console's handling of a finished command) can ask for
+    // another. That one would share m_elevation_begun with this one and could
+    // take its result, and the IPC slot holds one capability, so it is refused.
+    if (m_unlock_prompt_open) {
+        LogPrintf("WARN: %s: refused a passphrase prompt while another is open", __func__);
+        return UnlockContext(this, false, false);
+    }
+
     // The receiver reports success through setElevationBegun() before it
     // returns; with no receiver connected, nothing was begun.
     m_elevation_begun = false;
-    emit requireUnlock(kind);
+
+    {
+        // Cleared however the signal returns.
+        struct PromptOpen {
+            bool& open;
+            explicit PromptOpen(bool& flag) : open(flag) { open = true; }
+            ~PromptOpen() { open = false; }
+        } prompt_open{m_unlock_prompt_open};
+
+        emit requireUnlock(kind);
+    }
 
     const bool began = std::exchange(m_elevation_begun, false);
 
@@ -656,6 +668,11 @@ WalletModel::UnlockContext::~UnlockContext()
     }
 }
 
+// Assigning a context would leave two owners of one capability, each ending it
+// when it goes; copying hands the duty over instead (CopyFrom).
+static_assert(!std::is_copy_assignable_v<WalletModel::UnlockContext>);
+static_assert(!std::is_move_assignable_v<WalletModel::UnlockContext>);
+
 void WalletModel::UnlockContext::CopyFrom(const UnlockContext& rhs)
 {
     // Transfer the context: the old object must do NOTHING on destruction, or
@@ -664,8 +681,9 @@ void WalletModel::UnlockContext::CopyFrom(const UnlockContext& rhs)
     // call site currently constructs directly from the prvalue that
     // requestUnlock returns, which C++17 elides, so no copy happens there --
     // RPCConsole keeps one on the heap for a command it runs again.
-    *this = rhs;
-    rhs.end_elevation = false;
+    wallet = rhs.wallet;
+    valid = rhs.valid;
+    end_elevation = std::exchange(rhs.end_elevation, false);
 }
 
 bool WalletModel::getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const

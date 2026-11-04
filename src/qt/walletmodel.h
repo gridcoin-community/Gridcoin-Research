@@ -149,13 +149,17 @@ public:
     // unlock to staking (persisted node-side as the unlock preference).
     bool setWalletLocked(bool locked, const SecureString& passPhrase=SecureString(),
                          bool stakingOnly = false);
-    bool changePassphrase(const SecureString& oldPass, const SecureString& newPass);
 
     //! Record that the passphrase prompt raised by requireUnlock() began a
     //! capability (interfaces::Wallet::beginElevation()), so the requestUnlock()
     //! waiting on that prompt hands back a context that ends it. GUI thread
     //! only; the prompt calls it once the check has succeeded.
     void setElevationBegun() { m_elevation_begun = true; }
+
+    //! A passphrase prompt raised by requestUnlock() is open. A second
+    //! requestUnlock() made meanwhile (from a queued event run inside the
+    //! prompt's event loop) is refused. GUI thread only.
+    bool isUnlockPromptOpen() const { return m_unlock_prompt_open; }
 
     // Back up the wallet .dat / config file to dest (pass-throughs to the
     // wallet interface, used by the GUI backup action). Return false on
@@ -174,12 +178,15 @@ public:
 
         bool isValid() const { return valid; }
 
-        // Copy operator and constructor transfer the context
+        //! Copying transfers the context: the copy ends the capability, and
+        //! the original no longer does.
         UnlockContext(const UnlockContext& obj) { CopyFrom(obj); }
 
-        // Commented out as we don't use the below form and it triggers an infinite recursion
-        // warning.
-        // UnlockContext& operator=(const UnlockContext& rhs) { CopyFrom(rhs); return *this; }
+        //! Not assignable. Assigning would either leave two owners of one
+        //! capability or end one still in use; a context is only ever handed
+        //! over by construction.
+        UnlockContext& operator=(const UnlockContext&) = delete;
+        UnlockContext& operator=(UnlockContext&&) = delete;
     private:
         WalletModel *wallet{nullptr};
         bool valid{false};
@@ -199,7 +206,8 @@ public:
     //! capability for \p kind is begun with it. The context ends the capability
     //! when it goes. Cancelled or
     //! refused, the context is invalid and nothing changed. Synchronous: it
-    //! returns once the prompt has closed.
+    //! returns once the prompt has closed. While a prompt is open, a further
+    //! call is refused with an invalid context and no prompt.
     UnlockContext requestUnlock(CapabilityKind kind);
 
     bool getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
@@ -338,6 +346,9 @@ private:
     //! Set by setElevationBegun() while requestUnlock() waits on its prompt,
     //! and read and cleared by it afterwards. GUI thread only.
     bool m_elevation_begun{false};
+
+    //! requestUnlock() is waiting on its prompt. GUI thread only.
+    bool m_unlock_prompt_open{false};
 
 
 public slots:

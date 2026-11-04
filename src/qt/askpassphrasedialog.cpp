@@ -131,9 +131,10 @@ namespace {
 //! Balances setOverrideCursor/restoreOverrideCursor even if the call it wraps
 //! throws.
 //!
-//! Both users cross IPC in the split build, where a disconnect mid-call raises,
-//! and an override cursor that is set and never restored persists for the life
-//! of the application -- the whole GUI keeps a wait cursor with nothing running.
+//! Its user, the encryption, crosses IPC in the split build, where a disconnect
+//! mid-call raises, and an override cursor that is set and never restored
+//! persists for the life of the application -- the whole GUI keeps a wait
+//! cursor with nothing running.
 struct BusyCursor {
     BusyCursor() { QApplication::setOverrideCursor(Qt::WaitCursor); }
     ~BusyCursor() { QApplication::restoreOverrideCursor(); }
@@ -304,45 +305,15 @@ void AskPassphraseDialog::accept()
     case ChangePass:
         if(newpass1 == newpass2)
         {
-            // Down BEFORE the call, exactly as the Encrypt case above, and for
-            // the same reason: changePassphrase() re-derives the key several
-            // times to recalibrate the iteration count, blocking the GUI thread,
-            // and accept() already cleared the fields -- so leaving it up shows
-            // an empty frozen prompt here too, just for less time.
-            hide();
-
-            bool changed = false;
-            {
-                BusyCursor busy;
-                changed = model->changePassphrase(oldpass, newpass1);
-            }
-
-            if(changed)
-            {
-                QMessageBox::information(this, tr("Wallet encrypted"),
-                                     tr("Wallet passphrase was successfully changed."));
-                QDialog::accept(); // Success
-            }
-            else
-            {
-                // Back up before the error: this dialog is where the passphrase
-                // is retyped, so it has to return. The box on top of it is right
-                // here -- unlike the success case, the prompt is still wanted.
-                show();
-
-                // Check if the old passphrase had a null character
-                if (oldpass.find('\0') == std::string::npos) {
-                    QMessageBox::critical(this, tr("Passphrase change failed"),
-                                          tr("The passphrase entered for the wallet decryption was incorrect."));
-                } else {
-                    QMessageBox::critical(this, tr("Passphrase change failed"),
-                                          tr("The old passphrase entered for the wallet decryption is incorrect. "
-                                             "It contains a null character (ie - a zero byte). "
-                                             "If the passphrase was set with a version of this software prior to 5.4.6, "
-                                             "please try again with only the characters up to — but not including — "
-                                             "the first null character."));
-                }
-            }
+            // The same off-thread check as an unlock. The change waits its turn
+            // behind other passphrase attempts, waits out a delay of up to 30 s
+            // on a wrong old passphrase, and re-derives the key several times
+            // to recalibrate the iteration count; none of that may freeze the
+            // GUI. The dialog stays up with its inputs disabled, and
+            // checkFinished() reports. The node restores the scope and the
+            // deadline of the unlock it interrupts, so a wallet unlocked for
+            // staking is still unlocked for staking afterwards.
+            startCheck(std::move(oldpass), std::move(newpass1));
         }
         else
         {
@@ -362,7 +333,7 @@ void AskPassphraseDialog::reject()
     QDialog::reject();
 }
 
-void AskPassphraseDialog::startCheck(SecureString passphrase)
+void AskPassphraseDialog::startCheck(SecureString passphrase, SecureString new_passphrase)
 {
     m_check_had_null = passphrase.find('\0') != std::string::npos;
     m_check_accepted = false;
@@ -371,21 +342,34 @@ void AskPassphraseDialog::startCheck(SecureString passphrase)
     setChecking(true);
 
     // The thread calls the wallet interface only: no Qt object is touched off
-    // the GUI thread. The passphrase moves into it and is cleansed when the
+    // the GUI thread. The passphrases move into it and are cleansed when the
     // thread ends.
     interfaces::Wallet& wallet = model->wallet();
-    const bool elevate = (mode == Elevate);
+    const Mode check_mode = mode;
     const CapabilityKind kind = m_kind;
     const bool staking_only = (mode == UnlockStaking && ui->stakingCheckBox->isChecked());
 
-    m_check = std::thread([this, &wallet, elevate, kind, staking_only, passphrase = std::move(passphrase)] {
+    m_check = std::thread([this, &wallet, check_mode, kind, staking_only, passphrase = std::move(passphrase),
+                           new_passphrase = std::move(new_passphrase)] {
         bool accepted = false;
 
         // Nothing may escape a thread. In the split build the call crosses
         // IPC, and a disconnect mid-call raises.
         try {
-            accepted = elevate ? wallet.beginElevation(passphrase, kind)
-                               : wallet.unlockWallet(passphrase, staking_only);
+            switch (check_mode) {
+            case Elevate:
+                accepted = wallet.beginElevation(passphrase, kind);
+                break;
+            case UnlockStaking:
+                accepted = wallet.unlockWallet(passphrase, staking_only);
+                break;
+            case ChangePass:
+                accepted = wallet.changeWalletPassphrase(passphrase, new_passphrase);
+                break;
+            case Encrypt:
+                // Encryption checks no passphrase and does not come here.
+                break;
+            }
         } catch (const std::exception& e) {
             LogPrintf("WARN: AskPassphraseDialog: the passphrase check failed: %s", e.what());
         } catch (...) {
@@ -410,7 +394,8 @@ void AskPassphraseDialog::setChecking(bool checking)
     ui->buttonBox->setEnabled(!checking);
 
     if (checking) {
-        ui->statusLabel->setText(tr("Checking the passphrase..."));
+        ui->statusLabel->setText(mode == ChangePass ? tr("Changing the passphrase...")
+                                                    : tr("Checking the passphrase..."));
         setCursor(Qt::BusyCursor);
     } else {
         ui->statusLabel->clear();
@@ -428,6 +413,27 @@ void AskPassphraseDialog::checkFinished()
 
     m_check_reported = true;
     setChecking(false);
+
+    if (mode == ChangePass) {
+        if (m_check_accepted) {
+            QMessageBox::information(this, tr("Wallet encrypted"),
+                                     tr("Wallet passphrase was successfully changed."));
+            QDialog::accept(); // Success
+        } else if (!m_check_had_null) {
+            // The dialog stays up: it is where the passphrase is retyped.
+            QMessageBox::critical(this, tr("Passphrase change failed"),
+                                  tr("The passphrase entered for the wallet decryption was incorrect."));
+        } else {
+            QMessageBox::critical(this, tr("Passphrase change failed"),
+                                  tr("The old passphrase entered for the wallet decryption is incorrect. "
+                                     "It contains a null character (ie - a zero byte). "
+                                     "If the passphrase was set with a version of this software prior to 5.4.6, "
+                                     "please try again with only the characters up to — but not including — "
+                                     "the first null character."));
+        }
+
+        return;
+    }
 
     if (m_check_accepted) {
         // The operation waiting in WalletModel::requestUnlock() takes the

@@ -147,8 +147,8 @@ public:
         // A client that still asks for this predates beginElevation(), and the
         // handshake's schema major keeps such a client from connecting. Refused
         // without reading the passphrase, so it is not counted as an attempt.
-        LogPrintf("WARNING: %s: refused. The wallet is no longer widened for an operation; the "
-                  "client must begin a capability for it instead.", __func__);
+        LogPrintf("WARNING: %s: refused. elevateWallet is retired; the client begins a "
+                  "capability for each operation instead.", __func__);
         return false;
     }
 
@@ -334,17 +334,20 @@ public:
     bool getNewReceiveAddress(std::string& address_out) override
     {
         // The reserved key stays node-side and only its encoded address is
-        // returned. fAllowReuse=true matches the old GUI addRow() behavior.
+        // returned.
         //
-        // The address book's new-address action holds a Send capability (the
-        // capability under which a send refills the pool for its change key),
-        // so the pool may be refilled here as well. Without one, on a wallet
-        // unlocked for staking only, the draw uses the pool as it is.
+        // A fresh key or nothing (fAllowReuse=false): an empty pool reports
+        // false rather than handing back the wallet's default key, which the
+        // user already has. The address book draws first with no capability;
+        // on false, for a wallet locked or unlocked for staking only, it asks
+        // for the passphrase and draws again under a Send capability (the one
+        // under which a send refills the pool for its change key), which lets
+        // the pool refill.
         CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(), CapabilityKind::Send);
 
         try {
             CPubKey new_key;
-            if (!m_wallet->GetKeyFromPool(new_key, true)) {
+            if (!m_wallet->GetKeyFromPool(new_key, false)) {
                 return false;
             }
 
@@ -362,8 +365,9 @@ public:
         // fAllowReuse=false to match the researcher pool page's former
         // getKeyFromPool(..., false) call: a deliberately fresh receive key.
         //
-        // That page is part of the researcher wizard and holds a Contract
-        // capability, under which the pool may be refilled for a fresh key.
+        // That page is part of the researcher wizard. It draws first with no
+        // capability, and on false asks for the passphrase and draws again
+        // under a Contract capability, which lets the pool refill.
         CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(), CapabilityKind::Contract);
 
         try {

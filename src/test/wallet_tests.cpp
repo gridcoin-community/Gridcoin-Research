@@ -13,6 +13,7 @@
 #include "gridcoin/voting/builders.h"
 #include "gridcoin/voting/poll.h"
 #include "init.h"
+#include "interfaces/wallet.h"
 #include "wallet/wallet.h"
 #include "net_processing.h"
 #include "wallet/walletdb.h"
@@ -1965,6 +1966,59 @@ BOOST_AUTO_TEST_CASE(topup_runs_under_full)
     BOOST_CHECK_GE(pool, EncryptedHdKeyPoolWallet::TARGET);
     BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before + pool);
     BOOST_CHECK_EQUAL(fx.Derived(), derived_before + pool);
+}
+
+//! The GUI's receive-address draws work without a capability while the pool
+//! has keys, and report an empty pool as a failure, so the GUI can ask for the
+//! passphrase and draw again under a capability that refills it. The address
+//! book's draw used to fall back on the wallet's default key instead, which
+//! handed the user an address they already had as if it were new.
+BOOST_AUTO_TEST_CASE(receive_address_draws_use_the_pool_and_report_it_empty)
+{
+    EncryptedHdKeyPoolWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    // The key a reusing draw would fall back on.
+    CKey default_key;
+    default_key.MakeNewKey(true);
+    {
+        LOCK(fx.wallet.cs_wallet);
+        fx.wallet.vchDefaultKey = default_key.GetPubKey();
+    }
+    const std::string default_address = EncodeDestination(default_key.GetPubKey().GetID());
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(&fx.wallet);
+
+    // From the pool, with no capability and nothing made.
+    const size_t keys_before = fx.KeyCount();
+
+    std::string address;
+    BOOST_REQUIRE(wallet->getNewReceiveAddress(address));
+    BOOST_CHECK(address != default_address);
+    BOOST_CHECK(IsMine(fx.wallet, DecodeDestination(address)) != ISMINE_NO);
+
+    std::string labelled;
+    BOOST_REQUIRE(wallet->getNewReceiveAddressWithLabel("pool", labelled));
+    BOOST_CHECK(labelled != address);
+
+    BOOST_CHECK_EQUAL(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET - 2);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+
+    // Empty: both report it, neither returns the default key, and nothing is
+    // made.
+    fx.DrainPool();
+
+    std::string from_empty;
+    BOOST_CHECK(!wallet->getNewReceiveAddress(from_empty));
+    BOOST_CHECK(from_empty.empty());
+
+    std::string labelled_from_empty;
+    BOOST_CHECK(!wallet->getNewReceiveAddressWithLabel("pool", labelled_from_empty));
+    BOOST_CHECK(labelled_from_empty.empty());
+
+    BOOST_CHECK_EQUAL(fx.PoolSize(), 0U);
+    BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 
 //! getwalletinfo and getinfo read the oldest pool key's time, which reserves
