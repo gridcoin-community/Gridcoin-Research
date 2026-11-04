@@ -127,6 +127,11 @@ namespace BCLog {
         bool m_log_time_micros = DEFAULT_LOGTIMEMICROS;
         bool m_log_threadnames = DEFAULT_LOGTHREADNAMES;
 
+        //! Open the log file with BCLog::OpenLogFile(..., secure = true). Set before logging starts.
+        bool m_secure_open{false};
+        //! Escape every newline in a message except a final one (see LogEscapeMessage). Set before logging starts.
+        bool m_escape_newlines{false};
+
         fs::path m_file_path;
         std::atomic<bool> m_reopen_file{false};
         static boost::gregorian::date PrevArchiveCheckDate;
@@ -177,6 +182,19 @@ namespace BCLog {
         bool DefaultShrinkDebugFile() const;
     };
 
+
+    //! Escapes control characters (other than a newline) in a log message. With escape_newlines, every newline except
+    //! a final one is escaped too, so a message cannot start a new line in the log.
+    std::string LogEscapeMessage(const std::string& str, bool escape_newlines = false);
+
+    //! secure == false: fsbridge::fopen(path, mode). secure == true (POSIX): open(path,
+    //! O_CLOEXEC|O_NOFOLLOW|O_NONBLOCK|access-for-mode[|O_CREAT|O_APPEND for "a"; |O_CREAT for "w"], 0600), never
+    //! O_TRUNC at open; then fstat must show S_ISREG, st_uid == geteuid() and st_nlink == 1, else the file is closed
+    //! and nullptr returned; then O_NONBLOCK is cleared, the file is truncated for mode "w", and fdopen is called.
+    //! A symlink, a hard link or a FIFO at the path is refused, and a FIFO does not block the caller. A file that
+    //! already exists keeps its mode; a new file is created 0600. Windows: refuses when fs::symlink_status(path) is
+    //! a symlink, else fsbridge::fopen. Supported modes are "r", "a" and "w".
+    FILE* OpenLogFile(const fs::path& path, const char* mode, bool secure);
 } // namespace BCLog
 
 BCLog::Logger& LogInstance();

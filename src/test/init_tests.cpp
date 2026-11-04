@@ -5,12 +5,37 @@
 #include "gridcoin/contract/registry.h"
 #include "init.h"
 #include "policy/fees.h"
+#include "test/test_gridcoin.h"
 #include "util/system.h"
 
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <set>
+#include <sstream>
 #include <string>
+#include <vector>
+
+namespace {
+//! ReadConfigStream is protected, so expose it the way the other argument tests do.
+class TestArgsManager : public ArgsManager
+{
+public:
+    using ArgsManager::ReadConfigStream;
+};
+
+void RegisterArgs(ArgsManager& args)
+{
+    for (const char* a : {"-guilogfile=<f>", "-autotrustidentity", "-ipclogtrace", "-staking", "-resetblockchaindata"}) {
+        args.AddArg(a, "", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    }
+}
+
+bool Contains(const std::vector<std::string>& v, const std::string& key)
+{
+    return std::find(v.begin(), v.end(), key) != v.end();
+}
+} // namespace
 
 BOOST_AUTO_TEST_SUITE(init_tests)
 
@@ -99,6 +124,95 @@ BOOST_AUTO_TEST_CASE(paytxfee_above_the_settxfee_maximum_warns_at_startup)
     BOOST_CHECK(!PayTxFeeWarnsAtStartup(MaxTxFeeRate()));
     BOOST_CHECK(PayTxFeeWarnsAtStartup(MaxTxFeeRate() + 1));
     BOOST_CHECK(PayTxFeeWarnsAtStartup(COIN / 4));
+}
+
+BOOST_AUTO_TEST_CASE(gui_only_args_from_config_are_ignored)
+{
+    TestArgsManager args;
+    RegisterArgs(args);
+
+    // The options appear at top level and in a network section.
+    std::istringstream conf("guilogfile=/home/x/.bashrc\nautotrustidentity=1\nipclogtrace=1\nstaking=0\n"
+                            "[test]\nguilogfile=/home/x/.profile\n");
+    std::string err;
+    BOOST_REQUIRE(args.ReadConfigStream(conf, "test.conf", err, true));
+
+    const std::vector<std::string> removed = IgnoreGuiOnlyConfigArgs(args);
+
+    BOOST_CHECK(!args.IsArgSet("-guilogfile"));
+    BOOST_CHECK(!args.IsArgSet("-autotrustidentity"));
+    BOOST_CHECK(!args.IsArgSet("-ipclogtrace"));
+    BOOST_CHECK(args.IsArgSet("-staking"));
+
+    // Keys are returned with the leading '-', once each, even when set in two sections.
+    BOOST_CHECK_EQUAL(removed.size(), 3u);
+    BOOST_CHECK(Contains(removed, "-guilogfile"));
+    BOOST_CHECK(Contains(removed, "-autotrustidentity"));
+    BOOST_CHECK(Contains(removed, "-ipclogtrace"));
+
+    // The network section's copy is gone too.
+    args.SelectConfigNetwork("test");
+    BOOST_CHECK(!args.IsArgSet("-guilogfile"));
+}
+
+BOOST_AUTO_TEST_CASE(gui_only_args_on_command_line_are_kept)
+{
+    TestArgsManager args;
+    RegisterArgs(args);
+
+    const char* argv[] = {"x", "-guilogfile=/tmp/g.log", "-ipclogtrace=1"};
+    std::string err;
+    BOOST_REQUIRE(args.ParseParameters(3, argv, err));
+
+    std::istringstream conf("guilogfile=/home/x/.bashrc\n");
+    BOOST_REQUIRE(args.ReadConfigStream(conf, "test.conf", err, true));
+
+    const std::vector<std::string> removed = IgnoreGuiOnlyConfigArgs(args);
+
+    BOOST_CHECK_EQUAL(args.GetArg("-guilogfile", ""), "/tmp/g.log");
+    BOOST_CHECK(args.GetBoolArg("-ipclogtrace", false));
+    BOOST_CHECK_EQUAL(removed.size(), 1u);
+}
+
+BOOST_AUTO_TEST_CASE(resetblockchaindata_refused_in_multiprocess_gui)
+{
+    const std::string expected =
+        "-resetblockchaindata is not available in the multiprocess GUI. "
+        "Stop the core and run gridcoinresearchd -resetblockchaindata.";
+
+    {
+        TestArgsManager args;
+        RegisterArgs(args);
+        BOOST_CHECK(!MultiprocessGuiArgError(args).has_value());
+    }
+    {
+        TestArgsManager args;
+        RegisterArgs(args);
+        const char* argv[] = {"x", "-resetblockchaindata"};
+        std::string err;
+        BOOST_REQUIRE(args.ParseParameters(2, argv, err));
+        const auto msg = MultiprocessGuiArgError(args);
+        BOOST_REQUIRE(msg.has_value());
+        BOOST_CHECK_EQUAL(*msg, expected);
+    }
+    {
+        TestArgsManager args;
+        RegisterArgs(args);
+        std::istringstream conf("resetblockchaindata=1\n");
+        std::string err;
+        BOOST_REQUIRE(args.ReadConfigStream(conf, "test.conf", err, true));
+        const auto msg = MultiprocessGuiArgError(args);
+        BOOST_REQUIRE(msg.has_value());
+        BOOST_CHECK_EQUAL(*msg, expected);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(gui_only_args_list_matches_the_literal)
+{
+    const std::vector<std::string>& list = GuiOnlyArgs();
+    BOOST_CHECK(Contains(list, "-guilogfile"));
+    BOOST_CHECK(Contains(list, "-autotrustidentity"));
+    BOOST_CHECK(!Contains(list, "-ipclogtrace"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

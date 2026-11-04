@@ -10,6 +10,7 @@
 #include <boost/thread.hpp>
 
 #include <atomic>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -47,6 +48,18 @@ bool AppInit2(ThreadHandlerPtr threads);
 void ThreadAppInit2(ThreadHandlerPtr th);
 
 void AddLoggingArgs(ArgsManager& argsman);
+
+//! The options that belong to the GUI process only (the literal list in init.cpp).
+const std::vector<std::string>& GuiOnlyArgs();
+
+//! Removes GuiOnlyArgs() and "-ipclogtrace" from every section of the read-only config layer, so in multiprocess
+//! mode the GUI takes them only from its command line or the GUI settings. Logs once per removed key. Returns the
+//! removed keys, each with its leading '-' and listed once however many sections held it.
+std::vector<std::string> IgnoreGuiOnlyConfigArgs(ArgsManager& args);
+
+//! The message to show when -resetblockchaindata is set, from any source, in the multiprocess GUI (the core does
+//! that job); otherwise nullopt.
+std::optional<std::string> MultiprocessGuiArgError(const ArgsManager& args);
 
 /**
  * Register all arguments with the ArgsManager

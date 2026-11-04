@@ -14,8 +14,16 @@
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 
+#include <cstring>
 #include <mutex>
 #include <set>
+
+#ifndef WIN32
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#endif
 
 extern ArgsManager gArgs;
 
@@ -59,7 +67,7 @@ bool BCLog::Logger::StartLogging()
 
     if (m_print_to_file) {
         assert(!m_file_path.empty());
-        m_fileout = fsbridge::fopen(m_file_path, "a");
+        m_fileout = BCLog::OpenLogFile(m_file_path, "a", m_secure_open);
         if (!m_fileout) {
             return false;
         }
@@ -258,11 +266,14 @@ namespace BCLog {
      * It escapes instead of removes them to still allow for troubleshooting
      * issues where they accidentally end up in strings.
      */
-    std::string LogEscapeMessage(const std::string& str) {
+    std::string LogEscapeMessage(const std::string& str, bool escape_newlines) {
         std::string ret;
-        for (char ch_in : str) {
+        for (size_t i = 0; i < str.size(); ++i) {
+            const char ch_in = str[i];
             uint8_t ch = (uint8_t)ch_in;
-            if ((ch >= 32 || ch == '\n') && ch != '\x7f') {
+            // With escape_newlines only a final newline is kept as a newline.
+            const bool keep_newline = ch == '\n' && (!escape_newlines || i + 1 == str.size());
+            if ((ch >= 32 || keep_newline) && ch != '\x7f') {
                 ret += ch_in;
             } else {
                 ret += strprintf("\\x%02x", ch);
@@ -270,12 +281,59 @@ namespace BCLog {
         }
         return ret;
     }
+
+    FILE* OpenLogFile(const fs::path& path, const char* mode, bool secure)
+    {
+        if (!secure) return fsbridge::fopen(path, mode);
+
+#ifdef WIN32
+        boost::system::error_code ec;
+        if (fs::is_symlink(fs::symlink_status(path, ec))) return nullptr;
+        return fsbridge::fopen(path, mode);
+#else
+        int flags = O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK;
+        if (std::strcmp(mode, "r") == 0) {
+            flags |= O_RDONLY;
+        } else if (std::strcmp(mode, "a") == 0) {
+            flags |= O_WRONLY | O_CREAT | O_APPEND;
+        } else if (std::strcmp(mode, "w") == 0) {
+            // Truncation waits until the file has passed the checks below.
+            flags |= O_WRONLY | O_CREAT;
+        } else {
+            return nullptr;
+        }
+
+        const int fd = ::open(path.c_str(), flags, static_cast<mode_t>(0600));
+        if (fd < 0) return nullptr;
+
+        struct stat st;
+        if (::fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != ::geteuid() || st.st_nlink != 1) {
+            ::close(fd);
+            return nullptr;
+        }
+
+        const int fl = ::fcntl(fd, F_GETFL);
+        if (fl < 0 || ::fcntl(fd, F_SETFL, fl & ~O_NONBLOCK) != 0) {
+            ::close(fd);
+            return nullptr;
+        }
+
+        if (std::strcmp(mode, "w") == 0 && ::ftruncate(fd, 0) != 0) {
+            ::close(fd);
+            return nullptr;
+        }
+
+        FILE* file = ::fdopen(fd, mode);
+        if (file == nullptr) ::close(fd);
+        return file;
+#endif
+    }
 }
 
 void BCLog::Logger::LogPrintStr(const std::string& str)
 {
     std::lock_guard<std::mutex> scoped_lock(m_cs);
-    std::string str_prefixed = LogEscapeMessage(str);
+    std::string str_prefixed = LogEscapeMessage(str, m_escape_newlines);
 
     if (m_log_threadnames && m_started_new_line) {
         const auto threadname = util::ThreadGetInternalName();
@@ -304,7 +362,7 @@ void BCLog::Logger::LogPrintStr(const std::string& str)
         // reopen the log file, if requested
         if (m_reopen_file) {
             m_reopen_file = false;
-            FILE* new_fileout = fsbridge::fopen(m_file_path, "a");
+            FILE* new_fileout = BCLog::OpenLogFile(m_file_path, "a", m_secure_open);
             if (new_fileout) {
                 setbuf(new_fileout, nullptr); // unbuffered
                 if (m_fileout != nullptr) fclose(m_fileout);
@@ -326,7 +384,7 @@ void BCLog::Logger::ShrinkDebugFile()
     assert(!m_file_path.empty());
 
     // Scroll debug.log if it's getting too big
-    FILE* file = fsbridge::fopen(m_file_path, "r");
+    FILE* file = BCLog::OpenLogFile(m_file_path, "r", m_secure_open);
 
     // Special files (e.g. device nodes) may not have a size.
     size_t log_size = 0;
@@ -348,7 +406,7 @@ void BCLog::Logger::ShrinkDebugFile()
         int nBytes = fread(vch.data(), 1, vch.size(), file);
         fclose(file);
 
-        file = fsbridge::fopen(m_file_path, "w");
+        file = BCLog::OpenLogFile(m_file_path, "w", m_secure_open);
         if (file)
         {
             fwrite(vch.data(), 1, nBytes, file);
@@ -430,7 +488,7 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
 
             // Re-open logging file. (This is subtly different than the flag based reopen above, because the file must be closed first, renamed for compression,
             // and then a new one opened.
-            FILE* new_fileout = fsbridge::fopen(m_file_path, "a");
+            FILE* new_fileout = BCLog::OpenLogFile(m_file_path, "a", m_secure_open);
             if (new_fileout)
             {
                 setbuf(new_fileout, nullptr); // unbuffered

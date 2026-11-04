@@ -995,6 +995,14 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    // The -multiprocess flag may itself come from the config file, so it is decided after the first read. In that
+    // mode the GUI's own options come from its command line or the GUI settings, never from the data directory's
+    // config file, which the core shares.
+    const bool multiprocess_gui = gArgs.GetBoolArg("-multiprocess", false);
+    if (multiprocess_gui) {
+        IgnoreGuiOnlyConfigArgs(gArgs);
+    }
+
     // Do this to pickup -testnet / -regtest from the command line.
     SelectParams(gArgs.GetChainName());
 
@@ -1053,6 +1061,10 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    if (multiprocess_gui) {
+        IgnoreGuiOnlyConfigArgs(gArgs);
+    }
+
     // In -multiprocess mode the core owns gridcoinsettings.json: it reads and writes the file and announces every
     // change, and the GUI reaches each setting through interfaces::Node. So the GUI does not open the file: a copy
     // read here would go stale, and writing it back would race the core's own writes and could revert a change
@@ -1103,6 +1115,13 @@ int main(int argc, char *argv[])
     }
 #endif
 
+    if (multiprocess_gui) {
+        // The GUI's log file is opened without following a symlink, hard link or FIFO, and a string that comes
+        // from the core cannot start a new line in it.
+        LogInstance().m_secure_open = true;
+        LogInstance().m_escape_newlines = true;
+    }
+
     // Initialize logging as early as possible.
     InitLogging();
     LogNonDumpableStatus();
@@ -1115,6 +1134,15 @@ int main(int argc, char *argv[])
 
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
+
+    if (multiprocess_gui) {
+        if (const auto err = MultiprocessGuiArgError(gArgs)) {
+            GUILogPrintf("%s", *err);
+            ThreadSafeMessageBox(*err, _("Gridcoin"), CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+            QMessageBox::critical(nullptr, PACKAGE_NAME, QString::fromStdString(*err));
+            return EXIT_FAILURE;
+        }
+    }
 
     // Check to see if the user requested to reset blockchain data -- We allow on testnet.
     if (gArgs.IsArgSet("-resetblockchaindata"))

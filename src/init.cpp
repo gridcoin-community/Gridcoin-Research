@@ -47,6 +47,7 @@
 
 #include <openssl/crypto.h>
 
+#include <set>
 #include <thread>
 
 static boost::thread_group threadGroup;
@@ -130,6 +131,43 @@ static const char* GRIDCOIN_PID_FILENAME = "gridcoinresearchd.pid";
 static const std::vector<std::string> GUI_ONLY_ARGS{
     "-autotrustidentity", "-choosedatadir", "-devsyntheticcoins", "-guilogfile", "-ipcserviceuser", "-lang", "-min",
     "-nobuildwarn", "-resetguisettings", "-splash", "-style", "-suppressnetworkgraph"};
+
+const std::vector<std::string>& GuiOnlyArgs()
+{
+    return GUI_ONLY_ARGS;
+}
+
+std::vector<std::string> IgnoreGuiOnlyConfigArgs(ArgsManager& args)
+{
+    std::set<std::string> removed;
+
+    args.LockSettings([&](util::Settings& settings) {
+        for (auto& section : settings.ro_config) {
+            for (const std::string& name : GuiOnlyArgs()) {
+                // Keys in the read-only config layer have no leading '-'.
+                if (section.second.erase(name.substr(1)) > 0) removed.insert(name);
+            }
+            if (section.second.erase("ipclogtrace") > 0) removed.insert("-ipclogtrace");
+        }
+    });
+
+    for (const std::string& name : removed) {
+        LogPrintf("ignored %s from the config file: in multiprocess mode GUI options come from the command line or "
+                  "the GUI settings\n", name);
+    }
+
+    return std::vector<std::string>(removed.begin(), removed.end());
+}
+
+std::optional<std::string> MultiprocessGuiArgError(const ArgsManager& args)
+{
+    if (args.IsArgSet("-resetblockchaindata")) {
+        return std::string("-resetblockchaindata is not available in the multiprocess GUI. "
+                           "Stop the core and run gridcoinresearchd -resetblockchaindata.");
+    }
+
+    return std::nullopt;
+}
 
 static fs::path GetPidFile(const ArgsManager& args)
 {
