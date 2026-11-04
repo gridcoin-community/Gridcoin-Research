@@ -461,12 +461,21 @@ void OptionsDialog::sidestakeTableEditCommitted()
     }
 
     // Shown once the editor has closed. A message box over the open editor
-    // would take its focus, and the delegate would commit the edit again.
+    // would take its focus, and the delegate would commit the edit again. A
+    // second refused commit before it shows is the same edit, so it is not
+    // queued again.
+    if (m_sidestake_elevation_report_queued) {
+        return;
+    }
+
+    m_sidestake_elevation_report_queued = true;
     QMetaObject::invokeMethod(this, &OptionsDialog::handleSideStakeElevationRequired, Qt::QueuedConnection);
 }
 
 void OptionsDialog::handleSideStakeElevationRequired()
 {
+    m_sidestake_elevation_report_queued = false;
+
     // Refetch first, which also clears the status, so the edit shows as it is
     // stored and is reported once.
     model->getSideStakeTableModel()->refresh();

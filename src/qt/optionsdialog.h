@@ -108,6 +108,10 @@ private:
     bool m_init_column_sizes_set;
     bool m_resize_columns_in_progress;
 
+    //! A refused side-stake table edit's message is queued to show once the
+    //! editor has closed.
+    bool m_sidestake_elevation_report_queued{false};
+
     enum SideStakeTableColumnWidths
     {
         ADDRESS_COLUMN_WIDTH = 200,

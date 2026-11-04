@@ -91,6 +91,7 @@ private slots:
     void editSideStakeDeclinedShowsMessageAndStaysOpen();
     void deleteSideStakeDeclinedRemovesNothing();
     void tableSideStakeEditDeclinedShowsTheMessage();
+    void tableSideStakeEditRefusedTwiceShowsTheMessageOnce();
 
 private:
     // Suite-wide QSettings redirect (see initTestCase) and what it replaced.

@@ -1587,3 +1587,42 @@ void OptionsModelTests::tableSideStakeEditDeclinedShowsTheMessage()
     QVERIFY(view->indexWidget(allocation) == nullptr);
     QVERIFY(dialog.isVisible());
 }
+
+void OptionsModelTests::tableSideStakeEditRefusedTwiceShowsTheMessageOnce()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    sidestakes.m_needs_elevation = true;
+    sidestakes.m_edit_result.status = interfaces::SideStakeEditStatus::OK;
+    sidestakes.m_snapshot.entries.push_back(LocalSideStake("rawAddr"));
+    OptionsModel model(node, sidestakes);
+
+    int asks = 0;
+    InstallPrompt(model, asks, false, sidestakes.m_elevated);
+
+    OptionsDialog dialog;
+    dialog.setModel(&model);
+    dialog.show();
+    QTableView* view = Find<QTableView>(dialog, "sidestakingTableView");
+    QVERIFY(view);
+
+    const QModelIndex allocation = view->model()->index(0, SideStakeTableModel::Allocation);
+    view->setCurrentIndex(allocation);
+    view->edit(allocation);
+    QLineEdit* editor = qobject_cast<QLineEdit*>(view->indexWidget(allocation));
+    QVERIFY(editor);
+    editor->setText(QStringLiteral("20"));
+
+    MessageBoxCloser boxes;
+
+    // The delegate commits the editor twice before the event loop runs, as
+    // Enter and the editor losing focus can, and each commit is refused.
+    Q_EMIT view->itemDelegate()->commitData(editor);
+    Q_EMIT view->itemDelegate()->commitData(editor);
+    QCOMPARE(sidestakes.m_edit_calls, 2);
+
+    QTRY_VERIFY(!boxes.m_texts.isEmpty());
+    QTest::qWait(100);
+    QCOMPARE(boxes.m_texts, QStringList{SIDE_STAKE_PASSPHRASE_MESSAGE});
+    QVERIFY(dialog.isVisible());
+}
