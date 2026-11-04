@@ -34,7 +34,6 @@
 #include "rpc/passphrase_params.h"
 #include "rpc/protocol.h"
 #include "rpc/server.h"
-#include "rpc/util.h"
 #include "sync.h"
 #include "util.h"
 #include "util/strencodings.h"
@@ -444,15 +443,11 @@ public:
             const UniValue params = RPCConvertValues(method, full);
             const PassphraseParamsCleanser cleanser(method, params);
 
-            // The arity check and the conversion of a body's exception are the dispatcher's, which
-            // this path does not go through.
-            const CRPCCommand* command = tableRPC[method];
-            if (command != nullptr && command->helpman != nullptr) {
-                const RPCHelpMan& help = command->helpman();
-                if (!help.IsVariadic() && !help.IsValidNumArgs(params.size())) {
-                    throw std::runtime_error(help.ToString());
-                }
-            }
+            // This path runs the method itself rather than through tableRPC.execute(), so it makes
+            // the dispatcher's checks first: the arity check, and the passphrase gate of an
+            // access_elevate row (encryptwallet). It converts a body's exception as the
+            // dispatcher does.
+            tableRPC.admit(method, params);
 
             try {
                 return ExecutePassphraseCommand(method, passphrases, params);

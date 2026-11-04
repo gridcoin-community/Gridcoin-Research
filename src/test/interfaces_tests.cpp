@@ -264,6 +264,44 @@ BOOST_AUTO_TEST_CASE(node_secret_console_formats_a_body_exception_like_the_dispa
     BOOST_CHECK_EQUAL(secret.output, dispatched);
 }
 
+// The secret path makes the dispatcher's own checks before the method runs, as tableRPC.execute()
+// makes them for HTTP RPC and the plain console: encryptwallet, an access_elevate row, is refused on an
+// encrypted wallet that cannot use its keys, and a wrong argument count gets the dispatcher's help,
+// with the line an access_elevate row adds. Both answers are the dispatcher's, formatted as the
+// console formats them.
+BOOST_AUTO_TEST_CASE(node_secret_console_makes_the_dispatcher_checks)
+{
+    grc_test::EncryptedWallet fx;
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+
+    const auto dispatched = [](const std::vector<std::string>& args) {
+        try {
+            tableRPC.execute("encryptwallet", RPCConvertValues("encryptwallet", args));
+        } catch (const UniValue& error) {
+            return strprintf("%s (code %d)", find_value(error, "message").get_str(), find_value(error, "code").get_int());
+        } catch (const std::exception& e) {
+            return std::string("Error: ") + e.what();
+        }
+        return std::string("returned");
+    };
+
+    const interfaces::RpcConsoleResult refused =
+        node->executeRpcConsoleSecretCommand("encryptwallet", {SecureString("another")}, {});
+    BOOST_CHECK(!refused.ok);
+    BOOST_CHECK_EQUAL(refused.output, dispatched({"another"}));
+    BOOST_CHECK(refused.output.find("encryptwallet needs the wallet passphrase") != std::string::npos);
+    BOOST_CHECK(refused.output.find("(code -13)") != std::string::npos);
+
+    const interfaces::RpcConsoleResult arity =
+        node->executeRpcConsoleSecretCommand("encryptwallet", {SecureString("another")}, {"extra"});
+    BOOST_CHECK(!arity.ok);
+    BOOST_CHECK_EQUAL(arity.output, dispatched({"another", "extra"}));
+    BOOST_CHECK(arity.output.find("Needs the wallet passphrase.") != std::string::npos);
+
+    BOOST_CHECK(fx.wallet.IsLocked());
+    BOOST_CHECK(fx.wallet.Unlock(grc_test::EncryptedWallet::PASSPHRASE));
+}
+
 // The plain console call carries its arguments as plain strings, so it refuses the three passphrase
 // methods before anything runs: the right old passphrase sent this way changes nothing, and the
 // wallet stays locked.

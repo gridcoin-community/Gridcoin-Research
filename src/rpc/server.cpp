@@ -1873,7 +1873,7 @@ const char* RpcAccessName(rpcaccess access)
     return "";
 }
 
-UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params) const
+const CRPCCommand& CRPCTable::admit(const std::string& strMethod, const UniValue& params) const
 {
     // Find method
     const CRPCCommand *pcmd = tableRPC[strMethod];
@@ -1896,8 +1896,9 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
         }
     }
 
-    // The HTTP server, the IPC console and the plain GUI with -server=1 all arrive
-    // here, so this is the one place an elevate-class RPC is refused when the wallet
+    // The HTTP server, the IPC console (its passphrase call by admit() alone) and the
+    // plain GUI with -server=1 all arrive here, so this is the one place an
+    // elevate-class RPC is refused when the wallet
     // has no full unlock and the request carries no passphrase. It follows the arity
     // check and runs before any method body. The refusal names both ways to proceed,
     // where EnsureWalletIsUnlocked()'s names only a standing unlock; the code is the
@@ -1910,6 +1911,13 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
                                "or send the passphrase with this request");
         }
     }
+
+    return *pcmd;
+}
+
+UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params) const
+{
+    const CRPCCommand* pcmd = &admit(strMethod, params);
 
     // Let's add an optional display if BCLog::LogFlags::RPC is set to show how long it takes
     // the rpc commands to be performed in milliseconds. We will do this only on successful

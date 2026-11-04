@@ -186,6 +186,16 @@ public:
     UniValue execute(const std::string &method, const UniValue& params) const;
 
     /**
+     * The checks execute() makes before a method runs: the method exists, the
+     * argument count fits its help (the help is thrown otherwise, with the line
+     * an access_elevate row adds), and an access_elevate row is refused with
+     * RPC_WALLET_UNLOCK_NEEDED while the wallet cannot use its keys. For a
+     * caller that runs the method itself, as the console's passphrase call does.
+     * @returns The method's command.
+     */
+    const CRPCCommand& admit(const std::string& method, const UniValue& params) const;
+
+    /**
     * Returns a list of registered commands
     * @param include_deprecated   Also list commands in DEPRECATED_RPCS
     *                             (hidden from autocomplete but still callable).

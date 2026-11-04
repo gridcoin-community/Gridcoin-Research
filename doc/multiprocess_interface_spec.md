@@ -286,8 +286,10 @@ console) runs under the capability they hold, one operation kind at a time.
 `elevateWallet @36` stays in the schema,
 because a released ordinal cannot be dropped, but always returns false.
 `RpcConsoleResult` gained `walletUnlockNeeded @2`, `SettingChangeResult` gained
-`elevationRequired @7`, and `SideStakeEditStatus` gained `ELEVATION_REQUIRED`.
-The new methods alone would be
+`elevationRequired @7`, `SideStakeEditStatus` gained `ELEVATION_REQUIRED`,
+`Wallet` gained `getTransactionFeeRate @39`, which the send confirmation reads,
+and `Node` gained `executeRpcConsoleSecretCommand @43`, which carries the
+console's wallet passphrases as `SecureString`. The new methods alone would be
 additive; the major is for the other direction. A GUI and a node of
 different majors disagree on how an operation is authorised, so each such action
 would fail with a message the user cannot act on. A newer GUI against
@@ -424,7 +426,9 @@ The three methods with passphrase parameters (`walletpassphrase`,
 `executeRpcConsoleCommand` refuses them before anything runs, because there the
 passphrase would cross as plain text. `executeRpcConsoleSecretCommand` runs
 them, with the passphrases as `SecureString` (`List(Data)` on the wire) and the
-other parameters as text. `interfaces::RpcConsolePassphraseIndexes(method)`
+other parameters as text, after the same checks the dispatcher makes (the
+argument count, and the passphrase gate of an elevate-class row such as
+`encryptwallet`). `interfaces::RpcConsolePassphraseIndexes(method)`
 names the passphrase positions, locally and with no call to the node.
 
 ### 4.2 StakingStatus — `src/interfaces/staking.h`, `staking.capnp`
