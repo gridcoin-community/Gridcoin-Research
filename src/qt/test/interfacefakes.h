@@ -287,6 +287,8 @@ public:
     // A batch naming one of these is refused for want of the wallet passphrase
     // while m_elevated is false, as the node refuses an Elevate-class setting
     // without a Settings capability: nothing applied, elevation_required set.
+    // As in the node, an erase of one that is not set changes nothing and is
+    // not refused.
     std::set<std::string> m_needs_elevation;
     bool m_elevated{false};
 
@@ -325,7 +327,8 @@ public:
             return failure;
         }
         for (const auto& setting : settings) {
-            if (!m_elevated && m_needs_elevation.count(setting.first)) {
+            const bool erases_unset = setting.second.empty() && !m_settings.count(setting.first);
+            if (!m_elevated && m_needs_elevation.count(setting.first) && !erases_unset) {
                 interfaces::SettingChangeResult refused;
                 refused.ok = false;
                 refused.invalid_input = true;

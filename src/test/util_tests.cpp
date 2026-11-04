@@ -1827,8 +1827,10 @@ void RegisterK3Probes()
     add("k3_elevate_probe", ArgsManager::ALLOW_ANY);
     add("k3_clionly_probe", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY);
     add("k3_sensitive_probe", ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE | ArgsManager::SETTING_FREE);
-    // ChangeSettings() checks registration first; init registers the real one.
+    // ChangeSettings() checks registration first; init registers the real ones,
+    // with these flags.
     add("blocknotify", ArgsManager::ALLOW_ANY);
+    add("proxy", ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT);
 }
 
 //! Create the data directory, and on exit remove the settings file and reload the
@@ -2133,6 +2135,47 @@ BOOST_AUTO_TEST_CASE(changesettings_needs_elevation_for_elevate_keys)
     BOOST_CHECK(out.ok);
     BOOST_CHECK(out.no_change == std::vector<std::string>{"k3_elevate_probe=2"});
     BOOST_CHECK(Change({{"k3_elevate_probe", "3"}}).elevation_required);
+}
+
+// Erasing an Elevate-class setting that is not set changes nothing, so it needs
+// no passphrase; erasing one that is set still does. An erase of a value forced
+// empty is no change either, and the forced value stays.
+BOOST_AUTO_TEST_CASE(changesettings_erasing_an_unset_elevate_key_needs_no_elevation)
+{
+    SettingsFileScope scope;
+    ProbeEraser eraser({"proxy", "k3_free_probe"});
+    grc_test::EncryptedWalletSwap swap;
+    BOOST_REQUIRE(swap.wallet().Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
+
+    BOOST_REQUIRE(!gArgs.IsArgSet("-proxy"));
+    ChangeOutcome out = Change({{"proxy", ""}});
+    BOOST_CHECK(out.ok);
+    BOOST_CHECK(!out.elevation_required);
+    BOOST_CHECK_EQUAL(out.error, "");
+    BOOST_CHECK(out.no_change == std::vector<std::string>{"proxy="});
+    BOOST_CHECK(out.immediate.empty());
+    BOOST_CHECK(out.requires_restart_list.empty());
+    BOOST_CHECK(getRwSetting("proxy").isNull());
+    BOOST_CHECK(!gArgs.IsArgSet("-proxy"));
+
+    // Set, the erase is a change.
+    scope.Write({{"proxy", "10.0.0.1:9050"}});
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+    out = Change({{"proxy", ""}});
+    BOOST_CHECK(!out.ok);
+    BOOST_CHECK(out.elevation_required);
+    BOOST_CHECK_EQUAL(out.error, "Changing proxy needs the wallet passphrase: unlock the wallet fully, "
+                                 "or send the passphrase with this request");
+    BOOST_CHECK_EQUAL(getRwSetting("proxy").get_str(), "10.0.0.1:9050");
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-proxy", "<unset>"), "10.0.0.1:9050");
+
+    // Forced empty, the value already reads empty.
+    gArgs.ForceSetArg("-k3_free_probe", "");
+    out = Change({{"k3_free_probe", ""}});
+    BOOST_CHECK(out.ok);
+    BOOST_CHECK(out.no_change == std::vector<std::string>{"k3_free_probe="});
+    BOOST_CHECK(gArgs.IsArgSet("-k3_free_probe"));
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-k3_free_probe", "<unset>"), "");
 }
 
 BOOST_AUTO_TEST_CASE(changesettings_batch_with_an_unelevated_elevate_key_applies_nothing)

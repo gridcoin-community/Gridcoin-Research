@@ -13,6 +13,7 @@
 #include "editsidestakedialog.h"
 
 #include <QSortFilterProxyModel>
+#include <QAbstractItemDelegate>
 #include <QDir>
 #include <QIntValidator>
 #include <QLocale>
@@ -237,6 +238,12 @@ void OptionsDialog::setModel(OptionsModel *model)
 
         connect(this, &OptionsDialog::sidestakeAllocationInvalid, this, &OptionsDialog::handleSideStakeAllocationInvalid);
         connect(this, &OptionsDialog::sidestakeDescriptionInvalid, this, &OptionsDialog::handleSideStakeDescriptionInvalid);
+
+        // An edit in the table reaches the model when the delegate commits it.
+        // Connected after the view's own connection, so this runs once the
+        // model has the edit's status.
+        connect(ui->sidestakingTableView->itemDelegate(), &QAbstractItemDelegate::commitData,
+                this, &OptionsDialog::sidestakeTableEditCommitted);
     }
 
     /* update the display unit, to not use the default ("BTC") */
@@ -443,10 +450,30 @@ void OptionsDialog::deleteSideStakeButton_clicked()
 
     if (!sidestake_model->removeRows(indexes.at(0).row(), 1)
             && sidestake_model->getEditStatus() == SideStakeTableModel::ELEVATION_REQUIRED) {
-        QMessageBox::warning(this, windowTitle(),
-                             tr("Changing side stakes needs your wallet passphrase. The change was not saved."),
-                             QMessageBox::Ok, QMessageBox::Ok);
+        handleSideStakeElevationRequired();
     }
+}
+
+void OptionsDialog::sidestakeTableEditCommitted()
+{
+    if (!model || model->getSideStakeTableModel()->getEditStatus() != SideStakeTableModel::ELEVATION_REQUIRED) {
+        return;
+    }
+
+    // Shown once the editor has closed. A message box over the open editor
+    // would take its focus, and the delegate would commit the edit again.
+    QMetaObject::invokeMethod(this, &OptionsDialog::handleSideStakeElevationRequired, Qt::QueuedConnection);
+}
+
+void OptionsDialog::handleSideStakeElevationRequired()
+{
+    // Refetch first, which also clears the status, so the edit shows as it is
+    // stored and is reported once.
+    model->getSideStakeTableModel()->refresh();
+
+    QMessageBox::warning(this, windowTitle(),
+                         tr("Changing side stakes needs your wallet passphrase. The change was not saved."),
+                         QMessageBox::Ok, QMessageBox::Ok);
 }
 
 void OptionsDialog::showRestartWarning_Proxy()

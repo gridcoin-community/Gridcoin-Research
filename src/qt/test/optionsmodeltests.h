@@ -83,9 +83,11 @@ private slots:
     void dialogWithoutAWalletModelSavesNothing();
     void dialogSideStakingToggleAsksOnce();
     void dialogDeclinedSideStakingToggleReverts();
+    void dialogProxyHostEditWithTheProxyOffDoesNotAsk();
     void editSideStakeDeclinedShowsMessageAndStaysOpen_data();
     void editSideStakeDeclinedShowsMessageAndStaysOpen();
     void deleteSideStakeDeclinedRemovesNothing();
+    void tableSideStakeEditDeclinedShowsTheMessage();
 
 private:
     // Suite-wide QSettings redirect (see initTestCase) and what it replaced.

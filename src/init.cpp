@@ -1480,7 +1480,12 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
             current_value = ToString(gArgs.GetArg(name, 1));
         }
 
-        const bool value_changed = !erase_refused && (current_value != value);
+        // An erase of a setting that is not set changes nothing: the sentinel
+        // default above would otherwise differ from the empty value. A value
+        // forced empty is set, and already reads empty, so erasing it is no
+        // change either and it stays forced.
+        const bool value_changed = !erase_refused && current_value != value
+                                   && (!value.empty() || gArgs.IsArgSet(name));
 
         // An Elevate-class setting needs the wallet passphrase authority when the running value
         // changes, or when the stored entry would (a value already in effect from the command line

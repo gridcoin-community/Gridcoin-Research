@@ -1351,6 +1351,38 @@ void OptionsModelTests::dialogDeclinedSideStakingToggleReverts()
     QVERIFY(dialog.isVisible());
 }
 
+void OptionsModelTests::dialogProxyHostEditWithTheProxyOffDoesNotAsk()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    OptionsModel model(node, sidestakes);
+    PromptedWallet wallet(model, &node, LockState(true, false, true), true, &node.m_elevated);
+
+    OptionsDialog dialog;
+    dialog.setModel(&model);
+    dialog.show();
+    DialogWidgets widgets(dialog);
+    QVERIFY(widgets.AllFound());
+
+    // The host can be edited only with the box ticked: tick, edit, untick.
+    widgets.proxy->setChecked(true);
+    widgets.proxy_host->setText(QStringLiteral("10.0.0.1"));
+    widgets.proxy->setChecked(false);
+
+    MessageBoxCloser boxes;
+    widgets.ok->click();
+
+    // The node's proxy stays unset: the empty proxy sent for the host edit
+    // erases nothing, and needs no passphrase.
+    QCOMPARE(wallet.Prompts(), 0);
+    QVERIFY(boxes.m_texts.isEmpty());
+    QCOMPARE(node.m_change_calls, (std::vector<SettingsBatch>{{{"proxy", ""}}}));
+    QVERIFY(!node.isSettingSet("proxy"));
+    QCOMPARE(QSettings().value(GUIUtil::nodeSettingsKey("addrProxy")).toString(), QStringLiteral("10.0.0.1:9050"));
+    QVERIFY(!dialog.isVisible());
+}
+
 void OptionsModelTests::editSideStakeDeclinedShowsMessageAndStaysOpen_data()
 {
     QTest::addColumn<bool>("editExisting");
@@ -1431,5 +1463,44 @@ void OptionsModelTests::deleteSideStakeDeclinedRemovesNothing()
     QCOMPARE(sidestakes.m_edit_calls, 1);
     QCOMPARE(boxes.m_texts, QStringList{G2_MESSAGE});
     QCOMPARE(view->model()->rowCount(), 1);
+    QVERIFY(dialog.isVisible());
+}
+
+void OptionsModelTests::tableSideStakeEditDeclinedShowsTheMessage()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    sidestakes.m_needs_elevation = true;
+    sidestakes.m_edit_result.status = interfaces::SideStakeEditStatus::OK;
+    sidestakes.m_snapshot.entries.push_back(LocalSideStake("rawAddr"));
+    OptionsModel model(node, sidestakes);
+
+    int asks = 0;
+    InstallPrompt(model, asks, false, sidestakes.m_elevated);
+
+    OptionsDialog dialog;
+    dialog.setModel(&model);
+    dialog.show();
+    QTableView* view = Find<QTableView>(dialog, "sidestakingTableView");
+    QVERIFY(view);
+
+    // Edit the allocation in the table, as a double click does, and press Enter.
+    const QModelIndex allocation = view->model()->index(0, SideStakeTableModel::Allocation);
+    view->setCurrentIndex(allocation);
+    view->edit(allocation);
+    QLineEdit* editor = qobject_cast<QLineEdit*>(view->indexWidget(allocation));
+    QVERIFY(editor);
+    editor->setText(QStringLiteral("20"));
+
+    MessageBoxCloser boxes;
+    QTest::keyClick(editor, Qt::Key_Return);
+
+    // Shown once the editor has closed, and once.
+    QTRY_VERIFY(!boxes.m_texts.isEmpty());
+    QTest::qWait(100);
+    QCOMPARE(boxes.m_texts, QStringList{G2_MESSAGE});
+    QCOMPARE(asks, 1);
+    QCOMPARE(sidestakes.m_edit_calls, 1);
+    QVERIFY(view->indexWidget(allocation) == nullptr);
     QVERIFY(dialog.isVisible());
 }

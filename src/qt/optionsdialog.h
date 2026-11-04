@@ -65,6 +65,12 @@ private slots:
     void handlePollExpireNotifyValid(QValidatedLineEdit *object, bool fState);
     void handleSideStakeAllocationInvalid();
     void handleSideStakeDescriptionInvalid();
+    //! Tell the user a side-stake change was not saved for want of the
+    //! passphrase, with the table refetched.
+    void handleSideStakeElevationRequired();
+    //! After the table's delegate committed an edit: if the passphrase was not
+    //! given, report it once the editor has closed.
+    void sidestakeTableEditCommitted();
 
     //! Submits the dialog when side staking is toggled. Not saved for want of
     //! the passphrase, the box shows side staking as stored again.

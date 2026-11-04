@@ -292,8 +292,9 @@ bool OptionsModel::needsSettingsElevation(const QMap<OptionID, QVariant>& submit
     // The proxy fields are GUI state in QSettings, compared and rebuilt as
     // setData() does. Turning the proxy on or off changes the node's proxy. The
     // address counts only while the proxy is on: with it off, setData() sends
-    // the same empty proxy whatever the address. Should the node refuse that
-    // for want of the passphrase, changeCoreSettings() asks after the refusal.
+    // the same empty proxy whatever the address. That erase needs the
+    // passphrase only when the node has a proxy of its own, which the dialog
+    // does not show, and changeCoreSettings() then asks after the refusal.
     QSettings settings;
     const bool use_proxy = settings.value(GUIUtil::nodeSettingsKey("fUseProxy"), false).toBool();
     const auto submitted_use = submitted.constFind(ProxyUse);
