@@ -91,7 +91,10 @@ void URITests::uriQueueNameIsPerUser()
 
     char arg0[] = "test";
     char* argv[] = {arg0, nullptr};
+    // The mode assertion below assumes a umask that leaves the owner bits alone
+    const mode_t old_umask = umask(022);
     ipcInit(1, argv, [](const std::string&) {});
+    umask(old_umask);
 
     QVERIFY(stat(path.c_str(), &st) == 0);
     QCOMPARE(st.st_uid, geteuid());
