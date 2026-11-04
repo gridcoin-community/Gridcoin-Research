@@ -279,6 +279,10 @@ public:
     // The effective settings, by name without the leading dash (set by the test).
     std::map<std::string, std::string> m_settings;
 
+    // startShutdown() calls, and what each call does besides (set by the test).
+    int m_start_shutdown_calls{0};
+    std::function<void()> m_on_start_shutdown;
+
     // Recorded calls.
     std::vector<std::vector<std::pair<std::string, std::string>>> m_change_calls;
 
@@ -397,7 +401,11 @@ public:
         paths.wallet_file = "/fake/data/wallet.dat";
         return paths;
     }
-    void startShutdown() override {}
+    void startShutdown() override
+    {
+        ++m_start_shutdown_calls;
+        if (m_on_start_shutdown) m_on_start_shutdown();
+    }
     interfaces::LatestVersionInfo checkForLatestUpdate() override { return {}; }
     std::vector<interfaces::DiagnosticResult> runDiagnostics() override { return {}; }
     double getBlockDifficulty(uint32_t /*target_bits*/) override { ++m_chain_reads; return 0.0; }

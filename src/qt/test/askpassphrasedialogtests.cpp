@@ -725,3 +725,37 @@ void AskPassphraseDialogTests::encryptionMessageSaysWhenTheCoreStops()
              qPrintable(run.text));
     QCOMPARE(run.app_result, 0);
 }
+
+// The end of the user's session (Windows WM_QUERYENDSESSION) in the split build
+// quits at once, also while the message after an encryption is open. The GUI's
+// local node is not shut down: its shutdown would arrive as the quit for the
+// core's stop (QueueShutdown), which the message holds.
+void AskPassphraseDialogTests::sessionEndDoesNotWaitForTheEncryptionMessage()
+{
+    qt_test::FakeNode node;
+    // As main() wires the local node: its shutdown posts the quit for the core's stop.
+    node.m_on_start_shutdown = [] {
+        QMetaObject::invokeMethod(qApp, [] { BitcoinGUI::requestQuitForCoreStop(); }, Qt::QueuedConnection);
+    };
+
+    const QuitWhileEncryptionMessage run = EncryptAndQuitWhileTheMessageIsOpen(
+        *this, [&node] { BitcoinGUI::requestQuitForSessionEnd(node, /*multiprocess=*/true); });
+
+    QVERIFY(run.confirmed);
+    QVERIFY(run.asked);
+    QVERIFY2(!run.open_after_quit, "the session's end waited for the message");
+    QVERIFY(!run.closed_by_case);
+    QCOMPARE(run.app_result, 0);
+    QCOMPARE(node.m_start_shutdown_calls, 0);
+}
+
+// In the monolith the node runs in this process: the session's end shuts it
+// down, as before, and the node's shutdown quits the GUI (QueueShutdown).
+void AskPassphraseDialogTests::sessionEndInTheMonolithShutsTheNodeDown()
+{
+    qt_test::FakeNode node;
+
+    BitcoinGUI::requestQuitForSessionEnd(node, /*multiprocess=*/false);
+
+    QCOMPARE(node.m_start_shutdown_calls, 1);
+}

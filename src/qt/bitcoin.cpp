@@ -293,10 +293,13 @@ static void QueueShutdown()
 {
     // Route a core-initiated shutdown through BitcoinGUI::requestQuit() so the
     // explicit-shutdown flag is set and minimize-on-close doesn't veto the quit
-    // on Qt6 (see BitcoinGUI::closeEvent / issue #2995). It is the core's stop,
-    // so a message that must stay up holds it (requestQuitForCoreStop). The
-    // functor overload is compile-time checked, unlike a string-named
-    // invokeMethod.
+    // on Qt6 (see BitcoinGUI::closeEvent / issue #2995). This fires for the
+    // shutdown of the node in this process: in the monolith, the core's stop,
+    // posted as requestQuitForCoreStop (no message holds the monolith's quit).
+    // The split GUI's local node is never shut down: its session end quits
+    // through requestQuitForSessionEnd, and the core's stop arrives as the
+    // dropped connection. The functor overload is compile-time checked, unlike a
+    // string-named invokeMethod.
     QMetaObject::invokeMethod(QCoreApplication::instance(),
                               [] { BitcoinGUI::requestQuitForCoreStop(); },
                               Qt::QueuedConnection);
@@ -1320,10 +1323,11 @@ int main(int argc, char *argv[])
     std::unique_ptr<interfaces::Node> gui_node = local_init->makeNode();
 
 #if defined(WIN32)
-    // Windows session-end (WM_QUERYENDSESSION/WM_ENDSESSION) -> request shutdown
-    // through the LOCAL node (see gui_node note above). Installed well before
-    // app.exec(), soon enough to catch session-end.
-    app.installNativeEventFilter(new WinShutdownMonitor(*gui_node));
+    // Windows session-end (WM_QUERYENDSESSION/WM_ENDSESSION) -> in the monolith,
+    // request shutdown through the LOCAL node (see gui_node note above); in the
+    // split GUI, quit directly (BitcoinGUI::requestQuitForSessionEnd). Installed
+    // well before app.exec(), soon enough to catch session-end.
+    app.installNativeEventFilter(new WinShutdownMonitor(*gui_node, multiprocess_gui));
 #endif
 
     // interface_init is the Init the data models consume core state through: the

@@ -38,6 +38,7 @@ class MultisignPSGTDialog;
 class Notificator;
 
 namespace interfaces {
+class Node;
 class PSGTPoolContext;
 } // namespace interfaces
 class RPCConsole;
@@ -158,6 +159,13 @@ public:
     //! (QueueShutdown), or the connection to it was lost. While a QuitHold
     //! exists it waits, and is made when the last one goes.
     static void requestQuitForCoreStop();
+
+    //! The quit for the end of the user's session (Windows WM_QUERYENDSESSION).
+    //! In the monolith (\p multiprocess false) the node runs in this process: it
+    //! is shut down, and its shutdown quits the GUI (QueueShutdown). In the split
+    //! build the core is another process: the GUI posts requestQuit(), which a
+    //! QuitHold does not hold, and \p node, the GUI's local one, is left alone.
+    static void requestQuitForSessionEnd(interfaces::Node& node, bool multiprocess);
 
     //! While one exists, requestQuitForCoreStop() does not quit: the quit is
     //! made when the last one goes. For a message the user must be able to read

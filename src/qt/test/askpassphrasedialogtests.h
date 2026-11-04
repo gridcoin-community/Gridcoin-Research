@@ -46,6 +46,8 @@ private slots:
     void encryptionMessageOutlivesTheCore();
     void terminationSignalDoesNotWaitForTheEncryptionMessage();
     void encryptionMessageSaysWhenTheCoreStops();
+    void sessionEndDoesNotWaitForTheEncryptionMessage();
+    void sessionEndInTheMonolithShutsTheNodeDown();
 
 private:
     std::unique_ptr<GuiIpcWorker> m_worker;

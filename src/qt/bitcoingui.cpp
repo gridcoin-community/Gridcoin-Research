@@ -1606,6 +1606,20 @@ void BitcoinGUI::requestQuitForCoreStop()
     requestQuit();
 }
 
+void BitcoinGUI::requestQuitForSessionEnd(interfaces::Node& node, bool multiprocess)
+{
+    if (!multiprocess) {
+        node.startShutdown();
+        return;
+    }
+
+    // Posted, as the node's shutdown would post its quit, rather than made inside
+    // the native event that asked for it.
+    if (QCoreApplication* app = QCoreApplication::instance()) {
+        QMetaObject::invokeMethod(app, [] { requestQuit(); }, Qt::QueuedConnection);
+    }
+}
+
 BitcoinGUI::QuitHold::QuitHold()
 {
     ++m_quit_holds;

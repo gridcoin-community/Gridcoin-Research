@@ -6,6 +6,7 @@
 
 #if defined(WIN32)
 #include "interfaces/node.h"
+#include "qt/bitcoingui.h"
 #include <util.h>
 
 #include <windows.h>
@@ -29,8 +30,9 @@ bool WinShutdownMonitor::nativeEventFilter(const QByteArray &eventType, void *pM
            case WM_QUERYENDSESSION:
            {
                // Initiate a client shutdown after receiving a WM_QUERYENDSESSION and block
-               // Windows session end until we have finished client shutdown.
-               m_node.startShutdown();
+               // Windows session end until we have finished client shutdown. The split
+               // GUI quits without waiting for a message that holds the core's stop.
+               BitcoinGUI::requestQuitForSessionEnd(m_node, m_multiprocess);
                *pnResult = FALSE;
                return true;
            }
