@@ -1,6 +1,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <amount.h>
+#include <interfaces/file_transfer.h>
 #include <key_io.h>
 #include <util.h>
 
@@ -19,9 +20,10 @@
 
 #include <univalue.h>
 
+
 #include "chain.h"
 #include "test/chain_setup.h"
-
+#include <set>
 #include <stdexcept>
 
 using namespace std;
@@ -363,6 +365,33 @@ BOOST_AUTO_TEST_CASE(every_rpc_row_matches_the_classification_file)
         BOOST_CHECK_MESSAGE(expected == column,
                             name + ": the classification file gives " + expected + ", the row access_" + column);
     }
+}
+
+// The RPCs that take a file path from the caller (the classification file's
+// "path": true rows) are exactly the ones the IPC console refuses to dispatch
+// and the GUI console runs through the file transfer (ConsoleFileCommands()).
+BOOST_AUTO_TEST_CASE(the_path_taking_rows_are_the_console_file_commands)
+{
+    const std::string text(json_tests::entry_point_classes,
+                           json_tests::entry_point_classes + sizeof(json_tests::entry_point_classes));
+
+    UniValue classes;
+    BOOST_REQUIRE(classes.read(text));
+    const UniValue rpc = find_value(classes, "rpc");
+    BOOST_REQUIRE(rpc.isObject());
+
+    std::set<std::string> path_rows;
+    for (const std::string& name : rpc.getKeys()) {
+        if (find_value(rpc[name], "path").isTrue()) path_rows.insert(name);
+    }
+
+    std::set<std::string> file_commands;
+    for (const interfaces::ConsoleFileCommand& command : interfaces::ConsoleFileCommands()) {
+        file_commands.insert(command.method);
+    }
+
+    BOOST_CHECK(!path_rows.empty());
+    BOOST_CHECK_EQUAL_COLLECTIONS(path_rows.begin(), path_rows.end(), file_commands.begin(), file_commands.end());
 }
 
 BOOST_AUTO_TEST_CASE(every_gated_row_is_refused_without_elevation)
