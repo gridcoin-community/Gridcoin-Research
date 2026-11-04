@@ -52,10 +52,11 @@ client's operations. Outside src/test/ (IPC_SLOT_FILES below):
 
   * IpcCapability(), BeginIpcElevation() and EndIpcElevation() are called
     only in the IPC interface implementations (src/wallet/interfaces.cpp,
-    src/gridcoin/interfaces.cpp, src/node/interfaces.cpp), in the daemon's
-    attach-slot hook (src/gridcoinresearchd.cpp), which ends the slot as the
-    attached GUI's connection is torn down, and in the wallet's own files,
-    which declare and define them. Code that serves another caller,
+    src/gridcoin/interfaces.cpp, src/node/interfaces.cpp) and in the wallet's
+    own files, which declare and define them. The daemon's attach-slot hook
+    (src/gridcoinresearchd.cpp), which ends the slot as the attached GUI's
+    connection is torn down, makes exactly one call, EndIpcElevation({}), and
+    no other. Code that serves another caller,
     an RPC request or an internal job, must not run under the IPC client's
     capability.
 
@@ -116,17 +117,20 @@ GRANT_FILES = (
     "src/wallet/capability.cpp",
 )
 
-# The files that may call the IPC capability slot's accessors: the IPC interface
-# implementations, the daemon's attach-slot hook, and the wallet's own files,
-# which declare and define them. src/test/ is allowed as well.
-IPC_SLOT_FILES = (
-    "src/wallet/interfaces.cpp",
-    "src/gridcoin/interfaces.cpp",
-    "src/node/interfaces.cpp",
-    "src/gridcoinresearchd.cpp",
-    "src/wallet/wallet.h",
-    "src/wallet/wallet.cpp",
-)
+# The files that may call the IPC capability slot's accessors, each with the
+# calls it may make. None: any of them, any number of times (the IPC interface
+# implementations, and the wallet's own files, which declare and define them).
+# A list: exactly these calls, as (accessor, argument text), in this order; the
+# daemon's attach-slot hook ends the slot once, with no connection check, as the
+# connection is torn down. src/test/ is allowed as well.
+IPC_SLOT_FILES = {
+    "src/wallet/interfaces.cpp": None,
+    "src/gridcoin/interfaces.cpp": None,
+    "src/node/interfaces.cpp": None,
+    "src/wallet/wallet.h": None,
+    "src/wallet/wallet.cpp": None,
+    "src/gridcoinresearchd.cpp": [("EndIpcElevation", "{}")],
+}
 
 IPC_SLOT_RE = re.compile(r"\b(IpcCapability|BeginIpcElevation|EndIpcElevation)\s*\(")
 
@@ -272,6 +276,24 @@ def braced(text, start):
     return text[start:i - 1]
 
 
+def call_arguments(text, open_paren):
+    """The text between the parenthesis at open_paren and the one closing it,
+    with whitespace collapsed, or None when it is not closed."""
+    depth = 0
+    for i in range(open_paren, len(text)):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return re.sub(r"\s+", " ", text[open_paren + 1:i]).strip()
+    return None
+
+
+def describe_slot_calls(calls):
+    return ", ".join("{}({})".format(name, args) for name, args in calls) or "none"
+
+
 def class_body(text, name):
     """Return (start, body) of `class name { ... }`, or None."""
     m = re.search(r"\bclass\s+{}\b[^{{;]*\{{".format(re.escape(name)), text)
@@ -363,7 +385,13 @@ def check_code(path, code, errors, key_calls):
         for m in IPC_SLOT_RE.finditer(code):
             errors.append("{}:{}: {}() is called outside the IPC interface files ({}); the IPC slot's "
                           "capability is the connected client's, for the interface methods that serve it"
-                          .format(path, line_of(code, m.start()), m.group(1), ", ".join(IPC_SLOT_FILES)))
+                          .format(path, line_of(code, m.start()), m.group(1),
+                                  ", ".join(p for p, calls in IPC_SLOT_FILES.items() if calls is None)))
+    elif IPC_SLOT_FILES[path] is not None:
+        found = [(m.group(1), call_arguments(code, m.end() - 1)) for m in IPC_SLOT_RE.finditer(code)]
+        if found != list(IPC_SLOT_FILES[path]):
+            errors.append("{}: the IPC slot is called as {}; this file may make only {}"
+                          .format(path, describe_slot_calls(found), describe_slot_calls(IPC_SLOT_FILES[path])))
 
     if path not in GRANT_FILES:
         for m in GRANT_RE.finditer(code):
@@ -498,9 +526,11 @@ CLEAN_FILES = {
         "StakingKeyAccess MinerStakingKeyAccess() { return StakingKeyAccess(); }\n"
         "bool g() { return TrySignClaim(pwallet, claim, block); }\n"),
     "src/wallet/interfaces.cpp": (
-        "bool b() { return w->BeginIpcElevation(p, k); }\n"
-        "void s() { CapabilityScope scope(*w, w->IpcCapability(), kind); }\n"
-        "void e() { w->EndIpcElevation(); }\n"),
+        "bool b() { return w->BeginIpcElevation(p, k, m_connection_closed); }\n"
+        "void s() { CapabilityScope scope(*w, w->IpcCapability(m_connection_closed), kind); }\n"
+        "void e() { w->EndIpcElevation(m_connection_closed); }\n"),
+    "src/gridcoinresearchd.cpp": (
+        "auto hook = [] { if (pwalletMain) pwalletMain->EndIpcElevation({}); };\n"),
 }
 
 # (the rule it breaks, the error that rule must report, files added to the
@@ -564,11 +594,22 @@ FAILING_SAMPLES = [
     ("the IPC capability slot read outside the IPC interfaces",
      "src/wallet/rpcwallet.cpp:5: IpcCapability() is called outside the IPC interface files",
      {"src/wallet/rpcwallet.cpp": CLEAN_FILES["src/wallet/rpcwallet.cpp"]
-      + "void g() { CapabilityScope s(*pwalletMain, pwalletMain->IpcCapability(), kind); }\n"},
+      + "void g() { CapabilityScope s(*pwalletMain, pwalletMain->IpcCapability({}), kind); }\n"},
      None, None, None),
     ("the IPC capability slot begun outside the IPC interfaces",
      "src/rpc/misc.cpp:1: BeginIpcElevation() is called outside the IPC interface files",
-     {"src/rpc/misc.cpp": "bool f() { return pwalletMain->BeginIpcElevation(p, k); }\n"},
+     {"src/rpc/misc.cpp": "bool f() { return pwalletMain->BeginIpcElevation(p, k, {}); }\n"},
+     None, None, None),
+    ("the daemon's slot hook reading the slot",
+     "src/gridcoinresearchd.cpp: the IPC slot is called as EndIpcElevation({}), IpcCapability({}); "
+     "this file may make only EndIpcElevation({})",
+     {"src/gridcoinresearchd.cpp": CLEAN_FILES["src/gridcoinresearchd.cpp"]
+      + "auto id = pwalletMain->IpcCapability({});\n"},
+     None, None, None),
+    ("the daemon's slot hook passing a connection check",
+     "src/gridcoinresearchd.cpp: the IPC slot is called as EndIpcElevation(closed); "
+     "this file may make only EndIpcElevation({})",
+     {"src/gridcoinresearchd.cpp": "auto hook = [] { pwalletMain->EndIpcElevation(closed); };\n"},
      None, None, None),
     ("an IPC row naming an interface no capnp file declares",
      "names interface Vault, which no file in src/ipc/capnp/ declares",
