@@ -21,10 +21,12 @@
 #include "uint256.h"
 #include "util.h"
 
+#include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
 #include <QLineEdit>
 #include <QMetaObject>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QString>
@@ -38,9 +40,15 @@
 #include <future>
 #include <iterator>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
+
+#ifndef WIN32
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 using RPCConsoleDetail::DispatchConsoleCommand;
 using RPCConsoleDetail::RedactSensitiveArgs;
@@ -138,6 +146,7 @@ struct TransferLog
     //! The wallet's endElevation() count when the source or sink was destroyed.
     int end_elevation_calls_at_destruction{-1};
     // Sinks only.
+    int finishes{0};
     std::vector<unsigned char> received{};
     uint64_t finish_size{0};
     uint256 finish_sha{};
@@ -233,12 +242,19 @@ private:
     size_t m_pos{0};
 };
 
-//! A console sink that keeps what it receives and answers finish() with \p output.
+//! Where a test sink waits for its gate.
+enum class SinkGate { None, Write, Finish };
+
+//! A console sink that keeps what it receives and answers finish() with \p output. With a gate,
+//! its first write or its finish waits until the gate opens (10 seconds at most).
 class ConsoleSink : public interfaces::FileSink
 {
 public:
-    ConsoleSink(std::shared_ptr<TransferLog> log, const int* end_elevation_calls, std::string output)
-        : m_log(std::move(log)), m_end_elevation_calls(end_elevation_calls), m_output(std::move(output))
+    ConsoleSink(std::shared_ptr<TransferLog> log, const int* end_elevation_calls, std::string output,
+                SinkGate gate_on = SinkGate::None, const std::atomic<bool>* gate = nullptr,
+                std::atomic<bool>* waiting = nullptr)
+        : m_log(std::move(log)), m_end_elevation_calls(end_elevation_calls), m_output(std::move(output)),
+          m_gate_on(gate_on), m_gate(gate), m_waiting(waiting)
     {
     }
 
@@ -252,6 +268,7 @@ public:
     bool write(const std::vector<unsigned char>& data) override
     {
         m_log->threads.push_back(std::this_thread::get_id());
+        if (m_gate_on == SinkGate::Write && m_log->received.empty()) Wait();
         m_log->received.insert(m_log->received.end(), data.begin(), data.end());
         return true;
     }
@@ -259,6 +276,8 @@ public:
     interfaces::FileSinkResult finish(uint64_t size, const uint256& sha256) override
     {
         m_log->threads.push_back(std::this_thread::get_id());
+        ++m_log->finishes;
+        if (m_gate_on == SinkGate::Finish) Wait();
         m_log->finish_size = size;
         m_log->finish_sha = sha256;
         interfaces::FileSinkResult result;
@@ -270,10 +289,59 @@ public:
     void cancel() override { m_log->cancelled = true; }
 
 private:
+    void Wait()
+    {
+        if (!m_gate) return;
+        if (m_waiting) *m_waiting = true;
+        for (int i = 0; i < 1000 && !m_gate->load(); ++i) {
+            std::this_thread::sleep_for(10ms);
+        }
+    }
+
     const std::shared_ptr<TransferLog> m_log;
     const int* const m_end_elevation_calls;
     const std::string m_output;
+    const SinkGate m_gate_on;
+    const std::atomic<bool>* const m_gate;
+    std::atomic<bool>* const m_waiting;
 };
+
+//! The progress dialog, if one is showing.
+QProgressDialog* VisibleProgressDialog()
+{
+    for (QWidget* widget : QApplication::topLevelWidgets()) {
+        auto* dialog = qobject_cast<QProgressDialog*>(widget);
+        if (dialog && dialog->isVisible()) return dialog;
+    }
+    return nullptr;
+}
+
+//! Clicks the progress dialog's Cancel once \p waiting is set, then opens \p gate once the dialog
+//! says it is cancelling. Started before the command is entered; \p clicked and \p saw_cancelling
+//! record what it did.
+void CancelWhenWaiting(QTimer& observer, QObject* context, std::atomic<bool>& waiting, std::atomic<bool>& gate,
+                       bool& clicked, bool& saw_cancelling)
+{
+    QObject::connect(&observer, &QTimer::timeout, context,
+                     [w = &waiting, g = &gate, c = &clicked, seen = &saw_cancelling] {
+                         QProgressDialog* dialog = VisibleProgressDialog();
+                         if (!dialog || !*w) return;
+
+                         auto* button = dialog->findChild<QPushButton*>();
+
+                         if (!*c && button) {
+                             button->click();
+                             *c = true;
+                             return;
+                         }
+
+                         if (*c && dialog->labelText() == QStringLiteral("Cancelling...")) {
+                             *seen = true;
+                             *g = true;
+                         }
+                     });
+    observer.start(5);
+}
 
 //! A WalletModel over FakeLockStateWallet, unencrypted unless the test says otherwise. Its
 //! passphrase prompt is answered at once: the kind asked for is recorded, a capability is begun
@@ -736,6 +804,42 @@ void RPCConsoleTests::fileCommandWithoutPathIsAnError()
     QVERIFY2(PaneText(console).contains(QStringLiteral("usage")), qPrintable(PaneText(console)));
 }
 
+// More arguments than the command's RPC takes is a usage error, as the RPC's own count check
+// gives: nothing is asked for and nothing reaches the core.
+void RPCConsoleTests::fileCommandWithTooManyArgumentsIsAnError()
+{
+    std::string error;
+
+    QVERIFY(!RPCConsoleDetail::ParseConsoleFileRequest("dumpwallet out.txt extra", error));
+    QVERIFY2(error.find("usage") != std::string::npos && error.find("at most 1 argument") != std::string::npos,
+             error.c_str());
+
+    QVERIFY(!RPCConsoleDetail::ParseConsoleFileRequest("dumpcontracts beacon /tmp/b.txt true 0 100 7", error));
+    QVERIFY2(error.find("at most 5 argument") != std::string::npos, error.c_str());
+
+    // All five dumpcontracts takes are accepted.
+    QVERIFY(RPCConsoleDetail::ParseConsoleFileRequest("dumpcontracts beacon /tmp/b.txt true 0 100", error));
+    QVERIFY(error.empty());
+
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
+    ConsoleWallet fixture;
+    fixture.UnlockedForStakingOnly();
+    fixture.wallet.m_console_download = [](const std::string&, const std::vector<std::string>&, std::string&) {
+        return std::unique_ptr<interfaces::FileSource>();
+    };
+
+    RPCConsole console;
+    console.setWalletModel(fixture.model.get());
+    QSignalSpy requests(&console, &RPCConsole::cmdRequest);
+    Enter(console, QStringLiteral("dumpwallet out.txt extra"));
+
+    QCOMPARE(requests.count(), 0);
+    QVERIFY(fixture.prompts.empty());
+    QVERIFY(fixture.wallet.m_console_begins.empty());
+    QVERIFY2(PaneText(console).contains(QStringLiteral("at most 1 argument")), qPrintable(PaneText(console)));
+    QVERIFY(!fs::exists(GetDataDir() / "out.txt"));
+}
+
 // Without a wallet a file command is refused at the console, and never reaches the node's console,
 // which refuses it too.
 void RPCConsoleTests::fileCommandNeedsALoadedWallet()
@@ -885,8 +989,8 @@ void RPCConsoleTests::downloadNoteNamesTheLocalFile()
     QCOMPARE(RPCConsoleDetail::ConsoleNoteForDestination("", dest), std::string());
 }
 
-// A file the core lists with nothing to send (size 0 and a note) is reported with its note, never
-// read, and nothing is written.
+// A file the core lists with nothing in it and a note, and refuses to read with that note (an
+// entry with no file), is read, and its note is shown. Nothing is written.
 void RPCConsoleTests::downloadWithNothingToSendIsReportedNotWritten()
 {
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
@@ -896,21 +1000,59 @@ void RPCConsoleTests::downloadWithNothingToSendIsReportedNotWritten()
 
     ConsoleWallet fixture;
     const auto log = std::make_shared<TransferLog>();
+    const std::string note = "the command wrote nothing to send";
     fixture.wallet.m_console_download = [&](const std::string&, const std::vector<std::string>&, std::string&) {
         return std::make_unique<ConsoleSource>(log, &fixture.wallet.m_end_elevation_calls, "dumpcontracts.txt",
-                                               std::vector<unsigned char>{}, 0, "the command wrote nothing to send");
+                                               std::vector<unsigned char>{}, 0, note, note);
     };
 
     RPCConsole console;
     console.setWalletModel(fixture.model.get());
     Enter(console, QStringLiteral("dumpcontracts beacon ") + Quoted(dest));
 
-    QCOMPARE(log->reads, 0);
+    QCOMPARE(log->reads, 1);
     QVERIFY(log->destroyed);
     QCOMPARE(EntriesIn(dir), 0);
-    QVERIFY2(PaneText(console).contains(QStringLiteral("the command wrote nothing to send")),
+    QVERIFY2(PaneText(console).contains(QStringLiteral("Nothing was written to %1: %2")
+                                            .arg(GUIUtil::boostPathToQString(dest), QString::fromStdString(note))),
              qPrintable(PaneText(console)));
     QVERIFY(!PaneText(console).contains(QStringLiteral("Wrote ")));
+}
+
+// A file with nothing in it that the core does send is written, empty, and its reply is shown with
+// the local file named, as for any other.
+void RPCConsoleTests::downloadOfAnEmptyFileWritesItAndShowsTheReply()
+{
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const fs::path dest = PathIn(dir, "empty.txt");
+
+    ConsoleWallet fixture;
+    const auto log = std::make_shared<TransferLog>();
+    const std::string reply = "{\"number_of_contracts_exported\": 0, "
+                              "\"exported_to_file\": \"/core/data/transfers/out-0123456789abcdef.tmp\"}";
+    fixture.wallet.m_console_download = [&](const std::string&, const std::vector<std::string>&, std::string&) {
+        return std::make_unique<ConsoleSource>(log, &fixture.wallet.m_end_elevation_calls, "dumpcontracts.txt",
+                                               std::vector<unsigned char>{}, 0, reply);
+    };
+
+    RPCConsole console;
+    console.setWalletModel(fixture.model.get());
+    Enter(console, QStringLiteral("dumpcontracts beacon ") + Quoted(dest));
+
+    QVERIFY(fs::exists(dest));
+    QCOMPARE(ReadAll(dest), std::string());
+    QCOMPARE(EntriesIn(dir), 1);
+
+    const QString pane = PaneText(console);
+    const QString shown_dest = GUIUtil::boostPathToQString(dest);
+    QVERIFY2(pane.contains(QStringLiteral("Wrote 0 bytes to %1 (SHA-256 "
+                                          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)")
+                               .arg(shown_dest)),
+             qPrintable(pane));
+    QVERIFY2(pane.contains(QStringLiteral("\"exported_to_file\": \"%1\"").arg(shown_dest)), qPrintable(pane));
+    QVERIFY2(!pane.contains(QStringLiteral("/core/data/transfers")), qPrintable(pane));
 }
 
 // A source that fails on its first read (the dump could not start) shows its error in the pane,
@@ -968,14 +1110,20 @@ void RPCConsoleTests::downloadToACoreFileIsRefusedBeforeThePrompt()
     QVERIFY2(pane.contains(QStringLiteral("is inside the core's")), qPrintable(pane));
 }
 
-// As the RPC did, dumpcontracts leaves a file already there alone.
-void RPCConsoleTests::dumpcontractsKeepsAnExistingFile()
+// A download never replaces what is already at its destination: a file, a bare name that names
+// one in this process's data directory, or a link, also one that leads nowhere. It is refused
+// before the prompt and before the core is asked anything, and what is there is left as it is.
+void RPCConsoleTests::downloadKeepsAnExistingFile()
 {
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
-    const fs::path dest = PathIn(dir, "old.txt");
-    WriteAll(dest, "old");
+    const fs::path old_contracts = PathIn(dir, "contracts.txt");
+    const fs::path old_dump = PathIn(dir, "dump.txt");
+    const fs::path peers = GetDataDir() / "peers.dat";
+    WriteAll(old_contracts, "old contracts");
+    WriteAll(old_dump, "old dump");
+    WriteAll(peers, "peers");
 
     ConsoleWallet fixture;
     fixture.UnlockedForStakingOnly();
@@ -987,12 +1135,107 @@ void RPCConsoleTests::dumpcontractsKeepsAnExistingFile()
 
     RPCConsole console;
     console.setWalletModel(fixture.model.get());
-    Enter(console, QStringLiteral("dumpcontracts beacon ") + Quoted(dest));
+    Enter(console, QStringLiteral("dumpcontracts beacon ") + Quoted(old_contracts));
+    Enter(console, QStringLiteral("dumpwallet ") + Quoted(old_dump));
+    Enter(console, QStringLiteral("dumpwallet peers.dat"));
+    int refusals = 3;
+
+#ifndef WIN32
+    const fs::path dangling = PathIn(dir, "dangling.txt");
+    fs::create_symlink(PathIn(dir, "nowhere.txt"), dangling);
+    Enter(console, QStringLiteral("dumpwallet ") + Quoted(dangling));
+    ++refusals;
+#endif
 
     QVERIFY(fixture.prompts.empty());
+    QCOMPARE(fixture.wallet.m_begin_elevation_calls, 0);
     QVERIFY(fixture.wallet.m_console_begins.empty());
-    QCOMPARE(ReadAll(dest), std::string("old"));
-    QVERIFY2(PaneText(console).contains(QStringLiteral("File already exists")), qPrintable(PaneText(console)));
+    QCOMPARE(ReadAll(old_contracts), std::string("old contracts"));
+    QCOMPARE(ReadAll(old_dump), std::string("old dump"));
+    QCOMPARE(ReadAll(peers), std::string("peers"));
+#ifndef WIN32
+    QVERIFY(fs::is_symlink(dangling));
+    QVERIFY(!fs::exists(PathIn(dir, "nowhere.txt")));
+#endif
+
+    const QString pane = PaneText(console);
+    QCOMPARE(pane.count(QStringLiteral("File already exists at location. Please delete or rename old file first.")),
+             refusals);
+}
+
+// Cancel during a download stops it: nothing is at the destination, no partial file is left, and
+// the pane says so.
+void RPCConsoleTests::downloadCancelLeavesNothing()
+{
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const fs::path dest = PathIn(dir, "dump.txt");
+
+    ConsoleWallet fixture;
+    const auto log = std::make_shared<TransferLog>();
+    std::atomic<bool> gate{false};
+    std::atomic<bool> waiting{false};
+    fixture.wallet.m_console_download = [&](const std::string&, const std::vector<std::string>&, std::string&) {
+        return std::make_unique<ConsoleSource>(log, &fixture.wallet.m_end_elevation_calls, "wallet-dump.txt",
+                                               BytesOf(ABC), -1, "", "", &gate, &waiting);
+    };
+
+    RPCConsole console;
+    console.setWalletModel(fixture.model.get());
+
+    bool clicked = false;
+    bool saw_cancelling = false;
+    QTimer observer;
+    CancelWhenWaiting(observer, this, waiting, gate, clicked, saw_cancelling);
+
+    // So a regression fails rather than hangs.
+    QTimer backstop;
+    backstop.setSingleShot(true);
+    connect(&backstop, &QTimer::timeout, this, [&gate] { gate = true; });
+    backstop.start(10000);
+
+    Enter(console, QStringLiteral("dumpwallet ") + Quoted(dest));
+    observer.stop();
+    backstop.stop();
+
+    QVERIFY(clicked);
+    QVERIFY(saw_cancelling);
+    QVERIFY(!fs::exists(dest));
+    QCOMPARE(EntriesIn(dir), 0);
+    QVERIFY(log->destroyed);
+    QVERIFY2(PaneText(console).contains(
+                 QStringLiteral("Cancelled; nothing was written to %1.").arg(GUIUtil::boostPathToQString(dest))),
+             qPrintable(PaneText(console)));
+}
+
+// A begin that throws, as a call across IPC does when the core drops the connection, shows its
+// error, and the input can be used again.
+void RPCConsoleTests::beginThatThrowsIsShown()
+{
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const fs::path dest = PathIn(dir, "dump.txt");
+
+    ConsoleWallet fixture;
+    fixture.wallet.m_console_download = [](const std::string&, const std::vector<std::string>&,
+                                           std::string&) -> std::unique_ptr<interfaces::FileSource> {
+        throw std::runtime_error("IPC client method call interrupted by disconnect.");
+    };
+
+    RPCConsole console;
+    console.setWalletModel(fixture.model.get());
+    Enter(console, QStringLiteral("dumpwallet ") + Quoted(dest));
+
+    QCOMPARE(fixture.wallet.m_console_begins.size(), size_t{1});
+    QVERIFY(!fs::exists(dest));
+    QVERIFY2(PaneText(console).contains(QStringLiteral("IPC client method call interrupted by disconnect.")),
+             qPrintable(PaneText(console)));
+
+    auto* input = console.findChild<QLineEdit*>(QStringLiteral("lineEdit"));
+    QVERIFY(input);
+    QVERIFY(input->isEnabled());
 }
 
 // The upload asks for its own capability, begins with the file's size and the other arguments,
@@ -1049,8 +1292,8 @@ void RPCConsoleTests::uploadSendsTheFileAndShowsTheOutput()
     QVERIFY2(pane.contains(QStringLiteral("imported 1 key")), qPrintable(pane));
 }
 
-// A file that is not there, a directory, and a file over the command's upload cap are refused
-// before the prompt and before the core is asked anything.
+// A file that is not there, a directory, a file over the command's upload cap, and one this account
+// may not read are refused before the prompt and before the core is asked anything.
 void RPCConsoleTests::uploadOfNoRegularFileIsRefusedBeforeThePrompt()
 {
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
@@ -1074,6 +1317,14 @@ void RPCConsoleTests::uploadOfNoRegularFileIsRefusedBeforeThePrompt()
     Enter(console, QStringLiteral("parseaccrualsnapshotfile ") + Quoted(GUIUtil::qstringToBoostPath(dir.path())));
     Enter(console, QStringLiteral("importwallet ") + Quoted(big));
 
+#ifndef WIN32
+    // A file this account may not read. Root reads it anyway, so the case needs another account.
+    const fs::path unreadable = PathIn(dir, "unreadable.txt");
+    WriteAll(unreadable, "# Wallet dump\n");
+    QCOMPARE(::chmod(unreadable.string().c_str(), 0), 0);
+    if (::geteuid() != 0) Enter(console, QStringLiteral("importwallet ") + Quoted(unreadable));
+#endif
+
     QVERIFY(fixture.prompts.empty());
     QVERIFY(fixture.wallet.m_console_begins.empty());
     const QString pane = PaneText(console);
@@ -1084,6 +1335,73 @@ void RPCConsoleTests::uploadOfNoRegularFileIsRefusedBeforeThePrompt()
                                .arg(64 * 1024 * 1024 + 1)
                                .arg(64 * 1024 * 1024)),
              qPrintable(pane));
+#ifndef WIN32
+    if (::geteuid() != 0) {
+        QVERIFY2(pane.contains(QStringLiteral("Cannot send %1: it is not a file that can be read.")
+                                   .arg(GUIUtil::boostPathToQString(unreadable))),
+                 qPrintable(pane));
+    }
+#endif
+}
+
+// A cancel before the core's command runs stops the upload, and the pane says the command was not
+// run. A cancel that comes while the command runs cannot stop it, and the pane shows its result.
+void RPCConsoleTests::uploadCancelIsReportedUnlessTheCommandRan()
+{
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const fs::path local = PathIn(dir, "dump.txt");
+    const std::string content = "# Wallet dump\n";
+    WriteAll(local, content);
+
+    for (const SinkGate gate_on : {SinkGate::Write, SinkGate::Finish}) {
+        ConsoleWallet fixture;
+        const auto log = std::make_shared<TransferLog>();
+        std::atomic<bool> gate{false};
+        std::atomic<bool> waiting{false};
+        fixture.wallet.m_console_upload = [&](const std::string&, const std::vector<std::string>&, uint64_t,
+                                              std::string&) {
+            return std::make_unique<ConsoleSink>(log, &fixture.wallet.m_end_elevation_calls, "imported 1 key",
+                                                 gate_on, &gate, &waiting);
+        };
+
+        RPCConsole console;
+        console.setWalletModel(fixture.model.get());
+
+        bool clicked = false;
+        bool saw_cancelling = false;
+        QTimer observer;
+        CancelWhenWaiting(observer, this, waiting, gate, clicked, saw_cancelling);
+
+        QTimer backstop;
+        backstop.setSingleShot(true);
+        connect(&backstop, &QTimer::timeout, this, [&gate] { gate = true; });
+        backstop.start(10000);
+
+        Enter(console, QStringLiteral("importwallet ") + Quoted(local));
+        observer.stop();
+        backstop.stop();
+
+        QVERIFY(clicked);
+        QVERIFY(saw_cancelling);
+
+        const QString pane = PaneText(console);
+        const QString shown = GUIUtil::boostPathToQString(local);
+
+        if (gate_on == SinkGate::Write) {
+            QCOMPARE(log->finishes, 0);
+            QVERIFY(log->cancelled);
+            QVERIFY2(pane.contains(QStringLiteral("Cancelled; importwallet was not run with %1.").arg(shown)),
+                     qPrintable(pane));
+        } else {
+            QCOMPARE(log->finishes, 1);
+            QVERIFY2(pane.contains(QStringLiteral("Sent %1 bytes from %2.").arg(content.size()).arg(shown)),
+                     qPrintable(pane));
+            QVERIFY2(pane.contains(QStringLiteral("imported 1 key")), qPrintable(pane));
+        }
+
+    }
 }
 
 // While a file command holds its capability, a command refused for the wallet's keys is not asked

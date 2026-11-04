@@ -47,16 +47,21 @@ private slots:
     void dumpcontractsPathIsSecondArgument();
     void nonFileCommandIsNotIntercepted();
     void fileCommandWithoutPathIsAnError();
+    void fileCommandWithTooManyArgumentsIsAnError();
     void fileCommandNeedsALoadedWallet();
     void downloadRunsOnTheWorkerAndShowsWhatItWrote();
     void downloadHoldsItsOwnCapabilityUntilTheSourceIsGone();
     void downloadNoteNamesTheLocalFile();
     void downloadWithNothingToSendIsReportedNotWritten();
+    void downloadOfAnEmptyFileWritesItAndShowsTheReply();
     void downloadFirstReadErrorIsShown();
     void downloadToACoreFileIsRefusedBeforeThePrompt();
-    void dumpcontractsKeepsAnExistingFile();
+    void downloadKeepsAnExistingFile();
+    void downloadCancelLeavesNothing();
+    void beginThatThrowsIsShown();
     void uploadSendsTheFileAndShowsTheOutput();
     void uploadOfNoRegularFileIsRefusedBeforeThePrompt();
+    void uploadCancelIsReportedUnlessTheCommandRan();
     void noPromptWhileAFileCommandHoldsItsCapability();
 
 private:

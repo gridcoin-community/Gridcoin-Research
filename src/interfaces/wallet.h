@@ -501,7 +501,8 @@ public:
     //! source does.
     //!
     //! Null, with \p error_out set: "not a file command" for a method that is
-    //! not a Download row; too few arguments before the file; another
+    //! not a Download row; too few arguments before the file, or more in all
+    //! than the command's RPC takes (the row's max_args); another
     //! transfer of this wallet interface is live; "Enter the wallet
     //! passphrase to transfer files." when the wallet may not use its keys
     //! without the capability; or the command failed. Another transfer can

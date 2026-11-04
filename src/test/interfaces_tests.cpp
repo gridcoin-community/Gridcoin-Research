@@ -47,6 +47,7 @@
 
 #include <rpc/client.h>
 #include <rpc/server.h>
+#include <rpc/util.h>
 #include <boost/signals2/signal.hpp>
 #include <boost/test/unit_test.hpp>
 #include "consensus/consensus.h"
@@ -2871,6 +2872,50 @@ BOOST_AUTO_TEST_CASE(console_upload_refuses_too_large)
         BOOST_CHECK(!w->beginConsoleUpload(method, {}, command->max_upload_bytes, err));
         BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
     }
+}
+
+// A console file command with more arguments than its RPC takes is refused
+// before anything else, as the RPC refuses it. Each row's maximum is its RPC's
+// own arity, the file included.
+BOOST_AUTO_TEST_CASE(console_transfer_refuses_too_many_arguments)
+{
+    const std::vector<std::pair<const char*, const RPCHelpMan& (*)()>> rows{
+        {"dumpwallet", &dumpwallet_helpman},
+        {"importwallet", &importwallet_helpman},
+        {"dumpcontracts", &dumpcontracts_helpman},
+        {"parseaccrualsnapshotfile", &parseaccrualsnapshotfile_helpman},
+    };
+    for (const auto& [method, helpman] : rows) {
+        const interfaces::ConsoleFileCommand* command = interfaces::FindConsoleFileCommand(method);
+        BOOST_REQUIRE(command);
+        BOOST_CHECK_MESSAGE(command->max_args == helpman().GetArgs().size(), method);
+    }
+
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
+    std::string err;
+
+    BOOST_CHECK(!w->beginConsoleDownload("dumpwallet", {"extra"}, err));
+    BOOST_CHECK_MESSAGE(err.find("at most 1 argument") != std::string::npos, err);
+
+    err.clear();
+    BOOST_CHECK(!w->beginConsoleUpload("importwallet", {"extra"}, 10, err));
+    BOOST_CHECK_MESSAGE(err.find("at most 1 argument") != std::string::npos, err);
+
+    err.clear();
+    BOOST_CHECK(!w->beginConsoleUpload("parseaccrualsnapshotfile", {"extra"}, 10, err));
+    BOOST_CHECK_MESSAGE(err.find("at most 1 argument") != std::string::npos, err);
+
+    err.clear();
+    BOOST_CHECK(!w->beginConsoleDownload("dumpcontracts", {"beacon", "true", "0", "100", "7"}, err));
+    BOOST_CHECK_MESSAGE(err.find("at most 5 argument") != std::string::npos, err);
+
+    // Every argument dumpcontracts takes passes the count; this wallet, unlocked
+    // for staking only, then refuses it for want of a capability.
+    err.clear();
+    BOOST_CHECK(!w->beginConsoleDownload("dumpcontracts", {"beacon", "true", "0", "100"}, err));
+    BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
 }
 
 // dumpwallet: the source holds the capability while it streams the dump, and

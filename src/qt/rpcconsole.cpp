@@ -471,6 +471,38 @@ interfaces::RpcConsoleResult DispatchConsoleCommand(interfaces::Node& node, std:
     return result;
 }
 
+namespace {
+//! Why a begin that returned nothing gave no reason.
+std::string CouldNotBegin(const ConsoleFileRequest& request)
+{
+    return QObject::tr("%1 could not begin").arg(QString::fromUtf8(request.cmd->method)).toStdString();
+}
+
+//! A sink that passes every call on to \p inner and records whether finish() was called, which is
+//! when the core's command runs.
+class FinishWatch : public interfaces::FileSink
+{
+public:
+    explicit FinishWatch(interfaces::FileSink& inner) : m_inner(inner) {}
+
+    bool write(const std::vector<unsigned char>& data) override { return m_inner.write(data); }
+
+    interfaces::FileSinkResult finish(uint64_t size, const uint256& sha256) override
+    {
+        m_finished = true;
+        return m_inner.finish(size, sha256);
+    }
+
+    void cancel() override { m_inner.cancel(); }
+
+    bool Finished() const { return m_finished; }
+
+private:
+    interfaces::FileSink& m_inner;
+    bool m_finished{false};
+};
+} // namespace
+
 std::optional<ConsoleFileRequest> ParseConsoleFileRequest(const std::string& line, std::string& error)
 {
     error.clear();
@@ -491,6 +523,14 @@ std::optional<ConsoleFileRequest> ParseConsoleFileRequest(const std::string& lin
     if (path_position >= args.size() || args[path_position].empty()) {
         error = QObject::tr("usage: %1 takes the file as its argument %2, as in help %1")
                     .arg(QString::fromStdString(args[0]), QString::number(static_cast<qulonglong>(path_position)))
+                    .toStdString();
+        return std::nullopt;
+    }
+
+    // As the RPC's own count check refuses more than it takes.
+    if (args.size() - 1 > cmd->max_args) {
+        error = QObject::tr("usage: %1 takes at most %2 argument(s), its file included, as in help %1")
+                    .arg(QString::fromStdString(args[0]), QString::number(static_cast<qulonglong>(cmd->max_args)))
                     .toStdString();
         return std::nullopt;
     }
@@ -535,7 +575,7 @@ ConsoleFileResult RunConsoleDownload(interfaces::Wallet& wallet, const ConsoleFi
     }
 
     if (!source) {
-        if (result.error.empty()) result.error = strprintf("%s could not begin", request.cmd->method);
+        if (result.error.empty()) result.error = CouldNotBegin(request);
         return result;
     }
 
@@ -551,20 +591,17 @@ ConsoleFileResult RunConsoleDownload(interfaces::Wallet& wallet, const ConsoleFi
     }
 
     if (infos.size() != 1) {
-        result.error = strprintf("the core listed %u files for %s, which writes one", infos.size(),
-                                 request.cmd->method);
+        result.error = QObject::tr("the core listed %1 files for %2, which writes one")
+                           .arg(QString::number(static_cast<qulonglong>(infos.size())),
+                                QString::fromUtf8(request.cmd->method))
+                           .toStdString();
         return result;
     }
 
-    // The note of a file with content is the command's reply, and is shown with it. One with nothing
-    // in it says why there is nothing to send.
+    // The note is the command's reply, shown with the file once it has arrived. The file is
+    // downloaded whatever its size: an entry with nothing to send refuses its first read, with its
+    // reason, and that is what is shown.
     result.note = infos[0].note;
-
-    if (interfaces::EntryIsSkipped(infos[0])) {
-        result.skipped = true;
-        return result;
-    }
-
     result.outcome = interfaces::DownloadEntry(*source, 0, request.local_path, progress, cancel);
 
     return result;
@@ -586,13 +623,16 @@ ConsoleFileResult RunConsoleUpload(interfaces::Wallet& wallet, const ConsoleFile
     }
 
     if (!sink) {
-        if (result.error.empty()) result.error = strprintf("%s could not begin", request.cmd->method);
+        if (result.error.empty()) result.error = CouldNotBegin(request);
         return result;
     }
 
-    // finish() runs the command in the core: importwallet imports the keys and rescans. The sink
-    // goes as this returns, on this thread, and with it the capability it holds.
-    result.sink_result = interfaces::UploadFile(*sink, request.local_path, progress, cancel);
+    // finish() runs the command in the core: importwallet imports the keys and rescans. A cancel
+    // stops the upload only before then; once the command runs, its result is what is shown. The
+    // sink goes as this returns, on this thread, and with it the capability it holds.
+    FinishWatch watch(*sink);
+    result.sink_result = interfaces::UploadFile(watch, request.local_path, progress, cancel);
+    result.cancelled = !watch.Finished() && cancel.load();
 
     return result;
 }
@@ -629,6 +669,11 @@ QString ConsoleFileResultText(const ConsoleFileRequest& request, const ConsoleFi
     if (!result.error.empty()) return QString::fromStdString(result.error);
 
     if (request.cmd->direction == interfaces::TransferDirection::Upload) {
+        if (result.cancelled) {
+            failed = false;
+            return QObject::tr("Cancelled; %1 was not run with %2.").arg(QString::fromUtf8(request.cmd->method), path);
+        }
+
         if (!result.sink_result.ok) return QString::fromStdString(result.sink_result.error);
 
         failed = false;
@@ -636,10 +681,6 @@ QString ConsoleFileResultText(const ConsoleFileRequest& request, const ConsoleFi
                            .arg(QString::number(static_cast<qulonglong>(result.size)), path);
         if (!result.sink_result.output.empty()) text += "\n" + QString::fromStdString(result.sink_result.output);
         return text;
-    }
-
-    if (result.skipped) {
-        return QObject::tr("Nothing was written to %1: %2").arg(path, QString::fromStdString(result.note));
     }
 
     switch (result.outcome.status) {
@@ -1160,9 +1201,11 @@ void RPCConsole::runFileCommand(const RPCConsoleDetail::ConsoleFileRequest& requ
             return;
         }
 
-        // dumpcontracts refuses to replace a file, as the RPC did when it wrote the file itself.
+        // A download never replaces what is there: a bare name lands in the data directory, among
+        // files the check above does not list. A link counts, also one that leads nowhere, and so
+        // does anything that cannot be examined.
         boost::system::error_code ec;
-        if (std::string_view(request.cmd->method) == "dumpcontracts" && fs::exists(request.local_path, ec)) {
+        if (fs::symlink_status(request.local_path, ec).type() != fs::file_not_found) {
             message(CMD_ERROR, tr("File already exists at location. Please delete or rename old file first."));
             return;
         }
@@ -1170,8 +1213,9 @@ void RPCConsole::runFileCommand(const RPCConsoleDetail::ConsoleFileRequest& requ
         boost::system::error_code ec;
         const bool regular = fs::is_regular_file(request.local_path, ec);
         const uintmax_t file_size = regular ? fs::file_size(request.local_path, ec) : 0;
+        const bool readable = regular && !ec && fsbridge::ifstream(request.local_path, std::ios::binary).is_open();
 
-        if (!regular || ec) {
+        if (!readable) {
             message(CMD_ERROR, tr("Cannot send %1: it is not a file that can be read.").arg(path));
             return;
         }

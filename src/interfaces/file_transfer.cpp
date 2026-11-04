@@ -96,12 +96,13 @@ bool SameFile(const fs::path& a, const fs::path& b)
 
 const std::vector<ConsoleFileCommand>& ConsoleFileCommands()
 {
-    // The file argument of dumpcontracts is its second (contract_type comes first).
+    // The file argument of dumpcontracts is its second (contract_type comes first),
+    // and it takes three more after it (txids_only, low_height, high_height).
     static const std::vector<ConsoleFileCommand> table{
-        {"dumpwallet", 0, TransferDirection::Download, 0},
-        {"importwallet", 0, TransferDirection::Upload, 64ULL * 1024 * 1024},
-        {"dumpcontracts", 1, TransferDirection::Download, 0},
-        {"parseaccrualsnapshotfile", 0, TransferDirection::Upload, 256ULL * 1024 * 1024},
+        {"dumpwallet", 0, TransferDirection::Download, 0, 1},
+        {"importwallet", 0, TransferDirection::Upload, 64ULL * 1024 * 1024, 1},
+        {"dumpcontracts", 1, TransferDirection::Download, 0, 5},
+        {"parseaccrualsnapshotfile", 0, TransferDirection::Upload, 256ULL * 1024 * 1024, 1},
     };
 
     return table;

@@ -94,13 +94,15 @@ enum class TransferDirection { Download, Upload };
 
 //! A console command whose argument names a file on the machine running the GUI.
 //! path_index is the position of that argument; max_upload_bytes is the upload cap
-//! (0 for downloads).
+//! (0 for downloads); max_args is the most arguments the command's RPC takes, its
+//! file included.
 struct ConsoleFileCommand
 {
     const char* method;
     size_t path_index;
     TransferDirection direction;
     uint64_t max_upload_bytes;
+    size_t max_args;
 };
 
 //! The path-taking console commands, in table order.

@@ -163,14 +163,24 @@ const char* const NOT_A_FILE_COMMAND = "not a file command";
 const char* const FILE_TRANSFER_REFUSAL = "Enter the wallet passphrase to transfer files.";
 
 //! Whether \p args, the console arguments without the file, has the ones the
-//! command takes before its file. The core puts its own value at path_index.
-bool ArgumentsBeforeFile(const ConsoleFileCommand& command, const std::vector<std::string>& args,
-                         std::string& error)
+//! command takes before its file, and no more than its RPC takes in all
+//! (max_args, the file included), as the RPC's own count check refuses. The
+//! core puts its own value at path_index.
+bool ArgumentCountFits(const ConsoleFileCommand& command, const std::vector<std::string>& args,
+                       std::string& error)
 {
-    if (command.path_index <= args.size()) return true;
+    if (command.path_index > args.size()) {
+        error = strprintf("%s takes %u argument(s) before its file", command.method, command.path_index);
+        return false;
+    }
 
-    error = strprintf("%s takes %u argument(s) before its file", command.method, command.path_index);
-    return false;
+    if (args.size() + 1 > command.max_args) {
+        error = strprintf("usage: %s takes at most %u argument(s), its file included", command.method,
+                          command.max_args);
+        return false;
+    }
+
+    return true;
 }
 
 //! Remove the snapshots in \p entries and empty it.
@@ -564,7 +574,7 @@ public:
             error_out = NOT_A_FILE_COMMAND;
             return nullptr;
         }
-        if (!ArgumentsBeforeFile(*command, args, error_out)) return nullptr;
+        if (!ArgumentCountFits(*command, args, error_out)) return nullptr;
 
         // One transfer at a time on this interface, claimed here and held by
         // the source returned.
@@ -632,7 +642,7 @@ public:
             error_out = NOT_A_FILE_COMMAND;
             return nullptr;
         }
-        if (!ArgumentsBeforeFile(*command, args, error_out)) return nullptr;
+        if (!ArgumentCountFits(*command, args, error_out)) return nullptr;
 
         if (size > command->max_upload_bytes) {
             error_out = strprintf("%s: the file is too large (%u bytes; at most %u)", method, size,

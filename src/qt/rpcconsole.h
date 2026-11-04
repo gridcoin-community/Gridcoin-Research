@@ -68,7 +68,7 @@ struct ConsoleFileRequest
 
 //! Parses \p line as the console does (parseCommandLine). nullopt with \p error empty for a line
 //! that does not parse or names no file command, and with \p error set ("usage: ...") for a file
-//! command without its file. Otherwise the file is the argument at args[1 + path_index]: a name
+//! command without its file, or with more arguments than its RPC takes (max_args). Otherwise the file is the argument at args[1 + path_index]: a name
 //! without a parent directory is taken in this process's data directory (GetDataDir()), as the RPC
 //! takes it in the core's, and a relative path with one is made absolute. core_args are the other
 //! arguments, in order.
@@ -80,9 +80,6 @@ struct ConsoleFileResult
     //! The core refused to begin the transfer, or its file could not be listed: why. Nothing was
     //! downloaded or uploaded then.
     std::string error{};
-    //! Downloads: the file the core offered was listed with nothing to send
-    //! (interfaces::EntryIsSkipped()), and note says why. Nothing was written.
-    bool skipped{false};
     //! Downloads: the outcome, once the download ran.
     interfaces::TransferOutcome outcome{};
     //! Downloads: the note the core listed the file with (dumpcontracts' reply).
@@ -90,12 +87,13 @@ struct ConsoleFileResult
     //! Uploads: the bytes announced, and what the core's command made of them.
     uint64_t size{0};
     interfaces::FileSinkResult sink_result{};
+    //! Uploads: cancelled before the core's command ran (finish() was never called).
+    bool cancelled{false};
 };
 
 //! Runs a download row of interfaces::ConsoleFileCommands(): begins it
 //! (interfaces::Wallet::beginConsoleDownload() with the request's core_args), lists the core's one
-//! file, downloads it to the request's local_path unless it has nothing to send, and destroys the
-//! source. Every call into the wallet interface is made on the calling thread, which is the modal
+//! file, downloads it to the request's local_path, and destroys the source. Every call into the wallet interface is made on the calling thread, which is the modal
 //! GuiIpcWorker's in the console, and the source is gone when this returns.
 ConsoleFileResult RunConsoleDownload(interfaces::Wallet& wallet, const ConsoleFileRequest& request,
                                      const interfaces::ProgressFn& progress, const std::atomic<bool>& cancel);
@@ -112,8 +110,9 @@ std::string ConsoleNoteForDestination(const std::string& note, const fs::path& d
 
 //! The console's reply to a file command. A download that arrived reads "Wrote <n> bytes to <path>
 //! (SHA-256 <hex>)", then its note (ConsoleNoteForDestination()). An upload the core's command
-//! accepted reads "Sent <n> bytes from <path>.", then the command's output. Otherwise the text says
-//! why nothing was written or sent, and \p failed is set; a cancelled download is not a failure.
+//! accepted reads "Sent <n> bytes from <path>.", then the command's output. A cancel reads
+//! "Cancelled; ...", and is not a failure. Otherwise the text says why nothing was written or sent,
+//! and \p failed is set.
 QString ConsoleFileResultText(const ConsoleFileRequest& request, const ConsoleFileResult& result, bool& failed);
 } // namespace RPCConsoleDetail
 
