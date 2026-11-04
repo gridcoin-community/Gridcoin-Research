@@ -128,7 +128,7 @@
     "MRC.snapshot": {
       "class": "read_only",
       "effect": "read_only",
-      "note": "signs a trial claim that never leaves the core; P1's chokepoint governs it"
+      "note": "signs a trial claim that never leaves the core; the signing chokepoint governs it"
     },
     "MRC.submit": {
       "class": "elevate",

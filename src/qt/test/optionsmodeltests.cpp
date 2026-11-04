@@ -134,9 +134,9 @@ bool SubmitSideStaking(OptionsModel& model, bool enabled)
 }
 
 // The messages the dialogs show when the passphrase was not given.
-const QString G1_MESSAGE = QStringLiteral(
+const QString PASSPHRASE_NEEDED_MESSAGE = QStringLiteral(
     "Changing UPnP, the proxy or side staking needs your wallet passphrase. These changes were not saved.");
-const QString G2_MESSAGE = QStringLiteral(
+const QString SIDE_STAKE_PASSPHRASE_MESSAGE = QStringLiteral(
     "Changing side stakes needs your wallet passphrase. The change was not saved.");
 
 //! Put the settings an earlier version kept in Gridcoin-Qt.conf at the root of
@@ -1266,7 +1266,7 @@ void OptionsModelTests::dialogDeclinedPassphraseSavesNothing()
 
     QCOMPARE(wallet.Prompts(), 1);
     QCOMPARE(wallet.m_changes_sent_at_prompt, std::vector<size_t>{0});
-    QCOMPARE(boxes.m_texts, QStringList{G1_MESSAGE});
+    QCOMPARE(boxes.m_texts, QStringList{PASSPHRASE_NEEDED_MESSAGE});
     QCOMPARE(node.m_change_calls.size(), size_t{0});
     QVERIFY(dialog.isVisible());
 }
@@ -1290,7 +1290,7 @@ void OptionsModelTests::dialogWithoutAWalletModelSavesNothing()
     MessageBoxCloser boxes;
     widgets.apply->click();
 
-    QCOMPARE(boxes.m_texts, QStringList{G1_MESSAGE});
+    QCOMPARE(boxes.m_texts, QStringList{PASSPHRASE_NEEDED_MESSAGE});
     QCOMPARE(node.m_change_calls.size(), size_t{0});
     QVERIFY(widgets.apply->isEnabled());
     QVERIFY(dialog.isVisible());
@@ -1344,7 +1344,7 @@ void OptionsModelTests::dialogDeclinedSideStakingToggleReverts()
     // Not saved, so the box shows side staking off again, with the side-stake
     // buttons that go with that, and the revert submits nothing.
     QCOMPARE(wallet.Prompts(), 1);
-    QCOMPARE(boxes.m_texts, QStringList{G1_MESSAGE});
+    QCOMPARE(boxes.m_texts, QStringList{PASSPHRASE_NEEDED_MESSAGE});
     QCOMPARE(node.m_change_calls.size(), size_t{0});
     QVERIFY(!widgets.side_staking->isChecked());
     QVERIFY(widgets.new_side_stake->isHidden());
@@ -1428,7 +1428,7 @@ void OptionsModelTests::editSideStakeDeclinedShowsMessageAndStaysOpen()
     QCOMPARE(asks, 1);
     QCOMPARE(sidestakes.m_edit_calls, 1);
     QCOMPARE(table->getEditStatus(), SideStakeTableModel::ELEVATION_REQUIRED);
-    QCOMPARE(boxes.m_texts, QStringList{G2_MESSAGE});
+    QCOMPARE(boxes.m_texts, QStringList{SIDE_STAKE_PASSPHRASE_MESSAGE});
     QVERIFY(dialog.isVisible());
 }
 
@@ -1461,7 +1461,7 @@ void OptionsModelTests::deleteSideStakeDeclinedRemovesNothing()
     // Refused once, asked once, not sent again, and the row is still there.
     QCOMPARE(asks, 1);
     QCOMPARE(sidestakes.m_edit_calls, 1);
-    QCOMPARE(boxes.m_texts, QStringList{G2_MESSAGE});
+    QCOMPARE(boxes.m_texts, QStringList{SIDE_STAKE_PASSPHRASE_MESSAGE});
     QCOMPARE(view->model()->rowCount(), 1);
     QVERIFY(dialog.isVisible());
 }
@@ -1498,7 +1498,7 @@ void OptionsModelTests::tableSideStakeEditDeclinedShowsTheMessage()
     // Shown once the editor has closed, and once.
     QTRY_VERIFY(!boxes.m_texts.isEmpty());
     QTest::qWait(100);
-    QCOMPARE(boxes.m_texts, QStringList{G2_MESSAGE});
+    QCOMPARE(boxes.m_texts, QStringList{SIDE_STAKE_PASSPHRASE_MESSAGE});
     QCOMPARE(asks, 1);
     QCOMPARE(sidestakes.m_edit_calls, 1);
     QVERIFY(view->indexWidget(allocation) == nullptr);

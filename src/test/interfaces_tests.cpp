@@ -1470,7 +1470,7 @@ BOOST_AUTO_TEST_CASE(node_changesettings_needs_a_settings_elevation)
 
     // Registered as an Elevate-class setting, as util_tests registers it; the
     // registration outlives the case.
-    const std::string probe = "k3_elevate_probe";
+    const std::string probe = "elevate_probe";
     if (!gArgs.GetArgFlags("-" + probe)) {
         gArgs.AddArg("-" + probe, "unit-test probe", ArgsManager::ALLOW_ANY, OptionsCategory::HIDDEN);
     }

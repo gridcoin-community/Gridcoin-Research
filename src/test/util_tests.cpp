@@ -1816,17 +1816,17 @@ BOOST_AUTO_TEST_CASE(command_line_only_options_are_ignored_in_a_config_file)
 namespace {
 //! Register the probe arguments the settings file load cases use. The
 //! registrations outlive the case, outside the suite's StateGuard snapshot.
-void RegisterK3Probes()
+void RegisterSettingsProbes()
 {
     const auto add = [](const std::string& name, unsigned int flags) {
         if (!gArgs.GetArgFlags("-" + name)) {
             gArgs.AddArg("-" + name, "unit-test probe", flags, OptionsCategory::HIDDEN);
         }
     };
-    add("k3_free_probe", ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE);
-    add("k3_elevate_probe", ArgsManager::ALLOW_ANY);
-    add("k3_clionly_probe", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY);
-    add("k3_sensitive_probe", ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE | ArgsManager::SETTING_FREE);
+    add("free_probe", ArgsManager::ALLOW_ANY | ArgsManager::SETTING_FREE);
+    add("elevate_probe", ArgsManager::ALLOW_ANY);
+    add("command_line_only_probe", ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY);
+    add("sensitive_probe", ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE | ArgsManager::SETTING_FREE);
     // ChangeSettings() checks registration first; init registers the real ones,
     // with these flags.
     add("blocknotify", ArgsManager::ALLOW_ANY);
@@ -1845,7 +1845,7 @@ struct SettingsFileScope
         BOOST_REQUIRE(!datadir.empty());
         fs::create_directories(datadir);
         gArgs.ClearPathCache();
-        RegisterK3Probes();
+        RegisterSettingsProbes();
         BOOST_REQUIRE(gArgs.GetSettingsPath(&m_path));
     }
 
@@ -1886,7 +1886,8 @@ const std::string FILE_NAME_FOR_LOG{"gridcoinsettings.json"};
 BOOST_AUTO_TEST_CASE(refused_settings_are_ignored_at_load_and_kept_in_the_file)
 {
     SettingsFileScope scope;
-    scope.Write({{"k3_free_probe", "a"}, {"blocknotify", "echo b"}, {"k3_clionly_probe", "c"}, {"k3_unknown_key", "d"}});
+    scope.Write({{"free_probe", "a"}, {"blocknotify", "echo b"}, {"command_line_only_probe", "c"},
+                 {"unknown_key", "d"}});
 
     std::vector<std::string> lines;
     {
@@ -1895,48 +1896,48 @@ BOOST_AUTO_TEST_CASE(refused_settings_are_ignored_at_load_and_kept_in_the_file)
         LogInstance().DeleteCallback(callback);
     }
 
-    BOOST_CHECK_EQUAL(gArgs.GetArg("-k3_free_probe", ""), "a");
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-free_probe", ""), "a");
     BOOST_CHECK(!gArgs.IsArgSet("-blocknotify"));
-    BOOST_CHECK(!gArgs.IsArgSet("-k3_clionly_probe"));
+    BOOST_CHECK(!gArgs.IsArgSet("-command_line_only_probe"));
     BOOST_CHECK(getRwSetting("blocknotify").isNull());
     // An unknown key is not refused.
-    BOOST_CHECK_EQUAL(getRwSetting("k3_unknown_key").write(), UniValue("d").write());
+    BOOST_CHECK_EQUAL(getRwSetting("unknown_key").write(), UniValue("d").write());
 
     BOOST_CHECK_EQUAL(CountLines(lines, "ignored blocknotify from " + FILE_NAME_FOR_LOG
                                         + "; set it in gridcoinresearch.conf if you want it\n"), 1u);
-    BOOST_CHECK_EQUAL(CountLines(lines, "ignored k3_clionly_probe from " + FILE_NAME_FOR_LOG
+    BOOST_CHECK_EQUAL(CountLines(lines, "ignored command_line_only_probe from " + FILE_NAME_FOR_LOG
                                         + "; it is accepted only on the command line\n"), 1u);
 
     BOOST_REQUIRE(gArgs.WriteSettingsFile());
     const auto raw = scope.ReadRaw();
     BOOST_CHECK_EQUAL(raw.size(), 4u);
-    BOOST_CHECK_EQUAL(raw.at("k3_free_probe").get_str(), "a");
+    BOOST_CHECK_EQUAL(raw.at("free_probe").get_str(), "a");
     BOOST_CHECK_EQUAL(raw.at("blocknotify").get_str(), "echo b");
-    BOOST_CHECK_EQUAL(raw.at("k3_clionly_probe").get_str(), "c");
-    BOOST_CHECK_EQUAL(raw.at("k3_unknown_key").get_str(), "d");
+    BOOST_CHECK_EQUAL(raw.at("command_line_only_probe").get_str(), "c");
+    BOOST_CHECK_EQUAL(raw.at("unknown_key").get_str(), "d");
 }
 
 BOOST_AUTO_TEST_CASE(erasing_a_refused_setting_removes_it_from_the_file)
 {
     SettingsFileScope scope;
-    scope.Write({{"k3_free_probe", "a"}, {"blocknotify", "echo b"}});
+    scope.Write({{"free_probe", "a"}, {"blocknotify", "echo b"}});
     BOOST_REQUIRE(gArgs.ReadSettingsFile());
 
     BOOST_REQUIRE(updateRwSetting("blocknotify", {}));
 
     const auto raw = scope.ReadRaw();
     BOOST_CHECK(raw.count("blocknotify") == 0);
-    BOOST_CHECK(raw.count("k3_free_probe") == 1);
+    BOOST_CHECK(raw.count("free_probe") == 1);
 }
 
 BOOST_AUTO_TEST_CASE(listsettings_masks_sensitive_values_and_lists_ignored_settings)
 {
     SettingsFileScope scope;
-    BOOST_REQUIRE(updateRwSetting("k3_sensitive_probe", "secret", true));
+    BOOST_REQUIRE(updateRwSetting("sensitive_probe", "secret", true));
     // The write above is the file the load below reads; add the other keys to it.
     auto values = scope.ReadRaw();
     values.emplace("rpcpassword", "pw");
-    values.emplace("k3_unknown_key", "d");
+    values.emplace("unknown_key", "d");
     scope.Write(values);
     BOOST_REQUIRE(gArgs.ReadSettingsFile());
 
@@ -1946,11 +1947,11 @@ BOOST_AUTO_TEST_CASE(listsettings_masks_sensitive_values_and_lists_ignored_setti
     bool found_sensitive = false;
     bool unknown_not_changeable = false;
     for (const UniValue& entry : out["setting_file_args"].getValues()) {
-        if (entry.exists("k3_sensitive_probe")) {
+        if (entry.exists("sensitive_probe")) {
             found_sensitive = true;
-            BOOST_CHECK_EQUAL(entry["k3_sensitive_probe"].get_str(), "****");
+            BOOST_CHECK_EQUAL(entry["sensitive_probe"].get_str(), "****");
         }
-        if (entry.exists("k3_unknown_key")) {
+        if (entry.exists("unknown_key")) {
             unknown_not_changeable = !entry["changeable_without_restart"].get_bool();
         }
     }
@@ -1962,13 +1963,13 @@ BOOST_AUTO_TEST_CASE(listsettings_masks_sensitive_values_and_lists_ignored_setti
     BOOST_CHECK_EQUAL(ignored[0]["rpcpassword"].get_str(), "****");
 
     // Clear the forced value the update above applied.
-    BOOST_REQUIRE(updateRwSetting("k3_sensitive_probe", {}, true));
+    BOOST_REQUIRE(updateRwSetting("sensitive_probe", {}, true));
 }
 
 BOOST_AUTO_TEST_CASE(logargs_masks_sensitive_settings_file_values)
 {
     SettingsFileScope scope;
-    scope.Write({{"k3_sensitive_probe", "secret"}, {"k3_free_probe", "a"}});
+    scope.Write({{"sensitive_probe", "secret"}, {"free_probe", "a"}});
     BOOST_REQUIRE(gArgs.ReadSettingsFile());
 
     std::vector<std::string> lines;
@@ -1978,9 +1979,9 @@ BOOST_AUTO_TEST_CASE(logargs_masks_sensitive_settings_file_values)
         LogInstance().DeleteCallback(callback);
     }
 
-    BOOST_CHECK_EQUAL(CountLines(lines, "Setting file arg: k3_sensitive_probe = ****"), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "Setting file arg: sensitive_probe = ****"), 1u);
     BOOST_CHECK_EQUAL(CountLines(lines, "secret"), 0u);
-    BOOST_CHECK_EQUAL(CountLines(lines, "Setting file arg: k3_free_probe = \"a\""), 1u);
+    BOOST_CHECK_EQUAL(CountLines(lines, "Setting file arg: free_probe = \"a\""), 1u);
 }
 
 
@@ -2021,14 +2022,15 @@ struct ProbeEraser
     }
 };
 
-const std::string E3_ELEVATE_PROBE{"Changing k3_elevate_probe needs the wallet passphrase: unlock the wallet fully, "
-                                   "or send the passphrase with this request"};
+const std::string ELEVATE_PROBE_NEEDS_PASSPHRASE{
+    "Changing elevate_probe needs the wallet passphrase: unlock the wallet fully, "
+    "or send the passphrase with this request"};
 } // namespace
 
 BOOST_AUTO_TEST_CASE(changesettings_refuses_refused_and_command_line_only_keys)
 {
     SettingsFileScope scope;
-    ProbeEraser eraser({"blocknotify", "k3_clionly_probe"});
+    ProbeEraser eraser({"blocknotify", "command_line_only_probe"});
 
     const ChangeOutcome refused = Change({{"blocknotify", "echo x"}});
     BOOST_CHECK(!refused.ok);
@@ -2038,11 +2040,11 @@ BOOST_AUTO_TEST_CASE(changesettings_refuses_refused_and_command_line_only_keys)
     BOOST_CHECK(getRwSetting("blocknotify").isNull());
     BOOST_CHECK(!gArgs.IsArgSet("-blocknotify"));
 
-    const ChangeOutcome cli_only = Change({{"k3_clionly_probe", "1"}});
+    const ChangeOutcome cli_only = Change({{"command_line_only_probe", "1"}});
     BOOST_CHECK(!cli_only.ok);
     BOOST_CHECK(cli_only.invalid_input);
-    BOOST_CHECK_EQUAL(cli_only.error, "Refused setting: k3_clionly_probe can be set only on the command line");
-    BOOST_CHECK(getRwSetting("k3_clionly_probe").isNull());
+    BOOST_CHECK_EQUAL(cli_only.error, "Refused setting: command_line_only_probe can be set only on the command line");
+    BOOST_CHECK(getRwSetting("command_line_only_probe").isNull());
 }
 
 BOOST_AUTO_TEST_CASE(changesettings_refusal_leaves_a_loaded_refused_entry_alone)
@@ -2072,7 +2074,7 @@ BOOST_AUTO_TEST_CASE(changesettings_refusal_leaves_a_loaded_refused_entry_alone)
 BOOST_AUTO_TEST_CASE(changesettings_erases_a_refused_key)
 {
     SettingsFileScope scope;
-    scope.Write({{"k3_free_probe", "a"}, {"blocknotify", "echo b"}});
+    scope.Write({{"free_probe", "a"}, {"blocknotify", "echo b"}});
     BOOST_REQUIRE(gArgs.ReadSettingsFile());
 
     const ChangeOutcome erased = Change({{"blocknotify", ""}});
@@ -2084,57 +2086,57 @@ BOOST_AUTO_TEST_CASE(changesettings_erases_a_refused_key)
 
     const auto raw = scope.ReadRaw();
     BOOST_CHECK(raw.count("blocknotify") == 0);
-    BOOST_CHECK(raw.count("k3_free_probe") == 1);
+    BOOST_CHECK(raw.count("free_probe") == 1);
 }
 
 BOOST_AUTO_TEST_CASE(changesettings_needs_elevation_for_elevate_keys)
 {
     SettingsFileScope scope;
-    ProbeEraser eraser({"k3_elevate_probe", "k3_free_probe"});
+    ProbeEraser eraser({"elevate_probe", "free_probe"});
     grc_test::EncryptedWalletSwap swap;
     CWallet& w = swap.wallet();
 
     // Locked.
-    ChangeOutcome out = Change({{"k3_elevate_probe", "1"}});
+    ChangeOutcome out = Change({{"elevate_probe", "1"}});
     BOOST_CHECK(!out.ok);
     BOOST_CHECK(out.elevation_required);
     BOOST_CHECK(!out.invalid_input);
-    BOOST_CHECK_EQUAL(out.error, E3_ELEVATE_PROBE);
-    BOOST_CHECK(getRwSetting("k3_elevate_probe").isNull());
+    BOOST_CHECK_EQUAL(out.error, ELEVATE_PROBE_NEEDS_PASSPHRASE);
+    BOOST_CHECK(getRwSetting("elevate_probe").isNull());
 
     // A Free setting needs none.
-    BOOST_CHECK(Change({{"k3_free_probe", "1"}}).ok);
+    BOOST_CHECK(Change({{"free_probe", "1"}}).ok);
 
     // Unlocked for staking only.
     BOOST_REQUIRE(w.Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
-    out = Change({{"k3_elevate_probe", "1"}});
+    out = Change({{"elevate_probe", "1"}});
     BOOST_CHECK(!out.ok);
     BOOST_CHECK(out.elevation_required);
-    BOOST_CHECK(getRwSetting("k3_elevate_probe").isNull());
+    BOOST_CHECK(getRwSetting("elevate_probe").isNull());
 
     // A passphrase capability on this thread.
     {
         CapabilityScope s(w, w.BeginElevation(grc_test::EncryptedWalletSwap::Passphrase(), CapabilityKind::Settings),
                           CapabilityKind::Settings);
         BOOST_REQUIRE(s.Active());
-        out = Change({{"k3_elevate_probe", "1"}});
+        out = Change({{"elevate_probe", "1"}});
         BOOST_CHECK(out.ok);
         BOOST_CHECK(!out.elevation_required);
     }
-    BOOST_CHECK_EQUAL(getRwSetting("k3_elevate_probe").get_str(), "1");
+    BOOST_CHECK_EQUAL(getRwSetting("elevate_probe").get_str(), "1");
 
     // A standing full unlock needs no scope.
     w.Lock();
     BOOST_REQUIRE(w.Unlock(grc_test::EncryptedWalletSwap::Passphrase()));
-    BOOST_CHECK(Change({{"k3_elevate_probe", "2"}}).ok);
-    BOOST_CHECK_EQUAL(getRwSetting("k3_elevate_probe").get_str(), "2");
+    BOOST_CHECK(Change({{"elevate_probe", "2"}}).ok);
+    BOOST_CHECK_EQUAL(getRwSetting("elevate_probe").get_str(), "2");
 
     // Locked again: restating the stored value changes nothing and needs nothing.
     w.Lock();
-    out = Change({{"k3_elevate_probe", "2"}});
+    out = Change({{"elevate_probe", "2"}});
     BOOST_CHECK(out.ok);
-    BOOST_CHECK(out.no_change == std::vector<std::string>{"k3_elevate_probe=2"});
-    BOOST_CHECK(Change({{"k3_elevate_probe", "3"}}).elevation_required);
+    BOOST_CHECK(out.no_change == std::vector<std::string>{"elevate_probe=2"});
+    BOOST_CHECK(Change({{"elevate_probe", "3"}}).elevation_required);
 }
 
 // Erasing an Elevate-class setting that is not set changes nothing, so it needs
@@ -2143,7 +2145,7 @@ BOOST_AUTO_TEST_CASE(changesettings_needs_elevation_for_elevate_keys)
 BOOST_AUTO_TEST_CASE(changesettings_erasing_an_unset_elevate_key_needs_no_elevation)
 {
     SettingsFileScope scope;
-    ProbeEraser eraser({"proxy", "k3_free_probe"});
+    ProbeEraser eraser({"proxy", "free_probe"});
     grc_test::EncryptedWalletSwap swap;
     BOOST_REQUIRE(swap.wallet().Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
 
@@ -2170,33 +2172,33 @@ BOOST_AUTO_TEST_CASE(changesettings_erasing_an_unset_elevate_key_needs_no_elevat
     BOOST_CHECK_EQUAL(gArgs.GetArg("-proxy", "<unset>"), "10.0.0.1:9050");
 
     // Forced empty, the value already reads empty.
-    gArgs.ForceSetArg("-k3_free_probe", "");
-    out = Change({{"k3_free_probe", ""}});
+    gArgs.ForceSetArg("-free_probe", "");
+    out = Change({{"free_probe", ""}});
     BOOST_CHECK(out.ok);
-    BOOST_CHECK(out.no_change == std::vector<std::string>{"k3_free_probe="});
-    BOOST_CHECK(gArgs.IsArgSet("-k3_free_probe"));
-    BOOST_CHECK_EQUAL(gArgs.GetArg("-k3_free_probe", "<unset>"), "");
+    BOOST_CHECK(out.no_change == std::vector<std::string>{"free_probe="});
+    BOOST_CHECK(gArgs.IsArgSet("-free_probe"));
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-free_probe", "<unset>"), "");
 }
 
 BOOST_AUTO_TEST_CASE(changesettings_batch_with_an_unelevated_elevate_key_applies_nothing)
 {
     SettingsFileScope scope;
-    ProbeEraser eraser({"k3_elevate_probe", "k3_free_probe"});
+    ProbeEraser eraser({"elevate_probe", "free_probe"});
     grc_test::EncryptedWalletSwap swap;
 
-    const ChangeOutcome out = Change({{"k3_free_probe", "9"}, {"k3_elevate_probe", "9"}});
+    const ChangeOutcome out = Change({{"free_probe", "9"}, {"elevate_probe", "9"}});
     BOOST_CHECK(!out.ok);
     BOOST_CHECK(out.elevation_required);
     BOOST_CHECK(out.immediate.empty() && out.requires_restart_list.empty() && out.no_change.empty());
-    BOOST_CHECK_EQUAL(gArgs.GetArg("-k3_free_probe", "<unset>"), "<unset>");
-    BOOST_CHECK(getRwSetting("k3_free_probe").isNull());
-    BOOST_CHECK(getRwSetting("k3_elevate_probe").isNull());
+    BOOST_CHECK_EQUAL(gArgs.GetArg("-free_probe", "<unset>"), "<unset>");
+    BOOST_CHECK(getRwSetting("free_probe").isNull());
+    BOOST_CHECK(getRwSetting("elevate_probe").isNull());
 }
 
 BOOST_AUTO_TEST_CASE(rpc_request_elevation_covers_one_request_only)
 {
     SettingsFileScope scope;
-    ProbeEraser eraser({"k3_elevate_probe"});
+    ProbeEraser eraser({"elevate_probe"});
     grc_test::EncryptedWalletSwap swap;
     CWallet& w = swap.wallet();
 
@@ -2206,13 +2208,13 @@ BOOST_AUTO_TEST_CASE(rpc_request_elevation_covers_one_request_only)
         CapabilityScope s(w, w.BeginElevation(grc_test::EncryptedWalletSwap::Passphrase(), CapabilityKind::RpcRequest),
                           CapabilityKind::RpcRequest);
         BOOST_REQUIRE(s.Active());
-        BOOST_CHECK(Change({{"k3_elevate_probe", "5"}}).ok);
+        BOOST_CHECK(Change({{"elevate_probe", "5"}}).ok);
     }
 
-    const ChangeOutcome after = Change({{"k3_elevate_probe", "6"}});
+    const ChangeOutcome after = Change({{"elevate_probe", "6"}});
     BOOST_CHECK(!after.ok);
     BOOST_CHECK(after.elevation_required);
-    BOOST_CHECK_EQUAL(getRwSetting("k3_elevate_probe").get_str(), "5");
+    BOOST_CHECK_EQUAL(getRwSetting("elevate_probe").get_str(), "5");
 }
 
 BOOST_AUTO_TEST_CASE(changesettings_caps_paytxfee)

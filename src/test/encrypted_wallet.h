@@ -23,7 +23,7 @@ namespace grc_test {
 class EncryptedWalletSwap
 {
 public:
-    static SecureString Passphrase() { return SecureString("k3-test-passphrase"); }
+    static SecureString Passphrase() { return SecureString("test-passphrase"); }
 
     EncryptedWalletSwap()
         : m_saved(pwalletMain)

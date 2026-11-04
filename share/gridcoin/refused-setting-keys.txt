@@ -52,7 +52,7 @@ salvagewallet
 zapwallettxes
 upgradewallet
 
-# command-line-only options of other plans
+# command-line-only options
 autounlock*
 stdin*
 debugallowtracer
