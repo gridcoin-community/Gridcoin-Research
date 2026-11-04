@@ -303,7 +303,8 @@ bool RunBackupWithProgress(QWidget* parent, const QString& title, BackupBeginFn 
             ran.begun = true;
             ran.entries = interfaces::DownloadBackupEntries(
                 *source, dests,
-                [&progress, &cancel, &saving](interfaces::FileSource& src, uint32_t entry, const fs::path& dest) {
+                [&progress, &cancel, &saving](interfaces::FileSource& src, uint32_t entry,
+                                              const interfaces::FileEntryInfo& info, const fs::path& dest) {
                     // A cancel while the core made its copies takes effect here, before anything
                     // is written.
                     if (cancel.load()) {
@@ -313,7 +314,10 @@ bool RunBackupWithProgress(QWidget* parent, const QString& title, BackupBeginFn 
                         return cancelled;
                     }
 
+                    // The dialog names this entry from now on, with its own counts, not the ones
+                    // the entry before it left.
                     *saving = entry;
+                    progress(0, info.size);
                     return interfaces::DownloadEntry(src, entry, dest, progress, cancel);
                 });
 

@@ -166,8 +166,10 @@ struct BackupEntryResult
     TransferOutcome outcome{};
 };
 
-//! Downloads one entry of a source to dest: DownloadEntry, or the GUI's wrapper of it.
-using BackupDownloadFn = std::function<TransferOutcome(FileSource& src, uint32_t entry, const fs::path& dest)>;
+//! Downloads one entry of a source to dest: DownloadEntry, or the GUI's wrapper of it. \p info is the
+//! entry as the source listed it.
+using BackupDownloadFn =
+    std::function<TransferOutcome(FileSource& src, uint32_t entry, const FileEntryInfo& info, const fs::path& dest)>;
 
 //! Download each entry of src, in order, to the destination at the same index of dests, through
 //! download. A skipped entry (EntryIsSkipped) is reported with its note and never passed to

@@ -37,6 +37,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -261,11 +262,15 @@ private:
 //! observer may still look after that.
 struct TwoEntryGates
 {
+    //! The reads that wait, as (entry, read of that entry from 1), in the order they come: the
+    //! wallet's second, then the configuration file's first and second.
+    static constexpr std::array<std::pair<uint32_t, int>, 3> GATED{{{0, 2}, {1, 1}, {1, 2}}};
+
     Mutex mutex;
     std::condition_variable cv;
-    //! The entry whose gated read waits, or -1.
+    //! The gate whose read waits, or -1.
     int waiting GUARDED_BY(mutex){-1};
-    std::array<bool, 2> released GUARDED_BY(mutex){};
+    std::array<bool, GATED.size()> released GUARDED_BY(mutex){};
 
     int Waiting()
     {
@@ -273,16 +278,17 @@ struct TwoEntryGates
         return waiting;
     }
 
-    void Release(int entry)
+    void Release(size_t gate)
     {
         LOCK(mutex);
-        released.at(static_cast<size_t>(entry)) = true;
+        released.at(gate) = true;
         cv.notify_all();
     }
 };
 
 //! A source of two entries, as a backup of the wallet and its configuration file, each sent in
-//! chunks of GatedSource::CHUNK. The second read of each entry waits until the test releases it.
+//! chunks of GatedSource::CHUNK. The reads in TwoEntryGates::GATED wait until the test releases
+//! them.
 class TwoEntrySource : public interfaces::FileSource
 {
 public:
@@ -315,11 +321,15 @@ public:
             return c;
         }
 
-        if (++m_reads[entry] == 2) {
+        const int read = ++m_reads[entry];
+
+        for (size_t gate = 0; gate < TwoEntryGates::GATED.size(); ++gate) {
+            if (TwoEntryGates::GATED[gate] != std::pair<uint32_t, int>{entry, read}) continue;
+
             WAIT_LOCK(m_gates->mutex, lock);
-            m_gates->waiting = static_cast<int>(entry);
-            m_gates->cv.wait(lock, [this, entry]() EXCLUSIVE_LOCKS_REQUIRED(m_gates->mutex) {
-                return m_gates->released[entry];
+            m_gates->waiting = static_cast<int>(gate);
+            m_gates->cv.wait(lock, [this, gate]() EXCLUSIVE_LOCKS_REQUIRED(m_gates->mutex) {
+                return m_gates->released[gate];
             });
             m_gates->waiting = -1;
         }
@@ -744,7 +754,8 @@ void FileTransferDialogTests::cancelWhileTheBackupBeginsSavesNothing()
 
 // The backup's one dialog names the file being saved and its place in the run, so the byte count
 // starting again for the second file reads as a new file: "Saving <destination> (1 of 2)", then
-// "(2 of 2)".
+// "(2 of 2)". The second file's counts start at 0 of its own size as soon as its name shows, before
+// its first chunk, not with the first file's counts.
 void FileTransferDialogTests::backupDialogNamesTheFileBeingSaved()
 {
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
@@ -756,30 +767,35 @@ void FileTransferDialogTests::backupDialogNamesTheFileBeingSaved()
     const std::array<std::vector<unsigned char>, 2> data{Bytes(3 * GatedSource::CHUNK),
                                                          Bytes(2 * GatedSource::CHUNK + 7)};
     const auto gates = std::make_shared<TwoEntryGates>();
-    std::array<QString, 2> labels;
+
+    // What the dialog shows at each gate, once it has caught up with the job.
+    const std::array<QString, TwoEntryGates::GATED.size()> counts{
+        QString("%1 of %2 bytes").arg(GatedSource::CHUNK).arg(data[0].size()),
+        QString("0 of %1 bytes").arg(data[1].size()),
+        QString("%1 of %2 bytes").arg(GatedSource::CHUNK).arg(data[1].size()),
+    };
+    std::array<QString, TwoEntryGates::GATED.size()> labels;
 
     QTimer observer;
     connect(&observer, &QTimer::timeout, this, [&] {
-        const int entry = gates->Waiting();
+        const int gate = gates->Waiting();
         QProgressDialog* dialog = VisibleProgressDialog();
-        if (entry < 0 || !dialog) return;
+        if (gate < 0 || !dialog) return;
 
-        // Once the dialog shows the entry's own first chunk of its own total.
-        const QString counts = QString("%1 of %2 bytes")
-                                   .arg(GatedSource::CHUNK)
-                                   .arg(data.at(static_cast<size_t>(entry)).size());
-        if (!dialog->labelText().contains(counts)) return;
+        const size_t index = static_cast<size_t>(gate);
+        if (!dialog->labelText().endsWith("\n" + counts.at(index))) return;
 
-        labels.at(static_cast<size_t>(entry)) = dialog->labelText();
-        gates->Release(entry);
+        labels.at(index) = dialog->labelText();
+        gates->Release(index);
     });
     observer.start(5);
 
     QTimer backstop;
     backstop.setSingleShot(true);
     connect(&backstop, &QTimer::timeout, this, [&gates] {
-        gates->Release(0);
-        gates->Release(1);
+        for (size_t gate = 0; gate < TwoEntryGates::GATED.size(); ++gate) {
+            gates->Release(gate);
+        }
     });
     backstop.start(5000);
 
@@ -801,8 +817,9 @@ void FileTransferDialogTests::backupDialogNamesTheFileBeingSaved()
 
     const QString first = QString("Saving %1 (1 of 2)").arg(GUIUtil::boostPathToQString(wallet_dest));
     const QString second = QString("Saving %1 (2 of 2)").arg(GUIUtil::boostPathToQString(conf_dest));
-    QVERIFY2(labels[0].startsWith(first + "\n"), qPrintable(labels[0]));
-    QVERIFY2(labels[1].startsWith(second + "\n"), qPrintable(labels[1]));
+    QCOMPARE(labels[0], first + "\n" + counts[0]);
+    QCOMPARE(labels[1], second + "\n" + counts[1]);
+    QCOMPARE(labels[2], second + "\n" + counts[2]);
     QVERIFY(ReadAll(conf_dest) == std::string(data[1].begin(), data[1].end()));
 }
 

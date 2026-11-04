@@ -868,14 +868,22 @@ BOOST_AUTO_TEST_CASE(backup_skips_an_entry_with_a_note)
     const std::vector<fs::path> dests{dir / "w.dat", dir / "c.conf", dir / "s.json"};
     int downloads = 0;
 
+    std::vector<std::string> listed;
+
     const std::vector<interfaces::BackupEntryResult> results = interfaces::DownloadBackupEntries(
-        src, dests, [&](interfaces::FileSource& s, uint32_t entry, const fs::path& dest) {
+        src, dests,
+        [&](interfaces::FileSource& s, uint32_t entry, const interfaces::FileEntryInfo& info, const fs::path& dest) {
             ++downloads;
+            listed.push_back(strprintf("%s %d", info.name, info.size));
             return interfaces::DownloadEntry(s, entry, dest, nullptr, cancel, 4096);
         });
 
     BOOST_REQUIRE_EQUAL(results.size(), 3u);
     BOOST_CHECK_EQUAL(downloads, 2);
+
+    // Each download is told the entry as the source listed it.
+    const std::vector<std::string> expected{"wallet.dat 10000", "gridcoinsettings.json 300"};
+    BOOST_CHECK_EQUAL_COLLECTIONS(listed.begin(), listed.end(), expected.begin(), expected.end());
 
     BOOST_CHECK_EQUAL(results[0].name, "wallet.dat");
     BOOST_CHECK(results[0].dest == dests[0]);
@@ -908,7 +916,8 @@ BOOST_AUTO_TEST_CASE(backup_stops_at_the_first_failure)
     int downloads = 0;
 
     const std::vector<interfaces::BackupEntryResult> results = interfaces::DownloadBackupEntries(
-        src, {dir / "w.dat", dir / "s.json"}, [&](interfaces::FileSource& s, uint32_t entry, const fs::path& dest) {
+        src, {dir / "w.dat", dir / "s.json"},
+        [&](interfaces::FileSource& s, uint32_t entry, const interfaces::FileEntryInfo&, const fs::path& dest) {
             ++downloads;
             return interfaces::DownloadEntry(s, entry, dest, nullptr, cancel, 4096);
         });
@@ -925,7 +934,8 @@ BOOST_AUTO_TEST_CASE(backup_stops_at_the_first_failure)
     // thread) still leaves the source stopped.
     MultiSource untouched({{"wallet.dat", Bytes(10), ""}, {"gridcoinsettings.json", Bytes(10), ""}});
     const std::vector<interfaces::BackupEntryResult> local = interfaces::DownloadBackupEntries(
-        untouched, {dir / "w.dat", dir / "s.json"}, [](interfaces::FileSource&, uint32_t, const fs::path&) {
+        untouched, {dir / "w.dat", dir / "s.json"},
+        [](interfaces::FileSource&, uint32_t, const interfaces::FileEntryInfo&, const fs::path&) {
             interfaces::TransferOutcome out;
             out.status = interfaces::TransferStatus::LocalError;
             out.message = "no file transfer thread is running";
@@ -945,7 +955,8 @@ BOOST_AUTO_TEST_CASE(backup_cancel_leaves_nothing_and_stops_the_rest)
     int chunks = 0;
 
     const std::vector<interfaces::BackupEntryResult> results = interfaces::DownloadBackupEntries(
-        src, {dir / "w.dat", dir / "s.json"}, [&](interfaces::FileSource& s, uint32_t entry, const fs::path& dest) {
+        src, {dir / "w.dat", dir / "s.json"},
+        [&](interfaces::FileSource& s, uint32_t entry, const interfaces::FileEntryInfo&, const fs::path& dest) {
             return interfaces::DownloadEntry(
                 s, entry, dest, [&](uint64_t, int64_t) { if (++chunks == 3) cancel = true; }, cancel, 4096);
         });
@@ -960,7 +971,8 @@ BOOST_AUTO_TEST_CASE(backup_cancel_leaves_nothing_and_stops_the_rest)
 BOOST_AUTO_TEST_CASE(backup_source_that_cannot_list_its_entries)
 {
     int downloads = 0;
-    const interfaces::BackupDownloadFn count = [&](interfaces::FileSource&, uint32_t, const fs::path&) {
+    const interfaces::BackupDownloadFn count = [&](interfaces::FileSource&, uint32_t, const interfaces::FileEntryInfo&,
+                                                   const fs::path&) {
         ++downloads;
         return interfaces::TransferOutcome{};
     };

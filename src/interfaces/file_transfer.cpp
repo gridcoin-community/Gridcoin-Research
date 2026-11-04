@@ -470,7 +470,7 @@ std::vector<BackupEntryResult> DownloadBackupEntries(FileSource& src, const std:
             continue;
         }
 
-        result.outcome = download(src, static_cast<uint32_t>(i), dests[i]);
+        result.outcome = download(src, static_cast<uint32_t>(i), infos[i], dests[i]);
         const bool arrived = result.outcome.status == TransferStatus::Ok;
         results.push_back(std::move(result));
 
