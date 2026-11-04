@@ -4,6 +4,9 @@
 
 #include <rpc/client.h>
 #include <rpc/passphrase_params.h>
+#include <rpc/protocol.h>
+#include <rpc/server.h>
+#include <test/staking_test_peers.h>
 #include <util/strencodings.h>
 
 #include <boost/test/unit_test.hpp>
@@ -203,6 +206,42 @@ BOOST_AUTO_TEST_CASE(new_passphrase_indexes)
     BOOST_CHECK((NewPassphraseIndexes("encryptwallet") == std::vector<int>{0}));
     BOOST_CHECK((NewPassphraseIndexes("walletpassphrasechange") == std::vector<int>{1}));
     BOOST_CHECK(NewPassphraseIndexes("walletpassphrase").empty());
+}
+
+BOOST_AUTO_TEST_CASE(execute_passphrase_command_change)
+{
+    grc_test::EncryptedWallet fx;
+    const SecureString old_pass = grc_test::EncryptedWallet::PASSPHRASE;
+
+    // The passphrase positions of params are ignored; the SecureStrings carry them.
+    UniValue params(UniValue::VARR);
+    params.push_back("");
+    params.push_back("");
+
+    const std::vector<SecureString> passphrases{old_pass, SecureString("new")};
+    BOOST_CHECK_NO_THROW(ExecutePassphraseCommand("walletpassphrasechange", passphrases, params));
+
+    BOOST_CHECK(fx.wallet.Unlock(SecureString("new")));
+    fx.wallet.Lock();
+    BOOST_CHECK(!fx.wallet.Unlock(old_pass));
+}
+
+BOOST_AUTO_TEST_CASE(execute_passphrase_command_wrong_count)
+{
+    grc_test::EncryptedWallet fx;
+
+    UniValue params(UniValue::VARR);
+    params.push_back("");
+    params.push_back("");
+
+    const std::vector<SecureString> one{SecureString("only")};
+
+    try {
+        ExecutePassphraseCommand("walletpassphrasechange", one, params);
+        BOOST_ERROR("no exception for a wrong passphrase count");
+    } catch (const UniValue& error) {
+        BOOST_CHECK_EQUAL(find_value(error, "code").get_int(), RPC_INVALID_PARAMETER);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

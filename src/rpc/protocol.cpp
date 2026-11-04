@@ -334,9 +334,9 @@ int ReadHTTPMessage(std::basic_istream<char>& stream, std::map<std::string,
     // Read message
     if (nLen > 0)
     {
-        std::vector<char> vch(nLen);
-        stream.read(&vch[0], nLen);
-        strMessageRet = std::string(vch.begin(), vch.end());
+        // Read straight into the caller's string, so no second copy of the body is left behind.
+        strMessageRet.resize(nLen);
+        stream.read(&strMessageRet[0], nLen);
     }
 
     std::string sConHdr = mapHeadersRet["connection"];

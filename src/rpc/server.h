@@ -256,6 +256,12 @@ UniValue ExecuteWithElevation(const std::optional<SecureString>& header, const s
 //! before any call runs.
 UniValue ExecuteBatchWithElevation(const UniValue& requests, const std::optional<SecureString>& header);
 
+//! walletpassphrase, walletpassphrasechange or encryptwallet with the passphrases already in
+//! SecureStrings (parameter order). `params` holds the other parameters at their real indexes; the
+//! passphrase positions are ignored. Throws exactly what the RPCs throw; a wrong passphrase count
+//! throws JSONRPCError(RPC_INVALID_PARAMETER, "<method> takes <n> passphrase(s)").
+UniValue ExecutePassphraseCommand(const std::string& method, const std::vector<SecureString>& passphrases, const UniValue& params);
+
 //
 // Utilities: convert hex-encoded Values
 // (throws error if not hex).

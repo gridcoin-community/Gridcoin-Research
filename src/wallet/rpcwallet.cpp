@@ -9,6 +9,7 @@
 #include "version.h"
 #include "txdb.h"
 #include "rpc/server.h"
+#include "rpc/passphrase_params.h"
 #include "rpc/protocol.h"
 #include "rpc/util.h"
 #include "init.h"
@@ -3465,7 +3466,8 @@ static const RPCHelpMan walletpassphrase_help{
 };
 const RPCHelpMan& walletpassphrase_helpman() { return walletpassphrase_help; }
 
-UniValue walletpassphrase(const UniValue& params)
+//! The body of walletpassphrase. params[0] is not read; the passphrase is the SecureString.
+static UniValue WalletPassphraseBody(const SecureString& strWalletPass, const UniValue& params)
 {
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrase was called.");
@@ -3505,11 +3507,6 @@ UniValue walletpassphrase(const UniValue& params)
                            "node is still starting up or is shutting down. The wallet has NOT been "
                            "unlocked. Try again once the node is running.");
     }
-
-    // Note that the walletpassphrase is stored in params[0] which is not mlock()ed
-    SecureString strWalletPass;
-    strWalletPass.reserve(100);
-    strWalletPass = std::string_view{params[0].get_str()};
 
     // ppcoin: if the user's OS account is compromised, prevent trivial
     // sendmoney. The scope travels with the unlock instead of being written to
@@ -3597,18 +3594,13 @@ static const RPCHelpMan walletpassphrasechange_help{
 };
 const RPCHelpMan& walletpassphrasechange_helpman() { return walletpassphrasechange_help; }
 
-UniValue walletpassphrasechange(const UniValue& params)
+//! The body of walletpassphrasechange. params[0] and params[1] are not read.
+static UniValue WalletPassphraseChangeBody(const SecureString& strOldWalletPass,
+                                           const SecureString& strNewWalletPass,
+                                           const UniValue& params)
 {
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrasechange was called.");
-
-    SecureString strOldWalletPass;
-    strOldWalletPass.reserve(100);
-    strOldWalletPass = std::string_view{params[0].get_str()};
-
-    SecureString strNewWalletPass;
-    strNewWalletPass.reserve(100);
-    strNewWalletPass = std::string_view{params[1].get_str()};
 
     if (strOldWalletPass.length() < 1 || strNewWalletPass.length() < 1)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Passphrase cannot be empty.");
@@ -3958,14 +3950,11 @@ static const RPCHelpMan encryptwallet_help{
 };
 const RPCHelpMan& encryptwallet_helpman() { return encryptwallet_help; }
 
-UniValue encryptwallet(const UniValue& params)
+//! The body of encryptwallet. params[0] is not read.
+static UniValue EncryptWalletBody(const SecureString& strWalletPass, const UniValue& params)
 {
     if (pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an encrypted wallet, but encryptwallet was called.");
-
-    SecureString strWalletPass;
-    strWalletPass.reserve(100);
-    strWalletPass = std::string_view{params[0].get_str()};
 
     if (strWalletPass.length() < 1)
         throw runtime_error(
@@ -3982,6 +3971,56 @@ UniValue encryptwallet(const UniValue& params)
     // unencrypted private keys. So:
     StartShutdown();
     return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet. The keypool has been flushed and a new HD seed was generated (if you are using HD). You need to make a new backup.";
+}
+
+//! A passphrase parameter moved into a SecureString.
+static SecureString PassphraseParam(const UniValue& params, size_t index)
+{
+    SecureString passphrase;
+    passphrase.reserve(100);
+    passphrase = std::string_view{params[index].get_str()};
+
+    return passphrase;
+}
+
+UniValue ExecutePassphraseCommand(const std::string& method, const std::vector<SecureString>& passphrases, const UniValue& params)
+{
+    const std::vector<int>* indexes = PassphraseParamIndexes(method);
+
+    if (indexes == nullptr) {
+        throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
+    }
+
+    if (passphrases.size() != indexes->size()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           strprintf("%s takes %u passphrase%s", method, indexes->size(), indexes->size() == 1 ? "" : "s"));
+    }
+
+    if (method == "walletpassphrase") return WalletPassphraseBody(passphrases[0], params);
+    if (method == "walletpassphrasechange") return WalletPassphraseChangeBody(passphrases[0], passphrases[1], params);
+
+    return EncryptWalletBody(passphrases[0], params);
+}
+
+UniValue walletpassphrase(const UniValue& params)
+{
+    const std::vector<SecureString> passphrases{PassphraseParam(params, 0)};
+
+    return ExecutePassphraseCommand("walletpassphrase", passphrases, params);
+}
+
+UniValue walletpassphrasechange(const UniValue& params)
+{
+    const std::vector<SecureString> passphrases{PassphraseParam(params, 0), PassphraseParam(params, 1)};
+
+    return ExecutePassphraseCommand("walletpassphrasechange", passphrases, params);
+}
+
+UniValue encryptwallet(const UniValue& params)
+{
+    const std::vector<SecureString> passphrases{PassphraseParam(params, 0)};
+
+    return ExecutePassphraseCommand("encryptwallet", passphrases, params);
 }
 
 class DescribeAddressVisitor

@@ -121,15 +121,20 @@ namespace ipc {
 //! both false, which is what it always sent, and the minor already turns the
 //! mismatch into the "Update the node" hard fail.
 //!
-//! Major 5: Wallet gained `beginElevation @37` and `endElevation @38`
-//! (wallet.capnp), and every method that uses the wallet's keys for the GUI
-//! runs under the capability they hold, one operation kind at a time.
-//! `elevateWallet @36` stays in the schema, because a released ordinal cannot be
-//! dropped, but it always returns false. RpcConsoleResult gained
-//! `walletUnlockNeeded @2` (node.capnp), which the console reads to ask for the
-//! passphrase and run a refused command again.
-//! SettingChangeResult gained `elevationRequired @7` and SideStakeEditStatus ELEVATION_REQUIRED.
-//! Wallet gained `getTransactionFeeRate @39` (wallet.capnp), which the send confirmation reads.
+//! Major 5: every method that uses the wallet's keys for the GUI runs under the
+//! capability the GUI holds, one operation kind at a time. The additions:
+//! - Wallet gained `beginElevation @37` and `endElevation @38` (wallet.capnp).
+//!   `elevateWallet @36` stays in the schema, because a released ordinal cannot
+//!   be dropped, but it always returns false.
+//! - RpcConsoleResult gained `walletUnlockNeeded @2` (node.capnp), which the
+//!   console reads to ask for the passphrase and run a refused command again.
+//! - SettingChangeResult gained `elevationRequired @7` (node.capnp), and
+//!   SideStakeEditStatus, which crosses as its Int32 value (sidestake.capnp),
+//!   gained ELEVATION_REQUIRED.
+//! - Wallet gained `getTransactionFeeRate @39` (wallet.capnp), which the send
+//!   confirmation reads.
+//! - Node gained `executeRpcConsoleSecretCommand @43` (node.capnp), which
+//!   carries the console's wallet passphrases as SecureString.
 //!
 //! The new methods alone would be additive, which is why the reason for the
 //! major is the other direction. A GUI and a node of different majors disagree

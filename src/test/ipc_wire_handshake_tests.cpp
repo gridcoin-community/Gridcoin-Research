@@ -953,4 +953,36 @@ BOOST_AUTO_TEST_CASE(wire_capability_kind_out_of_range_is_refused)
     wallet.reset();
 }
 
+// The passphrases of a console command cross as raw bytes, whitespace and all.
+BOOST_AUTO_TEST_CASE(wire_secret_console_command_carries_passphrases)
+{
+    grc_test::EncryptedWallet fx;
+
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    id.identity_token = "tok";
+
+    struct NodeServingInner : StubInner {
+        std::unique_ptr<interfaces::Node> makeNode() override { return interfaces::MakeNode(); }
+    };
+
+    WireLink link([&id](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(std::make_unique<NodeServingInner>(), "the-cookie", id);
+    });
+
+    BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
+
+    std::unique_ptr<interfaces::Node> node = link.client->makeNode();
+    BOOST_REQUIRE(node != nullptr);
+
+    const SecureString fresh(" lead and trail ");
+    const interfaces::RpcConsoleResult result = node->executeRpcConsoleSecretCommand(
+        "walletpassphrasechange", {grc_test::EncryptedWallet::PASSPHRASE, fresh}, {});
+    BOOST_CHECK_MESSAGE(result.ok, result.output);
+
+    BOOST_CHECK(fx.wallet.Unlock(fresh));
+
+    node.reset();
+}
+
 BOOST_AUTO_TEST_SUITE_END()

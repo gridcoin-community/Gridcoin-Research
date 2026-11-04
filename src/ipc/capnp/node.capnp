@@ -63,6 +63,7 @@ interface Node $Proxy.wrap("interfaces::Node") {
     handlePSGTPoolChanged @40 (context :Proxy.Context, callback :PSGTPoolChangedCallback) -> (result :Handler.Handler);
     handleNotifyScraperEvent @41 (context :Proxy.Context, callback :NotifyScraperEventCallback) -> (result :Handler.Handler);
     isMainNet @42 (context :Proxy.Context) -> (result :Bool);
+    executeRpcConsoleSecretCommand @43 (context :Proxy.Context, method :Text, passphrases :List(Data), args :List(Text)) -> (result :RpcConsoleResult);
 }
 
 # --- Notification callbacks (interfaces::Node::*Fn std::function types) ---

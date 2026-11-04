@@ -379,6 +379,12 @@ public:
     {
         return {};
     }
+    interfaces::RpcConsoleResult executeRpcConsoleSecretCommand(const std::string& /*method*/,
+                                                                const std::vector<SecureString>& /*passphrases*/,
+                                                                const std::vector<std::string>& /*args*/) override
+    {
+        return {};
+    }
     std::vector<std::string> listRpcCommands() override { return {}; }
     interfaces::ScraperConvergenceSnapshot getScraperConvergenceSnapshot() override { return {}; }
 

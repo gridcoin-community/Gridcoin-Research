@@ -17,6 +17,7 @@
 #include "client.h"
 #include "protocol.h"
 #include "random.h"
+#include <rpc/passphrase_params.h>
 #include "support/cleanse.h"
 #include "wallet/capability.h"
 #include "wallet/db.h"
@@ -1665,14 +1666,41 @@ void JSONRequest::parse(const UniValue& valRequest)
         throw JSONRPCError(RPC_INVALID_REQUEST, "Params must be an array");
 }
 
+namespace {
+//! memory_cleanse the bytes of a string on every exit from the scope that owns it.
+class StringCleanser
+{
+public:
+    explicit StringCleanser(std::string& text) : m_text(text) {}
+    ~StringCleanser()
+    {
+        if (!m_text.empty()) memory_cleanse(&m_text[0], m_text.size());
+    }
+
+    StringCleanser(const StringCleanser&) = delete;
+    StringCleanser& operator=(const StringCleanser&) = delete;
+
+private:
+    std::string& m_text;
+};
+} // namespace
+
 static UniValue JSONRPCExecOne(const UniValue& req)
 {
     UniValue rpc_result(UniValue::VOBJ);
 
     JSONRequest jreq;
+
+    // The method is known only after the parse, so the cleansers are built in place there. The
+    // request's own copy of the params and the parsed copy are both overwritten on every exit.
+    std::optional<PassphraseParamsCleanser> parsed_cleanser;
+    std::optional<PassphraseParamsCleanser> request_cleanser;
     try
     {
         jreq.parse(req);
+
+        parsed_cleanser.emplace(jreq.strMethod, jreq.params);
+        request_cleanser.emplace(jreq.strMethod, find_value(req, "params"));
 
         ThrowIfRefusedInWarmup(jreq.strMethod);
 
@@ -1717,6 +1745,10 @@ void ServiceConnection(AcceptedConnection *conn)
         int nProto = 0;
         map<string, string> mapHeaders;
         string strRequest, strMethod, strURI;
+
+        // The body can carry a wallet passphrase, so its bytes are overwritten on every exit from
+        // this iteration.
+        const StringCleanser request_cleanser(strRequest);
 
         // Read HTTP request line
         if (!ReadHTTPRequestLine(conn->stream(), nProto, strMethod, strURI))
@@ -1789,6 +1821,11 @@ void ServiceConnection(AcceptedConnection *conn)
             // singleton request
             if (valRequest.isObject()) {
                 jreq.parse(valRequest);
+
+                // Both copies of the params are overwritten when the request is done.
+                const PassphraseParamsCleanser parsed_cleanser(jreq.strMethod, jreq.params);
+                const PassphraseParamsCleanser request_params_cleanser(jreq.strMethod,
+                                                                       find_value(valRequest, "params"));
 
                 ThrowIfRefusedInWarmup(jreq.strMethod);
 

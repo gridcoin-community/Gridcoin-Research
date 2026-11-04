@@ -31,6 +31,7 @@
 #include "node/gui_cache.h"
 #include "node/ui_interface.h"
 #include "rpc/client.h"
+#include "rpc/passphrase_params.h"
 #include "rpc/protocol.h"
 #include "rpc/server.h"
 #include "sync.h"
@@ -43,6 +44,7 @@
 
 #include <univalue.h>
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -96,6 +98,51 @@ std::string ArgSubstitute(std::string text, const std::vector<std::string>& args
     }
 
     return text;
+}
+
+//! Run one console command under the console's capability and format the outcome. The command
+//! throws what the RPC throws; the reply, or the formatted error, is returned as text.
+template <typename Execute>
+static RpcConsoleResult RunRpcConsole(const std::string& method, Execute&& execute)
+{
+    RpcConsoleResult out;
+
+    // The command runs under the RpcRequest capability the console began,
+    // when it began one. It begins one only after a command was refused
+    // for the keys (wallet_unlock_needed below), to run that command again.
+    std::optional<CapabilityScope> scope;
+    if (pwalletMain) {
+        scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::RpcRequest);
+    }
+
+    try {
+        ThrowIfRefusedInWarmup(method);
+        UniValue result = execute();
+
+        if (result.isNull()) {
+            out.output.clear();
+        } else if (result.isStr()) {
+            out.output = result.get_str();
+        } else {
+            out.output = result.write(2);
+        }
+        out.ok = true;
+    } catch (UniValue& objError) {
+        try { // Nice formatting for a standard-format error
+            const int code = find_value(objError, "code").get_int();
+            const std::string message = find_value(objError, "message").get_str();
+            out.output = strprintf("%s (code %d)", message, code);
+            out.wallet_unlock_needed = (code == RPC_WALLET_UNLOCK_NEEDED);
+        } catch (const std::runtime_error&) { // missing code/message: raw JSON
+            out.output = objError.write();
+        }
+        out.ok = false;
+    } catch (const std::exception& e) {
+        out.output = std::string("Error: ") + e.what();
+        out.ok = false;
+    }
+
+    return out;
 }
 
 //! In-process Node implementation: thin wrappers over the existing globals.
@@ -355,46 +402,45 @@ public:
     RpcConsoleResult executeRpcConsoleCommand(const std::string& method,
                                               const std::vector<std::string>& args) override
     {
-        RpcConsoleResult out;
-
-        // The command runs under the RpcRequest capability the console began,
-        // when it began one. It begins one only after a command was refused
-        // for the keys (wallet_unlock_needed below), to run that command again.
-        std::optional<CapabilityScope> scope;
-        if (pwalletMain) {
-            scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::RpcRequest);
-        }
-
-        try {
+        return RunRpcConsole(method, [&] {
             // Convert the positional string args in the command-dependent way,
-            // dispatch, and format the reply -- all UniValue handling stays here.
-            ThrowIfRefusedInWarmup(method);
-            UniValue result = tableRPC.execute(method, RPCConvertValues(method, args));
+            // dispatch -- all UniValue handling stays here. The converted params
+            // are overwritten at the passphrase positions when the call is done.
+            const UniValue params = RPCConvertValues(method, args);
+            const PassphraseParamsCleanser cleanser(method, params);
 
-            if (result.isNull()) {
-                out.output.clear();
-            } else if (result.isStr()) {
-                out.output = result.get_str();
-            } else {
-                out.output = result.write(2);
-            }
-            out.ok = true;
-        } catch (UniValue& objError) {
-            try { // Nice formatting for a standard-format error
-                const int code = find_value(objError, "code").get_int();
-                const std::string message = find_value(objError, "message").get_str();
-                out.output = strprintf("%s (code %d)", message, code);
-                out.wallet_unlock_needed = (code == RPC_WALLET_UNLOCK_NEEDED);
-            } catch (const std::runtime_error&) { // missing code/message: raw JSON
-                out.output = objError.write();
-            }
-            out.ok = false;
-        } catch (const std::exception& e) {
-            out.output = std::string("Error: ") + e.what();
-            out.ok = false;
+            return tableRPC.execute(method, params);
+        });
+    }
+
+    RpcConsoleResult executeRpcConsoleSecretCommand(const std::string& method,
+                                                    const std::vector<SecureString>& passphrases,
+                                                    const std::vector<std::string>& args) override
+    {
+        if (PassphraseParamIndexes(method) == nullptr) {
+            RpcConsoleResult refused;
+            refused.output = "Error: " + method + " takes no passphrase";
+            return refused;
         }
 
-        return out;
+        return RunRpcConsole(method, [&] {
+            // The passphrase positions hold placeholders; the SecureStrings carry the passphrases.
+            // The other parameters are converted at their real indexes.
+            const std::vector<int>& indexes = *PassphraseParamIndexes(method);
+            std::vector<std::string> full;
+            size_t next_arg = 0;
+            const size_t total = args.size() + indexes.size();
+
+            for (size_t i = 0; i < total; ++i) {
+                const bool secret = std::find(indexes.begin(), indexes.end(), static_cast<int>(i)) != indexes.end();
+                full.push_back(secret ? std::string() : (next_arg < args.size() ? args[next_arg++] : std::string()));
+            }
+
+            const UniValue params = RPCConvertValues(method, full);
+            const PassphraseParamsCleanser cleanser(method, params);
+
+            return ExecutePassphraseCommand(method, passphrases, params);
+        });
     }
 
     std::vector<std::string> listRpcCommands() override

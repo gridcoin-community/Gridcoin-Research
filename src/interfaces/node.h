@@ -17,6 +17,7 @@
 // (upstream: util/ui_change_type.h) so interface headers stop pulling the
 // signal hub transitively.
 #include "node/ui_interface.h"
+#include "support/allocators/secure.h" // For SecureString.
 #include "uint256.h"
 
 #include <cstdint>
@@ -288,6 +289,13 @@ public:
     //! GUI calls it from its off-thread RPC executor.
     virtual RpcConsoleResult executeRpcConsoleCommand(const std::string& method,
                                                       const std::vector<std::string>& args) = 0;
+
+    //! As executeRpcConsoleCommand, for the methods with passphrase parameters. The
+    //! passphrases cross as SecureString; args are the other parameters in order.
+    //! Any other method: ok = false, output "Error: <method> takes no passphrase".
+    virtual RpcConsoleResult executeRpcConsoleSecretCommand(const std::string& method,
+                                                            const std::vector<SecureString>& passphrases,
+                                                            const std::vector<std::string>& args) = 0;
 
     //! The list of RPC command names, for the console's autocomplete.
     virtual std::vector<std::string> listRpcCommands() = 0;

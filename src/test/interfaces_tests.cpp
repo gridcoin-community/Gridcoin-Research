@@ -205,6 +205,28 @@ BOOST_AUTO_TEST_CASE(console_command_refused_in_warmup)
     BOOST_CHECK(open.output.find("(code -28)") == std::string::npos);
 }
 
+BOOST_AUTO_TEST_CASE(node_secret_console_refuses_other_methods)
+{
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+
+    const interfaces::RpcConsoleResult result =
+        node->executeRpcConsoleSecretCommand("getblockcount", {SecureString("x")}, {});
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(result.output.find("takes no passphrase") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(node_secret_console_changes_passphrase)
+{
+    grc_test::EncryptedWallet fx;
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+
+    const interfaces::RpcConsoleResult result = node->executeRpcConsoleSecretCommand(
+        "walletpassphrasechange", {grc_test::EncryptedWallet::PASSPHRASE, SecureString("p\xc3\xa4 ss")}, {});
+    BOOST_CHECK_MESSAGE(result.ok, result.output);
+
+    BOOST_CHECK(fx.wallet.Unlock(SecureString("p\xc3\xa4 ss")));
+}
+
 BOOST_AUTO_TEST_CASE(node_handler_bridges_ui_signal)
 {
     std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
