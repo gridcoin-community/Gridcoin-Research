@@ -11,19 +11,24 @@
 #include "interfaces/mrc.h"
 #include "interfaces/node.h"
 #include "interfaces/psgt.h"
+#include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
 #include "key.h"
 #include "key_io.h"
+#include "node/access_policy.h"
 #include "node/gui_cache.h"
 #include "node/ui_interface.h"
 #include "gridcoin/scraper/fwd.h"
+#include "gridcoin/sidestake.h"
 #include "primitives/transaction.h"
 #include "psgt.h"
 #include "sync.h"
+#include "test/encrypted_wallet.h"
 #include "test/gui_cache_fakes.h"
 #include "test/psgt_test_helpers.h"
 #include "test/staking_test_peers.h"
+#include "test/state_guard.h"
 #include "txmempool.h"
 #include "util.h"
 #include "util/strencodings.h"
@@ -1381,6 +1386,192 @@ BOOST_AUTO_TEST_CASE(ipc_console_command_runs_under_an_rpc_request_capability)
     BOOST_CHECK(!result.wallet_unlock_needed);
 
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+// The settings getters answer for the settings the GUI reads. Every other name
+// answers with the caller's default, as if it were not set.
+BOOST_AUTO_TEST_CASE(node_setting_getters_answer_only_gui_readable_settings)
+{
+    grc_test::StateGuard state_guard;
+    gArgs.ForceSetArg("-rpcpassword", "pw");
+    gArgs.ForceSetArg("-blocknotify", "x");
+    gArgs.ForceSetArg("-staking", "0");
+
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+
+    BOOST_CHECK_EQUAL(node->getSettingStr("rpcpassword", "d"), "d");
+    BOOST_CHECK(!node->isSettingSet("rpcpassword"));
+    BOOST_CHECK(node->getSettingBool("rpcpassword", true));
+    BOOST_CHECK_EQUAL(node->getSettingInt("rpcpassword", 7), 7);
+    BOOST_CHECK_EQUAL(node->getSettingStr("blocknotify", "d"), "d");
+    BOOST_CHECK(!node->isSettingSet("blocknotify"));
+
+    BOOST_CHECK(!node->getSettingBool("staking", true));
+    BOOST_CHECK(node->isSettingSet("staking"));
+
+    for (const char* name : {"contractchangetoinputaddress", "disableupdatecheck", "enablesidestaking",
+                             "enablestakesplit", "minstakesplitvalue", "proxy", "reservebalance", "showorphans",
+                             "staking", "stakingefficiency", "upnp"}) {
+        BOOST_CHECK_MESSAGE(IsGuiReadableSetting(name), name);
+    }
+
+    for (const char* name : {"rpcpassword", "email", "datadir", "blocknotify", "sidestakeaddresses", ""}) {
+        BOOST_CHECK_MESSAGE(!IsGuiReadableSetting(name), name);
+    }
+}
+
+namespace {
+//! Create the data directory, so that a changed setting can be written to the
+//! settings file.
+void EnsureDataDir()
+{
+    const fs::path datadir = gArgs.GetArg("-datadir", "");
+    BOOST_REQUIRE(!datadir.empty());
+    fs::create_directories(datadir);
+    gArgs.ClearPathCache();
+}
+
+//! Erases the named read-write settings, stored and forced, on exit, so that no
+//! case leaves one behind in the settings file.
+struct RwSettingsEraser
+{
+    std::vector<std::string> m_names;
+
+    explicit RwSettingsEraser(std::vector<std::string> names) : m_names(std::move(names)) {}
+
+    ~RwSettingsEraser()
+    {
+        for (const std::string& name : m_names) {
+            (void)updateRwSetting(name, {}, true);
+        }
+    }
+};
+} // namespace
+
+// An Elevate-class setting changed through the node interface is stored only
+// under the Settings capability the client began, or with a standing full
+// unlock; a capability of another kind does not count.
+BOOST_AUTO_TEST_CASE(node_changesettings_needs_a_settings_elevation)
+{
+    EnsureDataDir();
+
+    // Registered as an Elevate-class setting, as util_tests registers it; the
+    // registration outlives the case.
+    const std::string probe = "k3_elevate_probe";
+    if (!gArgs.GetArgFlags("-" + probe)) {
+        gArgs.AddArg("-" + probe, "unit-test probe", ArgsManager::ALLOW_ANY, OptionsCategory::HIDDEN);
+    }
+
+    const RwSettingsEraser eraser({probe});
+
+    grc_test::EncryptedWalletSwap swap;
+    BOOST_REQUIRE(swap.wallet().Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
+
+    std::unique_ptr<interfaces::Init> init = interfaces::MakeGridcoinInit();
+    std::unique_ptr<interfaces::Wallet> wallet = init->makeWallet();
+    std::unique_ptr<interfaces::Node> node = init->makeNode();
+    BOOST_REQUIRE(wallet != nullptr);
+    BOOST_REQUIRE(node != nullptr);
+
+    interfaces::SettingChangeResult result = node->changeSettings({{probe, "1"}});
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(result.elevation_required);
+    BOOST_CHECK(result.invalid_input);
+    BOOST_CHECK(getRwSetting(probe).isNull());
+
+    BOOST_REQUIRE(wallet->beginElevation(grc_test::EncryptedWalletSwap::Passphrase(), CapabilityKind::Send));
+    result = node->changeSettings({{probe, "1"}});
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(result.elevation_required);
+    wallet->endElevation();
+
+    BOOST_REQUIRE(wallet->beginElevation(grc_test::EncryptedWalletSwap::Passphrase(), CapabilityKind::Settings));
+    result = node->changeSettings({{probe, "1"}});
+    BOOST_CHECK(result.ok);
+    BOOST_CHECK(!result.elevation_required);
+    wallet->endElevation();
+    BOOST_CHECK_EQUAL(getRwSetting(probe).write(), "\"1\"");
+
+    result = node->changeSettings({{probe, "2"}});
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(result.elevation_required);
+    BOOST_CHECK_EQUAL(getRwSetting(probe).write(), "\"1\"");
+
+    BOOST_CHECK(swap.wallet().IsUnlockedForStakingOnly());
+}
+
+// Every side-stake edit through the interface needs the Settings capability the
+// client began, or a standing full unlock.
+BOOST_AUTO_TEST_CASE(sidestake_edits_need_a_settings_elevation)
+{
+    grc_test::StateGuard state_guard;
+    EnsureDataDir();
+    gArgs.ForceSetArg("-enablesidestaking", "1");
+
+    GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+    uint160 hash;
+    *(hash.begin()) = 0x61;
+    const CTxDestination dest = CKeyID(hash);
+    const std::string address = EncodeDestination(dest);
+
+    // Start and end with no entry for the address and no side-stake keys stored.
+    struct Cleanup {
+        GRC::SideStakeRegistry& registry;
+        CTxDestination dest;
+        void Run() const
+        {
+            registry.NonContractDelete(dest, /*save_to_file=*/false);
+            BOOST_CHECK(updateRwSettings({{"sidestakeaddresses", util::SettingsValue{}},
+                                          {"sidestakeallocations", util::SettingsValue{}},
+                                          {"sidestakedescriptions", util::SettingsValue{}}}));
+        }
+        ~Cleanup() { Run(); }
+    } cleanup{registry, dest};
+    cleanup.Run();
+
+    grc_test::EncryptedWalletSwap swap;
+    CWallet& w = swap.wallet();
+    BOOST_REQUIRE(w.Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
+
+    std::unique_ptr<interfaces::Init> init = interfaces::MakeGridcoinInit();
+    std::unique_ptr<interfaces::Wallet> wallet = init->makeWallet();
+    std::unique_ptr<interfaces::SideStakeManager> sidestakes = init->makeSideStakeManager();
+    BOOST_REQUIRE(wallet != nullptr);
+    BOOST_REQUIRE(sidestakes != nullptr);
+
+    const auto addresses = [&sidestakes] {
+        std::vector<std::string> out;
+        for (const interfaces::SideStakeEntry& entry : sidestakes->entries().entries) {
+            out.push_back(entry.address);
+        }
+        return out;
+    };
+    const std::vector<std::string> before = addresses();
+
+    BOOST_CHECK(sidestakes->addLocal(address, 10, "a").status == interfaces::SideStakeEditStatus::ELEVATION_REQUIRED);
+    BOOST_CHECK(addresses() == before);
+    BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+
+    BOOST_REQUIRE(wallet->beginElevation(grc_test::EncryptedWalletSwap::Passphrase(), CapabilityKind::Settings));
+    BOOST_CHECK(sidestakes->addLocal(address, 10, "a").status == interfaces::SideStakeEditStatus::OK);
+    BOOST_CHECK(sidestakes->setDescription(address, "b").status == interfaces::SideStakeEditStatus::OK);
+    wallet->endElevation();
+
+    BOOST_CHECK(sidestakes->setAllocation(address, 20).status == interfaces::SideStakeEditStatus::ELEVATION_REQUIRED);
+    BOOST_CHECK(sidestakes->deleteLocal(address).status == interfaces::SideStakeEditStatus::ELEVATION_REQUIRED);
+    {
+        const auto entries = registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL);
+        BOOST_REQUIRE_EQUAL(entries.size(), 1u);
+        BOOST_CHECK_CLOSE(entries.front()->GetAllocation().ToPercent(), 10.0, 1e-6);
+        BOOST_CHECK_EQUAL(entries.front()->GetDescription(), "b");
+    }
+
+    // A standing full unlock needs no capability.
+    w.Lock();
+    BOOST_REQUIRE(w.Unlock(grc_test::EncryptedWalletSwap::Passphrase()));
+    BOOST_CHECK(sidestakes->deleteLocal(address).status == interfaces::SideStakeEditStatus::OK);
+    BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
+    w.Lock();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

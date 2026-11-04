@@ -52,6 +52,12 @@ private slots:
     void proxyFailedPortRetries();
     void proxyFailedEnableThenValidHost();
 
+    void elevationRefusalAsksAndRetriesOnce();
+    void declinedElevationIsAskedOncePerPass();
+    void oneSubmitAsksOnceForSeveralElevatedFields();
+    void elevationRefusalWithoutAWalletModelFails();
+    void sideStakeEditRefusalAsksAndRetriesOnce();
+
 private:
     // Suite-wide QSettings redirect (see initTestCase) and what it replaced.
     std::unique_ptr<QTemporaryDir> m_settings_root;

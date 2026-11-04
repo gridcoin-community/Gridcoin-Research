@@ -68,10 +68,26 @@ SideStakeTableModel::EditStatus MapEditStatus(interfaces::SideStakeEditStatus st
     case interfaces::SideStakeEditStatus::DUPLICATE_ADDRESS:   return SideStakeTableModel::DUPLICATE_ADDRESS;
     case interfaces::SideStakeEditStatus::INVALID_ALLOCATION:  return SideStakeTableModel::INVALID_ALLOCATION;
     case interfaces::SideStakeEditStatus::INVALID_DESCRIPTION: return SideStakeTableModel::INVALID_DESCRIPTION;
+    case interfaces::SideStakeEditStatus::ELEVATION_REQUIRED:  return SideStakeTableModel::ELEVATION_REQUIRED;
     }
 
     assert(false);
     return SideStakeTableModel::OK;
+}
+
+//! Run one side-stake command, and once more when the node refused it for want
+//! of the wallet passphrase and \p options got a Settings capability for it.
+template <typename Edit>
+interfaces::SideStakeEditResult RunEdit(OptionsModel* options, Edit&& edit)
+{
+    interfaces::SideStakeEditResult result = edit();
+
+    if (result.status == interfaces::SideStakeEditStatus::ELEVATION_REQUIRED
+            && options != nullptr && options->elevateSettingsAfterRefusal()) {
+        result = edit();
+    }
+
+    return result;
 }
 
 } // anonymous namespace
@@ -118,6 +134,7 @@ SideStakeTableModel::SideStakeTableModel(interfaces::SideStakeManager& sidestake
     : QAbstractTableModel(parent)
     , m_edit_status(OK)
     , m_sidestake_manager(sidestake_manager)
+    , m_options_model(parent)
     , m_local_revision_high_water(0)
 {
     m_columns << tr("Address") << tr("Allocation") << tr("Description") << tr("Status");
@@ -250,8 +267,9 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
             return false;
         }
 
-        const interfaces::SideStakeEditResult result =
-            m_sidestake_manager.setAllocation(address, allocation_percent);
+        const interfaces::SideStakeEditResult result = RunEdit(m_options_model, [&] {
+            return m_sidestake_manager.setAllocation(address, allocation_percent);
+        });
 
         m_edit_status = MapEditStatus(result.status);
 
@@ -265,8 +283,9 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
     }
     case Description:
     {
-        const interfaces::SideStakeEditResult result =
-            m_sidestake_manager.setDescription(address, value.toString().toStdString());
+        const interfaces::SideStakeEditResult result = RunEdit(m_options_model, [&] {
+            return m_sidestake_manager.setDescription(address, value.toString().toStdString());
+        });
 
         m_edit_status = MapEditStatus(result.status);
 
@@ -346,8 +365,9 @@ QString SideStakeTableModel::addRow(const QString &address, const QString &alloc
         return QString();
     }
 
-    const interfaces::SideStakeEditResult result =
-        m_sidestake_manager.addLocal(address.toStdString(), allocation_percent, description.toStdString());
+    const interfaces::SideStakeEditResult result = RunEdit(m_options_model, [&] {
+        return m_sidestake_manager.addLocal(address.toStdString(), allocation_percent, description.toStdString());
+    });
 
     m_edit_status = MapEditStatus(result.status);
 
@@ -375,7 +395,12 @@ bool SideStakeTableModel::removeRows(int row, int count, const QModelIndex &pare
         return false;
     }
 
-    const interfaces::SideStakeEditResult result = m_sidestake_manager.deleteLocal(rec->address);
+    // Copied: a refetch while the passphrase is asked for would invalidate rec.
+    const std::string address = rec->address;
+
+    const interfaces::SideStakeEditResult result = RunEdit(m_options_model, [&] {
+        return m_sidestake_manager.deleteLocal(address);
+    });
 
     if (result.status != interfaces::SideStakeEditStatus::OK) {
         return false;

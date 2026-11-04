@@ -5,6 +5,12 @@
 #include <QAbstractListModel>
 #include <QDate>
 
+#include <functional>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace interfaces {
 class Node;
 class SideStakeManager;
@@ -79,6 +85,24 @@ public:
     //! never from the constructor, which runs before those.
     void migrateCoreSettings();
 
+    //! Asks for the wallet passphrase and begins a Settings capability with it.
+    //! Returns what holds that capability, which ends it when destroyed, or null
+    //! when none was begun (the user cancelled, or no prompt could be shown).
+    using SettingsElevationRequest = std::function<std::shared_ptr<void>()>;
+
+    //! The wallet model sets this while it exists, and clears it (an empty
+    //! function) when it goes, which also ends a capability still held. With
+    //! none set, a change the node refuses for want of the passphrase fails as
+    //! any other refused change does.
+    void setSettingsElevationRequest(SettingsElevationRequest request);
+
+    //! After the node refused a change for want of the wallet passphrase, ask
+    //! for it and return whether a Settings capability is now held, so that the
+    //! caller sends the same change once more. Asks at most once until control
+    //! returns to the event loop and holds the capability until then, so that
+    //! one submit of several fields asks once.
+    bool elevateSettingsAfterRefusal();
+
     int rowCount(const QModelIndex & parent = QModelIndex()) const;
     QVariant data(const QModelIndex & index, int role = Qt::DisplayRole) const;
     bool setData(const QModelIndex & index, const QVariant & value, int role = Qt::EditRole);
@@ -126,6 +150,11 @@ public:
     void toggleCoinControlFeatures();
 
 private:
+    //! Change core settings through the node. A change refused for want of the
+    //! wallet passphrase is sent once more when elevateSettingsAfterRefusal()
+    //! gets a Settings capability. Returns whether the node stored the change.
+    bool changeCoreSettings(const std::vector<std::pair<std::string, std::string>>& settings);
+
     //! Settings command/query surface; owned by the process, outlives this model.
     interfaces::Node& m_node;
     int nDisplayUnit;
@@ -152,6 +181,17 @@ private:
     interfaces::SideStakeManager& m_sidestake_manager;
 
     SideStakeTableModel* m_sidestake_model;
+
+    //! Set by the wallet model; see setSettingsElevationRequest().
+    SettingsElevationRequest m_settings_elevation_request;
+
+    //! The capability elevateSettingsAfterRefusal() began, held until control
+    //! returns to the event loop.
+    std::shared_ptr<void> m_settings_elevation;
+
+    //! elevateSettingsAfterRefusal() has asked since control last returned to
+    //! the event loop.
+    bool m_settings_elevation_asked{false};
 
 signals:
     void displayUnitChanged(int unit);

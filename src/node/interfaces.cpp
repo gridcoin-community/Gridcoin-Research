@@ -27,6 +27,7 @@
 #include "chain.h"
 #include "net.h"
 #include "netbase.h"
+#include "node/access_policy.h"
 #include "node/gui_cache.h"
 #include "node/ui_interface.h"
 #include "rpc/client.h"
@@ -400,23 +401,30 @@ public:
         return tableRPC.listCommands();
     }
 
+    // The getters answer only for the settings the GUI reads
+    // (IsGuiReadableSetting). Any other name reads as unset: the caller's
+    // default, and isSettingSet() false.
     bool getSettingBool(const std::string& name, bool default_val) override
     {
+        if (!IsGuiReadableSetting(name)) return default_val;
         return gArgs.GetBoolArg("-" + name, default_val);
     }
 
     int64_t getSettingInt(const std::string& name, int64_t default_val) override
     {
+        if (!IsGuiReadableSetting(name)) return default_val;
         return gArgs.GetArg("-" + name, default_val);
     }
 
     std::string getSettingStr(const std::string& name, const std::string& default_val) override
     {
+        if (!IsGuiReadableSetting(name)) return default_val;
         return gArgs.GetArg("-" + name, default_val);
     }
 
     bool isSettingSet(const std::string& name) override
     {
+        if (!IsGuiReadableSetting(name)) return false;
         return gArgs.IsArgSet("-" + name);
     }
 
@@ -424,6 +432,15 @@ public:
         const std::vector<std::pair<std::string, std::string>>& settings) override
     {
         SettingChangeResult out;
+
+        // The change runs under the Settings capability the client began, when
+        // it began one, which lets an Elevate-class setting through on a wallet
+        // without a full unlock.
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) {
+            scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
+        }
+
         // ChangeSettings() can throw: with dynamic settings disabled (-nosettings)
         // the settings-file write throws, after the settings are restored. Report
         // it as a failed change, as the RPC dispatcher does for changesettings,
@@ -435,7 +452,9 @@ public:
             bool elevation_required = false;
             out.ok = ChangeSettings(settings, out.requires_restart, out.no_change, out.immediate,
                                     out.requires_restart_settings, out.invalid_input, elevation_required, out.error);
-            // The caller sees an elevation refusal as a rejected input, with the message.
+            // An elevation refusal is a rejected input, with the message, and is
+            // flagged so the GUI can ask for the passphrase and send it again.
+            out.elevation_required = elevation_required;
             if (elevation_required) out.invalid_input = true;
         } catch (const std::exception& e) {
             out.ok = false;

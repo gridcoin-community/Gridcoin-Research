@@ -884,6 +884,12 @@ public:
     void LoadLocalSideStakesFromConfig();
 
     //!
+    //! \brief Logs whether side staking is enabled and the active local side stakes, each with its
+    //! address, allocation and description. Initialize() calls it after the start-up load.
+    //!
+    void LogLocalSideStakes() const;
+
+    //!
     //! \brief Monotonic in-memory revision of the LOCAL (voluntary, rwsettings-
     //! persisted) sidestake state, advanced at every local mutation commit
     //! (design §4.4 versioned refetch). Lets a consumer (e.g. the GUI sidestake

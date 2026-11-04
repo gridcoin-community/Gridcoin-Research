@@ -64,6 +64,7 @@ enum class SideStakeEditStatus
     DUPLICATE_ADDRESS,   //!< A local sidestake for this address already exists.
     INVALID_ALLOCATION,  //!< Allocation negative or would push the total past 100%.
     INVALID_DESCRIPTION, //!< Description contains characters outside SAFE_CHARS_CSV.
+    ELEVATION_REQUIRED,  //!< Nothing done: changing side stakes needs the wallet passphrase.
 };
 
 //! Result of a mutating command. \p local_revision is the post-mutation local

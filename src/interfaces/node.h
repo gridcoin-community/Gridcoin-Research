@@ -89,6 +89,10 @@ struct SettingChangeResult
     bool ok = false;
     bool invalid_input = false;
     std::string error;
+    //! Nothing was changed because a setting in the batch needs the wallet
+    //! passphrase (invalid_input is set too). The GUI can ask for it, begin a
+    //! Settings capability with it and send the same batch again.
+    bool elevation_required = false;
     //! At least one changed setting does not take effect until restart.
     bool requires_restart = false;
     //! name=value strings, categorized like the changesettings RPC.

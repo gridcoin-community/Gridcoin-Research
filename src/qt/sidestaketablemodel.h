@@ -54,7 +54,8 @@ public:
         INVALID_ADDRESS,        /**< Unparseable address */
         DUPLICATE_ADDRESS,      /**< Address already in sidestake registry */
         INVALID_ALLOCATION,     /**< Allocation is invalid (i.e. not parseable or not between 0.0 and 100.0) */
-        INVALID_DESCRIPTION     /**< Description contains an invalid character */
+        INVALID_DESCRIPTION,    /**< Description contains an invalid character */
+        ELEVATION_REQUIRED      /**< Not saved: changing side stakes needs the wallet passphrase */
     };
 
     /** @name Methods overridden from QAbstractTableModel
@@ -94,6 +95,11 @@ private:
     //! The node-side sidestake registry boundary (Phase 1d-ii). Owned by the
     //! process and outlives this model.
     interfaces::SideStakeManager& m_sidestake_manager;
+
+    //! The options model that owns this one, which asks for the wallet
+    //! passphrase when the node refuses an edit for want of it. Null when this
+    //! model has no owner, and a refused edit then fails as it is.
+    OptionsModel* m_options_model{nullptr};
 
     //! High-water mark of the local sidestake revision seen across mutation
     //! returns and accepted notifications (design §4.4). RwSettingsUpdated

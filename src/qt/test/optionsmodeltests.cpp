@@ -17,6 +17,7 @@
 #include <QVariant>
 
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -83,6 +84,37 @@ bool SubmitProxyUntouched(OptionsModel& model)
     return model.setData(model.index(OptionsModel::ProxyUse), UntouchedSubmit(model, OptionsModel::ProxyUse, false), Qt::EditRole)
         && model.setData(model.index(OptionsModel::ProxyIP), UntouchedSubmit(model, OptionsModel::ProxyIP, true), Qt::EditRole)
         && model.setData(model.index(OptionsModel::ProxyPort), UntouchedSubmit(model, OptionsModel::ProxyPort, true), Qt::EditRole);
+}
+
+//! A Settings capability the fake prompt began: the fake it was given accepts
+//! changes that need the passphrase while this lives.
+class FakeElevation
+{
+public:
+    explicit FakeElevation(bool& elevated) : m_elevated(elevated) { m_elevated = true; }
+    ~FakeElevation() { m_elevated = false; }
+
+    FakeElevation(const FakeElevation&) = delete;
+    FakeElevation& operator=(const FakeElevation&) = delete;
+
+private:
+    bool& m_elevated;
+};
+
+//! Stand in for the wallet model's passphrase prompt: count each prompt in
+//! \p asks and, when \p grant, begin a FakeElevation over \p elevated.
+void InstallPrompt(OptionsModel& model, int& asks, bool grant, bool& elevated)
+{
+    model.setSettingsElevationRequest([&asks, grant, &elevated]() -> std::shared_ptr<void> {
+        ++asks;
+        if (!grant) return nullptr;
+        return std::make_shared<FakeElevation>(elevated);
+    });
+}
+
+bool SubmitSideStaking(OptionsModel& model, bool enabled)
+{
+    return model.setData(model.index(OptionsModel::EnableSideStaking), QVariant(enabled), Qt::EditRole);
 }
 } // anonymous namespace
 
@@ -453,4 +485,124 @@ void OptionsModelTests::proxyFailedEnableThenValidHost()
     QVERIFY(model.setData(model.index(OptionsModel::ProxyUse), QVariant(true), Qt::EditRole));
     QCOMPARE(node.m_change_calls.size(), size_t{3});
     QCOMPARE(node.m_change_calls.back(), (SettingsBatch{{"proxy", "10.0.0.2:9050"}}));
+}
+
+void OptionsModelTests::elevationRefusalAsksAndRetriesOnce()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    OptionsModel model(node, sidestakes);
+    node.m_needs_elevation = {"enablesidestaking"};
+
+    int asks = 0;
+    InstallPrompt(model, asks, true, node.m_elevated);
+
+    // Refused, asked for the passphrase once, and sent once more under it.
+    QVERIFY(SubmitSideStaking(model, true));
+    QCOMPARE(asks, 1);
+    QCOMPARE(node.m_change_calls.size(), size_t{2});
+    QCOMPARE(node.getSettingStr("enablesidestaking", ""), std::string("1"));
+
+    // The capability is held until control returns to the event loop.
+    QVERIFY(node.m_elevated);
+    QCoreApplication::processEvents();
+    QVERIFY(!node.m_elevated);
+}
+
+void OptionsModelTests::declinedElevationIsAskedOncePerPass()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    OptionsModel model(node, sidestakes);
+    node.m_needs_elevation = {"enablesidestaking"};
+
+    int asks = 0;
+    InstallPrompt(model, asks, false, node.m_elevated);
+
+    // Declined: the change fails, is not sent again, and stores nothing.
+    QVERIFY(!SubmitSideStaking(model, true));
+    QCOMPARE(asks, 1);
+    QCOMPARE(node.m_change_calls.size(), size_t{1});
+    QVERIFY(!node.isSettingSet("enablesidestaking"));
+
+    // A second refusal before control returns to the event loop does not ask again.
+    QVERIFY(!SubmitSideStaking(model, true));
+    QCOMPARE(asks, 1);
+    QCOMPARE(node.m_change_calls.size(), size_t{2});
+
+    // A later submit asks again.
+    QCoreApplication::processEvents();
+    QVERIFY(!SubmitSideStaking(model, true));
+    QCOMPARE(asks, 2);
+}
+
+void OptionsModelTests::oneSubmitAsksOnceForSeveralElevatedFields()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    OptionsModel model(node, sidestakes);
+    node.m_needs_elevation = {"proxy", "enablesidestaking"};
+
+    int asks = 0;
+    InstallPrompt(model, asks, true, node.m_elevated);
+
+    // Enabling the proxy, changing its host and enabling side staking in one
+    // submit writes the proxy twice and side staking once, and asks once.
+    QVERIFY(model.setData(model.index(OptionsModel::ProxyUse), QVariant(true), Qt::EditRole));
+    QVERIFY(model.setData(model.index(OptionsModel::ProxyIP), QVariant(QStringLiteral("10.0.0.1")), Qt::EditRole));
+    QVERIFY(SubmitSideStaking(model, true));
+    QCOMPARE(asks, 1);
+    QCOMPARE(node.m_change_calls.size(), size_t{4});
+    QCOMPARE(node.getSettingStr("proxy", ""), std::string("10.0.0.1:9050"));
+    QCOMPARE(node.getSettingStr("enablesidestaking", ""), std::string("1"));
+
+    // The next submit asks again.
+    QCoreApplication::processEvents();
+    QVERIFY(SubmitSideStaking(model, false));
+    QCOMPARE(asks, 2);
+}
+
+void OptionsModelTests::elevationRefusalWithoutAWalletModelFails()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    OptionsModel model(node, sidestakes);
+    node.m_needs_elevation = {"enablesidestaking"};
+
+    QVERIFY(!SubmitSideStaking(model, true));
+    QCOMPARE(node.m_change_calls.size(), size_t{1});
+    QVERIFY(!node.isSettingSet("enablesidestaking"));
+}
+
+void OptionsModelTests::sideStakeEditRefusalAsksAndRetriesOnce()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    sidestakes.m_needs_elevation = true;
+    sidestakes.m_edit_result.status = interfaces::SideStakeEditStatus::OK;
+    sidestakes.m_edit_result.address = "encodedAddr";
+    OptionsModel model(node, sidestakes);
+    SideStakeTableModel* table = model.getSideStakeTableModel();
+
+    // Declined: the add fails with the elevation status and is not sent again.
+    int declined_asks = 0;
+    InstallPrompt(model, declined_asks, false, sidestakes.m_elevated);
+    QVERIFY(table->addRow("rawAddr", "10", "d").isEmpty());
+    QCOMPARE(declined_asks, 1);
+    QCOMPARE(sidestakes.m_edit_calls, 1);
+    QCOMPARE(table->getEditStatus(), SideStakeTableModel::ELEVATION_REQUIRED);
+    QCoreApplication::processEvents();
+
+    // Given: sent once more under the capability, which stays held for the
+    // rest of the pass, so the next edit is not asked again.
+    int asks = 0;
+    InstallPrompt(model, asks, true, sidestakes.m_elevated);
+    QCOMPARE(table->addRow("rawAddr", "10", "d"), QString("encodedAddr"));
+    QCOMPARE(asks, 1);
+    QCOMPARE(sidestakes.m_edit_calls, 3);
+    QCOMPARE(table->getEditStatus(), SideStakeTableModel::OK);
+    QVERIFY(sidestakes.m_elevated);
+
+    QCoreApplication::processEvents();
+    QVERIFY(!sidestakes.m_elevated);
 }

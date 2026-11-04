@@ -146,6 +146,7 @@ struct SettingChangeResult $Proxy.wrap("interfaces::SettingChangeResult") {
     noChange @4 :List(Text) $Proxy.name("no_change");
     immediate @5 :List(Text);
     requiresRestartSettings @6 :List(Text) $Proxy.name("requires_restart_settings");
+    elevationRequired @7 :Bool $Proxy.name("elevation_required");
 }
 
 struct ScraperConvergenceSnapshot $Proxy.wrap("interfaces::ScraperConvergenceSnapshot") {

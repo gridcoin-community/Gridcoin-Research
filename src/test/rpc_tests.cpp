@@ -423,6 +423,40 @@ BOOST_AUTO_TEST_CASE(free_rows_run_without_elevation)
     BOOST_CHECK_NO_THROW(RunAs("getbalance", {}));
 }
 
+BOOST_AUTO_TEST_CASE(elevate_rows_run_with_an_unencrypted_wallet)
+{
+    struct RestoreFee { int64_t saved{nTransactionFee}; ~RestoreFee() { nTransactionFee = saved; } } restore;
+
+    // The fixture's wallet is not encrypted, so it has no keys to protect.
+    BOOST_REQUIRE(pwalletMain != nullptr);
+    BOOST_REQUIRE(!pwalletMain->IsCrypted());
+
+    BOOST_CHECK_NO_THROW(RunAs("settxfee", {"0.002"}));
+    BOOST_CHECK_EQUAL(nTransactionFee, 200000);
+}
+
+BOOST_AUTO_TEST_CASE(elevate_rows_are_refused_with_no_wallet_loaded)
+{
+    struct RestoreFee { int64_t saved{nTransactionFee}; ~RestoreFee() { nTransactionFee = saved; } } restore;
+    struct NoWallet {
+        CWallet* saved{pwalletMain};
+        NoWallet() { pwalletMain = nullptr; }
+        ~NoWallet() { pwalletMain = saved; }
+    } no_wallet;
+
+    const int64_t before = nTransactionFee;
+
+    BOOST_CHECK_EXCEPTION(RunAs("settxfee", {"0.003"}), UniValue,
+        [](const UniValue& e) {
+            return CodeIs(e, RPC_WALLET_UNLOCK_NEEDED)
+                && find_value(e, "message").get_str() == "Error: no wallet is loaded.";
+        });
+    BOOST_CHECK_EQUAL(nTransactionFee, before);
+
+    // A row of another class runs as before.
+    BOOST_CHECK_NO_THROW(RunAs("getblockcount", {}));
+}
+
 BOOST_AUTO_TEST_CASE(the_access_gate_follows_the_arity_check)
 {
     grc_test::EncryptedWalletSwap fx;

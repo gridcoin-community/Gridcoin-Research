@@ -40,6 +40,7 @@
 #include "key_io.h"
 #include "chain.h"
 #include "net_processing.h"
+#include "node/access_policy.h"
 #include "node/psgt_pool.h"
 #include "node/ui_interface.h"
 #include "psgt.h"
@@ -62,6 +63,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -458,6 +460,11 @@ private:
 //! methods, so no GUI code holds a GRC::SideStake or calls GetSideStakeRegistry()
 //! directly. Mutations return the post-mutation local sidestake revision (design
 //! §4.4) for read-your-writes.
+//!
+//! Every mutation changes side stakes, which needs the wallet passphrase. Each
+//! runs under the Settings capability the client began for the wallet, when it
+//! began one, and answers ELEVATION_REQUIRED, having done nothing, unless the
+//! wallet's keys are usable: a capability, a full unlock, or no encryption.
 class SideStakeManagerImpl : public SideStakeManager
 {
 public:
@@ -496,6 +503,10 @@ public:
                                  double allocation_percent,
                                  const std::string& description) override
     {
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
+
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
         const CTxDestination destination = DecodeDestination(address);
@@ -551,6 +562,10 @@ public:
     SideStakeEditResult setAllocation(const std::string& address,
                                       double allocation_percent) override
     {
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
+
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
         GRC::SideStake original;
@@ -591,6 +606,10 @@ public:
     SideStakeEditResult setDescription(const std::string& address,
                                        const std::string& description) override
     {
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
+
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
         GRC::SideStake original;
@@ -619,6 +638,10 @@ public:
 
     SideStakeEditResult deleteLocal(const std::string& address) override
     {
+        std::optional<CapabilityScope> scope;
+        if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
+
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
         GRC::SideStake original;

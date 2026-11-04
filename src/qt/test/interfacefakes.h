@@ -23,6 +23,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <thread>
 #include <utility>
@@ -45,15 +46,20 @@ namespace qt_test {
 //! Fake interfaces::SideStakeManager: serves a canned entries() snapshot, returns
 //! a canned result from every mutating command, and records the last add/delete
 //! so a test can assert the model delegated to the interface with the right args.
+//! With m_needs_elevation set, every mutating command answers ELEVATION_REQUIRED
+//! while m_elevated is false, as the node does without a Settings capability.
 class FakeSideStakeManager : public interfaces::SideStakeManager
 {
 public:
     // Canned responses (set by the test before use).
     interfaces::SideStakeSnapshot m_snapshot;
     interfaces::SideStakeEditResult m_edit_result;
+    bool m_needs_elevation = false;
+    bool m_elevated = false;
 
     // Recorded calls.
     int m_entries_calls = 0;
+    int m_edit_calls = 0;
     std::string m_last_add_address;
     double m_last_add_allocation = 0.0;
     std::string m_last_add_description;
@@ -74,25 +80,25 @@ public:
         m_last_add_address = address;
         m_last_add_allocation = allocation_percent;
         m_last_add_description = description;
-        return m_edit_result;
+        return EditResult();
     }
 
     interfaces::SideStakeEditResult setAllocation(const std::string& /*address*/,
                                                   double /*allocation_percent*/) override
     {
-        return m_edit_result;
+        return EditResult();
     }
 
     interfaces::SideStakeEditResult setDescription(const std::string& /*address*/,
                                                    const std::string& /*description*/) override
     {
-        return m_edit_result;
+        return EditResult();
     }
 
     interfaces::SideStakeEditResult deleteLocal(const std::string& address) override
     {
         m_last_deleted_address = address;
-        return m_edit_result;
+        return EditResult();
     }
 
     // The subscription callbacks are dropped: these tests exercise the query and
@@ -110,6 +116,21 @@ public:
         interfaces::MandatorySideStakeChangedFn /*fn*/) override
     {
         return interfaces::MakeCleanupHandler([] {});
+    }
+
+private:
+    //! Counts the command and answers it.
+    interfaces::SideStakeEditResult EditResult()
+    {
+        ++m_edit_calls;
+
+        if (m_needs_elevation && !m_elevated) {
+            interfaces::SideStakeEditResult refused;
+            refused.status = interfaces::SideStakeEditStatus::ELEVATION_REQUIRED;
+            return refused;
+        }
+
+        return m_edit_result;
     }
 };
 
@@ -263,6 +284,11 @@ public:
     // Counts the chain-state reads a model makes of the node (the ones that
     // take cs_main in the real node), so a test can show a model made none.
     int m_chain_reads = 0;
+    // A batch naming one of these is refused for want of the wallet passphrase
+    // while m_elevated is false, as the node refuses an Elevate-class setting
+    // without a Settings capability: nothing applied, elevation_required set.
+    std::set<std::string> m_needs_elevation;
+    bool m_elevated{false};
 
     std::string getSettingStr(const std::string& name, const std::string& default_val) override
     {
@@ -297,6 +323,16 @@ public:
             interfaces::SettingChangeResult failure;
             failure.ok = false;
             return failure;
+        }
+        for (const auto& setting : settings) {
+            if (!m_elevated && m_needs_elevation.count(setting.first)) {
+                interfaces::SettingChangeResult refused;
+                refused.ok = false;
+                refused.invalid_input = true;
+                refused.elevation_required = true;
+                refused.error = "Changing " + setting.first + " needs the wallet passphrase";
+                return refused;
+            }
         }
         for (const auto& [name, value] : settings) {
             if (value.empty()) {

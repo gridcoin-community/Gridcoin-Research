@@ -1,6 +1,7 @@
 #include "optionsmodel.h"
 
 #include <QDebug>
+#include <QMetaObject>
 #include <QSettings>
 
 #include "bitcoinunits.h"
@@ -29,20 +30,18 @@ std::string FormatReserveBalanceSetting(qint64 sat)
     return s.toStdString();
 }
 
-//! Push the effective proxy to the core -proxy setting: the GUI keeps its three
+//! The effective proxy for the core -proxy setting: the GUI keeps its three
 //! proxy fields (enable + address) as local editing state in QSettings, and the
 //! effective value (the address when enabled, empty when disabled) is mirrored to
 //! gridcoinsettings.json through the node. Empty erases -proxy, so a -proxy on the
 //! command line or in the config file still applies; netbase cannot clear a live
 //! proxy, so disabling is effective on restart (unchanged from the previous
 //! behavior).
-bool PushEffectiveProxy(interfaces::Node& node, QSettings& settings)
+std::string EffectiveProxy(QSettings& settings)
 {
     const bool use_proxy = settings.value(GUIUtil::nodeSettingsKey("fUseProxy"), false).toBool();
-    const std::string addr =
-        use_proxy ? settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString().toStdString()
-                  : std::string();
-    return node.changeSettings({{"proxy", addr}}).ok;
+    return use_proxy ? settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString().toStdString()
+                     : std::string();
 }
 
 //! Put a proxy field back as it was before a push that failed: its previous
@@ -216,6 +215,48 @@ void OptionsModel::migrateCoreSettings()
     }
 }
 
+void OptionsModel::setSettingsElevationRequest(SettingsElevationRequest request)
+{
+    m_settings_elevation_request = std::move(request);
+
+    // A capability still held was begun through the request being replaced.
+    m_settings_elevation.reset();
+}
+
+bool OptionsModel::elevateSettingsAfterRefusal()
+{
+    if (!m_settings_elevation_request || m_settings_elevation_asked) {
+        return false;
+    }
+
+    // The Options dialog submits every field in one pass, and the proxy fields
+    // each write the proxy setting. Asking once for the pass, and holding what
+    // the user gave until control returns to the event loop, lets the rest of
+    // the submit through on that one answer, or refuses it on that one refusal.
+    m_settings_elevation_asked = true;
+    m_settings_elevation = m_settings_elevation_request();
+
+    QMetaObject::invokeMethod(this, [this] {
+        m_settings_elevation.reset();
+        m_settings_elevation_asked = false;
+    }, Qt::QueuedConnection);
+
+    return m_settings_elevation != nullptr;
+}
+
+bool OptionsModel::changeCoreSettings(const std::vector<std::pair<std::string, std::string>>& settings)
+{
+    const interfaces::SettingChangeResult result = m_node.changeSettings(settings);
+
+    if (result.ok || !result.elevation_required || !elevateSettingsAfterRefusal()) {
+        return result.ok;
+    }
+
+    // Refused for want of the wallet passphrase, which the user has now given:
+    // send the same change once more, under the capability it began.
+    return m_node.changeSettings(settings).ok;
+}
+
 int OptionsModel::rowCount(const QModelIndex & parent) const
 {
     return OptionIDRowCount;
@@ -365,7 +406,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
             // Core setting: the node applies it (SetUseUPnP + MapPort start/stop
             // the port-map thread) via the immediate-effect hook.
-            successful = m_node.changeSettings({{"upnp", value.toBool() ? "1" : "0"}}).ok;
+            successful = changeCoreSettings({{"upnp", value.toBool() ? "1" : "0"}});
             break;
         case MinimizeOnClose:
             fMinimizeOnClose = value.toBool();
@@ -391,7 +432,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             const std::optional<QVariant> previous =
                 settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
             settings.setValue(key, value.toBool());
-            successful = PushEffectiveProxy(m_node, settings);
+            successful = changeCoreSettings({{"proxy", EffectiveProxy(settings)}});
             if (!successful) RestoreProxyField(settings, key, previous);
         }
         break;
@@ -405,7 +446,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             const std::optional<QVariant> previous =
                 settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
             settings.setValue(key, updated);
-            successful = PushEffectiveProxy(m_node, settings);
+            successful = changeCoreSettings({{"proxy", EffectiveProxy(settings)}});
             if (!successful) RestoreProxyField(settings, key, previous);
         }
         break;
@@ -418,7 +459,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             const std::optional<QVariant> previous =
                 settings.contains(key) ? std::optional<QVariant>(settings.value(key)) : std::nullopt;
             settings.setValue(key, updated);
-            successful = PushEffectiveProxy(m_node, settings);
+            successful = changeCoreSettings({{"proxy", EffectiveProxy(settings)}});
             if (!successful) RestoreProxyField(settings, key, previous);
         }
         break;
@@ -438,8 +479,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             // Store as a plain money string, zero included. An empty value would
             // erase the setting instead, and a -reservebalance in the config file
             // would then apply again rather than the zero chosen here.
-            successful = m_node.changeSettings(
-                {{"reservebalance", FormatReserveBalanceSetting(sat)}}).ok;
+            successful = changeCoreSettings({{"reservebalance", FormatReserveBalanceSetting(sat)}});
             if (successful) {
                 emit reserveBalanceChanged(sat);
             }
@@ -509,7 +549,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             // Core read-write setting (the core scheduler and the GUI both read
             // it); route through the node so it persists to gridcoinsettings.json.
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"disableupdatecheck", value.toBool() ? "1" : "0"}}).ok;
+            successful = changeCoreSettings({{"disableupdatecheck", value.toBool() ? "1" : "0"}});
             break;
         case DataDir:
             // There is no SetArgument here, because the core data directory cannot
@@ -524,27 +564,27 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         // changed; see MapPortUPnP.
         case EnableStaking:
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"staking", value.toBool() ? "1" : "0"}}).ok;
+            successful = changeCoreSettings({{"staking", value.toBool() ? "1" : "0"}});
             break;
         case EnableStakeSplit:
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"enablestakesplit", value.toBool() ? "1" : "0"}}).ok;
+            successful = changeCoreSettings({{"enablestakesplit", value.toBool() ? "1" : "0"}});
             break;
         case EnableSideStaking:
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"enablesidestaking", value.toBool() ? "1" : "0"}}).ok;
+            successful = changeCoreSettings({{"enablesidestaking", value.toBool() ? "1" : "0"}});
             break;
         case StakingEfficiency:
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"stakingefficiency", value.toString().toStdString()}}).ok;
+            successful = changeCoreSettings({{"stakingefficiency", value.toString().toStdString()}});
             break;
         case MinStakeSplitValue:
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"minstakesplitvalue", value.toString().toStdString()}}).ok;
+            successful = changeCoreSettings({{"minstakesplitvalue", value.toString().toStdString()}});
             break;
         case ContractChangeToInput:
             if (SubmittedValueUnchanged(value, data(index, Qt::EditRole))) break;
-            successful = m_node.changeSettings({{"contractchangetoinputaddress", value.toBool() ? "1" : "0"}}).ok;
+            successful = changeCoreSettings({{"contractchangetoinputaddress", value.toBool() ? "1" : "0"}});
             break;
         default:
             break;

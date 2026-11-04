@@ -136,3 +136,23 @@ void SideStakeModelTests::removeRowRefusesMandatory()
     QVERIFY(!model.removeRows(0, 1, QModelIndex()));
     QVERIFY(fake.m_last_deleted_address.empty());
 }
+
+void SideStakeModelTests::elevationRequiredStatusMaps()
+{
+    qt_test::FakeSideStakeManager fake;
+    fake.m_snapshot.entries.push_back(MakeEntry("localAddr", 10.0, "d", "Active", false));
+    fake.m_edit_result.status = interfaces::SideStakeEditStatus::ELEVATION_REQUIRED;
+
+    // With no options model to ask for the passphrase, the refusal is the result.
+    SideStakeTableModel model(fake);
+    model.refresh();
+
+    QVERIFY(model.addRow("rawAddr", "10", "d").isEmpty());
+    QCOMPARE(model.getEditStatus(), SideStakeTableModel::ELEVATION_REQUIRED);
+
+    QVERIFY(!model.setData(model.index(0, SideStakeTableModel::Description, QModelIndex()), QString("e"), Qt::EditRole));
+    QCOMPARE(model.getEditStatus(), SideStakeTableModel::ELEVATION_REQUIRED);
+
+    QVERIFY(!model.removeRows(0, 1, QModelIndex()));
+    QCOMPARE(fake.m_edit_calls, 3);
+}

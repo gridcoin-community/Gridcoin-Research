@@ -13,6 +13,7 @@
 #include <QTimer>
 
 #include <cassert>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -70,11 +71,24 @@ WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource&
     connect(eventDrainTimer, &QTimer::timeout, this, &WalletModel::drainEventQueue);
     eventDrainTimer->start(MODEL_EVENT_DRAIN_INTERVAL);
 
+    // A core setting or side-stake edit the node refuses for want of the wallet
+    // passphrase asks for it here, as every other operation that needs the keys
+    // does, and the options model sends it again under the Settings capability.
+    optionsModel->setSettingsElevationRequest([this]() -> std::shared_ptr<void> {
+        auto context = std::make_shared<UnlockContext>(requestUnlock(CapabilityKind::Settings));
+        if (!context->isValid()) return nullptr;
+        return context;
+    });
+
     subscribeToCoreSignals();
 }
 
 WalletModel::~WalletModel()
 {
+    // First, because clearing it also ends a Settings capability the options
+    // model may still hold, and ending that needs this model's wallet interface.
+    optionsModel->setSettingsElevationRequest({});
+
     unsubscribeFromCoreSignals();
 
     // The one-shot coin-store load thread holds only node-side locks; join it

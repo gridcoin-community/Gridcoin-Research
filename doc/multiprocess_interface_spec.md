@@ -285,7 +285,9 @@ send, message and PSGT signing, MRC, poll, vote and beacon methods, and the
 console) runs under the capability they hold, one operation kind at a time.
 `elevateWallet @36` stays in the schema,
 because a released ordinal cannot be dropped, but always returns false.
-`RpcConsoleResult` gained `walletUnlockNeeded @2`. The new methods alone would be
+`RpcConsoleResult` gained `walletUnlockNeeded @2`, `SettingChangeResult` gained
+`elevationRequired @7`, and `SideStakeEditStatus` gained `ELEVATION_REQUIRED`.
+The new methods alone would be
 additive; the major is for the other direction. A GUI and a node of
 different majors disagree on how an operation is authorised, so each such action
 would fail with a message the user cannot act on. A newer GUI against
@@ -387,7 +389,12 @@ Command/action methods: `startShutdown`, `banNode`, `unban`, `disconnectNode`,
 round trip happens node-side; only formatted text crosses), `listRpcCommands`,
 the typed settings getters (`getSettingBool/Int/Str`, `isSettingSet`) and
 `changeSettings(...) -> SettingChangeResult`, plus `checkForLatestUpdate` and
-`runDiagnostics`.
+`runDiagnostics`. The getters answer only for the settings the GUI reads
+(`IsGuiReadableSetting` in `src/node/access_policy.h`); any other name reads as
+unset, with the caller's default. `changeSettings` applies the settings classes
+as the `changesettings` RPC does, and runs under the connection's `Settings`
+capability when one is held (§4.3); an Elevate-class change refused without one
+comes back with `elevation_required` (and `invalid_input`) set.
 
 DTOs: `BannedNode`, `PeerInfo`, `RpcConsoleResult`, `SettingChangeResult`,
 `ScraperConvergenceSnapshot`, `LatestVersionInfo`, `DiagnosticResult` (+ the
@@ -436,8 +443,9 @@ IPC slot; a second begin replaces the first, and `endElevation` ends it. The
 wallet methods that use keys for an operation of that kind run under it:
 `sendCoins` (`Send`), `signMessage` (`SignMessage`), `PSGTPoolContext::signPSGT`
 and `signPoolEntry` (`SignPSGT`), `MRC::submit`, `VotingManager::submitPoll` and
-`submitVote`, and the `ResearcherContext` beacon methods (`Contract`), and
-`Node::executeRpcConsoleCommand` (`RpcRequest`). A capability applies
+`submitVote`, and the `ResearcherContext` beacon methods (`Contract`),
+`Node::executeRpcConsoleCommand` (`RpcRequest`), and `Node::changeSettings` and
+the four `SideStakeManager` edits (`Settings`). A capability applies
 only to the operations of its kind on its connection; a locked wallet is unlocked
 for staking only until the capability ends. A wrong
 passphrase returns false after the failed-passphrase delay (up to 30 s), so a
@@ -447,7 +455,12 @@ checked one at a time, in the order they arrive, so a call also waits for the
 attempts ahead of it. An IPC caller cannot give its attempt up; only the node's
 shutdown ends the wait. `elevateWallet` always returns false.
 The GUI side is `WalletModel::requestUnlock(CapabilityKind)` and its
-`UnlockContext`, which ends the capability when the operation finishes.
+`UnlockContext`, which ends the capability when the operation finishes. For
+settings and side stakes, `OptionsModel` asks only after the node refused a
+change for the passphrase (`SettingChangeResult::elevation_required`,
+`SideStakeEditStatus::ELEVATION_REQUIRED`), then sends the same change once more;
+it asks at most once per pass of the event loop, so one submit of the Options
+dialog asks once.
 
 Coin control / send: `getOutputs`, `computeCoinControlSummary(...)
 -> CoinControlSummary` (all fee math runs node-side), `getMaxConsolidationInputs`,
@@ -539,6 +552,9 @@ The unified mandatory + local sidestake table with add/edit/delete commands and 
 versioned-refetch revision (`SideStakeSnapshot::local_revision`, design §4.4).
 `entries`, `localRevision`, `addLocal`, `setAllocation`, `setDescription`,
 `deleteLocal`, `handleRwSettingsUpdated`, `handleMandatorySideStakeChanged`.
+Every edit needs the wallet passphrase: it runs under the connection's `Settings`
+capability (§4.3), or needs a full unlock or an unencrypted wallet, and without
+one answers `ELEVATION_REQUIRED` having changed nothing.
 
 Served over IPC like the other factories (`Init.makeSideStakeManager @13`). The
 node's implementation reads the node's own sidestake registry, so `entries()`

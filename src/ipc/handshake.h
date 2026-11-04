@@ -128,6 +128,7 @@ namespace ipc {
 //! dropped, but it always returns false. RpcConsoleResult gained
 //! `walletUnlockNeeded @2` (node.capnp), which the console reads to ask for the
 //! passphrase and run a refused command again.
+//! SettingChangeResult gained `elevationRequired @7` and SideStakeEditStatus ELEVATION_REQUIRED.
 //!
 //! The new methods alone would be additive, which is why the reason for the
 //! major is the other direction. A GUI and a node of different majors disagree
