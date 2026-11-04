@@ -1476,6 +1476,80 @@ BOOST_AUTO_TEST_CASE(dumpwallet_writes_no_dump_with_a_key_missing)
         BOOST_CHECK(dump.find("# extended private masterkey: ") != std::string::npos);
         BOOST_CHECK(dump.size() > 14 && dump.compare(dump.size() - 14, 14, "# End of dump\n") == 0);
     }
+
+    // Metadata for a key the wallet does not hold, as a failed import can leave,
+    // is no key to dump: the dump succeeds and leaves it out.
+    {
+        KeyReachWallet fx(WalletOptions{});
+        fx.UnlockFor(UnlockScope::Full);
+
+        CKey orphan;
+        orphan.MakeNewKey(true);
+        const CKeyID orphan_id = orphan.GetPubKey().GetID();
+        {
+            LOCK(fx.wallet.cs_wallet);
+            fx.wallet.mapKeyMetadata[orphan_id] = CKeyMetadata(GetTime());
+        }
+        BOOST_REQUIRE(!fx.wallet.HaveKey(orphan_id));
+
+        const Outcome outcome = Call("dumpwallet", {DUMP_FILE});
+        BOOST_CHECK_MESSAGE(outcome.returned, outcome.Describe());
+
+        std::string dump;
+        {
+            fsbridge::ifstream file(path);
+            dump.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+        }
+        fs::remove(path);
+
+        BOOST_CHECK(dump.find("addr=" + EncodeDestination(CTxDestination(orphan_id))) == std::string::npos);
+        BOOST_CHECK(dump.find("# End of dump\n") != std::string::npos);
+    }
+
+    // A dump that cannot be written is no success, and what the path names is
+    // removed only when it is a regular file. /dev/full takes the dump and fails
+    // it at the flush; where there is no /dev/full this part is skipped.
+    if (fs::exists("/dev/full")) {
+        KeyReachWallet fx(WalletOptions{});
+        fx.UnlockFor(UnlockScope::Full);
+
+        const Outcome outcome = Call("dumpwallet", {"/dev/full"});
+
+        BOOST_CHECK_MESSAGE(outcome.code == RPC_WALLET_ERROR, outcome.Describe());
+        BOOST_CHECK_EQUAL(outcome.message, "dumpwallet: cannot write the dump file");
+        BOOST_CHECK(fs::exists("/dev/full"));
+    } else {
+        BOOST_TEST_MESSAGE("no /dev/full: the write failure is not checked here");
+    }
+
+    // A symbolic link at the path is not removed when the dump fails. Where links
+    // cannot be made this part is skipped.
+    {
+        const fs::path target = GetDataDir() / "key_entry_points_dump_target.txt";
+        fs::remove(target);
+        fsbridge::ofstream(target) << "the link's target\n";
+
+        bool linked{false};
+        try {
+            fs::create_symlink(target, path);
+            linked = true;
+        } catch (const std::exception& e) {
+            BOOST_TEST_MESSAGE("no symbolic link: " << e.what());
+        }
+
+        if (linked) {
+            KeyReachWallet fx(WalletOptions{});
+            fx.UnlockFor(UnlockScope::StakingOnly);
+
+            const auto [code, message] = RpcError([&] { WriteWalletDump(fx.wallet, DUMP_FILE); });
+
+            BOOST_CHECK(code == RPC_WALLET_UNLOCK_NEEDED);
+            BOOST_CHECK(fs::is_symlink(fs::symlink_status(path)));
+        }
+
+        fs::remove(path);
+        fs::remove(target);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

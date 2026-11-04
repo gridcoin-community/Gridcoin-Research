@@ -166,8 +166,10 @@ extern void EnsureWalletIsUnlocked();
 //! the wallet is unlocked for staking only, or one that does not decrypt --
 //! fails the dump rather than being left out of it: it throws
 //! RPC_WALLET_UNLOCK_NEEDED, or RPC_WALLET_ERROR when the wallet may use its
-//! keys. On that or any other failure part way through, the file is removed
-//! before the error leaves.
+//! keys. Metadata for a key the wallet does not hold is no key, and is left
+//! out. A dump that cannot be written throws RPC_WALLET_ERROR. On any failure
+//! part way through, a regular file at the path is removed before the error
+//! leaves; a symbolic link or a special file there is left as it is.
 void WriteWalletDump(CWallet& wallet, const std::string& filename);
 
 //! \brief Take a request's elevation header out of its headers.

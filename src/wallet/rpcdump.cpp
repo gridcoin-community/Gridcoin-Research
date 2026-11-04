@@ -367,6 +367,8 @@ namespace {
 
 //! Removes a dump file that was not written to the end, however the writer
 //! leaves: a dump with keys missing must not stay on disk looking complete.
+//! Only a regular file is removed. A symbolic link or a special file at the
+//! path is left as it is.
 class PartialDumpRemover
 {
 public:
@@ -381,7 +383,7 @@ public:
         // A destructor may not throw, and a file that cannot be removed leaves
         // nothing better to do here.
         try {
-            fs::remove(m_path);
+            if (fs::is_regular_file(fs::symlink_status(m_path))) fs::remove(m_path);
         } catch (const std::exception&) {
         }
     }
@@ -472,10 +474,14 @@ void WriteWalletDump(CWallet& wallet, const std::string& filename)
         std::string strTime = EncodeDumpTime(it->first);
         std::string strAddr = EncodeDestination(keyid);
 
+        // The birth times also list keys that have metadata but are not in
+        // the wallet, as a failed import can leave; there is no key to dump.
+        // A key the wallet holds and cannot read fails the dump: leaving it
+        // out would write a dump that looks complete and is not.
         CKey key;
         if (!wallet.GetKey(keyid, key)) {
-            // Every key listed here is one the wallet holds. Skipping it would
-            // write a dump that looks complete and is not.
+            if (!wallet.HaveKey(keyid)) continue;
+
             throw UnreadableKeyError(wallet, keyid);
         }
 
@@ -494,6 +500,12 @@ void WriteWalletDump(CWallet& wallet, const std::string& filename)
     file << "\n";
     file << "# End of dump\n";
     file.close();
+
+    // The close flushes what is still buffered. A write that failed leaves a
+    // dump with its end cut off, which the remover takes away.
+    if (file.fail()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "dumpwallet: cannot write the dump file");
+    }
 
     remover.Complete();
 }
