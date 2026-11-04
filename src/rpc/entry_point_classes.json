@@ -198,8 +198,8 @@
     },
     "Node.executeRpcConsoleSecretCommand": {
       "class": "dispatch",
-      "effect": "key_writer",
-      "note": "carries walletpassphrase, walletpassphrasechange and encryptwallet with their passphrases as SecureString; encryptwallet writes key material"
+      "effect": "state",
+      "note": "carries walletpassphrase, walletpassphrasechange and encryptwallet with their passphrases as SecureString"
     },
     "Node.getAlertStatusBarMessage": {
       "class": "read_only",
