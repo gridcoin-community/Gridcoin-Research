@@ -66,7 +66,13 @@ public:
     int64_t getUnconfirmedBalance() override { return m_wallet->GetUnconfirmedBalance(); }
 
     int64_t getImmatureBalance() override { return m_wallet->GetImmatureBalance(); }
-    CAmount getTransactionFeeRate() override { return nTransactionFee; }
+
+    CAmount getTransactionFeeRate() override
+    {
+        // The rate per kB CreateTransaction pays: the configured rate, or the
+        // minimum fee of a send when that is higher.
+        return std::max<CAmount>(nTransactionFee, GetBaseFee(CTransaction(), GMF_SEND));
+    }
 
     bool tryGetBalances(WalletBalances& balances) override
     {

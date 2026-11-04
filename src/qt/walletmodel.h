@@ -119,7 +119,7 @@ public:
     qint64 getStake() const;
     qint64 getUnconfirmedBalance() const;
     qint64 getImmatureBalance() const;
-    //! The configured transaction fee rate, per kB.
+    //! The fee rate per kB a send pays (interfaces::Wallet::getTransactionFeeRate).
     CAmount getTransactionFeeRate() const;
     int getNumTransactions() const;
     EncryptionStatus getEncryptionStatus() const;

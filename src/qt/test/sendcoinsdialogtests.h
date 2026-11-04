@@ -15,6 +15,7 @@ class SendCoinsDialogTests : public QObject
 private slots:
     void confirmationShowsEveryFullAddressAndTheFeeRate();
     void confirmationShowsACustomChangeAddress();
+    void confirmationEscapesMarkupInTheAddresses();
 };
 
 #endif // BITCOIN_QT_TEST_SENDCOINSDIALOGTESTS_H

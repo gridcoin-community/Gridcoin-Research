@@ -54,3 +54,19 @@ void SendCoinsDialogTests::confirmationShowsACustomChangeAddress()
     QVERIFY(text.contains(ADDRESS_A));
     QVERIFY(text.contains(ADDRESS_B));
 }
+
+void SendCoinsDialogTests::confirmationEscapesMarkupInTheAddresses()
+{
+    // The text is rich text, so markup in an address or the change address is
+    // shown as written rather than rendered.
+    QList<SendCoinsRecipient> recipients = MakeRecipients();
+    recipients[0].address = QStringLiteral("S9FY<i>recipient</i>");
+
+    const QString text = SendCoinsDialog::FormatSendConfirmation(
+        recipients, FEE_RATE, QStringLiteral("S7rQ<img src=x>change"));
+
+    QVERIFY(text.contains(QStringLiteral("S9FY&lt;i&gt;recipient&lt;/i&gt;")));
+    QVERIFY(!text.contains(QStringLiteral("<i>recipient")));
+    QVERIFY(text.contains(QStringLiteral("S7rQ&lt;img src=x&gt;change")));
+    QVERIFY(!text.contains(QStringLiteral("<img")));
+}

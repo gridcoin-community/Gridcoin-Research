@@ -253,7 +253,8 @@ public:
     //! Immature (newly generated) balance.
     virtual int64_t getImmatureBalance() = 0;
 
-    //! The configured transaction fee rate (nTransactionFee), per kB.
+    //! The fee rate per kB a send pays: the configured rate (nTransactionFee),
+    //! or the minimum fee per kB when that is higher.
     virtual CAmount getTransactionFeeRate() = 0;
 
     //! Fill all four balances in one shot, or return false without blocking

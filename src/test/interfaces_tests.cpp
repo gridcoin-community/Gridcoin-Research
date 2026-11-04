@@ -19,6 +19,7 @@
 #include "node/access_policy.h"
 #include "node/gui_cache.h"
 #include "node/ui_interface.h"
+#include "policy/fees.h"
 #include "gridcoin/scraper/fwd.h"
 #include "gridcoin/sidestake.h"
 #include "primitives/transaction.h"
@@ -340,13 +341,27 @@ BOOST_AUTO_TEST_CASE(wallet_reports_the_fee_rate_in_effect)
 {
     BOOST_REQUIRE(pwalletMain != nullptr);
 
-    const int64_t saved_transaction_fee{nTransactionFee};
-    nTransactionFee = 123456;
-
     std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(pwalletMain);
-    BOOST_CHECK_EQUAL(wallet->getTransactionFeeRate(), 123456);
 
-    nTransactionFee = saved_transaction_fee;
+    // The least a send pays per kB.
+    const CAmount minimum = GetBaseFee(CTransaction(), GMF_SEND);
+
+    {
+        // A configured rate above the minimum is the rate a send pays.
+        const grc_test::TransactionFeeGuard fee(minimum + 23456);
+        BOOST_CHECK_EQUAL(wallet->getTransactionFeeRate(), minimum + 23456);
+    }
+
+    {
+        // A configured rate below the minimum, here none, pays the minimum.
+        const grc_test::TransactionFeeGuard fee(0);
+        BOOST_CHECK_EQUAL(wallet->getTransactionFeeRate(), minimum);
+    }
+
+    {
+        const grc_test::TransactionFeeGuard fee(minimum - 1);
+        BOOST_CHECK_EQUAL(wallet->getTransactionFeeRate(), minimum);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(wallet_address_book_handler_bridges_value_types)
