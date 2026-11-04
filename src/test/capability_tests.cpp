@@ -531,6 +531,47 @@ BOOST_AUTO_TEST_CASE(ipc_slot_dropped)
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 
+// A begin whose IPC client has gone away is abandoned where it would install
+// its capability: the check is made in the same section as the install, so the
+// slot is left exactly as it is, and the new capability is ended. The client
+// that holds the slot now keeps its capability.
+BOOST_AUTO_TEST_CASE(ipc_slot_abandoned_begin_leaves_the_slot)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send));
+    const std::optional<CapabilityId> held = fx.wallet.IpcCapability();
+    BOOST_REQUIRE(held.has_value());
+
+    int asked = 0;
+    BOOST_CHECK(!fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::SignMessage, [&] {
+        ++asked;
+        return true;
+    }));
+    BOOST_CHECK_EQUAL(asked, 1);
+    BOOST_CHECK(fx.wallet.IpcCapability() == held);
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+    {
+        CapabilityScope scope(fx.wallet, held, CapabilityKind::Send);
+        BOOST_CHECK(scope.Active());
+    }
+
+    // Not abandoned: installed as before, replacing what the slot held.
+    BOOST_CHECK(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::SignMessage, [] { return false; }));
+    const std::optional<CapabilityId> replaced = fx.wallet.IpcCapability();
+    BOOST_REQUIRE(replaced.has_value());
+    BOOST_CHECK(*replaced != *held);
+    {
+        CapabilityScope scope(fx.wallet, held, CapabilityKind::Send);
+        BOOST_CHECK(!scope.Active());
+    }
+
+    fx.wallet.EndIpcElevation();
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
 BOOST_AUTO_TEST_CASE(ipc_slot_holds_one_capability)
 {
     EncryptedWallet fx;

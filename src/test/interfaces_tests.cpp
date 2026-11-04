@@ -1510,6 +1510,42 @@ BOOST_AUTO_TEST_CASE(ipc_begin_elevation_on_a_closed_connection_ends_it)
                 == interfaces::MessageSignStatus::KeyNotAvailable);
 }
 
+// The late begin of a GUI that has gone away must not touch the slot at all: by
+// the time it would install its capability, the next GUI may have attached and
+// begun its own, and displacing that would end it (or, for an instant, serve the
+// next GUI under the late capability). Driven deterministically: A's connection
+// is closed, B then begins a capability, and only then does A's begin reach the
+// slot.
+BOOST_AUTO_TEST_CASE(ipc_begin_elevation_after_close_keeps_the_next_guis_capability)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    std::unique_ptr<interfaces::Wallet> gone = interfaces::MakeWallet(&fx.wallet);
+    auto gone_scope = interfaces::MakeConnectionScope();
+    gone->bindConnectionScope(gone_scope);
+    gone_scope->close();
+
+    std::unique_ptr<interfaces::Wallet> next = interfaces::MakeWallet(&fx.wallet);
+    next->bindConnectionScope(interfaces::MakeConnectionScope());
+    BOOST_REQUIRE(next->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
+    const std::optional<CapabilityId> next_id = fx.wallet.IpcCapability();
+    BOOST_REQUIRE(next_id.has_value());
+
+    BOOST_CHECK(!gone->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::Send));
+    BOOST_CHECK(fx.wallet.IpcCapability() == next_id);
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+
+    // The next GUI's capability is still live.
+    std::string signature;
+    BOOST_CHECK(next->signMessage(EncodeDestination(fx.id), "a message", signature)
+                == interfaces::MessageSignStatus::OK);
+
+    next->endElevation();
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
 // Bound to an open connection, or not bound at all (the monolithic build's
 // in-process wallet), beginElevation() is unchanged.
 BOOST_AUTO_TEST_CASE(ipc_begin_elevation_on_an_open_or_no_connection_is_unchanged)

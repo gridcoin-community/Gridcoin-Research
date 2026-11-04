@@ -10,6 +10,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -426,7 +427,15 @@ public:
     //! The IPC server serves one client at a time, so the process keeps one IPC
     //! capability. Whatever the slot held is ended, whether or not this one is
     //! issued, and false leaves the slot empty. Otherwise as BeginElevation().
-    bool BeginIpcElevation(const SecureString& passphrase, CapabilityKind kind)
+    //!
+    //! \p abandoned, when set, is asked in the same capability-mutex section
+    //! that installs the capability. When it answers true (the client the
+    //! capability is for has gone away), the slot is left exactly as it is, the
+    //! new capability is ended once the mutex is released, and false is
+    //! returned. It runs under the capability mutex, so it must not lock
+    //! anything; a lock-free read is what it is for.
+    bool BeginIpcElevation(const SecureString& passphrase, CapabilityKind kind,
+                           const std::function<bool()>& abandoned = {})
         LOCKS_EXCLUDED(cs_wallet, m_capability_mutex);
 
     //! \brief End the IPC slot's capability, if it holds one, as EndElevation()

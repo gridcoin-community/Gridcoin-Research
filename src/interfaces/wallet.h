@@ -342,9 +342,10 @@ public:
     //! False on a wrong passphrase (after the failed-passphrase delay, so it can
     //! block for up to 30 s -- never call it on the GUI thread), on a kind
     //! outside CapabilityKind, or when the wallet cannot be unlocked for it. An
-    //! unencrypted wallet accepts any passphrase. Also false, with the
-    //! capability ended, when the IPC connection the wallet is served on closed
-    //! while the call ran (bindConnectionScope).
+    //! unencrypted wallet accepts any passphrase. Also false when the IPC
+    //! connection the wallet is served on closed while the call ran
+    //! (bindConnectionScope): the capability it began is ended, and the slot,
+    //! which may hold the next GUI's capability by then, is left as it is.
     //!
     //! The passphrase first waits its turn behind other passphrase attempts,
     //! which are served in the order they ask. In the monolithic build a

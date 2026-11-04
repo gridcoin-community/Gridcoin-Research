@@ -1171,16 +1171,28 @@ void CWallet::EndElevation(CapabilityId id)
     if (relock_epoch) LockIfCurrent(*relock_epoch);
 }
 
-bool CWallet::BeginIpcElevation(const SecureString& passphrase, CapabilityKind kind)
+bool CWallet::BeginIpcElevation(const SecureString& passphrase, CapabilityKind kind,
+                                const std::function<bool()>& abandoned)
 {
     const std::optional<CapabilityId> id = BeginElevation(passphrase, kind);
 
     // The slot takes the new capability, or is emptied when none was issued,
-    // and whatever it held is ended once the mutex is released.
+    // and whatever it held is ended once the mutex is released. An abandoned
+    // begin is decided in this same section, so nothing can see the slot hold a
+    // capability whose client has gone away, and it leaves the slot alone.
     std::optional<CapabilityId> displaced;
+    bool installed = false;
     {
         LOCK(m_capability_mutex);
-        displaced = std::exchange(m_ipc_capability, id);
+        if (!abandoned || !abandoned()) {
+            displaced = std::exchange(m_ipc_capability, id);
+            installed = true;
+        }
+    }
+
+    if (!installed) {
+        if (id) EndElevation(*id);
+        return false;
     }
 
     if (displaced) EndElevation(*displaced);

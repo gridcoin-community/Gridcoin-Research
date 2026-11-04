@@ -169,32 +169,38 @@ public:
             return false;
         }
 
+        // The connection this wallet is served on may go away while the
+        // passphrase is checked. Its scope reads closed from the moment its
+        // teardown begins, before the slot hook ends the IPC capability (an
+        // exchange under the capability mutex), and the begin asks the scope in
+        // the same capability-mutex section that installs. So either the install
+        // comes before the hook's exchange, and the hook ends it before the slot
+        // can pass to another GUI, or it comes after, and nothing is installed:
+        // the slot, and any capability the next GUI has begun, are left alone.
+        // No scope is bound in process (the monolithic build), where there is no
+        // connection.
+        const ConnectionScope* const scope = m_connection_scope.get();
+        std::function<bool()> abandoned;
+        if (scope) abandoned = [scope] { return scope->closed(); };
+
         bool begun = false;
         try {
-            begun = m_wallet->BeginIpcElevation(passphrase, kind);
+            begun = m_wallet->BeginIpcElevation(passphrase, kind, abandoned);
         } catch (const std::exception& e) {
             // Nothing the client could use is left behind: a capability this
             // call may have issued before the throw is ended with the slot.
+            // Unless the connection has closed: then the slot is the next GUI's,
+            // and a capability this call installed is ended by the slot hook.
             LogPrintf("ERROR: %s: no capability was begun: %s", __func__, e.what());
-            m_wallet->EndIpcElevation();
+            if (!scope || !scope->closed()) m_wallet->EndIpcElevation();
             return false;
         }
-        if (!begun) return false;
 
-        // The connection may have gone away while the passphrase was checked.
-        // Its teardown marks the scope closed before running the slot hook,
-        // which ends the IPC capability, and this check runs after the slot was
-        // set. So either the hook runs after the set and ends it, or the scope
-        // already reads closed here and it is ended now. Either way it cannot
-        // outlive the connection into the next GUI's session. No scope is bound
-        // in process (the monolithic build), where there is no connection.
-        if (m_connection_scope && m_connection_scope->closed()) {
+        if (!begun && scope && scope->closed()) {
             LogPrintf("WARNING: %s: the IPC connection closed while the capability was being begun; "
-                      "it is ended", __func__);
-            m_wallet->EndIpcElevation();
-            return false;
+                      "it was not kept", __func__);
         }
-        return true;
+        return begun;
     }
 
     void endElevation() override { m_wallet->EndIpcElevation(); }
