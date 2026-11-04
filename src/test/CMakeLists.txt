@@ -8,6 +8,7 @@ add_executable(test_gridcoin
     alt_signal_stack_tests.cpp
     bip68_tests.cpp
     block_version_tests.cpp
+    capability_tests.cpp
     checkpoints_tests.cpp
     coinstake_construction_tests.cpp
     csv_tests.cpp

@@ -1525,6 +1525,66 @@ BOOST_FIXTURE_TEST_CASE(ordinary_contract_refused_under_staking_only, grc_test::
     BOOST_CHECK(staking.TakeFootprint() == before);
 }
 
+//! A capability scope lets a wallet unlocked for staking only build and sign an
+//! ordinary send on the scope's thread. The builder asks whether the calling
+//! thread may use the keys, not what the wallet-wide unlock is, and the scope
+//! widens nothing.
+BOOST_FIXTURE_TEST_CASE(a_capability_lets_a_staking_only_wallet_build_a_send, grc_test::WalletTxScope)
+{
+    const SyncTimeReset reset_sync;
+    MineUntilReadyToAdvertise();
+
+    StakingOnlyResearcherWallet staking;
+
+    CScript destination;
+    destination.SetDestination(staking.m_beacon_key.GetPubKey().GetID());
+
+    // The change goes back to an input's address. The wallet holds no
+    // database, and a change key drawn under the capability would top the key
+    // pool up into one.
+    const auto build = [&](CWalletTx& wtx) {
+        CReserveKey reserve_key(&staking.m_wallet);
+        CAmount fee = 0;
+
+        return staking.m_wallet.CreateTransaction({std::make_pair(destination, COIN / 10)}, wtx, reserve_key, fee,
+                                                  /*coinControl=*/nullptr, /*change_back_to_input_address=*/true);
+    };
+
+    // Refused without a capability, before anything is signed.
+    CWalletTx refused;
+    BOOST_CHECK(!build(refused));
+    BOOST_CHECK(refused.vin.empty());
+
+    const std::optional<CapabilityId> id =
+        staking.m_wallet.BeginElevation(StakingOnlyResearcherWallet::PASSPHRASE, CapabilityKind::Send);
+    BOOST_REQUIRE(id.has_value());
+
+    CWalletTx built;
+    {
+        CapabilityScope scope(staking.m_wallet, id, CapabilityKind::Send);
+        BOOST_REQUIRE(scope.Active());
+        BOOST_REQUIRE(build(built));
+    }
+
+    {
+        LOCK2(cs_main, staking.m_wallet.cs_wallet);
+
+        // Every input carries a signature that spends the coin it names.
+        BOOST_REQUIRE(!built.vin.empty());
+
+        for (unsigned int i = 0; i < built.vin.size(); ++i) {
+            const auto prev = staking.m_wallet.mapWallet.find(built.vin[i].prevout.hash);
+            BOOST_REQUIRE(prev != staking.m_wallet.mapWallet.end());
+            BOOST_CHECK(VerifySignature(prev->second, built, SCRIPT_VERIFY_P2SH, i, 0));
+        }
+    }
+
+    BOOST_CHECK(staking.m_wallet.IsUnlockedForStakingOnly());
+    BOOST_CHECK(!staking.GeneralKeyAccess());
+
+    staking.m_wallet.EndElevation(*id);
+}
+
 //! With no beacon to renew, the job advertises a new one under the same access.
 //! Its key is taken from the key pool as the pool stands, and no key is
 //! created; the transaction has the renewal's shape at the minimum fee.

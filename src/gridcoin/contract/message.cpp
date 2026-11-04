@@ -238,7 +238,8 @@ std::string SendContractTx(CWalletTx& wtx_new, const StakingKeyAccess* renewal_a
     // The builder refuses too, but only as "Transaction creation failed"; this
     // reports why, as CWallet::SendMoney does. Under the lock above, so a
     // narrowing that lands while this send waits for the wallet is seen here.
-    if (pwalletMain->IsUnlockedForStakingOnly() && !renewal_access) {
+    // A capability scope open on this thread lets the send through.
+    if (!pwalletMain->CanUseKeys() && !renewal_access) {
         std::string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
         LogPrintf("%s: %s", __func__, strError);
         return strError;

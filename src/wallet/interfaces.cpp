@@ -534,8 +534,9 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
     // narrowing that lands between this check and the build.
     //
     // Nothing else on this path guards the unlock: this layer is what the GUI
-    // uses, and EnsureWalletIsUnlocked is RPC-only.
-    if (m_wallet->IsUnlockedForStakingOnly()) {
+    // uses, and EnsureWalletIsUnlocked is RPC-only. A capability scope open on
+    // this thread lets the send through.
+    if (m_wallet->IsUnlockedForStakingOnly() && !m_wallet->CanUseKeys()) {
         return {SendCoinsStatus::WalletUnlockedForStakingOnly};
     }
 
@@ -713,7 +714,7 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
             // and send the user to look at their balance. First, because a
             // staking-only wallet is the reason regardless of what the fee
             // arithmetic below would say.
-            if (m_wallet->IsUnlockedForStakingOnly()) {
+            if (m_wallet->IsUnlockedForStakingOnly() && !m_wallet->CanUseKeys()) {
                 return {SendCoinsStatus::WalletUnlockedForStakingOnly};
             }
 

@@ -741,9 +741,10 @@ BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid, cons
     }
 
     // A wallet unlocked for staking only sends a beacon only as the automated
-    // renewal. Refused before anything else is done: a new beacon would draw a
-    // key from the pool next, and a stale advertisement would be retired.
-    if (wallet->IsUnlockedForStakingOnly() && !renewal_access) {
+    // renewal, or under a capability scope open on this thread. Refused before
+    // anything else is done: a new beacon would draw a key from the pool next,
+    // and a stale advertisement would be retired.
+    if (!wallet->CanUseKeys() && !renewal_access) {
         LogPrintf("WARNING: %s: Wallet unlocked for staking only.", __func__);
         return BeaconError::WALLET_LOCKED;
     }

@@ -34,9 +34,11 @@
 #include "wallet/staking_signer.h"
 
 #include <algorithm>
+#include <limits>
 #include <optional>
 #include <set>
 #include <stdexcept>
+#include <utility>
 
 using namespace std;
 
@@ -621,6 +623,39 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                      std::optional<std::chrono::seconds> relock_after,
                      UnlockFailure* failure_out)
 {
+    UnlockFailure failure = UnlockFailure::None;
+
+    const bool unlocked = UnlockWithoutDelay(strWalletPassphrase, scope, relock_after, &failure,
+                                             /*epoch_out=*/nullptr);
+
+    if (failure_out) *failure_out = failure;
+
+    // Only a wrong passphrase is counted. A wallet that was already unlocked,
+    // or a right passphrase whose relock could not be armed, says nothing
+    // about whether the caller knows the passphrase.
+    if (unlocked) {
+        m_failed_unlocks = 0;
+    } else if (failure == UnlockFailure::Passphrase) {
+        DelayFailedPassphrase();
+    }
+
+    return unlocked;
+}
+
+void CWallet::DelayFailedPassphrase()
+{
+    // Never under cs_wallet (the declaration excludes it): a sleep of up to
+    // 30 s there would stall every wallet operation, the staking miner's
+    // included.
+    const unsigned int failures = ++m_failed_unlocks;
+
+    UninterruptibleSleep(FailedPassphraseDelay(failures));
+}
+
+bool CWallet::UnlockWithoutDelay(const SecureString& strWalletPassphrase, UnlockScope scope,
+                                 std::optional<std::chrono::seconds> relock_after,
+                                 UnlockFailure* failure_out, uint64_t* epoch_out)
+{
     // Default to the passphrase, so every early return that IS about the
     // passphrase needs no ceremony; the two that are not say so explicitly.
     if (failure_out) *failure_out = UnlockFailure::Passphrase;
@@ -723,6 +758,7 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                 }
 
                 if (failure_out) *failure_out = UnlockFailure::None;
+                if (epoch_out) *epoch_out = epoch;
 
                 return true;
             }
@@ -793,6 +829,240 @@ bool CWallet::CanCreateKeys() const
     }
 
     return false;
+}
+
+bool CWallet::CanUseKeys() const
+{
+    // The standing unlock, or a capability scope open on this thread. An
+    // unencrypted wallet reads Full.
+    return GetUnlockScope() == UnlockScope::Full || ElevationGrant::IsActiveFor(this);
+}
+
+bool CWallet::DecryptMasterKey(const SecureString& passphrase, CKeyingMaterial& master_key_out) const
+{
+    // Copied under cs_wallet and derived outside it. The derivation is
+    // calibrated to take a few hundred milliseconds, and nothing that needs
+    // the wallet should wait behind it. The records hold the master key only
+    // encrypted.
+    MasterKeyMap master_keys;
+    {
+        LOCK(cs_wallet);
+        master_keys = mapMasterKeys;
+    }
+
+    CCrypter crypter;
+
+    for (const auto& entry : master_keys) {
+        const CMasterKey& master_key = entry.second;
+
+        if (crypter.SetKeyFromPassphrase(passphrase, master_key.vchSalt, master_key.nDeriveIterations,
+                                         master_key.nDerivationMethod)
+            && crypter.Decrypt(master_key.vchCryptedKey, master_key_out)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphrase, CapabilityKind kind)
+{
+    // The key derivation and the failed-passphrase delay both run without
+    // cs_wallet, which they can only if the caller does not hold it either
+    // (the declaration excludes it).
+    const std::chrono::seconds ttl = CapabilityTtl(kind);
+
+    // The unlock this capability made, when it found the wallet locked.
+    std::optional<uint64_t> made_epoch;
+
+    // The unlock in progress when the passphrase matched its key.
+    std::optional<uint64_t> matched_epoch;
+
+    if (IsCrypted()) {
+        bool accepted = false;
+
+        // At most two passes. The unlock can change while the key is derived:
+        // another unlock can reach a locked wallet first, or a timed relock can
+        // lock an unlocked one. The second pass takes the path for the state
+        // the first one found.
+        for (int pass = 0; pass < 2; ++pass) {
+            if (IsLocked()) {
+                UnlockFailure failure = UnlockFailure::None;
+                uint64_t epoch = 0;
+
+                // Staking only, and timed to the capability, so that the wallet
+                // is never left open wider or longer than the operation needs.
+                if (UnlockWithoutDelay(passphrase, UnlockScope::StakingOnly, ttl, &failure, &epoch)) {
+                    accepted = true;
+                    made_epoch = epoch;
+                    break;
+                }
+
+                // Another unlock got there first. The next pass checks the
+                // passphrase against the key it installed.
+                if (failure == UnlockFailure::AlreadyUnlocked) continue;
+
+                // The passphrase was right, but the unlock could not be timed
+                // and was not kept. It is no passphrase failure, so there is no
+                // delay and nothing is counted.
+                if (failure == UnlockFailure::RelockUnavailable) {
+                    LogPrintf("WARNING: %s: no capability was issued, because the wallet's relock could not "
+                              "be scheduled", __func__);
+                    return std::nullopt;
+                }
+
+                break;
+            }
+
+            CKeyingMaterial master_key;
+
+            if (!DecryptMasterKey(passphrase, master_key)) break;
+
+            const uint64_t epoch = GetUnlockEpoch();
+
+            if (MatchesMasterKey(master_key)) {
+                accepted = true;
+                matched_epoch = epoch;
+                break;
+            }
+
+            // A key that decrypts a record but is not the one installed comes
+            // from a wrong passphrase, unless the wallet locked meanwhile.
+            if (!IsLocked()) break;
+        }
+
+        if (!accepted) {
+            DelayFailedPassphrase();
+            return std::nullopt;
+        }
+
+        m_failed_unlocks = 0;
+    }
+
+    // Drawn and timed before the mutex is taken: it is a leaf, and the
+    // generator takes a lock of its own. Never 0.
+    CapabilityId id = GetRand(std::numeric_limits<uint64_t>::max() - 1) + 1;
+    const std::chrono::seconds now = GetTime<std::chrono::seconds>();
+
+    CapabilityRecord record;
+    record.kind = kind;
+    record.deadline = now + ttl;
+    record.relock_epoch = made_epoch;
+
+    LOCK(m_capability_mutex);
+
+    // Capabilities past their deadline are dropped here, so that ones never
+    // ended do not accumulate.
+    for (auto it = m_capabilities.begin(); it != m_capabilities.end();) {
+        if (it->second.deadline <= now) {
+            it = m_capabilities.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    // A draw that collides with an issued id takes the next free one, never 0.
+    // Random draws collide with negligible odds, but the generator is
+    // deterministic under the unit tests and repeats every draw there.
+    while (m_capabilities.count(id)) {
+        id = (id == std::numeric_limits<uint64_t>::max()) ? 1 : id + 1;
+    }
+
+    // An unlock a capability made for itself serves every capability issued
+    // while it lasts, and the last of them to end locks it.
+    if (!record.relock_epoch && matched_epoch) {
+        for (const auto& entry : m_capabilities) {
+            if (entry.second.relock_epoch == matched_epoch) {
+                record.relock_epoch = matched_epoch;
+                break;
+            }
+        }
+    }
+
+    m_capabilities.emplace(id, record);
+
+    return id;
+}
+
+void CWallet::EndElevation(CapabilityId id)
+{
+    // Read before the mutex is taken; nothing is called out to while it is
+    // held.
+    const std::chrono::seconds now = GetTime<std::chrono::seconds>();
+
+    std::optional<uint64_t> relock_epoch;
+
+    {
+        LOCK(m_capability_mutex);
+
+        const auto it = m_capabilities.find(id);
+
+        if (it == m_capabilities.end()) return;
+
+        relock_epoch = it->second.relock_epoch;
+        m_capabilities.erase(it);
+
+        // Another live capability still relies on the same unlock, and the last
+        // of them to end locks it.
+        if (relock_epoch) {
+            for (const auto& entry : m_capabilities) {
+                if (entry.second.relock_epoch == relock_epoch && now < entry.second.deadline) {
+                    relock_epoch.reset();
+                    break;
+                }
+            }
+        }
+    }
+
+    // With the mutex released, and under cs_KeyStore alone. A no-op when that
+    // unlock has already ended, by its timer, a manual lock or a passphrase
+    // change.
+    if (relock_epoch) LockIfCurrent(*relock_epoch);
+}
+
+bool CWallet::BeginIpcElevation(const SecureString& passphrase, CapabilityKind kind)
+{
+    const std::optional<CapabilityId> id = BeginElevation(passphrase, kind);
+
+    // The slot takes the new capability, or is emptied when none was issued,
+    // and whatever it held is ended once the mutex is released.
+    std::optional<CapabilityId> displaced;
+    {
+        LOCK(m_capability_mutex);
+        displaced = std::exchange(m_ipc_capability, id);
+    }
+
+    if (displaced) EndElevation(*displaced);
+
+    return id.has_value();
+}
+
+void CWallet::EndIpcElevation()
+{
+    std::optional<CapabilityId> id;
+    {
+        LOCK(m_capability_mutex);
+        id = std::exchange(m_ipc_capability, std::nullopt);
+    }
+
+    if (id) EndElevation(*id);
+}
+
+std::optional<CapabilityId> CWallet::IpcCapability() const
+{
+    LOCK(m_capability_mutex);
+    return m_ipc_capability;
+}
+
+bool CWallet::IsCapabilityLive(CapabilityId id, CapabilityKind kind) const
+{
+    const std::chrono::seconds now = GetTime<std::chrono::seconds>();
+
+    LOCK(m_capability_mutex);
+
+    const auto it = m_capabilities.find(id);
+
+    return it != m_capabilities.end() && it->second.kind == kind && now < it->second.deadline;
 }
 
 bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase)
@@ -1032,8 +1302,21 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             m_seed_phrase_blob_crypted = true;
         }
 
+        // A capability issued before now had no passphrase to check, so none
+        // outlives the encryption. The capability mutex is a leaf, so taking it
+        // under cs_wallet keeps the lock order.
+        {
+            LOCK(m_capability_mutex);
+            m_capabilities.clear();
+            m_ipc_capability.reset();
+        }
+
+        // Without the failed-passphrase delay, which must not be slept under
+        // cs_wallet. The passphrase is the one the keys were just encrypted
+        // with.
         Lock();
-        Unlock(strWalletPassphrase);
+        UnlockWithoutDelay(strWalletPassphrase, UnlockScope::Full, /*relock_after=*/std::nullopt,
+                           /*failure_out=*/nullptr, /*epoch_out=*/nullptr);
 
         // If we are using HD, replace the HD master key (seed) with a new
         // one -- unless the ACTIVE master is the phrase-derived one, in
@@ -4268,8 +4551,14 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
         // The automated beacon renewal's access is the one exception. What it
         // may build is fixed below: its shape is checked before anything is
         // signed, and it is signed through the staking accessor.
-        if (IsUnlockedForStakingOnly() && !renewal_access) {
-            return error("%s: wallet is unlocked for staking only", __func__);
+        //
+        // Asked as "may this thread use the keys", so a capability scope open
+        // on the calling thread lets its operation build on a wallet unlocked
+        // for staking only, and nothing else does. A locked wallet is refused
+        // here too, where before it failed at the first signature.
+        if (!CanUseKeys() && !renewal_access) {
+            return error("%s: the wallet's keys may not be used: it is locked, or unlocked for staking only "
+                         "with no capability for this operation", __func__);
         }
 
         // The renewal signs through the staking accessor, which reaches the keys
@@ -4836,7 +5125,9 @@ string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNe
         LogPrintf("SendMoney() : %s", strError);
         return strError;
     }
-    if (IsUnlockedForStakingOnly())
+    // After the lock check, so this refuses a wallet unlocked for staking only
+    // unless a capability scope is open on this thread.
+    if (!CanUseKeys())
     {
         string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
         LogPrintf("SendMoney() : %s", strError);
@@ -5050,15 +5341,19 @@ bool CWallet::NewKeyPool()
 {
     {
         LOCK(cs_wallet);
+
+        // Refused before anything is retired. Where no key can be made, the old
+        // pool is all the wallet has to draw from, and a caller that ignores
+        // the result (sethdseed does) would otherwise leave it with none. That
+        // includes a grant on a locked wallet, where a timed relock has landed
+        // inside a capability scope.
+        if (!CanCreateKeys())
+            return false;
+
         CWalletDB walletdb(strWalletFile);
         for (auto const& nIndex : setKeyPool)
             walletdb.ErasePool(nIndex);
         setKeyPool.clear();
-
-        // The old pool's keys are retired in any scope. New ones are made only
-        // where keys may be created.
-        if (!CanCreateKeys())
-            return false;
 
         unsigned int default_size = IsHDEnabled() ? DEFAULT_KEYPOOL_SIZE : DEFAULT_KEYPOOL_SIZE_PRE_HD;
         int64_t nKeys = max(gArgs.GetArg("-keypool", default_size), (int64_t)0);

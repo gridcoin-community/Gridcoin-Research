@@ -316,6 +316,7 @@ add_library(gridcoin_util STATIC
     util/tokenpipe.cpp
     validation.cpp
     validationinterface.cpp
+    wallet/capability.cpp
     wallet/coinviews.cpp
     wallet/cursor.cpp
     wallet/db.cpp

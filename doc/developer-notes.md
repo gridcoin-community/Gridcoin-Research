@@ -680,6 +680,11 @@ order to prevent deadlocks:
 2. `cs_wallet` (wallet operations)
 3. Subsystem-specific locks (e.g. `cs_poll_registry`, `cs_ScraperGlobals`)
 
+`CWallet::m_capability_mutex`, which guards the wallet's issued capabilities
+and its IPC capability slot, is a leaf: it may be taken under any of the locks
+above, `cs_KeyStore` included, but no other lock is taken and nothing is called
+out to while it is held.
+
 This ordering applies regardless of whether you use `LOCK2` or separate `LOCK`
 statements. The `DEBUG_LOCKORDER` build flag will detect violations at runtime
 and report them in `debug.log`.

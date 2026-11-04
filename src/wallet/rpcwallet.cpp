@@ -103,7 +103,9 @@ void EnsureWalletIsUnlocked()
 {
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-    if (pwalletMain->IsUnlockedForStakingOnly())
+    // A capability scope open on this thread, such as one for a request that
+    // carries the passphrase, lets the request through a staking-only unlock.
+    if (!pwalletMain->CanUseKeys())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
 }
 
@@ -3505,8 +3507,9 @@ UniValue walletpassphrase(const UniValue& params)
         : UnlockScope::Full;
 
     if (strWalletPass.length() > 0) {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-
+        // No lock is held across the call. Unlock() takes cs_wallet for what
+        // needs it, and a wrong passphrase sleeps before it returns, which must
+        // not happen under cs_main or cs_wallet.
         CWallet::UnlockFailure failure = CWallet::UnlockFailure::None;
 
         if (!pwalletMain->Unlock(strWalletPass, scope, std::chrono::seconds(nSleepTime), &failure)) {

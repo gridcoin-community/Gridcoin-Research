@@ -1292,52 +1292,10 @@ BOOST_AUTO_TEST_CASE(a_contract_send_held_off_by_a_narrowing_refuses_on_its_own_
     staking.Lock();
 }
 
-//! Stand up a running scheduler for the duration of a case and put the previous
-//! one back however the case exits, so a failed assertion cannot strand the
-//! rest of the binary without one.
-//!
-//! The handle is published as soon as the object exists and does NOT wait for
-//! the service thread to enter serviceQueue. It does not need to: arming asks
-//! only whether the scheduler has been told to stop, so a task enqueued before
-//! the thread comes up is run when it gets there. Waiting on
-//! AreThreadsServicingQueue() here would be the racy version of this.
-//!
-//! Declare it AFTER the wallet its tasks touch, so it is destroyed first: its
-//! destructor joins the service thread, which may still be inside a relock. A
-//! case sees the relock through IsLocked(), and LockIfCurrent() locks before it
-//! raises NotifyStatusChanged, so a wallet destroyed first is destroyed under
-//! that call (ThreadSanitizer reported it as a race on the signal's mutex).
-struct SchedulerForThisCase {
-    std::unique_ptr<CScheduler> m_saved;
-    CScheduler* m_saved_handle;
-    std::thread m_service;
-
-    SchedulerForThisCase()
-        : m_saved(std::move(g_scheduler))
-        , m_saved_handle(g_scheduler_handle.load(std::memory_order_acquire))
-    {
-        g_scheduler = std::make_unique<CScheduler>();
-        g_scheduler_handle.store(g_scheduler.get(), std::memory_order_release);
-        m_service = std::thread([] { g_scheduler->serviceQueue(); });
-    }
-
-    ~SchedulerForThisCase()
-    {
-        g_scheduler_handle.store(m_saved_handle, std::memory_order_release);
-        g_scheduler->stop();
-        if (m_service.joinable()) m_service.join();
-        g_scheduler = std::move(m_saved);
-    }
-};
-
-//! Spin until the scheduled relock has run, or give up. The service thread runs
-//! the task, so the wait is for another thread rather than for time.
-static void WaitForRelock(const CWallet& wallet)
-{
-    for (int i = 0; i < 200 && !wallet.IsLocked(); ++i) {
-        UninterruptibleSleep(std::chrono::milliseconds(10));
-    }
-}
+// The scheduler stand-in and the relock wait are shared with capability_tests,
+// in test/staking_test_peers.h.
+using grc_test::SchedulerForThisCase;
+using grc_test::WaitForRelock;
 
 //!
 //! A timed unlock locks itself when its deadline arrives, and a relock armed
@@ -2163,6 +2121,44 @@ BOOST_AUTO_TEST_CASE(a_grant_lets_the_pool_top_up_under_staking_only)
     BOOST_CHECK_NO_THROW(topped_up = fx.wallet.TopUpKeyPool());
     BOOST_CHECK(!topped_up);
     BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+}
+
+//! NewKeyPool replaces the pool only where keys may be created. Where they may
+//! not, it refuses before it retires anything, so a caller that ignores the
+//! result (sethdseed does) cannot leave the wallet with an empty pool. That
+//! covers a grant on a locked wallet, which a capability scope holds once a
+//! timed relock has landed under it.
+BOOST_AUTO_TEST_CASE(new_key_pool_refused_keeps_the_pool)
+{
+    EncryptedHdKeyPoolWallet fx;
+    const size_t keys_before = fx.KeyCount();
+    const uint32_t derived_before = fx.Derived();
+
+    const auto refused_and_kept = [&] {
+        bool replaced{true};
+        BOOST_CHECK_NO_THROW(replaced = fx.wallet.NewKeyPool());
+        BOOST_CHECK(!replaced);
+        BOOST_CHECK_EQUAL(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET);
+        BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
+        BOOST_CHECK_EQUAL(fx.Derived(), derived_before);
+    };
+
+    BOOST_REQUIRE(fx.wallet.IsLocked());
+    refused_and_kept();
+
+    {
+        const ElevationGrant grant = ElevationGrantTestPeer::Make(fx.wallet);
+        refused_and_kept();
+    }
+
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    refused_and_kept();
+
+    // Fully unlocked, the pool is replaced with new keys.
+    fx.UnlockFor(UnlockScope::Full);
+    BOOST_CHECK(fx.wallet.NewKeyPool());
+    BOOST_CHECK_EQUAL(fx.PoolSize(), EncryptedHdKeyPoolWallet::TARGET);
+    BOOST_CHECK_EQUAL(fx.Derived(), derived_before + EncryptedHdKeyPoolWallet::TARGET);
 }
 
 //! The thread walletpassphrase starts to top the pool up lets no exception

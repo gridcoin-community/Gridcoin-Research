@@ -274,10 +274,11 @@ public:
         LOCK(cs_main);
 
         // The trial claim is built unsigned when the wallet cannot use its keys:
-        // when the caller says it is locked, or it is locked or unlocked for
-        // staking only. The preview needs the fee, not a signature; submit()
-        // builds and signs the claim it sends.
-        const bool can_use_keys = !m_wallet->IsUnlockedForStakingOnly() && !m_wallet->IsLocked();
+        // when the caller says it is locked, or it is locked, or unlocked for
+        // staking only with no capability scope open on this thread. The
+        // preview needs the fee, not a signature; submit() builds and signs the
+        // claim it sends.
+        const bool can_use_keys = m_wallet->CanUseKeys() && !m_wallet->IsLocked();
         return GRC::BuildMRCSnapshot(m_wallet, fee_boost, wallet_locked || !can_use_keys, researcher_eligible);
     }
 
@@ -334,8 +335,9 @@ private:
         // deliberately does not treat that as locked, so the submit button
         // stays enabled and the claim path asks for a temporary elevation
         // instead of refusing. This refusal is what backstops that -- it is
-        // reached only if the elevation did not happen.
-        if (m_wallet->IsUnlockedForStakingOnly()) {
+        // reached only if the elevation did not happen. A capability scope open
+        // on this thread is such an elevation.
+        if (m_wallet->IsUnlockedForStakingOnly() && !m_wallet->CanUseKeys()) {
             res.error = "The wallet is unlocked for staking only. Unlock it fully to submit a "
                         "manual research claim.";
             return res;
