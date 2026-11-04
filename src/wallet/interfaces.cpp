@@ -907,6 +907,11 @@ public:
 
     void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
     {
+        // Bound again, the earlier connection's hook goes, so that connection's
+        // close no longer reaches this wallet and the hook is not left behind.
+        if (m_connection_scope && m_closing_hook != 0) m_connection_scope->removeCloseHook(m_closing_hook);
+        m_closing_hook = 0;
+
         m_connection_scope = std::move(scope);
         m_connection_closed = ConnectionClosedCheck(m_connection_scope);
         if (m_connection_scope) {
@@ -944,8 +949,8 @@ private:
     //! Empty in process, where there is no connection and nothing to check.
     std::function<bool()> m_connection_closed{};
     //! Set by a close hook on that connection, registered in
-    //! bindConnectionScope() and removed when this wallet is destroyed; the
-    //! cancel token of the passphrase attempts this wallet makes
+    //! bindConnectionScope() and removed when this wallet is bound again or
+    //! destroyed; the cancel token of the passphrase attempts this wallet makes
     //! (GiveUpWhenConnectionCloses).
     const std::shared_ptr<std::atomic<bool>> m_connection_closing{std::make_shared<std::atomic<bool>>(false)};
     ConnectionScope::HookId m_closing_hook{0};

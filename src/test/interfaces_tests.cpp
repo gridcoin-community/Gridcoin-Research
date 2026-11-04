@@ -1608,6 +1608,69 @@ BOOST_AUTO_TEST_CASE(ipc_begin_elevation_on_an_open_or_no_connection_is_unchange
 }
 
 namespace {
+//! A connection scope that only keeps its hooks, so a case can count the ones
+//! still registered on it.
+class CountingScope final : public interfaces::ConnectionScope
+{
+public:
+    HookId addCloseHook(std::function<void()> fn) override
+    {
+        m_hooks.emplace(++m_next_id, std::move(fn));
+        return m_next_id;
+    }
+
+    void removeCloseHook(HookId id) override { m_hooks.erase(id); }
+
+    void close() override
+    {
+        m_closed = true;
+        std::map<HookId, std::function<void()>> hooks = std::move(m_hooks);
+        m_hooks.clear();
+        for (auto& hook : hooks) hook.second();
+    }
+
+    bool closed() const override { return m_closed.load(); }
+
+    size_t Hooks() const { return m_hooks.size(); }
+
+private:
+    std::map<HookId, std::function<void()>> m_hooks{};
+    HookId m_next_id{0};
+    std::atomic<bool> m_closed{false};
+};
+} // namespace
+
+// Bound again, a wallet takes its close hook off the connection it was bound to
+// before, so that connection's close no longer reaches it, and a wallet that
+// goes away takes its hook off the connection it is bound to.
+BOOST_AUTO_TEST_CASE(wallet_rebound_removes_its_hook_from_the_earlier_connection)
+{
+    const auto first = std::make_shared<CountingScope>();
+    const auto second = std::make_shared<CountingScope>();
+
+    {
+        std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+
+        w->bindConnectionScope(first);
+        BOOST_CHECK_EQUAL(first->Hooks(), 1U);
+
+        w->bindConnectionScope(second);
+        BOOST_CHECK_EQUAL(first->Hooks(), 0U);
+        BOOST_CHECK_EQUAL(second->Hooks(), 1U);
+
+        // Unbound (in process), it keeps no hook anywhere.
+        w->bindConnectionScope(nullptr);
+        BOOST_CHECK_EQUAL(second->Hooks(), 0U);
+
+        w->bindConnectionScope(second);
+        BOOST_CHECK_EQUAL(second->Hooks(), 1U);
+    }
+
+    BOOST_CHECK_EQUAL(first->Hooks(), 0U);
+    BOOST_CHECK_EQUAL(second->Hooks(), 0U);
+}
+
+namespace {
 //! Replaces the encryption shutdown function with a counter for a case, and
 //! puts the real one back however the case exits.
 struct EncryptionShutdownCounter

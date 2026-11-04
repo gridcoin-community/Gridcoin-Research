@@ -47,10 +47,16 @@ means. This lint keeps the file true against the code:
       to its file and class; a new interface needs a line there before such
       an entry is accepted. EXEMPT lists the methods excused, with the reason.
    9. An elevated_handle entry of interface X lists in "minted_by" exactly the
-      capnp methods that return an X (a result of type X or Alias.X), and each
-      of them is an "ipc" entry of class elevate. When no method returns an X
-      yet, minted_by is [] and the entry has a non-empty note saying why. No
-      other entry has minted_by.
+      capnp methods that return an X (a result of type X or Alias.X, or a List
+      of them), and each of them is an "ipc" entry of class elevate. When no
+      method returns an X yet, minted_by is [] and the entry has a non-empty
+      note saying why. No other entry has minted_by. So that no handle is
+      returned unseen, every result type resolves: to a builtin type, or to an
+      interface, struct or enum declared once in src/ipc/capnp/ (or listed in
+      EXTERNAL_TYPES). A result that does not resolve fails, and so does a
+      struct result that carries an interface in a field (directly, in a List,
+      or in a struct it holds). The parse must find at least one method
+      result.
   10. The key entry point list (--key-entry-points, by default
       src/test/data/key_entry_points.json) exists, has non-empty "rpc" and
       "ipc" lists, and every RPC and Interface.method in them is of class
@@ -122,6 +128,7 @@ ROW_CANDIDATE_RE = re.compile(r'^\s*\{\s*"[^"]+"\s*,\s*&', re.M)
 MEMBER_RE = re.compile(r"(?<![\w.])([a-zA-Z][a-zA-Z0-9_]*)\s*@(\d+)\s*\(", re.MULTILINE)
 SCOPE_RE = re.compile(r"\b(interface|struct|enum|union)\s+(\w+)[^{]*\{")
 CAPNP_COMMENT_RE = re.compile(r"#[^\n]*")
+CAPNP_STRING_RE = re.compile(r'"(?:[^"\\\n]|\\.)*"')
 # Any method declaration, counted without regard to the name: an ordinal
 # followed by a parameter list or a generic parameter list.
 CAPNP_CANDIDATE_RE = re.compile(r"@\d+\s*[\[(]")
@@ -247,22 +254,124 @@ def closing_paren(text, open_paren):
 
 # Rule 9: a method's result list, after its parameter list.
 RESULTS_START_RE = re.compile(r"\s*->\s*\(")
-# Rule 9: the type of one result, X or Alias.X.
-RESULT_TYPE_RE = re.compile(r":\s*([A-Za-z_][\w.]*)")
+# Rule 9: where the type of one result or struct field begins, X or Alias.X.
+TYPE_START_RE = re.compile(r":\s*([A-Za-z_][\w.]*)")
+# Rule 9: a name inside the parentheses of a type, as in List(X).
+TYPE_NAME_RE = re.compile(r"[A-Za-z_][\w.]*")
+# Rule 9: the builtin capnp types, which carry no interface. The types inside
+# List(...) are read as well. AnyPointer and Capability are left out on
+# purpose: either can hold an interface, so a result of either cannot be
+# resolved.
+CAPNP_BUILTINS = ("Void", "Bool", "Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64",
+                  "Float32", "Float64", "Text", "Data", "List")
+# Rule 9: what follows ':' for an inline union or group in a struct, whose
+# fields are read with the struct's own.
+CAPNP_INLINE = ("union", "group")
+# Rule 9: types the schemas use that are declared outside src/ipc/capnp/, by
+# full name, with what each is. Proxy.ThreadMap is libmultiprocess's
+# (mp/proxy.capnp); Init.construct returns it.
+EXTERNAL_TYPES = {"Proxy.ThreadMap": "interface"}
 
 # Rule 9: Interface.method -> the interface names among its result types (the
-# last component of each X or Alias.X), filled in by capnp_methods().
+# last component of each X or Alias.X, in a List or not), filled in by
+# capnp_methods().
 METHOD_RESULTS = {}
+
+
+def type_names(text, start_match):
+    """The names in the type whose ':' TYPE_START_RE matched: that name and,
+    when a parenthesised list follows it, every name inside, so List(X) gives
+    List and X."""
+    names = [start_match.group(1)]
+    i = start_match.end()
+    while i < len(text) and text[i] in " \t\r\n":
+        i += 1
+    if i < len(text) and text[i] == "(":
+        close = closing_paren(text, i)
+        if close >= 0:
+            names.extend(TYPE_NAME_RE.findall(text[i + 1:close]))
+    return names
+
+
+def resolve_type(name, declared):
+    """What the type name X or Alias.X is: "builtin", "interface", "struct" or
+    "enum", or None when it is unknown or declared more than once."""
+    if name in EXTERNAL_TYPES:
+        return EXTERNAL_TYPES[name]
+    short = name.split(".")[-1]
+    if short in CAPNP_BUILTINS:
+        return "builtin"
+    kinds = declared.get(short, [])
+    return kinds[0] if len(kinds) == 1 else None
+
+
+def struct_carries(name, declared, struct_bodies, seen):
+    """(the interfaces, the unresolved types) that the fields of struct name
+    hold, directly, in a List, or in a struct they hold."""
+    interfaces, unresolved = set(), set()
+    if name in seen:
+        return interfaces, unresolved
+    seen.add(name)
+    body = struct_bodies.get(name, "")
+    for m in TYPE_START_RE.finditer(body):
+        if m.group(1) in CAPNP_INLINE:
+            continue
+        for t in type_names(body, m):
+            kind = resolve_type(t, declared)
+            if kind == "interface":
+                interfaces.add(t.split(".")[-1])
+            elif kind == "struct":
+                inner = struct_carries(t.split(".")[-1], declared, struct_bodies, seen)
+                interfaces |= inner[0]
+                unresolved |= inner[1]
+            elif kind is None:
+                unresolved.add(t)
+    return interfaces, unresolved
+
+
+def resolve_results(raw_results, declared, struct_bodies):
+    """Fill METHOD_RESULTS from each method's result type names, and fail a
+    result that cannot be resolved or a struct result that carries an
+    interface: rule 9 sees only the interfaces a method returns directly."""
+    for key in sorted(raw_results):
+        types = set()
+        for t in raw_results[key]:
+            kind = resolve_type(t, declared)
+            if kind == "interface":
+                types.add(t.split(".")[-1])
+            elif kind == "struct":
+                interfaces, unresolved = struct_carries(t.split(".")[-1], declared, struct_bodies, set())
+                if interfaces:
+                    fail("ipc." + key, "returns struct {}, which carries the interface(s) {}; rule 9 sees only "
+                                       "the interfaces a method returns directly, so return each as a result "
+                                       "of its own".format(t, ", ".join(sorted(interfaces))))
+                if unresolved:
+                    fail("ipc." + key, "returns struct {}, whose field type(s) {} cannot be resolved, so rule 9 "
+                                       "cannot tell whether it carries an interface".format(
+                                           t, ", ".join(sorted(unresolved))))
+            elif kind is None:
+                fail("ipc." + key, "the result type {} is not a builtin type, an interface, struct or enum "
+                                   "declared once in {}, or one of EXTERNAL_TYPES, so rule 9 cannot tell "
+                                   "whether it returns a handle".format(t, CAPNP_GLOB))
+        METHOD_RESULTS[key] = types
 
 
 def capnp_methods():
     """Interface.method of every capnp interface method. Also records each
-    method's result types in METHOD_RESULTS."""
+    method's result interfaces in METHOD_RESULTS (rule 9)."""
     methods = set()
     parsed = 0
     candidates = 0
+    # Rule 9: every declared type name -> the kinds it is declared as; every
+    # struct name -> its body; Interface.method -> its result type names.
+    declared = {}
+    struct_bodies = {}
+    raw_results = {}
     for path in sorted(glob.glob(CAPNP_GLOB)):
         text = CAPNP_COMMENT_RE.sub(lambda m: " " * len(m.group(0)), read_text(path))
+        # String literals too (annotation arguments such as "interfaces::X"),
+        # so that a ':' in one is not read as the start of a type.
+        text = CAPNP_STRING_RE.sub(lambda m: '"' + " " * (len(m.group(0)) - 2) + '"', text)
         spans = []
         for m in SCOPE_RE.finditer(text):
             depth = 1
@@ -275,6 +384,10 @@ def capnp_methods():
                 i += 1
             if depth == 0:
                 spans.append((m.group(1), m.group(2), m.end(), i - 1))
+                if m.group(1) in ("interface", "struct", "enum"):
+                    declared.setdefault(m.group(2), []).append(m.group(1))
+                if m.group(1) == "struct":
+                    struct_bodies[m.group(2)] = text[m.end():i - 1]
         for m in CAPNP_CANDIDATE_RE.finditer(text):
             scope = innermost_scope(spans, m.start())
             if scope is not None and scope[0] == "interface":
@@ -288,18 +401,22 @@ def capnp_methods():
             if key in methods:
                 fail("ipc." + key, "more than one capnp method of this name")
             methods.add(key)
-            types = set()
+            names = []
             params_end = closing_paren(text, m.end() - 1)
             arrow = RESULTS_START_RE.match(text, params_end + 1) if params_end >= 0 else None
             if arrow:
                 results_end = closing_paren(text, arrow.end() - 1)
                 if results_end >= 0:
-                    for t in RESULT_TYPE_RE.findall(text[arrow.end():results_end]):
-                        types.add(t.split(".")[-1])
-            METHOD_RESULTS[key] = types
+                    results = text[arrow.end():results_end]
+                    for t in TYPE_START_RE.finditer(results):
+                        names.extend(type_names(results, t))
+            raw_results[key] = names
     if candidates > parsed:
         fail(CAPNP_GLOB, "{} interface method declaration(s) did not parse (name or shape); "
                          "they are not checked".format(candidates - parsed))
+    if methods and not any(raw_results.values()):
+        fail(CAPNP_GLOB, "parsed no method results; rule 9's result parser is probably broken")
+    resolve_results(raw_results, declared, struct_bodies)
     return methods
 
 

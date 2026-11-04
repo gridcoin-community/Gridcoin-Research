@@ -27,7 +27,9 @@ bindConnectionScope() runs operations under the client's capability, which it
 reads for its own connection only once it is bound. So every make* factory whose
 interface declares bindConnectionScope() must return BindToConnection(...) in
 ServeInit. Without it, the object reads the capability with no connection check,
-and could use the next GUI's capability after its own connection has closed.
+and could use the next GUI's capability after its own connection has closed. The
+check fails when it finds no such factory at all, since then it has stopped
+reading the interface headers and checks nothing.
 
 If you are here because the lint failed, the fix is almost always to add the
 missing override to src/ipc/serve_init.cpp with RequireAuth() as its first
@@ -202,6 +204,7 @@ def check_connection_binding(header_text, serve_text, interface_texts):
     found = overrides_with_bodies(serve_text)
     if init_body is None or found is None:
         return ["could not locate class Init or class ServeInit for the connection-binding check"]
+    bindable_factories = 0
     for m in FACTORY_RE.finditer(strip_noncode(init_body)):
         interface, factory = m.group(1), m.group(2)
         bindable = False
@@ -211,6 +214,7 @@ def check_connection_binding(header_text, serve_text, interface_texts):
                 bindable = True
         if not bindable:
             continue
+        bindable_factories += 1
         body = found.get((factory, 0))
         if body is None:
             continue  # the completeness check above reports a missing override
@@ -220,6 +224,13 @@ def check_connection_binding(header_text, serve_text, interface_texts):
                 "bindConnectionScope(). Unbound, the object reads the client's capability with no "
                 "connection check, and once its connection has closed it could use the next GUI's "
                 "capability. Return BindToConnection(m_inner->{0}()).".format(factory, interface))
+    # interfaces::Wallet, among others, declares bindConnectionScope(), so a
+    # check that finds no such factory is not reading the headers it is given,
+    # and would pass whatever ServeInit returns.
+    if bindable_factories == 0:
+        errors.append(
+            "found no make* factory on interfaces::Init whose interface declares bindConnectionScope(); "
+            "the connection-binding check is not reading the interface headers, and so checks nothing")
     return errors
 
 
@@ -478,8 +489,9 @@ public:
 
 
 def self_test():
-    """The connection-binding check passes the clean sample and fails a factory
-    of a bindable interface that is returned unbound."""
+    """The connection-binding check passes the clean sample, fails a factory
+    of a bindable interface that is returned unbound, and fails when it finds
+    no bindable factory at all."""
     failures = []
     clean = check_connection_binding(SAMPLE_INIT_HEADER, SAMPLE_SERVE, SAMPLE_INTERFACES)
     if clean:
@@ -489,6 +501,11 @@ def self_test():
     errors = check_connection_binding(SAMPLE_INIT_HEADER, unbound, SAMPLE_INTERFACES)
     if not any("ServeInit::makeWallet() does not return BindToConnection(...)" in e for e in errors):
         failures.append("no error for an unbound makeWallet(); got: {}".format("; ".join(errors) or "none"))
+    # The interface headers not read (none given): nothing is bindable, which
+    # must fail rather than pass with nothing checked.
+    errors = check_connection_binding(SAMPLE_INIT_HEADER, SAMPLE_SERVE, [])
+    if not any("found no make* factory" in e for e in errors):
+        failures.append("no error when no factory is bindable; got: {}".format("; ".join(errors) or "none"))
     for failure in failures:
         fail("self-test: " + failure)
     return 1 if failures else 0
