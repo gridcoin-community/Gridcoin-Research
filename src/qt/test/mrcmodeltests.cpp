@@ -97,7 +97,7 @@ struct WalletFixture
     qt_test::FakeGuiState gui_state;
     qt_test::FakeMRC mrc;
     qt_test::FakeResearcherContext researcher_context;
-    qt_test::FakeWallet wallet;
+    qt_test::UnencryptedFakeWallet wallet;
     qt_test::FakeWalletTxSource tx_source;
     std::shared_ptr<interfaces::WalletCoinSource> coin_source = interfaces::MakeSyntheticCoinSource(0, 0);
     OptionsModel options;

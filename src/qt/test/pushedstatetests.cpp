@@ -122,7 +122,7 @@ void PushedStateTests::wallet_balances_from_push()
     qt_test::FakeNode node;
     qt_test::FakeSideStakeManager sidestakes;
     qt_test::FakeGuiState gui_state;
-    qt_test::FakeWallet wallet;
+    qt_test::UnencryptedFakeWallet wallet;
     qt_test::FakeWalletTxSource tx_source;
     auto coin_source = interfaces::MakeSyntheticCoinSource(0, 0);
     OptionsModel options(node, sidestakes);
@@ -165,7 +165,7 @@ void PushedStateTests::voting_unavailable_until_synced()
     qt_test::FakeNode node;
     qt_test::FakeSideStakeManager sidestakes;
     qt_test::FakeGuiState gui_state;
-    qt_test::FakeWallet wallet;
+    qt_test::UnencryptedFakeWallet wallet;
     qt_test::FakeWalletTxSource tx_source;
     qt_test::FakeVotingManager voting;
     qt_test::FakeResearcherContext researcher_context;
@@ -232,7 +232,7 @@ void PushedStateTests::poll_title_is_read_when_the_first_synced_push_arrives()
     qt_test::FakeNode node;
     qt_test::FakeSideStakeManager sidestakes;
     qt_test::FakeGuiState gui_state;
-    qt_test::FakeWallet wallet;
+    qt_test::UnencryptedFakeWallet wallet;
     qt_test::FakeWalletTxSource tx_source;
     qt_test::FakeVotingManager voting;
     qt_test::FakeResearcherContext researcher_context;

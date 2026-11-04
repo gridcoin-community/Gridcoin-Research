@@ -8,6 +8,8 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <cstdint>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -391,7 +393,8 @@ public:
     //! the FailedPassphraseDelay() for the failures counted so far, slept
     //! without holding cs_wallet, so the caller must not hold it either. Also
     //! nullopt, with no delay, when a locked wallet's unlock cannot arm its
-    //! relock.
+    //! relock, and when the attempt is given up while it waits for its turn
+    //! (AwaitPassphraseTurn()).
     std::optional<CapabilityId> BeginElevation(const SecureString& passphrase, CapabilityKind kind)
         LOCKS_EXCLUDED(cs_wallet, m_capability_mutex);
 
@@ -468,9 +471,15 @@ public:
         //! retiring the relock armed for it and silently giving the wallet a
         //! different lifetime than the first caller was told.
         AlreadyUnlocked,
+
+        //! The attempt was given up while it waited for its turn, because a
+        //! shutdown was requested or its caller cancelled it
+        //! (PassphraseAttemptCancel). The passphrase was not checked.
+        Abandoned,
     };
 
-    //! The attempt first waits for its turn (AwaitPassphraseTurn()). A wrong
+    //! The attempt first waits for its turn (AwaitPassphraseTurn()), and one
+    //! given up while it waits fails with UnlockFailure::Abandoned. A wrong
     //! passphrase (UnlockFailure::Passphrase) is counted, and the refusal
     //! returns only after the FailedPassphraseDelay() for the failures counted
     //! so far. The key is derived, and every wait slept, without cs_wallet
@@ -503,8 +512,9 @@ public:
     bool RestrictToStakingOnly();
 
     //! A wrong old passphrase is counted and delayed as by Unlock(), and the
-    //! caller must not hold cs_wallet. A successful change ends every
-    //! capability: they were proved with the old passphrase.
+    //! caller must not hold cs_wallet. False, with nothing changed, when the
+    //! attempt is given up while it waits for its turn. A successful change
+    //! ends every capability: they were proved with the old passphrase.
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase)
         LOCKS_EXCLUDED(cs_wallet);
 
@@ -535,21 +545,38 @@ private:
     std::map<CapabilityId, CapabilityRecord> m_capabilities GUARDED_BY(m_capability_mutex);
     std::optional<CapabilityId> m_ipc_capability GUARDED_BY(m_capability_mutex);
 
+    //! Guards the passphrase attempts' turns. A leaf: no other lock is taken
+    //! while it is held, and nothing is called but the lock-free reads of the
+    //! shutdown flag and of the attempt's cancel token.
+    mutable Mutex m_passphrase_turn_mutex;
+
+    //! Raised whenever a turn ends, so that the attempt now served looks again.
+    std::condition_variable m_passphrase_turn_ended;
+
     //! Consecutive failed passphrase attempts, across Unlock(),
     //! BeginElevation() and ChangeWalletPassphrase(). Process-wide in effect:
-    //! there is one wallet.
+    //! there is one wallet. Written under m_passphrase_turn_mutex; atomic so
+    //! that FailedUnlockCount() can read it without the mutex.
     std::atomic<unsigned int> m_failed_unlocks{0};
 
-    //! When the next passphrase attempt may start, as steady-clock
-    //! microseconds. Each attempt claims a turn from it and moves it on; see
-    //! AwaitPassphraseTurn().
-    std::atomic<int64_t> m_next_passphrase_attempt{0};
+    //! Passphrase attempts are served in the order they ask: each takes the
+    //! next ticket, and waits until its ticket is the one served.
+    uint64_t m_next_passphrase_ticket GUARDED_BY(m_passphrase_turn_mutex){0};
+    uint64_t m_served_passphrase_ticket GUARDED_BY(m_passphrase_turn_mutex){0};
+
+    //! Tickets given up before they were served, passed over when they are.
+    std::set<uint64_t> m_abandoned_passphrase_tickets GUARDED_BY(m_passphrase_turn_mutex);
+
+    //! The served attempt checks its passphrase no sooner than this: the end of
+    //! the delay the last refusal earned.
+    std::chrono::steady_clock::time_point m_next_passphrase_check GUARDED_BY(m_passphrase_turn_mutex){};
 
     //! Whether \p id is issued, for \p kind, and before its deadline. What
     //! CapabilityScope checks before it grants.
     bool IsCapabilityLive(CapabilityId id, CapabilityKind kind) const LOCKS_EXCLUDED(m_capability_mutex);
 
     friend class CapabilityScope;
+    friend struct PassphraseTurnTestPeer;
 
     //! Unlock() without the turn, and without counting or delaying a wrong
     //! passphrase, reporting the epoch of the unlock it installed through
@@ -566,27 +593,67 @@ private:
     bool DecryptMasterKey(const SecureString& passphrase, CKeyingMaterial& master_key_out) const
         LOCKS_EXCLUDED(cs_wallet);
 
+    //! \brief One passphrase attempt's turn, from AwaitPassphraseTurn().
+    //!
+    //! Held() is false when the attempt was given up while it waited, and it
+    //! must then check no passphrase. Otherwise the attempt reports its check
+    //! with Accepted() or Refused(). A turn that ends without either, because
+    //! the attempt never checked the passphrase or did not get as far as
+    //! saying how the check went, is handed on unused, so the attempts behind
+    //! it are never held up by it.
+    class PassphraseTurn
+    {
+    public:
+        PassphraseTurn(CWallet& wallet, std::optional<uint64_t> ticket) : m_wallet(wallet), m_ticket(ticket) {}
+        ~PassphraseTurn();
+
+        PassphraseTurn(const PassphraseTurn&) = delete;
+        PassphraseTurn& operator=(const PassphraseTurn&) = delete;
+        PassphraseTurn(PassphraseTurn&&) = delete;
+        PassphraseTurn& operator=(PassphraseTurn&&) = delete;
+
+        bool Held() const { return m_ticket.has_value(); }
+
+        //! The passphrase was accepted: the count is reset, and the next
+        //! attempt is checked at once.
+        void Accepted();
+
+        //! The passphrase was refused. It is counted, every later check waits
+        //! out its FailedPassphraseDelay(), and this returns once that delay
+        //! is over, or sooner when a shutdown is requested or the attempt is
+        //! cancelled (PassphraseAttemptCancel); the attempts behind it wait the
+        //! whole delay all the same. Never call it under cs_wallet.
+        void Refused();
+
+    private:
+        CWallet& m_wallet;
+
+        //! The ticket whose turn this is, until the turn ends.
+        std::optional<uint64_t> m_ticket;
+
+        //! End the turn: serve the next ticket, and wake the attempts waiting.
+        void End();
+    };
+
     //! \brief Wait for this passphrase attempt's turn.
     //!
-    //! A turn starts no sooner than the one claimed before it, and moves the
-    //! next one on by the delay this attempt would earn by failing, so callers
-    //! on several threads check one passphrase per delay, as one caller would.
-    //! An attempt whose turn comes round after attempts ahead of it have
-    //! failed claims a new turn, spaced for the failures counted now, behind
-    //! the turns claimed meanwhile. Returns the time the last turn claimed
-    //! moved the next one to, for ReleasePassphraseTurn().
-    int64_t AwaitPassphraseTurn() LOCKS_EXCLUDED(cs_wallet);
+    //! Attempts are served one at a time, in the order they ask, so callers on
+    //! several threads have their passphrases checked as one caller's would
+    //! be. The attempt served waits out the delay the last refusal earned
+    //! before its passphrase is checked, and no later attempt overtakes it, so
+    //! its wait is bounded by the attempts ahead of it, each at most a check
+    //! and the longest FailedPassphraseDelay().
+    //!
+    //! The wait ends with no turn held when a shutdown is requested, or when
+    //! the calling thread's attempt is cancelled (PassphraseAttemptCancel). The
+    //! attempt is then given up: its passphrase is not checked, nothing is
+    //! counted, and its place passes to the attempt behind it. Never call it
+    //! under cs_wallet.
+    PassphraseTurn AwaitPassphraseTurn() LOCKS_EXCLUDED(cs_wallet, m_passphrase_turn_mutex);
 
-    //! Hand a turn back unused, when the attempt never checked the passphrase.
-    void ReleasePassphraseTurn(int64_t turn);
-
-    //! A passphrase was accepted: the count is reset and the next attempt may
-    //! start at once.
-    void PassphraseAccepted();
-
-    //! Count a wrong passphrase, hold every later attempt back by its
-    //! FailedPassphraseDelay(), and sleep that delay before returning.
-    void DelayFailedPassphrase() LOCKS_EXCLUDED(cs_wallet);
+    //! Serve the ticket after \p ticket, or, when \p ticket is not yet the one
+    //! served, mark it to be passed over when its turn comes.
+    void EndPassphraseTicket(uint64_t ticket) EXCLUSIVE_LOCKS_REQUIRED(m_passphrase_turn_mutex);
 
     //! ChangeWalletPassphrase() without the turn or the delay. \p
     //! passphrase_accepted is set once the old passphrase has been checked:

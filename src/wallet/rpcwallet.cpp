@@ -3538,6 +3538,12 @@ UniValue walletpassphrase(const UniValue& params)
                                    "need to change unlock settings.");
             }
 
+            // The node began shutting down while the attempt waited its turn.
+            if (failure == CWallet::UnlockFailure::Abandoned) {
+                throw JSONRPCError(RPC_WALLET_ERROR,
+                                   "Error: the node is shutting down; the wallet passphrase was not checked.");
+            }
+
             if (failure == CWallet::UnlockFailure::RelockUnavailable) {
                 throw JSONRPCError(RPC_WALLET_ERROR,
                                    "Error: the wallet passphrase was accepted, but the automatic "

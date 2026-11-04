@@ -31,6 +31,8 @@
 #include "gridcoin/support/block_finder.h"
 #include "policy/fees.h"
 #include "node/blockstorage.h"
+#include "node/shutdown.h"
+#include "wallet/capability.h"
 #include "wallet/staking_signer.h"
 
 #include <algorithm>
@@ -614,7 +616,15 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                      std::optional<std::chrono::seconds> relock_after,
                      UnlockFailure* failure_out)
 {
-    const int64_t turn = AwaitPassphraseTurn();
+    PassphraseTurn turn = AwaitPassphraseTurn();
+
+    // Given up while it waited, by a shutdown or by its caller. The passphrase
+    // was never checked, so nothing is counted.
+    if (!turn.Held()) {
+        if (failure_out) *failure_out = UnlockFailure::Abandoned;
+
+        return false;
+    }
 
     UnlockFailure failure = UnlockFailure::None;
 
@@ -625,89 +635,138 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
 
     // Only a wrong passphrase is counted. A wallet that was already unlocked,
     // or a right passphrase whose relock could not be armed, says nothing
-    // about whether the caller knows the passphrase.
+    // about whether the caller knows the passphrase, and the turn is handed
+    // on unused when it goes out of scope.
     if (unlocked) {
-        PassphraseAccepted();
+        turn.Accepted();
     } else if (failure == UnlockFailure::Passphrase) {
-        DelayFailedPassphrase();
-    } else {
-        ReleasePassphraseTurn(turn);
+        turn.Refused();
     }
 
     return unlocked;
 }
 
-//! The steady clock, in the microseconds the next-attempt time is kept in.
-static int64_t SteadyMicros()
+//! How often a passphrase attempt that is waiting looks again at whether a
+//! shutdown was requested or it was cancelled. Neither wakes it, so this
+//! bounds how long either takes to end the wait.
+static constexpr std::chrono::milliseconds PASSPHRASE_WAIT_POLL{100};
+
+//! Whether the passphrase attempt the calling thread makes is given up.
+static bool PassphraseAttemptGivenUp()
 {
-    return std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
+    return ShutdownRequested() || PassphraseAttemptCancel::Requested();
 }
 
-int64_t CWallet::AwaitPassphraseTurn()
+CWallet::PassphraseTurn CWallet::AwaitPassphraseTurn()
 {
+    // Never under cs_wallet (the declaration excludes it): the wait can last
+    // as long as the attempts ahead take, each up to the longest delay.
+    WAIT_LOCK(m_passphrase_turn_mutex, lock);
+
+    const uint64_t ticket = m_next_passphrase_ticket++;
+
     while (true) {
-        // Claim the next turn. It starts no sooner than the turn claimed
-        // before it, and pushes the one after back by the delay this attempt
-        // would earn if it failed. Concurrent callers therefore take turns,
-        // one passphrase check per delay, as a single caller would: waiting
-        // until a shared time instead would release every waiter at that time
-        // at once.
-        const int64_t now = SteadyMicros();
-        const unsigned int failures = m_failed_unlocks.load();
-        int64_t claimed = m_next_passphrase_attempt.load();
-        int64_t start = 0;
-        int64_t next = 0;
+        // Its place passes to the attempt behind it, which then does not wait
+        // for an attempt that will never come.
+        if (PassphraseAttemptGivenUp()) {
+            EndPassphraseTicket(ticket);
+            m_passphrase_turn_ended.notify_all();
 
-        do {
-            start = std::max(now, claimed);
-            next = start + std::chrono::microseconds(FailedPassphraseDelay(failures + 1)).count();
-        } while (!m_next_passphrase_attempt.compare_exchange_weak(claimed, next));
+            return PassphraseTurn(*this, std::nullopt);
+        }
 
-        // Never under cs_wallet (the declaration excludes it).
-        if (start > now) UninterruptibleSleep(std::chrono::microseconds(start - now));
+        const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
-        // The turn was spaced for the failures counted when it was claimed.
-        // If attempts ahead of it have failed since, its start is too soon for
-        // the delay they earned, and so is the spacing of every turn behind
-        // it: claim again, which waits out that delay and spaces the turns
-        // after this one by the delay it would earn now. The turns claimed
-        // meanwhile go first.
-        if (m_failed_unlocks.load() <= failures) return next;
+        if (ticket != m_served_passphrase_ticket) {
+            m_passphrase_turn_ended.wait_until(lock, now + PASSPHRASE_WAIT_POLL);
+            continue;
+        }
+
+        // Served. The check waits out the delay the last refusal earned, which
+        // a later refusal cannot move: no attempt is checked meanwhile.
+        if (now >= m_next_passphrase_check) {
+            return PassphraseTurn(*this, ticket);
+        }
+
+        m_passphrase_turn_ended.wait_until(lock, std::min(m_next_passphrase_check, now + PASSPHRASE_WAIT_POLL));
     }
 }
 
-void CWallet::ReleasePassphraseTurn(int64_t turn)
+void CWallet::EndPassphraseTicket(uint64_t ticket)
 {
-    // Only if no later attempt has claimed a turn after this one.
-    int64_t expected = turn;
-    m_next_passphrase_attempt.compare_exchange_strong(expected, SteadyMicros());
-}
-
-void CWallet::PassphraseAccepted()
-{
-    m_failed_unlocks = 0;
-    m_next_passphrase_attempt = SteadyMicros();
-}
-
-void CWallet::DelayFailedPassphrase()
-{
-    const unsigned int failures = ++m_failed_unlocks;
-    const int64_t until = SteadyMicros() + std::chrono::microseconds(FailedPassphraseDelay(failures)).count();
-
-    // Every later attempt, from any caller, waits at least as long. A turn
-    // already claimed further out is kept.
-    int64_t claimed = m_next_passphrase_attempt.load();
-
-    while (claimed < until && !m_next_passphrase_attempt.compare_exchange_weak(claimed, until)) {
+    if (ticket != m_served_passphrase_ticket) {
+        m_abandoned_passphrase_tickets.insert(ticket);
+        return;
     }
 
-    // The refusal itself returns only once its delay is over. Never under
-    // cs_wallet (the declaration excludes it): a sleep of up to 30 s there
-    // would stall every wallet operation, the staking miner's included.
-    const int64_t now = SteadyMicros();
+    ++m_served_passphrase_ticket;
 
-    if (until > now) UninterruptibleSleep(std::chrono::microseconds(until - now));
+    while (m_abandoned_passphrase_tickets.erase(m_served_passphrase_ticket)) {
+        ++m_served_passphrase_ticket;
+    }
+}
+
+void CWallet::PassphraseTurn::End()
+{
+    {
+        LOCK(m_wallet.m_passphrase_turn_mutex);
+        m_wallet.EndPassphraseTicket(*m_ticket);
+    }
+
+    m_ticket.reset();
+    m_wallet.m_passphrase_turn_ended.notify_all();
+}
+
+CWallet::PassphraseTurn::~PassphraseTurn()
+{
+    // Handed on unused: the delay the last refusal earned still stands for
+    // the attempt served next.
+    if (m_ticket) End();
+}
+
+void CWallet::PassphraseTurn::Accepted()
+{
+    if (!m_ticket) return;
+
+    {
+        LOCK(m_wallet.m_passphrase_turn_mutex);
+        m_wallet.m_failed_unlocks = 0;
+        m_wallet.m_next_passphrase_check = std::chrono::steady_clock::now();
+    }
+
+    End();
+}
+
+void CWallet::PassphraseTurn::Refused()
+{
+    if (!m_ticket) return;
+
+    std::chrono::steady_clock::time_point until;
+    {
+        LOCK(m_wallet.m_passphrase_turn_mutex);
+
+        const unsigned int failures = ++m_wallet.m_failed_unlocks;
+
+        // Every later check, from any caller, waits at least as long.
+        until = std::chrono::steady_clock::now() + FailedPassphraseDelay(failures);
+        m_wallet.m_next_passphrase_check = std::max(m_wallet.m_next_passphrase_check, until);
+    }
+
+    End();
+
+    // The refusal itself returns once its delay is over. Never under
+    // cs_wallet: a sleep of up to 30 s there would stall every wallet
+    // operation, the staking miner's included. A shutdown, or the caller
+    // giving the attempt up, ends this wait early; the next check waits the
+    // whole delay regardless.
+    while (!PassphraseAttemptGivenUp()) {
+        const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+
+        if (now >= until) break;
+
+        UninterruptibleSleep(std::chrono::duration_cast<std::chrono::microseconds>(
+            std::min<std::chrono::steady_clock::duration>(until - now, PASSPHRASE_WAIT_POLL)));
+    }
 }
 
 //! Whether two sets of master key records are the same records.
@@ -955,7 +1014,11 @@ std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphra
     std::optional<uint64_t> matched_epoch;
 
     if (IsCrypted()) {
-        const int64_t turn = AwaitPassphraseTurn();
+        PassphraseTurn turn = AwaitPassphraseTurn();
+
+        // Given up while it waited, with the passphrase never checked.
+        if (!turn.Held()) return std::nullopt;
+
         bool accepted = false;
 
         // At most two passes. The unlock can change while the key is derived:
@@ -981,9 +1044,8 @@ std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphra
 
                 // The passphrase was right, but the unlock could not be timed
                 // and was not kept. It is no passphrase failure, so there is no
-                // delay and nothing is counted.
+                // delay and nothing is counted: the turn is handed on unused.
                 if (failure == UnlockFailure::RelockUnavailable) {
-                    ReleasePassphraseTurn(turn);
                     LogPrintf("WARNING: %s: no capability was issued, because the wallet's relock could not "
                               "be scheduled", __func__);
                     return std::nullopt;
@@ -1010,11 +1072,11 @@ std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphra
         }
 
         if (!accepted) {
-            DelayFailedPassphrase();
+            turn.Refused();
             return std::nullopt;
         }
 
-        PassphraseAccepted();
+        turn.Accepted();
     }
 
     // Drawn and timed before the mutex is taken: it is a leaf, and the
@@ -1147,19 +1209,24 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
 {
     // The old passphrase is a passphrase attempt like any other: it waits for
     // its turn, and a wrong one is counted and delayed.
-    const int64_t turn = AwaitPassphraseTurn();
+    PassphraseTurn turn = AwaitPassphraseTurn();
+
+    // Given up while it waited, with nothing checked or changed.
+    if (!turn.Held()) return false;
 
     std::optional<bool> passphrase_accepted;
 
     const bool changed = ChangeWalletPassphraseWithoutDelay(strOldWalletPassphrase, strNewWalletPassphrase,
                                                             passphrase_accepted);
 
-    if (!passphrase_accepted) {
-        ReleasePassphraseTurn(turn);
-    } else if (*passphrase_accepted) {
-        PassphraseAccepted();
-    } else {
-        DelayFailedPassphrase();
+    // An attempt that never checked the old passphrase hands its turn on
+    // unused when the turn goes out of scope.
+    if (passphrase_accepted) {
+        if (*passphrase_accepted) {
+            turn.Accepted();
+        } else {
+            turn.Refused();
+        }
     }
 
     return changed;

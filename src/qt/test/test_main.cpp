@@ -5,6 +5,7 @@
 #include "logging.h"
 
 #include "aboutdialogtests.h"
+#include "askpassphrasedialogtests.h"
 #include "autostarttests.h"
 #include "bitcoinguitests.h"
 #include "clientmodeltests.h"
@@ -133,6 +134,10 @@ int main(int argc, char *argv[])
 
     OverviewTxModelTests test18;
     if (QTest::qExec(&test18) != 0)
+        fInvalid = true;
+
+    AskPassphraseDialogTests test19;
+    if (QTest::qExec(&test19) != 0)
         fInvalid = true;
 
     return fInvalid;

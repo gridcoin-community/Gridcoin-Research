@@ -683,7 +683,11 @@ order to prevent deadlocks:
 `CWallet::m_capability_mutex`, which guards the wallet's issued capabilities
 and its IPC capability slot, is a leaf: it may be taken under any of the locks
 above, `cs_KeyStore` included, but no other lock is taken and nothing is called
-out to while it is held.
+out to while it is held. `CWallet::m_passphrase_turn_mutex`, which guards the
+order in which passphrase attempts are checked, is a leaf too: no other lock is
+taken under it, and nothing is called but lock-free reads of the shutdown flag
+and the attempt's cancel token. A passphrase attempt waits for its turn on it,
+so it is never taken under `cs_main` or `cs_wallet`.
 
 This ordering applies regardless of whether you use `LOCK2` or separate `LOCK`
 statements. The `DEBUG_LOCKORDER` build flag will detect violations at runtime

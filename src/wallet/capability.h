@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_WALLET_CAPABILITY_H
 #define GRIDCOIN_WALLET_CAPABILITY_H
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -50,6 +51,44 @@ std::chrono::seconds CapabilityTtl(CapabilityKind kind);
 //! min(250 ms << min(n, 7), 30 s): it doubles with each further failure and is
 //! 30 s from the seventh on.
 std::chrono::milliseconds FailedPassphraseDelay(unsigned int consecutive_failures);
+
+//! \brief Lets the caller give up the passphrase attempt it makes on this thread
+//! while the attempt waits.
+//!
+//! Passphrase attempts take turns (CWallet::Unlock(), BeginElevation() and
+//! ChangeWalletPassphrase()). While this is in force on a thread and \p cancel
+//! is true, an attempt that thread makes stops waiting: one still waiting for
+//! its turn returns without its passphrase being checked, and one that was
+//! refused stops waiting out its delay. A check already under way finishes.
+//!
+//! It is seen only by the thread that sets it. An attempt made through IPC, as
+//! the GUI's are in the split build, runs on a thread of the node that has
+//! none, and only a shutdown of the node ends its wait. RPC sets none.
+//!
+//! Neither copyable nor movable, and not allocated with new: it is in force
+//! for the block that holds it, on the thread that runs that block.
+class PassphraseAttemptCancel
+{
+public:
+    explicit PassphraseAttemptCancel(const std::atomic<bool>& cancel);
+    ~PassphraseAttemptCancel();
+
+    PassphraseAttemptCancel(const PassphraseAttemptCancel&) = delete;
+    PassphraseAttemptCancel& operator=(const PassphraseAttemptCancel&) = delete;
+    PassphraseAttemptCancel(PassphraseAttemptCancel&&) = delete;
+    PassphraseAttemptCancel& operator=(PassphraseAttemptCancel&&) = delete;
+
+    static void* operator new(std::size_t) = delete;
+    static void* operator new[](std::size_t) = delete;
+
+    //! Whether the attempt on the calling thread has been cancelled. False on a
+    //! thread that set none.
+    static bool Requested();
+
+private:
+    //! What was in force on this thread before, restored when this ends.
+    const std::atomic<bool>* m_previous{nullptr};
+};
 
 //! \brief Lets the calling thread use the wallet's keys for one operation, under
 //! a capability issued for that kind of operation.

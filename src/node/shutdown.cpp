@@ -40,6 +40,11 @@ bool ShutdownRequested()
     return g_shutdown_requested.load(std::memory_order_relaxed);
 }
 
+void AbortShutdown()
+{
+    g_shutdown_requested.store(false, std::memory_order_relaxed);
+}
+
 void SetShutdownInProgress(bool in_progress)
 {
     g_shutdown_in_progress.store(in_progress, std::memory_order_relaxed);

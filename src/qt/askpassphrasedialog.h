@@ -6,6 +6,7 @@
 #include <QDialog>
 
 #include <atomic>
+#include <memory>
 #include <thread>
 
 namespace Ui {
@@ -42,8 +43,11 @@ public:
 
     void accept();
 
-    //! Ignored while the passphrase is being checked: the check cannot be
-    //! called back, and closing the prompt under it would lose its outcome.
+    //! While the passphrase is being checked, cancels the check and hides the
+    //! prompt at once. A check still waiting for its turn gives up; one already
+    //! checking finishes, and checkFinished() then ends the prompt rejected,
+    //! acting on nothing it found except to end a capability it began and to
+    //! say so if the passphrase did change.
     void reject();
 
     void setModel(WalletModel *model);
@@ -83,6 +87,13 @@ private:
 
     //! checkFinished() has acted on the outcome.
     bool m_check_reported{false};
+
+    //! Set by reject() to cancel the running check (PassphraseAttemptCancel).
+    //! Shared with the check's thread, which watches it while it waits.
+    std::shared_ptr<std::atomic<bool>> m_check_cancel;
+
+    //! The prompt was cancelled while its check ran.
+    bool m_check_cancelled{false};
 
     //! The passphrase being checked (the old one, for ChangePass) contained a
     //! null character.

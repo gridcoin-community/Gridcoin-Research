@@ -15,6 +15,7 @@
 #include <QKeyEvent>
 
 #include <exception>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -88,8 +89,11 @@ AskPassphraseDialog::~AskPassphraseDialog()
 {
     // A check still running holds this dialog's address, so it must finish
     // first. That is reached only when the application quits under an open
-    // prompt; reject() refuses to close it otherwise.
+    // prompt: a cancelled prompt stays until its check reports. Cancelled
+    // first, so that a check still waiting for its turn gives up rather than
+    // holding the quit up.
     if (m_check.joinable()) {
+        if (m_check_cancel) *m_check_cancel = true;
         m_check.join();
     }
 
@@ -326,7 +330,16 @@ void AskPassphraseDialog::accept()
 
 void AskPassphraseDialog::reject()
 {
+    // The prompt goes at once, without waiting for the check. In the
+    // monolithic build a check still waiting for its turn sees the cancel and
+    // gives up; one already deriving the key, or, in the split build, one
+    // waiting in the node's process, which this cannot reach, finishes in the
+    // background. The prompt stays in being, hidden, until checkFinished()
+    // ends it, so the check's thread always has a dialog to report to.
     if (m_check.joinable()) {
+        if (m_check_cancel) *m_check_cancel = true;
+        m_check_cancelled = true;
+        hide();
         return;
     }
 
@@ -338,6 +351,8 @@ void AskPassphraseDialog::startCheck(SecureString passphrase, SecureString new_p
     m_check_had_null = passphrase.find('\0') != std::string::npos;
     m_check_accepted = false;
     m_check_reported = false;
+    m_check_cancelled = false;
+    m_check_cancel = std::make_shared<std::atomic<bool>>(false);
 
     setChecking(true);
 
@@ -348,10 +363,16 @@ void AskPassphraseDialog::startCheck(SecureString passphrase, SecureString new_p
     const Mode check_mode = mode;
     const CapabilityKind kind = m_kind;
     const bool staking_only = (mode == UnlockStaking && ui->stakingCheckBox->isChecked());
+    const std::shared_ptr<std::atomic<bool>> cancel = m_check_cancel;
 
-    m_check = std::thread([this, &wallet, check_mode, kind, staking_only, passphrase = std::move(passphrase),
+    m_check = std::thread([this, &wallet, check_mode, kind, staking_only, cancel, passphrase = std::move(passphrase),
                            new_passphrase = std::move(new_passphrase)] {
         bool accepted = false;
+
+        // The attempt watches the cancel while it waits for its turn. Only in
+        // the monolithic build, where the wallet runs on this thread: across
+        // IPC the attempt runs in the node's process, which cannot see it.
+        const PassphraseAttemptCancel attempt(*cancel);
 
         // Nothing may escape a thread. In the split build the call crosses
         // IPC, and a disconnect mid-call raises.
@@ -413,6 +434,29 @@ void AskPassphraseDialog::checkFinished()
 
     m_check_reported = true;
     setChecking(false);
+
+    // Cancelled while the check ran: nothing waits for its outcome. A
+    // capability it began has no operation to use it, so it is ended here. A
+    // passphrase it changed did change, which the user must be told. Anything
+    // else is let go, an unlock included: the user asked for it when they
+    // pressed OK.
+    if (m_check_cancelled) {
+        if (m_check_accepted && mode == Elevate && model) {
+            try {
+                model->wallet().endElevation();
+            } catch (const std::exception& e) {
+                LogPrintf("WARN: %s: could not end a cancelled prompt's capability: %s", __func__, e.what());
+            }
+        }
+
+        if (m_check_accepted && mode == ChangePass) {
+            QMessageBox::information(parentWidget(), tr("Wallet encrypted"),
+                                     tr("Wallet passphrase was successfully changed."));
+        }
+
+        QDialog::reject();
+        return;
+    }
 
     if (mode == ChangePass) {
         if (m_check_accepted) {

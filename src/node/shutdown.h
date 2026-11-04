@@ -33,6 +33,11 @@ void SetShutdownRequested();
 //! Whether a shutdown has been requested.
 bool ShutdownRequested();
 
+//! Clear the request flag. As upstream's AbortShutdown(): only before anything
+//! waits for a shutdown, or in the unit tests, which request one to check how
+//! code that watches the flag stops and must leave it as they found it.
+void AbortShutdown();
+
 //! Set whether node teardown is in progress. Passed \c true at the top of
 //! Shutdown() (and by the low-disk abort in CheckDiskSpace); reset to \c false
 //! by CConnman::Start() as it starts the net threads. Start() runs once per

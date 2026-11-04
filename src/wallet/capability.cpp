@@ -9,6 +9,31 @@
 
 #include <algorithm>
 
+namespace {
+
+// The cancel token of the passphrase attempt the calling thread makes, or
+// nullptr when it set none. A plain pointer, because a thread_local must be
+// trivially destructible (see test/lint/lint-thread-local.sh).
+thread_local const std::atomic<bool>* g_passphrase_cancel{nullptr};
+
+} // namespace
+
+PassphraseAttemptCancel::PassphraseAttemptCancel(const std::atomic<bool>& cancel)
+    : m_previous(g_passphrase_cancel)
+{
+    g_passphrase_cancel = &cancel;
+}
+
+PassphraseAttemptCancel::~PassphraseAttemptCancel()
+{
+    g_passphrase_cancel = m_previous;
+}
+
+bool PassphraseAttemptCancel::Requested()
+{
+    return g_passphrase_cancel != nullptr && g_passphrase_cancel->load();
+}
+
 std::chrono::seconds CapabilityTtl(CapabilityKind kind)
 {
     switch (kind) {

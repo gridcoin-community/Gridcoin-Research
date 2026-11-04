@@ -8,6 +8,7 @@
 #include "gridcoin/voting/builders.h"
 #include "init.h"
 #include "keystore.h"
+#include "node/shutdown.h"
 #include "rpc/protocol.h"
 #include "rpc/server.h"
 #include "scheduler.h"
@@ -29,6 +30,18 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
+
+// At global scope, because CWallet names ::PassphraseTurnTestPeer as a friend.
+struct PassphraseTurnTestPeer
+{
+    //! How many passphrase attempts have asked the wallet for a turn: the
+    //! tickets it has handed out.
+    static uint64_t AttemptsAsked(const CWallet& wallet)
+    {
+        LOCK(wallet.m_passphrase_turn_mutex);
+        return wallet.m_next_passphrase_ticket;
+    }
+};
 
 namespace {
 
@@ -55,6 +68,37 @@ bool KeyReachable(const EncryptedWallet& fx)
     CKey key;
     return fx.wallet.GetKey(fx.id, key) && key.IsValid();
 }
+
+//! Wait until \p wallet has been asked for \p count passphrase turns in all.
+bool WaitForAttemptsAsked(const CWallet& wallet, uint64_t count)
+{
+    for (int i = 0; i < 6000 && PassphraseTurnTestPeer::AttemptsAsked(wallet) < count; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    return PassphraseTurnTestPeer::AttemptsAsked(wallet) >= count;
+}
+
+//! Wait until \p wallet has counted \p count failed passphrase attempts.
+bool WaitForFailures(const CWallet& wallet, unsigned int count)
+{
+    for (int i = 0; i < 6000 && wallet.FailedUnlockCount() < count; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    return wallet.FailedUnlockCount() >= count;
+}
+
+//! Requests a shutdown while it lives, and clears the request however the case
+//! exits, so that the rest of the binary runs without one.
+struct ShutdownRequestedForThisCase
+{
+    ShutdownRequestedForThisCase() { SetShutdownRequested(); }
+    ~ShutdownRequestedForThisCase() { AbortShutdown(); }
+
+    ShutdownRequestedForThisCase(const ShutdownRequestedForThisCase&) = delete;
+    ShutdownRequestedForThisCase& operator=(const ShutdownRequestedForThisCase&) = delete;
+};
 
 //! The RPC error code EnsureWalletIsUnlocked() refuses the calling thread with,
 //! or nullopt when it lets the thread through.
@@ -769,9 +813,160 @@ BOOST_AUTO_TEST_CASE(a_queued_attempt_waits_out_failures_made_while_it_waited)
 
     // Each check came no sooner after the failure before it than the delay
     // that failure earned, as when one caller makes the attempts in turn.
-    // Lower bounds only: a loaded machine makes every gap longer.
-    BOOST_CHECK(failed_at[1] - failed_at[0] >= FailedPassphraseDelay(1));
-    BOOST_CHECK(failed_at[2] - failed_at[1] >= FailedPassphraseDelay(2));
+    // Lower bounds only: a loaded machine makes every real gap longer. The
+    // poller above sees a failure only when it next looks, though, which on a
+    // loaded machine can be well after the failure, and a gap measured from a
+    // failure seen late is that much short of the real one. A tenth of a second
+    // is allowed for that. A check that did not wait out the delay would come
+    // within a key derivation of the failure before it, far inside the bound.
+    constexpr std::chrono::milliseconds POLL_LAG{100};
+
+    BOOST_CHECK(failed_at[1] - failed_at[0] >= FailedPassphraseDelay(1) - POLL_LAG);
+    BOOST_CHECK(failed_at[2] - failed_at[1] >= FailedPassphraseDelay(2) - POLL_LAG);
+}
+
+BOOST_AUTO_TEST_CASE(a_waiting_attempt_is_not_overtaken_by_later_ones)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    const uint64_t asked = PassphraseTurnTestPeer::AttemptsAsked(fx.wallet);
+
+    // A wrong attempt takes the first turn, and the right passphrase asks for
+    // the next one while that attempt is checked.
+    std::future<std::optional<CapabilityId>> first = std::async(std::launch::async, [&fx] {
+        return fx.wallet.BeginElevation(SecureString("wrong"), CapabilityKind::Send);
+    });
+    BOOST_REQUIRE(WaitForAttemptsAsked(fx.wallet, asked + 1));
+
+    std::future<std::optional<CapabilityId>> right = std::async(std::launch::async, [&fx] {
+        return fx.wallet.BeginElevation(Passphrase(), CapabilityKind::Send);
+    });
+    BOOST_REQUIRE(WaitForAttemptsAsked(fx.wallet, asked + 2));
+
+    // Once the first has failed, and the right passphrase waits out the delay
+    // that failure earned, two more wrong attempts ask, one after the other.
+    BOOST_REQUIRE(WaitForFailures(fx.wallet, 1));
+
+    std::future<std::optional<CapabilityId>> later = std::async(std::launch::async, [&fx] {
+        return fx.wallet.BeginElevation(SecureString("wrong"), CapabilityKind::Send);
+    });
+    BOOST_REQUIRE(WaitForAttemptsAsked(fx.wallet, asked + 3));
+
+    std::future<std::optional<CapabilityId>> last = std::async(std::launch::async, [&fx] {
+        return fx.wallet.BeginElevation(SecureString("wrong"), CapabilityKind::Send);
+    });
+    BOOST_REQUIRE(WaitForAttemptsAsked(fx.wallet, asked + 4));
+
+    const std::optional<CapabilityId> accepted = right.get();
+    BOOST_CHECK(accepted.has_value());
+
+    BOOST_CHECK(!first.get().has_value());
+    BOOST_CHECK(!later.get().has_value());
+    BOOST_CHECK(!last.get().has_value());
+
+    // The right passphrase kept its place: it was checked before either later
+    // attempt, so its acceptance cleared the count and both of their refusals
+    // were counted after it.
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 2U);
+
+    if (accepted) fx.wallet.EndElevation(*accepted);
+}
+
+BOOST_AUTO_TEST_CASE(a_cancelled_attempt_gives_up_its_turn)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    // Two refusals, the second on a thread of its own, so that the next check
+    // waits about FailedPassphraseDelay(2) behind it.
+    BOOST_REQUIRE(!fx.wallet.BeginElevation(SecureString("wrong"), CapabilityKind::Send).has_value());
+
+    std::future<std::optional<CapabilityId>> second = std::async(std::launch::async, [&fx] {
+        return fx.wallet.BeginElevation(SecureString("wrong"), CapabilityKind::Send);
+    });
+    BOOST_REQUIRE(WaitForFailures(fx.wallet, 2));
+
+    const uint64_t asked = PassphraseTurnTestPeer::AttemptsAsked(fx.wallet);
+
+    // A wrong attempt whose caller gives it up while it waits for its turn.
+    std::atomic<bool> cancel{false};
+    std::atomic<unsigned int> failures_when_given_up{0};
+
+    std::future<std::optional<CapabilityId>> cancelled = std::async(std::launch::async,
+        [&fx, &cancel, &failures_when_given_up] {
+            const PassphraseAttemptCancel token(cancel);
+            const std::optional<CapabilityId> id = fx.wallet.BeginElevation(SecureString("wrong"),
+                                                                            CapabilityKind::Send);
+            failures_when_given_up = fx.wallet.FailedUnlockCount();
+            return id;
+        });
+    BOOST_REQUIRE(WaitForAttemptsAsked(fx.wallet, asked + 1));
+
+    // The right passphrase, in line behind it.
+    std::future<std::optional<CapabilityId>> right = std::async(std::launch::async, [&fx] {
+        return fx.wallet.BeginElevation(Passphrase(), CapabilityKind::Send);
+    });
+    BOOST_REQUIRE(WaitForAttemptsAsked(fx.wallet, asked + 2));
+
+    cancel = true;
+
+    // Given up with its passphrase never checked, so counted neither way.
+    BOOST_CHECK(!cancelled.get().has_value());
+    BOOST_CHECK_EQUAL(failures_when_given_up.load(), 2U);
+
+    // Its turn went to the attempt behind it.
+    const std::optional<CapabilityId> accepted = right.get();
+    BOOST_CHECK(accepted.has_value());
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+    BOOST_CHECK(!second.get().has_value());
+
+    if (accepted) fx.wallet.EndElevation(*accepted);
+}
+
+BOOST_AUTO_TEST_CASE(a_waiting_attempt_gives_up_at_shutdown)
+{
+    EncryptedWallet fx;
+
+    // Two refusals, the second on a thread of its own, so that the next check
+    // waits about FailedPassphraseDelay(2) behind it.
+    BOOST_REQUIRE(!fx.wallet.Unlock(SecureString("wrong"), UnlockScope::StakingOnly));
+
+    std::future<bool> second = std::async(std::launch::async, [&fx] {
+        return fx.wallet.Unlock(SecureString("wrong"), UnlockScope::StakingOnly);
+    });
+    BOOST_REQUIRE(WaitForFailures(fx.wallet, 2));
+
+    const uint64_t asked = PassphraseTurnTestPeer::AttemptsAsked(fx.wallet);
+
+    // RPC and IPC callers set no cancel token. A shutdown ends their wait.
+    CWallet::UnlockFailure failure{CWallet::UnlockFailure::None};
+    std::atomic<unsigned int> failures_when_given_up{0};
+
+    std::future<bool> waiting = std::async(std::launch::async, [&fx, &failure, &failures_when_given_up] {
+        const bool unlocked = fx.wallet.Unlock(SecureString("wrong"), UnlockScope::StakingOnly,
+                                               /*relock_after=*/std::nullopt, &failure);
+        failures_when_given_up = fx.wallet.FailedUnlockCount();
+        return unlocked;
+    });
+    BOOST_REQUIRE(WaitForAttemptsAsked(fx.wallet, asked + 1));
+
+    std::chrono::steady_clock::duration given_up_after{};
+    {
+        const ShutdownRequestedForThisCase shutdown;
+        const auto requested = std::chrono::steady_clock::now();
+
+        BOOST_CHECK(!waiting.get());
+        given_up_after = std::chrono::steady_clock::now() - requested;
+
+        // The refusal waiting out its delay stops waiting too.
+        BOOST_CHECK(!second.get());
+    }
+
+    // Given up before its turn came, with its passphrase never checked.
+    BOOST_CHECK(failure == CWallet::UnlockFailure::Abandoned);
+    BOOST_CHECK_EQUAL(failures_when_given_up.load(), 2U);
+    BOOST_CHECK(given_up_after < FailedPassphraseDelay(2));
+    BOOST_CHECK(fx.wallet.IsLocked());
 }
 
 BOOST_AUTO_TEST_CASE(a_failed_passphrase_change_counts_and_waits)

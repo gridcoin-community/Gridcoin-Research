@@ -12,7 +12,7 @@
 #include "primitives/transaction.h" // For COutPoint.
 #include "support/allocators/secure.h" // For SecureString.
 #include "uint256.h"
-#include "wallet/capability.h" // For CapabilityKind.
+#include "wallet/capability.h" // For CapabilityKind and PassphraseAttemptCancel.
 
 #include <cstdint>
 #include <functional>
@@ -337,6 +337,12 @@ public:
     //! block for up to 30 s -- never call it on the GUI thread), on a kind
     //! outside CapabilityKind, or when the wallet cannot be unlocked for it. An
     //! unencrypted wallet accepts any passphrase.
+    //!
+    //! The passphrase first waits its turn behind other passphrase attempts,
+    //! which are served in the order they ask. In the monolithic build a
+    //! PassphraseAttemptCancel on the calling thread gives the attempt up while
+    //! it waits, and this returns false; across IPC the attempt waits in the
+    //! node, where only the node's shutdown ends the wait.
     virtual bool beginElevation(const SecureString& passphrase, CapabilityKind kind) = 0;
 
     //! End the capability beginElevation() began, if one is held. Idempotent.
@@ -348,7 +354,8 @@ public:
     //!
     //! The passphrase waits its turn behind other passphrase attempts, and a
     //! wrong one is followed by the failed-passphrase delay (up to 30 s), so
-    //! this can block -- never call it on the GUI thread.
+    //! this can block -- never call it on the GUI thread. The wait can be
+    //! given up as beginElevation()'s can.
     virtual bool unlockWallet(const SecureString& passphrase, bool staking_only) = 0;
 
     //! Change the wallet passphrase. The wallet keeps the unlock it had: a
@@ -359,7 +366,7 @@ public:
     //! The old passphrase waits its turn and a wrong one is delayed (up to
     //! 30 s) as an unlock's is, and the new key is derived several times to
     //! set its iteration count, so this can block -- never call it on the GUI
-    //! thread.
+    //! thread. The wait for its turn can be given up as beginElevation()'s can.
     virtual bool changeWalletPassphrase(const SecureString& old_passphrase,
                                         const SecureString& new_passphrase) = 0;
 
