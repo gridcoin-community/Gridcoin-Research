@@ -24,7 +24,7 @@ enum class CapabilityKind : uint8_t {
     Backup,          // wallet snapshot for the transfer channel
     FileTransfer,    // dumpwallet / importwallet streams, console file commands
     Settings,        // Elevate-class settings: sidestakes, proxy, upnp, settxfee
-    AutoUnlockSetup, // creating or replacing an autounlock secret (P4, P5)
+    AutoUnlockSetup, // creating or replacing an autounlock secret (the Windows and macOS integrations)
     RpcRequest,      // one RPC request carrying the elevation header
 };
 

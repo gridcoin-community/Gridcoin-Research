@@ -63,7 +63,7 @@ struct ListenerOwnerFacts {
     std::string listener;                        //!< owner of the server side of our connection
     std::optional<std::string> conf_owner;       //!< owner of the conf file this process read
     std::optional<std::string> service_account;  //!< -rpcserviceuser, resolved, only from a trusted conf
-    bool image_is_installed_core{true};          //!< Windows (Task 6); always true elsewhere
+    bool image_is_installed_core{true};          //!< checked on Windows; always true elsewhere
 };
 
 enum class ListenerVerdict { Accept, Refuse };

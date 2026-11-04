@@ -626,7 +626,7 @@ program holds the RPC address.
 
 Linux: the core marks itself non-dumpable as the first statement of `main`, so other programs of the
 same user cannot attach a debugger, read `/proc/<pid>/mem`, `environ` or `fd`, or take its file
-descriptors. The service units set `LimitCORE=0` (packaging, P3); for a core you start by hand run
+descriptors. The packaged service units set `LimitCORE=0`; for a core you start by hand run
 `ulimit -c 0` first. On hosts with Yama `ptrace_scope=0` (Debian's default) the packages install the
 daemon execute-only (0711), so it is non-dumpable from `execve`; a hand-started core from a readable
 binary has a window of microseconds before that first statement. The core also refuses to start with a
@@ -639,7 +639,7 @@ not. The protection therefore rests on non-dumpability and disabled core dumps, 
 
 Windows: a process running as you can read the memory of any other process running as you, the
 monolithic wallet's included (see section 2 of `doc/multiprocess_design.md`). macOS: the hardened
-runtime (the macOS section, P5).
+runtime (see the macOS section).
 
 ## Troubleshooting
 
