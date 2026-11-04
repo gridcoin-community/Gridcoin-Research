@@ -149,16 +149,21 @@ public:
      * minimize-on-close handling would otherwise ignore that close and veto the
      * quit, so an explicit Exit only minimized the window. See issue #2995.
      *
-     * While a QuitHold exists the quit waits, and is made when the last one
-     * goes.
+     * Made at once, also while a QuitHold exists: a termination signal
+     * (logout, system shutdown, the service manager) asks for it here.
      */
     static void requestQuit();
 
-    //! While one exists, requestQuit() does not quit, from any caller: the quit
-    //! asked for is made when the last one goes. For a message the user must be
-    //! able to read to its end although the core may go away meanwhile, which
-    //! asks for a quit when the connection drops: the one after an encryption in
-    //! the split build. GUI thread only.
+    //! requestQuit() for a quit the core's going asks for: the core stopped
+    //! (QueueShutdown), or the connection to it was lost. While a QuitHold
+    //! exists it waits, and is made when the last one goes.
+    static void requestQuitForCoreStop();
+
+    //! While one exists, requestQuitForCoreStop() does not quit: the quit is
+    //! made when the last one goes. For a message the user must be able to read
+    //! to its end although the core may stop meanwhile: the one after an
+    //! encryption in the split build. Every other quit is made at once. GUI
+    //! thread only.
     class QuitHold
     {
     public:
@@ -229,8 +234,8 @@ private:
     //! plain bool is sufficient. See requestQuit() / issue #2995.
     static bool m_quit_requested;
 
-    //! The QuitHolds that exist, and whether requestQuit() was called while one
-    //! did. GUI thread only, as m_quit_requested.
+    //! The QuitHolds that exist, and whether requestQuitForCoreStop() was
+    //! called while one did. GUI thread only, as m_quit_requested.
     static int m_quit_holds;
     static bool m_quit_deferred;
 

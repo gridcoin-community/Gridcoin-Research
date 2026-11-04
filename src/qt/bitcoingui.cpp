@@ -1590,7 +1590,12 @@ void BitcoinGUI::requestQuit()
     // exit() that would short-circuit it; on Qt5 quit() is exit(0) and skips that
     // sequence, which is fine because Qt5 never hits the minimize-on-close veto.
     // See the requestQuit() doc and issue #2995.
-    //
+    m_quit_requested = true;
+    QApplication::quit();
+}
+
+void BitcoinGUI::requestQuitForCoreStop()
+{
     // A message that must stay up until the user closes it holds the quit until
     // then (QuitHold).
     if (m_quit_holds > 0) {
@@ -1598,8 +1603,7 @@ void BitcoinGUI::requestQuit()
         return;
     }
 
-    m_quit_requested = true;
-    QApplication::quit();
+    requestQuit();
 }
 
 BitcoinGUI::QuitHold::QuitHold()

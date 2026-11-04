@@ -192,6 +192,90 @@ private:
     bool m_released{false};
 };
 
+//! What became of the message after an encryption in the split build when a
+//! quit was asked for while it was open.
+struct QuitWhileEncryptionMessage
+{
+    bool confirmed{false};
+    bool asked{false};
+    //! The message's text.
+    QString text{};
+    //! Still open well after the quit was asked for.
+    bool open_after_quit{false};
+    //! The case closed it, as the user would.
+    bool closed_by_case{false};
+    //! What the application's event loop returned.
+    int app_result{-1};
+};
+
+//! Encrypt in the split build over a fake wallet, under the application's own
+//! event loop as in the GUI (outside it a quit does nothing), confirming the
+//! encryption. While the message after it is open, post \p quit, as its caller
+//! does. When the message is still open well after the quit was delivered, close
+//! it as the user would.
+QuitWhileEncryptionMessage EncryptAndQuitWhileTheMessageIsOpen(QObject& context, std::function<void()> quit)
+{
+    QuitWhileEncryptionMessage run;
+
+    qt_test::FakeWallet wallet;
+    wallet.m_encrypt_result = true;
+    ModelOverFakeWallet fixture(wallet);
+
+    AskPassphraseDialog dialog(AskPassphraseDialog::Encrypt);
+    dialog.setModel(&fixture.model);
+    dialog.setMultiprocess(true);
+
+    int ticks_after_quit = 0;
+
+    QTimer observer;
+    observer.setInterval(5);
+    QObject::connect(&observer, &QTimer::timeout, &context, [&] {
+        QMessageBox* const box = VisibleMessageBox();
+        if (!box || run.closed_by_case) return;
+
+        if (!run.confirmed) {
+            if (box->windowTitle() != QStringLiteral("Confirm wallet encryption")) return;
+            run.confirmed = true;
+            box->button(QMessageBox::Yes)->click();
+            return;
+        }
+
+        if (box->windowTitle() != QStringLiteral("Wallet encrypted")) return;
+
+        if (!run.asked) {
+            run.asked = true;
+            run.text = box->text();
+            QMetaObject::invokeMethod(qApp, quit, Qt::QueuedConnection);
+            return;
+        }
+
+        // The quit posted above has been delivered well before this.
+        if (++ticks_after_quit < 20) return;
+
+        run.open_after_quit = true;
+        run.closed_by_case = true;
+        box->button(QMessageBox::Ok)->click();
+    });
+    observer.start();
+
+    // Ends the application's loop if nothing else does, so a regression fails rather than hangs.
+    QTimer backstop;
+    backstop.setSingleShot(true);
+    QObject::connect(&backstop, &QTimer::timeout, qApp, [] { QCoreApplication::exit(TIMED_OUT); });
+    backstop.start(15000);
+
+    QTimer::singleShot(0, &dialog, [&dialog] {
+        QTimer::singleShot(0, &dialog, [&dialog] { SubmitPassphrase(dialog); });
+        dialog.exec();
+    });
+
+    run.app_result = QCoreApplication::exec();
+    observer.stop();
+    backstop.stop();
+
+    return run;
+}
+
 } // namespace
 
 void AskPassphraseDialogTests::initTestCase()
@@ -589,77 +673,55 @@ void AskPassphraseDialogTests::deletedWhileQueuedGivesTheCheckUp()
 
 // After an encryption in the split build the core stops, when the GUI's
 // connection closes or by itself a while after the encryption, and the GUI then
-// sees the connection drop, which asks for a quit (BitcoinGUI::requestQuit(),
-// posted from the disconnect hook). The message after the encryption, which
-// holds the warning about earlier backups, stays until the user closes it, and
-// the quit happens then. Run under the application's own event loop, as in the
-// GUI: outside it a quit does nothing.
+// sees the connection drop, which asks for a quit
+// (BitcoinGUI::requestQuitForCoreStop(), posted from the disconnect hook). The
+// message after the encryption, which holds the warning about earlier backups,
+// stays until the user closes it, and the quit happens then.
 void AskPassphraseDialogTests::encryptionMessageOutlivesTheCore()
 {
-    qt_test::FakeWallet wallet;
-    wallet.m_encrypt_result = true;
-    ModelOverFakeWallet fixture(wallet);
+    // What the disconnect hook posts when the connection to the core is lost.
+    const QuitWhileEncryptionMessage run = EncryptAndQuitWhileTheMessageIsOpen(
+        *this, [] { BitcoinGUI::requestQuitForCoreStop(); });
 
-    AskPassphraseDialog dialog(AskPassphraseDialog::Encrypt);
-    dialog.setModel(&fixture.model);
-    dialog.setMultiprocess(true);
-
-    bool confirmed = false;
-    bool dropped = false;
-    int ticks_after_drop = 0;
-    bool open_after_drop = false;
-    bool closed = false;
-
-    QTimer observer;
-    observer.setInterval(5);
-    QObject::connect(&observer, &QTimer::timeout, this, [&] {
-        QMessageBox* const box = VisibleMessageBox();
-        if (!box || closed) return;
-
-        if (!confirmed) {
-            if (box->windowTitle() != QStringLiteral("Confirm wallet encryption")) return;
-            confirmed = true;
-            box->button(QMessageBox::Yes)->click();
-            return;
-        }
-
-        if (box->windowTitle() != QStringLiteral("Wallet encrypted")) return;
-
-        if (!dropped) {
-            dropped = true;
-            // What the disconnect hook posts when the connection to the core is lost.
-            QMetaObject::invokeMethod(qApp, [] { BitcoinGUI::requestQuit(); }, Qt::QueuedConnection);
-            return;
-        }
-
-        // The quit posted above has been delivered well before this.
-        if (++ticks_after_drop < 20) return;
-
-        open_after_drop = true;
-        closed = true;
-        box->button(QMessageBox::Ok)->click();
-    });
-    observer.start();
-
-    // Ends the application's loop if nothing else does, so a regression fails rather than hangs.
-    QTimer backstop;
-    backstop.setSingleShot(true);
-    QObject::connect(&backstop, &QTimer::timeout, qApp, [] { QCoreApplication::exit(TIMED_OUT); });
-    backstop.start(15000);
-
-    QTimer::singleShot(0, &dialog, [&dialog] {
-        QTimer::singleShot(0, &dialog, [&dialog] { SubmitPassphrase(dialog); });
-        dialog.exec();
-    });
-
-    const int app_result = QCoreApplication::exec();
-    observer.stop();
-    backstop.stop();
-
-    QVERIFY(confirmed);
-    QVERIFY(dropped);
-    QVERIFY2(open_after_drop, "the message closed when the connection to the core was lost");
-    QVERIFY(closed);
-    QCOMPARE(app_result, 0);
+    QVERIFY(run.confirmed);
+    QVERIFY(run.asked);
+    QVERIFY2(run.text.contains(QStringLiteral("IMPORTANT: Any earlier backups of your wallet file")),
+             qPrintable(run.text));
+    QVERIFY2(run.open_after_quit, "the message closed when the connection to the core was lost");
+    QVERIFY(run.closed_by_case);
+    QCOMPARE(run.app_result, 0);
     QVERIFY(!VisibleMessageBox());
+}
+
+// A quit from a termination signal (logout, system shutdown, the service
+// manager) is made at once, also while the message after an encryption is
+// open. The GUI's signal handler asks for it with BitcoinGUI::requestQuit().
+void AskPassphraseDialogTests::terminationSignalDoesNotWaitForTheEncryptionMessage()
+{
+    const QuitWhileEncryptionMessage run =
+        EncryptAndQuitWhileTheMessageIsOpen(*this, [] { BitcoinGUI::requestQuit(); });
+
+    QVERIFY(run.confirmed);
+    QVERIFY(run.asked);
+    QVERIFY2(!run.open_after_quit, "the quit waited for the message");
+    QVERIFY(!run.closed_by_case);
+    QCOMPARE(run.app_result, 0);
+    QVERIFY(!VisibleMessageBox());
+}
+
+// The message after an encryption in the split build says when the core stops:
+// when the message is closed, or by itself a minute after the encryption when
+// the message is left open, so it is true whichever comes first. The warning
+// about earlier backups follows it.
+void AskPassphraseDialogTests::encryptionMessageSaysWhenTheCoreStops()
+{
+    const QuitWhileEncryptionMessage run = EncryptAndQuitWhileTheMessageIsOpen(
+        *this, [] { BitcoinGUI::requestQuitForCoreStop(); });
+
+    QVERIFY2(run.text.contains(QStringLiteral("The Gridcoin core stops to finish the encryption when you close this "
+                                              "message, or after a minute if it is left open.")),
+             qPrintable(run.text));
+    QVERIFY2(run.text.contains(QStringLiteral("IMPORTANT: Any earlier backups of your wallet file")),
+             qPrintable(run.text));
+    QCOMPARE(run.app_result, 0);
 }

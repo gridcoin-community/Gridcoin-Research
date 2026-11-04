@@ -287,16 +287,17 @@ void AskPassphraseDialog::accept()
                     // (as the RPC encryptwallet does), so the GUI quits after the user
                     // has read this. The core also stops by itself a while after the
                     // encryption if the connection is still open then, and the GUI asks
-                    // for a quit when it sees the connection drop. That quit, and this
-                    // one, wait until the user has closed the message.
+                    // for a quit when it sees the connection drop. That quit waits until
+                    // the user has closed the message (QuitHold); a quit from a
+                    // termination signal does not.
                     const BitcoinGUI::QuitHold hold;
 
                     QMessageBox::warning(this, tr("Wallet encrypted"),
                                          "<qt>" +
                                              tr("Your wallet is now encrypted and locked. The Gridcoin core stops "
-                                                "when you close this message, to finish the encryption. If it runs "
-                                                "as a service it starts again by itself; otherwise start it again, "
-                                                "then reopen the wallet.") +
+                                                "to finish the encryption when you close this message, or after a "
+                                                "minute if it is left open. If it runs as a service it starts again "
+                                                "by itself; otherwise start it again, then reopen the wallet.") +
                                              "<br><br>" + backupWarning + "</qt>");
                     BitcoinGUI::requestQuit();
                 }

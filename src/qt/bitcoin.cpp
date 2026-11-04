@@ -293,10 +293,12 @@ static void QueueShutdown()
 {
     // Route a core-initiated shutdown through BitcoinGUI::requestQuit() so the
     // explicit-shutdown flag is set and minimize-on-close doesn't veto the quit
-    // on Qt6 (see BitcoinGUI::closeEvent / issue #2995). The functor overload is
-    // compile-time checked, unlike a string-named invokeMethod.
+    // on Qt6 (see BitcoinGUI::closeEvent / issue #2995). It is the core's stop,
+    // so a message that must stay up holds it (requestQuitForCoreStop). The
+    // functor overload is compile-time checked, unlike a string-named
+    // invokeMethod.
     QMetaObject::invokeMethod(QCoreApplication::instance(),
-                              [] { BitcoinGUI::requestQuit(); },
+                              [] { BitcoinGUI::requestQuitForCoreStop(); },
                               Qt::QueuedConnection);
 }
 
@@ -354,7 +356,7 @@ static bool IsDaemonDisconnectMessage(const std::string& msg)
 
 //! Post a graceful, popup-free GUI quit to the Qt main thread when the node
 //! connection is lost -- the same path a core-initiated shutdown takes
-//! (QueueShutdown / requestQuit). Deliberately NO modal dialog: a modal would
+//! (QueueShutdown / requestQuitForCoreStop). Deliberately NO modal dialog: a modal would
 //! hang an unattended or remote GUI. Safe if the QCoreApplication is already gone.
 static void QuitOnDaemonConnectionLost(const char* reason)
 {
@@ -370,7 +372,7 @@ static void QuitOnDaemonConnectionLost(const char* reason)
         GUILogPrintf("IPC: %s; closing the GUI", reason);
     }
     if (QCoreApplication* qapp = QCoreApplication::instance()) {
-        QMetaObject::invokeMethod(qapp, [] { BitcoinGUI::requestQuit(); }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(qapp, [] { BitcoinGUI::requestQuitForCoreStop(); }, Qt::QueuedConnection);
     }
 }
 
@@ -747,6 +749,7 @@ static void InstallGuiTerminationHandler(QCoreApplication& app)
         char buf;
         while (::read(g_signal_pipe[0], &buf, 1) > 0) { /* drain */ }
         GUILogPrintf("IPC: received a termination signal; closing the GUI");
+        // Made at once: a message that holds the core's stop does not hold this.
         BitcoinGUI::requestQuit();
     });
     struct sigaction sa = {};
