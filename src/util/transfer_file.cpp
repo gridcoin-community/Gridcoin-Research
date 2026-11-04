@@ -29,10 +29,12 @@
 namespace util {
 namespace {
 
-void RemoveQuietly(const fs::path& p)
+// True unless removing p failed. A name that is already gone is not a failure.
+bool RemoveFile(const fs::path& p)
 {
     boost::system::error_code ec;
     fs::remove(p, ec);
+    return !ec;
 }
 
 #ifndef WIN32
@@ -77,7 +79,8 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
                              FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
 
     if (h == INVALID_HANDLE_VALUE) {
-        error = strprintf("cannot create temporary file %s (error %u)", temp.string(), static_cast<unsigned>(::GetLastError()));
+        const DWORD last_error = ::GetLastError();
+        error = strprintf("cannot create temporary file %s (error %u)", temp.string(), static_cast<unsigned>(last_error));
         return std::nullopt;
     }
 
@@ -138,6 +141,7 @@ void TransferTempFile::MoveFrom(TransferTempFile& other) noexcept
     m_dest = std::move(other.m_dest);
     m_temp = std::move(other.m_temp);
     m_active = other.m_active;
+    m_remove_failed = other.m_remove_failed;
     m_hasher = other.m_hasher;
     m_size = other.m_size;
 #ifdef WIN32
@@ -170,9 +174,28 @@ void TransferTempFile::Abort()
     CloseHandle();
 
     if (m_active) {
-        RemoveQuietly(m_temp);
+        if (!RemoveFile(m_temp)) {
+            m_remove_failed = true;
+        }
+
         m_active = false;
     }
+}
+
+void TransferTempFile::AppendRemoveNote(std::string& error) const
+{
+    if (m_remove_failed) {
+        error += "; " + RemoveFailedNote();
+    }
+}
+
+std::string TransferTempFile::RemoveFailedNote() const
+{
+    if (!m_remove_failed) {
+        return "";
+    }
+
+    return strprintf("the temporary file %s could not be removed", m_temp.string());
 }
 
 uint256 TransferTempFile::Sha256() const
@@ -198,7 +221,8 @@ bool TransferTempFile::Write(const unsigned char* data, size_t len, std::string&
         DWORD wrote = 0;
 
         if (!::WriteFile(static_cast<HANDLE>(m_handle), data + done, want, &wrote, nullptr)) {
-            error = strprintf("write to %s failed (error %u)", m_temp.string(), static_cast<unsigned>(::GetLastError()));
+            const DWORD last_error = ::GetLastError();
+            error = strprintf("write to %s failed (error %u)", m_temp.string(), static_cast<unsigned>(last_error));
             return false;
         }
 
@@ -240,14 +264,17 @@ bool TransferTempFile::Commit(uint64_t expected_size, const uint256& expected_sh
 
 #ifdef WIN32
     if (!::FlushFileBuffers(static_cast<HANDLE>(m_handle))) {
-        error = strprintf("cannot flush %s (error %u)", m_temp.string(), static_cast<unsigned>(::GetLastError()));
+        const DWORD last_error = ::GetLastError();
+        error = strprintf("cannot flush %s (error %u)", m_temp.string(), static_cast<unsigned>(last_error));
         Abort();
+        AppendRemoveNote(error);
         return false;
     }
 #else
     if (::fsync(m_fd) != 0) {
         error = strprintf("cannot sync %s: %s", m_temp.string(), SysErrorString(errno));
         Abort();
+        AppendRemoveNote(error);
         return false;
     }
 #endif
@@ -257,26 +284,31 @@ bool TransferTempFile::Commit(uint64_t expected_size, const uint256& expected_sh
     if (m_size != expected_size) {
         error = strprintf("size mismatch: received %u bytes, expected %u", m_size, expected_size);
         Abort();
+        AppendRemoveNote(error);
         return false;
     }
 
     if (Sha256() != expected_sha256) {
         error = "SHA-256 mismatch";
         Abort();
+        AppendRemoveNote(error);
         return false;
     }
 
 #ifdef WIN32
     if (!::MoveFileExW(m_temp.c_str(), m_dest.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        const DWORD last_error = ::GetLastError();
         error = strprintf("cannot rename %s over %s (error %u)", m_temp.string(), m_dest.string(),
-                          static_cast<unsigned>(::GetLastError()));
+                          static_cast<unsigned>(last_error));
         Abort();
+        AppendRemoveNote(error);
         return false;
     }
 #else
     if (::rename(m_temp.c_str(), m_dest.c_str()) != 0) {
         error = strprintf("cannot rename %s over %s: %s", m_temp.string(), m_dest.string(), SysErrorString(errno));
         Abort();
+        AppendRemoveNote(error);
         return false;
     }
 
@@ -288,31 +320,37 @@ bool TransferTempFile::Commit(uint64_t expected_size, const uint256& expected_sh
     return true;
 }
 
-bool HasFreeSpace(const fs::path& dir, uint64_t need, std::string& error)
+SpaceCheck CheckFreeSpace(const fs::path& dir, uint64_t need, std::string& error)
 {
     boost::system::error_code ec;
     const fs::space_info info = fs::space(dir, ec);
 
     if (ec) {
         error = strprintf("cannot determine the free space in %s: %s", dir.string(), ec.message());
-        return false;
+        return SpaceCheck::QueryFailed;
     }
 
     const uint64_t margin = interfaces::FILE_TRANSFER_FREE_SPACE_MARGIN;
     const uint64_t available = info.available;
 
     // need + margin without overflow
-    const bool fits = need <= std::numeric_limits<uint64_t>::max() - margin && available >= need + margin;
+    const bool overflow = need > std::numeric_limits<uint64_t>::max() - margin;
 
-    if (!fits) {
-        const uint64_t required = need > std::numeric_limits<uint64_t>::max() - margin
-                                      ? std::numeric_limits<uint64_t>::max() : need + margin;
-        error = strprintf("not enough free space in %s: %u bytes available, %u bytes required (%u short)",
-                          dir.string(), available, required, required - available);
-        return false;
+    if (!overflow && available >= need + margin) {
+        return SpaceCheck::Enough;
     }
 
-    return true;
+    const uint64_t required = overflow ? std::numeric_limits<uint64_t>::max() : need + margin;
+    const uint64_t shortfall = required > available ? required - available : 0;
+
+    error = strprintf("not enough free space in %s: %u bytes available, %u bytes required (%u short)",
+                      dir.string(), available, required, shortfall);
+    return SpaceCheck::Short;
+}
+
+bool HasFreeSpace(const fs::path& dir, uint64_t need, std::string& error)
+{
+    return CheckFreeSpace(dir, need, error) == SpaceCheck::Enough;
 }
 
 } // namespace util

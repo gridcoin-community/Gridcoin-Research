@@ -8,9 +8,7 @@
 #include "tinyformat.h"
 #include "util/transfer_file.h"
 
-#include <algorithm>
 #include <exception>
-#include <memory>
 #include <optional>
 
 namespace interfaces {
@@ -64,6 +62,10 @@ const ConsoleFileCommand* FindConsoleFileCommand(const std::string& method)
 TransferOutcome DownloadEntry(FileSource& src, uint32_t entry, const fs::path& dest, const ProgressFn& progress,
                               const std::atomic<bool>& cancel, uint32_t chunk_bytes)
 {
+    if (chunk_bytes == 0) {
+        return Fail(TransferStatus::LocalError, 0, "the chunk size must not be zero");
+    }
+
     std::vector<FileEntryInfo> infos;
 
     try {
@@ -72,7 +74,10 @@ TransferOutcome DownloadEntry(FileSource& src, uint32_t entry, const fs::path& d
         return Fail(TransferStatus::SourceError, 0, e.what());
     }
 
+    // From here on every path other than Ok stops the source, so a core-side source
+    // that holds a capability while streaming lets go at once.
     if (entry >= infos.size()) {
+        CancelQuietly(src);
         return Fail(TransferStatus::SourceError, 0, "the source has no such file");
     }
 
@@ -87,24 +92,42 @@ TransferOutcome DownloadEntry(FileSource& src, uint32_t entry, const fs::path& d
 
     std::string error;
 
-    if (!util::HasFreeSpace(dir, need, error)) {
+    switch (util::CheckFreeSpace(dir, need, error)) {
+    case util::SpaceCheck::Enough:
+        break;
+    case util::SpaceCheck::Short:
+        CancelQuietly(src);
         return Fail(TransferStatus::NoSpace, 0, error);
+    case util::SpaceCheck::QueryFailed:
+        CancelQuietly(src);
+        return Fail(TransferStatus::LocalError, 0, error);
     }
 
     std::optional<util::TransferTempFile> tmp = util::TransferTempFile::Create(dest, error);
 
     if (!tmp) {
+        CancelQuietly(src);
         return Fail(TransferStatus::LocalError, 0, error);
     }
 
     uint64_t done = 0;
 
-    // Every return below goes through tmp's destructor or Commit(), so the temporary
-    // file is gone on every path other than Ok.
+    // Stops the source, removes the temporary file and reports why. If the file
+    // cannot be removed the message says so.
+    auto bail = [&](TransferStatus status, std::string message) {
+        CancelQuietly(src);
+        tmp->Abort();
+
+        if (tmp->RemoveFailed()) {
+            message += "; " + tmp->RemoveFailedNote();
+        }
+
+        return Fail(status, done, std::move(message));
+    };
+
     for (;;) {
         if (cancel.load()) {
-            CancelQuietly(src);
-            return Fail(TransferStatus::Cancelled, done, "cancelled");
+            return bail(TransferStatus::Cancelled, "cancelled");
         }
 
         FileChunk chunk;
@@ -112,27 +135,32 @@ TransferOutcome DownloadEntry(FileSource& src, uint32_t entry, const fs::path& d
         try {
             chunk = src.read(entry, chunk_bytes);
         } catch (const std::exception& e) {
-            return Fail(TransferStatus::SourceError, done, e.what());
+            return bail(TransferStatus::SourceError, e.what());
         }
 
         if (!chunk.error.empty()) {
-            return Fail(TransferStatus::SourceError, done, chunk.error);
+            return bail(TransferStatus::SourceError, chunk.error);
         }
 
         if (chunk.data.size() > chunk_bytes) {
-            return Fail(TransferStatus::SourceError, done, "the source sent more than the requested chunk size");
+            return bail(TransferStatus::SourceError, "the source sent more than the requested chunk size");
         }
 
         // A source that returns nothing and never reaches eof would otherwise spin.
         if (chunk.data.empty() && !chunk.eof) {
-            return Fail(TransferStatus::SourceError, done, "the source returned no data");
+            return bail(TransferStatus::SourceError, "the source returned no data");
         }
 
         if (!chunk.data.empty() && !tmp->Write(chunk.data.data(), chunk.data.size(), error)) {
-            return Fail(TransferStatus::LocalError, done, error);
+            return bail(TransferStatus::LocalError, error);
         }
 
         done += chunk.data.size();
+
+        // A known-size entry that delivers more than it declared is refused at once.
+        if (total >= 0 && done > static_cast<uint64_t>(total)) {
+            return bail(TransferStatus::SourceError, "the source sent more data than the declared size");
+        }
 
         if (progress) {
             progress(done, total);
@@ -148,20 +176,26 @@ TransferOutcome DownloadEntry(FileSource& src, uint32_t entry, const fs::path& d
     try {
         trailer = src.trailer(entry);
     } catch (const std::exception& e) {
-        return Fail(TransferStatus::SourceError, done, e.what());
+        return bail(TransferStatus::SourceError, e.what());
     }
 
     if (!trailer.ok) {
-        return Fail(TransferStatus::SourceError, done, trailer.error.empty() ? "the source gave no trailer" : trailer.error);
+        return bail(TransferStatus::SourceError, trailer.error.empty() ? "the source gave no trailer" : trailer.error);
     }
 
     if (trailer.size != tmp->Size() || trailer.sha256 != tmp->Sha256() || (total >= 0 && static_cast<uint64_t>(total) != done)) {
-        return Fail(TransferStatus::VerifyFailed, done, "the received data does not match the size and SHA-256 the source sent");
+        return bail(TransferStatus::VerifyFailed, "the received data does not match the size and SHA-256 the source sent");
+    }
+
+    // A cancel that arrived during the last chunk still stops the transfer.
+    if (cancel.load()) {
+        return bail(TransferStatus::Cancelled, "cancelled");
     }
 
     const uint256 sha = tmp->Sha256();
 
     if (!tmp->Commit(trailer.size, trailer.sha256, error)) {
+        CancelQuietly(src);
         return Fail(TransferStatus::LocalError, done, error);
     }
 
@@ -175,31 +209,35 @@ TransferOutcome DownloadEntry(FileSource& src, uint32_t entry, const fs::path& d
 FileSinkResult UploadFile(FileSink& sink, const fs::path& local, const ProgressFn& progress,
                           const std::atomic<bool>& cancel, uint32_t chunk_bytes)
 {
-    FileSinkResult failed;
-    failed.ok = false;
-
-    auto cancel_sink = [&sink]() {
+    // Every failure path tells the sink to stop, so a receiver that holds state for
+    // the upload lets go at once. A sink that is already gone throws, which is ignored.
+    auto fail = [&sink](std::string message) {
         try {
             sink.cancel();
         } catch (const std::exception&) {
         }
+
+        FileSinkResult failed;
+        failed.ok = false;
+        failed.error = std::move(message);
+        return failed;
     };
+
+    if (chunk_bytes == 0) {
+        return fail("the chunk size must not be zero");
+    }
 
     boost::system::error_code ec;
     const uintmax_t file_size = fs::file_size(local, ec);
 
     if (ec) {
-        failed.error = strprintf("cannot read %s: %s", local.string(), ec.message());
-        cancel_sink();
-        return failed;
+        return fail(strprintf("cannot read %s: %s", local.string(), ec.message()));
     }
 
     fsbridge::ifstream in(local, std::ios::binary);
 
     if (!in.is_open()) {
-        failed.error = strprintf("cannot open %s", local.string());
-        cancel_sink();
-        return failed;
+        return fail(strprintf("cannot open %s", local.string()));
     }
 
     CSHA256 hasher;
@@ -208,9 +246,7 @@ FileSinkResult UploadFile(FileSink& sink, const fs::path& local, const ProgressF
 
     for (;;) {
         if (cancel.load()) {
-            cancel_sink();
-            failed.error = "cancelled";
-            return failed;
+            return fail("cancelled");
         }
 
         in.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(buf.size()));
@@ -223,12 +259,10 @@ FileSinkResult UploadFile(FileSink& sink, const fs::path& local, const ProgressF
 
             try {
                 if (!sink.write(buf)) {
-                    failed.error = "the receiver refused the data";
-                    return failed;
+                    return fail("the receiver refused the data");
                 }
             } catch (const std::exception& e) {
-                failed.error = e.what();
-                return failed;
+                return fail(e.what());
             }
 
             sent += static_cast<uint64_t>(got);
@@ -240,14 +274,18 @@ FileSinkResult UploadFile(FileSink& sink, const fs::path& local, const ProgressF
         }
 
         if (in.bad()) {
-            failed.error = strprintf("read error on %s", local.string());
-            cancel_sink();
-            return failed;
+            return fail(strprintf("read error on %s", local.string()));
         }
 
         if (got <= 0 || in.eof()) {
             break;
         }
+    }
+
+    // A cancel that arrived during the last chunk must stop the upload before finish(),
+    // which can act on the data (for example by importing it).
+    if (cancel.load()) {
+        return fail("cancelled");
     }
 
     uint256 sha;
@@ -256,8 +294,7 @@ FileSinkResult UploadFile(FileSink& sink, const fs::path& local, const ProgressF
     try {
         return sink.finish(sent, sha);
     } catch (const std::exception& e) {
-        failed.error = e.what();
-        return failed;
+        return fail(e.what());
     }
 }
 

@@ -21,7 +21,59 @@
 #include <string>
 #include <vector>
 
+#ifndef WIN32
+#include <signal.h>
+#include <sys/resource.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
 namespace {
+
+#ifndef WIN32
+// Restores the file-size limit and the SIGXFSZ disposition on every exit path.
+class FileSizeLimitGuard
+{
+public:
+    explicit FileSizeLimitGuard(rlim_t limit)
+    {
+        struct sigaction ignore;
+        ignore.sa_handler = SIG_IGN;
+        sigemptyset(&ignore.sa_mask);
+        ignore.sa_flags = 0;
+
+        m_signal_saved = ::sigaction(SIGXFSZ, &ignore, &m_old_action) == 0;
+        m_limit_saved = ::getrlimit(RLIMIT_FSIZE, &m_old_limit) == 0;
+
+        if (m_limit_saved) {
+            struct rlimit lim = m_old_limit;
+            lim.rlim_cur = limit;
+            ::setrlimit(RLIMIT_FSIZE, &lim);
+        }
+    }
+
+    ~FileSizeLimitGuard() { Restore(); }
+
+    void Restore()
+    {
+        if (m_limit_saved) {
+            ::setrlimit(RLIMIT_FSIZE, &m_old_limit);
+            m_limit_saved = false;
+        }
+
+        if (m_signal_saved) {
+            ::sigaction(SIGXFSZ, &m_old_action, nullptr);
+            m_signal_saved = false;
+        }
+    }
+
+private:
+    struct rlimit m_old_limit{};
+    struct sigaction m_old_action{};
+    bool m_limit_saved{false};
+    bool m_signal_saved{false};
+};
+#endif // !WIN32
 
 std::vector<unsigned char> Bytes(size_t n)
 {
@@ -62,6 +114,9 @@ struct FakeSource : public interfaces::FileSource
     int throw_on_read{0};           // 1-based read number that throws
     int error_on_read{0};           // 1-based read number that returns an error chunk
     bool wrong_sha{false};
+    bool trailer_ok{true};
+    int oversize_on_read{0};        // 1-based read number that returns more than max_bytes
+    int empty_on_read{0};           // 1-based read number that returns no data and no eof
     size_t pos{0};
     int reads{0};
     uint32_t max_requested{0};
@@ -92,6 +147,15 @@ struct FakeSource : public interfaces::FileSource
             return c;
         }
 
+        if (reads == empty_on_read) {
+            return c;
+        }
+
+        if (reads == oversize_on_read) {
+            c.data.assign(static_cast<size_t>(max_bytes) + 1, 0x11);
+            return c;
+        }
+
         const size_t n = std::min<size_t>(max_bytes, data.size() - pos);
         c.data.assign(data.begin() + pos, data.begin() + pos + n);
         pos += n;
@@ -102,7 +166,8 @@ struct FakeSource : public interfaces::FileSource
     interfaces::FileTrailer trailer(uint32_t) override
     {
         interfaces::FileTrailer t;
-        t.ok = true;
+        t.ok = trailer_ok;
+        t.error = trailer_ok ? "" : "no trailer available";
         t.size = data.size();
         t.sha256 = wrong_sha ? Sha256Of(Bytes(7)) : Sha256Of(data);
         return t;
@@ -165,6 +230,8 @@ struct DirFixture
 
     ~DirFixture()
     {
+        boost::system::error_code mode_ec;
+        fs::permissions(dir, fs::owner_all, mode_ec);
         boost::system::error_code ec;
         fs::remove_all(dir, ec);
     }
@@ -207,11 +274,11 @@ BOOST_AUTO_TEST_CASE(download_trailer_mismatch_is_verify_failed)
     BOOST_CHECK_EQUAL(CountEntries(dir), 0u);
 }
 
-// Review Focus 2
+// A source that fails mid-stream leaves no temporary file and the destination unchanged
 BOOST_AUTO_TEST_CASE(download_source_error_mid_stream_removes_part)
 {
     {
-        std::ofstream(( dir / "d.bin").string(), std::ios::binary) << "old";
+        std::ofstream((dir / "d.bin").string(), std::ios::binary) << "old";
     }
 
     FakeSource src(Bytes(100'000));
@@ -348,6 +415,196 @@ BOOST_AUTO_TEST_CASE(upload_cancel_and_failures)
     r = interfaces::UploadFile(missing, dir / "does-not-exist", nullptr, cancel, 4096);
     BOOST_CHECK(!r.ok);
     BOOST_CHECK(!missing.finished);
+}
+
+BOOST_AUTO_TEST_CASE(download_cancel_after_final_chunk_is_honoured)
+{
+    // one chunk holds the whole file; cancel is set from the final progress callback
+    FakeSource src(Bytes(1000));
+    std::atomic<bool> cancel{false};
+
+    auto out = interfaces::DownloadEntry(src, 0, dir / "d.bin", [&](uint64_t, int64_t) { cancel = true; }, cancel, 4096);
+
+    BOOST_CHECK(out.status == interfaces::TransferStatus::Cancelled);
+    BOOST_CHECK(src.cancelled);
+    BOOST_CHECK_EQUAL(CountEntries(dir), 0u);
+}
+
+BOOST_AUTO_TEST_CASE(download_more_than_declared_size_fails_at_once)
+{
+    FakeSource src(Bytes(100'000));
+    src.reported_size = 5000;
+    std::atomic<bool> cancel{false};
+
+    auto out = interfaces::DownloadEntry(src, 0, dir / "d.bin", nullptr, cancel, 4096);
+
+    BOOST_CHECK(out.status == interfaces::TransferStatus::SourceError);
+    // stops at the chunk that crossed the declared size, not at eof
+    BOOST_CHECK_EQUAL(src.reads, 2);
+    BOOST_CHECK(src.cancelled);
+    BOOST_CHECK_EQUAL(CountEntries(dir), 0u);
+}
+
+BOOST_AUTO_TEST_CASE(download_declared_size_differs_from_received)
+{
+    // declared larger than the data the source delivers, trailer matches the data
+    FakeSource src(Bytes(10'000));
+    src.reported_size = 20'000;
+    std::atomic<bool> cancel{false};
+
+    auto out = interfaces::DownloadEntry(src, 0, dir / "d.bin", nullptr, cancel, 4096);
+
+    BOOST_CHECK(out.status == interfaces::TransferStatus::VerifyFailed);
+    BOOST_CHECK(src.cancelled);
+    BOOST_CHECK(!fs::exists(dir / "d.bin"));
+    BOOST_CHECK_EQUAL(CountEntries(dir), 0u);
+}
+
+BOOST_AUTO_TEST_CASE(download_oversized_and_empty_chunks_are_refused)
+{
+    std::atomic<bool> cancel{false};
+
+    FakeSource big(Bytes(100'000));
+    big.oversize_on_read = 2;
+    auto out = interfaces::DownloadEntry(big, 0, dir / "d.bin", nullptr, cancel, 4096);
+    BOOST_CHECK(out.status == interfaces::TransferStatus::SourceError);
+    BOOST_CHECK(big.cancelled);
+    BOOST_CHECK_EQUAL(CountEntries(dir), 0u);
+
+    FakeSource empty(Bytes(100'000));
+    empty.empty_on_read = 2;
+    out = interfaces::DownloadEntry(empty, 0, dir / "d.bin", nullptr, cancel, 4096);
+    BOOST_CHECK(out.status == interfaces::TransferStatus::SourceError);
+    BOOST_CHECK(empty.cancelled);
+    BOOST_CHECK_EQUAL(CountEntries(dir), 0u);
+}
+
+BOOST_AUTO_TEST_CASE(download_trailer_not_ok_and_bad_entry_index)
+{
+    std::atomic<bool> cancel{false};
+
+    FakeSource src(Bytes(10'000));
+    src.trailer_ok = false;
+    auto out = interfaces::DownloadEntry(src, 0, dir / "d.bin", nullptr, cancel, 4096);
+    BOOST_CHECK(out.status == interfaces::TransferStatus::SourceError);
+    BOOST_CHECK(out.message.find("no trailer available") != std::string::npos);
+    BOOST_CHECK(src.cancelled);
+    BOOST_CHECK_EQUAL(CountEntries(dir), 0u);
+
+    FakeSource other(Bytes(10));
+    out = interfaces::DownloadEntry(other, 7, dir / "d.bin", nullptr, cancel, 4096);
+    BOOST_CHECK(out.status == interfaces::TransferStatus::SourceError);
+    BOOST_CHECK_EQUAL(other.reads, 0);
+    BOOST_CHECK_EQUAL(CountEntries(dir), 0u);
+}
+
+BOOST_AUTO_TEST_CASE(download_zero_chunk_size_and_missing_directory)
+{
+    std::atomic<bool> cancel{false};
+
+    FakeSource src(Bytes(10));
+    auto out = interfaces::DownloadEntry(src, 0, dir / "d.bin", nullptr, cancel, 0);
+    BOOST_CHECK(out.status == interfaces::TransferStatus::LocalError);
+    BOOST_CHECK_EQUAL(src.reads, 0);
+
+    // a failed free-space query is a local error, not a space shortfall
+    FakeSource src2(Bytes(10));
+    out = interfaces::DownloadEntry(src2, 0, dir / "no-such-dir" / "d.bin", nullptr, cancel, 4096);
+    BOOST_CHECK(out.status == interfaces::TransferStatus::LocalError);
+    BOOST_CHECK(!out.message.empty());
+    BOOST_CHECK_EQUAL(src2.reads, 0);
+}
+
+#ifndef WIN32
+BOOST_AUTO_TEST_CASE(download_write_failure_removes_part)
+{
+    std::ofstream((dir / "d.bin").string(), std::ios::binary) << "old";
+
+    FakeSource src(Bytes(64 * 1024));
+    std::atomic<bool> cancel{false};
+    interfaces::TransferOutcome out;
+
+    {
+        FileSizeLimitGuard guard(4096);
+        out = interfaces::DownloadEntry(src, 0, dir / "d.bin", nullptr, cancel, 64 * 1024);
+        guard.Restore();
+    }
+
+    BOOST_CHECK(out.status == interfaces::TransferStatus::LocalError);
+    BOOST_CHECK(src.cancelled);
+    BOOST_CHECK_EQUAL(ReadAll(dir / "d.bin"), "old");
+    BOOST_CHECK_EQUAL(CountEntries(dir), 1u);
+}
+
+BOOST_AUTO_TEST_CASE(download_reports_temp_file_that_cannot_be_removed)
+{
+    // an owner-only directory mode does not stop root from unlinking
+    if (::geteuid() == 0) {
+        BOOST_TEST_MESSAGE("skipped: running as root, so a read-only directory does not block unlink");
+        return;
+    }
+
+    FakeSource src(Bytes(100'000));
+    src.throw_on_read = 3;
+    std::atomic<bool> cancel{false};
+    int chunks = 0;
+
+    // the directory becomes read-only after the first chunk, so the unlink fails
+    auto out = interfaces::DownloadEntry(src, 0, dir / "d.bin",
+                                         [&](uint64_t, int64_t) { if (++chunks == 1) ::chmod(dir.c_str(), 0500); },
+                                         cancel, 4096);
+
+    ::chmod(dir.c_str(), 0700);
+
+    BOOST_CHECK(out.status == interfaces::TransferStatus::SourceError);
+    BOOST_CHECK(out.message.find("could not be removed") != std::string::npos);
+    BOOST_CHECK_EQUAL(CountEntries(dir), 1u);
+}
+#endif // !WIN32
+
+BOOST_AUTO_TEST_CASE(upload_cancel_after_final_chunk_is_honoured)
+{
+    {
+        std::ofstream out((dir / "up.bin").string(), std::ios::binary);
+        out << "small file";
+    }
+
+    FakeSink sink;
+    std::atomic<bool> cancel{false};
+
+    auto r = interfaces::UploadFile(sink, dir / "up.bin", [&](uint64_t, int64_t) { cancel = true; }, cancel, 4096);
+
+    BOOST_CHECK(!r.ok);
+    BOOST_CHECK(sink.cancelled);
+    BOOST_CHECK(!sink.finished);
+}
+
+BOOST_AUTO_TEST_CASE(upload_failures_cancel_the_sink)
+{
+    {
+        std::ofstream out((dir / "up.bin").string(), std::ios::binary);
+        out << "some content";
+    }
+
+    std::atomic<bool> cancel{false};
+
+    FakeSink refusing;
+    refusing.fail_on_write = 1;
+    auto r = interfaces::UploadFile(refusing, dir / "up.bin", nullptr, cancel, 4096);
+    BOOST_CHECK(!r.ok);
+    BOOST_CHECK(refusing.cancelled);
+
+    FakeSink throwing;
+    throwing.throw_on_write = 1;
+    r = interfaces::UploadFile(throwing, dir / "up.bin", nullptr, cancel, 4096);
+    BOOST_CHECK(!r.ok);
+    BOOST_CHECK(throwing.cancelled);
+
+    FakeSink zero;
+    r = interfaces::UploadFile(zero, dir / "up.bin", nullptr, cancel, 0);
+    BOOST_CHECK(!r.ok);
+    BOOST_CHECK(zero.cancelled);
+    BOOST_CHECK_EQUAL(zero.writes, 0);
 }
 
 BOOST_AUTO_TEST_CASE(console_file_commands_table)

@@ -42,6 +42,7 @@ add_executable(test_gridcoin
     crypto_tests.cpp
     diagnose_tests.cpp
     fees_tests.cpp
+    file_transfer_tests.cpp
     fs_tests.cpp
     getarg_tests.cpp
     gridcoin_tests.cpp
@@ -94,8 +95,6 @@ add_executable(test_gridcoin
     netbase_tests.cpp
     net_tests.cpp
     notification_dispatcher_tests.cpp
-    transfer_file_tests.cpp
-    file_transfer_tests.cpp
     orphan_block_tests.cpp
     psgt_pool_tests.cpp
     psgt_tests.cpp
@@ -207,6 +206,7 @@ add_executable(test_gridcoin
     timedata_tests.cpp
     transaction_identity_tests.cpp
     transaction_tests.cpp
+    transfer_file_tests.cpp
     txmempool_tests.cpp
     uint256_tests.cpp
     util_fraction_tests.cpp

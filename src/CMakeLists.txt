@@ -243,8 +243,8 @@ add_library(gridcoin_util STATIC
     gridcoin/voting/vote.cpp
     hash.cpp
     init.cpp
-    interfaces/handler.cpp
     interfaces/file_transfer.cpp
+    interfaces/handler.cpp
     interfaces/init.cpp
     interfaces/notification_dispatcher.cpp
     key.cpp
@@ -315,13 +315,13 @@ add_library(gridcoin_util STATIC
     util/strencodings.cpp
     util/string.cpp
     util/syserror.cpp
-    util/transfer_file.cpp
     util/dir_permissions.cpp
     util/system.cpp
     util/threadinterrupt.cpp
     util/threadnames.cpp
     util/time.cpp
     util/tokenpipe.cpp
+    util/transfer_file.cpp
     validation.cpp
     validationinterface.cpp
     wallet/capability.cpp

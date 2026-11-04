@@ -59,10 +59,17 @@ public:
     //! Close and remove the temporary file. Idempotent.
     void Abort();
 
+    //! True if Abort() (or a failed Commit()) could not remove the temporary file.
+    bool RemoveFailed() const { return m_remove_failed; }
+
+    //! The note to append to an error message when RemoveFailed(), else empty.
+    std::string RemoveFailedNote() const;
+
 private:
     TransferTempFile() = default;
 
     void CloseHandle();
+    void AppendRemoveNote(std::string& error) const;
     void MoveFrom(TransferTempFile& other) noexcept;
 
     fs::path m_dest;
@@ -73,12 +80,19 @@ private:
     int m_fd{-1};
 #endif
     bool m_active{false};
+    bool m_remove_failed{false};
     CSHA256 m_hasher;
     uint64_t m_size{0};
 };
 
+enum class SpaceCheck { Enough, Short, QueryFailed };
+
+//! Like HasFreeSpace, but tells a shortfall from a failed query of the filesystem.
+SpaceCheck CheckFreeSpace(const fs::path& dir, uint64_t need, std::string& error);
+
 //! True if the filesystem holding dir has at least need plus the transfer free-space
-//! margin available. On false, error names the directory and the shortfall.
+//! margin available. On false, error names the directory and the shortfall (or why
+//! the free space could not be determined).
 bool HasFreeSpace(const fs::path& dir, uint64_t need, std::string& error);
 
 } // namespace util

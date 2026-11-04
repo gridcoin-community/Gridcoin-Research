@@ -236,28 +236,28 @@ BOOST_AUTO_TEST_CASE(abort_and_destruction_leave_nothing)
     BOOST_CHECK_EQUAL(CountPartFiles(dir), 0u);
 }
 
-BOOST_AUTO_TEST_CASE(create_refuses_planted_temp_name)
+BOOST_AUTO_TEST_CASE(create_refuses_preexisting_temp_name)
 {
     std::string err;
 
-    WriteAll(dir / "victim", "keep");
+    WriteAll(dir / "target", "keep");
 
 #ifndef WIN32
-    // a symlink at the temp name, pointing at a file the attacker wants overwritten
-    BOOST_REQUIRE_EQUAL(::symlink((dir / "victim").c_str(), (dir / "t.part").c_str()), 0);
+    // a symlink at the temp name, pointing at a file that must stay unchanged
+    BOOST_REQUIRE_EQUAL(::symlink((dir / "target").c_str(), (dir / "t.part").c_str()), 0);
     BOOST_CHECK(!util::TransferTempFile::CreateAt(dir / "out", dir / "t.part", err));
     BOOST_CHECK(!err.empty());
-    BOOST_CHECK_EQUAL(ReadAll(dir / "victim"), "keep");
+    BOOST_CHECK_EQUAL(ReadAll(dir / "target"), "keep");
     fs::remove(dir / "t.part");
 #endif
 
     // a regular file at the temp name
-    WriteAll(dir / "t.part", "planted");
+    WriteAll(dir / "t.part", "preexisting");
     err.clear();
     BOOST_CHECK(!util::TransferTempFile::CreateAt(dir / "out", dir / "t.part", err));
     BOOST_CHECK(!err.empty());
-    BOOST_CHECK_EQUAL(ReadAll(dir / "t.part"), "planted");
-    BOOST_CHECK_EQUAL(ReadAll(dir / "victim"), "keep");
+    BOOST_CHECK_EQUAL(ReadAll(dir / "t.part"), "preexisting");
+    BOOST_CHECK_EQUAL(ReadAll(dir / "target"), "keep");
     BOOST_CHECK(!fs::exists(dir / "out"));
 }
 
@@ -273,7 +273,7 @@ BOOST_AUTO_TEST_CASE(temp_is_0600_under_umask_000)
     BOOST_CHECK_EQUAL(ModeOf(PartFileIn(dir)), 0600u);
 }
 
-// Review Focus 1
+// A failed write leaves the destination untouched and no temporary file behind
 BOOST_AUTO_TEST_CASE(write_failure_leaves_destination_untouched)
 {
     std::string err;
@@ -302,7 +302,7 @@ BOOST_AUTO_TEST_CASE(write_failure_leaves_destination_untouched)
 }
 #endif // !WIN32
 
-// Review Focus 5
+// A destination with non-ASCII characters and a space round-trips
 BOOST_AUTO_TEST_CASE(non_ascii_destination_round_trips)
 {
     // UTF-8 for "Sicherung äöü 测试.dat", with a space
