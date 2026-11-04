@@ -36,17 +36,18 @@ CONFIGURED = {"bindir": "/usr/bin", "default_network": "main", "python3": "/usr/
 
 
 class FakeHost:
-    def __init__(self, users=None, groups=None, root=True, enabled=(), active=()):
+    def __init__(self, users=None, groups=None, root=True, enabled=(), active=(), fail=()):
         self.users = users if users is not None else {}
         self.groups = groups if groups is not None else {}
         self.root = root
+        self.fail = set(fail)
         self.enabled = set(enabled)
         self.active = set(active)
         self.calls = []
 
     def systemctl(self, *args):
         self.calls.append(args)
-        return 0
+        return 1 if args[0] in self.fail else 0
 
     def is_enabled(self, unit):
         return unit in self.enabled
@@ -106,8 +107,8 @@ class ServiceTestBase(unittest.TestCase):
 
     def make_credential(self, name, mode=0o600):
         path = os.path.join(self.paths.credstore, name)
-        with open(path, "wb") as f:
-            f.write(b"x")
+        with open(path, "w", encoding="utf8") as f:
+            f.write("x")
         os.chmod(path, mode)
         return path
 
@@ -331,8 +332,8 @@ class AutounlockTests(ServiceTestBase):
     def test_system_credential_may_be_the_existing_install_file(self):
         conf = os.path.join(self.tmp.name, "etc-gridcoin")
         os.makedirs(conf)
-        with open(os.path.join(conf, "wallet-passphrase.cred"), "wb") as f:
-            f.write(b"x")
+        with open(os.path.join(conf, "wallet-passphrase.cred"), "w", encoding="utf8") as f:
+            f.write("x")
         nets = dict(svc.NETWORKS)
         nets["main"] = dataclasses.replace(svc.NETWORKS["main"], conf_dir=conf)
         saved = svc.NETWORKS
@@ -374,6 +375,114 @@ class ConfigTests(ServiceTestBase):
         self.assertEqual(rc, 0, err)
         self.assertTrue(os.path.exists(os.path.join(
             self.paths.etc_systemd, "gridcointestnetd@bob.service.d", "50-gridcoin-service.conf")))
+
+
+class FixRoundTests(ServiceTestBase):
+    def failing_host(self, verb, active=()):
+        return FakeHost(users=self.host.users, fail=(verb,), active=active)
+
+    def test_enable_user_step_failures_propagate(self):
+        for verb in ("daemon-reload", "enable"):
+            with self.subTest(verb=verb):
+                host = self.failing_host(verb)
+                rc, out, err = self.run_main("enable-user", "bob", host=host)
+                self.assertEqual(rc, 1)
+                self.assertIn(verb, err)
+                self.assertIn("kept", err)
+                self.assertTrue(os.path.exists(os.path.join(
+                    self.paths.etc_systemd, "gridcoinresearchd@bob.service.d", "50-gridcoin-service.conf")))
+
+    def test_autounlock_enable_step_failures_propagate(self):
+        self.make_credential("gridcoinresearch-bob.wallet-passphrase")
+        for verb in ("daemon-reload", "enable", "restart"):
+            with self.subTest(verb=verb):
+                host = self.failing_host(verb, active=("gridcoinresearchd@bob.service",))
+                rc, out, err = self.run_main("autounlock", "enable", "bob", host=host)
+                self.assertEqual(rc, 1)
+                self.assertIn(verb, err)
+
+    def test_disable_step_failures_propagate_after_cleanup(self):
+        self.run_main("enable-user", "bob")
+        host = self.failing_host("disable")
+        rc, out, err = self.run_main("disable-user", "bob", host=host)
+        self.assertEqual(rc, 1)
+        self.assertIn("disable", err)
+        self.assertEqual(os.listdir(self.paths.etc_systemd), [])
+        rc, out, err = self.run_main("disable-user", "bob", host=self.failing_host("daemon-reload"))
+        self.assertEqual(rc, 1)
+        self.make_credential("gridcoinresearch-bob.wallet-passphrase")
+        self.run_main("autounlock", "enable", "bob")
+        rc, out, err = self.run_main("autounlock", "disable", "bob", host=self.failing_host("disable"))
+        self.assertEqual(rc, 1)
+        self.assertEqual(os.listdir(self.paths.etc_systemd), [])
+
+    def test_dropin_directory_symlink_refused(self):
+        target = os.path.join(self.tmp.name, "elsewhere")
+        os.makedirs(target)
+        os.symlink(target, os.path.join(self.paths.etc_systemd, "gridcoinresearchd@bob.service.d"))
+        rc, out, err = self.run_main("enable-user", "bob")
+        self.assertEqual(rc, 1)
+        self.assertEqual(os.listdir(target), [])
+        self.assertEqual(self.host.calls, [])
+
+    def test_dropin_directory_created_0755(self):
+        self.run_main("enable-user", "bob")
+        d = os.path.join(self.paths.etc_systemd, "gridcoinresearchd@bob.service.d")
+        self.assertEqual(os.stat(d).st_mode & 0o777, 0o755)
+
+    def test_disable_works_for_deleted_or_low_uid_user(self):
+        self.run_main("enable-user", "bob")
+        self.make_credential("gridcoinresearch-bob.wallet-passphrase")
+        self.run_main("autounlock", "enable", "bob")
+        gone = FakeHost(users={})
+        rc, out, err = self.run_main("autounlock", "disable", "bob", host=gone)
+        self.assertEqual(rc, 0, err)
+        rc, out, err = self.run_main("disable-user", "bob", host=gone)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(os.listdir(self.paths.etc_systemd), [])
+        low = FakeHost(users={"svc": Passwd("svc", 5, "/")})
+        rc, out, err = self.run_main("disable-user", "svc", host=low)
+        self.assertEqual(rc, 0, err)
+        rc, out, err = self.run_main("disable-user", "a/b", host=gone)
+        self.assertNotEqual(rc, 0)
+
+    def test_parser_prog_uses_network_tool_name(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            with self.assertRaises(SystemExit):
+                svc.main(["--network=test", "enable-user", "-h"], self.host, self.paths)
+        self.assertIn("gridcointestnet-service", out.getvalue())
+
+    def test_write_dropin_temp_is_exclusive(self):
+        unit = "gridcoinresearchd@bob.service"
+        directory = os.path.join(self.paths.etc_systemd, unit + ".d")
+        os.makedirs(directory)
+        victim = os.path.join(self.tmp.name, "victim")
+        with open(victim, "w", encoding="utf8") as f:
+            f.write("keep")
+        planted = os.path.join(directory, ".50-gridcoin-service.conf.%d.tmp" % os.getpid())
+        os.symlink(victim, planted)
+        with self.assertRaises(FileExistsError):
+            svc.write_dropin(self.paths, unit, "50-gridcoin-service.conf", "new")
+        with open(victim, encoding="utf8") as f:
+            self.assertEqual(f.read(), "keep")
+        self.assertTrue(os.path.islink(planted))
+        self.assertFalse(os.path.exists(os.path.join(directory, "50-gridcoin-service.conf")))
+
+    def test_real_host_uses_fixed_path(self):
+        calls = []
+        saved = svc.subprocess.call
+        svc.subprocess.call = lambda cmd, **kw: calls.append(kw) or 0
+        try:
+            host = svc.Host()
+            host.systemctl("daemon-reload")
+            host.is_enabled("x")
+            host.is_active("x")
+        finally:
+            svc.subprocess.call = saved
+        self.assertEqual(len(calls), 3)
+        for kw in calls:
+            self.assertEqual(kw["env"], {"PATH": "/usr/bin:/bin"})
 
 
 if __name__ == "__main__":

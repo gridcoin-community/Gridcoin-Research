@@ -21,6 +21,7 @@ import os
 import pwd
 import re
 import subprocess
+import stat
 import sys
 
 CONFIG = {"bindir": "@GRC_BINDIR@", "default_network": "@GRC_UNIT_NETWORK@", "python3": "@GRC_UNIT_PYTHON3@"}
@@ -33,7 +34,15 @@ UNSAFE_PATH_RE = re.compile(r"[\s\"'\\$%;]")
 ROOT_EQUIVALENT_GROUPS = ("docker", "lxd", "incus", "libvirt", "disk", "wheel", "sudo", "adm", "systemd-journal")
 
 
+# Fixed search path for every command the tool runs, whatever the caller's PATH.
+SAFE_ENV = {"PATH": "/usr/bin:/bin"}
+
+
 class UserError(Exception):
+    pass
+
+
+class StepError(Exception):
     pass
 
 
@@ -75,13 +84,13 @@ class Host:
     """Real host access. Tests use a fake with the same methods."""
 
     def systemctl(self, *args):
-        return subprocess.call(["systemctl", *args])
+        return subprocess.call(["systemctl", *args], env=SAFE_ENV)
 
     def is_enabled(self, unit):
-        return subprocess.call(["systemctl", "is-enabled", "--quiet", unit]) == 0
+        return subprocess.call(["systemctl", "is-enabled", "--quiet", unit], env=SAFE_ENV) == 0
 
     def is_active(self, unit):
-        return subprocess.call(["systemctl", "is-active", "--quiet", unit]) == 0
+        return subprocess.call(["systemctl", "is-active", "--quiet", unit], env=SAFE_ENV) == 0
 
     def getpwnam(self, name):
         return pwd.getpwnam(name)
@@ -111,9 +120,13 @@ def uid_min(paths):
     return 1000
 
 
-def validate_user(name, host, paths):
+def validate_name(name):
     if not USER_RE.match(name):
         raise UserError("invalid user name '%s'" % name)
+
+
+def validate_user(name, host, paths):
+    validate_name(name)
     try:
         pw = host.getpwnam(name)
     except KeyError:
@@ -187,9 +200,24 @@ def dropin_dir(paths, unit):
     return os.path.join(paths.etc_systemd, unit + ".d")
 
 
+def owned_by_root(st):
+    # A non-root run exists only in tests, where the temporary tree belongs to the caller.
+    return st.st_uid in (0, os.geteuid())
+
+
+def ensure_dropin_dir(directory):
+    try:
+        st = os.lstat(directory)
+    except FileNotFoundError:
+        os.mkdir(directory, 0o755)
+        return
+    if not stat.S_ISDIR(st.st_mode) or not owned_by_root(st):
+        raise UserError("%s exists but is not a directory owned by root; refusing" % directory)
+
+
 def write_dropin(paths, unit, filename, text):
     directory = dropin_dir(paths, unit)
-    os.makedirs(directory, mode=0o755, exist_ok=True)
+    ensure_dropin_dir(directory)
     final = os.path.join(directory, filename)
     temp = os.path.join(directory, ".%s.%d.tmp" % (filename, os.getpid()))
     fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
@@ -228,6 +256,13 @@ def credential_path(paths, net, user):
     return new_install
 
 
+def step(host, *args):
+    rc = host.systemctl(*args)
+    if rc != 0:
+        raise StepError("step 'systemctl %s' failed with exit status %s; drop-ins already written are kept"
+                        % (" ".join(args), rc))
+
+
 def cmd_enable_user(args, net, host, paths):
     pw = validate_user(args.user, host, paths)
     datadir = resolve_datadir(pw, args.datadir)
@@ -235,8 +270,8 @@ def cmd_enable_user(args, net, host, paths):
         raise UserError("%s.service is enabled and conflicts with the per-user unit; disable it first" % net.daemon)
     unit = "%s@%s.service" % (net.daemon, args.user)
     write_dropin(paths, unit, DROPIN_MAIN, render_user_dropin(net, datadir))
-    host.systemctl("daemon-reload")
-    host.systemctl("enable", "--now", unit)
+    step(host, "daemon-reload")
+    step(host, "enable", "--now", unit)
     risky = [g for g in host.user_groups(args.user) if g in ROOT_EQUIVALENT_GROUPS]
     if risky:
         print("warning: %s is in groups that are equivalent to root on this machine: %s.\n"
@@ -247,19 +282,26 @@ def cmd_enable_user(args, net, host, paths):
 
 
 def cmd_disable_user(args, net, host, paths):
-    validate_user(args.user, host, paths)
+    validate_name(args.user)
     unit, socket_unit, _ = autounlock_target(net, args.user)
-    host.systemctl("disable", "--now", unit, socket_unit)
+    # Cleanup continues past a failed disable so the drop-ins of a vanished unit can still go.
+    rc = host.systemctl("disable", "--now", unit, socket_unit)
     remove_dropin(paths, unit, DROPIN_MAIN)
     remove_dropin(paths, unit, DROPIN_AUTOUNLOCK)
-    host.systemctl("daemon-reload")
+    step(host, "daemon-reload")
+    if rc != 0:
+        raise StepError("step 'systemctl disable --now %s %s' failed with exit status %s; the drop-ins were removed"
+                        % (unit, socket_unit, rc))
     return 0
 
 
 def cmd_autounlock(args, net, host, paths):
     user = None if args.system else args.user
     if user is not None:
-        validate_user(user, host, paths)
+        if args.action == "enable":
+            validate_user(user, host, paths)
+        else:
+            validate_name(user)
     unit, socket_unit, _ = autounlock_target(net, user)
     if args.action == "enable":
         cred = credential_path(paths, net, user)
@@ -270,22 +312,25 @@ def cmd_autounlock(args, net, host, paths):
         if st.st_uid != 0 or (st.st_mode & 0o777) != 0o600:
             print("warning: %s is not owned by root with mode 0600" % cred)
         write_dropin(paths, unit, DROPIN_AUTOUNLOCK, render_autounlock_dropin(net, user))
-        host.systemctl("daemon-reload")
-        host.systemctl("enable", "--now", socket_unit)
+        step(host, "daemon-reload")
+        step(host, "enable", "--now", socket_unit)
         if host.is_active(unit):
-            host.systemctl("restart", "--no-block", unit)
+            step(host, "restart", "--no-block", unit)
     else:
-        host.systemctl("disable", "--now", socket_unit)
+        rc = host.systemctl("disable", "--now", socket_unit)
         remove_dropin(paths, unit, DROPIN_AUTOUNLOCK)
-        host.systemctl("daemon-reload")
+        step(host, "daemon-reload")
+        if rc != 0:
+            raise StepError("step 'systemctl disable --now %s' failed with exit status %s; the drop-in was removed"
+                            % (socket_unit, rc))
         if host.is_active(unit):
-            host.systemctl("restart", "--no-block", unit)
+            step(host, "restart", "--no-block", unit)
         print("The credential file remains until you remove it: %s" % credential_path(paths, net, user))
     return 0
 
 
 def build_parser(default_network):
-    parser = argparse.ArgumentParser(prog="gridcoin-service")
+    parser = argparse.ArgumentParser(prog=NETWORKS[default_network].tool_name)
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_network(p):
@@ -312,7 +357,10 @@ def main(argv, host=None, paths=None):
         return EXIT_USAGE
     host = host if host is not None else Host()
     paths = paths if paths is not None else Paths()
-    parser = build_parser(CONFIG["default_network"])
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--network", choices=sorted(NETWORKS), default=CONFIG["default_network"])
+    known, _ = pre.parse_known_args(argv)
+    parser = build_parser(known.network)
     args = parser.parse_args(argv)
     if args.command == "autounlock" and (args.system == (args.user is not None)):
         parser.error("autounlock needs exactly one of <user> or --system")
@@ -323,8 +371,8 @@ def main(argv, host=None, paths=None):
     handlers = {"enable-user": cmd_enable_user, "disable-user": cmd_disable_user, "autounlock": cmd_autounlock}
     try:
         return handlers[args.command](args, net, host, paths)
-    except UserError as e:
-        print("gridcoin-service: %s" % e, file=sys.stderr)
+    except (UserError, StepError, OSError) as e:
+        print("%s: %s" % (net.tool_name, e), file=sys.stderr)
         return 1
 
 
