@@ -4,6 +4,7 @@
 
 #include "gridcoin/contract/registry.h"
 #include "init.h"
+#include "policy/fees.h"
 #include "util/system.h"
 
 #include <boost/test/unit_test.hpp>
@@ -82,6 +83,16 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
                              "-alertnotify", "-startupnotify", "-shutdownnotify", "-rpcuser", "-rpcpassword"}) {
         BOOST_CHECK_MESSAGE(all_flags.at(name) & ArgsManager::SENSITIVE, name);
     }
+}
+
+BOOST_AUTO_TEST_CASE(paytxfee_above_the_settxfee_maximum_warns_at_startup)
+{
+    // The warning starts where settxfee and changesettings stop accepting a rate.
+    BOOST_CHECK(!PayTxFeeWarnsAtStartup(0));
+    BOOST_CHECK(!PayTxFeeWarnsAtStartup(GetBaseFee(CTransaction(), GMF_SEND)));
+    BOOST_CHECK(!PayTxFeeWarnsAtStartup(MaxTxFeeRate()));
+    BOOST_CHECK(PayTxFeeWarnsAtStartup(MaxTxFeeRate() + 1));
+    BOOST_CHECK(PayTxFeeWarnsAtStartup(COIN / 4));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

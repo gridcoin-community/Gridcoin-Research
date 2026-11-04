@@ -64,6 +64,12 @@ std::string LogSomething();
 //! so a live edit takes effect without a restart in both paths.
 void ApplyRwSettingSideEffect(const std::string& name);
 
+//! Whether a -paytxfee rate read at startup, from the config file, the command
+//! line or gridcoinsettings.json, is high enough to warn about: above
+//! MaxTxFeeRate(), the most settxfee and changesettings accept. The rate is used
+//! as given either way.
+bool PayTxFeeWarnsAtStartup(CAmount rate);
+
 //! Validate, persist to gridcoinsettings.json, set in the running args, and apply
 //! one or more settings given as name/value strings. Two-phase: every setting is
 //! fully validated (name is a known arg; proxy/reservebalance values must parse)

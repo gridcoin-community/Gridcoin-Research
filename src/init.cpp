@@ -1334,7 +1334,13 @@ void InitLogging()
     LogPrintf(PACKAGE_NAME " version %s (%s)", FormatFullVersion(), build_type);
 }
 
-
+bool PayTxFeeWarnsAtStartup(CAmount rate)
+{
+    // The highest rate settxfee and changesettings accept. A higher rate from
+    // a file or the command line is still used, so the warning is all that
+    // tells the user.
+    return rate > MaxTxFeeRate();
+}
 
 void ApplyRwSettingSideEffect(const std::string& name)
 {
@@ -1853,7 +1859,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     {
         if (!ParseMoney(gArgs.GetArg("-paytxfee", ""), nTransactionFee))
             return InitError(strprintf(_("Invalid amount for -paytxfee=<amount>: '%s'"), gArgs.GetArg("-paytxfee", "")));
-        if (nTransactionFee > 0.25 * COIN)
+        if (PayTxFeeWarnsAtStartup(nTransactionFee))
             InitWarning(_("Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction."));
     }
 
