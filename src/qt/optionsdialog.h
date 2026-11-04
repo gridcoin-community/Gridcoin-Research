@@ -66,6 +66,8 @@ private slots:
     void handleSideStakeAllocationInvalid();
     void handleSideStakeDescriptionInvalid();
 
+    //! Submits the dialog when side staking is toggled. Not saved for want of
+    //! the passphrase, the box shows side staking as stored again.
     void refreshSideStakeTableModel();
 
     void tabWidgetSelectionChanged(int index);
@@ -79,6 +81,13 @@ signals:
     void sidestakeDescriptionInvalid();
 
 private:
+    //! Submit every field through the mapper, for OK, Apply and the side-staking
+    //! toggle. When the submit changes a setting that needs the wallet
+    //! passphrase (OptionsModel::needsSettingsElevation), ask for it first and
+    //! hold it across the submit. Returns false, having saved nothing and told
+    //! the user, when it was not given.
+    bool submitSettings();
+
     Ui::OptionsDialog *ui;
     OptionsModel *model;
     MonitoredDataMapper *mapper;

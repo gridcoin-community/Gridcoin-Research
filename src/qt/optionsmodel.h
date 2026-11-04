@@ -4,6 +4,8 @@
 #include "sidestaketablemodel.h"
 #include <QAbstractListModel>
 #include <QDate>
+#include <QMap>
+#include <QVariant>
 
 #include <functional>
 #include <memory>
@@ -78,12 +80,29 @@ public:
     //! note in bitcoin.cpp.
     void readNodeSettings();
 
-    //! One-time migration of the settings that moved from Gridcoin-Qt.conf into
-    //! the core read-write settings file (proxy / UPnP / reservebalance /
-    //! update-check). Must be called from the composition root AFTER the config
-    //! and read-write settings files are loaded and the network is selected --
-    //! never from the constructor, which runs before those.
+    //! One-time migration of reservebalance and disableupdatecheck from
+    //! Gridcoin-Qt.conf into the core read-write settings file; neither needs
+    //! the wallet passphrase. Marks it done with the QSettings key
+    //! "coreSettingsMigrated". Must be called from the composition root AFTER
+    //! the config and read-write settings files are loaded and the network is
+    //! selected -- never from the constructor, which runs before those.
     void migrateCoreSettings();
+
+    //! Runs apply() while holding a Settings elevation; false when the user gave none.
+    using WithElevation = std::function<bool(const std::function<void()>& apply)>;
+
+    //! One-time migration of the proxy and UPnP settings kept in
+    //! Gridcoin-Qt.conf by an earlier version. Changing them needs the wallet
+    //! passphrase, so the composition root calls this once the wallet can ask
+    //! for it, through \p with_elevation. Without one, the old values are
+    //! discarded. Marks it done with the QSettings key
+    //! "coreElevatedSettingsMigrated", except when the node could not store
+    //! them: the next start then tries again.
+    void migrateElevatedCoreSettings(const WithElevation& with_elevation);
+
+    //! Whether submitting these widget values changes an Elevate-class core setting: UPnP, proxy use,
+    //! the proxy address or port while the proxy is (being) enabled, or side staking.
+    bool needsSettingsElevation(const QMap<OptionID, QVariant>& submitted) const;
 
     //! Asks for the wallet passphrase and begins a Settings capability with it.
     //! Returns what holds that capability, which ends it when destroyed, or null
@@ -102,6 +121,16 @@ public:
     //! returns to the event loop and holds the capability until then, so that
     //! one submit of several fields asks once.
     bool elevateSettingsAfterRefusal();
+
+    //! Before a change that needsSettingsElevation() expects to need the wallet
+    //! passphrase: ask for it, and return whether a Settings capability is now
+    //! held. This is the one ask until control returns to the event loop, as in
+    //! elevateSettingsAfterRefusal(), and the capability is held until then, so
+    //! a change the node refuses during it is not asked for again. Already asked
+    //! in that time, the earlier answer stands. Without a request set, nothing
+    //! is asked and the answer is false. The wallet model's request asks nothing
+    //! of an unencrypted or fully unlocked wallet, and answers true.
+    bool elevateSettingsBeforeChange();
 
     int rowCount(const QModelIndex & parent = QModelIndex()) const;
     QVariant data(const QModelIndex & index, int role = Qt::DisplayRole) const;
@@ -154,6 +183,11 @@ private:
     //! wallet passphrase is sent once more when elevateSettingsAfterRefusal()
     //! gets a Settings capability. Returns whether the node stored the change.
     bool changeCoreSettings(const std::vector<std::pair<std::string, std::string>>& settings);
+
+    //! Ask through m_settings_elevation_request, unless that is unset or has
+    //! asked since control last returned to the event loop, and hold what it
+    //! began until control returns there. Returns whether a capability is held.
+    bool askForSettingsElevation();
 
     //! Settings command/query surface; owned by the process, outlives this model.
     interfaces::Node& m_node;

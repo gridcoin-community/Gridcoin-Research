@@ -4,20 +4,36 @@
 
 #include "qt/test/optionsmodeltests.h"
 
+#include "interfaces/wallet_coin_source.h"
+#include "logging.h"
+#include "qt/editsidestakedialog.h"
 #include "qt/guiutil.h"
+#include "qt/optionsdialog.h"
 #include "qt/optionsmodel.h"
 #include "qt/test/interfacefakes.h"
+#include "qt/walletmodel.h"
 #include "util.h"
 
+#include <QAbstractButton>
+#include <QApplication>
 #include <QCheckBox>
 #include <QCoreApplication>
 #include <QDataWidgetMapper>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QModelIndex>
+#include <QPushButton>
+#include <QStringList>
+#include <QTableView>
+#include <QTimer>
 #include <QVariant>
+#include <QVariantMap>
 
+#include <functional>
+#include <list>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -115,6 +131,213 @@ void InstallPrompt(OptionsModel& model, int& asks, bool grant, bool& elevated)
 bool SubmitSideStaking(OptionsModel& model, bool enabled)
 {
     return model.setData(model.index(OptionsModel::EnableSideStaking), QVariant(enabled), Qt::EditRole);
+}
+
+// The messages the dialogs show when the passphrase was not given.
+const QString G1_MESSAGE = QStringLiteral(
+    "Changing UPnP, the proxy or side staking needs your wallet passphrase. These changes were not saved.");
+const QString G2_MESSAGE = QStringLiteral(
+    "Changing side stakes needs your wallet passphrase. The change was not saved.");
+
+//! Put the settings an earlier version kept in Gridcoin-Qt.conf at the root of
+//! QSettings: the two the core takes without the passphrase and, when
+//! \p network, the proxy and UPnP ones.
+void SeedLegacySettings(bool network)
+{
+    QSettings settings;
+    settings.setValue("nReserveBalance", 5 * COIN_SAT);
+    settings.setValue("fDisableUpdateCheck", true);
+    if (network) {
+        settings.setValue("fUseProxy", true);
+        settings.setValue("addrProxy", QStringLiteral("1.2.3.4:9050"));
+        settings.setValue("fUseUPnP", true);
+    }
+}
+
+//! A migration's elevation: counts each call in \p calls and, when \p grant,
+//! runs apply under a FakeElevation over \p elevated.
+OptionsModel::WithElevation CountingElevation(int& calls, bool grant, bool& elevated)
+{
+    return [&calls, grant, &elevated](const std::function<void()>& apply) {
+        ++calls;
+        if (!grant) return false;
+        FakeElevation elevation(elevated);
+        apply();
+        return true;
+    };
+}
+
+//! Keeps the lines logged while it lives.
+class LogCapture
+{
+public:
+    LogCapture()
+        : m_callback(LogInstance().PushBackCallback([this](const std::string& line) { m_lines.push_back(line); }))
+    {
+    }
+    ~LogCapture() { LogInstance().DeleteCallback(m_callback); }
+
+    LogCapture(const LogCapture&) = delete;
+    LogCapture& operator=(const LogCapture&) = delete;
+
+    //! How many lines contain \p text.
+    int Count(const std::string& text) const
+    {
+        int count = 0;
+        for (const std::string& line : m_lines) {
+            if (line.find(text) != std::string::npos) ++count;
+        }
+        return count;
+    }
+
+private:
+    std::vector<std::string> m_lines;
+    std::list<std::function<void(const std::string&)>>::iterator m_callback;
+};
+
+//! Closes each message box shown while it lives with its default button, and
+//! keeps its text, so that a test can run a slot that shows one.
+class MessageBoxCloser : public QObject
+{
+public:
+    MessageBoxCloser()
+    {
+        connect(&m_timer, &QTimer::timeout, this, [this] {
+            for (QWidget* widget : QApplication::topLevelWidgets()) {
+                QMessageBox* box = qobject_cast<QMessageBox*>(widget);
+                if (!box || !box->isVisible()) continue;
+
+                m_texts << box->text();
+
+                if (QAbstractButton* button = box->defaultButton()) {
+                    button->click();
+                } else if (QAbstractButton* escape = box->escapeButton()) {
+                    escape->click();
+                } else {
+                    box->close();
+                }
+            }
+        });
+        m_timer.start(10);
+    }
+
+    QStringList m_texts;
+
+private:
+    QTimer m_timer;
+};
+
+interfaces::WalletLockState LockState(bool crypted, bool locked, bool staking_only)
+{
+    interfaces::WalletLockState state;
+    state.crypted = crypted;
+    state.locked = locked;
+    state.unlocked_for_staking_only = staking_only;
+    return state;
+}
+
+//! A WalletModel over fakes. Constructed, it installs its passphrase request
+//! on the options model as it does in the application. The prompt it raises
+//! (requireUnlock) is answered here: each is counted, with the number of
+//! changes \p node had been sent by then, and when \p grant the capability is
+//! begun on the fake wallet, which sets \p capability_flag while it lives.
+class PromptedWallet
+{
+public:
+    PromptedWallet(OptionsModel& model, const qt_test::FakeNode* node, interfaces::WalletLockState state,
+                   bool grant, bool* capability_flag)
+        : m_wallet_model(m_wallet, m_tx_source, *m_coin_source, &model)
+    {
+        m_wallet.m_lock_state = state;
+        m_wallet.m_capability_flag = capability_flag;
+
+        QObject::connect(&m_wallet_model, &WalletModel::requireUnlock, &m_wallet_model,
+                         [this, node, grant](CapabilityKind kind) {
+            m_changes_sent_at_prompt.push_back(node ? node->m_change_calls.size() : 0);
+            m_prompt_kinds.push_back(kind);
+            if (grant && m_wallet.beginElevation(SecureString(), kind)) {
+                m_wallet_model.setElevationBegun();
+            }
+        });
+    }
+
+    int Prompts() const { return static_cast<int>(m_prompt_kinds.size()); }
+
+    qt_test::FakeLockStateWallet m_wallet;
+    std::vector<size_t> m_changes_sent_at_prompt;
+    std::vector<CapabilityKind> m_prompt_kinds;
+
+private:
+    qt_test::FakeWalletTxSource m_tx_source;
+    std::shared_ptr<interfaces::WalletCoinSource> m_coin_source{interfaces::MakeSyntheticCoinSource(1, 1)};
+    WalletModel m_wallet_model;
+};
+
+template <typename Widget>
+Widget* Find(QWidget& parent, const char* name)
+{
+    return parent.findChild<Widget*>(QString::fromLatin1(name));
+}
+
+void Flip(QCheckBox* box)
+{
+    box->setChecked(!box->isChecked());
+}
+
+//! The dialog's widgets the tests below drive.
+struct DialogWidgets
+{
+    explicit DialogWidgets(QWidget& dialog)
+        : upnp(Find<QCheckBox>(dialog, "mapPortUpnp"))
+        , proxy(Find<QCheckBox>(dialog, "connectSocks"))
+        , proxy_host(Find<QLineEdit>(dialog, "proxyIp"))
+        , staking(Find<QCheckBox>(dialog, "enableStaking"))
+        , side_staking(Find<QCheckBox>(dialog, "enableSideStaking"))
+        , new_side_stake(Find<QPushButton>(dialog, "pushButtonNewSideStake"))
+        , ok(Find<QPushButton>(dialog, "okButton"))
+        , apply(Find<QPushButton>(dialog, "applyButton"))
+    {
+    }
+
+    bool AllFound() const
+    {
+        return upnp && proxy && proxy_host && staking && side_staking && new_side_stake && ok && apply;
+    }
+
+    QCheckBox* upnp;
+    QCheckBox* proxy;
+    QLineEdit* proxy_host;
+    QCheckBox* staking;
+    QCheckBox* side_staking;
+    QPushButton* new_side_stake;
+    QPushButton* ok;
+    QPushButton* apply;
+};
+
+//! The settings the dialog writes that need the wallet passphrase.
+const std::set<std::string> ELEVATE_SETTINGS{"proxy", "upnp", "enablesidestaking"};
+
+OptionsModel::OptionID OptionByName(const QString& name)
+{
+    static const std::map<QString, OptionsModel::OptionID> ids{
+        {QStringLiteral("MapPortUPnP"), OptionsModel::MapPortUPnP},
+        {QStringLiteral("ProxyUse"), OptionsModel::ProxyUse},
+        {QStringLiteral("ProxyIP"), OptionsModel::ProxyIP},
+        {QStringLiteral("ProxyPort"), OptionsModel::ProxyPort},
+        {QStringLiteral("EnableSideStaking"), OptionsModel::EnableSideStaking},
+        {QStringLiteral("EnableStaking"), OptionsModel::EnableStaking},
+    };
+    return ids.at(name);
+}
+
+interfaces::SideStakeEntry LocalSideStake(const std::string& address)
+{
+    interfaces::SideStakeEntry entry;
+    entry.address = address;
+    entry.allocation_percent = 10.0;
+    entry.description = "d";
+    entry.status = "Active";
+    return entry;
 }
 } // anonymous namespace
 
@@ -624,4 +847,589 @@ void OptionsModelTests::sideStakeInvalidInputDoesNotAsk()
     QCOMPARE(table->getEditStatus(), SideStakeTableModel::INVALID_ADDRESS);
     QCOMPARE(asks, 0);
     QCOMPARE(sidestakes.m_edit_calls, 1);
+}
+
+void OptionsModelTests::migrationMovesOnlyFreeSettingsWithoutElevation()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    SeedLegacySettings(true);
+    OptionsModel model(node, sidestakes);
+
+    model.migrateCoreSettings();
+
+    QCOMPARE(node.getSettingStr("reservebalance", ""), std::string("5.00000000"));
+    QCOMPARE(node.getSettingStr("disableupdatecheck", ""), std::string("1"));
+    QVERIFY(!node.isSettingSet("proxy"));
+    QVERIFY(!node.isSettingSet("upnp"));
+
+    // Proxy and UPnP are left for migrateElevatedCoreSettings: its flag is not
+    // set, and the old values are still there for it.
+    QSettings settings;
+    QVERIFY(settings.value("coreSettingsMigrated", false).toBool());
+    QVERIFY(!settings.value("coreElevatedSettingsMigrated", false).toBool());
+    QVERIFY(settings.contains("addrProxy"));
+    QVERIFY(settings.contains("fUseUPnP"));
+}
+
+void OptionsModelTests::elevatedMigrationAppliesProxyAndUpnpWhenElevated()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    SeedLegacySettings(true);
+    OptionsModel model(node, sidestakes);
+    model.migrateCoreSettings();
+
+    int calls = 0;
+    model.migrateElevatedCoreSettings(CountingElevation(calls, true, node.m_elevated));
+
+    QCOMPARE(calls, 1);
+    QCOMPARE(node.getSettingStr("proxy", ""), std::string("1.2.3.4:9050"));
+    QCOMPARE(node.getSettingStr("upnp", ""), std::string("1"));
+    QVERIFY(QSettings().value("coreElevatedSettingsMigrated", false).toBool());
+}
+
+void OptionsModelTests::declinedElevatedMigrationDiscardsLegacyValuesOnce()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    SeedLegacySettings(true);
+    OptionsModel model(node, sidestakes);
+    model.migrateCoreSettings();
+
+    int calls = 0;
+    {
+        LogCapture log;
+        model.migrateElevatedCoreSettings(CountingElevation(calls, false, node.m_elevated));
+        QCOMPARE(log.Count("Discarded the proxy and UPnP settings kept by an earlier version "
+                           "(proxy=1.2.3.4:9050, upnp=1): the wallet passphrase was not given"), 1);
+    }
+
+    QCOMPARE(calls, 1);
+    QVERIFY(!node.isSettingSet("proxy"));
+    QVERIFY(!node.isSettingSet("upnp"));
+
+    // The old values are gone, so the dialog no longer shows a proxy the node
+    // does not use.
+    QSettings settings;
+    QVERIFY(!settings.contains("fUseProxy"));
+    QVERIFY(!settings.contains("addrProxy"));
+    QVERIFY(!settings.contains("fUseUPnP"));
+    QVERIFY(!model.data(model.index(OptionsModel::ProxyUse, 0), Qt::EditRole).toBool());
+    QVERIFY(settings.value("coreElevatedSettingsMigrated", false).toBool());
+
+    // Done: a later start does not ask again.
+    model.migrateElevatedCoreSettings(CountingElevation(calls, false, node.m_elevated));
+    QCOMPARE(calls, 1);
+}
+
+void OptionsModelTests::elevatedMigrationSkippedAfterAnEarlierMigration()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    SeedLegacySettings(true);
+
+    // An earlier build moved every setting, proxy and UPnP included, and set
+    // only this flag.
+    QSettings().setValue("coreSettingsMigrated", true);
+
+    OptionsModel model(node, sidestakes);
+    model.migrateCoreSettings();
+    QCOMPARE(node.m_change_calls.size(), size_t{0});
+
+    int calls = 0;
+    model.migrateElevatedCoreSettings(CountingElevation(calls, true, node.m_elevated));
+    QCOMPARE(calls, 0);
+    QCOMPARE(node.m_change_calls.size(), size_t{0});
+    QVERIFY(QSettings().value("coreElevatedSettingsMigrated", false).toBool());
+}
+
+void OptionsModelTests::failedElevatedMigrationStoreRetries()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    SeedLegacySettings(true);
+    OptionsModel model(node, sidestakes);
+    model.migrateCoreSettings();
+
+    // Given the passphrase, but the node could not store the values.
+    int calls = 0;
+    node.m_fail_changes = true;
+    model.migrateElevatedCoreSettings(CountingElevation(calls, true, node.m_elevated));
+    QCOMPARE(calls, 1);
+    QVERIFY(!QSettings().value("coreElevatedSettingsMigrated", false).toBool());
+    QVERIFY(QSettings().contains("addrProxy"));
+
+    node.m_fail_changes = false;
+    model.migrateElevatedCoreSettings(CountingElevation(calls, true, node.m_elevated));
+    QCOMPARE(calls, 2);
+    QCOMPARE(node.getSettingStr("proxy", ""), std::string("1.2.3.4:9050"));
+    QVERIFY(QSettings().value("coreElevatedSettingsMigrated", false).toBool());
+}
+
+void OptionsModelTests::elevatedMigrationRetriedAtTheNextStart()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    SeedLegacySettings(true);
+
+    // A start that moves the free settings and ends before the main window
+    // shows, so the proxy and UPnP move never runs...
+    {
+        OptionsModel model(node, sidestakes);
+        model.migrateCoreSettings();
+    }
+
+    // ...is not read at the next start as an earlier build's complete move.
+    OptionsModel model(node, sidestakes);
+    model.migrateCoreSettings();
+
+    int calls = 0;
+    model.migrateElevatedCoreSettings(CountingElevation(calls, true, node.m_elevated));
+    QCOMPARE(calls, 1);
+    QCOMPARE(node.getSettingStr("proxy", ""), std::string("1.2.3.4:9050"));
+    QCOMPARE(node.getSettingStr("upnp", ""), std::string("1"));
+}
+
+void OptionsModelTests::elevatedMigrationWithoutLegacyValuesDoesNotAsk()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    SeedLegacySettings(false);
+    OptionsModel model(node, sidestakes);
+    model.migrateCoreSettings();
+
+    int calls = 0;
+    model.migrateElevatedCoreSettings(CountingElevation(calls, true, node.m_elevated));
+    QCOMPARE(calls, 0);
+    QVERIFY(QSettings().value("coreElevatedSettingsMigrated", false).toBool());
+
+    // Nor when the node already has its own proxy and UPnP settings: the old
+    // ones are not moved over them.
+    QSettings().remove("coreElevatedSettingsMigrated");
+    SeedLegacySettings(true);
+    node.m_settings["proxy"] = "10.0.0.1:9050";
+    node.m_settings["upnp"] = "0";
+    model.migrateElevatedCoreSettings(CountingElevation(calls, true, node.m_elevated));
+    QCOMPARE(calls, 0);
+    QCOMPARE(node.getSettingStr("proxy", ""), std::string("10.0.0.1:9050"));
+    QVERIFY(QSettings().value("coreElevatedSettingsMigrated", false).toBool());
+}
+
+void OptionsModelTests::needsSettingsElevationOnlyForChangedNetworkAndSideStakeFields_data()
+{
+    QTest::addColumn<bool>("proxyStoredOn");
+    QTest::addColumn<bool>("onlyChanges");
+    QTest::addColumn<QVariantMap>("changes");
+    QTest::addColumn<bool>("expected");
+
+    const QVariant host = QStringLiteral("10.0.0.1");
+
+    QTest::newRow("all five unchanged") << false << false << QVariantMap{} << false;
+    QTest::newRow("UPnP on") << false << false << QVariantMap{{"MapPortUPnP", true}} << true;
+    QTest::newRow("proxy on") << false << false << QVariantMap{{"ProxyUse", true}} << true;
+    QTest::newRow("host, proxy off") << false << false << QVariantMap{{"ProxyIP", host}, {"ProxyUse", false}} << false;
+    QTest::newRow("host, proxy on") << false << false << QVariantMap{{"ProxyIP", host}, {"ProxyUse", true}} << true;
+    QTest::newRow("side staking on") << false << false << QVariantMap{{"EnableSideStaking", true}} << true;
+    QTest::newRow("staking only") << false << true << QVariantMap{{"EnableStaking", false}} << false;
+    QTest::newRow("enabled proxy unchanged") << true << false << QVariantMap{} << false;
+    QTest::newRow("enabled proxy, host") << true << false << QVariantMap{{"ProxyIP", host}} << true;
+    QTest::newRow("enabled proxy, port")
+        << true << false << QVariantMap{{"ProxyPort", QStringLiteral("9150")}} << true;
+    QTest::newRow("enabled proxy turned off") << true << false << QVariantMap{{"ProxyUse", false}} << true;
+}
+
+void OptionsModelTests::needsSettingsElevationOnlyForChangedNetworkAndSideStakeFields()
+{
+    QFETCH(bool, proxyStoredOn);
+    QFETCH(bool, onlyChanges);
+    QFETCH(QVariantMap, changes);
+    QFETCH(bool, expected);
+
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_settings["upnp"] = "0";
+    node.m_settings["enablesidestaking"] = "0";
+    {
+        QSettings settings;
+        settings.setValue(GUIUtil::nodeSettingsKey("fUseProxy"), proxyStoredOn);
+        settings.setValue(GUIUtil::nodeSettingsKey("addrProxy"), QStringLiteral("127.0.0.1:9050"));
+    }
+    OptionsModel model(node, sidestakes);
+
+    // The five fields as the dialog hands them over untouched, then the edits.
+    QMap<OptionsModel::OptionID, QVariant> submitted;
+    if (!onlyChanges) {
+        submitted[OptionsModel::MapPortUPnP] = UntouchedSubmit(model, OptionsModel::MapPortUPnP, false);
+        submitted[OptionsModel::ProxyUse] = UntouchedSubmit(model, OptionsModel::ProxyUse, false);
+        submitted[OptionsModel::ProxyIP] = UntouchedSubmit(model, OptionsModel::ProxyIP, true);
+        submitted[OptionsModel::ProxyPort] = UntouchedSubmit(model, OptionsModel::ProxyPort, true);
+        submitted[OptionsModel::EnableSideStaking] = UntouchedSubmit(model, OptionsModel::EnableSideStaking, false);
+    }
+    for (auto it = changes.cbegin(); it != changes.cend(); ++it) {
+        submitted[OptionByName(it.key())] = it.value();
+    }
+
+    QCOMPARE(model.needsSettingsElevation(submitted), expected);
+
+    // Asking writes nothing.
+    QCOMPARE(node.m_change_calls.size(), size_t{0});
+}
+
+void OptionsModelTests::dialogSubmitOfElevatedChangesAsksOnce()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    OptionsModel model(node, sidestakes);
+    PromptedWallet wallet(model, &node, LockState(true, false, true), true, &node.m_elevated);
+
+    OptionsDialog dialog;
+    dialog.setModel(&model);
+    dialog.show();
+    DialogWidgets widgets(dialog);
+    QVERIFY(widgets.AllFound());
+
+    // UPnP, the proxy and its host in one submit: the proxy alone is written
+    // twice.
+    const bool upnp_was = widgets.upnp->isChecked();
+    Flip(widgets.upnp);
+    widgets.proxy->setChecked(true);
+    widgets.proxy_host->setText(QStringLiteral("10.0.0.1"));
+
+    MessageBoxCloser boxes;
+    widgets.ok->click();
+
+    // Asked once, for the Settings capability, before anything was written.
+    QCOMPARE(wallet.Prompts(), 1);
+    QVERIFY(wallet.m_prompt_kinds.front() == CapabilityKind::Settings);
+    QCOMPARE(wallet.m_changes_sent_at_prompt, std::vector<size_t>{0});
+    QVERIFY(boxes.m_texts.isEmpty());
+    QCOMPARE(node.getSettingStr("upnp", ""), std::string(upnp_was ? "0" : "1"));
+    QCOMPARE(node.getSettingStr("proxy", ""), std::string("10.0.0.1:9050"));
+    QVERIFY(!dialog.isVisible());
+
+    // The capability ends once control returns to the event loop.
+    QCOMPARE(wallet.m_wallet.m_end_elevation_calls, 0);
+    QCoreApplication::processEvents();
+    QCOMPARE(wallet.m_wallet.m_begin_elevation_calls, 1);
+    QCOMPARE(wallet.m_wallet.m_end_elevation_calls, 1);
+    QVERIFY(!node.m_elevated);
+}
+
+void OptionsModelTests::dialogSubmitOfFreeChangesDoesNotAsk()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    OptionsModel model(node, sidestakes);
+    PromptedWallet wallet(model, &node, LockState(true, false, true), true, &node.m_elevated);
+
+    OptionsDialog dialog;
+    dialog.setModel(&model);
+    dialog.show();
+    DialogWidgets widgets(dialog);
+    QVERIFY(widgets.AllFound());
+
+    const bool staking_was = widgets.staking->isChecked();
+    Flip(widgets.staking);
+
+    MessageBoxCloser boxes;
+    widgets.ok->click();
+
+    QCOMPARE(wallet.Prompts(), 0);
+    QVERIFY(boxes.m_texts.isEmpty());
+    QCOMPARE(node.getSettingStr("staking", ""), std::string(staking_was ? "0" : "1"));
+    QVERIFY(!dialog.isVisible());
+}
+
+void OptionsModelTests::dialogDoesNotAskAWalletThatNeedsNoPassphrase_data()
+{
+    QTest::addColumn<bool>("crypted");
+    QTest::newRow("unencrypted") << false;
+    QTest::newRow("fully unlocked") << true;
+}
+
+void OptionsModelTests::dialogDoesNotAskAWalletThatNeedsNoPassphrase()
+{
+    QFETCH(bool, crypted);
+
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    // The wallet's keys are at hand, so the node takes these changes as they are.
+    node.m_elevated = true;
+    OptionsModel model(node, sidestakes);
+    PromptedWallet wallet(model, &node, LockState(crypted, false, false), true, nullptr);
+
+    OptionsDialog dialog;
+    dialog.setModel(&model);
+    dialog.show();
+    DialogWidgets widgets(dialog);
+    QVERIFY(widgets.AllFound());
+
+    const bool upnp_was = widgets.upnp->isChecked();
+    Flip(widgets.upnp);
+
+    MessageBoxCloser boxes;
+    widgets.ok->click();
+
+    QCOMPARE(wallet.Prompts(), 0);
+    QCOMPARE(wallet.m_wallet.m_begin_elevation_calls, 0);
+    QVERIFY(boxes.m_texts.isEmpty());
+    QCOMPARE(node.getSettingStr("upnp", ""), std::string(upnp_was ? "0" : "1"));
+    QVERIFY(!dialog.isVisible());
+}
+
+void OptionsModelTests::dialogHeldElevationIsNotAskedAgain()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    OptionsModel model(node, sidestakes);
+    // The prompt succeeds, but the node does not see the capability, so it
+    // refuses the change as if none were held.
+    PromptedWallet wallet(model, &node, LockState(true, false, true), true, nullptr);
+
+    OptionsDialog dialog;
+    dialog.setModel(&model);
+    dialog.show();
+    DialogWidgets widgets(dialog);
+    QVERIFY(widgets.AllFound());
+
+    Flip(widgets.upnp);
+
+    MessageBoxCloser boxes;
+    widgets.ok->click();
+
+    // The refusal is not asked for a second time while the first answer holds.
+    QCOMPARE(wallet.Prompts(), 1);
+    QCOMPARE(node.m_change_calls.size(), size_t{1});
+    QVERIFY(!node.isSettingSet("upnp"));
+}
+
+void OptionsModelTests::dialogUnexpectedRefusalAsksOnce()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    // A setting the dialog does not expect to need the passphrase, refused for
+    // want of it all the same: the options model asks after the refusal.
+    node.m_needs_elevation = {"staking"};
+    OptionsModel model(node, sidestakes);
+    PromptedWallet wallet(model, &node, LockState(true, false, true), true, &node.m_elevated);
+
+    OptionsDialog dialog;
+    dialog.setModel(&model);
+    dialog.show();
+    DialogWidgets widgets(dialog);
+    QVERIFY(widgets.AllFound());
+
+    const bool staking_was = widgets.staking->isChecked();
+    Flip(widgets.staking);
+
+    MessageBoxCloser boxes;
+    widgets.ok->click();
+
+    QCOMPARE(wallet.Prompts(), 1);
+    QCOMPARE(wallet.m_changes_sent_at_prompt, std::vector<size_t>{1});
+    QCOMPARE(node.m_change_calls.size(), size_t{2});
+    QCOMPARE(node.getSettingStr("staking", ""), std::string(staking_was ? "0" : "1"));
+}
+
+void OptionsModelTests::dialogDeclinedPassphraseSavesNothing()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    OptionsModel model(node, sidestakes);
+    PromptedWallet wallet(model, &node, LockState(true, false, true), false, &node.m_elevated);
+
+    OptionsDialog dialog;
+    dialog.setModel(&model);
+    dialog.show();
+    DialogWidgets widgets(dialog);
+    QVERIFY(widgets.AllFound());
+
+    // A free change goes with the refused one: nothing of the submit is saved.
+    Flip(widgets.upnp);
+    Flip(widgets.staking);
+
+    MessageBoxCloser boxes;
+    widgets.ok->click();
+
+    QCOMPARE(wallet.Prompts(), 1);
+    QCOMPARE(wallet.m_changes_sent_at_prompt, std::vector<size_t>{0});
+    QCOMPARE(boxes.m_texts, QStringList{G1_MESSAGE});
+    QCOMPARE(node.m_change_calls.size(), size_t{0});
+    QVERIFY(dialog.isVisible());
+}
+
+void OptionsModelTests::dialogWithoutAWalletModelSavesNothing()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    OptionsModel model(node, sidestakes);
+
+    OptionsDialog dialog;
+    dialog.setModel(&model);
+    dialog.show();
+    DialogWidgets widgets(dialog);
+    QVERIFY(widgets.AllFound());
+
+    Flip(widgets.upnp);
+    QVERIFY(widgets.apply->isEnabled());
+
+    MessageBoxCloser boxes;
+    widgets.apply->click();
+
+    QCOMPARE(boxes.m_texts, QStringList{G1_MESSAGE});
+    QCOMPARE(node.m_change_calls.size(), size_t{0});
+    QVERIFY(widgets.apply->isEnabled());
+    QVERIFY(dialog.isVisible());
+}
+
+void OptionsModelTests::dialogSideStakingToggleAsksOnce()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    node.m_settings["enablesidestaking"] = "0";
+    OptionsModel model(node, sidestakes);
+    PromptedWallet wallet(model, &node, LockState(true, false, true), true, &node.m_elevated);
+
+    OptionsDialog dialog;
+    dialog.setModel(&model);
+    dialog.show();
+    DialogWidgets widgets(dialog);
+    QVERIFY(widgets.AllFound());
+    QVERIFY(!widgets.side_staking->isChecked());
+
+    // The toggle submits the dialog at once.
+    MessageBoxCloser boxes;
+    widgets.side_staking->setChecked(true);
+
+    QCOMPARE(wallet.Prompts(), 1);
+    QCOMPARE(wallet.m_changes_sent_at_prompt, std::vector<size_t>{0});
+    QVERIFY(boxes.m_texts.isEmpty());
+    QCOMPARE(node.getSettingStr("enablesidestaking", ""), std::string("1"));
+    QVERIFY(widgets.side_staking->isChecked());
+}
+
+void OptionsModelTests::dialogDeclinedSideStakingToggleReverts()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    node.m_settings["enablesidestaking"] = "0";
+    OptionsModel model(node, sidestakes);
+    PromptedWallet wallet(model, &node, LockState(true, false, true), false, &node.m_elevated);
+
+    OptionsDialog dialog;
+    dialog.setModel(&model);
+    dialog.show();
+    DialogWidgets widgets(dialog);
+    QVERIFY(widgets.AllFound());
+
+    MessageBoxCloser boxes;
+    widgets.side_staking->setChecked(true);
+
+    // Not saved, so the box shows side staking off again, with the side-stake
+    // buttons that go with that, and the revert submits nothing.
+    QCOMPARE(wallet.Prompts(), 1);
+    QCOMPARE(boxes.m_texts, QStringList{G1_MESSAGE});
+    QCOMPARE(node.m_change_calls.size(), size_t{0});
+    QVERIFY(!widgets.side_staking->isChecked());
+    QVERIFY(widgets.new_side_stake->isHidden());
+    QVERIFY(dialog.isVisible());
+}
+
+void OptionsModelTests::editSideStakeDeclinedShowsMessageAndStaysOpen_data()
+{
+    QTest::addColumn<bool>("editExisting");
+    QTest::newRow("new") << false;
+    QTest::newRow("edit") << true;
+}
+
+void OptionsModelTests::editSideStakeDeclinedShowsMessageAndStaysOpen()
+{
+    QFETCH(bool, editExisting);
+
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    sidestakes.m_needs_elevation = true;
+    sidestakes.m_edit_result.status = interfaces::SideStakeEditStatus::OK;
+    sidestakes.m_edit_result.address = "encodedAddr";
+    if (editExisting) sidestakes.m_snapshot.entries.push_back(LocalSideStake("rawAddr"));
+    OptionsModel model(node, sidestakes);
+    SideStakeTableModel* table = model.getSideStakeTableModel();
+    table->refresh();
+
+    int asks = 0;
+    InstallPrompt(model, asks, false, sidestakes.m_elevated);
+
+    EditSideStakeDialog dialog(editExisting ? EditSideStakeDialog::EditSideStake : EditSideStakeDialog::NewSideStake);
+    dialog.setModel(table);
+    QLineEdit* address = Find<QLineEdit>(dialog, "addressLineEdit");
+    QLineEdit* allocation = Find<QLineEdit>(dialog, "allocationLineEdit");
+    QLineEdit* description = Find<QLineEdit>(dialog, "descriptionLineEdit");
+    QVERIFY(address && allocation && description);
+    if (editExisting) {
+        dialog.loadRow(0);
+    } else {
+        address->setText(QStringLiteral("rawAddr"));
+    }
+    allocation->setText(QStringLiteral("20"));
+    description->setText(QStringLiteral("d"));
+    dialog.show();
+
+    MessageBoxCloser boxes;
+    dialog.accept();
+
+    QCOMPARE(asks, 1);
+    QCOMPARE(sidestakes.m_edit_calls, 1);
+    QCOMPARE(table->getEditStatus(), SideStakeTableModel::ELEVATION_REQUIRED);
+    QCOMPARE(boxes.m_texts, QStringList{G2_MESSAGE});
+    QVERIFY(dialog.isVisible());
+}
+
+void OptionsModelTests::deleteSideStakeDeclinedRemovesNothing()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    sidestakes.m_needs_elevation = true;
+    sidestakes.m_edit_result.status = interfaces::SideStakeEditStatus::OK;
+    sidestakes.m_snapshot.entries.push_back(LocalSideStake("rawAddr"));
+    OptionsModel model(node, sidestakes);
+
+    int asks = 0;
+    InstallPrompt(model, asks, false, sidestakes.m_elevated);
+
+    OptionsDialog dialog;
+    dialog.setModel(&model);
+    dialog.show();
+    QTableView* view = Find<QTableView>(dialog, "sidestakingTableView");
+    QPushButton* remove = Find<QPushButton>(dialog, "pushButtonDeleteSideStake");
+    QVERIFY(view && remove);
+    QCOMPARE(view->model()->rowCount(), 1);
+
+    view->selectRow(0);
+    QVERIFY(remove->isEnabled());
+
+    MessageBoxCloser boxes;
+    remove->click();
+
+    // Refused once, asked once, not sent again, and the row is still there.
+    QCOMPARE(asks, 1);
+    QCOMPARE(sidestakes.m_edit_calls, 1);
+    QCOMPARE(boxes.m_texts, QStringList{G2_MESSAGE});
+    QCOMPARE(view->model()->rowCount(), 1);
+    QVERIFY(dialog.isVisible());
 }

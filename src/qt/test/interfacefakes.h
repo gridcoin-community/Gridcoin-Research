@@ -767,7 +767,119 @@ private:
     }
 };
 
-//! Fake interfaces::WalletTxSource with no transactions.
+//! Fake interfaces::Wallet, enough to construct a WalletModel for the settings
+//! tests: it reports the lock state the test sets, answers a passphrase at once
+//! and counts the capabilities begun and ended. While one lives it sets
+//! *m_capability_flag, when the test points that at the flag its FakeNode or
+//! FakeSideStakeManager reads (m_elevated), as the node then accepts what needs
+//! the passphrase. Every other call answers with an empty default and changes
+//! nothing.
+class FakeLockStateWallet : public interfaces::Wallet
+{
+public:
+    interfaces::WalletLockState m_lock_state;
+    bool* m_capability_flag{nullptr};
+
+    // Recorded calls.
+    int m_begin_elevation_calls{0};
+    int m_end_elevation_calls{0};
+    std::optional<CapabilityKind> m_last_elevation_kind;
+
+    interfaces::WalletLockState getLockState() override { return m_lock_state; }
+    bool isUnlockedForStakingOnly() override { return m_lock_state.unlocked_for_staking_only; }
+    bool getUnlockStakingOnlyFlag() override { return m_lock_state.unlocked_for_staking_only; }
+
+    bool beginElevation(const SecureString& /*passphrase*/, CapabilityKind kind) override
+    {
+        ++m_begin_elevation_calls;
+        m_last_elevation_kind = kind;
+        if (m_capability_flag) *m_capability_flag = true;
+        return true;
+    }
+
+    void endElevation() override
+    {
+        ++m_end_elevation_calls;
+        if (m_capability_flag) *m_capability_flag = false;
+    }
+
+    int64_t getBalance() override { return 0; }
+    int64_t getStake() override { return 0; }
+    int64_t getUnconfirmedBalance() override { return 0; }
+    int64_t getImmatureBalance() override { return 0; }
+    bool tryGetBalances(interfaces::WalletBalances& /*balances*/) override { return false; }
+    int getNumTransactions() override { return 0; }
+    bool encryptWallet(const SecureString& /*passphrase*/) override { return false; }
+    bool lockWallet() override { return false; }
+    bool restrictToStakingOnly() override { return false; }
+    bool elevateWallet(const SecureString& /*passphrase*/) override { return false; }
+    bool unlockWallet(const SecureString& /*passphrase*/, bool /*staking_only*/) override { return false; }
+    bool changeWalletPassphrase(const SecureString& /*old_passphrase*/,
+                                const SecureString& /*new_passphrase*/) override
+    {
+        return false;
+    }
+    bool getPubKey(const CKeyID& /*address*/, CPubKey& /*pub_key_out*/) override { return false; }
+    bool getKeyFromPool(const std::string& /*label*/, CPubKey& /*pub_key_out*/) override { return false; }
+    std::vector<interfaces::WalletOutput> getOutputs(const std::vector<COutPoint>& /*outpoints*/) override
+    {
+        return {};
+    }
+    interfaces::CoinControlSummary computeCoinControlSummary(const interfaces::WalletCoinControl& /*selection*/,
+                                                             const std::vector<int64_t>& /*recipient_amounts*/,
+                                                             bool /*subtract_fee_from_amount*/) override
+    {
+        return {};
+    }
+    unsigned int getMaxConsolidationInputs() override { return 0; }
+    interfaces::SendCoinsResult sendCoins(const std::vector<interfaces::WalletSendRecipient>& /*recipients*/,
+                                          const std::optional<interfaces::WalletCoinControl>& /*coin_control*/,
+                                          int64_t /*accepted_fee*/) override
+    {
+        return {};
+    }
+    bool backupWallet(const std::string& /*dest*/) override { return false; }
+    bool backupConfigFile(const std::string& /*dest*/) override { return false; }
+    interfaces::MessageSignStatus signMessage(const std::string& /*address*/, const std::string& /*message*/,
+                                              std::string& /*signature_out*/) override
+    {
+        return interfaces::MessageSignStatus::KeyNotAvailable;
+    }
+    interfaces::MessageVerifyStatus verifyMessage(const std::string& /*address*/, const std::string& /*message*/,
+                                                  const std::vector<unsigned char>& /*signature*/) override
+    {
+        return interfaces::MessageVerifyStatus::RecoverFailed;
+    }
+    std::vector<interfaces::WalletAddress> getAddresses() override { return {}; }
+    bool getAddressLabel(const std::string& /*address*/, std::string& /*label_out*/) override { return false; }
+    bool isMine(const std::string& /*address*/) override { return false; }
+    void setAddressBook(const std::string& /*address*/, const std::string& /*label*/) override {}
+    bool delAddressBook(const std::string& /*address*/) override { return false; }
+    bool getNewReceiveAddress(std::string& /*address_out*/) override { return false; }
+    bool getNewReceiveAddressWithLabel(const std::string& /*label*/, std::string& /*address_out*/) override
+    {
+        return false;
+    }
+    std::vector<std::string> getUnbookedReceiveAddresses() override { return {}; }
+
+    // The subscription callbacks are dropped, as in the fakes above.
+    std::unique_ptr<interfaces::Handler> handleStatusChanged(StatusChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+    std::unique_ptr<interfaces::Handler> handleAddressBookChanged(AddressBookChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+    std::unique_ptr<interfaces::Handler> handleTransactionChanged(TransactionChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+};
+
+//! Fake interfaces::WalletTxSource with no transactions, so that a WalletModel
+//! can be made over UnencryptedFakeWallet, FakeWallet or FakeLockStateWallet: an
+//! empty store that answers every query with no rows and records nothing.
 class FakeWalletTxSource : public interfaces::WalletTxSource
 {
 public:

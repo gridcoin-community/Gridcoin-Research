@@ -7,6 +7,7 @@
 #include "bitcoinunits.h"
 #include "guiutil.h"
 #include "interfaces/node.h"
+#include "qt/guilog.h"
 #include "util/strencodings.h" // For SplitHostPort (IPv6-aware host:port parsing).
 
 #include "amount.h" // For MIN_STAKE_SPLIT_VALUE_GRC.
@@ -174,17 +175,31 @@ void OptionsModel::readNodeSettings()
 
 void OptionsModel::migrateCoreSettings()
 {
-    // proxy / UPnP / reservebalance / update-check are now core read-write
-    // settings (gridcoinsettings.json), reached through interfaces::Node. On the
-    // first run after upgrade, move any values the user had in Gridcoin-Qt.conf
-    // into the core so they are not silently dropped, then stop touching them
-    // from QSettings. This runs from the composition root AFTER the config file
-    // and the read-write settings file are loaded and the network is selected --
+    // reservebalance / update-check are now core read-write settings
+    // (gridcoinsettings.json), reached through interfaces::Node. On the first
+    // run after upgrade, move any values the user had in Gridcoin-Qt.conf into
+    // the core so they are not silently dropped, then stop touching them from
+    // QSettings. This runs from the composition root AFTER the config file and
+    // the read-write settings file are loaded and the network is selected --
     // OptionsModel itself is constructed earlier (before those), so it must not
-    // write settings from its constructor.
+    // write settings from its constructor. Proxy and UPnP move separately, in
+    // migrateElevatedCoreSettings(), because changing them needs the wallet
+    // passphrase.
     QSettings settings;
     if (settings.value("coreSettingsMigrated", false).toBool()) {
+        // An earlier build moved every setting in one batch, proxy and UPnP
+        // included, and set only this flag.
+        if (!settings.contains("coreElevatedSettingsMigrated")) {
+            settings.setValue("coreElevatedSettingsMigrated", true);
+        }
         return;
+    }
+
+    // Record that proxy and UPnP are still to move. A start that ends before
+    // they do leaves this flag false rather than absent, so the next start does
+    // not take it for an earlier build's complete move above.
+    if (!settings.contains("coreElevatedSettingsMigrated")) {
+        settings.setValue("coreElevatedSettingsMigrated", false);
     }
 
     // Only migrate a setting the user has NOT already set in gridcoinresearch.conf
@@ -192,13 +207,6 @@ void OptionsModel::migrateCoreSettings()
     // always won over the remembered GUI value; skipping already-set settings
     // preserves that precedence instead of force-overriding the config file.
     std::vector<std::pair<std::string, std::string>> migrate;
-    if (!m_node.isSettingSet("proxy")
-            && settings.value("fUseProxy", false).toBool() && settings.contains("addrProxy")) {
-        migrate.emplace_back("proxy", settings.value("addrProxy").toString().toStdString());
-    }
-    if (!m_node.isSettingSet("upnp") && settings.contains("fUseUPnP")) {
-        migrate.emplace_back("upnp", settings.value("fUseUPnP").toBool() ? "1" : "0");
-    }
     if (!m_node.isSettingSet("reservebalance")
             && settings.contains("nReserveBalance") && settings.value("nReserveBalance").toLongLong() > 0) {
         migrate.emplace_back("reservebalance",
@@ -215,6 +223,103 @@ void OptionsModel::migrateCoreSettings()
     }
 }
 
+void OptionsModel::migrateElevatedCoreSettings(const WithElevation& with_elevation)
+{
+    QSettings settings;
+    if (settings.value("coreElevatedSettingsMigrated", false).toBool()) {
+        return;
+    }
+
+    // As in migrateCoreSettings(), a setting already set in the config file or
+    // on the command line keeps that value.
+    std::vector<std::pair<std::string, std::string>> migrate;
+    if (!m_node.isSettingSet("proxy")
+            && settings.value("fUseProxy", false).toBool() && settings.contains("addrProxy")) {
+        migrate.emplace_back("proxy", settings.value("addrProxy").toString().toStdString());
+    }
+    if (!m_node.isSettingSet("upnp") && settings.contains("fUseUPnP")) {
+        migrate.emplace_back("upnp", settings.value("fUseUPnP").toBool() ? "1" : "0");
+    }
+
+    if (migrate.empty()) {
+        settings.setValue("coreElevatedSettingsMigrated", true);
+        return;
+    }
+
+    bool stored = false;
+    const bool elevated = with_elevation([&] { stored = m_node.changeSettings(migrate).ok; });
+
+    if (!elevated) {
+        // Without the passphrase the core cannot take them, and keeping them
+        // here would show the proxy as set in the Options dialog while the node
+        // uses none. Discarded once, and logged so the values can be set again.
+        std::string discarded;
+        for (const auto& [name, value] : migrate) {
+            if (!discarded.empty()) discarded += ", ";
+            discarded += name + "=" + value;
+        }
+        GUILogPrintf("Discarded the proxy and UPnP settings kept by an earlier version (%s): "
+                     "the wallet passphrase was not given", discarded);
+
+        settings.remove("fUseProxy");
+        settings.remove("addrProxy");
+        settings.remove("fUseUPnP");
+        settings.setValue("coreElevatedSettingsMigrated", true);
+        return;
+    }
+
+    // Only mark the migration done once the node has stored the values. A write
+    // that failed leaves the flag false, and the next start tries again.
+    if (stored) {
+        settings.setValue("coreElevatedSettingsMigrated", true);
+    }
+}
+
+bool OptionsModel::needsSettingsElevation(const QMap<OptionID, QVariant>& submitted) const
+{
+    // A field changes when setData() would write it: see the guard in each case
+    // below.
+    const auto changed = [&](OptionID id) {
+        const auto it = submitted.constFind(id);
+        return it != submitted.constEnd()
+            && !SubmittedValueUnchanged(it.value(), data(index(id), Qt::EditRole));
+    };
+
+    if (changed(MapPortUPnP) || changed(EnableSideStaking)) {
+        return true;
+    }
+
+    // The proxy fields are GUI state in QSettings, compared and rebuilt as
+    // setData() does. Turning the proxy on or off changes the node's proxy. The
+    // address counts only while the proxy is on: with it off, setData() sends
+    // the same empty proxy whatever the address. Should the node refuse that
+    // for want of the passphrase, changeCoreSettings() asks after the refusal.
+    QSettings settings;
+    const bool use_proxy = settings.value(GUIUtil::nodeSettingsKey("fUseProxy"), false).toBool();
+    const auto submitted_use = submitted.constFind(ProxyUse);
+    const bool new_use_proxy = submitted_use != submitted.constEnd() ? submitted_use.value().toBool() : use_proxy;
+
+    if (new_use_proxy != use_proxy) {
+        return true;
+    }
+
+    if (!new_use_proxy) {
+        return false;
+    }
+
+    const QString stored = settings.value(GUIUtil::nodeSettingsKey("addrProxy"), "127.0.0.1:9050").toString();
+    auto [host, port] = SplitProxy(stored);
+
+    if (const auto it = submitted.constFind(ProxyIP); it != submitted.constEnd()) {
+        host = it.value().toString();
+    }
+    if (const auto it = submitted.constFind(ProxyPort); it != submitted.constEnd()) {
+        port = it.value().toInt();
+    }
+
+    return FormatProxy(host, port) != stored;
+}
+
 void OptionsModel::setSettingsElevationRequest(SettingsElevationRequest request)
 {
     m_settings_elevation_request = std::move(request);
@@ -225,6 +330,22 @@ void OptionsModel::setSettingsElevationRequest(SettingsElevationRequest request)
 
 bool OptionsModel::elevateSettingsAfterRefusal()
 {
+    return askForSettingsElevation();
+}
+
+bool OptionsModel::elevateSettingsBeforeChange()
+{
+    // The answer given earlier in this pass stands: a second submit within it
+    // neither asks again nor goes ahead after a cancel.
+    if (m_settings_elevation_asked) {
+        return m_settings_elevation != nullptr;
+    }
+
+    return askForSettingsElevation();
+}
+
+bool OptionsModel::askForSettingsElevation()
+{
     if (!m_settings_elevation_request || m_settings_elevation_asked) {
         return false;
     }
@@ -233,6 +354,8 @@ bool OptionsModel::elevateSettingsAfterRefusal()
     // each write the proxy setting. Asking once for the pass, and holding what
     // the user gave until control returns to the event loop, lets the rest of
     // the submit through on that one answer, or refuses it on that one refusal.
+    // An ask made before the submit is that one ask as well, so a refusal
+    // during the submit does not ask again.
     m_settings_elevation_asked = true;
     m_settings_elevation = m_settings_elevation_request();
 

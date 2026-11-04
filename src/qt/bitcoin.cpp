@@ -1213,9 +1213,10 @@ int main(int argc, char *argv[])
         options_node = interface_init->makeNode();
         optionsModel = std::make_unique<OptionsModel>(*options_node, *sidestake_manager);
         // Per-node QSettings prefs (the datadir is finalized now) + the one-time
-        // migration of proxy / UPnP / reservebalance / etc. from Gridcoin-Qt.conf
-        // into the core read-write settings (the daemon's, over IPC, in the split
-        // build).
+        // migration of reservebalance / update-check from Gridcoin-Qt.conf into
+        // the core read-write settings (the daemon's, over IPC, in the split
+        // build). Proxy and UPnP need the wallet passphrase and move later, once
+        // the main window is shown (migrateElevatedCoreSettings).
         optionsModel->readNodeSettings();
         optionsModel->migrateCoreSettings();
     }
@@ -1579,6 +1580,27 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
                 // Regenerate startup link, to fix links to old versions
                 GUIUtil::SetStartOnSystemStartup(optionsModel.getStartAtStartup(), optionsModel.getStartMin());
+
+                // Move the proxy and UPnP settings an earlier version kept in
+                // Gridcoin-Qt.conf into the core, once. Changing them needs the
+                // wallet passphrase, so this waits until the main window can ask
+                // for it. A wallet that needs no passphrase is not asked, and
+                // nothing is asked when there is nothing to move.
+                optionsModel.migrateElevatedCoreSettings([&window, &walletModel](const std::function<void()>& apply) {
+                    const WalletModel::EncryptionStatus status = walletModel.getEncryptionStatus();
+                    if (status == WalletModel::Locked || status == WalletModel::UnlockedForStakingOnly) {
+                        QMessageBox::information(&window, PACKAGE_NAME,
+                            QObject::tr("This version keeps the proxy and UPnP settings in the core. To keep "
+                                        "the ones you set in an earlier version, enter your wallet passphrase. "
+                                        "If you cancel, they are discarded."));
+                    }
+
+                    WalletModel::UnlockContext ctx(walletModel.requestUnlock(CapabilityKind::Settings));
+                    if (!ctx.isValid()) return false;
+
+                    apply();
+                    return true;
+                });
 
 #ifndef WIN32
                 // In the split (-multiprocess) build the GUI runs no in-process

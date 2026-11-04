@@ -402,6 +402,9 @@ bool SideStakeTableModel::removeRows(int row, int count, const QModelIndex &pare
         return m_sidestake_manager.deleteLocal(address);
     });
 
+    // OptionsDialog tells the user when the delete needed the passphrase.
+    m_edit_status = MapEditStatus(result.status);
+
     if (result.status != interfaces::SideStakeEditStatus::OK) {
         return false;
     }

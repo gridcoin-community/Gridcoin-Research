@@ -455,12 +455,17 @@ checked one at a time, in the order they arrive, so a call also waits for the
 attempts ahead of it. An IPC caller cannot give its attempt up; only the node's
 shutdown ends the wait. `elevateWallet` always returns false.
 The GUI side is `WalletModel::requestUnlock(CapabilityKind)` and its
-`UnlockContext`, which ends the capability when the operation finishes. For
-settings and side stakes, `OptionsModel` asks only after the node refused a
-change for the passphrase (`SettingChangeResult::elevation_required`,
-`SideStakeEditStatus::ELEVATION_REQUIRED`), then sends the same change once more;
-it asks at most once per pass of the event loop, so one submit of the Options
-dialog asks once.
+`UnlockContext`, which ends the capability when the operation finishes. The
+Options dialog asks before a submit that changes UPnP, the proxy or side staking
+(`OptionsModel::needsSettingsElevation`) and holds the capability across the
+submit; declined, it saves nothing of that submit. For any other change the node
+refuses for the passphrase (`SettingChangeResult::elevation_required`), and for
+the side-stake edits (`SideStakeEditStatus::ELEVATION_REQUIRED`), `OptionsModel`
+asks after the refusal, then sends the same change once more. Either way it asks
+at most once per pass of the event loop, so one submit of the Options dialog asks
+once. At the first start of this version, proxy and UPnP values an earlier
+version kept in `Gridcoin-Qt.conf` move to the node once, under a `Settings`
+capability; declined, they are discarded and the discard is logged.
 
 Coin control / send: `getOutputs`, `computeCoinControlSummary(...)
 -> CoinControlSummary` (all fee math runs node-side), `getMaxConsolidationInputs`,
