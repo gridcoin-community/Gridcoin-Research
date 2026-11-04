@@ -169,8 +169,9 @@ public:
             return false;
         }
 
+        bool begun = false;
         try {
-            return m_wallet->BeginIpcElevation(passphrase, kind);
+            begun = m_wallet->BeginIpcElevation(passphrase, kind);
         } catch (const std::exception& e) {
             // Nothing the client could use is left behind: a capability this
             // call may have issued before the throw is ended with the slot.
@@ -178,6 +179,22 @@ public:
             m_wallet->EndIpcElevation();
             return false;
         }
+        if (!begun) return false;
+
+        // The connection may have gone away while the passphrase was checked.
+        // Its teardown marks the scope closed before running the slot hook,
+        // which ends the IPC capability, and this check runs after the slot was
+        // set. So either the hook runs after the set and ends it, or the scope
+        // already reads closed here and it is ended now. Either way it cannot
+        // outlive the connection into the next GUI's session. No scope is bound
+        // in process (the monolithic build), where there is no connection.
+        if (m_connection_scope && m_connection_scope->closed()) {
+            LogPrintf("WARNING: %s: the IPC connection closed while the capability was being begun; "
+                      "it is ended", __func__);
+            m_wallet->EndIpcElevation();
+            return false;
+        }
+        return true;
     }
 
     void endElevation() override { m_wallet->EndIpcElevation(); }

@@ -5,6 +5,7 @@
 #include "amount.h"
 #include "chain.h"
 #include "clientversion.h"
+#include "interfaces/connection_scope.h"
 #include "interfaces/gui_state.h"
 #include "interfaces/handler.h"
 #include "interfaces/init.h"
@@ -1479,6 +1480,55 @@ BOOST_AUTO_TEST_CASE(ipc_begin_elevation_refuses_an_unknown_kind)
 
     // Ending with nothing begun is a no-op.
     wallet->endElevation();
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+// A GUI can go away while its beginElevation() is still checking the passphrase.
+// Its connection's teardown then finds no capability to end, so the capability
+// the call goes on to begin must be ended by the call itself, or it would serve
+// the next GUI to attach. Driven deterministically: the wallet is bound to a
+// scope that is already closed when the call is made.
+BOOST_AUTO_TEST_CASE(ipc_begin_elevation_on_a_closed_connection_ends_it)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(&fx.wallet);
+    auto scope = interfaces::MakeConnectionScope();
+    wallet->bindConnectionScope(scope);
+    scope->close();
+
+    BOOST_CHECK(!wallet->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+
+    // The passphrase was right, so it is not counted as a failed attempt.
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+
+    std::string signature;
+    BOOST_CHECK(wallet->signMessage(EncodeDestination(fx.id), "a message", signature)
+                == interfaces::MessageSignStatus::KeyNotAvailable);
+}
+
+// Bound to an open connection, or not bound at all (the monolithic build's
+// in-process wallet), beginElevation() is unchanged.
+BOOST_AUTO_TEST_CASE(ipc_begin_elevation_on_an_open_or_no_connection_is_unchanged)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    std::unique_ptr<interfaces::Wallet> served = interfaces::MakeWallet(&fx.wallet);
+    served->bindConnectionScope(interfaces::MakeConnectionScope());
+    BOOST_CHECK(served->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
+    BOOST_CHECK(fx.wallet.IpcCapability().has_value());
+    served->endElevation();
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+
+    std::unique_ptr<interfaces::Wallet> monolith = interfaces::MakeWallet(&fx.wallet);
+    BOOST_CHECK(monolith->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::SignMessage));
+    BOOST_CHECK(fx.wallet.IpcCapability().has_value());
+    monolith->endElevation();
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
 

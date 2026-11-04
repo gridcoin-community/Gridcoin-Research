@@ -342,7 +342,9 @@ public:
     //! False on a wrong passphrase (after the failed-passphrase delay, so it can
     //! block for up to 30 s -- never call it on the GUI thread), on a kind
     //! outside CapabilityKind, or when the wallet cannot be unlocked for it. An
-    //! unencrypted wallet accepts any passphrase.
+    //! unencrypted wallet accepts any passphrase. Also false, with the
+    //! capability ended, when the IPC connection the wallet is served on closed
+    //! while the call ran (bindConnectionScope).
     //!
     //! The passphrase first waits its turn behind other passphrase attempts,
     //! which are served in the order they ask. In the monolithic build a
@@ -515,8 +517,9 @@ public:
     //! Bind this wallet to the IPC connection it is served on, so what it starts
     //! for that connection (transfers, capabilities) can register teardown hooks
     //! that end it when the connection goes away. The serving Init calls it once,
-    //! before the wallet is handed out. The in-process wallet only stores the
-    //! scope; it registers nothing itself and calls nothing on it when destroyed.
+    //! before the wallet is handed out. The in-process wallet stores the scope and
+    //! registers nothing itself; beginElevation() asks it whether the connection
+    //! has closed, and nothing is called on it when the wallet is destroyed.
     //!
     //! LOCAL ONLY: not served over capnp (no ordinal in wallet.capnp), so no peer
     //! can call it, and the GUI's proxy keeps this default, which does nothing.
