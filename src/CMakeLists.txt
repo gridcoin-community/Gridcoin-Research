@@ -319,6 +319,7 @@ add_library(gridcoin_util STATIC
     util/string.cpp
     util/syserror.cpp
     util/dir_permissions.cpp
+    util/fsmodes.cpp
     util/system.cpp
     util/threadinterrupt.cpp
     util/threadnames.cpp

@@ -7,6 +7,8 @@
 #include "wallet/walletdb.h"
 #include "wallet/wallet.h"
 #include "util.h"
+#include "util/dir_permissions.h"
+#include "util/fsmodes.h"
 #include "util/time.h"
 #include <filesystem>
 
@@ -113,6 +115,43 @@ void GRC::RunBackupJob()
 }
 
 namespace {
+//! Creates the directory a backup goes into, owner-only when this call creates it. A directory
+//! that exists keeps the mode the operator gave it.
+void CreateBackupDirectory(const fs::path& dir)
+{
+    // A target with no directory part goes into the working directory.
+    if (dir.empty()) return;
+
+    std::string error;
+    if (!util::CreateOwnerOnlyDirectory(dir, error)) {
+        throw fs::filesystem_error(error, dir, boost::system::errc::make_error_code(boost::system::errc::io_error));
+    }
+}
+
+//! Copies a backup file over its target. On POSIX a new target is created owner-only (0600) and
+//! its mode is right before any data is written; a target that exists keeps its mode.
+void CopyBackupFile(const fs::path& source, const fs::path& target)
+{
+#ifndef WIN32
+    fsmodes::CopyFileOwnerOnly(source, target);
+#elif BOOST_VERSION > 107400
+    fs::copy_file(source, target, fs::copy_options::overwrite_existing);
+#elif BOOST_VERSION == 107400
+    // Workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
+    // The std paths are built from the native strings as they are. Going through wstring()
+    // converts with the locale, and a non-ASCII path fails: Boost throws
+    // boost::system::system_error under the C locale, and std::filesystem refuses the wide
+    // string under a UTF-8 one.
+    std::filesystem::path StdSource = source.native();
+    std::filesystem::path StdTarget = target.native();
+    std::filesystem::copy_file(StdSource, StdTarget, std::filesystem::copy_options::overwrite_existing);
+#else
+    fs::copy_file(source, target, fs::copy_option::overwrite_if_exists);
+#endif
+}
+} // anonymous namespace
+
+namespace {
 //! Shared implementation of the file-copy logic used by BackupConfigFile and
 //! BackupSettingsFile. Encapsulates the Boost 1.74 symlink-target workaround
 //! so callers only have to provide the source path, the destination string,
@@ -122,21 +161,8 @@ bool BackupPlainFile(const fs::path& source, const std::string& strDest, const c
     fs::path target = strDest;
     try
     {
-        fs::create_directories(target.parent_path());
-#if BOOST_VERSION > 107400
-        fs::copy_file(source, target, fs::copy_options::overwrite_existing);
-#elif BOOST_VERSION == 107400
-        // Workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
-        // The std paths are built from the native strings as they are. Going through wstring()
-        // converts with the locale, and a non-ASCII path fails: Boost throws
-        // boost::system::system_error under the C locale, and std::filesystem refuses the wide
-        // string under a UTF-8 one.
-        std::filesystem::path StdSource = source.native();
-        std::filesystem::path StdTarget = target.native();
-        std::filesystem::copy_file(StdSource, StdTarget, std::filesystem::copy_options::overwrite_existing);
-#else
-        fs::copy_file(source, target, fs::copy_option::overwrite_if_exists);
-#endif
+        CreateBackupDirectory(target.parent_path());
+        CopyBackupFile(source, target);
         LogPrintf("%s: Copied %s to %s", __func__, label, target.string());
         return true;
     }
@@ -203,21 +229,10 @@ bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
         fs::path WalletTarget = strDest;
         try
         {
-            fs::create_directories(WalletTarget.parent_path());
+            CreateBackupDirectory(WalletTarget.parent_path());
             if (fs::is_directory(WalletTarget))
                 WalletTarget /= wallet.strWalletFile;
-#if BOOST_VERSION > 107400
-            fs::copy_file(WalletSource, WalletTarget, fs::copy_options::overwrite_existing);
-#elif BOOST_VERSION == 107400
-            // This is a workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
-            // Native strings, as in BackupPlainFile above. The target is WalletTarget, so a directory
-            // gets the wallet file name appended here as it does in the Boost branch.
-            std::filesystem::path StdWalletSource = WalletSource.native();
-            std::filesystem::path StdWalletTarget = WalletTarget.native();
-            std::filesystem::copy_file(StdWalletSource, StdWalletTarget, std::filesystem::copy_options::overwrite_existing);
-#else
-            fs::copy_file(WalletSource, WalletTarget, fs::copy_option::overwrite_if_exists);
-#endif
+            CopyBackupFile(WalletSource, WalletTarget);
             LogPrintf("BackupWallet: Copied wallet.dat to %s", WalletTarget.string());
         }
         catch(const fs::filesystem_error &e) {

@@ -46,6 +46,7 @@ add_executable(test_gridcoin
     fees_tests.cpp
     file_transfer_tests.cpp
     fs_tests.cpp
+    fsmodes_tests.cpp
     getarg_tests.cpp
     gridcoin_tests.cpp
     htlc_tests.cpp

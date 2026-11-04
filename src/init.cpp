@@ -29,6 +29,7 @@
 #include "script/interpreter.h"
 #include "gridcoin/gridcoin.h"
 #include "gridcoin/upgrade.h"
+#include "gridcoin/backup.h"
 #include "gridcoin/contract/registry.h"
 #include "miner.h"
 #include "net_processing.h"
@@ -40,6 +41,7 @@
 #include "node/psgt_pool.h"
 #include "policy/fees.h"
 #include <util/check.h>
+#include <util/fsmodes.h>
 #include <util/proc_hardening.h>
 #include <util/sdnotify.h>
 #include <util/strencodings.h>
@@ -2152,6 +2154,37 @@ bool AppInit2(ThreadHandlerPtr threads)
     const bool fStartRPC = gArgs.GetBoolArg("-server", false);
     LogPrintf("init: -server=%d, %s RPC server\n", fStartRPC, fStartRPC ? "starting" : "skipping");
     if (fStartRPC) StartRPCThreads();
+
+#ifndef WIN32
+    // Existing wallet files and directories are never re-moded here: their permissions belong to
+    // the operator, who may have widened them on purpose. Say which ones give other accounts
+    // access, and how to change that.
+    {
+        fs::path settings_path;
+        if (!gArgs.GetSettingsPath(&settings_path, /* temp= */ false)) settings_path.clear();
+
+        for (const fsmodes::ModeFinding& finding : fsmodes::CheckOwnerOnlyModes(
+                datadir, GetConfigFile(), settings_path, datadir / walletFileName,
+                GRC::GetBackupPath(), LogInstance().m_file_path)) {
+            LogPrintf("%s", finding.message);
+        }
+    }
+
+    // Automatic backups fail late, in the scheduler, when the backup directory cannot be written.
+    if (GRC::BackupsEnabled()) {
+        const fs::path backup_dir = GRC::GetBackupPath();
+
+        if (const std::optional<std::string> reason = fsmodes::CheckBackupDirWritable(backup_dir)) {
+            const std::string text = strprintf("-backupdir %s is not writable (%s): automatic wallet backups will fail. "
+                                               "Under the per-user unit, run gridcoin-service enable-user <user> "
+                                               "--backupdir=%s so the unit can write it.",
+                                               fsbridge::LongPathString(backup_dir), *reason,
+                                               fsbridge::LongPathString(backup_dir));
+            LogPrintf("WARNING: %s", text);
+            InitWarning(text);
+        }
+    }
+#endif
 
 #ifdef WIN32
     // Until the bundled Berkeley DB was built with UNICODE (src/bdb53/CMakeLists.txt), it read the

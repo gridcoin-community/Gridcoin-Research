@@ -11,6 +11,10 @@
 #include <fs.h>
 #include <util/system.h>
 
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
+
 #include <boost/test/unit_test.hpp>
 
 namespace {
@@ -160,5 +164,103 @@ BOOST_AUTO_TEST_CASE(a_backup_leaves_a_wallet_file_in_the_working_directory_alon
 
     BOOST_CHECK_EQUAL(fs::last_write_time(other_wallet), stamp);
 }
+
+#ifndef WIN32
+namespace {
+
+//! Sets the process umask for one case and puts the old one back at the end.
+struct UmaskGuard
+{
+    const mode_t m_saved;
+
+    explicit UmaskGuard(mode_t mask) : m_saved(::umask(mask)) {}
+    ~UmaskGuard() { ::umask(m_saved); }
+};
+
+unsigned ModeOf(const fs::path& path)
+{
+    struct stat st;
+    BOOST_REQUIRE_EQUAL(::stat(path.string().c_str(), &st), 0);
+
+    // st_mode is mode_t; the permission bits fit an unsigned.
+    return static_cast<unsigned>(st.st_mode & 07777);
+}
+
+fs::path MakeConf(const fs::path& dir)
+{
+    const fs::path conf = dir / "gridcoinresearch.conf";
+    {
+        fsbridge::ofstream stream(conf);
+        stream << "# backup_tests\n";
+    }
+    return conf;
+}
+
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(new_backup_copy_is_0600)
+{
+    const BackupDir dir;
+    const UmaskGuard permissive(0);
+
+    const fs::path conf = MakeConf(dir.m_path);
+    grc_test::ForcedArgGuard conf_arg("conf", conf.string());
+
+    const fs::path target = dir.m_path / "fresh-backup-name";
+
+    BOOST_CHECK(GRC::BackupConfigFile(target.string()));
+    BOOST_CHECK_EQUAL(ModeOf(target), 0600U);
+}
+
+BOOST_AUTO_TEST_CASE(a_new_backup_directory_is_0700)
+{
+    const BackupDir dir;
+    const UmaskGuard permissive(0);
+
+    const fs::path conf = MakeConf(dir.m_path);
+    grc_test::ForcedArgGuard conf_arg("conf", conf.string());
+
+    const fs::path target = dir.m_path / "newdir" / "backup";
+
+    BOOST_CHECK(GRC::BackupConfigFile(target.string()));
+    BOOST_CHECK_EQUAL(ModeOf(target.parent_path()), 0700U);
+    BOOST_CHECK_EQUAL(ModeOf(target), 0600U);
+}
+
+BOOST_AUTO_TEST_CASE(an_existing_backup_target_keeps_its_mode)
+{
+    const BackupDir dir;
+    const UmaskGuard permissive(0);
+
+    const fs::path conf = MakeConf(dir.m_path);
+    grc_test::ForcedArgGuard conf_arg("conf", conf.string());
+
+    const fs::path target = dir.m_path / "existing-backup";
+    {
+        fsbridge::ofstream stream(target);
+        stream << "old contents that are longer than the new ones, to show the truncation\n";
+    }
+    BOOST_REQUIRE_EQUAL(::chmod(target.string().c_str(), 0644), 0);
+
+    BOOST_CHECK(GRC::BackupConfigFile(target.string()));
+    BOOST_CHECK_EQUAL(ModeOf(target), 0644U);
+    BOOST_CHECK_EQUAL(fs::file_size(target), fs::file_size(conf));
+}
+
+BOOST_AUTO_TEST_CASE(a_new_wallet_backup_is_0600)
+{
+    const BackupDir dir;
+    const WalletFilePlaceholder wallet_file;
+    const UmaskGuard permissive(0);
+
+    RequireWalletFileNotInUse();
+
+    const fs::path target = dir.m_path / "wallet-backups" / "wallet.dat-fresh";
+
+    BOOST_CHECK(GRC::BackupWallet(*pwalletMain, target.string()));
+    BOOST_CHECK_EQUAL(ModeOf(target), 0600U);
+    BOOST_CHECK_EQUAL(ModeOf(target.parent_path()), 0700U);
+}
+#endif // !WIN32
 
 BOOST_AUTO_TEST_SUITE_END()
