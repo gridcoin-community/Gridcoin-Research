@@ -57,6 +57,7 @@ private slots:
     void oneSubmitAsksOnceForSeveralElevatedFields();
     void elevationRefusalWithoutAWalletModelFails();
     void sideStakeEditRefusalAsksAndRetriesOnce();
+    void sideStakeInvalidInputDoesNotAsk();
 
 private:
     // Suite-wide QSettings redirect (see initTestCase) and what it replaced.

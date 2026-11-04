@@ -463,8 +463,11 @@ private:
 //!
 //! Every mutation changes side stakes, which needs the wallet passphrase. Each
 //! runs under the Settings capability the client began for the wallet, when it
-//! began one, and answers ELEVATION_REQUIRED, having done nothing, unless the
-//! wallet's keys are usable: a capability, a full unlock, or no encryption.
+//! began one. It validates first, so an edit that would change nothing (invalid
+//! input, no such entry, the value already set) gets its own answer without the
+//! passphrase. Then, before it changes anything, it answers ELEVATION_REQUIRED
+//! unless the wallet's keys are usable: a capability, a full unlock, or no
+//! encryption.
 class SideStakeManagerImpl : public SideStakeManager
 {
 public:
@@ -505,7 +508,6 @@ public:
     {
         std::optional<CapabilityScope> scope;
         if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
-        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
 
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
@@ -551,6 +553,8 @@ public:
             return Result(SideStakeEditStatus::INVALID_DESCRIPTION);
         }
 
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
+
         registry.NonContractAdd(GRC::LocalSideStake(destination,
                                                     new_allocation,
                                                     sanitized,
@@ -564,7 +568,6 @@ public:
     {
         std::optional<CapabilityScope> scope;
         if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
-        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
 
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
@@ -590,6 +593,8 @@ public:
             return Result(SideStakeEditStatus::INVALID_ALLOCATION);
         }
 
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
+
         // Change only the allocation. Rebuilding the whole entry from `original`
         // and writing it back through NonContractAdd() would carry the description
         // and status from a read taken in an earlier lock scope, so a config reload
@@ -608,7 +613,6 @@ public:
     {
         std::optional<CapabilityScope> scope;
         if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
-        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
 
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
@@ -626,6 +630,8 @@ public:
             return Result(SideStakeEditStatus::INVALID_DESCRIPTION);
         }
 
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
+
         // Change only the description; see setAllocation for why the surviving
         // fields must not be round-tripped through the earlier read.
         if (!registry.NonContractSetDescription(original.GetDestination(), sanitized)) {
@@ -640,7 +646,6 @@ public:
     {
         std::optional<CapabilityScope> scope;
         if (pwalletMain) scope.emplace(*pwalletMain, pwalletMain->IpcCapability(), CapabilityKind::Settings);
-        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
 
         GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
@@ -650,6 +655,8 @@ public:
         if (!FindLocal(registry, address, original)) {
             return Result(SideStakeEditStatus::INVALID_ADDRESS);
         }
+
+        if (!HoldsElevation()) return Result(SideStakeEditStatus::ELEVATION_REQUIRED);
 
         registry.NonContractDelete(original.GetDestination());
 

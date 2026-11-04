@@ -554,7 +554,9 @@ versioned-refetch revision (`SideStakeSnapshot::local_revision`, design §4.4).
 `deleteLocal`, `handleRwSettingsUpdated`, `handleMandatorySideStakeChanged`.
 Every edit needs the wallet passphrase: it runs under the connection's `Settings`
 capability (§4.3), or needs a full unlock or an unencrypted wallet, and without
-one answers `ELEVATION_REQUIRED` having changed nothing.
+one answers `ELEVATION_REQUIRED` having changed nothing. An edit that would change
+nothing (invalid input, no such entry, the value already set) gets its own status
+first, without the passphrase.
 
 Served over IPC like the other factories (`Init.makeSideStakeManager @13`). The
 node's implementation reads the node's own sidestake registry, so `entries()`

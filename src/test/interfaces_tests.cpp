@@ -1501,7 +1501,8 @@ BOOST_AUTO_TEST_CASE(node_changesettings_needs_a_settings_elevation)
 }
 
 // Every side-stake edit through the interface needs the Settings capability the
-// client began, or a standing full unlock.
+// client began, or a standing full unlock. An edit that would change nothing is
+// answered without one.
 BOOST_AUTO_TEST_CASE(sidestake_edits_need_a_settings_elevation)
 {
     grc_test::StateGuard state_guard;
@@ -1552,10 +1553,29 @@ BOOST_AUTO_TEST_CASE(sidestake_edits_need_a_settings_elevation)
     BOOST_CHECK(addresses() == before);
     BOOST_CHECK(registry.Try(dest, GRC::SideStake::FilterFlag::LOCAL).empty());
 
+    // An edit that would change nothing gets its own answer without the
+    // passphrase: invalid input, or no entry to edit.
+    BOOST_CHECK(sidestakes->addLocal("not an address", 10, "a").status
+                == interfaces::SideStakeEditStatus::INVALID_ADDRESS);
+    BOOST_CHECK(sidestakes->addLocal(address, 150, "a").status == interfaces::SideStakeEditStatus::INVALID_ALLOCATION);
+    BOOST_CHECK(sidestakes->addLocal(address, 10, "a,b").status == interfaces::SideStakeEditStatus::INVALID_DESCRIPTION);
+    BOOST_CHECK(sidestakes->setAllocation(address, 20).status == interfaces::SideStakeEditStatus::INVALID_ADDRESS);
+    BOOST_CHECK(sidestakes->setDescription(address, "b").status == interfaces::SideStakeEditStatus::INVALID_ADDRESS);
+    BOOST_CHECK(sidestakes->deleteLocal(address).status == interfaces::SideStakeEditStatus::INVALID_ADDRESS);
+    BOOST_CHECK(addresses() == before);
+
     BOOST_REQUIRE(wallet->beginElevation(grc_test::EncryptedWalletSwap::Passphrase(), CapabilityKind::Settings));
     BOOST_CHECK(sidestakes->addLocal(address, 10, "a").status == interfaces::SideStakeEditStatus::OK);
     BOOST_CHECK(sidestakes->setDescription(address, "b").status == interfaces::SideStakeEditStatus::OK);
     wallet->endElevation();
+
+    // The same holds for an existing entry: a duplicate, an invalid value, or
+    // the value it already has.
+    BOOST_CHECK(sidestakes->addLocal(address, 10, "a").status == interfaces::SideStakeEditStatus::DUPLICATE_ADDRESS);
+    BOOST_CHECK(sidestakes->setAllocation(address, 150).status == interfaces::SideStakeEditStatus::INVALID_ALLOCATION);
+    BOOST_CHECK(sidestakes->setDescription(address, "x,y").status == interfaces::SideStakeEditStatus::INVALID_DESCRIPTION);
+    BOOST_CHECK(sidestakes->setAllocation(address, 10).status == interfaces::SideStakeEditStatus::NO_CHANGES);
+    BOOST_CHECK(sidestakes->setDescription(address, "b").status == interfaces::SideStakeEditStatus::NO_CHANGES);
 
     BOOST_CHECK(sidestakes->setAllocation(address, 20).status == interfaces::SideStakeEditStatus::ELEVATION_REQUIRED);
     BOOST_CHECK(sidestakes->deleteLocal(address).status == interfaces::SideStakeEditStatus::ELEVATION_REQUIRED);

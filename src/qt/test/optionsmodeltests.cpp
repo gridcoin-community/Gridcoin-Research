@@ -606,3 +606,22 @@ void OptionsModelTests::sideStakeEditRefusalAsksAndRetriesOnce()
     QCoreApplication::processEvents();
     QVERIFY(!sidestakes.m_elevated);
 }
+
+void OptionsModelTests::sideStakeInvalidInputDoesNotAsk()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    sidestakes.m_edit_result.status = interfaces::SideStakeEditStatus::INVALID_ADDRESS;
+    OptionsModel model(node, sidestakes);
+    SideStakeTableModel* table = model.getSideStakeTableModel();
+
+    int asks = 0;
+    InstallPrompt(model, asks, true, sidestakes.m_elevated);
+
+    // The node answers bad input with its own status, before it would ask for
+    // the passphrase, and the model shows that answer without a prompt.
+    QVERIFY(table->addRow("rawAddr", "10", "d").isEmpty());
+    QCOMPARE(table->getEditStatus(), SideStakeTableModel::INVALID_ADDRESS);
+    QCOMPARE(asks, 0);
+    QCOMPARE(sidestakes.m_edit_calls, 1);
+}
