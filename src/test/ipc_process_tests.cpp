@@ -328,11 +328,13 @@ BOOST_AUTO_TEST_CASE(attach_group_access_needs_a_configured_group)
     BOOST_CHECK_THROW(ipc::ApplyAttachGroupAccess(dir.path), std::logic_error);
 }
 
-// A group this account is not a member of cannot be applied by a non-root
-// process, and the error says what to change.
-BOOST_AUTO_TEST_CASE(attach_group_not_a_member_names_the_remedy)
+// A group this account is not a member of is refused when the attach group is
+// configured, before any path is regrouped. ApplyAttachGroupAccess keeps its own
+// message for the same case as a second line of defence.
+BOOST_AUTO_TEST_CASE(attach_group_not_a_member_is_refused_at_configuration)
 {
     AttachGroupReset reset;
+#ifdef __linux__
     if (::geteuid() == 0) {
         BOOST_TEST_MESSAGE("running as root, which can set any group; skipping");
         return;
@@ -342,18 +344,11 @@ BOOST_AUTO_TEST_CASE(attach_group_not_a_member_names_the_remedy)
         BOOST_TEST_MESSAGE("no group this account is outside of; skipping");
         return;
     }
-    BOOST_REQUIRE(ipc::ConfigureAttachGroup(*foreign));
-
-    TempDir dir;
-    try {
-        ipc::ApplyAttachGroupAccess(dir.path);
-        BOOST_ERROR("ApplyAttachGroupAccess did not throw");
-    } catch (const std::system_error& e) {
-        BOOST_CHECK_MESSAGE(std::string(e.what()).find(
-                                "the core must run with the attach group as a supplementary group") !=
-                                std::string::npos,
-                            e.what());
-    }
+    BOOST_CHECK(!ipc::ConfigureAttachGroup(*foreign));
+    BOOST_CHECK(!ipc::AttachGroupGid());
+#else
+    BOOST_TEST_MESSAGE("the membership check at configuration is Linux-only; skipping");
+#endif
 }
 
 // A directory regrouped from 0770 to 0750 ends with the new group and without

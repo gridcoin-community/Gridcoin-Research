@@ -10,6 +10,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <cstdio>
 #include <optional>
 #include <string>
@@ -221,6 +222,86 @@ BOOST_FIXTURE_TEST_CASE(configure_attach_group, PeerPolicySetup)
     BOOST_CHECK(ipc::ConfigureAttachGroup(""));
     BOOST_CHECK(!ipc::AttachGroupGid());
 }
+
+#ifdef __linux__
+// The supplementary groups of the peer come from SO_PEERGROUPS, so on a
+// socketpair the peer is this process and its groups are getgroups().
+BOOST_AUTO_TEST_CASE(peer_identity_reads_groups)
+{
+    int fds[2];
+    BOOST_REQUIRE_EQUAL(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
+    const auto id = ipc::ReadPeerIdentity(fds[0]);
+    ::close(fds[0]);
+    ::close(fds[1]);
+    BOOST_REQUIRE(id);
+    BOOST_CHECK_EQUAL(id->uid, ::geteuid());
+    BOOST_CHECK_EQUAL(id->gid, ::getegid());
+
+    const int count = ::getgroups(0, nullptr);
+    BOOST_REQUIRE(count >= 0);
+    std::vector<gid_t> expected(static_cast<size_t>(count));
+    if (count > 0) {
+        BOOST_REQUIRE_EQUAL(::getgroups(count, expected.data()), count);
+    }
+    std::vector<gid_t> actual = id->groups;
+    std::sort(expected.begin(), expected.end());
+    std::sort(actual.begin(), actual.end());
+    BOOST_CHECK(actual == expected);
+}
+
+// A group the process belongs to only as a supplementary group can be the
+// attach group, and a peer in that group is admitted through it.
+BOOST_FIXTURE_TEST_CASE(attach_group_admits_member_by_supplementary_group, PeerPolicySetup)
+{
+    const int count = ::getgroups(0, nullptr);
+    BOOST_REQUIRE(count >= 0);
+    std::vector<gid_t> held(static_cast<size_t>(count));
+    if (count > 0) {
+        BOOST_REQUIRE_EQUAL(::getgroups(count, held.data()), count);
+    }
+    for (gid_t gid : held) {
+        const struct group* gr = ::getgrgid(gid);
+        if (gr == nullptr || gid == ::getegid()) continue;
+        BOOST_REQUIRE(ipc::ConfigureAttachGroup(gr->gr_name));
+        BOOST_CHECK(ipc::ServerPeerPolicy(P(::geteuid() + 1, 12345, {gid})) == ipc::PeerVerdict::Allow);
+        BOOST_CHECK(ipc::ServerPeerPolicy(P(::geteuid() + 1, 12345, {12346})) == ipc::PeerVerdict::Refuse);
+        return;
+    }
+    BOOST_TEST_MESSAGE("this process has no named supplementary group; skipping");
+}
+
+// The core must hold the attach group itself, or the service unit is missing
+// SupplementaryGroups=.
+BOOST_FIXTURE_TEST_CASE(configure_rejects_unknown_and_foreign_groups, PeerPolicySetup)
+{
+    BOOST_CHECK(!ipc::ConfigureAttachGroup("grc-no-such-group-xyz"));
+    BOOST_CHECK(!ipc::AttachGroupGid());
+
+    const int count = ::getgroups(0, nullptr);
+    BOOST_REQUIRE(count >= 0);
+    std::vector<gid_t> held(static_cast<size_t>(count));
+    if (count > 0) {
+        BOOST_REQUIRE_EQUAL(::getgroups(count, held.data()), count);
+    }
+    held.push_back(::getegid());
+
+    ::setgrent();
+    std::optional<std::string> foreign;
+    while (const struct group* gr = ::getgrent()) {
+        if (std::find(held.begin(), held.end(), gr->gr_gid) == held.end()) {
+            foreign = std::string{gr->gr_name};
+            break;
+        }
+    }
+    ::endgrent();
+    if (!foreign) {
+        BOOST_TEST_MESSAGE("no group in /etc/group is foreign to this process; skipping");
+        return;
+    }
+    BOOST_CHECK(!ipc::ConfigureAttachGroup(*foreign));
+    BOOST_CHECK(!ipc::AttachGroupGid());
+}
+#endif
 
 // ConfiguredOption is the one rule for a name-valued option: unset and negated
 // both read as "". Without the negation branch GetArg returns "0" for the

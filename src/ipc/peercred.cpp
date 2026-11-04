@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <pwd.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
@@ -188,8 +189,13 @@ const char* PeerCredentialEnforcement()
            "is the guard, and -ipcattachgroup is not available)";
 #elif defined(__linux__)
     // peercred_posix.cpp reads SO_PEERCRED under the same __linux__ test.
+#ifdef SO_PEERGROUPS
+    return "SO_PEERCRED and SO_PEERGROUPS (this OS user; with -ipcattachgroup also a non-root peer whose primary "
+           "or supplementary group is that group)";
+#else
     return "SO_PEERCRED (this OS user; with -ipcattachgroup also a non-root peer whose primary group is that "
-           "group)";
+           "group; supplementary attach-group membership is unavailable on this build)";
+#endif
 #else
     return "getpeereid (this OS user; with -ipcattachgroup also a non-root peer whose primary group is that "
            "group)";

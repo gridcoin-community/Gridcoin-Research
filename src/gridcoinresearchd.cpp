@@ -277,7 +277,8 @@ bool AppInit(int argc, char* argv[])
 
             const std::string attach_group = ipc::ConfiguredOption("-ipcattachgroup");
             if (!ipc::ConfigureAttachGroup(attach_group)) {
-                return InitError(strprintf("The IPC attach group '%s' does not exist.", SanitizeString(attach_group)));
+                return InitError(strprintf("The IPC attach group '%s' does not exist or this process is not a member of it.",
+                                           SanitizeString(attach_group)));
             }
         }
 #endif

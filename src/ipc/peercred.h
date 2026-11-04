@@ -29,7 +29,7 @@
 //! ConfigureAttachGroup and AttachGroupGid, which live in peercred_posix.cpp and
 //! peercred_win.cpp.
 //!
-//! On POSIX the identity comes from SO_PEERCRED on Linux and getpeereid()
+//! On POSIX the identity comes from SO_PEERCRED and SO_PEERGROUPS on Linux and getpeereid()
 //! elsewhere, and a peer that cannot be read is refused. The core admits its own
 //! uid, and with -ipcattachgroup also a non-root peer in that group; root is
 //! never admitted through the group. The GUI admits a core running as its own
@@ -63,14 +63,15 @@ struct PeerIdentity
 enum class PeerVerdict { Allow, Refuse };
 
 //! Hook. On POSIX this is the identity of the peer of a connected or accepted
-//! AF_UNIX \p fd (SO_PEERCRED on Linux, getpeereid() elsewhere; groups left
-//! empty), or nullopt, with a log line, when it cannot be read. Callers refuse on
+//! AF_UNIX \p fd (SO_PEERCRED and SO_PEERGROUPS on Linux, getpeereid() elsewhere, where groups are
+//! left empty), or nullopt, with a log line, when it cannot be read. Callers refuse on
 //! nullopt. The Windows placeholder ignores \p fd (kj gives the server -1) and
 //! returns an empty PeerIdentity.
 std::optional<PeerIdentity> ReadPeerIdentity(int fd);
 
 //! Hook. Resolve the group \p name and remember it as the attach group; "" clears
-//! it and returns true. Returns false if the group does not exist. The daemon
+//! it and returns true. Returns false if the group does not exist or, on Linux, if
+//! this process does not hold it (the unit needs SupplementaryGroups=). The daemon
 //! calls it once, with -ipcattachgroup, before it serves. The Windows
 //! placeholder returns true only for "".
 bool ConfigureAttachGroup(const std::string& name);

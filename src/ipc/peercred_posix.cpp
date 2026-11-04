@@ -12,6 +12,7 @@
 #include "logging.h"
 #include "sync.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <grp.h>
 #include <sys/socket.h>
@@ -51,6 +52,25 @@ std::optional<gid_t> LookUpGroupGid(const std::string& name)
     return grp.gr_gid;
 }
 
+#ifdef __linux__
+//! Whether this process holds \p gid as its effective or a supplementary group.
+bool ProcessHoldsGroup(gid_t gid)
+{
+    if (::getegid() == gid) return true;
+    // The group list can change between the two calls, so retry once if it grew.
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        const int count = ::getgroups(0, nullptr);
+        if (count < 0) return false;
+        std::vector<gid_t> held(static_cast<size_t>(count) + 1);
+        const int got = ::getgroups(static_cast<int>(held.size()), held.data());
+        if (got < 0) continue;
+        held.resize(static_cast<size_t>(got));
+        return std::find(held.begin(), held.end(), gid) != held.end();
+    }
+    return false;
+}
+#endif
+
 } // namespace
 
 std::optional<PeerIdentity> ReadPeerIdentity(int fd)
@@ -80,6 +100,27 @@ std::optional<PeerIdentity> ReadPeerIdentity(int fd)
     }
     peer.uid = cred.uid;
     peer.gid = cred.gid;
+#ifdef SO_PEERGROUPS
+    // The supplementary groups of the peer. Start with room for 64 and, when the
+    // kernel says that was too small (ERANGE), retry once with the size it
+    // reports. Any other failure refuses the peer.
+    peer.groups.resize(64);
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        socklen_t glen = static_cast<socklen_t>(peer.groups.size() * sizeof(gid_t));
+        if (::getsockopt(fd, SOL_SOCKET, SO_PEERGROUPS, peer.groups.data(), &glen) == 0) {
+            peer.groups.resize(glen / sizeof(gid_t));
+            return peer;
+        }
+        const int err = errno;
+        if (err != ERANGE || attempt != 0 || glen == 0 || glen % sizeof(gid_t) != 0) {
+            LogPrintf("IPC: cannot read the peer's identity: SO_PEERGROUPS failed (errno %d)\n", err);
+            return std::nullopt;
+        }
+        peer.groups.resize(glen / sizeof(gid_t));
+    }
+    LogPrintf("IPC: cannot read the peer's identity: SO_PEERGROUPS did not settle\n");
+    return std::nullopt;
+#endif
 #else
     // macOS, FreeBSD, OpenBSD and the other BSDs.
     if (::getpeereid(fd, &peer.uid, &peer.gid) != 0) {
@@ -97,6 +138,15 @@ bool ConfigureAttachGroup(const std::string& name)
     if (!name.empty()) {
         gid = LookUpGroupGid(name);
         if (!gid) return false;
+#ifdef __linux__
+        // The kernel reports the peers' groups, but a socket the core owns is
+        // only shared with the group if the core is in it.
+        if (!ProcessHoldsGroup(*gid)) {
+            LogPrintf("IPC: this process is not a member of %s; add SupplementaryGroups=%s to the unit\n",
+                      name, name);
+            return false;
+        }
+#endif
     }
     {
         LOCK(g_attach_group_mutex);
