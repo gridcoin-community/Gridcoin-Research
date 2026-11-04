@@ -535,7 +535,7 @@ static CoreConnectAttempt AttemptCoreConnect(const fs::path& ipc_dir)
 
 //! Connect to the core in \p ipc_dir, waiting for one that is still starting.
 //!
-//! Every attempt runs on a thread of its own while WaitForCore keeps the GUI
+//! Every attempt runs on the modal GuiIpcWorker while WaitForCore keeps the GUI
 //! thread's event loop running (qt/coreconnectwait.h). NextConnectStep decides
 //! which failures are retried (no cookie yet, or nothing listening), every
 //! IPC_CONNECT_RETRY_INTERVAL, for up to IPC_CONNECT_WAIT_MAX. On failure,
@@ -1342,8 +1342,8 @@ int main(int argc, char *argv[])
     // The threads the GUI calls into the core on when the GUI thread must not wait, one
     // for each GuiIpcWorker::Role. Declared before node_connection, so they are joined
     // only after the connection is gone: a thread that has made IPC calls must not exit
-    // while its connection may be destroyed (see GuiIpcWorker). Each starts its thread
-    // when it is first given a job.
+    // while its connection may be destroyed (see GuiIpcWorker). The connect attempts
+    // below run on the modal one. Each starts its thread when it is first given a job.
     GuiIpcWorker modal_worker(GuiIpcWorker::Role::Modal);
     GuiIpcWorker coin_load_worker(GuiIpcWorker::Role::CoinLoad);
 #ifdef ENABLE_MULTIPROCESS

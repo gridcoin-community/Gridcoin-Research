@@ -5,6 +5,7 @@
 #include "qt/test/coreconnectwaittests.h"
 
 #include "qt/coreconnectwait.h"
+#include "qt/guiipcworker.h"
 
 #include <QApplication>
 #include <QCoreApplication>
@@ -66,9 +67,28 @@ void ClearApplicationQuit()
     QCoreApplication::exec();
 }
 
+//! The thread \p worker runs its jobs on, or no thread if it does not run them.
+std::thread::id ThreadOf(GuiIpcWorker& worker)
+{
+    std::thread::id id;
+    const std::future<void> done = worker.Post([&id] { id = std::this_thread::get_id(); });
+    if (!done.valid() || done.wait_for(10s) != std::future_status::ready) return {};
+    return id;
+}
+
 const QString WAITING_TEXT{"Waiting for the Gridcoin core to start..."};
 const QString CANCELING_TEXT{"Canceling..."};
 } // namespace
+
+void CoreConnectWaitTests::initTestCase()
+{
+    m_worker = std::make_unique<GuiIpcWorker>(GuiIpcWorker::Role::Modal);
+}
+
+void CoreConnectWaitTests::cleanupTestCase()
+{
+    m_worker.reset();
+}
 
 // A core that is up is attached at once: no dialog, and no wait for a retry
 // interval before the result is looked at.
@@ -307,6 +327,55 @@ void CoreConnectWaitTests::attemptThatThrowsEndsTheWait()
     QCOMPARE(outcome.last.number, 0);
     QCOMPARE(attempts.load(), 1);
     QVERIFY(!outcome.canceled);
+}
+
+// Every attempt runs on the process's modal worker, a thread that outlives the
+// connection an attempt hands over, never on a thread that exits after it.
+void CoreConnectWaitTests::attemptsRunOnTheModalWorker()
+{
+    QVERIFY(m_worker);
+    const std::thread::id worker_thread = ThreadOf(*m_worker);
+    QVERIFY(worker_thread != std::thread::id{});
+    QVERIFY(worker_thread != std::this_thread::get_id());
+
+    std::atomic<int> attempts{0};
+    std::array<std::atomic<std::thread::id>, 3> threads{};
+    const CoreWaitOutcome<FakeAttempt> outcome = WaitForCore<FakeAttempt>(
+        [&attempts, &threads] {
+            const int n = ++attempts;
+            if (n <= 3) threads[static_cast<size_t>(n - 1)] = std::this_thread::get_id();
+            // The third attempt connects.
+            return FakeAttempt{n, /*connected=*/n == 3, /*retryable=*/n < 3};
+        },
+        Connected, Retryable, FastTimings(), "test");
+
+    QVERIFY(outcome.last.connected);
+    QVERIFY(outcome.error.empty());
+    QCOMPARE(attempts.load(), 3);
+    for (const std::atomic<std::thread::id>& thread : threads) {
+        QVERIFY(thread.load() == worker_thread);
+    }
+}
+
+// Without the modal worker no attempt is made, on any thread, and the wait ends
+// at once as for an attempt that failed unexpectedly.
+void CoreConnectWaitTests::withoutTheModalWorkerNothingIsAttempted()
+{
+    m_worker.reset();
+    QVERIFY(GuiIpcWorker::Current(GuiIpcWorker::Role::Modal) == nullptr);
+
+    std::atomic<int> attempts{0};
+    const CoreWaitOutcome<FakeAttempt> outcome = WaitForCore<FakeAttempt>(
+        [&attempts] { return FakeAttempt{++attempts, /*connected=*/true, /*retryable=*/false}; },
+        Connected, [](const FakeAttempt&, std::chrono::seconds) { return true; }, FastTimings(), "test");
+
+    m_worker = std::make_unique<GuiIpcWorker>(GuiIpcWorker::Role::Modal);
+
+    QCOMPARE(attempts.load(), 0);
+    QVERIFY(!outcome.last.connected);
+    QVERIFY(!outcome.error.empty());
+    QVERIFY(!outcome.canceled);
+    QVERIFY(!outcome.dialog_shown);
 }
 
 // The event loop is told to quit from outside, as the application quitting

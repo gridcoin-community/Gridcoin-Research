@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_QT_CORECONNECTWAIT_H
 #define GRIDCOIN_QT_CORECONNECTWAIT_H
 
+#include "qt/guiipcworker.h"
+
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QObject>
@@ -50,8 +52,12 @@ struct CoreWaitOutcome
 //! Connect to a core that may still be starting, without blocking the GUI
 //! thread.
 //!
-//! Each \p attempt runs on a thread of its own, while the GUI thread runs an
-//! event loop and looks at it every timings.poll. An attempt that \p connected
+//! Each \p attempt runs on the process's modal GuiIpcWorker, while the GUI
+//! thread runs an event loop and looks at it every timings.poll. An attempt
+//! makes IPC calls, and the worker outlives the connection it hands over:
+//! main() makes the worker before it connects (see GuiIpcWorker). Without that
+//! worker no attempt is made, and the wait ends at once as for an attempt that
+//! threw. An attempt that \p connected
 //! ends the wait. After one that did not, \p retry, given the time since the
 //! first attempt started, says whether to try again, and the next attempt
 //! starts timings.retry_interval after that one ended. A busy dialog, "Waiting
@@ -63,8 +69,8 @@ struct CoreWaitOutcome
 //! flight is waited for with the dialog up, saying "Canceling..." with Cancel
 //! disabled, while the GUI thread keeps processing events; that attempt's
 //! result is then the last one. The same holds when the event loop is told to
-//! quit from outside. The attempt in flight is always finished here, never in
-//! the future's destructor, so no attempt is running when this returns.
+//! quit from outside. The attempt in flight is always finished here, so no
+//! attempt is running when this returns.
 template <typename Result>
 CoreWaitOutcome<Result> WaitForCore(std::function<Result()> attempt,
                                     std::function<bool(const Result&)> connected,
@@ -74,8 +80,19 @@ CoreWaitOutcome<Result> WaitForCore(std::function<Result()> attempt,
     using Clock = std::chrono::steady_clock;
     const Clock::time_point first_start = Clock::now();
 
+    //! What one attempt hands over: its result, or what it threw. Shared with
+    //! the job that runs it, and read only once the job has finished.
+    struct Slot
+    {
+        Result result{};
+        bool threw{false};
+        std::string error{};
+    };
+
     CoreWaitOutcome<Result> outcome;
-    std::future<Result> pending;
+    std::shared_ptr<Slot> slot;
+    // Ready once the attempt has returned, or thrown, and its job is gone.
+    std::future<void> pending;
     Clock::time_point pending_start = first_start;
     Clock::time_point next_start = first_start;
     std::unique_ptr<QProgressDialog> dialog;
@@ -91,23 +108,16 @@ CoreWaitOutcome<Result> WaitForCore(std::function<Result()> attempt,
     };
 
     // Take the finished attempt's result, as the last one. Returns false when
-    // the attempt threw. get() also joins the attempt's thread (std::async's
-    // shared state); wait_for() returning ready is not that join. The attempt
-    // may hand over a connection whose IPC client state lives in that thread's
-    // thread-locals, and it is used and destroyed on the GUI thread only after
-    // the thread, and with it that state, is gone.
+    // the attempt threw.
     const auto take_result = [&] {
-        try {
-            outcome.last = pending.get();
-            return true;
-        } catch (const std::exception& e) {
+        pending.get();
+        if (slot->threw) {
             outcome.last = Result{};
-            outcome.error = e.what();
-        } catch (...) {
-            outcome.last = Result{};
-            outcome.error = "unknown exception";
+            outcome.error = slot->error;
+            return false;
         }
-        return false;
+        outcome.last = std::move(slot->result);
+        return true;
     };
 
     const auto on_canceled = [&] {
@@ -147,7 +157,32 @@ CoreWaitOutcome<Result> WaitForCore(std::function<Result()> attempt,
 
     const auto start_attempt = [&] {
         pending_start = Clock::now();
-        pending = std::async(std::launch::async, attempt);
+        slot = std::make_shared<Slot>();
+
+        GuiIpcWorker* const worker = GuiIpcWorker::Current(GuiIpcWorker::Role::Modal);
+        if (worker) {
+            pending = worker->Post([job_slot = slot, attempt] {
+                try {
+                    job_slot->result = attempt();
+                } catch (const std::exception& e) {
+                    job_slot->threw = true;
+                    job_slot->error = e.what();
+                } catch (...) {
+                    job_slot->threw = true;
+                    job_slot->error = "unknown exception";
+                }
+            });
+        }
+
+        if (!pending.valid()) {
+            // Nothing ran: taken as an attempt that threw.
+            slot->threw = true;
+            slot->error = worker ? "the thread the connect attempts run on could not be started"
+                                 : "no thread to run the connect attempts on";
+            std::promise<void> none;
+            none.set_value();
+            pending = none.get_future();
+        }
     };
 
     const auto tick = [&] {
@@ -187,10 +222,10 @@ CoreWaitOutcome<Result> WaitForCore(std::function<Result()> attempt,
     if (!ended_here) outcome.canceled = true;
     if (pending.valid()) {
         // The loop was told to quit from outside with an attempt in flight.
-        // Finish it with events still processed, so the GUI thread is never
-        // stuck in the future's destructor. A nested event loop would not run:
-        // once the application has been told to quit, QEventLoop::exec()
-        // returns at once.
+        // Finish it with events still processed, so the GUI thread is not
+        // stuck waiting for it. A nested event loop would not run: once the
+        // application has been told to quit, QEventLoop::exec() returns at
+        // once.
         show_dialog();
         dialog->setLabelText(QObject::tr("Canceling..."));
         cancel_button->setEnabled(false);

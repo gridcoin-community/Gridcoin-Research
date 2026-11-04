@@ -5,17 +5,25 @@
 #ifndef BITCOIN_QT_TEST_CORECONNECTWAITTESTS_H
 #define BITCOIN_QT_TEST_CORECONNECTWAITTESTS_H
 
+#include "qt/guiipcworker.h"
+
 #include <QObject>
 #include <QTest>
 
+#include <memory>
+
 //! WaitForCore (qt/coreconnectwait.h) driven by fake attempts: no core and no
-//! socket. Each attempt runs on a thread of WaitForCore's; the cases observe the
-//! waiting dialog from the GUI thread while WaitForCore's event loop runs.
+//! socket. Each attempt runs on the modal worker the class makes, as main()
+//! makes one for the application; the cases observe the waiting dialog from the
+//! GUI thread while WaitForCore's event loop runs.
 class CoreConnectWaitTests : public QObject
 {
     Q_OBJECT
 
 private slots:
+    void initTestCase();
+    void cleanupTestCase();
+
     void firstAttemptThatConnectsShowsNoDialog();
     void failureNotRetriedGivesUpWithoutDialog();
     void retriedFailureShowsDialogUntilConnected();
@@ -23,8 +31,13 @@ private slots:
     void cancelWaitsForAttemptWithoutBlocking();
     void cancelWhileIdleStartsNoAttempt();
     void attemptThatThrowsEndsTheWait();
+    void attemptsRunOnTheModalWorker();
+    void withoutTheModalWorkerNothingIsAttempted();
     // Last: it tells the application to quit, then clears that again.
     void loopExitWaitsForAttemptWithoutBlocking();
+
+private:
+    std::unique_ptr<GuiIpcWorker> m_worker;
 };
 
 #endif // BITCOIN_QT_TEST_CORECONNECTWAITTESTS_H
