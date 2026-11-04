@@ -486,8 +486,10 @@ public:
 
         // A copy of the wallet file is the keys, so the snapshots are made under
         // the Backup capability the client began. An unencrypted or fully
-        // unlocked wallet needs none.
-        CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(m_connection_closed), CapabilityKind::Backup);
+        // unlocked wallet needs none. The slot is read once, so the capability
+        // ended below is the one this call ran under.
+        const std::optional<CapabilityId> id = m_wallet->IpcCapability(m_connection_closed);
+        CapabilityScope scope(*m_wallet, id, CapabilityKind::Backup);
         if (!m_wallet->CanUseKeys()) {
             error_out = "Enter the wallet passphrase to back up the wallet.";
             return nullptr;
@@ -500,10 +502,10 @@ public:
         // whether the snapshots were made or not. Ended now, so the source holds
         // none. Only when this call ran under it: on an unencrypted or fully
         // unlocked wallet the gate passes without one, and a capability of
-        // another kind the client holds stays for its own operation. Once the connection has
-        // closed the slot is left alone: it may hold the next GUI's capability
-        // by then.
-        if (scope.Active()) m_wallet->EndIpcElevation(m_connection_closed);
+        // another kind the client holds stays for its own operation. Only this
+        // call's capability is ended: one begun into the slot meanwhile stays,
+        // and once the connection has closed the slot is left alone.
+        if (scope.Active()) m_wallet->EndIpcElevationIf(*id, m_connection_closed);
 
         if (!made) return nullptr;
 

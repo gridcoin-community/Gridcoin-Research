@@ -426,7 +426,9 @@ public:
     //!
     //! The IPC server serves one client at a time, so the process keeps one IPC
     //! capability. Whatever the slot held is ended, whether or not this one is
-    //! issued, and false leaves the slot empty. Otherwise as BeginElevation().
+    //! issued, and false leaves the slot empty. An ended capability the slot
+    //! still held whose id is drawn again for this one is not ended a second
+    //! time, since that would end this one. Otherwise as BeginElevation().
     //!
     //! \p connection_closed, here and on EndIpcElevation() and IpcCapability(),
     //! has no default, so a caller cannot forget it. A caller serving an IPC
@@ -452,6 +454,18 @@ public:
     //! own teardown ended what was its. That teardown (the slot hook) therefore
     //! passes an empty check.
     void EndIpcElevation(const std::function<bool()>& connection_closed)
+        LOCKS_EXCLUDED(m_capability_mutex);
+
+    //! \brief End capability \p id, which the caller read from the IPC slot,
+    //! and empty the slot only if it still holds \p id.
+    //!
+    //! For an operation that ran under the capability it read from the slot
+    //! (IpcCapability()) and is done with it. A capability begun into the slot
+    //! since, by this client or by the next, is not this operation's and stays
+    //! in the slot. When \p connection_closed answers true the slot is left
+    //! alone, as EndIpcElevation() leaves it. \p id is ended either way, with
+    //! the capability mutex released, as EndElevation() ends it.
+    void EndIpcElevationIf(CapabilityId id, const std::function<bool()>& connection_closed)
         LOCKS_EXCLUDED(m_capability_mutex);
 
     //! The capability in the IPC slot, or nullopt when the slot is empty or

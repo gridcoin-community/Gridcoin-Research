@@ -1199,7 +1199,11 @@ bool CWallet::BeginIpcElevation(const SecureString& passphrase, CapabilityKind k
         return false;
     }
 
-    if (displaced) EndElevation(*displaced);
+    // The slot can still hold a capability that has ended, which its operation
+    // ended without emptying the slot (a transfer's source or sink). Such an
+    // id may be drawn again, and then it names the capability just installed,
+    // which is not ended.
+    if (displaced && displaced != id) EndElevation(*displaced);
 
     return id.has_value();
 }
@@ -1214,6 +1218,20 @@ void CWallet::EndIpcElevation(const std::function<bool()>& connection_closed)
     }
 
     if (id) EndElevation(*id);
+}
+
+void CWallet::EndIpcElevationIf(CapabilityId id, const std::function<bool()>& connection_closed)
+{
+    {
+        LOCK(m_capability_mutex);
+        if ((!connection_closed || !connection_closed()) && m_ipc_capability == id) {
+            m_ipc_capability.reset();
+        }
+    }
+
+    // With the mutex released, as EndIpcElevation() ends what it took. A no-op
+    // for a capability that has ended already.
+    EndElevation(id);
 }
 
 std::optional<CapabilityId> CWallet::IpcCapability(const std::function<bool()>& connection_closed) const

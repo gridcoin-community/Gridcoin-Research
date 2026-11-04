@@ -639,6 +639,92 @@ BOOST_AUTO_TEST_CASE(ipc_slot_holds_one_capability)
     }
 }
 
+// An operation that read its capability from the slot ends that capability, and
+// takes it out of the slot only while the slot still holds it and the
+// connection is open. A capability begun into the slot since, whoever began it,
+// stays in the slot and live.
+BOOST_AUTO_TEST_CASE(ipc_slot_end_if_ends_only_the_named_capability)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    const auto open = [] { return false; };
+    const auto closed = [] { return true; };
+
+    // The slot still holds it: emptied, and the capability ended.
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Backup, {}));
+    const std::optional<CapabilityId> named = fx.wallet.IpcCapability({});
+    BOOST_REQUIRE(named.has_value());
+
+    fx.wallet.EndIpcElevationIf(*named, open);
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
+    {
+        CapabilityScope scope(fx.wallet, named, CapabilityKind::Backup);
+        BOOST_CHECK(!scope.Active());
+    }
+
+    // The slot holds another one: it stays there and live, and the named one,
+    // which is no longer in the slot, is ended all the same.
+    const std::optional<CapabilityId> replaced = fx.wallet.BeginElevation(Passphrase(), CapabilityKind::Backup);
+    BOOST_REQUIRE(replaced.has_value());
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send, {}));
+    const std::optional<CapabilityId> held = fx.wallet.IpcCapability({});
+    BOOST_REQUIRE(held.has_value());
+
+    fx.wallet.EndIpcElevationIf(*replaced, open);
+    BOOST_CHECK(fx.wallet.IpcCapability({}) == held);
+    {
+        CapabilityScope scope(fx.wallet, held, CapabilityKind::Send);
+        BOOST_CHECK(scope.Active());
+    }
+    {
+        CapabilityScope scope(fx.wallet, replaced, CapabilityKind::Backup);
+        BOOST_CHECK(!scope.Active());
+    }
+
+    // Its connection closed: the slot is left alone even though it holds the
+    // named capability, which is ended all the same.
+    fx.wallet.EndIpcElevationIf(*held, closed);
+    BOOST_CHECK(fx.wallet.IpcCapability({}) == held);
+    {
+        CapabilityScope scope(fx.wallet, held, CapabilityKind::Send);
+        BOOST_CHECK(!scope.Active());
+    }
+
+    fx.wallet.EndIpcElevation({});
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
+// An operation can end its capability without emptying the slot, as a
+// transfer's source or sink does. The next begin into the slot displaces that
+// ended id, and its own capability stays live even when it is drawn with the
+// same id, as the unit tests' deterministic generator draws it.
+BOOST_AUTO_TEST_CASE(ipc_slot_begin_over_an_ended_capability_keeps_the_new_one)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::FileTransfer, {}));
+    const std::optional<CapabilityId> ended = fx.wallet.IpcCapability({});
+    BOOST_REQUIRE(ended.has_value());
+
+    fx.wallet.EndElevation(*ended);
+    BOOST_REQUIRE(fx.wallet.IpcCapability({}) == ended);
+
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::FileTransfer, {}));
+    const std::optional<CapabilityId> next = fx.wallet.IpcCapability({});
+    BOOST_REQUIRE(next.has_value());
+    {
+        CapabilityScope scope(fx.wallet, next, CapabilityKind::FileTransfer);
+        BOOST_CHECK(scope.Active());
+    }
+
+    fx.wallet.EndIpcElevation({});
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+}
+
 BOOST_AUTO_TEST_CASE(capability_end_idempotent_and_lock_free)
 {
     EncryptedWallet fx;

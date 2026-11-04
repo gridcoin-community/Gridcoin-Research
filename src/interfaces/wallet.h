@@ -457,7 +457,8 @@ public:
     //! unlocked wallet needs none. A capability authorises one operation, so
     //! the Backup capability this call ran under is ended when it returns,
     //! whether the snapshots were made or not, and the returned source holds
-    //! none. A refusal before that point (a live transfer, no capability)
+    //! none. Only that capability: one begun into the slot while the call ran
+    //! stays there. A refusal before that point (a live transfer, no capability)
     //! leaves the slot as it was, and so does a call that ran under none: a
     //! capability of another kind is left for its own operation.
     //!

@@ -50,15 +50,17 @@ ElevationGrant is restricted the same way. Its maker is CapabilityScope, so:
 The wallet keeps one IPC capability, in its IPC slot, for the connected
 client's operations. Outside src/test/ (IPC_SLOT_FILES below):
 
-  * IpcCapability(), BeginIpcElevation() and EndIpcElevation() are called
-    only in the IPC interface implementations (src/wallet/interfaces.cpp,
-    src/gridcoin/interfaces.cpp, src/node/interfaces.cpp) and in the wallet's
-    own files, which declare and define them. The daemon's attach-slot hook
-    (src/gridcoinresearchd.cpp), which ends the slot as the attached GUI's
-    connection is torn down, makes exactly one call, EndIpcElevation({}), and
-    no other. Code that serves another caller,
-    an RPC request or an internal job, must not run under the IPC client's
-    capability.
+  * IpcCapability(), BeginIpcElevation(), EndIpcElevation() and
+    EndIpcElevationIf() are called only in the IPC interface implementations
+    (src/wallet/interfaces.cpp, src/gridcoin/interfaces.cpp,
+    src/node/interfaces.cpp) and in the wallet's own files, which declare and
+    define them. EndIpcElevationIf(), which ends the capability an operation
+    read from the slot, is further confined to src/wallet/interfaces.cpp and
+    the wallet's own files (IPC_SLOT_NAME_FILES). The daemon's attach-slot
+    hook (src/gridcoinresearchd.cpp), which ends the slot as the attached
+    GUI's connection is torn down, makes exactly one call, EndIpcElevation({}),
+    and no other. Code that serves another caller, an RPC request or an
+    internal job, must not run under the IPC client's capability.
 
 Every path to the wallet's private keys goes through GetKey(),
 DecryptSecretWithMasterKey(), GetSeedPhraseBlob() or AddKeyPubKey(). The unit
@@ -132,7 +134,15 @@ IPC_SLOT_FILES = {
     "src/gridcoinresearchd.cpp": [("EndIpcElevation", "{}")],
 }
 
-IPC_SLOT_RE = re.compile(r"\b(IpcCapability|BeginIpcElevation|EndIpcElevation)\s*\(")
+# Slot accessors that only some of the files above may call, with those files.
+# EndIpcElevationIf() ends the capability an operation read from the slot; the
+# wallet interface's backup and file transfer methods are the operations that
+# do, besides the wallet's own files, which declare and define it.
+IPC_SLOT_NAME_FILES = {
+    "EndIpcElevationIf": ("src/wallet/interfaces.cpp", "src/wallet/wallet.h", "src/wallet/wallet.cpp"),
+}
+
+IPC_SLOT_RE = re.compile(r"\b(IpcCapability|BeginIpcElevation|EndIpcElevationIf|EndIpcElevation)\s*\(")
 
 # Test-only makers, confined to the unit tests.
 TEST_PEERS = ("StakingKeyAccessTestPeer", "ElevationGrantTestPeer")
@@ -392,6 +402,13 @@ def check_code(path, code, errors, key_calls):
         if found != list(IPC_SLOT_FILES[path]):
             errors.append("{}: the IPC slot is called as {}; this file may make only {}"
                           .format(path, describe_slot_calls(found), describe_slot_calls(IPC_SLOT_FILES[path])))
+    else:
+        for m in IPC_SLOT_RE.finditer(code):
+            files = IPC_SLOT_NAME_FILES.get(m.group(1))
+            if files is not None and path not in files:
+                errors.append("{}:{}: {}() is called outside {}; it ends the capability an operation read "
+                              "from the IPC slot, which only those files' operations do"
+                              .format(path, line_of(code, m.start()), m.group(1), ", ".join(files)))
 
     if path not in GRANT_FILES:
         for m in GRANT_RE.finditer(code):
@@ -528,7 +545,8 @@ CLEAN_FILES = {
     "src/wallet/interfaces.cpp": (
         "bool b() { return w->BeginIpcElevation(p, k, m_connection_closed); }\n"
         "void s() { CapabilityScope scope(*w, w->IpcCapability(m_connection_closed), kind); }\n"
-        "void e() { w->EndIpcElevation(m_connection_closed); }\n"),
+        "void e() { w->EndIpcElevation(m_connection_closed); }\n"
+        "void f() { w->EndIpcElevationIf(id, m_connection_closed); }\n"),
     "src/gridcoinresearchd.cpp": (
         "auto hook = [] { if (pwalletMain) pwalletMain->EndIpcElevation({}); };\n"),
 }
@@ -599,6 +617,14 @@ FAILING_SAMPLES = [
     ("the IPC capability slot begun outside the IPC interfaces",
      "src/rpc/misc.cpp:1: BeginIpcElevation() is called outside the IPC interface files",
      {"src/rpc/misc.cpp": "bool f() { return pwalletMain->BeginIpcElevation(p, k, {}); }\n"},
+     None, None, None),
+    ("the slot's read capability ended outside the IPC interfaces",
+     "src/rpc/misc.cpp:1: EndIpcElevationIf() is called outside the IPC interface files",
+     {"src/rpc/misc.cpp": "void f() { pwalletMain->EndIpcElevationIf(id, {}); }\n"},
+     None, None, None),
+    ("the slot's read capability ended in an IPC interface file other than the wallet's",
+     "src/gridcoin/interfaces.cpp:1: EndIpcElevationIf() is called outside src/wallet/interfaces.cpp",
+     {"src/gridcoin/interfaces.cpp": "void f() { w->EndIpcElevationIf(id, m_connection_closed); }\n"},
      None, None, None),
     ("the daemon's slot hook reading the slot",
      "src/gridcoinresearchd.cpp: the IPC slot is called as EndIpcElevation({}), IpcCapability({}); "
