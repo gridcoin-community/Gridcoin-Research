@@ -449,6 +449,92 @@ BOOST_AUTO_TEST_CASE(prepare_ipc_directory_attach_group_state_is_quiet)
     }
 }
 
+// With an attach group the daemon prepares its IPC directory with
+// PrepareAttachGroupDirectory. An existing directory that gives other access is
+// changed, not "left as configured", and the line logged says what it was. A
+// second start, and bind()'s own check, find it as it should be and say
+// nothing. A directory that does not exist yet is made and given the group's
+// access.
+BOOST_AUTO_TEST_CASE(attach_group_directory_logs_the_change_it_makes)
+{
+    AttachGroupReset reset;
+    const auto name = GroupName(::getegid());
+    if (!name) {
+        BOOST_TEST_MESSAGE("the effective group has no entry in the group database; skipping");
+        return;
+    }
+    BOOST_REQUIRE(ipc::ConfigureAttachGroup(*name));
+
+    TempDir dir;
+    BOOST_REQUIRE_EQUAL(::chmod(dir.path.c_str(), 0755), 0);
+    {
+        CaptureLog log;
+        ipc::PrepareAttachGroupDirectory(dir.path);
+        BOOST_CHECK(!log.Contains("Leaving it as configured"));
+        BOOST_CHECK(!log.Contains("accessible to other users"));
+        BOOST_CHECK_MESSAGE(log.Contains("it was mode 755"), "no line says what the directory was");
+    }
+    BOOST_CHECK_EQUAL(ModeOf(dir.path), static_cast<mode_t>(0750));
+    BOOST_CHECK_EQUAL(GroupOf(dir.path), ::getegid());
+    {
+        CaptureLog log;
+        ipc::PrepareAttachGroupDirectory(dir.path);
+        ipc::PrepareIpcDirectory(dir.path);
+        BOOST_CHECK(!log.Contains(dir.path.string()));
+    }
+
+    const fs::path fresh = dir.path / "fresh";
+    {
+        CaptureLog log;
+        ipc::PrepareAttachGroupDirectory(fresh);
+        BOOST_CHECK(!log.Contains(fresh.string()));
+    }
+    BOOST_CHECK_EQUAL(ModeOf(fresh), static_cast<mode_t>(0750));
+    BOOST_CHECK_EQUAL(GroupOf(fresh), ::getegid());
+}
+
+// The attach group is given access to the IPC directory, so the core refuses an
+// attach group without -ipcdir, whose default is the data directory. The text
+// names both options. -noipcdir and an empty -ipcdir count as unset, as
+// GetIpcDir() takes them, and -noipcattachgroup counts as no group.
+BOOST_FIXTURE_TEST_CASE(attach_group_without_ipcdir_is_refused, grc_test::StateGuard)
+{
+    // Forced values would take precedence over the command line ones below.
+    gArgs.ClearForcedArg("-ipcdir");
+    gArgs.ClearForcedArg("-ipcattachgroup");
+    BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
+
+    gArgs.ForceSetArg("-ipcattachgroup", "gridcoin");
+    const std::optional<std::string> refusal = ipc::AttachGroupIpcDirRefusal();
+    BOOST_REQUIRE(refusal);
+    BOOST_CHECK_MESSAGE(refusal->find("-ipcattachgroup") != std::string::npos, *refusal);
+    BOOST_CHECK_MESSAGE(refusal->find("-ipcdir") != std::string::npos, *refusal);
+
+    gArgs.ForceSetArg("-ipcdir", "");
+    BOOST_CHECK(ipc::AttachGroupIpcDirRefusal());
+
+    gArgs.ForceSetArg("-ipcdir", "/run/gridcoinresearchd");
+    BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
+
+    gArgs.ClearForcedArg("-ipcdir");
+    gArgs.LockSettings([](util::Settings& settings) {
+        util::SettingsValue negated;
+        negated.setBool(false);
+        settings.command_line_options["ipcdir"] = {negated};
+    });
+    BOOST_REQUIRE(gArgs.IsArgNegated("-ipcdir"));
+    BOOST_CHECK(ipc::AttachGroupIpcDirRefusal());
+
+    gArgs.ClearForcedArg("-ipcattachgroup");
+    gArgs.LockSettings([](util::Settings& settings) {
+        util::SettingsValue negated;
+        negated.setBool(false);
+        settings.command_line_options["ipcattachgroup"] = {negated};
+    });
+    BOOST_REQUIRE(gArgs.IsArgNegated("-ipcattachgroup"));
+    BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
+}
+
 BOOST_AUTO_TEST_CASE(apply_path_access_refuses_symlink)
 {
     TempDir dir;

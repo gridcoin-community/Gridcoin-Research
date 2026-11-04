@@ -45,6 +45,13 @@ std::unique_ptr<Process> MakeProcess();
 //! value. The IPC socket and cookie live here.
 fs::path GetIpcDir();
 
+//! The reason the core refuses to start when -ipcattachgroup is set and -ipcdir
+//! is not, or nullopt. The attach group is given access to the IPC directory,
+//! and without -ipcdir that is the data directory. Both options are read as
+//! ConfiguredOption() reads them, so a negated or empty value counts as unset.
+//! nullopt on Windows, where ConfigureAttachGroup() refuses any attach group.
+std::optional<std::string> AttachGroupIpcDirRefusal();
+
 //! Make sure \p dir exists. When this call creates it, it is restricted to this
 //! account (POSIX mode 0700 through an fd, Windows owner-only protected DACL)
 //! and failing to do so throws; an existing directory is left as configured,
@@ -86,6 +93,14 @@ std::optional<std::string> IpcDirWarning(const std::string& dir, mode_t mode, ui
 //! the message says the core must run with the attach group as a supplementary
 //! group.
 void ApplyAttachGroupAccess(const fs::path& ipcdir);
+
+//! What the daemon prepares its IPC directory with when an attach group is
+//! configured: make sure \p dir exists, created owner-only as
+//! PrepareIpcDirectory() creates it, then give it the attach group's access
+//! (ApplyAttachGroupAccess()). An existing directory is not warned about, since
+//! its access is set here; when that changes its mode or group, a line logs the
+//! mode and group it had. Throws as those two do.
+void PrepareAttachGroupDirectory(const fs::path& dir);
 #endif // !WIN32
 } // namespace ipc
 

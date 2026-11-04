@@ -241,6 +241,19 @@ fs::path GetIpcDir()
     return GetDataDir();
 }
 
+std::optional<std::string> AttachGroupIpcDirRefusal()
+{
+#ifndef WIN32
+    if (ConfiguredOption("-ipcattachgroup").empty() || !ConfiguredOption("-ipcdir").empty()) return std::nullopt;
+
+    return std::string{"-ipcattachgroup is set without -ipcdir. The attach group is given access to the IPC "
+                       "directory, which without -ipcdir is the data directory. Set -ipcdir to a directory of its "
+                       "own for the IPC socket and cookie."};
+#else
+    return std::nullopt;
+#endif
+}
+
 #ifndef WIN32
 void ApplyPathAccessNoFollow(const fs::path& path, PathKind kind, mode_t mode, std::optional<gid_t> group)
 {
@@ -365,6 +378,51 @@ void ApplyAttachGroupAccess(const fs::path& ipcdir)
 }
 #endif // !WIN32
 
+namespace {
+//! Make sure \p dir exists, restricting it to this account when this call
+//! creates it (PrepareIpcDirectory). Returns whether it did.
+bool CreateIpcDirectory(const fs::path& dir)
+{
+    boost::system::error_code ec;
+    const bool created = fs::create_directories(dir, ec);
+    if (ec) {
+        throw std::system_error(ec.value(), std::system_category(),
+                                "could not create the IPC directory " + dir.string());
+    }
+
+    if (created) {
+#ifndef WIN32
+        ApplyPathAccessNoFollow(dir, PathKind::Directory, 0700, std::nullopt);
+#else
+        util::ApplyOwnerOnlyDacl(dir, /*inheritable=*/true);
+#endif
+    }
+
+    return created;
+}
+} // namespace
+
+#ifndef WIN32
+void PrepareAttachGroupDirectory(const fs::path& dir)
+{
+    const bool created = CreateIpcDirectory(dir);
+
+    // A directory made just now was this account's alone; only a change to one
+    // that was there already is logged.
+    struct stat before{};
+    const bool existed = !created && ::stat(dir.string().c_str(), &before) == 0;
+
+    ApplyAttachGroupAccess(dir);
+
+    const std::optional<gid_t> gid = AttachGroupGid();
+    if (existed && gid && ((before.st_mode & 07777) != static_cast<mode_t>(0750) || before.st_gid != *gid)) {
+        LogPrintf("IPC: set the IPC directory %s to mode 750 in the attach group (gid %u); it was mode %03o, gid %u",
+                  dir.string(), static_cast<unsigned>(*gid), static_cast<unsigned>(before.st_mode & 07777),
+                  static_cast<unsigned>(before.st_gid));
+    }
+}
+#endif // !WIN32
+
 void PrepareIpcDirectory(const fs::path& dir)
 {
     // Socket directory access control (design section 4.3).
@@ -395,20 +453,7 @@ void PrepareIpcDirectory(const fs::path& dir)
     // util::CreateOwnerOnlyDirectory), so for it the create branch does not run.
     // It runs for an explicit -ipcdir, or a custom socket path, whose directory
     // does not exist yet.
-    boost::system::error_code ec;
-    const bool created = fs::create_directories(dir, ec);
-    if (ec) {
-        throw std::system_error(ec.value(), std::system_category(),
-                                "could not create the IPC directory " + dir.string());
-    }
-
-    if (created) {
-#ifndef WIN32
-        ApplyPathAccessNoFollow(dir, PathKind::Directory, 0700, std::nullopt);
-#else
-        util::ApplyOwnerOnlyDacl(dir, /*inheritable=*/true);
-#endif
-    } else {
+    if (!CreateIpcDirectory(dir)) {
 #ifndef WIN32
         struct stat st;
         if (::stat(dir.string().c_str(), &st) == 0) {

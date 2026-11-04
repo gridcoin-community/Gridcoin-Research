@@ -181,11 +181,13 @@ schema-diff lint against the previous release tag.
   cookie. The core sets them through file descriptors rather than by following a
   path, and refuses to start if it cannot, for example when its account is not a
   member of the group (it must run with the attach group as a supplementary group).
-  Use `-ipcdir` for attach-group setups: without it the `0750` directory is the data
-  directory itself, so group members can traverse it and read any file inside it that
-  is world-readable.
+  On POSIX the core refuses to start when `-ipcattachgroup` is set without `-ipcdir`:
+  the `0750` directory would otherwise be the data directory itself, so group members
+  could traverse it and read any file inside it that is world-readable. An attach
+  group therefore always has an IPC directory of its own. The core logs the mode and
+  group that directory had when it changes them.
   The DIRECTORY is changed only when the node creates it (owner-only) or when
-  `-ipcattachgroup` is set: an existing data directory is otherwise left as the
+  `-ipcattachgroup` is set: an existing directory is otherwise left as the
   operator configured it and merely warned about, so a deliberately widened datadir
   is never silently re-tightened.
 - Cookie: node writes a fresh 256-bit cookie (`ipc.cookie`, atomic rename) each

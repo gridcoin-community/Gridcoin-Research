@@ -1054,8 +1054,8 @@ void SetupServerArgs()
                    "paths are resolved against the data directory.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-ipcattachgroup=<group>",
-                   "Also admit IPC clients in this group (the different-account service). Unset: only this "
-                   "process's own user.",
+                   "Also admit IPC clients in this group (the different-account service). Needs -ipcdir: the "
+                   "group is given access to the IPC directory. Unset: only this process's own user.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-ipclogtrace",
                    "Log the full request and response payload of every IPC call. This includes "

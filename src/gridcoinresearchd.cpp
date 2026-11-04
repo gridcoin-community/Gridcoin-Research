@@ -383,10 +383,17 @@ bool AppInit(int argc, char* argv[])
         // request, not the loss of a nice-to-have.
         const bool multiprocess = gArgs.GetBoolArg("-multiprocess", false);
         // The attach group is resolved before anything is written or served, so
-        // a group that does not exist stops the node before a cookie is written.
+        // a group that does not exist, or one without an IPC directory of its
+        // own (-ipcdir), stops the node before a cookie is written.
         // -noipcattachgroup counts as unset.
         const std::string attach_group = ipc::ConfiguredOption("-ipcattachgroup");
-        if (multiprocess && !ipc::ConfigureAttachGroup(attach_group)) {
+        const std::optional<std::string> ipcdir_refusal =
+            multiprocess ? ipc::AttachGroupIpcDirRefusal() : std::nullopt;
+        if (ipcdir_refusal) {
+            InitError(*ipcdir_refusal);
+            fRet = false;
+            SetShutdownRequested();
+        } else if (multiprocess && !ipc::ConfigureAttachGroup(attach_group)) {
             InitError(strprintf("The IPC attach group '%s' does not exist.", SanitizeString(attach_group)));
             // The same fatal path as a failed listener below.
             fRet = false;
@@ -396,17 +403,22 @@ bool AppInit(int argc, char* argv[])
             // step after which a stale socket file can be the cause.
             bool listening = false;
             try {
-                // An explicit -ipcdir may not exist yet. Create it restricted to
-                // this account; a failure is fatal like the rest of this block.
-                ipc::PrepareIpcDirectory(ipc::GetIpcDir());
+                // An explicit -ipcdir may not exist yet. It is created restricted
+                // to this account; a failure is fatal like the rest of this block.
 #ifndef WIN32
                 // With an attach group, the directory, the cookie and the socket
                 // are given that group before anything is served, and a failure
-                // is fatal like the rest of this block.
+                // is fatal like the rest of this block. The directory is then
+                // given its access first, and a change to it is logged.
                 const std::optional<gid_t> attach_gid = ipc::AttachGroupGid();
-                if (attach_gid) ipc::ApplyAttachGroupAccess(ipc::GetIpcDir());
+                if (attach_gid) {
+                    ipc::PrepareAttachGroupDirectory(ipc::GetIpcDir());
+                } else {
+                    ipc::PrepareIpcDirectory(ipc::GetIpcDir());
+                }
                 std::string cookie = ipc::WriteCookie(ipc::GetIpcDir(), attach_gid);
 #else
+                ipc::PrepareIpcDirectory(ipc::GetIpcDir());
                 std::string cookie = ipc::WriteCookie(ipc::GetIpcDir());
 #endif
                 cookie_written = true;
