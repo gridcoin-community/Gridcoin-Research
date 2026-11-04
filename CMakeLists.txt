@@ -1077,6 +1077,14 @@ if(ENABLE_TESTS AND ENABLE_DAEMON)
                 RUN_SERIAL TRUE   # tests spin up daemons; don't overlap with other ctest cases
                 TIMEOUT 1800
             )
+
+            # Every RPC row and capnp method has an access class in
+            # src/rpc/entry_point_classes.json that agrees with the code.
+            add_test(
+                NAME lint_entry_point_classes
+                COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/test/lint/lint-entry-point-classes.py"
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            )
         endif()
 
         add_custom_target(check-functional

@@ -50,6 +50,15 @@ foreach(file_in IN LISTS JSON_TEST_FILES)
     add_dependencies(test_gridcoin generate_${file_in}.h)
 endforeach()
 
+# The entry-point access classes live beside the RPC table; rpc_tests reads them
+# as json_tests::entry_point_classes.
+add_custom_command(OUTPUT entry_point_classes.json.h
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/build-aux/cmake/json2header.cmake ${XXD} ${CMAKE_SOURCE_DIR}/src/rpc/entry_point_classes.json ${CMAKE_CURRENT_BINARY_DIR}/entry_point_classes.json.h
+    DEPENDS ${CMAKE_SOURCE_DIR}/src/rpc/entry_point_classes.json
+)
+add_custom_target(generate_entry_point_classes.json.h DEPENDS entry_point_classes.json.h)
+add_dependencies(test_gridcoin generate_entry_point_classes.json.h)
+
 foreach(file_in IN LISTS BINARY_TEST_FILES)
     get_filename_component(var_name ${file_in} NAME_WE)
     add_custom_command(OUTPUT ${file_in}.h

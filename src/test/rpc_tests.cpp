@@ -10,6 +10,7 @@
 #include <rpc/util.h>
 #include <net.h>
 #include <policy/fees.h>
+#include <test/data/entry_point_classes.json.h>
 #include <wallet/capability.h>
 #include <wallet/wallet.h>
 
@@ -307,6 +308,48 @@ BOOST_AUTO_TEST_CASE(rpc_rows_carry_their_access_class)
     BOOST_CHECK_EQUAL(std::string(RpcAccessName(access_elevate)), "elevate");
     BOOST_CHECK_EQUAL(std::string(RpcAccessName(access_elevate_inband)), "elevate_inband");
     BOOST_CHECK_EQUAL(std::string(RpcAccessName(access_settings)), "settings");
+}
+
+BOOST_AUTO_TEST_CASE(every_rpc_row_matches_the_classification_file)
+{
+    // src/rpc/entry_point_classes.json, embedded at build time. It is one
+    // object, so it is read directly rather than through read_json().
+    const std::string text(json_tests::entry_point_classes,
+                           json_tests::entry_point_classes + sizeof(json_tests::entry_point_classes));
+
+    UniValue classes;
+    BOOST_REQUIRE(classes.read(text));
+    BOOST_REQUIRE(classes.isObject());
+
+    const UniValue rpc = find_value(classes, "rpc");
+    BOOST_REQUIRE(rpc.isObject());
+
+    const std::vector<std::string> commands = tableRPC.listCommands(true);
+    BOOST_CHECK_EQUAL(rpc.size(), commands.size());
+
+    for (const std::string& name : commands) {
+        const UniValue& entry = find_value(rpc, name);
+
+        BOOST_CHECK_MESSAGE(entry.isObject(), name + " has no entry in the classification file");
+        if (!entry.isObject()) continue;
+
+        const UniValue cls = find_value(entry, "class");
+        const UniValue authority = find_value(entry, "authority");
+
+        BOOST_CHECK_MESSAGE(cls.isStr(), name + " has no class");
+        if (!cls.isStr()) continue;
+
+        // An elevate entry whose method verifies a passphrase argument is the
+        // access_elevate_inband row; every other class names its column.
+        std::string expected = cls.get_str();
+        if (expected == "elevate" && authority.isStr() && authority.get_str() == "passphrase_argument") {
+            expected = "elevate_inband";
+        }
+
+        const std::string column = RpcAccessName(tableRPC[name]->access);
+        BOOST_CHECK_MESSAGE(expected == column,
+                            name + ": the classification file gives " + expected + ", the row access_" + column);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(every_gated_row_is_refused_without_elevation)

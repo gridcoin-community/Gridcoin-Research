@@ -1,0 +1,1827 @@
+{
+  "ipc": {
+    "AddressBookChangedCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "AddressBookChangedCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ChangedCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ChangedCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "GuiState.current": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "GuiState.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "GuiState.handleChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "GuiState.handleMRCQuote": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "GuiState.requestMRCQuote": {
+      "class": "read_only",
+      "effect": "read_only",
+      "note": "quotes the claim from a trial built unsigned (no_sign)"
+    },
+    "GuiState.requestUpdate": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Handler.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Handler.disconnect": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.authenticate": {
+      "class": "free",
+      "effect": "state"
+    },
+    "Init.construct": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.getBuildInfo": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.getIdentity": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.isCoreReady": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.makeGuiState": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.makeMRC": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.makeNode": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.makePSGTPoolContext": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.makeResearcherContext": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.makeSideStakeManager": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.makeStakingStatus": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.makeVotingManager": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.makeWallet": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.makeWalletCoinSource": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.makeWalletTxSource": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "MRC.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "MRC.handleMRCChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "MRC.isOutOfSync": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "MRC.snapshot": {
+      "class": "read_only",
+      "effect": "read_only",
+      "note": "signs a trial claim that never leaves the core; P1's chokepoint governs it"
+    },
+    "MRC.submit": {
+      "class": "elevate",
+      "effect": "keys",
+      "kind": "Contract"
+    },
+    "MRC.submitConfirmed": {
+      "class": "elevate",
+      "effect": "keys",
+      "kind": "Contract"
+    },
+    "MRCQuoteCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "MRCQuoteCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "MinerStatusChangedCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "MinerStatusChangedCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "NewPollReceivedCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "NewPollReceivedCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "NewVoteReceivedCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "NewVoteReceivedCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.banNode": {
+      "class": "free",
+      "effect": "state"
+    },
+    "Node.changeSettings": {
+      "class": "settings",
+      "effect": "value"
+    },
+    "Node.checkForLatestUpdate": {
+      "class": "free",
+      "effect": "state"
+    },
+    "Node.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.disconnectNode": {
+      "class": "free",
+      "effect": "state"
+    },
+    "Node.executeRpcConsoleCommand": {
+      "class": "dispatch",
+      "effect": "value"
+    },
+    "Node.getAlertStatusBarMessage": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getBanned": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getBestBlockHash": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getBlockDifficulty": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getClientVersion": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getDifficulty": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getLastBlockTime": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getNodeCount": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getNumBlocks": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getNumBlocksOfPeers": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getPeers": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getScraperConvergenceSnapshot": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getSettingBool": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getSettingInt": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getSettingStr": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getTotalBytesRecv": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getTotalBytesSent": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.getWarnings": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.handleBannedListChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.handleInitShutdown": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.handleMinerStatusChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.handleNotifyAlertChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.handleNotifyBlocksChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.handleNotifyNumConnectionsChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.handleNotifyScraperEvent": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.handlePSGTPoolChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.handleRwSettingsUpdated": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.isInitialBlockDownload": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.isMainNet": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.isOutOfSyncByAge": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.isSettingSet": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.isTestNet": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.listRpcCommands": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.runDiagnostics": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.startShutdown": {
+      "class": "free",
+      "effect": "state"
+    },
+    "Node.tryGetNumBlocksOfPeers": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Node.unban": {
+      "class": "free",
+      "effect": "state"
+    },
+    "NotifyAlertChangedCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "NotifyAlertChangedCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "NotifyBlocksChangedCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "NotifyBlocksChangedCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "NotifyNumConnectionsChangedCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "NotifyNumConnectionsChangedCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "NotifyScraperEventCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "NotifyScraperEventCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "PSGTPoolChangedCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "PSGTPoolChangedCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "PSGTPoolContext.combinePSGTs": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "PSGTPoolContext.decodePSGT": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "PSGTPoolContext.describePSGT": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "PSGTPoolContext.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "PSGTPoolContext.entries": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "PSGTPoolContext.finalizeToRawTxHex": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "PSGTPoolContext.poolEntryPsgt": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "PSGTPoolContext.poolStatus": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "PSGTPoolContext.removePoolEntry": {
+      "class": "free",
+      "effect": "state"
+    },
+    "PSGTPoolContext.signPSGT": {
+      "class": "elevate",
+      "effect": "keys",
+      "kind": "SignPSGT"
+    },
+    "PSGTPoolContext.signPoolEntry": {
+      "class": "elevate",
+      "effect": "keys",
+      "kind": "SignPSGT"
+    },
+    "PSGTPoolContext.submitPSGTToPool": {
+      "class": "free",
+      "effect": "state"
+    },
+    "PSGTPoolContext.walletHasSignature": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "PSGTPoolContext.walletMustSignRevision": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.activePools": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.advertiseBeacon": {
+      "class": "elevate",
+      "effect": "keys",
+      "kind": "Contract"
+    },
+    "ResearcherContext.advertiseBeaconV3": {
+      "class": "elevate",
+      "effect": "keys",
+      "kind": "Contract"
+    },
+    "ResearcherContext.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.generateBeaconKeyForV3": {
+      "class": "elevate",
+      "effect": "key_writer",
+      "kind": "Contract"
+    },
+    "ResearcherContext.handleAccrualChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.handleBeaconChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.handleBlocksChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.handleResearcherChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.hasV3CapableProjects": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.maxProjectNameLength": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.maxProjectUrlLength": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.outOfSync": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.projects": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.reload": {
+      "class": "free",
+      "effect": "state"
+    },
+    "ResearcherContext.snapshot": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.switchMode": {
+      "class": "free",
+      "effect": "state"
+    },
+    "ResearcherContext.trySnapshot": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.v3CapableProjects": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ResearcherContext.whitelistProjects": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "SideStakeManager.addLocal": {
+      "class": "elevate",
+      "effect": "value",
+      "kind": "Settings"
+    },
+    "SideStakeManager.deleteLocal": {
+      "class": "elevate",
+      "effect": "value",
+      "kind": "Settings"
+    },
+    "SideStakeManager.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "SideStakeManager.entries": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "SideStakeManager.handleMandatorySideStakeChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "SideStakeManager.handleRwSettingsUpdated": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "SideStakeManager.localRevision": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "SideStakeManager.setAllocation": {
+      "class": "elevate",
+      "effect": "value",
+      "kind": "Settings"
+    },
+    "SideStakeManager.setDescription": {
+      "class": "elevate",
+      "effect": "state",
+      "kind": "Settings"
+    },
+    "StakingStatus.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "StakingStatus.getCoinWeight": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "StakingStatus.getErrors": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "StakingStatus.getNetworkWeight": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "StakingStatus.isStaking": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "StakingStatus.tryGetEstimatedTimeToStake": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "StakingStatus.tryGetNetworkWeight": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "TransactionChangedCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "TransactionChangedCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "VoidCallback.call": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "VoidCallback.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "VotingManager.buildPollTable": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "VotingManager.currentPollTitle": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "VotingManager.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "VotingManager.estimatePollFee": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "VotingManager.getPollTypes": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "VotingManager.handleNewPollReceived": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "VotingManager.handleNewVoteReceived": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "VotingManager.latestActivePollTime": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "VotingManager.pollV3Enabled": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "VotingManager.submitPoll": {
+      "class": "elevate",
+      "effect": "keys",
+      "kind": "Contract"
+    },
+    "VotingManager.submitVote": {
+      "class": "elevate",
+      "effect": "keys",
+      "kind": "Contract"
+    },
+    "Wallet.backupConfigFile": {
+      "class": "refuse",
+      "effect": "state",
+      "note": "P2c makes it always return false; until then it still writes the copy",
+      "path": true
+    },
+    "Wallet.backupWallet": {
+      "class": "refuse",
+      "effect": "state",
+      "note": "P2c makes it always return false; until then it still writes the copy",
+      "path": true
+    },
+    "Wallet.beginElevation": {
+      "authority": "passphrase_argument",
+      "class": "elevate",
+      "effect": "state"
+    },
+    "Wallet.changeWalletPassphrase": {
+      "authority": "passphrase_argument",
+      "class": "elevate",
+      "effect": "state"
+    },
+    "Wallet.computeCoinControlSummary": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.delAddressBook": {
+      "class": "free",
+      "effect": "state"
+    },
+    "Wallet.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.elevateWallet": {
+      "class": "refuse",
+      "effect": "state"
+    },
+    "Wallet.encryptWallet": {
+      "authority": "unencrypted_only",
+      "class": "elevate",
+      "effect": "key_writer"
+    },
+    "Wallet.endElevation": {
+      "class": "free",
+      "effect": "state"
+    },
+    "Wallet.getAddressLabel": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.getAddresses": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.getBalance": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.getImmatureBalance": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.getKeyFromPool": {
+      "class": "free",
+      "effect": "state",
+      "note": "draws a key the pool holds; it opens no capability, so a wallet unlocked for staking only cannot refill the pool through it"
+    },
+    "Wallet.getLockState": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.getMaxConsolidationInputs": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.getNewReceiveAddress": {
+      "class": "free",
+      "effect": "state"
+    },
+    "Wallet.getNewReceiveAddressWithLabel": {
+      "class": "free",
+      "effect": "state"
+    },
+    "Wallet.getNumTransactions": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.getOutputs": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.getPubKey": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.getStake": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.getUnbookedReceiveAddresses": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.getUnconfirmedBalance": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.getUnlockStakingOnlyFlag": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.handleAddressBookChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.handleStatusChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.handleTransactionChanged": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.isMine": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.isUnlockedForStakingOnly": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.lockWallet": {
+      "class": "free",
+      "effect": "state"
+    },
+    "Wallet.restrictToStakingOnly": {
+      "class": "free",
+      "effect": "state"
+    },
+    "Wallet.sendCoins": {
+      "class": "elevate",
+      "effect": "value",
+      "kind": "Send"
+    },
+    "Wallet.setAddressBook": {
+      "class": "free",
+      "effect": "state"
+    },
+    "Wallet.signMessage": {
+      "class": "elevate",
+      "effect": "keys",
+      "kind": "SignMessage"
+    },
+    "Wallet.tryGetBalances": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.unlockWallet": {
+      "authority": "passphrase_argument",
+      "class": "elevate",
+      "effect": "state"
+    },
+    "Wallet.verifyMessage": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "WalletCoinSource.applyValueFilter": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletCoinSource.consumeNeedsResync": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletCoinSource.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "WalletCoinSource.drainEvents": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletCoinSource.getGroupDirectory": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "WalletCoinSource.getGroupRows": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "WalletCoinSource.getGroups": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "WalletCoinSource.getRows": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "WalletCoinSource.noteAddressBookChanged": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletCoinSource.reconcileSelection": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletCoinSource.registerView": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletCoinSource.reloadAndSnapshot": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletCoinSource.selectAll": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletCoinSource.selectGroup": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletCoinSource.setSelected": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletCoinSource.setViewMode": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletCoinSource.setViewSort": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletCoinSource.unregisterView": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletTxSource.destroy": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "WalletTxSource.drainEvents": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletTxSource.getAllRows": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "WalletTxSource.getRowDetail": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "WalletTxSource.getRows": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "WalletTxSource.noteAddressBookChanged": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletTxSource.prime": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletTxSource.registerView": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletTxSource.rowForKey": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "WalletTxSource.setViewFilter": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletTxSource.setViewLimit": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletTxSource.setViewSort": {
+      "class": "free",
+      "effect": "state"
+    },
+    "WalletTxSource.unregisterView": {
+      "class": "free",
+      "effect": "state"
+    }
+  },
+  "rpc": {
+    "abandontransaction": {
+      "class": "free",
+      "effect": "state"
+    },
+    "addkey": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "addmultisigaddress": {
+      "class": "free",
+      "effect": "state"
+    },
+    "addnode": {
+      "class": "free",
+      "effect": "state"
+    },
+    "addpoll": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "addredeemscript": {
+      "class": "free",
+      "effect": "state"
+    },
+    "advertisebeacon": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "advertisebeaconv3": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "analyzepsgt": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "approvepool": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "archivelog": {
+      "class": "free",
+      "effect": "state"
+    },
+    "askforoutstandingblocks": {
+      "class": "free",
+      "effect": "state"
+    },
+    "auditsnapshotaccrual": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "auditsnapshotaccruals": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "authorizepool": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "backupwallet": {
+      "class": "elevate",
+      "effect": "state"
+    },
+    "beaconaudit": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "beaconauth": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "beaconconvergence": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "beaconreport": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "beaconstatus": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "burn": {
+      "class": "elevate",
+      "effect": "value"
+    },
+    "cancelunbroadcasttransaction": {
+      "class": "free",
+      "effect": "state"
+    },
+    "changesettings": {
+      "class": "settings",
+      "effect": "value"
+    },
+    "checkwallet": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "claimhtlc": {
+      "class": "elevate",
+      "effect": "value"
+    },
+    "clearbanned": {
+      "class": "free",
+      "effect": "state"
+    },
+    "combinepsgt": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "consolidatemsunspent": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "consolidateunspent": {
+      "class": "elevate",
+      "effect": "value"
+    },
+    "convergencereport": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "converttopsgt": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "createhtlc": {
+      "class": "elevate",
+      "effect": "value"
+    },
+    "createmrcrequest": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "createpsgt": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "createrawtransaction": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "currentcontractaverage": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "currenttime": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "debug": {
+      "class": "free",
+      "effect": "state"
+    },
+    "decodepsgt": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "decoderawtransaction": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "decodescript": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "deletecscrapermanifest": {
+      "class": "free",
+      "effect": "state"
+    },
+    "disconnectnode": {
+      "class": "free",
+      "effect": "state"
+    },
+    "dumpcontracts": {
+      "class": "free",
+      "effect": "state",
+      "path": true
+    },
+    "dumpprivkey": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "dumpseedphrase": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "dumpwallet": {
+      "class": "elevate",
+      "effect": "keys",
+      "path": true
+    },
+    "encryptwallet": {
+      "authority": "unencrypted_only",
+      "class": "elevate",
+      "effect": "key_writer"
+    },
+    "explainmagnitude": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "exportstats1": {
+      "class": "free",
+      "effect": "state"
+    },
+    "finalizepsgt": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "fundrawtransaction": {
+      "class": "elevate",
+      "effect": "value"
+    },
+    "generate": {
+      "class": "free",
+      "effect": "state"
+    },
+    "generatesuperblock": {
+      "class": "free",
+      "effect": "state"
+    },
+    "generatetoaddress": {
+      "class": "free",
+      "effect": "state"
+    },
+    "getaccount": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getaccountaddress": {
+      "class": "free",
+      "effect": "state"
+    },
+    "getaddednodeinfo": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getaddressesbyaccount": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getaddressesbylabel": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getautogreylist": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getbalance": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getbalancedetail": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getbestblockhash": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getblock": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getblockbymintime": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getblockbynumber": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getblockchaininfo": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getblockcount": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getblockhash": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getblocksbatch": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getblockstats": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getburnreport": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getcheckpoint": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getclockstats": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getconnectioncount": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getdifficulty": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getinfo": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getlaststake": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getmempoolentry": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getmempoolinfo": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getmininginfo": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getmpart": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getmrcinfo": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getnettotals": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getnetworkinfo": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getnewaddress": {
+      "class": "free",
+      "effect": "state"
+    },
+    "getnewpubkey": {
+      "class": "free",
+      "effect": "state"
+    },
+    "getnodeaddresses": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getpeerinfo": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getpollresults": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getpsgtpoolinfo": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getrawmempool": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getrawprojectstatus": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getrawtransaction": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getrawwallettransaction": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getreceivedbyaccount": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getreceivedbyaddress": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getreceivedbylabel": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getrecentblocks": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getseedphraseinfo": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getstakinginfo": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "gettransaction": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "gettxoutproof": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getunconfirmedbalance": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getvotingclaim": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "getwalletinfo": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "help": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "importprivkey": {
+      "class": "elevate",
+      "effect": "key_writer"
+    },
+    "importwallet": {
+      "class": "elevate",
+      "effect": "key_writer",
+      "path": true
+    },
+    "inspectaccrualsnapshot": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "inspectwalletstate": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "keypoolrefill": {
+      "class": "elevate",
+      "effect": "key_writer"
+    },
+    "lifetime": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listaccounts": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listaddressgroupings": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listalerts": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listbanned": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listlabels": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listmandatorysidestakes": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listmanifests": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listpolls": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listpools": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listprojects": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listprotocolentries": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listpsgtpool": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listreceivedbyaccount": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listreceivedbyaddress": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listreceivedbylabel": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listresearcheraccounts": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listscrapers": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listsettings": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listsidestakes": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listsinceblock": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "liststakes": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listtransactions": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "listunspent": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "logging": {
+      "class": "free",
+      "effect": "state"
+    },
+    "magnitude": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "maintainbackups": {
+      "class": "elevate",
+      "effect": "state"
+    },
+    "makekeypair": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "makeseedphrase": {
+      "class": "elevate",
+      "effect": "key_writer"
+    },
+    "migratelabels": {
+      "class": "free",
+      "effect": "state"
+    },
+    "move": {
+      "class": "free",
+      "effect": "state"
+    },
+    "network": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "networktime": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "parseaccrualsnapshotfile": {
+      "class": "free",
+      "effect": "read_only",
+      "path": true
+    },
+    "parselegacysb": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "pendingbeaconreport": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "ping": {
+      "class": "free",
+      "effect": "state"
+    },
+    "projects": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "rainbymagnitude": {
+      "class": "elevate",
+      "effect": "value"
+    },
+    "readdata": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "refundhtlc": {
+      "class": "elevate",
+      "effect": "value"
+    },
+    "registerpool": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "removepool": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "removepsgtfrompool": {
+      "class": "free",
+      "effect": "state"
+    },
+    "reorganize": {
+      "class": "free",
+      "effect": "state"
+    },
+    "repairwallet": {
+      "class": "free",
+      "effect": "state"
+    },
+    "resendtx": {
+      "class": "free",
+      "effect": "state"
+    },
+    "reservebalance": {
+      "class": "free",
+      "effect": "state"
+    },
+    "resetcpids": {
+      "class": "free",
+      "effect": "state"
+    },
+    "restoreseedphrase": {
+      "class": "elevate",
+      "effect": "key_writer"
+    },
+    "revokebeacon": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "savescraperfilemanifest": {
+      "class": "free",
+      "effect": "state"
+    },
+    "scanforunspent": {
+      "class": "free",
+      "effect": "state"
+    },
+    "scraperreport": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "sendalert": {
+      "class": "free",
+      "effect": "state"
+    },
+    "sendalert2": {
+      "class": "free",
+      "effect": "state"
+    },
+    "sendblock": {
+      "class": "free",
+      "effect": "state"
+    },
+    "sendfrom": {
+      "class": "elevate",
+      "effect": "value"
+    },
+    "sendmany": {
+      "class": "elevate",
+      "effect": "value"
+    },
+    "sendrawtransaction": {
+      "class": "free",
+      "effect": "state"
+    },
+    "sendscraperfilemanifest": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "sendtoaddress": {
+      "class": "elevate",
+      "effect": "value"
+    },
+    "setaccount": {
+      "class": "free",
+      "effect": "state"
+    },
+    "setban": {
+      "class": "free",
+      "effect": "state"
+    },
+    "sethdseed": {
+      "class": "elevate",
+      "effect": "key_writer"
+    },
+    "setlabel": {
+      "class": "free",
+      "effect": "state"
+    },
+    "setmocktime": {
+      "class": "free",
+      "effect": "state"
+    },
+    "settxfee": {
+      "class": "elevate",
+      "effect": "value"
+    },
+    "showblock": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "signmessage": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "signpsgtinpool": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "signrawtransaction": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "signrawtransactionwithkey": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "signrawtransactionwithwallet": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "splitunspent": {
+      "class": "elevate",
+      "effect": "value"
+    },
+    "stakelimit": {
+      "class": "free",
+      "effect": "state"
+    },
+    "stop": {
+      "class": "free",
+      "effect": "state"
+    },
+    "submitpsgt": {
+      "class": "free",
+      "effect": "state"
+    },
+    "superblockage": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "superblockaverage": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "superblocks": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "sweepuncoveredcoins": {
+      "class": "elevate",
+      "effect": "value"
+    },
+    "testmempoolaccept": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "testnewsb": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "testpollnotification": {
+      "class": "free",
+      "effect": "state"
+    },
+    "upgradewallet": {
+      "class": "elevate",
+      "effect": "key_writer"
+    },
+    "utxoupdatepsgt": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "validateaddress": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "validatepubkey": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "verifymessage": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "verifytxoutproof": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "versionreport": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "vote": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "votebyid": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "votedetails": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "walletcreatefundedpsgt": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "walletdiagnose": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "walletlock": {
+      "class": "free",
+      "effect": "state"
+    },
+    "walletpassphrase": {
+      "authority": "passphrase_argument",
+      "class": "elevate",
+      "effect": "state"
+    },
+    "walletpassphrasechange": {
+      "authority": "passphrase_argument",
+      "class": "elevate",
+      "effect": "state"
+    },
+    "walletprocesspsgt": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "withdrawpool": {
+      "class": "elevate",
+      "effect": "keys"
+    },
+    "writedata": {
+      "class": "elevate",
+      "effect": "state"
+    }
+  }
+}

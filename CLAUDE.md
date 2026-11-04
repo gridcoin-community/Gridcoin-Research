@@ -156,6 +156,15 @@ Every `vRPCCommands[]` row in `src/rpc/server.cpp` carries a **mandatory heritag
 
 `test/lint/lint-rpc-heritage.py` (wired into `lint-all.sh`) is the single fingerprint authority — it computes and validates the baselines, so run it after any RPC change.
 
+### Entry-Point Access Classes (adding an RPC, an IPC method or an argument)
+
+`src/rpc/entry_point_classes.json` gives every RPC row and every capnp method (`Interface.method`) a class (`read_only`, `free`, `elevate`, `settings`, `dispatch`, `elevated_handle`, `refuse`) and an effect; `test/lint/lint-entry-point-classes.py` (in `lint-all.sh` and the CTest case `lint_entry_point_classes`) checks it against the code. The class table, the baseline rule and the full checklist are in "Entry-point access classes" in `doc/developer-notes.md`.
+
+- **New RPC row:** `access_<class>` on the row and a matching `"rpc"` entry (`access_elevate_inband` is `elevate` with `"authority": "passphrase_argument"`).
+- **New capnp method:** an `"ipc"` entry; an `elevate` one without an authority names its `"kind"` and opens `CapabilityScope` with `CapabilityKind::<kind>` in the method body (a new interface also needs a line in the lint's `IMPLEMENTATIONS` map).
+- **New argument:** one list of `init_tests`; `ArgsManager::SETTING_FREE` if Free; a Refuse argument (any command, path, URL, RPC/IPC or process-mode option) gets a pattern in `share/gridcoin/refused-setting-keys.txt`, and a `COMMAND_LINE_ONLY` argument must match one.
+- Keep the file as `json.dumps(data, indent=2, sort_keys=True)` plus a newline. When unsure of a class, choose `elevate`.
+
 ## Test Conventions
 
 - Framework: Boost Unit Test

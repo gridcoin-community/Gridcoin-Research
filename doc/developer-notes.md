@@ -1753,6 +1753,61 @@ required, documented decision.
   doesn't match `ROW_RE` (e.g. a malformed `heritage_fp`); fix the row, or update `ROW_RE` in
   the lint if the table format itself changed, so no RPC is silently unenforced.
 
+### Entry-point access classes
+
+`src/rpc/entry_point_classes.json` gives every RPC row and every capnp interface method
+(keyed `Interface.method`) an access class and an effect. `test/lint/lint-entry-point-classes.py`,
+run by `lint-all.sh` and as the CTest case `lint_entry_point_classes`, checks the file against
+`src/rpc/server.cpp`, the schemas in `src/ipc/capnp/` and the IPC method bodies, and
+`rpc_tests/every_rpc_row_matches_the_classification_file` checks it against the running RPC table.
+
+Each entry is `{"class": C, "effect": E}` with the optional fields `kind` (the `CapabilityKind`
+an Elevate IPC method opens), `authority`, `path` (`true` when the entry takes a path from the
+caller), `minted_by` and `note`. The file is kept exactly as
+`json.dumps(data, indent=2, sort_keys=True)` plus a newline; the lint rejects any other layout.
+
+| Class | Meaning | Enforced by |
+|---|---|---|
+| `read_only` | Changes no core state, takes no caller path, reveals no key. | nothing to enforce |
+| `free` | Changes core state that neither moves nor redirects value, nor widens who can reach the node or run code on it, nor moves secrets out. | nothing to enforce |
+| `elevate` | Signs or reveals keys, writes key material, moves or redirects value (spend, fee, side stake, change address), widens network exposure, deletes or exports wallet files. Needs a capability or a standing full unlock. | RPC: the `CRPCTable::execute` gate. IPC: `CapabilityScope(..., <kind>)` in the method body. |
+| `elevate` + `authority: passphrase_argument` | The entry verifies a wallet passphrase given as its own argument (unlock, passphrase change, `beginElevation`). | RPC column `access_elevate_inband`: the dispatcher does not gate it; the method verifies. IPC: no kind. |
+| `elevate` + `authority: unencrypted_only` | Acts only on an unencrypted wallet, which always has its keys. | RPC: gated (it passes). IPC: no kind. |
+| `settings` | `changesettings` and `Node.changeSettings`: the class of each setting applies. | `ChangeSettings()`, per setting |
+| `dispatch` | `Node.executeRpcConsoleCommand` (and `Node.executeRpcConsoleSecretCommand` when it is added): the class of the RPC row carried applies. | the `CRPCTable::execute` gate |
+| `elevated_handle` | A method of an object that only Elevate methods make; `minted_by` lists those methods. | the minting method's capability |
+| `refuse` | Never performed: `Wallet.elevateWallet`, and `Wallet.backupWallet` and `Wallet.backupConfigFile`, which are classed ahead of the change that makes them always return false. | the method itself |
+
+The effects are `read_only`, `state`, `value`, `keys` and `key_writer`. An effect of `value`,
+`keys` or `key_writer` needs class `elevate`, `settings`, `dispatch`, `elevated_handle` or
+`refuse`; an effect of `read_only` needs class `read_only`, or `free` with `"path": true`.
+
+**The baseline rule.** The plain GUI runs no RPC server, so `free` is limited to what a program
+of the desktop account can already do, without the passphrase, to a monolithic wallet unlocked
+for staking only (edit the config or settings file and restart, stop the node, lock the wallet,
+manage peers), and to node-operator housekeeping that a restart or the owner can undo.
+Everything else that changes state is `elevate`. The gate lives in `CRPCTable::execute` and in
+the IPC method bodies, so HTTP RPC, the IPC console and the plain GUI with `-server=1` get the
+same answer.
+
+**Checklist:**
+
+- A new RPC row takes `access_<class>` as its seventh field and an entry under `"rpc"` whose
+  class matches it (`access_elevate_inband` is `elevate` with `"authority": "passphrase_argument"`;
+  `access_elevate` is any other `elevate`).
+- A new capnp method takes an entry under `"ipc"`. An Elevate one without an authority names
+  its `kind`, and its method body opens `CapabilityScope` with `CapabilityKind::<kind>`. A
+  method on an interface that is not yet in the lint's `IMPLEMENTATIONS` map needs a line there
+  naming the file and class that implement the interface.
+- A new argument goes into one list of `init_tests/every_registered_argument_has_its_settings_class`,
+  takes `ArgsManager::SETTING_FREE` if it is Free, and, if it is Refuse (any command, path, URL,
+  RPC/IPC or process-mode option), gets a pattern in `share/gridcoin/refused-setting-keys.txt`.
+  A `COMMAND_LINE_ONLY` argument must match a pattern.
+- When `src/test/data/key_entry_points.json` is present, every RPC and IPC method it lists as
+  reaching the wallet's keys must be of class `elevate`, or `dispatch` for a console method,
+  which reaches the keys only through the RPC it carries (that RPC's own row is `elevate`).
+- When unsure of a class, choose `elevate`.
+
 Functional tests
 ----------------
 
