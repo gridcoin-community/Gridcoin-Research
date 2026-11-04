@@ -142,10 +142,11 @@ namespace ipc {
 //! - Init gained `holdsAttachSlot @16` (init.capnp), which tells a second GUI
 //!   that another is attached.
 //! - Wallet gained `beginBackup @40` (wallet.capnp), which returns a FileSource
-//!   (file_transfer.capnp, new) streaming a snapshot the core makes in its own
-//!   transfer directory. `backupWallet @20` and `backupConfigFile @21` stay in
-//!   the schema, but they always return false: the core no longer writes to a
-//!   path the client names.
+//!   streaming a snapshot the core makes in its own transfer directory.
+//!   `backupWallet @20` and `backupConfigFile @21` stay in the schema, but they
+//!   always return false: the core no longer writes to a path the client names.
+//! - file_transfer.capnp is new: the FileSource and FileSink interfaces and
+//!   their structs. No method returns a FileSink yet.
 //!
 //! The new methods alone would be additive, which is why the reason for the
 //! major is the other direction. A GUI and a node of different majors disagree

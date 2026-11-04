@@ -332,11 +332,12 @@ because a released ordinal cannot be dropped, but always returns false.
 `Node` gained `executeRpcConsoleSecretCommand @43`, which carries the
 console's wallet passphrases as `SecureString`, and `Init` gained
 `holdsAttachSlot @15`, which tells a second GUI that another is attached.
-`Wallet` also gained `beginBackup @40 (items)`, which returns a `FileSource` (the
-new `file_transfer.capnp`) streaming copies the core makes in its own transfer
-directory under a Backup capability; `backupWallet @20` and `backupConfigFile
-@21` stay in the schema but always return false, since the core no longer writes
-to a path the client names. The new methods alone would be
+`Wallet` also gained `beginBackup @40 (items)`, which returns a `FileSource`
+streaming copies the core makes in its own transfer directory under a Backup
+capability; `backupWallet @20` and `backupConfigFile @21` stay in the schema but
+always return false, since the core no longer writes to a path the client names.
+The new `file_transfer.capnp` declares the `FileSource` and `FileSink`
+interfaces; no method returns a `FileSink` yet. The new methods alone would be
 additive; the major is for the other direction. A GUI and a node of
 different majors disagree on how an operation is authorised, so each such action
 would fail with a message the user cannot act on. A newer GUI against

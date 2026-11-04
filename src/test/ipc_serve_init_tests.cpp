@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "interfaces/connection_scope.h"
 #include "interfaces/init.h"
 // Complete types for the unique_ptrs/shared_ptrs the gated factories return.
 #include "interfaces/gui_state.h"
@@ -9,7 +10,6 @@
 #include "interfaces/node.h"
 #include "interfaces/psgt.h"
 #include "interfaces/researcher.h"
-#include "interfaces/connection_scope.h"
 #include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
 #include "interfaces/voting.h"
