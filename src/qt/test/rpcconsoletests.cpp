@@ -4,8 +4,10 @@
 
 #include "qt/test/rpcconsoletests.h"
 
+#include "interfaces/node.h"
 #include "qt/rpcconsole.h"
 #include "qt/test/interfacefakes.h"
+#include "support/lockedpool.h"
 
 #include <QLineEdit>
 #include <QPushButton>
@@ -135,8 +137,9 @@ void RPCConsoleTests::passphraseCommandsKeepNoSecretInHistoryOrPane()
     }
 }
 
-// The console line is cleansed without going through the secure pool, which refuses a buffer over
-// 256 KiB: a pasted raw transaction can be that long.
+// The helpers take any QString, so the line's bytes must not go through the secure pool, which
+// refuses a buffer over 256 KiB. The console's own input stops far short of that; the helpers are
+// called directly here.
 void RPCConsoleTests::handlesLineLongerThanSecurePool()
 {
     const QString hex(300 * 1024, QLatin1Char('a'));
@@ -250,4 +253,76 @@ void RPCConsoleTests::passphraseCommandIsNeverRunAgainUnderUnlock()
 
     std::vector<std::string> plain_args{"sendtoaddress", "SBvCq9hD7WtYpRk3mXnJ5fLgZ2aEu8VsQo", "1"};
     QVERIFY(DispatchConsoleCommand(node, plain_args).wallet_unlock_needed);
+}
+
+// A passphrase the secure pool cannot hold is refused before anything is built or sent, and its
+// parsed copy is still overwritten. One byte less than an arena is the longest that fits.
+void RPCConsoleTests::refusesPassphraseTooLongForSecurePool()
+{
+    qt_test::FakeNode node;
+    const size_t too_long = 300 * 1024;
+    std::vector<std::string> args{"walletpassphrase", std::string(too_long, 'p'), "60"};
+
+    const interfaces::RpcConsoleResult result = DispatchConsoleCommand(node, args);
+
+    QVERIFY(!result.ok);
+    QCOMPARE(result.output, std::string("Error: walletpassphrase: passphrase too long"));
+    QVERIFY(node.m_secret_calls.empty());
+    QVERIFY(node.m_console_calls.empty());
+    QCOMPARE(args[1], std::string(too_long, '\0'));
+
+    std::vector<std::string> at_limit{"walletpassphrasechange", "old", std::string(LockedPool::ARENA_SIZE - 1, 'n')};
+    QVERIFY(DispatchConsoleCommand(node, at_limit).output.empty());
+    QCOMPARE(node.m_secret_calls.size(), size_t{1});
+    QCOMPARE(node.m_secret_calls.front().passphrases.at(1).size(), size_t{LockedPool::ARENA_SIZE - 1});
+
+    std::vector<std::string> past_limit{"walletpassphrasechange", "old", std::string(LockedPool::ARENA_SIZE, 'n')};
+    QCOMPARE(DispatchConsoleCommand(node, past_limit).output,
+             std::string("Error: walletpassphrasechange: passphrase too long"));
+    QCOMPARE(node.m_secret_calls.size(), size_t{1});
+}
+
+// Every method the console routes as a passphrase command must also be redacted, or its passphrase
+// would go to the secret path and still be echoed into the pane, the history and the log. The
+// methods come from the node's own RPC table.
+void RPCConsoleTests::everyPassphraseMethodIsRedacted()
+{
+    size_t passphrase_methods = 0;
+
+    for (const std::string& method : interfaces::MakeNode()->listRpcCommands()) {
+        if (interfaces::RpcConsolePassphraseIndexes(method) == nullptr) continue;
+        ++passphrase_methods;
+
+        const QString name = QString::fromStdString(method);
+        QCOMPARE(RedactSensitiveArgs(name + QStringLiteral(" ") + PHRASE_PASSWORD + QStringLiteral(" x")),
+                 name + QStringLiteral(" (arguments not shown)"));
+    }
+
+    // walletpassphrase, walletpassphrasechange and encryptwallet at least.
+    QVERIFY(passphrase_methods >= 3);
+}
+
+// A mis-cased passphrase command never runs, but its arguments are still kept out of the history,
+// the pane and the "Handling Error" log line, which all use RedactSensitiveArgs.
+void RPCConsoleTests::redactsMisCasedPassphraseCommand()
+{
+    QCOMPARE(RedactSensitiveArgs(QStringLiteral("WalletPassphrase ") + PHRASE_PASSWORD + QStringLiteral(" 60")),
+             QStringLiteral("WalletPassphrase (arguments not shown)"));
+
+    // Unparseable, so through the leading-token fallback.
+    QCOMPARE(RedactSensitiveArgs(QStringLiteral("WALLETPASSPHRASECHANGE old \"") + PHRASE_PASSWORD),
+             QStringLiteral("WALLETPASSPHRASECHANGE (arguments not shown)"));
+
+    RPCConsole console;
+    auto* input = console.findChild<QLineEdit*>(QStringLiteral("lineEdit"));
+    auto* pane = console.findChild<QTextEdit*>(QStringLiteral("messagesWidget"));
+    QVERIFY(input);
+    QVERIFY(pane);
+
+    input->setText(QStringLiteral("EncryptWallet ") + PHRASE_PASSWORD);
+    QTest::keyClick(input, Qt::Key_Return);
+    QTest::keyClick(input, Qt::Key_Up);
+
+    QCOMPARE(input->text(), QStringLiteral("EncryptWallet (arguments not shown)"));
+    QVERIFY(!pane->toPlainText().contains(PHRASE_PASSWORD));
 }

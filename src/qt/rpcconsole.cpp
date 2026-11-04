@@ -8,6 +8,7 @@
 #include "qt/decoration.h"
 #include "guiutil.h"
 #include "support/cleanse.h"
+#include "support/lockedpool.h"
 #include "util/strencodings.h"
 #endif
 
@@ -121,8 +122,8 @@ private:
 
 //! The UTF-8 bytes of a console line, the bytes toStdString() gives, overwritten
 //! when this goes out of scope: the line can carry a passphrase. A QByteArray,
-//! not a SecureString, because the secure pool refuses a buffer over 256 KiB,
-//! and a pasted raw transaction can be longer than that.
+//! not a SecureString, because the helpers that use it take any QString, and the
+//! secure pool refuses a buffer over 256 KiB.
 class ConsoleLineBytes
 {
 public:
@@ -298,6 +299,14 @@ const std::set<std::string> SENSITIVE_ARG_COMMANDS = {
     "walletpassphrase",
     "walletpassphrasechange",
 };
+
+//! Whether \p name is in SENSITIVE_ARG_COMMANDS, in any letter case. The
+//! dispatcher matches a method name exactly, so a mis-cased one never runs, but
+//! its arguments are just as secret in the history, the pane and the log.
+bool IsSensitiveArgCommand(const std::string& name)
+{
+    return SENSITIVE_ARG_COMMANDS.count(ToLower(name)) != 0;
+}
 } // namespace
 
 namespace RPCConsoleDetail {
@@ -350,7 +359,7 @@ QString RedactSensitiveArgs(const QString& command)
 
     const ConsoleLineBytes line(command);
     if (parseCommandLine(args, line.view()) && !args.empty()) {
-        if (!SENSITIVE_ARG_COMMANDS.count(args[0])) return command;
+        if (!IsSensitiveArgCommand(args[0])) return command;
         return QString::fromStdString(args[0]) + QStringLiteral(" (arguments not shown)");
     }
 
@@ -367,7 +376,7 @@ QString RedactSensitiveArgs(const QString& command)
     // still sees which command failed. Text whose first token is not recognised is
     // returned unchanged, so an ordinary typo is still visible to correct.
     const std::string token = LeadingCommandToken(command);
-    if (!token.empty() && SENSITIVE_ARG_COMMANDS.count(token)) {
+    if (!token.empty() && IsSensitiveArgCommand(token)) {
         return QString::fromStdString(token) + QStringLiteral(" (arguments not shown)");
     }
 
@@ -399,6 +408,19 @@ interfaces::RpcConsoleResult DispatchConsoleCommand(interfaces::Node& node, std:
             }
         }
     } passphrase_cleanser{args, *indexes};
+
+    // A SecureString of n bytes takes n + 1 from one arena of the secure pool,
+    // so a longer passphrase cannot be held at all. It is refused here, before
+    // anything is built or sent, rather than thrown from the allocator.
+    for (const int index : *indexes) {
+        const size_t position = static_cast<size_t>(index) + 1;
+
+        if (position < args.size() && args[position].size() > LockedPool::ARENA_SIZE - 1) {
+            interfaces::RpcConsoleResult refused;
+            refused.output = "Error: " + method + ": passphrase too long";
+            return refused;
+        }
+    }
 
     // The vector is reserved first and each passphrase is built in a secure
     // buffer of its own, so no move copies one out of a string's inline storage,

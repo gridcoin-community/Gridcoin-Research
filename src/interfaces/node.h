@@ -389,10 +389,10 @@ std::unique_ptr<Node> MakeNode();
 //! after the method name, in parameter order: walletpassphrase {0},
 //! walletpassphrasechange {0, 1}, encryptwallet {0}. These are the methods
 //! Node::executeRpcConsoleSecretCommand runs and Node::executeRpcConsoleCommand
-//! refuses. nullptr for every other method. It reads the RPC server's table
-//! (PassphraseParamIndexes) in the calling process, with no call to the node.
+//! refuses. nullptr for every other method. It reads the table in
+//! rpc/passphrase_params.cpp (PassphraseParamIndexes) in the calling process,
+//! with no call to the node.
 const std::vector<int>* RpcConsolePassphraseIndexes(const std::string& method);
-
 
 // Marshalability pins (interfaces/marshal.h): each DTO above must stay a
 // copyable value type the node side can fill and ship across the boundary.

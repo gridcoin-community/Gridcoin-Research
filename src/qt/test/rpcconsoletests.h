@@ -28,6 +28,9 @@ private slots:
     void routesOrdinaryCommandOverPlainPath();
     void passphraseCommandWithoutArgsStaysOnSecretPath();
     void passphraseCommandIsNeverRunAgainUnderUnlock();
+    void refusesPassphraseTooLongForSecurePool();
+    void everyPassphraseMethodIsRedacted();
+    void redactsMisCasedPassphraseCommand();
 };
 
 #endif // BITCOIN_QT_TEST_RPCCONSOLETESTS_H

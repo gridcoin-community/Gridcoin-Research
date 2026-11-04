@@ -293,6 +293,17 @@ QString HtmlEscape(const std::string& str, bool fMultiLine)
 SecureString SecureStringFromQString(const QString& text)
 {
     QByteArray utf8 = text.toUtf8();
+
+    // Overwritten however this returns: reserve() throws std::bad_alloc past the
+    // secure pool's limit.
+    struct Utf8Cleanser {
+        QByteArray& bytes;
+        ~Utf8Cleanser()
+        {
+            if (!bytes.isEmpty()) memory_cleanse(bytes.data(), static_cast<size_t>(bytes.size()));
+        }
+    } utf8_cleanser{utf8};
+
     const size_t size = static_cast<size_t>(utf8.size());
 
     // The buffer is reserved before the bytes go in, past the inline capacity of
@@ -300,8 +311,6 @@ SecureString SecureStringFromQString(const QString& text)
     SecureString out;
     out.reserve(std::max<size_t>(size, 100));
     out.assign(utf8.constData(), size);
-
-    if (size > 0) memory_cleanse(utf8.data(), size);
 
     return out;
 }

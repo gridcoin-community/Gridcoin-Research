@@ -45,8 +45,11 @@ QString RedactSensitiveArgs(const QString& command);
 //! cleansed in place (its size kept) before return, a throw included. Their
 //! result never has wallet_unlock_needed set: the command carries its own
 //! passphrase, so the console does not keep it to run again under an unlock.
-//! A passphrase past the secure pool's 256 KiB throws std::bad_alloc, as any
-//! SecureString does. Other methods go to executeRpcConsoleCommand.
+//! A passphrase longer than one arena of the secure pool holds
+//! (LockedPool::ARENA_SIZE - 1 bytes) is refused before any SecureString is
+//! built or the node is called: ok = false, output "Error: <method>: passphrase
+//! too long", and the args are still cleansed. Other methods go to
+//! executeRpcConsoleCommand.
 interfaces::RpcConsoleResult DispatchConsoleCommand(interfaces::Node& node, std::vector<std::string>& args);
 } // namespace RPCConsoleDetail
 
