@@ -36,6 +36,7 @@
 #include "sync.h"
 #include "test/chain_setup.h"
 #include "test/data/key_entry_points.json.h"
+#include "test/file_size_limit_guard.h"
 #include "test/mock_wallet_db.h"
 #include "test/psgt_test_helpers.h"
 #include "test/staking_test_peers.h"
@@ -1476,6 +1477,13 @@ BOOST_AUTO_TEST_CASE(ipc_pool_draws_make_no_key_while_staking_only)
     DriveIpcRows(find_value(Table(), "ipc_pool_draw"));
 }
 
+//! The whole of the file at \p path, or "" when it cannot be read.
+std::string ReadFile(const fs::path& path)
+{
+    fsbridge::ifstream file(path);
+    return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+}
+
 //! What a call that should fail threw: its RPC error code and message, or
 //! nullopt and the exception's text when it threw something else.
 template <typename Fn>
@@ -1500,13 +1508,11 @@ BOOST_AUTO_TEST_CASE(dumpwallet_writes_no_dump_with_a_key_missing)
     fs::remove(path);
 
     // Unlocked for staking only, and past the RPC's own unlock check, which
-    // refuses before the writer runs: the writer refuses before it reads a key.
+    // refuses before the writer runs: the writer refuses before it reads a key,
+    // and the file it had opened is removed.
     {
         KeyReachWallet fx(WalletOptions{});
         fx.UnlockFor(UnlockScope::StakingOnly);
-
-        // A file already there is replaced by a dump or by nothing.
-        fsbridge::ofstream(path) << "an earlier file\n";
 
         const auto [code, message] = RpcError([&] { WriteWalletDump(fx.wallet, DUMP_FILE); });
 
@@ -1602,50 +1608,89 @@ BOOST_AUTO_TEST_CASE(dumpwallet_writes_no_dump_with_a_key_missing)
         BOOST_CHECK(dump.find("# End of dump\n") != std::string::npos);
     }
 
-    // A dump that cannot be written is no success, and what the path names is
-    // removed only when it is a regular file. /dev/full takes the dump and fails
-    // it at the flush; where there is no /dev/full this part is skipped.
-    if (fs::exists("/dev/full")) {
+#ifndef WIN32
+    // A dump that cannot be written is no success, and the file it had begun is
+    // removed. The file-size limit fails the writes, as a full disk would.
+    {
         KeyReachWallet fx(WalletOptions{});
         fx.UnlockFor(UnlockScope::Full);
 
-        const Outcome outcome = Call("dumpwallet", {"/dev/full"});
+        Outcome outcome;
+        {
+            grc_test::FileSizeLimitGuard limit(64);
+            outcome = Call("dumpwallet", {DUMP_FILE});
+            limit.Restore();
+        }
 
         BOOST_CHECK_MESSAGE(outcome.code == RPC_WALLET_ERROR, outcome.Describe());
         BOOST_CHECK_EQUAL(outcome.message, "dumpwallet: cannot write the dump file");
-        BOOST_CHECK(fs::exists("/dev/full"));
-    } else {
-        BOOST_TEST_MESSAGE("no /dev/full: the write failure is not checked here");
+        BOOST_CHECK(!fs::exists(fs::symlink_status(path)));
+    }
+#endif
+}
+
+//! dumpwallet never writes over what is at its path: a file, or a symbolic
+//! link, also one that leads nowhere. Nothing is opened, truncated or removed
+//! there. A path where nothing is still gets the dump.
+BOOST_AUTO_TEST_CASE(dumpwallet_refuses_an_existing_destination)
+{
+    const fs::path path = GetDataDir() / DUMP_FILE;
+    const fs::path target = GetDataDir() / "key_entry_points_dump_target.txt";
+    fs::remove(path);
+    fs::remove(target);
+
+    const std::string refusal = "File already exists at location. Please delete or rename old file first.";
+
+    KeyReachWallet fx(WalletOptions{});
+    fx.UnlockFor(UnlockScope::Full);
+
+    // A file.
+    {
+        fsbridge::ofstream(path) << "an earlier file\n";
+
+        const Outcome outcome = Call("dumpwallet", {DUMP_FILE});
+
+        BOOST_CHECK_MESSAGE(outcome.code == RPC_INVALID_PARAMETER, outcome.Describe());
+        BOOST_CHECK_EQUAL(outcome.message, refusal);
+        BOOST_CHECK_EQUAL(ReadFile(path), "an earlier file\n");
+        fs::remove(path);
     }
 
-    // A symbolic link at the path is not removed when the dump fails. Where links
-    // cannot be made this part is skipped.
-    {
-        const fs::path target = GetDataDir() / "key_entry_points_dump_target.txt";
-        fs::remove(target);
+    // A symbolic link to a file, and one that leads nowhere. Where links cannot
+    // be made this part is skipped.
+    bool linked{false};
+    try {
+        fs::create_symlink(target, path);
+        linked = true;
+    } catch (const std::exception& e) {
+        BOOST_TEST_MESSAGE("no symbolic link: " << e.what());
+    }
+
+    if (linked) {
+        const Outcome dangling = Call("dumpwallet", {DUMP_FILE});
+
+        BOOST_CHECK_MESSAGE(dangling.code == RPC_INVALID_PARAMETER, dangling.Describe());
+        BOOST_CHECK_EQUAL(dangling.message, refusal);
+        BOOST_CHECK(fs::is_symlink(fs::symlink_status(path)));
+        BOOST_CHECK(!fs::exists(fs::symlink_status(target)));
+
         fsbridge::ofstream(target) << "the link's target\n";
 
-        bool linked{false};
-        try {
-            fs::create_symlink(target, path);
-            linked = true;
-        } catch (const std::exception& e) {
-            BOOST_TEST_MESSAGE("no symbolic link: " << e.what());
-        }
+        const Outcome to_a_file = Call("dumpwallet", {DUMP_FILE});
 
-        if (linked) {
-            KeyReachWallet fx(WalletOptions{});
-            fx.UnlockFor(UnlockScope::StakingOnly);
-
-            const auto [code, message] = RpcError([&] { WriteWalletDump(fx.wallet, DUMP_FILE); });
-
-            BOOST_CHECK(code == RPC_WALLET_UNLOCK_NEEDED);
-            BOOST_CHECK(fs::is_symlink(fs::symlink_status(path)));
-        }
+        BOOST_CHECK_MESSAGE(to_a_file.code == RPC_INVALID_PARAMETER, to_a_file.Describe());
+        BOOST_CHECK(fs::is_symlink(fs::symlink_status(path)));
+        BOOST_CHECK_EQUAL(ReadFile(target), "the link's target\n");
 
         fs::remove(path);
         fs::remove(target);
     }
+
+    // Where nothing is, the dump is written.
+    const Outcome fresh = Call("dumpwallet", {DUMP_FILE});
+    BOOST_CHECK_MESSAGE(fresh.returned, fresh.Describe());
+    BOOST_CHECK(ReadFile(path).find("# End of dump\n") != std::string::npos);
+    fs::remove(path);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

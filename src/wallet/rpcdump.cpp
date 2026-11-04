@@ -207,6 +207,7 @@ static const RPCHelpMan dumpwallet_help{
     "dumpwallet",
     "Dumps all wallet keys in a human-readable format into the specified file.\n"
     "If a path is not specified in the filename, the data directory is used.\n"
+    "The file must not already exist.\n"
     "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
     {
         {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename to dump the wallet to."},
@@ -264,6 +265,16 @@ void WriteWalletDump(CWallet& wallet, const std::string& filename)
     // If provided filename does not have a path, then append parent path, otherwise leave alone.
     if (PathForDump.parent_path().empty())
         PathForDump = DefaultPathDataDir / PathForDump;
+
+    // Nothing at the path is written over: a bare name lands in the data
+    // directory, among the node's own files. A symbolic link counts, also one
+    // that leads nowhere, and so does a path that cannot be examined. Refused
+    // before the file is opened, so nothing there is truncated or removed.
+    boost::system::error_code ec;
+    if (fs::symlink_status(PathForDump, ec).type() != fs::file_not_found) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           "File already exists at location. Please delete or rename old file first.");
+    }
 
     fsbridge::ofstream file;
     file.open(PathForDump);

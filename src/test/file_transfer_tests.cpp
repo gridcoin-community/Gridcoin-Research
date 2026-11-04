@@ -5,6 +5,7 @@
 #include "crypto/sha256.h"
 #include "fs.h"
 #include "interfaces/file_transfer.h"
+#include "test/file_size_limit_guard.h"
 #include "test/test_gridcoin.h"
 #include "uint256.h"
 #include "util/system.h"
@@ -22,58 +23,11 @@
 #include <vector>
 
 #ifndef WIN32
-#include <signal.h>
-#include <sys/resource.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
 
 namespace {
-
-#ifndef WIN32
-// Restores the file-size limit and the SIGXFSZ disposition on every exit path.
-class FileSizeLimitGuard
-{
-public:
-    explicit FileSizeLimitGuard(rlim_t limit)
-    {
-        struct sigaction ignore;
-        ignore.sa_handler = SIG_IGN;
-        sigemptyset(&ignore.sa_mask);
-        ignore.sa_flags = 0;
-
-        m_signal_saved = ::sigaction(SIGXFSZ, &ignore, &m_old_action) == 0;
-        m_limit_saved = ::getrlimit(RLIMIT_FSIZE, &m_old_limit) == 0;
-
-        if (m_limit_saved) {
-            struct rlimit lim = m_old_limit;
-            lim.rlim_cur = limit;
-            ::setrlimit(RLIMIT_FSIZE, &lim);
-        }
-    }
-
-    ~FileSizeLimitGuard() { Restore(); }
-
-    void Restore()
-    {
-        if (m_limit_saved) {
-            ::setrlimit(RLIMIT_FSIZE, &m_old_limit);
-            m_limit_saved = false;
-        }
-
-        if (m_signal_saved) {
-            ::sigaction(SIGXFSZ, &m_old_action, nullptr);
-            m_signal_saved = false;
-        }
-    }
-
-private:
-    struct rlimit m_old_limit{};
-    struct sigaction m_old_action{};
-    bool m_limit_saved{false};
-    bool m_signal_saved{false};
-};
-#endif // !WIN32
 
 std::vector<unsigned char> Bytes(size_t n)
 {
@@ -615,7 +569,7 @@ BOOST_AUTO_TEST_CASE(download_write_failure_removes_part)
     interfaces::TransferOutcome out;
 
     {
-        FileSizeLimitGuard guard(4096);
+        grc_test::FileSizeLimitGuard guard(4096);
         out = interfaces::DownloadEntry(src, 0, dir / "d.bin", nullptr, cancel, 64 * 1024);
         guard.Restore();
     }

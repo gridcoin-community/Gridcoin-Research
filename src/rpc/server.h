@@ -234,7 +234,10 @@ void EnsureWalletIsUnlocked(const CWallet& wallet);
 //! wallet does not hold is no key, and is left out. A dump that cannot
 //! be written throws RPC_WALLET_ERROR. On any failure part way through, a
 //! regular file at the path is removed before the error leaves; a symbolic
-//! link or a special file there is left as it is.
+//! link or a special file there is left as it is. Anything already at the
+//! path (a file, a symbolic link, also one that leads nowhere, or a path that
+//! cannot be examined) is refused with RPC_INVALID_PARAMETER before the file
+//! is opened, so nothing there is truncated or removed.
 void WriteWalletDump(CWallet& wallet, const std::string& filename);
 
 //! \brief Take a request's elevation header out of its headers.
