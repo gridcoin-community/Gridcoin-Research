@@ -7,4 +7,4 @@ usr/share/metainfo/us.gridcoin.GridcoinResearch.metainfo.xml
 usr/share/bash-completion/completions/gridcoinresearchd
 usr/share/bash-completion/completions/gridcoinresearch
 usr/lib/systemd/system/gridcoinresearchd-autounlock.service
-usr/share/gridcoin/gridcoin_autounlock.py
+usr/share/gridcoin/gridcoin_autounlock_helper.py

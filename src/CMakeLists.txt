@@ -538,7 +538,7 @@ if(ENABLE_DAEMON)
         # The stake-only autounlock helper the unit above runs. install(PROGRAMS ...)
         # sets the executable bit; share/gridcoin is portable (share == share on
         # every distro), matching the unit's ExecStart path.
-        install(PROGRAMS "${CMAKE_SOURCE_DIR}/contrib/wallettools/gridcoin_autounlock.py" COMPONENT daemon
+        install(PROGRAMS "${CMAKE_SOURCE_DIR}/contrib/init/gridcoin_autounlock_helper.py" COMPONENT daemon
             DESTINATION "${CMAKE_INSTALL_DATADIR}/gridcoin"
         )
         install(FILES "${CMAKE_SOURCE_DIR}/contrib/completions/bash/gridcoinresearchd.bash" COMPONENT daemon

@@ -492,7 +492,7 @@ bool static Bind(const CService &addr, bool fError = true) {
 //!
 //! Base58 is alphanumeric, which matters twice over: the config parser sees no
 //! character it treats specially, and core rejects '#' in an rpcpassword outright
-//! (the autounlock helper documents the same constraint). The encoding is 43-44
+//! (a config line is cut at the first '#'). The encoding is 43-44
 //! characters, so it can never collide with the fixed username either.
 static std::string GenerateRpcPassword()
 {
@@ -519,15 +519,15 @@ static std::string GenerateRpcPassword()
 //!  - The newbie headless install. Someone hand-writes a config, forgets credentials,
 //!    and ends up with an instance that cannot be controlled at all.
 //!
-//! The expectation for a headless daemon is that it answers RPC on loopback. That is
-//! not merely convention here: the stake-only autounlock helper is pure RPC
-//! (contrib/wallettools/gridcoin_autounlock.py), so an RPC-less daemon silently loses
-//! the one feature the unattended deployment exists for.
+//! The expectation for a headless daemon is that it answers RPC on loopback, so that
+//! the local endpoint is controllable. The Linux autounlock helper
+//! (contrib/init/gridcoin_autounlock_helper.py) does not use RPC: the core pulls the
+//! passphrase over a socket. The Windows scheduled task helper is still RPC based.
 //!
 //! Scope, deliberately narrow:
 //!  - Only when an RPC server is actually being started. An explicit server=0 is a real
-//!    choice and is honoured -- the config is not touched (and autounlock will not work,
-//!    which is documented).
+//!    choice and is honoured -- the config is not touched (and an RPC based autounlock will
+//!    not work, which is documented).
 //!  - Only ever APPENDS. Nothing already in the file is rewritten or removed. A missing
 //!    rpcpassword is an absence rather than a decision -- no interface ever offered the
 //!    user a way to choose it -- which is what separates this from the data directory
@@ -609,7 +609,7 @@ static void AddMissingRpcCredentials()
 //! The generated password is what the error message itself recommends: a random
 //! 256-bit value, base58-encoded, with a fixed username that differs from it.
 //! Nobody needs to memorise it -- it exists so the local RPC endpoint is not
-//! open, and the autounlock helper reads it from this file.
+//! open, and local RPC clients read it from this file.
 //!
 //! The file is created owner-only where the platform expresses that as a mode.
 //! On Windows it inherits the data directory's owner+SYSTEM DACL (see
