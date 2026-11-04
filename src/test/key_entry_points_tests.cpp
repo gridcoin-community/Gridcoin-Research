@@ -667,13 +667,40 @@ std::optional<Refusal> ParseRefusal(const std::string& name)
 }
 
 //! What a driver or probe came to: whether it was refused, whether it did what
-//! it was asked, and what it said.
+//! it was asked, what it said, and where it stopped -- the status by name, or the
+//! error text -- for the stop marks to compare with.
 struct DriverOutcome
 {
     bool refused{false};
     bool succeeded{false};
     std::string detail;
+    std::string stop;
 };
+
+//! The name \p names gives \p status, or "status <n>" for one it does not name.
+template <typename Status>
+std::string StatusName(Status status, const std::vector<std::pair<Status, std::string>>& names)
+{
+    for (const auto& [value, name] : names) {
+        if (value == status) return name;
+    }
+
+    return strprintf("status %d", static_cast<int>(status));
+}
+
+std::string BeaconStatusName(interfaces::BeaconStatus status)
+{
+    using interfaces::BeaconStatus;
+
+    return StatusName(status, {{BeaconStatus::ACTIVE, "ACTIVE"},
+                               {BeaconStatus::ERROR_INSUFFICIENT_FUNDS, "ERROR_INSUFFICIENT_FUNDS"},
+                               {BeaconStatus::ERROR_MISSING_KEY, "ERROR_MISSING_KEY"},
+                               {BeaconStatus::ERROR_TX_FAILED, "ERROR_TX_FAILED"},
+                               {BeaconStatus::ERROR_INVALID_PROOF_XML, "ERROR_INVALID_PROOF_XML"},
+                               {BeaconStatus::ERROR_WALLET_LOCKED, "ERROR_WALLET_LOCKED"},
+                               {BeaconStatus::NO_CPID, "NO_CPID"},
+                               {BeaconStatus::PENDING, "PENDING"}});
+}
 
 //! A probe: the narrowest function the row reaches, run on the calling thread
 //! under whatever capability scope that thread holds.
@@ -684,7 +711,8 @@ DriverOutcome Probe(const std::string& probe, KeyReachWallet& fx)
         CTxDestination address;
         CKey key;
         const bool authorized = IsScraperAuthorizedToBroadcastManifests(address, key, nullptr);
-        return {!authorized, authorized, authorized ? "authorised" : "not authorised"};
+        const std::string said = authorized ? "authorised" : "not authorised";
+        return {!authorized, authorized, said, said};
     }
 
     if (probe == "VoteBuilder::BuildContractTx") {
@@ -699,14 +727,14 @@ DriverOutcome Probe(const std::string& probe, KeyReachWallet& fx)
             LOCK(cs_main);
             GRC::VoteBuilder::ForPoll(poll, uint256::ONE).AddResponse(uint8_t {0}).BuildContractTx(&fx.wallet, 2);
         } catch (const std::exception& e) {
-            return {e.what() == VotingStakingOnlyRefusal(), false, e.what()};
+            return {e.what() == VotingStakingOnlyRefusal(), false, e.what(), e.what()};
         }
 
-        return {false, true, "built"};
+        return {false, true, "built", "built"};
     }
 
     BOOST_ERROR("unknown probe " << probe);
-    return {false, false, "unknown probe"};
+    return {false, false, "unknown probe", "unknown probe"};
 }
 
 //! The manifests a scraper row published, for its messages; nothing for the
@@ -745,6 +773,16 @@ bool ReachedTheKey(const UniValue& row, const Outcome& outcome)
 
     const UniValue complete = find_value(outcome.result, "complete");
     return complete.isNull() || complete.isTrue();
+}
+
+//! Whether an RPC row the table marks as stopping before the key stopped where
+//! its expected_stop says: with that RPC error code, or "returned".
+bool StopsAsMarked(const UniValue& row, const Outcome& outcome)
+{
+    const UniValue expected = find_value(row, "expected_stop");
+
+    if (expected.isNum()) return outcome.code == expected.get_int();
+    return expected.isStr() && expected.get_str() == "returned" && outcome.returned;
 }
 
 //! Drive the rows of one RPC section. Each is refused without a capability,
@@ -856,7 +894,11 @@ void DriveRpcRows(const UniValue& rows, std::optional<Refusal> section_refusal)
                     BOOST_CHECK_MESSAGE(published > 0, name << ": nothing published under an RpcRequest capability");
                 }
 
-                if (stops_before_key.empty()) {
+                if (!stops_before_key.empty()) {
+                    BOOST_CHECK_MESSAGE(StopsAsMarked(*row, allowed), name << ": no longer stops as its mark says ("
+                                        << find_value(*row, "expected_stop").write() << "): " << allowed.Describe()
+                                        << "; update stops_before_key and expected_stop");
+                } else {
                     BOOST_CHECK_MESSAGE(ReachedTheKey(*row, allowed), name << ": did not reach the key code under "
                                         "an RpcRequest capability, and the table gives no reason: "
                                         << allowed.Describe());
@@ -907,9 +949,11 @@ std::map<std::string, IpcDriver> IpcDrivers()
         std::string signature;
         const interfaces::MessageSignStatus status =
             interfaces::MakeWallet(&fx.wallet)->signMessage(EncodeDestination(CTxDestination(fx.own_id)), "x", signature);
+        const std::string name = StatusName(status, {{interfaces::MessageSignStatus::OK, "OK"},
+                                                     {interfaces::MessageSignStatus::KeyNotAvailable, "KeyNotAvailable"},
+                                                     {interfaces::MessageSignStatus::SigningFailed, "SigningFailed"}});
         return DriverOutcome{status == interfaces::MessageSignStatus::KeyNotAvailable,
-                             status == interfaces::MessageSignStatus::OK,
-                             strprintf("status %d", static_cast<int>(status))};
+                             status == interfaces::MessageSignStatus::OK, name, name};
     };
 
     drivers["Wallet.sendCoins"] = [](KeyReachWallet& fx) {
@@ -918,9 +962,13 @@ std::map<std::string, IpcDriver> IpcDrivers()
         recipient.amount = COIN;
 
         const interfaces::SendCoinsResult result = interfaces::MakeWallet(&fx.wallet)->sendCoins({recipient}, std::nullopt, 0);
-        return DriverOutcome{result.status == interfaces::SendCoinsStatus::WalletUnlockedForStakingOnly,
-                             result.status == interfaces::SendCoinsStatus::OK,
-                             strprintf("status %d", static_cast<int>(result.status))};
+        using interfaces::SendCoinsStatus;
+        const std::string name = StatusName(result.status, {{SendCoinsStatus::OK, "OK"},
+                                                            {SendCoinsStatus::AmountExceedsBalance, "AmountExceedsBalance"},
+                                                            {SendCoinsStatus::WalletUnlockedForStakingOnly,
+                                                             "WalletUnlockedForStakingOnly"}});
+        return DriverOutcome{result.status == SendCoinsStatus::WalletUnlockedForStakingOnly,
+                             result.status == SendCoinsStatus::OK, name, name};
     };
 
     drivers["PSGTPoolContext.signPSGT"] = [](KeyReachWallet& fx) {
@@ -929,7 +977,8 @@ std::map<std::string, IpcDriver> IpcDrivers()
             SerializePSGT(psgt_test::MakeSpendPSGT(previous, 9 * COIN)));
         return DriverOutcome{!result.ok && result.error == PSGT_SIGN_REFUSAL,
                              result.ok && result.signed_now == 1,
-                             strprintf("ok %d, signed %d: %s", result.ok, result.signed_now, result.error)};
+                             strprintf("ok %d, signed %d: %s", result.ok, result.signed_now, result.error),
+                             result.ok ? strprintf("signed %d", result.signed_now) : result.error};
     };
 
     drivers["PSGTPoolContext.signPoolEntry"] = [](KeyReachWallet& fx) {
@@ -937,22 +986,29 @@ std::map<std::string, IpcDriver> IpcDrivers()
         std::string txid;
         const interfaces::PSGTSignStatus status =
             interfaces::MakePSGTPoolContext(&fx.wallet)->signPoolEntry(ABSENT_POOL_IMAGE, error, txid);
-        return DriverOutcome{status == interfaces::PSGTSignStatus::FAILED && error == PSGT_SIGN_REFUSAL,
-                             status == interfaces::PSGTSignStatus::SIGNED_AND_RELAYED
-                                 || status == interfaces::PSGTSignStatus::COMPLETED_AND_BROADCAST,
-                             strprintf("status %d: %s", static_cast<int>(status), error)};
+        using interfaces::PSGTSignStatus;
+        const std::string name = StatusName(status, {{PSGTSignStatus::SIGNED_AND_RELAYED, "SIGNED_AND_RELAYED"},
+                                                     {PSGTSignStatus::COMPLETED_AND_BROADCAST, "COMPLETED_AND_BROADCAST"},
+                                                     {PSGTSignStatus::NO_NEW_SIGNATURES, "NO_NEW_SIGNATURES"},
+                                                     {PSGTSignStatus::ALREADY_KNOWN, "ALREADY_KNOWN"},
+                                                     {PSGTSignStatus::NOT_FOUND, "NOT_FOUND"},
+                                                     {PSGTSignStatus::FAILED, "FAILED"}});
+        return DriverOutcome{status == PSGTSignStatus::FAILED && error == PSGT_SIGN_REFUSAL,
+                             status == PSGTSignStatus::SIGNED_AND_RELAYED
+                                 || status == PSGTSignStatus::COMPLETED_AND_BROADCAST,
+                             name + ": " + error, name};
     };
 
     drivers["MRC.submit"] = [](KeyReachWallet& fx) {
         const interfaces::MRCSubmitResult result = interfaces::MakeMRC(&fx.wallet)->submit(0, false);
-        return DriverOutcome{result.error == MRC_STAKING_ONLY_REFUSAL, result.success,
-                             result.success ? "submitted" : result.error};
+        const std::string said = result.success ? "submitted" : result.error;
+        return DriverOutcome{result.error == MRC_STAKING_ONLY_REFUSAL, result.success, said, said};
     };
 
     drivers["MRC.submitConfirmed"] = [](KeyReachWallet& fx) {
         const interfaces::MRCSubmitResult result = interfaces::MakeMRC(&fx.wallet)->submitConfirmed(0, false, 0, 0);
-        return DriverOutcome{result.error == MRC_STAKING_ONLY_REFUSAL, result.success,
-                             result.success ? "submitted" : result.error};
+        const std::string said = result.success ? "submitted" : result.error;
+        return DriverOutcome{result.error == MRC_STAKING_ONLY_REFUSAL, result.success, said, said};
     };
 
     drivers["VotingManager.submitPoll"] = [](KeyReachWallet&) {
@@ -966,10 +1022,14 @@ std::map<std::string, IpcDriver> IpcDrivers()
         poll.response_type = static_cast<int>(GRC::PollResponseType::YES_NO_ABSTAIN);
 
         const interfaces::VotingSubmitResult result = interfaces::MakeVotingManager()->submitPoll(poll);
-        return DriverOutcome{result.status == interfaces::VotingSubmitStatus::FAILED
-                                 && result.error == VotingStakingOnlyRefusal(),
-                             result.status == interfaces::VotingSubmitStatus::OK,
-                             strprintf("status %d: %s", static_cast<int>(result.status), result.error)};
+        using interfaces::VotingSubmitStatus;
+        const std::string name = StatusName(result.status, {{VotingSubmitStatus::OK, "OK"},
+                                                            {VotingSubmitStatus::POLL_NOT_FOUND, "POLL_NOT_FOUND"},
+                                                            {VotingSubmitStatus::POLL_LOAD_FAILED, "POLL_LOAD_FAILED"},
+                                                            {VotingSubmitStatus::FAILED, "FAILED"}});
+        const std::string said = result.error.empty() ? name : name + ": " + result.error;
+        return DriverOutcome{result.status == VotingSubmitStatus::FAILED && result.error == VotingStakingOnlyRefusal(),
+                             result.status == VotingSubmitStatus::OK, said, said};
     };
 
     drivers["VotingManager.submitVote"] = [](KeyReachWallet& fx) {
@@ -985,15 +1045,15 @@ std::map<std::string, IpcDriver> IpcDrivers()
 
     drivers["ResearcherContext.advertiseBeacon"] = [](KeyReachWallet& fx) {
         const interfaces::BeaconAdvertiseResult result = interfaces::MakeResearcherContext(&fx.wallet)->advertiseBeacon();
+        const std::string name = BeaconStatusName(result.status);
         return DriverOutcome{result.status == interfaces::BeaconStatus::ERROR_WALLET_LOCKED,
-                             result.status == interfaces::BeaconStatus::ACTIVE,
-                             strprintf("status %d", static_cast<int>(result.status))};
+                             result.status == interfaces::BeaconStatus::ACTIVE, name, name};
     };
 
     drivers["ResearcherContext.generateBeaconKeyForV3"] = [](KeyReachWallet& fx) {
         const std::string public_key = interfaces::MakeResearcherContext(&fx.wallet)->generateBeaconKeyForV3();
-        return DriverOutcome{public_key.empty(), !public_key.empty(),
-                             public_key.empty() ? "no key" : "key " + public_key};
+        const std::string said = public_key.empty() ? "no key" : "key " + public_key;
+        return DriverOutcome{public_key.empty(), !public_key.empty(), said, public_key.empty() ? "no key" : "key"};
     };
 
     drivers["ResearcherContext.advertiseBeaconV3"] = [](KeyReachWallet& fx) {
@@ -1002,34 +1062,35 @@ std::map<std::string, IpcDriver> IpcDrivers()
                                   "<signature>AAAA</signature>";
         const interfaces::BeaconAdvertiseResult result =
             interfaces::MakeResearcherContext(&fx.wallet)->advertiseBeaconV3(proof);
+        const std::string name = BeaconStatusName(result.status);
         return DriverOutcome{result.status == interfaces::BeaconStatus::ERROR_WALLET_LOCKED,
-                             result.status == interfaces::BeaconStatus::ACTIVE,
-                             strprintf("status %d", static_cast<int>(result.status))};
+                             result.status == interfaces::BeaconStatus::ACTIVE, name, name};
     };
 
     drivers["Node.executeRpcConsoleCommand"] = [](KeyReachWallet& fx) {
         const interfaces::RpcConsoleResult result = interfaces::MakeNode()->executeRpcConsoleCommand(
             "signmessage", {EncodeDestination(CTxDestination(fx.own_id)), "x"});
         return DriverOutcome{result.wallet_unlock_needed, result.ok,
-                             strprintf("ok %d: %s", result.ok, result.output)};
+                             strprintf("ok %d: %s", result.ok, result.output), result.ok ? "ok" : result.output};
     };
 
     drivers["Wallet.getNewReceiveAddress"] = [](KeyReachWallet& fx) {
         std::string address;
         const bool drawn = interfaces::MakeWallet(&fx.wallet)->getNewReceiveAddress(address);
-        return DriverOutcome{!drawn, drawn, drawn ? "drew " + address : "no address"};
+        return DriverOutcome{!drawn, drawn, drawn ? "drew " + address : "no address", drawn ? "drew" : "no address"};
     };
 
     drivers["Wallet.getNewReceiveAddressWithLabel"] = [](KeyReachWallet& fx) {
         std::string address;
         const bool drawn = interfaces::MakeWallet(&fx.wallet)->getNewReceiveAddressWithLabel("key entry points", address);
-        return DriverOutcome{!drawn, drawn, drawn ? "drew " + address : "no address"};
+        return DriverOutcome{!drawn, drawn, drawn ? "drew " + address : "no address", drawn ? "drew" : "no address"};
     };
 
     drivers["Wallet.getKeyFromPool"] = [](KeyReachWallet& fx) {
         CPubKey key;
         const bool drawn = interfaces::MakeWallet(&fx.wallet)->getKeyFromPool("", key);
-        return DriverOutcome{!drawn, drawn, drawn ? "drew a key" : "no key"};
+        const std::string said = drawn ? "drew a key" : "no key";
+        return DriverOutcome{!drawn, drawn, said, said};
     };
 
     return drivers;
@@ -1110,7 +1171,12 @@ void DriveIpcRows(const UniValue& rows)
             BOOST_CHECK_MESSAGE(!allowed.refused, name << ": refused under a " << kind_value.get_str()
                                 << " capability: " << allowed.detail);
 
-            if (stops_before_key.empty()) {
+            if (!stops_before_key.empty()) {
+                const std::string expected_stop = Field(*row, "expected_stop");
+                BOOST_CHECK_MESSAGE(allowed.stop == expected_stop, name << ": no longer stops as its mark says ("
+                                    << expected_stop << "): " << allowed.stop
+                                    << "; update stops_before_key and expected_stop");
+            } else {
                 BOOST_CHECK_MESSAGE(allowed.succeeded, name << ": did not reach the key code under a "
                                     << kind_value.get_str() << " capability, and the table gives no reason: "
                                     << allowed.detail);
@@ -1173,8 +1239,14 @@ BOOST_AUTO_TEST_CASE(the_table_names_every_key_reaching_entry_point)
 
             const UniValue stops = find_value(rows[i], "stops_before_key");
             const UniValue after = find_value(rows[i], "error_after_key");
+            const UniValue expected_stop = find_value(rows[i], "expected_stop");
             BOOST_CHECK_MESSAGE(stops.isNull() || (stops.isStr() && !stops.get_str().empty()),
                                 name << ": stops_before_key is not a reason");
+            BOOST_CHECK_MESSAGE(stops.isNull() == expected_stop.isNull(),
+                                name << ": expected_stop goes with stops_before_key, and only with it");
+            BOOST_CHECK_MESSAGE(expected_stop.isNull() || expected_stop.isNum()
+                                    || (expected_stop.isStr() && expected_stop.get_str() == "returned"),
+                                name << ": expected_stop is neither an RPC error code nor \"returned\"");
             BOOST_CHECK_MESSAGE(after.isNull() || after.isNum(), name << ": error_after_key is not an error code");
             BOOST_CHECK_MESSAGE(stops.isNull() || after.isNull(),
                                 name << ": a row that stops before the key cannot fail after it");
@@ -1218,8 +1290,13 @@ BOOST_AUTO_TEST_CASE(the_table_names_every_key_reaching_entry_point)
             }
 
             const UniValue stops = find_value(rows[i], "stops_before_key");
+            const UniValue expected_stop = find_value(rows[i], "expected_stop");
             BOOST_CHECK_MESSAGE(stops.isNull() || (stops.isStr() && !stops.get_str().empty()),
                                 name << ": stops_before_key is not a reason");
+            BOOST_CHECK_MESSAGE(stops.isNull() == expected_stop.isNull(),
+                                name << ": expected_stop goes with stops_before_key, and only with it");
+            BOOST_CHECK_MESSAGE(expected_stop.isNull() || (expected_stop.isStr() && !expected_stop.get_str().empty()),
+                                name << ": expected_stop is not a status");
         }
     }
 
