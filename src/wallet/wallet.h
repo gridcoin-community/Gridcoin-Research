@@ -410,10 +410,12 @@ public:
     //!    Capabilities issued while that unlock lasts rely on it too, and it is
     //!    locked when the last of them ends.
     //!
-    //! nullopt for a wrong passphrase. That refusal returns only after the
-    //! FailedPassphraseDelay() for the failures counted so far, slept without
-    //! holding cs_wallet, so the caller must not hold it either. Also nullopt,
-    //! with no delay, when a locked wallet's unlock cannot arm its relock.
+    //! An encrypted wallet's attempt first waits for its turn, as Unlock()
+    //! does. nullopt for a wrong passphrase. That refusal returns only after
+    //! the FailedPassphraseDelay() for the failures counted so far, slept
+    //! without holding cs_wallet, so the caller must not hold it either. Also
+    //! nullopt, with no delay, when a locked wallet's unlock cannot arm its
+    //! relock.
     std::optional<CapabilityId> BeginElevation(const SecureString& passphrase, CapabilityKind kind)
         LOCKS_EXCLUDED(cs_wallet, m_capability_mutex);
 
@@ -442,8 +444,9 @@ public:
     //! The capability in the IPC slot, or nullopt when the slot is empty.
     std::optional<CapabilityId> IpcCapability() const LOCKS_EXCLUDED(m_capability_mutex);
 
-    //! How many passphrase attempts have failed in a row, across Unlock() and
-    //! BeginElevation(). An accepted passphrase resets it to 0.
+    //! How many passphrase attempts have failed in a row, across Unlock(),
+    //! BeginElevation() and ChangeWalletPassphrase(). An accepted passphrase
+    //! resets it to 0.
     unsigned int FailedUnlockCount() const { return m_failed_unlocks.load(); }
 
     //! \brief Unlock with an explicit scope and an optional duration.
@@ -491,10 +494,11 @@ public:
         AlreadyUnlocked,
     };
 
-    //! A wrong passphrase (UnlockFailure::Passphrase) is counted, and the
-    //! refusal returns only after the FailedPassphraseDelay() for the failures
-    //! counted so far. The delay is slept without holding cs_wallet, so the
-    //! caller must not hold it either. A success resets the count.
+    //! The attempt first waits for its turn (AwaitPassphraseTurn()). A wrong
+    //! passphrase (UnlockFailure::Passphrase) is counted, and the refusal
+    //! returns only after the FailedPassphraseDelay() for the failures counted
+    //! so far. The key is derived, and every wait slept, without cs_wallet
+    //! held, so the caller must not hold it either. A success resets the count.
     bool Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                 std::optional<std::chrono::seconds> relock_after,
                 UnlockFailure* failure_out = nullptr) LOCKS_EXCLUDED(cs_wallet);
@@ -545,7 +549,11 @@ public:
     //! and an unencrypted one; do not read false as "it was locked".
     bool RestrictToStakingOnly();
 
-    bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
+    //! A wrong old passphrase is counted and delayed as by Unlock(), and the
+    //! caller must not hold cs_wallet. A successful change ends every
+    //! capability: they were proved with the old passphrase.
+    bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase)
+        LOCKS_EXCLUDED(cs_wallet);
 
     //! Ends every capability issued before it, since those were issued with no
     //! passphrase to check.
@@ -574,9 +582,15 @@ private:
     std::map<CapabilityId, CapabilityRecord> m_capabilities GUARDED_BY(m_capability_mutex);
     std::optional<CapabilityId> m_ipc_capability GUARDED_BY(m_capability_mutex);
 
-    //! Consecutive failed passphrase attempts, across Unlock() and
-    //! BeginElevation(). Process-wide in effect: there is one wallet.
+    //! Consecutive failed passphrase attempts, across Unlock(),
+    //! BeginElevation() and ChangeWalletPassphrase(). Process-wide in effect:
+    //! there is one wallet.
     std::atomic<unsigned int> m_failed_unlocks{0};
+
+    //! When the next passphrase attempt may start, as steady-clock
+    //! microseconds. Each attempt claims a turn from it and moves it on; see
+    //! AwaitPassphraseTurn().
+    std::atomic<int64_t> m_next_passphrase_attempt{0};
 
     //! Whether \p id is issued, for \p kind, and before its deadline. What
     //! CapabilityScope checks before it grants.
@@ -584,8 +598,11 @@ private:
 
     friend class CapabilityScope;
 
-    //! Unlock() without counting or delaying a wrong passphrase, reporting the
-    //! epoch of the unlock it installed through \p epoch_out.
+    //! Unlock() without the turn, and without counting or delaying a wrong
+    //! passphrase, reporting the epoch of the unlock it installed through
+    //! \p epoch_out. It takes cs_wallet only to copy the master key records
+    //! and to install the key, never across the derivation, so a caller that
+    //! does not hold cs_wallet keeps it free while the key is derived.
     bool UnlockWithoutDelay(const SecureString& strWalletPassphrase, UnlockScope scope,
                             std::optional<std::chrono::seconds> relock_after,
                             UnlockFailure* failure_out, uint64_t* epoch_out);
@@ -596,8 +613,32 @@ private:
     bool DecryptMasterKey(const SecureString& passphrase, CKeyingMaterial& master_key_out) const
         LOCKS_EXCLUDED(cs_wallet);
 
-    //! Count a wrong passphrase and sleep its FailedPassphraseDelay().
+    //! \brief Wait for this passphrase attempt's turn.
+    //!
+    //! A turn starts no sooner than the one claimed before it, and moves the
+    //! next one on by the delay this attempt would earn by failing, so callers
+    //! on several threads check one passphrase per delay, as one caller would.
+    //! Returns the time the turn moved the next one to, for
+    //! ReleasePassphraseTurn().
+    int64_t AwaitPassphraseTurn() LOCKS_EXCLUDED(cs_wallet);
+
+    //! Hand a turn back unused, when the attempt never checked the passphrase.
+    void ReleasePassphraseTurn(int64_t turn);
+
+    //! A passphrase was accepted: the count is reset and the next attempt may
+    //! start at once.
+    void PassphraseAccepted();
+
+    //! Count a wrong passphrase, hold every later attempt back by its
+    //! FailedPassphraseDelay(), and sleep that delay before returning.
     void DelayFailedPassphrase() LOCKS_EXCLUDED(cs_wallet);
+
+    //! ChangeWalletPassphrase() without the turn or the delay. \p
+    //! passphrase_accepted is set once the old passphrase has been checked:
+    //! true when it opened the wallet, false when it did not.
+    bool ChangeWalletPassphraseWithoutDelay(const SecureString& strOldWalletPassphrase,
+                                            const SecureString& strNewWalletPassphrase,
+                                            std::optional<bool>& passphrase_accepted);
 
 public:
     void GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet);

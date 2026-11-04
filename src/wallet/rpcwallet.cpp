@@ -3595,8 +3595,9 @@ UniValue walletpassphrasechange(const UniValue& params)
     if (strOldWalletPass.length() < 1 || strNewWalletPass.length() < 1)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Passphrase cannot be empty.");
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
+    // No lock is held across the call. ChangeWalletPassphrase() takes
+    // cs_wallet itself, and a wrong passphrase waits before it returns, which
+    // must not happen under cs_main or cs_wallet.
     if (!pwalletMain->ChangeWalletPassphrase(strOldWalletPass, strNewWalletPass)) {
         // Check if the old passphrase had a null character
         if (strOldWalletPass.find('\0') == std::string::npos) {

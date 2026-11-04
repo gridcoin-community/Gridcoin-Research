@@ -623,6 +623,8 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
                      std::optional<std::chrono::seconds> relock_after,
                      UnlockFailure* failure_out)
 {
+    const int64_t turn = AwaitPassphraseTurn();
+
     UnlockFailure failure = UnlockFailure::None;
 
     const bool unlocked = UnlockWithoutDelay(strWalletPassphrase, scope, relock_after, &failure,
@@ -634,22 +636,96 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, UnlockScope scope,
     // or a right passphrase whose relock could not be armed, says nothing
     // about whether the caller knows the passphrase.
     if (unlocked) {
-        m_failed_unlocks = 0;
+        PassphraseAccepted();
     } else if (failure == UnlockFailure::Passphrase) {
         DelayFailedPassphrase();
+    } else {
+        ReleasePassphraseTurn(turn);
     }
 
     return unlocked;
 }
 
+//! The steady clock, in the microseconds the next-attempt time is kept in.
+static int64_t SteadyMicros()
+{
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+int64_t CWallet::AwaitPassphraseTurn()
+{
+    // Claim the next turn. It starts no sooner than the turn claimed before
+    // it, and pushes the one after back by the delay this attempt would earn
+    // if it failed. Concurrent callers therefore take turns, one passphrase
+    // check per delay, as a single caller would: waiting until a shared time
+    // instead would release every waiter at that time at once.
+    const int64_t now = SteadyMicros();
+    int64_t claimed = m_next_passphrase_attempt.load();
+    int64_t start = 0;
+    int64_t next = 0;
+
+    do {
+        start = std::max(now, claimed);
+        next = start + std::chrono::microseconds(FailedPassphraseDelay(m_failed_unlocks.load() + 1)).count();
+    } while (!m_next_passphrase_attempt.compare_exchange_weak(claimed, next));
+
+    // Never under cs_wallet (the declaration excludes it).
+    if (start > now) UninterruptibleSleep(std::chrono::microseconds(start - now));
+
+    return next;
+}
+
+void CWallet::ReleasePassphraseTurn(int64_t turn)
+{
+    // Only if no later attempt has claimed a turn after this one.
+    int64_t expected = turn;
+    m_next_passphrase_attempt.compare_exchange_strong(expected, SteadyMicros());
+}
+
+void CWallet::PassphraseAccepted()
+{
+    m_failed_unlocks = 0;
+    m_next_passphrase_attempt = SteadyMicros();
+}
+
 void CWallet::DelayFailedPassphrase()
 {
-    // Never under cs_wallet (the declaration excludes it): a sleep of up to
-    // 30 s there would stall every wallet operation, the staking miner's
-    // included.
     const unsigned int failures = ++m_failed_unlocks;
+    const int64_t until = SteadyMicros() + std::chrono::microseconds(FailedPassphraseDelay(failures)).count();
 
-    UninterruptibleSleep(FailedPassphraseDelay(failures));
+    // Every later attempt, from any caller, waits at least as long. A turn
+    // already claimed further out is kept.
+    int64_t claimed = m_next_passphrase_attempt.load();
+
+    while (claimed < until && !m_next_passphrase_attempt.compare_exchange_weak(claimed, until)) {
+    }
+
+    // The refusal itself returns only once its delay is over. Never under
+    // cs_wallet (the declaration excludes it): a sleep of up to 30 s there
+    // would stall every wallet operation, the staking miner's included.
+    const int64_t now = SteadyMicros();
+
+    if (until > now) UninterruptibleSleep(std::chrono::microseconds(until - now));
+}
+
+//! Whether two sets of master key records are the same records.
+static bool SameMasterKeyRecords(const CWallet::MasterKeyMap& a, const CWallet::MasterKeyMap& b)
+{
+    if (a.size() != b.size()) return false;
+
+    for (auto ai = a.begin(), bi = b.begin(); ai != a.end(); ++ai, ++bi) {
+        if (ai->first != bi->first
+            || ai->second.vchCryptedKey != bi->second.vchCryptedKey
+            || ai->second.vchSalt != bi->second.vchSalt
+            || ai->second.nDerivationMethod != bi->second.nDerivationMethod
+            || ai->second.nDeriveIterations != bi->second.nDeriveIterations
+            || ai->second.vchOtherDerivationParameters != bi->second.vchOtherDerivationParameters) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool CWallet::UnlockWithoutDelay(const SecureString& strWalletPassphrase, UnlockScope scope,
@@ -681,6 +757,9 @@ bool CWallet::UnlockWithoutDelay(const SecureString& strWalletPassphrase, Unlock
     // the actual relock would be on different clocks -- and a mock time that
     // moved between the unlock and a later passphrase change would recompute the
     // remaining delay from a number that never meant wall time.
+    //
+    // Fixed here, before the key derivation, so the derivation counts against
+    // the unlock's time rather than extending it.
     const std::optional<int64_t> deadline = relock_after
         ? std::optional<int64_t>(GetTimeSeconds() + relock_after->count())
         : std::nullopt;
@@ -694,8 +773,36 @@ bool CWallet::UnlockWithoutDelay(const SecureString& strWalletPassphrase, Unlock
         return false;
     }
 
-    CCrypter crypter;
-    CKeyingMaterial vMasterKey;
+    // The records are copied under cs_wallet and the key is derived from them
+    // outside it. The derivation is calibrated to take a few hundred
+    // milliseconds, and block and transaction processing take cs_wallet, so
+    // they must not wait behind it.
+    MasterKeyMap master_keys;
+    {
+        LOCK(cs_wallet);
+        master_keys = mapMasterKeys;
+    }
+
+    // In record order, stopping at the first record the passphrase does not
+    // open, as when the derivation ran under the lock.
+    std::vector<CKeyingMaterial> derived_keys;
+    {
+        CCrypter crypter;
+
+        for (const auto& entry : master_keys) {
+            CKeyingMaterial derived;
+
+            if (!crypter.SetKeyFromPassphrase(strWalletPassphrase, entry.second.vchSalt,
+                                              entry.second.nDeriveIterations, entry.second.nDerivationMethod)
+                || !crypter.Decrypt(entry.second.vchCryptedKey, derived)) {
+                break;
+            }
+
+            derived_keys.push_back(std::move(derived));
+        }
+    }
+
+    if (derived_keys.empty()) return false;
 
     {
         LOCK(cs_wallet);
@@ -711,12 +818,15 @@ bool CWallet::UnlockWithoutDelay(const SecureString& strWalletPassphrase, Unlock
             return false;
         }
 
-        for (auto const& pMasterKey : mapMasterKeys)
+        // The records were rewritten while the key was derived, by a passphrase
+        // change. The key came from records the wallet no longer has, so the
+        // passphrase is not taken as proved: it may be the one just replaced.
+        if (!SameMasterKeyRecords(master_keys, mapMasterKeys)) {
+            return error("%s: the wallet passphrase changed while the key was being derived", __func__);
+        }
+
+        for (const CKeyingMaterial& vMasterKey : derived_keys)
         {
-            if(!crypter.SetKeyFromPassphrase(strWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod))
-                return false;
-            if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
-                return false;
             uint64_t epoch = 0;
 
             if (CCryptoKeyStore::Unlock(vMasterKey, scope, deadline, &epoch))
@@ -764,6 +874,7 @@ bool CWallet::UnlockWithoutDelay(const SecureString& strWalletPassphrase, Unlock
             }
         }
     }
+
     return false;
 }
 
@@ -879,6 +990,7 @@ std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphra
     std::optional<uint64_t> matched_epoch;
 
     if (IsCrypted()) {
+        const int64_t turn = AwaitPassphraseTurn();
         bool accepted = false;
 
         // At most two passes. The unlock can change while the key is derived:
@@ -906,6 +1018,7 @@ std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphra
                 // and was not kept. It is no passphrase failure, so there is no
                 // delay and nothing is counted.
                 if (failure == UnlockFailure::RelockUnavailable) {
+                    ReleasePassphraseTurn(turn);
                     LogPrintf("WARNING: %s: no capability was issued, because the wallet's relock could not "
                               "be scheduled", __func__);
                     return std::nullopt;
@@ -936,7 +1049,7 @@ std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphra
             return std::nullopt;
         }
 
-        m_failed_unlocks = 0;
+        PassphraseAccepted();
     }
 
     // Drawn and timed before the mutex is taken: it is a leaf, and the
@@ -1067,6 +1180,30 @@ bool CWallet::IsCapabilityLive(CapabilityId id, CapabilityKind kind) const
 
 bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase)
 {
+    // The old passphrase is a passphrase attempt like any other: it waits for
+    // its turn, and a wrong one is counted and delayed.
+    const int64_t turn = AwaitPassphraseTurn();
+
+    std::optional<bool> passphrase_accepted;
+
+    const bool changed = ChangeWalletPassphraseWithoutDelay(strOldWalletPassphrase, strNewWalletPassphrase,
+                                                            passphrase_accepted);
+
+    if (!passphrase_accepted) {
+        ReleasePassphraseTurn(turn);
+    } else if (*passphrase_accepted) {
+        PassphraseAccepted();
+    } else {
+        DelayFailedPassphrase();
+    }
+
+    return changed;
+}
+
+bool CWallet::ChangeWalletPassphraseWithoutDelay(const SecureString& strOldWalletPassphrase,
+                                                 const SecureString& strNewWalletPassphrase,
+                                                 std::optional<bool>& passphrase_accepted)
+{
     // The lock itself reports what it ended. Reading the scope first and
     // locking afterwards is two acquisitions with a gap, and the scheduled
     // relock takes only cs_KeyStore, so it can land in that gap: the read says
@@ -1091,6 +1228,10 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
 
         const bool fWasLocked = (prior->scope == UnlockScope::Locked);
 
+        // Refused until a master key record opens with the old passphrase and
+        // the keys open with that master key.
+        passphrase_accepted = false;
+
         CCrypter crypter;
         CKeyingMaterial vMasterKey;
         for (auto &pMasterKey : mapMasterKeys)
@@ -1113,6 +1254,8 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
 
             if (CCryptoKeyStore::Unlock(vMasterKey, working_scope, prior->deadline, &epoch))
             {
+                passphrase_accepted = true;
+
                 // The rewrite below needs the master key, not an open wallet, so
                 // a wallet that was locked on entry is locked again before it.
                 // No path out of the rewrite, the error returns included, then
@@ -1166,6 +1309,15 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
                 }
 
                 pMasterKey.second = new_master_key;
+
+                // Every capability was proved with the old passphrase, so none
+                // outlives the change. The capability mutex is a leaf, so
+                // taking it under cs_wallet keeps the lock order.
+                {
+                    LOCK(m_capability_mutex);
+                    m_capabilities.clear();
+                    m_ipc_capability.reset();
+                }
 
                 LogPrintf("Wallet passphrase changed to an nDeriveIterations of %i", pMasterKey.second.nDeriveIterations);
 

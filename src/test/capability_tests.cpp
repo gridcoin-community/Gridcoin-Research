@@ -187,9 +187,15 @@ BOOST_AUTO_TEST_CASE(capability_wrong_kind_inactive)
         BOOST_CHECK(!KeyReachable(fx));
     }
 
-    // An id that was never issued is inactive for every kind.
+    // An id that is no longer issued is inactive. It was issued while the
+    // first was live, so it is not the first, and then ended.
+    const std::optional<CapabilityId> ended = fx.wallet.BeginElevation(Passphrase(), CapabilityKind::Send);
+    BOOST_REQUIRE(ended.has_value());
+    BOOST_REQUIRE(*ended != *id);
+    fx.wallet.EndElevation(*ended);
+
     {
-        CapabilityScope scope(fx.wallet, *id + 1, CapabilityKind::Send);
+        CapabilityScope scope(fx.wallet, ended, CapabilityKind::Send);
         BOOST_CHECK(!scope.Active());
     }
 
@@ -586,6 +592,136 @@ BOOST_AUTO_TEST_CASE(capability_end_idempotent_and_lock_free)
         BOOST_CHECK_EQUAL(notified.load(), 2);
         BOOST_CHECK(!held_a_lock.load());
     }
+}
+
+BOOST_AUTO_TEST_CASE(unlock_derives_without_holding_cs_wallet)
+{
+    EncryptedWallet fx;
+    BOOST_REQUIRE(fx.wallet.IsLocked());
+
+    // A long derivation: the records ask for many times the iterations they
+    // were calibrated at. No passphrase opens them now, so the unlock below is
+    // refused after deriving for seconds.
+    {
+        LOCK(fx.wallet.cs_wallet);
+        BOOST_REQUIRE(!fx.wallet.mapMasterKeys.empty());
+
+        for (auto& entry : fx.wallet.mapMasterKeys) {
+            entry.second.nDeriveIterations *= 30;
+        }
+    }
+
+    const auto started = std::chrono::steady_clock::now();
+    std::future<bool> unlock = std::async(std::launch::async, [&fx] {
+        return fx.wallet.Unlock(SecureString("wrong"), UnlockScope::Full);
+    });
+
+    // Let the derivation get under way, then take cs_wallet beside it.
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+    const auto asked = std::chrono::steady_clock::now();
+    bool still_unlocking{false};
+    {
+        LOCK(fx.wallet.cs_wallet);
+        still_unlocking = unlock.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
+    }
+    const auto waited = std::chrono::steady_clock::now() - asked;
+
+    BOOST_CHECK(!unlock.get());
+    const auto lasted = std::chrono::steady_clock::now() - started;
+
+    // The derivation was long, the lock was taken while it ran, and taking it
+    // did not wait for it.
+    BOOST_CHECK(lasted > std::chrono::seconds(1));
+    BOOST_CHECK(still_unlocking);
+    BOOST_CHECK(waited < std::chrono::milliseconds(500));
+    BOOST_CHECK(fx.wallet.IsLocked());
+}
+
+BOOST_AUTO_TEST_CASE(an_attempt_waits_out_a_concurrent_refusal)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+
+    // Two refusals first, so that the next one earns a 2 s delay, long beside a
+    // key derivation even on a loaded machine.
+    BOOST_REQUIRE(!fx.wallet.BeginElevation(SecureString("wrong"), CapabilityKind::Send).has_value());
+    BOOST_REQUIRE(!fx.wallet.BeginElevation(SecureString("wrong"), CapabilityKind::Send).has_value());
+    BOOST_REQUIRE_EQUAL(fx.wallet.FailedUnlockCount(), 2U);
+
+    std::future<std::optional<CapabilityId>> refused = std::async(std::launch::async, [&fx] {
+        return fx.wallet.BeginElevation(SecureString("wrong"), CapabilityKind::Send);
+    });
+
+    // Until the third attempt has been refused. It is then waiting out its
+    // delay on its own thread.
+    for (int i = 0; i < 1000 && fx.wallet.FailedUnlockCount() < 3; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    BOOST_REQUIRE_EQUAL(fx.wallet.FailedUnlockCount(), 3U);
+
+    // An attempt made meanwhile, from another caller, waits for the same
+    // delay before its passphrase is checked, so concurrent callers get no
+    // more attempts than one caller would. Most of the 2 s, with slack.
+    const auto asked = std::chrono::steady_clock::now();
+    const std::optional<CapabilityId> accepted = fx.wallet.BeginElevation(Passphrase(), CapabilityKind::Send);
+    const auto waited = std::chrono::steady_clock::now() - asked;
+
+    BOOST_CHECK(accepted.has_value());
+    BOOST_CHECK(waited >= std::chrono::milliseconds(1000));
+    BOOST_CHECK(!refused.get().has_value());
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(a_failed_passphrase_change_counts_and_waits)
+{
+    EncryptedWallet fx;
+    const SecureString changed("capability-test-changed");
+
+    const auto asked = std::chrono::steady_clock::now();
+    BOOST_CHECK(!fx.wallet.ChangeWalletPassphrase(SecureString("wrong"), changed));
+    const auto waited = std::chrono::steady_clock::now() - asked;
+
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 1U);
+    BOOST_CHECK(waited >= FailedPassphraseDelay(1));
+
+    // The right passphrase changes it and clears the count.
+    BOOST_CHECK(fx.wallet.ChangeWalletPassphrase(Passphrase(), changed));
+    BOOST_CHECK_EQUAL(fx.wallet.FailedUnlockCount(), 0U);
+    BOOST_CHECK(fx.wallet.IsLocked());
+}
+
+BOOST_AUTO_TEST_CASE(a_passphrase_change_ends_every_capability)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    const SecureString changed("capability-test-changed");
+
+    const std::optional<CapabilityId> id = fx.wallet.BeginElevation(Passphrase(), CapabilityKind::FileTransfer);
+    BOOST_REQUIRE(id.has_value());
+    BOOST_REQUIRE(fx.wallet.BeginIpcElevation(Passphrase(), CapabilityKind::Send));
+
+    BOOST_REQUIRE(fx.wallet.ChangeWalletPassphrase(Passphrase(), changed));
+
+    // The unlock is as it was; what the old passphrase issued is not.
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+    BOOST_CHECK(!fx.wallet.IpcCapability().has_value());
+    {
+        CapabilityScope scope(fx.wallet, id, CapabilityKind::FileTransfer);
+        BOOST_CHECK(!scope.Active());
+        BOOST_CHECK(!KeyReachable(fx));
+    }
+
+    // The new passphrase issues capabilities as before.
+    const std::optional<CapabilityId> renewed = fx.wallet.BeginElevation(changed, CapabilityKind::Send);
+    BOOST_REQUIRE(renewed.has_value());
+    {
+        CapabilityScope scope(fx.wallet, renewed, CapabilityKind::Send);
+        BOOST_CHECK(scope.Active());
+        BOOST_CHECK(KeyReachable(fx));
+    }
+
+    fx.wallet.EndElevation(*renewed);
 }
 
 BOOST_AUTO_TEST_CASE(capability_lets_a_staking_only_wallet_send)
