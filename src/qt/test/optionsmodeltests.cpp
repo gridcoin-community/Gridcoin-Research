@@ -139,9 +139,25 @@ const QString PASSPHRASE_NEEDED_MESSAGE = QStringLiteral(
 const QString SIDE_STAKE_PASSPHRASE_MESSAGE = QStringLiteral(
     "Changing side stakes needs your wallet passphrase. The change was not saved.");
 
+//! The UPnP value the node uses when nothing sets it, as the Options dialog
+//! shows it: off, unless the build turns UPnP on by default.
+bool UnsetUpnp()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    OptionsModel model(node, sidestakes);
+    return model.data(model.index(OptionsModel::MapPortUPnP, 0), Qt::EditRole).toBool();
+}
+
+//! The upnp setting a legacy UPnP value other than the node's moves as.
+std::string MovedUpnp()
+{
+    return UnsetUpnp() ? "0" : "1";
+}
+
 //! Put the settings an earlier version kept in Gridcoin-Qt.conf at the root of
 //! QSettings: the two the core takes without the passphrase and, when
-//! \p network, the proxy and UPnP ones.
+//! \p network, the proxy and UPnP ones, each different from what the node uses.
 void SeedLegacySettings(bool network)
 {
     QSettings settings;
@@ -150,7 +166,7 @@ void SeedLegacySettings(bool network)
     if (network) {
         settings.setValue("fUseProxy", true);
         settings.setValue("addrProxy", QStringLiteral("1.2.3.4:9050"));
-        settings.setValue("fUseUPnP", true);
+        settings.setValue("fUseUPnP", !UnsetUpnp());
     }
 }
 
@@ -887,7 +903,7 @@ void OptionsModelTests::elevatedMigrationAppliesProxyAndUpnpWhenElevated()
 
     QCOMPARE(calls, 1);
     QCOMPARE(node.getSettingStr("proxy", ""), std::string("1.2.3.4:9050"));
-    QCOMPARE(node.getSettingStr("upnp", ""), std::string("1"));
+    QCOMPARE(node.getSettingStr("upnp", ""), MovedUpnp());
     QVERIFY(QSettings().value("coreElevatedSettingsMigrated", false).toBool());
 }
 
@@ -905,7 +921,8 @@ void OptionsModelTests::declinedElevatedMigrationDiscardsLegacyValuesOnce()
         LogCapture log;
         model.migrateElevatedCoreSettings(CountingElevation(calls, false, node.m_elevated));
         QCOMPARE(log.Count("Discarded the proxy and UPnP settings kept by an earlier version "
-                           "(proxy=1.2.3.4:9050, upnp=1): the wallet passphrase was not given"), 1);
+                           "(proxy=1.2.3.4:9050, upnp=" + MovedUpnp() + "): the wallet passphrase was not given"),
+                 1);
     }
 
     QCOMPARE(calls, 1);
@@ -994,7 +1011,7 @@ void OptionsModelTests::elevatedMigrationRetriedAtTheNextStart()
     model.migrateElevatedCoreSettings(CountingElevation(calls, true, node.m_elevated));
     QCOMPARE(calls, 1);
     QCOMPARE(node.getSettingStr("proxy", ""), std::string("1.2.3.4:9050"));
-    QCOMPARE(node.getSettingStr("upnp", ""), std::string("1"));
+    QCOMPARE(node.getSettingStr("upnp", ""), MovedUpnp());
 }
 
 void OptionsModelTests::elevatedMigrationWithoutLegacyValuesDoesNotAsk()
@@ -1021,6 +1038,72 @@ void OptionsModelTests::elevatedMigrationWithoutLegacyValuesDoesNotAsk()
     QCOMPARE(calls, 0);
     QCOMPARE(node.getSettingStr("proxy", ""), std::string("10.0.0.1:9050"));
     QVERIFY(QSettings().value("coreElevatedSettingsMigrated", false).toBool());
+}
+
+void OptionsModelTests::elevatedMigrationDropsAUpnpValueTheNodeUses()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    SeedLegacySettings(false);
+    QSettings().setValue("fUseUPnP", UnsetUpnp());
+    OptionsModel model(node, sidestakes);
+    model.migrateCoreSettings();
+    const size_t free_change_calls = node.m_change_calls.size();
+
+    // Moving it would change nothing, so nothing is asked or sent, and the old
+    // value is removed.
+    int calls = 0;
+    model.migrateElevatedCoreSettings(CountingElevation(calls, true, node.m_elevated));
+    QCOMPARE(calls, 0);
+    QCOMPARE(node.m_change_calls.size(), free_change_calls);
+    QVERIFY(!node.isSettingSet("upnp"));
+
+    QSettings settings;
+    QVERIFY(!settings.contains("fUseUPnP"));
+    QVERIFY(settings.value("coreElevatedSettingsMigrated", false).toBool());
+}
+
+void OptionsModelTests::elevatedMigrationAsksForAUpnpValueThatDiffers()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    SeedLegacySettings(false);
+    QSettings().setValue("fUseUPnP", !UnsetUpnp());
+    OptionsModel model(node, sidestakes);
+    model.migrateCoreSettings();
+
+    int calls = 0;
+    model.migrateElevatedCoreSettings(CountingElevation(calls, true, node.m_elevated));
+    QCOMPARE(calls, 1);
+    QCOMPARE(node.getSettingStr("upnp", ""), MovedUpnp());
+    QVERIFY(QSettings().value("coreElevatedSettingsMigrated", false).toBool());
+}
+
+void OptionsModelTests::elevatedMigrationMovesOnlyTheValuesThatDiffer()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    SeedLegacySettings(true);
+    QSettings().setValue("fUseUPnP", UnsetUpnp());
+    OptionsModel model(node, sidestakes);
+    model.migrateCoreSettings();
+
+    // The proxy differs, so the user is asked, and only the proxy is sent.
+    int calls = 0;
+    model.migrateElevatedCoreSettings(CountingElevation(calls, true, node.m_elevated));
+    QCOMPARE(calls, 1);
+    QVERIFY(!node.m_change_calls.empty());
+    const std::vector<std::pair<std::string, std::string>> proxy_only{{"proxy", "1.2.3.4:9050"}};
+    QVERIFY(node.m_change_calls.back() == proxy_only);
+    QCOMPARE(node.getSettingStr("proxy", ""), std::string("1.2.3.4:9050"));
+    QVERIFY(!node.isSettingSet("upnp"));
+
+    QSettings settings;
+    QVERIFY(!settings.contains("fUseUPnP"));
+    QVERIFY(settings.value("coreElevatedSettingsMigrated", false).toBool());
 }
 
 void OptionsModelTests::needsSettingsElevationOnlyForChangedNetworkAndSideStakeFields_data()

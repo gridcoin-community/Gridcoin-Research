@@ -94,10 +94,11 @@ public:
     //! One-time migration of the proxy and UPnP settings kept in
     //! Gridcoin-Qt.conf by an earlier version. Changing them needs the wallet
     //! passphrase, so the composition root calls this once the wallet can ask
-    //! for it, through \p with_elevation. Without one, the old values are
-    //! discarded. Marks it done with the QSettings key
-    //! "coreElevatedSettingsMigrated", except when the node could not store
-    //! them: the next start then tries again.
+    //! for it, through \p with_elevation, and only for values that differ from
+    //! the node's; an old value the node already uses is removed without
+    //! asking. Without the passphrase, the old values are discarded. Marks it
+    //! done with the QSettings key "coreElevatedSettingsMigrated", except when
+    //! the node could not store them: the next start then tries again.
     void migrateElevatedCoreSettings(const WithElevation& with_elevation);
 
     //! Whether submitting these widget values changes an Elevate-class core setting: UPnP, proxy use,

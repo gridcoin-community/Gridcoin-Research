@@ -231,14 +231,28 @@ void OptionsModel::migrateElevatedCoreSettings(const WithElevation& with_elevati
     }
 
     // As in migrateCoreSettings(), a setting already set in the config file or
-    // on the command line keeps that value.
+    // on the command line keeps that value. An old value the node already uses
+    // would change nothing, so it is not moved and does not ask for the
+    // passphrase; its old keys are removed.
     std::vector<std::pair<std::string, std::string>> migrate;
     if (!m_node.isSettingSet("proxy")
             && settings.value("fUseProxy", false).toBool() && settings.contains("addrProxy")) {
-        migrate.emplace_back("proxy", settings.value("addrProxy").toString().toStdString());
+        const std::string proxy = settings.value("addrProxy").toString().toStdString();
+        if (proxy == m_node.getSettingStr("proxy", "")) {
+            settings.remove("fUseProxy");
+            settings.remove("addrProxy");
+        } else {
+            migrate.emplace_back("proxy", proxy);
+        }
     }
     if (!m_node.isSettingSet("upnp") && settings.contains("fUseUPnP")) {
-        migrate.emplace_back("upnp", settings.value("fUseUPnP").toBool() ? "1" : "0");
+        const bool upnp = settings.value("fUseUPnP").toBool();
+        // What the Options dialog shows, which is the node's own default here.
+        if (upnp == data(index(MapPortUPnP), Qt::EditRole).toBool()) {
+            settings.remove("fUseUPnP");
+        } else {
+            migrate.emplace_back("upnp", upnp ? "1" : "0");
+        }
     }
 
     if (migrate.empty()) {

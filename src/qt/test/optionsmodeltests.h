@@ -68,6 +68,9 @@ private slots:
     void failedElevatedMigrationStoreRetries();
     void elevatedMigrationRetriedAtTheNextStart();
     void elevatedMigrationWithoutLegacyValuesDoesNotAsk();
+    void elevatedMigrationDropsAUpnpValueTheNodeUses();
+    void elevatedMigrationAsksForAUpnpValueThatDiffers();
+    void elevatedMigrationMovesOnlyTheValuesThatDiffer();
     void needsSettingsElevationOnlyForChangedNetworkAndSideStakeFields_data();
     void needsSettingsElevationOnlyForChangedNetworkAndSideStakeFields();
 
