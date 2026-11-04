@@ -691,8 +691,10 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-dblogsize=<n>", "Set database disk log size in megabytes (default: 100)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-synctime", "Sync time with other nodes. Disable if time on your system is precise e.g. syncing with"
-                                " NTP (default: 1)",
+    argsman.AddArg("-synctime", "Sync time with other nodes (default: 1). Disabling this is strongly discouraged, even if"
+                                " this computer syncs with NTP: with -synctime=0 this node uses only its own clock, does"
+                                " not correct an error in it, and while it stakes shows a warning that it has no network"
+                                " time quorum.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-paytxfee=<amt>", "Fee per KB to add to transactions you send",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
