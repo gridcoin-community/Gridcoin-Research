@@ -254,6 +254,7 @@ add_library(gridcoin_util STATIC
     net_processing.cpp
     netaddress.cpp
     netbase.cpp
+    node/access_policy.cpp
     node/blockstorage.cpp
     node/chainman.cpp
     node/coherence.cpp

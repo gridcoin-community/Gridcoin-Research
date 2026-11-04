@@ -33,9 +33,11 @@
 #include "net_processing.h"
 #include "txmempool.h"
 #include "node/blockstorage.h"
+#include "node/access_policy.h"
 #include "node/coherence.h"
 #include "node/mempool_persist.h"
 #include "node/psgt_pool.h"
+#include "policy/fees.h"
 #include <util/check.h>
 #include <util/proc_hardening.h>
 #include <util/strencodings.h>
@@ -1385,6 +1387,7 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
                     std::vector<std::string>& immediate_out,
                     std::vector<std::string>& requires_restart_list_out,
                     bool& invalid_input_out,
+                    bool& elevation_required_out,
                     std::string& error_out)
 {
     // Reset all outputs so results are well-defined even if the caller reuses
@@ -1394,6 +1397,7 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
     immediate_out.clear();
     requires_restart_list_out.clear();
     error_out.clear();
+    elevation_required_out = false;
     // Phase-1 failures are caller/validation errors; a phase-2 storage failure
     // flips this back to false.
     invalid_input_out = true;
@@ -1425,6 +1429,20 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
             return false;
         }
 
+        // A Refuse-class setting cannot be set here at all. An empty value is still accepted
+        // and erases an entry an older build or an edit of the file left in the settings file.
+        // That erase is never a change to the running value, which the file did not supply.
+        const SettingClass setting_class = gArgs.GetSettingClass(name);
+        const bool erase_refused = setting_class == SettingClass::REFUSE && value.empty();
+        if (setting_class == SettingClass::REFUSE && !value.empty()) {
+            if (*flags & ArgsManager::COMMAND_LINE_ONLY) {
+                error_out = "Refused setting: " + name + " can be set only on the command line";
+            } else {
+                error_out = "Refused setting: " + name + " can be set only in gridcoinresearch.conf or on the command line";
+            }
+            return false;
+        }
+
         // Value validation for the push-model network/staking knobs whose bad
         // value would otherwise persist and fail at the next startup (the config
         // consumers assert/InitError on a malformed value). An empty value erases
@@ -1441,6 +1459,17 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
                     return false;
                 }
             }
+            if (name == "paytxfee") {
+                int64_t parsed = 0;
+                if (!ParseMoney(value, parsed)) {
+                    error_out = "Invalid paytxfee amount: " + value;
+                    return false;
+                }
+                if (parsed > MaxTxFeeRate()) {
+                    error_out = "paytxfee " + value + " above maximum " + FormatMoney(MaxTxFeeRate());
+                    return false;
+                }
+            }
         }
 
         // GetArg is overloaded; one of these succeeds (matches the changesettings RPC).
@@ -1451,7 +1480,22 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
             current_value = ToString(gArgs.GetArg(name, 1));
         }
 
-        const bool value_changed = (current_value != value);
+        const bool value_changed = !erase_refused && (current_value != value);
+
+        // An Elevate-class setting needs the wallet passphrase authority when the running value
+        // changes, or when the stored entry would (a value already in effect from the command line
+        // or the config file is still a new entry in the settings file).
+        if (setting_class == SettingClass::ELEVATE && !HoldsElevation()) {
+            const util::SettingsValue new_entry = value.empty() ? util::SettingsValue() : util::SettingsValue(value);
+            if (value_changed || getRwSetting(name).write() != new_entry.write()) {
+                error_out = "Changing " + name + " needs the wallet passphrase: unlock the wallet fully, "
+                            "or send the passphrase with this request";
+                invalid_input_out = false;
+                elevation_required_out = true;
+                return false;
+            }
+        }
+
         const bool immediate_effect = *flags & ArgsManager::IMMEDIATE_EFFECT;
 
         if (!valid_settings.insert(std::make_pair(

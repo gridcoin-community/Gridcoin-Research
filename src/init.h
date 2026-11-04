@@ -75,7 +75,14 @@ void ApplyRwSettingSideEffect(const std::string& name);
 //! no_change_out / immediate_out / requires_restart_list_out and
 //! requires_restart_out is set. On failure returns false with error_out set and
 //! invalid_input_out distinguishing a caller/validation error (true; nothing was
-//! changed) from an internal storage error (false). On a storage failure the
+//! changed) from an internal storage error (false).
+//!
+//! Each setting has a class (ArgsManager::GetSettingClass). A Free setting changes
+//! freely. An Elevate setting needs HoldsElevation(): a full unlock, or the
+//! passphrase capability of the request. When it is missing the call fails with
+//! elevation_required_out set (and invalid_input_out false) before anything is
+//! applied. A Refuse setting is refused with a value; an empty value erases it
+//! from the settings file and is reported in no_change_out. On a storage failure the
 //! failing setting is unchanged in the settings file, in memory and in the
 //! running args. Settings processed before it (in name order, not the order
 //! given) stay applied and stored. The rest are not touched. Shared core of the
@@ -86,6 +93,7 @@ bool ChangeSettings(const std::vector<std::pair<std::string, std::string>>& sett
                     std::vector<std::string>& immediate_out,
                     std::vector<std::string>& requires_restart_list_out,
                     bool& invalid_input_out,
+                    bool& elevation_required_out,
                     std::string& error_out);
 
 extern bool fResetBlockchainRequest;

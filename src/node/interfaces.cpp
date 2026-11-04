@@ -432,8 +432,11 @@ public:
         // failure handling (the proxy rows' restore, for one) never runs. The
         // result lists keep whatever was applied before the throw.
         try {
+            bool elevation_required = false;
             out.ok = ChangeSettings(settings, out.requires_restart, out.no_change, out.immediate,
-                                    out.requires_restart_settings, out.invalid_input, out.error);
+                                    out.requires_restart_settings, out.invalid_input, elevation_required, out.error);
+            // The caller sees an elevation refusal as a rejected input, with the message.
+            if (elevation_required) out.invalid_input = true;
         } catch (const std::exception& e) {
             out.ok = false;
             out.invalid_input = false;
