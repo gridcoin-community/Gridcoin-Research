@@ -7,11 +7,12 @@
 #include "logging.h"
 #include "sync.h"
 
+#include <atomic>
 #include <condition_variable>
 #include <exception>
+#include <list>
 #include <thread>
 #include <utility>
-#include <vector>
 
 namespace interfaces {
 
@@ -26,7 +27,7 @@ public:
     {
         {
             LOCK(m_mutex);
-            if (!m_closed) {
+            if (!m_closed.load()) {
                 const HookId id = m_next_id++;
                 m_hooks.emplace_back(id, std::move(fn));
                 return id;
@@ -44,8 +45,12 @@ public:
         std::function<void()> removed;
 
         WAIT_LOCK(m_mutex, lock);
-        if (m_running && m_closing_thread == std::this_thread::get_id()) return;
-        m_cv.wait(lock, [this]() EXCLUSIVE_LOCKS_REQUIRED(m_mutex) { return !m_running; });
+        // From inside a hook (the thread running close()), waiting for close()
+        // to finish would wait for itself. A hook still pending is erased there
+        // all the same, so it does not run.
+        if (!m_running || m_closing_thread != std::this_thread::get_id()) {
+            m_cv.wait(lock, [this]() EXCLUSIVE_LOCKS_REQUIRED(m_mutex) { return !m_running; });
+        }
 
         for (auto it = m_hooks.begin(); it != m_hooks.end(); ++it) {
             if (it->first == id) {
@@ -58,10 +63,9 @@ public:
 
     void close() override
     {
-        std::vector<std::pair<HookId, std::function<void()>>> hooks;
         {
             WAIT_LOCK(m_mutex, lock);
-            if (m_closed) {
+            if (m_closed.load()) {
                 // Return only once the hooks have run, so a caller that releases
                 // the attach slot after close() cannot release it early. From
                 // inside a hook that would wait for itself.
@@ -69,21 +73,29 @@ public:
                 m_cv.wait(lock, [this]() EXCLUSIVE_LOCKS_REQUIRED(m_mutex) { return !m_running; });
                 return;
             }
-            m_closed = true;
+            // Set before any hook runs, so a lock-free closed() reads true from
+            // here on. No hook can be added after this; addCloseHook() runs it.
+            m_closed.store(true);
             m_running = true;
             m_closing_thread = std::this_thread::get_id();
-            hooks.swap(m_hooks);
         }
 
-        for (const auto& hook : hooks) {
-            RunHook(hook.second);
+        // One at a time, in order, each run outside the mutex. A hook that
+        // removes a later one, directly or by destroying its owner, therefore
+        // erases it before it is taken, and it does not run.
+        while (true) {
+            // Destroyed at the end of each pass, outside the mutex and before the
+            // next hook is taken, so a destructor that removes a later hook stops
+            // it too, and nothing of a hook is left when waiters are released.
+            std::function<void()> hook;
+            {
+                LOCK(m_mutex);
+                if (m_hooks.empty()) break;
+                hook = std::move(m_hooks.front().second);
+                m_hooks.pop_front();
+            }
+            RunHook(hook);
         }
-
-        // The hooks are destroyed before anyone waiting is released, so when
-        // removeCloseHook() or a second close() returns, nothing of a hook is
-        // left here. A destructor that removes its own hook comes back through
-        // removeCloseHook() on this thread, which returns at once.
-        hooks.clear();
 
         {
             LOCK(m_mutex);
@@ -93,11 +105,7 @@ public:
         m_cv.notify_all();
     }
 
-    bool closed() const override
-    {
-        LOCK(m_mutex);
-        return m_closed;
-    }
+    bool closed() const override { return m_closed.load(); }
 
 private:
     //! Run one hook, containing what it throws. close() runs on the IPC
@@ -118,9 +126,11 @@ private:
     //! A leaf: no other lock is taken under it, and no hook runs under it.
     mutable Mutex m_mutex;
     std::condition_variable m_cv;
-    std::vector<std::pair<HookId, std::function<void()>>> m_hooks GUARDED_BY(m_mutex){};
+    std::list<std::pair<HookId, std::function<void()>>> m_hooks GUARDED_BY(m_mutex){};
     HookId m_next_id GUARDED_BY(m_mutex){1};
-    bool m_closed GUARDED_BY(m_mutex){false};
+    //! Written only under m_mutex (in close()); read without it by closed(), so
+    //! that callers holding other locks can ask, and under it by addCloseHook().
+    std::atomic<bool> m_closed{false};
     //! Whether close() is running the hooks, and on which thread.
     bool m_running GUARDED_BY(m_mutex){false};
     std::thread::id m_closing_thread GUARDED_BY(m_mutex){};

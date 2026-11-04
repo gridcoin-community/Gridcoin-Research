@@ -178,6 +178,30 @@ BOOST_AUTO_TEST_CASE(remove_from_inside_a_hook_does_not_wait_for_itself)
     BOOST_CHECK(s->closed());
 }
 
+// A hook whose action removes a later hook (say, by destroying the later hook's
+// owner) stops that hook from running: close() takes the hooks one at a time,
+// so a removal from inside a hook erases one still pending.
+BOOST_AUTO_TEST_CASE(hook_removing_a_later_hook_stops_it)
+{
+    auto s = interfaces::MakeConnectionScope();
+    interfaces::ConnectionScope::HookId second{0};
+    bool first_ran = false;
+    bool second_ran = false;
+    bool third_ran = false;
+
+    s->addCloseHook([&] {
+        first_ran = true;
+        s->removeCloseHook(second);
+    });
+    second = s->addCloseHook([&] { second_ran = true; });
+    s->addCloseHook([&] { third_ran = true; });
+
+    s->close();
+    BOOST_CHECK(first_ran);
+    BOOST_CHECK(!second_ran);
+    BOOST_CHECK(third_ran);
+}
+
 // Hooks run outside the scope's mutex, so a hook can use the scope itself: ask
 // closed(), or add a hook, which the scope being closed runs at once.
 BOOST_AUTO_TEST_CASE(hook_can_use_the_scope)

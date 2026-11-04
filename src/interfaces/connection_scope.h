@@ -24,7 +24,7 @@ namespace interfaces {
 //! delete a core-private temp file, set a flag.
 //!
 //! The scope's mutex is a leaf. It is never held while a hook runs or while a
-//! hook is destroyed.
+//! hook is destroyed, and closed() does not take it.
 class ConnectionScope
 {
 public:
@@ -40,19 +40,28 @@ public:
     //! Unregister a hook, so it does not run. If close() is running hooks, waits
     //! until it has finished, so a hook never outlives its removal: an owner may
     //! free what its hook uses as soon as this returns. From inside a hook (the
-    //! thread running close()) it returns at once instead, since waiting there
-    //! would wait for itself. An id that is unknown, already removed or 0 is
-    //! ignored.
+    //! thread running close()) it does not wait, since that would wait for
+    //! itself, but a hook still pending is erased and does not run. An id that
+    //! is unknown, already removed or 0 is ignored.
+    //!
+    //! Because it can wait for running hooks, never call it holding cs_KeyStore,
+    //! the wallet's capability mutex, or any other lock a hook takes: the hook
+    //! could then never finish.
     virtual void removeCloseHook(HookId id) = 0;
 
-    //! Run the registered hooks, once each, in registration order, and mark the
-    //! scope closed. A hook that throws is logged and the rest still run.
+    //! Mark the scope closed, then run the registered hooks, once each, in
+    //! registration order, taking them one at a time so that a hook removed by
+    //! an earlier one does not run. A hook that throws is logged and the rest
+    //! still run.
     //! Idempotent: a later call runs nothing, but if another thread is still
     //! running the hooks it waits for them, so every caller returns only once the
     //! hooks have run. A call from inside a hook returns at once.
     virtual void close() = 0;
 
-    //! Whether close() has been called. True from the moment close() begins.
+    //! Whether close() has been called. True from the moment close() begins,
+    //! before any hook runs. Lock-free, so it may be asked under any lock: the
+    //! wallet asks it under its capability mutex, as it installs an IPC
+    //! capability (CWallet::BeginIpcElevation).
     virtual bool closed() const = 0;
 };
 
