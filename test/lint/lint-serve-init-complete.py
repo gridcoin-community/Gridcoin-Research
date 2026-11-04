@@ -22,11 +22,19 @@ This lint closes both. Every virtual on interfaces::Init must have an override
 in ServeInit, and every override must call RequireAuth() -- except the methods
 listed in UNGATED below, which are exempt by design.
 
+It also checks the connection binding. An interface that declares
+bindConnectionScope() runs operations under the client's capability, which it
+reads for its own connection only once it is bound. So every make* factory whose
+interface declares bindConnectionScope() must return BindToConnection(...) in
+ServeInit. Without it, the object reads the capability with no connection check,
+and could use the next GUI's capability after its own connection has closed.
+
 If you are here because the lint failed, the fix is almost always to add the
 missing override to src/ipc/serve_init.cpp with RequireAuth() as its first
 statement, delegating to m_inner.
 """
 
+import glob
 import re
 import sys
 
@@ -34,6 +42,13 @@ INIT_HEADER = "src/interfaces/init.h"
 SERVE_INIT = "src/ipc/serve_init.cpp"
 INIT_CAPNP = "src/ipc/capnp/init.capnp"
 WIRE_TEST = "src/test/ipc_wire_handshake_tests.cpp"
+INTERFACE_HEADERS = "src/interfaces/*.h"
+
+# "virtual std::unique_ptr<X> makeY(" or the shared_ptr form: a factory and the
+# interface it returns.
+FACTORY_RE = re.compile(r"\bvirtual\s+std::(?:unique|shared)_ptr<\s*(?:interfaces::)?(\w+)\s*>\s+(make\w+)\s*\(")
+BIND_RE = re.compile(r"\bbindConnectionScope\s*\(")
+BIND_RETURN_RE = re.compile(r"\breturn\s+BindToConnection\s*\(")
 
 # Methods that must NOT be gated, with the reason each is exempt.
 UNGATED = {
@@ -175,6 +190,37 @@ def overrides_with_bodies(serve_text):
             i += 1
         out[key] = body[start:i - 1]
     return out
+
+
+def check_connection_binding(header_text, serve_text, interface_texts):
+    """Every make* factory on interfaces::Init whose interface declares
+    bindConnectionScope() returns BindToConnection(...) in ServeInit.
+    interface_texts are the texts of the headers that declare the interfaces.
+    Returns the errors."""
+    errors = []
+    init_body = class_body(header_text, "Init")
+    found = overrides_with_bodies(serve_text)
+    if init_body is None or found is None:
+        return ["could not locate class Init or class ServeInit for the connection-binding check"]
+    for m in FACTORY_RE.finditer(strip_noncode(init_body)):
+        interface, factory = m.group(1), m.group(2)
+        bindable = False
+        for text in interface_texts:
+            body = class_body(text, interface)
+            if body is not None and BIND_RE.search(strip_noncode(body)):
+                bindable = True
+        if not bindable:
+            continue
+        body = found.get((factory, 0))
+        if body is None:
+            continue  # the completeness check above reports a missing override
+        if not BIND_RETURN_RE.search(body):
+            errors.append(
+                "ServeInit::{0}() does not return BindToConnection(...), but interfaces::{1} declares "
+                "bindConnectionScope(). Unbound, the object reads the client's capability with no "
+                "connection check, and once its connection has closed it could use the next GUI's "
+                "capability. Return BindToConnection(m_inner->{0}()).".format(factory, interface))
+    return errors
 
 
 def capnp_init_methods(capnp_text):
@@ -371,6 +417,10 @@ def main():
                 "looks. Add `link.client->{0}();` and a matching Seen flag + BOOST_CHECK_MESSAGE "
                 "to wire_every_init_factory_reaches_the_server.".format(name, WIRE_TEST))
 
+    # --- Fifth gate: every bindable object is bound to its connection ---
+    interface_texts = [t for t in (read(path) for path in sorted(glob.glob(INTERFACE_HEADERS))) if t is not None]
+    errors.extend(check_connection_binding(header_text, serve_text, interface_texts))
+
     # An UNGATED entry that calls RequireAuth() is a contradiction worth catching.
     for name in UNGATED:
         if any(k[0] == name and "RequireAuth()" in b for k, b in found.items()):
@@ -386,5 +436,65 @@ def main():
     return 0
 
 
+SAMPLE_INIT_HEADER = """
+class Init
+{
+public:
+    virtual std::unique_ptr<Wallet> makeWallet();
+    virtual std::unique_ptr<StakingStatus> makeStakingStatus();
+};
+"""
+
+SAMPLE_INTERFACES = ["""
+class Wallet
+{
+public:
+    virtual void bindConnectionScope(std::shared_ptr<ConnectionScope> /*scope*/) {}
+};
+class StakingStatus
+{
+public:
+    // bindConnectionScope() is not declared here, only named in this comment.
+    virtual bool isStaking() = 0;
+};
+"""]
+
+SAMPLE_SERVE = """
+class ServeInit : public interfaces::Init
+{
+public:
+    std::unique_ptr<interfaces::Wallet> makeWallet() override
+    {
+        RequireAuth();
+        return BindToConnection(m_inner->makeWallet());
+    }
+    std::unique_ptr<interfaces::StakingStatus> makeStakingStatus() override
+    {
+        RequireAuth();
+        return m_inner->makeStakingStatus();
+    }
+};
+"""
+
+
+def self_test():
+    """The connection-binding check passes the clean sample and fails a factory
+    of a bindable interface that is returned unbound."""
+    failures = []
+    clean = check_connection_binding(SAMPLE_INIT_HEADER, SAMPLE_SERVE, SAMPLE_INTERFACES)
+    if clean:
+        failures.append("the clean sample fails: {}".format("; ".join(clean)))
+    unbound = SAMPLE_SERVE.replace("return BindToConnection(m_inner->makeWallet());",
+                                   "return m_inner->makeWallet();")
+    errors = check_connection_binding(SAMPLE_INIT_HEADER, unbound, SAMPLE_INTERFACES)
+    if not any("ServeInit::makeWallet() does not return BindToConnection(...)" in e for e in errors):
+        failures.append("no error for an unbound makeWallet(); got: {}".format("; ".join(errors) or "none"))
+    for failure in failures:
+        fail("self-test: " + failure)
+    return 1 if failures else 0
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--self-test"]:
+        sys.exit(self_test())
     sys.exit(main())
