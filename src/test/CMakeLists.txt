@@ -173,6 +173,7 @@ add_executable(test_gridcoin
     # CTxDB batch-consistent reads: Exists() against a pending Delete.
     dbwrapper_tests.cpp
     random_tests.cpp
+    rpc_elevation_tests.cpp
     rpc_tests.cpp
     rpchelpman_tests.cpp
     sanity_tests.cpp

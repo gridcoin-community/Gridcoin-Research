@@ -249,6 +249,10 @@ static const RPCHelpMan getwalletinfo_help{
             {RPCResult::Type::NUM_TIME, "keypoololdest", "Oldest key in the wallet keypool (unix epoch)."},
             {RPCResult::Type::NUM, "keypoolsize", "Number of keys in the wallet keypool."},
             {RPCResult::Type::NUM_TIME, "unlocked_until", /*optional=*/true, "Time until wallet auto-locks (encrypted wallets only)."},
+            {RPCResult::Type::STR, "unlock_scope", "How far the wallet is unlocked: \"locked\", \"staking_only\" "
+                "(it stakes, and spends or signs only for an operation the wallet passphrase authorises, such "
+                "as a request that carries it) or \"full\". An unencrypted wallet reads \"full\". An operation "
+                "authorised that way does not change it."},
             {RPCResult::Type::STR_HEX, "masterkeyid", /*optional=*/true, "HD master key id (HD wallets only)."},
             {RPCResult::Type::BOOL, "staking", "Whether the staking miner is currently active."},
             {RPCResult::Type::STR, "mining-error", "Most recent staking miner error, if any."},
@@ -275,6 +279,13 @@ UniValue getwalletinfo(const UniValue& params)
 
         if (pwalletMain->IsCrypted())
             res.pushKV("unlocked_until", pwalletMain->GetUnlockDeadline().value_or(0));
+
+        // The wallet-wide scope, which a capability open on this thread does
+        // not change.
+        const UnlockScope scope = pwalletMain->GetUnlockScope();
+        res.pushKV("unlock_scope", scope == UnlockScope::Full          ? "full"
+                                   : scope == UnlockScope::StakingOnly ? "staking_only"
+                                                                       : "locked");
 
         CKeyID masterKeyID = pwalletMain->GetHDChain().masterKeyID;
         if (!masterKeyID.IsNull())
@@ -846,8 +857,9 @@ UniValue sendtoaddress(const UniValue& params)
         }
     }
 
-    if (pwalletMain->IsLocked())
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+    // Refused for a staking-only unlock too, unless this thread may use the
+    // keys, as sendmany and sendfrom are.
+    EnsureWalletIsUnlocked();
 
     string strError = pwalletMain->SendMoneyToDestination(address, nAmount, wtx, &relay);
     if (!strError.empty())
@@ -4361,8 +4373,9 @@ const RPCHelpMan& burn_helpman() { return burn_help; }
 
 UniValue burn(const UniValue& params)
 {
-    if (pwalletMain->IsLocked())
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+    // Refused for a staking-only unlock too, unless this thread may use the
+    // keys.
+    EnsureWalletIsUnlocked();
 
     int64_t nAmount = AmountFromValue(params[0]);
     CScript scriptPubKey;

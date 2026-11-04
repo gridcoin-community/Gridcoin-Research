@@ -7,12 +7,16 @@
 #ifndef BITCOIN_RPC_SERVER_H
 #define BITCOIN_RPC_SERVER_H
 
+#include <support/allocators/secure.h>
+
 #include <boost/asio/ip/address.hpp>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 #include <list>
 #include <map>
+#include <optional>
 
 class CBlockIndex;
 class uint256;
@@ -153,6 +157,36 @@ extern UniValue ValueFromAmount(int64_t amount);
 
 extern std::string HelpRequiringPassphrase();
 extern void EnsureWalletIsUnlocked();
+
+//! \brief Take a request's elevation header out of its headers.
+//!
+//! The X-Gridcoin-Elevate header (stored as "x-gridcoin-elevate", the parser
+//! lower-cases names) carries the wallet passphrase for one request,
+//! base64-encoded in the standard alphabet with padding, so that the parser's
+//! trimming of whitespace cannot change it. Returns the value, still encoded,
+//! in secure memory, or nullopt when the request carries none. The header is
+//! erased from \p headers, and the memory that held its value is overwritten
+//! first, so nothing that reads the headers afterwards, a request handler or a
+//! log, can see it.
+std::optional<SecureString> TakeElevationHeader(std::map<std::string, std::string>& headers);
+
+//! \brief Run one request, or one batch, under the capability its elevation
+//! header proves.
+//!
+//! With no header, or with no wallet to authorise anything, \p execute runs as
+//! it would without one. Otherwise the header is decoded and the wallet checks
+//! the passphrase (CWallet::BeginElevation(), for CapabilityKind::RpcRequest).
+//! \p execute then runs on the calling thread under a CapabilityScope for that
+//! capability, and the capability ends when \p execute returns or throws. A
+//! value that is not base64, or a passphrase the wallet does not accept,
+//! throws RPC_WALLET_PASSPHRASE_INCORRECT without running \p execute.
+//!
+//! An unencrypted wallet issues a capability for any passphrase, so a request
+//! with a well-formed header runs there as it would without one.
+//!
+//! The passphrase check derives a key and may wait out the failed-passphrase
+//! delay, so the caller must hold no lock.
+UniValue ExecuteWithElevation(const std::optional<SecureString>& header, const std::function<UniValue()>& execute);
 
 //
 // Utilities: convert hex-encoded Values

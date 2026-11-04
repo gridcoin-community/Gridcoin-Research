@@ -2020,6 +2020,56 @@ BOOST_AUTO_TEST_CASE(getwalletinfo_path_no_throw_under_staking_only)
     BOOST_CHECK_EQUAL(fx.KeyCount(), keys_before);
 }
 
+//! getwalletinfo reports the wallet-wide unlock scope: what the wallet allows
+//! every thread, whatever a capability allows one of them.
+BOOST_AUTO_TEST_CASE(getwalletinfo_reports_scope)
+{
+    const auto reported = [] {
+        const UniValue scope = find_value(getwalletinfo(UniValue(UniValue::VARR)), "unlock_scope");
+
+        return scope.isStr() ? scope.get_str() : std::string("(absent)");
+    };
+
+    {
+        EncryptedHdKeyPoolWallet fx;
+        BOOST_CHECK_EQUAL(reported(), "locked");
+
+        fx.UnlockFor(UnlockScope::StakingOnly);
+        BOOST_CHECK_EQUAL(reported(), "staking_only");
+
+        // A capability open on the asking thread leaves it as it is.
+        const std::optional<CapabilityId> id = fx.wallet.BeginElevation(EncryptedHdKeyPoolWallet::PASSPHRASE,
+                                                                        CapabilityKind::RpcRequest);
+        BOOST_REQUIRE(id.has_value());
+        {
+            CapabilityScope scope(fx.wallet, id, CapabilityKind::RpcRequest);
+            BOOST_REQUIRE(scope.Active());
+            BOOST_CHECK_EQUAL(reported(), "staking_only");
+        }
+        fx.wallet.EndElevation(*id);
+
+        fx.UnlockFor(UnlockScope::Full);
+        BOOST_CHECK_EQUAL(reported(), "full");
+
+        fx.wallet.Lock();
+        BOOST_CHECK_EQUAL(reported(), "locked");
+    }
+
+    // An unencrypted wallet has no unlock to narrow.
+    {
+        const std::string file{"wallet_unlock_scope_plain.dat"};
+        grc_test::ForcedArgGuard target{"keypool", "5"};
+        MockWalletDbScope db{file};
+        BOOST_REQUIRE(db.isolated());
+
+        CWallet plain{file};
+        grc_test::SwapMainWallet swap{&plain};
+        BOOST_REQUIRE(!plain.IsCrypted());
+
+        BOOST_CHECK_EQUAL(reported(), "full");
+    }
+}
+
 //! A draw from an empty pool under staking only fails cleanly at every entry
 //! that would otherwise make the key: no key, no exception.
 BOOST_AUTO_TEST_CASE(getkeyfrompool_empty_under_staking_only_returns_false)

@@ -15,7 +15,10 @@
 #include "client.h"
 #include "protocol.h"
 #include "random.h"
+#include "support/cleanse.h"
+#include "wallet/capability.h"
 #include "wallet/db.h"
+#include "wallet/wallet.h"
 #include <rpc/util.h>
 #include <util.h>
 #include <util/strencodings.h>
@@ -202,6 +205,110 @@ bool HTTPAuthorized(map<string, string>& mapHeaders)
     strUserPass64 = TrimString(strUserPass64);
     string strUserPass = DecodeBase64(strUserPass64);
     return TimingResistantEqual(strUserPass, strRPCUserColonPass);
+}
+
+//! The elevation header's name, as ReadHTTPHeaders() stores it (lower case).
+static const std::string ELEVATION_HEADER{"x-gridcoin-elevate"};
+
+std::optional<SecureString> TakeElevationHeader(std::map<std::string, std::string>& headers)
+{
+    const auto it = headers.find(ELEVATION_HEADER);
+
+    if (it == headers.end()) return std::nullopt;
+
+    std::string& value = it->second;
+
+    // Reserved past the short-string capacity first, so that even a short
+    // value is copied into the secure allocator's memory rather than into the
+    // string object itself.
+    SecureString encoded;
+    encoded.reserve(std::max<size_t>(value.size(), 100));
+    encoded.assign(value.data(), value.size());
+
+    if (!value.empty()) memory_cleanse(&value[0], value.size());
+
+    headers.erase(it);
+
+    return std::optional<SecureString>{std::move(encoded)};
+}
+
+//! The passphrase an elevation header's value carries, or nullopt when the
+//! value is not base64 in the standard alphabet with padding.
+static std::optional<SecureString> DecodeElevationHeader(const SecureString& encoded)
+{
+    // DecodeBase64() reads a C string and would stop at a NUL, decoding only
+    // the part before it as if it were the whole value.
+    if (encoded.find('\0') != SecureString::npos) return std::nullopt;
+
+    bool invalid{false};
+    std::vector<unsigned char> decoded = DecodeBase64(encoded.c_str(), &invalid);
+
+    SecureString passphrase;
+    passphrase.reserve(std::max<size_t>(decoded.size(), 100));
+    if (!invalid) passphrase.assign(decoded.begin(), decoded.end());
+
+    // The decoded bytes are the passphrase, in memory the secure allocator
+    // does not own, so they are overwritten before it is freed.
+    if (!decoded.empty()) memory_cleanse(decoded.data(), decoded.size());
+
+    if (invalid) return std::nullopt;
+
+    return std::optional<SecureString>{std::move(passphrase)};
+}
+
+namespace {
+//! Ends a capability when the request it was issued for is over, however the
+//! request ends.
+class EndElevationOnExit
+{
+public:
+    EndElevationOnExit(CWallet& wallet, CapabilityId id) : m_wallet(wallet), m_id(id) {}
+    ~EndElevationOnExit() { m_wallet.EndElevation(m_id); }
+
+    EndElevationOnExit(const EndElevationOnExit&) = delete;
+    EndElevationOnExit& operator=(const EndElevationOnExit&) = delete;
+
+private:
+    CWallet& m_wallet;
+    CapabilityId m_id{0};
+};
+} // namespace
+
+UniValue ExecuteWithElevation(const std::optional<SecureString>& header, const std::function<UniValue()>& execute)
+{
+    CWallet* const wallet = pwalletMain;
+
+    // With no wallet there is nothing to authorise, and a header is ignored.
+    if (!header || !wallet) return execute();
+
+    std::optional<CapabilityId> id;
+    {
+        const std::optional<SecureString> passphrase = DecodeElevationHeader(*header);
+
+        if (!passphrase) {
+            throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT,
+                               "Error: the X-Gridcoin-Elevate header must carry the wallet passphrase, "
+                               "base64-encoded with padding.");
+        }
+
+        // Derives a key, and after a wrong passphrase sleeps the delay, with no
+        // lock held: the RPC worker holds none here.
+        id = wallet->BeginElevation(*passphrase, CapabilityKind::RpcRequest);
+    }
+
+    if (!id) {
+        throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT,
+                           "Error: the wallet passphrase sent with this request was not accepted.");
+    }
+
+    // Declared in this order so that the scope drops its grant before the
+    // capability ends. A scope that finds the capability already ended, by a
+    // passphrase change in between, is inactive, and the request then runs as
+    // one without the header would.
+    const EndElevationOnExit end_elevation(*wallet, *id);
+    const CapabilityScope scope(*wallet, id, CapabilityKind::RpcRequest);
+
+    return execute();
 }
 
 int64_t AmountFromValue(const UniValue& value)
@@ -462,7 +569,7 @@ static const CRPCCommand vRPCCommands[] =
     { "gettransaction",          &gettransaction,          cat_wallet, &gettransaction_helpman, heritage_mixed, "b82e0de9cd38" },
     { "abandontransaction",      &abandontransaction,      cat_wallet, &abandontransaction_helpman, heritage_pure_upstream, "8a15aece8d9f" },
     { "getunconfirmedbalance",   &getunconfirmedbalance,   cat_wallet, &getunconfirmedbalance_helpman, heritage_removed_upstream, "e169db2f48c0" },
-    { "getwalletinfo",           &getwalletinfo,           cat_wallet, &getwalletinfo_helpman, heritage_mixed, "693ce305655c" },
+    { "getwalletinfo",           &getwalletinfo,           cat_wallet, &getwalletinfo_helpman, heritage_mixed, "5f9474f07a47" },
     { "importprivkey",           &importprivkey,           cat_wallet, &importprivkey_helpman, heritage_removed_upstream, "907321bb2292" },
     { "importwallet",            &importwallet,            cat_wallet, &importwallet_helpman, heritage_removed_upstream, "eaad3c94f6a6" },
     { "inspectwalletstate",      &inspectwalletstate,      cat_wallet, &inspectwalletstate_helpman, heritage_pure_gridcoin, "" },
@@ -1331,13 +1438,13 @@ static UniValue JSONRPCExecOne(const UniValue& req)
     return rpc_result;
 }
 
-static string JSONRPCExecBatch(const UniValue& vReq)
+static UniValue JSONRPCExecBatch(const UniValue& vReq)
 {
     UniValue ret(UniValue::VARR);
     for (unsigned int reqIdx = 0; reqIdx < vReq.size(); reqIdx++)
         ret.push_back(JSONRPCExecOne(vReq[reqIdx]));
 
-    return UniValue(ret).write() + "\n";
+    return ret;
 }
 
 void ServiceConnection(AcceptedConnection *conn)
@@ -1362,6 +1469,12 @@ void ServiceConnection(AcceptedConnection *conn)
         // status the parser actually produced and close.
         const int http_status = ReadHTTPMessage(conn->stream(), mapHeaders, strRequest, nProto,
                                                 MAX_RPC_BODY_SIZE);
+
+        // The wallet passphrase a request may carry for itself is taken out of
+        // the headers at once, whatever becomes of the request, so that it is
+        // held only in secure memory and nothing that reads the headers sees
+        // it. It is used only once the request has been authorised.
+        const std::optional<SecureString> elevation = TakeElevationHeader(mapHeaders);
 
         if (http_status != HTTP_OK) {
             conn->stream() << HTTPReply(http_status, "", false) << std::flush;
@@ -1415,15 +1528,19 @@ void ServiceConnection(AcceptedConnection *conn)
             if (valRequest.isObject()) {
                 jreq.parse(valRequest);
 
-                UniValue result = tableRPC.execute(jreq.strMethod, jreq.params);
+                UniValue result = ExecuteWithElevation(elevation, [&] {
+                    return tableRPC.execute(jreq.strMethod, jreq.params);
+                });
 
                 // Send reply
                 strReply = JSONRPCReply(result, NullUniValue, jreq.id);
 
-            // array of requests
-            } else if (valRequest.isArray())
-                strReply = JSONRPCExecBatch(valRequest.get_array());
-            else
+            // array of requests, authorised once for the whole batch
+            } else if (valRequest.isArray()) {
+                strReply = ExecuteWithElevation(elevation, [&] {
+                    return JSONRPCExecBatch(valRequest.get_array());
+                }).write() + "\n";
+            } else
                 throw JSONRPCError(RPC_PARSE_ERROR, "Top-level object parse error");
 
             conn->stream() << HTTPReply(HTTP_OK, strReply, fRun) << std::flush;
