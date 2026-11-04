@@ -1795,7 +1795,8 @@ same answer.
 
 - A new RPC row takes `access_<class>` as its seventh field and an entry under `"rpc"` whose
   class matches it (`access_elevate_inband` is `elevate` with `"authority": "passphrase_argument"`;
-  `access_elevate` is any other `elevate`).
+  `access_elevate` is any other `elevate`). The help of an `access_elevate` row gains the line
+  "Needs the wallet passphrase." from `CRPCTable`, so its description need not say so.
 - A new capnp method takes an entry under `"ipc"`. An Elevate one without an authority names
   its `kind`, and its method body passes `CapabilityKind::<kind>` as an argument of the
   capability it opens: a `CapabilityScope` declaration, an `emplace()` into a

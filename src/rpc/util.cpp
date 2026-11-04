@@ -336,7 +336,7 @@ std::vector<std::pair<std::string, bool>> RPCHelpMan::GetArgNames() const
     return ret;
 }
 
-std::string RPCHelpMan::ToString() const
+std::string RPCHelpMan::ToString(const std::string& requirement) const
 {
     std::string ret;
 
@@ -360,6 +360,10 @@ std::string RPCHelpMan::ToString() const
 
     // Description
     ret += "\n\n" + TrimString(m_description) + "\n";
+
+    if (!requirement.empty()) {
+        ret += "\n" + requirement + "\n";
+    }
 
     // Arguments
     Sections sections;

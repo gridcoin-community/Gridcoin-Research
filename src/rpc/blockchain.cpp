@@ -960,7 +960,7 @@ static const RPCHelpMan settxfee_help{
     "settxfee",
     "Set the transaction fee per kB (rounded to the nearest 0.00000001 GRC). "
     "Overwrites the paytxfee parameter. "
-    "At most 0.1 GRC per kB. Needs the wallet passphrase: a full unlock, or the passphrase sent with this request.",
+    "At most 0.1 GRC per kB.",
     {
         {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
             "The transaction fee in GRC/kB."},

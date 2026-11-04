@@ -282,6 +282,12 @@ static void RunAs(const char* method, const std::vector<std::string>& args)
     tableRPC.execute(method, RPCConvertValues(method, args));
 }
 
+//! The dispatcher's refusal of an elevate-class row without the passphrase.
+static std::string GateRefusal(const std::string& method)
+{
+    return method + " needs the wallet passphrase: unlock the wallet fully, or send the passphrase with this request";
+}
+
 BOOST_AUTO_TEST_CASE(rpc_rows_carry_their_access_class)
 {
     for (const char* name : {"settxfee", "backupwallet", "maintainbackups", "writedata", "encryptwallet"}) {
@@ -392,7 +398,10 @@ BOOST_AUTO_TEST_CASE(every_gated_row_is_refused_without_elevation)
             for (const std::string& a : args) params.push_back(a);
 
             BOOST_CHECK_EXCEPTION(tableRPC.execute(name, params), UniValue,
-                [](const UniValue& e) { return CodeIs(e, RPC_WALLET_UNLOCK_NEEDED); });
+                [&name](const UniValue& e) {
+                    return CodeIs(e, RPC_WALLET_UNLOCK_NEEDED)
+                        && find_value(e, "message").get_str() == GateRefusal(name);
+                });
         }
     }
 
@@ -507,6 +516,60 @@ BOOST_AUTO_TEST_CASE(the_access_gate_follows_the_arity_check)
     BOOST_REQUIRE(fx.wallet().IsLocked());
 
     BOOST_CHECK_THROW(tableRPC.execute("settxfee", UniValue(UniValue::VARR)), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(the_access_gate_names_the_method_and_both_ways_to_proceed)
+{
+    struct RestoreFee { int64_t saved{nTransactionFee}; ~RestoreFee() { nTransactionFee = saved; } } restore;
+    grc_test::EncryptedWalletSwap fx;
+
+    BOOST_REQUIRE(fx.wallet().Unlock(grc_test::EncryptedWalletSwap::Passphrase(), UnlockScope::StakingOnly));
+
+    const int64_t before = nTransactionFee;
+
+    BOOST_CHECK_EXCEPTION(RunAs("settxfee", {"0.003"}), UniValue,
+        [](const UniValue& e) {
+            return CodeIs(e, RPC_WALLET_UNLOCK_NEEDED)
+                && find_value(e, "message").get_str()
+                       == "settxfee needs the wallet passphrase: unlock the wallet fully, "
+                          "or send the passphrase with this request";
+        });
+    BOOST_CHECK_EQUAL(nTransactionFee, before);
+
+    fx.wallet().Lock();
+}
+
+BOOST_AUTO_TEST_CASE(the_help_of_an_elevate_row_says_it_needs_the_passphrase)
+{
+    const std::string line = "\nNeeds the wallet passphrase.\n";
+
+    const auto count = [&line](const std::string& text) {
+        size_t n = 0;
+        for (size_t pos = text.find(line); pos != std::string::npos; pos = text.find(line, pos + 1)) ++n;
+        return n;
+    };
+
+    BOOST_CHECK_EQUAL(count(tableRPC.help("settxfee", cat_null)), 1U);
+    BOOST_CHECK_EQUAL(count(tableRPC.help("getblockcount", cat_null)), 0U);
+
+    // Every row with help says it exactly when it is an elevate-class row.
+    for (const std::string& name : tableRPC.listCommands(true)) {
+        const CRPCCommand* cmd = tableRPC[name];
+
+        if (cmd->category == cat_null) continue;
+
+        const size_t expected = cmd->access == access_elevate ? 1 : 0;
+        BOOST_CHECK_MESSAGE(count(tableRPC.help(name, cat_null)) == expected, name);
+    }
+
+    // So does the help the dispatcher returns for a call with the wrong number
+    // of arguments, which it checks before the access class.
+    try {
+        tableRPC.execute("settxfee", UniValue(UniValue::VARR));
+        BOOST_FAIL("settxfee with no arguments did not throw");
+    } catch (const std::runtime_error& e) {
+        BOOST_CHECK_EQUAL(count(e.what()), 1U);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

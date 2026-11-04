@@ -397,6 +397,14 @@ vector<unsigned char> ParseHexO(const UniValue& o, string strKey)
 /// Note: This interface may still be subject to change.
 ///
 
+//! A row's help text. The dispatcher refuses an elevate-class row without the
+//! wallet passphrase, so its help says so here, once for every such row, rather
+//! than in each description.
+static std::string RowHelp(const CRPCCommand& cmd)
+{
+    return cmd.helpman().ToString(cmd.access == access_elevate ? "Needs the wallet passphrase." : "");
+}
+
 string CRPCTable::help(string strCommand, rpccategory category) const
 {
     string strRet;
@@ -423,7 +431,7 @@ string CRPCTable::help(string strCommand, rpccategory category) const
         // Every command now has a helpman accessor (addpoll's was lifted in PR M3);
         // pull help text directly from it without invoking the command body or
         // using throw-as-control-flow.
-        string strHelp = pcmd->helpman().ToString();
+        string strHelp = RowHelp(*pcmd);
         if (strCommand.empty())
             if (strHelp.find('\n') != string::npos)
                 strHelp = strHelp.substr(0, strHelp.find('\n'));
@@ -1604,17 +1612,23 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     if (pcmd->helpman != nullptr) {
         const RPCHelpMan& help = pcmd->helpman();
         if (!help.IsVariadic() && !help.IsValidNumArgs(params.size())) {
-            throw runtime_error(help.ToString());
+            throw runtime_error(RowHelp(*pcmd));
         }
     }
 
     // The HTTP server, the IPC console and the plain GUI with -server=1 all arrive
     // here, so this is the one place an elevate-class RPC is refused when the wallet
     // has no full unlock and the request carries no passphrase. It follows the arity
-    // check and runs before any method body.
+    // check and runs before any method body. The refusal names both ways to proceed,
+    // where EnsureWalletIsUnlocked()'s names only a standing unlock; the code is the
+    // same, which the console reads to ask for the passphrase.
     if (pcmd->access == access_elevate) {
         if (!pwalletMain) throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: no wallet is loaded.");
-        EnsureWalletIsUnlocked();
+        if (pwalletMain->IsLocked() || !pwalletMain->CanUseKeys()) {
+            throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED,
+                               strMethod + " needs the wallet passphrase: unlock the wallet fully, "
+                               "or send the passphrase with this request");
+        }
     }
 
     // Let's add an optional display if BCLog::LogFlags::RPC is set to show how long it takes
