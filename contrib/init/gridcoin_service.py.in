@@ -1,0 +1,332 @@
+#!@GRC_UNIT_PYTHON3@ -I
+# Copyright (c) 2026 The Gridcoin developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or https://opensource.org/licenses/mit-license.php.
+"""Set up the per-user Gridcoin core unit and wire autounlock to it.
+
+Run as root. Commands:
+  enable-user <user>       write the drop-in for <daemon>@<user>.service and start it
+  disable-user <user>      stop the unit and remove the drop-ins
+  autounlock enable|disable (<user> | --system)
+
+The per-user core runs with the user's own account, groups and home, as if the user
+had started the daemon by hand. The tool does not touch the user's configuration
+file or RPC credentials. Python 3 standard library only.
+"""
+
+import argparse
+import dataclasses
+import grp
+import os
+import pwd
+import re
+import subprocess
+import sys
+
+CONFIG = {"bindir": "@GRC_BINDIR@", "default_network": "@GRC_UNIT_NETWORK@", "python3": "@GRC_UNIT_PYTHON3@"}
+
+EXIT_USAGE = 64
+DROPIN_MAIN = "50-gridcoin-service.conf"
+DROPIN_AUTOUNLOCK = "60-gridcoin-autounlock.conf"
+USER_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+UNSAFE_PATH_RE = re.compile(r"[\s\"'\\$%;]")
+ROOT_EQUIVALENT_GROUPS = ("docker", "lxd", "incus", "libvirt", "disk", "wheel", "sudo", "adm", "systemd-journal")
+
+
+class UserError(Exception):
+    pass
+
+
+@dataclasses.dataclass(frozen=True)
+class Network:
+    daemon: str
+    net_arg: str
+    account: str
+    attach_group: str
+    conf_dir: str
+    state: str
+    autounlock: str
+    cred_prefix: str
+    subdir: str
+
+    @property
+    def tool_name(self):
+        return self.account + "-service"
+
+
+NETWORKS = {
+    "main": Network("gridcoinresearchd", "", "gridcoin", "gridcoin-gui", "/etc/gridcoin",
+                    "gridcoinresearchd", "gridcoin-autounlock", "gridcoinresearch", ""),
+    "test": Network("gridcointestnetd", "-testnet", "gridcointestnet", "gridcointestnet-gui", "/etc/gridcoin-testnet",
+                    "gridcointestnetd", "gridcointestnet-autounlock", "gridcointestnet", "testnet"),
+}
+
+
+@dataclasses.dataclass
+class Paths:
+    etc_systemd: str = "/etc/systemd/system"
+    credstore: str = "/etc/credstore.encrypted"
+    var_lib: str = "/var/lib"
+    tool_state: str = "/var/lib/gridcoin-service"
+    login_defs: str = "/etc/login.defs"
+
+
+class Host:
+    """Real host access. Tests use a fake with the same methods."""
+
+    def systemctl(self, *args):
+        return subprocess.call(["systemctl", *args])
+
+    def is_enabled(self, unit):
+        return subprocess.call(["systemctl", "is-enabled", "--quiet", unit]) == 0
+
+    def is_active(self, unit):
+        return subprocess.call(["systemctl", "is-active", "--quiet", unit]) == 0
+
+    def getpwnam(self, name):
+        return pwd.getpwnam(name)
+
+    def user_groups(self, name):
+        pw = pwd.getpwnam(name)
+        names = {g.gr_name for g in grp.getgrall() if name in g.gr_mem}
+        try:
+            names.add(grp.getgrgid(pw.pw_gid).gr_name)
+        except KeyError:
+            pass
+        return sorted(names)
+
+    def is_root(self):
+        return os.geteuid() == 0
+
+
+def uid_min(paths):
+    try:
+        with open(paths.login_defs, encoding="utf8") as f:
+            for line in f:
+                fields = line.split()
+                if len(fields) == 2 and fields[0] == "UID_MIN" and fields[1].isdigit():
+                    return int(fields[1])
+    except OSError:
+        pass
+    return 1000
+
+
+def validate_user(name, host, paths):
+    if not USER_RE.match(name):
+        raise UserError("invalid user name '%s'" % name)
+    try:
+        pw = host.getpwnam(name)
+    except KeyError:
+        raise UserError("unknown user '%s'" % name) from None
+    if pw.pw_uid == 0:
+        raise UserError("refusing uid 0")
+    if pw.pw_uid < uid_min(paths):
+        raise UserError("'%s' is a system account (uid %d below UID_MIN)" % (name, pw.pw_uid))
+    return pw
+
+
+def resolve_datadir(pw, override):
+    """Return the validated explicit data directory, or None to use the core's default."""
+    if override is None:
+        return None
+    if not os.path.isabs(override):
+        raise UserError("--datadir must be an absolute path")
+    if UNSAFE_PATH_RE.search(override):
+        raise UserError("--datadir may not contain whitespace, quotes, backslash, $, % or ;")
+    path = ""
+    for part in override.split("/"):
+        if part == "":
+            continue
+        if part in (".", ".."):
+            raise UserError("--datadir may not contain '.' or '..' components")
+        path += "/" + part
+        if os.path.islink(path):
+            raise UserError("--datadir has a symlink component: %s" % path)
+    if not os.path.isdir(override):
+        raise UserError("--datadir is not an existing directory")
+    if os.stat(override).st_uid != pw.pw_uid:
+        raise UserError("--datadir is not owned by %s" % pw.pw_name)
+    return override
+
+
+def header(net):
+    return "# Written by %s; rerun the tool instead of editing\n" % net.tool_name
+
+
+def render_user_dropin(net, datadir):
+    parts = [os.path.join(CONFIG["bindir"], net.daemon), net.net_arg, "-nodaemon", "-nodaemonwait", "-multiprocess"]
+    if datadir is not None:
+        parts.append("-datadir=" + datadir)
+    parts.append("$GRIDCOIN_AUTOUNLOCK_ARGS")
+    # An empty net_arg leaves two spaces, as in the system unit.
+    exec_start = " ".join(parts)
+    return (header(net) + "[Service]\n"
+            "ExecStart=\n"
+            "ExecStart=" + exec_start + "\n"
+            "Environment=GRIDCOIN_AUTOUNLOCK_ARGS=\n"
+            "RestartPreventExitStatus=\n")
+
+
+def autounlock_target(net, user):
+    if user is None:
+        return net.daemon + ".service", net.autounlock + ".socket", "/run/%s/%s.sock" % (net.autounlock, net.account)
+    return ("%s@%s.service" % (net.daemon, user), "%s@%s.socket" % (net.autounlock, user),
+            "/run/%s/%s.sock" % (net.autounlock, user))
+
+
+def render_autounlock_dropin(net, user):
+    _, socket_unit, sock_path = autounlock_target(net, user)
+    return (header(net) + "[Unit]\n"
+            "Wants=" + socket_unit + "\n"
+            "After=" + socket_unit + "\n"
+            "[Service]\n"
+            "Environment=GRIDCOIN_AUTOUNLOCK_ARGS=-autounlocksocket=" + sock_path + "\n")
+
+
+def dropin_dir(paths, unit):
+    return os.path.join(paths.etc_systemd, unit + ".d")
+
+
+def write_dropin(paths, unit, filename, text):
+    directory = dropin_dir(paths, unit)
+    os.makedirs(directory, mode=0o755, exist_ok=True)
+    final = os.path.join(directory, filename)
+    temp = os.path.join(directory, ".%s.%d.tmp" % (filename, os.getpid()))
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    try:
+        with os.fdopen(fd, "w", encoding="utf8") as f:
+            f.write(text)
+        os.chmod(temp, 0o644)
+        if os.geteuid() == 0:
+            os.chown(temp, 0, 0)
+        os.rename(temp, final)
+    except BaseException:
+        if os.path.exists(temp):
+            os.unlink(temp)
+        raise
+
+
+def remove_dropin(paths, unit, filename):
+    directory = dropin_dir(paths, unit)
+    try:
+        os.unlink(os.path.join(directory, filename))
+    except FileNotFoundError:
+        return
+    try:
+        os.rmdir(directory)
+    except OSError:
+        pass
+
+
+def credential_path(paths, net, user):
+    if user is not None:
+        return os.path.join(paths.credstore, "%s-%s.wallet-passphrase" % (net.cred_prefix, user))
+    new_install = os.path.join(paths.credstore, net.cred_prefix + ".wallet-passphrase")
+    existing = os.path.join(net.conf_dir, "wallet-passphrase.cred")
+    if not os.path.exists(new_install) and os.path.exists(existing):
+        return existing
+    return new_install
+
+
+def cmd_enable_user(args, net, host, paths):
+    pw = validate_user(args.user, host, paths)
+    datadir = resolve_datadir(pw, args.datadir)
+    if host.is_enabled(net.daemon + ".service"):
+        raise UserError("%s.service is enabled and conflicts with the per-user unit; disable it first" % net.daemon)
+    unit = "%s@%s.service" % (net.daemon, args.user)
+    write_dropin(paths, unit, DROPIN_MAIN, render_user_dropin(net, datadir))
+    host.systemctl("daemon-reload")
+    host.systemctl("enable", "--now", unit)
+    risky = [g for g in host.user_groups(args.user) if g in ROOT_EQUIVALENT_GROUPS]
+    if risky:
+        print("warning: %s is in groups that are equivalent to root on this machine: %s.\n"
+              "The per-user core runs with the user's account and groups; this mode is a convenience\n"
+              "(staking, autounlock), not extra isolation. For isolation use `%s enable %s`."
+              % (args.user, ", ".join(risky), net.tool_name, args.user))
+    return 0
+
+
+def cmd_disable_user(args, net, host, paths):
+    validate_user(args.user, host, paths)
+    unit, socket_unit, _ = autounlock_target(net, args.user)
+    host.systemctl("disable", "--now", unit, socket_unit)
+    remove_dropin(paths, unit, DROPIN_MAIN)
+    remove_dropin(paths, unit, DROPIN_AUTOUNLOCK)
+    host.systemctl("daemon-reload")
+    return 0
+
+
+def cmd_autounlock(args, net, host, paths):
+    user = None if args.system else args.user
+    if user is not None:
+        validate_user(user, host, paths)
+    unit, socket_unit, _ = autounlock_target(net, user)
+    if args.action == "enable":
+        cred = credential_path(paths, net, user)
+        try:
+            st = os.stat(cred)
+        except OSError:
+            raise UserError("no credential at %s; create it first" % cred) from None
+        if st.st_uid != 0 or (st.st_mode & 0o777) != 0o600:
+            print("warning: %s is not owned by root with mode 0600" % cred)
+        write_dropin(paths, unit, DROPIN_AUTOUNLOCK, render_autounlock_dropin(net, user))
+        host.systemctl("daemon-reload")
+        host.systemctl("enable", "--now", socket_unit)
+        if host.is_active(unit):
+            host.systemctl("restart", "--no-block", unit)
+    else:
+        host.systemctl("disable", "--now", socket_unit)
+        remove_dropin(paths, unit, DROPIN_AUTOUNLOCK)
+        host.systemctl("daemon-reload")
+        if host.is_active(unit):
+            host.systemctl("restart", "--no-block", unit)
+        print("The credential file remains until you remove it: %s" % credential_path(paths, net, user))
+    return 0
+
+
+def build_parser(default_network):
+    parser = argparse.ArgumentParser(prog="gridcoin-service")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    def add_network(p):
+        p.add_argument("--network", choices=sorted(NETWORKS), default=default_network)
+
+    p = sub.add_parser("enable-user")
+    p.add_argument("user")
+    p.add_argument("--datadir")
+    add_network(p)
+    p = sub.add_parser("disable-user")
+    p.add_argument("user")
+    add_network(p)
+    p = sub.add_parser("autounlock")
+    p.add_argument("action", choices=("enable", "disable"))
+    p.add_argument("user", nargs="?")
+    p.add_argument("--system", action="store_true")
+    add_network(p)
+    return parser
+
+
+def main(argv, host=None, paths=None):
+    if any(v.startswith("@") for v in CONFIG.values()):
+        print("gridcoin-service: not configured (build-time values missing)", file=sys.stderr)
+        return EXIT_USAGE
+    host = host if host is not None else Host()
+    paths = paths if paths is not None else Paths()
+    parser = build_parser(CONFIG["default_network"])
+    args = parser.parse_args(argv)
+    if args.command == "autounlock" and (args.system == (args.user is not None)):
+        parser.error("autounlock needs exactly one of <user> or --system")
+    if not host.is_root():
+        print("gridcoin-service: must be run as root", file=sys.stderr)
+        return 1
+    net = NETWORKS[args.network]
+    handlers = {"enable-user": cmd_enable_user, "disable-user": cmd_disable_user, "autounlock": cmd_autounlock}
+    try:
+        return handlers[args.command](args, net, host, paths)
+    except UserError as e:
+        print("gridcoin-service: %s" % e, file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

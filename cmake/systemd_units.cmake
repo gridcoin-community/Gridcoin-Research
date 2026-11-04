@@ -98,3 +98,11 @@ if(INSTALL_SYSTEMD_UNITS AND INSTALL_SYSTEMD_AUTOUNLOCK)
         RENAME "gridcoin-autounlock-helper"
     )
 endif()
+
+# The per-user service setup tool, generated for this network.
+if(INSTALL_SYSTEMD_UNITS)
+    configure_file("${GRC_UNIT_TEMPLATE_DIR}/gridcoin_service.py.in" "${GRC_UNIT_OUTPUT_DIR}/${GRC_SERVICE_TOOL}" @ONLY)
+    install(PROGRAMS "${GRC_UNIT_OUTPUT_DIR}/${GRC_SERVICE_TOOL}" COMPONENT daemon
+        DESTINATION "${CMAKE_INSTALL_SBINDIR}"
+    )
+endif()
