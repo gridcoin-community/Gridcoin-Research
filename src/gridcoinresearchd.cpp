@@ -14,6 +14,7 @@
 #include <util/proc_hardening.h>
 #include <util/syserror.h>
 #include "util/threadnames.h"
+#include <util/sdnotify.h>
 #include <util/tokenpipe.h>
 #include "net.h"
 #include "txdb.h"
@@ -136,6 +137,10 @@ bool AppInit(int argc, char* argv[])
 
     ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
     bool fRet = false;
+
+    // Extends the service manager start timeout on each startup progress message.
+    // Disconnected once readiness has been reported.
+    boost::signals2::connection init_message_connection;
 
     try
     {
@@ -353,6 +358,9 @@ bool AppInit(int argc, char* argv[])
             }
         }
 
+        init_message_connection = uiInterface.InitMessage_connect(
+            [](const std::string& message) { sdnotify::ExtendStartTimeout(message); });
+
         fRet = AppInit2(threads);
 #if HAVE_DECL_FORK
         if (daemon_ep.IsOpen()) {
@@ -371,6 +379,10 @@ bool AppInit(int argc, char* argv[])
 
         PrintException(nullptr, "AppInit()");
     }
+
+    // Startup is over, successful or not, so later progress messages must not
+    // extend the start timeout.
+    init_message_connection.disconnect();
 
     if (fRet) {
         // Core init succeeded. ThreadAppInit2 (the GUI's init wrapper) sets this
@@ -506,9 +518,14 @@ bool AppInit(int argc, char* argv[])
             }
         }
 #endif
+        // Readiness is reported only when startup, including the multiprocess
+        // listener when requested, succeeded.
+        if (fRet) sdnotify::NotifyReady();
+
         while (!ShutdownRequested()) {
             UninterruptibleSleep(std::chrono::milliseconds{500});
         }
+        sdnotify::NotifyStopping();
 #ifdef ENABLE_MULTIPROCESS
         if (ipc) ipc->disconnectIncoming();
         // Also reached on the fatal-error path above, so the thread is never left
@@ -543,6 +560,10 @@ int main(int argc, char* argv[])
     // without this they inherit a default desktop umask of 022 and land
     // world-readable. Narrowing here rather than after the fact leaves no window.
     util::SetOwnerOnlyUmask();
+
+    // Capture and remove NOTIFY_SOCKET while the process is still single-threaded.
+    // The process-hardening statements come before this one.
+    sdnotify::CaptureFromEnvironment();
 
     // Reinit default timer to ensure it is zeroed out at the start of main.
     g_timer.InitTimer("default", false);

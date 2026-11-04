@@ -41,6 +41,7 @@
 #include "policy/fees.h"
 #include <util/check.h>
 #include <util/proc_hardening.h>
+#include <util/sdnotify.h>
 #include <util/strencodings.h>
 #include <util/string.h>
 #include <util/syserror.h>
@@ -2411,7 +2412,12 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     uiInterface.InitMessage(_("Loading block index..."));
     LogPrintf("Loading block index...");
-    if (!LoadBlockIndex() && !ShutdownRequested())
+    bool block_index_loaded = false;
+    {
+        sdnotify::ScopedStartupHeartbeat heartbeat("Loading block index");
+        block_index_loaded = LoadBlockIndex();
+    }
+    if (!block_index_loaded && !ShutdownRequested())
         return InitError(_("Error loading blkindex.dat"));
 
     // as LoadBlockIndex can take several minutes, it's possible the user
@@ -2657,7 +2663,10 @@ bool AppInit2(ThreadHandlerPtr threads)
 
         int mrc_requests_added = 0;
 
-        pwalletMain->ScanForMRCRequests(pindexMRCRequestRescan, pindexRescan, true);
+        {
+            sdnotify::ScopedStartupHeartbeat heartbeat("Rescanning");
+            pwalletMain->ScanForMRCRequests(pindexMRCRequestRescan, pindexRescan, true);
+        }
 
         LogPrintf("INFO: %u: %i missing MRC request transactions added to wallet.",
                   __func__, mrc_requests_added);
@@ -2682,7 +2691,10 @@ bool AppInit2(ThreadHandlerPtr threads)
 
         g_timer.GetTimes("rescan start", "init");
 
-        pwalletMain->ScanForWalletTransactions(pindexRescan, true);
+        {
+            sdnotify::ScopedStartupHeartbeat heartbeat("Rescanning");
+            pwalletMain->ScanForWalletTransactions(pindexRescan, true);
+        }
 
         g_timer.GetTimes("rescan complete", "init");
     }
@@ -2718,6 +2730,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             uiInterface.InitMessage(_("Reindexing blockchain from on disk block data files..."));
 
             // The true flag directs LoadBlockchainData to delete the input files after the load is complete.
+            sdnotify::ScopedStartupHeartbeat heartbeat("Importing blocks");
             if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load, true, true)) return false;
 
             g_timer.GetTimes("reindex complete", "init");
@@ -2727,6 +2740,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             uiInterface.InitMessage(_("Importing blockchain data file(s)."));
 
             // Step 7 checked the files given by -loadblock and put them in block_data_files_to_load.
+            sdnotify::ScopedStartupHeartbeat heartbeat("Importing blocks");
             if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load, false, false)) return false;
 
             g_timer.GetTimes("load blockchain file(s) complete", "init");

@@ -191,6 +191,7 @@ add_executable(test_gridcoin
     rpc_tests.cpp
     rpchelpman_tests.cpp
     sanity_tests.cpp
+    sdnotify_tests.cpp
     scheduler_tests.cpp
     script_p2sh_tests.cpp
     gridcoin/connectinputs_tests.cpp

@@ -311,6 +311,7 @@ add_library(gridcoin_util STATIC
     util.cpp
     util/bip32.cpp
     util/proc_hardening.cpp
+    util/sdnotify.cpp
     util/settings.cpp
     util/sock.cpp
     util/strencodings.cpp
