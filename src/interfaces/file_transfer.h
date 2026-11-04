@@ -80,7 +80,7 @@ class FileSink
 public:
     virtual ~FileSink() = default;
 
-    //! False if the sink refused the data (the transfer is over).
+    //! False if the sink refused the data (the transfer is over). finish() then reports why.
     virtual bool write(const std::vector<unsigned char>& data) = 0;
 
     virtual FileSinkResult finish(uint64_t size, const uint256& sha256) = 0;
@@ -132,7 +132,8 @@ TransferOutcome DownloadEntry(FileSource& src, uint32_t entry, const fs::path& d
                               const std::atomic<bool>& cancel, uint32_t chunk_bytes = FILE_TRANSFER_CHUNK_BYTES);
 
 //! Reads local in chunk_bytes pieces, hashing as it goes, then finish(size, sha).
-//! Setting cancel calls sink.cancel().
+//! Setting cancel calls sink.cancel(). A refused write ends the upload with the reason
+//! the sink's finish() then gives, or "the receiver refused the data" when it gives none.
 FileSinkResult UploadFile(FileSink& sink, const fs::path& local, const ProgressFn& progress,
                           const std::atomic<bool>& cancel, uint32_t chunk_bytes = FILE_TRANSFER_CHUNK_BYTES);
 

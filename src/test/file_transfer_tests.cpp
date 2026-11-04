@@ -141,6 +141,9 @@ struct FakeSink : public interfaces::FileSink
     int fail_on_write{0};     // 1-based write number that returns false
     int throw_on_write{0};    // 1-based write number that throws
     int writes{0};
+    //! Why a refused write stopped the sink, which finish() then reports, as the core's sinks do.
+    std::string refusal{"the receiver's own reason"};
+    bool stopped{false};
 
     bool write(const std::vector<unsigned char>& d) override
     {
@@ -151,6 +154,7 @@ struct FakeSink : public interfaces::FileSink
         }
 
         if (writes == fail_on_write) {
+            stopped = true;
             return false;
         }
 
@@ -161,6 +165,12 @@ struct FakeSink : public interfaces::FileSink
 
     interfaces::FileSinkResult finish(uint64_t size, const uint256& sha) override
     {
+        if (stopped) {
+            interfaces::FileSinkResult r;
+            r.error = refusal;
+            return r;
+        }
+
         finished = true;
         finish_size = size;
         finish_sha = sha;
@@ -445,8 +455,17 @@ BOOST_AUTO_TEST_CASE(upload_cancel_and_failures)
     refusing.fail_on_write = 3;
     r = interfaces::UploadFile(refusing, dir / "up.bin", nullptr, cancel, 4096);
     BOOST_CHECK(!r.ok);
-    BOOST_CHECK(!r.error.empty());
+    BOOST_CHECK_EQUAL(r.error, "the receiver's own reason");
     BOOST_CHECK(!refusing.finished);
+
+    // A sink that refuses without saying why.
+    FakeSink silent;
+    silent.fail_on_write = 2;
+    silent.refusal.clear();
+    r = interfaces::UploadFile(silent, dir / "up.bin", nullptr, cancel, 4096);
+    BOOST_CHECK(!r.ok);
+    BOOST_CHECK_EQUAL(r.error, "the receiver refused the data");
+    BOOST_CHECK(!silent.finished);
 
     FakeSink throwing;
     throwing.throw_on_write = 2;

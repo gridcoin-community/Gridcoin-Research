@@ -33,6 +33,21 @@ void CancelQuietly(FileSource& src)
     }
 }
 
+// Why the sink refused a write. A sink that refuses a write has stopped, and a stopped
+// sink's finish() reports why. offered counts the refused bytes, which the sink did not
+// take, so the finish of a sink that had not stopped does not match what it received and
+// acts on nothing.
+std::string RefusalReason(FileSink& sink, uint64_t offered)
+{
+    try {
+        const FileSinkResult result = sink.finish(offered, uint256{});
+        if (!result.ok && !result.error.empty()) return result.error;
+    } catch (const std::exception&) {
+    }
+
+    return "the receiver refused the data";
+}
+
 // The path without the "." a trailing separator leaves as its last element.
 fs::path WithoutTrailingDot(fs::path p)
 {
@@ -319,7 +334,7 @@ FileSinkResult UploadFile(FileSink& sink, const fs::path& local, const ProgressF
 
             try {
                 if (!sink.write(buf)) {
-                    return fail("the receiver refused the data");
+                    return fail(RefusalReason(sink, sent + static_cast<uint64_t>(got)));
                 }
             } catch (const std::exception& e) {
                 return fail(e.what());

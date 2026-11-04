@@ -3016,6 +3016,37 @@ BOOST_FIXTURE_TEST_CASE(console_upload_parses_a_snapshot_and_ends_capability, Ba
     BOOST_CHECK_EQUAL(fs::file_size(local), size);
 }
 
+// An upload the core refuses partway, here for passing the size it announced,
+// ends with the core's reason, not only that the data was refused. Nothing is
+// left in the transfer directory.
+BOOST_FIXTURE_TEST_CASE(console_upload_refused_partway_reports_the_reason, BackupCase)
+{
+    EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
+    w->bindConnectionScope(interfaces::MakeConnectionScope());
+
+    const fs::path local = WriteSnapshotFile(dir);
+    const uint64_t size = fs::file_size(local);
+    BOOST_REQUIRE(size > 7);
+
+    BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::FileTransfer));
+
+    std::string err;
+    std::unique_ptr<interfaces::FileSink> sink =
+        w->beginConsoleUpload("parseaccrualsnapshotfile", {}, size - 1, err);
+    BOOST_REQUIRE_MESSAGE(sink, err);
+
+    const std::atomic<bool> cancel{false};
+    const interfaces::FileSinkResult result = interfaces::UploadFile(*sink, local, {}, cancel, 7);
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK_EQUAL(result.error, "the upload is larger than its announced size");
+    BOOST_CHECK(result.output.empty());
+
+    sink.reset();
+    BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+}
+
 BOOST_FIXTURE_TEST_CASE(second_console_transfer_refused_while_one_is_live, BackupCase)
 {
     EncryptedWallet fx;

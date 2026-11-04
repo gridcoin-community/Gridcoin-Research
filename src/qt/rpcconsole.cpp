@@ -478,8 +478,9 @@ std::string CouldNotBegin(const ConsoleFileRequest& request)
     return QObject::tr("%1 could not begin").arg(QString::fromUtf8(request.cmd->method)).toStdString();
 }
 
-//! A sink that passes every call on to \p inner and records whether finish() was called, which is
-//! when the core's command runs.
+//! A sink that passes every call on to \p inner and records whether finish() was called. The core's
+//! command runs in it, unless a refused write had stopped the sink already, when it only reports
+//! why.
 class FinishWatch : public interfaces::FileSink
 {
 public:
