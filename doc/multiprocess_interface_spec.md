@@ -428,7 +428,8 @@ passphrase would cross as plain text. `executeRpcConsoleSecretCommand` runs
 them, with the passphrases as `SecureString` (`List(Data)` on the wire) and the
 other parameters as text, after the same checks the dispatcher makes (the
 argument count, and the passphrase gate of an elevate-class row such as
-`encryptwallet`). `interfaces::RpcConsolePassphraseIndexes(method)`
+`encryptwallet`). It never sets `wallet_unlock_needed`: a passphrase method is
+not run again under a capability. `interfaces::RpcConsolePassphraseIndexes(method)`
 names the passphrase positions, locally and with no call to the node.
 
 ### 4.2 StakingStatus — `src/interfaces/staking.h`, `staking.capnp`

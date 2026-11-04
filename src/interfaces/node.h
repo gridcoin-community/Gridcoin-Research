@@ -296,7 +296,8 @@ public:
     //! As executeRpcConsoleCommand, for the methods with passphrase parameters
     //! (RpcConsolePassphraseIndexes). The passphrases cross as SecureString; args
     //! are the other parameters in order. Any other method: ok = false, output
-    //! "Error: <method> takes no passphrase".
+    //! "Error: <method> takes no passphrase". wallet_unlock_needed is always
+    //! false: a passphrase method is not run again under a capability.
     virtual RpcConsoleResult executeRpcConsoleSecretCommand(const std::string& method,
                                                             const std::vector<SecureString>& passphrases,
                                                             const std::vector<std::string>& args) = 0;

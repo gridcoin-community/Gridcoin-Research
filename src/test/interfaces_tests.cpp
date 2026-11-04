@@ -289,6 +289,8 @@ BOOST_AUTO_TEST_CASE(node_secret_console_makes_the_dispatcher_checks)
         node->executeRpcConsoleSecretCommand("encryptwallet", {SecureString("another")}, {});
     BOOST_CHECK(!refused.ok);
     BOOST_CHECK_EQUAL(refused.output, dispatched({"another"}));
+    // A passphrase method is never run again under an unlock, so nothing asks for one.
+    BOOST_CHECK(!refused.wallet_unlock_needed);
     BOOST_CHECK(refused.output.find("encryptwallet needs the wallet passphrase") != std::string::npos);
     BOOST_CHECK(refused.output.find("(code -13)") != std::string::npos);
 

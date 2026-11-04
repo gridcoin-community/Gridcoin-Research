@@ -427,7 +427,7 @@ public:
             return refused;
         }
 
-        return RunRpcConsole(method, [&] {
+        RpcConsoleResult result = RunRpcConsole(method, [&] {
             // The passphrase positions hold placeholders; the SecureStrings carry the passphrases.
             // The other parameters are converted at their real indexes.
             const std::vector<int>& indexes = *PassphraseParamIndexes(method);
@@ -455,6 +455,13 @@ public:
                 throw JSONRPCError(RPC_MISC_ERROR, e.what());
             }
         });
+
+        // A passphrase method is not run again under a capability: the client
+        // would have to send its passphrases again, and the passphrase it would
+        // ask for is the one the method already takes.
+        result.wallet_unlock_needed = false;
+
+        return result;
     }
 
     std::vector<std::string> listRpcCommands() override
