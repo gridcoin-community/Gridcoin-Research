@@ -1,4 +1,5 @@
 #include "walletmodel.h"
+#include "qt/guiipcworker.h"
 #include "qt/guilog.h"
 #include "guiconstants.h"
 #include "optionsmodel.h"
@@ -13,6 +14,7 @@
 #include <QTimer>
 
 #include <cassert>
+#include <exception>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -91,10 +93,11 @@ WalletModel::~WalletModel()
 
     unsubscribeFromCoreSignals();
 
-    // The one-shot coin-store load thread holds only node-side locks; join it
-    // so it never outlives the model that launched it.
-    if (m_coin_load_thread.joinable()) {
-        m_coin_load_thread.join();
+    // A coin-store scan still running reports to this model when it ends, so
+    // wait for it: it never outlives the model that started it. It holds
+    // only node-side locks.
+    if (m_coin_load_done.valid()) {
+        m_coin_load_done.wait();
     }
 }
 
@@ -766,50 +769,81 @@ void WalletModel::ensureCoinSourceLoaded(bool force)
     if (m_coin_load_started && !force) {
         return;
     }
-    // A load is STILL RUNNING: never join it here. This runs on the GUI thread
-    // and the scan is O(wallet) under cs_main + cs_wallet, so joining would
-    // freeze the UI for the length of a full wallet walk — and the resync flag
-    // that drives the force path fires on ordinary user actions (an
-    // address-book label edit regroups change outputs). Record that another
-    // pass is owed and start it from the completion callback instead; repeated
-    // requests collapse into the single pending flag.
+    // A load is STILL RUNNING: never wait for it here. This runs on the GUI
+    // thread and the scan is O(wallet) under cs_main + cs_wallet, so waiting
+    // would freeze the UI for the length of a full wallet walk — and the
+    // resync flag that drives the force path fires on ordinary user actions
+    // (an address-book label edit regroups change outputs). Record that
+    // another pass is owed and start it from the completion callback instead;
+    // repeated requests collapse into the single pending flag.
     if (m_coin_load_in_flight) {
         m_coin_reload_pending = force;
         return;
     }
-    // Not in flight: the thread has already run its completion callback, so
-    // this join only reaps a finished thread.
-    if (m_coin_load_thread.joinable()) {
-        m_coin_load_thread.join();
-    }
     m_coin_load_started = true;
     m_coin_load_in_flight = true;
 
+    // O(wallet) scan under cs_main + cs_wallet -- the reason this never runs
+    // on the GUI thread. It runs on the coin-load worker, a thread that
+    // outlives the connection to the core: a thread that has made IPC calls
+    // must not exit while its connection may be destroyed (see GuiIpcWorker),
+    // and a disconnect mid-scan ends the call just as the connection is
+    // destroyed. A worker of its own, so a prompt never waits behind a scan.
+    //
+    // The job posts its end back to this model, which outlives it (the
+    // destructor waits for it). Queued to this QObject, so Qt drops it if the
+    // model is gone before it runs. A scan that throws, as one across IPC does
+    // when the core drops the connection, is reported the same way.
     interfaces::WalletCoinSource* source = &m_coin_source;
-    m_coin_load_thread = std::thread([this, source] {
-        // O(wallet) scan under cs_main + cs_wallet -- the reason this runs on
-        // a one-shot thread and never the GUI thread. Completion arrives as
-        // the CoinReset the reload publishes, through the normal drain.
-        source->reloadAndSnapshot();
+    GuiIpcWorker* const worker = GuiIpcWorker::Current(GuiIpcWorker::Role::CoinLoad);
 
-        // Hand completion back to the GUI thread: drain first so the reload's
-        // Reset is APPLIED (the consumers' caches hold the scanned wallet),
-        // then announce. Consumers gate their loading state on this signal —
-        // not on the first Reset they happen to see, which for a cold store is
-        // the registration Reset published against an empty table. Queued to
-        // this QObject, so Qt drops it if the model is gone.
+    m_coin_load_done = worker ? worker->Post([this, source] {
+        QString error;
+
+        try {
+            source->reloadAndSnapshot();
+        } catch (const std::exception& e) {
+            error = QString::fromStdString(e.what());
+            if (error.isEmpty()) error = QStringLiteral("the scan failed");
+        } catch (...) {
+            error = QStringLiteral("the scan failed");
+        }
+
+        QMetaObject::invokeMethod(this, [this, error] { coinSourceLoadEnded(error); }, Qt::QueuedConnection);
+    }) : std::future<void>();
+
+    if (!m_coin_load_done.valid()) {
         QMetaObject::invokeMethod(this, [this] {
-            m_coin_load_in_flight = false;
-            m_coin_load_complete = true;
-            drainCoinEventQueue();
-            emit coinSourceLoadFinished();
-
-            // A resync was requested while this pass was running (the wallet
-            // moved under it): run one more, now that nothing is in flight.
-            if (m_coin_reload_pending) {
-                m_coin_reload_pending = false;
-                ensureCoinSourceLoaded(/*force=*/true);
-            }
+            coinSourceLoadEnded(QStringLiteral("no thread is running to load the coin list"));
         }, Qt::QueuedConnection);
-    });
+    }
+}
+
+void WalletModel::coinSourceLoadEnded(const QString& error)
+{
+    m_coin_load_in_flight = false;
+
+    if (error.isEmpty()) {
+        // Drain first so the reload's Reset is APPLIED (the consumers' caches
+        // hold the scanned wallet), then announce. Consumers gate their
+        // loading state on this signal — not on the first Reset they happen to
+        // see, which for a cold store is the registration Reset published
+        // against an empty table.
+        m_coin_load_complete = true;
+        drainCoinEventQueue();
+        emit coinSourceLoadFinished();
+    } else {
+        // Nothing was loaded. The consumers stay in their loading state, and
+        // the next request scans again.
+        GUILogPrintf("WARN: %s: the coin list could not be loaded: %s", __func__, error.toStdString());
+        m_coin_load_started = false;
+        emit coinSourceLoadFailed(error);
+    }
+
+    // A resync was requested while this pass was running (the wallet moved
+    // under it): run one more, now that nothing is in flight.
+    if (m_coin_reload_pending) {
+        m_coin_reload_pending = false;
+        ensureCoinSourceLoaded(/*force=*/true);
+    }
 }

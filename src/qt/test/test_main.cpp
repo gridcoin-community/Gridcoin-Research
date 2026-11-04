@@ -27,6 +27,7 @@
 #include "sendcoinsdialogtests.h"
 #include "sidestakemodeltests.h"
 #include "uritests.h"
+#include "walletmodeltests.h"
 
 #if defined(QT_STATICPLUGIN)
 #include <QtPlugin>
@@ -158,6 +159,10 @@ int main(int argc, char *argv[])
 
     GuiIpcWorkerTests test23;
     if (QTest::qExec(&test23) != 0)
+        fInvalid = true;
+
+    WalletModelTests test24;
+    if (QTest::qExec(&test24) != 0)
         fInvalid = true;
 
     return fInvalid;

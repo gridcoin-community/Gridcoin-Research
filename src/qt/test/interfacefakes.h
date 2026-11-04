@@ -14,6 +14,7 @@
 #include "interfaces/sidestake.h"
 #include "interfaces/voting.h"
 #include "interfaces/wallet.h"
+#include "interfaces/wallet_coin_source.h"
 #include "interfaces/wallet_tx_source.h"
 #include "util/strencodings.h"
 
@@ -24,6 +25,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <utility>
@@ -700,6 +702,8 @@ public:
     std::atomic<bool> m_returned{false};
     std::atomic<bool> m_saw_cancel{false};
     std::atomic<int> m_end_elevation_calls{0};
+    //! The thread the last passphrase call ran on, written before m_waiting.
+    std::atomic<std::thread::id> m_call_thread{};
 
     bool beginElevation(const SecureString& /*passphrase*/, CapabilityKind /*kind*/) override { return Wait(); }
 
@@ -814,6 +818,7 @@ private:
     //! until cancelled, with false.
     bool Wait()
     {
+        m_call_thread = std::this_thread::get_id();
         m_waiting = true;
         bool result{false};
 
@@ -982,6 +987,105 @@ public:
     void prime(bool, int64_t) override {}
     std::vector<GRC::WalletEvent> drainEvents(std::size_t) override { return {}; }
     void noteAddressBookChanged(const std::string&, const std::string&) override {}
+};
+
+//! Fake interfaces::WalletCoinSource: a synthetic coin source
+//! (interfaces::MakeSyntheticCoinSource) whose wallet scan, reloadAndSnapshot(),
+//! records the thread it runs on, and can be held until the test releases it
+//! or made to throw, as a call across IPC throws when the core drops the
+//! connection. Everything else is the synthetic source's.
+class FakeCoinSource : public interfaces::WalletCoinSource
+{
+public:
+    // Set by the test.
+    std::atomic<bool> m_throw{false};
+    std::atomic<bool> m_hold{false};
+    std::atomic<bool> m_release{false};
+
+    // Observed.
+    std::atomic<int> m_reloads{0};
+    //! Scans that have returned or thrown.
+    std::atomic<int> m_reloads_ended{0};
+    std::atomic<bool> m_reload_waiting{false};
+    std::atomic<std::thread::id> m_reload_thread{};
+
+    GRC::CoinGroupsResult reloadAndSnapshot() override
+    {
+        m_reload_thread = std::this_thread::get_id();
+        ++m_reloads;
+
+        struct Ended
+        {
+            std::atomic<int>& count;
+            ~Ended() { ++count; }
+        } ended{m_reloads_ended};
+
+        if (m_hold) {
+            m_reload_waiting = true;
+
+            // Ten seconds at most, so that a test that never releases it still ends.
+            for (int i = 0; i < 1000 && !m_release; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        }
+
+        if (m_throw) throw std::runtime_error("the core dropped the connection");
+
+        return m_synthetic->reloadAndSnapshot();
+    }
+
+    void registerView(int view_id, GRC::CoinViewMode mode, int sort_column, int sort_order) override
+    {
+        m_synthetic->registerView(view_id, mode, sort_column, sort_order);
+    }
+    void unregisterView(int view_id) override { m_synthetic->unregisterView(view_id); }
+    void setViewMode(int view_id, GRC::CoinViewMode mode) override { m_synthetic->setViewMode(view_id, mode); }
+    void setViewSort(int view_id, int sort_column, int sort_order) override
+    {
+        m_synthetic->setViewSort(view_id, sort_column, sort_order);
+    }
+    GRC::CoinRowsResult getRows(int view_id, int first, int count) override
+    {
+        return m_synthetic->getRows(view_id, first, count);
+    }
+    GRC::CoinGroupsResult getGroups(int view_id, int first, int count) override
+    {
+        return m_synthetic->getGroups(view_id, first, count);
+    }
+    GRC::CoinRowsResult getGroupRows(int view_id, const std::string& group_address, int first, int count) override
+    {
+        return m_synthetic->getGroupRows(view_id, group_address, first, count);
+    }
+    std::vector<GRC::CoinGroupInfo> getGroupDirectory() override { return m_synthetic->getGroupDirectory(); }
+    std::set<COutPoint> reconcileSelection(std::set<COutPoint> selection) override
+    {
+        return m_synthetic->reconcileSelection(std::move(selection));
+    }
+    GRC::CoinSelectionUpdate setSelected(const COutPoint& outpoint, bool selected) override
+    {
+        return m_synthetic->setSelected(outpoint, selected);
+    }
+    GRC::CoinBulkSelectionResult selectGroup(const std::string& group_address, bool selected) override
+    {
+        return m_synthetic->selectGroup(group_address, selected);
+    }
+    GRC::CoinBulkSelectionResult selectAll(bool selected) override { return m_synthetic->selectAll(selected); }
+    GRC::CoinBulkSelectionResult applyValueFilter(bool less_or_equal, int64_t value, uint32_t max_inputs) override
+    {
+        return m_synthetic->applyValueFilter(less_or_equal, value, max_inputs);
+    }
+    std::vector<GRC::WalletCoinEvent> drainEvents(std::size_t max_batch) override
+    {
+        return m_synthetic->drainEvents(max_batch);
+    }
+    bool consumeNeedsResync() override { return m_synthetic->consumeNeedsResync(); }
+    void noteAddressBookChanged(const std::string& address, const std::string& label) override
+    {
+        m_synthetic->noteAddressBookChanged(address, label);
+    }
+
+private:
+    const std::shared_ptr<interfaces::WalletCoinSource> m_synthetic{interfaces::MakeSyntheticCoinSource(1, 1)};
 };
 
 } // namespace qt_test

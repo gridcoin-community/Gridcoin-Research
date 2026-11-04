@@ -864,6 +864,7 @@ void RPCConsole::browseHistory(int offset)
 
 void RPCConsole::startExecutor()
 {
+    // Long-lived like a GuiIpcWorker: it ends only at teardown (stopExecutorThread), while the connection to the core is still open.
     QThread* thread = new QThread;
     m_executorThread = thread;
     RPCExecutor *executor = new RPCExecutor(clientModel->node());

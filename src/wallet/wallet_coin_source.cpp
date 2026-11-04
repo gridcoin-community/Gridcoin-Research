@@ -140,7 +140,7 @@ public:
         // cs_main + cs_wallet — and this runs on the GUI thread, where that
         // would freeze the UI and stall block processing behind cs_main on a
         // large wallet. Flag the resync instead: the drain path polls
-        // consumeNeedsResync() and reloads on the one-shot load thread. The
+        // consumeNeedsResync() and reloads off the GUI thread. The
         // flag is idempotent, so a burst of label edits collapses into one
         // rebuild.
         m_store.markNeedsResync();

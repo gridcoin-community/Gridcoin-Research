@@ -5,6 +5,7 @@
 #include "guiconstants.h"
 #include "guiutil.h"
 #include "qt/decoration.h"
+#include "qt/guiipcworker.h"
 #include "util.h" /* for LogPrintf */
 #include "walletmodel.h"
 
@@ -14,10 +15,44 @@
 #include <QPushButton>
 #include <QKeyEvent>
 
+#include <atomic>
 #include <exception>
 #include <memory>
 #include <string>
 #include <utility>
+
+struct AskPassphraseDialog::CheckState
+{
+    //! Set by reject() or the destructor to cancel the check
+    //! (PassphraseAttemptCancel).
+    std::atomic<bool> cancel{false};
+
+    //! The passphrase was accepted. Written by the check before it reports.
+    std::atomic<bool> accepted{false};
+
+    //! Whoever moves this out of QUEUED owns what follows: the check, which
+    //! then runs and reports, or the prompt, which then reports for a check
+    //! that never ran. A check given up touches nothing of the prompt's when
+    //! its turn comes, so the prompt may be gone by then.
+    static constexpr int QUEUED{0};
+    static constexpr int RUNNING{1};
+    static constexpr int GIVEN_UP{2};
+    std::atomic<int> phase{QUEUED};
+
+    //! Called by the check when its turn comes. False if it was given up.
+    bool Start()
+    {
+        int expected = QUEUED;
+        return phase.compare_exchange_strong(expected, RUNNING);
+    }
+
+    //! Called by the prompt. False if the check has already started.
+    bool GiveUp()
+    {
+        int expected = QUEUED;
+        return phase.compare_exchange_strong(expected, GIVEN_UP);
+    }
+};
 
 AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
                  : QDialog(parent)
@@ -89,17 +124,22 @@ AskPassphraseDialog::~AskPassphraseDialog()
     // A check still running holds this dialog's address, so it must finish
     // first. The prompt stays open until its check reports, cancelled or not,
     // so that is reached only when the application quits under an open
-    // prompt. Cancelled first, so that a check still waiting for its turn in
-    // this process gives up rather than holding the quit up.
-    if (m_check.joinable()) {
-        if (m_check_cancel) *m_check_cancel = true;
-        m_check.join();
+    // prompt. Cancelled first, so that a check waiting for its turn in the
+    // wallet gives up rather than holding the quit up. A check still waiting
+    // for its turn on the worker is given up and never runs, so it is not
+    // waited for.
+    if (m_check_in_flight) {
+        m_check->cancel = true;
+
+        if (!m_check->GiveUp() && m_check_done.valid()) {
+            m_check_done.wait();
+        }
     }
 
     // The check began a capability, and the report that would have handed it
     // to the waiting operation never ran. End it rather than leave it to its
     // deadline.
-    if (!m_check_reported && m_check_accepted && mode == Elevate && model) {
+    if (!m_check_reported && m_check && m_check->accepted && mode == Elevate && model) {
         try {
             model->wallet().endElevation();
         } catch (const std::exception& e) {
@@ -151,7 +191,7 @@ void AskPassphraseDialog::accept()
 {
     // The OK button is disabled while a check runs; this covers any other
     // route to accept().
-    if (m_check.joinable())
+    if (m_check_in_flight)
         return;
 
     if(!model)
@@ -311,15 +351,22 @@ void AskPassphraseDialog::reject()
     // Cancels the check rather than waiting for it here, and the prompt stays
     // open, saying so, until the check reports: checkFinished() then ends it.
     // It must not be hidden or closed now. Hiding ends exec(), and the dialog's
-    // owner would then destroy it, which joins the check on the GUI thread. In
+    // owner would then destroy it, which waits for the check on the GUI thread. In
     // the monolithic build a check still waiting for its turn sees the cancel
     // and gives up at once. One already deriving the key finishes first, and
     // so, in the split build, does one waiting in the node's process, which
-    // the cancel cannot reach; the event loop runs meanwhile.
-    if (m_check.joinable()) {
-        if (m_check_cancel) *m_check_cancel = true;
+    // the cancel cannot reach; the event loop runs meanwhile. A check still
+    // waiting for its turn on the worker is given up, and reported as one that
+    // saw the cancel would be.
+    if (m_check_in_flight) {
+        m_check->cancel = true;
         m_check_cancelled = true;
         ui->statusLabel->setText(tr("Cancelling..."));
+
+        if (m_check->GiveUp()) {
+            QMetaObject::invokeMethod(this, &AskPassphraseDialog::checkFinished, Qt::QueuedConnection);
+        }
+
         return;
     }
 
@@ -329,61 +376,87 @@ void AskPassphraseDialog::reject()
 void AskPassphraseDialog::startCheck(SecureString passphrase, SecureString new_passphrase)
 {
     m_check_had_null = passphrase.find('\0') != std::string::npos;
-    m_check_accepted = false;
     m_check_reported = false;
     m_check_cancelled = false;
-    m_check_cancel = std::make_shared<std::atomic<bool>>(false);
+    m_check_in_flight = true;
+
+    const auto check = std::make_shared<CheckState>();
+    m_check = check;
 
     setChecking(true);
 
-    // The thread calls the wallet interface only: no Qt object is touched off
-    // the GUI thread. The passphrases move into it and are cleansed when the
-    // thread ends.
+    // The check calls the wallet interface only: no Qt object is touched off
+    // the GUI thread. It writes its outcome into the shared state, and posts
+    // its report to this dialog, which outlives a check that has started (its
+    // destructor waits for one); the report is dropped if the dialog is
+    // destroyed before it runs. The passphrases move into the job and are
+    // cleansed when it is destroyed.
+    //
+    // It runs on the process's modal worker, a thread that outlives the
+    // connection to the core: a thread that has made IPC calls must not exit
+    // while its connection may be destroyed (see GuiIpcWorker), and a
+    // disconnect mid-check ends the call just as the connection is destroyed.
     interfaces::Wallet& wallet = model->wallet();
     const Mode check_mode = mode;
     const CapabilityKind kind = m_kind;
     const bool staking_only = (mode == UnlockStaking && ui->stakingCheckBox->isChecked());
-    const std::shared_ptr<std::atomic<bool>> cancel = m_check_cancel;
 
-    m_check = std::thread([this, &wallet, check_mode, kind, staking_only, cancel, passphrase = std::move(passphrase),
-                           new_passphrase = std::move(new_passphrase)] {
-        bool accepted = false;
+    GuiIpcWorker* const worker = GuiIpcWorker::Current(GuiIpcWorker::Role::Modal);
 
-        // The attempt watches the cancel while it waits for its turn. Only in
-        // the monolithic build, where the wallet runs on this thread: across
-        // IPC the attempt runs in the node's process, which cannot see it.
-        const PassphraseAttemptCancel attempt(*cancel);
+    if (worker) {
+        m_check_done = worker->Post([this, &wallet, check, check_mode, kind, staking_only,
+                                     passphrase = std::move(passphrase),
+                                     new_passphrase = std::move(new_passphrase)] {
+            // Given up while it waited for its turn: the prompt may be gone.
+            if (!check->Start()) return;
 
-        // Nothing may escape a thread. In the split build the call crosses
-        // IPC, and a disconnect mid-call raises.
-        try {
-            switch (check_mode) {
-            case Elevate:
-                accepted = wallet.beginElevation(passphrase, kind);
-                break;
-            case UnlockStaking:
-                accepted = wallet.unlockWallet(passphrase, staking_only);
-                break;
-            case ChangePass:
-                accepted = wallet.changeWalletPassphrase(passphrase, new_passphrase);
-                break;
-            case Encrypt:
-                // Encryption checks no passphrase and does not come here.
-                break;
+            bool accepted = false;
+
+            // The attempt watches the cancel while it waits for its turn in
+            // the wallet. Only in the monolithic build, where the wallet runs
+            // on this thread: across IPC the attempt runs in the node's
+            // process, which cannot see it.
+            const PassphraseAttemptCancel attempt(check->cancel);
+
+            // Nothing may escape a job. In the split build the call crosses
+            // IPC, and a disconnect mid-call raises.
+            try {
+                switch (check_mode) {
+                case Elevate:
+                    accepted = wallet.beginElevation(passphrase, kind);
+                    break;
+                case UnlockStaking:
+                    accepted = wallet.unlockWallet(passphrase, staking_only);
+                    break;
+                case ChangePass:
+                    accepted = wallet.changeWalletPassphrase(passphrase, new_passphrase);
+                    break;
+                case Encrypt:
+                    // Encryption checks no passphrase and does not come here.
+                    break;
+                }
+            } catch (const std::exception& e) {
+                LogPrintf("WARN: AskPassphraseDialog: the passphrase check failed: %s", e.what());
+            } catch (...) {
+                LogPrintf("WARN: AskPassphraseDialog: the passphrase check failed");
             }
-        } catch (const std::exception& e) {
-            LogPrintf("WARN: AskPassphraseDialog: the passphrase check failed: %s", e.what());
-        } catch (...) {
-            LogPrintf("WARN: AskPassphraseDialog: the passphrase check failed");
-        }
 
-        m_check_accepted = accepted;
+            check->accepted = accepted;
 
-        // The dialog outlives this thread (its destructor joins it), so it is
-        // still there to post to. A posted call is dropped if it is destroyed
-        // before the call runs.
+            // The last use of this dialog.
+            QMetaObject::invokeMethod(this, &AskPassphraseDialog::checkFinished, Qt::QueuedConnection);
+        });
+    } else {
+        m_check_done = std::future<void>();
+    }
+
+    // No worker, or it could not take the job: the check reports as one that
+    // failed, with nothing tried.
+    if (!m_check_done.valid()) {
+        LogPrintf("ERROR: AskPassphraseDialog: no thread is running to check the passphrase");
+        check->GiveUp();
         QMetaObject::invokeMethod(this, &AskPassphraseDialog::checkFinished, Qt::QueuedConnection);
-    });
+    }
 }
 
 void AskPassphraseDialog::setChecking(bool checking)
@@ -411,13 +484,13 @@ void AskPassphraseDialog::setChecking(bool checking)
 
 void AskPassphraseDialog::checkFinished()
 {
-    // The thread posted this as its last act, so it is finishing.
-    if (m_check.joinable()) {
-        m_check.join();
-    }
-
+    // Posted by the check as its last use of this dialog, or by the prompt for
+    // a check that never ran.
+    m_check_in_flight = false;
     m_check_reported = true;
     setChecking(false);
+
+    const bool accepted = m_check->accepted;
 
     // Cancelled while the check ran: nothing waits for its outcome. A
     // capability it began has no operation to use it, so it is ended here. A
@@ -425,7 +498,7 @@ void AskPassphraseDialog::checkFinished()
     // else is let go, an unlock included: the user asked for it when they
     // pressed OK.
     if (m_check_cancelled) {
-        if (m_check_accepted && mode == Elevate && model) {
+        if (accepted && mode == Elevate && model) {
             try {
                 model->wallet().endElevation();
             } catch (const std::exception& e) {
@@ -433,7 +506,7 @@ void AskPassphraseDialog::checkFinished()
             }
         }
 
-        if (m_check_accepted && mode == ChangePass) {
+        if (accepted && mode == ChangePass) {
             QMessageBox::information(this, tr("Wallet encrypted"),
                                      tr("Wallet passphrase was successfully changed."));
         }
@@ -443,7 +516,7 @@ void AskPassphraseDialog::checkFinished()
     }
 
     if (mode == ChangePass) {
-        if (m_check_accepted) {
+        if (accepted) {
             QMessageBox::information(this, tr("Wallet encrypted"),
                                      tr("Wallet passphrase was successfully changed."));
             QDialog::accept(); // Success
@@ -463,7 +536,7 @@ void AskPassphraseDialog::checkFinished()
         return;
     }
 
-    if (m_check_accepted) {
+    if (accepted) {
         // The operation waiting in WalletModel::requestUnlock() takes the
         // capability, and its context ends it.
         if (mode == Elevate) {

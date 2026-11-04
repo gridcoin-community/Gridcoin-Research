@@ -60,8 +60,8 @@
 
 #include <atomic>
 #include <optional>
-// Not inside the WIN32 guard below: the teardown join uses QThreadPool on every
-// platform, and nothing else on this file's include path pulls it in.
+// Not inside the WIN32 guard below: main() sets the pool's expiry and the teardown
+// joins it on every platform, and nothing else on this file's include path pulls it in.
 #include <QThreadPool>
 #ifndef WIN32
 #include <QSocketNotifier>
@@ -900,6 +900,16 @@ int main(int argc, char *argv[])
     RegisterMetaTypes();
     GridcoinApplication app(argc, argv);
 
+    // QtConcurrent tasks call into the core on the global pool's threads (the About
+    // dialog's version check, the poll table's refresh), and a pool thread ends by
+    // default after 30 s idle: at any moment, so also while the connection to the core
+    // is being destroyed, which a thread that has made IPC calls must not do (see
+    // GuiIpcWorker). With no expiry they end only when the pool is drained, at teardown
+    // while the connection is still open, or when ~QCoreApplication deletes the pool,
+    // after the connection is gone. Set before the pool starts a thread: the timeout
+    // applies only to threads started after it is set.
+    QThreadPool::globalInstance()->setExpiryTimeout(-1);
+
 #if defined(WIN32) && defined(QT_GUI)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
 #endif
@@ -1669,8 +1679,8 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 }
                 // The windowed coin-control source (#3183): same ownership and
                 // teardown contract as the tx source. Construction is cheap —
-                // the initial wallet scan runs lazily on WalletModel's
-                // one-shot load thread at first dialog open, and the store
+                // the initial wallet scan runs lazily on the coin-load worker
+                // (WalletModel) at first dialog open, and the store
                 // stays warm (but silent) between dialog opens.
                 std::shared_ptr<interfaces::WalletCoinSource> wallet_coin_source;
                 const std::string synthetic_coins = gArgs.GetArg("-devsyntheticcoins", "");
@@ -1872,6 +1882,9 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // declared here and destroyed at the closing brace below, so joining
                 // after it would join AFTER the worker's Node is already gone --
                 // which is the exact use-after-free this is here to prevent.
+                //
+                // waitForDone() also ends the pool's threads. The connection to the
+                // core is still open here and stays open until main() unwinds.
                 QThreadPool::globalInstance()->waitForDone();
             }
             // Shut down the core and its threads (but don't exit Bitcoin-Qt

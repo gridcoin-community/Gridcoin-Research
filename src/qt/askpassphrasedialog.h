@@ -5,9 +5,8 @@
 
 #include <QDialog>
 
-#include <atomic>
+#include <future>
 #include <memory>
-#include <thread>
 
 namespace Ui {
     class AskPassphraseDialog;
@@ -76,23 +75,27 @@ private:
     //! refusal that finds it locked can say the unlock ran out meanwhile.
     bool m_opened_staking_only{false};
 
-    //! The passphrase check for UnlockStaking, Elevate and ChangePass. It runs
-    //! off the GUI thread, because a wrong passphrase waits out a delay of up
-    //! to 30 s and the key derivation itself takes a moment, and the GUI must
-    //! not freeze for either. The dialog stays open, its inputs disabled, until
-    //! the check reports to checkFinished(). Joined there, or in the
-    //! destructor. Encrypt checks no passphrase and stays on the GUI thread.
-    std::thread m_check;
+    //! What the dialog and its check share. Defined in the .cpp.
+    struct CheckState;
 
-    //! The check's outcome, written by the check's thread before it reports.
-    std::atomic<bool> m_check_accepted{false};
+    //! The passphrase check for UnlockStaking, Elevate and ChangePass. It runs
+    //! off the GUI thread, on the process's modal GuiIpcWorker, because a
+    //! wrong passphrase waits out a delay of up to 30 s and the key derivation
+    //! itself takes a moment, and the GUI must not freeze for either. The
+    //! dialog stays open, its inputs disabled, until the check reports to
+    //! checkFinished(). The check writes its outcome here, never into the
+    //! dialog. Encrypt checks no passphrase and stays on the GUI thread.
+    std::shared_ptr<CheckState> m_check;
+
+    //! Ready once the check's job has finished on the worker. The destructor
+    //! waits for it while a check that has begun is still running.
+    std::future<void> m_check_done;
+
+    //! A check has started and has not yet reported to checkFinished().
+    bool m_check_in_flight{false};
 
     //! checkFinished() has acted on the outcome.
     bool m_check_reported{false};
-
-    //! Set by reject() to cancel the running check (PassphraseAttemptCancel).
-    //! Shared with the check's thread, which watches it while it waits.
-    std::shared_ptr<std::atomic<bool>> m_check_cancel;
 
     //! The prompt was cancelled while its check ran.
     bool m_check_cancelled{false};
@@ -101,7 +104,7 @@ private:
     //! null character.
     bool m_check_had_null{false};
 
-    //! Start the check of \p passphrase on its own thread. For ChangePass,
+    //! Start the check of \p passphrase on the modal worker. For ChangePass,
     //! \p new_passphrase is the one to change it to.
     void startCheck(SecureString passphrase, SecureString new_passphrase = SecureString());
 

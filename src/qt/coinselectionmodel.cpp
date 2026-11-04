@@ -92,7 +92,7 @@ CoinSelectionModel::CoinSelectionModel(WalletModel* wallet_model,
 
     // Register before wiring the drain so the registration Reset is the first
     // event this model sees; the initial wallet scan runs on WalletModel's
-    // one-shot load thread (never this GUI thread — the scan holds
+    // coin-load worker (never this GUI thread — the scan holds
     // cs_main+cs_wallet and is O(wallet)).
     m_source.registerView(m_view_id, m_mode, GRC::COINCOL_AMOUNT, /*desc*/ 1);
 

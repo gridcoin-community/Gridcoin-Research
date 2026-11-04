@@ -2,9 +2,9 @@
 #define BITCOIN_QT_WALLETMODEL_H
 
 #include <QObject>
+#include <future>
 #include <map>
 #include <memory>
-#include <thread>
 #include <optional>
 #include <string>
 #include <vector>
@@ -245,11 +245,12 @@ public:
     //! by CoinSelectionModel's fetch/sort paths.
     void drainCoinEventQueue();
 
-    //! Run the coin store's initial wallet scan (reloadAndSnapshot) on a
-    //! one-shot load thread — never the GUI thread: the scan holds
+    //! Run the coin store's initial wallet scan (reloadAndSnapshot) on the
+    //! process's coin-load GuiIpcWorker — never the GUI thread: the scan holds
     //! cs_main + cs_wallet and is O(wallet). Idempotent unless \p force
     //! (the bulk-resync path). Completion is drained and then announced via
-    //! coinSourceLoadFinished().
+    //! coinSourceLoadFinished(); a scan that fails, or finds no worker to run
+    //! on, is announced via coinSourceLoadFailed().
     void ensureCoinSourceLoaded(bool force = false);
 
     //! True once a coin-store scan has completed and been drained. A consumer
@@ -277,9 +278,10 @@ private:
     //! The windowed coin-control boundary (#3183). Not owned (see coinSource()).
     interfaces::WalletCoinSource& m_coin_source;
 
-    //! One-shot coin-store load thread (see ensureCoinSourceLoaded); joined in
-    //! the destructor.
-    std::thread m_coin_load_thread;
+    //! Ready once the latest coin-store scan's job has finished on the worker
+    //! (see ensureCoinSourceLoaded). The destructor waits for it: the job
+    //! reports to this model.
+    std::future<void> m_coin_load_done;
     bool m_coin_load_started = false;
     //! Set on the GUI thread when a completed scan has been drained (see
     //! isCoinSourceLoaded).
@@ -290,6 +292,10 @@ private:
     bool m_coin_reload_pending = false;
     //! Reentrancy guard for drainCoinEventQueue (mirrors m_draining).
     bool m_coin_draining = false;
+
+    //! The coin-store scan has ended, with \p error empty if it succeeded.
+    //! Runs on the GUI thread.
+    void coinSourceLoadEnded(const QString& error);
 
     // Wallet has an options model for wallet-specific options
     // (transaction fee, for example)
@@ -397,6 +403,12 @@ signals:
     //! so the consumers' caches hold the scanned wallet. Emitted on the GUI
     //! thread; consumers clear their loading state here.
     void coinSourceLoadFinished();
+
+    //! The coin store's wallet scan failed with \p message: in the split
+    //! build, most often because the core dropped the connection. Nothing was
+    //! loaded, coinSourceLoadFinished() is not emitted for it, and the next
+    //! ensureCoinSourceLoaded() scans again. Emitted on the GUI thread.
+    void coinSourceLoadFailed(const QString& message);
 
     // Signal that balance in wallet changed
     void balanceChanged(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);

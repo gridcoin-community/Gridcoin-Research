@@ -24,8 +24,11 @@
 #include <QTimer>
 #include <QWidget>
 
+#include <chrono>
 #include <functional>
+#include <future>
 #include <memory>
+#include <thread>
 
 namespace {
 
@@ -46,7 +49,7 @@ struct ModelOverFakeWallet
 };
 
 //! Lets the fake's waits return however the case exits, before the dialog,
-//! which joins the check's thread, is destroyed. Declare it after the dialog.
+//! which waits for its check, is destroyed. Declare it after the dialog.
 struct ReleaseOnExit
 {
     qt_test::FakeWallet& wallet;
@@ -57,6 +60,22 @@ struct ReleaseOnExit
 //! What exec() returns when the case's own timeout ended it, which no path of
 //! the prompt does.
 constexpr int TIMED_OUT{2};
+
+//! What exec() returns when the case ended the prompt's loop from outside, as
+//! an application quitting under the prompt does.
+constexpr int ENDED_OUTSIDE{3};
+
+//! The thread the process's modal worker runs its jobs on.
+std::thread::id ModalWorkerThread()
+{
+    GuiIpcWorker* const worker = GuiIpcWorker::Current(GuiIpcWorker::Role::Modal);
+    if (!worker) return {};
+
+    std::thread::id id;
+    const std::future<void> done = worker->Post([&id] { id = std::this_thread::get_id(); });
+    if (!done.valid() || done.wait_for(std::chrono::seconds{10}) != std::future_status::ready) return {};
+    return id;
+}
 
 //! Type a passphrase into the prompt, and the new one twice for a change, and
 //! press OK, which starts the check.
@@ -122,6 +141,8 @@ int ExecAndCancel(AskPassphraseDialog& dialog, qt_test::FakeWallet& wallet, AtCa
 
 void AskPassphraseDialogTests::initTestCase()
 {
+    m_worker = std::make_unique<GuiIpcWorker>(GuiIpcWorker::Role::Modal);
+
     // OptionsModel reads QSettings. Redirected as OptionsModelTests does, so a
     // run cannot reach or leave anything in a real store.
     m_prev_organization = QCoreApplication::organizationName();
@@ -143,6 +164,8 @@ void AskPassphraseDialogTests::cleanupTestCase()
     QCoreApplication::setOrganizationName(m_prev_organization);
     QCoreApplication::setApplicationName(m_prev_application);
     m_settings_root.reset();
+
+    m_worker.reset();
 }
 
 void AskPassphraseDialogTests::init()
@@ -284,4 +307,161 @@ void AskPassphraseDialogTests::passphraseChangedAfterCancelIsReported()
     // change.
     QCOMPARE(result, int(QDialog::Rejected));
     QCOMPARE(shown, QStringList{AskPassphraseDialog::tr("Wallet passphrase was successfully changed.")});
+}
+
+// The check runs on the process's modal worker, not on a thread of its own.
+void AskPassphraseDialogTests::checkRunsOnTheModalWorker()
+{
+    // Asked first, so that the worker's thread is running before the check
+    // starts: an id is unique only among threads alive at the same time.
+    const std::thread::id worker_thread = ModalWorkerThread();
+    QVERIFY(worker_thread != std::thread::id{});
+    QVERIFY(worker_thread != std::this_thread::get_id());
+
+    qt_test::FakeWallet wallet;
+    ModelOverFakeWallet fixture(wallet);
+
+    AskPassphraseDialog dialog(AskPassphraseDialog::Elevate);
+    dialog.setModel(&fixture.model);
+    dialog.setCapabilityKind(CapabilityKind::Send);
+    const ReleaseOnExit release{wallet};
+
+    QTimer::singleShot(0, &dialog, [&dialog] { SubmitPassphrase(dialog); });
+
+    // The passphrase is accepted once the check waits.
+    QTimer poll;
+    poll.setInterval(5);
+    QObject::connect(&poll, &QTimer::timeout, &dialog, [&] {
+        if (!wallet.m_waiting) return;
+        poll.stop();
+        wallet.m_release_result = true;
+        wallet.m_release = true;
+    });
+    poll.start();
+
+    QTimer::singleShot(10000, &dialog, [&dialog] { dialog.done(TIMED_OUT); });
+
+    const int result = dialog.exec();
+
+    QCOMPARE(result, int(QDialog::Accepted));
+    QVERIFY(wallet.m_call_thread.load() == worker_thread);
+}
+
+// A check still waiting for its turn on the modal worker gives up at once
+// when the prompt is cancelled. The prompt ends rejected without the
+// passphrase being tried, and when the check's turn comes, after the prompt
+// is gone, it touches nothing.
+void AskPassphraseDialogTests::cancelWhileQueuedEndsAtOnceAndTriesNothing()
+{
+    qt_test::FakeWallet wallet;
+    ModelOverFakeWallet fixture(wallet);
+
+    // Holds the modal worker until released, so the check waits behind it.
+    std::promise<void> unblock;
+    const std::shared_future<void> unblocked = unblock.get_future().share();
+    GuiIpcWorker* const worker = GuiIpcWorker::Current(GuiIpcWorker::Role::Modal);
+    QVERIFY(worker);
+    const std::future<void> blocker = worker->Post([unblocked] {
+        unblocked.wait_for(std::chrono::seconds{10});
+    });
+    QVERIFY(blocker.valid());
+
+    int result{0};
+    qint64 took{-1};
+    bool visible{false};
+    QString status;
+
+    {
+        AskPassphraseDialog dialog(AskPassphraseDialog::Elevate);
+        dialog.setModel(&fixture.model);
+        dialog.setCapabilityKind(CapabilityKind::Send);
+
+        QElapsedTimer since_cancel;
+
+        QTimer::singleShot(0, &dialog, [&] {
+            SubmitPassphrase(dialog);
+
+            since_cancel.start();
+            dialog.reject();
+
+            visible = dialog.isVisible();
+            if (QLabel* const label = dialog.findChild<QLabel*>("statusLabel")) status = label->text();
+        });
+
+        QTimer::singleShot(10000, &dialog, [&dialog] { dialog.done(TIMED_OUT); });
+
+        result = dialog.exec();
+        took = since_cancel.elapsed();
+    }
+
+    // The prompt is gone. Now the check's turn comes, and then a job after it.
+    unblock.set_value();
+    QVERIFY(blocker.wait_for(std::chrono::seconds{10}) == std::future_status::ready);
+    const std::future<void> after = worker->Post([] {});
+    QVERIFY(after.valid());
+    QVERIFY(after.wait_for(std::chrono::seconds{10}) == std::future_status::ready);
+    QCoreApplication::processEvents();
+
+    // Cancelling left the prompt open, saying so, until the check reported.
+    QVERIFY(visible);
+    QCOMPARE(status, AskPassphraseDialog::tr("Cancelling..."));
+
+    QCOMPARE(result, int(QDialog::Rejected));
+    QVERIFY2(took < 1000, qPrintable(QStringLiteral("exec() returned %1 ms after the cancel").arg(took)));
+    QVERIFY(!wallet.m_waiting.load());
+    QCOMPARE(wallet.m_end_elevation_calls.load(), 0);
+}
+
+// A prompt destroyed while its check runs, as when the application quits with
+// the prompt open, waits for the check, and ends the capability the check
+// began, which no operation will claim.
+void AskPassphraseDialogTests::destroyedUnderARunningCheckEndsItsCapability()
+{
+    qt_test::FakeWallet wallet;
+    ModelOverFakeWallet fixture(wallet);
+    wallet.m_ignore_cancel = true;
+
+    int result{0};
+    std::thread releaser;
+
+    {
+        AskPassphraseDialog dialog(AskPassphraseDialog::Elevate);
+        dialog.setModel(&fixture.model);
+        dialog.setCapabilityKind(CapabilityKind::Send);
+
+        QTimer::singleShot(0, &dialog, [&dialog] { SubmitPassphrase(dialog); });
+
+        // Once the check waits, the prompt's loop is ended from outside.
+        QTimer poll;
+        poll.setInterval(5);
+        QObject::connect(&poll, &QTimer::timeout, &dialog, [&] {
+            if (!wallet.m_waiting) return;
+            poll.stop();
+            dialog.done(ENDED_OUTSIDE);
+        });
+        poll.start();
+
+        QTimer::singleShot(10000, &dialog, [&dialog] { dialog.done(TIMED_OUT); });
+
+        result = dialog.exec();
+
+        // The passphrase is accepted only once the dialog is being destroyed.
+        releaser = std::thread([&wallet] {
+            std::this_thread::sleep_for(std::chrono::milliseconds{200});
+            wallet.m_release_result = true;
+            wallet.m_release = true;
+        });
+    }
+
+    const bool returned_when_destroyed = wallet.m_returned;
+    const int ended_when_destroyed = wallet.m_end_elevation_calls;
+    releaser.join();
+
+    // What the check posted to the destroyed prompt is dropped.
+    QCoreApplication::processEvents();
+
+    QCOMPARE(result, ENDED_OUTSIDE);
+    QVERIFY(returned_when_destroyed);
+    QCOMPARE(ended_when_destroyed, 1);
+    QCOMPARE(wallet.m_end_elevation_calls.load(), 1);
 }

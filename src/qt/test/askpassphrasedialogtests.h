@@ -5,6 +5,8 @@
 #ifndef BITCOIN_QT_TEST_ASKPASSPHRASEDIALOGTESTS_H
 #define BITCOIN_QT_TEST_ASKPASSPHRASEDIALOGTESTS_H
 
+#include "qt/guiipcworker.h"
+
 #include <QObject>
 #include <QSettings>
 #include <QString>
@@ -20,6 +22,8 @@
 //! and the prompt ends at once; one that does not keeps the prompt open, with
 //! the event loop running, until it reports, and the prompt then acts only on
 //! what it must: ending a capability begun, reporting a passphrase changed.
+//! The checks run on a modal worker made for the class, as main() makes one
+//! for the application.
 class AskPassphraseDialogTests : public QObject
 {
     Q_OBJECT
@@ -33,8 +37,13 @@ private slots:
     void cancelWhileWaitingEndsTheLoopAtOnce();
     void cancelPastTheTurnKeepsTheLoopRunning();
     void passphraseChangedAfterCancelIsReported();
+    void checkRunsOnTheModalWorker();
+    void cancelWhileQueuedEndsAtOnceAndTriesNothing();
+    void destroyedUnderARunningCheckEndsItsCapability();
 
 private:
+    std::unique_ptr<GuiIpcWorker> m_worker;
+
     // The QSettings redirect OptionsModel needs (as in OptionsModelTests), and
     // what it replaced.
     std::unique_ptr<QTemporaryDir> m_settings_root;

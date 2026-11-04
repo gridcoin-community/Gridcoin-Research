@@ -253,6 +253,12 @@ void FileTransferDialogTests::downloadWithoutWorkerIsALocalError()
 void FileTransferDialogTests::downloadShowsProgressAndSavesTheFile()
 {
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
+
+    // Asked first, so that the worker's thread is running before the transfer
+    // starts: an id is unique only among threads alive at the same time.
+    std::thread::id worker_thread;
+    const std::future<void> asked = worker.Post([&worker_thread] { worker_thread = std::this_thread::get_id(); });
+    QVERIFY(asked.valid() && asked.wait_for(10s) == std::future_status::ready);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     const fs::path dest = GUIUtil::qstringToBoostPath(dir.path()) / "backup.dat";
@@ -294,10 +300,6 @@ void FileTransferDialogTests::downloadShowsProgressAndSavesTheFile()
     QVERIFY(!VisibleProgressDialog());
 
     // Every read ran on the modal worker's thread.
-    std::thread::id worker_thread;
-    const std::future<void> asked = worker.Post([&worker_thread] { worker_thread = std::this_thread::get_id(); });
-    QVERIFY(asked.valid() && asked.wait_for(10s) == std::future_status::ready);
-
     const std::vector<std::thread::id> threads = src.ReadThreads();
     QVERIFY(!threads.empty());
     QVERIFY(threads[0] != std::this_thread::get_id());
