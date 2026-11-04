@@ -199,12 +199,13 @@ schema-diff lint against the previous release tag.
   guessing oracle nor a way to hold the connection slot while retrying. Recovery is by
   reconnecting, which builds a fresh `ServeInit`.
 - **Unauthenticated-connection deadline** (`ipc::IPC_AUTH_DEADLINE`, 30 s): the listener
-  serves one connection at a time and does not re-arm `accept()` while the slot is
-  taken, so a peer that connects and never authenticates would otherwise deny the real
-  GUI service for as long as it lived. Such a connection is dropped and its slot
-  reclaimed. This is also how "disconnect on mismatch" is realised — as a bounded delay
-  rather than an instantaneous close, because `authenticate()` runs on a server worker
-  thread while closing a connection is an event-loop-thread operation.
+  serves at most two connections (the GUI holding the attach slot and one that is told
+  another GUI is attached) and does not re-arm `accept()` while both are taken, so peers
+  that connect and never authenticate, or authenticate without the slot, would otherwise
+  deny the real GUI service for as long as they lived. Such a connection is dropped and
+  its place reclaimed. This is also how "disconnect on mismatch" is realised — as a
+  bounded delay rather than an instantaneous close, because `authenticate()` runs on a
+  server worker thread while closing a connection is an event-loop-thread operation.
 - The **OS peer check** (`SO_PEERCRED` on Linux, `getpeereid` on the other POSIX
   targets) is the boundary on POSIX, and it **fails closed**: a peer whose identity
   cannot be read is refused, not admitted, so a platform that stops exposing peer

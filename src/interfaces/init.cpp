@@ -33,8 +33,15 @@ bool Init::authenticate(const std::string& /*cookie*/) { return false; }
 
 // Fail closed for the same reason: an Init that does not implement authentication
 // has never authenticated, so the listener's deadline reclaims its connection
-// rather than letting it sit in the single connection slot forever.
+// rather than letting it sit in a connection slot forever.
 bool Init::isAuthenticated() { return false; }
+
+// The monolithic build has no attach slot: its one in-process GUI is always the
+// attached one. Only the serving wrapper (ipc::MakeServeInit) can answer false.
+bool Init::holdsAttachSlot() { return true; }
+
+// Nothing to tear down for an Init that is not served over IPC.
+void Init::connectionClosed() {}
 
 BuildInfo Init::getBuildInfo() { return BuildInfo{}; }
 

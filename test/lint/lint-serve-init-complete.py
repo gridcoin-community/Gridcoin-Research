@@ -19,8 +19,8 @@ both ways of getting it wrong compile cleanly:
     method is served to a peer that never presented the cookie.
 
 This lint closes both. Every virtual on interfaces::Init must have an override
-in ServeInit, and every override must call RequireAuth() -- except the two
-methods listed in UNGATED below, which are exempt by design.
+in ServeInit, and every override must call RequireAuth() -- except the methods
+listed in UNGATED below, which are exempt by design.
 
 If you are here because the lint failed, the fix is almost always to add the
 missing override to src/ipc/serve_init.cpp with RequireAuth() as its first
@@ -43,6 +43,9 @@ UNGATED = {
     # that is the only time the listener asks. Not exposed over capnp, so no remote
     # peer can call it.
     "isAuthenticated",
+    # Run by the local listener when the connection is torn down; never a remote
+    # call. It runs for every connection, authenticated or not.
+    "connectionClosed",
 }
 
 # Virtuals deliberately absent from init.capnp, with the reason each is exempt.
@@ -56,6 +59,10 @@ UNSERVED = {
     # The listener asks this locally, before authentication, to decide whether a
     # connection beat the deadline. Serving it would let a peer probe the gate.
     "isAuthenticated",
+    # Run by the local listener when the connection is torn down; never a remote
+    # call. Serving it would let a peer end the attached GUI's capability or free
+    # the attach slot at will.
+    "connectionClosed",
 }
 
 # Schema methods with no interfaces::Init counterpart, with the reason.

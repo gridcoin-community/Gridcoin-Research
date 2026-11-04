@@ -243,6 +243,7 @@ add_library(gridcoin_util STATIC
     gridcoin/voting/vote.cpp
     hash.cpp
     init.cpp
+    interfaces/connection_scope.cpp
     interfaces/file_transfer.cpp
     interfaces/handler.cpp
     interfaces/init.cpp

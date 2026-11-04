@@ -108,6 +108,26 @@ public:
     //! connection is reclaimed at the deadline.
     virtual bool isAuthenticated();
 
+    //! Whether this connection holds the core's attach slot. The core serves one
+    //! GUI at a time, and only the connection holding the slot gets any makeX
+    //! capability. A second GUI that authenticates while another is attached is
+    //! answered false here and refused every factory, so it can tell the user
+    //! another GUI is attached. Served (init.capnp @15) and gated like the
+    //! handshake methods. The default, true, is the monolithic build's answer:
+    //! it has no slot, and its one in-process GUI is always the attached one.
+    virtual bool holdsAttachSlot();
+
+    //! Run this connection's teardown: end what it holds (its wallet capability,
+    //! its transfers) and give back the attach slot. Called by the LOCAL
+    //! listener, on the IPC event-loop thread, when the connection is torn down,
+    //! and finished before the listener can serve another GUI.
+    //!
+    //! Deliberately NOT exposed in init.capnp: it is never a remote call, and a
+    //! peer that could invoke it would end the attached GUI's capability or free
+    //! the slot at will. Recorded in lint-serve-init-complete.py's UNSERVED and
+    //! UNGATED sets with the reason. The default does nothing.
+    virtual void connectionClosed();
+
     //! The node's build fingerprint, for the schema/protocol/commit comparison in
     //! the handshake (section 4.2). Only meaningful after a successful
     //! authenticate(). The base default returns an empty snapshot; the node's

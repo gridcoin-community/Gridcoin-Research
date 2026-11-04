@@ -139,6 +139,20 @@ void InvokeDisconnectCb(const std::function<void()>& cb)
     }
 }
 
+//! Run a served connection's teardown (interfaces::Init::connectionClosed) on the
+//! event-loop thread. A throw would unwind out of ~Connection, skipping the rest of
+//! its cleanups and the accept re-arm, so contain and log it instead.
+void RunConnectionClosed(interfaces::Init& init)
+{
+    try {
+        init.connectionClosed();
+    } catch (const std::exception& e) {
+        error("ipc: connection teardown threw: %s", e.what());
+    } catch (...) {
+        error("ipc: connection teardown threw a non-standard exception");
+    }
+}
+
 class CapnpProtocol : public Protocol
 {
 public:
@@ -194,22 +208,32 @@ public:
         // connection via make_init (which also runs the peer-credential check and
         // returns null to reject a connection before serving). Each connection
         // therefore authenticates on its own -- a new peer cannot ride an earlier
-        // peer's authenticated session. The single simultaneous-connection cap
-        // remains the v1 "one GUI" model; it is no longer load-bearing for auth.
-        // InitImpl (interfaces::Init) is specified explicitly: it cannot be deduced
-        // from the lambda, which converts to the std::function<...> parameter only
-        // once the parameter type is known.
-        // The single slot is why the deadline matters: accept() is not re-armed
-        // while it is occupied, so an unauthenticated squatter is a denial of
-        // service against the real GUI until something reclaims the slot.
+        // peer's authenticated session. InitImpl (interfaces::Init) is specified
+        // explicitly: it cannot be deduced from the lambda, which converts to the
+        // std::function<...> parameter only once the parameter type is known.
+        //
+        // One GUI at a time is the attach slot's job (ipc::AttachSlot), not the
+        // transport's. The cap is two connections: the attached GUI, and one more
+        // that can authenticate and be told another GUI is attached.
+        //
+        // The cap is why the deadline matters: accept() is not re-armed while both
+        // connections are taken, so a connection that has not authenticated, or
+        // has but holds no slot, is dropped at the deadline. Otherwise two
+        // squatters would deny the real GUI service until something reclaimed them.
+        //
+        // The teardown hook runs each connection's connectionClosed() on this
+        // event-loop thread as the connection is destroyed, and it finishes before
+        // the listener re-arms accept(): what the attached GUI held is ended before
+        // another GUI can claim the slot.
         mp::ListenConnectionsFactory<messages::Init, interfaces::Init>(
             *m_loop, listen_fd,
             [make_init = std::move(make_init)](int peer_fd) -> std::shared_ptr<interfaces::Init> {
                 return make_init(peer_fd); // unique_ptr -> shared_ptr; null => reject
             },
-            /*max_connections=*/1,
-            [](interfaces::Init& init) { return init.isAuthenticated(); },
-            auth_deadline);
+            /*max_connections=*/2,
+            [](interfaces::Init& init) { return init.isAuthenticated() && init.holdsAttachSlot(); },
+            auth_deadline,
+            [](interfaces::Init& init) { RunConnectionClosed(init); });
     }
 
     void disconnectIncoming() override

@@ -193,11 +193,14 @@ struct RecordingInner : interfaces::Init {
 };
 
 //! Factory serving a fresh ServeInit (StubInner + the given cookie/identity) per
-//! connection, matching how the daemon serves.
+//! connection, matching how the daemon serves: every connection shares the
+//! listener's one attach slot. The slot hook is empty; the daemon's ends the
+//! wallet's IPC capability.
 interfaces::MakeServeInitFn CookieServeFactory(std::string cookie, interfaces::NodeIdentity id)
 {
-    return [cookie = std::move(cookie), id = std::move(id)](int) -> std::unique_ptr<interfaces::Init> {
-        return ipc::MakeServeInit(std::make_unique<StubInner>(), cookie, id);
+    return [cookie = std::move(cookie), id = std::move(id),
+            slot = ipc::MakeAttachSlot()](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(std::make_unique<StubInner>(), cookie, id, slot, {});
     };
 }
 
@@ -582,13 +585,13 @@ BOOST_AUTO_TEST_CASE(wire_wrong_cookie_latches_the_connection)
 }
 
 // The authentication deadline, end to end: a peer that connects and never
-// authenticates is dropped, and the single connection slot it was occupying is
-// returned to service.
+// authenticates is dropped, and the connection slot it was occupying is returned
+// to service.
 //
-// This is the assertion that matters for availability. max_connections is 1 and
-// accept() is not re-armed while the slot is taken, so before the deadline existed
-// any local process could connect, say nothing, and lock the real GUI out for as
-// long as it stayed alive.
+// This is the assertion that matters for availability. max_connections is 2 (one
+// attached GUI and one that is told another is attached) and accept() is not
+// re-armed while both are taken, so without the deadline any local process could
+// connect, say nothing, and lock the real GUI out for as long as it stayed alive.
 //
 // The squatter's disconnect is waited for explicitly rather than assumed after a
 // fixed sleep: it is the same event that drives the server-side re-arm, so
@@ -685,13 +688,16 @@ BOOST_AUTO_TEST_CASE(wire_every_init_factory_reaches_the_server)
     id.network = "main";
     id.identity_token = "tok";
 
-    WireLink link([&seen, &id](int) -> std::unique_ptr<interfaces::Init> {
-        return ipc::MakeServeInit(std::make_unique<RecordingInner>(seen), "the-cookie", id);
+    WireLink link([&seen, &id, slot = ipc::MakeAttachSlot()](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(std::make_unique<RecordingInner>(seen), "the-cookie", id, slot, {});
     });
 
-    // ServeInit gates every factory behind RequireAuth(), so authenticate first.
+    // ServeInit gates every factory behind RequireAuth() and the attach slot, so
+    // authenticate first. The only connection holds the slot, and the answer
+    // crosses the wire like the factories below.
     ipc::HandshakeResult r = ipc::ClientHandshake(*link.client, "the-cookie", "main");
     BOOST_REQUIRE(r.ok);
+    BOOST_REQUIRE(link.client->holdsAttachSlot());
 
     // Each call returns nullptr by construction; the return is deliberately
     // ignored. What is asserted is that the invocation arrived server-side.
@@ -741,8 +747,8 @@ BOOST_AUTO_TEST_CASE(wire_gui_state_push_reaches_the_client)
 
     interfaces::NodeIdentity id;
     id.network = "main";
-    WireLink link([&store, &id](int) -> std::unique_ptr<interfaces::Init> {
-        return ipc::MakeServeInit(std::make_unique<GuiStateInner>(store), "the-cookie", id);
+    WireLink link([&store, &id, slot = ipc::MakeAttachSlot()](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(std::make_unique<GuiStateInner>(store), "the-cookie", id, slot, {});
     });
     ClearAtExit clear_store(store);
     BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
@@ -777,8 +783,8 @@ BOOST_AUTO_TEST_CASE(wire_gui_state_quote_reaches_the_client)
     GuiStateStore store;
     interfaces::NodeIdentity id;
     id.network = "main";
-    WireLink link([&store, &id](int) -> std::unique_ptr<interfaces::Init> {
-        return ipc::MakeServeInit(std::make_unique<GuiStateInner>(store), "the-cookie", id);
+    WireLink link([&store, &id, slot = ipc::MakeAttachSlot()](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(std::make_unique<GuiStateInner>(store), "the-cookie", id, slot, {});
     });
     ClearAtExit clear_store(store);
     BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
@@ -816,8 +822,8 @@ BOOST_AUTO_TEST_CASE(push_to_a_disconnected_gui_is_dropped)
     GuiStateStore store;
     interfaces::NodeIdentity id;
     id.network = "main";
-    WireLink link([&store, &id](int) -> std::unique_ptr<interfaces::Init> {
-        return ipc::MakeServeInit(std::make_unique<GuiStateInner>(store), "the-cookie", id);
+    WireLink link([&store, &id, slot = ipc::MakeAttachSlot()](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(std::make_unique<GuiStateInner>(store), "the-cookie", id, slot, {});
     });
     ClearAtExit clear_store(store);
     BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
@@ -864,8 +870,8 @@ BOOST_AUTO_TEST_CASE(a_dropped_gui_connection_ends_its_subscription)
 
     interfaces::NodeIdentity id;
     id.network = "main";
-    WireLink link([&id](int) -> std::unique_ptr<interfaces::Init> {
-        return ipc::MakeServeInit(interfaces::MakeGridcoinInit(), "the-cookie", id);
+    WireLink link([&id, slot = ipc::MakeAttachSlot()](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(interfaces::MakeGridcoinInit(), "the-cookie", id, slot, {});
     });
     BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
 
@@ -1052,11 +1058,11 @@ BOOST_FIXTURE_TEST_CASE(wire_connect_address_reports_same_account, grc_test::Sta
 
     interfaces::NodeIdentity id;
     id.network = "main";
-    auto factory = [&served, id](int peer_fd) -> std::unique_ptr<interfaces::Init> {
+    auto factory = [&served, id, slot = ipc::MakeAttachSlot()](int peer_fd) -> std::unique_ptr<interfaces::Init> {
         const std::optional<ipc::PeerIdentity> peer = ipc::ReadPeerIdentity(peer_fd);
         if (!peer || ipc::ServerPeerPolicy(*peer) == ipc::PeerVerdict::Refuse) return nullptr;
         ++served;
-        return ipc::MakeServeInit(std::make_unique<StubInner>(), "the-cookie", id);
+        return ipc::MakeServeInit(std::make_unique<StubInner>(), "the-cookie", id, slot, {});
     };
     pair.server = interfaces::MakeIpc("ipc-pair-server", std::move(factory));
     std::string listen_address = "unix";
@@ -1075,6 +1081,74 @@ BOOST_FIXTURE_TEST_CASE(wire_connect_address_reports_same_account, grc_test::Sta
     ipc::HandshakeResult r = ipc::ClientHandshake(*pair.init, "the-cookie", "main");
     BOOST_CHECK(r.ok);
     BOOST_CHECK_EQUAL(served.load(), 1);
+}
+
+// The attached GUI's teardown hook finishes before the core serves another GUI.
+//
+// The slot hook sleeps before it records that it ran, so a second GUI that could
+// claim the slot while the hook was still running would see it unrecorded. GUI B
+// retries on a fresh connection until it holds the slot; the moment it does, the
+// hook must already have finished. Until ClientHandshake itself reports an
+// attached GUI, the slot is asked for explicitly after the handshake.
+BOOST_AUTO_TEST_CASE(wire_disconnect_runs_slot_hook_before_next_gui)
+{
+    interfaces::NodeIdentity id;
+    id.network = "main";
+
+    // Declared before the server, so it outlives every hook the server runs.
+    std::atomic<bool> dropped_a{false};
+
+    UnixSocket sock;
+    auto server = ipc::capnp::MakeCapnpProtocol();
+    server->listen(sock.releaseBoundFd(), "ipc-wire-server",
+                   [id, &dropped_a, slot = ipc::MakeAttachSlot()](int) -> std::unique_ptr<interfaces::Init> {
+                       return ipc::MakeServeInit(std::make_unique<StubInner>(), "cookie", id, slot, [&dropped_a] {
+                           std::this_thread::sleep_for(std::chrono::milliseconds{200});
+                           dropped_a = true;
+                       });
+                   });
+
+    // GUI A attaches, then goes away: its proxy and its protocol are destroyed.
+    {
+        auto a_proto = ipc::capnp::MakeCapnpProtocol();
+        auto a = a_proto->connect(sock.connectClient(), "ipc-wire-gui-a", /*on_disconnect=*/{});
+        BOOST_REQUIRE(a != nullptr);
+        ipc::HandshakeResult r = ipc::ClientHandshake(*a, "cookie", "main");
+        BOOST_REQUIRE(r.ok);
+        BOOST_REQUIRE(a->holdsAttachSlot());
+        a.reset();
+        a_proto.reset();
+    }
+
+    // GUI B tries again on a new connection each time until it holds the slot.
+    // The cap only limits a failing run.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{20};
+    bool attached = false;
+    bool dropped_when_attached = false;
+    int attempts = 0;
+    while (!attached && std::chrono::steady_clock::now() < deadline) {
+        ++attempts;
+        auto b_proto = ipc::capnp::MakeCapnpProtocol();
+        auto b = b_proto->connect(sock.connectClient(), "ipc-wire-gui-b", /*on_disconnect=*/{});
+        BOOST_REQUIRE(b != nullptr);
+        ipc::HandshakeResult r = ipc::ClientHandshake(*b, "cookie", "main");
+        if (r.ok && b->holdsAttachSlot()) {
+            // At that moment, with no further wait.
+            dropped_when_attached = dropped_a.load();
+            attached = true;
+        }
+        b.reset();
+        b_proto.reset();
+        // Paces the retries; not part of what is asserted.
+        if (!attached) std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    }
+
+    BOOST_REQUIRE_MESSAGE(attached, "GUI B never attached after GUI A went away (" << attempts << " attempts)");
+    BOOST_CHECK_MESSAGE(dropped_when_attached,
+                        "GUI B attached before GUI A's teardown hook had finished");
+
+    server->disconnectIncoming();
+    server.reset();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

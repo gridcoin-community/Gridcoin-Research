@@ -138,6 +138,8 @@ namespace ipc {
 //!   confirmation reads.
 //! - Node gained `executeRpcConsoleSecretCommand @43` (node.capnp), which
 //!   carries the console's wallet passphrases as SecureString.
+//! - Init gained `holdsAttachSlot @16` (init.capnp), which tells a second GUI
+//!   that another is attached.
 //!
 //! The new methods alone would be additive, which is why the reason for the
 //! major is the other direction. A GUI and a node of different majors disagree

@@ -29,6 +29,8 @@ class CWallet;
 
 namespace interfaces {
 
+class ConnectionScope;
+
 //! Snapshot of the four GUI-displayed balances, filled atomically under one
 //! lock acquisition (see Wallet::tryGetBalances).
 struct WalletBalances
@@ -509,6 +511,16 @@ public:
     //! Register a handler for wallet-transaction changes.
     using TransactionChangedFn = std::function<void(const uint256& tx_hash, ChangeType status)>;
     virtual std::unique_ptr<Handler> handleTransactionChanged(TransactionChangedFn fn) = 0;
+
+    //! Bind this wallet to the IPC connection it is served on, so what it starts
+    //! for that connection (transfers, capabilities) can register teardown hooks
+    //! that end it when the connection goes away. The serving Init calls it once,
+    //! before the wallet is handed out. The in-process wallet only stores the
+    //! scope; it registers nothing itself and calls nothing on it when destroyed.
+    //!
+    //! LOCAL ONLY: not served over capnp (no ordinal in wallet.capnp), so no peer
+    //! can call it, and the GUI's proxy keeps this default, which does nothing.
+    virtual void bindConnectionScope(std::shared_ptr<ConnectionScope> /*scope*/) {}
 };
 
 //! Return an in-process Wallet interface implementation wrapping the given

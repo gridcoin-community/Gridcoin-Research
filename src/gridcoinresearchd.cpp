@@ -420,11 +420,21 @@ bool AppInit(int argc, char* argv[])
                 // ipc.cookie are the guard.
                 // cookie + identity are captured by value and copied into each
                 // ServeInit.
-                auto make_serve_init = [cookie = std::move(cookie), identity = std::move(identity)]
+                //
+                // One GUI at a time: every connection shares this listener's one
+                // attach slot, and only the connection holding it is served the
+                // wallet and node interfaces. When that GUI goes away, its teardown
+                // ends the wallet's IPC capability before another GUI can claim the
+                // slot, so a capability never passes from one GUI to the next. The
+                // hook runs on the IPC event-loop thread; EndIpcElevation takes
+                // neither cs_main nor cs_wallet.
+                auto make_serve_init = [cookie = std::move(cookie), identity = std::move(identity),
+                                        slot = ipc::MakeAttachSlot()]
                     (int peer_fd) -> std::unique_ptr<interfaces::Init> {
                         const std::optional<ipc::PeerIdentity> peer = ipc::ReadPeerIdentity(peer_fd);
                         if (!peer || ipc::ServerPeerPolicy(*peer) == ipc::PeerVerdict::Refuse) return nullptr;
-                        return ipc::MakeServeInit(interfaces::MakeGridcoinInit(), cookie, identity);
+                        return ipc::MakeServeInit(interfaces::MakeGridcoinInit(), cookie, identity, slot,
+                                                  [] { if (pwalletMain) pwalletMain->EndIpcElevation(); });
                     };
                 // Client notifications are posted to one dispatcher thread, so the
                 // core thread that emits one never waits for the GUI.

@@ -33,9 +33,10 @@ using GuiState = import "gui_state.capnp";
 # generates no override for it on ProxyClient<Init>, so the call resolves to the
 # base default, returns nullptr, and the capability silently does not exist over
 # IPC. The coin channel shipped exactly that way and the multiprocess GUI could
-# not start at all. isAuthenticated is the one deliberate omission (the local
-# listener asks it before authentication); it is recorded in that lint's UNSERVED
-# set with the reason.
+# not start at all. isAuthenticated and connectionClosed are the deliberate
+# omissions (the local listener asks the first before authentication and runs
+# the second at teardown; neither is ever a remote call); they are recorded in
+# that lint's UNSERVED set with the reasons.
 interface Init $Proxy.wrap("interfaces::Init") {
     construct @0 (threadMap :Proxy.ThreadMap) -> (threadMap :Proxy.ThreadMap);
     isCoreReady @1 (context :Proxy.Context) -> (result :Bool);
@@ -57,6 +58,10 @@ interface Init $Proxy.wrap("interfaces::Init") {
     makeSideStakeManager @13 (context :Proxy.Context) -> (result :SideStake.SideStakeManager);
     makeWalletCoinSource @14 (context :Proxy.Context) -> (result :WalletCoinSource.WalletCoinSource);
     makeGuiState @15 (context :Proxy.Context) -> (result :GuiState.GuiState);
+
+    # Whether this connection holds the core's one attach slot. False tells an
+    # authenticated second GUI that another is attached; every makeX refuses it.
+    holdsAttachSlot @16 (context :Proxy.Context) -> (result :Bool);
 }
 
 struct BuildInfo $Proxy.wrap("interfaces::BuildInfo") {

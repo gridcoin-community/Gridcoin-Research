@@ -98,11 +98,22 @@ parent of a custom socket path. An existing directory is left as the operator
 configured it; `ProcessImpl::bind` logs a warning if the socket's directory is
 open to other users.
 
-The node caps the listener at **one simultaneous connection**
-(`mp::ListenConnectionsFactory<messages::Init, interfaces::Init>(...,
-/*max_connections=*/1, ...)` in `src/ipc/capnp/protocol.cpp`). An alternative
-front end must therefore be the *only* client attached; a second connection will
-not be accepted while one is live (see §10).
+The node serves **one GUI at a time**. Every connection of the listener shares
+one attach slot (`ipc::AttachSlot`, `src/ipc/serve_init.h`); the first connection
+to authenticate claims it and holds it until it closes. A second connection that
+authenticates meanwhile can complete the handshake reads and ask
+`Init::holdsAttachSlot()`, which answers `false`, but every `makeX` factory
+refuses it with "another GUI is already attached to this core". The transport
+cap is two simultaneous connections (`mp::ListenConnectionsFactory<messages::Init,
+interfaces::Init>(..., /*max_connections=*/2, ...)` in
+`src/ipc/capnp/protocol.cpp`): the attached GUI and one that is told so. An
+alternative front end must therefore be the *only* client attached (see §10).
+
+When a connection is torn down -- the peer disconnects, the authentication
+deadline drops it, or the node shuts down -- the node runs its teardown
+(`Init::connectionClosed`, local only) on the IPC event-loop thread before the
+listener can serve another connection: the slot holder's wallet capability is
+ended first, then the slot is given back.
 
 ### 2.2 The cookie
 
@@ -144,7 +155,9 @@ full ordered sequence a client must perform:
 6. **`Init::getIdentity()`** — the node's `NodeIdentity` (`identity_token`,
    `network`). Steps 5 and 6 are fetched in **one guarded round-trip**.
 7. **Compatibility checks** (all inside one `try`; see §2.5).
-8. **`Init::makeNode()` / `makeWallet()` / …** — proceed to the interface tree.
+8. **`Init::holdsAttachSlot()`** — `false` means another GUI is attached and every
+   factory will be refused (§2.1).
+9. **`Init::makeNode()` / `makeWallet()` / …** — proceed to the interface tree.
 
 Only after a successful handshake may the client call the `makeX` factories.
 The node additionally polls `Init::isCoreReady()` readiness: `authenticate()`
@@ -360,7 +373,9 @@ a map, not a field-by-field restatement.
 ### 4.0 Init — `src/interfaces/init.h`, `ipc/capnp/init.capnp`
 
 The per-process bootstrap. Beyond the handshake methods (`authenticate`,
-`getBuildInfo`, `getIdentity`, §2) and `isCoreReady()`, it hands out:
+`getBuildInfo`, `getIdentity`, §2), `isCoreReady()` and `holdsAttachSlot()`
+(`@15`, schema major 5; whether this connection is the attached GUI, §2.1), it
+hands out the factories below, to the attached GUI only:
 
 | Factory | Returns | Notes |
 |---|---|---|
@@ -476,7 +491,9 @@ checked one at a time, in the order they arrive, so a call also waits for the
 attempts ahead of it. An IPC caller cannot give its attempt up; only the node's
 shutdown ends the wait. `elevateWallet` always returns false.
 The GUI side is `WalletModel::requestUnlock(CapabilityKind)` and its
-`UnlockContext`, which ends the capability when the operation finishes. The
+`UnlockContext`, which ends the capability when the operation finishes. If the
+attached GUI goes away instead, the node ends the capability as it tears the
+connection down, before another GUI can attach (§2.1). The
 Options dialog asks before a submit that changes UPnP, the proxy or side staking
 (`OptionsModel::needsSettingsElevation`) and holds the capability across the
 submit; declined, it saves nothing of that submit. For any other change the node
@@ -791,7 +808,7 @@ type/status rendering is the client's job (only locale-free data crosses).
 - **What the node does *not* protect against.** It does not verify *which*
   process holds the cookie: the peer-credential check (§2.5) refuses a peer
   running as a different OS user (outside the configured attach group), but it
-  cannot tell two processes of the same user apart, and Windows has no such check. It serves one connection at a time,
+  cannot tell two processes of the same user apart, and Windows has no such check. It serves one GUI at a time,
   and each accepted connection must authenticate on its own (§10). And identity
   binding, as above, is not enforced node-side at all.
 
@@ -878,14 +895,15 @@ foreign client is a real undertaking:
 
 Reported honestly so nobody designs against a contract that is not there yet:
 
-1. **One client at a time.** The listener is `max_connections=1` and does not
-   accept a second connection while one is being served (`protocol.cpp`).
+1. **One client at a time.** The listener is `max_connections=2` and does not
+   accept a third connection while two are being served (`protocol.cpp`); of
+   those, only the one holding the attach slot is served any factory (§2.1).
    Authentication is per connection: each accepted connection gets a fresh
    `ServeInit` and one `authenticate()` attempt (a wrong cookie leaves it
    permanently unauthenticated), and it is dropped if it has not authenticated
-   within `ipc::IPC_AUTH_DEADLINE`, 30 s (`serve_init.h`; enforced by the
-   listener in `protocol.cpp`). An alt front end must be the sole client, and
-   must authenticate promptly after connecting.
+   and claimed the slot within `ipc::IPC_AUTH_DEADLINE`, 30 s (`serve_init.h`;
+   enforced by the listener in `protocol.cpp`). An alt front end must be the sole
+   client, and must authenticate promptly after connecting.
 2. **Versioned-refetch is only partly realized.** Design §4.4 describes every
    void signal growing a `registry_version` parameter. In practice no
    notification carries one. Outside the windowed channels, only local

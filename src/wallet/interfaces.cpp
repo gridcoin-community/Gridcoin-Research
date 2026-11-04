@@ -7,6 +7,7 @@
 #include "gridcoin/backup.h"
 #include "gridcoin/tx_message.h"
 #include "hash.h"
+#include "interfaces/connection_scope.h"
 #include "interfaces/handler.h"
 #include "interfaces/notification_dispatcher.h"
 #include "key_io.h"
@@ -605,6 +606,11 @@ public:
             })));
     }
 
+    void bindConnectionScope(std::shared_ptr<ConnectionScope> scope) override
+    {
+        m_connection_scope = std::move(scope);
+    }
+
 private:
     //! sendCoins() without its capability scope and exception boundary.
     SendCoinsResult SendCoinsUnderScope(const std::vector<WalletSendRecipient>& recipients,
@@ -612,6 +618,11 @@ private:
                                         int64_t accepted_fee);
 
     CWallet* m_wallet;
+    //! The IPC connection this wallet is served on (bindConnectionScope), or null
+    //! in process. Set once, before the wallet is handed out, and only read after.
+    //! Nothing is called on it when the wallet is destroyed: what registers a hook
+    //! in it removes the hook itself.
+    std::shared_ptr<ConnectionScope> m_connection_scope{nullptr};
 };
 
 SendCoinsResult WalletImpl::SendCoinsUnderScope(const std::vector<WalletSendRecipient>& recipients,
