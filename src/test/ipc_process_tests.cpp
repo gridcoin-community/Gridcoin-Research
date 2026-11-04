@@ -351,6 +351,37 @@ BOOST_AUTO_TEST_CASE(attach_group_not_a_member_is_refused_at_configuration)
 #endif
 }
 
+// The startup message names the group and the remedy. A group that does not
+// exist keeps its own wording, and a group the core holds has no problem.
+BOOST_AUTO_TEST_CASE(attach_group_problem_names_the_remedy)
+{
+    const std::optional<std::string> unknown = ipc::AttachGroupProblem("no-such-gridcoin-group-xyz");
+    BOOST_REQUIRE(unknown);
+    BOOST_CHECK(unknown->find("no-such-gridcoin-group-xyz") != std::string::npos);
+    BOOST_CHECK(unknown->find("does not exist") != std::string::npos);
+    BOOST_CHECK(unknown->find("SupplementaryGroups") == std::string::npos);
+
+    const std::optional<std::string> own = GroupName(::getegid());
+    if (own) BOOST_CHECK(!ipc::AttachGroupProblem(*own));
+
+#ifdef __linux__
+    if (::geteuid() != 0) {
+        const std::optional<std::string> foreign = ForeignGroupName();
+        if (foreign) {
+            const std::optional<std::string> problem = ipc::AttachGroupProblem(*foreign);
+            BOOST_REQUIRE(problem);
+            BOOST_CHECK(problem->find("'" + *foreign + "'") != std::string::npos);
+            BOOST_CHECK(problem->find("not a member") != std::string::npos);
+            BOOST_CHECK(problem->find("SupplementaryGroups=" + *foreign) != std::string::npos);
+            BOOST_CHECK(problem->find("service unit") != std::string::npos);
+            BOOST_CHECK(problem->find("does not exist") == std::string::npos);
+        } else {
+            BOOST_TEST_MESSAGE("no group this account is outside of; skipping the membership part");
+        }
+    }
+#endif
+}
+
 // A directory regrouped from 0770 to 0750 ends with the new group and without
 // group write.
 BOOST_AUTO_TEST_CASE(regroup_wide_directory_ends_narrow)

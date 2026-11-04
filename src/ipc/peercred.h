@@ -76,11 +76,30 @@ std::optional<PeerIdentity> ReadPeerIdentity(int fd);
 //! placeholder returns true only for "".
 bool ConfigureAttachGroup(const std::string& name);
 
+//! The operator-facing reason ConfigureAttachGroup(\p name) would fail, or nullopt
+//! when it would not. It names the group; for a group this process does not
+//! hold (Linux) it says to add SupplementaryGroups=<name> to the service unit or
+//! to run the core with that group; for an unknown group it says the group does
+//! not exist. The daemon uses it as the text of its startup error.
+std::optional<std::string> AttachGroupProblem(const std::string& name);
+
 #ifndef WIN32
 //! Hook. The gid ConfigureAttachGroup resolved, or nullopt when none is
 //! configured. (Windows has no gid_t; its attach group arrives with the Windows
 //! backend.)
 std::optional<gid_t> AttachGroupGid();
+
+//! What ReadPeerIdentity does when reading the peer's supplementary groups fails
+//! with a given errno.
+enum class PeerGroupsError {
+    //! The kernel has no SO_PEERGROUPS (ENOPROTOOPT, kernels before 4.13). The
+    //! identity from SO_PEERCRED is kept with empty groups.
+    EmptyGroups,
+    //! Any other failure refuses the peer.
+    Refuse,
+};
+
+PeerGroupsError PeerGroupsErrorAction(int err);
 
 //! Whether \p gid is \p peer's primary group or one of its supplementary groups.
 bool PeerInGroup(const PeerIdentity& peer, gid_t gid);

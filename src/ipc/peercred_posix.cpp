@@ -11,10 +11,13 @@
 
 #include "logging.h"
 #include "sync.h"
+#include "util/strencodings.h"
+#include "tinyformat.h"
 
 #include <algorithm>
 #include <cerrno>
 #include <grp.h>
+#include <mutex>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -73,6 +76,11 @@ bool ProcessHoldsGroup(gid_t gid)
 
 } // namespace
 
+PeerGroupsError PeerGroupsErrorAction(int err)
+{
+    return err == ENOPROTOOPT ? PeerGroupsError::EmptyGroups : PeerGroupsError::Refuse;
+}
+
 std::optional<PeerIdentity> ReadPeerIdentity(int fd)
 {
     if (fd < 0) {
@@ -112,6 +120,18 @@ std::optional<PeerIdentity> ReadPeerIdentity(int fd)
             return peer;
         }
         const int err = errno;
+        if (PeerGroupsErrorAction(err) == PeerGroupsError::EmptyGroups) {
+            // Empty groups still refuse a peer admitted only through a
+            // supplementary group, so group admission stays closed while a
+            // same-account peer keeps working. Logged once per process.
+            static std::once_flag logged;
+            std::call_once(logged, [] {
+                LogPrintf("IPC: this kernel does not report peer supplementary groups (SO_PEERGROUPS); "
+                          "attach group membership is unavailable and only same-account peers are admitted\n");
+            });
+            peer.groups.clear();
+            return peer;
+        }
         if (err != ERANGE || attempt != 0 || glen == 0 || glen % sizeof(gid_t) != 0) {
             LogPrintf("IPC: cannot read the peer's identity: SO_PEERGROUPS failed (errno %d)\n", err);
             return std::nullopt;
@@ -156,6 +176,24 @@ bool ConfigureAttachGroup(const std::string& name)
         LogPrintf("IPC: -ipcattachgroup: non-root peers in the group with gid %u are also admitted\n", *gid);
     }
     return true;
+}
+
+std::optional<std::string> AttachGroupProblem(const std::string& name)
+{
+    if (name.empty()) return std::nullopt;
+    const std::string shown = SanitizeString(name);
+    const std::optional<gid_t> gid = LookUpGroupGid(name);
+    if (!gid) {
+        return strprintf("The IPC attach group '%s' does not exist.", shown);
+    }
+#ifdef __linux__
+    if (!ProcessHoldsGroup(*gid)) {
+        return strprintf("This process is not a member of the IPC attach group '%s'. Add "
+                         "SupplementaryGroups=%s to the service unit (or run the core with that group).",
+                         shown, shown);
+    }
+#endif
+    return std::nullopt;
 }
 
 std::optional<gid_t> AttachGroupGid()

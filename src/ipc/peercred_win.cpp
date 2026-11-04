@@ -29,6 +29,12 @@ bool ConfigureAttachGroup(const std::string& name)
     return false;
 }
 
+std::optional<std::string> AttachGroupProblem(const std::string& name)
+{
+    if (name.empty()) return std::nullopt;
+    return "The Windows peer check for a different account is not available in this build.";
+}
+
 } // namespace ipc
 
 #endif // WIN32

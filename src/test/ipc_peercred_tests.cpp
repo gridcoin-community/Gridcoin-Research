@@ -223,6 +223,19 @@ BOOST_FIXTURE_TEST_CASE(configure_attach_group, PeerPolicySetup)
     BOOST_CHECK(!ipc::AttachGroupGid());
 }
 
+#ifndef WIN32
+// Kernels before 4.13 define SO_PEERGROUPS in the headers but answer
+// ENOPROTOOPT. Only that errno leaves the groups empty; every other failure
+// refuses the peer.
+BOOST_AUTO_TEST_CASE(peer_groups_error_action)
+{
+    BOOST_CHECK(ipc::PeerGroupsErrorAction(ENOPROTOOPT) == ipc::PeerGroupsError::EmptyGroups);
+    for (const int err : {EPERM, EBADF, EFAULT, EINVAL, ENOMEM, ERANGE, ENOTSOCK, EOPNOTSUPP}) {
+        BOOST_CHECK_MESSAGE(ipc::PeerGroupsErrorAction(err) == ipc::PeerGroupsError::Refuse, "errno " << err);
+    }
+}
+#endif
+
 #ifdef __linux__
 // The supplementary groups of the peer come from SO_PEERGROUPS, so on a
 // socketpair the peer is this process and its groups are getgroups().
