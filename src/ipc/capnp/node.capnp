@@ -64,6 +64,7 @@ interface Node $Proxy.wrap("interfaces::Node") {
     handleNotifyScraperEvent @41 (context :Proxy.Context, callback :NotifyScraperEventCallback) -> (result :Handler.Handler);
     isMainNet @42 (context :Proxy.Context) -> (result :Bool);
     executeRpcConsoleSecretCommand @43 (context :Proxy.Context, method :Text, passphrases :List(Data), args :List(Text)) -> (result :RpcConsoleResult);
+    getCorePaths @44 (context :Proxy.Context) -> (result :CorePaths);
 }
 
 # --- Notification callbacks (interfaces::Node::*Fn std::function types) ---
@@ -131,6 +132,14 @@ struct PeerInfo $Proxy.wrap("interfaces::PeerInfo") {
     pingTime @15 :Float64 $Proxy.name("ping_time");
     pingWait @16 :Float64 $Proxy.name("ping_wait");
     minPing @17 :Float64 $Proxy.name("min_ping");
+}
+
+struct CorePaths $Proxy.wrap("interfaces::CorePaths") {
+    datadir @0 :Text;
+    debugLog @1 :Text $Proxy.name("debug_log");
+    configFile @2 :Text $Proxy.name("config_file");
+    settingsFile @3 :Text $Proxy.name("settings_file");
+    walletFile @4 :Text $Proxy.name("wallet_file");
 }
 
 struct RpcConsoleResult $Proxy.wrap("interfaces::RpcConsoleResult") {

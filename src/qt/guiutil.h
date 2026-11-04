@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QMessageBox>
 #include "fs.h"
+#include "qt/guiipcinfo.h"
 #include "support/allocators/secure.h" // For SecureString.
 
 class ArgsManager;
@@ -126,8 +127,25 @@ namespace GUIUtil
     // Determine whether a widget is hidden behind other windows
     bool isObscured(QWidget *w);
 
-    // Open debug.log
-    void openDebugLogfile();
+    //! What to do with a file that lives on the core's side.
+    enum class OpenAction { OpenFile, ShowAdminMessage, Missing };
+
+    //! core_other_account -> ShowAdminMessage; else the file exists -> OpenFile;
+    //! else Missing. The file is not looked at when the core runs under another
+    //! account, since this account cannot be expected to read it.
+    OpenAction DecideCoreFileOpen(bool core_other_account, const fs::path& path);
+
+    //! The message that tells the user how to read a core file this account
+    //! cannot read. Names the path twice (where it is, and in the command).
+    QString AdminReadMessage(const QString& what, const QString& path);
+
+    //! Open a file at a path the core reported with the associated application,
+    //! or tell the user why it cannot be opened from here. what is the display
+    //! name of the file ("debug log", "config file").
+    void openCoreFile(const GuiIpcInfo& info, const QString& what, const std::string& path, QWidget* parent);
+
+    //! Open the core's debug log.
+    void openDebugLogfile(const GuiIpcInfo& info, QWidget* parent);
 
     /** Qt event filter that intercepts ToolTipChange events, and replaces the tooltip with a rich text
       representation if needed. This assures that Qt can word-wrap long tooltip messages.

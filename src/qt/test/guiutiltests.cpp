@@ -7,6 +7,7 @@
 #include "qt/guiutil.h"
 #include "util.h"
 
+#include <QFile>
 #include <QSettings>
 #include <QString>
 #include <QTemporaryDir>
@@ -103,4 +104,29 @@ void GUIUtilTests::persistedLaunchModeRoundTrips()
         GUIUtil::ApplyPersistedLaunchMode(settings, args);
         QVERIFY(!args.GetBoolArg("-multiprocess", true));
     }
+}
+
+void GUIUtilTests::coreFileOpenDecision()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const fs::path existing = fs::path(dir.path().toStdString()) / "present.log";
+    {
+        QFile file(QString::fromStdString(existing.string()));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+    }
+    const fs::path missing = fs::path(dir.path().toStdString()) / "absent.log";
+
+    // A core under another account is never opened from here, whether or not
+    // this account can see the file.
+    QVERIFY(GUIUtil::DecideCoreFileOpen(true, existing) == GUIUtil::OpenAction::ShowAdminMessage);
+    QVERIFY(GUIUtil::DecideCoreFileOpen(true, missing) == GUIUtil::OpenAction::ShowAdminMessage);
+    QVERIFY(GUIUtil::DecideCoreFileOpen(false, existing) == GUIUtil::OpenAction::OpenFile);
+    QVERIFY(GUIUtil::DecideCoreFileOpen(false, missing) == GUIUtil::OpenAction::Missing);
+
+    // The message names the path where it is and in the command to read it.
+    const QString message = GUIUtil::AdminReadMessage(QStringLiteral("debug log"),
+                                                      QStringLiteral("/var/lib/x/debug.log"));
+    QCOMPARE(message.count(QStringLiteral("/var/lib/x/debug.log")), 2);
+    QVERIFY(message.contains(QStringLiteral("debug log")));
 }

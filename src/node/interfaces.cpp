@@ -218,6 +218,25 @@ public:
 
     bool isMainNet() override { return OnMainnet(); }
 
+    CorePaths getCorePaths() override
+    {
+        CorePaths paths;
+        paths.datadir = GetDataDir().string();
+        paths.debug_log = LogInstance().m_file_path.string();
+        paths.config_file = GetConfigFile().string();
+
+        fs::path settings_path;
+        if (gArgs.GetSettingsPath(&settings_path)) paths.settings_file = settings_path.string();
+
+        // pwalletMain is read once into a local; the file name is immutable after
+        // the wallet is constructed.
+        if (CWallet* const wallet = pwalletMain) {
+            paths.wallet_file = (GetDataDir() / wallet->strWalletFile).string();
+        }
+
+        return paths;
+    }
+
     void startShutdown() override { StartShutdown(); }
 
     LatestVersionInfo checkForLatestUpdate() override

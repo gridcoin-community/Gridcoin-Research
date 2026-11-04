@@ -293,6 +293,10 @@
       "class": "read_only",
       "effect": "read_only"
     },
+    "Node.getCorePaths": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
     "Node.getDifficulty": {
       "class": "read_only",
       "effect": "read_only"

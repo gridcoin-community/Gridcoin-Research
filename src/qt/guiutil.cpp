@@ -25,6 +25,8 @@
 #include <QDoubleValidator>
 #include <QFont>
 #include <QLineEdit>
+#include <QMessageBox>
+#include <QProcess>
 #include <QTextDocument> // For Qt::escape
 #include <QUrlQuery>
 #include <QAbstractItemView>
@@ -475,13 +477,68 @@ bool isObscured(QWidget *w)
         && checkPoint(QPoint(w->width() / 2, w->height() / 2), w));
 }
 
-void openDebugLogfile()
+OpenAction DecideCoreFileOpen(bool core_other_account, const fs::path& path)
 {
-    fs::path pathDebug = GetDataDir() / "debug.log";
+    if (core_other_account) return OpenAction::ShowAdminMessage;
 
-    /* Open debug.log with the associated application */
-    if (fs::exists(pathDebug))
-        QDesktopServices::openUrl(QUrl::fromLocalFile(boostPathToQString(pathDebug)));
+    return fs::exists(path) ? OpenAction::OpenFile : OpenAction::Missing;
+}
+
+QString AdminReadMessage(const QString& what, const QString& path)
+{
+#ifdef WIN32
+    return QObject::tr("The core runs under the service account, so its %1 is not readable from your account. "
+                       "It is at %2. Read it by opening %3 from an administrator account.")
+        .arg(what, path, path);
+#else
+    return QObject::tr("The core runs under the service account, so its %1 is not readable from your account. "
+                       "It is at %2. Read it as an administrator, for example: sudo less %3")
+        .arg(what, path, path);
+#endif
+}
+
+void openCoreFile(const GuiIpcInfo& info, const QString& what, const std::string& path, QWidget* parent)
+{
+    const QString qpath = QString::fromStdString(path);
+
+    switch (DecideCoreFileOpen(info.core_other_account, fs::path(path))) {
+    case OpenAction::ShowAdminMessage:
+        QMessageBox::information(parent, QObject::tr("Core file"), AdminReadMessage(what, qpath));
+        return;
+    case OpenAction::Missing:
+        QMessageBox::information(parent, QObject::tr("Core file"),
+                                 QObject::tr("The file %1 does not exist yet.").arg(qpath));
+        return;
+    case OpenAction::OpenFile:
+        break;
+    }
+
+    // Open the file with the associated application.
+    bool res = QDesktopServices::openUrl(QUrl::fromLocalFile(qpath));
+
+#ifdef Q_OS_WIN
+    // Workaround for Windows specific behaviour
+    if (!res) {
+        res = QProcess::startDetached("C:\\Windows\\system32\\notepad.exe", QStringList{qpath});
+    }
+#endif
+#ifdef Q_OS_MACOS
+    // Workaround for macOS-specific behaviour; see https://github.com/bitcoin/bitcoin/issues/15409
+    if (!res) {
+        res = QProcess::startDetached("/usr/bin/open", QStringList{"-t", qpath});
+    }
+#endif
+
+    if (!res) {
+        QMessageBox::critical(parent, QObject::tr("File Association Error"),
+                              QObject::tr("Unable to open the %1. Please check your operating system"
+                                          " file associations.").arg(what));
+    }
+}
+
+void openDebugLogfile(const GuiIpcInfo& info, QWidget* parent)
+{
+    openCoreFile(info, QObject::tr("debug log"), info.core_paths.debug_log, parent);
 }
 
 ToolTipToRichTextFilter::ToolTipToRichTextFilter(int size_threshold, QObject *parent) :

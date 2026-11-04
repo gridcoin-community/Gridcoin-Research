@@ -1405,6 +1405,9 @@ int main(int argc, char *argv[])
         sidestake_manager = interface_init->makeSideStakeManager();
         options_node = interface_init->makeNode();
         optionsModel = std::make_unique<OptionsModel>(*options_node, *sidestake_manager);
+        // The core's file paths, as the core sees them, for "Open debug log"
+        // and "Open config" (in the monolith they are this process's own).
+        ipc_info.core_paths = options_node->getCorePaths();
         // Per-node QSettings prefs (the datadir is finalized now) + the one-time
         // migration of reservebalance / update-check from Gridcoin-Qt.conf into
         // the core read-write settings (the daemon's, over IPC, in the split
@@ -1525,6 +1528,11 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         // IPC, and drives the models through that remote Init.
         const bool multiprocess = gArgs.GetBoolArg("-multiprocess", false);
 
+        // The About dialog's multiprocess section (active only in the split
+        // build) and the core's file paths for the debug log and config buttons,
+        // which both builds have.
+        window.setIpcConnectionInfo(ipc_info);
+
         if (multiprocess)
         {
             // The connect + GUI-side identity binding already ran in main() (so
@@ -1537,8 +1545,6 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
             {
                 window.showBuildMismatchWarning(ipc_info.gui_version, ipc_info.node_version);
             }
-            // Populate the About dialog's multiprocess connection section.
-            window.setIpcConnectionInfo(ipc_info);
 
             // The multiprocess GUI logs to its own file (set up in main() before
             // this function) but, unlike the node, runs no core scheduler to rotate

@@ -139,6 +139,9 @@ namespace ipc {
 //!   confirmation reads.
 //! - Node gained `executeRpcConsoleSecretCommand @43` (node.capnp), which
 //!   carries the console's wallet passphrases as SecureString.
+//! - Node gained `getCorePaths @44` (node.capnp) and the CorePaths struct
+//!   (datadir, debug log, config, settings and wallet file paths as the core
+//!   sees them), which the GUI's "Open debug log" and "Open config" read.
 //! - Init gained `holdsAttachSlot @16` (init.capnp), which tells a second GUI
 //!   that another is attached.
 //! - Wallet gained `beginBackup @40` (wallet.capnp), which returns a FileSource

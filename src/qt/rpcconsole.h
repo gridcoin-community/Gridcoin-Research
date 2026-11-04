@@ -60,6 +60,10 @@ class RPCConsole: public QDialog
 
 public:
     explicit RPCConsole(QWidget* parent = nullptr);
+
+    //! The core's file paths and whether it runs under another account, for the
+    //! "Open debug log file" button.
+    void setIpcInfo(const GuiIpcInfo& info);
     ~RPCConsole();
 
     void setClientModel(ClientModel *model);
@@ -149,6 +153,7 @@ signals:
 private:
     Ui::RPCConsole *ui;
     ClientModel *clientModel;
+    GuiIpcInfo m_ipc_info;
     QStringList history;
     int historyPtr = 0;
     QList<int64_t> cachedNodeids;

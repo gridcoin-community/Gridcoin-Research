@@ -19,6 +19,7 @@ private slots:
     void secureStringFromQStringMatchesToStdString();
     void secureStringFromQStringUsesSecureBuffer();
     void persistedLaunchModeRoundTrips();
+    void coreFileOpenDecision();
 };
 
 #endif // BITCOIN_QT_TEST_GUIUTILTESTS_H

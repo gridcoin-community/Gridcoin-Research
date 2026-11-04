@@ -330,7 +330,10 @@ because a released ordinal cannot be dropped, but always returns false.
 `elevationRequired @7`, `SideStakeEditStatus` gained `ELEVATION_REQUIRED`,
 `Wallet` gained `getTransactionFeeRate @39`, which the send confirmation reads,
 `Node` gained `executeRpcConsoleSecretCommand @43`, which carries the
-console's wallet passphrases as `SecureString`, and `Init` gained
+console's wallet passphrases as `SecureString`, `Node` gained
+`getCorePaths @44` with the `CorePaths` struct (data directory, debug log,
+config, settings and wallet file paths as the core sees them), which the
+GUI's "Open debug log" and "Open config" read, and `Init` gained
 `holdsAttachSlot @15`, which tells a second GUI that another is attached.
 `Wallet` also gained `beginBackup @40 (items)`, which returns a `FileSource`
 streaming copies the core makes in its own transfer directory under a Backup
@@ -446,6 +449,7 @@ Command/action methods: `startShutdown`, `banNode`, `unban`, `disconnectNode`,
 `executeRpcConsoleCommand(method, args) -> RpcConsoleResult` (the whole UniValue
 round trip happens node-side; only formatted text crosses),
 `executeRpcConsoleSecretCommand(method, passphrases, args) -> RpcConsoleResult`,
+`getCorePaths() -> CorePaths`,
 `listRpcCommands`,
 the typed settings getters (`getSettingBool/Int/Str`, `isSettingSet`) and
 `changeSettings(...) -> SettingChangeResult`, plus `checkForLatestUpdate` and

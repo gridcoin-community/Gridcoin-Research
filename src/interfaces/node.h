@@ -65,6 +65,19 @@ struct PeerInfo
     double min_ping = 0;
 };
 
+//! The files and directories the core uses, as the core sees them. In the
+//! split build the core can run under another account, so the GUI's own idea of
+//! these paths is not the core's. A path is empty when the core has no such file
+//! (no wallet loaded, no settings file).
+struct CorePaths
+{
+    std::string datadir;
+    std::string debug_log;
+    std::string config_file;
+    std::string settings_file;
+    std::string wallet_file;
+};
+
 //! Result of running one RPC-console command. The whole UniValue round trip
 //! (arg conversion, dispatch, result/error formatting) happens node-side; only
 //! the already-formatted text crosses the boundary.
@@ -239,6 +252,10 @@ public:
     //! has to ask for it directly rather than infer it.
     virtual bool isMainNet() = 0;
 
+    //! The core's data directory, debug log, config file, settings file and
+    //! wallet file, as paths on the core's side.
+    virtual CorePaths getCorePaths() = 0;
+
     //! Request that the node begin shutting down (the GUI->core direction, e.g.
     //! a Windows WM_QUERYENDSESSION). Wraps the core StartShutdown(); in the
     //! monolith this brings the whole app down, matching the prior direct call.
@@ -409,6 +426,7 @@ const std::vector<int>* RpcConsolePassphraseIndexes(const std::string& method);
 // copyable value type the node side can fill and ship across the boundary.
 INTERFACES_ASSERT_MARSHALABLE(BannedNode);
 INTERFACES_ASSERT_MARSHALABLE(PeerInfo);
+INTERFACES_ASSERT_MARSHALABLE(CorePaths);
 INTERFACES_ASSERT_MARSHALABLE(RpcConsoleResult);
 INTERFACES_ASSERT_MARSHALABLE(SettingChangeResult);
 INTERFACES_ASSERT_MARSHALABLE(ScraperConvergenceSnapshot);

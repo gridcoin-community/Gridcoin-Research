@@ -1050,9 +1050,14 @@ void RPCConsole::on_tabWidget_currentChanged(int index)
     }
 }
 
+void RPCConsole::setIpcInfo(const GuiIpcInfo& info)
+{
+    m_ipc_info = info;
+}
+
 void RPCConsole::on_openDebugLogfileButton_clicked()
 {
-    GUIUtil::openDebugLogfile();
+    GUIUtil::openDebugLogfile(m_ipc_info, this);
 }
 
 void RPCConsole::scrollToEnd()

@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_QT_GUIIPCINFO_H
 #define GRIDCOIN_QT_GUIIPCINFO_H
 
+#include "interfaces/node.h"
+
 #include <QString>
 
 //! Pre-formatted facts about the GUI<->node IPC connection, for the About
@@ -27,6 +29,7 @@ struct GuiIpcInfo
     QString socket_path;               //!< The AF_UNIX socket the GUI connected on.
     QString node_identity;             //!< The node's raw identity token; empty means unavailable
                                        //!< (the About dialog substitutes an "unavailable" label).
+    interfaces::CorePaths core_paths;  //!< The core's own file paths (filled in both builds).
     QString network;                   //!< The node's chain network ("main"/"test"/...).
 };
 

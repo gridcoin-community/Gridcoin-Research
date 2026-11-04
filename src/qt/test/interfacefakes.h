@@ -383,6 +383,16 @@ public:
     std::string getClientVersion() override { return {}; }
     bool isTestNet() override { return false; }
     bool isMainNet() override { return false; }
+    interfaces::CorePaths getCorePaths() override
+    {
+        interfaces::CorePaths paths;
+        paths.datadir = "/fake/data";
+        paths.debug_log = "/fake/data/debug.log";
+        paths.config_file = "/fake/data/gridcoinresearch.conf";
+        paths.settings_file = "/fake/data/settings.json";
+        paths.wallet_file = "/fake/data/wallet.dat";
+        return paths;
+    }
     void startShutdown() override {}
     interfaces::LatestVersionInfo checkForLatestUpdate() override { return {}; }
     std::vector<interfaces::DiagnosticResult> runDiagnostics() override { return {}; }

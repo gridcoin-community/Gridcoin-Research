@@ -836,6 +836,7 @@ void BitcoinGUI::showBuildMismatchWarning(const QString& gui_commit, const QStri
 void BitcoinGUI::setIpcConnectionInfo(const GuiIpcInfo& info)
 {
     m_ipc_info = info;
+    rpcConsole->setIpcInfo(info);
 
     // Reset blockchain data cannot work from this process in the split build.
     // resetblockchainClicked() only sets fResetBlockchainRequest and calls
@@ -1206,28 +1207,9 @@ void BitcoinGUI::themeToggled()
 
 void BitcoinGUI::openConfigClicked()
 {
-    boost::filesystem::path pathConfig = GetConfigFile();
-    /* Open gridcoinresearch.conf with the associated application */
-    QString qPathConfig = GUIUtil::boostPathToQString(pathConfig);
-    bool res = QDesktopServices::openUrl(QUrl::fromLocalFile(qPathConfig));
-
-#ifdef Q_OS_WIN
-    // Workaround for Windows specific behaviour
-    if(!res) {
-        res = QProcess::startDetached("C:\\Windows\\system32\\notepad.exe", QStringList{qPathConfig});
-    }
-#endif
-#ifdef Q_OS_MACOS
-    // Workaround for macOS-specific behaviour; see https://github.com/bitcoin/bitcoin/issues/15409
-    if (!res) {
-        res = QProcess::startDetached("/usr/bin/open", QStringList{"-t", qPathConfig});
-    }
-#endif
-
-    if (!res) {
-        error("File Association Error", "Unable to open the config file. Please check your operating system"
-                                        " file associations.", true);
-    }
+    // The core's own config file: the core can run under another account, so
+    // this process's idea of the path is not necessarily the core's.
+    GUIUtil::openCoreFile(m_ipc_info, tr("config file"), m_ipc_info.core_paths.config_file, this);
 }
 
 void BitcoinGUI::researcherClicked()
