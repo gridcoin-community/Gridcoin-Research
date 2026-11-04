@@ -143,17 +143,6 @@ const std::vector<std::string>& GuiOnlyArgs()
 static Mutex g_reported_gui_only_mutex;
 static std::set<std::string> g_reported_gui_only GUARDED_BY(g_reported_gui_only_mutex);
 
-bool IsArgOnCommandLine(const ArgsManager& args, const std::string& name)
-{
-    bool found = false;
-
-    args.LockSettings([&](const util::Settings& settings) {
-        found = settings.command_line_options.count(name.substr(1)) > 0;
-    });
-
-    return found;
-}
-
 std::vector<std::string> IgnoreGuiOnlyConfigArgs(ArgsManager& args)
 {
     std::set<std::string> removed;
@@ -185,18 +174,6 @@ std::optional<std::string> MultiprocessGuiArgError(const ArgsManager& args)
     if (args.IsArgSet("-resetblockchaindata")) {
         return std::string("-resetblockchaindata is not available in the multiprocess GUI. "
                            "Stop the core and run gridcoinresearchd -resetblockchaindata.");
-    }
-
-    bool datadir_in_config = false;
-    args.LockSettings([&](const util::Settings& settings) {
-        for (const auto& section : settings.ro_config) {
-            if (section.second.count("datadir") > 0) datadir_in_config = true;
-        }
-    });
-
-    if (datadir_in_config && !IsArgOnCommandLine(args, "-datadir")) {
-        return std::string("datadir in the configuration file is not used by the multiprocess GUI. "
-                           "Pass -datadir on the command line.");
     }
 
     return std::nullopt;

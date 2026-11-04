@@ -207,10 +207,8 @@ BOOST_AUTO_TEST_CASE(resetblockchaindata_refused_in_multiprocess_gui)
     }
 }
 
-BOOST_AUTO_TEST_CASE(datadir_in_config_is_refused_in_multiprocess_gui)
+BOOST_AUTO_TEST_CASE(datadir_from_config_is_not_refused_in_multiprocess_gui)
 {
-    const std::string expected =
-        "datadir in the configuration file is not used by the multiprocess GUI. Pass -datadir on the command line.";
     std::string err;
 
     {
@@ -219,10 +217,7 @@ BOOST_AUTO_TEST_CASE(datadir_in_config_is_refused_in_multiprocess_gui)
         RegisterArgs(args);
         std::istringstream conf("datadir=/somewhere/else\n");
         BOOST_REQUIRE(args.ReadConfigStream(conf, "test.conf", err, true));
-        BOOST_CHECK(!IsArgOnCommandLine(args, "-datadir"));
-        const auto msg = MultiprocessGuiArgError(args);
-        BOOST_REQUIRE(msg.has_value());
-        BOOST_CHECK_EQUAL(*msg, expected);
+        BOOST_CHECK(!MultiprocessGuiArgError(args).has_value());
     }
     {
         // From a network section of the configuration file.
@@ -230,25 +225,14 @@ BOOST_AUTO_TEST_CASE(datadir_in_config_is_refused_in_multiprocess_gui)
         RegisterArgs(args);
         std::istringstream conf("[test]\ndatadir=/somewhere/else\n");
         BOOST_REQUIRE(args.ReadConfigStream(conf, "test.conf", err, true));
-        BOOST_CHECK(MultiprocessGuiArgError(args).has_value());
-    }
-    {
-        // From the command line alone.
-        TestArgsManager args;
-        RegisterArgs(args);
-        const char* argv[] = {"x", "-datadir=/tmp/dd"};
-        BOOST_REQUIRE(args.ParseParameters(2, argv, err));
-        BOOST_CHECK(IsArgOnCommandLine(args, "-datadir"));
         BOOST_CHECK(!MultiprocessGuiArgError(args).has_value());
     }
     {
-        // Both: the command line wins, so the configuration file does not steer anything.
+        // From the command line.
         TestArgsManager args;
         RegisterArgs(args);
         const char* argv[] = {"x", "-datadir=/tmp/dd"};
         BOOST_REQUIRE(args.ParseParameters(2, argv, err));
-        std::istringstream conf("datadir=/somewhere/else\n");
-        BOOST_REQUIRE(args.ReadConfigStream(conf, "test.conf", err, true));
         BOOST_CHECK(!MultiprocessGuiArgError(args).has_value());
     }
 }

@@ -1114,12 +1114,8 @@ int main(int argc, char *argv[])
     // GUI file exactly as it would the node's. The node is a separate process and
     // keeps its own -debuglogfile.
     if (multiprocess_gui) {
-        // The log file names come from the command line only. A debuglogfile or guilogfile in the data
-        // directory's configuration file, which the core shares, does not steer where the GUI writes.
-        const fs::path node_log = AbsPathForConfigVal(IsArgOnCommandLine(gArgs, "-debuglogfile")
-            ? fs::path(gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE))
-            : fs::path(DEFAULT_DEBUGLOGFILE));
-        const fs::path gui_log = IsArgOnCommandLine(gArgs, "-guilogfile")
+        const fs::path node_log = AbsPathForConfigVal(gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
+        const fs::path gui_log = gArgs.IsArgSet("-guilogfile")
             ? AbsPathForConfigVal(fs::path(gArgs.GetArg("-guilogfile", "")))
             : DeriveGuiLogPath(node_log);
 
