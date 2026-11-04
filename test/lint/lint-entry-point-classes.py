@@ -47,13 +47,13 @@ means. This lint keeps the file true against the code:
       an entry is accepted. EXEMPT lists the methods excused, with the reason.
    9. An elevated_handle entry lists in "minted_by" the "ipc" entries of class
       elevate that make its object. No other entry has minted_by.
-  10. When the key entry point list exists (--key-entry-points, by default
-      src/test/data/key_entry_points.json), it has non-empty "rpc" and "ipc"
-      lists, and every RPC and Interface.method in them is of class elevate
-      or dispatch here. A
-      dispatch entry reaches the keys only through the RPC it carries, whose
-      own row rule 1 and the dispatcher gate hold to elevate, and rule 7
-      confines dispatch to the console methods.
+  10. The key entry point list (--key-entry-points, by default
+      src/test/data/key_entry_points.json) exists, has non-empty "rpc" and
+      "ipc" lists, and every RPC and Interface.method in them is of class
+      elevate or dispatch here. A dispatch entry reaches the keys only
+      through the RPC it carries, whose own row rule 1 and the dispatcher
+      gate hold to elevate, and rule 7 confines dispatch to the console
+      methods.
   11. The file is formatted as json.dumps(data, indent=2, sort_keys=True)
       plus a newline.
 
@@ -550,8 +550,7 @@ def check_key_entry_points(path, data):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--key-entry-points", metavar="PATH",
-                        help="the key entry point list for rule 10 (default: {}; the rule is "
-                             "skipped when the default file is absent)".format(KEY_ENTRY_POINTS_FILE))
+                        help="the key entry point list for rule 10 (default: {})".format(KEY_ENTRY_POINTS_FILE))
     args = parser.parse_args()
     key_entry_points = os.path.abspath(args.key_entry_points) if args.key_entry_points else None
 
@@ -582,13 +581,11 @@ def main():
         check_bodies(data["ipc"])
         check_handles(data["ipc"])
 
-        if key_entry_points is None and not os.path.exists(KEY_ENTRY_POINTS_FILE):
-            print("lint-entry-point-classes: note: {} is absent; rule 10 skipped".format(KEY_ENTRY_POINTS_FILE),
-                  file=sys.stderr)
-        elif key_entry_points is not None and not os.path.exists(key_entry_points):
-            fail(key_entry_points, "no such file")
+        key_entry_points = key_entry_points or KEY_ENTRY_POINTS_FILE
+        if not os.path.exists(key_entry_points):
+            fail(key_entry_points, "no such file; rule 10 needs the key entry point list")
         else:
-            check_key_entry_points(key_entry_points or KEY_ENTRY_POINTS_FILE, data)
+            check_key_entry_points(key_entry_points, data)
 
     if errors:
         for e in errors:

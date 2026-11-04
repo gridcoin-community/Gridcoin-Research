@@ -1809,9 +1809,10 @@ same answer.
   takes `ArgsManager::SETTING_FREE` if it is Free, and, if it is Refuse (any command, path, URL,
   RPC/IPC or process-mode option), gets a pattern in `share/gridcoin/refused-setting-keys.txt`.
   A `COMMAND_LINE_ONLY` argument must match a pattern.
-- When `src/test/data/key_entry_points.json` is present, every RPC and IPC method it lists as
-  reaching the wallet's keys must be of class `elevate`, or `dispatch` for a console method,
-  which reaches the keys only through the RPC it carries (that RPC's own row is `elevate`).
+- Every RPC and IPC method that `src/test/data/key_entry_points.json` lists as reaching the
+  wallet's keys must be of class `elevate`, or `dispatch` for a console method, which reaches
+  the keys only through the RPC it carries (that RPC's own row is `elevate`). The lint fails
+  when that list is missing.
 - When unsure of a class, choose `elevate`.
 
 Functional tests
