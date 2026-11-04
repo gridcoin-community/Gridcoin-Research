@@ -1793,8 +1793,8 @@ caller), `minted_by` and `note`. The file is kept exactly as
 | `elevate` + `authority: unencrypted_only` | Acts only on an unencrypted wallet, which always has its keys. | RPC column `access_elevate_unencrypted`: the dispatcher does not gate it, its help has no passphrase line, and the method refuses an encrypted wallet itself (`RPC_WALLET_WRONG_ENC_STATE`). IPC: no kind. |
 | `settings` | `changesettings` and `Node.changeSettings`: the class of each setting applies. | `ChangeSettings()`, per setting |
 | `dispatch` | `Node.executeRpcConsoleCommand`, and `Node.executeRpcConsoleSecretCommand` for the RPCs with passphrase parameters: the class of the RPC row carried applies. | the `CRPCTable::execute` gate (`CRPCTable::admit`, which the passphrase call runs before the method) |
-| `elevated_handle` | A method of an object that only Elevate methods make; `minted_by` lists those methods. | the minting method's capability |
-| `refuse` | Never performed: `Wallet.elevateWallet`, and `Wallet.backupWallet` and `Wallet.backupConfigFile`, which are classed ahead of the change that makes them always return false. | the method itself |
+| `elevated_handle` | A method of an object that only Elevate methods make (`FileSource`, `FileSink`); `minted_by` lists those methods. | the minting method's capability |
+| `refuse` | Never performed: `Wallet.elevateWallet`, `Wallet.backupWallet` and `Wallet.backupConfigFile`, which always return false (`Wallet.beginBackup` streams a backup instead). | the method itself |
 
 The effects are `read_only`, `state`, `value`, `keys` and `key_writer`. An effect of `value`,
 `keys` or `key_writer` needs class `elevate`, `settings`, `dispatch`, `elevated_handle` or

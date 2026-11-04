@@ -92,7 +92,8 @@
     {"interface": "Wallet", "method": "getKeyFromPool", "kind": null, "reaches": "AddKeyPubKey", "needs": ["empty_pool"], "note": "Runs under no capability, so it never makes a key on a wallet unlocked for staking only. The GUI draws through getNewReceiveAddress and getNewReceiveAddressWithLabel."}
   ],
   "ipc_not_rows": [
-    {"interface": "Wallet", "method": "backupWallet", "reason": "Copies the encrypted wallet file; reads no key."},
+    {"interface": "Wallet", "method": "backupWallet", "reason": "Always returns false: the core no longer writes a copy to a path the client names."},
+    {"interface": "Wallet", "method": "beginBackup", "reason": "Snapshots the wallet file, its keys still encrypted, into the core's transfer directory and streams it through a FileSource; reads no key."},
     {"interface": "Wallet", "method": "encryptWallet", "reason": "Makes key material only on an unencrypted wallet; an encrypted one refuses it."},
     {"interface": "Wallet", "method": "lockWallet", "reason": "Discards the master key; reads no key."},
     {"interface": "Wallet", "method": "unlockWallet", "reason": "The unlock itself, proved by the passphrase."},

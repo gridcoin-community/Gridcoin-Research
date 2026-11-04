@@ -16,6 +16,73 @@
       "class": "read_only",
       "effect": "read_only"
     },
+    "FileSink.cancel": {
+      "class": "elevated_handle",
+      "effect": "state",
+      "minted_by": [
+        "Wallet.beginBackup"
+      ],
+      "note": "no method mints a FileSink yet; listed under Wallet.beginBackup until the console upload that mints one is added"
+    },
+    "FileSink.destroy": {
+      "class": "elevated_handle",
+      "effect": "state",
+      "minted_by": [
+        "Wallet.beginBackup"
+      ],
+      "note": "no method mints a FileSink yet; listed under Wallet.beginBackup until the console upload that mints one is added"
+    },
+    "FileSink.finish": {
+      "class": "elevated_handle",
+      "effect": "state",
+      "minted_by": [
+        "Wallet.beginBackup"
+      ],
+      "note": "no method mints a FileSink yet; listed under Wallet.beginBackup until the console upload that mints one is added"
+    },
+    "FileSink.write": {
+      "class": "elevated_handle",
+      "effect": "state",
+      "minted_by": [
+        "Wallet.beginBackup"
+      ],
+      "note": "no method mints a FileSink yet; listed under Wallet.beginBackup until the console upload that mints one is added"
+    },
+    "FileSource.cancel": {
+      "class": "elevated_handle",
+      "effect": "state",
+      "minted_by": [
+        "Wallet.beginBackup"
+      ]
+    },
+    "FileSource.destroy": {
+      "class": "elevated_handle",
+      "effect": "state",
+      "minted_by": [
+        "Wallet.beginBackup"
+      ]
+    },
+    "FileSource.entries": {
+      "class": "elevated_handle",
+      "effect": "state",
+      "minted_by": [
+        "Wallet.beginBackup"
+      ]
+    },
+    "FileSource.read": {
+      "class": "elevated_handle",
+      "effect": "state",
+      "minted_by": [
+        "Wallet.beginBackup"
+      ]
+    },
+    "FileSource.trailer": {
+      "class": "elevated_handle",
+      "effect": "state",
+      "minted_by": [
+        "Wallet.beginBackup"
+      ]
+    },
     "GuiState.current": {
       "class": "read_only",
       "effect": "read_only"
@@ -62,6 +129,10 @@
       "effect": "read_only"
     },
     "Init.getIdentity": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Init.holdsAttachSlot": {
       "class": "read_only",
       "effect": "read_only"
     },
@@ -663,14 +734,19 @@
     "Wallet.backupConfigFile": {
       "class": "refuse",
       "effect": "state",
-      "note": "classed ahead of the change that makes it always return false; until then it still writes the copy",
+      "note": "always returns false: the core no longer writes a copy to a path the client names; Wallet.beginBackup streams one",
       "path": true
     },
     "Wallet.backupWallet": {
       "class": "refuse",
       "effect": "state",
-      "note": "classed ahead of the change that makes it always return false; until then it still writes the copy",
+      "note": "always returns false: the core no longer writes a copy to a path the client names; Wallet.beginBackup streams one",
       "path": true
+    },
+    "Wallet.beginBackup": {
+      "class": "elevate",
+      "effect": "state",
+      "kind": "Backup"
     },
     "Wallet.beginElevation": {
       "authority": "passphrase_argument",

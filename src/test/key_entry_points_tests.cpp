@@ -110,9 +110,9 @@ const std::vector<std::string> INVENTORY_RPCS{
 
 //! The same for the IPC methods, as interface.method.
 const std::vector<std::string> INVENTORY_IPC{
-    "Wallet.backupWallet", "Wallet.encryptWallet", "Wallet.lockWallet", "Wallet.elevateWallet", "Wallet.unlockWallet",
-    "Wallet.changeWalletPassphrase", "Wallet.getKeyFromPool", "Wallet.sendCoins", "Wallet.signMessage",
-    "Wallet.getNewReceiveAddress", "Wallet.getNewReceiveAddressWithLabel",
+    "Wallet.backupWallet", "Wallet.beginBackup", "Wallet.encryptWallet", "Wallet.lockWallet", "Wallet.elevateWallet",
+    "Wallet.unlockWallet", "Wallet.changeWalletPassphrase", "Wallet.getKeyFromPool", "Wallet.sendCoins",
+    "Wallet.signMessage", "Wallet.getNewReceiveAddress", "Wallet.getNewReceiveAddressWithLabel",
     "MRC.snapshot", "MRC.submit", "MRC.submitConfirmed",
     "VotingManager.submitPoll", "VotingManager.submitVote",
     "ResearcherContext.advertiseBeacon", "ResearcherContext.generateBeaconKeyForV3",
