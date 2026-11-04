@@ -999,18 +999,29 @@ int main(int argc, char *argv[])
     // mode the GUI's own options come from its command line or the GUI settings, never from the data directory's
     // config file, which the core shares.
     const bool multiprocess_gui = gArgs.GetBoolArg("-multiprocess", false);
-    if (multiprocess_gui) {
+
+    // The decision is final. A per-network config file read later cannot change it, so pin it for every later
+    // reader of the option, including the ones outside this function.
+    gArgs.ForceSetArg("-multiprocess", multiprocess_gui ? "1" : "0");
+
+    // Refuses a datadir from a configuration file (before anything is opened there) and -resetblockchaindata,
+    // from any source. Run after each read of the configuration files.
+    auto refuse_multiprocess_gui_args = [&]() {
+        if (!multiprocess_gui) return false;
+
         IgnoreGuiOnlyConfigArgs(gArgs);
 
-        // This refuses a datadir from the configuration file (before anything is opened there) and
-        // -resetblockchaindata, from any source.
         if (const auto err = MultiprocessGuiArgError(gArgs)) {
             tfm::format(std::cerr, "%s\n", err->c_str());
             QMessageBox::critical(nullptr, PACKAGE_NAME,
                                   QObject::tr("The multiprocess GUI cannot start: %1").arg(QString::fromStdString(*err)));
-            return EXIT_FAILURE;
+            return true;
         }
-    }
+
+        return false;
+    };
+
+    if (refuse_multiprocess_gui_args()) return EXIT_FAILURE;
 
     // Do this to pickup -testnet / -regtest from the command line.
     SelectParams(gArgs.GetChainName());
@@ -1049,7 +1060,7 @@ int main(int argc, char *argv[])
     // owns the datadir and already holds this lock; the GUI runs no core, so it
     // must not contend for the lock (it would always fail against the running
     // daemon). The short-circuit skips LockDirectory entirely in that mode.
-    if (!gArgs.GetBoolArg("-multiprocess", false) && !LockDirectory(dataDir, ".lock", false)) {
+    if (!multiprocess_gui && !LockDirectory(dataDir, ".lock", false)) {
         std::string str = strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running "
                                       "and using that directory."),
                                     dataDir, PACKAGE_NAME);
@@ -1070,15 +1081,14 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    if (multiprocess_gui) {
-        IgnoreGuiOnlyConfigArgs(gArgs);
-    }
+    // The per-network configuration file can carry a datadir too; refuse it before any path is derived from it.
+    if (refuse_multiprocess_gui_args()) return EXIT_FAILURE;
 
     // In -multiprocess mode the core owns gridcoinsettings.json: it reads and writes the file and announces every
     // change, and the GUI reaches each setting through interfaces::Node. So the GUI does not open the file: a copy
     // read here would go stale, and writing it back would race the core's own writes and could revert a change
     // the core had just made. The monolithic GUI is the node, so it initializes the settings as the daemon does.
-    if (!gArgs.GetBoolArg("-multiprocess", false) && !gArgs.InitSettings(error)) {
+    if (!multiprocess_gui && !gArgs.InitSettings(error)) {
         ThreadSafeMessageBox(strprintf("Error initializing settings.\n"),
                 "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME,
@@ -1103,7 +1113,7 @@ int main(int argc, char *argv[])
     // the GUI file for this (GUI) process only. InitLogging then opens/shrinks the
     // GUI file exactly as it would the node's. The node is a separate process and
     // keeps its own -debuglogfile.
-    if (gArgs.GetBoolArg("-multiprocess", false)) {
+    if (multiprocess_gui) {
         // The log file names come from the command line only. A debuglogfile or guilogfile in the data
         // directory's configuration file, which the core shares, does not steer where the GUI writes.
         const fs::path node_log = AbsPathForConfigVal(IsArgOnCommandLine(gArgs, "-debuglogfile")
@@ -1212,7 +1222,7 @@ int main(int argc, char *argv[])
     // QSettings-backed GUI-local prefs are unaffected by that.
     interfaces::Init* interface_init = local_init.get();
     GuiIpcInfo ipc_info;
-    const bool multiprocess = gArgs.GetBoolArg("-multiprocess", false);
+    const bool multiprocess = multiprocess_gui;
 
     // Mark this, the Qt main thread, so that a DEBUG_LOCKORDER build reports any
     // cs_main taken on it (sync.h). Only the monolithic build: a -multiprocess

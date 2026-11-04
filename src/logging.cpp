@@ -7,6 +7,7 @@
 #include <util/threadnames.h>
 #include "util/time.h"
 #include "util/system.h"
+#include "util/syserror.h"
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/iostreams/stream.hpp>
@@ -15,6 +16,7 @@
 #include <boost/iostreams/filter/gzip.hpp>
 
 #include <algorithm>
+#include <functional>
 #include <cerrno>
 #include <cstring>
 #include <istream>
@@ -24,6 +26,7 @@
 #include <streambuf>
 
 #ifndef WIN32
+#include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -403,6 +406,25 @@ namespace BCLog {
 
         return cur;
     }
+
+    bool CreateDirectoryUnder(const fs::path& root, const fs::path& parent, const char* name)
+    {
+        const int parent_fd = OpenDirectoryUnder(root, parent);
+        if (parent_fd < 0) return false;
+
+        bool ok = ::mkdirat(parent_fd, name, static_cast<mode_t>(0700)) == 0 || errno == EEXIST;
+
+        if (ok) {
+            // An existing entry must itself be a real directory of ours.
+            const int fd = ::openat(parent_fd, name, O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+            struct stat st;
+            ok = fd >= 0 && ::fstat(fd, &st) == 0 && st.st_uid == ::geteuid();
+            if (fd >= 0) ::close(fd);
+        }
+
+        ::close(parent_fd);
+        return ok;
+    }
 #endif
 
     FILE* OpenLogFileUnder(const fs::path& root, const fs::path& path, const char* mode)
@@ -531,36 +553,53 @@ struct DirFd
     ~DirFd() { if (fd >= 0) ::close(fd); }
 };
 
-//! An unbuffered output stream buffer that writes to a file descriptor it does not own.
+//! An unbuffered output stream buffer that writes to a file descriptor it does not own. A write error is
+//! recorded and the bytes are reported as consumed, so the compressor can finish; the caller checks Failed().
 class FdStreamBuf : public std::streambuf
 {
 public:
     explicit FdStreamBuf(int fd) : m_fd(fd) {}
 
+    bool Failed() const { return m_failed; }
+
 protected:
     std::streamsize xsputn(const char* data, std::streamsize count) override
     {
         std::streamsize done = 0;
-        while (done < count) {
+        while (!m_failed && done < count) {
             const ssize_t n = ::write(m_fd, data + done, static_cast<size_t>(count - done));
-            if (n < 0) {
-                if (errno == EINTR) continue;
+            if (n < 0 && errno == EINTR) continue;
+            // A write that makes no progress is a failure; it is never retried.
+            if (n <= 0) {
+                m_failed = true;
                 break;
             }
             done += n;
         }
-        return done;
+        return count;
     }
 
     int_type overflow(int_type ch) override
     {
         if (traits_type::eq_int_type(ch, traits_type::eof())) return traits_type::not_eof(ch);
         const char c = traits_type::to_char_type(ch);
-        return xsputn(&c, 1) == 1 ? ch : traits_type::eof();
+        xsputn(&c, 1);
+        return ch;
     }
 
 private:
-    int m_fd;
+    int m_fd{-1};
+    bool m_failed{false};
+};
+
+//! Closes a stdio file at scope exit.
+struct FileCloser
+{
+    FILE* file;
+    explicit FileCloser(FILE* f) : file(f) {}
+    FileCloser(const FileCloser&) = delete;
+    FileCloser& operator=(const FileCloser&) = delete;
+    ~FileCloser() { if (file != nullptr) fclose(file); }
 };
 
 //! Compresses temp_name into out_name, both entries of the directory archive_fd. The input is opened with the
@@ -568,22 +607,23 @@ private:
 //! under the output name is overwritten or followed. The input is removed afterwards.
 bool CompressSecure(int archive_fd, const std::string& temp_name, const std::string& out_name)
 {
-    FILE* infile = BCLog::OpenLogFileAt(archive_fd, temp_name.c_str(), "r");
-    if (infile == nullptr) {
+    FileCloser infile(BCLog::OpenLogFileAt(archive_fd, temp_name.c_str(), "r"));
+    if (infile.file == nullptr) {
         LogPrintf("ERROR: Logger: Failed to open archive log file for compression %s.", temp_name);
         return false;
     }
 
-    const int out_fd = ::openat(archive_fd, out_name.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
-                                static_cast<mode_t>(0600));
-    if (out_fd < 0) {
-        fclose(infile);
+    DirFd out_fd(::openat(archive_fd, out_name.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
+                          static_cast<mode_t>(0600)));
+    if (out_fd.fd < 0) {
         LogPrintf("ERROR: Logger: Failed to create archive gzip file %s.", out_name);
         return false;
     }
 
-    {
-        FdStreamBuf out_buf(out_fd);
+    bool ok = true;
+
+    try {
+        FdStreamBuf out_buf(out_fd.fd);
         std::ostream out_file(&out_buf);
         boost::iostreams::filtering_ostream out;
         out.push(boost::iostreams::gzip_compressor());
@@ -591,19 +631,55 @@ bool CompressSecure(int archive_fd, const std::string& temp_name, const std::str
 
         char buffer[65536];
         size_t n;
-        while ((n = fread(buffer, 1, sizeof(buffer), infile)) > 0) {
+        while ((n = fread(buffer, 1, sizeof(buffer), infile.file)) > 0) {
             out.write(buffer, static_cast<std::streamsize>(n));
         }
 
         // reset() flushes the compressor into the file stream.
         out.reset();
+
+        ok = !out_buf.Failed() && !ferror(infile.file);
+    } catch (const std::exception&) {
+        ok = false;
     }
 
-    ::close(out_fd);
-    fclose(infile);
+    // Closing is checked too, as a delayed write error can show up there.
+    const int fd = out_fd.fd;
+    out_fd.fd = -1;
+    if (::close(fd) != 0) ok = false;
+
+    if (!ok) {
+        // Keep the log in the temp file; do not leave a partial archive behind.
+        ::unlinkat(archive_fd, out_name.c_str(), 0);
+        LogPrintf("ERROR: Logger: Failed to write archive gzip file %s.", out_name);
+        return false;
+    }
+
     ::unlinkat(archive_fd, temp_name.c_str(), 0);
 
     return true;
+}
+
+//! The names of the entries of the directory archive_fd (which stays open and unchanged).
+std::vector<std::string> ListDirectoryNames(int archive_fd)
+{
+    std::vector<std::string> names;
+
+    const int dup_fd = ::dup(archive_fd);
+    if (dup_fd < 0) return names;
+
+    DIR* dir = ::fdopendir(dup_fd);
+    if (dir == nullptr) {
+        ::close(dup_fd);
+        return names;
+    }
+
+    while (const struct dirent* entry = ::readdir(dir)) {
+        names.emplace_back(entry->d_name);
+    }
+
+    ::closedir(dir);
+    return names;
 }
 } // namespace
 #endif
@@ -628,9 +704,11 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
     // Check to see if the log archive directory exists and is a directory. If not create it.
     if (m_secure_open)
     {
-        // A link at the name is not touched here; the directory is opened without following links below.
-        boost::system::error_code ec;
-        fs::create_directory(LogArchiveDir, ec);
+        // The directory is created relative to the network data directory, opened without following links, so
+        // a link in its place is never followed. A failure shows when the archive directory is opened below.
+#ifndef WIN32
+        BCLog::CreateDirectoryUnder(m_secure_root, pathDataDir, "logarchive");
+#endif
     }
     else if (fs::exists(LogArchiveDir))
     {
@@ -660,6 +738,11 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
             archive_dir.fd = BCLog::OpenDirectoryUnder(m_secure_root, LogArchiveDir);
             log_dir.fd = BCLog::OpenDirectoryUnder(m_secure_root, m_file_path.parent_path());
             if (archive_dir.fd < 0 || log_dir.fd < 0) {
+                // Count this check as done, so the failure is logged once a day and not at every call.
+                {
+                    std::lock_guard<std::mutex> scoped_lock(m_cs);
+                    PrevArchiveCheckDate = ArchiveCheckDate;
+                }
                 LogPrintf("ERROR: Logger: archive: the log or archive directory could not be opened safely (%s).",
                           LogArchiveDir.string());
                 return false;
@@ -693,7 +776,7 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
             if (m_secure_open) {
                 if (::renameat(log_dir.fd, plogfile.filename().c_str(), archive_dir.fd, pfile_temp.filename().c_str()) != 0) {
                     rename_error_msg = "Failed to rename logging file: ";
-                    rename_error_msg += std::strerror(errno);
+                    rename_error_msg += SysErrorString(errno);
                 }
             } else
 #endif
@@ -804,7 +887,30 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
             // target the same files.
             try
             {
+                bool retained_securely = false;
+#ifndef WIN32
+                if (m_secure_open) {
+                    // List and remove through the archive directory descriptor opened above, so the pass cannot
+                    // be redirected by a change to the path.
+                    std::set<std::string, std::greater<std::string>> sorted_names;
+                    for (const std::string& name : ListDirectoryNames(archive_dir.fd)) {
+                        if (name.rfind(archive_prefix, 0) == 0) sorted_names.insert(name);
+                    }
+
+                    unsigned int n = 0;
+                    for (const std::string& name : sorted_names) {
+                        if (n >= nRetention) {
+                            ::unlinkat(archive_dir.fd, name.c_str(), 0);
+                            LogPrintf("INFO: Logger: Removed old archive gzip file %s.", name);
+                        }
+                        ++n;
+                    }
+                    retained_securely = true;
+                }
+#endif
+
                 // The greater than sort in the set should then return descending order by datetime.
+                if (!retained_securely)
                 for (fs::directory_entry& DirEntry : fs::directory_iterator(LogArchiveDir))
                 {
                     std::string sFilename = DirEntry.path().filename().string();

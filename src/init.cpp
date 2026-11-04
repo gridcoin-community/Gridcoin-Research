@@ -139,6 +139,10 @@ const std::vector<std::string>& GuiOnlyArgs()
     return GUI_ONLY_ARGS;
 }
 
+//! The config keys IgnoreGuiOnlyConfigArgs has already reported in this process.
+static Mutex g_reported_gui_only_mutex;
+static std::set<std::string> g_reported_gui_only GUARDED_BY(g_reported_gui_only_mutex);
+
 bool IsArgOnCommandLine(const ArgsManager& args, const std::string& name)
 {
     bool found = false;
@@ -165,12 +169,10 @@ std::vector<std::string> IgnoreGuiOnlyConfigArgs(ArgsManager& args)
     });
 
     // The caller may run this after each read of the config files; each key is reported once per process.
-    static std::set<std::string> reported;
-    static std::mutex reported_mutex;
-    std::lock_guard<std::mutex> lock(reported_mutex);
+    LOCK(g_reported_gui_only_mutex);
 
     for (const std::string& name : removed) {
-        if (!reported.insert(name).second) continue;
+        if (!g_reported_gui_only.insert(name).second) continue;
         LogPrintf("ignored %s from the config file: in multiprocess mode GUI options come from the command line or "
                   "the GUI settings\n", name);
     }

@@ -127,7 +127,9 @@ namespace BCLog {
         bool m_log_time_micros = DEFAULT_LOGTIMEMICROS;
         bool m_log_threadnames = DEFAULT_LOGTHREADNAMES;
 
-        //! Open the log file with BCLog::OpenLogFile(..., secure = true). Set before logging starts.
+        //! The multiprocess GUI's mode. Open the log file with BCLog::OpenLogFile(..., secure = true) (anchored at
+        //! m_secure_root when that is set), create and read the log archive with the same checks, and carry on without
+        //! a file when the open is refused (m_file_open_failed). Set before logging starts.
         bool m_secure_open{false};
         //! Escape every newline in a message except a final one (see LogEscapeMessage). Set before logging starts.
         bool m_escape_newlines{false};
@@ -202,7 +204,7 @@ namespace BCLog {
     //! and nullptr returned; then O_NONBLOCK is cleared, the file is truncated for mode "w", and fdopen is called.
     //! A symlink, a hard link or a FIFO at the path is refused, and a FIFO does not block the caller. A file that
     //! already exists keeps its mode; a new file is created 0600. Windows: refuses when fs::symlink_status(path) is
-    //! a symlink, else fsbridge::fopen. Supported modes are "r", "a" and "w".
+    //! a symlink or a reparse point, else fsbridge::fopen. Supported modes are "r", "a" and "w".
     FILE* OpenLogFile(const fs::path& path, const char* mode, bool secure);
 
     //! Secure open of path (a file below root) through each directory component below root in turn: every one is
@@ -217,6 +219,10 @@ namespace BCLog {
     //! Opens the directory dir through each component below root as OpenLogFileUnder does. Returns a descriptor, or
     //! -1 when a component is a symlink, not a directory or not owned by the effective user.
     int OpenDirectoryUnder(const fs::path& root, const fs::path& dir);
+
+    //! Creates the directory name inside the directory parent (below root), opened as OpenDirectoryUnder does, so a
+    //! link in place of parent or of name is never followed. True when the directory exists afterwards.
+    bool CreateDirectoryUnder(const fs::path& root, const fs::path& parent, const char* name);
 #endif
 } // namespace BCLog
 

@@ -9,7 +9,14 @@
 #include "util/system.h"
 #include "util/time.h"
 
+#include "test/state_guard.h"
+
+#include <boost/iostreams/copy.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
 #include <boost/test/unit_test.hpp>
+
+#include <sstream>
 
 #include <fstream>
 #include <iterator>
@@ -17,6 +24,8 @@
 #include <vector>
 
 #ifndef WIN32
+#include <signal.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
@@ -255,7 +264,15 @@ BOOST_AUTO_TEST_CASE(secure_archive_writes_a_gzip_file)
         if (name.rfind("logging_tests_archive_ok-", 0) != 0) continue;
         ++found;
         const std::string data = ReadAll(it->path());
-        BOOST_CHECK(data.size() > 2 && data[0] == '\x1f' && data[1] == '\x8b');
+        std::istringstream compressed(data);
+        std::ostringstream plain;
+        boost::iostreams::filtering_istream in;
+        in.push(boost::iostreams::gzip_decompressor());
+        in.push(compressed);
+        boost::iostreams::copy(in, plain);
+        // The logger writes a run of newlines first, then the line.
+        const std::string text = plain.str();
+        BOOST_CHECK(text.size() >= 5 && text.compare(text.size() - 5, 5, "line\n") == 0);
         fs::remove(it->path());
     }
     BOOST_CHECK_EQUAL(found, 1u);
@@ -295,6 +312,134 @@ BOOST_AUTO_TEST_CASE(archive_refuses_a_symlinked_archive_directory)
     if (had_archive_dir) fs::rename(aside, archive_dir);
     fs::remove_all(real);
     fs::remove(GetDataDir() / "logging_tests_archive_dir.log");
+}
+BOOST_AUTO_TEST_CASE(secure_archive_failure_keeps_the_log_and_leaves_no_partial_archive)
+{
+    const fs::path archive_dir = GetDataDir() / "logarchive";
+    fs::create_directories(archive_dir);
+
+    BCLog::Logger logger;
+    SetUpSecureLogger(logger, "logging_tests_archive_fail.log");
+    BOOST_REQUIRE(logger.StartLogging());
+    logger.LogPrintStr("line\n");
+
+    // A file size limit makes the write of the archive fail part way.
+    struct rlimit old_limit;
+    BOOST_REQUIRE_EQUAL(::getrlimit(RLIMIT_FSIZE, &old_limit), 0);
+    void (*old_handler)(int) = ::signal(SIGXFSZ, SIG_IGN);
+    struct rlimit limit = old_limit;
+    limit.rlim_cur = 20;
+    BOOST_REQUIRE_EQUAL(::setrlimit(RLIMIT_FSIZE, &limit), 0);
+
+    const bool archived = logger.archive(/*fImmediate=*/true, fs::path());
+
+    BOOST_REQUIRE_EQUAL(::setrlimit(RLIMIT_FSIZE, &old_limit), 0);
+    ::signal(SIGXFSZ, old_handler);
+
+    BOOST_CHECK(!archived);
+
+    size_t gz = 0, temp = 0;
+    for (fs::directory_iterator it(archive_dir), end; it != end; ++it) {
+        const std::string name = it->path().filename().string();
+        if (name.rfind("logging_tests_archive_fail-", 0) != 0) continue;
+        if (name.size() > 3 && name.compare(name.size() - 3, 3, ".gz") == 0) ++gz; else ++temp;
+        fs::remove(it->path());
+    }
+    BOOST_CHECK_EQUAL(gz, 0u);
+    // The log stays in the temp file.
+    BOOST_CHECK_EQUAL(temp, 1u);
+
+    logger.DisconnectTestLogger();
+    fs::remove(GetDataDir() / "logging_tests_archive_fail.log");
+}
+
+BOOST_AUTO_TEST_CASE(secure_archive_retention_removes_the_oldest_by_name)
+{
+    grc_test::StateGuard guard;
+    gArgs.ForceSetArg("-logarchiveretainnumfiles", "2");
+
+    const fs::path archive_dir = GetDataDir() / "logarchive";
+    fs::create_directories(archive_dir);
+    for (const char* stamp : {"99990101000001", "99990101000002", "99990101000003"}) {
+        std::ofstream out((archive_dir / (std::string("logging_tests_ret-") + stamp + ".log.gz")).string());
+        out << "x";
+    }
+    // Another log's archive in the same directory is left alone.
+    {
+        std::ofstream out((archive_dir / "logging_tests_ret_other-20000101000001.log.gz").string());
+        out << "x";
+    }
+
+    BCLog::Logger logger;
+    SetUpSecureLogger(logger, "logging_tests_ret.log");
+    BOOST_REQUIRE(logger.StartLogging());
+    logger.LogPrintStr("line\n");
+    BOOST_CHECK(logger.archive(/*fImmediate=*/true, fs::path()));
+
+    // Only the two newest names are kept (the new archive, stamped with the current time, sorts below these).
+    BOOST_CHECK(!fs::exists(archive_dir / "logging_tests_ret-99990101000001.log.gz"));
+    BOOST_CHECK(fs::exists(archive_dir / "logging_tests_ret-99990101000002.log.gz"));
+    BOOST_CHECK(fs::exists(archive_dir / "logging_tests_ret-99990101000003.log.gz"));
+    BOOST_CHECK(fs::exists(archive_dir / "logging_tests_ret_other-20000101000001.log.gz"));
+
+    logger.DisconnectTestLogger();
+    for (fs::directory_iterator it(archive_dir), end; it != end; ++it) {
+        if (it->path().filename().string().rfind("logging_tests_ret", 0) == 0) fs::remove(it->path());
+    }
+    fs::remove(GetDataDir() / "logging_tests_ret.log");
+}
+
+BOOST_AUTO_TEST_CASE(failed_archive_directory_open_counts_as_the_daily_check)
+{
+    const fs::path archive_dir = GetDataDir() / "logarchive";
+    const fs::path aside = GetDataDir() / "logarchive.logging_tests_aside2";
+    const fs::path real = GetDataDir() / "logging_tests_real_archive2";
+    fs::remove_all(aside);
+    fs::remove_all(real);
+    const bool had_archive_dir = fs::exists(archive_dir);
+    if (had_archive_dir) fs::rename(archive_dir, aside);
+    fs::create_directories(real);
+    BOOST_REQUIRE_EQUAL(::symlink(real.string().c_str(), archive_dir.string().c_str()), 0);
+
+    BCLog::Logger logger;
+    SetUpSecureLogger(logger, "logging_tests_daily.log");
+    BOOST_REQUIRE(logger.StartLogging());
+
+    const boost::gregorian::date saved = BCLog::Logger::PrevArchiveCheckDate;
+    BCLog::Logger::PrevArchiveCheckDate = boost::gregorian::date(2000, 1, 1);
+
+    BOOST_CHECK(!logger.archive(/*fImmediate=*/false, fs::path()));
+    const boost::gregorian::date today = boost::posix_time::from_time_t(GetAdjustedTime()).date();
+    BOOST_CHECK(BCLog::Logger::PrevArchiveCheckDate == today);
+
+    BCLog::Logger::PrevArchiveCheckDate = saved;
+    logger.DisconnectTestLogger();
+    fs::remove(archive_dir);
+    if (had_archive_dir) fs::rename(aside, archive_dir);
+    fs::remove_all(real);
+    fs::remove(GetDataDir() / "logging_tests_daily.log");
+}
+
+BOOST_AUTO_TEST_CASE(create_directory_under_does_not_follow_a_link)
+{
+    const fs::path root = GetDataDir() / "logging_tests_mkdir";
+    fs::remove_all(root);
+    fs::create_directories(root / "real");
+    BOOST_REQUIRE_EQUAL(::symlink((root / "real").string().c_str(), (root / "link").string().c_str()), 0);
+
+    BOOST_CHECK(BCLog::CreateDirectoryUnder(root, root / "real", "sub"));
+    BOOST_CHECK(fs::is_directory(root / "real" / "sub"));
+    // Already there is fine.
+    BOOST_CHECK(BCLog::CreateDirectoryUnder(root, root / "real", "sub"));
+
+    BOOST_CHECK(!BCLog::CreateDirectoryUnder(root, root / "link", "other"));
+    BOOST_CHECK(!fs::exists(root / "real" / "other"));
+
+    // A link in place of the directory itself is not accepted either.
+    BOOST_REQUIRE_EQUAL(::symlink((root / "real").string().c_str(), (root / "real" / "lnk").string().c_str()), 0);
+    BOOST_CHECK(!BCLog::CreateDirectoryUnder(root, root / "real", "lnk"));
+
+    fs::remove_all(root);
 }
 #endif
 
