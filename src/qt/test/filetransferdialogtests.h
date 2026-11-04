@@ -8,16 +8,14 @@
 #include <QObject>
 #include <QTest>
 
-//! The GUI's transfer worker and progress dialog (qt/filetransferdialog.h), driven by in-process
-//! sources and sinks: no core and no IPC. The cases observe the dialog from the GUI thread while
-//! the transfer runs on the worker.
+//! The GUI's transfer progress dialog (qt/filetransferdialog.h), driven by in-process sources and
+//! sinks: no core and no IPC. The cases observe the dialog from the GUI thread while the transfer
+//! runs on the modal worker (qt/guiipcworker.h).
 class FileTransferDialogTests : public QObject
 {
     Q_OBJECT
 
 private slots:
-    void workerRunsJobsInOrderOnOneThread();
-    void workerRunsQueuedJobsBeforeItGoes();
     void downloadWithoutWorkerIsALocalError();
     void downloadShowsProgressAndSavesTheFile();
     void cancelStopsTheDownloadAndLeavesNothing();

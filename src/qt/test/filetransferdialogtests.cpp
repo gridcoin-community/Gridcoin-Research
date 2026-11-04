@@ -9,6 +9,7 @@
 #include "interfaces/file_transfer.h"
 #include "interfaces/node.h"
 #include "qt/filetransferdialog.h"
+#include "qt/guiipcworker.h"
 #include "qt/guiutil.h"
 #include "sync.h"
 #include "uint256.h"
@@ -30,7 +31,6 @@
 #include <fstream>
 #include <future>
 #include <iterator>
-#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -217,73 +217,10 @@ int EntriesIn(const QTemporaryDir& dir)
 const QString CANCELLING_TEXT{"Cancelling..."};
 } // namespace
 
-// Every job runs on one thread, not the GUI's, in the order posted, and one that throws does not
-// end that thread.
-void FileTransferDialogTests::workerRunsJobsInOrderOnOneThread()
-{
-    const std::thread::id gui_thread = std::this_thread::get_id();
-    QVERIFY(FileTransferWorker::Current() == nullptr);
-
-    {
-        FileTransferWorker worker;
-        QVERIFY(FileTransferWorker::Current() == &worker);
-
-        Mutex mutex;
-        std::vector<int> order;
-        std::vector<std::thread::id> threads;
-        std::promise<void> last;
-        std::future<void> done = last.get_future();
-
-        for (int i = 0; i < 3; ++i) {
-            QVERIFY(worker.Post([&, i] {
-                LOCK(mutex);
-                order.push_back(i);
-                threads.push_back(std::this_thread::get_id());
-            }));
-        }
-
-        QVERIFY(worker.Post([] { throw std::runtime_error("a job that throws"); }));
-        QVERIFY(worker.Post([&] {
-            {
-                LOCK(mutex);
-                threads.push_back(std::this_thread::get_id());
-            }
-            last.set_value();
-        }));
-
-        QVERIFY(done.wait_for(10s) == std::future_status::ready);
-
-        LOCK(mutex);
-        QVERIFY(order == (std::vector<int>{0, 1, 2}));
-        QVERIFY(threads.size() == 4);
-        QVERIFY(threads[0] != gui_thread);
-        QVERIFY(std::all_of(threads.begin(), threads.end(), [&](const std::thread::id& id) { return id == threads[0]; }));
-    }
-
-    QVERIFY(FileTransferWorker::Current() == nullptr);
-}
-
-// The worker is joined by its destructor, which runs the jobs still queued first.
-void FileTransferDialogTests::workerRunsQueuedJobsBeforeItGoes()
-{
-    std::atomic<int> ran{0};
-
-    {
-        FileTransferWorker worker;
-        QVERIFY(worker.Post([] { std::this_thread::sleep_for(50ms); }));
-
-        for (int i = 0; i < 5; ++i) {
-            QVERIFY(worker.Post([&ran] { ++ran; }));
-        }
-    }
-
-    QCOMPARE(ran.load(), 5);
-}
-
 // Outside a worker's lifetime nothing is read or written.
 void FileTransferDialogTests::downloadWithoutWorkerIsALocalError()
 {
-    QVERIFY(FileTransferWorker::Current() == nullptr);
+    QVERIFY(GuiIpcWorker::Current(GuiIpcWorker::Role::Modal) == nullptr);
 
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -315,7 +252,7 @@ void FileTransferDialogTests::downloadWithoutWorkerIsALocalError()
 // total, and the file arrives whole.
 void FileTransferDialogTests::downloadShowsProgressAndSavesTheFile()
 {
-    FileTransferWorker worker;
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     const fs::path dest = GUIUtil::qstringToBoostPath(dir.path()) / "backup.dat";
@@ -356,17 +293,22 @@ void FileTransferDialogTests::downloadShowsProgressAndSavesTheFile()
     QVERIFY2(seen_label.contains(QString("%1 of %2 bytes").arg(GatedSource::CHUNK).arg(total)), qPrintable(seen_label));
     QVERIFY(!VisibleProgressDialog());
 
+    // Every read ran on the modal worker's thread.
+    std::thread::id worker_thread;
+    const std::future<void> asked = worker.Post([&worker_thread] { worker_thread = std::this_thread::get_id(); });
+    QVERIFY(asked.valid() && asked.wait_for(10s) == std::future_status::ready);
+
     const std::vector<std::thread::id> threads = src.ReadThreads();
     QVERIFY(!threads.empty());
     QVERIFY(threads[0] != std::this_thread::get_id());
-    QVERIFY(std::all_of(threads.begin(), threads.end(), [&](const std::thread::id& id) { return id == threads[0]; }));
+    QVERIFY(std::all_of(threads.begin(), threads.end(), [&](const std::thread::id& id) { return id == worker_thread; }));
 }
 
 // Cancel keeps the dialog up, saying so with Cancel disabled, until the transfer has stopped; then
 // nothing is left at the destination, and the source was told to stop.
 void FileTransferDialogTests::cancelStopsTheDownloadAndLeavesNothing()
 {
-    FileTransferWorker worker;
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     const fs::path dest = GUIUtil::qstringToBoostPath(dir.path()) / "backup.dat";
@@ -419,7 +361,7 @@ void FileTransferDialogTests::cancelStopsTheDownloadAndLeavesNothing()
 
 void FileTransferDialogTests::uploadSendsTheFile()
 {
-    FileTransferWorker worker;
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     const fs::path local = GUIUtil::qstringToBoostPath(dir.path()) / "import.txt";
@@ -515,7 +457,7 @@ void FileTransferDialogTests::backupResultText()
 // only once it has stopped, with events still processed meanwhile.
 void FileTransferDialogTests::loopExitCancelsAndWaitsForTheTransfer()
 {
-    FileTransferWorker worker;
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     const fs::path dest = GUIUtil::qstringToBoostPath(dir.path()) / "backup.dat";

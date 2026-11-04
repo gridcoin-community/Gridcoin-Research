@@ -7,14 +7,9 @@
 
 #include "fs.h"
 #include "interfaces/file_transfer.h"
-#include "sync.h"
 
 #include <QString>
 
-#include <condition_variable>
-#include <deque>
-#include <functional>
-#include <thread>
 #include <vector>
 
 QT_BEGIN_NAMESPACE
@@ -25,52 +20,10 @@ namespace interfaces {
 struct CorePaths;
 } // namespace interfaces
 
-//! The one thread on which this process runs file transfers (RunDownloadWithProgress and
-//! RunUploadWithProgress).
+//! Runs DownloadEntry on the process's modal GuiIpcWorker with a modal QProgressDialog (bytes done /
+//! total, Cancel). Returns the outcome.
 //!
-//! In the split build a transfer's calls cross IPC, and libmultiprocess keeps state for each
-//! thread that makes them: an entry per connection in that thread's request_threads and
-//! callback_threads maps. Two paths destroy those entries, and they do not synchronise with each
-//! other: the event loop, when it destroys the connection, and the thread's own exit. So a thread
-//! that has made calls must not exit while its connection may be destroyed. A transfer that ends
-//! because the core dropped the connection would do exactly that on a thread of its own, since the
-//! failed call wakes it just as the loop deletes the connection. This thread is started by the
-//! first job and joined only when this object is destroyed, which main() does after the
-//! connection is gone, as with the GUI thread itself.
-class FileTransferWorker
-{
-public:
-    //! Becomes the process's worker (Current()) until it is destroyed. One at a time.
-    FileTransferWorker();
-
-    //! Runs the jobs still queued, then joins the thread.
-    ~FileTransferWorker();
-
-    FileTransferWorker(const FileTransferWorker&) = delete;
-    FileTransferWorker& operator=(const FileTransferWorker&) = delete;
-
-    //! The process's worker, or null outside the lifetime of one.
-    static FileTransferWorker* Current();
-
-    //! Run \p job on the worker thread, after the jobs posted before it. False, and the job is not
-    //! run, when the thread cannot be started. A job that throws is logged and the thread carries
-    //! on.
-    bool Post(std::function<void()> job) LOCKS_EXCLUDED(m_mutex);
-
-private:
-    void Run() LOCKS_EXCLUDED(m_mutex);
-
-    Mutex m_mutex;
-    std::condition_variable m_cv;
-    std::deque<std::function<void()>> m_jobs GUARDED_BY(m_mutex){};
-    bool m_stop GUARDED_BY(m_mutex){false};
-    //! Started by the first Post().
-    std::thread m_thread GUARDED_BY(m_mutex){};
-};
-
-//! Runs DownloadEntry on a worker std::thread with a modal QProgressDialog (bytes done / total, Cancel). Returns the outcome.
-//!
-//! The worker is FileTransferWorker::Current(); without one the outcome is a LocalError. Cancel
+//! Without that worker the outcome is a LocalError. Cancel
 //! stops the transfer, and the dialog stays up, saying so, until it has stopped. The transfer has
 //! always finished when this returns, also when the event loop is told to quit meanwhile, which
 //! cancels it.

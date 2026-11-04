@@ -18,7 +18,7 @@
 #include "voting/votingmodel.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
-#include "qt/filetransferdialog.h"
+#include "qt/guiipcworker.h"
 #include "qt/intro.h"
 #include "guiconstants.h"
 #include "interfaces/init.h"
@@ -1327,10 +1327,13 @@ int main(int argc, char *argv[])
     // beside the thread name above.
     if (!multiprocess) MarkGuiThread();
 
-    // The thread the GUI runs file transfers on. Declared before node_connection, so
-    // it is joined only after the connection is gone: a thread that has made IPC calls
-    // must not exit while its connection may be destroyed (see FileTransferWorker).
-    FileTransferWorker transfer_worker;
+    // The threads the GUI calls into the core on when the GUI thread must not wait, one
+    // for each GuiIpcWorker::Role. Declared before node_connection, so they are joined
+    // only after the connection is gone: a thread that has made IPC calls must not exit
+    // while its connection may be destroyed (see GuiIpcWorker). Each starts its thread
+    // when it is first given a job.
+    GuiIpcWorker modal_worker(GuiIpcWorker::Role::Modal);
+    GuiIpcWorker coin_load_worker(GuiIpcWorker::Role::CoinLoad);
 #ifdef ENABLE_MULTIPROCESS
     std::optional<ipc::GuiConnection> node_connection;
     if (multiprocess)

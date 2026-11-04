@@ -5,9 +5,8 @@
 #include "qt/filetransferdialog.h"
 
 #include "interfaces/node.h"
+#include "qt/guiipcworker.h"
 #include "qt/guiutil.h"
-#include "util.h" /* for LogPrintf */
-#include "util/threadnames.h"
 
 #include <QCoreApplication>
 #include <QDialog>
@@ -22,16 +21,13 @@
 #include <atomic>
 #include <chrono>
 #include <exception>
+#include <functional>
 #include <future>
 #include <memory>
 #include <string>
-#include <system_error>
 #include <utility>
 
 namespace {
-//! The process's worker: FileTransferWorker::Current().
-std::atomic<FileTransferWorker*> g_transfer_worker{nullptr};
-
 //! How often the GUI thread looks at a transfer in flight.
 constexpr std::chrono::milliseconds TRANSFER_POLL{50};
 
@@ -43,10 +39,9 @@ struct TransferJob
     std::atomic<uint64_t> done{0};
     std::atomic<int64_t> total{-1};
     std::atomic<bool> cancel{false};
-    //! Written by the worker before it fulfils finished, and read only after that. Left as
-    //! it is (a failure with no message) if even the failure could not be made.
+    //! Written by the job, and read only once the job has finished. Left as it is (a failure
+    //! with no message) if even the failure could not be made.
     Result result{};
-    std::promise<void> finished{};
 };
 
 QString CountsText(uint64_t done, int64_t total)
@@ -65,21 +60,13 @@ Result RunWithProgress(QWidget* parent, const QString& title, const QString& wha
                        std::function<Result(const interfaces::ProgressFn&, const std::atomic<bool>&)> transfer,
                        std::function<Result(const std::string&)> failed)
 {
-    FileTransferWorker* const worker = FileTransferWorker::Current();
+    GuiIpcWorker* const worker = GuiIpcWorker::Current(GuiIpcWorker::Role::Modal);
     if (!worker) return failed("no file transfer thread is running");
 
     const auto job = std::make_shared<TransferJob<Result>>();
-    std::future<void> finished = job->finished.get_future();
 
-    const bool posted = worker->Post([job, transfer = std::move(transfer), failed] {
-        // The GUI thread waits for finished, so it is fulfilled however this ends, after
-        // the result is written.
-        struct Fulfil
-        {
-            std::promise<void>& finished;
-            ~Fulfil() { finished.set_value(); }
-        } fulfil{job->finished};
-
+    // Ready once the job has returned, however it ends, so after it has written the result.
+    std::future<void> finished = worker->Post([job, transfer = std::move(transfer), failed] {
         try {
             job->result = transfer(
                 [job](uint64_t done, int64_t total) {
@@ -94,7 +81,7 @@ Result RunWithProgress(QWidget* parent, const QString& title, const QString& wha
         }
     });
 
-    if (!posted) return failed("the file transfer thread could not be started");
+    if (!finished.valid()) return failed("the file transfer thread could not be started");
 
     // No cancel button from the constructor: the dialog's own is set below, so it can be
     // disabled while cancelling.
@@ -201,91 +188,6 @@ Result RunWithProgress(QWidget* parent, const QString& title, const QString& wha
     return std::move(job->result);
 }
 } // namespace
-
-FileTransferWorker::FileTransferWorker()
-{
-    FileTransferWorker* none = nullptr;
-
-    if (!g_transfer_worker.compare_exchange_strong(none, this)) {
-        LogPrintf("ERROR: %s: a file transfer worker exists already; this one is not used", __func__);
-    }
-}
-
-FileTransferWorker::~FileTransferWorker()
-{
-    FileTransferWorker* self = this;
-    g_transfer_worker.compare_exchange_strong(self, nullptr);
-
-    std::thread thread;
-
-    {
-        LOCK(m_mutex);
-        m_stop = true;
-        thread = std::move(m_thread);
-    }
-
-    m_cv.notify_all();
-
-    if (thread.joinable()) thread.join();
-}
-
-FileTransferWorker* FileTransferWorker::Current()
-{
-    return g_transfer_worker.load();
-}
-
-bool FileTransferWorker::Post(std::function<void()> job)
-{
-    LOCK(m_mutex);
-
-    if (m_stop) return false;
-
-    if (!m_thread.joinable()) {
-        try {
-            m_thread = std::thread([this] { Run(); });
-        } catch (const std::system_error& e) {
-            LogPrintf("ERROR: %s: could not start the file transfer thread: %s", __func__, e.what());
-            return false;
-        }
-    }
-
-    m_jobs.push_back(std::move(job));
-    m_cv.notify_one();
-
-    return true;
-}
-
-void FileTransferWorker::Run()
-{
-    util::ThreadRename("gui-transfer");
-
-    for (;;) {
-        std::function<void()> job;
-
-        {
-            WAIT_LOCK(m_mutex, lock);
-            m_cv.wait(lock, [this]() EXCLUSIVE_LOCKS_REQUIRED(m_mutex) { return m_stop || !m_jobs.empty(); });
-
-            // Stopped, with nothing left to run.
-            if (m_jobs.empty()) return;
-
-            job = std::move(m_jobs.front());
-            m_jobs.pop_front();
-        }
-
-        // Nothing may escape the thread.
-        try {
-            job();
-        } catch (const std::exception& e) {
-            LogPrintf("ERROR: %s: a file transfer job failed: %s", __func__, e.what());
-        } catch (...) {
-            LogPrintf("ERROR: %s: a file transfer job failed", __func__);
-        }
-
-        // Destroyed outside the mutex.
-        job = nullptr;
-    }
-}
 
 interfaces::TransferOutcome RunDownloadWithProgress(QWidget* parent, const QString& title, interfaces::FileSource& src,
                                                     uint32_t entry, const fs::path& dest)

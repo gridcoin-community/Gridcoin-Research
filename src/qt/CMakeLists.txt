@@ -52,6 +52,7 @@ add_library(gridcoinqt STATIC
     editsidestakedialog.cpp
     favoritespage.cpp
     filetransferdialog.cpp
+    guiipcworker.cpp
     guilog.cpp
     guiutil.cpp
     intro.cpp

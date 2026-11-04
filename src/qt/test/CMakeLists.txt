@@ -22,6 +22,7 @@ add_executable(test_gridcoin-qt
     sendcoinsdialogtests.cpp
     coreconnectwaittests.cpp
     filetransferdialogtests.cpp
+    guiipcworkertests.cpp
 )
 
 set_target_properties(test_gridcoin-qt PROPERTIES
