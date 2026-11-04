@@ -52,8 +52,10 @@ client's operations. Outside src/test/ (IPC_SLOT_FILES below):
 
   * IpcCapability(), BeginIpcElevation() and EndIpcElevation() are called
     only in the IPC interface implementations (src/wallet/interfaces.cpp,
-    src/gridcoin/interfaces.cpp, src/node/interfaces.cpp) and in the wallet's
-    own files, which declare and define them. Code that serves another caller,
+    src/gridcoin/interfaces.cpp, src/node/interfaces.cpp), in the daemon's
+    attach-slot hook (src/gridcoinresearchd.cpp), which ends the slot as the
+    attached GUI's connection is torn down, and in the wallet's own files,
+    which declare and define them. Code that serves another caller,
     an RPC request or an internal job, must not run under the IPC client's
     capability.
 
@@ -115,12 +117,13 @@ GRANT_FILES = (
 )
 
 # The files that may call the IPC capability slot's accessors: the IPC interface
-# implementations, and the wallet's own files, which declare and define them.
-# src/test/ is allowed as well.
+# implementations, the daemon's attach-slot hook, and the wallet's own files,
+# which declare and define them. src/test/ is allowed as well.
 IPC_SLOT_FILES = (
     "src/wallet/interfaces.cpp",
     "src/gridcoin/interfaces.cpp",
     "src/node/interfaces.cpp",
+    "src/gridcoinresearchd.cpp",
     "src/wallet/wallet.h",
     "src/wallet/wallet.cpp",
 )
