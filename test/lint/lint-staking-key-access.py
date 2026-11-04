@@ -47,6 +47,16 @@ ElevationGrant is restricted the same way. Its maker is CapabilityScope, so:
     Elsewhere only its static members (ElevationGrant::IsActiveFor) may be
     used, so a grant cannot be constructed or held anywhere else.
 
+The wallet keeps one IPC capability, in its IPC slot, for the connected
+client's operations. Outside src/test/ (IPC_SLOT_FILES below):
+
+  * IpcCapability(), BeginIpcElevation() and EndIpcElevation() are called
+    only in the IPC interface implementations (src/wallet/interfaces.cpp,
+    src/gridcoin/interfaces.cpp, src/node/interfaces.cpp) and in the wallet's
+    own files, which declare and define them. Code that serves another caller,
+    an RPC request or an internal job, must not run under the IPC client's
+    capability.
+
 Every path to the wallet's private keys goes through GetKey(),
 DecryptSecretWithMasterKey(), GetSeedPhraseBlob() or AddKeyPubKey(). The unit
 suite key_entry_points_tests drives each entry point that reaches them, from
@@ -103,6 +113,19 @@ GRANT_FILES = (
     CAPABILITY_HEADER,
     "src/wallet/capability.cpp",
 )
+
+# The files that may call the IPC capability slot's accessors: the IPC interface
+# implementations, and the wallet's own files, which declare and define them.
+# src/test/ is allowed as well.
+IPC_SLOT_FILES = (
+    "src/wallet/interfaces.cpp",
+    "src/gridcoin/interfaces.cpp",
+    "src/node/interfaces.cpp",
+    "src/wallet/wallet.h",
+    "src/wallet/wallet.cpp",
+)
+
+IPC_SLOT_RE = re.compile(r"\b(IpcCapability|BeginIpcElevation|EndIpcElevation)\s*\(")
 
 # Test-only makers, confined to the unit tests.
 TEST_PEERS = ("StakingKeyAccessTestPeer", "ElevationGrantTestPeer")
@@ -333,6 +356,12 @@ def check_code(path, code, errors, key_calls):
     if path.startswith(TEST_DIR):
         return
 
+    if path not in IPC_SLOT_FILES:
+        for m in IPC_SLOT_RE.finditer(code):
+            errors.append("{}:{}: {}() is called outside the IPC interface files ({}); the IPC slot's "
+                          "capability is the connected client's, for the interface methods that serve it"
+                          .format(path, line_of(code, m.start()), m.group(1), ", ".join(IPC_SLOT_FILES)))
+
     if path not in GRANT_FILES:
         for m in GRANT_RE.finditer(code):
             errors.append("{}:{}: ElevationGrant is used outside {} and {}; elsewhere only its "
@@ -465,6 +494,10 @@ CLEAN_FILES = {
     "src/miner.cpp": (
         "StakingKeyAccess MinerStakingKeyAccess() { return StakingKeyAccess(); }\n"
         "bool g() { return TrySignClaim(pwallet, claim, block); }\n"),
+    "src/wallet/interfaces.cpp": (
+        "bool b() { return w->BeginIpcElevation(p, k); }\n"
+        "void s() { CapabilityScope scope(*w, w->IpcCapability(), kind); }\n"
+        "void e() { w->EndIpcElevation(); }\n"),
 }
 
 # (the rule it breaks, the error that rule must report, files added to the
@@ -525,6 +558,15 @@ FAILING_SAMPLES = [
     ("an IPC row naming a method its interface does not declare",
      "names Wallet.removedMethod, which the interface does not declare",
      {}, None, dict(SAMPLE_TABLE, ipc=[{"interface": "Wallet", "method": "removedMethod"}]), None),
+    ("the IPC capability slot read outside the IPC interfaces",
+     "src/wallet/rpcwallet.cpp:5: IpcCapability() is called outside the IPC interface files",
+     {"src/wallet/rpcwallet.cpp": CLEAN_FILES["src/wallet/rpcwallet.cpp"]
+      + "void g() { CapabilityScope s(*pwalletMain, pwalletMain->IpcCapability(), kind); }\n"},
+     None, None, None),
+    ("the IPC capability slot begun outside the IPC interfaces",
+     "src/rpc/misc.cpp:1: BeginIpcElevation() is called outside the IPC interface files",
+     {"src/rpc/misc.cpp": "bool f() { return pwalletMain->BeginIpcElevation(p, k); }\n"},
+     None, None, None),
     ("an IPC row naming an interface no capnp file declares",
      "names interface Vault, which no file in src/ipc/capnp/ declares",
      {}, None, dict(SAMPLE_TABLE, ipc=[{"interface": "Vault", "method": "signMessage"}]), None),
