@@ -419,6 +419,32 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
     return read_whole_file;
 }
 
+bool ReadFirstExternalBlock(const fs::path& path, CBlock& block)
+{
+    CAutoFile blkdat(fsbridge::fopen(path, "rb"), SER_DISK, CLIENT_VERSION);
+    if (blkdat.IsNull()) return false;
+
+    try {
+        // A block record is the message start, the block size and the block.
+        unsigned char window[CMessageHeader::MESSAGE_START_SIZE] = {};
+        size_t bytes_read = 0;
+        while (bytes_read < sizeof(window) || memcmp(window, Params().MessageStart(), sizeof(window)) != 0) {
+            memmove(window, window + 1, sizeof(window) - 1);
+            blkdat >> window[sizeof(window) - 1];
+            ++bytes_read;
+        }
+
+        unsigned int nSize = 0;
+        blkdat >> nSize;
+        if (nSize == 0 || nSize > MAX_BLOCK_SIZE) return false;
+        blkdat >> block;
+    } catch (const std::exception&) {
+        return false;
+    }
+
+    return true;
+}
+
 
 // Load-time entry point moved here from main.cpp (issue #3125, workstream
 // C5): loads the block index from LevelDB and, on an empty datadir, creates

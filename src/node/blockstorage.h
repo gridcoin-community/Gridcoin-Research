@@ -6,6 +6,7 @@
 #ifndef BITCOIN_NODE_BLOCKSTORAGE_H
 #define BITCOIN_NODE_BLOCKSTORAGE_H
 
+#include "fs.h"
 #include "protocol.h"
 #include "sync.h"
 
@@ -46,6 +47,10 @@ void CloseBlockFile();
 //! however many blocks it had loaded by then. Takes ownership of fileIn and closes it.
 bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
                            unsigned int percent_start = 0, unsigned int percent_end = 100);
+
+//! Read the block in the first block record of a file in block data file format, found as LoadExternalBlockFile finds
+//! it, at the first message start. Returns false if the file cannot be opened or that record does not hold a block.
+bool ReadFirstExternalBlock(const fs::path& path, CBlock& block);
 
 //! Load the block index from LevelDB, creating and writing the genesis block
 //! first on an empty datadir (via CreateGenesisBlock in chainparams.cpp).
