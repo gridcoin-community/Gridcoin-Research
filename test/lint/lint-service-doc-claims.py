@@ -3,19 +3,16 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://opensource.org/licenses/mit-license.php.
 
-"""Keep wording that no longer describes the Linux service setup out of the docs.
+"""Keep a fixed list of phrases out of the service docs.
 
-The service units, the autounlock helper and the way they are set up changed, and
-some sentences from the earlier docs and unit headers describe what the code no
-longer does. This lint fails when one of them comes back. It reads every text file
-under doc/, contrib/init/ and contrib/docker/, and matches each phrase without
-regard to case, line breaks, the comment and quote markers that start a line (#, >,
-;) and the Markdown marks ` and *, so a phrase wrapped over two lines of a unit
-header or a block quote is still found.
+The lint reads every text file under doc/, contrib/init/ and contrib/docker/ and
+fails when one of the phrases in PHRASES appears, naming the file and the line. It
+matches each phrase without regard to case, line breaks, the comment and quote
+markers that start a line (#, >, ;) and the Markdown marks ` and *, so a phrase
+wrapped over two lines of a unit header or a block quote is still found.
 
-If you are here because the lint failed, rewrite the sentence to say what the code
-does now. doc/running-unattended.md describes the current setup; the hint after each
-match says what to say instead.
+If you are here because the lint failed, reword the sentence.
+doc/running-unattended.md describes the current setup.
 """
 
 import bisect
@@ -25,19 +22,14 @@ import sys
 
 ROOTS = ("doc", "contrib/init", "contrib/docker")
 SKIP_DIRS = {"__pycache__", ".git"}
+HINT = "see doc/running-unattended.md for the current setup"
 
-# (phrase, what to say instead)
-CLAIMS = (
-    ("nearly turnkey",
-     "describe the setup steps"),
-    ("nothing elsewhere can",
-     "say what a TPM adds, on hosts that have one"),
-    ("dumpprivkey <one of your",
-     "check unlock_scope in getwalletinfo"),
-    ("Autounlock re-runs on the fresh instance",
-     "describe what an upgrade does on each distribution"),
-    ("chown -R 1000:1000",
-     "build the image with the host's UID and GID instead"),
+PHRASES = (
+    "nearly turnkey",
+    "nothing elsewhere can",
+    "dumpprivkey <one of your",
+    "Autounlock re-runs on the fresh instance",
+    "chown -R 1000:1000",
 )
 
 # What starts a line in a unit header, a shell or conf comment, or a Markdown quote.
@@ -86,10 +78,10 @@ def check_text(name, text):
     """The findings for one file, as printable lines."""
     document = Document(text)
     found = []
-    for phrase, hint in CLAIMS:
+    for phrase in PHRASES:
         for line in document.find(phrase):
-            found.append((line, phrase, hint))
-    return ["%s:%d: outdated claim '%s': %s" % (name, line, phrase, hint) for line, phrase, hint in sorted(found)]
+            found.append((line, phrase))
+    return ["%s:%d: listed phrase '%s': %s" % (name, line, phrase, HINT) for line, phrase in sorted(found)]
 
 
 def files_to_check():
@@ -113,7 +105,7 @@ def self_test():
     """Each phrase must be found wrapped over a comment, a quote and a plain line, and a text
     without any must give nothing."""
     failures = 0
-    for phrase, _ in CLAIMS:
+    for phrase in PHRASES:
         words = phrase.split(" ")
         half = max(1, len(words) // 2)
         first, rest = " ".join(words[:half]), " ".join(words[half:])
@@ -136,7 +128,7 @@ def self_test():
     if failures:
         print("self-test: %d failure(s)" % failures)
         return 1
-    print("lint-service-doc-claims self-test: each of %d phrases found in every sample" % len(CLAIMS))
+    print("lint-service-doc-claims self-test: each of %d phrases found in every sample" % len(PHRASES))
     return 0
 
 
@@ -158,7 +150,7 @@ def main(argv):
     for line in findings:
         print(line)
     if findings:
-        print("%d outdated claim(s) about the Linux service setup; see doc/running-unattended.md" % len(findings))
+        print("%d listed phrase(s) found; %s" % (len(findings), HINT))
         return 1
     print("lint-service-doc-claims: OK: %d files under %s checked" % (checked, ", ".join(ROOTS)))
     return 0

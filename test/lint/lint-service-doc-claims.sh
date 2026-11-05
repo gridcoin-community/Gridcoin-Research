@@ -4,10 +4,9 @@
 # Distributed under the MIT/X11 software license, see the accompanying
 # file COPYING or https://opensource.org/licenses/mit-license.php.
 #
-# Keep wording that no longer describes the Linux service setup out of doc/,
-# contrib/init/ and contrib/docker/ (see lint-service-doc-claims.py). The phrases are
-# checked against embedded samples first, so a phrase that has stopped matching
-# anything fails the lint.
+# Keep the phrases listed in lint-service-doc-claims.py out of doc/, contrib/init/ and
+# contrib/docker/. The phrases are checked against embedded samples first, so a phrase
+# that has stopped matching anything fails the lint.
 
 export LC_ALL=C
 
