@@ -2725,7 +2725,7 @@ def carried_system_paths(net, display, value, own, sources, copied, paths, host)
         # (GetConfigFile in src/util/system.cpp is net-specific).
         start_conf = (os.path.join(datadir, *(["testnet"] if net.testnet else []), CONF_NAME)
                       if os.path.isabs(datadir) else None)
-        if conf is None and start_conf is not None and os.path.lexists(start_conf):
+        if conf is None and start_conf is not None:
             conf = start_conf
             conf_name = "the configuration file %s in the -datadir of %s" % (shown(conf), display)
     default_conf, default_datadir = system_defaults(net)
@@ -2734,6 +2734,13 @@ def carried_system_paths(net, display, value, own, sources, copied, paths, host)
         datadir = carried_system_path(net, datadir, "datadir", display, paths, host)
     else:
         datadir = None
+    # The old core would have made that conf on its next start (CreateNewConfigFile in
+    # src/init.cpp) and read it; the new unit would read its own instead.
+    if conf_name is not None and not os.path.lexists(conf):
+        raise UserError("the ExecStart= in %s has no -conf, and %s, the configuration file the core would have made "
+                        "there and read, does not exist, so the new unit would read %s instead; add -conf=<the "
+                        "file this node should read> to ExecStart= in %s, or make %s, then rerun the switch-over"
+                        % (display, shown(conf), default_conf, display, shown(conf)))
     if conf is not None and normalize_path(conf) != default_conf:
         conf = carried_system_path(net, conf, "conf", display, paths, host, datadir or default_datadir, conf_name)
     else:

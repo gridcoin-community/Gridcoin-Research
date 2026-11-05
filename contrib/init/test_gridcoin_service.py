@@ -3663,9 +3663,8 @@ class SwitchOverTests(ServiceTestBase):
         data = os.path.join(self.tmp.name, "data", "grc")
         os.makedirs(data)
         copy = os.path.join(self.paths.etc_systemd, "gridcoinresearchd.service")
-        default_conf, _ = svc.system_defaults(svc.NETWORKS["main"])
         # Without -conf the core read the conf in the datadir it started from: that one is carried
-        # when it is there, and otherwise the unit's own.
+        # when it is there. Otherwise the copy stays, as the new unit would read its own.
         for conf_there in (True, False):
             with self.subTest(conf_there=conf_there):
                 svc_rmtree(self.system_unit_dir())
@@ -3680,9 +3679,15 @@ class SwitchOverTests(ServiceTestBase):
                 self.write_text(copy, "[Service]\nType=forking\nExecStart=/usr/bin/gridcoinresearchd -daemonwait "
                                       "-datadir=%s\n" % data)
                 rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+                if not conf_there:
+                    self.assertEqual(rc, 1)
+                    self.assertIn("has no -conf", err)
+                    self.assertFalse(os.path.exists(os.path.join(self.system_unit_dir(), "50-gridcoin-service.conf")))
+                    self.assertTrue(os.path.exists(copy))
+                    continue
                 self.assertEqual(rc, 0, err)
                 text = self.dropin("gridcoinresearchd.service")
-                self.assertIn(" -conf=%s -datadir=%s " % (conf if conf_there else default_conf, data), text)
+                self.assertIn(" -conf=%s -datadir=%s " % (conf, data), text)
                 self.assertTrue(os.path.exists(copy + ".disabled-by-gridcoin-switchover"))
 
     def test_switch_over_carries_the_conf_a_testnet_core_read(self):
@@ -3762,7 +3767,8 @@ class SwitchOverTests(ServiceTestBase):
     def test_switch_over_refuses_a_testnet_override_that_ran_mainnet(self):
         # The testnet unit's command line without -testnet ran a mainnet node.
         data = os.path.join(self.tmp.name, "data", "grc")
-        os.makedirs(data)
+        os.makedirs(os.path.join(data, "testnet"))
+        self.write_text(os.path.join(data, "testnet", "gridcoinresearch.conf"), "rpcuser=x\n")
         override = self.system_override("-datadir=%s" % data, daemon="gridcointestnetd")
         state = self.write_state("system-core\n", network="test")
         rc, out, err = self.run_main("switch-over", "--state=" + state, "--network=test")
@@ -3896,6 +3902,34 @@ class SwitchOverTests(ServiceTestBase):
         self.assertIn("the configuration file %s in the -datadir of %s" % (conf, override), err)
         self.assertNotIn("-conf", err)
 
+    def test_switch_over_refuses_a_command_line_whose_datadir_has_no_conf(self):
+        # Without -conf the old core would have made the conf in its datadir and read it; the new
+        # unit would read its own instead.
+        data = os.path.join(self.tmp.name, "data", "grc")
+        os.makedirs(os.path.join(data, "testnet"))
+        for network, daemon, words, missing in (
+                ("main", "gridcoinresearchd", "-datadir=%s" % data, os.path.join(data, "gridcoinresearch.conf")),
+                ("test", "gridcointestnetd", "-testnet -datadir=%s" % data,
+                 os.path.join(data, "testnet", "gridcoinresearch.conf"))):
+            with self.subTest(network=network):
+                if network == "test":
+                    # The mainnet conf there is not the one a testnet core reads.
+                    self.write_text(os.path.join(data, "gridcoinresearch.conf"), "rpcuser=x\n")
+                svc_rmtree(self.system_unit_dir(daemon))
+                override = self.system_override(words, daemon=daemon)
+                self.host.calls.clear()
+                state = self.write_state("system-core\n", network=network)
+                rc, out, err = self.run_main("switch-over", "--state=" + state, "--network=" + network)
+                self.assertEqual(rc, 1)
+                self.assertIn("has no -conf, and %s, the configuration file the core would have made there and "
+                              "read, does not exist" % missing, err)
+                self.assertIn("add -conf=", err)
+                self.assertEqual(os.listdir(self.system_unit_dir(daemon)), ["override.conf"])
+                self.assertTrue(os.path.exists(override))
+                self.assertEqual(self.host.calls, [])
+                with open(state, encoding="utf8") as f:
+                    self.assertEqual(f.read(), "system-core\n")
+
     def test_switch_over_refuses_a_conf_others_can_write(self):
         # A conf anyone but root and the service account can write, or one in such a directory,
         # would let that account add options such as blocknotify= to the service.
@@ -3953,6 +3987,7 @@ class SwitchOverTests(ServiceTestBase):
         # its own.
         data = os.path.join(self.tmp.name, "data", "grc")
         os.makedirs(data)
+        self.write_text(os.path.join(data, "gridcoinresearch.conf"), "rpcuser=x\n")
         for words, expected in (("-datadir=%s//" % data.replace("/data/", "//data/"), " -datadir=%s " % data),
                                 ("-conf=%s -datadir=/var/lib//gridcoinresearchd/" % svc.system_defaults(
                                     svc.NETWORKS["main"])[0], None)):
@@ -4090,7 +4125,9 @@ class SwitchOverTests(ServiceTestBase):
         data = os.path.join(self.tmp.name, "data", "grc")
         os.makedirs(data)
         self.host.users["gridcointestnet"] = Passwd("gridcointestnet", self.uid + 1, "/var/lib/gridcointestnetd")
-        self.system_override("-testnet -datadir=%s" % data, daemon="gridcointestnetd")
+        # The unit's own conf, as one in this datadir would not be the account's.
+        conf, _ = svc.system_defaults(svc.NETWORKS["test"])
+        self.system_override("-testnet -conf=%s -datadir=%s" % (conf, data), daemon="gridcointestnetd")
         rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n", network="test"),
                                      "--network=test")
         self.assertEqual(rc, 0, err)

@@ -691,6 +691,8 @@ class NewsTests(unittest.TestCase):
             # A full copy left in place is the unit still, and runs as it did.
             self.assertIn("keeps running on its old command line", news, net["tree"])
             self.assertNotIn("Until then the service does not start", news, net["tree"])
+            # A command line without -conf whose datadir has no conf is left too.
+            self.assertIn("with no -conf when its datadir has no", news, net["tree"])
 
 
 def maintainer_scripts():
