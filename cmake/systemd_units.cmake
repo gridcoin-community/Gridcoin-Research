@@ -2,17 +2,29 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://opensource.org/licenses/mit-license.php.
 #
-# Generates the systemd units, the sysusers.d entry and the tmpfiles.d entry from
+# Generates the systemd units, the sysusers.d entry and the tmpfiles.d entries from
 # the templates in contrib/init for one network, and installs them with the
-# autounlock helper. Included from the daemon install block in src/CMakeLists.txt
-# on Linux, after GNUInstallDirs.
+# autounlock helper and gridcoin-service. Included from the daemon install block in
+# src/CMakeLists.txt on every UNIX but macOS, after GNUInstallDirs; it installs
+# nothing of systemd's except on Linux.
 #
 # The templates name the network only through the GRC_* variables set below, so
 # a mainnet and a testnet package come from the same files.
 
 set(GRC_UNIT_NETWORK "main" CACHE STRING "Network the generated systemd units serve (main or test)")
 set_property(CACHE GRC_UNIT_NETWORK PROPERTY STRINGS main test)
-option(INSTALL_SYSTEMD_UNITS "Install the systemd units, sysusers.d and tmpfiles.d entries" ON)
+# systemd is Linux only, so the default is ON there and OFF elsewhere (the BSDs).
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(_grc_systemd_default ON)
+else()
+    set(_grc_systemd_default OFF)
+endif()
+option(INSTALL_SYSTEMD_UNITS "Install the systemd units, sysusers.d and tmpfiles.d entries (Linux only)"
+       ${_grc_systemd_default})
+if(INSTALL_SYSTEMD_UNITS AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(WARNING "INSTALL_SYSTEMD_UNITS is ignored on ${CMAKE_SYSTEM_NAME}: systemd is Linux only")
+    set(INSTALL_SYSTEMD_UNITS OFF)
+endif()
 option(INSTALL_SYSTEMD_AUTOUNLOCK "Install the autounlock helper and its units (systemd 251 or later)" ON)
 set(GRC_SYSTEMD_UNITDIR "lib/systemd/system" CACHE STRING "Unit directory, relative to CMAKE_INSTALL_PREFIX")
 set(GRC_SYSUSERSDIR "lib/sysusers.d" CACHE STRING "sysusers.d directory, relative to CMAKE_INSTALL_PREFIX")
