@@ -403,7 +403,7 @@ endif()
 target_link_libraries(gridcoin_util PUBLIC ${LIBGRIDCOIN_CRYPTO})
 
 # The Unix socket client for the stake-only autounlock helper (Linux service units).
-if(UNIX AND NOT APPLE)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(gridcoin_util PRIVATE wallet/autounlock_socket.cpp)
 endif()
 

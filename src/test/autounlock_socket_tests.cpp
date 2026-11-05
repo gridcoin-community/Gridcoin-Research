@@ -5,13 +5,17 @@
 #ifdef __linux__
 
 #include "init.h"
+#include "node/shutdown.h"
+#include "test/state_guard.h"
 #include "util/system.h"
+#include "wallet/autounlock.h"
 #include "wallet/autounlock_socket.h"
 
 #include <boost/test/unit_test.hpp>
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -46,14 +50,25 @@ struct TempDir
     }
 };
 
+//! Requests a shutdown while it lives and clears the request however the case exits.
+struct ShutdownForThisCase
+{
+    ShutdownForThisCase() { SetShutdownRequested(); }
+    ~ShutdownForThisCase() { AbortShutdown(); }
+};
+
 //! A helper stand-in. It binds the socket after bind_delay, accepts connections, writes the reply to each one and
-//! closes it. It stops after max_connections or when asked to.
+//! closes it. It stops after max_connections or when asked to. With a drip interval it instead sends one byte per
+//! interval and never closes, until the client goes away. It sets flags only, which the main thread checks, because
+//! Boost.Test assertions are not safe on this thread.
 class Listener
 {
 public:
     Listener(const fs::path& path, std::string reply, int max_connections,
-             std::chrono::milliseconds bind_delay = std::chrono::milliseconds(0))
-        : m_path(path), m_reply(std::move(reply)), m_max(max_connections), m_bind_delay(bind_delay)
+             std::chrono::milliseconds bind_delay = std::chrono::milliseconds(0),
+             std::chrono::milliseconds drip_interval = std::chrono::milliseconds(0))
+        : m_path(path), m_reply(std::move(reply)), m_max(max_connections), m_bind_delay(bind_delay),
+          m_drip_interval(drip_interval)
     {
         if (bind_delay.count() == 0) {
             Bind();
@@ -73,18 +88,21 @@ public:
     }
 
     int Accepted() const { return m_accepted; }
+    bool Bound() const { return m_bound; }
 
 private:
     void Bind()
     {
         m_fd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-        BOOST_REQUIRE(m_fd >= 0);
+        if (m_fd < 0) {
+            return;
+        }
+
         sockaddr_un address;
         std::memset(&address, 0, sizeof(address));
         address.sun_family = AF_UNIX;
         std::memcpy(address.sun_path, m_path.c_str(), m_path.native().size());
-        BOOST_REQUIRE_EQUAL(::bind(m_fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)), 0);
-        BOOST_REQUIRE_EQUAL(::listen(m_fd, 8), 0);
+        m_bound = ::bind(m_fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0 && ::listen(m_fd, 8) == 0;
     }
 
     void Run()
@@ -94,7 +112,7 @@ private:
             Bind();
         }
 
-        while (!m_stop && m_accepted < m_max) {
+        while (m_bound && !m_stop && m_accepted < m_max) {
             pollfd pfd{m_fd, POLLIN, 0};
 
             if (::poll(&pfd, 1, 20) <= 0) {
@@ -109,7 +127,11 @@ private:
 
             ++m_accepted;
 
-            if (!m_reply.empty()) {
+            if (m_drip_interval.count() > 0) {
+                while (!m_stop && ::send(conn, "x", 1, MSG_NOSIGNAL) == 1) {
+                    std::this_thread::sleep_for(m_drip_interval);
+                }
+            } else if (!m_reply.empty()) {
                 size_t sent = 0;
 
                 while (sent < m_reply.size()) {
@@ -131,7 +153,9 @@ private:
     std::string m_reply;
     int m_max;
     std::chrono::milliseconds m_bind_delay;
+    std::chrono::milliseconds m_drip_interval;
     int m_fd{-1};
+    std::atomic<bool> m_bound{false};
     std::atomic<int> m_accepted{0};
     std::atomic<bool> m_stop{false};
     std::thread m_thread;
@@ -153,6 +177,7 @@ BOOST_AUTO_TEST_CASE(fetch_reads_passphrase_to_eof)
     TempDir dir;
     const fs::path p = dir.path / "au.sock";
     Listener listener(p, "secret", 1);
+    BOOST_REQUIRE(listener.Bound());
 
     const auto value = autounlock::FetchFromSocket(p, QuickParams());
     BOOST_REQUIRE(value.has_value());
@@ -164,6 +189,7 @@ BOOST_AUTO_TEST_CASE(connected_fd_is_cloexec)
     TempDir dir;
     const fs::path p = dir.path / "au.sock";
     Listener listener(p, "secret", 1);
+    BOOST_REQUIRE(listener.Bound());
 
     std::string err;
     const int fd = autounlock::ConnectAutoUnlockSocket(p, err);
@@ -206,20 +232,120 @@ BOOST_AUTO_TEST_CASE(fetch_succeeds_when_socket_appears_late)
     TempDir dir;
     const fs::path p = dir.path / "au.sock";
 
-    // The socket does not exist for the first attempts, which fail with ENOENT; the waits (50, 100, 200 ms) outlast
-    // the bind delay.
+    // The socket is bound only after 200 ms. The direct connect below asserts that nothing is there before that
+    // (connect fails with errno 2, ENOENT), and the waits between attempts (50, 100, 200 ms) outlast the bind delay,
+    // so the value can arrive only through a retry.
     autounlock::SocketFetchParams params = QuickParams();
     params.first_delay = std::chrono::milliseconds(50);
 
     std::string err;
     BOOST_CHECK_EQUAL(autounlock::ConnectAutoUnlockSocket(p, err), -1);
     BOOST_CHECK(err.find("connect failed") == 0);
+    BOOST_CHECK(err.find("(2)") != std::string::npos || err.find("No such file") != std::string::npos);
 
-    Listener listener(p, "secret", 1, std::chrono::milliseconds(120));
+    Listener listener(p, "secret", 1, std::chrono::milliseconds(200));
 
     const auto value = autounlock::FetchFromSocket(p, params);
+    BOOST_CHECK(listener.Bound());
+    BOOST_CHECK_EQUAL(listener.Accepted(), 1);
     BOOST_REQUIRE(value.has_value());
     BOOST_CHECK(*value == "secret");
+}
+
+BOOST_AUTO_TEST_CASE(slow_drip_cannot_extend_the_deadline)
+{
+    TempDir dir;
+    const fs::path p = dir.path / "au.sock";
+    Listener listener(p, "", 100, std::chrono::milliseconds(0), std::chrono::milliseconds(300));
+
+    autounlock::SocketFetchParams params = QuickParams();
+    params.attempts = 2;
+
+    const auto start = std::chrono::steady_clock::now();
+    const auto value = autounlock::FetchFromSocket(p, params);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+
+    BOOST_CHECK(listener.Bound());
+    BOOST_CHECK(!value.has_value());
+    BOOST_CHECK_EQUAL(listener.Accepted(), 2);
+    // two attempts of 1 s each and one 10 ms wait, with room for a slow machine
+    BOOST_CHECK(elapsed < std::chrono::seconds(4));
+    BOOST_CHECK(elapsed >= std::chrono::seconds(2));
+}
+
+BOOST_AUTO_TEST_CASE(dispatcher_uses_the_socket_option)
+{
+    TempDir dir;
+    const fs::path p = dir.path / "au.sock";
+    Listener listener(p, "secret", 100);
+
+    // without the option there is no backend
+    BOOST_CHECK(!FetchAutoUnlockPassphrase());
+    BOOST_CHECK_EQUAL(listener.Accepted(), 0);
+
+    {
+        grc_test::ForcedArgGuard guard("autounlocksocket", p.string());
+        const auto value = FetchAutoUnlockPassphrase();
+        BOOST_REQUIRE(value.has_value());
+        BOOST_CHECK(*value == "secret");
+    }
+
+    BOOST_CHECK(!FetchAutoUnlockPassphrase());
+}
+
+BOOST_AUTO_TEST_CASE(path_too_long_refused)
+{
+    TempDir dir;
+    Listener listener(dir.path / "au.sock", "secret", 100);
+
+    const fs::path longpath = fs::path("/tmp") / std::string(sizeof(sockaddr_un::sun_path), 'a');
+
+    std::string err;
+    BOOST_CHECK_EQUAL(autounlock::ConnectAutoUnlockSocket(longpath, err), -1);
+    BOOST_CHECK_EQUAL(err, "path too long");
+    BOOST_CHECK(!autounlock::FetchFromSocket(longpath, QuickParams()).has_value());
+    BOOST_CHECK_EQUAL(listener.Accepted(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(shutdown_makes_no_attempt)
+{
+    TempDir dir;
+    const fs::path p = dir.path / "au.sock";
+    Listener listener(p, "secret", 100);
+
+    {
+        ShutdownForThisCase shutdown;
+        BOOST_CHECK(!autounlock::FetchFromSocket(p, QuickParams()).has_value());
+    }
+
+    BOOST_CHECK_EQUAL(listener.Accepted(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(shutdown_during_the_read_ends_the_fetch)
+{
+    TempDir dir;
+    const fs::path p = dir.path / "au.sock";
+    Listener listener(p, "", 100, std::chrono::milliseconds(0), std::chrono::milliseconds(300));
+
+    // a long receive timeout, so that only the shutdown can end the read quickly
+    autounlock::SocketFetchParams params = QuickParams();
+    params.receive_timeout = std::chrono::seconds(30);
+
+    std::thread requester([]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        SetShutdownRequested();
+    });
+
+    const auto start = std::chrono::steady_clock::now();
+    const auto value = autounlock::FetchFromSocket(p, params);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    requester.join();
+    AbortShutdown();
+
+    BOOST_CHECK(!value.has_value());
+    // no further attempt after the shutdown
+    BOOST_CHECK_EQUAL(listener.Accepted(), 1);
+    BOOST_CHECK(elapsed < std::chrono::seconds(3));
 }
 
 BOOST_AUTO_TEST_CASE(option_is_command_line_only)

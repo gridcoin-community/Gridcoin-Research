@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cstdint>
 #include <cstring>
 
 #include <poll.h>
@@ -55,7 +56,7 @@ bool WaitUnlessShutdown(std::chrono::milliseconds delay)
 
 //! Reads to end of file into the secure string, through a stack buffer that is cleansed. Returns an empty string on
 //! success and the failure reason otherwise. Neither the bytes nor a copy of them is ever in a std::string.
-std::string ReadReply(int fd, const SocketFetchParams& params, SecureString& reply)
+std::string ReadReply(int fd, const SocketFetchParams& params, SecureString& reply, bool& stopped)
 {
     const auto deadline = std::chrono::steady_clock::now() + params.receive_timeout;
     char buffer[256];
@@ -65,6 +66,12 @@ std::string ReadReply(int fd, const SocketFetchParams& params, SecureString& rep
     reply.reserve(params.max_bytes + 1);
 
     while (true) {
+        if (ShutdownRequested()) {
+            stopped = true;
+            reason = "shutdown";
+            break;
+        }
+
         const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
                     deadline - std::chrono::steady_clock::now());
 
@@ -74,7 +81,8 @@ std::string ReadReply(int fd, const SocketFetchParams& params, SecureString& rep
         }
 
         pollfd pfd{fd, POLLIN, 0};
-        const int ready = ::poll(&pfd, 1, static_cast<int>(remaining.count()));
+        // The wait is cut into slices of at most 100 ms so that a shutdown request is seen within that time.
+        const int ready = ::poll(&pfd, 1, static_cast<int>(std::min<int64_t>(remaining.count(), 100)));
 
         if (ready < 0) {
             if (errno == EINTR) {
@@ -86,8 +94,8 @@ std::string ReadReply(int fd, const SocketFetchParams& params, SecureString& rep
         }
 
         if (ready == 0) {
-            reason = "timed out";
-            break;
+            // the deadline is checked at the top of the loop
+            continue;
         }
 
         // one byte more than the limit is enough to know that the reply is too long
@@ -104,6 +112,8 @@ std::string ReadReply(int fd, const SocketFetchParams& params, SecureString& rep
         }
 
         if (n == 0) {
+            // The protocol carries no length, so end of file after a partial reply is taken as the whole reply. A
+            // truncated passphrase then fails the unlock, which does no harm.
             if (reply.empty()) {
                 reason = "the helper refused (see journalctl -u <helper unit>)";
             }
@@ -185,11 +195,20 @@ std::optional<SecureString> FetchFromSocket(const fs::path& socket_path, const S
 
         std::string reason;
         SecureString reply;
+        // An AF_UNIX connect blocks only when the listen backlog of the socket is full, so it is not cut short by a
+        // shutdown request.
         const int fd = ConnectAutoUnlockSocket(socket_path, reason);
 
         if (fd >= 0) {
-            reason = ReadReply(fd, params, reply);
+            bool stopped = false;
+            reason = ReadReply(fd, params, reply, stopped);
             ::close(fd);
+
+            if (stopped) {
+                LogPrintf("autounlock: attempt %d of %d stopped: shutdown; the wallet stays locked", attempt,
+                          params.attempts);
+                return std::nullopt;
+            }
 
             if (reason.empty()) {
                 return reply;
