@@ -729,6 +729,15 @@ def list_dir(dir_fd):
         os.close(fd)
 
 
+def list_entries(dir_fd, display):
+    """list_dir for a walk: a directory that can be read but not searched, or not listed at all,
+    raises TreeError naming it."""
+    try:
+        return list_dir(dir_fd)
+    except OSError as e:
+        raise TreeError("%r: %s" % (display, e.strerror)) from None
+
+
 def open_dir(name, dir_fd=None, uids=None, display=None):
     """Open a directory without following a symlink in its last component, and check with fstat
     that it is a directory owned by one of uids (any owner when None). FileNotFoundError passes
@@ -811,7 +820,7 @@ def open_entry(dir_fd, name, display, dev=None):
 
 
 def stream_dir(tar, dir_fd, prefix, exclude_top, dev):
-    for name in sorted(list_dir(dir_fd)):
+    for name in sorted(list_entries(dir_fd, prefix.rstrip("/") or ".")):
         if not prefix and name in exclude_top:
             continue
         rel = prefix + name
@@ -866,7 +875,8 @@ def extract_stream(inp, dst_dir, created=None):
     the tar stream inp, as new inodes: files 0600 and directories 0700, each created exclusively
     and without following a symlink, inside a directory the same stream created. A member of any
     other type, or with an absolute or unnormalised name, raises TreeError. Each top-level name is
-    appended to created (a list) once it exists, so the names are known after a failure too.
+    appended to created (a list) just before its entry is made, and removed again if that fails,
+    so the names are known after a failure too.
     Returns the number of file bytes written."""
     top = open_dir(dst_dir) if isinstance(dst_dir, str) else dst_dir
     dirs = {"": top}
@@ -878,15 +888,24 @@ def extract_stream(inp, dst_dir, created=None):
                 parent_fd = dirs.get(parent)
                 if parent_fd is None:
                     raise TreeError("%r: its directory is not earlier in the stream" % member.name)
+                # A top-level name is recorded before its entry exists, so that a writer killed in
+                # between leaves nothing its cleanup does not know of; a create that fails takes
+                # the name off again.
+                record = not parent and created is not None
+                if record:
+                    created.append(base)
+                try:
+                    if member.isdir():
+                        os.mkdir(base, 0o700, dir_fd=parent_fd)
+                    else:
+                        fd = os.open(base, NEW_FILE_FLAGS, 0o600, dir_fd=parent_fd)
+                except BaseException:
+                    if record:
+                        created.remove(base)
+                    raise
                 if member.isdir():
-                    os.mkdir(base, 0o700, dir_fd=parent_fd)
-                    if not parent and created is not None:
-                        created.append(base)
                     dirs[member.name] = open_dir(base, dir_fd=parent_fd, display=member.name)
                     continue
-                fd = os.open(base, NEW_FILE_FLAGS, 0o600, dir_fd=parent_fd)
-                if not parent and created is not None:
-                    created.append(base)
                 with os.fdopen(fd, "wb") as f:
                     data = tar.extractfile(member)
                     while True:
@@ -1014,31 +1033,42 @@ def empty_dir(dir_fd, keep):
 
 
 class CreatedNames(list):
-    """The top-level names a writer created. Each is also written, as it comes, to record_fd (one
-    JSON string per line), so the parent knows them should the writer die without a report."""
+    """The top-level names a writer created. Each change is also written, as it comes, to
+    record_fd (one JSON ["+" or "-", name] per line), so the parent knows the names should the
+    writer die without a report."""
 
     def __init__(self, record_fd):
         super().__init__()
         self.record_fd = record_fd
 
-    def append(self, name):
-        super().append(name)
-        data = (json.dumps(name) + "\n").encode("ascii")
+    def write(self, change, name):
+        data = (json.dumps([change, name]) + "\n").encode("ascii")
         while data:
             data = data[os.write(self.record_fd, data):]
 
+    def append(self, name):
+        super().append(name)
+        self.write("+", name)
+
+    def remove(self, name):
+        super().remove(name)
+        self.write("-", name)
+
 
 def recorded_names(record_fd):
-    """The names a dead writer recorded; a line cut short by its death is skipped."""
+    """The names a dead writer had recorded and not taken off again; a line cut short by its death
+    is skipped."""
     data = os.pread(record_fd, os.fstat(record_fd).st_size, 0)
     names = []
     for line in data.split(b"\n"):
         try:
-            name = json.loads(line.decode("ascii"))
-        except ValueError:
+            change, name = json.loads(line.decode("ascii"))
+        except (ValueError, TypeError):
             continue
-        if isinstance(name, str):
+        if change == "+":
             names.append(name)
+        elif change == "-" and name in names:
+            names.remove(name)
     return names
 
 
@@ -1379,7 +1409,7 @@ def quarantine_files(src_fd, src_display, owner_uid, q_fd, exclude_top=frozenset
     dev = os.fstat(src_fd).st_dev
 
     def walk(dir_fd, prefix, q_parent):
-        for name in sorted(list_dir(dir_fd)):
+        for name in sorted(list_entries(dir_fd, prefix.rstrip("/") or ".")):
             rel = prefix + name
             if not prefix and name in exclude_top:
                 continue

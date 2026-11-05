@@ -1055,6 +1055,63 @@ class CopyTests(ServiceTestBase):
             with self.assertRaisesRegex(svc.DirtyCopyError, "removing.*failed.*may be left: a\\Z"):
                 self.copy()
 
+    def test_a_writer_killed_right_after_creating_has_it_removed(self):
+        # The name is recorded before the entry exists, so the cleanup knows every entry.
+        real_mkdir, real_open = os.mkdir, os.open
+
+        def mkdir_then_die(name, mode=0o777, *, dir_fd=None):
+            real_mkdir(name, mode, dir_fd=dir_fd)
+            if name == "a":
+                os._exit(9)
+
+        def open_then_die(name, flags, mode=0o777, *, dir_fd=None):
+            fd = real_open(name, flags, mode, dir_fd=dir_fd)
+            if name == "f" and flags & os.O_CREAT:
+                os._exit(9)
+            return fd
+
+        for patch, files in ((mock.patch.object(svc.os, "mkdir", mkdir_then_die), {"a/x": b"1"}),
+                             (mock.patch.object(svc.os, "open", open_then_die), {"f": b"1"})):
+            svc_rmtree(self.src)
+            svc_rmtree(self.dst)
+            write_tree(self.src, files)
+            write_tree(self.dst, {"keep": b"k"})
+            with patch:
+                with self.assertRaisesRegex(svc.CopyError, "without a report"):
+                    self.copy()
+            self.assertEqual(read_tree(self.dst), {"keep": b"k"})
+
+    def test_a_name_that_could_not_be_created_is_not_cleaned_up(self):
+        # wallet.dat exists in the target: its create fails, and the writer then dies. The record
+        # drops the name again, so the cleanup leaves the target's own file alone.
+        write_tree(self.src, {"wallet.dat": b"w"})
+        write_tree(self.dst, {"wallet.dat": b"theirs"})
+
+        def dies(*args, **kwargs):
+            os._exit(9)
+
+        with mock.patch.object(svc, "remove_created", dies):
+            with self.assertRaisesRegex(svc.CopyError, "without a report"):
+                self.copy()
+        self.assertEqual(read_tree(self.dst), {"wallet.dat": b"theirs"})
+
+    def test_a_directory_that_cannot_be_searched_is_named(self):
+        write_tree(self.src, {"blocks/blk0001.dat": b"1", "wallet.dat": b"w"})
+        blocks = os.path.join(self.src, "blocks")
+        os.chmod(blocks, 0o600)
+        self.addCleanup(os.chmod, blocks, 0o700)
+        with self.assertRaisesRegex(svc.TreeError, "'blocks'"):
+            svc.stream_tree(self.src, io.BytesIO(), set())
+        with self.assertRaisesRegex(svc.TreeError, "'blocks'"):
+            self.copy()
+        self.assertEqual(os.listdir(self.dst), [])
+        src_fd = os.open(self.src, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, src_fd)
+        q_fd = os.open(self.dst, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, q_fd)
+        with self.assertRaisesRegex(svc.TreeError, "'blocks'"):
+            svc.quarantine_files(src_fd, self.src, os.getuid(), q_fd)
+
     def test_extract_rejects_traversal_names(self):
         work = os.path.join(self.tmp.name, "work")
         # Each case and the check that must refuse it. The names are refused by name before any
