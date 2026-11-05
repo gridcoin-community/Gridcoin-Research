@@ -19,6 +19,7 @@ import importlib.util
 import io
 import json
 import os
+import posixpath
 import re
 import shutil
 import socket
@@ -4396,6 +4397,26 @@ class SwitchOverTests(ServiceTestBase):
         rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
         self.assertEqual(rc, 0, err)
         self.assertIn(" -datadir=%s " % data, self.dropin("gridcoinresearchd.service"))
+
+    def test_switch_over_takes_the_packaged_unit_under_lib_for_its_own(self):
+        # On a host without a merged /usr, dh_installsystemd (compat 13) may install the unit under
+        # /lib/systemd/system, which is then not /usr/lib/systemd/system by realpath either.
+        self.paths = dataclasses.replace(self.paths, packaged_units="/usr/lib/systemd/system")
+        unit = "gridcoinresearchd.service"
+        for fragment, accepted in (("/lib/systemd/system/" + unit, True), ("/usr/lib/systemd/system/" + unit, True),
+                                   ("/usr/local/lib/systemd/system/" + unit, False)):
+            with self.subTest(fragment=fragment):
+                svc_rmtree(self.system_unit_dir())
+                self.write_system_dropin("override.conf", "[Service]\nUser=gridcoin\n")
+                self.host.fragments[unit] = fragment
+                # A host where /lib is a directory of its own, not a link to /usr/lib.
+                with mock.patch.object(svc.os.path, "realpath", lambda p, *a, **k: posixpath.normpath(p)):
+                    rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+                if accepted:
+                    self.assertEqual(rc, 0, err)
+                else:
+                    self.assertEqual(rc, 1)
+                    self.assertIn("systemd loads %s from %s" % (unit, fragment), err)
 
     def test_switch_over_warns_when_the_carried_datadir_is_another_accounts(self):
         data = os.path.join(self.tmp.name, "data", "grc")

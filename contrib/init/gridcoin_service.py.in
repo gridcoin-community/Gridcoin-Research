@@ -2913,7 +2913,8 @@ def refuse_unloadable_unit(net, paths, copy, masked):
 
 def refuse_unseen_unit_files(net, host, paths, copy, masked):
     """Refuse when systemd loads the system unit other than the switch-over reads it, as systemctl
-    show reports: from a file other than the packaged unit or its copy in /etc/systemd/system, or
+    show reports: from a file other than the packaged unit (in /usr/lib/systemd/system or, without a
+    merged /usr, /lib/systemd/system) or its copy in /etc/systemd/system, or
     with a drop-in from another directory (/run, /usr/local/lib, /usr/lib, a type-wide service.d)
     that sets a key the switch-over reads or moves aside (OLD_UNIT_KEYS) or one of MOUNT_KEYS. The
     packaged unit's own drop-ins are its own. What systemd reports is of its last daemon-reload, so
@@ -2923,14 +2924,19 @@ def refuse_unseen_unit_files(net, host, paths, copy, masked):
     if need_reload:
         raise UserError("the files of %s changed since systemd last read them; run systemctl daemon-reload, then "
                         "rerun the switch-over" % unit)
-    packaged = os.path.join(paths.packaged_units, unit)
+    # Without a merged /usr, dh_installsystemd (compat 13) may install the unit under
+    # /lib/systemd/system, which is then another directory than /usr/lib/systemd/system.
+    packaged_dirs = [paths.packaged_units]
+    if paths.packaged_units.startswith("/usr/lib/"):
+        packaged_dirs.append("/lib/" + paths.packaged_units[len("/usr/lib/"):])
+    packaged = [os.path.join(directory, unit) for directory in packaged_dirs]
     if not masked:
-        known = [packaged] + ([copy] if copy is not None else [])
+        known = packaged + ([copy] if copy is not None else [])
         if not fragment or os.path.realpath(fragment) not in [os.path.realpath(path) for path in known]:
             raise UserError("systemd loads %s from %s, not from %s; remove that file or move it to %s, run systemctl "
                             "daemon-reload, then rerun the switch-over"
                             % (unit, fragment or "no file", " or ".join(known), os.path.join(paths.etc_systemd, unit)))
-    read_here = [os.path.realpath(dropin_dir(paths, unit)), os.path.realpath(packaged + ".d")]
+    read_here = [os.path.realpath(dropin_dir(paths, unit))] + [os.path.realpath(path + ".d") for path in packaged]
     for path in dropins:
         if os.path.realpath(os.path.dirname(path)) in read_here:
             continue
