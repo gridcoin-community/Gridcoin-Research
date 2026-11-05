@@ -1158,6 +1158,56 @@ BOOST_AUTO_TEST_CASE(wire_capability_kind_out_of_range_is_refused)
     wallet.reset();
 }
 
+// The automatic backups made before an encryption come back over the real wire, so the GUI
+// of the split build can name them. Nothing is deleted.
+BOOST_AUTO_TEST_CASE(wire_encryptwallet_carries_the_pre_encryption_backups)
+{
+    // Served without a ServeInit, the wallet is bound to no connection, so the encryption
+    // stops nothing; the real stop is replaced anyway, should that change.
+    interfaces::SetEncryptionShutdownFnForTesting([] {});
+    struct RestoreShutdownFn {
+        ~RestoreShutdownFn() { interfaces::SetEncryptionShutdownFnForTesting({}); }
+    } restore_shutdown_fn;
+
+    const TempIpcDir backup_dir;
+    grc_test::ForcedArgGuard backupdir_arg("backupdir", backup_dir.dir.string());
+
+    const fs::path first = backup_dir.dir / "wallet.dat-2026-01-01T00-00-00Z";
+    const fs::path second = backup_dir.dir / "wallet.dat-2026-02-01T00-00-00Z-beacon";
+    for (const fs::path& path : {first, second}) {
+        fsbridge::ofstream stream(path);
+        stream << "ipc_wire_handshake_tests\n";
+    }
+
+    CWallet plain;
+    {
+        CKey key;
+        key.MakeNewKey(true);
+        LOCK(plain.cs_wallet);
+        BOOST_REQUIRE(plain.AddKey(key));
+    }
+
+    WireLink link([&plain](int) -> std::unique_ptr<interfaces::Init> {
+        return std::make_unique<WalletServingInit>(&plain);
+    });
+
+    std::unique_ptr<interfaces::Wallet> wallet = link.client->makeWallet();
+    BOOST_REQUIRE(wallet != nullptr);
+
+    BOOST_REQUIRE(wallet->encryptWallet(SecureString("over the wire")));
+    BOOST_CHECK(plain.IsCrypted());
+
+    const std::vector<std::string> backups = wallet->getPreEncryptionBackups();
+
+    BOOST_REQUIRE_EQUAL(backups.size(), 2U);
+    BOOST_CHECK_EQUAL(backups[0], first.string());
+    BOOST_CHECK_EQUAL(backups[1], second.string());
+    BOOST_CHECK(fs::exists(first));
+    BOOST_CHECK(fs::exists(second));
+
+    wallet.reset();
+}
+
 // A short passphrase read off the wire lands in a secure buffer of its own, and the wire bytes
 // are cleansed.
 BOOST_AUTO_TEST_CASE(secure_string_read_hook_reserves_secure_capacity)

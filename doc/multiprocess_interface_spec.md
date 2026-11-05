@@ -516,6 +516,10 @@ state (`getLockState -> WalletLockState`, `isUnlockedForStakingOnly`,
 `lockWallet`, `unlockWallet`, `changeWalletPassphrase` — all taking a
 `SecureString` passphrase, §7; and `restrictToStakingOnly`, which narrows an
 existing unlock to staking-only without one, and has no production callers).
+After `encryptWallet`, `getPreEncryptionBackups` (schema major 5) returns the
+paths of the core's automatic wallet backups made before the encryption
+(`GRC::ListAutomaticWalletBackupsBefore`), which still hold the unencrypted keys;
+the GUI names them in the message after the encryption, and nothing deletes them.
 
 Per-operation capabilities (schema major 5): `beginElevation(passphrase, kind)`
 verifies the passphrase and begins a capability for one `CapabilityKind`

@@ -25,6 +25,7 @@
 #include "chain.h"
 #include "test/chain_setup.h"
 #include <optional>
+#include <regex>
 #include <set>
 #include <tuple>
 #include <stdexcept>
@@ -649,6 +650,25 @@ BOOST_AUTO_TEST_CASE(dumpcontracts_refuses_a_height_off_the_chain)
         BOOST_CHECK_MESSAGE(!fs::exists(path), named);
         fs::remove(path, ec);
     }
+}
+
+// The message for a missing or unusable rpcpassword names the configuration file and says
+// which settings to add. It suggests no password: the message goes to the log, and a
+// password suggested there is one anybody who reads the log knows.
+BOOST_AUTO_TEST_CASE(missing_password_message_has_no_password)
+{
+    const fs::path conf = fs::path("etc") / "gridcoin" / "gridcoinresearch.conf";
+
+    const std::string message = MissingRpcPasswordMessage(conf);
+    BOOST_TEST_MESSAGE(message);
+
+    BOOST_CHECK(message.find(conf.string()) != std::string::npos);
+    BOOST_CHECK(message.find("rpcuser") != std::string::npos);
+    BOOST_CHECK(message.find("rpcpassword") != std::string::npos);
+
+    // A base58 password as GenerateRpcPassword makes one is 43 or 44 characters.
+    static const std::regex generated{"rpcpassword=[1-9A-HJ-NP-Za-km-z]{40,}"};
+    BOOST_CHECK(!std::regex_search(message, generated));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

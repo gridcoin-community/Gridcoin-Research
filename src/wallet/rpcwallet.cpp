@@ -3942,13 +3942,16 @@ UniValue walletlock(const UniValue& params)
 static const RPCHelpMan encryptwallet_help{
     "encryptwallet",
     "Encrypts the wallet with the given passphrase. "
-    "After encryption, the node will shut down and must be restarted.",
+    "After encryption, the node will shut down and must be restarted. "
+    "Backups made before the encryption still hold the unencrypted keys: the result names "
+    "the automatic ones in the backup directory, and nothing deletes them.",
     {
         {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
             "The passphrase used to encrypt the wallet. Must be non-empty."},
     },
     RPCResult{RPCResult::Type::STR, "message",
-        "Confirmation message; the daemon stops after returning."},
+        "Confirmation message, then a warning that names the automatic wallet backups made before "
+        "the encryption; the daemon stops after returning."},
     RPCExamples{
         HelpExampleCli("encryptwallet", "\"mypassphrase\"") +
         HelpExampleRpc("encryptwallet", "\"mypassphrase\"")},
@@ -3975,7 +3978,16 @@ static UniValue EncryptWalletBody(const SecureString& strWalletPass, const UniVa
     // slack space in .dat files; that is bad if the old data is
     // unencrypted private keys. So:
     StartShutdown();
-    return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet. The keypool has been flushed and a new HD seed was generated (if you are using HD). You need to make a new backup.";
+
+    // The automatic backups made before the encryption hold the unencrypted keys, and are
+    // named so that the user can delete them by hand; nothing here deletes one. Backup names
+    // carry whole seconds, so one named in the second the encryption finished counts as made
+    // before it.
+    const fs::path backup_dir = GRC::GetBackupPath();
+    const std::vector<fs::path> found = GRC::ListAutomaticWalletBackupsBefore(backup_dir, GetTime() + 1);
+
+    return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet. The keypool has been flushed and a new HD seed was generated (if you are using HD). You need to make a new backup.\n"
+           + GRC::PreEncryptionBackupWarning(backup_dir, found);
 }
 
 std::vector<SecureString> ReadPassphraseParams(const std::string& method, const UniValue& params)

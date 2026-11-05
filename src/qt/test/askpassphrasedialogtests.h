@@ -46,6 +46,9 @@ private slots:
     void encryptionMessageOutlivesTheCore();
     void terminationSignalDoesNotWaitForTheEncryptionMessage();
     void encryptionMessageSaysWhenTheCoreStops();
+    void encryptionMessageListsTheBackupsBeforeIt();
+    void encryptionMessageInTheMonolithListsTheBackupsBeforeIt();
+    void encryptionMessageWithManyBackupsListsThemAllInItsDetails();
     void sessionEndDoesNotWaitForTheEncryptionMessage();
     void sessionEndInTheMonolithShutsTheNodeDown();
 

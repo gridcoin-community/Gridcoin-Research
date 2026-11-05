@@ -157,6 +157,12 @@ namespace ipc {
 //!   FileSource of what dumpwallet or dumpcontracts writes, the second a
 //!   FileSink for what importwallet or parseaccrualsnapshotfile reads. The
 //!   core puts its own value where the command takes its file.
+//! - Wallet gained `getPreEncryptionBackups @43` (wallet.capnp), the paths of
+//!   the core's automatic wallet backups made before an encryptWallet() on the
+//!   same interface, which the GUI names after the encryption. A method of its
+//!   own: libmultiprocess maps `result` only as the last result field, so the
+//!   list could not follow it in encryptWallet's results, and putting it first
+//!   would renumber `result`.
 //!
 //! The new methods alone would be additive, which is why the reason for the
 //! major is the other direction. A GUI and a node of different majors disagree

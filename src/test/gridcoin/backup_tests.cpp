@@ -4,13 +4,18 @@
 
 #include "gridcoin/backup.h"
 #include "init.h"
+#include "node/shutdown.h"
+#include "rpc/server.h"
+#include "test/staking_test_peers.h"
 #include "test/state_guard.h"
 #include "test/wallet_file_placeholder.h"
 #include "wallet/db.h"
 #include "wallet/wallet.h"
 #include <fs.h>
 #include <logging.h>
+#include <univalue.h>
 #include <util/system.h>
+#include <util/time.h>
 
 #ifndef WIN32
 #include <sys/stat.h>
@@ -332,5 +337,202 @@ BOOST_AUTO_TEST_CASE(an_unrestrictable_new_backup_directory_still_receives_the_b
     GRC::ResetUnrestrictedBackupLogForTesting();
 }
 #endif // !WIN32
+
+namespace {
+
+//! 2026-06-01T00:00:00Z.
+constexpr int64_t JUNE_2026{1780272000};
+
+//! 2026-01-01T00:00:00Z.
+constexpr int64_t JANUARY_2026{1767225600};
+
+//! Creates a regular file at \p path.
+void Touch(const fs::path& path)
+{
+    fsbridge::ofstream stream(path);
+    stream << "backup_tests\n";
+}
+
+//! Puts the mock time back at the end of a case.
+struct MockTimeGuard
+{
+    const int64_t m_saved = GetMockTime().count();
+
+    ~MockTimeGuard() { SetMockTime(m_saved); }
+};
+
+//! Clears a shutdown request at the end of a case, so the rest of the binary runs without one.
+struct AbortShutdownOnExit
+{
+    ~AbortShutdownOnExit() { AbortShutdown(); }
+};
+
+} // anonymous namespace
+
+// The automatic wallet backups made before a time are the regular files named as
+// GetBackupFilename("wallet.dat") names them, with an earlier time in the name. A file
+// with another name, a backup named after the time and a symbolic link with a backup's
+// name are not listed, and nothing is removed.
+BOOST_AUTO_TEST_CASE(list_names_only_automatic_backups_before_time)
+{
+    const BackupDir dir;
+
+    const fs::path before = dir.m_path / "wallet.dat-2026-01-01T00-00-00";
+    const fs::path after = dir.m_path / "wallet.dat-2026-12-01T00-00-00";
+    const fs::path other = dir.m_path / "mywallet.bak";
+    Touch(before);
+    Touch(after);
+    Touch(other);
+
+#ifndef WIN32
+    const fs::path link = dir.m_path / "wallet.dat-2026-01-02T00-00-00";
+    fs::create_symlink(other, link);
+#endif
+
+    const std::vector<fs::path> found = GRC::ListAutomaticWalletBackupsBefore(dir.m_path, JUNE_2026);
+
+    BOOST_REQUIRE_EQUAL(found.size(), 1U);
+    BOOST_CHECK_EQUAL(found[0].string(), before.string());
+
+    BOOST_CHECK(fs::exists(before));
+    BOOST_CHECK(fs::exists(after));
+    BOOST_CHECK(fs::exists(other));
+#ifndef WIN32
+    BOOST_CHECK(fs::is_symlink(link));
+#endif
+}
+
+// The names the core writes have a Z after the time (FormatISO8601DateTimeDashSep), and
+// some have a suffix after it; the names of older releases have neither. Each is listed
+// when its time is before the one given, in name order. Names that only look like one,
+// and a directory with a backup's name, are not.
+BOOST_AUTO_TEST_CASE(list_takes_the_names_the_core_writes)
+{
+    const BackupDir dir;
+    grc_test::ForcedArgGuard backupdir_arg("backupdir", dir.m_path.string());
+    const MockTimeGuard mock_time;
+
+    // 2026-01-01T01:01:01Z.
+    SetMockTime(JANUARY_2026 + 3661);
+
+    const fs::path written = GRC::GetBackupFilename("wallet.dat");
+    const fs::path suffixed = GRC::GetBackupFilename("wallet.dat", "beacon");
+    BOOST_REQUIRE_EQUAL(written.filename().string(), "wallet.dat-2026-01-01T01-01-01Z");
+    BOOST_REQUIRE_EQUAL(suffixed.filename().string(), "wallet.dat-2026-01-01T01-01-01Z-beacon");
+    Touch(written);
+    Touch(suffixed);
+
+    const fs::path older_release = dir.m_path / "wallet.dat-2020-05-05T05-05-05-beacon";
+    Touch(older_release);
+
+    for (const char* name : {"wallet.dat-2026-01-01T01-01-01x", "wallet.dat-2026-01-01T01-01-01Zbeacon",
+                             "wallet.dat-2026-01-01T01-01", "wallet.dat-2026-1-01T01-01-01Z",
+                             "wallet.dat-2026-13-01T01-01-01Z", "wallet.dat-2026-01-01 01-01-01Z",
+                             "xwallet.dat-2026-01-01T01-01-01Z", "gridcoinresearch.conf-2026-01-01T01-01-01Z",
+                             "wallet.dat"}) {
+        Touch(dir.m_path / name);
+    }
+    fs::create_directories(dir.m_path / "wallet.dat-2026-01-02T00-00-00Z");
+
+    const std::vector<fs::path> found = GRC::ListAutomaticWalletBackupsBefore(dir.m_path, JUNE_2026);
+
+    BOOST_REQUIRE_EQUAL(found.size(), 3U);
+    BOOST_CHECK_EQUAL(found[0].string(), older_release.string());
+    BOOST_CHECK_EQUAL(found[1].string(), written.string());
+    BOOST_CHECK_EQUAL(found[2].string(), suffixed.string());
+
+    // A backup named in the second given is not before it.
+    BOOST_CHECK_EQUAL(GRC::ListAutomaticWalletBackupsBefore(dir.m_path, JANUARY_2026 + 3661).size(), 1U);
+}
+
+// A backup directory that does not exist has no backups in it.
+BOOST_AUTO_TEST_CASE(list_of_a_missing_directory_is_empty)
+{
+    const BackupDir dir;
+
+    BOOST_CHECK(GRC::ListAutomaticWalletBackupsBefore(dir.m_path / "missing", JUNE_2026).empty());
+}
+
+// The warning names the backup directory and each backup found, says that a backup made
+// by hand before encryption holds the unencrypted keys too, gives the order in which to
+// get rid of them, and points to the docs. With none found it still names the directory
+// and the backups made by hand.
+BOOST_AUTO_TEST_CASE(warning_names_dir_and_manual_backups)
+{
+    const fs::path dir = fs::path("srv") / "gridcoin" / "walletbackups";
+    const std::vector<fs::path> found{dir / "wallet.dat-2026-01-01T00-00-00Z", dir / "wallet.dat-2026-02-01T00-00-00Z"};
+
+    const std::string warning = GRC::PreEncryptionBackupWarning(dir, found);
+    BOOST_TEST_MESSAGE(warning);
+
+    BOOST_CHECK(warning.find(dir.string()) != std::string::npos);
+    BOOST_CHECK(warning.find("wallet.dat-2026-01-01T00-00-00Z") != std::string::npos);
+    BOOST_CHECK(warning.find("wallet.dat-2026-02-01T00-00-00Z") != std::string::npos);
+    BOOST_CHECK(warning.find("made by hand before encryption") != std::string::npos);
+    BOOST_CHECK(warning.find("unencrypted keys") != std::string::npos);
+    BOOST_CHECK(warning.find("doc/running-unattended.md#purging-pre-encryption-backups") != std::string::npos);
+
+    const size_t check = warning.find("check that the new passphrase works");
+    const size_t fresh = warning.find("make a fresh backup of the encrypted wallet");
+    const size_t remove = warning.find("delete the old backups by hand");
+    BOOST_REQUIRE(check != std::string::npos);
+    BOOST_REQUIRE(fresh != std::string::npos);
+    BOOST_REQUIRE(remove != std::string::npos);
+    BOOST_CHECK(check < fresh);
+    BOOST_CHECK(fresh < remove);
+
+    const std::string none = GRC::PreEncryptionBackupWarning(dir, {});
+    BOOST_TEST_MESSAGE(none);
+
+    BOOST_CHECK(none.find(dir.string()) != std::string::npos);
+    BOOST_CHECK(none.find("made by hand before encryption") != std::string::npos);
+    BOOST_CHECK(none.find("delete the old backups by hand") != std::string::npos);
+    BOOST_CHECK(none.find("doc/running-unattended.md#purging-pre-encryption-backups") != std::string::npos);
+}
+
+// encryptwallet deletes no backup. Its result lists the automatic backup made before the
+// encryption and not the one named after it, and both files are still there.
+BOOST_AUTO_TEST_CASE(encryptwallet_deletes_nothing)
+{
+    const BackupDir dir;
+    grc_test::ForcedArgGuard backupdir_arg("backupdir", dir.m_path.string());
+    const MockTimeGuard mock_time;
+    const AbortShutdownOnExit abort_shutdown;
+
+    SetMockTime(JUNE_2026);
+
+    const fs::path before = dir.m_path / "wallet.dat-2026-01-01T00-00-00Z";
+    const fs::path after = dir.m_path / "wallet.dat-2026-12-01T00-00-00Z";
+    Touch(before);
+    Touch(after);
+
+    // In memory: EncryptWallet on a file-backed wallet rewrites the wallet file, which the
+    // mock database of this binary refuses.
+    CWallet wallet;
+    grc_test::SwapMainWallet swap{&wallet};
+    {
+        CKey key;
+        key.MakeNewKey(true);
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKey(key));
+    }
+
+    UniValue params(UniValue::VARR);
+    params.push_back("backup_tests passphrase");
+
+    const UniValue result = tableRPC.execute("encryptwallet", params);
+    BOOST_REQUIRE(wallet.IsCrypted());
+
+    const std::string text = result.get_str();
+    BOOST_TEST_MESSAGE(text);
+
+    BOOST_CHECK(text.find("wallet encrypted;") == 0);
+    BOOST_CHECK(text.find(before.filename().string()) != std::string::npos);
+    BOOST_CHECK(text.find(after.filename().string()) == std::string::npos);
+    BOOST_CHECK(text.find("made by hand before encryption") != std::string::npos);
+
+    BOOST_CHECK(fs::exists(before));
+    BOOST_CHECK(fs::exists(after));
+}
 
 BOOST_AUTO_TEST_SUITE_END()

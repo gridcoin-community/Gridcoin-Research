@@ -14,12 +14,15 @@
 #include <QMetaObject>
 #include <QPushButton>
 #include <QKeyEvent>
+#include <QStringList>
 
+#include <algorithm>
 #include <atomic>
 #include <exception>
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 struct AskPassphraseDialog::CheckState
 {
@@ -186,6 +189,11 @@ struct BusyCursor {
     BusyCursor(const BusyCursor&) = delete;
     BusyCursor& operator=(const BusyCursor&) = delete;
 };
+
+//! How many of the backups made before an encryption the message after it names in its
+//! text. A wallet that ran unencrypted for years has one for every day, which would make
+//! the message taller than the screen; the rest are in the message's details, which scroll.
+constexpr size_t BACKUPS_NAMED_IN_TEXT{10};
 } // namespace
 
 void AskPassphraseDialog::accept()
@@ -246,9 +254,10 @@ void AskPassphraseDialog::accept()
             // Nothing else on screen says the application is busy once the
             // dialog is gone, and the whole GUI thread is blocked here.
             bool encrypted = false;
+            std::vector<std::string> pre_encryption_backups;
             {
                 BusyCursor busy;
-                encrypted = model->setWalletEncrypted(newpass1);
+                encrypted = model->setWalletEncrypted(newpass1, pre_encryption_backups);
             }
 
             if(encrypted) {
@@ -268,15 +277,52 @@ void AskPassphraseDialog::accept()
                                                  "every backup taken before encryption, including those in that directory.") +
                                               "</b>";
 
+                // The automatic backups the core found from before the encryption, by path,
+                // one to a line. A path is shown as it is: the message is rich text, so each
+                // is escaped, and the details are plain text.
+                QString backupList;
+                QString backupDetails;
+                if (!pre_encryption_backups.empty()) {
+                    backupList = "<br><br>" + tr("These automatic backups were made before the encryption and still "
+                                                 "hold your unencrypted keys:");
+
+                    const size_t named = std::min(pre_encryption_backups.size(), BACKUPS_NAMED_IN_TEXT);
+                    for (size_t i = 0; i < named; ++i) {
+                        backupList += "<br>" + GUIUtil::HtmlEscape(pre_encryption_backups[i]);
+                    }
+
+                    if (pre_encryption_backups.size() > named) {
+                        // The count fits an int: it is the number of files in one directory.
+                        backupList += "<br>" + tr("and %n more, all listed under Show Details.", "",
+                                                  static_cast<int>(pre_encryption_backups.size() - named));
+
+                        QStringList all;
+                        for (const std::string& backup : pre_encryption_backups) {
+                            all << QString::fromStdString(backup);
+                        }
+                        backupDetails = all.join(QLatin1Char('\n'));
+                    }
+
+                    backupList += "<br><br>" + tr("Once you have checked that the new passphrase works and made a "
+                                                  "fresh backup of the encrypted wallet, delete them by hand, with "
+                                                  "any backup you made by hand before encryption.");
+                }
+
+                // Modal until the user closes it, as QMessageBox::warning() is.
+                const auto showEncrypted = [&](const QString& text) {
+                    QMessageBox box(QMessageBox::Warning, tr("Wallet encrypted"),
+                                    "<qt>" + text + "<br><br>" + backupWarning + backupList + "</qt>",
+                                    QMessageBox::Ok, this);
+                    if (!backupDetails.isEmpty()) box.setDetailedText(backupDetails);
+                    box.exec();
+                };
+
                 if (!m_multiprocess) {
                     // Monolithic: node + wallet + GUI are one process, so restarting the
                     // application performs the clean reload that finishes the encryption.
-                    QMessageBox::warning(this, tr("Wallet encrypted"),
-                                         "<qt>" +
-                                             tr("Gridcoin will close now to finish the encryption process. "
-                                                "Remember that encrypting your wallet cannot fully protect "
-                                                "your coins from being stolen by malware infecting your computer.") +
-                                             "<br><br>" + backupWarning + "</qt>");
+                    showEncrypted(tr("Gridcoin will close now to finish the encryption process. "
+                                     "Remember that encrypting your wallet cannot fully protect "
+                                     "your coins from being stolen by malware infecting your computer."));
                     // The wallet must restart to finish encryption; route the
                     // shutdown through BitcoinGUI::requestQuit() so it can't be
                     // vetoed by minimize-on-close on Qt6 (issue #2995).
@@ -292,13 +338,10 @@ void AskPassphraseDialog::accept()
                     // termination signal does not.
                     const BitcoinGUI::QuitHold hold;
 
-                    QMessageBox::warning(this, tr("Wallet encrypted"),
-                                         "<qt>" +
-                                             tr("Your wallet is now encrypted and locked. The Gridcoin core stops "
-                                                "to finish the encryption when you close this message, or after a "
-                                                "minute if it is left open. If it runs as a service it starts again "
-                                                "by itself; otherwise start it again, then reopen the wallet.") +
-                                             "<br><br>" + backupWarning + "</qt>");
+                    showEncrypted(tr("Your wallet is now encrypted and locked. The Gridcoin core stops "
+                                     "to finish the encryption when you close this message, or after a "
+                                     "minute if it is left open. If it runs as a service it starts again "
+                                     "by itself; otherwise start it again, then reopen the wallet."));
                     BitcoinGUI::requestQuit();
                 }
             }

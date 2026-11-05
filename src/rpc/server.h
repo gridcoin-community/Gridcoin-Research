@@ -7,6 +7,7 @@
 #ifndef BITCOIN_RPC_SERVER_H
 #define BITCOIN_RPC_SERVER_H
 
+#include <fs.h>
 #include <support/allocators/secure.h>
 
 #include <boost/asio/ip/address.hpp>
@@ -54,6 +55,10 @@ void InitRPCAllowList();
 bool ClientAllowed(const boost::asio::ip::address& address);
 
 void StartRPCThreads();
+
+//! What StartRPCThreads() shows, and logs, when rpcpassword is empty or equal to rpcuser:
+//! that \p conf needs rpcuser and rpcpassword. It suggests no password.
+std::string MissingRpcPasswordMessage(const fs::path& conf);
 
 //! StartRPCThreads() binds the listener early, while initialisation is still running, so that
 //! the port is held from the datadir lock onward. Until this is called the server answers

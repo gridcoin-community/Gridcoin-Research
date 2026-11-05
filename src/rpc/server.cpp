@@ -1272,6 +1272,25 @@ void ThrowIfRefusedInWarmup(const std::string& method)
     }
 }
 
+std::string MissingRpcPasswordMessage(const fs::path& conf)
+{
+    // No password is suggested here. This message goes to debug.log, and to the journal
+    // under a service manager, so a password it suggested would be known to whoever can
+    // read those. Where this account owns the file, AddMissingRpcCredentials() has normally
+    // written generated credentials into it already, so the message is mostly reached where
+    // it could not: a file owned by root or another account, or one it could not write. A
+    // password set equal to the username, or set empty on the command line, also ends here.
+    return strprintf(_("The RPC server needs rpcuser and rpcpassword in the configuration file:\n %s\n"
+                       "Add both, with a long random password (you do not need to remember it). "
+                       "The username and password MUST NOT be the same.\n"
+                       "When this account owns that file and can write it, the core adds whichever of the two is "
+                       "missing itself at its next start; it never changes one that is set.\n"
+                       "If the file does not exist, create it with owner-readable-only file permissions.\n"
+                       "It is also recommended to set alertnotify so you are notified of problems;\n"
+                       "for example: alertnotify=echo %%s | mail -s \"Gridcoin Alert\" admin@foo.com\n"),
+                     conf.string());
+}
+
 void StartRPCThreads()
 {
     // Warmup is on from the moment the listener can accept, before the first bind.
@@ -1289,26 +1308,7 @@ void StartRPCThreads()
     if ((gArgs.GetArg("-rpcpassword", "") == "" ||
         (gArgs.GetArg("-rpcuser", "") == gArgs.GetArg("-rpcpassword", ""))))
     {
-        unsigned char rand_pwd[32];
-        GetRandBytes({rand_pwd, sizeof(rand_pwd)});
-        string strWhatAmI = "To use gridcoind";
-        if (gArgs.IsArgSet("-server"))
-            strWhatAmI = strprintf(_("To use the %s option"), "\"-server\"");
-        else if (gArgs.IsArgSet("-daemon"))
-            strWhatAmI = strprintf(_("To use the %s option"), "\"-daemon\"");
-        uiInterface.ThreadSafeMessageBox(strprintf(
-                                             _("%s, you must set a rpcpassword in the configuration file:\n %s\n"
-                                               "It is recommended you use the following random password:\n"
-                                               "rpcuser=gridcoinrpc\n"
-                                               "rpcpassword=%s\n"
-                                               "(you do not need to remember this password)\n"
-                                               "The username and password MUST NOT be the same.\n"
-                                               "If the file does not exist, create it with owner-readable-only file permissions.\n"
-                                               "It is also recommended to set alertnotify so you are notified of problems;\n"
-                                               "for example: alertnotify=echo %%s | mail -s \"Gridcoin Alert\" admin@foo.com\n"),
-                                             strWhatAmI,
-                                             GetConfigFile().string(),
-                                             EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32)),
+        uiInterface.ThreadSafeMessageBox(MissingRpcPasswordMessage(GetConfigFile()),
                 _("Error"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;

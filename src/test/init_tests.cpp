@@ -2,16 +2,20 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "fs.h"
 #include "gridcoin/contract/registry.h"
 #include "init.h"
+#include "logging.h"
 #include "node/shutdown.h"
 #include "policy/fees.h"
+#include "test/state_guard.h"
 #include "test/test_gridcoin.h"
 #include "util/system.h"
 
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
+#include <iterator>
 #include <set>
 #include <sstream>
 #include <string>
@@ -306,6 +310,60 @@ BOOST_AUTO_TEST_CASE(shutdown_signal_handlers_request_a_shutdown)
         BOOST_CHECK_MESSAGE(ShutdownRequested(), "signal " << signal << " did not request a shutdown");
         AbortShutdown();
     }
+}
+
+// The core adds generated RPC credentials only to a configuration file this account owns
+// (fsmodes::OwnedByUs). A symbolic link is not one, so the file it leads to is left as it
+// was, and the log says why nothing was added.
+BOOST_AUTO_TEST_CASE(rpc_credentials_are_not_added_to_a_conf_this_account_does_not_own)
+{
+    // The settings, including what a re-read of the configuration would put there.
+    const grc_test::StateGuard state;
+
+    struct RemoveOnExit {
+        const fs::path dir = GetDataDir() / "init_tests_conf";
+        ~RemoveOnExit()
+        {
+            boost::system::error_code ec;
+            fs::remove_all(dir, ec);
+        }
+    } scratch;
+    fs::create_directories(scratch.dir);
+
+    const std::string contents{"addnode=127.0.0.1\n"};
+    const fs::path target = scratch.dir / "provided.conf";
+    {
+        fsbridge::ofstream stream(target);
+        stream << contents;
+    }
+    const fs::path conf = scratch.dir / "gridcoinresearch.conf";
+    fs::create_symlink(target, conf);
+
+    grc_test::ForcedArgGuard conf_arg("conf", conf.string());
+    BOOST_REQUIRE(GetConfigFile() == conf);
+    BOOST_REQUIRE(gArgs.GetArg("-rpcuser", "").empty());
+    BOOST_REQUIRE(gArgs.GetArg("-rpcpassword", "").empty());
+
+    std::vector<std::string> lines;
+    const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+
+    AddMissingRpcCredentials();
+
+    LogInstance().DeleteCallback(callback);
+
+    std::string after;
+    {
+        fsbridge::ifstream stream(target);
+        after.assign(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+    }
+    BOOST_CHECK_EQUAL(after, contents);
+    BOOST_CHECK(fs::is_symlink(conf));
+
+    const std::string expected = "not adding RPC credentials to " + conf.string() +
+                                 ": it is not owned by this account; the package or the administrator provides them";
+    BOOST_CHECK_MESSAGE(std::any_of(lines.begin(), lines.end(),
+                                    [&](const std::string& l) { return l.find(expected) != std::string::npos; }),
+                        "no log line: " << expected);
 }
 #endif
 

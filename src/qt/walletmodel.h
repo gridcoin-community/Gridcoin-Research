@@ -146,8 +146,11 @@ public:
                               const std::optional<interfaces::WalletCoinControl>& coinControl = std::nullopt,
                               qint64 acceptedFee = 0);
 
-    // Wallet encryption
-    bool setWalletEncrypted(const SecureString& passphrase);
+    // Wallet encryption. On success \p pre_encryption_backups holds the paths of the core's
+    // automatic wallet backups made before the encryption, which still hold the unencrypted
+    // keys (interfaces::Wallet::getPreEncryptionBackups()); empty when there are none or they
+    // could not be had.
+    bool setWalletEncrypted(const SecureString& passphrase, std::vector<std::string>& pre_encryption_backups);
     // Passphrase only needed when unlocking; stakingOnly restricts the
     // unlock to staking (persisted node-side as the unlock preference).
     bool setWalletLocked(bool locked, const SecureString& passPhrase=SecureString(),

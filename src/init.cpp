@@ -528,20 +528,26 @@ static std::string GenerateRpcPassword()
 //!    and ends up with an instance that cannot be controlled at all.
 //!
 //! The expectation for a headless daemon is that it answers RPC on loopback, so that
-//! the local endpoint is controllable. The Linux autounlock helper
-//! (contrib/init/gridcoin_autounlock_helper.py) does not use RPC: the core pulls the
-//! passphrase over a socket. The Windows scheduled task helper is still RPC based.
+//! the local endpoint is controllable. No autounlock on Linux needs it: the core pulls
+//! the stake-only passphrase from the helper over a socket (-autounlocksocket). The
+//! Windows scheduled task's autounlock still unlocks over RPC.
 //!
 //! Scope, deliberately narrow:
 //!  - Only when an RPC server is actually being started. An explicit server=0 is a real
-//!    choice and is honoured -- the config is not touched (and an RPC based autounlock will
-//!    not work, which is documented).
+//!    choice and is honoured -- the config is not touched (and the Windows scheduled
+//!    task's autounlock will not work, which is documented).
+//!  - Only into a file this account owns (fsmodes::OwnedByUs: owned by the effective user,
+//!    and not a symbolic link). A conf owned by root or by another account -- the
+//!    different-account service, whose package or administrator writes the credentials
+//!    -- is left alone, with one log line, and StartRPCThreads then names the file and
+//!    what it needs (MissingRpcPasswordMessage). POSIX only for now: fsmodes has no
+//!    Windows owner check yet, so on Windows the file is written as before.
 //!  - Only ever APPENDS. Nothing already in the file is rewritten or removed. A missing
 //!    rpcpassword is an absence rather than a decision -- no interface ever offered the
 //!    user a way to choose it -- which is what separates this from the data directory
 //!    ACL rule, where widening the permissions IS a deliberate act we must not undo.
 //!  - Each key independently: a user who set rpcuser but no password keeps their name.
-static void AddMissingRpcCredentials()
+void AddMissingRpcCredentials()
 {
     const bool need_user = gArgs.GetArg("-rpcuser", "").empty();
     const bool need_password = gArgs.GetArg("-rpcpassword", "").empty();
@@ -549,6 +555,15 @@ static void AddMissingRpcCredentials()
     if (!need_password && !need_user) return;
 
     const fs::path config_file = GetConfigFile();
+
+#ifndef WIN32
+    if (!fsmodes::OwnedByUs(config_file)) {
+        LogPrintf("%s: not adding RPC credentials to %s: it is not owned by this account; the package or the "
+                  "administrator provides them",
+                  __func__, config_file.string());
+        return;
+    }
+#endif
 
     // Warn rather than re-tighten. We are adding a secret to a file the operator already
     // owns, and this branch's rule is that permissions the user set are left as the user
@@ -614,8 +629,8 @@ static void AddMissingRpcCredentials()
 //! a service manager (Windows scheduled task, systemd unit), where no GUI has run
 //! and no human is present to edit a config mid-boot.
 //!
-//! The generated password is what the error message itself recommends: a random
-//! 256-bit value, base58-encoded, with a fixed username that differs from it.
+//! The generated password is a random 256-bit value, base58-encoded, with a fixed
+//! username that differs from it.
 //! Nobody needs to memorise it -- it exists so the local RPC endpoint is not
 //! open, and local RPC clients read it from this file.
 //!

@@ -4,6 +4,7 @@
 
 #include "interfaces/wallet.h"
 
+#include "gridcoin/backup.h"
 #include "gridcoin/tx_message.h"
 #include "hash.h"
 #include "init.h"
@@ -17,6 +18,7 @@
 #include "streams.h"
 #include "util/strencodings.h"
 #include "util/system.h"
+#include "util/time.h"
 #include "util/transfer_file.h"
 #include "wallet/coincontrol.h"
 #include "net_processing.h"
@@ -410,6 +412,10 @@ public:
     {
         if (!m_wallet->EncryptWallet(passphrase)) return false;
 
+        // Backup names carry whole seconds, so one named in the second the encryption
+        // finished counts as made before it (getPreEncryptionBackups()).
+        m_encrypted_before.store(GetTime() + 1, std::memory_order_release);
+
         // Served on an IPC connection, the GUI cannot restart the core, and the
         // wallet database still holds plaintext residue until the core stops, as
         // the RPC encryptwallet makes it stop. The core stops when this
@@ -429,6 +435,20 @@ public:
         }
 
         return true;
+    }
+
+    std::vector<std::string> getPreEncryptionBackups() override
+    {
+        // As the RPC encryptwallet names them, for the GUI to show. Nothing is deleted.
+        const int64_t encrypted_before = m_encrypted_before.load(std::memory_order_acquire);
+        if (encrypted_before == 0) return {};
+
+        std::vector<std::string> backups;
+        for (const fs::path& backup : GRC::ListAutomaticWalletBackupsBefore(GRC::GetBackupPath(), encrypted_before)) {
+            backups.push_back(backup.string());
+        }
+
+        return backups;
     }
 
     bool lockWallet() override { return m_wallet->Lock(); }
@@ -1166,6 +1186,9 @@ private:
     //! Whether a transfer this interface began is live (LiveTransfer). Shared
     //! with that transfer, which may outlive the interface.
     const std::shared_ptr<std::atomic<bool>> m_transfer_live{std::make_shared<std::atomic<bool>>(false)};
+    //! The first second after encryptWallet() encrypted the wallet through this
+    //! interface, or 0 when it has not.
+    std::atomic<int64_t> m_encrypted_before{0};
 };
 
 SendCoinsResult WalletImpl::SendCoinsUnderScope(const std::vector<WalletSendRecipient>& recipients,

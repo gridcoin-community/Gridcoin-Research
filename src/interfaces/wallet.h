@@ -310,6 +310,12 @@ public:
     //! Encrypt the wallet with the given passphrase.
     virtual bool encryptWallet(const SecureString& passphrase) = 0;
 
+    //! After encryptWallet() has encrypted the wallet through this object: the paths of the
+    //! core's automatic wallet backups made before the encryption, which still hold the
+    //! unencrypted keys, in name order (GRC::ListAutomaticWalletBackupsBefore). Empty before
+    //! then. Nothing is deleted.
+    virtual std::vector<std::string> getPreEncryptionBackups() = 0;
+
     //! Lock the wallet. This also clears the staking-only restriction, which
     //! belongs to the unlock rather than outliving it.
     virtual bool lockWallet() = 0;

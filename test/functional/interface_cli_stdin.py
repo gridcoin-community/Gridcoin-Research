@@ -17,17 +17,19 @@ wallet and are judged by the server's reply to them, not by the wallet's accepta
 passphrase.
 
   - encryptwallet, walletpassphrase and walletpassphrasechange from standard input;
+  - encryptwallet names the automatic backups from before the encryption and deletes none;
   - -stdinelevate sends the passphrase base64-encoded in the header;
   - the flags are refused for methods they do not apply to, and a short input is reported;
   - the command-line form still works and warns.
 """
 import base64
+import os
 import socket
 import subprocess
 import threading
 
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_equal, rpc_port
+from test_framework.util import assert_equal, chain_subdir, rpc_port
 
 PASSPHRASE = "pä ss wörd"
 NEW_PASSPHRASE = "new pw"
@@ -129,10 +131,21 @@ class InterfaceCLIStdinTest(GridcoinTestFramework):
     def run_test(self):
         node = self.nodes[0]
 
+        # An automatic backup from before the encryption, which encryptwallet lists and leaves in place.
+        backup_dir = os.path.join(node.datadir, chain_subdir(self.chain), "walletbackups")
+        os.makedirs(backup_dir, exist_ok=True)
+        backup = os.path.join(backup_dir, "wallet.dat-2020-01-01T00-00-00Z")
+        os.close(os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+
         self.log.info("encryptwallet takes its passphrase from standard input")
         result = self.run_client("-stdinwalletpassphrase", "encryptwallet", input=PASSPHRASE + "\n")
         self.assert_client_ok(result)
         node.wait_until_stopped()
+
+        self.log.info("encryptwallet names the automatic backups from before the encryption and deletes none")
+        assert "wallet.dat-2020-01-01T00-00-00Z" in result.stdout, result.stdout
+        assert "made by hand before encryption" in result.stdout, result.stdout
+        assert os.path.exists(backup)
 
         # The regtest wallet database is in memory, so the restarted node has an unencrypted wallet
         # and the unlock calls below end at the wallet's own refusal. What is checked is that the

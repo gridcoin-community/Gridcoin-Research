@@ -524,9 +524,21 @@ WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
     }
 }
 
-bool WalletModel::setWalletEncrypted(const SecureString& passphrase)
+bool WalletModel::setWalletEncrypted(const SecureString& passphrase, std::vector<std::string>& pre_encryption_backups)
 {
-    return m_wallet.encryptWallet(passphrase);
+    pre_encryption_backups.clear();
+    if (!m_wallet.encryptWallet(passphrase)) return false;
+
+    // The wallet is encrypted now, whatever happens to the list: in the split build the
+    // connection may already be going, and the message after the encryption still has to
+    // say so, with its general warning about earlier backups.
+    try {
+        pre_encryption_backups = m_wallet.getPreEncryptionBackups();
+    } catch (const std::exception& e) {
+        LogPrintf("WARN: %s: could not get the backups made before the encryption: %s", __func__, e.what());
+    }
+
+    return true;
 }
 
 bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase, bool stakingOnly)

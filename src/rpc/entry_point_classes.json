@@ -846,6 +846,10 @@
       "class": "read_only",
       "effect": "read_only"
     },
+    "Wallet.getPreEncryptionBackups": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
     "Wallet.getPubKey": {
       "class": "read_only",
       "effect": "read_only"

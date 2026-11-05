@@ -22,6 +22,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QStringList>
+#include <QTextDocument>
 #include <QTimer>
 #include <QWidget>
 
@@ -29,7 +30,10 @@
 #include <functional>
 #include <future>
 #include <memory>
+#include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -274,6 +278,122 @@ QuitWhileEncryptionMessage EncryptAndQuitWhileTheMessageIsOpen(QObject& context,
     backstop.stop();
 
     return run;
+}
+
+//! The message after an encryption, as the user saw it.
+struct EncryptionMessage
+{
+    bool confirmed{false};
+    //! The message's text.
+    QString text{};
+    //! What the user reads: the text as the message box renders it.
+    QString shown{};
+    //! The message's details, plain text behind its Show Details button.
+    QString details{};
+    //! What the application's event loop returned.
+    int app_result{-1};
+};
+
+//! Encrypt over a fake wallet that reports \p backups as the automatic backups from
+//! before the encryption, in the split build when \p multiprocess and in the monolith
+//! otherwise. Runs under the application's own event loop, as in the GUI, confirming the
+//! encryption, and closes the message after it as the user would; the GUI quits then.
+EncryptionMessage EncryptAndReadTheMessage(QObject& context, bool multiprocess, std::vector<std::string> backups)
+{
+    EncryptionMessage run;
+
+    qt_test::FakeWallet wallet;
+    wallet.m_encrypt_result = true;
+    wallet.m_pre_encryption_backups = std::move(backups);
+    ModelOverFakeWallet fixture(wallet);
+
+    AskPassphraseDialog dialog(AskPassphraseDialog::Encrypt);
+    dialog.setModel(&fixture.model);
+    dialog.setMultiprocess(multiprocess);
+
+    bool closed = false;
+
+    QTimer observer;
+    observer.setInterval(5);
+    QObject::connect(&observer, &QTimer::timeout, &context, [&] {
+        QMessageBox* const box = VisibleMessageBox();
+        if (!box || closed) return;
+
+        if (!run.confirmed) {
+            if (box->windowTitle() != QStringLiteral("Confirm wallet encryption")) return;
+            run.confirmed = true;
+            box->button(QMessageBox::Yes)->click();
+            return;
+        }
+
+        if (box->windowTitle() != QStringLiteral("Wallet encrypted")) return;
+
+        run.text = box->text();
+        run.details = box->detailedText();
+        if (QLabel* const label = box->findChild<QLabel*>(QStringLiteral("qt_msgbox_label"))) {
+            QTextDocument rendered;
+            rendered.setHtml(label->text());
+            run.shown = label->textFormat() == Qt::PlainText ? label->text() : rendered.toPlainText();
+        }
+
+        closed = true;
+        box->button(QMessageBox::Ok)->click();
+    });
+    observer.start();
+
+    // Ends the application's loop if nothing else does, so a regression fails rather than hangs.
+    QTimer backstop;
+    backstop.setSingleShot(true);
+    QObject::connect(&backstop, &QTimer::timeout, qApp, [] { QCoreApplication::exit(TIMED_OUT); });
+    backstop.start(15000);
+
+    QTimer::singleShot(0, &dialog, [&dialog] {
+        QTimer::singleShot(0, &dialog, [&dialog] { SubmitPassphrase(dialog); });
+        dialog.exec();
+    });
+
+    run.app_result = QCoreApplication::exec();
+    observer.stop();
+    backstop.stop();
+
+    return run;
+}
+
+//! A name with markup in it, which the message must show as it is.
+const std::string MARKUP_BACKUP{"/srv/gridcoin/walletbackups/wallet.dat-2026-02-01T00-00-00Z-<b>beacon</b>&amp;"};
+
+//! The backups the cases below report.
+std::vector<std::string> ReportedBackups()
+{
+    return {"/srv/gridcoin/walletbackups/wallet.dat-2026-01-01T00-00-00Z", MARKUP_BACKUP};
+}
+
+//! Checks that \p run shows each of ReportedBackups() as it is, after the warning about
+//! earlier backups.
+void CheckTheBackupsAreListed(const EncryptionMessage& run)
+{
+    QVERIFY(run.confirmed);
+    QCOMPARE(run.app_result, 0);
+    QVERIFY(!VisibleMessageBox());
+
+    QVERIFY2(run.text.contains(QStringLiteral("IMPORTANT: Any earlier backups of your wallet file")),
+             qPrintable(run.text));
+    QVERIFY2(run.shown.contains(QStringLiteral("These automatic backups were made before the encryption and still "
+                                               "hold your unencrypted keys:")),
+             qPrintable(run.shown));
+
+    for (const std::string& backup : ReportedBackups()) {
+        QVERIFY2(run.shown.contains(QString::fromStdString(backup)), qPrintable(run.shown));
+    }
+
+    // The markup in the name is escaped, so none of it is read as markup.
+    QVERIFY2(!run.text.contains(QStringLiteral("<b>beacon</b>")), qPrintable(run.text));
+    QVERIFY2(run.text.indexOf(QStringLiteral("IMPORTANT: Any earlier backups")) <
+                 run.text.indexOf(QStringLiteral("These automatic backups")),
+             qPrintable(run.text));
+
+    // The text names them all, so there are no details.
+    QVERIFY2(run.details.isEmpty(), qPrintable(run.details));
 }
 
 } // namespace
@@ -723,7 +843,49 @@ void AskPassphraseDialogTests::encryptionMessageSaysWhenTheCoreStops()
              qPrintable(run.text));
     QVERIFY2(run.text.contains(QStringLiteral("IMPORTANT: Any earlier backups of your wallet file")),
              qPrintable(run.text));
+    // The fake reports no backups from before the encryption, so none are listed.
+    QVERIFY2(!run.text.contains(QStringLiteral("These automatic backups")), qPrintable(run.text));
     QCOMPARE(run.app_result, 0);
+}
+
+// The message after an encryption in the split build names the automatic backups the core
+// found from before it, each as it is: a name is escaped, so markup in it is shown and not
+// read. The warning about earlier backups comes first, as it did.
+void AskPassphraseDialogTests::encryptionMessageListsTheBackupsBeforeIt()
+{
+    CheckTheBackupsAreListed(EncryptAndReadTheMessage(*this, /*multiprocess=*/true, ReportedBackups()));
+}
+
+// The same in the monolith, where the GUI quits when the message is closed.
+void AskPassphraseDialogTests::encryptionMessageInTheMonolithListsTheBackupsBeforeIt()
+{
+    CheckTheBackupsAreListed(EncryptAndReadTheMessage(*this, /*multiprocess=*/false, ReportedBackups()));
+}
+
+// A wallet that ran unencrypted for years has a backup for every day, more than a message
+// can show. The text names the first ten and says how many more there are, and the
+// details, which scroll, list every one as plain text.
+void AskPassphraseDialogTests::encryptionMessageWithManyBackupsListsThemAllInItsDetails()
+{
+    std::vector<std::string> backups;
+    for (int day = 1; day <= 12; ++day) {
+        backups.push_back(QStringLiteral("/srv/gridcoin/walletbackups/wallet.dat-2026-01-%1T00-00-00Z")
+                              .arg(day, 2, 10, QLatin1Char('0'))
+                              .toStdString());
+    }
+    backups.push_back(MARKUP_BACKUP);
+
+    const EncryptionMessage run = EncryptAndReadTheMessage(*this, /*multiprocess=*/true, backups);
+
+    QVERIFY(run.confirmed);
+    QCOMPARE(run.app_result, 0);
+
+    for (size_t i = 0; i < backups.size(); ++i) {
+        const QString backup = QString::fromStdString(backups[i]);
+        QVERIFY2(run.shown.contains(backup) == (i < 10), qPrintable(run.shown));
+        QVERIFY2(run.details.split(QLatin1Char('\n')).contains(backup), qPrintable(run.details));
+    }
+    QVERIFY2(run.shown.contains(QStringLiteral("and 3 more, all listed under Show Details.")), qPrintable(run.shown));
 }
 
 // The end of the user's session (Windows WM_QUERYENDSESSION) in the split build

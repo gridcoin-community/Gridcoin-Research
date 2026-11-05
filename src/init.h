@@ -42,6 +42,11 @@ CKey GetRegtestPremineKey();
 void PlantRegtestPremineKey(CWallet* pwallet);
 
 void StartShutdown();
+
+//! Appends a generated rpcuser and rpcpassword, whichever is missing, to the existing
+//! configuration file, when this account owns that file (on Windows, always). AppInit2
+//! calls it when an RPC server is being started.
+void AddMissingRpcCredentials();
 //! Installs the SIGTERM and SIGINT handlers that request a shutdown (POSIX; nothing on
 //! Windows, whose console handler AppInit2 installs). The daemon calls it at the top of
 //! main(), so that a stop sent during startup is not lost; AppInit2 calls it again.

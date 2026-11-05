@@ -1805,6 +1805,49 @@ BOOST_AUTO_TEST_CASE(encryptwallet_without_scope_does_not_stop)
     BOOST_CHECK(!ShutdownRequested());
 }
 
+// After encryptWallet the wallet interface reports by path the automatic backups made
+// before the encryption, which the GUI shows, as the RPC encryptwallet names them. A backup
+// named after the encryption is not reported, nothing is deleted, and before an encryption
+// there is nothing to report.
+BOOST_AUTO_TEST_CASE(ipc_encryptwallet_lists_the_pre_encryption_backups)
+{
+    PlainWallet fx;
+    EncryptionShutdownCounter counter;
+
+    struct RemoveOnExit {
+        const fs::path dir = GetDataDir() / "interfaces_tests_pre_encryption";
+        ~RemoveOnExit()
+        {
+            boost::system::error_code ec;
+            fs::remove_all(dir, ec);
+        }
+    } scratch;
+    fs::create_directories(scratch.dir);
+    grc_test::ForcedArgGuard backupdir_arg("backupdir", scratch.dir.string());
+
+    const fs::path before = scratch.dir / "wallet.dat-2026-01-01T00-00-00Z";
+    const fs::path after = scratch.dir / "wallet.dat-2099-01-01T00-00-00Z";
+    for (const fs::path& path : {before, after}) {
+        fsbridge::ofstream stream(path);
+        stream << "interfaces_tests\n";
+    }
+
+    auto w = interfaces::MakeWallet(&fx.wallet);
+    BOOST_CHECK(w->getPreEncryptionBackups().empty());
+
+    BOOST_REQUIRE(w->encryptWallet(SecureString("pp")));
+
+    const std::vector<std::string> backups = w->getPreEncryptionBackups();
+    BOOST_REQUIRE_EQUAL(backups.size(), 1U);
+    BOOST_CHECK_EQUAL(backups[0], before.string());
+    BOOST_CHECK(fs::exists(before));
+    BOOST_CHECK(fs::exists(after));
+
+    // A failed encryption changes nothing.
+    BOOST_CHECK(!w->encryptWallet(SecureString("again")));
+    BOOST_CHECK(w->getPreEncryptionBackups() == backups);
+}
+
 BOOST_AUTO_TEST_CASE(ipc_sendcoins_runs_under_a_send_capability)
 {
     EncryptedWallet fx;

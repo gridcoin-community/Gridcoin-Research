@@ -10,6 +10,7 @@
 #include "util/dir_permissions.h"
 #include "util/fsmodes.h"
 #include "util/time.h"
+#include <algorithm>
 #include <atomic>
 #include <filesystem>
 #include <optional>
@@ -447,3 +448,100 @@ bool GRC::MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> 
     return true;
 }
 
+namespace {
+//! The time, in seconds since the epoch, that the name of an automatic wallet backup gives
+//! (see ListAutomaticWalletBackupsBefore), or nullopt when \p name is not such a name.
+std::optional<int64_t> AutomaticWalletBackupTime(const std::string& name)
+{
+    static const std::string prefix{"wallet.dat-"};
+    // YYYY-MM-DDTHH-MM-SS, with 'd' for a digit.
+    static const std::string shape{"dddd-dd-ddTdd-dd-dd"};
+
+    if (name.compare(0, prefix.size(), prefix) != 0) return std::nullopt;
+    if (name.size() < prefix.size() + shape.size()) return std::nullopt;
+
+    std::string stamp = name.substr(prefix.size(), shape.size());
+    for (size_t i = 0; i < shape.size(); ++i) {
+        const bool digit = stamp[i] >= '0' && stamp[i] <= '9';
+        if (shape[i] == 'd' ? !digit : stamp[i] != shape[i]) return std::nullopt;
+    }
+
+    size_t rest = prefix.size() + shape.size();
+    if (rest < name.size() && name[rest] == 'Z') ++rest;
+    if (rest < name.size() && name[rest] != '-') return std::nullopt;
+
+    // ParseISO8601DateTime reads the time with colons, and returns 0 for one it cannot read,
+    // such as a month 13.
+    stamp[13] = ':';
+    stamp[16] = ':';
+    const int64_t time = ParseISO8601DateTime(stamp + "Z");
+    if (time <= 0) return std::nullopt;
+
+    return time;
+}
+} // anonymous namespace
+
+std::vector<fs::path> GRC::ListAutomaticWalletBackupsBefore(const fs::path& backup_dir, int64_t encrypted_at)
+{
+    std::vector<fs::path> found;
+
+    // A backup directory that was never made holds no backups. The directory itself may be a
+    // symbolic link (moved to another disk), which is followed, as the startup checks follow it.
+    boost::system::error_code ec;
+    const fs::file_status dir_status = fs::status(backup_dir, ec);
+    if (dir_status.type() == fs::file_not_found) return found;
+
+    if (ec) {
+        LogPrintf("WARNING: %s: could not list the wallet backups in %s: %s", __func__, backup_dir.string(),
+                  ec.message());
+        return found;
+    }
+
+    try {
+        for (const fs::directory_entry& entry : fs::directory_iterator(backup_dir)) {
+            // symlink_status() does not follow a link, so a link is never a regular file here,
+            // and neither is an entry whose status cannot be read.
+            boost::system::error_code entry_ec;
+            if (!fs::is_regular_file(entry.symlink_status(entry_ec))) continue;
+
+            const std::optional<int64_t> time = AutomaticWalletBackupTime(entry.path().filename().string());
+            if (time && *time < encrypted_at) found.push_back(entry.path());
+        }
+    } catch (const fs::filesystem_error& e) {
+        // What was listed before the error is kept.
+        LogPrintf("WARNING: %s: could not list the wallet backups in %s: %s", __func__, backup_dir.string(), e.what());
+    }
+
+    std::sort(found.begin(), found.end());
+
+    return found;
+}
+
+std::string GRC::PreEncryptionBackupWarning(const fs::path& backup_dir, const std::vector<fs::path>& found)
+{
+    std::string warning;
+
+    if (found.empty()) {
+        warning = strprintf("No automatic backup from before the encryption was found in %s. Any backup made by "
+                            "hand before encryption holds the wallet's unencrypted keys: anyone who has one can "
+                            "spend the coins without the passphrase.",
+                            backup_dir.string());
+    } else {
+        std::string names;
+        for (const fs::path& backup : found) {
+            if (!names.empty()) names += ", ";
+            names += backup.filename().string();
+        }
+
+        warning = strprintf("These automatic backups in %s were made before the encryption: %s. They, and any "
+                            "backup made by hand before encryption, hold the wallet's unencrypted keys: anyone who "
+                            "has one can spend the coins without the passphrase.",
+                            backup_dir.string(), names);
+    }
+
+    warning += " Nothing deletes them for you. First check that the new passphrase works, then make a fresh "
+               "backup of the encrypted wallet, then delete the old backups by hand. See "
+               "doc/running-unattended.md#purging-pre-encryption-backups.";
+
+    return warning;
+}
