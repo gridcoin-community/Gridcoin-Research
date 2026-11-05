@@ -209,6 +209,24 @@ BOOST_AUTO_TEST_CASE(data_directory_refused_by_file_id)
     BOOST_CHECK(!ipc::DataDirectoryRefusal("/run/gridcoin", {7, 1001}, {}));
 }
 
+// On Windows the IPC directory is created and checked by a plain spelling: a "." or
+// ".." component is refused, since "<datadir>/x/.." would make x inside the data
+// directory and name the data directory itself. A trailing or doubled separator is
+// not such a component, and is dropped.
+BOOST_AUTO_TEST_CASE(plain_ipc_directory_refuses_dot_components)
+{
+    BOOST_CHECK_EQUAL(ipc::PlainIpcDirectory("/run/gridcoin").value_or("refused").string(), "/run/gridcoin");
+    BOOST_CHECK_EQUAL(ipc::PlainIpcDirectory("/run/gridcoin/").value_or("refused").string(), "/run/gridcoin");
+    BOOST_CHECK_EQUAL(ipc::PlainIpcDirectory("/run/gridcoin//").value_or("refused").string(), "/run/gridcoin");
+    BOOST_CHECK_EQUAL(ipc::PlainIpcDirectory("/run//gridcoin").value_or("refused").string(), "/run/gridcoin");
+    BOOST_CHECK_EQUAL(ipc::PlainIpcDirectory("/").value_or("refused").string(), "/");
+
+    for (const char* refused : {"/var/lib/gridcoin/x/..", "/var/lib/gridcoin/..", "/run/./gridcoin", "/run/gridcoin/.",
+                                "/run/gridcoin/./", "../ipc", "./ipc"}) {
+        BOOST_CHECK_MESSAGE(!ipc::PlainIpcDirectory(refused), "accepted '" << refused << "'");
+    }
+}
+
 #ifndef WIN32
 
 // Expected modes are written as mode_t: Boost.Test compares them with the

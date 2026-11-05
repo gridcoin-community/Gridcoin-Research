@@ -654,6 +654,40 @@ BOOST_AUTO_TEST_CASE(apply_acl_roundtrip)
     BOOST_CHECK_EQUAL(FormatSid(*acl.owner), FormatSid(self));
 }
 
+// A directory created with its list has exactly that list, owner included, and an
+// existing one is left alone.
+BOOST_AUTO_TEST_CASE(create_directory_with_acl_reads_back_and_leaves_an_existing_one)
+{
+    if (RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; create_directory_with_acl runs on Windows");
+        return;
+    }
+
+    TempDir dir;
+    const Sid self = CurrentTokenUser();
+    const AclSpec spec{self, {
+        {self, FILE_ALL_ACCESS, Inherit::ContainerAndObject},
+        {wellknown::System(), FILE_ALL_ACCESS, Inherit::ContainerAndObject},
+    }};
+
+    const fs::path made = dir.path / "made";
+    BOOST_CHECK(CreateDirectoryWithAcl(made, spec));
+    const ObservedAcl acl = ReadAcl(made);
+    const std::optional<std::string> reason = CheckMatchesSpec(acl, spec);
+    BOOST_CHECK_MESSAGE(!reason.has_value(), reason.value_or(""));
+
+    // The existing temp directory keeps the list it inherited.
+    const ObservedAcl before = ReadAcl(dir.path);
+    BOOST_CHECK(!CreateDirectoryWithAcl(dir.path, spec));
+    BOOST_CHECK(!CreateDirectoryWithAcl(made, spec));
+    const ObservedAcl after = ReadAcl(dir.path);
+    BOOST_CHECK_EQUAL(after.aces.size(), before.aces.size());
+    BOOST_CHECK_EQUAL(after.is_protected, before.is_protected);
+
+    // A parent that does not exist is an error, not "already there".
+    BOOST_CHECK_THROW(CreateDirectoryWithAcl(dir.path / "absent" / "made", spec), std::system_error);
+}
+
 BOOST_AUTO_TEST_CASE(owner_only_dacl_sets_explicit_owner)
 {
     if (RunningUnderWine()) {

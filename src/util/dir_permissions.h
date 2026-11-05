@@ -6,6 +6,9 @@
 #define GRIDCOIN_UTIL_DIR_PERMISSIONS_H
 
 #include "fs.h"
+#ifdef WIN32
+#include "util/win_acl.h"
+#endif
 
 #include <optional>
 #include <string>
@@ -101,6 +104,12 @@ bool RestrictErrorMeansNoModes(int err);
 void SetOwnerOnlyUmask();
 
 #ifdef WIN32
+//! The owner-only access list: owned by this process's token user, with that user
+//! and SYSTEM at FILE_ALL_ACCESS (SYSTEM named once when it is the user), inherited
+//! by what is created inside when \p inheritable. Throws std::system_error when the
+//! token cannot be read.
+winacl::AclSpec OwnerOnlyAclSpec(bool inheritable);
+
 //! Make the current user the owner of an existing file or directory, apply an
 //! owner+SYSTEM PROTECTED DACL to it, and verify both by reading them back exactly.
 //! Throws on failure: std::system_error when a call fails, std::runtime_error when

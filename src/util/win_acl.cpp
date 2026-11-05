@@ -731,6 +731,44 @@ void FreeSecurityDescriptor(void* sd)
     if (sd != nullptr) ::LocalFree(sd);
 }
 
+bool CreateDirectoryWithAcl(const fs::path& dir, const AclSpec& spec)
+{
+    const std::wstring wdir = dir.wstring();
+    {
+        const LocalPtr sd(MakeSecurityDescriptor(spec));
+        SECURITY_ATTRIBUTES sa{};
+        sa.nLength = sizeof(sa);
+        sa.lpSecurityDescriptor = sd.get();
+        sa.bInheritHandle = FALSE;
+        if (!::CreateDirectoryW(wdir.c_str(), &sa)) {
+            const DWORD error = ::GetLastError();
+            if (error == ERROR_ALREADY_EXISTS) return false;
+            ThrowWin32(error, "CreateDirectory " + dir.string());
+        }
+    }
+
+    // The volume may accept the descriptor and keep another list, as FAT and exFAT
+    // do. Read through a handle on what was created, not through the path, and take
+    // the directory away again when anything stops the check.
+    try {
+        const HANDLE handle = ::CreateFileW(wdir.c_str(), READ_CONTROL | FILE_READ_ATTRIBUTES,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                            OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+                                            nullptr);
+        if (handle == INVALID_HANDLE_VALUE) ThrowWin32(::GetLastError(), "open " + dir.string());
+        const HandleGuard guard(handle);
+
+        if (std::optional<std::string> reason = CheckMatchesSpec(ReadAcl(handle, /*kernel_object=*/false), spec)) {
+            throw AclNotKeptError(dir, std::move(*reason));
+        }
+    } catch (...) {
+        ::RemoveDirectoryW(wdir.c_str());
+        throw;
+    }
+
+    return true;
+}
+
 std::optional<Sid> LookupAccountSidByName(const std::wstring& name, bool require_alias)
 {
     DWORD sid_size = 0;

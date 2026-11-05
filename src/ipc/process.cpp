@@ -468,7 +468,27 @@ void ApplyAttachGroupAccess(const fs::path& ipcdir)
 }
 #endif // !WIN32
 
+std::optional<fs::path> PlainIpcDirectory(const fs::path& dir)
+{
+    // A trailing separator reads as a final "." component; it is not one.
+    fs::path plain = dir;
+    const auto ends_with_separator = [](const fs::path& path) {
+        const fs::path::string_type& native = path.native();
+        return !native.empty() && (native.back() == '/' || native.back() == fs::path::preferred_separator);
+    };
+    while (plain.has_relative_path() && plain.filename() == "." && ends_with_separator(plain)) {
+        plain = plain.parent_path();
+    }
+
+    for (const fs::path& part : plain) {
+        if (part == "." || part == "..") return std::nullopt;
+    }
+
+    return plain.lexically_normal();
+}
+
 namespace {
+#ifndef WIN32
 //! Make sure \p dir exists. Returns whether this call created it, which the
 //! caller then restricts. Throws std::system_error, naming the directory, when it
 //! cannot be created.
@@ -483,6 +503,36 @@ bool MakeIpcDirectory(const fs::path& dir)
 
     return created;
 }
+#else
+//! Make sure \p dir exists. When this call creates it, it is created with \p spec
+//! from the start (util::winacl::CreateDirectoryWithAcl, which reads it back), so it
+//! is never there with its parent's inherited list; the directories above it are
+//! made as usual. Returns whether this call created it. A spelling with a "." or
+//! ".." component is refused with std::runtime_error, so the directory created and
+//! checked is the one the path names. Throws std::system_error, naming the
+//! directory, when it cannot be created, and util::winacl::AclNotKeptError when it
+//! does not keep \p spec.
+bool MakeIpcDirectory(const fs::path& dir, const util::winacl::AclSpec& spec)
+{
+    const std::optional<fs::path> plain = PlainIpcDirectory(dir);
+    if (!plain) {
+        throw std::runtime_error(strprintf("The IPC directory '%s' has a '.' or '..' component. Give -ipcdir as a "
+                                           "path without them.",
+                                           dir.string()));
+    }
+
+    if (plain->has_relative_path() && plain->has_parent_path()) {
+        boost::system::error_code ec;
+        fs::create_directories(plain->parent_path(), ec);
+        if (ec) {
+            throw std::system_error(ec.value(), std::system_category(),
+                                    "could not create the directory above the IPC directory " + dir.string());
+        }
+    }
+
+    return util::winacl::CreateDirectoryWithAcl(*plain, spec);
+}
+#endif
 } // namespace
 
 #ifndef WIN32
@@ -519,10 +569,10 @@ void PrepareAttachGroupDirectory(const fs::path& dir)
     const std::optional<util::winacl::Sid> group = util::winacl::ParseSidString(*group_sid);
     if (!group) throw std::logic_error(strprintf("the attach group's SID '%s' does not parse", *group_sid));
 
-    // "Created" also when only a part of a spelling such as "<datadir>\x\.." was
-    // made; the data directory is refused by its identity before anything is
-    // changed either way.
-    const bool created = MakeIpcDirectory(dir);
+    // A directory made here has the attach group's list from the start. One that
+    // exists is refused by its identity, when it is the data directory, before
+    // anything is changed.
+    const bool created = MakeIpcDirectory(dir, win::IpcDirAclSpec(util::winacl::CurrentTokenUser(), *group));
     win::ApplyAttachGroupDirectoryAccess(dir, *group, created);
 }
 #endif // !WIN32
@@ -558,44 +608,45 @@ void PrepareIpcDirectory(const fs::path& dir)
     // cannot restrict a directory we just made, throw rather than expose the
     // socket in a world-accessible one. On POSIX that is an fd-based mode 0700;
     // Windows has no chmod/umask for AF_UNIX, so the equivalent is an explicit
-    // owner-only protected DACL (ApplyOwnerOnlyDacl).
+    // owner-only protected DACL given when the directory is created
+    // (util::winacl::CreateDirectoryWithAcl).
     //
     // The default -ipcdir is the data directory, which GetDataDir() has
     // normally created already (owner-only, through
     // util::CreateOwnerOnlyDirectory), so for it the create branch does not run.
     // It runs for an explicit -ipcdir, or a custom socket path, whose directory
     // does not exist yet.
+#ifndef WIN32
     if (MakeIpcDirectory(dir)) {
-#ifndef WIN32
         ApplyPathAccessNoFollow(dir, PathKind::Directory, 0700, std::nullopt);
-#else
-        util::ApplyOwnerOnlyDacl(dir, /*inheritable=*/true);
-#endif
-    } else {
-#ifndef WIN32
-        struct stat st;
-        if (::stat(dir.string().c_str(), &st) == 0) {
-            const auto warning = IpcDirWarning(dir.string(), st.st_mode, st.st_uid, st.st_gid, ::geteuid(),
-                                               AttachGroupGid());
-            if (warning) LogPrintf("WARN: %s: %s", __func__, *warning);
-        }
-#else
-        if (!ConfiguredOption("-ipcdir").empty()) {
-            if (const std::optional<std::string> reason = win::ServerIpcDirRefusal(dir)) {
-                throw std::runtime_error(strprintf("Refusing to serve IPC: %s", *reason));
-            }
-            return;
-        }
-
-        try {
-            util::VerifyOwnerOnlyDacl(dir);
-        } catch (const std::exception&) {
-            LogPrintf("WARN: %s: the IPC directory %s is not restricted to this account. "
-                      "Leaving it as configured; the IPC socket and cookie inside it remain owner-only.",
-                      __func__, dir.string());
-        }
-#endif
+        return;
     }
+
+    struct stat st;
+    if (::stat(dir.string().c_str(), &st) == 0) {
+        const auto warning = IpcDirWarning(dir.string(), st.st_mode, st.st_uid, st.st_gid, ::geteuid(),
+                                           AttachGroupGid());
+        if (warning) LogPrintf("WARN: %s: %s", __func__, *warning);
+    }
+#else
+    // Created with the owner-only list from the start, and read back.
+    if (MakeIpcDirectory(dir, util::OwnerOnlyAclSpec(/*inheritable=*/true))) return;
+
+    if (!ConfiguredOption("-ipcdir").empty()) {
+        if (const std::optional<std::string> reason = win::ServerIpcDirRefusal(dir)) {
+            throw std::runtime_error(strprintf("Refusing to serve IPC: %s", *reason));
+        }
+        return;
+    }
+
+    try {
+        util::VerifyOwnerOnlyDacl(dir);
+    } catch (const std::exception&) {
+        LogPrintf("WARN: %s: the IPC directory %s is not restricted to this account. "
+                  "Leaving it as configured; the IPC socket and cookie inside it remain owner-only.",
+                  __func__, dir.string());
+    }
+#endif
 }
 
 namespace {

@@ -217,6 +217,15 @@ void* BuildDacl(const std::vector<AceSpec>& aces);
 //! SECURITY_ATTRIBUTES. Free it with FreeSecurityDescriptor. Throws as BuildDacl does.
 void* MakeSecurityDescriptor(const AclSpec& spec);
 
+//! Create the directory \p dir with \p spec as its owner and protected DACL from the
+//! start (CreateDirectoryW with MakeSecurityDescriptor(spec)), so it is never there
+//! with another list, then read the list back through a handle on the directory
+//! itself (no reparse point followed) and compare it with CheckMatchesSpec. Returns
+//! false, changing nothing, when \p dir already exists. Throws std::system_error when
+//! a call fails, and AclNotKeptError when what is read back does not match; on
+//! either, after the directory was made, it is removed again.
+bool CreateDirectoryWithAcl(const fs::path& dir, const AclSpec& spec);
+
 //! Free a descriptor from MakeSecurityDescriptor. A null \p sd is ignored.
 void FreeSecurityDescriptor(void* sd);
 

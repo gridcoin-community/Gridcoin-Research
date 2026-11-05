@@ -89,6 +89,12 @@ struct FileId
 std::optional<std::string> DataDirectoryRefusal(const fs::path& ipcdir, const FileId& ipcdir_id,
                                                 const std::vector<std::pair<fs::path, FileId>>& datadirs);
 
+//! \p dir as the IPC directory is created and checked on Windows: lexically normal,
+//! without a trailing separator. nullopt when a component is "." or "..", which
+//! Windows refuses in an IPC directory: such a spelling can make a directory other
+//! than the one it names.
+std::optional<fs::path> PlainIpcDirectory(const fs::path& dir);
+
 //! What the daemon prepares its IPC directory with when an attach group is
 //! configured: make sure \p dir exists, then give it the attach group's access.
 //!
@@ -106,8 +112,9 @@ std::optional<std::string> DataDirectoryRefusal(const fs::path& ipcdir, const Fi
 void PrepareAttachGroupDirectory(const fs::path& dir);
 
 //! Make sure \p dir exists. When this call creates it, it is restricted to this
-//! account (POSIX mode 0700 through an fd, Windows owner-only protected DACL)
-//! and failing to do so throws; an existing directory is left as configured,
+//! account (POSIX mode 0700 through an fd; on Windows created with the owner-only
+//! protected DACL, refusing a spelling PlainIpcDirectory() refuses) and failing to
+//! do so throws; an existing directory is left as configured,
 //! with a warning in the log if it is accessible to other users. On Windows an
 //! existing directory is checked instead when -ipcdir is set: one that
 //! ipc::win::ServerIpcDirRefusal() refuses (a junction or link, no DACL, an owner
