@@ -7,6 +7,7 @@
 
 #include "fs.h"
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -61,6 +62,10 @@ bool NotOwnedModeAcceptable(unsigned mode);
 //! Creates the backup directory if absent, then creates and removes a file in it.
 //! Returns nullopt when that works, else the reason.
 std::optional<std::string> CheckBackupDirWritable(const fs::path& backupdir);
+
+//! CheckBackupDirWritable with the probe file named by \p probe_name, for tests.
+std::optional<std::string> CheckBackupDirWritable(const fs::path& backupdir,
+                                                  const std::function<std::string()>& probe_name);
 
 //! Copies a file, overwriting the target. A target that does not exist is created with mode
 //! 0600 (POSIX), so the mode is right before any data is written. An existing target keeps its

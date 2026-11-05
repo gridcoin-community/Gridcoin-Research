@@ -7,15 +7,16 @@
 #include "util/fsmodes.h"
 
 #include "util/dir_permissions.h"
+#include "random.h"
+#include "span.h"
 #include "tinyformat.h"
-#include "util/string.h"
+#include "util/strencodings.h"
 #include "util/syserror.h"
 
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <atomic>
 #include <cerrno>
 #include <set>
 
@@ -150,15 +151,33 @@ bool NotOwnedModeAcceptable(unsigned mode)
 
 std::optional<std::string> CheckBackupDirWritable(const fs::path& backupdir)
 {
+    // A random name: under PrivatePIDs= every start has the same pid, so a name made
+    // of the pid would meet the probe of an earlier start that was killed before it
+    // removed it.
+    return CheckBackupDirWritable(backupdir, [] {
+        unsigned char random[8];
+        GetRandBytes(Span<unsigned char>(random, sizeof(random)));
+        return ".gridcoin-write-test-" + HexStr(Span<const unsigned char>(random, sizeof(random)));
+    });
+}
+
+std::optional<std::string> CheckBackupDirWritable(const fs::path& backupdir,
+                                                  const std::function<std::string()>& probe_name)
+{
     std::string error;
     if (!util::CreateOwnerOnlyDirectory(backupdir, error)) return error;
 
-    static std::atomic<unsigned> counter{0};
+    const fs::path probe = backupdir / probe_name();
+    const auto create = [&probe] {
+        return ::open(probe.string().c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    };
 
-    const fs::path probe = backupdir / (".gridcoin-write-test-" + ToString(::getpid()) + "-"
-                                        + ToString(counter.fetch_add(1)));
-
-    const int fd = ::open(probe.string().c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    int fd = create();
+    if (fd < 0 && errno == EEXIST) {
+        // Taken: a probe that was never removed. It is removed, and the probe tried once more.
+        ::unlink(probe.string().c_str());
+        fd = create();
+    }
     if (fd < 0) return SysErrorString(errno);
 
     ::close(fd);

@@ -8,6 +8,7 @@
 
 #include "test/state_guard.h"
 #include <fs.h>
+#include <util/string.h>
 #include <util/system.h>
 
 #include <boost/test/unit_test.hpp>
@@ -281,6 +282,44 @@ BOOST_AUTO_TEST_CASE(backupdir_not_writable_reported)
 
     // Let the scratch directory be removed.
     BOOST_REQUIRE_EQUAL(::chmod(locked.string().c_str(), 0700), 0);
+}
+
+// A probe left behind by an earlier start that was killed between creating and
+// removing it does not make the directory look unwritable. Under PrivatePIDs= every
+// start has the same pid, so a probe named by pid and count would collide.
+BOOST_AUTO_TEST_CASE(a_leftover_write_probe_does_not_fail_the_check)
+{
+    const ScratchDir scratch;
+    const fs::path backups = scratch.m_path / "backups";
+    MakeDir(backups, 0700);
+
+    for (int count = 0; count < 200; ++count) {
+        MakeFile(backups / (".gridcoin-write-test-" + ToString(::getpid()) + "-" + ToString(count)), 0600);
+    }
+
+    BOOST_CHECK(!fsmodes::CheckBackupDirWritable(backups));
+    BOOST_CHECK(!fsmodes::CheckBackupDirWritable(backups));
+}
+
+// A probe name that is already taken is removed and the probe tried once more. A
+// name that cannot be freed is reported.
+BOOST_AUTO_TEST_CASE(a_taken_probe_name_is_freed_and_tried_once_more)
+{
+    const ScratchDir scratch;
+    const fs::path backups = scratch.m_path / "backups";
+    MakeDir(backups, 0700);
+
+    const auto fixed = [] { return std::string{"probe"}; };
+
+    MakeFile(backups / "probe", 0600);
+    BOOST_CHECK(!fsmodes::CheckBackupDirWritable(backups, fixed));
+    BOOST_CHECK(!fs::exists(backups / "probe"));
+
+    // A directory of that name is not removed by unlink, so the second try fails too.
+    MakeDir(backups / "probe", 0700);
+    const auto reason = fsmodes::CheckBackupDirWritable(backups, fixed);
+    BOOST_CHECK(reason.has_value() && !reason->empty());
+    BOOST_CHECK(fs::is_directory(backups / "probe"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
