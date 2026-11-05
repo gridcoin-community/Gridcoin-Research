@@ -53,9 +53,19 @@ DROPIN_EXISTING_CREDENTIAL = "50-existing-credential.conf"
 # What the switch-over renames a drop-in of the old per-user unit to: systemd reads only *.conf.
 DISABLED_SUFFIX = ".disabled-by-gridcoin-switchover"
 # The entries of the switch-over state file the package's preinst writes, one per line: these
-# three with a user name, and SYSTEM_AUTOUNLOCK alone.
+# three with a user name, and the system ones alone.
 STATE_USER_KINDS = ("autounlock", "core", "core-active")
 SYSTEM_AUTOUNLOCK = "system-autounlock"
+SYSTEM_CORE = "system-core"
+STATE_SYSTEM_KINDS = (SYSTEM_CORE, SYSTEM_AUTOUNLOCK)
+# What a drop-in or copy written for the old forking units sets that the notify units cannot keep:
+# the command line, the process type and pid file, notify access, and the account.
+OLD_UNIT_KEYS = ("ExecStart", "Type", "PIDFile", "NotifyAccess", "User", "Group")
+# What a drop-in for every per-user instance may not set: the instance's account is its name.
+TEMPLATE_REFUSED_KEYS = ("ExecStart", "Type", "PIDFile", "NotifyAccess", "User")
+# The words of an old per-user command line the new one carries or replaces; any other is lost.
+OLD_COMMAND_WORDS = ("-daemon", "-daemonwait", "-nodaemon", "-nodaemonwait", "-multiprocess")
+OLD_COMMAND_PREFIXES = ("-daemon=", "-daemonwait=", "-pid=", "-datadir=")
 # A name made only of dots is refused: "." and ".." name directories. Matched with
 # fullmatch and \Z, so a trailing newline is refused too.
 USER_RE = re.compile(r"(?!\.+\Z)[A-Za-z0-9._-]+\Z")
@@ -2109,8 +2119,8 @@ def read_switchover_state(path):
         fields = line.split(" ")
         if line == "":
             continue
-        if fields == [SYSTEM_AUTOUNLOCK]:
-            entries.append((SYSTEM_AUTOUNLOCK, None))
+        if len(fields) == 1 and fields[0] in STATE_SYSTEM_KINDS:
+            entries.append((fields[0], None))
         elif len(fields) == 2 and fields[0] in STATE_USER_KINDS and fields[1]:
             entries.append((fields[0], fields[1]))
         else:
@@ -2130,9 +2140,9 @@ def write_switchover_state(path, entries):
 def scan_old_installs(net, host, paths):
     """What --scan switches over, as the package's preinst records it: the old units enabled
     through a link in a *.wants/ directory under /etc/systemd/system and confirmed by systemctl
-    is-enabled, and the running per-user cores. A user whose core has this tool's drop-in already
-    and no old autounlock unit is done, and left out. Returns (entries, {user or None: the old
-    units to disable})."""
+    is-enabled, and the running per-user cores; and the system service's overrides written for the
+    old unit. A user whose core has this tool's drop-in already and no old autounlock unit is done,
+    and left out."""
     old = old_autounlock(net)
     links = set()
     for name in sorted(os.listdir(paths.etc_systemd)):
@@ -2140,12 +2150,10 @@ def scan_old_installs(net, host, paths):
         if name.endswith(".wants") and os.path.isdir(wants) and not os.path.islink(wants):
             links.update(entry for entry in os.listdir(wants) if os.path.islink(os.path.join(wants, entry)))
     entries = []
-    old_units = {}
     for name in sorted(links):
         user = unit_instance(name, old)
         if user is not None and host.is_enabled(name):
             entries.append(("autounlock", user))
-            old_units.setdefault(user, []).append(name)
     for name in sorted(links):
         user = unit_instance(name, net.daemon)
         if user is not None and host.is_enabled(name):
@@ -2154,15 +2162,23 @@ def scan_old_installs(net, host, paths):
         user = unit_instance(name, net.daemon)
         if user is not None:
             entries.append(("core-active", user))
+    try:
+        copy, masked, stale = system_core_overrides(net, paths)
+        system_core = (copy is not None and not masked) or bool(stale)
+    except UserError:
+        # The switch-over itself says why.
+        system_core = True
+    if system_core:
+        entries.insert(0, (SYSTEM_CORE, None))
     if old + ".service" in links and host.is_enabled(old + ".service"):
         entries.append((SYSTEM_AUTOUNLOCK, None))
-        old_units[None] = [old + ".service"]
+    old_users = {user for kind, user in entries if kind == "autounlock"}
 
     def done(user):
         unit = "%s@%s.service" % (net.daemon, user)
-        return user not in old_units and os.path.exists(os.path.join(dropin_dir(paths, unit), DROPIN_MAIN))
+        return user not in old_users and os.path.exists(os.path.join(dropin_dir(paths, unit), DROPIN_MAIN))
 
-    return [(kind, user) for kind, user in entries if user is None or not done(user)], old_units
+    return [(kind, user) for kind, user in entries if user is None or not done(user)]
 
 
 def unit_file_settings(text, section, key):
@@ -2191,9 +2207,10 @@ def unit_file_settings(text, section, key):
 
 
 def expand_specifiers(text, pw, display):
-    """Resolve the systemd specifiers a per-user unit's -datadir can use: %h (home), %i and %u (the
-    user, the instance name), %%."""
-    values = {"h": pw.pw_dir, "i": pw.pw_name, "u": pw.pw_name, "%": "%"}
+    """Resolve the systemd specifiers a per-user unit's -datadir can use: %i (the instance, the
+    user's name) and %%. In a unit of the system manager %h and %u are root's home and name, so a
+    -datadir with them never named the user's datadir, and is refused."""
+    values = {"i": pw.pw_name, "%": "%"}
     out = []
     i = 0
     while i < len(text):
@@ -2202,6 +2219,9 @@ def expand_specifiers(text, pw, display):
             i += 1
             continue
         letter = text[i + 1:i + 2]
+        if letter in ("h", "u"):
+            raise UserError("the -datadir in %s uses %%%s, which is root's home or name in a system unit, not "
+                            "%s's; write the path out" % (display, letter, pw.pw_name))
         if letter not in values:
             raise UserError("the -datadir in %s uses the specifier %%%s, which the switch-over does not resolve; "
                             "write the path out" % (display, letter))
@@ -2210,19 +2230,38 @@ def expand_specifiers(text, pw, display):
     return "".join(out)
 
 
-def datadir_from_command(command, pw, display):
-    """The last -datadir= (or --datadir=) value of an ExecStart= command line, as the core reads its
-    arguments, or None when it has none."""
+def command_words(command, display):
+    """The words of an ExecStart= command line. systemd and shlex read a backslash differently, so a
+    line with one is refused rather than misread; quotes they read alike."""
+    if "\\" in command:
+        raise UserError("the ExecStart= in %s has a backslash, which the switch-over does not read; write the "
+                        "command line without one" % display)
     try:
-        words = shlex.split(command)
+        return shlex.split(command)
     except ValueError as e:
         raise UserError("cannot read the ExecStart= in %s: %s" % (display, e)) from None
+
+
+def core_option(word):
+    """A core option word as the core reads it: a leading "--" is the same as "-"."""
+    return word[1:] if word.startswith("--") else word
+
+
+def datadir_from_command(words, pw, display):
+    """The last -datadir= (or --datadir=) value of an ExecStart= command line's words, as the core
+    reads its arguments, or None when it has none."""
     found = None
     for word in words[1:]:
-        for option in ("-datadir=", "--datadir="):
-            if word.startswith(option):
-                found = word[len(option):]
+        if core_option(word).startswith("-datadir="):
+            found = core_option(word)[len("-datadir="):]
     return None if found is None else expand_specifiers(found, pw, display)
+
+
+def dropped_words(net, words):
+    """The words of an old per-user command line that the new one neither carries nor replaces."""
+    carried = set(OLD_COMMAND_WORDS) | ({net.net_arg} if net.net_arg else set())
+    return [word for word in words[1:]
+            if core_option(word) not in carried and not core_option(word).startswith(OLD_COMMAND_PREFIXES)]
 
 
 def read_dropin_text(path):
@@ -2253,11 +2292,12 @@ def dropin_texts(directory):
             for name in sorted(os.listdir(directory)) if name.endswith(".conf")]
 
 
-def switched_datadir(pw, directory, paths):
+def switched_datadir(net, pw, directory, paths):
     """The datadir the user's core ran in under the old unit, as enable-user's --datadir: None for
     the core's default under the home directory. It is the last -datadir of the last ExecStart= the
     drop-ins in directory set, this tool's own included (a rerun); without one, the old unit's
-    /home/<user>/.GridcoinResearch."""
+    /home/<user>/.GridcoinResearch. An old command line with options the new one would drop is
+    refused, naming them."""
     command = None
     for path, text in dropin_texts(directory):
         for value in unit_file_settings(text or "", "Service", "ExecStart"):
@@ -2268,7 +2308,14 @@ def switched_datadir(pw, directory, paths):
         datadir = os.path.join(paths.old_unit_home, pw.pw_name, DATADIR_NAME)
     else:
         display = command[0]
-        datadir = datadir_from_command(command[1], pw, display)
+        words = command_words(command[1], display)
+        if os.path.basename(display) != DROPIN_MAIN:
+            dropped = dropped_words(net, words)
+            if dropped:
+                raise UserError("the ExecStart= in %s has options the new unit would drop: %s; move them to the "
+                                "configuration file, or remove them, then rerun"
+                                % (display, " ".join(shown(word) for word in dropped)))
+        datadir = datadir_from_command(words, pw, display)
     if datadir is None or datadir == os.path.join(pw.pw_dir, DATADIR_NAME):
         return None
     return resolve_datadir(pw, datadir, "the datadir %s from %s" % (shown(datadir), display))
@@ -2285,8 +2332,65 @@ def refuse_unit_replacements(net, user, paths):
                             "mask); move it aside, then rerun" % path)
     for path, text in dropin_texts(dropin_dir(paths, "%s@.service" % net.daemon)):
         # Even an empty ExecStart= would undo this tool's command line when it comes later.
-        if unit_file_settings(text or "", "Service", "ExecStart"):
-            raise UserError("%s sets ExecStart= for every %s@ instance; move it aside, then rerun" % (path, net.daemon))
+        keys = set_keys(text, TEMPLATE_REFUSED_KEYS)
+        if keys:
+            raise UserError("%s sets %s for every %s@ instance; move it aside, then rerun"
+                            % (path, ", ".join(keys), net.daemon))
+
+
+def set_keys(text, keys):
+    """Which of keys the [Service] section of a unit file text sets, an empty value included."""
+    return [key for key in keys if unit_file_settings(text or "", "Service", key)]
+
+
+def is_mask(path):
+    return os.path.islink(path) and os.readlink(path) == "/dev/null"
+
+
+def system_core_overrides(net, paths):
+    """What /etc/systemd/system holds for the system service that was written for the old forking
+    unit: (a unit file there that takes the packaged unit's place, or None; whether that is a mask;
+    [(drop-in path, the old-unit keys it sets)])."""
+    unit = net.daemon + ".service"
+    copy = os.path.join(paths.etc_systemd, unit)
+    stale = []
+    for path, text in dropin_texts(dropin_dir(paths, unit)):
+        keys = set_keys(text, OLD_UNIT_KEYS)
+        if keys and os.path.basename(path) not in (DROPIN_MAIN, DROPIN_AUTOUNLOCK):
+            stale.append((path, keys))
+    return (copy if os.path.lexists(copy) else None), is_mask(copy), stale
+
+
+def switch_system_core(net, host, paths, restart):
+    """Take the system service off what was written for the old forking unit, which would make the
+    notify unit fail at every start: a unit file in /etc/systemd/system in the packaged unit's
+    place, and the drop-ins that set its command line, type, pid file, notify access or account,
+    are renamed aside. A mask stays, and is reported. With restart (a --scan run, after which
+    nothing else restarts the service), a running service is restarted without waiting."""
+    unit = net.daemon + ".service"
+    copy, masked, stale = system_core_overrides(net, paths)
+    if masked:
+        print("%s is masked (a link to /dev/null); it stays masked, so %s does not start." % (copy, unit))
+    renamed = False
+    was_enabled = False
+    if copy is not None and not masked:
+        was_enabled = host.is_enabled(unit)
+        target = disable_dropin(paths.etc_systemd, unit)
+        print("Renamed %s to %s: it took the place of the packaged unit, written for the old forking daemon."
+              % (copy, target))
+        renamed = True
+    for path, keys in stale:
+        target = disable_dropin(os.path.dirname(path), os.path.basename(path))
+        print("Renamed %s to %s: it sets %s for the old forking unit." % (path, target, ", ".join(keys)))
+        renamed = True
+    if not renamed:
+        return
+    step(host, "daemon-reload")
+    # The enablement links named the copy; make them again for the packaged unit.
+    if was_enabled:
+        step(host, "reenable", unit)
+    if restart:
+        step(host, "try-restart", "--no-block", unit)
 
 
 def disable_dropin(directory, name):
@@ -2300,19 +2404,22 @@ def disable_dropin(directory, name):
     return target
 
 
-def switch_user(net, user, kinds, old_units, host, paths):
+def switch_user(net, user, kinds, host, paths):
     """Move one user's per-user core to the new unit: everything is checked before anything
     changes. The drop-ins of the old unit go out of systemd's view; enable-user's drop-in keeps the
     datadir the old unit used; with autounlock, the core pulls the passphrase from the user's
     helper socket, which loads the credential where it is. Then the core is re-enabled if it was
     enabled, and restarted without waiting if it ran. Returns the datadir (None: the default)."""
     pw = validate_user(user, host, paths)
-    if host.is_enabled(net.daemon + ".service"):
-        raise UserError("%s.service is enabled and conflicts with the per-user unit; disable it first" % net.daemon)
+    system_unit = net.daemon + ".service"
+    for state, check in (("enabled", host.is_enabled), ("running", host.is_active)):
+        if check(system_unit):
+            raise UserError("%s is %s and conflicts with the per-user unit: starting one stops the other; stop and "
+                            "disable it first" % (system_unit, state))
     refuse_unit_replacements(net, user, paths)
     unit, socket_unit, _ = autounlock_target(net, user)
     directory = dropin_dir(paths, unit)
-    datadir = switched_datadir(pw, directory, paths)
+    datadir = switched_datadir(net, pw, directory, paths)
     foreign = [os.path.basename(path) for path, _ in dropin_texts(directory)
                if os.path.basename(path) not in (DROPIN_MAIN, DROPIN_AUTOUNLOCK)]
     autounlock = "autounlock" in kinds and autounlock_units_installed()
@@ -2322,7 +2429,9 @@ def switch_user(net, user, kinds, old_units, host, paths):
         print("Autounlock for %s is not carried over: %s. The core starts with the wallet locked."
               % (user, NO_AUTOUNLOCK_UNITS))
 
-    for old in old_units:
+    # The old autounlock unit, where it is still on: a host set up by hand, or a rerun.
+    old = "%s@%s.service" % (old_autounlock(net), user)
+    if "autounlock" in kinds and host.is_enabled(old):
         step(host, "disable", "--now", old)
     write_dropin(paths, unit, DROPIN_MAIN, render_user_dropin(net, datadir))
     if autounlock:
@@ -2359,11 +2468,13 @@ def secure_credential(path):
         os.close(fd)
 
 
-def switch_system_autounlock(net, old_units, host, paths):
+def switch_system_autounlock(net, host, paths):
     """Move the system service's autounlock to the new helper. A credential the old unit used stays
     where it is, made root's own 0600, and a drop-in points the helper at it; then autounlock enable
     --system."""
     legacy = legacy_credential_path(net)
+    old = old_autounlock(net) + ".service"
+    old_units = [old] if host.is_enabled(old) else []
     if not autounlock_units_installed():
         for old in old_units:
             step(host, "disable", "--now", old)
@@ -2388,12 +2499,15 @@ def switch_system_autounlock(net, old_units, host, paths):
     enable_autounlock(net, None, host, paths)
 
 
+def switchover_state_path(paths, network):
+    return os.path.join(paths.tool_state, "switchover-%s.state" % network)
+
+
 def cmd_switch_over(args, net, host, paths):
     if args.state is not None:
         entries = read_switchover_state(args.state)
-        old_units = {}
     else:
-        entries, old_units = scan_old_installs(net, host, paths)
+        entries = scan_old_installs(net, host, paths)
     if not entries:
         if entries is not None and args.state is not None:
             os.unlink(args.state)
@@ -2403,37 +2517,53 @@ def cmd_switch_over(args, net, host, paths):
     for kind, user in entries:
         if user is not None:
             users.setdefault(user, set()).add(kind)
+    # Users and the system entries apart: a user may have any valid name.
     failed = set()
+    if (SYSTEM_CORE, None) in entries:
+        # First, so that nothing restarts the service on its old overrides.
+        try:
+            switch_system_core(net, host, paths, restart=args.state is None)
+        except (UserError, StepError, OSError) as e:
+            print("%s: %s.service: %s" % (net.tool_name, net.daemon, e), file=sys.stderr)
+            failed.add((SYSTEM_CORE, None))
     for user, kinds in users.items():
         try:
-            datadir = switch_user(net, user, kinds, old_units.get(user, []), host, paths)
+            datadir = switch_user(net, user, kinds, host, paths)
         except (UserError, StepError, OSError) as e:
             print("%s: %s: %s; %s's core was not restarted" % (net.tool_name, shown(user), e, shown(user)),
                   file=sys.stderr)
-            failed.add(user)
+            failed.add(("user", user))
             continue
         print("Switched %s over to %s@%s.service (datadir %s)."
               % (user, net.daemon, user, datadir or "the default, under the home directory"))
-    if any(user is None for _, user in entries):
+    if (SYSTEM_AUTOUNLOCK, None) in entries:
         try:
-            switch_system_autounlock(net, old_units.get(None, []), host, paths)
+            switch_system_autounlock(net, host, paths)
         except (UserError, StepError, OSError) as e:
             print("%s: %s.service's autounlock: %s" % (net.tool_name, net.daemon, e), file=sys.stderr)
-            failed.add(None)
+            failed.add((SYSTEM_AUTOUNLOCK, None))
         else:
             print("Switched %s.service's autounlock over to %s.socket." % (net.daemon, net.autounlock))
-    left = [(kind, user) for kind, user in entries if user in failed]
-    if args.state is not None:
+    left = [(kind, user) for kind, user in entries
+            if (("user", user) if user is not None else (kind, None)) in failed]
+    state_path = args.state
+    if state_path is None and left:
+        # What a --scan run leaves is kept where a --state rerun finds it, with what is there already.
+        os.close(open_tool_state(paths))
+        state_path = switchover_state_path(paths, args.network)
+        earlier = read_switchover_state(state_path) or []
+        left = earlier + [entry for entry in left if entry not in earlier]
+    if state_path is not None:
         if left:
-            write_switchover_state(args.state, left)
-        else:
-            os.unlink(args.state)
+            write_switchover_state(state_path, left)
+        elif os.path.exists(state_path):
+            os.unlink(state_path)
     if left:
-        rerun = "--state=" + args.state if args.state is not None else "--scan"
-        print("%s: the switch-over did not finish for %s; fix the cause and rerun: %s switch-over %s"
-              % (net.tool_name, ", ".join("the system service" if user is None else shown(user)
-                                          for user in sorted(failed, key=lambda u: (u is None, u or ""))),
-                 net.tool_name, rerun), file=sys.stderr)
+        names = {SYSTEM_CORE: "the system service", SYSTEM_AUTOUNLOCK: "the system service's autounlock"}
+        what = [shown(key[1]) for key in sorted(k for k in failed if k[0] == "user")]
+        what += [names[key[0]] for key in sorted(k for k in failed if k[0] != "user")]
+        print("%s: the switch-over did not finish for %s; fix the cause and rerun: %s switch-over --state=%s"
+              % (net.tool_name, ", ".join(what), net.tool_name, state_path), file=sys.stderr)
         return 1
     return 0
 

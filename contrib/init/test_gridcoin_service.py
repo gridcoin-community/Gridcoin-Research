@@ -2943,8 +2943,9 @@ class SwitchOverTests(ServiceTestBase):
         for d in (data, other):
             os.makedirs(d)
         cases = [
-            # A specifier, and a quoted --datadir.
-            ({"override.conf": "[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=%h/grc\n"}, data),
+            # The instance specifier, and a quoted --datadir.
+            ({"override.conf": "[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=%s/%%i/grc\n"
+                               % os.path.dirname(pw.pw_dir)}, data),
             ({"override.conf": '[Service]\nExecStart=\nExecStart=/usr/bin/x "--datadir=%s"\n' % other}, other),
             # The last command line is the one that runs, and on it the last -datadir.
             ({"a.conf": "[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=%s\n" % other,
@@ -2964,12 +2965,20 @@ class SwitchOverTests(ServiceTestBase):
                 for name, text in files.items():
                     self.write_override("alice", name, text)
                 directory = self.instance_dir("alice")
-                self.assertEqual(svc.switched_datadir(pw, directory, self.paths), expected)
-        # What cannot be resolved fails the user and changes nothing.
-        for text in ("[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=%t/grc\n",
-                     "[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=relative\n",
-                     "[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=${D}\n",
-                     "[Service]\nExecStart=\nExecStart=/usr/bin/x '-datadir=%s\n" % other):
+                self.assertEqual(svc.switched_datadir(svc.NETWORKS["main"], pw, directory, self.paths), expected)
+        # What cannot be resolved fails the user and changes nothing: an unknown specifier, %h and
+        # %u (root's home and name in a unit of the system manager), a relative path, a variable,
+        # an open quote, and a backslash, which systemd and shlex read differently.
+        for text, reason in (("[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=%t/grc\n", "%t"),
+                             ("[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=%h/grc\n", "root's home"),
+                             ("[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=/home/%u/grc\n", "root's home"),
+                             ("[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=relative\n", "absolute"),
+                             ("[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=${D}\n", "absolute"),
+                             ("[Service]\nExecStart=\nExecStart=/usr/bin/x '-datadir=%s\n" % other, "cannot read"),
+                             ("[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=%s\\x2dy\n" % other,
+                              "backslash"),
+                             ("[Service]\nExecStart=\nExecStart=/usr/bin/x \"-datadir=%s\\\" \"\n" % other,
+                              "backslash")):
             with self.subTest(text=text):
                 svc_rmtree(self.instance_dir("alice"))
                 path = self.write_override("alice", "override.conf", text)
@@ -2978,8 +2987,40 @@ class SwitchOverTests(ServiceTestBase):
                 rc, out, err = self.run_main("switch-over", "--state=" + state)
                 self.assertEqual(rc, 1)
                 self.assertIn(path, err)
+                self.assertIn(reason, err)
                 self.assertEqual(self.host.calls, [])
                 self.assertEqual(os.listdir(self.instance_dir("alice")), ["override.conf"])
+
+    def test_switch_over_refuses_old_options_it_would_drop(self):
+        data = os.path.join(self.tmp.name, "data", "alice", "grc")
+        os.makedirs(data)
+        # The old unit's own words, and the new command line's, are carried or replaced; any
+        # other option would be lost, so the user is not switched.
+        path = self.write_override("alice", "override.conf", "[Service]\nExecStart=\nExecStart=/usr/bin/x "
+                                   "-daemonwait -multiprocess -pid=/run/x.pid -datadir=%s -printtoconsole "
+                                   "--conf=/etc/x.conf\n" % data)
+        state = self.write_state("core alice\ncore-active alice\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 1)
+        self.assertIn(path, err)
+        self.assertIn("-printtoconsole --conf=/etc/x.conf", err)
+        self.assertEqual(self.host.calls, [])
+        self.assertEqual(os.listdir(self.instance_dir("alice")), ["override.conf"])
+        # Those words alone pass, -testnet only on testnet; this tool's own drop-in is not checked.
+        self.write_override("alice", "override.conf", "[Service]\nExecStart=\nExecStart=/usr/bin/x -daemon "
+                            "--daemonwait=1 -nodaemon -nodaemonwait -multiprocess -pid=/run/x.pid -datadir=%s\n"
+                            % data)
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 0, err)
+        testnet = "[Service]\nExecStart=\nExecStart=/usr/bin/x -testnet -daemonwait -datadir=%s\n" % data
+        self.write_override("alice", "override.conf", testnet, daemon="gridcointestnetd")
+        self.write_override("bob", "override.conf", testnet)
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("core alice\n", network="test"),
+                                     "--network=test")
+        self.assertEqual(rc, 0, err)
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("core bob\n"))
+        self.assertEqual(rc, 1)
+        self.assertIn("-testnet", err)
 
     def test_switch_over_keeps_an_old_unit_datadir_outside_the_home(self):
         # The old unit's /home/<user>/.GridcoinResearch, for a user whose home is elsewhere.
@@ -3069,14 +3110,15 @@ class SwitchOverTests(ServiceTestBase):
 
     def full_old_install(self):
         """An enabled and running old per-user instance with autounlock and an override, and the
-        old system autounlock."""
+        old system autounlock. The system service is not running: it conflicts with the per-user
+        unit."""
         data = os.path.join(self.tmp.name, "data", "alice", "grc")
         os.makedirs(data)
         self.make_credential("gridcoinresearch-alice.wallet-passphrase")
         self.write_override("alice", "override.conf", OLD_OVERRIDE % (data, data))
         with open(self.legacy, "wb") as f:
             f.write(b"old")
-        self.host.active.update({"gridcoinresearchd@alice.service", "gridcoinresearchd.service"})
+        self.host.active.add("gridcoinresearchd@alice.service")
         return data
 
     def test_switch_over_idempotent(self):
@@ -3118,7 +3160,6 @@ class SwitchOverTests(ServiceTestBase):
             ("disable", "--now", "gridcoinresearchd-autounlock.service"),
             ("daemon-reload",),
             ("enable", "--now", "gridcoin-autounlock.socket"),
-            ("restart", "--no-block", "gridcoinresearchd.service"),
         ])
         self.assertIn("-datadir=" + data, self.dropin("gridcoinresearchd@alice.service"))
         self.assertFalse(os.path.exists(self.instance_dir("carol")))
@@ -3168,7 +3209,8 @@ class SwitchOverTests(ServiceTestBase):
             (lambda: os.symlink("/dev/null", copy), copy),
             (lambda: self.write_text(template_dropin, "[Service]\nExecStart=\nExecStart=/usr/bin/x -daemon\n"),
              template_dropin),
-        ]
+        ] + [(lambda line=line: self.write_text(template_dropin, "[Service]\n%s\n" % line), template_dropin)
+             for line in ("Type=forking", "PIDFile=/run/x.pid", "NotifyAccess=all", "User=gridcoin")]
         for make, named in cases:
             with self.subTest(named=named):
                 for path in (copy, template_dropin):
@@ -3185,17 +3227,141 @@ class SwitchOverTests(ServiceTestBase):
         self.write_text(template_dropin, "[Service]\nNice=5\n")
         rc, out, err = self.run_main("switch-over", "--state=" + self.write_state(state_text))
         self.assertEqual(rc, 0, err)
-        # The system service enabled beside the user's: the per-user unit conflicts with it.
-        self.host.enabled.add("gridcoinresearchd.service")
-        self.host.calls.clear()
-        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state(state_text))
-        self.assertEqual(rc, 1)
-        self.assertIn("conflicts", err)
-        self.assertEqual(self.host.calls, [])
+        # The system service enabled or running beside the user's: the per-user unit conflicts
+        # with it, and starting one stops the other.
+        for where in (self.host.enabled, self.host.active):
+            where.add("gridcoinresearchd.service")
+            self.host.calls.clear()
+            rc, out, err = self.run_main("switch-over", "--state=" + self.write_state(state_text))
+            self.assertEqual(rc, 1)
+            self.assertIn("conflicts", err)
+            self.assertEqual(self.host.calls, [])
+            where.discard("gridcoinresearchd.service")
 
     def write_text(self, path, text):
         with open(path, "w", encoding="utf8") as f:
             f.write(text)
+
+    def system_unit_dir(self, daemon="gridcoinresearchd"):
+        return os.path.join(self.paths.etc_systemd, daemon + ".service.d")
+
+    def write_system_dropin(self, name, text, daemon="gridcoinresearchd"):
+        os.makedirs(self.system_unit_dir(daemon), exist_ok=True)
+        path = os.path.join(self.system_unit_dir(daemon), name)
+        self.write_text(path, text)
+        return path
+
+    def test_switch_over_moves_the_system_services_old_overrides_aside(self):
+        stale = {
+            "override.conf": "[Service]\nExecStart=\nExecStart=/usr/bin/gridcoinresearchd -daemonwait "
+                             "-pid=/run/gridcoinresearchd/gridcoinresearchd.pid\n",
+            "10-type.conf": "[Service]\nType=forking\nPIDFile=/run/gridcoinresearchd/gridcoinresearchd.pid\n",
+            "20-notify.conf": "[Service]\nNotifyAccess=all\n",
+            "30-account.conf": "[Service]\nUser=gridcoin\nGroup=gridcoin\n",
+        }
+        for name, body in stale.items():
+            self.write_system_dropin(name, body)
+        kept = self.write_system_dropin("40-nice.conf", "[Service]\nNice=5\n[Unit]\nDescription=x\n")
+        ours = self.write_system_dropin("60-gridcoin-autounlock.conf", "[Service]\nEnvironment=X=1\n")
+        state = self.write_state("system-core\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(sorted(os.listdir(self.system_unit_dir())), sorted(
+            ["40-nice.conf", "60-gridcoin-autounlock.conf"] + [n + ".disabled-by-gridcoin-switchover" for n in stale]))
+        for name, body in stale.items():
+            self.assertIn(os.path.join(self.system_unit_dir(), name), out)
+            renamed = os.path.join(self.system_unit_dir(), name + ".disabled-by-gridcoin-switchover")
+            self.assertEqual(read_bytes(renamed), body.encode())
+        self.assertIn("ExecStart", out)
+        self.assertIn("User, Group", out)
+        self.assertTrue(os.path.exists(kept) and os.path.exists(ours))
+        # The package restarts the service after this; only the new drop-in set is loaded here.
+        self.assertEqual(self.host.calls, [("daemon-reload",)])
+        self.assertFalse(os.path.exists(state))
+
+    def test_switch_over_moves_a_copy_of_the_old_system_unit_aside(self):
+        copy = os.path.join(self.paths.etc_systemd, "gridcoinresearchd.service")
+        self.write_text(copy, "[Service]\nType=forking\n")
+        self.host.enabled.add("gridcoinresearchd.service")
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+        self.assertEqual(rc, 0, err)
+        self.assertFalse(os.path.lexists(copy))
+        self.assertEqual(read_bytes(copy + ".disabled-by-gridcoin-switchover"), b"[Service]\nType=forking\n")
+        self.assertIn(copy, out)
+        # Its enablement links named the copy; they are made again for the packaged unit.
+        self.assertEqual(self.host.calls, [("daemon-reload",), ("reenable", "gridcoinresearchd.service")])
+        # A link to another file is a copy too; a mask stays, and is reported.
+        os.symlink("/opt/elsewhere/gridcoinresearchd.service", copy)
+        self.host.enabled.clear()
+        self.host.calls.clear()
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+        self.assertEqual(rc, 0, err)
+        self.assertTrue(os.path.islink(copy + ".2.disabled-by-gridcoin-switchover"))
+        self.assertEqual(self.host.calls, [("daemon-reload",)])
+        os.symlink("/dev/null", copy)
+        self.host.calls.clear()
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(os.readlink(copy), "/dev/null")
+        self.assertIn("masked", out)
+        self.assertEqual(self.host.calls, [])
+
+    def test_switch_over_scan_finds_the_system_services_old_overrides(self):
+        self.write_system_dropin("override.conf", "[Service]\nUser=gridcoin\n")
+        self.host.active.add("gridcoinresearchd.service")
+        rc, out, err = self.run_main("switch-over", "--scan")
+        self.assertEqual(rc, 0, err)
+        # Nothing else restarts the service after a --scan run.
+        self.assertEqual(self.host.calls, [("daemon-reload",),
+                                           ("try-restart", "--no-block", "gridcoinresearchd.service")])
+        # Harmless drop-ins and a mask give --scan nothing to do.
+        self.write_system_dropin("40-nice.conf", "[Service]\nNice=5\n")
+        os.symlink("/dev/null", os.path.join(self.paths.etc_systemd, "gridcoinresearchd.service"))
+        self.host.calls.clear()
+        rc, out, err = self.run_main("switch-over", "--scan")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("Nothing to switch over", out)
+        self.assertEqual(self.host.calls, [])
+
+    def test_switch_over_scan_keeps_what_failed_for_a_rerun(self):
+        self.full_old_install()
+        os.unlink(self.legacy)
+        self.wants("multi-user.target", "gridcoinresearchd@alice.service")
+        self.wants("gridcoinresearchd@alice.service", "gridcoinresearchd-autounlock@alice.service")
+        self.wants("gridcoinresearchd.service", "gridcoinresearchd-autounlock.service")
+        self.host.enabled.update({"gridcoinresearchd@alice.service", "gridcoinresearchd-autounlock@alice.service",
+                                  "gridcoinresearchd-autounlock.service"})
+        # A disabled unit is no longer enabled, as on a real host.
+        self.host.on_systemctl["disable"] = lambda args: self.host.enabled.difference_update(args[2:])
+        self.host.fail.add("reenable")
+        rc, out, err = self.run_main("switch-over", "--scan")
+        self.assertEqual(rc, 1)
+        state = os.path.join(self.paths.tool_state, "switchover-main.state")
+        self.assertIn("switch-over --state=" + state, err)
+        self.assertEqual(os.stat(state).st_mode & 0o777, 0o600)
+        with open(state, encoding="utf8") as f:
+            self.assertEqual(f.read(), "autounlock alice\ncore alice\ncore-active alice\nsystem-autounlock\n")
+        self.assertNotIn(("try-restart", "--no-block", "gridcoinresearchd@alice.service"), self.host.calls)
+        # The rerun finishes both: alice's old unit is off already, the system one is still on.
+        self.host.fail.clear()
+        with open(self.legacy, "wb") as f:
+            f.write(b"old")
+        self.host.calls.clear()
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 0, err)
+        self.assertNotIn(("disable", "--now", "gridcoinresearchd-autounlock@alice.service"), self.host.calls)
+        self.assertIn(("disable", "--now", "gridcoinresearchd-autounlock.service"), self.host.calls)
+        self.assertIn(("try-restart", "--no-block", "gridcoinresearchd@alice.service"), self.host.calls)
+        self.assertFalse(os.path.exists(state))
+        # A state file there already keeps its entries when a --scan run adds to it.
+        self.write_state("core carol\n")
+        self.host.fail.add("reenable")
+        self.host.enabled.add("gridcoinresearchd@bob.service")
+        self.wants("multi-user.target", "gridcoinresearchd@bob.service")
+        rc, out, err = self.run_main("switch-over", "--scan")
+        self.assertEqual(rc, 1)
+        with open(state, encoding="utf8") as f:
+            self.assertEqual(f.read(), "core carol\ncore bob\n")
 
     def test_switch_over_renames_without_overwriting(self):
         earlier = self.write_override("alice", "override.conf.disabled-by-gridcoin-switchover", "earlier")
@@ -3230,6 +3396,7 @@ class WithoutAutounlockUnitsTests(SwitchOverTests):
     test_switch_over_system_credential_must_exist = None
     test_switch_over_failed_user_not_restarted = None
     test_switch_over_scan_finds_the_old_units = None
+    test_switch_over_scan_keeps_what_failed_for_a_rerun = None
 
     def test_no_socket_is_touched_by_the_per_user_commands(self):
         self.make_credential("gridcoinresearch-bob.wallet-passphrase")
