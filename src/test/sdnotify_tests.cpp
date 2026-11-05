@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <util/sdnotify.h>
+#include <util/strencodings.h>
 #include <util/system.h>
 #include <tinyformat.h>
 
@@ -181,7 +182,9 @@ long long ExtensionUsec(const std::string& message)
 {
     const std::string key = "EXTEND_TIMEOUT_USEC=";
     if (message.compare(0, key.size(), key) != 0) return -1;
-    return std::stoll(message.substr(key.size()));
+    // The value ends at the line break before STATUS=.
+    const size_t end = message.find('\n', key.size());
+    return ToIntegral<long long>(message.substr(key.size(), end - key.size())).value_or(-1);
 }
 } // namespace
 #endif // __linux__

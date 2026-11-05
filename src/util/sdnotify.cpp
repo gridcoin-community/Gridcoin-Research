@@ -14,7 +14,6 @@
 #include <utility>
 
 #ifdef __linux__
-#include <atomic>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
