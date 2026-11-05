@@ -148,6 +148,51 @@ bool OwnedByUs(const fs::path& path)
     return !S_ISLNK(st.st_mode) && st.st_uid == ::geteuid();
 }
 
+AppendResult AppendToOwnedFile(const fs::path& path, const std::string& text)
+{
+    // O_NOFOLLOW refuses a symbolic link (ELOOP; EMLINK on FreeBSD), so whatever it leads to
+    // is never opened. O_NONBLOCK keeps a FIFO with no reader from holding the caller; it
+    // changes nothing for the regular file the check below lets through. No O_CREAT: the file
+    // must exist.
+    const int fd = ::open(path.string().c_str(),
+                          O_WRONLY | O_APPEND | O_NOFOLLOW | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+    if (fd < 0) {
+        const int err = errno;
+        if (err == ELOOP || err == EMLINK) return {AppendStatus::NotOwned, {}};
+        return {AppendStatus::OpenFailed, SysErrorString(err)};
+    }
+
+    // Checked on what was opened, not on the name: the name may lead somewhere else by now.
+    struct stat st;
+    if (::fstat(fd, &st) != 0) {
+        const int err = errno;
+        ::close(fd);
+        return {AppendStatus::OpenFailed, SysErrorString(err)};
+    }
+    if (!S_ISREG(st.st_mode) || st.st_uid != ::geteuid()) {
+        ::close(fd);
+        return {AppendStatus::NotOwned, {}};
+    }
+
+    int err = 0;
+    size_t done = 0;
+    while (done < text.size()) {
+        const ssize_t n = ::write(fd, text.data() + done, text.size() - done);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            err = errno;
+            break;
+        }
+        // write() returns at most what was asked, which is non-negative here.
+        done += static_cast<size_t>(n);
+    }
+
+    if (::close(fd) != 0 && err == 0) err = errno;
+    if (err != 0) return {AppendStatus::WriteFailed, SysErrorString(err)};
+
+    return {AppendStatus::Appended, {}};
+}
+
 bool NotOwnedModeAcceptable(unsigned mode)
 {
     // No access at all for "other" and no write for the group.

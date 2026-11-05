@@ -580,6 +580,42 @@ void AddMissingRpcCredentials()
     }
 #endif
 
+    // Lead with a newline: an existing file need not end with one, and silently gluing
+    // rpcuser= onto the tail of somebody's last directive would corrupt their config.
+    std::string credentials = "\n"
+                              "# Generated because an RPC server is being started without credentials, which\n"
+                              "# the daemon refuses to do. Without these it would not start at all. Change\n"
+                              "# them if you like; do not leave rpcpassword empty or equal to rpcuser.\n";
+
+    if (need_user) credentials += "rpcuser=gridcoinrpc\n";
+    if (need_password) credentials += "rpcpassword=" + GenerateRpcPassword() + "\n";
+
+#ifndef WIN32
+    // The file is opened without following a link and checked again on the open descriptor,
+    // so one swapped for a link or for another account's file since OwnedByUs() looked is not
+    // written.
+    const fsmodes::AppendResult appended = fsmodes::AppendToOwnedFile(config_file, credentials);
+
+    if (appended.status == fsmodes::AppendStatus::NotOwned) {
+        LogPrintf("%s: not adding RPC credentials to %s: it is not owned by this account; the package or the "
+                  "administrator provides them",
+                  __func__, config_file.string());
+        return;
+    }
+    if (appended.status == fsmodes::AppendStatus::OpenFailed) {
+        // Not fatal here: fall through to StartRPCThreads, which already fails with a
+        // clear message telling the operator exactly what to put in the file. This is
+        // no worse than the behaviour before this function existed.
+        LogPrintf("WARNING: %s: could not open %s to add the missing RPC credentials",
+                  __func__, config_file.string());
+        return;
+    }
+    if (appended.status == fsmodes::AppendStatus::WriteFailed) {
+        LogPrintf("WARNING: %s: could not write the missing RPC credentials to %s: %s",
+                  __func__, config_file.string(), appended.error);
+        return;
+    }
+#else
     {
         fsbridge::ofstream config(config_file, std::ios_base::app);
 
@@ -592,16 +628,9 @@ void AddMissingRpcCredentials()
             return;
         }
 
-        // Lead with a newline: an existing file need not end with one, and silently gluing
-        // rpcuser= onto the tail of somebody's last directive would corrupt their config.
-        config << "\n"
-               << "# Generated because an RPC server is being started without credentials, which\n"
-               << "# the daemon refuses to do. Without these it would not start at all. Change\n"
-               << "# them if you like; do not leave rpcpassword empty or equal to rpcuser.\n";
-
-        if (need_user) config << "rpcuser=gridcoinrpc\n";
-        if (need_password) config << "rpcpassword=" << GenerateRpcPassword() << "\n";
+        config << credentials;
     }
+#endif
 
     // Re-read so THIS start works rather than only the next one -- the whole point is that
     // an unattended boot does not need a human. Same pattern as the fresh-config branch.

@@ -57,6 +57,32 @@ std::vector<ModeFinding> CheckOwnerOnlyModes(const fs::path& datadir, const fs::
 //! True when the path is not a symbolic link and its owner is this process's effective user.
 bool OwnedByUs(const fs::path& path);
 
+//! What AppendToOwnedFile did.
+enum class AppendStatus
+{
+    //! The text was written at the end of the file.
+    Appended,
+    //! Nothing was written: the path is a symbolic link, or not a regular file this account owns.
+    NotOwned,
+    //! The file could not be opened; nothing was written.
+    OpenFailed,
+    //! The file was opened but the write failed. What was written before the failure stays.
+    WriteFailed,
+};
+
+struct AppendResult
+{
+    AppendStatus status;
+    //! Why it failed, for OpenFailed and WriteFailed.
+    std::string error;
+};
+
+//! Appends \p text to the existing file at \p path, which must be a regular file this account
+//! owns, as OwnedByUs() says. The file is opened without following a symbolic link and checked on
+//! the open descriptor before anything is written, so a file swapped for a link or for another
+//! account's file after an earlier OwnedByUs() is not written.
+AppendResult AppendToOwnedFile(const fs::path& path, const std::string& text);
+
 //! The rule for every checked path: no access for "other" and no write for the group.
 bool NotOwnedModeAcceptable(unsigned mode);
 

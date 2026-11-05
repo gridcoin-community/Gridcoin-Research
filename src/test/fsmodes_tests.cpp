@@ -15,13 +15,16 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include <algorithm>
 #include <cerrno>
 #include <cstdlib>
+#include <iterator>
 #include <set>
+#include <string>
 
 namespace {
 
@@ -84,6 +87,13 @@ bool HasFinding(const std::vector<fsmodes::ModeFinding>& findings, const fs::pat
 {
     return std::any_of(findings.begin(), findings.end(),
                        [&path](const fsmodes::ModeFinding& f) { return f.path == path; });
+}
+
+//! The contents of the file at \p path.
+std::string ReadAll(const fs::path& path)
+{
+    fsbridge::ifstream stream(path);
+    return {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
 }
 
 const fsmodes::ModeFinding& FindingFor(const std::vector<fsmodes::ModeFinding>& findings, const fs::path& path)
@@ -454,6 +464,62 @@ BOOST_AUTO_TEST_CASE(an_unrestrictable_backup_directory_is_kept_and_reported)
             BOOST_TEST_MESSAGE("not owner-only: " << *check.not_owner_only);
         }
     }
+}
+
+// AppendToOwnedFile writes at the end of a regular file this account owns and leaves what
+// was there.
+BOOST_AUTO_TEST_CASE(append_to_owned_file_appends_to_a_regular_file)
+{
+    const ScratchDir scratch;
+    const fs::path conf = scratch.m_path / "gridcoinresearch.conf";
+    MakeFile(conf, 0600);
+
+    const fsmodes::AppendResult result = fsmodes::AppendToOwnedFile(conf, "rpcuser=fsmodes\n");
+
+    BOOST_CHECK(result.status == fsmodes::AppendStatus::Appended);
+    BOOST_CHECK_EQUAL(ReadAll(conf), "fsmodes test\nrpcuser=fsmodes\n");
+    BOOST_CHECK_EQUAL(ModeOf(conf), 0600U);
+}
+
+// A conf that is a symbolic link is not written, and neither is the file it leads to: the
+// open does not follow the link. That is also what happens to a conf swapped for a link
+// after AddMissingRpcCredentials() checked it with OwnedByUs(), since the open does not rely
+// on that check.
+BOOST_AUTO_TEST_CASE(append_to_owned_file_refuses_a_symlinked_conf)
+{
+    const ScratchDir scratch;
+    const fs::path target = scratch.m_path / "elsewhere.conf";
+    MakeFile(target, 0600);
+
+    const fs::path conf = scratch.m_path / "gridcoinresearch.conf";
+    fs::create_symlink(target, conf);
+
+    const fsmodes::AppendResult result = fsmodes::AppendToOwnedFile(conf, "rpcpassword=fsmodes\n");
+
+    BOOST_CHECK(result.status == fsmodes::AppendStatus::NotOwned);
+    BOOST_CHECK_EQUAL(ReadAll(target), "fsmodes test\n");
+    BOOST_CHECK(fs::is_symlink(conf));
+}
+
+// A FIFO is not a regular file. With a reader on it the open succeeds, and the check of the
+// open descriptor refuses it, so nothing goes down the pipe.
+BOOST_AUTO_TEST_CASE(append_to_owned_file_refuses_a_fifo)
+{
+    const ScratchDir scratch;
+    const fs::path fifo = scratch.m_path / "gridcoinresearch.conf";
+    BOOST_REQUIRE_EQUAL(::mkfifo(fifo.string().c_str(), 0600), 0);
+
+    const int reader = ::open(fifo.string().c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    BOOST_REQUIRE(reader >= 0);
+
+    const fsmodes::AppendResult result = fsmodes::AppendToOwnedFile(fifo, "rpcpassword=fsmodes\n");
+
+    char buffer[64];
+    const ssize_t read = ::read(reader, buffer, sizeof(buffer));
+    ::close(reader);
+
+    BOOST_CHECK(result.status == fsmodes::AppendStatus::NotOwned);
+    BOOST_CHECK_MESSAGE(read <= 0, "the FIFO received " << read << " bytes");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
