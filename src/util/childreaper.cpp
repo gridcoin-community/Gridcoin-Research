@@ -19,6 +19,7 @@
 #include <set>
 #include <thread>
 
+#include <fcntl.h>
 #include <signal.h>
 #include <spawn.h>
 #include <sys/types.h>
@@ -83,14 +84,18 @@ int SpawnAndWait(const char* path, char* const argv[])
     }
 #elif defined(__APPLE__) && defined(POSIX_SPAWN_CLOEXEC_DEFAULT)
     // Every descriptor not inherited explicitly is closed in the shell, so it gets its
-    // standard input, output and error and nothing the core holds open.
+    // standard input, output and error and nothing the core holds open. Only those of
+    // the three that are open are named: naming a closed one makes posix_spawn fail
+    // with EBADF.
     flags = static_cast<short>(flags | POSIX_SPAWN_CLOEXEC_DEFAULT);
     spawn_error = posix_spawn_file_actions_init(&actions);
     if (spawn_error == 0) {
         used_actions = &actions;
-        spawn_error = FirstError({posix_spawn_file_actions_addinherit_np(&actions, STDIN_FILENO),
-                                  posix_spawn_file_actions_addinherit_np(&actions, STDOUT_FILENO),
-                                  posix_spawn_file_actions_addinherit_np(&actions, STDERR_FILENO)});
+        for (const int fd : {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO}) {
+            if (spawn_error == 0 && ::fcntl(fd, F_GETFD) != -1) {
+                spawn_error = posix_spawn_file_actions_addinherit_np(&actions, fd);
+            }
+        }
     }
 #else
     // Where neither closefrom nor POSIX_SPAWN_CLOEXEC_DEFAULT is available (glibc
