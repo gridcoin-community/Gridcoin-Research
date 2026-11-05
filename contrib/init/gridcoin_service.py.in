@@ -2601,9 +2601,9 @@ def check_conf_writers(net, path, name, datadir, host):
             raise UserError("%s: %s is owned by uid %d, not root or %s, so that account could change the service's "
                             "options; chown %s: %s" % (name, what, st.st_uid, net.account,
                                                        net.account if in_datadir else "root", target))
-        # In a sticky directory (/tmp) only an entry's owner, the directory's owner or root can
-        # rename or remove it, and both owners are checked here.
-        if st.st_mode & 0o022 and not (stat.S_ISDIR(st.st_mode) and st.st_mode & stat.S_ISVTX):
+        # A sticky directory is no exception: one that others can write (/dev/shm, /run/lock) lets
+        # any local user make an entry there that is missing, after a reboot say.
+        if st.st_mode & 0o022:
             raise UserError("%s: %s can be written by group or others (mode %04o), who could change the service's "
                             "options; chmod go-w %s" % (name, what, stat.S_IMODE(st.st_mode), target))
 

@@ -3139,6 +3139,16 @@ class SwitchOverTests(ServiceTestBase):
         # Files and directories made here are writable only by their owner, whatever the runner's
         # umask, as the checks on a carried conf depend on it.
         self.addCleanup(os.umask, os.umask(0o022))
+        # A carried conf's every directory up to / must be root's or the account's and closed to
+        # group and others, a sticky one too: the system temporary directory these tests run under
+        # (/tmp, 1777) is shown to the checks as 0755.
+        ancestors, directory = [], os.path.dirname(os.path.realpath(root))
+        while True:
+            ancestors.append(directory)
+            if directory == "/":
+                break
+            directory = os.path.dirname(directory)
+        self.enterContext(seen_as({d: {"mode": 0o755} for d in ancestors if os.stat(d).st_mode & stat.S_ISVTX}))
         conf_dirs = {"main": os.path.join(root, "etc-gridcoin"), "test": os.path.join(root, "etc-gridcoin-testnet")}
         for d in conf_dirs.values():
             os.makedirs(d)
@@ -3848,12 +3858,14 @@ class SwitchOverTests(ServiceTestBase):
                     rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
                 self.assertEqual(rc, 1)
                 self.assertIn(reason, err)
-        # A directory of root's with the sticky bit, /tmp say, lets nobody else replace what is in it.
+        # The sticky bit is no exception: a sticky directory others can write, /dev/shm or
+        # /run/lock say, lets any local user make an entry there that is gone (after a reboot).
         svc_rmtree(self.system_unit_dir())
         self.system_override("-conf=%s -datadir=%s" % (conf, data))
         with seen_as({top: {"uid": 0, "mode": 0o1777}}):
             rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
-        self.assertEqual(rc, 0, err)
+        self.assertEqual(rc, 1)
+        self.assertIn("%s above it can be written by group or others (mode 1777)" % top, err)
 
     def test_switch_over_checks_a_carried_conf_on_its_own_descriptors(self):
         # Each directory and the file are checked with fstat on a descriptor opened without
