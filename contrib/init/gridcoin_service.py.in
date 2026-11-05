@@ -70,6 +70,9 @@ TERMINATE_WAIT_SECONDS = 30
 UNSET_LOGIN_UID = 4294967295
 # The quarantined files are read whole; nothing that size is a real configuration file.
 MAX_CONFIG_BYTES = 16 * 1024 * 1024
+# The core's MAX_JSON_DEPTH (src/univalue/lib/univalue_read.cpp): it does not load a settings
+# file nested deeper.
+MAX_JSON_DEPTH = 512
 # The grammar build-aux/cmake/refusedkeys2header.cmake enforces on the pattern file.
 PATTERN_RE = re.compile(r"[a-z0-9_*-]+\Z")
 
@@ -588,10 +591,41 @@ def is_refused_key(key, patterns):
     return matches_any(key[key.find(".") + 1:], patterns)
 
 
+def refused_as_read(name, patterns):
+    """Whether the core refuses name, or the name it reads it as: the section up to the first
+    '.' and then a leading "no" removed, as InterpretOption removes them."""
+    key = name[name.find(".") + 1:]
+    return is_refused_key(name, patterns) or (key.startswith("no") and matches_any(key[2:], patterns))
+
+
+def json_depth(value):
+    """The deepest nesting of objects and arrays in value, the outermost counting 1, as UniValue
+    counts it."""
+    depth = 0
+    pending = [(value, 1)]
+    while pending:
+        item, level = pending.pop()
+        if isinstance(item, dict):
+            children = item.values()
+        elif isinstance(item, list):
+            children = item
+        else:
+            continue
+        depth = max(depth, level)
+        pending.extend((child, level + 1) for child in children)
+    return depth
+
+
 def sanitize_settings(text, patterns):
-    """Drop from a gridcoinsettings.json text the keys the core refuses: ReadSettingsFile tests
-    each key as written with IsRefusedSettingKey. Raises ValueError where the core's ReadSettings
-    fails (not JSON, not an object, a duplicate key). Returns (text, removed keys)."""
+    """Drop from a gridcoinsettings.json text the keys the core refuses. ReadSettingsFile in
+    src/util/system.cpp refuses a key when IsRefusedSettingKey holds for it as written, or when
+    the key, read through InterpretOption (section and a leading "no" removed), is a
+    COMMAND_LINE_ONLY option. The tool has no flags, so for that second arm it tests the patterns,
+    which cover every COMMAND_LINE_ONLY option (init_tests.cpp checks it). That also drops the
+    "no" form of a refused key that is not COMMAND_LINE_ONLY, which the core would keep and never
+    use. Raises ValueError, or RecursionError, where the core's ReadSettings fails (not JSON, not
+    an object, a duplicate key, nesting deeper than MAX_JSON_DEPTH) and for a number Python reads
+    as infinite, which cannot be written back as JSON. Returns (text, removed keys)."""
     def unique_pairs(pairs):
         obj = {}
         for key, value in pairs:
@@ -606,9 +640,12 @@ def sanitize_settings(text, patterns):
     settings = json.loads(text, object_pairs_hook=unique_pairs, parse_constant=no_constant)
     if not isinstance(settings, dict):
         raise ValueError("not a JSON object")
-    removed = [key for key in settings if is_refused_key(key, patterns)]
-    kept = {key: value for key, value in settings.items() if key not in removed}
-    return json.dumps(kept, indent=4) + "\n", removed
+    if json_depth(settings) > MAX_JSON_DEPTH:
+        raise ValueError("nested deeper than %d levels" % MAX_JSON_DEPTH)
+    removed = [key for key in settings if refused_as_read(key, patterns)]
+    dropped = set(removed)
+    kept = {key: value for key, value in settings.items() if key not in dropped}
+    return json.dumps(kept, indent=4, allow_nan=False) + "\n", removed
 
 
 def sanitize_conf(text, patterns):
@@ -632,8 +669,7 @@ def sanitize_conf(text, patterns):
             removed.append("line %d (not a setting)" % number)
         else:
             name = prefix + body.split("=", 1)[0].strip(" \t\r\n")
-            key = name[name.find(".") + 1:]
-            if is_refused_key(name, patterns) or (key.startswith("no") and matches_any(key[2:], patterns)):
+            if refused_as_read(name, patterns):
                 removed.append(name)
             else:
                 kept.append(line)
@@ -1133,29 +1169,36 @@ def quarantine_files(src_fd, src_display, owner_uid, q_fd):
     return found, backups
 
 
-def carry_quarantined(found, patterns, q_fd, dst_fd, dst_pw, host):
-    """Write the sanitised gridcoinsettings.json into dst_fd as dst_pw, and a sanitised copy of
-    the conf next to the quarantined one for root's review. Returns report lines, which name
-    keys and never values."""
+def sanitize_quarantined(found, patterns, q_fd, src_display):
+    """Sanitise what quarantine_files found, before anything is copied: a settings file the core
+    would not load refuses the command. The sanitised conf goes next to the quarantined one, for
+    root's review. Returns (sanitised settings text or None, report lines naming keys only)."""
     lines = []
+    settings_text = None
     if SETTINGS_NAME in found:
+        display = os.path.join(src_display, SETTINGS_NAME)
         try:
-            text, removed = sanitize_settings(found[SETTINGS_NAME].decode("utf8"), patterns)
+            settings_text, removed = sanitize_settings(found[SETTINGS_NAME].decode("utf8"), patterns)
         except UnicodeDecodeError:
             # Its message would quote a byte of the file.
-            lines.append("%s was not carried over: it is not UTF-8" % SETTINGS_NAME)
-        except ValueError as e:
-            lines.append("%s was not carried over: %s" % (SETTINGS_NAME, e))
-        else:
-            write_file_as(dst_fd, SETTINGS_NAME, text.encode("utf8"), dst_pw, host)
-            if removed:
-                lines.append("Removed from %s: %s" % (SETTINGS_NAME, ", ".join(shown(k) for k in removed)))
+            raise UserError("%s is not UTF-8, so the core cannot load it; fix or remove it, then rerun"
+                            % display) from None
+        except (ValueError, RecursionError) as e:
+            raise UserError("%s cannot be loaded as the core loads it (%s); fix or remove it, then rerun"
+                            % (display, e)) from None
+        if removed:
+            lines.append("Removed from %s: %s" % (SETTINGS_NAME, ", ".join(shown(k) for k in removed)))
+        carried = list(json.loads(settings_text))
+        if carried:
+            # The tool cannot see the core's flags, so it names every carried key; the ones that
+            # need elevation (proxy, connect, addnode and the like) are among them.
+            lines.append("Carried over in %s, for review: %s" % (SETTINGS_NAME, ", ".join(shown(k) for k in carried)))
     if CONF_NAME in found:
         text, removed = sanitize_conf(found[CONF_NAME].decode("utf8", "surrogateescape"), patterns)
         write_new_file(q_fd, CONF_NAME + ".sanitized", text.encode("utf8", "surrogateescape"))
         if removed:
             lines.append("Left out of %s.sanitized: %s" % (CONF_NAME, ", ".join(shown(k) for k in removed)))
-    return lines
+    return settings_text, lines
 
 
 def report_quarantine(found, backups, q_display, lines):
@@ -1319,9 +1362,12 @@ def cmd_enable(args, net, host, paths):
         q_fd, q_display = open_quarantine(state_fd, paths, pw.pw_name, args.network, host)
         keep(q_fd)
         found, backups = quarantine_files(s_fd, s_display, pw.pw_uid, q_fd)
+        settings_text, lines = sanitize_quarantined(found, patterns, q_fd, s_display)
         testnet_entries = set() if net.testnet else {n for n in os.listdir(s_fd) if is_testnet_entry(n)}
         copy_tree(s_fd, t_fd, pw.pw_name, net.account, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host, s_display)
-        report_quarantine(found, backups, q_display, carry_quarantined(found, patterns, q_fd, t_fd, acct, host))
+        if settings_text is not None:
+            write_file_as(t_fd, SETTINGS_NAME, settings_text.encode("utf8"), acct, host)
+        report_quarantine(found, backups, q_display, lines)
 
         # 6. Stash the source where only root can reach it, so no second core can stake it.
         stash_name = s_name + STASH_INFIX + stamp(host)
@@ -1427,6 +1473,7 @@ def cmd_disable(args, net, host, paths):
         testnet_entries = set() if net.testnet else {"testnet"}
         try:
             found, backups = quarantine_files(t_fd, t_display, acct.pw_uid, q_fd)
+            settings_text, lines = sanitize_quarantined(found, patterns, q_fd, t_display)
             copy_tree(t_fd, s_fd, net.account, pw.pw_name, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host,
                       t_display)
         except BaseException:
@@ -1436,7 +1483,9 @@ def cmd_disable(args, net, host, paths):
                 except OSError:
                     pass
             raise
-        report_quarantine(found, backups, q_display, carry_quarantined(found, patterns, q_fd, s_fd, pw, host))
+        if settings_text is not None:
+            write_file_as(s_fd, SETTINGS_NAME, settings_text.encode("utf8"), pw, host)
+        report_quarantine(found, backups, q_display, lines)
 
         # The user's own conf comes back from the stash enable recorded; a failure here leaves
         # the wallet where it now is and says so.

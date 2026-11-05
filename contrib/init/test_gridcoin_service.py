@@ -825,17 +825,28 @@ class RefusedKeyTests(unittest.TestCase):
                 svc.load_refused_patterns(os.path.join(tmp, "missing.txt"))
 
     def test_sanitize_settings_strips_what_the_core_refuses(self):
-        # ReadSettingsFile (src/util/system.cpp) refuses IsRefusedSettingKey(name) of each key as written.
+        # ReadSettingsFile (src/util/system.cpp) refuses a key when IsRefusedSettingKey(key) holds, or
+        # when the key read through InterpretOption (section and a leading "no" off) is
+        # COMMAND_LINE_ONLY; the patterns stand in for those flags (init_tests.cpp).
         text = json.dumps({"blocknotify": "x", "main.walletnotify": "x", "test.rpcport": 1, "noncruncher": True,
-                           "norpcpassword": "x", "staking": True, "addnode": ["a", "b"]})
+                           "noautounlocksocket": True, "test.noipcbind": 1, "norpcpassword": "x", "staking": True,
+                           "addnode": ["a", "b"]})
         out, removed = svc.sanitize_settings(text, self.patterns)
-        self.assertEqual(removed, ["blocknotify", "main.walletnotify", "test.rpcport"])
-        self.assertEqual(json.loads(out), {"noncruncher": True, "norpcpassword": "x", "staking": True,
-                                           "addnode": ["a", "b"]})
-        # The core refuses the file on a duplicate key, a non-object or a non-JSON constant.
-        for bad in ('{"a": 1, "a": 2}', "[]", '{"a": NaN}', "", "{"):
-            with self.assertRaises(ValueError, msg=bad):
+        self.assertEqual(removed, ["blocknotify", "main.walletnotify", "test.rpcport", "noautounlocksocket",
+                                   "test.noipcbind", "norpcpassword"])
+        self.assertEqual(json.loads(out), {"noncruncher": True, "staking": True, "addnode": ["a", "b"]})
+        # The core refuses the file on a duplicate key, a non-object, a non-JSON constant or nesting
+        # deeper than MAX_JSON_DEPTH (src/univalue/lib/univalue_read.cpp); a number Python reads as
+        # infinite cannot be written back as JSON.
+        for bad in ('{"a": 1, "a": 2}', "[]", '{"a": NaN}', '{"a": 1e999}', "", "{",
+                    '{"a": ' + "[" * 512 + "]" * 512 + "}"):
+            with self.assertRaises(ValueError, msg=bad[:40]):
                 svc.sanitize_settings(bad, self.patterns)
+        with self.assertRaises(RecursionError):
+            svc.sanitize_settings('{"a": ' + "[" * 100000 + "]" * 100000 + "}", self.patterns)
+        # 512 levels, the object itself included, is what the core still loads.
+        deep = '{"a": ' + "[" * 511 + "]" * 511 + "}"
+        self.assertEqual(svc.sanitize_settings(deep, self.patterns)[1], [])
 
     def test_sanitize_conf_follows_the_config_reader(self):
         # GetConfigOptions (src/util/system.cpp) cuts at '#', trims, prefixes "<section>." after a
@@ -1237,6 +1248,8 @@ class EnableTests(SwitchTestBase):
         for secret in ("SECRETPW", "SECRETJSON", "evil"):
             self.assertNotIn(secret, text)
         self.assertIn(q, text)
+        # What is carried over is named for review too, names only.
+        self.assertRegex(out, r"Carried over in gridcoinsettings\.json.*: staking")
 
     def test_config_backups_are_quarantined_not_copied(self):
         # The core keeps dated copies of both files in walletbackups/ (GetBackupFilename).
@@ -1460,16 +1473,35 @@ class EnableTests(SwitchTestBase):
         self.assertIn("gridcoinsettings.json", err)
         self.assertEqual(os.listdir(self.target()), [])
 
-    def test_enable_reports_settings_it_cannot_carry_without_their_bytes(self):
-        files = self.user_files()
-        files["gridcoinsettings.json"] = b'{"rpcpassword": "\xffSECRETBYTES"}'
-        write_tree(self.datadir, files)
-        rc, out, err = self.run_main("enable", "bob")
-        self.assertEqual(rc, 0, err)
-        self.assertIn("not UTF-8", out)
-        self.assertNotIn("SECRETBYTES", out + err)
-        self.assertNotIn("0xff", out + err)
-        self.assertNotIn("gridcoinsettings.json", os.listdir(self.target()))
+    def test_settings_the_core_cannot_load_refuse_before_the_copy(self):
+        cases = {
+            "not UTF-8": b'{"rpcpassword": "\xffSECRETBYTES"}',
+            "not JSON": b'{"rpcpassword": SECRETBYTES',
+            "duplicate": b'{"staking": true, "staking": false}',
+            "infinite": b'{"staking": 1e999}',
+            "too deep": b'{"a": ' + b"[" * 512 + b"]" * 512 + b"}",
+            "recursion": b'{"a": ' + b"[" * 100000 + b"]" * 100000 + b"}",
+        }
+        copies = []
+        original = svc.copy_as
+        # One host for all, so that each run's quarantine gets a name of its own.
+        host = FakeHost(users=self.host.users)
+        for name, text in cases.items():
+            with self.subTest(name=name):
+                svc_rmtree(self.datadir)
+                files = self.user_files()
+                files["gridcoinsettings.json"] = text
+                write_tree(self.datadir, files)
+                with mock.patch.object(svc, "copy_as", lambda *a, **k: copies.append(a) or original(*a, **k)):
+                    rc, out, err = self.run_main("enable", "bob", host=host)
+                self.assertEqual(rc, 1)
+                self.assertIn("gridcoinsettings.json", err)
+                self.assertNotIn("SECRETBYTES", out + err)
+                self.assertNotIn("0xff", out + err)
+                self.assertEqual(copies, [])
+                self.assertNotIn(("add_to_group", "bob", "gridcoin-gui"), host.calls)
+                self.assertEqual(os.listdir(self.target()), [])
+                self.assertEqual(read_tree(self.datadir), read_tree_from(files))
 
     def test_enable_and_disable_refuse_a_run_from_the_users_own_login(self):
         write_tree(self.datadir, self.user_files())
