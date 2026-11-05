@@ -14,6 +14,7 @@
 #include <cerrno>
 #include <chrono>
 #include <condition_variable>
+#include <initializer_list>
 #include <mutex>
 #include <set>
 #include <thread>
@@ -42,27 +43,75 @@ std::condition_variable g_reaper_cv;
 std::thread g_reaper_thread;
 std::atomic<bool> g_reaper_stop{false};
 
+// The first nonzero result of the calls that set up a spawn, or 0.
+int FirstError(std::initializer_list<int> results)
+{
+    for (const int result : results) {
+        if (result != 0) return result;
+    }
+    return 0;
+}
+
 // Spawns path with argv, waits for it and returns its status, or -1 on failure.
 int SpawnAndWait(const char* path, char* const argv[])
 {
-    pid_t pid = 0;
-    int spawn_error = 0;
-    {
-        std::lock_guard<std::mutex> lock(g_spawn_mutex);
+    // The child starts with SIGPIPE at its default action and no signal blocked,
+    // whatever this process has: the daemon ignores SIGPIPE, and a pipeline in a
+    // notify command must end as it would from a terminal.
+    posix_spawnattr_t attr;
+    int spawn_error = posix_spawnattr_init(&attr);
+    if (spawn_error != 0) {
+        LogPrintf("RunShellCommand error: posix_spawnattr_init failed with errno %d\n", spawn_error);
+        return -1;
+    }
+    sigset_t defaults;
+    sigset_t mask;
+    sigemptyset(&defaults);
+    sigaddset(&defaults, SIGPIPE);
+    sigemptyset(&mask);
+    // posix_spawnattr_setflags takes a short; the flags fit.
+    short flags = static_cast<short>(POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK);
+
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_t* used_actions = nullptr;
 #if HAVE_POSIX_SPAWN_CLOSEFROM
-        // The shell gets none of the descriptors the core holds open.
-        posix_spawn_file_actions_t actions;
-        spawn_error = posix_spawn_file_actions_init(&actions);
-        if (spawn_error == 0) {
-            spawn_error = posix_spawn_file_actions_addclosefrom_np(&actions, 3);
-            if (spawn_error == 0) spawn_error = posix_spawn(&pid, path, &actions, nullptr, argv, environ);
-            posix_spawn_file_actions_destroy(&actions);
-        }
+    // The shell gets none of the descriptors the core holds open.
+    spawn_error = posix_spawn_file_actions_init(&actions);
+    if (spawn_error == 0) {
+        used_actions = &actions;
+        spawn_error = posix_spawn_file_actions_addclosefrom_np(&actions, 3);
+    }
+#elif defined(__APPLE__) && defined(POSIX_SPAWN_CLOEXEC_DEFAULT)
+    // Every descriptor not inherited explicitly is closed in the shell, so it gets its
+    // standard input, output and error and nothing the core holds open.
+    flags = static_cast<short>(flags | POSIX_SPAWN_CLOEXEC_DEFAULT);
+    spawn_error = posix_spawn_file_actions_init(&actions);
+    if (spawn_error == 0) {
+        used_actions = &actions;
+        spawn_error = FirstError({posix_spawn_file_actions_addinherit_np(&actions, STDIN_FILENO),
+                                  posix_spawn_file_actions_addinherit_np(&actions, STDOUT_FILENO),
+                                  posix_spawn_file_actions_addinherit_np(&actions, STDERR_FILENO)});
+    }
 #else
-        spawn_error = posix_spawn(&pid, path, nullptr, nullptr, argv, environ);
+    // Where neither closefrom nor POSIX_SPAWN_CLOEXEC_DEFAULT is available (glibc
+    // before 2.34, for one) the shell inherits every descriptor that is not
+    // close-on-exec, as with system(). The core opens its sockets close-on-exec; a
+    // file opened without it reaches the shell.
 #endif
+    if (spawn_error == 0) {
+        spawn_error = FirstError({posix_spawnattr_setsigdefault(&attr, &defaults),
+                                  posix_spawnattr_setsigmask(&attr, &mask), posix_spawnattr_setflags(&attr, flags)});
+    }
+
+    pid_t pid = 0;
+    if (spawn_error == 0) {
+        std::lock_guard<std::mutex> lock(g_spawn_mutex);
+        spawn_error = posix_spawn(&pid, path, used_actions, &attr, argv, environ);
         if (spawn_error == 0) g_active_spawns.insert(pid);
     }
+    if (used_actions != nullptr) posix_spawn_file_actions_destroy(used_actions);
+    posix_spawnattr_destroy(&attr);
+
     if (spawn_error != 0) {
         LogPrintf("RunShellCommand error: posix_spawn(%s) failed with errno %d\n", path, spawn_error);
         return -1;

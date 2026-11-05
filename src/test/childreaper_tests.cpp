@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <fstream>
 #include <string>
 #include <thread>
@@ -20,6 +21,7 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <sys/prctl.h>
 #include <sys/wait.h>
@@ -239,6 +241,39 @@ BOOST_AUTO_TEST_CASE(spawned_shell_does_not_inherit_descriptors)
 #else
     BOOST_TEST_MESSAGE("posix_spawn_file_actions_addclosefrom_np is not available, case skipped");
 #endif
+}
+
+// The shell starts with SIGPIPE at its default action and no signal blocked, whatever
+// the core has: the daemon ignores SIGPIPE, and a notify command's pipeline must see
+// the default behaviour.
+BOOST_AUTO_TEST_CASE(spawned_shell_has_default_sigpipe_and_an_empty_mask)
+{
+    struct sigaction ignore;
+    memset(&ignore, 0, sizeof(ignore));
+    ignore.sa_handler = SIG_IGN;
+    sigemptyset(&ignore.sa_mask);
+    struct sigaction saved;
+    BOOST_REQUIRE_EQUAL(sigaction(SIGPIPE, &ignore, &saved), 0);
+
+    sigset_t block;
+    sigset_t old_mask;
+    sigemptyset(&block);
+    sigaddset(&block, SIGUSR2);
+    BOOST_REQUIRE_EQUAL(pthread_sigmask(SIG_BLOCK, &block, &old_mask), 0);
+
+    // Exit status 0 only when the shell does not ignore SIGPIPE (bit 12 of SigIgn) and
+    // does not block SIGUSR2 (bit 11 of SigBlk).
+    const int status = util::RunShellCommand(
+        "ign=$(sed -n 's/^SigIgn:[[:space:]]*//p' /proc/$$/status); "
+        "blk=$(sed -n 's/^SigBlk:[[:space:]]*//p' /proc/$$/status); "
+        "[ $(( 0x$ign & 0x1000 )) -eq 0 ] && [ $(( 0x$blk & 0x800 )) -eq 0 ]");
+
+    BOOST_CHECK_EQUAL(pthread_sigmask(SIG_SETMASK, &old_mask, nullptr), 0);
+    BOOST_CHECK_EQUAL(sigaction(SIGPIPE, &saved, nullptr), 0);
+
+    BOOST_REQUIRE(status != -1);
+    BOOST_CHECK(WIFEXITED(status));
+    BOOST_CHECK_EQUAL(WEXITSTATUS(status), 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
