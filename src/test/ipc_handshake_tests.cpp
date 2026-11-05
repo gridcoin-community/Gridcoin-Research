@@ -6,6 +6,7 @@
 #include "tinyformat.h"
 #include "interfaces/init.h"
 #include "ipc/handshake.h"
+#include "test/wine.h"
 #include "util/time.h"
 
 #include <boost/test/unit_test.hpp>
@@ -105,8 +106,9 @@ BOOST_AUTO_TEST_CASE(cookie_round_trip_and_delete)
     // unclean previous exit, or when a user removed the file by hand.
     BOOST_CHECK_NO_THROW(ipc::DeleteCookie(dir));
 
-    // And the real writer where the platform allows it, so the pair is covered
-    // end to end on the platforms that can express the permission.
+    // And the real writer, so the pair is covered end to end. Only Wine is excused:
+    // it keeps no protected DACL, so the owner-only cookie cannot be written there.
+    // Anywhere else a failure here is the test's.
     try {
         const std::string written = ipc::WriteCookie(dir);
         BOOST_CHECK_EQUAL(written.size(), 64u); // 256 bits, hex
@@ -118,7 +120,12 @@ BOOST_AUTO_TEST_CASE(cookie_round_trip_and_delete)
         ipc::DeleteCookie(dir);
         BOOST_CHECK(!ipc::ReadCookie(dir).has_value());
     } catch (const std::runtime_error& e) {
-        BOOST_TEST_MESSAGE(std::string("WriteCookie is not available here: ") + e.what());
+        if (!grc_test::RunningUnderWine()) {
+            boost::system::error_code ec;
+            fs::remove_all(dir, ec);
+            throw;
+        }
+        BOOST_TEST_MESSAGE(std::string("WriteCookie is not available under Wine: ") + e.what());
     }
 
     fs::remove_all(dir);

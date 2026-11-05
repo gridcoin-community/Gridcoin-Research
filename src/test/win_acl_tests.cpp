@@ -11,6 +11,7 @@
 #include <vector>
 
 #ifdef WIN32
+#include "test/wine.h"
 #include "util/dir_permissions.h"
 
 #include <windows.h>
@@ -570,17 +571,9 @@ BOOST_AUTO_TEST_CASE(parse_ace_refuses_truncated_entries)
 
 #ifdef WIN32
 
+using grc_test::RunningUnderWine;
+
 namespace {
-
-//! Wine accepts an access control list without keeping its protection, so the cases
-//! that apply one hold only on Windows itself. The cross-compiled suite also runs under
-//! Wine, where they say so and return.
-bool RunningUnderWine()
-{
-    const HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
-
-    return ntdll != nullptr && ::GetProcAddress(ntdll, "wine_get_version") != nullptr;
-}
 
 //! A fresh directory under the system temp directory, removed when the case ends.
 struct TempDir

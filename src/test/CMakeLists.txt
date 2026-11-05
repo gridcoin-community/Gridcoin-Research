@@ -16,6 +16,8 @@ add_executable(test_gridcoin
     accounting_tests.cpp
     chain_setup.cpp
     state_guard.cpp
+    # RunningUnderWine, for the cases that need Windows' own access control.
+    wine.cpp
     gridcoin/message_contract_tests.cpp
     state_leak_detector.cpp
     state_guard_tests.cpp
