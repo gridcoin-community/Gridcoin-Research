@@ -1143,8 +1143,10 @@ def hold_datadir_lock(path, owner_uid):
         # An open file description lock, so that closing some other descriptor of the file in this
         # process does not release it, as it would a traditional fcntl lock. Linux makes the two
         # kinds conflict, so it excludes the core's F_SETLK in FileLock::TryLock, and the reverse.
-        # struct flock: l_type, l_whence, l_start, l_len, l_pid (0 for this kind of lock).
-        request = struct.pack("hhqqi", fcntl.F_WRLCK, os.SEEK_SET, 0, 0, 0)
+        # struct flock: l_type, l_whence, l_start, l_len, l_pid (0 for this kind of lock), padded
+        # with zeros to 64 bytes, more than any ABI's struct flock, so the kernel never reads past
+        # what was passed.
+        request = struct.pack("hhqqi", fcntl.F_WRLCK, os.SEEK_SET, 0, 0, 0).ljust(64, b"\0")
         try:
             fcntl.fcntl(fd, fcntl.F_OFD_SETLK, request)
         except (BlockingIOError, PermissionError):

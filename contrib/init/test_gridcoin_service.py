@@ -1220,6 +1220,26 @@ class LockTests(ServiceTestBase):
         os.close(os.open(lock, os.O_RDONLY))
         self.assertTrue(lock_is_held_elsewhere(lock))
 
+    def test_lock_request_is_zero_padded_to_64_bytes(self):
+        d = os.path.join(self.tmp.name, "d")
+        os.makedirs(d)
+        lock = os.path.join(d, ".lock")
+        open(lock, "wb").close()
+        requests = []
+        real_fcntl = svc.fcntl.fcntl
+
+        def capture(fd, cmd, arg=0):
+            requests.append(arg)
+            return real_fcntl(fd, cmd, arg)
+
+        with mock.patch.object(svc.fcntl, "fcntl", capture):
+            os.close(svc.hold_datadir_lock(d, os.getuid()))
+        [request] = requests
+        head = svc.struct.calcsize("hhqqi")
+        self.assertEqual(len(request), 64)
+        self.assertEqual(request[:head], svc.struct.pack("hhqqi", svc.fcntl.F_WRLCK, os.SEEK_SET, 0, 0, 0))
+        self.assertEqual(request[head:], bytes(64 - head))
+
     def test_lock_file_must_be_the_owners_and_single_linked(self):
         d = os.path.join(self.tmp.name, "d")
         os.makedirs(d)
