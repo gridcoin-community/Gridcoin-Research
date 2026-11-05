@@ -110,6 +110,12 @@ Classification ClassifyTokenFacts(const TokenFacts& facts, const Sid& self, bool
                             FormatSid(self))};
 }
 
+bool FinishInTime(std::chrono::steady_clock::time_point begun, std::chrono::steady_clock::time_point now,
+                  std::chrono::milliseconds deadline)
+{
+    return now - begun <= deadline;
+}
+
 bool IsValidPipeSuffix(std::string_view s)
 {
     return IsLowerHex(s, 2 * ATTEST_SUFFIX_BYTES);
@@ -184,7 +190,7 @@ bool CompleteIo(HANDLE pipe, OVERLAPPED& ov, std::chrono::steady_clock::time_poi
         // either way the wait below then returns once it has completed.
         ::CancelIoEx(pipe, &ov);
         ::GetOverlappedResult(pipe, &ov, &transferred, TRUE);
-        error = waited == WAIT_TIMEOUT ? std::string("the deadline passed")
+        error = waited == WAIT_TIMEOUT ? std::string("nothing arrived in time")
                                        : Win32Failure("WaitForSingleObject", wait_error);
         return false;
     }
@@ -283,7 +289,7 @@ struct AttestServer::State
     enum class Phase : uint8_t
     {
         Idle,  //!< Begin not called yet
-        Begun, //!< the pipe is waiting for the client
+        Begun, //!< the pipe is there for the client to open and write
         Done,  //!< used: Finish was called, or Begin failed
     };
 
@@ -294,27 +300,19 @@ struct AttestServer::State
     //! A leaf: nothing else is locked while it is held.
     Mutex mutex;
     Phase phase GUARDED_BY(mutex){Phase::Idle};
+    //! The pipe. Every overlapped operation on it is started and completed inside
+    //! Attest, on Finish's thread, so none is pending at any other time.
     UniqueHandle pipe GUARDED_BY(mutex);
-    //! The manual-reset event each overlapped operation on the pipe signals.
-    UniqueHandle event GUARDED_BY(mutex);
-    //! The connect started in Begin. The system writes to it until the connect
-    //! completes, so it lives as long as the pipe.
-    OVERLAPPED connect_ov GUARDED_BY(mutex){};
-    //! Whether that connect is still to be waited out.
-    bool connect_pending GUARDED_BY(mutex){false};
-    //! The nonce's bytes, and when the client's time runs out.
+    //! The nonce's bytes, and when Begin made the pipe.
     std::string nonce GUARDED_BY(mutex);
-    std::chrono::steady_clock::time_point expires GUARDED_BY(mutex);
+    std::chrono::steady_clock::time_point begun_at GUARDED_BY(mutex);
 
-    //! Create the pipe and start the connect. False with \p error set.
+    //! Create the pipe. No operation is started on it. False with \p error set.
     bool Open(const std::wstring& path, std::string& error) EXCLUSIVE_LOCKS_REQUIRED(mutex);
 
-    //! The client's facts once it has connected and written the nonce. nullopt with
+    //! The facts of the client that opened the pipe and wrote the nonce. nullopt with
     //! \p error set.
     std::optional<TokenFacts> Attest(std::string& error) EXCLUSIVE_LOCKS_REQUIRED(mutex);
-
-    //! Cancel and wait out a pending connect, then close the pipe and the event.
-    void Close() EXCLUSIVE_LOCKS_REQUIRED(mutex);
 };
 
 bool AttestServer::State::Open(const std::wstring& path, std::string& error)
@@ -327,6 +325,7 @@ bool AttestServer::State::Open(const std::wstring& path, std::string& error)
     sa.bInheritHandle = FALSE;
 
     // One instance, and only if no pipe of the name exists yet; local clients only.
+    // A client can open the new instance at once, before any connect is called.
     const DWORD open_mode = PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE | FILE_FLAG_OVERLAPPED;
     const DWORD pipe_mode = PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS;
     const HANDLE handle = ::CreateNamedPipeW(path.c_str(), open_mode, pipe_mode, 1, 64, 64, 0, &sa);
@@ -336,47 +335,42 @@ bool AttestServer::State::Open(const std::wstring& path, std::string& error)
     }
     pipe.reset(handle);
 
-    event.reset(::CreateEventW(nullptr, /*bManualReset=*/TRUE, /*bInitialState=*/FALSE, nullptr));
-    if (!event) {
-        error = Win32Failure("CreateEventW", ::GetLastError());
-        return false;
-    }
-
-    // Usually the connect is left pending for Finish to wait out. ERROR_PIPE_CONNECTED
-    // is a client that connected between the create and the connect, and a success
-    // is a connect done at once; either way the pipe is connected, with nothing
-    // pending.
-    connect_ov = OVERLAPPED{};
-    connect_ov.hEvent = event.get();
-    if (!::ConnectNamedPipe(pipe.get(), &connect_ov)) {
-        const DWORD rc = ::GetLastError();
-        if (rc == ERROR_IO_PENDING) {
-            connect_pending = true;
-        } else if (rc != ERROR_PIPE_CONNECTED) {
-            error = Win32Failure("ConnectNamedPipe", rc);
-            return false;
-        }
-    }
-
     return true;
 }
 
 std::optional<TokenFacts> AttestServer::State::Attest(std::string& error)
 {
     const HANDLE handle = pipe.get();
+    const UniqueHandle event(::CreateEventW(nullptr, /*bManualReset=*/TRUE, /*bInitialState=*/FALSE, nullptr));
+    if (!event) {
+        error = Win32Failure("CreateEventW", ::GetLastError());
+        return std::nullopt;
+    }
 
-    // The connect started in Begin.
-    DWORD transferred = 0;
-    if (connect_pending) {
-        const bool connected = CompleteIo(handle, connect_ov, expires, transferred, error);
-        connect_pending = false;
-        if (!connected) {
-            error = "the client did not connect: " + error;
+    // The client opened the pipe before it asked for Finish, so the connect finds it
+    // connected (ERROR_PIPE_CONNECTED). One still pending means no client has opened
+    // the pipe, and it is cancelled and waited out at once. ERROR_NO_DATA is a client
+    // that opened the pipe and closed it again.
+    OVERLAPPED connect_ov{};
+    connect_ov.hEvent = event.get();
+    if (!::ConnectNamedPipe(handle, &connect_ov)) {
+        const DWORD rc = ::GetLastError();
+        if (rc == ERROR_IO_PENDING) {
+            DWORD transferred = 0;
+            ::CancelIoEx(handle, &connect_ov);
+            ::GetOverlappedResult(handle, &connect_ov, &transferred, TRUE);
+            error = "no client had opened the pipe";
+            return std::nullopt;
+        }
+        if (rc != ERROR_PIPE_CONNECTED) {
+            error = "the client is not connected: " + Win32Failure("ConnectNamedPipe", rc);
             return std::nullopt;
         }
     }
 
-    // Exactly the nonce's bytes, which a byte-mode pipe may deliver in parts.
+    // Exactly the nonce's bytes, which a byte-mode pipe may deliver in parts. The
+    // client wrote them before it asked for Finish, so the wait is short.
+    const std::chrono::steady_clock::time_point until = std::chrono::steady_clock::now() + ATTEST_FINISH_WAIT;
     std::array<unsigned char, ATTEST_NONCE_BYTES> got{};
     size_t have = 0;
     while (have < got.size()) {
@@ -393,7 +387,8 @@ std::optional<TokenFacts> AttestServer::State::Attest(std::string& error)
                 return std::nullopt;
             }
         }
-        if (!CompleteIo(handle, ov, expires, transferred, error)) {
+        DWORD transferred = 0;
+        if (!CompleteIo(handle, ov, until, transferred, error)) {
             error = "the client did not write the nonce: " + error;
             return std::nullopt;
         }
@@ -443,28 +438,12 @@ std::optional<TokenFacts> AttestServer::State::Attest(std::string& error)
     return ReadTokenFacts(token.get(), attach_group);
 }
 
-void AttestServer::State::Close()
-{
-    if (pipe && connect_pending) {
-        ::CancelIoEx(pipe.get(), &connect_ov);
-        DWORD transferred = 0;
-        ::GetOverlappedResult(pipe.get(), &connect_ov, &transferred, TRUE);
-        connect_pending = false;
-    }
-    pipe.reset();
-    event.reset();
-}
-
 AttestServer::AttestServer(Sid self, std::optional<Sid> attach_group, std::chrono::milliseconds deadline)
     : m_state(std::make_unique<State>(std::move(self), std::move(attach_group), deadline))
 {
 }
 
-AttestServer::~AttestServer()
-{
-    LOCK(m_state->mutex);
-    m_state->Close();
-}
+AttestServer::~AttestServer() = default;
 
 std::optional<std::pair<std::string, std::string>> AttestServer::Begin()
 {
@@ -492,7 +471,7 @@ std::optional<std::pair<std::string, std::string>> AttestServer::Begin()
         } else if (state.Open(*path, error)) {
             std::pair<std::string, std::string> challenge{std::move(suffix), HexStr(nonce_bytes)};
             state.nonce.assign(nonce_bytes.begin(), nonce_bytes.end());
-            state.expires = std::chrono::steady_clock::now() + state.deadline;
+            state.begun_at = std::chrono::steady_clock::now();
             state.phase = State::Phase::Begun;
             return challenge;
         }
@@ -500,7 +479,7 @@ std::optional<std::pair<std::string, std::string>> AttestServer::Begin()
         error = e.what();
     }
 
-    state.Close();
+    state.pipe.reset();
     LogPrintf("IPC: could not begin the Windows identity check: %s\n", error);
     return std::nullopt;
 }
@@ -517,12 +496,16 @@ std::optional<TokenFacts> AttestServer::Finish()
 
     std::string error;
     std::optional<TokenFacts> facts;
-    try {
-        facts = state.Attest(error);
-    } catch (const std::exception& e) {
-        error = e.what();
+    if (!FinishInTime(state.begun_at, std::chrono::steady_clock::now(), state.deadline)) {
+        error = strprintf("it was finished more than %d ms after it was begun", state.deadline.count());
+    } else {
+        try {
+            facts = state.Attest(error);
+        } catch (const std::exception& e) {
+            error = e.what();
+        }
     }
-    state.Close();
+    state.pipe.reset();
 
     if (!facts) LogPrintf("IPC: the Windows identity check failed: %s\n", error);
     return facts;

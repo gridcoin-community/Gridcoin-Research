@@ -6,6 +6,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -15,7 +16,7 @@
 #include "test/wine.h"
 #include "tinyformat.h"
 
-#include <chrono>
+#include <thread>
 #include <utility>
 
 #include <windows.h>
@@ -271,6 +272,23 @@ BOOST_AUTO_TEST_CASE(pipe_path_only_from_a_valid_suffix)
     BOOST_CHECK(!AttestPipePath("0123456789ABCDEF0123456789abcdef"));
 }
 
+// Finish is in time up to the deadline after Begin and refused after it, and it waits
+// about a second at most for the nonce, far less than the deadline.
+BOOST_AUTO_TEST_CASE(attest_finish_in_time_only_until_the_deadline)
+{
+    using std::chrono::milliseconds;
+    const std::chrono::steady_clock::time_point begun = std::chrono::steady_clock::time_point{} + std::chrono::hours{1};
+
+    BOOST_CHECK(FinishInTime(begun, begun, ATTEST_DEADLINE));
+    BOOST_CHECK(FinishInTime(begun, begun + ATTEST_DEADLINE, ATTEST_DEADLINE));
+    BOOST_CHECK(!FinishInTime(begun, begun + ATTEST_DEADLINE + milliseconds{1}, ATTEST_DEADLINE));
+    BOOST_CHECK(FinishInTime(begun, begun + milliseconds{100}, milliseconds{100}));
+    BOOST_CHECK(!FinishInTime(begun, begun + milliseconds{150}, milliseconds{100}));
+
+    BOOST_CHECK(ATTEST_FINISH_WAIT <= std::chrono::seconds{1});
+    BOOST_CHECK(ATTEST_FINISH_WAIT < ATTEST_DEADLINE);
+}
+
 #ifdef WIN32
 namespace {
 
@@ -410,24 +428,25 @@ BOOST_AUTO_TEST_CASE(attest_wrong_nonce_refused)
     BOOST_CHECK(!error.empty());
 }
 
-// A client that never connects, or connects and writes nothing, fails at the deadline
-// rather than holding the server.
-BOOST_AUTO_TEST_CASE(attest_no_write_times_out)
+// Finish waits for no client: one that never connected is refused at once, one that
+// connected and wrote nothing within ATTEST_FINISH_WAIT, whatever the deadline. A
+// Finish after the deadline is refused even when the nonce was written.
+BOOST_AUTO_TEST_CASE(attest_finish_does_not_wait)
 {
     if (SkipUnderWine()) return;
     const Sid self = CurrentTokenUser();
     using Clock = std::chrono::steady_clock;
 
     {
-        AttestServer server(self, std::nullopt, std::chrono::seconds{1});
+        AttestServer server(self, std::nullopt);
         BOOST_REQUIRE(server.Begin().has_value());
         const Clock::time_point start = Clock::now();
         BOOST_CHECK(!server.Finish());
-        BOOST_CHECK(Clock::now() - start < std::chrono::seconds{3});
+        BOOST_CHECK(Clock::now() - start < ATTEST_FINISH_WAIT);
     }
 
     {
-        AttestServer server(self, std::nullopt, std::chrono::seconds{1});
+        AttestServer server(self, std::nullopt);
         const std::optional<std::pair<std::string, std::string>> challenge = server.Begin();
         BOOST_REQUIRE(challenge.has_value());
         std::string error;
@@ -436,12 +455,25 @@ BOOST_AUTO_TEST_CASE(attest_no_write_times_out)
 
         const Clock::time_point start = Clock::now();
         BOOST_CHECK(!server.Finish());
-        BOOST_CHECK(Clock::now() - start < std::chrono::seconds{3});
+        BOOST_CHECK(Clock::now() - start < ATTEST_FINISH_WAIT + std::chrono::milliseconds{500});
+    }
+
+    {
+        AttestServer server(self, std::nullopt, std::chrono::milliseconds{100});
+        const std::optional<std::pair<std::string, std::string>> challenge = server.Begin();
+        BOOST_REQUIRE(challenge.has_value());
+        std::string error;
+        std::optional<AttestClientPipe> client = AttestClientPipe::Open(challenge->first, self, error);
+        BOOST_REQUIRE_MESSAGE(client.has_value(), error);
+        BOOST_REQUIRE_MESSAGE(client->WriteNonce(challenge->second, error), error);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds{300});
+        BOOST_CHECK(!server.Finish());
     }
 
     // A server begun and destroyed without Finish closes its pipe.
     {
-        AttestServer server(self, std::nullopt, std::chrono::seconds{1});
+        AttestServer server(self, std::nullopt);
         BOOST_REQUIRE(server.Begin().has_value());
     }
 }

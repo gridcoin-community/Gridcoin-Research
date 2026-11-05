@@ -22,11 +22,13 @@
 //! own account and, when one is configured, the attach group may open, and sends
 //! the name's suffix and a random nonce over the IPC connection. The client (the
 //! GUI) opens the pipe, checks that its owner is the server account it expects,
-//! and writes the nonce. Once the server has read the nonce, the pipe holds the
-//! security context of the client that wrote it. The server impersonates that
-//! client just long enough to open its token, then reads from the token the facts
-//! ClassifyTokenFacts decides on: the user, attach-group membership, integrity
-//! level, impersonation level and whether it is an AppContainer.
+//! writes the nonce, and only then asks the server to finish. The server reads the
+//! nonce, waiting at most ATTEST_FINISH_WAIT for it, so the call returns quickly.
+//! Once the server has read the nonce, the pipe holds the security context of the
+//! client that wrote it. The server impersonates that client just long enough to
+//! open its token, then reads from the token the facts ClassifyTokenFacts decides
+//! on: the user, attach-group membership, integrity level, impersonation level and
+//! whether it is an AppContainer.
 //!
 //! The client opens the pipe at the identification level, so the token the server
 //! gets can be read but cannot be used to act as the client.
@@ -44,17 +46,27 @@
 //!   AttestServer's Finish returned facts that ClassifyTokenFacts does not refuse;
 //!   no other connection's result counts for it;
 //! - the client takes the suffix only from the connection it opened, writes the
-//!   nonce only after AttestClientPipe::Open's owner check passed, keeps the pipe
-//!   open until the server has answered that the check finished, and sends its
-//!   cookie only when that answer, over the same connection, is a success.
+//!   nonce only after AttestClientPipe::Open's owner check passed, asks the server
+//!   to finish only after the nonce is written, keeps the pipe open until the
+//!   server has answered, and sends its cookie only when that answer, over the same
+//!   connection, is a success.
 namespace ipc::win {
 
 using util::winacl::Sid;
 
-//! How long, from Begin, the server waits for the client to connect and write the
-//! nonce. It lies inside IPC_AUTH_DEADLINE, which bounds the whole handshake
-//! (checked in win_attest.cpp).
+//! A Finish called later than this after its Begin is refused. Nothing waits this
+//! long. It lies inside IPC_AUTH_DEADLINE, which bounds the whole handshake (checked
+//! in win_attest.cpp).
 constexpr std::chrono::seconds ATTEST_DEADLINE{10};
+
+//! How long Finish waits for the nonce's bytes. The client has written them before it
+//! asks for Finish, so this only covers bytes still on their way.
+constexpr std::chrono::milliseconds ATTEST_FINISH_WAIT{1000};
+
+//! Whether a Finish at \p now, for a Begin at \p begun, is in time: no later than
+//! \p deadline after it.
+bool FinishInTime(std::chrono::steady_clock::time_point begun, std::chrono::steady_clock::time_point now,
+                  std::chrono::milliseconds deadline);
 
 //! The nonce's length in bytes. It travels over the IPC connection as twice as many
 //! lower-case hex digits, and through the pipe as the bytes themselves.
@@ -151,27 +163,29 @@ class AttestServer
 public:
     //! A server running as \p self, the account that will own the pipe, which must
     //! be this process's token user. \p attach_group, when set, may open the pipe
-    //! too. Finish waits at most \p deadline from Begin.
+    //! too. A Finish more than \p deadline after Begin is refused.
     AttestServer(Sid self, std::optional<Sid> attach_group, std::chrono::milliseconds deadline = ATTEST_DEADLINE);
-    //! Closes the pipe, first cancelling and waiting out an operation still pending.
+    //! Closes the pipe.
     ~AttestServer();
 
     AttestServer(const AttestServer&) = delete;
     AttestServer& operator=(const AttestServer&) = delete;
 
-    //! Create the pipe, \p AttestPipePath of a fresh random suffix with
+    //! Create the pipe, AttestPipePath of a fresh random suffix with
     //! AttestPipeAclSpec(self, attach_group) and one instance, refusing a name that
-    //! already exists and remote clients, and start waiting for the client to
-    //! connect. Returns {suffix, nonce_hex}, or nullopt (logged) on any failure or a
-    //! second call.
+    //! already exists and remote clients. The client can open it from then on;
+    //! nothing is waited for or started on it. Returns {suffix, nonce_hex}, or
+    //! nullopt (logged) on any failure or a second call.
     std::optional<std::pair<std::string, std::string>> Begin();
 
-    //! Wait, until the deadline, for the client to connect and write exactly the
-    //! nonce's bytes, compare them in constant time, then impersonate the client to
-    //! open its token, and read the facts from it. The pipe is closed before it
-    //! returns. nullopt (logged) on any failure, after the deadline, without a
-    //! successful Begin, or on a second call. A failure to stop impersonating aborts
-    //! the process.
+    //! For a client that has already opened the pipe and written the nonce: connect,
+    //! read exactly the nonce's bytes, waiting at most ATTEST_FINISH_WAIT for them,
+    //! compare them in constant time, then impersonate the client to open its token,
+    //! and read the facts from it. Every operation on the pipe is started and ended
+    //! on the calling thread, and the pipe is closed before it returns. nullopt
+    //! (logged) when no client has opened the pipe, on any failure, when called more
+    //! than the deadline after Begin, without a successful Begin, or on a second
+    //! call. A failure to stop impersonating aborts the process.
     std::optional<TokenFacts> Finish();
 
 private:
@@ -180,8 +194,9 @@ private:
 };
 
 //! The client's end of one attestation. Move-only; it closes the pipe when
-//! destroyed. Keep it until the server has answered that its Finish is done: the
-//! server reads the client's identity through this connection.
+//! destroyed. Write the nonce before asking the server to finish, and keep it until
+//! the server has answered: the server reads the client's identity through this
+//! connection.
 class AttestClientPipe
 {
 public:
