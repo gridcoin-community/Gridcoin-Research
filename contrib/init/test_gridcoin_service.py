@@ -407,7 +407,8 @@ class UnitFileReaderTests(unittest.TestCase):
                 self.assertEqual(svc.unit_file_settings(text, "Service", "ExecStart"), expected)
 
     def test_masks_are_what_systemd_takes_for_a_mask(self):
-        # A unit file is masked when it is empty or resolves to /dev/null.
+        # A unit file is masked when it is empty or resolves to a character device, /dev/null or
+        # any other.
         with tempfile.TemporaryDirectory() as tmp:
             def made(name, make):
                 path = os.path.join(tmp, name)
@@ -417,7 +418,8 @@ class UnitFileReaderTests(unittest.TestCase):
             masks = [made("a.service", lambda p: os.symlink("/dev/null", p)),
                      made("b.service", lambda p: os.close(os.open(p, os.O_WRONLY | os.O_CREAT, 0o644))),
                      made("c.service", lambda p: os.symlink("../../../../../../../../../../dev/null", p)),
-                     made("d.service", lambda p: os.symlink("a.service", p))]
+                     made("d.service", lambda p: os.symlink("a.service", p)),
+                     made("h.service", lambda p: os.symlink("/dev/zero", p))]
 
             def unit_file(path):
                 with open(path, "w", encoding="utf8") as f:
@@ -426,16 +428,16 @@ class UnitFileReaderTests(unittest.TestCase):
             others = [made("e.service", unit_file),
                       made("f.service", lambda p: os.symlink("e.service", p)),
                       made("g.service", lambda p: os.symlink("/nowhere/x.service", p))]
-            others.append(made("h.service", lambda p: os.symlink("/dev/zero", p)))
             for path in masks:
                 self.assertTrue(svc.is_mask(path), path)
             for path in others:
                 self.assertFalse(svc.is_mask(path), path)
-        # By the device it resolves to, as systemd tells /dev/null: the character device 1:3,
-        # whatever the path is called.
-        for rdev, expected in ((os.makedev(1, 3), True), (os.makedev(1, 5), False)):
-            device = os.stat_result((stat.S_IFCHR | 0o666, 1, 1, 1, 0, 0, 0, 0, 0, 0), {"st_rdev": rdev})
-            with self.subTest(rdev=rdev), mock.patch.object(svc.os, "stat", lambda path, *a, **k: device):
+        # By the kind of file it resolves to, as systemd's null_or_empty() tells: any character
+        # device, whatever its numbers or path; a block device is not one.
+        for kind, rdev, expected in ((stat.S_IFCHR, os.makedev(1, 3), True), (stat.S_IFCHR, os.makedev(1, 5), True),
+                                     (stat.S_IFCHR, os.makedev(4, 1), True), (stat.S_IFBLK, os.makedev(8, 0), False)):
+            device = os.stat_result((kind | 0o666, 1, 1, 1, 0, 0, 0, 0, 0, 0), {"st_rdev": rdev})
+            with self.subTest(kind=kind, rdev=rdev), mock.patch.object(svc.os, "stat", lambda path, *a, **k: device):
                 self.assertEqual(svc.is_mask("/elsewhere/null"), expected)
 
 

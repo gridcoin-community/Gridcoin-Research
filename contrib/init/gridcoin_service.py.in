@@ -2403,14 +2403,15 @@ def set_keys(text, keys):
 
 def is_mask(path):
     """Whether systemd takes the unit file at path for a mask: through any chain of links, relative or
-    not, it is an empty regular file, or /dev/null, the character device 1:3, whatever it is called."""
+    not, it is an empty regular file or a character device. That is systemd's null_or_empty()
+    (src/basic/stat-util.c), which does not check for /dev/null's numbers, so /dev/zero counts too."""
     try:
         st = os.stat(path)
     except OSError:
         return False
     if stat.S_ISREG(st.st_mode):
         return st.st_size == 0
-    return stat.S_ISCHR(st.st_mode) and st.st_rdev == os.makedev(1, 3)
+    return stat.S_ISCHR(st.st_mode)
 
 
 def system_core_overrides(net, paths):
@@ -2714,7 +2715,8 @@ def switch_system_core(net, host, paths):
     record = read_system_core_record(record_path)
     copy, masked, stale = system_core_overrides(net, paths)
     if masked:
-        print("%s is masked (empty, or a link to /dev/null); it stays masked, so %s does not start." % (copy, unit))
+        print("%s is masked (empty, or a link to /dev/null or another character device); it stays masked, so %s "
+              "does not start." % (copy, unit))
     ours = os.path.join(dropin_dir(paths, unit), DROPIN_MAIN)
     conf = datadir = None
     command = system_command(net, paths, copy, masked)
