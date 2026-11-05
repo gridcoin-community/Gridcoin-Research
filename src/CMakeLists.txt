@@ -327,6 +327,7 @@ add_library(gridcoin_util STATIC
     util/tokenpipe.cpp
     util/transfer_file.cpp
     util/win_acl.cpp
+    util/winservice.cpp
     validation.cpp
     validationinterface.cpp
     wallet/autounlock.cpp
