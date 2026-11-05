@@ -29,7 +29,8 @@ CONFIG = {"bindir": "@GRC_BINDIR@", "default_network": "@GRC_UNIT_NETWORK@", "py
 EXIT_USAGE = 64
 DROPIN_MAIN = "50-gridcoin-service.conf"
 DROPIN_AUTOUNLOCK = "60-gridcoin-autounlock.conf"
-USER_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+# A name made only of dots is refused: "." and ".." name directories.
+USER_RE = re.compile(r"^(?!\.+$)[A-Za-z0-9._-]+$")
 UNSAFE_PATH_RE = re.compile(r"[\s\"'\\$%;]")
 ROOT_EQUIVALENT_GROUPS = ("docker", "lxd", "incus", "libvirt", "disk", "wheel", "sudo", "adm", "systemd-journal")
 
@@ -205,14 +206,21 @@ def owned_by_root(st):
     return st.st_uid in (0, os.geteuid())
 
 
-def ensure_dropin_dir(directory):
+def check_dropin_dir(directory):
+    """Return whether the drop-in directory exists. One that exists must be a directory owned
+    by root, not a symlink, before anything is written into it or removed from it."""
     try:
         st = os.lstat(directory)
     except FileNotFoundError:
-        os.mkdir(directory, 0o755)
-        return
+        return False
     if not stat.S_ISDIR(st.st_mode) or not owned_by_root(st):
         raise UserError("%s exists but is not a directory owned by root; refusing" % directory)
+    return True
+
+
+def ensure_dropin_dir(directory):
+    if not check_dropin_dir(directory):
+        os.mkdir(directory, 0o755)
 
 
 def write_dropin(paths, unit, filename, text):
@@ -236,6 +244,8 @@ def write_dropin(paths, unit, filename, text):
 
 def remove_dropin(paths, unit, filename):
     directory = dropin_dir(paths, unit)
+    if not check_dropin_dir(directory):
+        return
     try:
         os.unlink(os.path.join(directory, filename))
     except FileNotFoundError:

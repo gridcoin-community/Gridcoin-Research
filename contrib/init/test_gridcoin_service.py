@@ -125,6 +125,22 @@ class ValidateUserTests(ServiceTestBase):
                 svc.validate_user(name, host, self.paths)
         self.assertEqual(svc.validate_user("bob", host, self.paths).pw_uid, 1000)
 
+    def test_names_made_only_of_dots_refused(self):
+        host = FakeHost(users={name: Passwd(name, 1000, self.home) for name in (".", "..", "...")})
+        for name in (".", "..", "..."):
+            with self.assertRaises(svc.UserError, msg=name):
+                svc.validate_name(name)
+            with self.assertRaises(svc.UserError, msg=name):
+                svc.validate_user(name, host, self.paths)
+            rc, out, err = self.run_main("disable-user", name, host=host)
+            self.assertEqual(rc, 1, name)
+            rc, out, err = self.run_main("autounlock", "disable", name, host=host)
+            self.assertEqual(rc, 1, name)
+        self.assertEqual(host.calls, [])
+        self.assertEqual(os.listdir(self.paths.etc_systemd), [])
+        for name in (".bob", "bob.", "b.o.b", "a..b"):
+            svc.validate_name(name)
+
     def test_uid_min_default_when_login_defs_missing(self):
         os.unlink(self.paths.login_defs)
         host = FakeHost(users={"low": Passwd("low", 999, "/h"), "ok": Passwd("ok", 1000, "/h")})
@@ -424,6 +440,30 @@ class FixRoundTests(ServiceTestBase):
         self.assertEqual(rc, 1)
         self.assertEqual(os.listdir(target), [])
         self.assertEqual(self.host.calls, [])
+
+    def test_removing_from_a_symlinked_dropin_directory_refused(self):
+        target = os.path.join(self.tmp.name, "elsewhere")
+        os.makedirs(target)
+        for name in ("50-gridcoin-service.conf", "60-gridcoin-autounlock.conf"):
+            with open(os.path.join(target, name), "w", encoding="utf8") as f:
+                f.write("keep")
+        os.symlink(target, os.path.join(self.paths.etc_systemd, "gridcoinresearchd@bob.service.d"))
+        for argv in (("disable-user", "bob"), ("autounlock", "disable", "bob")):
+            rc, out, err = self.run_main(*argv)
+            self.assertEqual(rc, 1, argv)
+            self.assertIn("refusing", err)
+            self.assertEqual(sorted(os.listdir(target)), ["50-gridcoin-service.conf", "60-gridcoin-autounlock.conf"])
+        self.assertTrue(os.path.islink(os.path.join(self.paths.etc_systemd, "gridcoinresearchd@bob.service.d")))
+
+    def test_removing_from_a_dropin_path_that_is_not_a_directory_refused(self):
+        path = os.path.join(self.paths.etc_systemd, "gridcoinresearchd@bob.service.d")
+        with open(path, "w", encoding="utf8") as f:
+            f.write("keep")
+        rc, out, err = self.run_main("disable-user", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("refusing", err)
+        with open(path, encoding="utf8") as f:
+            self.assertEqual(f.read(), "keep")
 
     def test_dropin_directory_created_0755(self):
         self.run_main("enable-user", "bob")
