@@ -702,6 +702,17 @@ BOOST_AUTO_TEST_CASE(service_user_must_be_a_user_or_a_service)
     // A service SID found as another kind is not a service.
     CheckRefusal(ServiceUserAccountRefusal(account(Service(), AccountType::Alias, "NT SERVICE")),
                  {FormatSid(Service())});
+
+    // A service's SID is S-1-5-80 and the five words of its name's hash. Other SIDs
+    // under S-1-5-80, such as NT SERVICE\ALL SERVICES (S-1-5-80-0), name no one
+    // service and are refused.
+    for (const char* refused : {"S-1-5-80-0", "S-1-5-80-1-2-3-4", "S-1-5-80-1-2-3-4-5-6", "S-1-5-81-1-2-3-4-5",
+                                "S-1-5-21-1-2-3-4-5", "S-1-16-80-1-2-3-4-5"}) {
+        CheckRefusal(ServiceUserAccountRefusal(account(SidOf(refused), AccountType::WellKnownGroup, "NT SERVICE")),
+                     {refused});
+    }
+    BOOST_CHECK(!ServiceUserAccountRefusal(
+        account(SidOf("S-1-5-80-1-2-3-4-5"), AccountType::WellKnownGroup, "NT SERVICE")));
 }
 
 // The attach group is a local group of this computer, found in the computer's own

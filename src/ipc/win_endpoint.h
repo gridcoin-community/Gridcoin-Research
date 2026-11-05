@@ -189,8 +189,9 @@ std::optional<std::string> LocalGroupLookupName(const std::string& computer, con
 std::optional<std::string> ServiceUserNameRefusal(const std::string& name);
 
 //! Why \p account, what -ipcserviceuser maps to, cannot be the expected server, or
-//! nullopt. It must be a user account, or a service SID: a well-known group under
-//! S-1-5-80 (NT SERVICE). Any group, alias or other kind is refused.
+//! nullopt. It must be a user account, or a service SID: a well-known group whose
+//! SID is S-1-5-80 and five more sub-authorities (NT SERVICE\<name>). Any group,
+//! alias or other kind is refused, and so is S-1-5-80-0 (NT SERVICE\ALL SERVICES).
 std::optional<std::string> ServiceUserAccountRefusal(const util::winacl::AccountLookup& account);
 
 //! Why \p account, what LocalGroupLookupName(\p computer, name) maps to, cannot be

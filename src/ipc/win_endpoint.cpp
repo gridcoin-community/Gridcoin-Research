@@ -7,6 +7,7 @@
 #include "tinyformat.h"
 #include "util/strencodings.h"
 
+#include <algorithm>
 #include <string_view>
 #include <vector>
 
@@ -268,9 +269,12 @@ std::optional<std::string> ServiceUserAccountRefusal(const util::winacl::Account
     using util::winacl::AccountType;
     if (account.type == AccountType::User) return std::nullopt;
 
-    // A service SID is NT SERVICE's: S-1-5-80 followed by the hash of the name.
+    // A service's SID is S-1-5-80 and the five words of the hash of its name
+    // (SHA-1). Other SIDs under S-1-5-80, such as NT SERVICE\ALL SERVICES
+    // (S-1-5-80-0), name no one service.
     const std::string sid = util::winacl::FormatSid(account.sid);
-    if (account.type == AccountType::WellKnownGroup && sid.rfind("S-1-5-80-", 0) == 0) return std::nullopt;
+    const bool service_sid = sid.rfind("S-1-5-80-", 0) == 0 && std::count(sid.begin(), sid.end(), '-') == 3 + 5;
+    if (account.type == AccountType::WellKnownGroup && service_sid) return std::nullopt;
 
     return strprintf("the -ipcserviceuser account (%s) is %s, and the core runs as a user account or as a service "
                      "(NT SERVICE)",
