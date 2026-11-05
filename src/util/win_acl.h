@@ -161,6 +161,15 @@ std::optional<std::string> FindForeignTrustee(const ObservedAcl& acl, const std:
 //! Deny entries and entries of other kinds are ignored.
 std::optional<std::string> CheckMatchesSpec(const ObservedAcl& acl, const AclSpec& spec);
 
+//! The entry at \p bytes as Windows lays it out in a DACL, where \p size bytes may be
+//! read: the header (type, flags, 16-bit size), then for the access, audit, alarm and
+//! label types the mask, any object flags and GUIDs, and the SID. nullopt, with nothing
+//! read past \p size, when the entry is shorter than its header, its size field is
+//! below the header's size or above \p size, it ends before the object flags, GUIDs
+//! or SID its type calls for, or its SID is not well formed. A type with no known
+//! layout is Other, with no trustee and no mask.
+std::optional<ObservedAce> ParseAce(const unsigned char* bytes, size_t size);
+
 #ifdef WIN32
 //! The SID of this process's token user. Throws std::system_error.
 Sid CurrentTokenUser();

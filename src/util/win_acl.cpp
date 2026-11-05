@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cstddef>
 #include <cstring>
 #include <initializer_list>
 #include <system_error>
@@ -56,6 +57,52 @@ bool WellFormed(const Sid& sid)
 {
     return sid.size() >= 8 && sid[0] == 1 && sid[1] >= 1 && sid[1] <= MAX_SUB_AUTHORITIES
         && sid.size() == 8 + 4 * size_t{sid[1]};
+}
+
+// The layout of an ACE, as ParseAce reads it. On Windows each value is checked against
+// the SDK below.
+constexpr uint8_t TYPE_ALLOWED = 0x00, TYPE_DENIED = 0x01, TYPE_AUDIT = 0x02, TYPE_ALARM = 0x03,
+    TYPE_ALLOWED_COMPOUND = 0x04, TYPE_ALLOWED_OBJECT = 0x05, TYPE_DENIED_OBJECT = 0x06, TYPE_AUDIT_OBJECT = 0x07,
+    TYPE_ALARM_OBJECT = 0x08, TYPE_ALLOWED_CALLBACK = 0x09, TYPE_DENIED_CALLBACK = 0x0A,
+    TYPE_ALLOWED_CALLBACK_OBJECT = 0x0B, TYPE_DENIED_CALLBACK_OBJECT = 0x0C, TYPE_AUDIT_CALLBACK = 0x0D,
+    TYPE_ALARM_CALLBACK = 0x0E, TYPE_AUDIT_CALLBACK_OBJECT = 0x0F, TYPE_ALARM_CALLBACK_OBJECT = 0x10,
+    TYPE_MANDATORY_LABEL = 0x11, TYPE_RESOURCE_ATTRIBUTE = 0x12, TYPE_SCOPED_POLICY_ID = 0x13,
+    TYPE_PROCESS_TRUST_LABEL = 0x14, TYPE_ACCESS_FILTER = 0x15;
+
+constexpr uint8_t FLAG_OBJECT_INHERIT = 0x01, FLAG_CONTAINER_INHERIT = 0x02, FLAG_NO_PROPAGATE_INHERIT = 0x04,
+    FLAG_INHERIT_ONLY = 0x08, FLAG_INHERITED = 0x10;
+
+//! The object flags of an object entry, saying which of its two GUIDs are present.
+constexpr uint32_t FLAG_OBJECT_TYPE_PRESENT = 0x1, FLAG_INHERITED_OBJECT_TYPE_PRESENT = 0x2;
+
+//! The header is the type, the flags and the 16-bit size of the whole entry. The mask
+//! follows it; in a plain entry the SID follows the mask, in an object entry the
+//! object flags and GUIDs come first, and in a compound entry a 16-bit compound type
+//! and 16 reserved bits.
+constexpr size_t HEADER_SIZE = 4, MASK_OFFSET = 4, SID_OFFSET = 8, OBJECT_FLAGS_OFFSET = 8,
+    OBJECT_GUIDS_OFFSET = 12, GUID_SIZE = 16, COMPOUND_SID_OFFSET = 12;
+
+//! A SID's revision, sub-authority count and 48-bit authority, before its sub-authorities.
+constexpr size_t SID_HEADER_SIZE = 8;
+
+uint32_t ReadLittleEndian32(const unsigned char* p)
+{
+    return uint32_t{p[0]} | uint32_t{p[1]} << 8 | uint32_t{p[2]} << 16 | uint32_t{p[3]} << 24;
+}
+
+//! The SID at \p offset in the \p size bytes at \p bytes, if a well-formed one starts
+//! there and ends within them.
+std::optional<Sid> SidIn(const unsigned char* bytes, size_t size, size_t offset)
+{
+    if (offset > size || size - offset < SID_HEADER_SIZE) return std::nullopt;
+
+    const size_t length = SID_HEADER_SIZE + 4 * size_t{bytes[offset + 1]};
+    if (size - offset < length) return std::nullopt;
+
+    Sid sid(bytes + offset, bytes + offset + length);
+    if (!WellFormed(sid)) return std::nullopt;
+
+    return sid;
 }
 
 //! A SID's authority, decimal or hex after "0x", below 2^48.
@@ -151,6 +198,43 @@ bool Matches(const ObservedAce& ace, const AceSpec& want)
 }
 
 } // namespace
+
+#ifdef WIN32
+static_assert(TYPE_ALLOWED == ACCESS_ALLOWED_ACE_TYPE && TYPE_DENIED == ACCESS_DENIED_ACE_TYPE);
+static_assert(TYPE_AUDIT == SYSTEM_AUDIT_ACE_TYPE && TYPE_ALARM == SYSTEM_ALARM_ACE_TYPE);
+static_assert(TYPE_ALLOWED_COMPOUND == ACCESS_ALLOWED_COMPOUND_ACE_TYPE);
+static_assert(TYPE_ALLOWED_OBJECT == ACCESS_ALLOWED_OBJECT_ACE_TYPE && TYPE_DENIED_OBJECT == ACCESS_DENIED_OBJECT_ACE_TYPE);
+static_assert(TYPE_AUDIT_OBJECT == SYSTEM_AUDIT_OBJECT_ACE_TYPE && TYPE_ALARM_OBJECT == SYSTEM_ALARM_OBJECT_ACE_TYPE);
+static_assert(TYPE_ALLOWED_CALLBACK == ACCESS_ALLOWED_CALLBACK_ACE_TYPE);
+static_assert(TYPE_DENIED_CALLBACK == ACCESS_DENIED_CALLBACK_ACE_TYPE);
+static_assert(TYPE_ALLOWED_CALLBACK_OBJECT == ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE);
+static_assert(TYPE_DENIED_CALLBACK_OBJECT == ACCESS_DENIED_CALLBACK_OBJECT_ACE_TYPE);
+static_assert(TYPE_AUDIT_CALLBACK == SYSTEM_AUDIT_CALLBACK_ACE_TYPE && TYPE_ALARM_CALLBACK == SYSTEM_ALARM_CALLBACK_ACE_TYPE);
+static_assert(TYPE_AUDIT_CALLBACK_OBJECT == SYSTEM_AUDIT_CALLBACK_OBJECT_ACE_TYPE);
+static_assert(TYPE_ALARM_CALLBACK_OBJECT == SYSTEM_ALARM_CALLBACK_OBJECT_ACE_TYPE);
+static_assert(TYPE_MANDATORY_LABEL == SYSTEM_MANDATORY_LABEL_ACE_TYPE);
+static_assert(TYPE_RESOURCE_ATTRIBUTE == SYSTEM_RESOURCE_ATTRIBUTE_ACE_TYPE);
+static_assert(TYPE_SCOPED_POLICY_ID == SYSTEM_SCOPED_POLICY_ID_ACE_TYPE);
+static_assert(TYPE_PROCESS_TRUST_LABEL == SYSTEM_PROCESS_TRUST_LABEL_ACE_TYPE);
+static_assert(TYPE_ACCESS_FILTER == SYSTEM_ACCESS_FILTER_ACE_TYPE);
+
+static_assert(FLAG_OBJECT_INHERIT == OBJECT_INHERIT_ACE && FLAG_CONTAINER_INHERIT == CONTAINER_INHERIT_ACE);
+static_assert(FLAG_NO_PROPAGATE_INHERIT == NO_PROPAGATE_INHERIT_ACE && FLAG_INHERIT_ONLY == INHERIT_ONLY_ACE);
+static_assert(FLAG_INHERITED == INHERITED_ACE);
+static_assert(FLAG_OBJECT_TYPE_PRESENT == ACE_OBJECT_TYPE_PRESENT);
+static_assert(FLAG_INHERITED_OBJECT_TYPE_PRESENT == ACE_INHERITED_OBJECT_TYPE_PRESENT);
+
+static_assert(HEADER_SIZE == sizeof(ACE_HEADER) && MASK_OFFSET == offsetof(ACCESS_ALLOWED_ACE, Mask));
+static_assert(SID_OFFSET == offsetof(ACCESS_ALLOWED_ACE, SidStart));
+static_assert(SID_OFFSET == offsetof(ACCESS_DENIED_CALLBACK_ACE, SidStart));
+static_assert(SID_OFFSET == offsetof(SYSTEM_AUDIT_ACE, SidStart));
+static_assert(SID_OFFSET == offsetof(SYSTEM_MANDATORY_LABEL_ACE, SidStart));
+static_assert(OBJECT_FLAGS_OFFSET == offsetof(ACCESS_ALLOWED_OBJECT_ACE, Flags));
+static_assert(OBJECT_GUIDS_OFFSET == offsetof(ACCESS_ALLOWED_OBJECT_ACE, ObjectType) && GUID_SIZE == sizeof(GUID));
+static_assert(OBJECT_GUIDS_OFFSET + 2 * GUID_SIZE == offsetof(ACCESS_ALLOWED_OBJECT_ACE, SidStart));
+static_assert(OBJECT_GUIDS_OFFSET + 2 * GUID_SIZE == offsetof(ACCESS_DENIED_CALLBACK_OBJECT_ACE, SidStart));
+static_assert(SID_HEADER_SIZE == offsetof(SID, SubAuthority) && MAX_SUB_AUTHORITIES == SID_MAX_SUB_AUTHORITIES);
+#endif // WIN32
 
 std::optional<Sid> ParseSidString(std::string_view s)
 {
@@ -265,6 +349,100 @@ std::optional<std::string> CheckMatchesSpec(const ObservedAcl& acl, const AclSpe
     return std::nullopt;
 }
 
+std::optional<ObservedAce> ParseAce(const unsigned char* bytes, size_t size)
+{
+    if (bytes == nullptr || size < HEADER_SIZE) return std::nullopt;
+
+    // The size field covers the whole entry, which may not reach past what may be read.
+    const size_t ace_size = size_t{bytes[2]} | size_t{bytes[3]} << 8;
+    if (ace_size < HEADER_SIZE || ace_size > size) return std::nullopt;
+
+    ObservedAce ace;
+    const uint8_t flags = bytes[1];
+    ace.inherit_only = (flags & FLAG_INHERIT_ONLY) != 0;
+    ace.inherited = (flags & FLAG_INHERITED) != 0;
+
+    const uint8_t propagation =
+        static_cast<uint8_t>(flags & (FLAG_OBJECT_INHERIT | FLAG_CONTAINER_INHERIT | FLAG_NO_PROPAGATE_INHERIT));
+    if (propagation == 0) {
+        ace.inherit = Inherit::None;
+    } else if (propagation == (FLAG_OBJECT_INHERIT | FLAG_CONTAINER_INHERIT)) {
+        ace.inherit = Inherit::ContainerAndObject;
+    } else {
+        ace.inherit = std::nullopt;
+    }
+
+    size_t sid_offset = SID_OFFSET;
+    bool object = false;
+
+    switch (bytes[0]) {
+    case TYPE_ALLOWED:
+        ace.kind = AceKind::Allow;
+        break;
+    case TYPE_ALLOWED_CALLBACK:
+        ace.kind = AceKind::OtherAllow;
+        break;
+    case TYPE_ALLOWED_COMPOUND:
+        ace.kind = AceKind::OtherAllow;
+        sid_offset = COMPOUND_SID_OFFSET;
+        break;
+    case TYPE_ALLOWED_OBJECT:
+    case TYPE_ALLOWED_CALLBACK_OBJECT:
+        ace.kind = AceKind::OtherAllow;
+        object = true;
+        break;
+    case TYPE_DENIED:
+    case TYPE_DENIED_CALLBACK:
+        ace.kind = AceKind::Deny;
+        break;
+    case TYPE_DENIED_OBJECT:
+    case TYPE_DENIED_CALLBACK_OBJECT:
+        ace.kind = AceKind::Deny;
+        object = true;
+        break;
+    case TYPE_AUDIT:
+    case TYPE_ALARM:
+    case TYPE_AUDIT_CALLBACK:
+    case TYPE_ALARM_CALLBACK:
+    case TYPE_MANDATORY_LABEL:
+    case TYPE_RESOURCE_ATTRIBUTE:
+    case TYPE_SCOPED_POLICY_ID:
+    case TYPE_PROCESS_TRUST_LABEL:
+    case TYPE_ACCESS_FILTER:
+        ace.kind = AceKind::Other;
+        break;
+    case TYPE_AUDIT_OBJECT:
+    case TYPE_ALARM_OBJECT:
+    case TYPE_AUDIT_CALLBACK_OBJECT:
+    case TYPE_ALARM_CALLBACK_OBJECT:
+        ace.kind = AceKind::Other;
+        object = true;
+        break;
+    default:
+        // A type with no known layout is read as its header alone.
+        ace.kind = AceKind::Other;
+        return ace;
+    }
+
+    if (object) {
+        if (ace_size < OBJECT_GUIDS_OFFSET) return std::nullopt;
+
+        const uint32_t object_flags = ReadLittleEndian32(bytes + OBJECT_FLAGS_OFFSET);
+        sid_offset = OBJECT_GUIDS_OFFSET;
+        if (object_flags & FLAG_OBJECT_TYPE_PRESENT) sid_offset += GUID_SIZE;
+        if (object_flags & FLAG_INHERITED_OBJECT_TYPE_PRESENT) sid_offset += GUID_SIZE;
+    }
+
+    std::optional<Sid> trustee = SidIn(bytes, ace_size, sid_offset);
+    if (!trustee) return std::nullopt;
+
+    // Every SID offset lies past the mask, so the SID's bounds check covers the mask too.
+    ace.mask = ReadLittleEndian32(bytes + MASK_OFFSET);
+    ace.trustee = std::move(*trustee);
+
+    return ace;
+}
+
 #ifdef WIN32
 namespace {
 
@@ -280,114 +458,12 @@ void RequireWellFormed(const Sid& sid, const char* what)
     if (!WellFormed(sid)) throw std::runtime_error(strprintf("%s is not a well-formed SID", what));
 }
 
-//! The SID at \p p, if a well-formed one starts there and ends no later than \p end.
-std::optional<Sid> SidAt(const unsigned char* p, const unsigned char* end)
-{
-    if (p >= end || end - p < 8) return std::nullopt;
-
-    const size_t length = 8 + 4 * size_t{p[1]};
-    if (static_cast<size_t>(end - p) < length) return std::nullopt;
-
-    Sid sid(p, p + length);
-    if (!WellFormed(sid)) return std::nullopt;
-
-    return sid;
-}
-
 //! A copy of the SID \p psid points to.
 std::optional<Sid> SidOf(PSID psid)
 {
     if (psid == nullptr || !::IsValidSid(psid)) return std::nullopt;
 
-    const auto* const p = static_cast<const unsigned char*>(psid);
-
-    return SidAt(p, p + ::GetLengthSid(psid));
-}
-
-//! The offset of the SID in an object entry: after its flags and whichever GUIDs they
-//! say are present. 0 if the entry is too short to hold its flags.
-size_t ObjectAceSidOffset(const unsigned char* bytes, size_t size)
-{
-    const size_t flags_offset = sizeof(ACE_HEADER) + sizeof(ACCESS_MASK);
-    if (size < flags_offset + sizeof(DWORD)) return 0;
-
-    DWORD flags = 0;
-    std::memcpy(&flags, bytes + flags_offset, sizeof(flags));
-
-    size_t offset = flags_offset + sizeof(DWORD);
-    if (flags & ACE_OBJECT_TYPE_PRESENT) offset += sizeof(GUID);
-    if (flags & ACE_INHERITED_OBJECT_TYPE_PRESENT) offset += sizeof(GUID);
-
-    return offset;
-}
-
-ObservedAce ReadAce(const void* entry)
-{
-    const auto* const header = static_cast<const ACE_HEADER*>(entry);
-    const auto* const bytes = static_cast<const unsigned char*>(entry);
-    const size_t size = header->AceSize;
-
-    ObservedAce ace;
-    ace.inherit_only = (header->AceFlags & INHERIT_ONLY_ACE) != 0;
-    ace.inherited = (header->AceFlags & INHERITED_ACE) != 0;
-
-    const BYTE propagation =
-        static_cast<BYTE>(header->AceFlags & (OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE | NO_PROPAGATE_INHERIT_ACE));
-    if (propagation == 0) {
-        ace.inherit = Inherit::None;
-    } else if (propagation == (OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE)) {
-        ace.inherit = Inherit::ContainerAndObject;
-    } else {
-        ace.inherit = std::nullopt;
-    }
-
-    // Every access entry starts with its header and a 32-bit mask.
-    if (size >= sizeof(ACE_HEADER) + sizeof(ACCESS_MASK)) {
-        std::memcpy(&ace.mask, bytes + sizeof(ACE_HEADER), sizeof(ace.mask));
-    }
-
-    const size_t plain_sid_offset = sizeof(ACE_HEADER) + sizeof(ACCESS_MASK);
-    size_t sid_offset = 0;
-
-    switch (header->AceType) {
-    case ACCESS_ALLOWED_ACE_TYPE:
-        ace.kind = AceKind::Allow;
-        sid_offset = plain_sid_offset;
-        break;
-    case ACCESS_ALLOWED_CALLBACK_ACE_TYPE:
-        ace.kind = AceKind::OtherAllow;
-        sid_offset = plain_sid_offset;
-        break;
-    case ACCESS_ALLOWED_OBJECT_ACE_TYPE:
-    case ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE:
-        ace.kind = AceKind::OtherAllow;
-        sid_offset = ObjectAceSidOffset(bytes, size);
-        break;
-    case ACCESS_ALLOWED_COMPOUND_ACE_TYPE:
-        // The mask, a 16-bit compound type and 16 reserved bits, then the server SID.
-        ace.kind = AceKind::OtherAllow;
-        sid_offset = plain_sid_offset + sizeof(DWORD);
-        break;
-    case ACCESS_DENIED_ACE_TYPE:
-    case ACCESS_DENIED_CALLBACK_ACE_TYPE:
-        ace.kind = AceKind::Deny;
-        sid_offset = plain_sid_offset;
-        break;
-    case ACCESS_DENIED_OBJECT_ACE_TYPE:
-    case ACCESS_DENIED_CALLBACK_OBJECT_ACE_TYPE:
-        ace.kind = AceKind::Deny;
-        sid_offset = ObjectAceSidOffset(bytes, size);
-        break;
-    default:
-        ace.kind = AceKind::Other;
-        break;
-    }
-
-    if (sid_offset != 0 && sid_offset < size) {
-        if (std::optional<Sid> trustee = SidAt(bytes + sid_offset, bytes + size)) ace.trustee = std::move(*trustee);
-    }
-
-    return ace;
+    return SidIn(static_cast<const unsigned char*>(psid), ::GetLengthSid(psid), 0);
 }
 
 //! What GetNamedSecurityInfoW or GetSecurityInfo returned, as an ObservedAcl. Frees \p sd.
@@ -408,6 +484,9 @@ ObservedAcl ToObservedAcl(PSECURITY_DESCRIPTOR sd, PSID owner, PACL dacl)
     acl.is_protected = (control & SE_DACL_PROTECTED) != 0;
 
     if (acl.dacl_present) {
+        const auto* const acl_begin = reinterpret_cast<const unsigned char*>(dacl);
+        const auto* const acl_end = acl_begin + dacl->AclSize;
+
         for (DWORD i = 0; i < dacl->AceCount; ++i) {
             void* entry = nullptr;
             if (!::GetAce(dacl, i, &entry)) {
@@ -415,7 +494,18 @@ ObservedAcl ToObservedAcl(PSECURITY_DESCRIPTOR sd, PSID owner, PACL dacl)
                 ::LocalFree(sd);
                 ThrowWin32(error, "GetAce");
             }
-            acl.aces.push_back(ReadAce(entry));
+
+            // An entry lies inside its ACL, and what is left of the ACL is what may be read.
+            const auto* const bytes = static_cast<const unsigned char*>(entry);
+            std::optional<ObservedAce> ace;
+            if (bytes >= acl_begin + sizeof(ACL) && bytes < acl_end) {
+                ace = ParseAce(bytes, static_cast<size_t>(acl_end - bytes));
+            }
+            if (!ace) {
+                ::LocalFree(sd);
+                ThrowWin32(ERROR_INVALID_ACL, "ParseAce");
+            }
+            acl.aces.push_back(std::move(*ace));
         }
     }
 

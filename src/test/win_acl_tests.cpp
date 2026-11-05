@@ -14,6 +14,7 @@
 #include "util/dir_permissions.h"
 
 #include <windows.h>
+#include <sddl.h>
 #endif
 
 using namespace util::winacl;
@@ -71,6 +72,84 @@ ObservedAcl Acl(const Sid& owner, std::vector<ObservedAce> aces)
 bool Contains(const std::optional<std::string>& reason, const std::string& text)
 {
     return reason.has_value() && reason->find(text) != std::string::npos;
+}
+
+using Bytes = std::vector<unsigned char>;
+
+void AppendLittleEndian(Bytes& bytes, uint32_t value)
+{
+    for (int shift = 0; shift < 32; shift += 8) {
+        bytes.push_back(static_cast<unsigned char>(value >> shift));
+    }
+}
+
+//! Write \p size into the entry's size field.
+void SetAceSize(Bytes& bytes, size_t size)
+{
+    bytes[2] = static_cast<unsigned char>(size);
+    bytes[3] = static_cast<unsigned char>(size >> 8);
+}
+
+//! An entry as Windows lays it out: the type, the flags and the 16-bit little-endian
+//! size, then the mask, \p body (object flags and GUIDs, or a compound type), the
+//! trustee's SID and \p tail.
+Bytes AceBytes(uint8_t type, uint8_t flags, uint32_t access, const Bytes& body, const Sid& trustee,
+               const Bytes& tail = {})
+{
+    Bytes bytes{type, flags, 0, 0};
+    AppendLittleEndian(bytes, access);
+    bytes.insert(bytes.end(), body.begin(), body.end());
+    bytes.insert(bytes.end(), trustee.begin(), trustee.end());
+    bytes.insert(bytes.end(), tail.begin(), tail.end());
+
+    SetAceSize(bytes, bytes.size());
+
+    return bytes;
+}
+
+//! The flags field of an object entry, then a GUID for each flag set.
+Bytes ObjectBody(uint32_t object_flags, const Bytes& guid)
+{
+    Bytes body;
+    AppendLittleEndian(body, object_flags);
+    if (object_flags & 0x1) body.insert(body.end(), guid.begin(), guid.end());
+    if (object_flags & 0x2) body.insert(body.end(), guid.begin(), guid.end());
+
+    return body;
+}
+
+std::optional<ObservedAce> Parse(const Bytes& bytes)
+{
+    return ParseAce(bytes.data(), bytes.size());
+}
+
+//! One entry of each allow and deny type, with the kind it is read as.
+struct AceCase
+{
+    uint8_t type{0};
+    Bytes body;
+    Bytes tail;
+    AceKind kind{AceKind::Other};
+};
+
+std::vector<AceCase> AllowAndDenyCases()
+{
+    // A compound entry carries a 16-bit compound type and 16 reserved bits before its
+    // first SID; a callback entry carries application data after its SID.
+    const Bytes compound{0x01, 0x00, 0x00, 0x00};
+    const Bytes application_data{0xDE, 0xAD, 0xBE, 0xEF};
+
+    return {
+        {0x00, {}, {}, AceKind::Allow},
+        {0x01, {}, {}, AceKind::Deny},
+        {0x04, compound, {}, AceKind::OtherAllow},
+        {0x05, ObjectBody(0, {}), {}, AceKind::OtherAllow},
+        {0x06, ObjectBody(0, {}), {}, AceKind::Deny},
+        {0x09, {}, application_data, AceKind::OtherAllow},
+        {0x0A, {}, application_data, AceKind::Deny},
+        {0x0B, ObjectBody(0, {}), application_data, AceKind::OtherAllow},
+        {0x0C, ObjectBody(0, {}), application_data, AceKind::Deny},
+    };
 }
 
 } // namespace
@@ -329,6 +408,145 @@ BOOST_AUTO_TEST_CASE(matches_spec_requires_protection_owner_and_exact_aces)
     BOOST_CHECK_MESSAGE(!narrowed.has_value(), narrowed.value_or(""));
 }
 
+BOOST_AUTO_TEST_CASE(parse_ace_reads_every_allow_and_deny_type)
+{
+    for (const AceCase& c : AllowAndDenyCases()) {
+        const std::optional<ObservedAce> ace = Parse(AceBytes(c.type, 0x00, 0x0012019F, c.body, wellknown::Users(), c.tail));
+        BOOST_REQUIRE_MESSAGE(ace.has_value(), "type " << int{c.type});
+        BOOST_CHECK_MESSAGE(ace->kind == c.kind, "type " << int{c.type});
+        BOOST_CHECK_MESSAGE(ace->trustee == wellknown::Users(), "type " << int{c.type} << ": " << FormatSid(ace->trustee));
+        BOOST_CHECK_EQUAL(ace->mask, 0x0012019Fu);
+        BOOST_CHECK(ace->inherit == Inherit::None);
+        BOOST_CHECK(!ace->inherit_only);
+        BOOST_CHECK(!ace->inherited);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(parse_ace_reads_audit_and_label_types_as_other)
+{
+    // A system audit entry, and a mandatory label of High integrity that forbids writes up.
+    const std::optional<ObservedAce> audit = Parse(AceBytes(0x02, 0x40, FILE_WRITE_DATA, {}, wellknown::Users()));
+    BOOST_REQUIRE(audit.has_value());
+    BOOST_CHECK(audit->kind == AceKind::Other);
+    BOOST_CHECK(audit->trustee == wellknown::Users());
+    BOOST_CHECK_EQUAL(audit->mask, static_cast<uint32_t>(FILE_WRITE_DATA));
+
+    const std::optional<ObservedAce> label = Parse(AceBytes(0x11, 0x00, 0x1, {}, SidOf("S-1-16-12288")));
+    BOOST_REQUIRE(label.has_value());
+    BOOST_CHECK(label->kind == AceKind::Other);
+    BOOST_CHECK_EQUAL(FormatSid(label->trustee), "S-1-16-12288");
+    BOOST_CHECK_EQUAL(label->mask, 0x1u);
+
+    // A type with no known layout is read as its header alone.
+    const std::optional<ObservedAce> unknown = Parse(Bytes{0x30, 0x00, 0x04, 0x00});
+    BOOST_REQUIRE(unknown.has_value());
+    BOOST_CHECK(unknown->kind == AceKind::Other);
+    BOOST_CHECK(unknown->trustee.empty());
+    BOOST_CHECK_EQUAL(unknown->mask, 0u);
+}
+
+BOOST_AUTO_TEST_CASE(parse_ace_finds_the_sid_after_object_guids)
+{
+    // Each GUID holds the bytes of the Users SID, so reading the trustee from too early
+    // an offset finds Users rather than Administrators.
+    const Bytes guid = wellknown::Users();
+    BOOST_REQUIRE_EQUAL(guid.size(), 16u);
+
+    for (const uint8_t type : {uint8_t{0x05}, uint8_t{0x06}, uint8_t{0x0B}, uint8_t{0x0C}}) {
+        for (const uint32_t object_flags : {0u, 1u, 2u, 3u}) {
+            const Bytes bytes = AceBytes(type, 0x00, FILE_ALL_ACCESS, ObjectBody(object_flags, guid),
+                                         wellknown::Administrators());
+            const std::optional<ObservedAce> ace = Parse(bytes);
+            BOOST_REQUIRE_MESSAGE(ace.has_value(), "type " << int{type} << ", object flags " << object_flags);
+            BOOST_CHECK_MESSAGE(ace->trustee == wellknown::Administrators(),
+                                "type " << int{type} << ", object flags " << object_flags << ": "
+                                        << FormatSid(ace->trustee));
+            BOOST_CHECK_EQUAL(ace->mask, static_cast<uint32_t>(FILE_ALL_ACCESS));
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(parse_ace_maps_inheritance_flags)
+{
+    struct FlagsCase
+    {
+        uint8_t flags{0};
+        std::optional<Inherit> inherit;
+        bool inherit_only{false};
+        bool inherited{false};
+    };
+
+    // Object inherit 0x1, container inherit 0x2, no-propagate 0x4, inherit-only 0x8,
+    // inherited 0x10.
+    const std::vector<FlagsCase> cases{
+        {0x00, Inherit::None, false, false},
+        {0x03, Inherit::ContainerAndObject, false, false},
+        {0x01, std::nullopt, false, false},
+        {0x02, std::nullopt, false, false},
+        {0x07, std::nullopt, false, false},
+        {0x0B, Inherit::ContainerAndObject, true, false},
+        {0x10, Inherit::None, false, true},
+        {0x13, Inherit::ContainerAndObject, false, true},
+    };
+
+    for (const FlagsCase& c : cases) {
+        const std::optional<ObservedAce> ace = Parse(AceBytes(0x00, c.flags, FILE_ALL_ACCESS, {}, wellknown::Users()));
+        BOOST_REQUIRE(ace.has_value());
+        BOOST_CHECK_MESSAGE(ace->inherit == c.inherit, "flags " << int{c.flags});
+        BOOST_CHECK_MESSAGE(ace->inherit_only == c.inherit_only, "flags " << int{c.flags});
+        BOOST_CHECK_MESSAGE(ace->inherited == c.inherited, "flags " << int{c.flags});
+    }
+}
+
+BOOST_AUTO_TEST_CASE(parse_ace_refuses_truncated_entries)
+{
+    BOOST_CHECK(!ParseAce(nullptr, 16).has_value());
+
+    // Shorter than the header, or a size field below the header's own size.
+    for (const Bytes& bytes : {Bytes{}, Bytes{0x00}, Bytes{0x00, 0x00, 0x08}, Bytes{0x00, 0x00, 0x03, 0x00}}) {
+        BOOST_CHECK_MESSAGE(!Parse(bytes).has_value(), bytes.size() << " bytes");
+    }
+
+    for (const AceCase& c : AllowAndDenyCases()) {
+        const Bytes whole = AceBytes(c.type, 0x00, FILE_ALL_ACCESS, c.body, wellknown::Users());
+        BOOST_REQUIRE(Parse(whole).has_value());
+
+        // Cut short, whether the size field still claims the whole entry or is cut with it.
+        // Each copy is exactly as long as what may be read.
+        for (size_t length = 0; length < whole.size(); ++length) {
+            Bytes claims_whole(whole.begin(), whole.begin() + length);
+            BOOST_CHECK_MESSAGE(!Parse(claims_whole).has_value(), "type " << int{c.type} << ", " << length << " bytes");
+
+            if (length >= 4) {
+                Bytes cut = claims_whole;
+                SetAceSize(cut, length);
+                BOOST_CHECK_MESSAGE(!Parse(cut).has_value(),
+                                    "type " << int{c.type} << ", size field " << length);
+            }
+        }
+    }
+
+    // A size field that ends inside the SID, with the rest of the SID readable after it.
+    Bytes ends_early = AceBytes(0x00, 0x00, FILE_ALL_ACCESS, {}, wellknown::Users());
+    SetAceSize(ends_early, 12);
+    BOOST_CHECK(!Parse(ends_early).has_value());
+
+    // A SID that claims more sub-authorities than the entry holds.
+    Bytes long_count = AceBytes(0x00, 0x00, FILE_ALL_ACCESS, {}, wellknown::Users());
+    long_count[9] = 5;
+    BOOST_CHECK(!Parse(long_count).has_value());
+
+    // Object flags that call for a GUID the entry does not hold.
+    Bytes missing_guid = AceBytes(0x05, 0x00, FILE_ALL_ACCESS, ObjectBody(0, {}), wellknown::Users());
+    missing_guid[8] = 0x03;
+    BOOST_CHECK(!Parse(missing_guid).has_value());
+
+    // A SID that is not revision 1.
+    Bytes revision = AceBytes(0x00, 0x00, FILE_ALL_ACCESS, {}, wellknown::Users());
+    revision[8] = 2;
+    BOOST_CHECK(!Parse(revision).has_value());
+}
+
 #ifdef WIN32
 
 namespace {
@@ -450,6 +668,60 @@ BOOST_AUTO_TEST_CASE(foreign_writer_on_chain_needs_a_plain_absolute_path)
     BOOST_CHECK(FindForeignWriterOnChain(fs::path("relative") / "file.exe", allowed).has_value());
     BOOST_CHECK(FindForeignWriterOnChain(fs::path("C:\\Windows\\..\\file.exe"), allowed).has_value());
     BOOST_CHECK(FindForeignWriterOnChain(fs::path("C:\\Windows\\.\\file.exe"), allowed).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(parse_ace_reads_entries_windows_builds)
+{
+    if (RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("parse_ace_reads_entries_windows_builds reads Windows' own SDDL conversion; it runs on Windows");
+        return;
+    }
+
+    // A plain allow, a conditional (callback) allow, an object allow with an object type,
+    // and an object deny with an inherited object type. FA is FILE_ALL_ACCESS and CC is
+    // the directory service right to create a child (0x1).
+    const wchar_t* const sddl = L"D:P(A;;FA;;;SY)(XA;;FA;;;WD;(Member_of {SID(BA)}))"
+                                L"(OA;;CC;bf967aba-0de6-11d0-a285-00aa003049e2;;WD)"
+                                L"(OD;;CC;;bf967aba-0de6-11d0-a285-00aa003049e2;WD)";
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    BOOST_REQUIRE(::ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION_1, &sd, nullptr));
+
+    BOOL present = FALSE;
+    BOOL defaulted = FALSE;
+    PACL dacl = nullptr;
+    const bool have_dacl = ::GetSecurityDescriptorDacl(sd, &present, &dacl, &defaulted) && present && dacl != nullptr;
+
+    std::vector<std::optional<ObservedAce>> aces;
+    if (have_dacl) {
+        const auto* const end = reinterpret_cast<const unsigned char*>(dacl) + dacl->AclSize;
+        for (DWORD i = 0; i < dacl->AceCount; ++i) {
+            void* entry = nullptr;
+            if (!::GetAce(dacl, i, &entry)) break;
+            const auto* const bytes = static_cast<const unsigned char*>(entry);
+            aces.push_back(ParseAce(bytes, static_cast<size_t>(end - bytes)));
+        }
+    }
+    ::LocalFree(sd);
+
+    BOOST_REQUIRE(have_dacl);
+    BOOST_REQUIRE_EQUAL(aces.size(), 4u);
+    for (const std::optional<ObservedAce>& ace : aces) {
+        BOOST_REQUIRE(ace.has_value());
+    }
+
+    const Sid everyone = SidOf("S-1-1-0");
+    BOOST_CHECK(aces[0]->kind == AceKind::Allow);
+    BOOST_CHECK(aces[0]->trustee == wellknown::System());
+    BOOST_CHECK_EQUAL(aces[0]->mask, static_cast<uint32_t>(FILE_ALL_ACCESS));
+    BOOST_CHECK(aces[1]->kind == AceKind::OtherAllow);
+    BOOST_CHECK(aces[1]->trustee == everyone);
+    BOOST_CHECK_EQUAL(aces[1]->mask, static_cast<uint32_t>(FILE_ALL_ACCESS));
+    BOOST_CHECK(aces[2]->kind == AceKind::OtherAllow);
+    BOOST_CHECK(aces[2]->trustee == everyone);
+    BOOST_CHECK_EQUAL(aces[2]->mask, 0x1u);
+    BOOST_CHECK(aces[3]->kind == AceKind::Deny);
+    BOOST_CHECK(aces[3]->trustee == everyone);
+    BOOST_CHECK_EQUAL(aces[3]->mask, 0x1u);
 }
 
 #endif // WIN32
