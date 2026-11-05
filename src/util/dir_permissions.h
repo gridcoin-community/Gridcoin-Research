@@ -101,17 +101,21 @@ bool RestrictErrorMeansNoModes(int err);
 void SetOwnerOnlyUmask();
 
 #ifdef WIN32
-//! Apply an owner+SYSTEM PROTECTED DACL to an existing file or directory and verify
-//! it by reading it back. Throws std::system_error on failure — callers that hold
-//! secrets (the IPC socket and cookie) rely on this failing closed.
+//! Make the current user the owner of an existing file or directory, apply an
+//! owner+SYSTEM PROTECTED DACL to it, and verify both by reading them back exactly.
+//! Throws on failure: std::system_error when a call fails, std::runtime_error when
+//! what is read back differs. Callers that hold secrets (the IPC socket and cookie)
+//! rely on this failing closed.
 //!
 //! \param inheritable  On a directory, make the ACEs inheritable so entries created
 //!                     inside are owner-only from creation rather than after the
 //!                     fact, which closes the create/protect window.
 void ApplyOwnerOnlyDacl(const fs::path& path, bool inheritable);
 
-//! Confirm \p path's DACL is present, protected, and names only owner + SYSTEM.
-//! Throws std::system_error describing the discrepancy otherwise.
+//! Confirm \p path's DACL is present and protected, its owner is the current user or
+//! SYSTEM, and every allow entry of any kind, inherit-only ones included, names one
+//! of the two. Throws std::runtime_error describing the discrepancy otherwise, and
+//! std::system_error when the ACL cannot be read.
 void VerifyOwnerOnlyDacl(const fs::path& path);
 
 //! The same DACL as a raw PACL, for callers that need it at CREATE time via

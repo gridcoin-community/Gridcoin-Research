@@ -326,6 +326,7 @@ add_library(gridcoin_util STATIC
     util/time.cpp
     util/tokenpipe.cpp
     util/transfer_file.cpp
+    util/win_acl.cpp
     validation.cpp
     validationinterface.cpp
     wallet/autounlock.cpp
@@ -407,11 +408,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(gridcoin_util PRIVATE wallet/autounlock_socket.cpp)
 endif()
 
-# advapi32: util/dir_permissions.cpp applies the owner-only NTFS DACL that protects
-# a freshly created data directory (SetNamedSecurityInfoW / SetEntriesInAclW /
-# GetNamedSecurityInfoW). This lives in gridcoin_util rather than gridcoin_ipc
-# because the monolithic build creates data directories too (the Qt chooser) and
-# gridcoin_ipc is only built when ENABLE_MULTIPROCESS=ON.
+# advapi32: util/win_acl.cpp reads, builds and applies Windows access control lists
+# (Get/SetNamedSecurityInfoW, GetSecurityInfo, AddAccessAllowedAceEx, the token and
+# account queries), and util/dir_permissions.cpp uses it for the owner-only NTFS DACL
+# that protects a freshly created data directory. This lives in gridcoin_util rather
+# than gridcoin_ipc because the monolithic build creates data directories too (the Qt
+# chooser) and gridcoin_ipc is only built when ENABLE_MULTIPROCESS=ON.
 if(WIN32)
     target_link_libraries(gridcoin_util PUBLIC advapi32)
 endif()
