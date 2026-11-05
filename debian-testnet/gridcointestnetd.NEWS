@@ -27,16 +27,17 @@ gridcoinresearch (5.5.2.1-1) unstable; urgency=medium
 
   The service never starts on a new datadir. A -conf or -datadir set in such
   an override or copy is carried into gridcointestnet-service's own drop-in,
-  /etc/systemd/system/gridcointestnetd.service.d/50-gridcoin-service.conf.
-  A command line without -datadir is left where it is, as which datadir the
+  /etc/systemd/system/gridcointestnetd.service.d/50-gridcoin-service.conf. A
+  command line without -datadir is left where it is, as which datadir the
   node used cannot be told from outside it: add -datadir=<the directory this
   node actually uses> to its ExecStart=, then run "gridcointestnet-service
-  switch-over --state=/var/lib/gridcoin-service/switchover-test.state".
-  So is a command line with any other option, or without -testnet, or with
-  no -conf when its datadir has no testnet/gridcoinresearch.conf; the
-  upgrade said what to change. Until then a full copy of the unit left in
-  place keeps running on its old command line, and a service with only such
-  drop-ins does not start.
+  switch-over --state=/var/lib/gridcoin-service/switchover-test.state". So
+  is a command line with any other option, or without -testnet, or with no
+  -conf when its datadir has no testnet/gridcoinresearch.conf; the upgrade
+  said what to change. Until then a full copy of the unit left in place
+  keeps running on its old command line. With only such drop-ins the service
+  does not start if they make the daemon fork, and otherwise runs on its old
+  command line.
 
   A desktop user attaches the GUI to the system service through membership of
   the gridcointestnet-gui group ("Connect to the system service" in the

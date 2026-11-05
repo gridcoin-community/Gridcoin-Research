@@ -693,6 +693,9 @@ class NewsTests(unittest.TestCase):
             self.assertNotIn("Until then the service does not start", news, net["tree"])
             # A command line without -conf whose datadir has no conf is left too.
             self.assertIn("with no -conf when its datadir has no", news, net["tree"])
+            # Drop-ins on the new unit stop it only when they make the daemon fork.
+            self.assertIn("does not start if they make the daemon fork, and otherwise runs on its old command line",
+                          news, net["tree"])
 
 
 def maintainer_scripts():

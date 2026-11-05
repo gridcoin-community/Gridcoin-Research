@@ -2399,7 +2399,7 @@ class EnableTests(SwitchTestBase):
             ("override", "-datadir=/data/x", "/data/x"),
             ("copy", "-datadir=/srv/grc", "/srv/grc"),
             # Without -datadir it runs on the core's default, not /var/lib/<state>.
-            ("override", "-daemonwait", "default datadir"),
+            ("override", "-daemonwait", "probably runs on the core's default datadir"),
             # The unit's own datadir, with a trailing slash, is the unit's own.
             ("override", "-datadir=/var/lib/gridcoinresearchd/", None),
         ]
@@ -3853,7 +3853,8 @@ class SwitchOverTests(ServiceTestBase):
         rc, out, err = self.run_main("switch-over", "--state=" + state, "--network=test")
         self.assertEqual(rc, 1)
         self.assertIn("no -testnet", err)
-        self.assertIn("mainnet", err)
+        # A testnet= line in its conf could have made it a testnet node after all.
+        self.assertIn("was probably a mainnet node", err)
         self.assertIn(override, err)
         self.assertEqual(os.listdir(self.system_unit_dir("gridcointestnetd")), ["override.conf"])
         self.assertEqual(self.host.calls, [])
@@ -4033,7 +4034,7 @@ class SwitchOverTests(ServiceTestBase):
                         self.assertEqual(f.read(), "system-core\n")
         # A comment is no setting, and the testnet unit's conf may set testnet=.
         svc_rmtree(self.system_unit_dir())
-        self.write_text(inside, "rpcuser=x\n# testnet=1\n")
+        self.write_text(inside, "rpcuser=x\n# testnet=1\n#main.testnet=1\n")
         self.system_override("-datadir=%s" % data)
         rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
         self.assertEqual(rc, 0, err)
@@ -4043,6 +4044,47 @@ class SwitchOverTests(ServiceTestBase):
         state = self.write_state("system-core\n", network="test")
         rc, out, err = self.run_main("switch-over", "--state=" + state, "--network=test")
         self.assertEqual(rc, 0, err)
+
+    def test_switch_over_names_the_real_datadir_of_a_linked_one(self):
+        # Without -conf the conf is read in the datadir, and a datadir reached through a link is
+        # one the walk refuses: the advice names the path it leads to.
+        real = os.path.join(self.tmp.name, "data", "grc")
+        os.makedirs(real)
+        self.write_text(os.path.join(real, "gridcoinresearch.conf"), "rpcuser=x\n")
+        link = os.path.join(self.tmp.name, "grc-link")
+        os.symlink(real, link)
+        override = self.system_override("-datadir=%s" % link)
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+        self.assertEqual(rc, 1)
+        self.assertIn("set -datadir=%s in ExecStart= in %s, or add -conf=" % (real, override), err)
+        # With -conf the conf is its own path, and one in the datadir as it resolves is the
+        # account's to own.
+        svc_rmtree(self.system_unit_dir())
+        conf = os.path.join(real, "gridcoinresearch.conf")
+        self.system_override("-conf=%s -datadir=%s" % (conf, link))
+        with seen_as({conf: {"uid": self.uid + 1}}):
+            rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+        self.assertEqual(rc, 1)
+        self.assertIn("chown gridcoin: %s" % conf, err)
+
+    def test_a_carried_conf_is_looked_at_before_it_is_opened(self):
+        # The last component is checked with lstat first, as open_entry does: nothing but a
+        # regular file is opened (a FIFO would wait for a writer, a device could act).
+        directory = os.path.join(self.tmp.name, "etc-fifo")
+        os.makedirs(directory)
+        fifo = os.path.join(directory, "gridcoin.conf")
+        os.mkfifo(fifo)
+        opened = []
+        real_open = os.open
+
+        def recording_open(name, *args, **kwargs):
+            opened.append(name)
+            return real_open(name, *args, **kwargs)
+
+        with mock.patch.object(svc.os, "open", recording_open), self.assertRaises(svc.UserError) as caught:
+            svc.check_conf_writers(svc.NETWORKS["main"], fifo, "the -conf %s" % fifo, "/nowhere", self.host)
+        self.assertIn("not a regular file", str(caught.exception))
+        self.assertNotIn("gridcoin.conf", opened)
 
     def test_switch_over_refuses_a_conf_others_can_write(self):
         # A conf anyone but root and the service account can write, or one in such a directory,
@@ -4076,7 +4118,9 @@ class SwitchOverTests(ServiceTestBase):
                 rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
                 self.assertEqual(rc, 1)
                 self.assertIn(reason, err)
-                self.assertIn("will not start", err)
+                # Drop-ins that daemonise give the notify unit a command line it fails on; others
+                # leave it running on the old one.
+                self.assertIn("will not start, or will run on its old command line", err)
                 self.assertEqual(os.listdir(self.system_unit_dir()), ["override.conf"])
         # Root's or the account's, writable by its owner alone: carried.
         os.chmod(directory, 0o755)
@@ -4213,7 +4257,8 @@ class SwitchOverTests(ServiceTestBase):
                         os.unlink(copy)
                     setting = "[%s]\n%s=%s\n" % (section, key, value)
                     if where == "drop-in":
-                        target = self.write_system_dropin("override.conf", setting + "[Service]\nExecStart=\n" + command)
+                        target = self.write_system_dropin("override.conf",
+                                                          setting + "[Service]\nExecStart=\n" + command)
                     else:
                         target = copy
                         self.write_text(copy, "[Service]\nType=forking\n" + command + setting)

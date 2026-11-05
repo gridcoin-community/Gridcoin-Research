@@ -1729,7 +1729,9 @@ def refuse_system_unit_datadir(paths, net, command_name):
     _, default_datadir = system_defaults(net)
     if datadir is not None and normalize_path(datadir) == default_datadir:
         return
-    runs_on = datadir if datadir is not None else "the core's default datadir under its account's home"
+    # Without -datadir the core started from its default, which a datadir= in its conf may have changed.
+    runs_on = ("runs on %s" % datadir if datadir is not None
+               else "probably runs on the core's default datadir under its account's home")
     if command_name == "enable":
         advice = ("enable moves the user's wallet into %s, which the service does not run on; to run it there, "
                   "change that ExecStart= to -datadir=%s first, or keep the service as it is"
@@ -1737,7 +1739,7 @@ def refuse_system_unit_datadir(paths, net, command_name):
     else:
         advice = ("disable moves the wallet in %s back to its user, and the service does not run on that; change "
                   "that ExecStart= back to -datadir=%s, then rerun disable" % (default_datadir, default_datadir))
-    raise UserError("%s runs on %s, from the ExecStart= in %s; %s" % (unit, runs_on, path, advice))
+    raise UserError("%s %s, from the ExecStart= in %s; %s" % (unit, runs_on, path, advice))
 
 
 def refuse_user_unit_datadir(paths, net, user, d_display):
@@ -2637,9 +2639,12 @@ def check_conf_writers(net, path, name, datadir, host):
     other to root, and the advice says so."""
     acct_uid = service_account_uid(net, host)
     parts = path.split("/")[1:]
+    real_datadir = os.path.realpath(datadir)
 
     def check(st, target, what):
-        in_datadir = target == datadir or target.startswith(datadir.rstrip("/") + "/")
+        # A path test on the paths as they resolve, so that a datadir reached through a link holds
+        # what is under the directory it leads to.
+        in_datadir = os.path.commonpath([os.path.realpath(target), real_datadir]) == real_datadir
         if st.st_uid not in (0, acct_uid):
             raise UserError("%s: %s is owned by uid %d, not root or %s, so that account could change the service's "
                             "options; chown %s: %s" % (name, what, st.st_uid, net.account,
@@ -2665,6 +2670,16 @@ def check_conf_writers(net, path, name, datadir, host):
             os.close(fd)
             fd = child
         check(os.fstat(fd), target or "/", "its directory")
+        # Looked at before it is opened, as open_entry does: nothing but a regular file is opened
+        # (a FIFO would wait for a writer, a device could act), and what is opened must be it.
+        try:
+            lst = os.stat(parts[-1], dir_fd=fd, follow_symlinks=False)
+        except OSError as e:
+            raise UserError("%s: %s" % (name, e.strerror)) from None
+        if stat.S_ISLNK(lst.st_mode):
+            raise UserError("%s is a symlink; name the file itself" % name)
+        if not stat.S_ISREG(lst.st_mode):
+            raise UserError("%s is not a regular file" % name)
         try:
             file_fd = os.open(parts[-1], FILE_FLAGS, dir_fd=fd)
         except OSError as e:
@@ -2673,8 +2688,8 @@ def check_conf_writers(net, path, name, datadir, host):
             raise UserError("%s: %s" % (name, e.strerror)) from None
         try:
             st = os.fstat(file_fd)
-            if not stat.S_ISREG(st.st_mode):
-                raise UserError("%s is not a regular file" % name)
+            if not stat.S_ISREG(st.st_mode) or (st.st_dev, st.st_ino) != (lst.st_dev, lst.st_ino):
+                raise UserError("%s changed while it was checked; rerun the switch-over" % name)
             check(st, path, "it")
             if not net.testnet:
                 refuse_testnet_line(file_fd, path)
@@ -2744,7 +2759,7 @@ def carried_system_paths(net, display, value, own, sources, copied, paths, host)
         if dropped:
             raise UserError("the ExecStart= in %s has options the new unit would drop: %s"
                             % (display, " ".join(shown(word) for word in dropped)))
-    conf = datadir = conf_name = None
+    conf = datadir = conf_name = start_datadir = None
     for word in words[1:]:
         option = core_option(word)
         if option.startswith("-conf="):
@@ -2754,9 +2769,10 @@ def carried_system_paths(net, display, value, own, sources, copied, paths, host)
     if not own:
         # The testnet unit's command line without -testnet ran a mainnet node.
         if net.testnet and not any(core_option(word) == net.net_arg for word in words[1:]):
-            raise UserError("the ExecStart= in %s has no %s, so the core it ran was a mainnet node, not this "
-                            "network's; if it is a testnet node, add %s to ExecStart= in %s, then rerun the "
-                            "switch-over" % (display, net.net_arg, net.net_arg, display))
+            raise UserError("the ExecStart= in %s has no %s, so the core it ran was probably a mainnet node (a "
+                            "testnet= line in its conf would have made it a testnet one), not this network's; if it "
+                            "is a testnet node, add %s to ExecStart= in %s, then rerun the switch-over"
+                            % (display, net.net_arg, net.net_arg, display))
         if datadir is None:
             raise UserError("the ExecStart= in %s has no -datadir; add -datadir=<the directory this node actually "
                             "uses> to ExecStart= in %s, then rerun the switch-over. It is probably %s"
@@ -2768,6 +2784,7 @@ def carried_system_paths(net, display, value, own, sources, copied, paths, host)
         if conf is None and start_conf is not None:
             conf = start_conf
             conf_name = "the configuration file %s in the -datadir of %s" % (shown(conf), display)
+            start_datadir = datadir
     default_conf, default_datadir = system_defaults(net)
     # The datadir first, so that its ownership warning comes before anything said of the conf.
     if datadir is not None and normalize_path(datadir) != default_datadir:
@@ -2781,6 +2798,14 @@ def carried_system_paths(net, display, value, own, sources, copied, paths, host)
                         "there and read, does not exist, so the new unit would read %s instead; add -conf=<the "
                         "file this node should read> to ExecStart= in %s, or make %s, then rerun the switch-over"
                         % (display, shown(conf), default_conf, display, shown(conf)))
+    # The walk below refuses a conf reached through a link, so the conf in a linked datadir is
+    # named by the path the link leads to.
+    if start_datadir is not None and os.path.realpath(start_datadir) != normalize_path(start_datadir):
+        raise UserError("the -datadir %s in %s leads through a link, to %s, and %s, the configuration file the core "
+                        "read there, is checked only on a path without links; set -datadir=%s in ExecStart= in %s, "
+                        "or add -conf=<that file's path without links>, then rerun the switch-over"
+                        % (shown(start_datadir), display, os.path.realpath(start_datadir), shown(conf),
+                           os.path.realpath(start_datadir), display))
     if conf is not None and normalize_path(conf) != default_conf:
         conf = carried_system_path(net, conf, "conf", display, paths, host, datadir or default_datadir, conf_name)
     else:
@@ -2829,11 +2854,11 @@ def switch_system_core(net, host, paths):
         refuse_moving_mounts(moving)
     except UserError as e:
         # Nothing moves: a full copy is the unit still and runs on as it did, while drop-ins on
-        # the notify unit give it a forking command line it fails on.
+        # the notify unit give it their command line, which fails when it makes the daemon fork.
         if copy is not None and not masked:
             outcome = "keeps running on its old command line"
         else:
-            outcome = "will not start"
+            outcome = "will not start, or will run on its old command line,"
         raise UserError("%s. It stays where it is, and %s %s until you change it; then rerun"
                         % (e, unit, outcome)) from None
     if not moving and record is None:
@@ -2910,8 +2935,8 @@ def refuse_unseen_unit_files(net, host, paths, copy, masked):
         if os.path.realpath(os.path.dirname(path)) in read_here:
             continue
         text = read_dropin_text(path) if os.path.exists(path) else None
-        keys = set_keys(text, OLD_UNIT_KEYS) + [key for section, key in MOUNT_KEYS
-                                                 if unit_file_settings(text or "", section, key)]
+        keys = set_keys(text, OLD_UNIT_KEYS)
+        keys += [key for section, key in MOUNT_KEYS if unit_file_settings(text or "", section, key)]
         if keys:
             raise UserError("%s, a drop-in for %s from outside %s, sets %s, which the switch-over neither reads nor "
                             "moves aside; move those settings to a drop-in in %s, or remove them, run systemctl "
