@@ -351,6 +351,37 @@ BOOST_AUTO_TEST_CASE(attach_group_not_a_member_is_refused_at_configuration)
 #endif
 }
 
+#ifndef __linux__
+// Outside Linux the membership is not checked at configuration, so a group this
+// account is not a member of reaches ApplyAttachGroupAccess. A non-root process
+// cannot apply it, and the error says what to change.
+BOOST_AUTO_TEST_CASE(attach_group_not_a_member_names_the_remedy)
+{
+    AttachGroupReset reset;
+    if (::geteuid() == 0) {
+        BOOST_TEST_MESSAGE("running as root, which can set any group; skipping");
+        return;
+    }
+    const std::optional<std::string> foreign = ForeignGroupName();
+    if (!foreign) {
+        BOOST_TEST_MESSAGE("no group this account is outside of; skipping");
+        return;
+    }
+    BOOST_REQUIRE(ipc::ConfigureAttachGroup(*foreign));
+
+    TempDir dir;
+    try {
+        ipc::ApplyAttachGroupAccess(dir.path);
+        BOOST_ERROR("ApplyAttachGroupAccess did not throw");
+    } catch (const std::system_error& e) {
+        BOOST_CHECK_MESSAGE(std::string(e.what()).find(
+                                "the core must run with the attach group as a supplementary group") !=
+                                std::string::npos,
+                            e.what());
+    }
+}
+#endif
+
 // The startup message names the group and the remedy. A group that does not
 // exist keeps its own wording, and a group the core holds has no problem.
 BOOST_AUTO_TEST_CASE(attach_group_problem_names_the_remedy)
@@ -605,6 +636,42 @@ BOOST_FIXTURE_TEST_CASE(attach_group_with_the_data_directory_as_ipcdir_is_refuse
     gArgs.ClearForcedArg("-ipcattachgroup");
     gArgs.ForceSetArg("-ipcdir", datadir.string());
     BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
+}
+
+// Only the IPC directory is given the attach group's access, so an -ipcdir
+// inside the data directory is accepted, whether it is written in full or
+// relative to the data directory. Paths are compared whole, so a directory
+// beside the data directory whose name begins with the data directory's name is
+// not taken for it.
+BOOST_FIXTURE_TEST_CASE(attach_group_ipcdir_inside_or_beside_the_data_directory_is_accepted,
+                        grc_test::StateGuard)
+{
+    gArgs.ClearForcedArg("-ipcdir");
+    gArgs.ForceSetArg("-ipcattachgroup", "gridcoin");
+
+    const fs::path datadir = GetDataDir();
+    BOOST_REQUIRE(fs::is_directory(datadir));
+
+    const fs::path inside = datadir / "ipc_process_tests_inside";
+    fs::create_directories(inside);
+    gArgs.ForceSetArg("-ipcdir", inside.string());
+    BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
+    gArgs.ForceSetArg("-ipcdir", "ipc_process_tests_inside");
+    BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
+
+    // Taken from the resolved path, which has no trailing separator.
+    const fs::path resolved = fs::canonical(datadir);
+    const fs::path beside = resolved.parent_path() / (resolved.filename().string() + "c");
+    boost::system::error_code ec;
+    fs::remove(beside, ec);
+    fs::create_directories(beside);
+    gArgs.ForceSetArg("-ipcdir", beside.string());
+    BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
+    gArgs.ForceSetArg("-ipcdir", (beside / "ipc").string());
+    BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
+
+    fs::remove(inside, ec);
+    fs::remove(beside, ec);
 }
 
 // The attach group is never given access to the data directory, however
