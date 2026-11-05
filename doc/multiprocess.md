@@ -26,17 +26,23 @@ For the internal architecture, see [multiprocess_design.md](multiprocess_design.
 ## How it works (in brief)
 
 When started with `-multiprocess`, the **daemon** listens on an `AF_UNIX` socket,
-`node.sock`, in its data directory and serves the GUI over IPC (Cap'n Proto). The
-**GUI**, also started with `-multiprocess`, connects to that socket instead of
-running the node in-process.
+`node.sock`, in its IPC directory (`-ipcdir`, by default the data directory) and serves
+the GUI over IPC (Cap'n Proto). The **GUI**, also started with `-multiprocess`, connects
+to that socket instead of running the node in-process.
 
 - **Connect-only.** The GUI does **not** start the daemon. Start the daemon first,
   then the GUI.
-- **Same data directory.** Both processes must use the same `-datadir`; that is how
-  the GUI finds `node.sock`.
-- **Authentication.** On start, the daemon writes a random cookie, `ipc.cookie`, in
-  the data directory (owner-readable only); the GUI reads it to authenticate. The
-  socket and the cookie are created with owner-only permissions.
+- **Same data directory.** Both processes must use the same `-datadir` (or, for the
+  system service, the same `-ipcdir`); that is how the GUI finds `node.sock`.
+- **Who may connect.** On Linux and the other POSIX systems the boundary is the
+  operating system's peer check on the socket: the core admits a process of its own
+  account, and with `-ipcattachgroup` also a member of that group (the system
+  service); the GUI admits a core of its own account, or of the `-ipcserviceuser`
+  account. The socket and the cookie are owner-only, or open to the attach group for
+  the system service. The cookie, `ipc.cookie`, is a fresh random value for each run
+  of the core: every process the peer check admits may read it, so it ties a connection
+  to this run of the core rather than adding a second check of who connects. On Windows
+  the owner-only permissions of the socket and the cookie are the guard.
 - **Matching builds.** The GUI and daemon must be the same build — the connection
   handshake rejects mismatched IPC schema/protocol versions. Use `gridcoinresearch`
   and `gridcoinresearchd` from the same release.
@@ -71,6 +77,10 @@ Availability: Linux, and Windows 10 (1803+) / Windows 11, which provide `AF_UNIX
    that it could not connect — it will not start one for you.
 
 (You can omit `-datadir` on both if you use the default data directory.)
+
+A core started by hand like this has no stake-only autounlock. To start the core at
+boot, and for autounlock, run it under the systemd units instead; see
+[*Running the core as a service (Linux)*](#running-the-core-as-a-service-linux) below.
 
 **Retrofitting an existing wallet** needs no migration: point the daemon at the data
 directory you already use. Two things differ from a fresh install, and both are
@@ -366,66 +376,52 @@ The key mental model: **the GUI and the daemon are independent processes.**
 ### Stop the node
 
 - `gridcoinresearchd -multiprocess -datadir=/path/to/data stop` (RPC), **or**
-- send the daemon `SIGTERM` (Linux) / stop its scheduled task (Windows).
+- send the daemon `SIGTERM` (Linux), stop its unit with `systemctl stop` (Linux
+  service), or stop its scheduled task (Windows).
 
 If the GUI is connected when the daemon stops, it detects the lost connection and
 exits cleanly on its own.
 
-### Running the daemon as a service (Linux)
+### Running the core as a service (Linux)
 
-You can run the daemon under `systemd` (or any supervisor) with `-multiprocess` and
-attach the GUI on demand. A minimal unit:
+The packages, and `cmake --install` on Linux, install systemd units for two ways of
+running the core unattended. [`running-unattended.md`](running-unattended.md) describes
+both, how to set them up, what each protects and what it does not:
 
-```ini
-[Unit]
-Description=Gridcoin daemon (multiprocess)
-After=network-online.target
+- **Same account** (`gridcoinresearchd@<user>.service`, set up with `sudo gridcoin-service
+  enable-user <user>`): the core runs as you, with your data directory, as if you had
+  started it by hand, and keeps running when you log out. This is for convenience,
+  staking and autounlock; for higher security use the next mode.
+- **Different account** (`gridcoinresearchd.service`, a wallet moved in with `sudo
+  gridcoin-service enable <user>` from another account's login): the core runs as the
+  `gridcoin` account in `/var/lib/gridcoinresearchd`, and members of `gridcoin-gui`
+  attach the GUI with `-ipcdir=/run/gridcoinresearchd -ipcserviceuser=gridcoin`.
 
-[Service]
-User=<your-user>
-ExecStart=/usr/local/bin/gridcoinresearchd -multiprocess -datadir=/path/to/data -printtoconsole
-Restart=on-failure
+Both units are `Type=notify`: the core starts with `-nodaemon -nodaemonwait` and tells
+systemd itself when it is ready, so `daemon=1` in a configuration file does not apply to
+them. Stake-only autounlock is a socket-activated helper (`gridcoin-autounlock@<user>.socket`,
+or `gridcoin-autounlock.socket` for the system service) that serves the passphrase only to
+the main process of its core's unit; a core started by hand gets nothing from it.
 
-[Install]
-WantedBy=multi-user.target
-```
+The system service runs in a systemd sandbox (`ProtectSystem=strict`, `ProtectHome=yes`,
+`PrivateTmp=`, `PrivateDevices=`, `SystemCallFilter=@system-service`,
+`RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK`, an empty capability
+bounding set and the rest of the list in the unit). The sandbox is best effort, and two
+points of it are easy to misread:
 
-Run the daemon under the **same user** whose account will run the GUI (so the data
-directory and socket permissions line up), then start the GUI with `-multiprocess`.
-Stopping the service stops the node (a connected GUI then exits); to stop just the
-GUI, close it or `SIGTERM` it as above.
+- **`@system-service` allows `execve`.** The core runs its notify commands
+  (`blocknotify=` and the others) through `/bin/sh`, so the filter does not stop a
+  compromised core from running programs as the service account. What it removes are
+  system calls a node never needs: `ptrace` and the other debugging calls, mounting,
+  loading kernel modules, raw I/O, swap and reboot. The address-family list keeps the
+  core to Unix, IPv4, IPv6 and netlink sockets (netlink is for `getaddrinfo()` and
+  interface enumeration; dropping it breaks DNS).
+- **No `DynamicUser=`, `PrivateUsers=` or `PrivateNetwork=`.** A uid remap would stop the
+  GUI opening the socket and the cookie, and a private network would cut the P2P and
+  RPC network.
 
-### Hardening the service
-
-The snippet above is deliberately minimal. A fully hardened packaged unit ships at
-[`contrib/init/gridcoinresearchd.service`](../contrib/init/gridcoinresearchd.service);
-prefer it for real deployments. Beyond the usual `ProtectSystem=strict` /
-`ProtectHome` / `PrivateTmp` / `MemoryDenyWriteExecute` sandboxing it adds a syscall
-allow-list and an address-family restriction — the OS-maintained equivalent of an
-in-process seccomp sandbox:
-
-```ini
-SystemCallFilter=@system-service
-SystemCallErrorNumber=EPERM
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
-CapabilityBoundingSet=
-NoNewPrivileges=true
-```
-
-Multiprocess-specific gotchas when hardening the unit:
-
-- **Keep `AF_NETLINK`** in `RestrictAddressFamilies=`. It is needed for
-  `getaddrinfo()` / local interface enumeration; dropping it breaks DNS and
-  local-address discovery, not just the obvious `AF_UNIX`/`AF_INET*`.
-- **Do not use `DynamicUser=` or `PrivateUsers=`.** They remap the uid, and the
-  GUI could then no longer open the `0600` `node.sock` / `ipc.cookie` the daemon
-  creates in the datadir.
-- **Do not use `PrivateNetwork=`** — it severs the P2P/RPC network.
-- If the datadir lives under `/home` (a personal, non-packaged install), set
-  `ProtectHome=read-only` **plus** `ReadWritePaths=<datadir>` instead of
-  `ProtectHome=true`, or the daemon cannot write the datadir / create the socket.
-  The packaged unit uses `/var/lib/gridcoinresearchd` (a `StateDirectory=`), so it
-  keeps the stronger `ProtectHome=true`.
+The per-user unit has no sandbox: it runs with your account's rights, as a core you
+start by hand does.
 
 For supervisors other than systemd (or launches with none), the daemon also applies
 a best-effort in-process hardening at startup: `-nonewprivs` (default on, Linux)
@@ -440,80 +436,36 @@ then [removed it entirely](https://github.com/bitcoin/bitcoin/pull/27896) as not
 worth maintaining versus externally-maintained sandboxing. A hand-rolled in-tree BPF
 policy is brittle — every glibc/kernel/library update can introduce a syscall the
 filter has not allow-listed, turning a benign call into a `SIGSYS` crash. The
-declarative `systemd` `SystemCallFilter=` above gets the same post-exploitation
-confinement (no `execve` of a shell, no new socket families for exfiltration, no
-`ptrace` into sibling processes) with the policy maintained by the OS instead of by
-this project.
+declarative `systemd` `SystemCallFilter=` above does that job, with the policy
+maintained by the OS instead of by this project.
 
-### Unattended stake-only autounlock (Linux)
+#### Packagers
 
-An encrypted wallet must be unlocked after every start before it can stake, and
-there is no native way to supply a passphrase at daemon startup. A packaged install
-ships an **opt-in** companion unit,
-[`contrib/init/gridcoinresearchd-autounlock.service`](../contrib/init/gridcoinresearchd-autounlock.service),
-that keeps the wallet unlocked **for staking only**, with the passphrase held
-host/TPM-bound in `systemd-creds` — never in a file the daemon reads, the unit, or
-on a command line. It stays **external** to the wallet (the in-wallet auto-unlock was
-removed years ago as insecure); it uses only the standard
-`walletpassphrase <pass> <timeout> true` RPC via the
-[`gridcoin_autounlock.py`](../contrib/wallettools/gridcoin_autounlock.py) helper.
+The units, the `sysusers.d` and `tmpfiles.d` entries, the autounlock helper and
+`gridcoin-service` are generated from the templates in `contrib/init` by the daemon's
+install step (`cmake/systemd_units.cmake`), for one network per build. The CMake
+variables, described in [`cmake-options.md`](cmake-options.md#systemd-units-linux):
 
-The helper is Python 3 (standard library only). The daemon package *Recommends*
-`python3` rather than depending on it, so on a minimal install
-(`apt --no-install-recommends`) install it first: `sudo apt install python3`.
+- `GRC_UNIT_NETWORK` (`main` or `test`): which network's names the units, accounts and
+  tool get. A testnet build installs the daemon as `gridcointestnetd`.
+- `INSTALL_SYSTEMD_UNITS` (`ON` on Linux): the units, the entries and `gridcoin-service`.
+- `INSTALL_SYSTEMD_AUTOUNLOCK` (`ON`): the helper and its four units. They need systemd
+  251 or later; build with `OFF` where it is older (Ubuntu 22.04), and `gridcoin-service`
+  then refuses `autounlock enable`.
+- `GRC_SYSTEMD_UNITDIR`, `GRC_SYSUSERSDIR`, `GRC_TMPFILESDIR`: where those go, relative to
+  `CMAKE_INSTALL_PREFIX`.
+- `GRC_UNIT_PYTHON3` (`/usr/bin/python3`): the interpreter the helper unit runs, as
+  `python3 -I`.
+- `GRC_DESKTOP_CORE_ACTIONS` (`ON`): the GUI launcher actions "Connect to your own core"
+  and "Connect to the system service".
 
-Set it up once, then enable:
-
-```bash
-# Encrypt the wallet passphrase, bound to this host (and its TPM, if present).
-# Let the terminal prompt for it -- never put it in the command line, where it
-# would land in ~/.bash_history (and, unless printf is a shell builtin, in
-# process listings). sudo I/O logging with log_input captures the command's
-# stdin too; on such a host run this from a root login shell (e.g. after
-# `su -`) and drop the `sudo`:
-#   systemd-ask-password 'Wallet passphrase:' | systemd-creds encrypt \
-#       --name=wallet-passphrase --tpm2-pcrs="" - /etc/gridcoin/wallet-passphrase.cred
-systemd-ask-password 'Wallet passphrase:' | sudo systemd-creds encrypt \
-    --name=wallet-passphrase --tpm2-pcrs="" - /etc/gridcoin/wallet-passphrase.cred
-sudo chown gridcoin:gridcoin /etc/gridcoin/wallet-passphrase.cred
-sudo chmod 0400 /etc/gridcoin/wallet-passphrase.cred
-
-sudo systemctl enable --now gridcoinresearchd-autounlock.service
-```
-
-`--tpm2-pcrs=""` matters on any host with a TPM: without it, `systemd-creds` also
-seals the credential to PCR 7, which measures the Secure Boot keys and dbx, and any
-BIOS key reset, dbx or firmware update, or Secure Boot toggle then makes the
-credential permanently undecryptable (the unit fails with `status=243/CREDENTIALS`).
-Binding to the host key (and the TPM, when one is present — the default key
-selection picks that automatically, so the same command serves both kinds of host)
-without a PCR policy keeps the credential tied to this machine's key material
-(decrypting it needs the host key plus this machine's TPM, so root on this host can
-and nothing elsewhere can) and survives ordinary firmware maintenance. The
-trade-off: without the PCR policy the TPM no longer refuses to unseal after a
-Secure Boot state change, so that defense-in-depth is given up. To keep it, drop
-`--tpm2-pcrs=""` and re-encrypt the passphrase after every BIOS key, dbx, or
-firmware change instead.
-
-`systemctl enable` links the unit into `gridcoinresearchd.service.wants/`, so it runs
-whenever the core starts (boot, restart, deploy) without modifying the core unit;
-`BindsTo=` re-triggers it on every core restart. It runs as `gridcoin`, unlocks
-stake-only (`walletpassphrase … true`, which still permits staking **and** automatic
-beacon renewal but blocks spends), and exits — a `Type=oneshot`, not a resident poll.
-A rejected passphrase, bad RPC credentials, or an unverifiable RPC listener park the
-unit in `failed` (`RestartPreventExitStatus=2`) where they are visible, rather than
-looping silently over a locked wallet.
-
-**Security model.** Only a principal that can already run as the `gridcoin` user on
-this host can recover the passphrase — the same bar as reading the wallet's own files.
-Before sending anything, the helper verifies (via `/proc/net/tcp{,6}`) that the RPC
-listener is owned by its own uid, so credentials are never handed to a local process
-that squatted the RPC port during startup; because the core uses `-daemonwait`, the
-port is already bound and served by the time the unit is ordered `After=` it, so this
-gate is defence in depth. While unlocked, the passphrase lives in the core's memory
-(unavoidable for unattended staking). Rotating the passphrase (or `rpcpassword`)
-requires `systemctl restart gridcoinresearchd-autounlock.service`, as the credential
-is read at unit start.
+Ship the units, the helper and `gridcoin-service` from one build: they are made to work
+together. Keep the daemon execute-only (mode 0711), as the install step makes it; that
+mode makes the core non-dumpable from the start on hosts with Yama `ptrace_scope=0`. A
+package's scripts run `systemd-sysusers` and `systemd-tmpfiles --create` for the installed
+entries, create the system service's configuration file (`root:gridcoin`, mode 0640,
+with generated RPC credentials), and on an upgrade from a package with the earlier units
+run `gridcoin-service switch-over`; `debian/` does all of this and is the reference.
 
 ### Unattended stake-only autounlock (Windows)
 
@@ -530,8 +482,8 @@ It prompts for the wallet passphrase (twice) and the account's login password, e
 passphrase with **DPAPI (CurrentUser)** to an owner-only `<datadir>\autounlock\passphrase.cred`
 (decryptable only by that account on that machine), and registers a resident
 `\Gridcoin\Autounlock` task that runs `Invoke-GridcoinAutounlock.ps1`. The helper waits for the
-core, unlocks **stake-only**, and self-heals across restarts. Its security contract mirrors the
-Linux helper: a **native listener-ownership gate** (`Get-NetTCPConnection` → owning-PID → owner
+core, unlocks **stake-only**, and self-heals across restarts. Its security contract is a
+**native listener-ownership gate** (`Get-NetTCPConnection` → owning-PID → owner
 SID) refuses to send credentials unless our own account owns every LISTEN socket on the RPC
 port, closing the same startup-squat race. Because DPAPI CurrentUser is per-account, the task
 must run as the account that ran setup. Remove with `.\Set-GridcoinAutounlock.ps1 -Remove`. See
@@ -617,7 +569,7 @@ client then says so and sends nothing, and `walletpassphrase` is the way to unlo
 
 Root, or an administrator, running the client against the system service reaches a listener owned
 by the service account (`gridcoin`, or `gridcointestnet` for testnet; on Windows
-`NT SERVICE\gridcoinresearchd`). The service's configuration file names that account, and the
+`NT SERVICE\gridcoinresearchd`). Name that account in the service's configuration file; the
 client honours the line while root owns that file and its directory and nobody else can write
 either:
 
@@ -669,15 +621,15 @@ runtime (see the macOS section).
 
 ## Troubleshooting
 
-- **Autounlock unit fails with `status=243/CREDENTIALS` and the journal shows
+- **The autounlock helper fails with `status=243/CREDENTIALS` and the journal shows
   `Failed to unseal secret using TPM2: Operation not permitted`.** The encrypted
   passphrase was sealed to a TPM PCR policy (the `systemd-creds` default binds
   PCR 7) and the machine's Secure Boot keys, dbx, or firmware have since changed,
-  so the TPM refuses to unseal it. The credential cannot be recovered; re-encrypt
-  the passphrase with `--tpm2-pcrs=""` as shown in the setup above, then
-  `sudo systemctl restart gridcoinresearchd-autounlock.service`. Unlock the wallet by
-  hand in the meantime (`walletpassphrase` stake-only) — the core keeps running,
-  it is just not staking.
+  so the TPM refuses to unseal it. The credential cannot be recovered; encrypt the
+  passphrase again with `--tpm2-pcrs=""` as in
+  [`running-unattended.md` → *Autounlock setup*](running-unattended.md#autounlock-setup),
+  then restart the core's unit. Unlock the wallet by hand in the meantime
+  (`walletpassphrase` stake-only) — the core keeps running, it is just not staking.
 - **"Could not connect to the Gridcoin daemon … node.sock: connection refused."**
   The daemon is not running yet, was not started with `-multiprocess`, is using a
   different `-datadir`, or (Windows) is running as a different user. Start the daemon

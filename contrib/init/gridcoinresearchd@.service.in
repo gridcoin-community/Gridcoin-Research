@@ -5,9 +5,11 @@
 # same files and processes the user's desktop session has. This mode is for staking
 # convenience and autounlock: the core keeps running when you log out, and an
 # encrypted wallet can be unlocked for staking at start. There is no isolation from
-# your own session, and the user's supplementary groups ride along. For higher
-# security use the different-account mode, the system service @GRC_DAEMON@.service,
-# which runs the core as its own account.
+# your own session, and the user's supplementary groups ride along. Autounlock never
+# leaves the wallet weaker than unlocking it for staking yourself after each start:
+# what a program running as you can do to it, it could do to that wallet too. For
+# higher security use the different-account mode, the system service
+# @GRC_DAEMON@.service, which runs the core as its own account.
 #
 # This file is a template. Run "@GRC_SERVICE_TOOL@ enable-user %i" as root, which
 # writes the drop-in that sets the real command line for the user, and then start the

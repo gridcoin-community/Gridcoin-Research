@@ -7,12 +7,15 @@
 # per-user unit @GRC_DAEMON@@.service instead.
 #
 # What it gives you: the core's files, memory and processes are out of reach of the
-# desktop accounts, and the systemd sandbox below narrows what the core itself can do.
+# desktop accounts, and the systemd sandbox below narrows, as far as it goes, what the
+# core itself can do. Autounlock never leaves the wallet weaker than unlocking it for
+# staking yourself after each start.
 # What it concedes: attach group = node operator plus wallet viewer. A member, and
 # any program running in a member's desktop account, can stop the node (the service
-# restarts it), hold the single GUI slot, manage peers, see balances and history,
-# guess passphrases online at the backoff rate, and capture a passphrase the member
-# types into the GUI. An unencrypted wallet has no protection against members.
+# restarts it), hold the single GUI slot, manage peers and the settings that need no
+# passphrase, see balances and history, guess passphrases online at the backoff rate,
+# and capture a passphrase the member types into the GUI. An unencrypted wallet has
+# no protection against members.
 # Autounlock keeps the stored passphrase out of the desktop accounts' reach; whoever
 # holds this machine's disk can still decrypt it unless the disk is encrypted or a
 # TPM binds the credential.

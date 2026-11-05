@@ -1,10 +1,10 @@
 # Wallet passphrase helper for the system service (different-account mode).
 # Generated from contrib/init/gridcoin-autounlock.service.in by CMake.
 #
-# Started by its socket unit on a connection. It runs as a dynamic user that holds
-# the encrypted credential, serves the passphrase to the main process of the bound
-# core unit (a child of the core is not served), and exits within a minute. It has
-# no network access. See doc/running-unattended.md.
+# Started by its socket unit on a connection. It runs as a dynamic user, and systemd
+# decrypts the credential for it alone. It serves the passphrase to the main process
+# of the bound core unit (a child of the core is not served), and exits within a
+# minute. It has no network access. See doc/running-unattended.md.
 
 [Unit]
 Description=Gridcoin wallet passphrase helper
