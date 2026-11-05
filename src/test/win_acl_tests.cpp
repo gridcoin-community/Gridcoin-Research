@@ -170,6 +170,25 @@ BOOST_AUTO_TEST_CASE(sid_string_roundtrip)
     }
 }
 
+BOOST_AUTO_TEST_CASE(sid_string_must_be_canonical)
+{
+    // Each SID has one string form, the one FormatSid writes: no leading zeros, an
+    // authority below 2^32 in decimal, and one of 2^32 or more as "0x" and twelve
+    // upper-case hex digits.
+    for (const char* text : {"S-1-5-018", "S-1-05-18", "S-1-5-00", "S-1-0x5-18", "S-1-4294967296-7",
+                             "S-1-0x0000FFFFFFFF-7", "S-1-0x123456789abc-7", "S-1-0X123456789ABC-7",
+                             "S-1-0x23456789ABC-7", "S-1-0x0123456789ABC-7", "S-1-0x-7"}) {
+        BOOST_CHECK_MESSAGE(!ParseSidString(text).has_value(), "'" << text << "' parses");
+    }
+
+    // Zero itself is canonical, as in the Null SID.
+    for (const char* text : {"S-1-0-0", "S-1-5-0", "S-1-0x000100000000-7", "S-1-4294967295-7"}) {
+        const std::optional<Sid> sid = ParseSidString(text);
+        BOOST_REQUIRE_MESSAGE(sid.has_value(), "'" << text << "' does not parse");
+        BOOST_CHECK_EQUAL(FormatSid(*sid), text);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(sid_binary_form_matches_windows)
 {
     // S-1-5-32-544 as Windows stores it: revision, two sub-authorities, the authority
@@ -188,7 +207,9 @@ BOOST_AUTO_TEST_CASE(sid_binary_form_matches_windows)
     // An authority of 2^32 or more is written in hex, as ConvertSidToStringSid writes
     // it, and 2^48 does not fit.
     BOOST_CHECK_EQUAL(FormatSid(SidOf("S-1-0x123456789ABC-7")), "S-1-0x123456789ABC-7");
-    BOOST_CHECK_EQUAL(FormatSid(SidOf("S-1-4294967296-7")), "S-1-0x000100000000-7");
+    const Sid wide{0x01, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00};
+    BOOST_CHECK_EQUAL(FormatSid(wide), "S-1-0x000100000000-7");
+    BOOST_CHECK(ParseSidString("S-1-0x000100000000-7") == wide);
     BOOST_CHECK(!ParseSidString("S-1-281474976710656-7").has_value());
 
     // Fifteen sub-authorities is the most a SID holds, and each is 32 bits.

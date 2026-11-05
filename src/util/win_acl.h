@@ -29,9 +29,10 @@ namespace util::winacl {
 //! authority big-endian, then each 32-bit sub-authority little-endian.
 using Sid = std::vector<unsigned char>;
 
-//! Parse a SID string such as "S-1-5-18". nullopt unless it is revision 1, with an
-//! authority below 2^48 (decimal, or hex after "0x") and one to fifteen decimal
-//! sub-authorities of 32 bits, and nothing else.
+//! Parse a SID string such as "S-1-5-18". nullopt unless it is revision 1, with one to
+//! fifteen sub-authorities of 32 bits, and nothing else, in the one form FormatSid
+//! writes: decimal numbers with no leading zero, and an authority below 2^32 in
+//! decimal or one of 2^32 or more as "0x" and twelve upper-case hex digits.
 std::optional<Sid> ParseSidString(std::string_view s);
 
 //! The string form of \p sid as ConvertSidToStringSid writes it, an authority of

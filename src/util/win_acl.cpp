@@ -46,7 +46,6 @@ namespace util::winacl {
 namespace {
 
 constexpr size_t MAX_SUB_AUTHORITIES = 15;
-constexpr uint64_t MAX_AUTHORITY = (uint64_t{1} << 48) - 1;
 
 const char* const NO_DACL = "it has no DACL (all users would have access)";
 const char* const NOT_PROTECTED = "its DACL is not protected (it still inherits ACEs from the parent)";
@@ -106,24 +105,33 @@ std::optional<Sid> SidIn(const unsigned char* bytes, size_t size, size_t offset)
     return sid;
 }
 
-//! A SID's authority, decimal or hex after "0x", below 2^48.
+//! A number of a SID string in the decimal form FormatSid writes: digits, with no
+//! leading zero unless the number is zero.
+std::optional<uint32_t> ParseCanonicalDecimal(const std::string& text)
+{
+    if (text.size() > 1 && text[0] == '0') return std::nullopt;
+
+    return ToIntegral<uint32_t>(text);
+}
+
+//! A SID's authority in the form FormatSid writes: decimal below 2^32, and from 2^32
+//! "0x" and twelve upper-case hex digits.
 std::optional<uint64_t> ParseAuthority(const std::string& text)
 {
-    std::optional<uint64_t> value;
+    if (text.size() > 2 && text[0] == '0' && text[1] == 'x') {
+        const bool twelve_digits = text.size() == 14 && std::all_of(text.begin() + 2, text.end(), [](char c) {
+            return IsDigit(c) || (c >= 'A' && c <= 'F');
+        });
+        if (!twelve_digits) return std::nullopt;
 
-    if (text.size() > 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X')) {
-        uint64_t hex = 0;
-        const char* const first = text.data() + 2;
-        const char* const last = text.data() + text.size();
-        const auto [end, error] = std::from_chars(first, last, hex, 16);
-        if (end == last && error == std::errc{}) value = hex;
-    } else {
-        value = ToIntegral<uint64_t>(text);
+        uint64_t value = 0;
+        std::from_chars(text.data() + 2, text.data() + text.size(), value, 16);
+        if ((value >> 32) == 0) return std::nullopt;
+
+        return value;
     }
 
-    if (!value || *value > MAX_AUTHORITY) return std::nullopt;
-
-    return value;
+    return ParseCanonicalDecimal(text);
 }
 
 void AppendLittleEndian(Sid& sid, uint32_t value)
@@ -253,7 +261,7 @@ std::optional<Sid> ParseSidString(std::string_view s)
         sid.push_back(static_cast<unsigned char>(*authority >> shift));
     }
     for (size_t i = 2; i < parts.size(); ++i) {
-        const std::optional<uint32_t> sub_authority = ToIntegral<uint32_t>(parts[i]);
+        const std::optional<uint32_t> sub_authority = ParseCanonicalDecimal(parts[i]);
         if (!sub_authority) return std::nullopt;
         AppendLittleEndian(sid, *sub_authority);
     }
