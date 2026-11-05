@@ -7,6 +7,12 @@ CONF=/etc/gridcoin-testnet/gridcoin.conf
 TOOL=/usr/sbin/gridcointestnet-service
 STATE_DIR=/var/lib/gridcoin-service
 STATE=$STATE_DIR/switchover-test.state
+# The preinst's record for an aborted upgrade, no longer needed once configure is done.
+RECORDED=$STATE_DIR/switchover-test.recorded
+BEFORE=$STATE_DIR/switchover-test.before
+# The first version of this package with the notify units. Set it at the release cut,
+# together with the preinst's and the version in gridcointestnetd.NEWS.
+FIRST_NEW_VERSION=5.5.2.1~
 
 # The configuration a fresh core writes for itself on its first start, as
 # CreateNewConfigFile() in src/init.cpp writes it: generated RPC credentials and its
@@ -20,6 +26,9 @@ create_conf() {
         exit 1
     fi
     new=$(mktemp "$CONF.XXXXXX")
+    # From here the file holds the password: it goes again on any failure.
+    trap 'rm -f "$new"' EXIT
+    trap 'rm -f "$new"; exit 1' HUP INT TERM
     cat > "$new" <<EOF
 # RPC credentials, generated when the $DAEMON package was installed. The local RPC
 # interface is credential-protected even though it listens on localhost only; the
@@ -38,6 +47,7 @@ EOF
     chgrp "$ACCOUNT" "$new"
     chmod 0640 "$new"
     mv "$new" "$CONF"
+    trap - EXIT HUP INT TERM
 }
 
 setup_conf() {
@@ -54,6 +64,26 @@ setup_conf() {
     fi
 }
 
+# On an upgrade from a version that had these units already, the running per-user cores
+# move to the new daemon; stopped ones stay stopped. A core with a switch-over entry
+# pending when this configure began ($pending) is the switch-over's: restarted by it, or,
+# while its switch-over fails, not restarted at all.
+restart_running_cores() {
+    active=$(systemctl list-units --state=active --plain --no-legend "$DAEMON@*.service") || return 0
+    printf '%s\n' "$active" | while read -r unit _; do
+        case $unit in
+            "$DAEMON"@?*.service) ;;
+            *) continue ;;
+        esac
+        user=${unit#"$DAEMON"@}
+        user=${user%.service}
+        if printf '%s\n' "$pending" | grep -qxF "core-active $user"; then
+            continue
+        fi
+        systemctl try-restart --no-block "$unit" || true
+    done
+}
+
 case "$1" in
     configure)
         # The service account and attach group, then /etc/gridcoin-testnet
@@ -65,19 +95,27 @@ case "$1" in
         chown root:root "$STATE_DIR"
         chmod 0700 "$STATE_DIR"
         setup_conf
+        pending=
+        if [ -e "$STATE" ]; then
+            pending=$(cat "$STATE")
+        fi
         if [ -d /run/systemd/system ]; then
-            systemctl daemon-reload
+            systemctl daemon-reload || true
             if [ -e "$STATE" ]; then
                 # The services the preinst found move to the new units.
                 if ! "$TOOL" switch-over --state="$STATE"; then
                     echo "$DAEMON: the switch-over did not finish, for the reasons above." >&2
                     echo "Once they are fixed, run: $TOOL switch-over --state=$STATE" >&2
                 fi
-            elif [ -n "$2" ]; then
-                # Running per-user cores move to the new daemon; stopped ones stay stopped.
-                systemctl try-restart --no-block "$DAEMON@*.service" || true
             fi
+            if [ -n "$2" ] && dpkg --compare-versions "$2" ge "$FIRST_NEW_VERSION"; then
+                restart_running_cores
+            fi
+        elif [ -e "$STATE" ]; then
+            echo "$DAEMON: systemd is not running, so nothing was switched over to the new units." >&2
+            echo "Once it runs, run: $TOOL switch-over --state=$STATE" >&2
         fi
+        rm -f "$RECORDED" "$BEFORE"
         ;;
 esac
 

@@ -1,7 +1,41 @@
 #!/bin/sh
 set -e
 
+OLD_AUTOUNLOCK=gridcoinresearchd-autounlock
+STATE_DIR=/var/lib/gridcoin-service
+STATE=$STATE_DIR/switchover-main.state
+RECORDED=$STATE_DIR/switchover-main.recorded
+BEFORE=$STATE_DIR/switchover-main.before
+
+# An install or upgrade stopped before the new package was configured: turn the old
+# autounlock units the preinst turned off back on, where their unit files still are, and
+# put the switch-over state back as it was.
+undo_preinst() {
+    if [ ! -e "$RECORDED" ]; then
+        return 0
+    fi
+    while read -r kind user; do
+        case $kind in
+            autounlock) unit=$OLD_AUTOUNLOCK@$user.service ;;
+            system-autounlock) unit=$OLD_AUTOUNLOCK.service ;;
+            *) continue ;;
+        esac
+        if ! systemctl enable "$unit" >/dev/null 2>&1; then
+            echo "gridcoinresearchd: $unit could not be turned back on, and was left off." >&2
+        fi
+    done < "$RECORDED"
+    if [ -e "$BEFORE" ]; then
+        mv "$BEFORE" "$STATE"
+    else
+        rm -f "$STATE"
+    fi
+    rm -f "$RECORDED"
+}
+
 case "$1" in
+    abort-install|abort-upgrade)
+        undo_preinst
+        ;;
     purge)
         # The drop-ins gridcoin-service wrote, and the switch-over state of this network.
         # Datadirs, configuration files, credentials and the record of a wallet moved

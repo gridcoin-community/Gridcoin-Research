@@ -1,0 +1,62 @@
+gridcoinresearch (5.5.2.1-1) unstable; urgency=medium
+
+  The daemon's systemd units are new in this release, and the system service
+  was switched over to them during this upgrade. This is what changed.
+
+  gridcoinresearchd.service is Type=notify: the core reports to systemd itself
+  when it is ready, with no forking and no pid file. The unit passes -nodaemon
+  and -nodaemonwait, so daemon=1 or daemonwait=1 in a configuration file no
+  longer matters.
+
+  Overrides written for the old forking unit would make the new one fail at
+  every start, so they were moved aside. A drop-in in
+  /etc/systemd/system/gridcoinresearchd.service.d that sets ExecStart=, Type=,
+  PIDFile=, NotifyAccess=, User= or Group= was renamed to
+  <name>.disabled-by-gridcoin-switchover, and so was a copy of the unit at
+  /etc/systemd/system/gridcoinresearchd.service. The upgrade named each one.
+  Review them, and put back with "systemctl edit" what still applies. A mask
+  was left as it was.
+
+  Autounlock moved to a socket-activated helper, gridcoin-autounlock.socket.
+  The core asks the helper for the passphrase. An enabled
+  gridcoinresearchd-autounlock.service was switched over automatically. Its
+  credential, /etc/gridcoin/wallet-passphrase.cred, stays where it is: it is
+  loaded through the drop-in
+  /etc/systemd/system/gridcoin-autounlock.service.d/50-existing-credential.conf
+  and owned by root, mode 0600. It was not decrypted, re-encrypted
+  or moved. The old unit and its RPC helper script are removed; the unit was
+  disabled and stopped before the upgrade.
+
+  /etc/gridcoin/gridcoin.conf is created, if it is missing, as root:gridcoin
+  0640 with generated RPC credentials. An existing one owned by root is given
+  the group gridcoin and made readable by that group only.
+
+  A desktop user attaches the GUI to the system service through membership of
+  the gridcoin-gui group ("Connect to the system service" in the menu). A new
+  membership takes effect at the user's next login.
+
+  The package also has a per-user unit, gridcoinresearchd@<user>.service, which
+  runs the core as that user. Set it up with
+  "gridcoin-service enable-user <user>": "systemctl enable" alone gives an
+  instance that stops with exit status 78 and says so. A per-user core and the
+  system service conflict, and one stops the other. Hosts that ran a test build
+  with per-user units had them switched over too, with the datadir they used,
+  unless the system service was enabled or running.
+
+  The testnet package (gridcointestnetd) runs its system service as the account
+  gridcointestnet.
+
+  Ubuntu 22.04 builds have no autounlock (it needs systemd 251 or later). The
+  old autounlock unit was turned off there, and the core starts with the wallet
+  locked.
+
+  If the switch-over did not finish, the upgrade said why, and
+  /var/lib/gridcoin-service/switchover-main.state keeps what is left. Fix the
+  cause and run "gridcoin-service switch-over
+  --state=/var/lib/gridcoin-service/switchover-main.state". Until then a core
+  it left is not restarted, and once stopped it may not start again.
+
+  The full description:
+  https://github.com/gridcoin-community/Gridcoin-Research/blob/development/doc/running-unattended.md
+
+ -- Gridcoin Developers <dev@gridcoin.us>  Thu, 05 Nov 2026 12:00:00 +0000

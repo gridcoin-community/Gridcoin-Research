@@ -1,19 +1,25 @@
 #!/bin/sh
 set -e
 
-# Before this release the per-user core gridcointestnetd@<user>.service was a forking
-# daemon, and autounlock was done by the RPC helper unit
-# gridcointestnetd-autounlock@<user>.service. On an upgrade from such a version, record
-# what was enabled and running, for the postinst to hand to
-# "gridcointestnet-service switch-over", and turn the old autounlock units off while
-# their unit files still exist. The cores keep running.
+# Before this release the system service gridcointestnetd.service was a forking daemon
+# (and, on hosts with a test build, so was the per-user gridcointestnetd@<user>.service,
+# with the RPC helper unit gridcointestnetd-autounlock@<user>.service). On an upgrade from
+# such a version, record what was enabled, running or overridden, for the postinst to
+# hand to "gridcointestnet-service switch-over", and turn the old autounlock units off
+# while their unit files still exist. The cores keep running. The postrm turns the old
+# units back on if the upgrade is aborted.
 
 DAEMON=gridcointestnetd
 OLD_AUTOUNLOCK=gridcointestnetd-autounlock
 UNIT_DIR=/etc/systemd/system
 STATE_DIR=/var/lib/gridcoin-service
 STATE=$STATE_DIR/switchover-test.state
-# The first version of this package with the notify units and gridcointestnet-service.
+# What this run recorded, and the state file as it was before, for an aborted upgrade.
+RECORDED=$STATE_DIR/switchover-test.recorded
+BEFORE=$STATE_DIR/switchover-test.before
+# The first version of this package with the notify units and gridcointestnet-service. Set
+# it at the release cut, together with the postinst's and the version in
+# gridcointestnetd.NEWS.
 FIRST_NEW_VERSION=5.5.2.1~
 
 # The user in a <prefix>@<user>.service unit name or path ($1, prefix $2), if any.
@@ -44,7 +50,7 @@ record_state() {
                 if [ -L "$link" ]; then
                     user=$(instance_user "$link" "$OLD_AUTOUNLOCK")
                     if [ -n "$user" ]; then
-                        echo "autounlock $user"
+                        printf '%s\n' "autounlock $user"
                     fi
                 fi
             done
@@ -52,22 +58,40 @@ record_state() {
                 if [ -L "$link" ]; then
                     user=$(instance_user "$link" "$DAEMON")
                     if [ -n "$user" ]; then
-                        echo "core $user"
+                        printf '%s\n' "core $user"
                     fi
                 fi
             done
             printf '%s\n' "$active" | while read -r unit _; do
                 user=$(instance_user "$unit" "$DAEMON")
                 if [ -n "$user" ]; then
-                    echo "core-active $user"
+                    printf '%s\n' "core-active $user"
                 fi
             done
+            # A copy of the system unit, or a drop-in for it (User=gridcoin, say): either
+            # may have been written for the forking daemon, and the switch-over decides.
+            overridden=
+            if [ -e "$UNIT_DIR/$DAEMON.service" ] || [ -L "$UNIT_DIR/$DAEMON.service" ]; then
+                overridden=1
+            fi
+            for dropin in "$UNIT_DIR/$DAEMON.service.d"/*.conf; do
+                if [ -e "$dropin" ] || [ -L "$dropin" ]; then
+                    overridden=1
+                fi
+            done
+            if [ -n "$overridden" ]; then
+                printf '%s\n' "system-core"
+            fi
         } > "$new"
     )
     if [ ! -s "$new" ]; then
         rm -f "$new"
-    elif [ -e "$STATE" ]; then
+        return 0
+    fi
+    cp "$new" "$RECORDED"
+    if [ -e "$STATE" ]; then
         # A switch-over that has not finished yet keeps its entries.
+        cp -p "$STATE" "$BEFORE"
         cat "$new" >> "$STATE"
         rm -f "$new"
     else

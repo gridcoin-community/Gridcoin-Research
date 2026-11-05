@@ -1,0 +1,49 @@
+gridcoinresearch (5.5.2.1-1) unstable; urgency=medium
+
+  The testnet daemon's systemd units are new in this release, and the system
+  service was switched over to them during this upgrade. This is what changed.
+
+  gridcointestnetd.service runs as the account gridcointestnet. systemd hands
+  /var/lib/gridcointestnetd to the new account at the service's first start,
+  and /etc/gridcoin-testnet is now root:gridcointestnet 0710. A
+  /etc/gridcoin-testnet/gridcoin.conf owned by root is given the group
+  gridcointestnet and made readable by that group only; one owned by gridcoin
+  must be given to root:gridcointestnet, mode 0640, by hand. A missing one is
+  created as root:gridcointestnet 0640 with generated RPC credentials.
+
+  The unit is Type=notify: the core reports to systemd itself when it is
+  ready, with no forking and no pid file. It passes -nodaemon and
+  -nodaemonwait, so daemon=1 or daemonwait=1 in a configuration file no longer
+  matters.
+
+  Overrides written for the old forking unit would make the new one fail at
+  every start, so they were moved aside. A drop-in in
+  /etc/systemd/system/gridcointestnetd.service.d that sets ExecStart=, Type=,
+  PIDFile=, NotifyAccess=, User= (User=gridcoin, say) or Group= was renamed to
+  <name>.disabled-by-gridcoin-switchover, and so was a copy of the unit at
+  /etc/systemd/system/gridcointestnetd.service. The upgrade named each one.
+  Review them, and put back with "systemctl edit" what still applies. A mask
+  was left as it was.
+
+  A desktop user attaches the GUI to the system service through membership of
+  the gridcointestnet-gui group ("Connect to the system service" in the
+  menu). A new membership takes effect at the user's next login.
+
+  The package also has a per-user unit, gridcointestnetd@<user>.service, which
+  runs the core as that user. Set it up with
+  "gridcointestnet-service enable-user <user>": "systemctl enable" alone gives
+  an instance that stops with exit status 78 and says so. A per-user core and
+  the system service conflict, and one stops the other. Hosts that ran a test
+  build with per-user units had them switched over too, with the datadir they
+  used, unless the system service was enabled or running.
+
+  If the switch-over did not finish, the upgrade said why, and
+  /var/lib/gridcoin-service/switchover-test.state keeps what is left. Fix the
+  cause and run "gridcointestnet-service switch-over
+  --state=/var/lib/gridcoin-service/switchover-test.state". Until then a core
+  it left is not restarted, and once stopped it may not start again.
+
+  The full description:
+  https://github.com/gridcoin-community/Gridcoin-Research/blob/development/doc/running-unattended.md
+
+ -- Gridcoin Developers <dev@gridcoin.us>  Thu, 05 Nov 2026 12:00:00 +0000
