@@ -453,6 +453,49 @@ BOOST_AUTO_TEST_CASE(list_of_a_missing_directory_is_empty)
     BOOST_CHECK(GRC::ListAutomaticWalletBackupsBefore(dir.m_path / "missing", JUNE_2026).empty());
 }
 
+#ifndef WIN32
+// A name with a control character (a byte below 0x20, or 0x7f) is not listed, whatever else
+// it looks like. Whoever can write the backup directory could otherwise put a terminal escape
+// or a line break into the encryptwallet result and the GUI's list.
+BOOST_AUTO_TEST_CASE(list_skips_names_with_control_characters)
+{
+    const BackupDir dir;
+
+    const fs::path plain = dir.m_path / "wallet.dat-2026-01-01T00-00-00Z";
+    Touch(plain);
+
+    for (const std::string& name : {std::string("wallet.dat-2026-01-02T00-00-00Z-\x1b[2J"),
+                                    std::string("wallet.dat-2026-01-03T00-00-00Z-a\nb"),
+                                    std::string("wallet.dat-2026-01-04T00-00-00Z-\x7f"),
+                                    std::string("wallet.dat-2026-01-05T00-00-00Z-\t")}) {
+        Touch(dir.m_path / name);
+        BOOST_REQUIRE(fs::is_regular_file(dir.m_path / name));
+    }
+
+    const std::vector<fs::path> found = GRC::ListAutomaticWalletBackupsBefore(dir.m_path, JUNE_2026);
+
+    BOOST_REQUIRE_EQUAL(found.size(), 1U);
+    BOOST_CHECK_EQUAL(found[0].string(), plain.string());
+}
+
+// A FIFO with a backup's name is not a backup, and is not listed.
+BOOST_AUTO_TEST_CASE(list_skips_a_fifo_with_a_backup_name)
+{
+    const BackupDir dir;
+
+    const fs::path plain = dir.m_path / "wallet.dat-2026-01-01T00-00-00Z";
+    Touch(plain);
+
+    const fs::path fifo = dir.m_path / "wallet.dat-2026-01-02T00-00-00Z";
+    BOOST_REQUIRE_EQUAL(::mkfifo(fifo.string().c_str(), 0600), 0);
+
+    const std::vector<fs::path> found = GRC::ListAutomaticWalletBackupsBefore(dir.m_path, JUNE_2026);
+
+    BOOST_REQUIRE_EQUAL(found.size(), 1U);
+    BOOST_CHECK_EQUAL(found[0].string(), plain.string());
+}
+#endif // !WIN32
+
 // The warning names the backup directory and each backup found, says that a backup made
 // by hand before encryption holds the unencrypted keys too, gives the order in which to
 // get rid of them, and points to the docs. With none found it still names the directory

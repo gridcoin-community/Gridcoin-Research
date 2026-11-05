@@ -457,6 +457,14 @@ std::optional<int64_t> AutomaticWalletBackupTime(const std::string& name)
     // YYYY-MM-DDTHH-MM-SS, with 'd' for a digit.
     static const std::string shape{"dddd-dd-ddTdd-dd-dd"};
 
+    // The name goes into the encryptwallet result and the GUI's list. Whoever can write the
+    // backup directory could put a terminal escape or a line break into it, and the core never
+    // writes a control character into a backup's name.
+    for (const char c : name) {
+        const unsigned char byte = static_cast<unsigned char>(c);
+        if (byte < 0x20 || byte == 0x7f) return std::nullopt;
+    }
+
     if (name.compare(0, prefix.size(), prefix) != 0) return std::nullopt;
     if (name.size() < prefix.size() + shape.size()) return std::nullopt;
 

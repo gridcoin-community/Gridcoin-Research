@@ -53,10 +53,13 @@ void ResetUnrestrictedBackupLogForTesting();
 //! An automatic backup is a regular file directly in \p backup_dir with a name that
 //! GetBackupFilename("wallet.dat") gives, or gave in an older release:
 //! wallet.dat-YYYY-MM-DDTHH-MM-SS, then a Z, then a suffix that begins with '-', the last two
-//! each optional. The time in the name is UTC. A symbolic link is never followed, so one with
-//! such a name is not listed. A directory that does not exist or cannot be read lists nothing
-//! (the second is logged). Nothing is deleted: a plaintext backup can be the user's last way
-//! back into a wallet whose new passphrase is lost, so the user deletes them by hand.
+//! each optional. The time in the name is UTC. A name with a control character (a byte below
+//! 0x20, or 0x7f) is not listed, since the names reach the RPC result and the GUI. A symbolic
+//! link is never followed, so one with such a name is not listed, and neither is a FIFO or
+//! anything else that is not a regular file. A directory that does not exist or cannot be read
+//! lists nothing (the second is logged). Nothing is deleted: a plaintext backup can be the
+//! user's last way back into a wallet whose new passphrase is lost, so the user deletes them by
+//! hand.
 std::vector<fs::path> ListAutomaticWalletBackupsBefore(const fs::path& backup_dir, int64_t encrypted_at);
 
 //! What encryptwallet adds to its result: the backups in \p found, from \p backup_dir, by
