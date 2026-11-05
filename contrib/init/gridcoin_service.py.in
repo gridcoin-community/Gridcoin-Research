@@ -61,6 +61,8 @@ SETTINGS_NAME = "gridcoinsettings.json"
 DATADIR_NAME = ".GridcoinResearch"
 STASH_INFIX = ".in-service-"
 TERMINATE_WAIT_SECONDS = 30
+# /proc/self/loginuid of a process outside any login session.
+UNSET_LOGIN_UID = 4294967295
 # The quarantined files are read whole; nothing that size is a real configuration file.
 MAX_CONFIG_BYTES = 16 * 1024 * 1024
 # The grammar build-aux/cmake/refusedkeys2header.cmake enforces on the pattern file.
@@ -165,23 +167,32 @@ class Host:
         return os.geteuid() == 0
 
     def user_processes(self, uid):
-        """The pids of the processes with uid as their real, effective, saved or filesystem uid."""
-        pids = []
-        wanted = str(uid).encode()
+        """The pids of the processes with uid as their real, effective, saved or filesystem uid,
+        apart from this command's own process tree."""
+        table = {}
         for name in os.listdir("/proc"):
             if not name.isdigit():
                 continue
+            fields = {}
             try:
                 with open("/proc/%s/status" % name, "rb") as f:
                     for line in f:
-                        if line.startswith(b"Uid:"):
-                            if wanted in line.split()[1:]:
-                                pids.append(int(name))
-                            break
-            except OSError:
+                        key, _, value = line.partition(b":")
+                        if key in (b"PPid", b"Uid"):
+                            fields[key] = value.split()
+                table[int(name)] = (int(fields[b"PPid"][0]), [int(u) for u in fields[b"Uid"]])
+            except (OSError, KeyError, IndexError, ValueError):
                 # The process ended meanwhile.
                 continue
-        return pids
+        return foreign_processes(table, uid, os.getpid())
+
+    def login_uid(self):
+        try:
+            with open("/proc/self/loginuid", encoding="utf8") as f:
+                text = f.read()
+        except OSError:
+            text = ""
+        return parse_login_uid(text, os.environ.get("SUDO_UID"))
 
     def terminate_user(self, name):
         # loginctl reports its own failure (no session, say); the caller then waits for the
@@ -235,6 +246,41 @@ class Host:
             except PermissionError:
                 return
             raise StepError("setuid(%d) could be undone; refusing" % uid)
+
+
+def foreign_processes(table, uid, self_pid):
+    """The pids in table ({pid: (ppid, uids)}) that have uid among their uids, leaving out
+    self_pid's own tree: itself, its ancestors (sudo keeps the caller's uid as its real uid) and
+    its descendants."""
+    def chain(pid):
+        seen = []
+        while pid in table and pid not in seen:
+            seen.append(pid)
+            pid = table[pid][0]
+        return seen
+
+    ancestors = set(chain(self_pid))
+    return sorted(pid for pid, (_, uids) in table.items()
+                  if uid in uids and pid not in ancestors and self_pid not in chain(pid))
+
+
+def parse_login_uid(loginuid_text, sudo_uid):
+    """The uid whose login this command runs in: /proc/self/loginuid, or SUDO_UID when that is
+    unset. None when neither says."""
+    text = loginuid_text.strip()
+    if text.isdigit() and int(text) != UNSET_LOGIN_UID:
+        return int(text)
+    if sudo_uid is not None and sudo_uid.isdigit():
+        return int(sudo_uid)
+    return None
+
+
+def refuse_own_login(host, pw):
+    """A run from the user's own login cannot work: the user's processes include this command's
+    own session, and ending the user's sessions would end this command."""
+    if host.login_uid() == pw.pw_uid:
+        raise UserError("this command runs in %s's own login; run this from another account's login (a root "
+                        "console, ssh as root, or another administrator)" % pw.pw_name)
 
 
 def uid_min(paths):
@@ -1140,6 +1186,7 @@ def copy_tree(src_fd, dst_fd, src_user, dst_user, exclude, host, src_display):
 
 def cmd_enable(args, net, host, paths):
     pw = validate_user(args.user, host, paths)
+    refuse_own_login(host, pw)
     acct = service_account(net, host)
     patterns = load_refused_patterns(net.refused_keys)
     with contextlib.ExitStack() as stack:
@@ -1246,6 +1293,7 @@ def restore_conf(stash_parent_fd, prefix, parent_display, s_fd, pw, host):
 
 def cmd_disable(args, net, host, paths):
     pw = validate_user(args.user, host, paths)
+    refuse_own_login(host, pw)
     acct = service_account(net, host)
     patterns = load_refused_patterns(net.refused_keys)
     with contextlib.ExitStack() as stack:

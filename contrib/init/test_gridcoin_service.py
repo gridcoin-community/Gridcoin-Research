@@ -54,7 +54,7 @@ CONFIGURED = {"bindir": "/usr/bin", "default_network": "main", "python3": "/usr/
 
 class FakeHost:
     def __init__(self, users=None, groups=None, root=True, enabled=(), active=(), fail=(), processes=None,
-                 terminate_ends_processes=True):
+                 terminate_ends_processes=True, login=None):
         self.users = users if users is not None else {}
         self.groups = groups if groups is not None else {}
         self.root = root
@@ -66,6 +66,10 @@ class FakeHost:
         self.terminate_ends_processes = terminate_ends_processes
         self.clock = 0.0
         self.stamps = 0
+        self.login = login
+
+    def login_uid(self):
+        return self.login
 
     def user_processes(self, uid):
         return list(self.processes.get(uid, []))
@@ -1113,8 +1117,34 @@ class PrivilegeTests(ServiceTestBase):
             svc.copy_as(src, dst, "bob", "gridcoin", set(), self.host)
         self.assertFalse(os.path.exists(log))
 
-    def test_real_host_lists_processes_by_uid(self):
-        self.assertIn(os.getpid(), svc.Host().user_processes(os.getuid()))
+    def test_real_host_leaves_out_its_own_process_tree(self):
+        child = subprocess.Popen([sys.executable, "-I", "-c", "import sys; sys.stdin.read()"], stdin=subprocess.PIPE)
+        self.addCleanup(child.wait)
+        self.addCleanup(child.stdin.close)
+        pids = svc.Host().user_processes(os.getuid())
+        for pid in (os.getpid(), os.getppid(), child.pid):
+            self.assertNotIn(pid, pids)
+
+    def test_own_process_tree_is_not_the_users(self):
+        # {pid: (ppid, uids)}: 10 -> 20 (sudo, real uid 1000) -> 30 (the tool) -> 40 (a child);
+        # 50 and 60 are the user's other processes, 70 another user's.
+        table = {1: (0, [0, 0, 0, 0]), 10: (1, [1000, 1000, 1000, 1000]), 20: (10, [1000, 0, 0, 0]),
+                 30: (20, [0, 0, 0, 0]), 40: (30, [1000, 1000, 1000, 1000]), 50: (1, [1000, 1000, 1000, 1000]),
+                 60: (50, [0, 1000, 1000, 1000]), 70: (1, [1001, 1001, 1001, 1001])}
+        self.assertEqual(svc.foreign_processes(table, 1000, 30), [50, 60])
+        self.assertEqual(svc.foreign_processes(table, 1001, 30), [70])
+        # A loop in the table (a reused pid) ends the walk.
+        self.assertEqual(svc.foreign_processes({5: (6, [1000]), 6: (5, [1000])}, 1000, 30), [5, 6])
+
+    def test_login_uid_from_loginuid_then_sudo(self):
+        self.assertEqual(svc.parse_login_uid("1000", None), 1000)
+        self.assertEqual(svc.parse_login_uid("0\n", "1000"), 0)
+        self.assertEqual(svc.parse_login_uid("4294967295", "1000"), 1000)
+        self.assertEqual(svc.parse_login_uid("", "1000"), 1000)
+        self.assertIsNone(svc.parse_login_uid("4294967295", None))
+        self.assertIsNone(svc.parse_login_uid("4294967295", "x"))
+        uid = svc.Host().login_uid()
+        self.assertTrue(uid is None or isinstance(uid, int))
 
 
 class SwitchTestBase(ServiceTestBase):
@@ -1371,6 +1401,20 @@ class EnableTests(SwitchTestBase):
         self.assertNotIn("SECRETBYTES", out + err)
         self.assertNotIn("0xff", out + err)
         self.assertNotIn("gridcoinsettings.json", os.listdir(self.target()))
+
+    def test_enable_and_disable_refuse_a_run_from_the_users_own_login(self):
+        write_tree(self.datadir, self.user_files())
+        host = FakeHost(users=self.host.users, login=self.uid)
+        for argv in (("enable", "bob"), ("enable", "bob", "--terminate-sessions"), ("disable", "bob")):
+            rc, out, err = self.run_main(*argv, host=host)
+            self.assertEqual(rc, 1, argv)
+            self.assertIn("run this from another account's login (a root console, ssh as root, or another "
+                          "administrator)", err)
+        self.assertEqual(host.calls, [])
+        self.assertEqual(read_tree(self.datadir), read_tree_from(self.user_files()))
+        # Another account's login (root's, here) is fine.
+        rc, out, err = self.run_main("enable", "bob", host=FakeHost(users=self.host.users, login=0))
+        self.assertEqual(rc, 0, err)
 
     def test_enable_refuses_unknown_user_or_missing_datadir(self):
         rc, out, err = self.run_main("enable", "nobody")
