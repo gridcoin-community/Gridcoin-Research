@@ -2300,6 +2300,11 @@ class EnableTests(SwitchTestBase):
         os.makedirs(directory)
         with open(os.path.join(directory, "50-gridcoin-service.conf"), "w", encoding="utf8") as f:
             f.write("[Service]\nExecStart=\nExecStart=/usr/bin/gridcoinresearchd -datadir=/data/grc\n")
+        _, default = svc.system_defaults(svc.NETWORKS["main"])
+        advice = {"enable": "enable moves the user's wallet into %s, which the service does not run on; to run it "
+                            "there, change that ExecStart= to -datadir=%s first" % (default, default),
+                  "disable": "disable moves the wallet in %s back to its user, and the service does not run on "
+                             "that; change that ExecStart= back to -datadir=%s, then rerun disable" % (default, default)}
         for argv in (("enable", "bob"), ("disable", "bob")):
             with self.subTest(argv=argv):
                 if argv[0] == "disable":
@@ -2307,6 +2312,8 @@ class EnableTests(SwitchTestBase):
                 rc, out, err = self.run_main(*argv)
                 self.assertEqual(rc, 1)
                 self.assertIn("/data/grc", err)
+                self.assertIn(advice[argv[0]], " ".join(err.split()))
+                self.assertNotIn("Move that wallet there", err)
                 self.assertEqual(self.host.calls, [])
         self.assertFalse(os.path.exists(self.target()))
 
@@ -3865,6 +3872,19 @@ class SwitchOverTests(ServiceTestBase):
                     rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
                 self.assertEqual(rc, 1)
 
+    def test_switch_over_names_the_conf_it_found_in_the_datadir_as_such(self):
+        # The command line had no -conf: the conf is the one the core read in its datadir.
+        data = os.path.join(self.tmp.name, "data", "grc")
+        os.makedirs(data)
+        conf = os.path.join(data, "gridcoinresearch.conf")
+        self.write_text(conf, "rpcuser=x\n")
+        os.chmod(conf, 0o666)
+        override = self.system_override("-datadir=%s" % data)
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+        self.assertEqual(rc, 1)
+        self.assertIn("the configuration file %s in the -datadir of %s" % (conf, override), err)
+        self.assertNotIn("-conf", err)
+
     def test_switch_over_refuses_a_conf_others_can_write(self):
         # A conf anyone but root and the service account can write, or one in such a directory,
         # would let that account add options such as blocknotify= to the service.
@@ -3989,7 +4009,9 @@ class SwitchOverTests(ServiceTestBase):
                 self.assertEqual(rc, 1)
                 self.assertIn(reason, err)
                 self.assertIn(override, err)
-                self.assertIn("will not start", err)
+                # The copy is the unit, and runs on as it did.
+                self.assertIn("keeps running on its old command line", err)
+                self.assertNotIn("will not start", err)
                 # Nothing moved: the service fails to start on the right data, never starts on a new one.
                 self.assertEqual(sorted(os.listdir(self.system_unit_dir())), ["10-type.conf", "override.conf"])
                 self.assertTrue(os.path.exists(copy) and os.path.exists(other))

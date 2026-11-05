@@ -25,7 +25,8 @@ gridcoinresearch (5.5.2.1-1) unstable; urgency=medium
   node actually uses> to its ExecStart=, then run "gridcoin-service
   switch-over --state=/var/lib/gridcoin-service/switchover-main.state".
   So is a command line with any other option; the upgrade said what to
-  change. Until then the service does not start.
+  change. Until then a full copy of the unit left in place keeps running on
+  its old command line, and a service with only such drop-ins does not start.
 
   Autounlock moved to a socket-activated helper, gridcoin-autounlock.socket.
   The core asks the helper for the passphrase. An enabled

@@ -688,6 +688,9 @@ class NewsTests(unittest.TestCase):
             self.assertIn("without -datadir", news, net["tree"])
             self.assertIn("add -datadir=", news, net["tree"])
             self.assertNotIn("then carried", news, net["tree"])
+            # A full copy left in place is the unit still, and runs as it did.
+            self.assertIn("keeps running on its old command line", news, net["tree"])
+            self.assertNotIn("Until then the service does not start", news, net["tree"])
 
 
 def maintainer_scripts():
