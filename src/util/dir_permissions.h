@@ -117,12 +117,6 @@ void ApplyOwnerOnlyDacl(const fs::path& path, bool inheritable);
 //! of the two. Throws std::runtime_error describing the discrepancy otherwise, and
 //! std::system_error when the ACL cannot be read.
 void VerifyOwnerOnlyDacl(const fs::path& path);
-
-//! The same DACL as a raw PACL, for callers that need it at CREATE time via
-//! SECURITY_ATTRIBUTES (CreateFileW) rather than applying it afterwards. The caller
-//! owns the result and must LocalFree() it. Returned as void* so this header stays
-//! free of <windows.h>.
-void* MakeOwnerOnlyDacl(bool inheritable);
 #endif // WIN32
 
 } // namespace util

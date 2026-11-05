@@ -37,6 +37,9 @@
 #include "ipc/peercred.h"
 #include "ipc/process.h"
 #include "ipc/serve_init.h"
+#ifdef WIN32
+#include "ipc/win_endpoint.h" // AttachGroupSid
+#endif
 #include "util/strencodings.h"
 #include "wallet/wallet.h" // pwalletMain / CWallet::GetWalletUuid for the identity token
 #include <atomic>
@@ -458,22 +461,24 @@ bool AppInit(int argc, char* argv[])
             try {
                 // An explicit -ipcdir may not exist yet. It is created restricted
                 // to this account; a failure is fatal like the rest of this block.
-#ifndef WIN32
                 // With an attach group, the directory, the cookie and the socket
                 // are given that group before anything is served, and a failure
                 // is fatal like the rest of this block. The directory is then
-                // given its access first, and a change to it is logged.
-                const std::optional<gid_t> attach_gid = ipc::AttachGroupGid();
-                if (attach_gid) {
+                // given its access first, and a change to it is logged. On
+                // Windows the group is the SID ConfigureAttachGroup resolved, and
+                // an Administrators-owned directory (the service layout) is
+                // checked rather than changed.
+#ifndef WIN32
+                const std::optional<gid_t> attach_group = ipc::AttachGroupGid();
+#else
+                const std::optional<std::string> attach_group = ipc::win::AttachGroupSid();
+#endif
+                if (attach_group) {
                     ipc::PrepareAttachGroupDirectory(ipc::GetIpcDir());
                 } else {
                     ipc::PrepareIpcDirectory(ipc::GetIpcDir());
                 }
-                std::string cookie = ipc::WriteCookie(ipc::GetIpcDir(), attach_gid);
-#else
-                ipc::PrepareIpcDirectory(ipc::GetIpcDir());
-                std::string cookie = ipc::WriteCookie(ipc::GetIpcDir());
-#endif
+                std::string cookie = ipc::WriteCookie(ipc::GetIpcDir(), attach_group);
                 cookie_written = true;
                 interfaces::NodeIdentity identity;
                 identity.network = Params().NetworkIDString();
@@ -489,8 +494,9 @@ bool AppInit(int argc, char* argv[])
                 // Refuse a peer before serving it when its identity cannot be
                 // read or ServerPeerPolicy refuses it: another OS user outside
                 // the -ipcattachgroup group, or root. Windows has no peer
-                // credentials, so there the owner-only DACLs on node.sock and
-                // ipc.cookie are the guard.
+                // credentials, so there the DACLs on node.sock and ipc.cookie are
+                // the guard (ipc/win_endpoint.h), and with -ipcattachgroup every
+                // peer is refused until a Windows peer can be identified.
                 // cookie + identity are captured by value and copied into each
                 // ServeInit.
                 //

@@ -38,9 +38,12 @@
 //! or root, and not writable by group or others.
 //!
 //! On Windows AF_UNIX exposes no peer credentials, and the server never receives
-//! a socket fd from kj. Until the Windows backend exists, the owner-only DACL on
-//! node.sock and ipc.cookie is the guard, and either side refuses as soon as a
-//! different account is configured (-ipcattachgroup or -ipcserviceuser).
+//! a socket fd from kj. The DACLs on node.sock and ipc.cookie (ipc/win_endpoint.h)
+//! are the guard: this account and SYSTEM, and with -ipcattachgroup also the
+//! group's right to connect and to read the cookie. The GUI checks the endpoint's
+//! owner and directories before it connects. Until a Windows peer can be
+//! identified, either side still refuses the other as soon as a different account
+//! is configured (-ipcattachgroup or -ipcserviceuser).
 namespace ipc {
 
 #ifndef WIN32
@@ -65,28 +68,30 @@ enum class PeerVerdict { Allow, Refuse };
 //! Hook. On POSIX this is the identity of the peer of a connected or accepted
 //! AF_UNIX \p fd (SO_PEERCRED and SO_PEERGROUPS on Linux, getpeereid() elsewhere, where groups are
 //! left empty), or nullopt, with a log line, when it cannot be read. Callers refuse on
-//! nullopt. The Windows placeholder ignores \p fd (kj gives the server -1) and
-//! returns an empty PeerIdentity.
+//! nullopt. On Windows \p fd is ignored (kj gives the server -1) and the
+//! PeerIdentity returned is empty.
 std::optional<PeerIdentity> ReadPeerIdentity(int fd);
 
 //! Hook. Resolve the group \p name and remember it as the attach group; "" clears
 //! it and returns true. Returns false if the group does not exist or, on Linux, if
-//! this process does not hold it (the unit needs SupplementaryGroups=). The daemon
-//! calls it once, with -ipcattachgroup, before it serves. The Windows
-//! placeholder returns true only for "".
+//! this process does not hold it (the unit needs SupplementaryGroups=). On
+//! Windows the name is looked up as <COMPUTERNAME>\<name> and must be a local group
+//! (SidTypeAlias); a name that brings a domain of its own is refused. The daemon
+//! calls it once, with -ipcattachgroup, before it serves.
 bool ConfigureAttachGroup(const std::string& name);
 
 //! The operator-facing reason ConfigureAttachGroup(\p name) would fail, or nullopt
 //! when it would not. It names the group; for a group this process does not
 //! hold (Linux) it says to add SupplementaryGroups=<name> to the service unit or
 //! to run the core with that group; for an unknown group it says the group does
-//! not exist. The daemon uses it as the text of its startup error.
+//! not exist; on Windows, for a name that is not a local group, it says so. The
+//! daemon uses it as the text of its startup error.
 std::optional<std::string> AttachGroupProblem(const std::string& name);
 
 #ifndef WIN32
 //! Hook. The gid ConfigureAttachGroup resolved, or nullopt when none is
-//! configured. (Windows has no gid_t; its attach group arrives with the Windows
-//! backend.)
+//! configured. (Windows has no gid_t; its counterpart is
+//! ipc::win::AttachGroupSid() in ipc/win_endpoint.h.)
 std::optional<gid_t> AttachGroupGid();
 
 //! What ReadPeerIdentity does when reading the peer's supplementary groups fails
@@ -140,8 +145,8 @@ PeerVerdict ClientPeerDecision(const PeerIdentity& server, const ClientPeerConte
 #endif // !WIN32
 
 //! The core's check of an accepted peer: ServerPeerDecision with this process's
-//! effective uid and AttachGroupGid(). The Windows placeholder allows unless
-//! -ipcattachgroup is set.
+//! effective uid and AttachGroupGid(). On Windows, where no peer is identified
+//! yet, it allows unless -ipcattachgroup is set.
 PeerVerdict ServerPeerPolicy(const PeerIdentity& peer);
 
 //! The GUI's check of the core it connected to, before it presents the cookie:
@@ -149,7 +154,8 @@ PeerVerdict ServerPeerPolicy(const PeerIdentity& peer);
 //! -ipcserviceuser account and lstat() of \p ipcdir, the directory that holds
 //! the socket. A core at the caller's own uid is allowed at once, without the
 //! account lookup or the lstat; for any other core both are made on each call.
-//! The Windows placeholder allows unless -ipcserviceuser is set.
+//! On Windows, where the endpoint was checked before connecting and no peer is
+//! identified yet, it allows unless -ipcserviceuser is set.
 PeerVerdict ClientPeerPolicy(const PeerIdentity& server, const fs::path& ipcdir);
 
 //! The value of a name-valued IPC option such as "-ipcserviceuser", or "" when

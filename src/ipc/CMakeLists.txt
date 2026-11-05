@@ -40,6 +40,9 @@ add_library(gridcoin_ipc STATIC EXCLUDE_FROM_ALL
     # off its platform.
     peercred_posix.cpp
     peercred_win.cpp
+    # The Windows endpoint's access lists and the GUI's check before it connects;
+    # its rules are pure and build everywhere.
+    win_endpoint.cpp
     serve_init.cpp
     connect.cpp
     capnp/protocol.cpp

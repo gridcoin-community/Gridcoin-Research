@@ -122,7 +122,9 @@ public:
         // account when the socket's directory belongs to that account or root
         // and is not writable by group or others. Two processes of the same
         // account are not told apart by this; the daemon refusing to start when
-        // it cannot bind keeps the socket from being left unowned.
+        // it cannot bind keeps the socket from being left unowned. On Windows,
+        // where the peer's identity cannot be read, Process::connect has already
+        // checked the socket's owner and its directories before connecting.
         //
         // Process::connect rewrote address to its canonical "unix:<path>" form,
         // so the socket's directory is the parent of that path.

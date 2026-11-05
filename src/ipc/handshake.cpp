@@ -11,7 +11,10 @@
 #include "tinyformat.h"
 #include "util/strencodings.h"
 #ifdef WIN32
-#include "util/dir_permissions.h" // ApplyOwnerOnlyDacl / MakeOwnerOnlyDacl
+#include "ipc/win_endpoint.h"
+#include "util/win_acl.h"
+
+#include <memory>
 #endif
 
 #include <algorithm>
@@ -90,14 +93,16 @@ private:
 //! knows the file does not hold what it expects.
 #ifdef WIN32
 //! Windows port of the atomic cookie writer. Same guarantees as the POSIX path,
-//! mapped to the Win32 API: an owner-only protected DACL supplied to CreateFileW
-//! (the analogue of POSIX's mode 0600 at open(): the secret is never on disk under
-//! a permissive ACL, not even briefly), no sharing for an exclusive open,
-//! bInheritHandle=FALSE for close-on-exec, FlushFileBuffers() for fsync, and
-//! MoveFileExW(REPLACE_EXISTING) for the atomic replace (boost::filesystem::
-//! rename's overwrite behaviour on Windows is version-dependent, so do not rely
-//! on it). O_NOFOLLOW has no direct analogue; CREATE_NEW over a pre-planted name
-//! fails rather than following it, which covers the same threat.
+//! mapped to the Win32 API: the cookie's access list \p spec (owner-only, or with
+//! the attach group's read) as a protected security descriptor supplied to
+//! CreateFileW, with its owner stated (the analogue of POSIX's mode at open(): the
+//! secret is never on disk under a permissive ACL, not even briefly), no sharing
+//! for an exclusive open, bInheritHandle=FALSE for close-on-exec,
+//! FlushFileBuffers() for fsync, and MoveFileExW(REPLACE_EXISTING) for the atomic
+//! replace (boost::filesystem::rename's overwrite behaviour on Windows is
+//! version-dependent, so do not rely on it). O_NOFOLLOW has no direct analogue;
+//! CREATE_NEW over a pre-planted name fails rather than following it, which covers
+//! the same threat.
 //!
 //! This used to open with _wsopen_s(..., _S_IREAD | _S_IWRITE) and rely on the
 //! file inheriting an owner-only datadir ACL. Neither protected anything: the CRT
@@ -106,7 +111,7 @@ private:
 //! datadir ACL it was relying on. On-device (W4) the inherited ACL did happen to
 //! be owner + SYSTEM + Administrators for a default %APPDATA% install, but that
 //! was an observation about one machine, not a property this code enforced.
-void WriteFileAtomic(const fs::path& path, const std::string& contents)
+void WriteFileAtomic(const fs::path& path, const std::string& contents, const util::winacl::AclSpec& spec)
 {
     fs::path tmp = path;
     tmp += ".tmp";
@@ -123,27 +128,18 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
                                  ": " + remove_ec.message());
     }
 
-    PACL dacl = static_cast<PACL>(util::MakeOwnerOnlyDacl(/*inheritable=*/false));
-    SECURITY_DESCRIPTOR sd;
-    HANDLE handle = INVALID_HANDLE_VALUE;
-    DWORD create_err = 0;
-    // SE_DACL_PROTECTED: without it the parent directory's inheritable ACEs are
-    // merged into the new file's DACL, which would defeat the point of naming an
-    // explicit trustee set here.
-    if (!::InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION) ||
-        !::SetSecurityDescriptorDacl(&sd, TRUE, dacl, FALSE) ||
-        !::SetSecurityDescriptorControl(&sd, SE_DACL_PROTECTED, SE_DACL_PROTECTED)) {
-        create_err = ::GetLastError();
-    } else {
-        SECURITY_ATTRIBUTES sa{};
-        sa.nLength = sizeof(sa);
-        sa.lpSecurityDescriptor = &sd;
-        sa.bInheritHandle = FALSE; // don't leak the handle into a child process
-        handle = ::CreateFileW(tmp.wstring().c_str(), GENERIC_WRITE, /*dwShareMode=*/0, &sa,
-                               CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (handle == INVALID_HANDLE_VALUE) create_err = ::GetLastError();
-    }
-    ::LocalFree(dacl); // the created file holds its own copy of the ACL
+    // The descriptor states the owner and a protected DACL: without the
+    // protection the parent directory's inheritable ACEs would be merged into the
+    // new file's DACL, which would defeat the point of naming the trustees here.
+    const std::unique_ptr<void, void (*)(void*)> sd(util::winacl::MakeSecurityDescriptor(spec),
+                                                    util::winacl::FreeSecurityDescriptor);
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof(sa);
+    sa.lpSecurityDescriptor = sd.get();
+    sa.bInheritHandle = FALSE; // don't leak the handle into a child process
+    const HANDLE handle = ::CreateFileW(tmp.wstring().c_str(), GENERIC_WRITE, /*dwShareMode=*/0, &sa, CREATE_NEW,
+                                        FILE_ATTRIBUTE_NORMAL, nullptr);
+    const DWORD create_err = handle == INVALID_HANDLE_VALUE ? ::GetLastError() : 0;
     if (handle == INVALID_HANDLE_VALUE) {
         throw std::system_error(static_cast<int>(create_err), std::system_category(),
                                 "create " + tmp_str);
@@ -180,7 +176,7 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents)
     // world-readable authentication secret. Doing this before the rename means a
     // volume that cannot protect the cookie never gets one -- the guard deletes
     // the temp copy on the way out.
-    util::ApplyOwnerOnlyDacl(tmp, /*inheritable=*/false);
+    win::ApplyEndpointAcl(tmp, spec);
 
     if (!::MoveFileExW(tmp.wstring().c_str(), path.wstring().c_str(),
                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
@@ -319,16 +315,20 @@ bool ConstantTimeEqual(const std::string& a, const std::string& b)
 #ifndef WIN32
 std::string WriteCookie(const fs::path& dir, std::optional<gid_t> group)
 #else
-std::string WriteCookie(const fs::path& dir)
+std::string WriteCookie(const fs::path& dir, const std::optional<std::string>& group_sid)
 #endif
 {
+#ifdef WIN32
+    // One list for both the create and the read-back, so the two cannot differ.
+    const util::winacl::AclSpec spec = win::ThisProcessEndpointAclSpec(win::IpcObject::Cookie, group_sid);
+#endif
     std::array<unsigned char, 32> buf{};
     GetStrongRandBytes(buf);
     const std::string cookie = HexStr(buf);
 #ifndef WIN32
     WriteFileAtomic(dir / COOKIE_FILE, cookie, group);
 #else
-    WriteFileAtomic(dir / COOKIE_FILE, cookie);
+    WriteFileAtomic(dir / COOKIE_FILE, cookie, spec);
 #endif
     return cookie;
 }

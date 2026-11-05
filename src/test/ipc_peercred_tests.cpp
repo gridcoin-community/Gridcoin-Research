@@ -422,15 +422,17 @@ BOOST_FIXTURE_TEST_CASE(client_policy_reads_service_user_and_ipcdir, PeerPolicyS
 
 #else // WIN32
 
-// Until the Windows peer check exists, the hooks keep the owner-only DACL
-// behaviour: an empty identity, no attach group, and a refusal as soon as a
-// different account is configured on either side.
+// Until a Windows peer can be identified, the policies admit only without a
+// different account: an empty identity, and a refusal as soon as a different
+// account is configured on either side. The attach group itself resolves (its
+// lookup is covered in ipc_win_endpoint_tests), and a group that is not on this
+// computer is refused.
 BOOST_FIXTURE_TEST_CASE(windows_placeholder_admits_only_without_other_account, PeerPolicySetup)
 {
     const auto id = ipc::ReadPeerIdentity(-1);
     BOOST_REQUIRE(id);
     BOOST_CHECK(ipc::ConfigureAttachGroup(""));
-    BOOST_CHECK(!ipc::ConfigureAttachGroup("Gridcoin GUI Users"));
+    BOOST_CHECK(!ipc::ConfigureAttachGroup("gridcoin-test-no-such-group"));
 
     gArgs.ClearForcedArg("-ipcattachgroup");
     gArgs.ClearForcedArg("-ipcserviceuser");

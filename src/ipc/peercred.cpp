@@ -161,22 +161,26 @@ PeerVerdict ClientPeerPolicy(const PeerIdentity& server, const fs::path& ipcdir)
 
 #else // WIN32
 
-// The Windows placeholders keep the owner-only DACL on node.sock and ipc.cookie
-// as the guard: with no other account configured only this account (and SYSTEM)
-// can open them. A configured other account cannot be checked yet, so it is
-// refused rather than admitted unchecked.
+// The DACLs on node.sock and ipc.cookie are the guard (ipc/win_endpoint.h): with
+// no other account configured only this account (and SYSTEM) can open them. With
+// -ipcattachgroup the group is given its rights on both, but no Windows peer is
+// identified yet, so a peer of another account would be admitted unchecked: every
+// peer is refused instead. The GUI, which has checked the endpoint's owner before
+// connecting, likewise refuses a core when -ipcserviceuser is set.
 
 PeerVerdict ServerPeerPolicy(const PeerIdentity&)
 {
     if (ConfiguredOption("-ipcattachgroup").empty()) return PeerVerdict::Allow;
-    LogPrintf("IPC: the Windows peer check for a different account is not available in this build\n");
+    LogPrintf("IPC: refusing the peer: -ipcattachgroup is set, and this build cannot identify a peer of another "
+              "account on Windows\n");
     return PeerVerdict::Refuse;
 }
 
 PeerVerdict ClientPeerPolicy(const PeerIdentity&, const fs::path&)
 {
     if (ConfiguredOption("-ipcserviceuser").empty()) return PeerVerdict::Allow;
-    LogPrintf("IPC: the Windows peer check for a different account is not available in this build\n");
+    LogPrintf("IPC: refusing the core: -ipcserviceuser is set, and this build cannot identify a core of another "
+              "account on Windows\n");
     return PeerVerdict::Refuse;
 }
 
@@ -185,8 +189,9 @@ PeerVerdict ClientPeerPolicy(const PeerIdentity&, const fs::path&)
 const char* PeerCredentialEnforcement()
 {
 #ifdef WIN32
-    return "none (Windows AF_UNIX exposes no peer credentials; the owner-only DACL on node.sock and ipc.cookie "
-           "is the guard, and -ipcattachgroup is not available)";
+    return "none (Windows AF_UNIX exposes no peer credentials; the DACLs on node.sock and ipc.cookie are the guard. "
+           "With -ipcattachgroup the group is given the right to connect and to read the cookie, but every peer is "
+           "refused, as this build cannot identify a peer of another account on Windows)";
 #elif defined(__linux__)
     // peercred_posix.cpp reads SO_PEERCRED under the same __linux__ test.
 #ifdef SO_PEERGROUPS

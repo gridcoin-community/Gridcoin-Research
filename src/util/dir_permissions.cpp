@@ -83,11 +83,6 @@ void ApplyOwnerOnlyDacl(const fs::path& path, bool inheritable)
     }
 }
 
-void* MakeOwnerOnlyDacl(bool inheritable)
-{
-    return winacl::BuildDacl(OwnerOnlySpec(inheritable).aces);
-}
-
 void VerifyOwnerOnlyDacl(const fs::path& path)
 {
     const winacl::ObservedAcl acl = winacl::ReadAcl(path);

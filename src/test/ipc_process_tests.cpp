@@ -12,8 +12,10 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <optional>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #ifndef WIN32
@@ -27,7 +29,6 @@
 #include <functional>
 #include <list>
 #include <grp.h>
-#include <optional>
 #include <stdexcept>
 #include <tuple>
 #endif
@@ -182,6 +183,30 @@ BOOST_FIXTURE_TEST_CASE(ipcdir_negated_counts_as_unset, grc_test::StateGuard)
     BOOST_REQUIRE(gArgs.IsArgSet("-ipcdir"));
     BOOST_REQUIRE(gArgs.IsArgNegated("-ipcdir"));
     BOOST_CHECK(ipc::GetIpcDir() == GetDataDir());
+}
+
+// The attach group's directory is refused when it opens as either data directory,
+// by its identity alone (device and inode, or volume serial and file index), so
+// however it was spelled. The text names both options and the data directory.
+BOOST_AUTO_TEST_CASE(data_directory_refused_by_file_id)
+{
+    const fs::path netdir{"/var/lib/gridcoin/testnet"};
+    const fs::path basedir{"/var/lib/gridcoin"};
+    const std::vector<std::pair<fs::path, ipc::FileId>> datadirs{{netdir, {7, 1001}}, {basedir, {7, 1000}}};
+
+    for (const auto& [datadir, id] : datadirs) {
+        const std::optional<std::string> refusal = ipc::DataDirectoryRefusal("/run/x/..", id, datadirs);
+        BOOST_REQUIRE(refusal);
+        BOOST_CHECK_MESSAGE(refusal->find("-ipcattachgroup") != std::string::npos, *refusal);
+        BOOST_CHECK_MESSAGE(refusal->find("-ipcdir (/run/x/..)") != std::string::npos, *refusal);
+        BOOST_CHECK_MESSAGE(refusal->find(datadir.string()) != std::string::npos, *refusal);
+    }
+
+    // The same index on another volume, or another index on the same one, is another
+    // directory.
+    BOOST_CHECK(!ipc::DataDirectoryRefusal("/run/gridcoin", {8, 1001}, datadirs));
+    BOOST_CHECK(!ipc::DataDirectoryRefusal("/run/gridcoin", {7, 1002}, datadirs));
+    BOOST_CHECK(!ipc::DataDirectoryRefusal("/run/gridcoin", {7, 1001}, {}));
 }
 
 #ifndef WIN32

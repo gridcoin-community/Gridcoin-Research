@@ -29,6 +29,9 @@
 #include <sys/un.h>
 #include <unistd.h>
 #else
+#include "interfaces/ipc.h" // PeerRefusedError
+#include "ipc/win_endpoint.h"
+
 // winsock2.h must precede afunix.h/ws2tcpip.h. AF_UNIX for Windows lives in
 // <afunix.h> (Windows 10 1803+); sockaddr_un has the same sun_family/sun_path
 // layout ParseAddress relies on.
@@ -230,6 +233,27 @@ int TryConnect(const struct sockaddr_un& addr, int& out_errno)
     return -1;
 }
 
+#ifdef WIN32
+//! The GUI's check of the endpoint at \p socket_path before it connects
+//! (ipc::win::CheckServerEndpointBeforeConnect against ExpectedServerSid()). A
+//! missing endpoint is no server listening, and is passed on as such, so the GUI
+//! keeps waiting. Anything else that stops the check is a refusal, thrown as
+//! interfaces::PeerRefusedError: nothing has been connected or sent.
+void CheckEndpointBeforeConnect(const fs::path& socket_path)
+{
+    try {
+        win::CheckServerEndpointBeforeConnect(socket_path, win::ExpectedServerSid());
+    } catch (const std::system_error& e) {
+        if (e.code() == std::errc::no_such_file_or_directory) throw;
+        throw interfaces::PeerRefusedError(
+            strprintf("The IPC endpoint could not be checked before connecting (%s); refusing to connect.", e.what()));
+    } catch (const std::exception& e) {
+        throw interfaces::PeerRefusedError(
+            strprintf("The IPC endpoint is not the expected core's: %s. Refusing to connect.", e.what()));
+    }
+}
+#endif
+
 } // namespace
 
 fs::path GetIpcDir()
@@ -242,7 +266,6 @@ fs::path GetIpcDir()
 
 std::optional<std::string> AttachGroupIpcDirRefusal()
 {
-#ifndef WIN32
     if (ConfiguredOption("-ipcattachgroup").empty()) return std::nullopt;
 
     if (ConfiguredOption("-ipcdir").empty()) {
@@ -252,7 +275,9 @@ std::optional<std::string> AttachGroupIpcDirRefusal()
     }
 
     // Compared with the links resolved. A directory that does not exist yet, or
-    // cannot be resolved, is not the data directory, which does exist.
+    // cannot be resolved, is not the data directory, which does exist. A spelling
+    // this misses (on Windows, one that differs only in case) is refused where the
+    // directory is opened, by its identity (DataDirectoryRefusal).
     const auto resolved = [](const fs::path& path) {
         boost::system::error_code ec;
         const fs::path canonical = fs::canonical(path, ec);
@@ -274,9 +299,21 @@ std::optional<std::string> AttachGroupIpcDirRefusal()
     }
 
     return std::nullopt;
-#else
+}
+
+std::optional<std::string> DataDirectoryRefusal(const fs::path& ipcdir, const FileId& ipcdir_id,
+                                                const std::vector<std::pair<fs::path, FileId>>& datadirs)
+{
+    for (const auto& [datadir, id] : datadirs) {
+        if (id == ipcdir_id) {
+            return strprintf("-ipcattachgroup is set and -ipcdir (%s) is the data directory (%s). The attach group is "
+                             "given access to the IPC directory. Set -ipcdir to a directory of its own for the IPC "
+                             "socket and cookie.",
+                             ipcdir.string(), datadir.string());
+        }
+    }
+
     return std::nullopt;
-#endif
 }
 
 #ifndef WIN32
@@ -386,19 +423,20 @@ namespace {
 //! inode, which a bind mount or a spelling with ".." keeps.
 void RefuseDataDirectory(const fs::path& dir, const struct stat& st)
 {
+    std::vector<std::pair<fs::path, FileId>> datadirs;
     for (const bool net_specific : {true, false}) {
         const fs::path datadir = GetDataDir(net_specific);
         struct stat data_st{};
 
         if (::stat(datadir.string().c_str(), &data_st) != 0) continue;
 
-        if (data_st.st_dev == st.st_dev && data_st.st_ino == st.st_ino) {
-            throw std::runtime_error(
-                strprintf("-ipcattachgroup is set and -ipcdir (%s) is the data directory (%s). The attach group is "
-                          "given access to the IPC directory. Set -ipcdir to a directory of its own for the IPC "
-                          "socket and cookie.",
-                          dir.string(), datadir.string()));
-        }
+        datadirs.emplace_back(datadir,
+                              FileId{static_cast<uint64_t>(data_st.st_dev), static_cast<uint64_t>(data_st.st_ino)});
+    }
+
+    const FileId id{static_cast<uint64_t>(st.st_dev), static_cast<uint64_t>(st.st_ino)};
+    if (std::optional<std::string> refusal = DataDirectoryRefusal(dir, id, datadirs)) {
+        throw std::runtime_error(*refusal);
     }
 }
 } // namespace
@@ -473,6 +511,20 @@ void PrepareAttachGroupDirectory(const fs::path& dir)
                   static_cast<unsigned>(before.st_gid));
     }
 }
+#else
+void PrepareAttachGroupDirectory(const fs::path& dir)
+{
+    const std::optional<std::string> group_sid = win::AttachGroupSid();
+    if (!group_sid) throw std::logic_error("no -ipcattachgroup is configured");
+    const std::optional<util::winacl::Sid> group = util::winacl::ParseSidString(*group_sid);
+    if (!group) throw std::logic_error(strprintf("the attach group's SID '%s' does not parse", *group_sid));
+
+    // "Created" also when only a part of a spelling such as "<datadir>\x\.." was
+    // made; the data directory is refused by its identity before anything is
+    // changed either way.
+    const bool created = MakeIpcDirectory(dir);
+    win::ApplyAttachGroupDirectoryAccess(dir, *group, created);
+}
 #endif // !WIN32
 
 void PrepareIpcDirectory(const fs::path& dir)
@@ -489,10 +541,18 @@ void PrepareIpcDirectory(const fs::path& dir)
     // The socket and the auth cookie are ours and are recreated on every start
     // with a fixed access that fails closed (see bind and handshake.cpp):
     // owner-only by default, and with -ipcattachgroup the socket is 0660 and the
-    // cookie 0640 in the attach group. A widened directory therefore does not
-    // change who can read the cookie. In attach-group mode the daemon sets the
-    // directory itself to 0750 in that group (ApplyAttachGroupAccess), which is
-    // the state this call does not warn about.
+    // cookie 0640 in the attach group (on Windows, the group's entries in
+    // ipc/win_endpoint.h). A widened directory therefore does not change who can
+    // read the cookie. In attach-group mode the daemon sets the directory itself
+    // to 0750 in that group (ApplyAttachGroupAccess), which is the state this call
+    // does not warn about.
+    //
+    // Windows is the exception for an -ipcdir the operator named: there an
+    // existing directory where another account could add, remove or replace the
+    // socket or cookie is refused rather than warned about, because on Windows the
+    // directory's list, not its traverse right, is what keeps them in place. The
+    // default, the data directory, keeps the warning: data directories made by
+    // earlier releases inherit %APPDATA%'s list.
     //
     // When the directory is created here, restricting it fails closed: if we
     // cannot restrict a directory we just made, throw rather than expose the
@@ -520,6 +580,13 @@ void PrepareIpcDirectory(const fs::path& dir)
             if (warning) LogPrintf("WARN: %s: %s", __func__, *warning);
         }
 #else
+        if (!ConfiguredOption("-ipcdir").empty()) {
+            if (const std::optional<std::string> reason = win::ServerIpcDirRefusal(dir)) {
+                throw std::runtime_error(strprintf("Refusing to serve IPC: %s", *reason));
+            }
+            return;
+        }
+
         try {
             util::VerifyOwnerOnlyDacl(dir);
         } catch (const std::exception&) {
@@ -540,7 +607,10 @@ public:
     {
         EnsureWinsock();
         struct sockaddr_un addr;
-        ParseAddress(address, ipc_dir, addr);
+        [[maybe_unused]] const fs::path path = ParseAddress(address, ipc_dir, addr);
+#ifdef WIN32
+        CheckEndpointBeforeConnect(path);
+#endif
         int connect_errno = 0;
         int fd = TryConnect(addr, connect_errno);
         if (fd == -1) {
@@ -577,8 +647,8 @@ public:
             // the process umask: it is process-wide state that other threads
             // share. The mode is set explicitly below, through an fd of the path,
             // before listen() so no peer can connect before it is final.
-            // (No umask on Windows; there the fail-closed ApplyOwnerOnlyDacl
-            // after the bind below restricts the socket.)
+            // (No umask on Windows; there the fail-closed ApplyEndpointAcl
+            // after the bind below gives the socket its access list.)
 #endif
             const int rc = ::bind(fd, (const struct sockaddr*)&addr, sizeof(addr));
             const int bind_errno = LastSocketError();
@@ -596,12 +666,13 @@ public:
                     throw;
                 }
 #else
-                // Same fail-closed contract as the mode set above: restrict the
-                // socket to this account and SYSTEM (non-inheritable, protected,
-                // verified by read-back), and refuse to serve rather than listen
-                // unprotected if that fails.
+                // Same fail-closed contract as the mode set above: give the
+                // socket its access list (this account and SYSTEM, and with an
+                // attach group that group's right to connect; non-inheritable,
+                // protected, verified by read-back), and refuse to serve rather
+                // than listen unprotected if that fails.
                 try {
-                    util::ApplyOwnerOnlyDacl(path, /*inheritable=*/false);
+                    win::ApplyEndpointAcl(path, win::IpcObject::Socket);
                 } catch (...) {
                     CloseSocket(fd);
                     throw;

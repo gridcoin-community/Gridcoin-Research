@@ -228,11 +228,14 @@ bool ConstantTimeEqual(const std::string& a, const std::string& b);
 //! Node side: write a fresh 256-bit cookie to <dir>/ipc.cookie (0600, atomic
 //! rename) and return its hex. Called once per node startup. On POSIX, with a
 //! \p group the file is instead 0640 in that group, set through the temp file's
-//! fd before it is renamed into place.
+//! fd before it is renamed into place. On Windows the file is created with
+//! ipc::win::EndpointAclSpec(Cookie, ...) for this account and, when given, the
+//! group whose SID string is \p group_sid (ipc::win::AttachGroupSid()), and that
+//! list is applied again and read back before the rename.
 #ifndef WIN32
 std::string WriteCookie(const fs::path& dir, std::optional<gid_t> group = std::nullopt);
 #else
-std::string WriteCookie(const fs::path& dir);
+std::string WriteCookie(const fs::path& dir, const std::optional<std::string>& group_sid = std::nullopt);
 #endif
 
 //! GUI side: read the hex cookie from <dir>/ipc.cookie. Returns nullopt when the

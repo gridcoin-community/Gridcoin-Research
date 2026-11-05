@@ -48,8 +48,10 @@ struct ConnectInfo
 };
 
 //! Thrown by Ipc::connectAddress when the process listening on the socket fails
-//! the client peer check (ipc::ClientPeerPolicy) or its identity cannot be read.
-//! Nothing has been sent to that process.
+//! the client peer check (ipc::ClientPeerPolicy) or its identity cannot be read,
+//! and on Windows when the endpoint fails the check made before connecting
+//! (ipc::win::CheckServerEndpointBeforeConnect). Nothing has been sent to that
+//! process.
 class PeerRefusedError : public std::runtime_error
 {
 public:
@@ -78,7 +80,8 @@ public:
     //! (on the IPC event-loop thread) when the remote drops the connection
     //! unexpectedly — the GUI uses it to quit gracefully when the node exits.
     //! Before anything is sent, the process at the other end is checked with
-    //! ipc::ClientPeerPolicy, and a refusal throws PeerRefusedError. If \p info
+    //! ipc::ClientPeerPolicy (on Windows, after the endpoint is checked before
+    //! connecting), and a refusal throws PeerRefusedError. If \p info
     //! is set it is filled once the socket is connected and the peer accepted,
     //! before the transport's bootstrap round trip (see ConnectInfo).
     virtual std::unique_ptr<Init> connectAddress(std::string& address,

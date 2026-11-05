@@ -7,10 +7,13 @@
 
 #include "fs.h"
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 #ifndef WIN32
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -28,14 +31,19 @@ public:
     virtual ~Process() = default;
 
     //! Canonicalize and connect to \p address under \p ipc_dir, returning the
-    //! connected socket descriptor.
+    //! connected socket descriptor. On Windows the endpoint is checked first
+    //! (ipc::win::CheckServerEndpointBeforeConnect): a refusal throws
+    //! interfaces::PeerRefusedError, and a missing endpoint a std::system_error
+    //! with std::errc::no_such_file_or_directory, before anything is connected.
+    //! On POSIX the peer is checked after connecting, by the caller.
     virtual int connect(const fs::path& ipc_dir, std::string& address) = 0;
 
     //! Canonicalize \p address under \p ipc_dir, create + bind a listening
     //! socket, and return its descriptor. Removes a stale socket file left by a
     //! crash; throws if the path is already bound by a live listener. On POSIX
     //! the socket is left 0600, or 0660 in the attach group when one is
-    //! configured.
+    //! configured; on Windows it gets ipc::win::EndpointAclSpec(Socket, ...) for
+    //! this account and the configured attach group.
     virtual int bind(const fs::path& ipc_dir, std::string& address) = 0;
 };
 
@@ -53,15 +61,55 @@ fs::path GetIpcDir();
 //! Both options are read as ConfiguredOption() reads them, so a negated or empty
 //! value counts as unset. An -ipcdir is compared with the data directory, and on
 //! a test network also with the base data directory above it, with the links in
-//! both resolved; one that does not exist yet is not the data directory. nullopt
-//! on Windows, where ConfigureAttachGroup() refuses any attach group.
+//! both resolved; one that does not exist yet is not the data directory. The same
+//! on every platform.
 std::optional<std::string> AttachGroupIpcDirRefusal();
+
+//! What identifies a file system object while it exists: on POSIX the device and
+//! inode, on Windows the volume serial number and the file index
+//! (GetFileInformationByHandle).
+struct FileId
+{
+    uint64_t volume{0};
+    uint64_t index{0};
+
+    bool operator==(const FileId& other) const { return volume == other.volume && index == other.index; }
+};
+
+//! The refusal, naming -ipcattachgroup, -ipcdir and the data directory, when the
+//! IPC directory \p ipcdir, as opened, has the id \p ipcdir_id of one of
+//! \p datadirs (the path and id of the network data directory, and of the base one
+//! above it); nullopt otherwise. Both platforms refuse the attach group's directory
+//! with it before any access is changed.
+std::optional<std::string> DataDirectoryRefusal(const fs::path& ipcdir, const FileId& ipcdir_id,
+                                                const std::vector<std::pair<fs::path, FileId>>& datadirs);
+
+//! What the daemon prepares its IPC directory with when an attach group is
+//! configured: make sure \p dir exists, then give it the attach group's access.
+//!
+//! POSIX: a directory this call creates is created owner-only as
+//! PrepareIpcDirectory() creates it (refusing the data directory as
+//! ApplyAttachGroupAccess() does), then ApplyAttachGroupAccess() gives it mode
+//! 0750 in the group. An existing directory is not warned about, since its access
+//! is set here; when that changes its mode or group, a line logs the mode and group
+//! it had.
+//!
+//! Windows: ipc::win::ApplyAttachGroupDirectoryAccess() with the configured group,
+//! which refuses the data directory by its file ID before anything is changed.
+//!
+//! Throws as those do, and std::logic_error when no attach group is configured.
+void PrepareAttachGroupDirectory(const fs::path& dir);
 
 //! Make sure \p dir exists. When this call creates it, it is restricted to this
 //! account (POSIX mode 0700 through an fd, Windows owner-only protected DACL)
 //! and failing to do so throws; an existing directory is left as configured,
-//! with a warning in the log if it is accessible to other users. Throws
-//! std::system_error, naming the directory, if it cannot be created.
+//! with a warning in the log if it is accessible to other users. On Windows an
+//! existing directory is checked instead when -ipcdir is set: one that
+//! ipc::win::ServerIpcDirRefusal() refuses (a junction or link, no DACL, an owner
+//! other than this account, SYSTEM or Administrators, or another trustee that can
+//! add, remove or replace an entry) throws std::runtime_error, so the core does not
+//! serve in it. Throws std::system_error, naming the directory, if it cannot be
+//! created.
 void PrepareIpcDirectory(const fs::path& dir);
 
 #ifndef WIN32
@@ -108,15 +156,6 @@ std::optional<std::string> IpcDirWarning(const std::string& dir, mode_t mode, ui
 //! AttachGroupIpcDirRefusal() cannot resolve, such as "<datadir>/x/.." with no x,
 //! or a bind mount, reaches it there.
 void ApplyAttachGroupAccess(const fs::path& ipcdir);
-
-//! What the daemon prepares its IPC directory with when an attach group is
-//! configured: make sure \p dir exists, created owner-only as
-//! PrepareIpcDirectory() creates it (refusing the data directory as
-//! ApplyAttachGroupAccess() does), then give it the attach group's access
-//! (ApplyAttachGroupAccess()). An existing directory is not warned about, since
-//! its access is set here; when that changes its mode or group, a line logs the
-//! mode and group it had. Throws as those two do.
-void PrepareAttachGroupDirectory(const fs::path& dir);
 #endif // !WIN32
 } // namespace ipc
 

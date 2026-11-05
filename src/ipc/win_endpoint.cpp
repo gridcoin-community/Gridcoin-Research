@@ -1,0 +1,440 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include "ipc/win_endpoint.h"
+
+#include "tinyformat.h"
+
+#include <string_view>
+#include <vector>
+
+#ifdef WIN32
+#include "ipc/peercred.h"
+#include "ipc/process.h"
+#include "logging.h"
+#include "util/strencodings.h"
+#include "util/system.h"
+
+#include <stdexcept>
+#include <system_error>
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif // WIN32
+
+namespace ipc::win {
+
+// The single rights by their bare names: <windows.h>'s macros where it is included,
+// util::winacl::mask's constants elsewhere, with the same values.
+using namespace util::winacl::mask;
+
+using util::winacl::AceSpec;
+using util::winacl::AclSpec;
+using util::winacl::Inherit;
+
+namespace {
+
+//! The bit IsReparseTagNameSurrogate() tests: a reparse point with it set stands for
+//! another named entity, so a path through it leads elsewhere.
+constexpr uint32_t REPARSE_TAG_NAME_SURROGATE = 0x20000000;
+
+//! The attach group's rights on \p obj.
+uint32_t GroupMask(IpcObject obj)
+{
+    switch (obj) {
+    case IpcObject::Socket:
+        return SOCKET_CONNECT_MASK;
+    case IpcObject::Cookie:
+        return COOKIE_READ_MASK;
+    } // no default case, so the compiler can warn about an object left out
+
+    return 0;
+}
+
+//! \p self, and SYSTEM unless it is \p self, with FILE_ALL_ACCESS and \p inherit.
+AclSpec OwnerAndSystem(const Sid& self, Inherit inherit)
+{
+    const Sid system = util::winacl::wellknown::System();
+    AclSpec spec{self, {AceSpec{self, FILE_ALL_ACCESS, inherit}}};
+    if (system != self) spec.aces.push_back(AceSpec{system, FILE_ALL_ACCESS, inherit});
+
+    return spec;
+}
+
+} // namespace
+
+#ifdef WIN32
+static_assert((IO_REPARSE_TAG_SYMLINK & REPARSE_TAG_NAME_SURROGATE) != 0 &&
+                  (IO_REPARSE_TAG_MOUNT_POINT & REPARSE_TAG_NAME_SURROGATE) != 0 &&
+                  (IO_REPARSE_TAG_AF_UNIX & REPARSE_TAG_NAME_SURROGATE) == 0,
+              "the name-surrogate bit differs from the Windows SDK's");
+static_assert(IsReparseTagNameSurrogate(REPARSE_TAG_NAME_SURROGATE), "IsReparseTagNameSurrogate tests another bit");
+#endif
+
+AclSpec EndpointAclSpec(IpcObject obj, const Sid& self, const std::optional<Sid>& attach_group)
+{
+    AclSpec spec = OwnerAndSystem(self, Inherit::None);
+    if (attach_group) spec.aces.push_back(AceSpec{*attach_group, GroupMask(obj), Inherit::None});
+
+    return spec;
+}
+
+AclSpec IpcDirAclSpec(const Sid& self, const Sid& attach_group)
+{
+    // What the core creates inside is owner-only from creation; the group's view
+    // reaches the directory alone.
+    AclSpec spec = OwnerAndSystem(self, Inherit::ContainerAndObject);
+    spec.aces.push_back(AceSpec{attach_group, DIR_VIEW_MASK, Inherit::None});
+
+    return spec;
+}
+
+EntryKind ClassifyEntry(bool directory, std::optional<uint32_t> reparse_tag)
+{
+    if (reparse_tag && (*reparse_tag & REPARSE_TAG_NAME_SURROGATE) != 0) return EntryKind::Redirect;
+
+    return directory ? EntryKind::Directory : EntryKind::File;
+}
+
+std::optional<std::string> DirectoryRefusal(const EndpointEntry& dir, const Sid& server, bool require_protected)
+{
+    const std::string shown = dir.path.string();
+
+    switch (dir.kind) {
+    case EntryKind::Directory:
+        break;
+    case EntryKind::Redirect:
+        return strprintf("the directory '%s' is a junction or link, which is not followed", shown);
+    case EntryKind::File:
+        return strprintf("'%s' is not a directory", shown);
+    } // no default case, so the compiler can warn about a kind left out
+
+    const std::vector<Sid> allowed{server, util::winacl::wellknown::System(),
+                                   util::winacl::wellknown::Administrators()};
+    if (std::optional<std::string> reason = util::winacl::FindForeignWriter(dir.acl, allowed, IPC_DIR_WRITEISH)) {
+        return strprintf("only the server's account (%s), SYSTEM and Administrators may own the directory '%s' or "
+                         "add, remove or replace an entry in it, but %s",
+                         util::winacl::FormatSid(server), shown, *reason);
+    }
+
+    if (require_protected && !dir.acl.is_protected) {
+        return strprintf("the directory '%s' must have a protected DACL at a service -ipcdir, and it still inherits "
+                         "entries from the directory above it",
+                         shown);
+    }
+
+    return std::nullopt;
+}
+
+std::optional<std::string> EndpointRefusal(const EndpointFacts& facts, const Sid& expected, bool require_protected)
+{
+    const EndpointEntry& socket = facts.socket;
+    const std::string shown = socket.path.string();
+
+    switch (socket.kind) {
+    case EntryKind::File:
+        break;
+    case EntryKind::Redirect:
+        return strprintf("the IPC socket '%s' is a link to another place, which is not followed", shown);
+    case EntryKind::Directory:
+        return strprintf("the IPC socket '%s' is a directory", shown);
+    } // no default case, so the compiler can warn about a kind left out
+
+    if (!socket.acl.owner) {
+        return strprintf("the owner of the IPC socket '%s' could not be read", shown);
+    }
+    if (*socket.acl.owner != expected) {
+        return strprintf("the IPC socket '%s' must be owned by the expected server account %s, and its owner is %s",
+                         shown, util::winacl::FormatSid(expected), util::winacl::FormatSid(*socket.acl.owner));
+    }
+
+    if (std::optional<std::string> reason = DirectoryRefusal(facts.dir, expected, require_protected)) return reason;
+
+    return DirectoryRefusal(facts.parent, expected, require_protected);
+}
+
+std::optional<std::string> LocalGroupLookupName(const std::string& computer, const std::string& name)
+{
+    if (computer.empty() || name.empty()) return std::nullopt;
+
+    // The characters Windows refuses in a user or group name; '\' and '@' would also
+    // bring a domain of their own.
+    static constexpr std::string_view refused{"\"/\\[]:;|=,+*?<>@"};
+    for (const char c : name) {
+        const auto byte = static_cast<unsigned char>(c);
+        if (byte < 0x20 || byte == 0x7f || refused.find(c) != std::string_view::npos) return std::nullopt;
+    }
+
+    return computer + "\\" + name;
+}
+
+#ifdef WIN32
+namespace {
+
+//! Closes a handle on every exit.
+class HandleGuard
+{
+public:
+    explicit HandleGuard(HANDLE handle) : m_handle(handle) {}
+    ~HandleGuard() { ::CloseHandle(m_handle); }
+
+    HandleGuard(const HandleGuard&) = delete;
+    HandleGuard& operator=(const HandleGuard&) = delete;
+
+    HANDLE get() const { return m_handle; }
+
+private:
+    HANDLE m_handle;
+};
+
+[[noreturn]] void ThrowWin32(DWORD error, const std::string& what)
+{
+    throw std::system_error(static_cast<int>(error), std::system_category(), what);
+}
+
+//! \p path opened to read its attributes and its owner and DACL, with backup
+//! semantics so a directory opens too, and FILE_FLAG_OPEN_REPARSE_POINT so a
+//! reparse point at \p path is opened itself rather than followed. Without
+//! \p share_delete nobody can rename or delete it while the handle is open. A
+//! missing path throws std::system_error with std::errc::no_such_file_or_directory,
+//! anything else the Win32 error.
+HANDLE OpenNoFollow(const fs::path& path, bool share_delete)
+{
+    const DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | (share_delete ? FILE_SHARE_DELETE : 0);
+    const HANDLE handle = ::CreateFileW(path.wstring().c_str(), READ_CONTROL | FILE_READ_ATTRIBUTES, share, nullptr,
+                                        OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+                                        nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+        const DWORD error = ::GetLastError();
+        if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
+            throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory), path.string());
+        }
+        ThrowWin32(error, "open " + path.string());
+    }
+
+    return handle;
+}
+
+//! What \p handle, opened by OpenNoFollow on \p path, refers to: its kind from its
+//! attributes and reparse tag, and its owner and DACL read through the handle.
+EndpointEntry ReadEntry(HANDLE handle, const fs::path& path)
+{
+    FILE_ATTRIBUTE_TAG_INFO info{};
+    if (!::GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &info, sizeof(info))) {
+        ThrowWin32(::GetLastError(), "GetFileInformationByHandleEx " + path.string());
+    }
+
+    const bool reparse_point = (info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+
+    EndpointEntry entry;
+    entry.path = path;
+    entry.kind = ClassifyEntry((info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0,
+                               reparse_point ? std::optional<uint32_t>{static_cast<uint32_t>(info.ReparseTag)}
+                                             : std::nullopt);
+    entry.acl = util::winacl::ReadAcl(handle, /*kernel_object=*/false);
+
+    return entry;
+}
+
+//! The volume serial number and file index of the object \p handle refers to, or
+//! nullopt when they cannot be read.
+std::optional<FileId> FileIdOf(HANDLE handle)
+{
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!::GetFileInformationByHandle(handle, &info)) return std::nullopt;
+
+    return FileId{info.dwVolumeSerialNumber, (static_cast<uint64_t>(info.nFileIndexHigh) << 32) | info.nFileIndexLow};
+}
+
+//! The network data directory and the base one above it, each with its file ID,
+//! opened as the core uses them: a junction there stands for the directory it leads
+//! to. One that cannot be opened is left out, as on POSIX one stat() fails for.
+std::vector<std::pair<fs::path, FileId>> DataDirectoryIds()
+{
+    std::vector<std::pair<fs::path, FileId>> ids;
+    for (const bool net_specific : {true, false}) {
+        const fs::path datadir = GetDataDir(net_specific);
+        const HANDLE handle = ::CreateFileW(datadir.wstring().c_str(), FILE_READ_ATTRIBUTES,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                            OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+        if (handle == INVALID_HANDLE_VALUE) continue;
+
+        const HandleGuard guard(handle);
+        if (const std::optional<FileId> id = FileIdOf(handle)) ids.emplace_back(datadir, *id);
+    }
+
+    return ids;
+}
+
+//! \p name as the log and an error show it: each part sanitized, the backslash
+//! between a domain and an account kept.
+std::string ShownAccount(const std::string& name)
+{
+    std::string shown;
+    size_t start = 0;
+    while (true) {
+        const size_t slash = name.find('\\', start);
+        shown += SanitizeString(name.substr(start, slash == std::string::npos ? std::string::npos : slash - start));
+        if (slash == std::string::npos) break;
+        shown += '\\';
+        start = slash + 1;
+    }
+
+    return shown;
+}
+
+} // namespace
+
+AclSpec ThisProcessEndpointAclSpec(IpcObject obj, const std::optional<std::string>& attach_group_sid)
+{
+    std::optional<Sid> group;
+    if (attach_group_sid) {
+        group = util::winacl::ParseSidString(*attach_group_sid);
+        if (!group) throw std::logic_error(strprintf("the attach group's SID '%s' does not parse", *attach_group_sid));
+    }
+
+    return EndpointAclSpec(obj, util::winacl::CurrentTokenUser(), group);
+}
+
+void ApplyEndpointAcl(const fs::path& path, const AclSpec& spec)
+{
+    // ApplyAcl reads the list back: a volume that accepts the call and stores
+    // nothing (FAT, exFAT, some redirectors) would leave the object open to all.
+    try {
+        util::winacl::ApplyAcl(path, spec);
+    } catch (const util::winacl::AclNotKeptError& e) {
+        throw std::runtime_error(strprintf("Refusing to serve IPC: '%s' did not keep its access control list -- %s. "
+                                           "The IPC directory must live on an NTFS volume that supports access "
+                                           "control.",
+                                           path.string(), e.reason()));
+    }
+}
+
+void ApplyEndpointAcl(const fs::path& path, IpcObject obj)
+{
+    ApplyEndpointAcl(path, ThisProcessEndpointAclSpec(obj, AttachGroupSid()));
+}
+
+Sid ExpectedServerSid()
+{
+    const std::string account = ConfiguredOption("-ipcserviceuser");
+    if (account.empty()) return util::winacl::CurrentTokenUser();
+
+    std::wstring wide;
+    try {
+        wide = Utf8ToWide(account);
+    } catch (const std::range_error&) {
+        throw std::runtime_error(
+            strprintf("The -ipcserviceuser account '%s' is not valid UTF-8.", ShownAccount(account)));
+    }
+
+    const std::optional<Sid> sid = util::winacl::LookupAccountSidByName(wide, /*require_alias=*/false);
+    if (!sid) {
+        throw std::runtime_error(
+            strprintf("The -ipcserviceuser account '%s' does not exist on this computer.", ShownAccount(account)));
+    }
+
+    return *sid;
+}
+
+void CheckServerEndpointBeforeConnect(const fs::path& socket_path, const Sid& expected)
+{
+    const fs::path dir = socket_path.parent_path();
+    if (!socket_path.is_absolute() || !dir.has_relative_path()) {
+        throw std::runtime_error(strprintf("the IPC socket '%s' is not in a directory below the root of a volume",
+                                           socket_path.string()));
+    }
+
+    // The socket first: when it is missing no server is listening, which is not a
+    // refusal.
+    EndpointFacts facts;
+    {
+        const HandleGuard socket(OpenNoFollow(socket_path, /*share_delete=*/true));
+        facts.socket = ReadEntry(socket.get(), socket_path);
+    }
+    {
+        const HandleGuard directory(OpenNoFollow(dir, /*share_delete=*/true));
+        facts.dir = ReadEntry(directory.get(), dir);
+    }
+    {
+        const HandleGuard parent(OpenNoFollow(dir.parent_path(), /*share_delete=*/true));
+        facts.parent = ReadEntry(parent.get(), dir.parent_path());
+    }
+
+    // Protected directories are asked for only at a service -ipcdir (see the header).
+    const bool service = !ConfiguredOption("-ipcserviceuser").empty();
+    if (std::optional<std::string> reason = EndpointRefusal(facts, expected, service)) {
+        throw std::runtime_error(*reason);
+    }
+}
+
+std::optional<std::string> ServerIpcDirRefusal(const fs::path& dir)
+{
+    const HandleGuard handle(OpenNoFollow(dir, /*share_delete=*/true));
+
+    return DirectoryRefusal(ReadEntry(handle.get(), dir), util::winacl::CurrentTokenUser(),
+                            /*require_protected=*/false);
+}
+
+void ApplyAttachGroupDirectoryAccess(const fs::path& dir, const Sid& attach_group, bool created)
+{
+    // Opened without following a reparse point at it, and without sharing delete,
+    // so that while the handle is open the path keeps naming the directory checked.
+    const HandleGuard handle(OpenNoFollow(dir, /*share_delete=*/false));
+    const EndpointEntry entry = ReadEntry(handle.get(), dir);
+    if (entry.kind != EntryKind::Directory) {
+        throw std::runtime_error(strprintf("-ipcattachgroup is set and -ipcdir (%s) is not a plain directory; a "
+                                           "junction or link is not followed. Set -ipcdir to a directory of its own "
+                                           "for the IPC socket and cookie.",
+                                           dir.string()));
+    }
+
+    // By identity, so whatever spelling reached it, and before anything is changed.
+    const std::optional<FileId> id = FileIdOf(handle.get());
+    if (!id) ThrowWin32(::GetLastError(), "GetFileInformationByHandle " + dir.string());
+    if (std::optional<std::string> refusal = DataDirectoryRefusal(dir, *id, DataDirectoryIds())) {
+        throw std::runtime_error(*refusal);
+    }
+
+    const Sid self = util::winacl::CurrentTokenUser();
+
+    // An existing directory of another account's, such as the Administrators-owned
+    // layout gridcoin-service.exe makes, is checked as it is and never changed.
+    if (!created && entry.acl.owner != self) {
+        if (std::optional<std::string> reason = DirectoryRefusal(entry, self, /*require_protected=*/false)) {
+            throw std::runtime_error(strprintf("Refusing to serve IPC: %s", *reason));
+        }
+        return;
+    }
+
+    const AclSpec spec = IpcDirAclSpec(self, attach_group);
+    const std::optional<std::string> differed = util::winacl::CheckMatchesSpec(entry.acl, spec);
+    if (!differed) return;
+
+    ApplyEndpointAcl(dir, spec);
+
+    // ApplyAcl went by the path; the handle holds the directory that was checked.
+    if (std::optional<std::string> reason =
+            util::winacl::CheckMatchesSpec(util::winacl::ReadAcl(handle.get(), /*kernel_object=*/false), spec)) {
+        throw std::runtime_error(strprintf("Refusing to serve IPC: the IPC directory '%s' did not keep the attach "
+                                           "group's access list -- %s",
+                                           dir.string(), *reason));
+    }
+
+    // A directory made just now was this account's alone; only a change to one that
+    // was there already is logged.
+    if (!created) {
+        LogPrintf("IPC: gave the IPC directory %s the attach group's access list (this account and SYSTEM full "
+                  "access, the group may view it); before, %s\n",
+                  dir.string(), *differed);
+    }
+}
+#endif // WIN32
+
+} // namespace ipc::win
