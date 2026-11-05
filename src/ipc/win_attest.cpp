@@ -575,7 +575,8 @@ bool AttestClientPipe::WriteNonce(const std::string& nonce_hex, std::string& err
     size_t written = 0;
     while (written < nonce.size()) {
         DWORD n = 0;
-        if (!::WriteFile(m_handle.get(), nonce.data() + written, static_cast<DWORD>(nonce.size() - written), &n, nullptr)) {
+        const DWORD left = static_cast<DWORD>(nonce.size() - written);
+        if (!::WriteFile(m_handle.get(), nonce.data() + written, left, &n, nullptr)) {
             error = "could not write to the node's identity-check pipe: " + Win32Failure("WriteFile", ::GetLastError());
             return false;
         }

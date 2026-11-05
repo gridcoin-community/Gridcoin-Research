@@ -178,7 +178,10 @@ public:
     //! be this process's token user. \p attach_group, when set, may open the pipe
     //! too. A Finish more than \p deadline after Begin is refused.
     AttestServer(Sid self, std::optional<Sid> attach_group, std::chrono::milliseconds deadline = ATTEST_DEADLINE);
-    //! Closes the pipe.
+    //! Closes the pipe if Finish has not, which takes its name away. No operation on
+    //! the pipe is pending by then: Finish starts and ends each one itself. It must
+    //! not run while a Begin or Finish of this object is still running on another
+    //! thread; the owner destroys it only after its calls have returned.
     ~AttestServer();
 
     AttestServer(const AttestServer&) = delete;
