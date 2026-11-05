@@ -142,14 +142,18 @@ namespace {
 //! one log line per process: a backup that other users might read is better than no backup,
 //! and an encrypted wallet's backup cannot be spent without the passphrase. A directory that
 //! exists keeps the mode the operator gave it.
-void CreateBackupDirectory(const fs::path& dir)
+//! A transfer snapshot's directory is created strictly owner-only, or refused.
+void CreateBackupDirectory(const fs::path& dir, GRC::BackupTarget kind = GRC::BackupTarget::BackupDirectory)
 {
     // A target with no directory part goes into the working directory.
     if (dir.empty()) return;
 
     std::string error;
     std::optional<std::string> unrestricted;
-    if (!util::CreateDirectoryRestrictedIfPossible(dir, error, unrestricted)) {
+    const bool made = kind == GRC::BackupTarget::TransferSnapshot
+                          ? util::CreateOwnerOnlyDirectory(dir, error)
+                          : util::CreateDirectoryRestrictedIfPossible(dir, error, unrestricted);
+    if (!made) {
         throw fs::filesystem_error(error, dir, boost::system::errc::make_error_code(boost::system::errc::io_error));
     }
     if (unrestricted) GRC::LogUnrestrictedBackupOnce(dir, *unrestricted);
@@ -157,11 +161,20 @@ void CreateBackupDirectory(const fs::path& dir)
 
 //! Copies a backup file over its target. On POSIX a new target is created owner-only (0600) and
 //! its mode is right before any data is written; a target that exists keeps its mode. A new
-//! target that the filesystem does not keep owner-only is logged as CreateBackupDirectory logs.
-void CopyBackupFile(const fs::path& source, const fs::path& target)
+//! target that the filesystem does not keep owner-only is logged as CreateBackupDirectory logs,
+//! or, for a transfer snapshot, removed and refused.
+void CopyBackupFile(const fs::path& source, const fs::path& target,
+                    [[maybe_unused]] GRC::BackupTarget kind = GRC::BackupTarget::BackupDirectory)
 {
 #ifndef WIN32
     if (const std::optional<std::string> unrestricted = fsmodes::CopyFileOwnerOnly(source, target)) {
+        if (kind == GRC::BackupTarget::TransferSnapshot) {
+            boost::system::error_code ec;
+            fs::remove(target, ec);
+            throw fs::filesystem_error("the copy is not owner-only: " + *unrestricted, target,
+                                       boost::system::errc::make_error_code(
+                                           boost::system::errc::operation_not_permitted));
+        }
         GRC::LogUnrestrictedBackupOnce(target.parent_path(), *unrestricted);
     }
 #elif BOOST_VERSION > 107400
@@ -239,7 +252,7 @@ bool GRC::BackupSettingsFile(const std::string& strDest)
     return BackupPlainFile(source, strDest, "gridcoinsettings.json");
 }
 
-bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
+bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest, BackupTarget target)
 {
     if (!wallet.fFileBacked)
         return false;
@@ -259,10 +272,10 @@ bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
         fs::path WalletTarget = strDest;
         try
         {
-            CreateBackupDirectory(WalletTarget.parent_path());
+            CreateBackupDirectory(WalletTarget.parent_path(), target);
             if (fs::is_directory(WalletTarget))
                 WalletTarget /= wallet.strWalletFile;
-            CopyBackupFile(WalletSource, WalletTarget);
+            CopyBackupFile(WalletSource, WalletTarget, target);
             LogPrintf("BackupWallet: Copied wallet.dat to %s", WalletTarget.string());
         }
         catch(const fs::filesystem_error &e) {

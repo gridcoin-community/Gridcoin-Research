@@ -4,6 +4,7 @@
 
 #include "crypto/sha256.h"
 #include "fs.h"
+#include "gridcoin/backup.h"
 #include "gridcoin/accrual/snapshot.h"
 #include "gridcoin/cpid.h"
 #include "interfaces/connection_scope.h"
@@ -815,6 +816,35 @@ BOOST_FIXTURE_TEST_CASE(snapshot_wallet_copies_the_wallet_file, TransferCase)
     BOOST_CHECK(error.find("file-backed") != std::string::npos);
     BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
 }
+
+#ifndef WIN32
+// A wallet snapshot for a transfer stays strictly owner-only: where the copy cannot keep mode
+// 0600 it is refused and removed, rather than kept as a backup in -backupdir would be, and the
+// backup directory's once-per-process log line is not spent on it. On a filesystem with POSIX
+// modes the snapshot is made 0600. The refusal runs where the transfer directory's files do
+// not keep their mode.
+BOOST_FIXTURE_TEST_CASE(a_transfer_snapshot_is_owner_only_or_refused, TransferCase)
+{
+    const grc_test::WalletFilePlaceholder wallet_file;
+    grc_test::RequireWalletFileNotInUse();
+    GRC::ResetUnrestrictedBackupLogForTesting();
+
+    std::string error;
+    const std::optional<fs::path> snapshot = wallet::SnapshotWallet(*pwalletMain, error);
+    if (snapshot) {
+        BOOST_CHECK_EQUAL(ModeOf(*snapshot), 0600u);
+        fs::remove(*snapshot);
+    } else {
+        BOOST_TEST_MESSAGE("refused: " << error);
+        BOOST_CHECK(!error.empty());
+        BOOST_CHECK_EQUAL(CountEntries(wallet::GetTransferDir()), 0u);
+    }
+
+    // The backup directory's log line is still to come.
+    BOOST_CHECK(GRC::LogUnrestrictedBackupOnce("/media/stick/backups", "a check that the line is unspent"));
+    GRC::ResetUnrestrictedBackupLogForTesting();
+}
+#endif
 
 BOOST_FIXTURE_TEST_CASE(snapshot_failures_leave_nothing, TransferCase)
 {

@@ -576,7 +576,9 @@ std::optional<fs::path> SnapshotWallet(const CWallet& wallet, std::string& error
 
     // BackupWallet logs a copy that failed, but not a wallet file that is in
     // use at that moment, which it does not copy.
-    if (!GRC::BackupWallet(wallet, snapshot.string())) {
+    // A snapshot is owner-only or not made: none of the backup directory's tolerance
+    // for a filesystem without modes applies here.
+    if (!GRC::BackupWallet(wallet, snapshot.string(), GRC::BackupTarget::TransferSnapshot)) {
         RemoveFile(snapshot);
         error = "the wallet file could not be copied; try again, and see the core's debug.log if it keeps failing";
         return std::nullopt;

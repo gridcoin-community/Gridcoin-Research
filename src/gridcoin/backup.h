@@ -23,7 +23,18 @@ bool BackupConfigFile(const std::string& strDest);
 bool BackupSettingsFile(const std::string& strDest);
 bool MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> backup_file_type,
                    unsigned int retention_by_num, unsigned int retention_by_days, std::vector<std::string>& files_removed);
-bool BackupWallet(const CWallet& wallet, const std::string& strDest);
+//! Where a copy BackupWallet makes is going.
+enum class BackupTarget
+{
+    //! A backup in the backup directory (-backupdir): kept even where the filesystem
+    //! cannot make it owner-only, with one log line per process (CreateBackupDirectory).
+    BackupDirectory,
+    //! A snapshot in the core's transfer directory: owner-only or refused.
+    TransferSnapshot,
+};
+
+bool BackupWallet(const CWallet& wallet, const std::string& strDest,
+                  BackupTarget target = BackupTarget::BackupDirectory);
 
 //! Logs one line, the first time in this process, saying that wallet backups in \p dir are
 //! written although they cannot be made owner-only, and why (\p reason). Returns whether this
