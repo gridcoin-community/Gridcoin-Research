@@ -212,6 +212,10 @@ std::optional<std::string> AttachGroupSid();
 //! std::system_error when the token cannot be read.
 util::winacl::AclSpec ThisProcessEndpointAclSpec(IpcObject obj, const std::optional<std::string>& attach_group_sid);
 
+//! The refusal to serve IPC when the endpoint object \p path did not keep its access
+//! list, \p reason saying how (CheckMatchesSpec's text).
+std::string EndpointAclNotKeptText(const fs::path& path, const std::string& reason);
+
 //! Make \p spec the owner and protected DACL of the endpoint object \p path and
 //! read it back (util::winacl::ApplyAcl). Throws std::system_error when a call
 //! fails, and std::runtime_error, worded as the refusal to serve IPC, when the

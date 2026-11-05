@@ -137,8 +137,9 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents, const ut
     sa.nLength = sizeof(sa);
     sa.lpSecurityDescriptor = sd.get();
     sa.bInheritHandle = FALSE; // don't leak the handle into a child process
-    const HANDLE handle = ::CreateFileW(tmp.wstring().c_str(), GENERIC_WRITE, /*dwShareMode=*/0, &sa, CREATE_NEW,
-                                        FILE_ATTRIBUTE_NORMAL, nullptr);
+    // READ_CONTROL, so the list can be read back through this handle below.
+    const HANDLE handle = ::CreateFileW(tmp.wstring().c_str(), GENERIC_WRITE | READ_CONTROL, /*dwShareMode=*/0, &sa,
+                                        CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
     const DWORD create_err = handle == INVALID_HANDLE_VALUE ? ::GetLastError() : 0;
     if (handle == INVALID_HANDLE_VALUE) {
         throw std::system_error(static_cast<int>(create_err), std::system_category(),
@@ -147,6 +148,21 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents, const ut
     // From here on the temp file exists and holds (or will hold) the secret: every
     // exit that is not the successful rename must delete it.
     TempFileGuard guard(tmp);
+
+    // The list is confirmed through the handle before anything is written: a volume
+    // that accepts the descriptor and keeps no list (FAT, exFAT, some redirectors)
+    // never receives the secret, not even in a temp file that is then deleted.
+    std::optional<std::string> not_kept;
+    try {
+        not_kept = util::winacl::CheckMatchesSpec(util::winacl::ReadAcl(handle, /*kernel_object=*/false), spec);
+    } catch (...) {
+        ::CloseHandle(handle);
+        throw;
+    }
+    if (not_kept) {
+        ::CloseHandle(handle);
+        throw std::runtime_error(win::EndpointAclNotKeptText(tmp, *not_kept));
+    }
 
     size_t written = 0;
     while (written < contents.size()) {
@@ -170,12 +186,10 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents, const ut
                                 "close " + tmp_str);
     }
 
-    // Re-state and verify the DACL on the finished file before it becomes the
-    // cookie: a volume without ACL support accepts the SECURITY_ATTRIBUTES above
-    // and stores nothing, and we would rather refuse to serve IPC than hand out a
-    // world-readable authentication secret. Doing this before the rename means a
-    // volume that cannot protect the cookie never gets one -- the guard deletes
-    // the temp copy on the way out.
+    // Re-state and verify the DACL on the finished file, by its path, before it
+    // becomes the cookie: what the rename moves into place is the file whose list
+    // was confirmed. A failure here refuses to serve IPC, and the guard deletes the
+    // temp copy on the way out.
     win::ApplyEndpointAcl(tmp, spec);
 
     if (!::MoveFileExW(tmp.wstring().c_str(), path.wstring().c_str(),

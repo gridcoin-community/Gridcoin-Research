@@ -403,6 +403,13 @@ AclSpec ThisProcessEndpointAclSpec(IpcObject obj, const std::optional<std::strin
     return EndpointAclSpec(obj, util::winacl::CurrentTokenUser(), group);
 }
 
+std::string EndpointAclNotKeptText(const fs::path& path, const std::string& reason)
+{
+    return strprintf("Refusing to serve IPC: '%s' did not keep its access control list -- %s. The IPC directory must "
+                     "live on an NTFS volume that supports access control.",
+                     path.string(), reason);
+}
+
 void ApplyEndpointAcl(const fs::path& path, const AclSpec& spec)
 {
     // ApplyAcl reads the list back: a volume that accepts the call and stores
@@ -410,10 +417,7 @@ void ApplyEndpointAcl(const fs::path& path, const AclSpec& spec)
     try {
         util::winacl::ApplyAcl(path, spec);
     } catch (const util::winacl::AclNotKeptError& e) {
-        throw std::runtime_error(strprintf("Refusing to serve IPC: '%s' did not keep its access control list -- %s. "
-                                           "The IPC directory must live on an NTFS volume that supports access "
-                                           "control.",
-                                           path.string(), e.reason()));
+        throw std::runtime_error(EndpointAclNotKeptText(path, e.reason()));
     }
 }
 
