@@ -20,11 +20,12 @@ gridcoinresearch (5.5.2.1-1) unstable; urgency=medium
   The service never starts on a new datadir. A -conf or -datadir set in such
   an override or copy is carried into gridcoin-service's own drop-in,
   /etc/systemd/system/gridcoinresearchd.service.d/50-gridcoin-service.conf.
-  A command line without -datadir ran on the core's default datadir under the
-  account's home, unless its configuration file set datadir=, which is then
-  carried. Without either, or with any other option on the command line, the
-  override is left where it is, and the service does not start until you
-  change it; the upgrade said what to change.
+  A command line without -datadir is left where it is, as which datadir the
+  node used cannot be told from outside it: add -datadir=<the directory this
+  node actually uses> to its ExecStart=, then run "gridcoin-service
+  switch-over --state=/var/lib/gridcoin-service/switchover-main.state".
+  So is a command line with any other option; the upgrade said what to
+  change. Until then the service does not start.
 
   Autounlock moved to a socket-activated helper, gridcoin-autounlock.socket.
   The core asks the helper for the passphrase. An enabled

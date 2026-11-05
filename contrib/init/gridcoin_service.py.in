@@ -2527,52 +2527,15 @@ def system_command(net, paths, copy, masked):
     return last_setting(system_sources(net, paths, copy, masked), "ExecStart")
 
 
-def conf_setting(text, name, chain):
-    """The value the core reads for name from a configuration file text, as GetConfigOptions and
-    InterpretOption in src/util/system.cpp read it: lines cut at '#' and trimmed; a [chain] section,
-    or a "chain." prefix, wins over the top level; within each the last line wins. None when it is
-    not set."""
-    top = in_chain = None
-    section = ""
-    for line in text.split("\n"):
-        body = line.split("#", 1)[0].strip(" \t\r\n")
-        if body.startswith("[") and body.endswith("]"):
-            section = body[1:-1]
-            continue
-        if "=" not in body:
-            continue
-        key, value = (part.strip(" \t\r\n") for part in body.split("=", 1))
-        if section:
-            key = section + "." + key
-        if key == name:
-            top = value
-        elif key == chain + "." + name:
-            in_chain = value
-    return in_chain if in_chain is not None else top
-
-
-def read_service_conf(path, net, host):
-    """Read a configuration file the old system service read, as root and without following a
-    symlink in its last component: a regular file owned by root or the service account. None when
-    there is no such file."""
-    acct_uid = service_account_uid(net, host)
-    parent, name = os.path.split(path)
+def default_datadir_hint(sources, host):
+    """The core's default datadir for the unit's user, for a message only: <home>/.GridcoinResearch
+    of the last User= the sources set, else of the account the released units ran as."""
+    user = last_setting(sources, "User")
+    user = user[1] if user is not None else OLD_SYSTEM_ACCOUNT
     try:
-        dir_fd = open_dir(parent)
-    except FileNotFoundError:
-        return None
-    try:
-        try:
-            os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
-        except FileNotFoundError:
-            return None
-        try:
-            data = read_owned_file(dir_fd, name, (0, acct_uid), path)
-        except TreeError as e:
-            raise UserError(str(e)) from None
-    finally:
-        os.close(dir_fd)
-    return data.decode("utf8", "surrogateescape")
+        return "%s (the core's default for %s)" % (os.path.join(host.getpwnam(user).pw_dir, DATADIR_NAME), shown(user))
+    except KeyError:
+        return "the core's default for %s, a user this host does not know" % shown(user)
 
 
 def service_account_uid(net, host):
@@ -2649,11 +2612,10 @@ def carried_system_paths(net, display, value, own, sources, paths, host):
     must run with, each None when it is the unit's own. A command line from an override or a copy
     (not own) with any option the new one would drop is refused.
 
-    Such a command line without -datadir ran the core on its default datadir under the home of the
-    unit's User=, unless the configuration file it read (its -conf, or else the one in that
-    datadir) set datadir=: that datadir is carried, and without one the switch is refused, naming
-    the default, as the service would otherwise start on a new datadir. Without -conf it read the
-    configuration file in the datadir it started from, which is carried when it is there."""
+    Such a command line without -datadir is refused: which datadir the core ended up on cannot be
+    told from outside it (its default for the unit's user is named as a hint), and the new unit
+    must never start on a new one. Without -conf the core read the configuration file in its
+    datadir, which is carried when it is there."""
     words = command_words(value, display)
     if not own:
         dropped = system_dropped_words(net, words)
@@ -2668,30 +2630,19 @@ def carried_system_paths(net, display, value, own, sources, paths, host):
         elif option.startswith("-datadir="):
             datadir = option[len("-datadir="):]
     if not own:
-        # The datadir the core started from: its -datadir, or its default under User='s home.
-        start = datadir
-        if start is None:
-            user = last_setting(sources, "User")
-            user = user[1] if user is not None else OLD_SYSTEM_ACCOUNT
-            try:
-                start = os.path.join(host.getpwnam(user).pw_dir, DATADIR_NAME)
-            except KeyError:
-                raise UserError("the ExecStart= in %s has no -datadir, and its User=%s does not exist, so the "
-                                "datadir it ran on cannot be told" % (display, shown(user))) from None
-        # Without -conf the core read the conf in that datadir, its testnet/ one on testnet
-        # (GetConfigFile in src/util/system.cpp is net-specific).
-        start_conf = (os.path.join(start, *(["testnet"] if net.testnet else []), CONF_NAME)
-                      if os.path.isabs(start) else None)
+        # The testnet unit's command line without -testnet ran a mainnet node.
+        if net.testnet and not any(core_option(word) == net.net_arg for word in words[1:]):
+            raise UserError("the ExecStart= in %s has no %s, so the core it ran was a mainnet node, not this "
+                            "network's; if it is a testnet node, add %s to ExecStart= in %s, then rerun the "
+                            "switch-over" % (display, net.net_arg, net.net_arg, display))
         if datadir is None:
-            read = conf if conf is not None else start_conf
-            conf_text = read_service_conf(read, net, host) if read and os.path.isabs(read) else None
-            datadir = conf_setting(conf_text, "datadir", "test" if net.testnet else "main") if conf_text else None
-            if not datadir:
-                raise UserError("the ExecStart= in %s has no -datadir, so the core ran on its default datadir, %s "
-                                "(under the home of %s), unless the configuration file it read, %s, set datadir=, "
-                                "which it does not. Add -datadir=%s to that ExecStart= if that is the wallet's "
-                                "datadir" % (display, start, shown(user), read, start))
-            print("Took the datadir from datadir= in %s." % read)
+            raise UserError("the ExecStart= in %s has no -datadir; add -datadir=<the directory this node actually "
+                            "uses> to ExecStart= in %s, then rerun the switch-over. It is probably %s"
+                            % (display, display, default_datadir_hint(sources, host)))
+        # Without -conf the core read the conf in its datadir, its testnet/ one on testnet
+        # (GetConfigFile in src/util/system.cpp is net-specific).
+        start_conf = (os.path.join(datadir, *(["testnet"] if net.testnet else []), CONF_NAME)
+                      if os.path.isabs(datadir) else None)
         if conf is None and start_conf is not None and os.path.lexists(start_conf):
             conf = start_conf
     default_conf, default_datadir = system_defaults(net)

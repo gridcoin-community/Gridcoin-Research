@@ -3644,18 +3644,6 @@ class SwitchOverTests(ServiceTestBase):
         self.assertEqual(rc, 0, err)
         self.assertIn(" -conf=%s -datadir=%s " % (conf, data), self.dropin("gridcointestnetd.service"))
 
-    def test_switch_over_carries_the_conf_it_took_the_datadir_from(self):
-        data = os.path.join(self.tmp.name, "data", "grc")
-        os.makedirs(data)
-        implied = os.path.join(self.host.users["gridcoin"].pw_dir, ".GridcoinResearch")
-        os.makedirs(implied)
-        conf = os.path.join(implied, "gridcoinresearch.conf")
-        self.write_text(conf, "datadir=%s\n" % data)
-        self.system_override("")
-        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
-        self.assertEqual(rc, 0, err)
-        self.assertIn(" -conf=%s -datadir=%s " % (conf, data), self.dropin("gridcoinresearchd.service"))
-
     def test_switch_over_refuses_a_system_override_without_datadir(self):
         # The command line ran on the core's default under User='s home, or a datadir= in the conf.
         gridcoin_home = self.host.users["gridcoin"].pw_dir
@@ -3673,86 +3661,61 @@ class SwitchOverTests(ServiceTestBase):
                 rc, out, err = self.run_main("switch-over", "--state=" + state)
                 self.assertEqual(rc, 1)
                 self.assertIn("no -datadir", err)
-                self.assertIn(implied, err)
-                self.assertIn(override, err)
+                self.assertIn("add -datadir=<the directory this node actually uses> to ExecStart= in %s, then "
+                              "rerun the switch-over" % override, err)
+                # The core's default for the unit's user, as a hint only.
+                self.assertIn("probably %s" % implied, err)
                 self.assertIn("will not start", err)
                 self.assertEqual(self.host.calls, [])
                 self.assertIn("override.conf", os.listdir(self.system_unit_dir()))
                 with open(state, encoding="utf8") as f:
                     self.assertEqual(f.read(), "system-core\n")
 
-    def test_switch_over_carries_the_datadir_its_conf_set(self):
+    def test_switch_over_refuses_a_testnet_override_that_ran_mainnet(self):
+        # The testnet unit's command line without -testnet ran a mainnet node.
+        data = os.path.join(self.tmp.name, "data", "grc")
+        os.makedirs(data)
+        override = self.system_override("-datadir=%s" % data, daemon="gridcointestnetd")
+        state = self.write_state("system-core\n", network="test")
+        rc, out, err = self.run_main("switch-over", "--state=" + state, "--network=test")
+        self.assertEqual(rc, 1)
+        self.assertIn("no -testnet", err)
+        self.assertIn("mainnet", err)
+        self.assertIn(override, err)
+        self.assertEqual(os.listdir(self.system_unit_dir("gridcointestnetd")), ["override.conf"])
+        self.assertEqual(self.host.calls, [])
+        with open(state, encoding="utf8") as f:
+            self.assertEqual(f.read(), "system-core\n")
+        # With it, and with the double-dash form, it is switched.
+        for word in ("-testnet", "--testnet"):
+            with self.subTest(word=word):
+                svc_rmtree(self.system_unit_dir("gridcointestnetd"))
+                self.system_override("%s -datadir=%s" % (word, data), daemon="gridcointestnetd")
+                rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n",
+                                                                                         network="test"),
+                                             "--network=test")
+                self.assertEqual(rc, 0, err)
+
+    def test_switch_over_never_takes_the_datadir_from_a_conf(self):
+        # The core does not reliably run on a datadir= in its conf, so a command line without
+        # -datadir is refused whatever its conf says, and the conf's value is not printed.
         data = os.path.join(self.tmp.name, "data", "grc")
         os.makedirs(data)
         implied = os.path.join(self.host.users["gridcoin"].pw_dir, ".GridcoinResearch")
         os.makedirs(implied)
+        self.write_text(os.path.join(implied, "gridcoinresearch.conf"), "datadir=%s\n" % data)
         other_conf = os.path.join(self.tmp.name, "etc-other", "gridcoin.conf")
         os.makedirs(os.path.dirname(other_conf))
-        secret = "rpcpassword=SECRETVALUE\n"
-        cases = [
-            # The conf it read by default, in the implied datadir.
-            (lambda: self.write_text(os.path.join(implied, "gridcoinresearch.conf"),
-                                     secret + "datadir=%s\n" % data), ""),
-            # Its -conf; a [main] value wins over the top level, and "main.datadir" is [main] too.
-            (lambda: self.write_text(other_conf, "datadir=/nowhere\n" + secret + "[main]\ndatadir=%s\n" % data),
-             "-conf=%s" % other_conf),
-            (lambda: self.write_text(other_conf, "datadir=/nowhere\nmain.datadir=%s\n" % data),
-             "-conf=%s" % other_conf),
-        ]
-        for make, words in cases:
+        self.write_text(other_conf, "datadir=%s\n[main]\ndatadir=%s\nmain.datadir=%s\n" % (data, data, data))
+        for words in ("", "-conf=%s" % other_conf):
             with self.subTest(words=words):
                 svc_rmtree(self.system_unit_dir())
-                for path in (os.path.join(implied, "gridcoinresearch.conf"), other_conf):
-                    if os.path.exists(path):
-                        os.unlink(path)
-                make()
                 self.system_override(words)
                 rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
-                self.assertEqual(rc, 0, err)
-                text = self.dropin("gridcoinresearchd.service")
-                self.assertIn(" -datadir=%s " % data, text)
-                self.assertIn("ReadWritePaths=%s\n" % data, text)
-                self.assertIn("datadir=", out)
-                self.assertNotIn("SECRETVALUE", out + err)
-                self.assertNotIn("nowhere", out + err)
-        # On testnet the conf's [test] section wins.
-        test_conf = os.path.join(self.tmp.name, "etc-other", "testnet.conf")
-        self.write_text(test_conf, "datadir=/nowhere\n[test]\ndatadir=%s\n" % data)
-        self.system_override("-testnet -conf=%s" % test_conf, daemon="gridcointestnetd")
-        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n", network="test"),
-                                     "--network=test")
-        self.assertEqual(rc, 0, err)
-        self.assertIn(" -datadir=%s " % data, self.dropin("gridcointestnetd.service"))
-
-    def test_switch_over_reads_a_conf_only_as_root_or_the_account_left_it(self):
-        conf = os.path.join(self.tmp.name, "etc-other", "gridcoin.conf")
-        os.makedirs(os.path.dirname(conf))
-        real = os.path.join(self.tmp.name, "real.conf")
-        self.write_text(real, "datadir=/x\n")
-        for make, reason in ((lambda: os.symlink(real, conf), "not a regular file"),
-                             (lambda: self.write_text(conf, "datadir=/x\n"), "owned by uid")):
-            with self.subTest(reason=reason):
-                svc_rmtree(self.system_unit_dir())
-                if os.path.lexists(conf):
-                    os.unlink(conf)
-                make()
-                if reason == "owned by uid":
-                    self.host.users["gridcoin"] = self.host.users["gridcoin"]._replace(pw_uid=self.uid + 1)
-                self.system_override("-conf=%s" % conf)
-                rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
                 self.assertEqual(rc, 1)
-                self.assertIn(reason, err)
-                self.assertIn("will not start", err)
-        # The unit's own conf is read for its datadir= too, though it is not carried, and with the
-        # same rule.
-        own_conf, _ = svc.system_defaults(svc.NETWORKS["main"])
-        self.write_text(own_conf, "datadir=%s\n" % self.tmp.name)
-        self.host.users["gridcoin"] = self.host.users["gridcoin"]._replace(pw_uid=self.uid + 1)
-        svc_rmtree(self.system_unit_dir())
-        self.system_override("-conf=%s" % own_conf)
-        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
-        self.assertEqual(rc, 1)
-        self.assertIn("owned by uid", err)
+                self.assertIn("no -datadir", err)
+                self.assertNotIn(data, out + err)
+                self.assertEqual(os.listdir(self.system_unit_dir()), ["override.conf"])
 
     def test_switch_over_refuses_a_conf_others_can_write(self):
         # A conf anyone but root and the service account can write, or one in such a directory,
