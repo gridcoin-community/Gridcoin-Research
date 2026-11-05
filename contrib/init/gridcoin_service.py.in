@@ -2938,13 +2938,14 @@ def cmd_switch_over(args, net, host, paths):
         elif os.path.exists(state_path):
             os.unlink(state_path)
     # Once, for both system entries, and not onto a system entry that failed.
+    restarted = True
     if system_changed and not any(key[0] != "user" for key in failed):
         try:
             restart_system_service(net, host)
         except StepError as e:
             print("%s: the switch-over did not finish: %s; once the cause is fixed, run: systemctl restart %s.service"
                   % (net.tool_name, e, net.daemon), file=sys.stderr)
-            return 1
+            restarted = False
     if left:
         names = {SYSTEM_CORE: "the system service", SYSTEM_AUTOUNLOCK: "the system service's autounlock"}
         what = [shown(key[1]) for key in sorted(k for k in failed if k[0] == "user")]
@@ -2952,7 +2953,7 @@ def cmd_switch_over(args, net, host, paths):
         print("%s: the switch-over did not finish for %s; fix the cause and rerun: %s switch-over --state=%s"
               % (net.tool_name, ", ".join(what), net.tool_name, state_path), file=sys.stderr)
         return 1
-    return 0
+    return 0 if restarted else 1
 
 
 def build_parser(default_network):

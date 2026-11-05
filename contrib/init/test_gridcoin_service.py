@@ -4078,6 +4078,21 @@ class SwitchOverTests(ServiceTestBase):
         self.assertIn("did not finish", err)
         self.assertIn("systemctl restart gridcoinresearchd.service", err)
 
+    def test_a_failed_restart_still_names_what_else_did_not_finish(self):
+        # A user's entry fails, the system service switches over, and its restart fails too: the
+        # line that names the rerun still comes, and the user's entry is kept for it.
+        self.write_system_dropin("override.conf", "[Service]\nUser=gridcoin\n")
+        self.host.active.add("gridcoinresearchd.service")
+        self.host.fail.add("try-restart")
+        state = self.write_state("system-core\ncore nosuchuser\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 1)
+        self.assertIn("systemctl restart gridcoinresearchd.service", err)
+        self.assertIn("did not finish for nosuchuser; fix the cause and rerun: gridcoin-service switch-over --state="
+                      + state, err)
+        with open(state, encoding="utf8") as f:
+            self.assertEqual(f.read(), "core nosuchuser\n")
+
     def test_switch_over_scan_keeps_what_failed_for_a_rerun(self):
         self.full_old_install()
         os.unlink(self.legacy)
