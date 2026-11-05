@@ -343,14 +343,16 @@ The new `file_transfer.capnp` declares the `FileSource` and `FileSink`
 interfaces. `Wallet` also gained `beginConsoleDownload @41 (method, args)` and
 `beginConsoleUpload @42 (method, args, size)`, which run the console's file
 commands through the transfer channel (under a FileTransfer capability when
-the wallet is encrypted and not fully unlocked): a
+the wallet is encrypted and not fully unlocked, except `dumpcontracts`, which
+exports public chain data and needs none): a
 `FileSource` of what `dumpwallet` or `dumpcontracts` writes, and a `FileSink`
 for what `importwallet` or `parseaccrualsnapshotfile` reads. The core puts its
 own value where the command takes its file. The GUI console runs these four
 commands itself, in both builds, before anything reaches
 `executeRpcConsoleCommand` (which refuses them): the file is on the GUI's side,
-a bare file name is taken in the GUI's own data directory, each command begins a
-FileTransfer capability of its own when the wallet needs one, and every call of
+a bare file name is taken in the GUI's own data directory, each command but
+`dumpcontracts` begins a FileTransfer capability of its own when the wallet needs
+one (`dumpcontracts` asks for no passphrase), and every call of
 the transfer runs on the GUI's modal worker. The new methods alone would be
 additive; the major is for the other direction. A GUI and a node of
 different majors disagree on how an operation is authorised, so each such action
@@ -606,7 +608,10 @@ file at the client's end is the client's to open, write and name. Three
   the file; the core puts its own value where the command takes its file. The
   source has one entry. `dumpwallet`'s is generated as it is read, so its size
   is -1 and `sizeHint` is an estimate. `dumpcontracts` runs inside this call,
-  and its entry's note is the command's reply.
+  and its entry's note is the command's reply. `dumpwallet` runs under a
+  `FileTransfer` capability when the wallet is encrypted and not fully
+  unlocked; `dumpcontracts` exports public chain data and runs with none on
+  any wallet, leaving a capability the client holds as it is.
 - `beginConsoleUpload(method, args, size) -> (errorOut, FileSink)` for
   `importwallet` (at most 64 MiB) and `parseaccrualsnapshotfile` (at most
   256 MiB). `args` are as for the download; `size` is the exact number of bytes

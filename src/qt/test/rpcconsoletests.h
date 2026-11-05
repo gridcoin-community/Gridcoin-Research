@@ -63,6 +63,7 @@ private slots:
     void uploadSendsTheFileAndShowsTheOutput();
     void uploadOfNoRegularFileIsRefusedBeforeThePrompt();
     void uploadCancelIsReportedUnlessTheCommandRan();
+    void dumpcontractsAsksForNoPassphrase();
     void noPromptWhileAFileCommandHoldsItsCapability();
 
 private:

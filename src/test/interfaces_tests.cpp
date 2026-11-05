@@ -2911,11 +2911,54 @@ BOOST_AUTO_TEST_CASE(console_transfer_refuses_too_many_arguments)
     BOOST_CHECK(!w->beginConsoleDownload("dumpcontracts", {"beacon", "true", "0", "100", "7"}, err));
     BOOST_CHECK_MESSAGE(err.find("at most 5 argument") != std::string::npos, err);
 
-    // Every argument dumpcontracts takes passes the count; this wallet, unlocked
-    // for staking only, then refuses it for want of a capability.
-    err.clear();
-    BOOST_CHECK(!w->beginConsoleDownload("dumpcontracts", {"beacon", "true", "0", "100"}, err));
-    BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
+}
+
+// dumpcontracts exports public chain data, so over the transfer channel it runs with no
+// passphrase: on a locked wallet and on one unlocked for staking only it needs no
+// capability, and it neither uses nor ends one the client holds. dumpwallet and
+// parseaccrualsnapshotfile on the same wallet are still refused without one.
+BOOST_FIXTURE_TEST_CASE(console_dumpcontracts_needs_no_passphrase, BackupCase)
+{
+    const grc_test::LoneBestBlock tip;
+
+    EncryptedWallet fx;
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
+    w->bindConnectionScope(interfaces::MakeConnectionScope());
+
+    for (const bool staking_only : {false, true}) {
+        if (staking_only) fx.UnlockFor(UnlockScope::StakingOnly);
+        BOOST_REQUIRE(!fx.wallet.CanUseKeys());
+
+        std::string err;
+        std::unique_ptr<interfaces::FileSource> source =
+            w->beginConsoleDownload("dumpcontracts", {"beacon", "true"}, err);
+        BOOST_REQUIRE_MESSAGE(source, err);
+        BOOST_CHECK_EQUAL(source->entries().size(), 1U);
+        source.reset();
+        BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
+
+        err.clear();
+        BOOST_CHECK(!w->beginConsoleDownload("dumpwallet", {}, err));
+        BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
+        err.clear();
+        BOOST_CHECK(!w->beginConsoleUpload("parseaccrualsnapshotfile", {}, 10, err));
+        BOOST_CHECK_EQUAL(err, FILE_TRANSFER_REFUSAL);
+    }
+
+    // A FileTransfer capability the client holds is left as it is.
+    BOOST_REQUIRE(w->beginElevation(EncryptedWallet::PASSPHRASE, CapabilityKind::FileTransfer));
+    const std::optional<CapabilityId> held = fx.wallet.IpcCapability({});
+    BOOST_REQUIRE(held.has_value());
+    std::string err;
+    std::unique_ptr<interfaces::FileSource> source = w->beginConsoleDownload("dumpcontracts", {"beacon"}, err);
+    BOOST_REQUIRE_MESSAGE(source, err);
+    source.reset();
+    BOOST_CHECK(fx.wallet.IpcCapability({}) == held);
+    BOOST_CHECK(FileTransferLive(fx.wallet, held));
+    w->endElevation();
+
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+    BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
 }
 
 // dumpwallet: the source holds the capability while it streams the dump, and

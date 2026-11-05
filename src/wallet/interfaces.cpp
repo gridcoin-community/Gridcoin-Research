@@ -584,17 +584,18 @@ public:
             return nullptr;
         }
 
-        // A console file transfer runs under the FileTransfer capability the
-        // client began when the wallet is encrypted and not fully unlocked; an
-        // unencrypted or fully unlocked wallet needs none. The slot is read
-        // once, so the capability handed on or ended below is the one this
-        // call ran under. The scope is closed again before anything runs: the
-        // dump source opens its own for each read, and the command below
-        // reaches no key. A capability of another kind in the slot is left for
-        // its own operation.
-        const std::optional<CapabilityId> id = m_wallet->IpcCapability(m_connection_closed);
+        // dumpwallet runs under the FileTransfer capability the client began
+        // when the wallet is encrypted and not fully unlocked; an unencrypted or
+        // fully unlocked wallet needs none. The slot is read once, so the
+        // capability handed on or ended below is the one this call ran under.
+        // The scope is closed again before anything runs: the dump source opens
+        // its own for each read. A capability of another kind in the slot is
+        // left for its own operation. dumpcontracts exports public chain data
+        // and reaches no key, so it runs with no capability, and one the client
+        // holds is neither used nor ended.
         std::optional<CapabilityId> held;
-        {
+        if (command->needs_passphrase) {
+            const std::optional<CapabilityId> id = m_wallet->IpcCapability(m_connection_closed);
             CapabilityScope scope(*m_wallet, id, CapabilityKind::FileTransfer);
             if (!m_wallet->CanUseKeys()) {
                 error_out = FILE_TRANSFER_REFUSAL;
@@ -614,8 +615,8 @@ public:
         }
 
         // The command writes into the core's transfer directory now, and the
-        // source streams that file. The capability that let it begin has done
-        // its one operation, and the source holds none.
+        // source streams that file. A capability that let it begin has done its
+        // one operation, and the source holds none.
         std::unique_ptr<FileSource> source;
         try {
             source = wallet::MakeRpcOutputSource(method, args, command->path_index, m_connection_scope, error_out);

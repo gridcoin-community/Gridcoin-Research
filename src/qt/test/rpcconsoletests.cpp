@@ -1337,6 +1337,52 @@ void RPCConsoleTests::uploadSendsTheFileAndShowsTheOutput()
     QVERIFY2(pane.contains(QStringLiteral("imported 1 key")), qPrintable(pane));
 }
 
+// dumpcontracts exports public chain data and asks for no passphrase, on a locked wallet or one
+// unlocked for staking only: no prompt, and no capability begun. dumpwallet and
+// parseaccrualsnapshotfile on the same wallet still ask.
+void RPCConsoleTests::dumpcontractsAsksForNoPassphrase()
+{
+    GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+
+    ConsoleWallet fixture;
+    const auto log = std::make_shared<TransferLog>();
+    fixture.wallet.m_console_download = [&](const std::string&, const std::vector<std::string>&, std::string&) {
+        return std::make_unique<ConsoleSource>(log, &fixture.wallet.m_end_elevation_calls, "contracts.txt",
+                                               BytesOf(ABC_TEXT), 3, "");
+    };
+    fixture.wallet.m_console_upload = [&](const std::string&, const std::vector<std::string>&, uint64_t,
+                                          std::string&) {
+        return std::make_unique<ConsoleSink>(log, &fixture.wallet.m_end_elevation_calls, "parsed");
+    };
+
+    RPCConsole console;
+    console.setWalletModel(fixture.model.get());
+
+    // Locked, then unlocked for staking only.
+    fixture.wallet.m_lock_state.crypted = true;
+    fixture.wallet.m_lock_state.locked = true;
+    Enter(console, QStringLiteral("dumpcontracts beacon ") + Quoted(PathIn(dir, "locked.txt")));
+    fixture.UnlockedForStakingOnly();
+    Enter(console, QStringLiteral("dumpcontracts beacon ") + Quoted(PathIn(dir, "staking.txt")));
+
+    QVERIFY(fixture.prompts.empty());
+    QCOMPARE(fixture.wallet.m_begin_elevation_calls, 0);
+    QCOMPARE(fixture.wallet.m_console_begins.size(), size_t{2});
+    QCOMPARE(ReadAll(PathIn(dir, "locked.txt")), ABC_TEXT);
+    QCOMPARE(ReadAll(PathIn(dir, "staking.txt")), ABC_TEXT);
+
+    Enter(console, QStringLiteral("dumpwallet ") + Quoted(PathIn(dir, "dump.txt")));
+    QCOMPARE(fixture.prompts, (std::vector<CapabilityKind>{CapabilityKind::FileTransfer}));
+
+    const fs::path snapshot = PathIn(dir, "snapshot");
+    WriteAll(snapshot, "snapshot");
+    Enter(console, QStringLiteral("parseaccrualsnapshotfile ") + Quoted(snapshot));
+    QCOMPARE(fixture.prompts,
+             (std::vector<CapabilityKind>{CapabilityKind::FileTransfer, CapabilityKind::FileTransfer}));
+}
+
 // A file that is not there, a directory, a file over the command's upload cap, and one this account
 // may not read are refused before the prompt and before the core is asked anything.
 void RPCConsoleTests::uploadOfNoRegularFileIsRefusedBeforeThePrompt()

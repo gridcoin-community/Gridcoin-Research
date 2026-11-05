@@ -756,7 +756,8 @@
     "Wallet.beginConsoleDownload": {
       "class": "elevate",
       "effect": "keys",
-      "kind": "FileTransfer"
+      "kind": "FileTransfer",
+      "note": "dumpwallet runs under the FileTransfer capability; dumpcontracts exports public chain data and runs without it"
     },
     "Wallet.beginConsoleUpload": {
       "class": "elevate",

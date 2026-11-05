@@ -95,7 +95,9 @@ enum class TransferDirection { Download, Upload };
 //! A console command whose argument names a file on the machine running the GUI.
 //! path_index is the position of that argument; max_upload_bytes is the upload cap
 //! (0 for downloads); max_args is the most arguments the command's RPC takes, its
-//! file included.
+//! file included. needs_passphrase says whether the command runs under a
+//! FileTransfer capability on a wallet that cannot use its keys without one: false
+//! only for dumpcontracts, which exports public chain data.
 struct ConsoleFileCommand
 {
     const char* method;
@@ -103,6 +105,7 @@ struct ConsoleFileCommand
     TransferDirection direction;
     uint64_t max_upload_bytes;
     size_t max_args;
+    bool needs_passphrase;
 };
 
 //! The path-taking console commands, in table order.

@@ -690,6 +690,12 @@ BOOST_AUTO_TEST_CASE(console_file_commands_table)
     BOOST_CHECK(interfaces::FindConsoleFileCommand("parseaccrualsnapshotfile")->direction == interfaces::TransferDirection::Upload);
     BOOST_CHECK_EQUAL(interfaces::FindConsoleFileCommand("parseaccrualsnapshotfile")->max_upload_bytes, 256u * 1024 * 1024);
     BOOST_CHECK(!interfaces::FindConsoleFileCommand("backupwallet"));
+
+    // Only dumpcontracts, which exports public chain data, runs without a passphrase.
+    for (const interfaces::ConsoleFileCommand& command : t) {
+        BOOST_CHECK_MESSAGE(command.needs_passphrase == (std::string(command.method) != "dumpcontracts"),
+                            command.method);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(destination_guard_refuses_core_files)

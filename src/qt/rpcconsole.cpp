@@ -1259,12 +1259,17 @@ void RPCConsole::runFileCommand(const RPCConsoleDetail::ConsoleFileRequest& requ
         // One FileTransfer capability for this command alone: a wallet that needs one asks for the
         // passphrase, an unencrypted or fully unlocked one asks nothing and needs none. The context
         // lives until the job below has destroyed the source or sink, since ending the capability
-        // ends the transfer; it ends the capability as it goes.
-        const WalletModel::UnlockContext ctx(walletModel->requestUnlock(CapabilityKind::FileTransfer));
+        // ends the transfer; it ends the capability as it goes. A command that needs no passphrase
+        // (dumpcontracts, which exports public chain data) asks nothing and begins none.
+        std::unique_ptr<WalletModel::UnlockContext> ctx;
+        if (request.cmd->needs_passphrase) {
+            ctx = std::make_unique<WalletModel::UnlockContext>(
+                walletModel->requestUnlock(CapabilityKind::FileTransfer));
 
-        if (!ctx.isValid()) {
-            message(CMD_ERROR, tr("%1 was not run: the wallet was not unlocked for it.").arg(method));
-            return;
+            if (!ctx->isValid()) {
+                message(CMD_ERROR, tr("%1 was not run: the wallet was not unlocked for it.").arg(method));
+                return;
+            }
         }
 
         // Every call into the core this command makes runs on the modal worker, under the progress

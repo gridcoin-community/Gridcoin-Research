@@ -485,27 +485,29 @@ public:
     //! the core puts a value of its own at the row's path_index, so no path
     //! the client names reaches the core.
     //!
-    //! Runs under the client's FileTransfer capability (beginElevation())
-    //! when the wallet is encrypted and not fully unlocked; an unencrypted or
-    //! fully unlocked wallet needs none, and a capability of another kind the
-    //! client holds is then left for its own operation. dumpwallet's source
+    //! dumpwallet runs under the client's FileTransfer capability
+    //! (beginElevation()) when the wallet is encrypted and not fully unlocked;
+    //! an unencrypted or fully unlocked wallet needs none, and a capability of
+    //! another kind the client holds is then left for its own operation.
+    //! dumpcontracts exports public chain data and needs no capability on any
+    //! wallet (the row's needs_passphrase is false): it neither uses nor ends
+    //! one the client holds. dumpwallet's source
     //! holds the capability, when there is one, while it streams, generates
     //! the dump under it, and ends it at the dump's end, on cancel, when
     //! destroyed (taking it out of the slot), or when the connection closes
     //! (the slot is then left as it is). So the client keeps the capability
     //! (its UnlockContext) until
     //! the download has finished: ending it ends the stream. dumpcontracts
-    //! runs here, into the core's transfer directory, and this call ends the
-    //! capability before it returns; the source streams that file, with the
-    //! command's reply as the entry's note, and deletes it as a backup's
-    //! source does.
+    //! runs here, into the core's transfer directory; the source streams that
+    //! file, with the command's reply as the entry's note, and deletes it as a
+    //! backup's source does.
     //!
     //! Null, with \p error_out set: "not a file command" for a method that is
     //! not a Download row; too few arguments before the file, or more in all
     //! than the command's RPC takes (the row's max_args); another
     //! transfer of this wallet interface is live; "Enter the wallet
-    //! passphrase to transfer files." when the wallet may not use its keys
-    //! without the capability; or the command failed. Another transfer can
+    //! passphrase to transfer files." when dumpwallet's wallet may not use its
+    //! keys without the capability; or the command failed. Another transfer can
     //! begin once the source is destroyed.
     virtual std::unique_ptr<FileSource> beginConsoleDownload(const std::string& method,
                                                              const std::vector<std::string>& args,
