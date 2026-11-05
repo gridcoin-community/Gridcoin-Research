@@ -200,6 +200,8 @@ BASE_SCRIPTS = [
     'rpc_audit_snapshot_accrual.py',
     'rpc_netinfo.py',
     'rpc_getaddednodeinfo.py',
+    # rpc_dumpcontracts.py: dumpcontracts refuses heights that are not on the chain.
+    'rpc_dumpcontracts.py',
     'rpc_multisig.py',
     # rpc_votebyid.py: votebyid refuses a choice id outside 0..255.
     'rpc_votebyid.py',

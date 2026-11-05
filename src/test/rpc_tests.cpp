@@ -11,6 +11,9 @@
 
 #include <univalue.h>
 
+#include "chain.h"
+#include "test/chain_setup.h"
+
 #include <stdexcept>
 
 using namespace std;
@@ -219,6 +222,69 @@ BOOST_AUTO_TEST_CASE(http_request_line_empty_proto)
     std::string method, uri;
 
     BOOST_CHECK_NO_THROW((void)ReadHTTPRequestLine(in, proto, method, uri));
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+// dumpcontracts walks pprev from the chain tip to the requested heights. A height that is not on the chain used
+// to leave that pointer null, and the dereference that followed crashed the node. These cases run against the
+// regtest chain, which has only the genesis block, so the valid heights are exactly 0 to 0.
+BOOST_AUTO_TEST_SUITE(rpc_dumpcontracts_tests, *boost::unit_test::fixture<grc_test::RegtestChainSetup>())
+
+static UniValue DumpContractsArgs(const fs::path& file, int low_height, int high_height)
+{
+    UniValue params(UniValue::VARR);
+    params.push_back("*");
+    params.push_back(file.string());
+    params.push_back(true);
+    params.push_back(low_height);
+    params.push_back(high_height);
+    return params;
+}
+
+static void CheckDumpContractsRefused(const fs::path& file, int low_height, int high_height, const std::string& expected)
+{
+    fs::remove(file);
+
+    try {
+        tableRPC["dumpcontracts"]->actor(DumpContractsArgs(file, low_height, high_height));
+        BOOST_ERROR("dumpcontracts did not refuse low_height " << low_height << ", high_height " << high_height);
+    } catch (const UniValue& objError) {
+        BOOST_CHECK_EQUAL(find_value(objError, "code").get_int(), RPC_INVALID_PARAMETER);
+        BOOST_CHECK_EQUAL(find_value(objError, "message").get_str(), expected);
+    }
+
+    BOOST_CHECK(!fs::exists(file));
+}
+
+BOOST_AUTO_TEST_CASE(dumpcontracts_refuses_heights_off_the_chain)
+{
+    const fs::path file = GetDataDir() / "dumpcontracts_height_test.txt";
+
+    // high_height above the tip.
+    CheckDumpContractsRefused(file, 0, 103, "high_height 103 is not on the chain: heights run from 0 to 0");
+
+    // low_height above the tip, with high_height left at its default.
+    CheckDumpContractsRefused(file, 5, 0, "low_height 5 is not on the chain: heights run from 0 to 0");
+
+    // Negative low_height.
+    CheckDumpContractsRefused(file, -1, 0, "low_height -1 is not on the chain: heights run from 0 to 0");
+
+    // Negative high_height. 0 means the tip, but a negative value is refused rather than taken as 0.
+    CheckDumpContractsRefused(file, 0, -1, "high_height -1 is not on the chain: heights run from 0 to 0");
+}
+
+BOOST_AUTO_TEST_CASE(dumpcontracts_accepts_heights_on_the_chain)
+{
+    const fs::path file = GetDataDir() / "dumpcontracts_height_test.txt";
+    fs::remove(file);
+
+    UniValue result;
+    BOOST_CHECK_NO_THROW(result = tableRPC["dumpcontracts"]->actor(DumpContractsArgs(file, 0, 0)));
+    BOOST_CHECK(fs::exists(file));
+    BOOST_CHECK_EQUAL(find_value(result, "high_height").get_int(), 0);
+
+    fs::remove(file);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
