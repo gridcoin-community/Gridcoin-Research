@@ -1590,9 +1590,17 @@ def report_state(command):
         raise StateError("unexpected %s (%s); %s" % (type(e).__name__, e, progress.state)) from None
 
 
+def decision_names(names):
+    """The names step 1 decides from: testnet's entries and the quarantined files. SKIP_TOP is not
+    among them: a core's own stop, which step 2 waits for, removes ipc.cookie and may touch .lock
+    or node.sock."""
+    return {name for name in names if is_testnet_entry(name) or name in QUARANTINE_TOP}
+
+
 def refuse_changed_listing(dir_fd, names, display):
     """The decisions of step 1 rest on its listing; the user could change it until the lock."""
-    now = set(list_dir(dir_fd))
+    now = decision_names(list_dir(dir_fd))
+    names = decision_names(names)
     if now != names:
         changes = (["added " + shown(n) for n in sorted(now - names)]
                    + ["removed " + shown(n) for n in sorted(names - now)])
@@ -1657,7 +1665,8 @@ def enable(args, net, host, paths, progress):
                 raise UserError("%s exists and is not empty; refusing" % t_display)
         refuse_user_unit_datadir(paths, net, pw.pw_name, d_display)
         names = list_dir(d_fd)
-        s_names = set(list_dir(s_fd))
+        # On mainnet the source is the datadir itself: the recheck compares against this listing.
+        s_names = set(list_dir(s_fd)) if net.testnet else set(names)
         testnet_entries = set() if net.testnet else {n for n in names if is_testnet_entry(n)}
         # The conf at the datadir root is read by both networks: beside testnet's datadir it stays.
         shared_conf = bool(testnet_entries) and CONF_NAME in names

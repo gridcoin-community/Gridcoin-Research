@@ -54,7 +54,7 @@ CONFIGURED = {"bindir": "/usr/bin", "default_network": "main", "python3": "/usr/
 
 class FakeHost:
     def __init__(self, users=None, groups=None, root=True, enabled=(), active=(), fail=(), processes=None,
-                 terminate_ends_processes=True, login=None):
+                 terminate_ends_processes=True, login=None, on_systemctl=None):
         self.users = users if users is not None else {}
         self.groups = groups if groups is not None else {}
         self.root = root
@@ -67,6 +67,8 @@ class FakeHost:
         self.clock = 0.0
         self.stamps = 0
         self.login = login
+        # {verb: callable(args)}: what a real unit does while systemctl runs, a core's clean stop say.
+        self.on_systemctl = dict(on_systemctl or {})
 
     def login_uid(self):
         return self.login
@@ -112,6 +114,8 @@ class FakeHost:
 
     def systemctl(self, *args):
         self.calls.append(args)
+        if args[0] in self.on_systemctl:
+            self.on_systemctl[args[0]](args)
         return 1 if args[0] in self.fail else 0
 
     def is_enabled(self, unit):
@@ -2258,7 +2262,7 @@ class EnableTests(SwitchTestBase):
         original = svc.end_user_processes
         changes = {
             "conf deleted": lambda: os.unlink(os.path.join(self.datadir, "gridcoinresearch.conf")),
-            "entry added": lambda: write_tree(self.datadir, {"new.dat": b"n"}),
+            "testnet stash added": lambda: write_tree(self.datadir, {"testnet.in-service-20260101T000000Z/f": b"n"}),
             "testnet removed": lambda: svc_rmtree(os.path.join(self.datadir, "testnet")),
         }
         for name, change in changes.items():
@@ -2314,6 +2318,55 @@ class EnableTests(SwitchTestBase):
         self.assertEqual(rc, 1)
         self.assertIn("unexpected KeyError", err)
         self.assertIn("the wallet is copied to %s" % self.datadir, err)
+
+    def core_stops_cleanly(self, datadir):
+        """What a stopping -multiprocess core does to its datadir: the cookie goes, the lock is
+        touched, a socket may come or go."""
+        def stop(args):
+            cookie = os.path.join(datadir, "ipc.cookie")
+            if os.path.exists(cookie):
+                os.unlink(cookie)
+            os.utime(os.path.join(datadir, ".lock"))
+            make_socket_file(os.path.join(datadir, "node.sock"))
+        return stop
+
+    def test_enable_survives_the_cores_own_stop(self):
+        # The per-user core runs -multiprocess without -ipcdir, so it keeps ipc.cookie in the
+        # datadir and removes it on the clean stop that disable --now waits for.
+        write_tree(self.datadir, self.shared_conf_files())
+        self.host.on_systemctl["disable"] = self.core_stops_cleanly(self.datadir)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("wallet.dat", os.listdir(self.target()))
+
+    def test_testnet_disable_survives_a_mainnet_cookie_going(self):
+        # A testnet disable reads the mainnet datadir around testnet/; a mainnet core's cookie
+        # there may go while it runs.
+        write_tree(self.datadir, self.user_files())
+        self.write_record("test")
+        write_tree(self.target("test"), {"wallet.dat": b"service testnet wallet"})
+        self.host.on_systemctl["disable"] = self.core_stops_cleanly(self.datadir)
+        rc, out, err = self.run_main("disable", "bob", "--network=test")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(read_tree(os.path.join(self.datadir, "testnet"))["wallet.dat"], b"service testnet wallet")
+
+    def test_mainnet_decides_and_rechecks_from_one_listing(self):
+        # On mainnet the source is the datadir itself; step 1 must list it once, so the recheck
+        # compares against the listing its decisions came from.
+        write_tree(self.datadir, self.shared_conf_files())
+        inode = os.stat(self.datadir).st_ino
+        listed_before_step_2 = []
+        real = svc.list_dir
+
+        def counting(fd):
+            if os.fstat(fd).st_ino == inode and not self.host.calls:
+                listed_before_step_2.append(fd)
+            return real(fd)
+
+        with mock.patch.object(svc, "list_dir", counting):
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(len(listed_before_step_2), 1)
 
     def test_enable_refuses_unknown_user_or_missing_datadir(self):
         rc, out, err = self.run_main("enable", "nobody")
