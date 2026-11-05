@@ -10,7 +10,9 @@
 #include "util/dir_permissions.h"
 #include "util/fsmodes.h"
 #include "util/time.h"
+#include <atomic>
 #include <filesystem>
+#include <optional>
 
 #include <boost/version.hpp>
 
@@ -115,25 +117,53 @@ void GRC::RunBackupJob()
 }
 
 namespace {
-//! Creates the directory a backup goes into, owner-only when this call creates it. A directory
-//! that exists keeps the mode the operator gave it.
+std::atomic<bool> g_unrestricted_backup_logged{false};
+} // anonymous namespace
+
+bool GRC::LogUnrestrictedBackupOnce(const fs::path& dir, const std::string& reason)
+{
+    if (g_unrestricted_backup_logged.exchange(true)) return false;
+
+    LogPrintf("WARNING: wallet backups in %s cannot be made owner-only (%s). They are written anyway, and other "
+              "users of this computer may be able to read them.",
+              dir.string(), reason);
+    return true;
+}
+
+void GRC::ResetUnrestrictedBackupLogForTesting()
+{
+    g_unrestricted_backup_logged = false;
+}
+
+namespace {
+//! Creates the directory a backup goes into, owner-only when this call creates it and the
+//! filesystem allows it. A directory that cannot be restricted (a filesystem without POSIX
+//! modes, such as FAT, or a volume that keeps no ACL) is kept and the backup goes ahead, with
+//! one log line per process: a backup that other users might read is better than no backup,
+//! and an encrypted wallet's backup cannot be spent without the passphrase. A directory that
+//! exists keeps the mode the operator gave it.
 void CreateBackupDirectory(const fs::path& dir)
 {
     // A target with no directory part goes into the working directory.
     if (dir.empty()) return;
 
     std::string error;
-    if (!util::CreateOwnerOnlyDirectory(dir, error)) {
+    std::optional<std::string> unrestricted;
+    if (!util::CreateDirectoryRestrictedIfPossible(dir, error, unrestricted)) {
         throw fs::filesystem_error(error, dir, boost::system::errc::make_error_code(boost::system::errc::io_error));
     }
+    if (unrestricted) GRC::LogUnrestrictedBackupOnce(dir, *unrestricted);
 }
 
 //! Copies a backup file over its target. On POSIX a new target is created owner-only (0600) and
-//! its mode is right before any data is written; a target that exists keeps its mode.
+//! its mode is right before any data is written; a target that exists keeps its mode. A new
+//! target that the filesystem does not keep owner-only is logged as CreateBackupDirectory logs.
 void CopyBackupFile(const fs::path& source, const fs::path& target)
 {
 #ifndef WIN32
-    fsmodes::CopyFileOwnerOnly(source, target);
+    if (const std::optional<std::string> unrestricted = fsmodes::CopyFileOwnerOnly(source, target)) {
+        GRC::LogUnrestrictedBackupOnce(target.parent_path(), *unrestricted);
+    }
 #elif BOOST_VERSION > 107400
     fs::copy_file(source, target, fs::copy_options::overwrite_existing);
 #elif BOOST_VERSION == 107400

@@ -154,23 +154,44 @@ bool NotOwnedModeAcceptable(unsigned mode)
     return (mode & 007) == 0 && (mode & 020) == 0;
 }
 
-std::optional<std::string> CheckBackupDirWritable(const fs::path& backupdir)
+namespace {
+//! Why a file this process created with mode 0600 through \p fd has another mode, or nullopt.
+std::optional<std::string> NewFileModeProblem(int fd)
+{
+    struct stat st;
+    if (::fstat(fd, &st) != 0) return std::nullopt;
+
+    // The permission bits fit an unsigned.
+    const unsigned mode = static_cast<unsigned>(st.st_mode & 07777);
+    if ((mode & 077) == 0) return std::nullopt;
+
+    return strprintf("a file created there with mode 0600 has mode %04o", mode);
+}
+} // anonymous namespace
+
+BackupDirCheck CheckBackupDir(const fs::path& backupdir)
 {
     // A random name: under PrivatePIDs= every start has the same pid, so a name made
     // of the pid would meet the probe of an earlier start that was killed before it
     // removed it.
-    return CheckBackupDirWritable(backupdir, [] {
+    return CheckBackupDir(backupdir, [] {
         unsigned char random[8];
         GetRandBytes(Span<unsigned char>(random, sizeof(random)));
         return ".gridcoin-write-test-" + HexStr(Span<const unsigned char>(random, sizeof(random)));
     });
 }
 
-std::optional<std::string> CheckBackupDirWritable(const fs::path& backupdir,
-                                                  const std::function<std::string()>& probe_name)
+BackupDirCheck CheckBackupDir(const fs::path& backupdir, const std::function<std::string()>& probe_name)
 {
+    BackupDirCheck check;
+
+    // Restricted where the filesystem allows it. A directory that cannot be is kept:
+    // backups that other users might read are better than no backups.
     std::string error;
-    if (!util::CreateOwnerOnlyDirectory(backupdir, error)) return error;
+    if (!util::CreateDirectoryRestrictedIfPossible(backupdir, error, check.not_owner_only)) {
+        check.not_writable = error;
+        return check;
+    }
 
     const fs::path probe = backupdir / probe_name();
     const auto create = [&probe] {
@@ -183,15 +204,39 @@ std::optional<std::string> CheckBackupDirWritable(const fs::path& backupdir,
         ::unlink(probe.string().c_str());
         fd = create();
     }
-    if (fd < 0) return SysErrorString(errno);
+    if (fd < 0) {
+        check.not_writable = SysErrorString(errno);
+        return check;
+    }
+
+    // A directory that was there already is not restricted here, but the probe shows
+    // whether the files written into it can be owner-only.
+    if (!check.not_owner_only) check.not_owner_only = NewFileModeProblem(fd);
 
     ::close(fd);
     ::unlink(probe.string().c_str());
 
+    return check;
+}
+
+std::optional<std::string> BackupDirWarning(const fs::path& backupdir, const BackupDirCheck& check)
+{
+    if (check.not_writable) {
+        return strprintf("-backupdir %s is not writable (%s): automatic wallet backups will fail. Make it writable "
+                         "by the account the core runs as (under a systemd unit with ProtectSystem=, also list it in "
+                         "ReadWritePaths=), or set -backupdir to a directory that account can write.",
+                         backupdir.string(), *check.not_writable);
+    }
+    if (check.not_owner_only) {
+        return strprintf("Wallet backups in %s cannot be made owner-only (%s). This happens on a filesystem without "
+                         "POSIX permissions, such as FAT. The backups are still written there, but other users of "
+                         "this computer may be able to read them.",
+                         backupdir.string(), *check.not_owner_only);
+    }
     return std::nullopt;
 }
 
-void CopyFileOwnerOnly(const fs::path& source, const fs::path& target)
+std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::path& target)
 {
     const auto fail = [](const char* what, const fs::path& path, int err) {
         throw fs::filesystem_error(what, path, boost::system::error_code(err, boost::system::generic_category()));
@@ -203,6 +248,9 @@ void CopyFileOwnerOnly(const fs::path& source, const fs::path& target)
     // A new target is created with mode 0600, so it is owner-only before any data is written. A
     // target that exists is opened as it is, and keeps its mode.
     int out = ::open(target.string().c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    // A filesystem without POSIX modes gives a new file a mode of its own.
+    std::optional<std::string> not_owner_only;
+    if (out >= 0) not_owner_only = NewFileModeProblem(out);
     if (out < 0 && errno == EEXIST) {
         out = ::open(target.string().c_str(), O_WRONLY | O_CLOEXEC);
 
@@ -258,6 +306,7 @@ void CopyFileOwnerOnly(const fs::path& source, const fs::path& target)
     if (::close(out) != 0 && err == 0) err = errno;
 
     if (err != 0) fail("CopyFileOwnerOnly: copy failed", target, err);
+    return not_owner_only;
 }
 
 } // namespace fsmodes

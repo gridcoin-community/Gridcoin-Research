@@ -320,7 +320,7 @@ BOOST_AUTO_TEST_CASE(backupdir_not_writable_reported)
 
     // A directory that does not exist yet is created, and is writable.
     const fs::path fresh = scratch.m_path / "fresh" / "backups";
-    BOOST_CHECK(!fsmodes::CheckBackupDirWritable(fresh));
+    BOOST_CHECK(!fsmodes::CheckBackupDir(fresh).not_writable);
     BOOST_CHECK(fs::is_directory(fresh));
     BOOST_CHECK_EQUAL(ModeOf(fresh), 0700U);
     BOOST_CHECK(fs::is_empty(fresh));
@@ -330,7 +330,7 @@ BOOST_AUTO_TEST_CASE(backupdir_not_writable_reported)
     const fs::path locked = scratch.m_path / "locked";
     MakeDir(locked, 0500);
 
-    const auto reason = fsmodes::CheckBackupDirWritable(locked);
+    const auto reason = fsmodes::CheckBackupDir(locked).not_writable;
     BOOST_CHECK(reason.has_value() && !reason->empty());
 
     // Let the scratch directory be removed.
@@ -350,8 +350,8 @@ BOOST_AUTO_TEST_CASE(a_leftover_write_probe_does_not_fail_the_check)
         MakeFile(backups / (".gridcoin-write-test-" + ToString(::getpid()) + "-" + ToString(count)), 0600);
     }
 
-    BOOST_CHECK(!fsmodes::CheckBackupDirWritable(backups));
-    BOOST_CHECK(!fsmodes::CheckBackupDirWritable(backups));
+    BOOST_CHECK(!fsmodes::CheckBackupDir(backups).not_writable);
+    BOOST_CHECK(!fsmodes::CheckBackupDir(backups).not_writable);
 }
 
 // A probe name that is already taken is removed and the probe tried once more. A
@@ -365,14 +365,70 @@ BOOST_AUTO_TEST_CASE(a_taken_probe_name_is_freed_and_tried_once_more)
     const auto fixed = [] { return std::string{"probe"}; };
 
     MakeFile(backups / "probe", 0600);
-    BOOST_CHECK(!fsmodes::CheckBackupDirWritable(backups, fixed));
+    BOOST_CHECK(!fsmodes::CheckBackupDir(backups, fixed).not_writable);
     BOOST_CHECK(!fs::exists(backups / "probe"));
 
     // A directory of that name is not removed by unlink, so the second try fails too.
     MakeDir(backups / "probe", 0700);
-    const auto reason = fsmodes::CheckBackupDirWritable(backups, fixed);
+    const auto reason = fsmodes::CheckBackupDir(backups, fixed).not_writable;
     BOOST_CHECK(reason.has_value() && !reason->empty());
     BOOST_CHECK(fs::is_directory(backups / "probe"));
+}
+
+// The startup warning for a backup directory whose files cannot be owner-only names the
+// cause and says what it means: backups are still written, and other users may read them.
+// It does not tell the user to make a writable directory writable.
+BOOST_AUTO_TEST_CASE(backup_dir_warning_names_the_cause)
+{
+    const fs::path dir = "/media/stick/backups";
+
+    BOOST_CHECK(!fsmodes::BackupDirWarning(dir, {}));
+
+    fsmodes::BackupDirCheck unrestricted;
+    unrestricted.not_owner_only = "created /media/stick/backups but could not chmod it to 0700: "
+                                  "Operation not permitted (1)";
+    const std::optional<std::string> warning = fsmodes::BackupDirWarning(dir, unrestricted);
+    BOOST_REQUIRE(warning);
+    BOOST_CHECK_MESSAGE(warning->find(*unrestricted.not_owner_only) != std::string::npos, *warning);
+    BOOST_CHECK_MESSAGE(warning->find(dir.string()) != std::string::npos, *warning);
+    BOOST_CHECK_MESSAGE(warning->find("still written") != std::string::npos, *warning);
+    BOOST_CHECK_MESSAGE(warning->find("other users") != std::string::npos, *warning);
+    BOOST_CHECK_MESSAGE(warning->find("not writable") == std::string::npos, *warning);
+    BOOST_CHECK_MESSAGE(warning->find("Make it writable") == std::string::npos, *warning);
+
+    fsmodes::BackupDirCheck locked;
+    locked.not_writable = "Permission denied (13)";
+    const std::optional<std::string> refused = fsmodes::BackupDirWarning(dir, locked);
+    BOOST_REQUIRE(refused);
+    BOOST_CHECK_MESSAGE(refused->find("not writable") != std::string::npos, *refused);
+    BOOST_CHECK_MESSAGE(refused->find("Permission denied (13)") != std::string::npos, *refused);
+    BOOST_CHECK_MESSAGE(refused->find("will fail") != std::string::npos, *refused);
+}
+
+// A backup directory whose files cannot be owner-only is kept and reported, and still
+// accepts files. On a filesystem with POSIX modes the directory is created owner-only
+// and nothing is reported. The other branch runs where a path named "unrestrictable"
+// behaves like FAT.
+BOOST_AUTO_TEST_CASE(an_unrestrictable_backup_directory_is_kept_and_reported)
+{
+    const ScratchDir scratch;
+    const mode_t saved_umask = ::umask(0);
+    const fs::path backups = scratch.m_path / "unrestrictable" / "backups";
+
+    for (int pass = 0; pass < 2; ++pass) {
+        // The first pass creates the directory, the second finds it there.
+        const fsmodes::BackupDirCheck check = fsmodes::CheckBackupDir(backups);
+        BOOST_CHECK(!check.not_writable);
+        BOOST_REQUIRE(fs::is_directory(backups));
+        if (ModeOf(backups) == 0700U) {
+            BOOST_CHECK_MESSAGE(!check.not_owner_only, *check.not_owner_only);
+        } else {
+            BOOST_REQUIRE_MESSAGE(check.not_owner_only, "pass " << pass);
+            BOOST_TEST_MESSAGE("not owner-only: " << *check.not_owner_only);
+        }
+    }
+
+    ::umask(saved_umask);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

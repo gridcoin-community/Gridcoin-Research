@@ -60,18 +60,34 @@ bool OwnedByUs(const fs::path& path);
 //! The rule for every checked path: no access for "other" and no write for the group.
 bool NotOwnedModeAcceptable(unsigned mode);
 
-//! Creates the backup directory if absent, then creates and removes a file in it.
-//! Returns nullopt when that works, else the reason.
-std::optional<std::string> CheckBackupDirWritable(const fs::path& backupdir);
+//! What the startup check of the backup directory found.
+struct BackupDirCheck
+{
+    //! Why no file can be written there, or nullopt when one can.
+    std::optional<std::string> not_writable;
+    //! Why the files written there are not owner-only, or nullopt: the directory, created
+    //! by the check, could not be restricted, or a file created there with mode 0600 has
+    //! another mode (a filesystem without POSIX modes, such as FAT). Backups are still
+    //! written there.
+    std::optional<std::string> not_owner_only;
+};
 
-//! CheckBackupDirWritable with the probe file named by \p probe_name, for tests.
-std::optional<std::string> CheckBackupDirWritable(const fs::path& backupdir,
-                                                  const std::function<std::string()>& probe_name);
+//! Creates the backup directory if absent, owner-only where the filesystem allows it, then
+//! creates and removes a file in it.
+BackupDirCheck CheckBackupDir(const fs::path& backupdir);
+
+//! CheckBackupDir with the probe file named by \p probe_name, for tests.
+BackupDirCheck CheckBackupDir(const fs::path& backupdir, const std::function<std::string()>& probe_name);
+
+//! The startup warning for what CheckBackupDir found in \p backupdir, or nullopt when there
+//! is nothing to say.
+std::optional<std::string> BackupDirWarning(const fs::path& backupdir, const BackupDirCheck& check);
 
 //! Copies a file, overwriting the target. A target that does not exist is created with mode
 //! 0600 (POSIX), so the mode is right before any data is written. An existing target keeps its
-//! mode. Throws fs::filesystem_error on failure.
-void CopyFileOwnerOnly(const fs::path& source, const fs::path& target);
+//! mode. Returns why a target this call created is not owner-only (a filesystem without POSIX
+//! modes gives it another mode), or nullopt. Throws fs::filesystem_error on failure.
+std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::path& target);
 
 } // namespace fsmodes
 #endif // !WIN32

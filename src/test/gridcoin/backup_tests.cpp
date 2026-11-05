@@ -9,11 +9,18 @@
 #include "wallet/db.h"
 #include "wallet/wallet.h"
 #include <fs.h>
+#include <logging.h>
 #include <util/system.h>
 
 #ifndef WIN32
 #include <sys/stat.h>
 #endif
+
+#include <algorithm>
+#include <functional>
+#include <list>
+#include <string>
+#include <vector>
 
 #include <boost/test/unit_test.hpp>
 
@@ -260,6 +267,69 @@ BOOST_AUTO_TEST_CASE(a_new_wallet_backup_is_0600)
     BOOST_CHECK(GRC::BackupWallet(*pwalletMain, target.string()));
     BOOST_CHECK_EQUAL(ModeOf(target), 0600U);
     BOOST_CHECK_EQUAL(ModeOf(target.parent_path()), 0700U);
+}
+//! Collects the lines the logger prints while in scope.
+struct CaptureLog
+{
+    std::vector<std::string> lines;
+    std::list<std::function<void(const std::string&)>>::iterator callback;
+
+    CaptureLog()
+        : callback(LogInstance().PushBackCallback([this](const std::string& s) { lines.push_back(s); }))
+    {
+    }
+    ~CaptureLog() { LogInstance().DeleteCallback(callback); }
+    CaptureLog(const CaptureLog&) = delete;
+    CaptureLog& operator=(const CaptureLog&) = delete;
+
+    size_t Count(const std::string& needle) const
+    {
+        return static_cast<size_t>(std::count_if(lines.begin(), lines.end(), [&](const std::string& l) {
+            return l.find(needle) != std::string::npos;
+        }));
+    }
+};
+
+// The line about backups that cannot be owner-only is logged once per process.
+BOOST_AUTO_TEST_CASE(an_unrestricted_backup_is_logged_once)
+{
+    GRC::ResetUnrestrictedBackupLogForTesting();
+    CaptureLog log;
+
+    BOOST_CHECK(GRC::LogUnrestrictedBackupOnce("/media/stick/backups", "no POSIX modes"));
+    BOOST_CHECK(!GRC::LogUnrestrictedBackupOnce("/media/stick/backups", "no POSIX modes"));
+    BOOST_CHECK(!GRC::LogUnrestrictedBackupOnce("/media/other", "no POSIX modes"));
+
+    BOOST_CHECK_EQUAL(log.Count("cannot be made owner-only"), 1U);
+    BOOST_CHECK_EQUAL(log.Count("/media/stick/backups"), 1U);
+    BOOST_CHECK_EQUAL(log.Count("no POSIX modes"), 1U);
+    GRC::ResetUnrestrictedBackupLogForTesting();
+}
+
+// A new backup directory that cannot be made owner-only still receives the backup, and
+// the backup is logged as not owner-only. Where the filesystem has POSIX modes it is
+// owner-only and nothing is logged. The other branch runs where a path named
+// "unrestrictable" behaves like FAT.
+BOOST_AUTO_TEST_CASE(an_unrestrictable_new_backup_directory_still_receives_the_backup)
+{
+    const BackupDir dir;
+    const UmaskGuard permissive(0);
+
+    const fs::path conf = MakeConf(dir.m_path);
+    grc_test::ForcedArgGuard conf_arg("conf", conf.string());
+
+    GRC::ResetUnrestrictedBackupLogForTesting();
+    CaptureLog log;
+
+    const fs::path target = dir.m_path / "unrestrictable" / "backups" / "gridcoinresearch.conf-backup";
+    BOOST_CHECK(GRC::BackupConfigFile(target.string()));
+    BOOST_REQUIRE(fs::exists(target));
+    BOOST_CHECK_EQUAL(fs::file_size(target), fs::file_size(conf));
+
+    const bool owner_only = ModeOf(target.parent_path()) == 0700U && ModeOf(target) == 0600U;
+    BOOST_CHECK_EQUAL(log.Count("cannot be made owner-only"), owner_only ? 0U : 1U);
+    BOOST_TEST_MESSAGE("owner-only: " << owner_only);
+    GRC::ResetUnrestrictedBackupLogForTesting();
 }
 #endif // !WIN32
 

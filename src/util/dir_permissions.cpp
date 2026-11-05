@@ -207,7 +207,22 @@ void SetOwnerOnlyUmask()
 #endif
 }
 
-bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
+namespace {
+//! What CreateAndRestrict did.
+enum class CreateResult
+{
+    //! The directory was there already, and is left as it is.
+    Existing,
+    //! This call created it and restricted it to this account.
+    Restricted,
+    //! This call created it and could not restrict it; error says why.
+    Unrestricted,
+    //! The directory could not be created; error says why.
+    Failed,
+};
+
+//! Create \p path and, if this call created it, restrict it to this account.
+CreateResult CreateAndRestrict(const fs::path& path, std::string& error)
 {
     error.clear();
 
@@ -222,7 +237,7 @@ bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
         boost::system::error_code stat_ec;
         if (!fs::is_directory(path, stat_ec)) {
             error = "could not create the directory " + path.string() + ": " + ec.message();
-            return false;
+            return CreateResult::Failed;
         }
     }
 
@@ -230,34 +245,9 @@ bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
     // a directory somebody widened on purpose is not ours to do, and the secrets
     // that live inside (the IPC socket and cookie) carry their own owner-only
     // protection regardless of how permissive the parent is.
-    if (!created) return true;
+    if (!created) return CreateResult::Existing;
 
     // We made it, so we set the terms.
-    //
-    // If we cannot, the directory we just created is withdrawn again before
-    // returning false. Leaving it behind is what made this fail open: on the NEXT
-    // start the directory exists, the !created branch above returns true without
-    // inspecting it, and a directory we already know we failed to protect is
-    // accepted silently and forever. One warning, then permanent exposure.
-    //
-    // fs::remove is deliberately the non-recursive form: it removes an empty
-    // directory or nothing. This runs microseconds after create_directories()
-    // returned `created`, so the directory is empty -- but if that assumption is
-    // ever wrong, remove() fails and reports rather than destroying anything. A
-    // data directory is the last place to use remove_all().
-    //
-    // A pre-existing directory never reaches here (it returned true above), so the
-    // create-only rule is intact: nothing the operator set up is inspected,
-    // re-tightened, or removed.
-    const auto withdraw = [&path](std::string& err) {
-        boost::system::error_code rm_ec;
-        fs::remove(path, rm_ec);
-        if (rm_ec) {
-            err += "; the directory could not be removed either (" + rm_ec.message()
-                 + "), so it is left in place UNRESTRICTED -- do not put a wallet in it";
-        }
-    };
-
 #ifdef WIN32
     try {
         // Inheritable: entries created inside are owner-only from creation rather
@@ -265,17 +255,74 @@ bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
         ApplyOwnerOnlyDacl(path, /*inheritable=*/true);
     } catch (const std::exception& e) {
         error = "created " + path.string() + " but could not restrict it to this account: " + e.what();
-        withdraw(error);
-        return false;
+        return CreateResult::Unrestricted;
     }
 #else
     if (::chmod(path.string().c_str(), 0700) != 0) {
-        error = strprintf("created %s but could not chmod it to 0700 (errno %d)", path.string(), errno);
-        withdraw(error);
-        return false;
+        const int err = errno;
+        error = strprintf("created %s but could not chmod it to 0700: %s (errno %d)", path.string(),
+                          std::generic_category().message(err), err);
+        return CreateResult::Unrestricted;
     }
 #endif
 
+    return CreateResult::Restricted;
+}
+} // namespace
+
+bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
+{
+    switch (CreateAndRestrict(path, error)) {
+    case CreateResult::Existing:
+    case CreateResult::Restricted:
+        return true;
+    case CreateResult::Failed:
+        return false;
+    case CreateResult::Unrestricted:
+        break;
+    }
+
+    // This call created the directory and could not restrict it, so it is withdrawn
+    // again before returning false. Leaving it behind is what made this fail open:
+    // on the NEXT start the directory exists, the existing-directory branch returns
+    // true without inspecting it, and a directory we already know we failed to
+    // protect is accepted silently and forever. One warning, then permanent exposure.
+    //
+    // fs::remove is deliberately the non-recursive form: it removes an empty
+    // directory or nothing. This runs microseconds after create_directories()
+    // created it, so the directory is empty -- but if that assumption is ever
+    // wrong, remove() fails and reports rather than destroying anything. A data
+    // directory is the last place to use remove_all().
+    //
+    // A pre-existing directory never reaches here, so the create-only rule is
+    // intact: nothing the operator set up is inspected, re-tightened, or removed.
+    boost::system::error_code rm_ec;
+    fs::remove(path, rm_ec);
+    if (rm_ec) {
+        error += "; the directory could not be removed either (" + rm_ec.message()
+               + "), so it is left in place UNRESTRICTED -- do not put a wallet in it";
+    }
+    return false;
+}
+
+bool CreateDirectoryRestrictedIfPossible(const fs::path& path, std::string& error,
+                                         std::optional<std::string>& unrestricted)
+{
+    unrestricted.reset();
+
+    switch (CreateAndRestrict(path, error)) {
+    case CreateResult::Existing:
+    case CreateResult::Restricted:
+        return true;
+    case CreateResult::Failed:
+        return false;
+    case CreateResult::Unrestricted:
+        break;
+    }
+
+    // Kept, and the reason handed back for the caller to report.
+    unrestricted = error;
+    error.clear();
     return true;
 }
 

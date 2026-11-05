@@ -2182,14 +2182,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (GRC::BackupsEnabled()) {
         const fs::path backup_dir = GRC::GetBackupPath();
 
-        if (const std::optional<std::string> reason = fsmodes::CheckBackupDirWritable(backup_dir)) {
-            const std::string text = strprintf("-backupdir %s is not writable (%s): automatic wallet backups will fail. "
-                                               "Make it writable by the account the core runs as (under a systemd "
-                                               "unit with ProtectSystem=, also list it in ReadWritePaths=), or set "
-                                               "-backupdir to a directory that account can write.",
-                                               fsbridge::LongPathString(backup_dir), *reason);
-            LogPrintf("WARNING: %s", text);
-            InitWarning(text);
+        if (const std::optional<std::string> text =
+                fsmodes::BackupDirWarning(backup_dir, fsmodes::CheckBackupDir(backup_dir))) {
+            LogPrintf("WARNING: %s", *text);
+            InitWarning(*text);
         }
     }
 #endif

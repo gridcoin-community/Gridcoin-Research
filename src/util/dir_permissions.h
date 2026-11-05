@@ -7,6 +7,7 @@
 
 #include "fs.h"
 
+#include <optional>
 #include <string>
 
 //! Owner-only directory creation, shared by every place a Gridcoin data directory
@@ -54,6 +55,16 @@ namespace util {
 //! In the one case where the withdrawal itself fails, the directory is left in
 //! place and \p error says so explicitly.
 bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error);
+
+//! CreateOwnerOnlyDirectory for a directory whose files are better kept with weaker
+//! protection than not kept at all: wallet backups. When this call created \p path
+//! and cannot restrict it (a filesystem without POSIX modes, such as FAT, or a
+//! volume that keeps no ACL), the directory is kept, \p unrestricted is set to the
+//! reason, and true is returned. False, with \p error set, only when the directory
+//! could not be created. A directory that exists is left as it is, as with
+//! CreateOwnerOnlyDirectory.
+bool CreateDirectoryRestrictedIfPossible(const fs::path& path, std::string& error,
+                                         std::optional<std::string>& unrestricted);
 
 //! Restrict the process umask so that every file and directory this process
 //! creates afterwards is owner-only from the moment it exists.

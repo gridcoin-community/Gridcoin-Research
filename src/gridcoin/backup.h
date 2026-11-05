@@ -24,6 +24,14 @@ bool BackupSettingsFile(const std::string& strDest);
 bool MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> backup_file_type,
                    unsigned int retention_by_num, unsigned int retention_by_days, std::vector<std::string>& files_removed);
 bool BackupWallet(const CWallet& wallet, const std::string& strDest);
+
+//! Logs one line, the first time in this process, saying that wallet backups in \p dir are
+//! written although they cannot be made owner-only, and why (\p reason). Returns whether this
+//! call logged.
+bool LogUnrestrictedBackupOnce(const fs::path& dir, const std::string& reason);
+
+//! Lets the next LogUnrestrictedBackupOnce log again.
+void ResetUnrestrictedBackupLogForTesting();
 }
 
 #endif // GRIDCOIN_BACKUP_H
