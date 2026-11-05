@@ -32,6 +32,7 @@
 #include "policy/fees.h"
 #include "node/blockstorage.h"
 #include "node/shutdown.h"
+#include "wallet/autounlock_store.h"
 #include "wallet/capability.h"
 #include "wallet/staking_signer.h"
 
@@ -1276,6 +1277,13 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
     // unused when the turn goes out of scope.
     if (passphrase_accepted) {
         if (*passphrase_accepted) {
+            // A stored autounlock passphrase follows the change. Every change
+            // that succeeds comes through here, cs_wallet is released by now,
+            // and the store's file I/O and encryption must not run under it.
+            // The turn is still held, so changes made one after another reach
+            // the store in the order they were made.
+            if (changed) OnWalletPassphraseChanged(strNewWalletPassphrase);
+
             turn.Accepted();
         } else {
             if (failure_out) *failure_out = UnlockFailure::Passphrase;

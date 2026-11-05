@@ -990,6 +990,14 @@ void SetupServerArgs()
                    "this socket after the wallet loads. Command line only.",
                    ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::WALLET);
 #endif
+#ifdef WIN32
+    // AddArg takes the name up to the first '=', so the [=<path>] form would register
+    // "-autounlockblob[". The help says the value may be left out.
+    argsman.AddArg("-autounlockblob=<path>", "Unlock the wallet for staking only at startup from a DPAPI-protected "
+                   "passphrase file (default <datadir>\\autounlock\\passphrase.dpapi when given without a value). "
+                   "Command line only.",
+                   ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::WALLET);
+#endif
     argsman.AddArg("-salvagewallet", "Attempt to recover private keys from a corrupt wallet.dat",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-zapwallettxes", "Delete all wallet transactions and only recover those parts of the blockchain through"

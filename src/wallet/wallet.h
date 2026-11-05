@@ -573,6 +573,9 @@ public:
     //! caller must not hold cs_wallet. False, with nothing changed, when the
     //! attempt is given up while it waits for its turn. A successful change
     //! ends every capability: they were proved with the old passphrase.
+    //! It also replaces a stored autounlock passphrase with the new one
+    //! (OnWalletPassphraseChanged()) once cs_wallet is released, which is file
+    //! I/O and encryption, so the caller must not hold cs_main either.
     //!
     //! \p failure_out, when given, is Abandoned for an attempt given up while
     //! it waited, Passphrase for a wrong old passphrase, and None otherwise.

@@ -1,0 +1,319 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include <boost/test/unit_test.hpp>
+
+#ifdef WIN32
+#include "chainparams.h"
+#include "chainparamsbase.h"
+#include "test/state_guard.h"
+#include "test/wine.h"
+#include "util/dir_permissions.h"
+#include "util/system.h"
+#include "util/win_acl.h"
+#include "util/winservice.h"
+#include "wallet/autounlock_blob.h"
+#include "wallet/autounlock_dpapi.h"
+#include "wallet/autounlock_store.h"
+
+#include <chrono>
+#include <iterator>
+#include <optional>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include <windows.h>
+#endif
+
+// The DPAPI store and fetch exist only on Windows, so elsewhere this suite is empty.
+BOOST_AUTO_TEST_SUITE(autounlock_dpapi_tests)
+
+#ifdef WIN32
+namespace {
+using namespace util::winacl;
+
+//! Whether these cases can rely on Windows' own access control. Wine keeps no protected
+//! DACL and has no real DPAPI key separation, so under it they only log.
+bool SkipUnderWine()
+{
+    if (!grc_test::RunningUnderWine()) return false;
+    BOOST_TEST_MESSAGE("Wine has no Windows security model for files and DPAPI; skipping");
+    return true;
+}
+
+//! A fresh data directory with -datadir pointing at it, for one case. The guard,
+//! constructed before -datadir is set, restores the fixture's when the case ends.
+struct TempDataDir
+{
+    fs::path path{fs::temp_directory_path() / fs::unique_path("autounlock_dpapi_%%%%-%%%%-%%%%")};
+    grc_test::StateGuard guard;
+
+    TempDataDir()
+    {
+        fs::create_directories(path);
+        gArgs.ForceSetArg("-datadir", path.string());
+        gArgs.ClearPathCache();
+    }
+
+    ~TempDataDir()
+    {
+        boost::system::error_code ec;
+        fs::remove_all(path, ec);
+    }
+
+    fs::path BlobPath() const { return path / "autounlock" / "passphrase.dpapi"; }
+};
+
+//! Makes the core look like a Windows service, or not, until the scope ends.
+struct ServiceMode
+{
+    explicit ServiceMode(bool service) { util::winsvc::SetRunningAsWindowsServiceForTesting(service); }
+    ~ServiceMode() { util::winsvc::SetRunningAsWindowsServiceForTesting(false); }
+};
+
+std::vector<unsigned char> ReadAll(const fs::path& path)
+{
+    fsbridge::ifstream file(path, std::ios::binary);
+    BOOST_REQUIRE(file.is_open());
+    return std::vector<unsigned char>(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+}
+
+//! What the autounlock file at \p path holds.
+AutoUnlockBlob StoredBlob(const fs::path& path)
+{
+    const std::optional<AutoUnlockBlob> blob = ParseAutoUnlockBlob(ReadAll(path));
+    BOOST_REQUIRE(blob.has_value());
+    return *blob;
+}
+
+//! The owner-only list with \p trustee also granted \p rights.
+AclSpec OwnerOnlyPlus(const Sid& trustee, uint32_t rights)
+{
+    AclSpec spec = util::OwnerOnlyAclSpec(/*inheritable=*/false);
+    spec.aces.push_back({trustee, rights, Inherit::None});
+    return spec;
+}
+
+bool Contains(const std::string& text, const std::string& part)
+{
+    return text.find(part) != std::string::npos;
+}
+
+} // namespace
+
+BOOST_AUTO_TEST_CASE(dpapi_store_fetch_roundtrip_local_machine)
+{
+    if (SkipUnderWine()) return;
+
+    TempDataDir datadir;
+    const fs::path path = datadir.BlobPath();
+    DpapiBlobStore store;
+    std::string error;
+
+    // The platform's store is this one.
+    BOOST_CHECK(dynamic_cast<DpapiBlobStore*>(GetAutoUnlockSecretStore()) != nullptr);
+
+    AutoUnlockStoreStatus status = store.Status();
+    BOOST_CHECK(status.supported);
+    BOOST_CHECK(!status.configured);
+    BOOST_CHECK_EQUAL(status.scope, "machine");
+    BOOST_CHECK_EQUAL(status.location, fsbridge::LongPathString(path));
+
+    const SecureString passphrase("dpapi-roundtrip-passphrase \xC3\xA9");
+    BOOST_REQUIRE_MESSAGE(store.Store(passphrase, error), error);
+
+    status = store.Status();
+    BOOST_CHECK(status.configured);
+    BOOST_CHECK_MESSAGE(status.problem.empty(), status.problem);
+
+    const AutoUnlockBlob blob = StoredBlob(path);
+    BOOST_CHECK(blob.scope == BlobScope::LocalMachine);
+    BOOST_CHECK_EQUAL(blob.network, Params().NetworkIDString());
+
+    // Owner-only from the start, and nothing left beside it.
+    const std::optional<std::string> reason = CheckMatchesSpec(ReadAcl(path), util::OwnerOnlyAclSpec(false));
+    BOOST_CHECK_MESSAGE(!reason.has_value(), reason.value_or(""));
+    BOOST_CHECK(!fs::exists(path.string() + ".tmp"));
+
+    std::optional<SecureString> fetched = FetchAutoUnlockFromDpapiBlob(path, error);
+    BOOST_REQUIRE_MESSAGE(fetched.has_value(), error);
+    BOOST_CHECK(*fetched == passphrase);
+
+    // Storing again replaces it.
+    const SecureString replacement("dpapi-roundtrip-replacement");
+    BOOST_REQUIRE_MESSAGE(store.Store(replacement, error), error);
+    fetched = FetchAutoUnlockFromDpapiBlob(path, error);
+    BOOST_REQUIRE_MESSAGE(fetched.has_value(), error);
+    BOOST_CHECK(*fetched == replacement);
+
+    // Removed, autounlock is not set up; removing again is no error.
+    BOOST_REQUIRE_MESSAGE(store.Remove(error), error);
+    BOOST_CHECK(!fs::exists(path));
+    BOOST_CHECK(!store.Status().configured);
+    BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
+    BOOST_CHECK_MESSAGE(Contains(error, "not set up"), error);
+    BOOST_CHECK_MESSAGE(store.Remove(error), error);
+}
+
+BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_loose_acl)
+{
+    if (SkipUnderWine()) return;
+
+    TempDataDir datadir;
+    const fs::path path = datadir.BlobPath();
+    DpapiBlobStore store;
+    std::string error;
+
+    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-loose-acl"), error), error);
+    ApplyAcl(path, OwnerOnlyPlus(wellknown::Users(), FILE_GENERIC_READ));
+
+    BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
+    BOOST_CHECK_MESSAGE(Contains(error, "readable by other accounts"), error);
+    BOOST_CHECK_MESSAGE(Contains(error, "turn autounlock off and set it up again"), error);
+
+    const AutoUnlockStoreStatus status = store.Status();
+    BOOST_CHECK(status.configured);
+    BOOST_CHECK_MESSAGE(Contains(status.problem, "readable by other accounts"), status.problem);
+}
+
+// An account that may change the file's access control list can grant itself read, which
+// the reader check alone does not see.
+BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_foreign_writer)
+{
+    if (SkipUnderWine()) return;
+
+    TempDataDir datadir;
+    const fs::path path = datadir.BlobPath();
+    DpapiBlobStore store;
+    std::string error;
+
+    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-foreign-writer"), error), error);
+    ApplyAcl(path, OwnerOnlyPlus(wellknown::Users(), WRITE_DAC | READ_CONTROL | SYNCHRONIZE));
+
+    const std::vector<Sid> allowed{CurrentTokenUser(), wellknown::System(), wellknown::Administrators()};
+    BOOST_REQUIRE(!FindForeignReader(ReadAcl(path), allowed).has_value());
+
+    BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
+    BOOST_CHECK_MESSAGE(Contains(error, "can be changed by other accounts"), error);
+    BOOST_CHECK_MESSAGE(Contains(error, "turn autounlock off and set it up again"), error);
+}
+
+BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_wrong_network)
+{
+    if (SkipUnderWine()) return;
+
+    TempDataDir datadir;
+    const fs::path path = datadir.BlobPath();
+    DpapiBlobStore store;
+    std::string error;
+
+    BOOST_REQUIRE_EQUAL(Params().NetworkIDString(), CBaseChainParams::MAIN);
+    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-wrong-network"), error), error);
+
+    // The guard puts mainnet back.
+    SelectParams(CBaseChainParams::TESTNET);
+
+    BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
+    BOOST_CHECK_MESSAGE(Contains(error, "network"), error);
+    BOOST_CHECK_MESSAGE(Contains(error, "main"), error);
+}
+
+BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_scope_mismatch)
+{
+    if (SkipUnderWine()) return;
+
+    TempDataDir datadir;
+    const fs::path path = datadir.BlobPath();
+    DpapiBlobStore store;
+    std::string error;
+
+    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-scope-machine"), error), error);
+    BOOST_REQUIRE(StoredBlob(path).scope == BlobScope::LocalMachine);
+
+    {
+        ServiceMode service(true);
+        BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
+        BOOST_CHECK_MESSAGE(Contains(error, "Windows service"), error);
+
+        const AutoUnlockStoreStatus status = store.Status();
+        BOOST_CHECK_EQUAL(status.scope, "service");
+        BOOST_CHECK(status.configured);
+        BOOST_CHECK(!status.problem.empty());
+
+        // Stored as a service, the file is for the service account. This account's own
+        // DPAPI key stands in for the service account's here.
+        const SecureString passphrase("dpapi-scope-service");
+        BOOST_REQUIRE_MESSAGE(store.Store(passphrase, error), error);
+        BOOST_CHECK(StoredBlob(path).scope == BlobScope::ServiceAccount);
+
+        const std::optional<SecureString> fetched = FetchAutoUnlockFromDpapiBlob(path, error);
+        BOOST_REQUIRE_MESSAGE(fetched.has_value(), error);
+        BOOST_CHECK(*fetched == passphrase);
+    }
+
+    BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
+    BOOST_CHECK_MESSAGE(Contains(error, "Windows service"), error);
+}
+
+BOOST_AUTO_TEST_CASE(dpapi_fetch_missing_or_oversize_file)
+{
+    if (SkipUnderWine()) return;
+
+    TempDataDir datadir;
+    const fs::path path = datadir.BlobPath();
+    std::string error;
+
+    BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
+    BOOST_CHECK_MESSAGE(Contains(error, "autounlock is not set up"), error);
+
+    // One byte over the limit, owner-only so that only its size is wrong.
+    std::string dir_error;
+    BOOST_REQUIRE_MESSAGE(util::CreateOwnerOnlyDirectory(path.parent_path(), dir_error), dir_error);
+    {
+        fsbridge::ofstream file(path, std::ios::binary);
+        BOOST_REQUIRE(file.is_open());
+        file << std::string(AUTOUNLOCK_BLOB_MAX_BYTES + 1, 'x');
+    }
+    util::ApplyOwnerOnlyDacl(path, /*inheritable=*/false);
+
+    BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
+    BOOST_CHECK_MESSAGE(Contains(error, "larger than"), error);
+}
+
+// A file held open without read sharing is retried: here it is released after half a
+// second, so the second attempt, one second after the first, reads it.
+BOOST_AUTO_TEST_CASE(dpapi_fetch_retries_a_sharing_violation)
+{
+    if (SkipUnderWine()) return;
+
+    TempDataDir datadir;
+    const fs::path path = datadir.BlobPath();
+    DpapiBlobStore store;
+    std::string error;
+
+    const SecureString passphrase("dpapi-sharing-violation");
+    BOOST_REQUIRE_MESSAGE(store.Store(passphrase, error), error);
+
+    const HANDLE held = ::CreateFileW(path.wstring().c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING,
+                                      FILE_ATTRIBUTE_NORMAL, nullptr);
+    BOOST_REQUIRE(held != INVALID_HANDLE_VALUE);
+
+    std::thread release([held]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        ::CloseHandle(held);
+    });
+
+    const auto start = std::chrono::steady_clock::now();
+    const std::optional<SecureString> fetched = FetchAutoUnlockFromDpapiBlob(path, error);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    release.join();
+
+    BOOST_REQUIRE_MESSAGE(fetched.has_value(), error);
+    BOOST_CHECK(*fetched == passphrase);
+    BOOST_CHECK(elapsed >= std::chrono::seconds(1));
+}
+#endif // WIN32
+
+BOOST_AUTO_TEST_SUITE_END()

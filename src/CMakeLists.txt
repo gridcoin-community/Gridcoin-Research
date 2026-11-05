@@ -331,6 +331,8 @@ add_library(gridcoin_util STATIC
     validation.cpp
     validationinterface.cpp
     wallet/autounlock.cpp
+    wallet/autounlock_blob.cpp
+    wallet/autounlock_store.cpp
     wallet/capability.cpp
     wallet/coinviews.cpp
     wallet/cursor.cpp
@@ -407,6 +409,12 @@ target_link_libraries(gridcoin_util PUBLIC ${LIBGRIDCOIN_CRYPTO})
 # The Unix socket client for the stake-only autounlock helper (Linux service units).
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(gridcoin_util PRIVATE wallet/autounlock_socket.cpp)
+endif()
+
+# The DPAPI store and fetch for the stake-only autounlock on Windows. Its
+# CryptProtectData and CryptUnprotectData are in crypt32, linked below.
+if(WIN32)
+    target_sources(gridcoin_util PRIVATE wallet/autounlock_dpapi.cpp)
 endif()
 
 # advapi32: util/win_acl.cpp reads, builds and applies Windows access control lists

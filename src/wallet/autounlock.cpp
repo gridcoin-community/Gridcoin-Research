@@ -12,11 +12,32 @@
 #include "wallet/autounlock_socket.h"
 #endif
 
+#ifdef WIN32
+#include "wallet/autounlock_blob.h"
+#include "wallet/autounlock_dpapi.h"
+#endif
+
 std::optional<SecureString> FetchAutoUnlockPassphrase()
 {
 #ifdef __linux__
     if (gArgs.IsArgSet("-autounlocksocket")) {
         return autounlock::FetchFromSocket(fs::path(gArgs.GetArg("-autounlocksocket", "")));
+    }
+#endif
+
+#ifdef WIN32
+    // Given without a value, the file is at its default place (AutoUnlockBlobPath()).
+    if (gArgs.IsArgSet("-autounlockblob") && !gArgs.IsArgNegated("-autounlockblob")) {
+        std::string error;
+        const std::optional<fs::path> path = AutoUnlockBlobPath(error);
+
+        if (!path) {
+            LogPrintf("autounlock: %s; the wallet stays locked", error);
+            return std::nullopt;
+        }
+
+        // The fetch logs its own outcome.
+        return FetchAutoUnlockFromDpapiBlob(*path, error);
     }
 #endif
 

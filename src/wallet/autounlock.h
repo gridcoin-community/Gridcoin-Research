@@ -13,7 +13,7 @@
 class CWallet;
 
 //! Platform backend for the wallet passphrase used to unlock for staking at start. Returns nullopt when no backend is
-//! configured, which is always the case until a platform branch is added here. Each branch registers its own
+//! configured (-autounlocksocket on Linux, -autounlockblob on Windows). Each branch registers its own
 //! COMMAND_LINE_ONLY option, does its own bounded retry and logs its own failure reason.
 std::optional<SecureString> FetchAutoUnlockPassphrase();
 
