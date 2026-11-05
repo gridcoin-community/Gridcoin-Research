@@ -445,9 +445,9 @@ On an upgrade from a release with the earlier units (a forking `gridcoinresearch
   `/usr/share/doc/gridcoinresearchd/NEWS.Debian.gz`.
 
 The testnet package does the same with `gridcointestnet-service` and `switchover-test.state`. Its system service
-now runs as `gridcointestnet` instead of `gridcoin`: systemd gives `/var/lib/gridcointestnetd` to the new account
-at the first start, and a `/etc/gridcoin-testnet/gridcoin.conf` owned by `gridcoin` must be given to
-`root:gridcointestnet`, mode 0640, by hand.
+runs as `gridcointestnet`, and systemd gives `/var/lib/gridcointestnetd` to that account at the service's first
+start. If `/etc/gridcoin-testnet/gridcoin.conf` is owned by `gridcoin`, give it to `root:gridcointestnet`, mode
+0640; the package does that only for one owned by root.
 
 #### Ubuntu 22.04
 
