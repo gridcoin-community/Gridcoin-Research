@@ -3028,6 +3028,9 @@ class SwitchOverTests(ServiceTestBase):
             self.host.users[name] = Passwd(name, self.uid, home)
         for name, state in (("gridcoin", "gridcoinresearchd"), ("gridcointestnet", "gridcointestnetd")):
             self.host.users[name] = Passwd(name, self.uid, os.path.join(root, "var_lib", state))
+        # Files and directories made here are writable only by their owner, whatever the runner's
+        # umask, as the checks on a carried conf depend on it.
+        self.addCleanup(os.umask, os.umask(0o022))
         conf_dirs = {"main": os.path.join(root, "etc-gridcoin"), "test": os.path.join(root, "etc-gridcoin-testnet")}
         for d in conf_dirs.values():
             os.makedirs(d)
@@ -3674,6 +3677,49 @@ class SwitchOverTests(ServiceTestBase):
                 self.assertEqual(rc, 1)
                 self.assertIn(reason, err)
                 self.assertIn("will not start", err)
+
+    def test_switch_over_refuses_a_conf_others_can_write(self):
+        # A conf anyone but root and the service account can write, or one in such a directory,
+        # would let that account add options such as blocknotify= to the service.
+        data = os.path.join(self.tmp.name, "data", "grc")
+        os.makedirs(data)
+        directory = os.path.join(self.tmp.name, "etc-other")
+        os.makedirs(directory)
+        conf = os.path.join(directory, "gridcoin.conf")
+        self.write_text(conf, "rpcuser=x\n")
+        real = os.path.join(self.tmp.name, "real.conf")
+        self.write_text(real, "rpcuser=x\n")
+        link = os.path.join(directory, "link.conf")
+        os.symlink(real, link)
+        account = self.host.users["gridcoin"]
+        cases = [
+            (conf, 0o664, 0o755, account, "group or others"),
+            (conf, 0o646, 0o755, account, "group or others"),
+            (conf, 0o644, 0o775, account, "its directory"),
+            (conf, 0o644, 0o757, account, "its directory"),
+            (conf, 0o644, 0o755, account._replace(pw_uid=self.uid + 1), "owned by uid"),
+            (link, 0o644, 0o755, account, "symlink"),
+        ]
+        for path, mode, dir_mode, acct, reason in cases:
+            with self.subTest(mode=oct(mode), dir_mode=oct(dir_mode), uid=acct.pw_uid, path=path):
+                svc_rmtree(self.system_unit_dir())
+                os.chmod(conf, mode)
+                os.chmod(directory, dir_mode)
+                self.host.users["gridcoin"] = acct
+                self.system_override("-conf=%s -datadir=%s" % (path, data))
+                rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+                self.assertEqual(rc, 1)
+                self.assertIn(reason, err)
+                self.assertIn("will not start", err)
+                self.assertEqual(os.listdir(self.system_unit_dir()), ["override.conf"])
+        # Root's or the account's, writable by its owner alone: carried.
+        os.chmod(directory, 0o755)
+        os.chmod(conf, 0o640)
+        self.host.users["gridcoin"] = account
+        svc_rmtree(self.system_unit_dir())
+        self.system_override("-conf=%s -datadir=%s" % (conf, data))
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+        self.assertEqual(rc, 0, err)
 
     def test_switch_over_carries_only_what_differs_from_the_unit(self):
         conf = os.path.join(self.tmp.name, "etc-other.conf")

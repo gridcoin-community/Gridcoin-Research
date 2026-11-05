@@ -2579,6 +2579,23 @@ def system_dropped_words(net, words):
             and not core_option(word).startswith("-conf=")]
 
 
+def check_conf_writers(net, path, name, host):
+    """Refuse a configuration file the service is to read, or its directory, that anyone but root and
+    the service account can write: that account could add options such as blocknotify= to the
+    service. The file itself must not be a symlink."""
+    acct_uid = service_account_uid(net, host)
+    if os.path.islink(path):
+        raise UserError("%s is a symlink; name the file itself" % name)
+    for target, what in ((path, "it"), (os.path.dirname(path), "its directory")):
+        st = os.stat(target)
+        if st.st_uid not in (0, acct_uid):
+            raise UserError("%s: %s is owned by uid %d, not root or %s, so that account could change the service's "
+                            "options; make it root's" % (name, what, st.st_uid, net.account))
+        if st.st_mode & 0o022:
+            raise UserError("%s: %s can be written by group or others (mode %04o), who could change the service's "
+                            "options; chmod go-w it" % (name, what, stat.S_IMODE(st.st_mode)))
+
+
 def carried_system_path(net, value, what, display, paths, host):
     """Check a -conf or -datadir value of the old system command line, for the new unit to run with
     it; None when it is the unit's own."""
@@ -2593,6 +2610,8 @@ def carried_system_path(net, value, what, display, paths, host):
                             % (name, hidden))
     if not (os.path.isdir(value) if what == "datadir" else os.path.isfile(value)):
         raise UserError("%s does not exist" % name)
+    if what == "conf":
+        check_conf_writers(net, value, name, host)
     if what == "datadir":
         try:
             acct = host.getpwnam(net.account)
