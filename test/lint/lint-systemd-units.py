@@ -273,7 +273,9 @@ def check_sysusers_tmpfiles(directory):
     failures = []
     expected = {
         "gridcoin.sysusers.in": ('u @GRC_ACCOUNT@ - "Gridcoin daemon" /var/lib/@GRC_STATE_NAME@', "g @GRC_ATTACH_GROUP@ -"),
-        "gridcoin.tmpfiles.in": ("d @GRC_CONF_DIR@ 0710 root @GRC_ACCOUNT@ -", "d /var/lib/gridcoin-service 0700 root root -"),
+        "gridcoin.tmpfiles.in": ("d @GRC_CONF_DIR@ 0710 root @GRC_ACCOUNT@ -",),
+        # Shared by both networks, so it is declared once.
+        "gridcoin-service.tmpfiles": ("d /var/lib/gridcoin-service 0700 root root -",),
     }
     for name, lines in expected.items():
         path = os.path.join(directory, name)
