@@ -1,2 +1,11 @@
 usr/share/icons/hicolor/48x48/apps/gridcointestnet.png
 usr/lib/systemd/system/gridcoinresearchd.service
+usr/lib/systemd/system/gridcoinresearchd@.service
+usr/lib/systemd/system/gridcoin-autounlock.socket
+usr/lib/systemd/system/gridcoin-autounlock.service
+usr/lib/systemd/system/gridcoin-autounlock@.socket
+usr/lib/systemd/system/gridcoin-autounlock@.service
+usr/lib/sysusers.d/gridcoinresearchd.conf
+usr/lib/tmpfiles.d/gridcoinresearchd.conf
+usr/libexec/gridcoin/gridcoin-autounlock-helper
+usr/sbin/gridcoin-service

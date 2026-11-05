@@ -6,5 +6,13 @@ usr/share/icons/hicolor/48x48/apps/gridcointestnet.png
 usr/share/metainfo/us.gridcoin.GridcoinResearch.metainfo.xml
 usr/share/bash-completion/completions/gridcoinresearchd
 usr/share/bash-completion/completions/gridcoinresearch
-usr/lib/systemd/system/gridcoinresearchd-autounlock.service
-usr/share/gridcoin/gridcoin_autounlock_helper.py
+usr/lib/systemd/system/gridcoinresearchd@.service
+usr/lib/systemd/system/gridcoin-autounlock.socket
+usr/lib/systemd/system/gridcoin-autounlock.service
+usr/lib/systemd/system/gridcoin-autounlock@.socket
+usr/lib/systemd/system/gridcoin-autounlock@.service
+usr/lib/sysusers.d/gridcoinresearchd.conf
+usr/lib/tmpfiles.d/gridcoinresearchd.conf
+usr/libexec/gridcoin/gridcoin-autounlock-helper
+usr/sbin/gridcoin-service
+usr/share/gridcoin/refused-setting-keys.txt
