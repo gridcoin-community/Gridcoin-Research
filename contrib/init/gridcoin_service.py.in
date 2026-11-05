@@ -183,7 +183,11 @@ class Host:
         return subprocess.call(["systemctl", *args], env=SAFE_ENV)
 
     def is_enabled(self, unit):
-        return subprocess.call(["systemctl", "is-enabled", "--quiet", unit], env=SAFE_ENV) == 0
+        """Whether systemctl is-enabled says "enabled". Its exit status is 0 for static, alias,
+        indirect, generated and other states too, so the output decides."""
+        proc = subprocess.run(["systemctl", "is-enabled", unit], env=SAFE_ENV, stdout=subprocess.PIPE,
+                              stderr=subprocess.DEVNULL, encoding="utf8", errors="replace", check=False)
+        return proc.stdout.strip() == "enabled"
 
     def is_active(self, unit):
         return subprocess.call(["systemctl", "is-active", "--quiet", unit], env=SAFE_ENV) == 0
@@ -2181,22 +2185,38 @@ def scan_old_installs(net, host, paths):
     return [(kind, user) for kind, user in entries if user is None or not done(user)]
 
 
+def ends_in_continuation(line):
+    """Whether line ends in a backslash that is not itself escaped by one before it."""
+    escaped = False
+    for char in line:
+        escaped = not escaped if char == "\\" else False
+    return escaped
+
+
 def unit_file_settings(text, section, key):
-    """The values of key in section of a unit file text, in order, read as systemd reads them:
-    comment lines skipped, a line that ends in a backslash continued on the next with a space."""
+    """The values of key in section of a unit file text, in order, read as config_parse() in
+    systemd's src/shared/conf-parser.c reads them: a UTF-8 byte order mark before the first line
+    is skipped; lines end at \n, \r\n or \r; a line whose first non-blank character is # or ;
+    is a comment, inside a continuation too; a line continues on the next when it ends in a
+    backslash that is not escaped (trailing whitespace, or an even run of backslashes, ends it),
+    the backslash becoming a space and the next line appended as it is; the joined line is then
+    stripped."""
     values = []
     current = None
     pending = None
-    for raw in text.split("\n"):
-        line = raw.strip()
-        if line.startswith(("#", ";")):
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    # read_line() ends a line at \n, \r\n or \r.
+    for raw in re.split(r"\r\n|\r|\n", text):
+        if raw.lstrip(" \t").startswith(("#", ";")):
             continue
         if pending is not None:
-            line = pending + line
+            raw = pending + raw
             pending = None
-        if line.endswith("\\"):
-            pending = line[:-1] + " "
+        if ends_in_continuation(raw):
+            pending = raw[:-1] + " "
             continue
+        line = raw.strip()
         if line.startswith("[") and line.endswith("]"):
             current = line[1:-1]
         elif current == section and "=" in line:
@@ -2344,7 +2364,15 @@ def set_keys(text, keys):
 
 
 def is_mask(path):
-    return os.path.islink(path) and os.readlink(path) == "/dev/null"
+    """Whether systemd takes the unit file at path for a mask: it is empty, or it resolves, through
+    any chain of links, relative or not, to /dev/null."""
+    if os.path.realpath(path) == "/dev/null":
+        return True
+    try:
+        st = os.stat(path)
+    except OSError:
+        return False
+    return stat.S_ISREG(st.st_mode) and st.st_size == 0
 
 
 def system_core_overrides(net, paths):
@@ -2370,7 +2398,7 @@ def switch_system_core(net, host, paths, restart):
     unit = net.daemon + ".service"
     copy, masked, stale = system_core_overrides(net, paths)
     if masked:
-        print("%s is masked (a link to /dev/null); it stays masked, so %s does not start." % (copy, unit))
+        print("%s is masked (empty, or a link to /dev/null); it stays masked, so %s does not start." % (copy, unit))
     renamed = False
     was_enabled = False
     if copy is not None and not masked:

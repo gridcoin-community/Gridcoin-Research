@@ -370,6 +370,45 @@ def desktop_actions(text):
     return actions, [name for name in listed if name]
 
 
+class UnitFileReaderTests(unittest.TestCase):
+    def test_lines_are_read_as_systemd_reads_them(self):
+        # config_parse() in systemd's src/shared/conf-parser.c: a line continues only when it ends
+        # in a backslash that is not itself escaped, so trailing whitespace or an even run of
+        # backslashes ends it; a byte order mark before the first line is skipped.
+        cases = [
+            ("[Service]\nExecStart=/x -a \\\n  -b\n", ["/x -a    -b"]),
+            ("[Service]\nExecStart=/x -a \\ \n-b=c\n", ["/x -a \\"]),
+            ("[Service]\nExecStart=/x -a\\\\\n-b=c\n", ["/x -a\\\\"]),
+            ("[Service]\nExecStart=/x -a\\\\\\\n-b\n", ["/x -a\\\\ -b"]),
+            ("\ufeff[Service]\nExecStart=/x\n", ["/x"]),
+            ("[Service]\r\nExecStart=/x \\\r\n-b\r\n", ["/x  -b"]),
+            ("[Service]\nExecStart=/x \\\n# a comment inside\n-b\n", ["/x  -b"]),
+        ]
+        for text, expected in cases:
+            with self.subTest(text=text):
+                self.assertEqual(svc.unit_file_settings(text, "Service", "ExecStart"), expected)
+
+    def test_masks_are_what_systemd_takes_for_a_mask(self):
+        # A unit file is masked when it is empty or resolves to /dev/null.
+        with tempfile.TemporaryDirectory() as tmp:
+            def made(name, make):
+                path = os.path.join(tmp, name)
+                make(path)
+                return path
+
+            masks = [made("a.service", lambda p: os.symlink("/dev/null", p)),
+                     made("b.service", lambda p: open(p, "w", encoding="utf8").close()),
+                     made("c.service", lambda p: os.symlink("../../../../../../../../../../dev/null", p)),
+                     made("d.service", lambda p: os.symlink("a.service", p))]
+            others = [made("e.service", lambda p: open(p, "w", encoding="utf8").write("[Unit]\n")),
+                      made("f.service", lambda p: os.symlink("e.service", p)),
+                      made("g.service", lambda p: os.symlink("/nowhere/x.service", p))]
+            for path in masks:
+                self.assertTrue(svc.is_mask(path), path)
+            for path in others:
+                self.assertFalse(svc.is_mask(path), path)
+
+
 class DesktopFileTests(unittest.TestCase):
     """The launcher offers only what the build can run: attaching to a running core needs the
     multiprocess GUI and a daemon, and the system service needs its units as well."""
@@ -913,18 +952,36 @@ class FixRoundTests(ServiceTestBase):
 
     def test_real_host_uses_fixed_path(self):
         calls = []
-        saved = svc.subprocess.call
-        svc.subprocess.call = lambda cmd, **kw: calls.append(kw) or 0
-        try:
+
+        def run(cmd, **kw):
+            calls.append(kw)
+            return subprocess.CompletedProcess(cmd, 0, stdout="enabled\n")
+
+        with mock.patch.object(svc.subprocess, "call", lambda cmd, **kw: calls.append(kw) or 0), \
+                mock.patch.object(svc.subprocess, "run", run):
             host = svc.Host()
             host.systemctl("daemon-reload")
             host.is_enabled("x")
             host.is_active("x")
-        finally:
-            svc.subprocess.call = saved
         self.assertEqual(len(calls), 3)
         for kw in calls:
             self.assertEqual(kw["env"], {"PATH": "/usr/bin:/bin"})
+
+    def test_real_host_counts_only_enabled_as_enabled(self):
+        # systemctl is-enabled exits 0 for static, alias, indirect, generated and more; only
+        # "enabled" means the unit's [Install] links are in place.
+        def no_real_command(*args, **kwargs):
+            raise AssertionError("a real command would have run: %r" % (args,))
+
+        for output, rc, expected in (("enabled\n", 0, True), ("enabled-runtime\n", 0, False), ("static\n", 0, False),
+                                     ("alias\n", 0, False), ("indirect\n", 0, False), ("generated\n", 0, False),
+                                     ("disabled\n", 1, False), ("", 1, False), ("masked\n", 1, False)):
+            # Every way out to a real systemctl is closed; only the canned run answers.
+            with self.subTest(output=output), mock.patch.object(svc.subprocess, "call", no_real_command), \
+                    mock.patch.object(svc.subprocess, "Popen", no_real_command), mock.patch.object(
+                    svc.subprocess, "run",
+                    lambda cmd, output=output, rc=rc, **kw: subprocess.CompletedProcess(cmd, rc, stdout=output)):
+                self.assertEqual(svc.Host().is_enabled("x.service"), expected)
 
 
 def write_tree(root, files):
