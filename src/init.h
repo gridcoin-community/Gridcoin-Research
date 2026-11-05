@@ -42,6 +42,10 @@ CKey GetRegtestPremineKey();
 void PlantRegtestPremineKey(CWallet* pwallet);
 
 void StartShutdown();
+//! Installs the SIGTERM and SIGINT handlers that request a shutdown (POSIX; nothing on
+//! Windows, whose console handler AppInit2 installs). The daemon calls it at the top of
+//! main(), so that a stop sent during startup is not lost; AppInit2 calls it again.
+void RegisterShutdownSignalHandlers();
 
 void Shutdown(void* parg);
 bool AppInit2(ThreadHandlerPtr threads);

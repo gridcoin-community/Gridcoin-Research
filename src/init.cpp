@@ -475,6 +475,14 @@ static void registerSignalHandler(int signal, void(*handler)(int))
 }
 #endif
 
+void RegisterShutdownSignalHandlers()
+{
+#ifndef WIN32
+    registerSignalHandler(SIGTERM, HandleSIGTERM);
+    registerSignalHandler(SIGINT, HandleSIGTERM);
+#endif
+}
+
 
 bool static Bind(const CService &addr, bool fError = true) {
     if (IsLimited(addr))
@@ -1772,9 +1780,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     // that debug.log and the settings file -- both created before this point -- are
     // covered too. Setting it here would be too late for them.
 
-    // Clean shutdown on SIGTERM
-    registerSignalHandler(SIGTERM, HandleSIGTERM);
-    registerSignalHandler(SIGINT, HandleSIGTERM);
+    // Clean shutdown on SIGTERM and SIGINT. The daemon has already installed these at the
+    // top of main(); the GUI's in-process core installs them here.
+    RegisterShutdownSignalHandlers();
 
     // Reopen debug.log on SIGHUP
     registerSignalHandler(SIGHUP, HandleSIGHUP);

@@ -46,6 +46,7 @@
 
 #include <boost/thread.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <csignal>
 #include <stdio.h>
 #include <stdexcept>
 
@@ -223,6 +224,12 @@ bool AppInit(int argc, char* argv[])
 
         if (fCommandLine)
         {
+#ifndef WIN32
+            // The command line client is not the node: a termination signal ends it at
+            // once, as before the node's handlers were installed at the top of main().
+            signal(SIGTERM, SIG_DFL);
+            signal(SIGINT, SIG_DFL);
+#endif
             // The client reads the node's read-write settings file but ignores its refused keys, the connection
             // options (rpcconnect, rpcport, rpcuser, rpcpassword, ...) included, which it takes only from the
             // command line and the config file. It never writes the file: InitSettings rewrites it through a
@@ -309,6 +316,13 @@ bool AppInit(int argc, char* argv[])
                     return InitError(resetblockchain.ResetBlockchainMessages(resetblockchain.CleanUp));
                 }
             }
+        }
+
+        // A stop requested so far (during -resetblockchaindata, for one) ends the start
+        // here, before the daemonizing fork and AppInit2.
+        if (ShutdownRequested()) {
+            LogPrintf("Shutdown requested during startup. Exiting.");
+            return false;
         }
 
         if (gArgs.GetBoolArg("-daemon", DEFAULT_DAEMON) || gArgs.GetBoolArg("-daemonwait", DEFAULT_DAEMONWAIT)) {
@@ -578,6 +592,13 @@ int main(int argc, char* argv[])
     // Capture and remove NOTIFY_SOCKET while the process is still single-threaded.
     // The process-hardening statements come before this one.
     sdnotify::CaptureFromEnvironment();
+
+    // A stop requested at any point of startup must be honoured. Under a unit with
+    // PrivatePIDs= this process is process 1 of its PID namespace, and a signal to
+    // process 1 with no handler is discarded, so without this a stop sent before
+    // AppInit2 installed the handlers was lost and the start ran on until the stop
+    // timeout killed it. The handlers only request a shutdown.
+    RegisterShutdownSignalHandlers();
 
     // Reinit default timer to ensure it is zeroed out at the start of main.
     g_timer.InitTimer("default", false);

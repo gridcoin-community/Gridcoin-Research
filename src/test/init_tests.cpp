@@ -4,6 +4,7 @@
 
 #include "gridcoin/contract/registry.h"
 #include "init.h"
+#include "node/shutdown.h"
 #include "policy/fees.h"
 #include "test/test_gridcoin.h"
 #include "util/system.h"
@@ -15,6 +16,10 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+#ifndef WIN32
+#include <csignal>
+#endif
 
 namespace {
 //! ReadConfigStream is protected, so expose it the way the other argument tests do.
@@ -245,5 +250,37 @@ BOOST_AUTO_TEST_CASE(gui_only_args_list_matches_the_literal)
     BOOST_CHECK(Contains(list, "-autotrustidentity"));
     BOOST_CHECK(!Contains(list, "-ipclogtrace"));
 }
+
+#ifndef WIN32
+// The handlers that RegisterShutdownSignalHandlers installs for SIGTERM and SIGINT
+// request a shutdown and do nothing else. The process's dispositions and the request
+// flag are put back afterwards.
+BOOST_AUTO_TEST_CASE(shutdown_signal_handlers_request_a_shutdown)
+{
+    struct sigaction saved_term, saved_int;
+    BOOST_REQUIRE_EQUAL(::sigaction(SIGTERM, nullptr, &saved_term), 0);
+    BOOST_REQUIRE_EQUAL(::sigaction(SIGINT, nullptr, &saved_int), 0);
+    BOOST_REQUIRE(!ShutdownRequested());
+
+    RegisterShutdownSignalHandlers();
+
+    for (const int signal : {SIGTERM, SIGINT}) {
+        // Checked before raising, so that a missing handler fails the case rather
+        // than ending the test process.
+        struct sigaction installed;
+        BOOST_REQUIRE_EQUAL(::sigaction(signal, nullptr, &installed), 0);
+        BOOST_REQUIRE_MESSAGE(installed.sa_handler != SIG_DFL && installed.sa_handler != SIG_IGN,
+                              "no handler for signal " << signal);
+
+        BOOST_REQUIRE(!ShutdownRequested());
+        BOOST_REQUIRE_EQUAL(::raise(signal), 0);
+        BOOST_CHECK_MESSAGE(ShutdownRequested(), "signal " << signal << " did not request a shutdown");
+        AbortShutdown();
+    }
+
+    BOOST_REQUIRE_EQUAL(::sigaction(SIGTERM, &saved_term, nullptr), 0);
+    BOOST_REQUIRE_EQUAL(::sigaction(SIGINT, &saved_int, nullptr), 0);
+}
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()

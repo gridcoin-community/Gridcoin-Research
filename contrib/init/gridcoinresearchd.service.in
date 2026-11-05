@@ -20,6 +20,13 @@
 # PrivatePIDs= is ignored with a log line before systemd 257; the rest of the unit
 # applies. The full model is in doc/running-unattended.md.
 #
+# With PrivatePIDs= the core is process 1 of its own PID namespace. It reaps the
+# processes the notify options leave behind, and it installs its stop handlers
+# first thing, since a signal to process 1 with no handler is discarded. Its
+# startup check for an attached debugger cannot see a tracer outside the
+# namespace; the core is still non-dumpable, which blocks an attach by the same
+# account.
+#
 # It is not recommended to modify this file in-place, because it is overwritten by
 # package upgrades. Use "systemctl edit @GRC_DAEMON@.service" for local changes.
 
