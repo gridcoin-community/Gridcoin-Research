@@ -2708,8 +2708,12 @@ bool AppInit2(ThreadHandlerPtr threads)
         int mrc_requests_added = 0;
 
         {
-            sdnotify::ScopedStartupHeartbeat heartbeat("Rescanning");
-            pwalletMain->ScanForMRCRequests(pindexMRCRequestRescan, pindexRescan, true);
+            // The scan's height is its progress: the start timeout is extended while it
+            // advances, with no cap, and no longer once it stalls.
+            std::atomic<int> scanned_height{-1};
+            sdnotify::ScopedStartupHeartbeat heartbeat(
+                "Rescanning", [&scanned_height] { return scanned_height.load(std::memory_order_relaxed); });
+            pwalletMain->ScanForMRCRequests(pindexMRCRequestRescan, pindexRescan, true, &scanned_height);
         }
 
         LogPrintf("INFO: %u: %i missing MRC request transactions added to wallet.",
@@ -2743,8 +2747,11 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_timer.GetTimes("rescan start", "init");
 
         {
-            sdnotify::ScopedStartupHeartbeat heartbeat("Rescanning");
-            pwalletMain->ScanForWalletTransactions(pindexRescan, true);
+            // As the MRC request scan above: extended while the scan's height advances.
+            std::atomic<int> scanned_height{-1};
+            sdnotify::ScopedStartupHeartbeat heartbeat(
+                "Rescanning", [&scanned_height] { return scanned_height.load(std::memory_order_relaxed); });
+            pwalletMain->ScanForWalletTransactions(pindexRescan, true, &scanned_height);
         }
 
         g_timer.GetTimes("rescan complete", "init");

@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <optional>
 #include <utility>
 
 #ifdef __linux__
@@ -194,6 +195,15 @@ bool ExtendStartTimeout(const std::string& status, std::chrono::microseconds ext
     return Send("EXTEND_TIMEOUT_USEC=" + ToString(extension.count()) + "\nSTATUS=" + text);
 }
 
+ScopedStartupHeartbeat::ScopedStartupHeartbeat(std::string status, std::function<long long()> progress,
+                                               std::chrono::milliseconds interval)
+    : m_status(std::move(status)), m_progress(std::move(progress)), m_max_total(MAX_STARTUP_STEP_EXTENSION),
+      m_interval(interval)
+{
+    if (!Active()) return;
+    m_thread = std::thread([this] { Run(); });
+}
+
 ScopedStartupHeartbeat::ScopedStartupHeartbeat(std::string status, std::chrono::milliseconds max_total,
                                                std::chrono::milliseconds interval)
     : m_status(std::move(status)), m_max_total(max_total), m_interval(interval)
@@ -220,27 +230,54 @@ void ScopedStartupHeartbeat::Run()
     const auto start = std::chrono::steady_clock::now();
     const microseconds max_total = std::chrono::duration_cast<microseconds>(m_max_total);
 
+    // Each beat extends by three beat intervals, so a missed beat is covered while a beat
+    // that passed the stop check just before a stop extends the stop by little.
+    const microseconds per_beat = 3 * std::chrono::duration_cast<microseconds>(m_interval);
+
+    // For a step with progress: the value the last beat saw, and whether a stall was logged.
+    std::optional<long long> last_progress;
+    bool stall_logged = false;
+
     std::unique_lock<std::mutex> lock(m_mutex);
     while (!m_stop) {
         // A stop requested during this step must run into the stop timeout.
         if (ShutdownCheckSaysStop()) return;
 
-        // No extension reaches past max_total from the start of the step.
-        const microseconds remaining =
-            max_total - std::chrono::duration_cast<microseconds>(std::chrono::steady_clock::now() - start);
-        if (remaining.count() <= 0) {
-            LogPrintf("sdnotify: %s has run for %d seconds; the start timeout is no longer extended for it\n",
-                      m_status, std::chrono::duration_cast<std::chrono::seconds>(m_max_total).count());
-            return;
+        microseconds extension = per_beat;
+        bool extend = true;
+        if (m_progress) {
+            // Extended only while the progress advances, with no cap: a stalled step stops
+            // being extended, and its last extension runs out within three intervals. The
+            // progress function reads an atomic; no lock is taken for it.
+            const long long progress = m_progress();
+            extend = !last_progress || progress != *last_progress;
+            last_progress = progress;
+            if (extend) {
+                stall_logged = false;
+            } else if (!stall_logged) {
+                LogPrintf("sdnotify: %s made no progress since the last beat; the start timeout is not extended "
+                          "until it does\n",
+                          m_status);
+                stall_logged = true;
+            }
+        } else {
+            // No extension reaches past max_total from the start of the step.
+            const microseconds remaining =
+                max_total - std::chrono::duration_cast<microseconds>(std::chrono::steady_clock::now() - start);
+            if (remaining.count() <= 0) {
+                LogPrintf("sdnotify: %s has run for %d seconds; the start timeout is no longer extended for it\n",
+                          m_status, std::chrono::duration_cast<std::chrono::seconds>(m_max_total).count());
+                return;
+            }
+            extension = std::min(per_beat, remaining);
         }
 
-        // Each beat extends by three beat intervals, so a missed beat is covered while a beat
-        // that passed the stop check just before a stop extends the stop by little. Only
-        // Send() is called from here, never wallet or chain code.
-        const microseconds per_beat = 3 * std::chrono::duration_cast<microseconds>(m_interval);
-        lock.unlock();
-        ExtendStartTimeout(m_status, std::min(per_beat, remaining));
-        lock.lock();
+        // Only Send() is called from here, never wallet or chain code.
+        if (extend) {
+            lock.unlock();
+            ExtendStartTimeout(m_status, extension);
+            lock.lock();
+        }
         m_cv.wait_for(lock, m_interval, [this] { return m_stop; });
     }
 }

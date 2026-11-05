@@ -7,6 +7,7 @@
 
 #include <chrono>
 #include <condition_variable>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -81,15 +82,24 @@ bool ExtendStartTimeout(const std::string& status, std::chrono::microseconds ext
 //! is three intervals (3 minutes for the default interval), and at most what is left
 //! of \p max_total, counted from construction, and none is
 //! sent once that is used up or a shutdown has been requested: a step that hangs
-//! ends the start at most \p max_total after it began. The steps it covers have no
-//! progress counter another thread can read safely, so it does not wait for one.
-//! The thread only calls Send().
+//! ends the start at most \p max_total after it began. That is for a step without a
+//! progress counter another thread can read safely (the block index load, a block
+//! import); a step with one (a rescan) uses the progress constructor instead. The
+//! thread only calls Send().
 class ScopedStartupHeartbeat
 {
 public:
     explicit ScopedStartupHeartbeat(std::string status,
                                     std::chrono::milliseconds max_total = MAX_STARTUP_STEP_EXTENSION,
                                     std::chrono::milliseconds interval = std::chrono::seconds{60});
+
+    //! A step that reports its progress through \p progress (a rescan's height): it has
+    //! no cap, and each beat extends, by three intervals, only when the value has changed
+    //! since the last beat. A stalled step is no longer extended, so its last extension
+    //! runs out within three intervals and the start timeout applies. \p progress is
+    //! called on the heartbeat's thread and must take no lock.
+    ScopedStartupHeartbeat(std::string status, std::function<long long()> progress,
+                           std::chrono::milliseconds interval = std::chrono::seconds{60});
     ~ScopedStartupHeartbeat();
 
     ScopedStartupHeartbeat(const ScopedStartupHeartbeat&) = delete;
@@ -99,6 +109,7 @@ private:
     void Run();
 
     const std::string m_status;
+    const std::function<long long()> m_progress;
     const std::chrono::milliseconds m_max_total;
     const std::chrono::milliseconds m_interval;
     // Leaf lock, taken only around the stop flag.

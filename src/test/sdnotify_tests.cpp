@@ -491,6 +491,69 @@ BOOST_AUTO_TEST_CASE(heartbeat_extension_is_capped)
     }
 }
 
+// A step that reports its progress (a rescan) is extended only while the progress advances:
+// each beat that finds it changed extends, by three intervals, and once it stops advancing the
+// beats send nothing, so the extension runs out within about three intervals. Such a step has
+// no cap.
+BOOST_AUTO_TEST_CASE(heartbeat_with_progress_extends_only_while_advancing)
+{
+    NotifyEnvGuard env;
+    TempDir dir;
+    BOOST_REQUIRE(!dir.Path().empty());
+    Listener listener(dir.Path() + "/notify");
+    BOOST_REQUIRE(listener.Ok());
+
+    setenv("NOTIFY_SOCKET", (dir.Path() + "/notify").c_str(), 1);
+    sdnotify::CaptureFromEnvironment();
+
+    constexpr auto interval = std::chrono::milliseconds{30};
+    std::atomic<long long> height{0};
+    std::atomic<bool> advancing{true};
+    std::thread scanner([&] {
+        while (advancing) {
+            ++height;
+            std::this_thread::sleep_for(std::chrono::milliseconds{5});
+        }
+    });
+
+    {
+        sdnotify::ScopedStartupHeartbeat heartbeat("Rescanning", [&height] { return height.load(); }, interval);
+
+        // Advancing: every beat extends, by three intervals.
+        listener.SetTimeout(std::chrono::milliseconds{200});
+        std::vector<long long> extensions;
+        const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds{300};
+        while (std::chrono::steady_clock::now() < until) {
+            const std::string message = listener.Receive();
+            BOOST_REQUIRE_MESSAGE(!message.empty(), "no extension while the progress advanced");
+            extensions.push_back(ExtensionUsec(message));
+        }
+        BOOST_CHECK_GE(extensions.size(), 4U);
+        for (const long long usec : extensions) {
+            BOOST_CHECK_EQUAL(usec, std::chrono::duration_cast<std::chrono::microseconds>(3 * interval).count());
+        }
+
+        // Stalled: after at most one more beat (the one that still sees the last change),
+        // nothing is sent.
+        advancing = false;
+        scanner.join();
+        std::this_thread::sleep_for(3 * interval);
+        listener.SetTimeout(std::chrono::milliseconds{20});
+        while (!listener.Receive().empty()) {}
+        listener.SetTimeout(std::chrono::milliseconds{150});
+        BOOST_CHECK_EQUAL(listener.Receive(), "");
+
+        // Advancing again: extended again.
+        ++height;
+        listener.SetTimeout(std::chrono::milliseconds{200});
+        BOOST_CHECK(!listener.Receive().empty());
+    }
+    if (scanner.joinable()) {
+        advancing = false;
+        scanner.join();
+    }
+}
+
 #endif // __linux__
 
 //! A conf file with daemon=1 and daemonwait=1 must lose to explicit -nodaemon

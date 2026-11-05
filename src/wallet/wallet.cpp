@@ -3223,7 +3223,7 @@ bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb)
 // with confirmed block information. We MUST persist these state changes to
 // wallet.dat so they survive wallet restarts. Without this, transactions that
 // appear during -rescan get lost on the next normal load.
-int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
+int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, std::atomic<int>* progress_height)
 {
     int ret = 0;
 
@@ -3234,6 +3234,8 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
 
         while (pindex)
         {
+            if (progress_height) progress_height->store(pindex->nHeight, std::memory_order_relaxed);
+
             // no need to read and scan block, if block was created before
             // our wallet birthday (as adjusted for block time variability)
             if (nTimeFirstKey && (pindex->nTime < (nTimeFirstKey - 7200))) {
@@ -3288,7 +3290,8 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
 // do to an overly aggressive ResendWalletTransactions in 5.4.1.0. Note the MRC
 // payment transactions were not affected. The change in effective balance due to this
 // is very small, since a successful MRC request costs 0.011 GRC.
-int CWallet::ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate)
+int CWallet::ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate,
+                                std::atomic<int>* progress_height)
 {
     int ret = 0;
 
@@ -3296,6 +3299,8 @@ int CWallet::ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd
         LOCK2(cs_main, cs_wallet);
         for(CBlockIndex* pindex = pindexStart; pindex && pindex->nHeight < pindexEnd->nHeight;)
         {
+            if (progress_height) progress_height->store(pindex->nHeight, std::memory_order_relaxed);
+
             // no need to read and scan block, if block was created before
             // our wallet birthday (as adjusted for block time variability)
             if (nTimeFirstKey && (pindex->nTime < (nTimeFirstKey - 7200))) {

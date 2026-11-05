@@ -873,8 +873,13 @@ private:
 
 public:
     void WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* pwalletdb);
-    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false);
-    int ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate = false);
+    //! \p progress_height, when given, is set to the height of each block as the scan
+    //! reaches it (relaxed), for a caller that reports the scan's progress from another
+    //! thread without a lock.
+    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false,
+                                  std::atomic<int>* progress_height = nullptr);
+    int ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate = false,
+                           std::atomic<int>* progress_height = nullptr);
     void ReacceptWalletTransactions();
 
 
