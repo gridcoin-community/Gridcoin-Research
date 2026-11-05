@@ -2401,15 +2401,15 @@ def set_keys(text, keys):
 
 
 def is_mask(path):
-    """Whether systemd takes the unit file at path for a mask: it is empty, or it resolves, through
-    any chain of links, relative or not, to /dev/null."""
-    if os.path.realpath(path) == "/dev/null":
-        return True
+    """Whether systemd takes the unit file at path for a mask: through any chain of links, relative or
+    not, it is an empty regular file, or /dev/null, the character device 1:3, whatever it is called."""
     try:
         st = os.stat(path)
     except OSError:
         return False
-    return stat.S_ISREG(st.st_mode) and st.st_size == 0
+    if stat.S_ISREG(st.st_mode):
+        return st.st_size == 0
+    return stat.S_ISCHR(st.st_mode) and st.st_rdev == os.makedev(1, 3)
 
 
 def system_core_overrides(net, paths):
@@ -2447,8 +2447,12 @@ def render_system_dropin(net, conf, datadir):
     if conf is None and datadir is None:
         return text
     default_conf, default_datadir = system_defaults(net)
-    text += ("# It carries the configuration file and datadir the service ran with.\n"
-             "[Service]\n"
+    text += "# It carries the configuration file and datadir the service ran with.\n"
+    if datadir is not None:
+        # systemd.exec(5), Implicit Dependencies: StateDirectory= and the like require the mounts
+        # their paths need, ReadWritePaths= does not, so a datadir on another mount asks for its own.
+        text += "[Unit]\nRequiresMountsFor=" + datadir + "\n"
+    text += ("[Service]\n"
              "ExecStart=\n"
              "ExecStart=" + system_exec_start(net, conf or default_conf, datadir or default_datadir) + "\n")
     if datadir is not None:
@@ -2765,7 +2769,10 @@ def restart_system_service(net, host):
     over: after a --scan run or a --state rerun by hand. A run from the package leaves it to the
     package, which restarts the service next."""
     unit = net.daemon + ".service"
-    if host.run_by_package() or not host.is_active(unit):
+    if host.run_by_package():
+        print("Left the restart of %s to the package." % unit)
+        return
+    if not host.is_active(unit):
         return
     step(host, "try-restart", "--no-block", unit)
     print("Restarted %s without waiting, so that it runs as switched over." % unit)
@@ -2940,7 +2947,12 @@ def cmd_switch_over(args, net, host, paths):
             os.unlink(state_path)
     # Once, for both system entries, and not onto a system entry that failed.
     if system_changed and not any(key[0] != "user" for key in failed):
-        restart_system_service(net, host)
+        try:
+            restart_system_service(net, host)
+        except StepError as e:
+            print("%s: the switch-over did not finish: %s; once the cause is fixed, run: systemctl restart %s.service"
+                  % (net.tool_name, e, net.daemon), file=sys.stderr)
+            return 1
     if left:
         names = {SYSTEM_CORE: "the system service", SYSTEM_AUTOUNLOCK: "the system service's autounlock"}
         what = [shown(key[1]) for key in sorted(k for k in failed if k[0] == "user")]

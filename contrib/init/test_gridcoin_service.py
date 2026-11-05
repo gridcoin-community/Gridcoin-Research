@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import tarfile
@@ -425,10 +426,17 @@ class UnitFileReaderTests(unittest.TestCase):
             others = [made("e.service", unit_file),
                       made("f.service", lambda p: os.symlink("e.service", p)),
                       made("g.service", lambda p: os.symlink("/nowhere/x.service", p))]
+            others.append(made("h.service", lambda p: os.symlink("/dev/zero", p)))
             for path in masks:
                 self.assertTrue(svc.is_mask(path), path)
             for path in others:
                 self.assertFalse(svc.is_mask(path), path)
+        # By the device it resolves to, as systemd tells /dev/null: the character device 1:3,
+        # whatever the path is called.
+        for rdev, expected in ((os.makedev(1, 3), True), (os.makedev(1, 5), False)):
+            device = os.stat_result((stat.S_IFCHR | 0o666, 1, 1, 1, 0, 0, 0, 0, 0, 0), {"st_rdev": rdev})
+            with self.subTest(rdev=rdev), mock.patch.object(svc.os, "stat", lambda path, *a, **k: device):
+                self.assertEqual(svc.is_mask("/elsewhere/null"), expected)
 
 
 class DesktopFileTests(unittest.TestCase):
@@ -979,8 +987,12 @@ class FixRoundTests(ServiceTestBase):
             calls.append(kw)
             return subprocess.CompletedProcess(cmd, 0, stdout="enabled\n")
 
+        def no_real_command(*args, **kwargs):
+            raise AssertionError("a real command would have run: %r" % (args,))
+
         with mock.patch.object(svc.subprocess, "call", lambda cmd, **kw: calls.append(kw) or 0), \
-                mock.patch.object(svc.subprocess, "run", run):
+                mock.patch.object(svc.subprocess, "run", run), \
+                mock.patch.object(svc.subprocess, "Popen", no_real_command):
             host = svc.Host()
             host.systemctl("daemon-reload")
             host.is_enabled("x")
@@ -3585,6 +3597,8 @@ class SwitchOverTests(ServiceTestBase):
                       "-multiprocess -conf=%s -datadir=%s -ipcdir=/run/gridcoinresearchd "
                       "-ipcattachgroup=gridcoin-gui $GRIDCOIN_AUTOUNLOCK_ARGS\nReadWritePaths=%s\n"
                       % (conf, data, data), text)
+        # ReadWritePaths= adds no mount dependency (systemd.exec(5)), so the drop-in asks for it.
+        self.assertIn("\n[Unit]\nRequiresMountsFor=%s\n" % data, text)
         self.assertFalse(os.path.exists(override))
         self.assertTrue(os.path.exists(override + ".disabled-by-gridcoin-switchover"))
         self.assertIn(data, out)
@@ -3729,6 +3743,16 @@ class SwitchOverTests(ServiceTestBase):
                 self.assertEqual(rc, 1)
                 self.assertIn(reason, err)
                 self.assertIn("will not start", err)
+        # The unit's own conf is read for its datadir= too, though it is not carried, and with the
+        # same rule.
+        own_conf, _ = svc.system_defaults(svc.NETWORKS["main"])
+        self.write_text(own_conf, "datadir=%s\n" % self.tmp.name)
+        self.host.users["gridcoin"] = self.host.users["gridcoin"]._replace(pw_uid=self.uid + 1)
+        svc_rmtree(self.system_unit_dir())
+        self.system_override("-conf=%s" % own_conf)
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+        self.assertEqual(rc, 1)
+        self.assertIn("owned by uid", err)
 
     def test_switch_over_refuses_a_conf_others_can_write(self):
         # A conf anyone but root and the service account can write, or one in such a directory,
@@ -3823,6 +3847,7 @@ class SwitchOverTests(ServiceTestBase):
                 else:
                     self.assertIn(" -conf=%s -datadir=/var/lib/gridcoinresearchd " % carried_conf, text)
                 self.assertNotIn("ReadWritePaths", text)
+                self.assertNotIn("RequiresMountsFor", text)
 
     def test_switch_over_keeps_a_system_override_it_cannot_carry(self):
         data = os.path.join(self.tmp.name, "data", "grc")
@@ -3957,13 +3982,24 @@ class SwitchOverTests(ServiceTestBase):
             self.assertIn(("enable", "--now", "gridcoin-autounlock.socket"), self.host.calls)
         self.assertFalse([call for call in self.host.calls if call[0] in ("restart", "try-restart")])
         os.unlink(os.path.join(self.system_unit_dir(), "override.conf"))
-        # A run from the package leaves the restart to the package.
+        # A run from the package leaves the restart to the package, and says so.
         self.host.package = True
         self.host.calls.clear()
         state = self.write_state("system-autounlock\n")
         rc, out, err = self.run_main("switch-over", "--state=" + state)
         self.assertEqual(rc, 0, err)
         self.assertFalse([call for call in self.host.calls if call[0] in ("restart", "try-restart")])
+        if svc.autounlock_units_installed():
+            self.assertIn("Left the restart of gridcoinresearchd.service to the package", out)
+
+    def test_a_failed_restart_of_the_system_service_is_reported(self):
+        self.write_system_dropin("override.conf", "[Service]\nUser=gridcoin\n")
+        self.host.active.add("gridcoinresearchd.service")
+        self.host.fail.add("try-restart")
+        rc, out, err = self.run_main("switch-over", "--scan")
+        self.assertEqual(rc, 1)
+        self.assertIn("did not finish", err)
+        self.assertIn("systemctl restart gridcoinresearchd.service", err)
 
     def test_switch_over_scan_keeps_what_failed_for_a_rerun(self):
         self.full_old_install()
