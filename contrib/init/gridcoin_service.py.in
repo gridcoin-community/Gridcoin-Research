@@ -2486,21 +2486,89 @@ def write_system_core_record(path, reenable):
     os.rename(temp, path)
 
 
-def system_command(net, paths, copy, masked):
-    """The command line the system service ran: the last ExecStart= of a copy of the unit in
-    /etc/systemd/system, then of its drop-ins in systemd's order. (path, value), or None for the
-    packaged unit's own."""
+# The account the earlier system units ran as.
+OLD_SYSTEM_ACCOUNT = "gridcoin"
+
+
+def system_sources(net, paths, copy, masked):
+    """What sets the system service up besides the packaged unit: a copy of the unit in
+    /etc/systemd/system, then its drop-ins in systemd's order. [(path, text or None)]."""
     sources = []
     if copy is not None and not masked:
-        # A link whose target is gone names no command.
+        # A link whose target is gone sets nothing.
         sources.append((copy, read_dropin_text(copy) if os.path.exists(copy) else None))
-    sources += dropin_texts(dropin_dir(paths, net.daemon + ".service"))
-    command = None
+    return sources + dropin_texts(dropin_dir(paths, net.daemon + ".service"))
+
+
+def last_setting(sources, key):
+    """The last non-empty value of key in [Service] across sources: (path, value), or None."""
+    found = None
     for path, text in sources:
-        for value in unit_file_settings(text or "", "Service", "ExecStart"):
+        for value in unit_file_settings(text or "", "Service", key):
             if value:
-                command = (path, value)
-    return command
+                found = (path, value)
+    return found
+
+
+def system_command(net, paths, copy, masked):
+    """The command line the system service ran: the last ExecStart= of system_sources. (path,
+    value), or None for the packaged unit's own."""
+    return last_setting(system_sources(net, paths, copy, masked), "ExecStart")
+
+
+def conf_setting(text, name, chain):
+    """The value the core reads for name from a configuration file text, as GetConfigOptions and
+    InterpretOption in src/util/system.cpp read it: lines cut at '#' and trimmed; a [chain] section,
+    or a "chain." prefix, wins over the top level; within each the last line wins. None when it is
+    not set."""
+    top = in_chain = None
+    section = ""
+    for line in text.split("\n"):
+        body = line.split("#", 1)[0].strip(" \t\r\n")
+        if body.startswith("[") and body.endswith("]"):
+            section = body[1:-1]
+            continue
+        if "=" not in body:
+            continue
+        key, value = (part.strip(" \t\r\n") for part in body.split("=", 1))
+        if section:
+            key = section + "." + key
+        if key == name:
+            top = value
+        elif key == chain + "." + name:
+            in_chain = value
+    return in_chain if in_chain is not None else top
+
+
+def read_service_conf(path, net, host):
+    """Read a configuration file the old system service read, as root and without following a
+    symlink in its last component: a regular file owned by root or the service account. None when
+    there is no such file."""
+    acct_uid = service_account_uid(net, host)
+    parent, name = os.path.split(path)
+    try:
+        dir_fd = open_dir(parent)
+    except FileNotFoundError:
+        return None
+    try:
+        try:
+            os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            return None
+        try:
+            data = read_owned_file(dir_fd, name, (0, acct_uid), path)
+        except TreeError as e:
+            raise UserError(str(e)) from None
+    finally:
+        os.close(dir_fd)
+    return data.decode("utf8", "surrogateescape")
+
+
+def service_account_uid(net, host):
+    try:
+        return host.getpwnam(net.account).pw_uid
+    except KeyError:
+        raise UserError("the service account %s does not exist; is the package installed?" % net.account) from None
 
 
 def system_dropped_words(net, words):
@@ -2536,10 +2604,15 @@ def carried_system_path(net, value, what, display, paths, host):
     return value
 
 
-def carried_system_paths(net, display, value, own, paths, host):
+def carried_system_paths(net, display, value, own, sources, paths, host):
     """The -conf and -datadir of the old system command line value (in display) that the new unit
-    must run with, each None when it is the unit's own. A command line from an override (not own)
-    with any option the new one would drop is refused."""
+    must run with, each None when it is the unit's own. A command line from an override or a copy
+    (not own) with any option the new one would drop is refused.
+
+    Such a command line without -datadir ran the core on its default datadir under the home of the
+    unit's User=, unless the configuration file it read (its -conf, or else the one in that
+    datadir) set datadir=: that datadir is carried, and without one the switch is refused, naming
+    the default, as the service would otherwise start on a new datadir."""
     words = command_words(value, display)
     if not own:
         dropped = system_dropped_words(net, words)
@@ -2553,6 +2626,23 @@ def carried_system_paths(net, display, value, own, paths, host):
             conf = option[len("-conf="):]
         elif option.startswith("-datadir="):
             datadir = option[len("-datadir="):]
+    if datadir is None and not own:
+        user = last_setting(sources, "User")
+        user = user[1] if user is not None else OLD_SYSTEM_ACCOUNT
+        try:
+            implied = os.path.join(host.getpwnam(user).pw_dir, DATADIR_NAME)
+        except KeyError:
+            raise UserError("the ExecStart= in %s has no -datadir, and its User=%s does not exist, so the datadir "
+                            "it ran on cannot be told" % (display, shown(user))) from None
+        read = conf if conf is not None else os.path.join(implied, *(["testnet"] if net.testnet else []), CONF_NAME)
+        conf_text = read_service_conf(read, net, host) if os.path.isabs(read) else None
+        datadir = conf_setting(conf_text, "datadir", "test" if net.testnet else "main") if conf_text else None
+        if not datadir:
+            raise UserError("the ExecStart= in %s has no -datadir, so the core ran on its default datadir, %s (under "
+                            "the home of %s), unless the configuration file it read, %s, set datadir=, which it does "
+                            "not. Add -datadir=%s to that ExecStart= if that is the wallet's datadir"
+                            % (display, implied, shown(user), read, implied))
+        print("Took the datadir from datadir= in %s." % read)
     default_conf, default_datadir = system_defaults(net)
     if conf is not None and conf != default_conf:
         conf = carried_system_path(net, conf, "conf", display, paths, host)
@@ -2590,7 +2680,8 @@ def switch_system_core(net, host, paths):
     if command is not None:
         display, value = command
         try:
-            conf, datadir = carried_system_paths(net, display, value, display == ours, paths, host)
+            conf, datadir = carried_system_paths(net, display, value, display == ours,
+                                                 system_sources(net, paths, copy, masked), paths, host)
         except UserError as e:
             raise UserError("%s. It stays where it is, and %s will not start until you change it; then rerun"
                             % (e, unit)) from None

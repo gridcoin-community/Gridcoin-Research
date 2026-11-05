@@ -679,6 +679,9 @@ class NewsTests(unittest.TestCase):
                 news = " ".join(f.read().split())
             self.assertIn("-datadir", news, net["tree"])
             self.assertIn("never starts on a new datadir", news, net["tree"])
+            # An override without -datadir ran on the default datadir, or the conf's datadir=.
+            self.assertIn("without -datadir", news, net["tree"])
+            self.assertIn("datadir=", news, net["tree"])
 
 
 def maintainer_scripts():

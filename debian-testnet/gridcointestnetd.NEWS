@@ -28,9 +28,11 @@ gridcoinresearch (5.5.2.1-1) unstable; urgency=medium
   The service never starts on a new datadir. A -conf or -datadir set in such
   an override or copy is carried into gridcointestnet-service's own drop-in,
   /etc/systemd/system/gridcointestnetd.service.d/50-gridcoin-service.conf.
-  An override whose command line has any other option is left where it is,
-  and the service does not start until you change it; the upgrade named the
-  options.
+  A command line without -datadir ran on the core's default datadir under the
+  account's home, unless its configuration file set datadir=, which is then
+  carried. Without either, or with any other option on the command line, the
+  override is left where it is, and the service does not start until you
+  change it; the upgrade said what to change.
 
   A desktop user attaches the GUI to the system service through membership of
   the gridcointestnet-gui group ("Connect to the system service" in the

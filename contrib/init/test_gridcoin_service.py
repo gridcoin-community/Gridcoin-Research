@@ -3026,6 +3026,8 @@ class SwitchOverTests(ServiceTestBase):
             home = os.path.join(root, "home", name)
             os.makedirs(home)
             self.host.users[name] = Passwd(name, self.uid, home)
+        for name, state in (("gridcoin", "gridcoinresearchd"), ("gridcointestnet", "gridcointestnetd")):
+            self.host.users[name] = Passwd(name, self.uid, os.path.join(root, "var_lib", state))
         conf_dirs = {"main": os.path.join(root, "etc-gridcoin"), "test": os.path.join(root, "etc-gridcoin-testnet")}
         for d in conf_dirs.values():
             os.makedirs(d)
@@ -3431,9 +3433,11 @@ class SwitchOverTests(ServiceTestBase):
         return path
 
     def test_switch_over_moves_the_system_services_old_overrides_aside(self):
+        conf, datadir = svc.system_defaults(svc.NETWORKS["main"])
         stale = {
             "override.conf": "[Service]\nExecStart=\nExecStart=/usr/bin/gridcoinresearchd -daemonwait "
-                             "-pid=/run/gridcoinresearchd/gridcoinresearchd.pid\n",
+                             "-pid=/run/gridcoinresearchd/gridcoinresearchd.pid -conf=%s -datadir=%s\n"
+                             % (conf, datadir),
             "10-type.conf": "[Service]\nType=forking\nPIDFile=/run/gridcoinresearchd/gridcoinresearchd.pid\n",
             "20-notify.conf": "[Service]\nNotifyAccess=all\n",
             "30-account.conf": "[Service]\nUser=gridcoin\nGroup=gridcoin\n",
@@ -3543,6 +3547,94 @@ class SwitchOverTests(ServiceTestBase):
         self.assertIn(" -datadir=%s " % data, self.dropin("gridcoinresearchd.service"))
         self.assertTrue(os.path.exists(copy + ".disabled-by-gridcoin-switchover"))
 
+    def test_switch_over_refuses_a_system_override_without_datadir(self):
+        # The command line ran on the core's default under User='s home, or a datadir= in the conf.
+        gridcoin_home = self.host.users["gridcoin"].pw_dir
+        old = os.path.join(self.tmp.name, "olduser")
+        self.host.users["olduser"] = Passwd("olduser", self.uid, old)
+        for user_dropin, implied in ((None, os.path.join(gridcoin_home, ".GridcoinResearch")),
+                                     ("[Service]\nUser=olduser\n", os.path.join(old, ".GridcoinResearch"))):
+            with self.subTest(user=user_dropin):
+                svc_rmtree(self.system_unit_dir())
+                override = self.system_override("")
+                if user_dropin:
+                    self.write_system_dropin("10-user.conf", user_dropin)
+                self.host.calls.clear()
+                state = self.write_state("system-core\n")
+                rc, out, err = self.run_main("switch-over", "--state=" + state)
+                self.assertEqual(rc, 1)
+                self.assertIn("no -datadir", err)
+                self.assertIn(implied, err)
+                self.assertIn(override, err)
+                self.assertIn("will not start", err)
+                self.assertEqual(self.host.calls, [])
+                self.assertIn("override.conf", os.listdir(self.system_unit_dir()))
+                with open(state, encoding="utf8") as f:
+                    self.assertEqual(f.read(), "system-core\n")
+
+    def test_switch_over_carries_the_datadir_its_conf_set(self):
+        data = os.path.join(self.tmp.name, "data", "grc")
+        os.makedirs(data)
+        implied = os.path.join(self.host.users["gridcoin"].pw_dir, ".GridcoinResearch")
+        os.makedirs(implied)
+        other_conf = os.path.join(self.tmp.name, "etc-other", "gridcoin.conf")
+        os.makedirs(os.path.dirname(other_conf))
+        secret = "rpcpassword=SECRETVALUE\n"
+        cases = [
+            # The conf it read by default, in the implied datadir.
+            (lambda: self.write_text(os.path.join(implied, "gridcoinresearch.conf"),
+                                     secret + "datadir=%s\n" % data), ""),
+            # Its -conf; a [main] value wins over the top level, and "main.datadir" is [main] too.
+            (lambda: self.write_text(other_conf, "datadir=/nowhere\n" + secret + "[main]\ndatadir=%s\n" % data),
+             "-conf=%s" % other_conf),
+            (lambda: self.write_text(other_conf, "datadir=/nowhere\nmain.datadir=%s\n" % data),
+             "-conf=%s" % other_conf),
+        ]
+        for make, words in cases:
+            with self.subTest(words=words):
+                svc_rmtree(self.system_unit_dir())
+                for path in (os.path.join(implied, "gridcoinresearch.conf"), other_conf):
+                    if os.path.exists(path):
+                        os.unlink(path)
+                make()
+                self.system_override(words)
+                rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+                self.assertEqual(rc, 0, err)
+                text = self.dropin("gridcoinresearchd.service")
+                self.assertIn(" -datadir=%s " % data, text)
+                self.assertIn("ReadWritePaths=%s\n" % data, text)
+                self.assertIn("datadir=", out)
+                self.assertNotIn("SECRETVALUE", out + err)
+                self.assertNotIn("nowhere", out + err)
+        # On testnet the conf's [test] section wins.
+        test_conf = os.path.join(self.tmp.name, "etc-other", "testnet.conf")
+        self.write_text(test_conf, "datadir=/nowhere\n[test]\ndatadir=%s\n" % data)
+        self.system_override("-testnet -conf=%s" % test_conf, daemon="gridcointestnetd")
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n", network="test"),
+                                     "--network=test")
+        self.assertEqual(rc, 0, err)
+        self.assertIn(" -datadir=%s " % data, self.dropin("gridcointestnetd.service"))
+
+    def test_switch_over_reads_a_conf_only_as_root_or_the_account_left_it(self):
+        conf = os.path.join(self.tmp.name, "etc-other", "gridcoin.conf")
+        os.makedirs(os.path.dirname(conf))
+        real = os.path.join(self.tmp.name, "real.conf")
+        self.write_text(real, "datadir=/x\n")
+        for make, reason in ((lambda: os.symlink(real, conf), "not a regular file"),
+                             (lambda: self.write_text(conf, "datadir=/x\n"), "owned by uid")):
+            with self.subTest(reason=reason):
+                svc_rmtree(self.system_unit_dir())
+                if os.path.lexists(conf):
+                    os.unlink(conf)
+                make()
+                if reason == "owned by uid":
+                    self.host.users["gridcoin"] = self.host.users["gridcoin"]._replace(pw_uid=self.uid + 1)
+                self.system_override("-conf=%s" % conf)
+                rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+                self.assertEqual(rc, 1)
+                self.assertIn(reason, err)
+                self.assertIn("will not start", err)
+
     def test_switch_over_carries_only_what_differs_from_the_unit(self):
         conf = os.path.join(self.tmp.name, "etc-other.conf")
         self.write_text(conf, "rpcuser=x\n")
@@ -3550,7 +3642,7 @@ class SwitchOverTests(ServiceTestBase):
             # The unit's own values: nothing to carry.
             ("-conf=%s/gridcoin.conf -datadir=/var/lib/gridcoinresearchd"
              % svc.NETWORKS["main"].conf_dir, None, None),
-            ("--conf=%s" % conf, conf, None),
+            ("--conf=%s -datadir=/var/lib/gridcoinresearchd" % conf, conf, None),
         ]
         for words, carried_conf, carried_datadir in cases:
             with self.subTest(words=words):
@@ -3577,7 +3669,7 @@ class SwitchOverTests(ServiceTestBase):
             ("-datadir=/home/alice/grc", "/home"),
             ("-datadir=%s/grc" % hidden, "sandbox hides"),
             ("-datadir=%s/missing" % data, "does not exist"),
-            ("-conf=%s/nothing.conf" % data, "does not exist"),
+            ("-conf=%s/nothing.conf -datadir=%s" % (data, data), "does not exist"),
             ("-datadir=relative", "absolute"),
             ("-datadir=%s/%%h" % data, "may not contain"),
         ]
@@ -3656,7 +3748,7 @@ class SwitchOverTests(ServiceTestBase):
         self.assertTrue(os.path.exists(copy + ".disabled-by-gridcoin-switchover"))
 
     def test_scan_leaves_a_switched_system_service_alone(self):
-        self.system_override("")
+        self.system_override("-conf=%s -datadir=%s" % svc.system_defaults(svc.NETWORKS["main"]))
         rc, out, err = self.run_main("switch-over", "--scan")
         self.assertEqual(rc, 0, err)
         # A drop-in the admin writes for the new unit afterwards is the admin's.
