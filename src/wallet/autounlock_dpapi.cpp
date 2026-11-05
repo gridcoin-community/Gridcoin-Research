@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <chrono>
 #include <exception>
+#include <functional>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -38,6 +39,9 @@ constexpr std::chrono::milliseconds FIRST_RETRY_DELAY{1000};
 
 //! What the user is told to do about a file the core will not use.
 const char* const SET_UP_AGAIN = "turn autounlock off and set it up again";
+
+//! SetAutoUnlockReadBackHookForTesting()'s hook. Set only by tests.
+std::function<void(const fs::path&)> g_read_back_hook;
 
 //! "<call> failed with error <n> (<message>)". The message is left out unless it is
 //! printable ASCII, as every log line must be: Windows words it in its display language.
@@ -137,8 +141,10 @@ struct CheckedFile
     std::string reason;
     //! Where, and anything more the reason has to say.
     std::string detail;
-    //! Whether setting autounlock up again is what puts it right.
-    bool set_up_again{false};
+    //! Whether the refusal is about the file itself: its size, layout, scope, network or
+    //! access control list. Such a refusal stands until autounlock is set up again. False
+    //! when the file could not be opened or read, which may pass.
+    bool definite{false};
     //! For a usable file, its bytes and what they hold.
     std::vector<unsigned char> bytes;
     AutoUnlockBlob blob;
@@ -147,16 +153,15 @@ struct CheckedFile
 //! \p file's reason as the fetch reports it.
 std::string Describe(const CheckedFile& file)
 {
-    return file.reason + (file.set_up_again ? std::string("; ") + SET_UP_AGAIN : std::string()) + " (" + file.detail
-        + ")";
+    return file.reason + (file.definite ? std::string("; ") + SET_UP_AGAIN : std::string()) + " (" + file.detail + ")";
 }
 
-CheckedFile Refused(std::string reason, std::string detail, bool set_up_again)
+CheckedFile Refused(std::string reason, std::string detail, bool definite)
 {
     CheckedFile file;
     file.reason = std::move(reason);
     file.detail = std::move(detail);
-    file.set_up_again = set_up_again;
+    file.definite = definite;
 
     return file;
 }
@@ -180,17 +185,17 @@ std::optional<CheckedFile> ForeignAccess(HANDLE handle, const fs::path& path)
         allowed = {winacl::CurrentTokenUser(), winacl::wellknown::System(), winacl::wellknown::Administrators()};
     } catch (const std::exception& e) {
         return Refused("could not read the autounlock file's access control list", Display(path) + ": " + e.what(),
-                       /*set_up_again=*/false);
+                       /*definite=*/false);
     }
 
     if (const std::optional<std::string> reader = winacl::FindForeignReader(acl, allowed)) {
         return Refused("the autounlock file is readable by other accounts", Display(path) + ": " + *reader,
-                       /*set_up_again=*/true);
+                       /*definite=*/true);
     }
 
     if (const std::optional<std::string> writer = winacl::FindForeignWriter(acl, allowed, winacl::mask::FILE_WRITEISH)) {
         return Refused("the autounlock file can be changed by other accounts, which could make it readable to them",
-                       Display(path) + ": " + *writer, /*set_up_again=*/true);
+                       Display(path) + ": " + *writer, /*definite=*/true);
     }
 
     return std::nullopt;
@@ -219,7 +224,7 @@ CheckedFile ReadOnce(const fs::path& path, bool& transient)
 
         transient = IsTransient(open_error);
         return Refused("could not open the autounlock file", Display(path) + ": " + Win32Failure("CreateFileW", open_error),
-                       /*set_up_again=*/false);
+                       /*definite=*/false);
     }
 
     const BlobScope expected = ModeScope();
@@ -241,7 +246,7 @@ CheckedFile ReadOnce(const fs::path& path, bool& transient)
             const DWORD read_error = ::GetLastError();
             transient = IsTransient(read_error);
             return Refused("could not read the autounlock file", Display(path) + ": " + Win32Failure("ReadFile", read_error),
-                           /*set_up_again=*/false);
+                           /*definite=*/false);
         }
 
         if (read == 0) break;
@@ -251,7 +256,7 @@ CheckedFile ReadOnce(const fs::path& path, bool& transient)
 
     if (total > AUTOUNLOCK_BLOB_MAX_BYTES) {
         return Refused(strprintf("the autounlock file is larger than %u bytes", AUTOUNLOCK_BLOB_MAX_BYTES), Display(path),
-                       /*set_up_again=*/true);
+                       /*definite=*/true);
     }
 
     bytes.resize(total);
@@ -260,7 +265,7 @@ CheckedFile ReadOnce(const fs::path& path, bool& transient)
 
     if (!blob) {
         return Refused("the autounlock file is not an autounlock file this version reads", Display(path),
-                       /*set_up_again=*/true);
+                       /*definite=*/true);
     }
 
     if (blob->scope != expected) {
@@ -268,14 +273,14 @@ CheckedFile ReadOnce(const fs::path& path, bool& transient)
                            ? "the autounlock file was set up for a core that runs as a user, but this core runs as a "
                              "Windows service"
                            : "the autounlock file was set up for the Windows service, but this core does not run as one",
-                       Display(path), /*set_up_again=*/true);
+                       Display(path), /*definite=*/true);
     }
 
     const std::string network = Params().NetworkIDString();
 
     if (blob->network != network) {
         return Refused(strprintf("the autounlock file is for the %s network, not %s", blob->network, network),
-                       Display(path), /*set_up_again=*/true);
+                       Display(path), /*definite=*/true);
     }
 
     CheckedFile usable;
@@ -456,15 +461,30 @@ bool StoreBlob(const SecureString& passphrase, std::string& error)
         return false;
     }
 
-    // Read back as the fetch reads it. A file the fetch would refuse, as on a volume that
-    // keeps no access control lists, is reported now rather than left in place.
+    if (g_read_back_hook) g_read_back_hook(*path);
+
+    // Read back as the fetch reads it. A file the fetch would refuse for what it is, as on
+    // a volume that keeps no access control lists, is removed now rather than left in
+    // place. One that could not be read back, as when another process holds it for longer
+    // than the retries wait, or a shutdown cut the wait short, is kept: it is the file just
+    // written, and only the check is missing.
     const CheckedFile written = ReadChecked(*path, FETCH_ATTEMPTS);
 
     if (written.state == FileState::Usable && written.bytes == bytes) return true;
 
+    if (written.state == FileState::Missing) {
+        error = strprintf("the autounlock file written to %s was gone when read back", Display(*path));
+        return false;
+    }
+
+    if (written.state == FileState::Refused && !written.definite) {
+        LogPrintf("autounlock: the passphrase is stored in %s, but the file could not be read back to check it: "
+                  "%s (%s)", Display(*path), written.reason, written.detail);
+        return true;
+    }
+
     const std::string reason = written.state == FileState::Usable ? "what was read back differs from what was written"
-                             : written.state == FileState::Missing ? "it was gone when read back"
-                                                                    : written.reason + " (" + written.detail + ")";
+                                                                   : written.reason + " (" + written.detail + ")";
 
     if (::DeleteFileW(path->wstring().c_str()) || ::GetLastError() == ERROR_FILE_NOT_FOUND) {
         error = strprintf("the autounlock file written to %s would not be used, so it was removed: %s", Display(*path),
@@ -577,6 +597,11 @@ AutoUnlockStoreStatus DpapiBlobStore::Status()
     }
 
     return status;
+}
+
+void SetAutoUnlockReadBackHookForTesting(std::function<void(const fs::path&)> hook)
+{
+    g_read_back_hook = std::move(hook);
 }
 
 AutoUnlockSecretStore* PlatformAutoUnlockSecretStore()

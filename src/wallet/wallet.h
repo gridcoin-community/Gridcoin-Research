@@ -580,7 +580,7 @@ public:
     //! \p failure_out, when given, is Abandoned for an attempt given up while
     //! it waited, Passphrase for a wrong old passphrase, and None otherwise.
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase,
-                                UnlockFailure* failure_out = nullptr) LOCKS_EXCLUDED(cs_wallet);
+                                UnlockFailure* failure_out = nullptr) LOCKS_EXCLUDED(cs_wallet, ::cs_main);
 
     //! Ends every capability issued before it, since those were issued with no
     //! passphrase to check.
@@ -706,7 +706,10 @@ private:
     //! be. The attempt served waits out the delay the last refusal earned
     //! before its passphrase is checked, and no later attempt overtakes it, so
     //! its wait is bounded by the attempts ahead of it, each at most a check
-    //! and the longest FailedPassphraseDelay().
+    //! and the longest FailedPassphraseDelay(). A passphrase change's turn
+    //! also covers storing the new passphrase for autounlock
+    //! (OnWalletPassphraseChanged()): encryption and file I/O, with up to
+    //! about 3 s of retries when another process holds the file.
     //!
     //! The wait ends with no turn held when a shutdown is requested, or when
     //! the calling thread's attempt is cancelled (PassphraseAttemptCancel). The

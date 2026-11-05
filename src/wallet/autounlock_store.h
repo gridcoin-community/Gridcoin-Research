@@ -52,13 +52,15 @@ AutoUnlockSecretStore* GetAutoUnlockSecretStore();
 void SetAutoUnlockSecretStoreForTesting(std::unique_ptr<AutoUnlockSecretStore> store);
 
 //! The platform's own store, defined by the platform's backend (autounlock_dpapi.cpp on
-//! Windows), and as nullptr in autounlock_store.cpp for a platform without one.
+//! Windows), and as nullptr in autounlock_store.cpp for a platform without one. Callers
+//! use GetAutoUnlockSecretStore(), which honours the store a test installed.
 AutoUnlockSecretStore* PlatformAutoUnlockSecretStore();
 
 //! Re-encrypts an existing secret after a passphrase change; logs; never throws. It acts
-//! only when the store's Status() says something is stored. Call it once for each change
-//! that succeeded, with neither cs_main nor cs_wallet held: the store does file I/O and
-//! encryption.
+//! only when the store's Status() says something is stored. When Store() fails, what is
+//! stored is the old passphrase, so it calls Remove() as well. Call it once for each
+//! change that succeeded, with neither cs_main nor cs_wallet held: the store does file I/O
+//! and encryption.
 void OnWalletPassphraseChanged(const SecureString& new_passphrase);
 
 #endif // GRIDCOIN_WALLET_AUTOUNLOCK_STORE_H

@@ -7,21 +7,25 @@
 #ifdef WIN32
 #include "chainparams.h"
 #include "chainparamsbase.h"
+#include "logging.h"
 #include "test/state_guard.h"
 #include "test/wine.h"
 #include "util/dir_permissions.h"
 #include "util/system.h"
 #include "util/win_acl.h"
 #include "util/winservice.h"
+#include "wallet/autounlock.h"
 #include "wallet/autounlock_blob.h"
 #include "wallet/autounlock_dpapi.h"
 #include "wallet/autounlock_store.h"
 
 #include <chrono>
+#include <functional>
 #include <iterator>
 #include <optional>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <windows.h>
@@ -64,6 +68,16 @@ struct TempDataDir
     }
 
     fs::path BlobPath() const { return path / "autounlock" / "passphrase.dpapi"; }
+};
+
+//! Installs a read-back hook for one scope.
+struct ReadBackHook
+{
+    explicit ReadBackHook(std::function<void(const fs::path&)> hook)
+    {
+        SetAutoUnlockReadBackHookForTesting(std::move(hook));
+    }
+    ~ReadBackHook() { SetAutoUnlockReadBackHookForTesting({}); }
 };
 
 //! Makes the core look like a Windows service, or not, until the scope ends.
@@ -280,6 +294,86 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_missing_or_oversize_file)
 
     BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
     BOOST_CHECK_MESSAGE(Contains(error, "larger than"), error);
+}
+
+// A file that cannot be read back because another process holds it is kept: what was
+// written is there. One that the read-back refuses for what it is, here for an access
+// control list that lets other accounts read it, is removed.
+BOOST_AUTO_TEST_CASE(dpapi_store_keeps_a_file_it_cannot_read_back)
+{
+    if (SkipUnderWine()) return;
+
+    TempDataDir datadir;
+    const fs::path path = datadir.BlobPath();
+    DpapiBlobStore store;
+    std::string error;
+
+    // Held without sharing from the moment it is in place until Store() returns, so that
+    // each read-back attempt, three over 3 s, meets a sharing violation.
+    HANDLE held = INVALID_HANDLE_VALUE;
+    const SecureString passphrase("dpapi-unverified");
+    bool stored = false;
+    {
+        ReadBackHook hook([&held](const fs::path& in_place) {
+            held = ::CreateFileW(in_place.wstring().c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING,
+                                 FILE_ATTRIBUTE_NORMAL, nullptr);
+        });
+        stored = store.Store(passphrase, error);
+    }
+    BOOST_REQUIRE(held != INVALID_HANDLE_VALUE);
+    ::CloseHandle(held);
+
+    BOOST_REQUIRE_MESSAGE(stored, error);
+    BOOST_CHECK(fs::exists(path));
+    const std::optional<SecureString> fetched = FetchAutoUnlockFromDpapiBlob(path, error);
+    BOOST_REQUIRE_MESSAGE(fetched.has_value(), error);
+    BOOST_CHECK(*fetched == passphrase);
+
+    {
+        ReadBackHook hook([](const fs::path& in_place) {
+            ApplyAcl(in_place, OwnerOnlyPlus(wellknown::Users(), FILE_GENERIC_READ));
+        });
+        BOOST_CHECK(!store.Store(SecureString("dpapi-refused-on-read-back"), error));
+    }
+    BOOST_CHECK_MESSAGE(Contains(error, "readable by other accounts"), error);
+    BOOST_CHECK_MESSAGE(Contains(error, "so it was removed"), error);
+    BOOST_CHECK(!fs::exists(path));
+}
+
+// FetchAutoUnlockPassphrase() reads the file only when -autounlockblob is given and not
+// negated. Given without a value, with no file at the default place, it logs one line.
+BOOST_AUTO_TEST_CASE(fetch_follows_autounlockblob)
+{
+    if (SkipUnderWine()) return;
+
+    TempDataDir datadir;
+    std::vector<std::string> lines;
+    const auto callback = LogInstance().PushBackCallback([&lines](const std::string& line) {
+        if (Contains(line, "autounlock")) lines.push_back(line);
+    });
+    struct CallbackRemover {
+        decltype(callback) it;
+        ~CallbackRemover() { LogInstance().DeleteCallback(it); }
+    } const remove_callback{callback};
+
+    gArgs.ClearForcedArg("-autounlockblob");
+    BOOST_CHECK(!FetchAutoUnlockPassphrase().has_value());
+    BOOST_CHECK_EQUAL(lines.size(), 0U);
+
+    gArgs.LockSettings([](util::Settings& settings) {
+        settings.command_line_options["autounlockblob"] = {util::SettingsValue(false)};
+    });
+    BOOST_REQUIRE(gArgs.IsArgNegated("-autounlockblob"));
+    BOOST_CHECK(!FetchAutoUnlockPassphrase().has_value());
+    BOOST_CHECK_EQUAL(lines.size(), 0U);
+    gArgs.LockSettings([](util::Settings& settings) { settings.command_line_options.erase("autounlockblob"); });
+
+    gArgs.ForceSetArg("-autounlockblob", "");
+    BOOST_CHECK(!FetchAutoUnlockPassphrase().has_value());
+    BOOST_REQUIRE_EQUAL(lines.size(), 1U);
+    const std::string expected = "autounlock is not set up (" + fsbridge::LongPathString(datadir.BlobPath())
+                               + "); the wallet stays locked";
+    BOOST_CHECK_MESSAGE(Contains(lines[0], expected), lines[0]);
 }
 
 // A file held open without read sharing is retried: here it is released after half a

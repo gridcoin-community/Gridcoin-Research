@@ -45,6 +45,7 @@ AutoUnlockBlob MakeBlob(BlobScope scope, const std::string& network, std::vector
 struct StoreCalls
 {
     int stores{0};
+    int removes{0};
     SecureString last;
 };
 
@@ -52,10 +53,11 @@ struct StoreCalls
 class FakeStore final : public AutoUnlockSecretStore
 {
 public:
-    enum class Outcome { Stores, Fails, Throws };
+    enum class Outcome { Succeeds, Fails, Throws };
 
-    FakeStore(std::shared_ptr<StoreCalls> calls, bool configured, Outcome outcome)
-        : m_calls(std::move(calls)), m_configured(configured), m_outcome(outcome)
+    FakeStore(std::shared_ptr<StoreCalls> calls, bool configured, Outcome store_outcome, Outcome remove_outcome)
+        : m_calls(std::move(calls)), m_configured(configured), m_store_outcome(store_outcome),
+          m_remove_outcome(remove_outcome)
     {
     }
 
@@ -64,15 +66,15 @@ public:
         ++m_calls->stores;
         m_calls->last = passphrase;
 
-        if (m_outcome == Outcome::Throws) throw std::runtime_error("the fake store throws");
-        if (m_outcome == Outcome::Fails) {
-            error = "the fake store refuses";
-            return false;
-        }
-        return true;
+        return Answer(m_store_outcome, error);
     }
 
-    bool Remove(std::string& /*error*/) override { return true; }
+    bool Remove(std::string& error) override
+    {
+        ++m_calls->removes;
+
+        return Answer(m_remove_outcome, error);
+    }
 
     AutoUnlockStoreStatus Status() override
     {
@@ -84,9 +86,20 @@ public:
     }
 
 private:
+    static bool Answer(Outcome outcome, std::string& error)
+    {
+        if (outcome == Outcome::Throws) throw std::runtime_error("the fake store throws");
+        if (outcome == Outcome::Fails) {
+            error = "the fake store refuses";
+            return false;
+        }
+        return true;
+    }
+
     std::shared_ptr<StoreCalls> m_calls;
     bool m_configured{false};
-    Outcome m_outcome{Outcome::Stores};
+    Outcome m_store_outcome{Outcome::Succeeds};
+    Outcome m_remove_outcome{Outcome::Succeeds};
 };
 
 //! Installs a fake store for one scope and restores the platform's after it.
@@ -94,9 +107,11 @@ struct FakeStoreInstalled
 {
     std::shared_ptr<StoreCalls> calls{std::make_shared<StoreCalls>()};
 
-    FakeStoreInstalled(bool configured, FakeStore::Outcome outcome)
+    FakeStoreInstalled(bool configured, FakeStore::Outcome store_outcome,
+                       FakeStore::Outcome remove_outcome = FakeStore::Outcome::Succeeds)
     {
-        SetAutoUnlockSecretStoreForTesting(std::make_unique<FakeStore>(calls, configured, outcome));
+        SetAutoUnlockSecretStoreForTesting(
+            std::make_unique<FakeStore>(calls, configured, store_outcome, remove_outcome));
     }
 
     ~FakeStoreInstalled()
@@ -249,6 +264,19 @@ BOOST_AUTO_TEST_CASE(blob_path_rules)
     BOOST_REQUIRE(path.has_value());
     BOOST_CHECK(*path == expected);
 
+    // Negated, as -noautounlockblob on the command line leaves it. Its value reads as "0",
+    // which would otherwise be a relative path.
+    gArgs.ClearForcedArg("-autounlockblob");
+    gArgs.LockSettings([](util::Settings& settings) {
+        settings.command_line_options["autounlockblob"] = {util::SettingsValue(false)};
+    });
+    BOOST_REQUIRE(gArgs.IsArgNegated("-autounlockblob"));
+    path = AutoUnlockBlobPath(error);
+    BOOST_REQUIRE_MESSAGE(path.has_value(), error);
+    BOOST_CHECK(*path == expected);
+    BOOST_CHECK(error.empty());
+    gArgs.LockSettings([](util::Settings& settings) { settings.command_line_options.erase("autounlockblob"); });
+
 #ifdef WIN32
     const fs::path absolute("C:\\Gridcoin\\elsewhere\\passphrase.dpapi");
 #else
@@ -276,35 +304,49 @@ BOOST_AUTO_TEST_CASE(passphrase_change_reencrypts_only_when_configured)
     const SecureString changed("autounlock-store-new-passphrase");
 
     {
-        FakeStoreInstalled fake(/*configured=*/true, FakeStore::Outcome::Stores);
+        FakeStoreInstalled fake(/*configured=*/true, FakeStore::Outcome::Succeeds);
         OnWalletPassphraseChanged(changed);
         BOOST_CHECK_EQUAL(fake.calls->stores, 1);
         BOOST_CHECK(fake.calls->last == changed);
+        BOOST_CHECK_EQUAL(fake.calls->removes, 0);
     }
 
     {
-        FakeStoreInstalled fake(/*configured=*/false, FakeStore::Outcome::Stores);
+        FakeStoreInstalled fake(/*configured=*/false, FakeStore::Outcome::Succeeds);
         OnWalletPassphraseChanged(changed);
         BOOST_CHECK_EQUAL(fake.calls->stores, 0);
+        BOOST_CHECK_EQUAL(fake.calls->removes, 0);
     }
 
+    // A store that fails leaves the old passphrase stored, which could no longer unlock
+    // the wallet, so it is removed.
     {
         FakeStoreInstalled fake(/*configured=*/true, FakeStore::Outcome::Fails);
         BOOST_CHECK_NO_THROW(OnWalletPassphraseChanged(changed));
         BOOST_CHECK_EQUAL(fake.calls->stores, 1);
+        BOOST_CHECK_EQUAL(fake.calls->removes, 1);
     }
 
     {
         FakeStoreInstalled fake(/*configured=*/true, FakeStore::Outcome::Throws);
         BOOST_CHECK_NO_THROW(OnWalletPassphraseChanged(changed));
         BOOST_CHECK_EQUAL(fake.calls->stores, 1);
+        BOOST_CHECK_EQUAL(fake.calls->removes, 1);
+    }
+
+    // The removal failing as well is logged, never thrown.
+    for (const FakeStore::Outcome remove : {FakeStore::Outcome::Fails, FakeStore::Outcome::Throws}) {
+        FakeStoreInstalled fake(/*configured=*/true, FakeStore::Outcome::Fails, remove);
+        BOOST_CHECK_NO_THROW(OnWalletPassphraseChanged(changed));
+        BOOST_CHECK_EQUAL(fake.calls->stores, 1);
+        BOOST_CHECK_EQUAL(fake.calls->removes, 1);
     }
 
     // Through the wallet: a change that succeeds stores the new passphrase once, and one
     // that is refused stores nothing. The refusal is answered after
     // FailedPassphraseDelay(1), half a second.
     {
-        FakeStoreInstalled fake(/*configured=*/true, FakeStore::Outcome::Stores);
+        FakeStoreInstalled fake(/*configured=*/true, FakeStore::Outcome::Succeeds);
         CWallet wallet;
         const SecureString original("autounlock-store-old-passphrase");
         MakeEncryptedWallet(wallet, original);
@@ -315,6 +357,7 @@ BOOST_AUTO_TEST_CASE(passphrase_change_reencrypts_only_when_configured)
 
         BOOST_CHECK(!wallet.ChangeWalletPassphrase(SecureString("autounlock-store-wrong"), original));
         BOOST_CHECK_EQUAL(fake.calls->stores, 1);
+        BOOST_CHECK_EQUAL(fake.calls->removes, 0);
     }
 
     // Uninstalled, the platform's store is back: none, except on Windows.

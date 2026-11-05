@@ -43,28 +43,51 @@ AutoUnlockSecretStore* PlatformAutoUnlockSecretStore()
 
 void OnWalletPassphraseChanged(const SecureString& new_passphrase)
 {
+    AutoUnlockSecretStore* const store = GetAutoUnlockSecretStore();
+
+    if (!store) return;
+
+    std::string location;
+    std::string failure;
+
     try {
-        AutoUnlockSecretStore* const store = GetAutoUnlockSecretStore();
-
-        if (!store) return;
-
         const AutoUnlockStoreStatus status = store->Status();
 
         if (!status.configured) return;
 
-        std::string error;
+        location = status.location;
 
-        if (store->Store(new_passphrase, error)) {
-            LogPrintf("autounlock: the stored passphrase now matches the new wallet passphrase (%s)", status.location);
-        } else {
-            LogPrintf("ERROR: autounlock: the stored passphrase could not be changed to the new wallet passphrase: %s. "
-                      "Autounlock will not unlock the wallet until it is set up again.", error);
+        if (store->Store(new_passphrase, failure)) {
+            LogPrintf("autounlock: the stored passphrase now matches the new wallet passphrase (%s)", location);
+            return;
         }
     } catch (const std::exception& e) {
-        LogPrintf("ERROR: autounlock: the stored passphrase could not be changed to the new wallet passphrase: %s. "
-                  "Autounlock will not unlock the wallet until it is set up again.", e.what());
+        failure = e.what();
     } catch (...) {
-        LogPrintf("ERROR: autounlock: the stored passphrase could not be changed to the new wallet passphrase. "
-                  "Autounlock will not unlock the wallet until it is set up again.");
+        failure = "an unknown error";
+    }
+
+    LogPrintf("ERROR: autounlock: the stored passphrase could not be changed to the new wallet passphrase: %s",
+              failure);
+
+    // What is stored is the old passphrase, which no longer unlocks the wallet: every start
+    // would spend a passphrase attempt on it, and it would stay on disk. So it is removed,
+    // and the next start says autounlock is not set up.
+    std::string error;
+    bool removed = false;
+
+    try {
+        removed = store->Remove(error);
+    } catch (const std::exception& e) {
+        error = e.what();
+    } catch (...) {
+        error = "an unknown error";
+    }
+
+    if (removed) {
+        LogPrintf("autounlock: the old stored passphrase was removed; set autounlock up again to use it");
+    } else {
+        LogPrintf("ERROR: autounlock: the old stored passphrase could not be removed either (%s): %s. Remove it, "
+                  "then set autounlock up again.", location, error);
     }
 }

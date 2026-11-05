@@ -9,6 +9,7 @@
 #include "support/allocators/secure.h"
 #include "wallet/autounlock_store.h"
 
+#include <functional>
 #include <optional>
 #include <string>
 
@@ -28,7 +29,10 @@ std::optional<SecureString> FetchAutoUnlockFromDpapiBlob(const fs::path& path, s
 //! The Windows store: the autounlock file at AutoUnlockBlobPath(), encrypted for the
 //! scope this mode reads. Store() writes the file under a temporary name beside it,
 //! owner-only from creation, moves it into place, then reads it back and checks it as
-//! FetchAutoUnlockFromDpapiBlob() would, removing a file that check refuses. Remove()
+//! FetchAutoUnlockFromDpapiBlob() would. It removes a file that check refuses for what
+//! it is (its size, layout, scope, network or access control list) and returns false. A
+//! file that could not be read back, after the fetch's retries or because a shutdown
+//! ended them, is kept, logged as not checked, and Store() returns true. Remove()
 //! succeeds when no file is there. Status() checks the file without decrypting it.
 class DpapiBlobStore final : public AutoUnlockSecretStore
 {
@@ -37,6 +41,11 @@ public:
     bool Remove(std::string& error) override;
     AutoUnlockStoreStatus Status() override;
 };
+
+//! For tests: \p hook is called by DpapiBlobStore::Store() with the file's path once the
+//! file is in place and before it is read back. An empty one restores the default, which
+//! does nothing.
+void SetAutoUnlockReadBackHookForTesting(std::function<void(const fs::path&)> hook);
 #endif // WIN32
 
 #endif // GRIDCOIN_WALLET_AUTOUNLOCK_DPAPI_H
