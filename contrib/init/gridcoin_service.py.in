@@ -2612,7 +2612,8 @@ def carried_system_paths(net, display, value, own, sources, paths, host):
     Such a command line without -datadir ran the core on its default datadir under the home of the
     unit's User=, unless the configuration file it read (its -conf, or else the one in that
     datadir) set datadir=: that datadir is carried, and without one the switch is refused, naming
-    the default, as the service would otherwise start on a new datadir."""
+    the default, as the service would otherwise start on a new datadir. Without -conf it read the
+    configuration file in the datadir it started from, which is carried when it is there."""
     words = command_words(value, display)
     if not own:
         dropped = system_dropped_words(net, words)
@@ -2626,23 +2627,33 @@ def carried_system_paths(net, display, value, own, sources, paths, host):
             conf = option[len("-conf="):]
         elif option.startswith("-datadir="):
             datadir = option[len("-datadir="):]
-    if datadir is None and not own:
-        user = last_setting(sources, "User")
-        user = user[1] if user is not None else OLD_SYSTEM_ACCOUNT
-        try:
-            implied = os.path.join(host.getpwnam(user).pw_dir, DATADIR_NAME)
-        except KeyError:
-            raise UserError("the ExecStart= in %s has no -datadir, and its User=%s does not exist, so the datadir "
-                            "it ran on cannot be told" % (display, shown(user))) from None
-        read = conf if conf is not None else os.path.join(implied, *(["testnet"] if net.testnet else []), CONF_NAME)
-        conf_text = read_service_conf(read, net, host) if os.path.isabs(read) else None
-        datadir = conf_setting(conf_text, "datadir", "test" if net.testnet else "main") if conf_text else None
-        if not datadir:
-            raise UserError("the ExecStart= in %s has no -datadir, so the core ran on its default datadir, %s (under "
-                            "the home of %s), unless the configuration file it read, %s, set datadir=, which it does "
-                            "not. Add -datadir=%s to that ExecStart= if that is the wallet's datadir"
-                            % (display, implied, shown(user), read, implied))
-        print("Took the datadir from datadir= in %s." % read)
+    if not own:
+        # The datadir the core started from: its -datadir, or its default under User='s home.
+        start = datadir
+        if start is None:
+            user = last_setting(sources, "User")
+            user = user[1] if user is not None else OLD_SYSTEM_ACCOUNT
+            try:
+                start = os.path.join(host.getpwnam(user).pw_dir, DATADIR_NAME)
+            except KeyError:
+                raise UserError("the ExecStart= in %s has no -datadir, and its User=%s does not exist, so the "
+                                "datadir it ran on cannot be told" % (display, shown(user))) from None
+        # Without -conf the core read the conf in that datadir, its testnet/ one on testnet
+        # (GetConfigFile in src/util/system.cpp is net-specific).
+        start_conf = (os.path.join(start, *(["testnet"] if net.testnet else []), CONF_NAME)
+                      if os.path.isabs(start) else None)
+        if datadir is None:
+            read = conf if conf is not None else start_conf
+            conf_text = read_service_conf(read, net, host) if read and os.path.isabs(read) else None
+            datadir = conf_setting(conf_text, "datadir", "test" if net.testnet else "main") if conf_text else None
+            if not datadir:
+                raise UserError("the ExecStart= in %s has no -datadir, so the core ran on its default datadir, %s "
+                                "(under the home of %s), unless the configuration file it read, %s, set datadir=, "
+                                "which it does not. Add -datadir=%s to that ExecStart= if that is the wallet's "
+                                "datadir" % (display, start, shown(user), read, start))
+            print("Took the datadir from datadir= in %s." % read)
+        if conf is None and start_conf is not None and os.path.lexists(start_conf):
+            conf = start_conf
     default_conf, default_datadir = system_defaults(net)
     if conf is not None and conf != default_conf:
         conf = carried_system_path(net, conf, "conf", display, paths, host)
