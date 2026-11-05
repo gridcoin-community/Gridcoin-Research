@@ -365,9 +365,12 @@ bool AppInit(int argc, char* argv[])
         init_message_connection = uiInterface.InitMessage_connect(
             [](const std::string& message) { sdnotify::ExtendStartTimeout(message); });
 
+#ifndef WIN32
         // The daemonizing fork is behind us. Under a PID namespace this process is
-        // process 1 and must reap what the notify commands leave behind.
+        // process 1 and must reap what the notify commands leave behind. The reaper
+        // is POSIX only.
         util::StartOrphanReaper();
+#endif
 
         fRet = AppInit2(threads);
 #if HAVE_DECL_FORK
@@ -548,7 +551,9 @@ bool AppInit(int argc, char* argv[])
     }
 
     Shutdown(nullptr);
+#ifndef WIN32
     util::StopOrphanReaper();
+#endif
 
     // delete thread handler
     threads->interruptAll();
