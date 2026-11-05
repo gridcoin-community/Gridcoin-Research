@@ -2440,6 +2440,13 @@ bool AppInit2(ThreadHandlerPtr threads)
     // existing block data files from blk*.dat to blk*.dat.orig to prepare for reloading index from block data files.
     // This is the first half of reindex. The second half is below in the import blocks section.
     if (gArgs.GetBoolArg("-reindex")) {
+        // A stop requested before the block data files are renamed ends the start here,
+        // so it does not leave a reindex half begun.
+        if (ShutdownRequested()) {
+            LogPrintf("Shutdown requested. Exiting.");
+            return false;
+        }
+
         uiInterface.InitMessage(_("Resetting block chain index to prepare for reindexing..."));
 
         if (!GRC::Upgrade::ResetBlockchainData(false) || !GRC::Upgrade::MoveBlockDataFiles(block_data_files_to_load)) {
@@ -2715,6 +2722,13 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (!walletdb.WriteAttribute("mrc_request_correction_scan_complete", mrc_request_correction_scan_complete)) {
             error("%s: Unable to update mrc request correction scan attribute in wallet db.", __func__);
         }
+
+        // The scan ran to its end and is recorded as done; a stop requested during it
+        // ends the start now rather than after the rest of initialisation.
+        if (ShutdownRequested()) {
+            LogPrintf("Shutdown requested. Exiting.");
+            return false;
+        }
     }
 
     // If -rescan was not requested, but the wallet height is less than the block database height, then we
@@ -2734,6 +2748,15 @@ bool AppInit2(ThreadHandlerPtr threads)
         }
 
         g_timer.GetTimes("rescan complete", "init");
+
+        // As after the block index load: a stop requested during the rescan ends the
+        // start now. The wallet keeps what the scan found; its best block is not moved,
+        // so the next start scans from the same block, as it does after any start that
+        // did not finish.
+        if (ShutdownRequested()) {
+            LogPrintf("Shutdown requested. Exiting.");
+            return false;
+        }
     }
 
     // ********************************************************* Step 9: initialize GRC code
