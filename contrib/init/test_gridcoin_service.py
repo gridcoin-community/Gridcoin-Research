@@ -15,14 +15,17 @@ import importlib.machinery
 import importlib.util
 import io
 import os
+import re
 import tempfile
 import unittest
 
 TOOL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gridcoin_service.py.in")
+SYSTEMD_UNITS_CMAKE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "cmake",
+                                   "systemd_units.cmake")
 
 
-def load_tool():
-    loader = importlib.machinery.SourceFileLoader("gridcoin_service", TOOL_PATH)
+def load_tool(path=TOOL_PATH):
+    loader = importlib.machinery.SourceFileLoader("gridcoin_service", path)
     spec = importlib.util.spec_from_loader(loader.name, loader)
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
@@ -32,7 +35,8 @@ def load_tool():
 svc = load_tool()
 
 Passwd = collections.namedtuple("Passwd", "pw_name pw_uid pw_dir")
-CONFIGURED = {"bindir": "/usr/bin", "default_network": "main", "python3": "/usr/bin/python3"}
+CONFIGURED = {"bindir": "/usr/bin", "default_network": "main", "python3": "/usr/bin/python3",
+              "libexec_subdir_main": "gridcoin", "libexec_subdir_test": "gridcointestnet"}
 
 
 class FakeHost:
@@ -158,6 +162,35 @@ class ValidateUserTests(ServiceTestBase):
         with self.assertRaises(svc.UserError):
             svc.validate_user("low", host, self.paths)
         svc.validate_user("ok", host, self.paths)
+
+
+class CMakeValuesTests(unittest.TestCase):
+    def test_libexec_subdir_comes_from_cmake(self):
+        with open(SYSTEMD_UNITS_CMAKE, encoding="utf8") as f:
+            cmake = f.read()
+        values = dict(re.findall(r'set\(GRC_LIBEXEC_SUBDIR_(MAIN|TEST) "([^"]*)"\)', cmake))
+        self.assertEqual(sorted(values), ["MAIN", "TEST"])
+        # Each network's branch installs the helper under the same value.
+        for net in ("MAIN", "TEST"):
+            branch = re.search(r'GRC_UNIT_NETWORK STREQUAL "%s"\)(.*?)(?:elseif|else)\(' % net.lower(), cmake, re.S)
+            self.assertIsNotNone(branch, net)
+            self.assertIn('set(GRC_LIBEXEC_SUBDIR "${GRC_LIBEXEC_SUBDIR_%s}")' % net, branch.group(1))
+        self.assertIn('DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${GRC_LIBEXEC_SUBDIR}"', cmake)
+
+        # The tool configured with those values names the same directories.
+        with open(TOOL_PATH, encoding="utf8") as f:
+            text = f.read()
+        for net in ("MAIN", "TEST"):
+            placeholder = "@GRC_LIBEXEC_SUBDIR_%s@" % net
+            self.assertIn(placeholder, text)
+            text = text.replace(placeholder, values[net])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "gridcoin_service.py")
+            with open(path, "w", encoding="utf8") as f:
+                f.write(text)
+            configured = load_tool(path)
+        self.assertEqual(configured.NETWORKS["main"].subdir, values["MAIN"])
+        self.assertEqual(configured.NETWORKS["test"].subdir, values["TEST"])
 
 
 class ResolveDatadirTests(ServiceTestBase):

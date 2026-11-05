@@ -24,7 +24,8 @@ import subprocess
 import stat
 import sys
 
-CONFIG = {"bindir": "@GRC_BINDIR@", "default_network": "@GRC_UNIT_NETWORK@", "python3": "@GRC_UNIT_PYTHON3@"}
+CONFIG = {"bindir": "@GRC_BINDIR@", "default_network": "@GRC_UNIT_NETWORK@", "python3": "@GRC_UNIT_PYTHON3@",
+          "libexec_subdir_main": "@GRC_LIBEXEC_SUBDIR_MAIN@", "libexec_subdir_test": "@GRC_LIBEXEC_SUBDIR_TEST@"}
 
 EXIT_USAGE = 64
 DROPIN_MAIN = "50-gridcoin-service.conf"
@@ -65,11 +66,13 @@ class Network:
         return self.account + "-service"
 
 
+# subdir is the helper's directory under libexec, as CMake installs it.
 NETWORKS = {
     "main": Network("gridcoinresearchd", "", "gridcoin", "gridcoin-gui", "/etc/gridcoin",
-                    "gridcoinresearchd", "gridcoin-autounlock", "gridcoinresearch", ""),
+                    "gridcoinresearchd", "gridcoin-autounlock", "gridcoinresearch", CONFIG["libexec_subdir_main"]),
     "test": Network("gridcointestnetd", "-testnet", "gridcointestnet", "gridcointestnet-gui", "/etc/gridcoin-testnet",
-                    "gridcointestnetd", "gridcointestnet-autounlock", "gridcointestnet", "testnet"),
+                    "gridcointestnetd", "gridcointestnet-autounlock", "gridcointestnet",
+                    CONFIG["libexec_subdir_test"]),
 }
 
 
