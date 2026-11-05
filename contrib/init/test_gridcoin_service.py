@@ -748,6 +748,26 @@ def make_socket_file(path):
         os.chdir(old)
 
 
+def changed_stat(st, **fields):
+    """st with the given fields (st_dev, st_ino) changed, as os.stat_result."""
+    values = [st.st_mode, st.st_ino, st.st_dev, st.st_nlink, st.st_uid, st.st_gid, st.st_size,
+              int(st.st_atime), int(st.st_mtime), int(st.st_ctime)]
+    for name, value in fields.items():
+        values[["st_mode", "st_ino", "st_dev"].index(name)] = value
+    return os.stat_result(values)
+
+
+def lock_is_held_elsewhere(lock_path):
+    """Whether a second process fails to take the core's own lock (F_SETLK through lockf)."""
+    code = ("import fcntl, os, sys\n"
+            "fd = os.open(sys.argv[1], os.O_RDWR)\n"
+            "try:\n"
+            "    fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+            "except OSError:\n"
+            "    sys.exit(3)\n")
+    return subprocess.run([sys.executable, "-I", "-c", code, lock_path]).returncode == 3
+
+
 def crafted_stream(members):
     """A tar stream with the given (name, type, data) members, written without tarfile's own checks."""
     buf = io.BytesIO()
@@ -1078,6 +1098,51 @@ class CopyTests(ServiceTestBase):
         self.assertEqual(names, ["a", "a/walletbackups", "a/walletbackups/gridcoinresearch.conf-x",
                                  "gridcoinresearch.conf-x", "walletbackups", "walletbackups/wallet-z.dat"])
 
+    def test_open_entry_refuses_an_entry_swapped_after_lstat(self):
+        write_tree(self.src, {"a": b"1"})
+        real_stat = os.stat
+
+        def stale(name, *args, **kwargs):
+            st = real_stat(name, *args, **kwargs)
+            return changed_stat(st, st_ino=st.st_ino + 1) if name == "a" else st
+
+        src_fd = os.open(self.src, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, src_fd)
+        with mock.patch.object(svc.os, "stat", stale):
+            with self.assertRaisesRegex(svc.TreeError, "changed while it was read"):
+                svc.open_entry(src_fd, "a", "a")
+
+    def test_stream_refuses_a_sub_mount(self):
+        write_tree(self.src, {"blocks/blk0001.dat": b"1", "chainstate/x": b"2"})
+        real_stat = os.stat
+
+        def mounted(name, *args, **kwargs):
+            st = real_stat(name, *args, **kwargs)
+            return changed_stat(st, st_dev=st.st_dev + 1) if name == "chainstate" else st
+
+        with mock.patch.object(svc.os, "stat", mounted):
+            with self.assertRaisesRegex(svc.TreeError, "chainstate.*another filesystem"):
+                svc.stream_tree(self.src, io.BytesIO(), set())
+
+    def test_create_paths_refuse_an_existing_or_swapped_directory(self):
+        dst_fd = os.open(self.dst, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, dst_fd)
+        os.mkdir(os.path.join(self.dst, "there"))
+        with self.assertRaisesRegex(svc.UserError, "exists"):
+            svc.create_dir("there", dst_fd, "there")
+        real_mkdir = os.mkdir
+
+        def swapped(name, mode=0o777, *, dir_fd=None):
+            # Made, then replaced at once by a directory with something in it.
+            real_mkdir(name, mode, dir_fd=dir_fd)
+            os.rename(name, name + ".moved", src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+            real_mkdir(name, 0o700, dir_fd=dir_fd)
+            real_mkdir(name + "/inside", 0o700, dir_fd=dir_fd)
+
+        with mock.patch.object(svc.os, "mkdir", swapped):
+            with self.assertRaisesRegex(svc.UserError, "replaced"):
+                svc.create_dir("new", dst_fd, "new")
+
     def test_extract_accepts_plain_members_and_counts_bytes(self):
         stream = crafted_stream([("a", tarfile.DIRTYPE, b""), ("a/f", tarfile.REGTYPE, b"12345"),
                                  ("g", tarfile.REGTYPE, b"")])
@@ -1115,24 +1180,50 @@ class LockTests(ServiceTestBase):
     def test_lock_absent_held_and_symlinked(self):
         d = os.path.join(self.tmp.name, "d")
         os.makedirs(d)
-        self.assertIsNone(svc.hold_datadir_lock(d))
+        uid = os.getuid()
+        self.assertIsNone(svc.hold_datadir_lock(d, uid))
         lock = os.path.join(d, ".lock")
         open(lock, "wb").close()
-        fd = svc.hold_datadir_lock(d)
+        fd = svc.hold_datadir_lock(d, uid)
         self.assertIsInstance(fd, int)
         os.close(fd)
         hold_lock_in_other_process(self, lock)
         with self.assertRaises(svc.UserError):
-            svc.hold_datadir_lock(d)
+            svc.hold_datadir_lock(d, uid)
         dir_fd = os.open(d, os.O_RDONLY | os.O_DIRECTORY)
         self.addCleanup(os.close, dir_fd)
         with self.assertRaises(svc.UserError):
-            svc.hold_datadir_lock(dir_fd)
+            svc.hold_datadir_lock(dir_fd, uid)
         e = os.path.join(self.tmp.name, "e")
         os.makedirs(e)
         os.symlink(lock, os.path.join(e, ".lock"))
         with self.assertRaises(svc.UserError):
-            svc.hold_datadir_lock(e)
+            svc.hold_datadir_lock(e, uid)
+
+    def test_lock_is_open_file_description_lock_against_the_cores(self):
+        d = os.path.join(self.tmp.name, "d")
+        os.makedirs(d)
+        lock = os.path.join(d, ".lock")
+        open(lock, "wb").close()
+        fd = svc.hold_datadir_lock(d, os.getuid())
+        self.addCleanup(os.close, fd)
+        # The core's F_SETLK (FileLock::TryLock) conflicts with it...
+        self.assertTrue(lock_is_held_elsewhere(lock))
+        # ...and closing another descriptor of the file here does not drop it, as it would a
+        # traditional fcntl lock.
+        os.close(os.open(lock, os.O_RDONLY))
+        self.assertTrue(lock_is_held_elsewhere(lock))
+
+    def test_lock_file_must_be_the_owners_and_single_linked(self):
+        d = os.path.join(self.tmp.name, "d")
+        os.makedirs(d)
+        lock = os.path.join(d, ".lock")
+        open(lock, "wb").close()
+        with self.assertRaisesRegex(svc.UserError, "owned"):
+            svc.hold_datadir_lock(d, os.getuid() + 1)
+        os.link(lock, os.path.join(self.tmp.name, "other-link"))
+        with self.assertRaisesRegex(svc.UserError, "link"):
+            svc.hold_datadir_lock(d, os.getuid())
 
 
 class PrivilegeTests(ServiceTestBase):
@@ -1717,6 +1808,77 @@ class EnableTests(SwitchTestBase):
         self.assertEqual(rc, 1)
         self.assertIn("the wallet is in %s and %s is empty" % (self.datadir, self.target()), err)
         self.assertIn("gridcoin-gui", err)
+
+    def test_enable_holds_the_lock_for_the_whole_command(self):
+        write_tree(self.datadir, self.user_files())
+        lock = os.path.join(self.datadir, ".lock")
+        seen = []
+        originals = {name: getattr(svc, name) for name in ("copy_as", "stash_source", "write_owner_record")}
+
+        def probe(name):
+            def wrapper(*args, **kwargs):
+                # .lock moves into the stash with the rest of the source.
+                path = lock
+                if not os.path.exists(lock):
+                    path = os.path.join(self.stashes(self.home, ".GridcoinResearch.in-service-")[0], ".lock")
+                seen.append((name, lock_is_held_elsewhere(path)))
+                return originals[name](*args, **kwargs)
+            return wrapper
+
+        with contextlib.ExitStack() as stack:
+            for name in originals:
+                stack.enter_context(mock.patch.object(svc, name, probe(name)))
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(seen, [("copy_as", True), ("stash_source", True), ("write_owner_record", True)])
+
+    def test_enable_refuses_a_datadir_on_its_own_mount(self):
+        write_tree(self.datadir, self.user_files())
+        inode = os.stat(self.datadir).st_ino
+        real_fstat = os.fstat
+
+        def mounted(fd):
+            st = real_fstat(fd)
+            return changed_stat(st, st_dev=st.st_dev + 1) if st.st_ino == inode else st
+
+        with mock.patch.object(svc.os, "fstat", mounted):
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("mount point", err)
+        self.assertEqual(self.host.calls, [])
+
+    def test_quarantined_files_over_16_mib_refuse(self):
+        write_tree(self.datadir, self.user_files())
+        os.truncate(os.path.join(self.datadir, "gridcoinresearch.conf"), 16 * 1024 * 1024 + 1)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("larger than", err)
+        self.assertEqual(self.host.calls, [])
+        os.truncate(os.path.join(self.datadir, "gridcoinresearch.conf"), 16 * 1024 * 1024)
+        os.truncate(os.path.join(self.datadir, "DB_CONFIG"), 16 * 1024 * 1024 + 1)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("DB_CONFIG", err)
+        self.assertIn("larger than", err)
+        self.assertEqual(os.listdir(self.target()), [])
+
+    def test_stash_refuses_a_swapped_stash_directory(self):
+        write_tree(self.datadir, self.user_files())
+        real_mkdir = os.mkdir
+
+        def swapped(name, mode=0o777, *, dir_fd=None):
+            real_mkdir(name, mode, dir_fd=dir_fd)
+            if name.startswith(".GridcoinResearch.in-service-"):
+                os.rename(name, name + ".moved", src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+                real_mkdir(name, 0o700, dir_fd=dir_fd)
+                fd = os.open(name + "/planted", os.O_WRONLY | os.O_CREAT, 0o600, dir_fd=dir_fd)
+                os.close(fd)
+
+        with mock.patch.object(svc.os, "mkdir", swapped):
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("replaced", err)
+        self.assertEqual(read_tree(self.datadir), read_tree_from(self.user_files()))
 
     def test_enable_refuses_unknown_user_or_missing_datadir(self):
         rc, out, err = self.run_main("enable", "nobody")
