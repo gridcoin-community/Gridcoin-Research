@@ -2961,6 +2961,30 @@ BOOST_FIXTURE_TEST_CASE(console_dumpcontracts_needs_no_passphrase, BackupCase)
     BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
 }
 
+// A console dumpcontracts with a height that is not on the chain reports the RPC's
+// refusal and leaves no file in the transfer directory.
+BOOST_FIXTURE_TEST_CASE(console_dumpcontracts_refuses_a_height_off_the_chain, BackupCase)
+{
+    const grc_test::LoneBestBlock tip; // one block, at height 0
+
+    std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
+    w->bindConnectionScope(interfaces::MakeConnectionScope());
+
+    // A high_height above the tip comes last: before the fix it crashed the process.
+    const std::vector<std::pair<std::vector<std::string>, std::string>> cases{
+        {{"beacon", "true", "1"}, "low_height 1"},
+        {{"beacon", "true", "-1"}, "low_height -1"},
+        {{"beacon", "false", "0", "100"}, "high_height 100"},
+    };
+    for (const auto& [args, named] : cases) {
+        std::string err;
+        BOOST_CHECK(!w->beginConsoleDownload("dumpcontracts", args, err));
+        BOOST_CHECK_MESSAGE(err.find(named) != std::string::npos, err);
+        BOOST_CHECK_MESSAGE(err.find("0 to 0") != std::string::npos, err);
+        BOOST_CHECK_EQUAL(TransferFileCount(), 0U);
+    }
+}
+
 // dumpwallet: the source holds the capability while it streams the dump, and
 // ends it at the dump's end. Nothing goes through the core's disk.
 BOOST_FIXTURE_TEST_CASE(console_download_streams_the_dump_and_ends_capability, BackupCase)

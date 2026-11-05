@@ -16,6 +16,7 @@
 #include <wallet/wallet.h>
 
 #include "encrypted_wallet.h"
+#include "lone_best_block.h"
 #include "staking_test_peers.h"
 
 #include <univalue.h>
@@ -23,7 +24,9 @@
 
 #include "chain.h"
 #include "test/chain_setup.h"
+#include <optional>
 #include <set>
+#include <tuple>
 #include <stdexcept>
 
 using namespace std;
@@ -605,6 +608,46 @@ BOOST_AUTO_TEST_CASE(the_help_of_an_elevate_row_says_it_needs_the_passphrase)
         BOOST_FAIL("settxfee with no arguments did not throw");
     } catch (const std::runtime_error& e) {
         BOOST_CHECK_EQUAL(count(e.what()), 1U);
+    }
+}
+
+// dumpcontracts refuses a low_height or high_height that is not on the chain with
+// RPC_INVALID_PARAMETER, naming the height and the range, and writes no file.
+BOOST_AUTO_TEST_CASE(dumpcontracts_refuses_a_height_off_the_chain)
+{
+    const grc_test::LoneBestBlock tip; // one block, at height 0
+
+    const fs::path path = GetDataDir() / "rpc_tests_dumpcontracts.txt";
+    boost::system::error_code ec;
+    fs::remove(path, ec);
+
+    // (low_height, high_height or none, the height named). A high_height above the tip
+    // comes last: before the fix it crashed the process.
+    const std::vector<std::tuple<int, std::optional<int>, std::string>> cases{
+        {1, std::nullopt, "low_height 1"},
+        {-1, std::nullopt, "low_height -1"},
+        {-4, -2, "low_height -4"},
+        {0, 100, "high_height 100"},
+    };
+    for (const auto& [low, high, named] : cases) {
+        UniValue params(UniValue::VARR);
+        params.push_back("*");
+        params.push_back(path.string());
+        params.push_back(true);
+        params.push_back(low);
+        if (high) params.push_back(*high);
+
+        try {
+            dumpcontracts(params);
+            BOOST_ERROR("dumpcontracts accepted " << named);
+        } catch (const UniValue& error) {
+            BOOST_CHECK_EQUAL(find_value(error, "code").get_int(), RPC_INVALID_PARAMETER);
+            const std::string message = find_value(error, "message").get_str();
+            BOOST_CHECK_MESSAGE(message.find(named) != std::string::npos, message);
+            BOOST_CHECK_MESSAGE(message.find("0 to 0") != std::string::npos, message);
+        }
+        BOOST_CHECK_MESSAGE(!fs::exists(path), named);
+        fs::remove(path, ec);
     }
 }
 
