@@ -163,8 +163,10 @@ bool ConfigureAttachGroup(const std::string& name)
         // The kernel reports the peers' groups, but a socket the core owns is
         // only shared with the group if the core is in it.
         if (!ProcessHoldsGroup(*gid)) {
-            LogPrintf("IPC: this process is not a member of %s; add SupplementaryGroups=%s to the unit\n",
-                      name, name);
+            const std::string shown = SanitizeString(name);
+            LogPrintf("IPC: this process is not a member of the attach group '%s'; add SupplementaryGroups=%s to "
+                      "the service unit, or run the core with that group\n",
+                      shown, shown);
             return false;
         }
 #endif
