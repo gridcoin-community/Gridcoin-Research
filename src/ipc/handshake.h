@@ -172,9 +172,18 @@ namespace ipc {
 //!
 //! Major 5 carries everything major 4 had through minor 2 (above), and the
 //! minor restarts at 0.
+//!
+//! Protocol 2: on Windows the GUI identifies itself to the node before it
+//! authenticates. It calls Init.beginAttest (@17), writes the nonce into the
+//! one-shot named pipe that names, and calls Init.finishAttest (@18)
+//! (ipc/win_attest.h), and the node refuses authenticate() on a connection whose
+//! peer that check has not admitted. The order is what changed: a GUI of
+//! protocol 1 presents its cookie first and is refused, and a GUI of protocol 2
+//! meets UNIMPLEMENTED from an older node's beginAttest and stops before it
+//! presents its cookie. On POSIX the order is unchanged.
 constexpr uint32_t IPC_SCHEMA_MAJOR = 5;
 constexpr uint32_t IPC_SCHEMA_MINOR = 0;
-constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
+constexpr uint32_t IPC_PROTOCOL_VERSION = 2;
 
 //! Domain-separation tag hashed into the node identity token. Bump the suffix if
 //! the token *algorithm* ever changes (independent of the capnp schema version).
@@ -193,7 +202,7 @@ constexpr std::chrono::seconds IPC_CONNECT_WAIT_MAX{300};
 enum class ConnectFailureKind {
     NoCookie,        //!< No ipc.cookie: no core serves the directory, or it is still starting.
     NotListening,    //!< Nothing listens on node.sock: no socket file, or one a stopped core left.
-    PeerRefused,     //!< The listening process failed the client peer check (ClientPeerPolicy).
+    PeerRefused,     //!< The listening process failed the client peer check or, on Windows, the identity check.
     AlreadyAttached, //!< Another GUI holds the core's attach slot.
     Timeout,         //!< The core did not finish the handshake within the timeout.
     Handshake,       //!< Any other connect or handshake failure.

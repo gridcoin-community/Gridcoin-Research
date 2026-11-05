@@ -222,11 +222,18 @@ schema-diff lint against the previous release tag.
   (`ipc::ServerPeerPolicy`) admits a peer at its own uid; with `-ipcattachgroup` it
   also admits a non-root peer in that group. Root is never admitted through the group.
   Each refusal is logged with the uid(s) and the rule that failed. Windows AF_UNIX
-  exposes no peer-credential API at all, so there the explicit owner+SYSTEM PROTECTED
-  DACL on the socket and cookie (applied and verified by read-back) is the guard, and
-  `-ipcattachgroup` and `-ipcserviceuser` are refused until a Windows peer check
-  exists. The daemon logs which mode is in force at startup. Platform asymmetry must
-  not become a security regression.
+  exposes no peer-credential API at all, so there the explicit-owner PROTECTED DACL on
+  the socket and cookie (applied and verified by read-back) decides who may connect,
+  and the peer is identified, in every mode, by a named-pipe identity check that runs
+  before `authenticate()` (`Init::beginAttest` / `Init::finishAttest`,
+  `src/ipc/win_attest.h`). The core reads the GUI's token user, attach-group
+  membership and integrity level through the pipe, admits its own account or a member
+  of the `-ipcattachgroup` group at Medium integrity only, and refuses
+  `authenticate()` on a connection the check has not admitted. The GUI checks that
+  the pipe, like `node.sock`, is owned by the account it expects (its own, or the
+  `-ipcserviceuser` account) before it writes anything into it. The daemon logs which
+  mode is in force at startup. Platform asymmetry must not become a security
+  regression.
 - The **GUI checks the core on its own end** (`ipc::ClientPeerPolicy`) before
   presenting the cookie, because step 5 hands the cookie to whatever answered. It
   admits a core at its own uid. With `-ipcserviceuser` it also admits a core running

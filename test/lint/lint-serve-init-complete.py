@@ -63,6 +63,14 @@ UNGATED = {
     # Run by the local listener when the connection is torn down; never a remote
     # call. It runs for every connection, authenticated or not.
     "connectionClosed",
+    # The first step of the Windows identity check, which on Windows must succeed
+    # BEFORE authenticate() will compare the cookie, so gating it would deadlock
+    # the handshake as gating authenticate() would. It serves only a fresh pipe
+    # name and nonce for this connection's one check, never node data.
+    "beginAttest",
+    # The second step, for the same reason. It returns only whether this
+    # connection's peer was admitted; what it decided on is logged, never served.
+    "finishAttest",
 }
 
 # Virtuals deliberately absent from init.capnp, with the reason each is exempt.

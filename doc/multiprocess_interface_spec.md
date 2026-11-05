@@ -144,7 +144,19 @@ full ordered sequence a client must perform:
    (`Ipc::connectAddress("unix", on_disconnect)`). Returns null if the address
    is empty/disabled or (for `"auto"`) if nothing is listening; throws on an
    unexpected socket error.
-4. **`Init::authenticate(cookie)`** — the **first** IPC call. The node compares
+   - **On Windows, the identity check** (`ipc::win::RunClientAttestation`,
+     `src/ipc/win_attest.h`), which `connectAddress` runs before it returns:
+     `Init::beginAttest()` names a one-shot pipe and a nonce; the client opens
+     `\\.\pipe\gridcoin-attest-<suffix>` at the identification level, refuses
+     unless the pipe's owner is the node account it expects, writes the nonce,
+     and calls `Init::finishAttest()`, keeping the pipe open until it answers.
+     The node reads the client's token through the pipe and admits its own
+     account, or a member of the `-ipcattachgroup` group, at Medium integrity
+     only. Until `finishAttest()` has returned `true` on the connection, the
+     node's `authenticate()` compares no cookie and fails, so a client that skips
+     this step can never authenticate there.
+4. **`Init::authenticate(cookie)`** — the first call after the connect (after
+   the identity check on Windows). The node compares
    it constant-time (`ConstantTimeEqual`) against the cookie it wrote. A `false`
    result is a hard fail: **build and identity are never served to an
    unauthenticated peer**, and every other method throws until `authenticate()`
@@ -202,6 +214,8 @@ change — do not silently drop the guard.
 | Condition | Detected by | Severity |
 |---|---|---|
 | Wrong / stale cookie | `authenticate()` returns false | **Hard fail** — "node may have restarted; reconnect" |
+| Windows: node without the identity check | `beginAttest()` throws or answers `served=false` | **Hard fail** before the cookie is sent — "use matching builds" |
+| Windows: identity refused | `finishAttest()` returns false | **Hard fail** — wrong account, not in the attach group, or elevated |
 | `schema_major` mismatch | `remote.schema_major != local.schema_major` | **Hard fail** — incompatible wire format |
 | `protocol_version` mismatch | `remote.protocol_version != local.protocol_version` | **Hard fail** |
 | Client `schema_minor` **>** node's | `local.schema_minor > remote.schema_minor` | **Hard fail** — "update the node" |
@@ -334,7 +348,7 @@ console's wallet passphrases as `SecureString`, `Node` gained
 `getCorePaths @44` with the `CorePaths` struct (data directory, debug log,
 config, settings and wallet file paths as the core sees them), which the
 GUI's "Open debug log" and "Open config" read, and `Init` gained
-`holdsAttachSlot @15`, which tells a second GUI that another is attached.
+`holdsAttachSlot @16`, which tells a second GUI that another is attached.
 `Wallet` also gained `beginBackup @40 (items)`, which returns a `FileSource`
 streaming copies the core makes in its own transfer directory under a Backup
 capability; `backupWallet @20` and `backupConfigFile @21` stay in the schema but

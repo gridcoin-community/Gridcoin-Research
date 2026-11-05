@@ -10,6 +10,7 @@
 #include <algorithm>
 
 #ifdef WIN32
+#include "interfaces/init.h"
 #include "ipc/handshake.h"
 #include "logging.h"
 #include "random.h"
@@ -588,6 +589,49 @@ bool AttestClientPipe::WriteNonce(const std::string& nonce_hex, std::string& err
     }
 
     return true;
+}
+
+void RunClientAttestation(interfaces::Init& init, const Sid& expected_server)
+{
+    static const std::string NOT_CHECKED{"The node did not complete the Windows identity check; use matching "
+                                         "builds of gridcoinresearch and gridcoinresearchd."};
+
+    interfaces::AttestChallenge challenge;
+    try {
+        challenge = init.beginAttest();
+    } catch (const std::exception& e) {
+        LogPrintf("IPC: the node did not begin the Windows identity check: %s", e.what());
+        throw std::runtime_error(NOT_CHECKED);
+    }
+    if (!challenge.served) {
+        LogPrintf("IPC: the node does not serve the Windows identity check");
+        throw std::runtime_error(NOT_CHECKED);
+    }
+    if (!IsValidPipeSuffix(challenge.pipe_suffix) || !IsValidNonceHex(challenge.nonce_hex)) {
+        throw std::runtime_error("The node did not begin the Windows identity check. See the node's debug.log.");
+    }
+
+    // Open checks the pipe's owner through the handle it opened, and nothing is
+    // written unless that owner is the expected node account.
+    std::string error;
+    std::optional<AttestClientPipe> pipe = AttestClientPipe::Open(challenge.pipe_suffix, expected_server, error);
+    if (!pipe || !pipe->WriteNonce(challenge.nonce_hex, error)) {
+        throw std::runtime_error(strprintf("The Windows identity check of the node failed: %s.", error));
+    }
+
+    // The pipe stays open until the node has answered: the node reads this
+    // process's identity through it.
+    bool admitted = false;
+    try {
+        admitted = init.finishAttest();
+    } catch (const std::exception& e) {
+        throw std::runtime_error(
+            strprintf("Lost connection to the node during the Windows identity check: %s", e.what()));
+    }
+    if (!admitted) {
+        throw std::runtime_error("The node refused this GUI's identity (wrong account, not in Gridcoin GUI Users, "
+                                 "or running elevated). See the node's debug.log.");
+    }
 }
 #endif // WIN32
 

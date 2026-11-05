@@ -858,6 +858,16 @@ BOOST_AUTO_TEST_CASE(wire_every_init_factory_reaches_the_server)
         return ipc::MakeServeInit(std::make_unique<RecordingInner>(seen), "the-cookie", id, slot, {});
     });
 
+    // The Windows identity check's two methods are served before authentication.
+    // Each crosses the wire like the factories below: without an ordinal the call
+    // would resolve to the base default, which answers served=false. This
+    // connection does not require the check, so none is begun or finished.
+    const interfaces::AttestChallenge challenge = link.client->beginAttest();
+    BOOST_CHECK_MESSAGE(challenge.served, "beginAttest did not reach the server");
+    BOOST_CHECK(challenge.pipe_suffix.empty());
+    BOOST_CHECK(challenge.nonce_hex.empty());
+    BOOST_CHECK(!link.client->finishAttest());
+
     // ServeInit gates every factory behind RequireAuth() and the attach slot, so
     // authenticate first. The only connection holds the slot, and the answer
     // crosses the wire like the factories below.
@@ -1078,6 +1088,24 @@ BOOST_AUTO_TEST_CASE(a_dropped_gui_connection_ends_its_subscription)
     std::this_thread::sleep_for(TIMER_CHANCE);
     BOOST_CHECK_EQUAL(compute.chain_calls.load(), chain_calls);
     BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), runs);
+}
+
+// A connection served with the identity check required refuses the cookie over the
+// real wire when no check admitted the peer, as it does on POSIX, where the check
+// cannot run.
+BOOST_AUTO_TEST_CASE(wire_attestation_required_refuses_the_cookie)
+{
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    WireLink link([id, slot = ipc::MakeAttachSlot()](int) -> std::unique_ptr<interfaces::Init> {
+        ipc::ServeInitOptions options;
+        options.require_attestation = true;
+        return ipc::MakeServeInit(std::make_unique<StubInner>(), "the-cookie", id, slot, {}, options);
+    });
+
+    const ipc::HandshakeResult r = ipc::ClientHandshake(*link.client, "the-cookie", "main");
+    BOOST_CHECK(!r.ok);
+    BOOST_CHECK_MESSAGE(r.error.find("rejected the authentication cookie") != std::string::npos, r.error);
 }
 
 // A capability over the real wire: the passphrase crosses as Data, the kind as a

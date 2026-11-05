@@ -5,9 +5,10 @@
 // Windows backend of the peer-check hooks declared in ipc/peercred.h. AF_UNIX on
 // Windows exposes no peer credentials, and kj hands the server no socket fd, so
 // no peer identity is read here: the DACLs on node.sock and ipc.cookie
-// (ipc/win_endpoint.h) are the guard. The attach group is resolved here, for
-// those DACLs. The build lists this file on every platform; elsewhere it compiles
-// to nothing.
+// (ipc/win_endpoint.h) decide who may connect, and the identity check on the
+// connection (ipc/win_attest.h) identifies the peer. The attach group is resolved
+// here, for those DACLs, the check's pipe and ServerPeerPolicy. The build lists
+// this file on every platform; elsewhere it compiles to nothing.
 
 #include "ipc/peercred.h"
 
@@ -96,8 +97,10 @@ ResolvedGroup ResolveAttachGroup(const std::string& name)
 
 std::optional<PeerIdentity> ReadPeerIdentity(int fd)
 {
+    // Nothing can be read from the socket, so there is no identity to return, and
+    // the callers' refusal on nullopt holds here too.
     (void)fd;
-    return PeerIdentity{};
+    return std::nullopt;
 }
 
 bool ConfigureAttachGroup(const std::string& name)

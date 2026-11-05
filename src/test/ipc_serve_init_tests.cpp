@@ -30,9 +30,21 @@
 #include <functional>
 #include <future>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
+
+#ifdef WIN32
+#include "ipc/win_attest.h"
+#include "test/wine.h"
+#include "util/win_acl.h"
+
+#include <utility>
+#include <vector>
+
+#include <windows.h>
+#endif
 
 namespace {
 //! Inner Init the served wrapper delegates to. isCoreReady() is overridden so we
@@ -79,6 +91,87 @@ struct JoinOnExit {
     std::thread& m_thread;
     ~JoinOnExit() { if (m_thread.joinable()) m_thread.join(); }
 };
+
+//! The options the daemon serves with on Windows: the identity check required.
+ipc::ServeInitOptions RequireAttestation()
+{
+    ipc::ServeInitOptions options;
+    options.require_attestation = true;
+    return options;
+}
+
+#ifdef WIN32
+//! Whether these cases can rely on Windows' own security model. Wine impersonates
+//! the process's own token and keeps no real access control, so under it they only
+//! log.
+bool SkipUnderWine()
+{
+    if (!grc_test::RunningUnderWine()) return false;
+    BOOST_TEST_MESSAGE("Wine has no Windows security model for pipes and tokens; skipping");
+    return true;
+}
+
+//! The integrity level of this process's token, a SECURITY_MANDATORY_*_RID. The
+//! core admits only Medium, so a case run elevated expects a refusal.
+uint32_t ProcessIntegrityRid()
+{
+    HANDLE raw = nullptr;
+    BOOST_REQUIRE(::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &raw));
+    const util::winacl::UniqueHandle token(raw);
+    const std::vector<unsigned char> buffer =
+        util::winacl::QueryTokenInformation(token.get(), TokenIntegrityLevel, "TokenIntegrityLevel");
+    const PSID label = reinterpret_cast<const TOKEN_MANDATORY_LABEL*>(buffer.data())->Label.Sid;
+    return *::GetSidSubAuthority(label, *::GetSidSubAuthorityCount(label) - 1u);
+}
+
+//! Whether \p e's message is \p text, exactly.
+struct IsMessage {
+    explicit IsMessage(std::string text) : m_text(std::move(text)) {}
+    bool operator()(const std::exception& e) const { return std::string{e.what()} == m_text; }
+    std::string m_text;
+};
+
+//! What the GUI reports for a node that does not run the identity check.
+const std::string NOT_CHECKED_MESSAGE{"The node did not complete the Windows identity check; use matching builds of "
+                                      "gridcoinresearch and gridcoinresearchd."};
+
+//! What the GUI reports for a node that ran the check and refused it.
+const std::string REFUSED_MESSAGE{"The node refused this GUI's identity (wrong account, not in Gridcoin GUI Users, "
+                                  "or running elevated). See the node's debug.log."};
+
+//! A node of an older build: it does not have beginAttest at all, so the call fails
+//! as an IPC call to an unknown method does.
+struct OlderNodeInit : public interfaces::Init {
+    interfaces::AttestChallenge beginAttest() override { throw std::runtime_error("method not implemented"); }
+};
+
+//! A node that runs a real check and refuses the peer whatever it read. Counts its
+//! finishAttest calls.
+struct RefusingNodeInit : public interfaces::Init {
+    explicit RefusingNodeInit(util::winacl::Sid self) : m_server(std::move(self), std::nullopt) {}
+
+    interfaces::AttestChallenge beginAttest() override
+    {
+        interfaces::AttestChallenge challenge;
+        challenge.served = true;
+        if (const auto begun = m_server.Begin()) {
+            challenge.pipe_suffix = begun->first;
+            challenge.nonce_hex = begun->second;
+        }
+        return challenge;
+    }
+
+    bool finishAttest() override
+    {
+        ++m_finish_calls;
+        m_server.Finish();
+        return false;
+    }
+
+    ipc::win::AttestServer m_server;
+    int m_finish_calls{0};
+};
+#endif // WIN32
 } // namespace
 
 BOOST_AUTO_TEST_SUITE(ipc_serve_init_tests)
@@ -508,5 +601,203 @@ BOOST_AUTO_TEST_CASE(served_side_stake_manager_is_bound_to_its_connection)
     served->connectionClosed();
     BOOST_CHECK((*bound)->closed());
 }
+
+// With the identity check required, as the daemon serves on Windows, no cookie is
+// compared until the check has admitted the connection's peer. authenticate()
+// fails, and the failure uses up the connection's one attempt, so the right cookie
+// is refused from then on as well.
+BOOST_AUTO_TEST_CASE(serve_init_requires_attestation_when_configured)
+{
+    auto serve = ipc::MakeServeInit(std::make_unique<StubInit>(), "the-cookie", {}, ipc::MakeAttachSlot(), {},
+                                    RequireAttestation());
+
+    BOOST_CHECK(!serve->authenticate("the-cookie"));
+    BOOST_CHECK(!serve->isAuthenticated());
+    BOOST_CHECK(!serve->authenticate("the-cookie"));
+    BOOST_CHECK(!serve->isAuthenticated());
+    BOOST_CHECK_THROW(serve->getBuildInfo(), std::exception);
+    BOOST_CHECK_THROW(serve->isCoreReady(), std::exception);
+}
+
+// A connection gets one identity check. Finishing a check that was never begun
+// fails; a second beginAttest() is answered, but with no pipe; and the one check
+// finishes once. The first answer has a pipe only where the check can run.
+BOOST_AUTO_TEST_CASE(serve_init_attestation_one_shot)
+{
+    auto serve = ipc::MakeServeInit(std::make_unique<StubInit>(), "the-cookie", {}, ipc::MakeAttachSlot(), {},
+                                    RequireAttestation());
+
+    BOOST_CHECK(!serve->finishAttest());
+
+    const interfaces::AttestChallenge first = serve->beginAttest();
+    BOOST_CHECK(first.served);
+#ifdef WIN32
+    if (!SkipUnderWine()) {
+        BOOST_CHECK(ipc::win::IsValidPipeSuffix(first.pipe_suffix));
+        BOOST_CHECK(ipc::win::IsValidNonceHex(first.nonce_hex));
+    }
+#else
+    BOOST_CHECK(first.pipe_suffix.empty());
+    BOOST_CHECK(first.nonce_hex.empty());
+#endif
+
+    const interfaces::AttestChallenge second = serve->beginAttest();
+    BOOST_CHECK(second.served);
+    BOOST_CHECK(second.pipe_suffix.empty());
+    BOOST_CHECK(second.nonce_hex.empty());
+
+    // No client wrote the nonce, so the check fails, and it cannot be finished again.
+    BOOST_CHECK(!serve->finishAttest());
+    BOOST_CHECK(!serve->finishAttest());
+    BOOST_CHECK(!serve->authenticate("the-cookie"));
+}
+
+// Served as the POSIX daemon serves, without the requirement, the check is still
+// answered, so a GUI can tell this node knows it, but nothing is begun, and the
+// cookie alone decides authentication.
+BOOST_AUTO_TEST_CASE(serve_init_attestation_not_required_on_posix_path)
+{
+    auto serve = ipc::MakeServeInit(std::make_unique<StubInit>(), "the-cookie", {}, ipc::MakeAttachSlot(), {});
+
+    const interfaces::AttestChallenge challenge = serve->beginAttest();
+    BOOST_CHECK(challenge.served);
+    BOOST_CHECK(challenge.pipe_suffix.empty());
+    BOOST_CHECK(challenge.nonce_hex.empty());
+    BOOST_CHECK(!serve->finishAttest());
+
+    BOOST_CHECK(serve->authenticate("the-cookie"));
+    BOOST_CHECK(serve->isAuthenticated());
+}
+
+#ifdef WIN32
+// The core and the GUI in one process: the GUI opens the pipe the core named, checks
+// that it is this account's, writes the nonce, and the core admits it, so the cookie
+// is then accepted. The core admits Medium integrity only, so a run that is elevated
+// is refused at both steps instead.
+BOOST_AUTO_TEST_CASE(serve_init_attest_then_authenticate_in_process)
+{
+    if (SkipUnderWine()) return;
+    const bool medium = ProcessIntegrityRid() == ipc::win::INTEGRITY_MEDIUM_RID;
+    BOOST_TEST_MESSAGE("this process runs at " << (medium ? "Medium" : "another") << " integrity");
+
+    auto serve = ipc::MakeServeInit(std::make_unique<StubInit>(), "the-cookie", {}, ipc::MakeAttachSlot(), {},
+                                    RequireAttestation());
+
+    const interfaces::AttestChallenge challenge = serve->beginAttest();
+    BOOST_REQUIRE(challenge.served);
+    BOOST_REQUIRE(ipc::win::IsValidPipeSuffix(challenge.pipe_suffix));
+    BOOST_REQUIRE(ipc::win::IsValidNonceHex(challenge.nonce_hex));
+
+    std::string error;
+    std::optional<ipc::win::AttestClientPipe> pipe =
+        ipc::win::AttestClientPipe::Open(challenge.pipe_suffix, util::winacl::CurrentTokenUser(), error);
+    BOOST_REQUIRE_MESSAGE(pipe.has_value(), error);
+    BOOST_REQUIRE_MESSAGE(pipe->WriteNonce(challenge.nonce_hex, error), error);
+
+    BOOST_CHECK_EQUAL(serve->finishAttest(), medium);
+    pipe.reset();
+
+    // The connection's one check is used.
+    BOOST_CHECK(!serve->finishAttest());
+    BOOST_CHECK(serve->beginAttest().pipe_suffix.empty());
+
+    BOOST_CHECK_EQUAL(serve->authenticate("the-cookie"), medium);
+    BOOST_CHECK_EQUAL(serve->isAuthenticated(), medium);
+    if (medium) BOOST_CHECK_NO_THROW(serve->getBuildInfo());
+}
+
+// An authentication refused for want of the check is the connection's one
+// attempt: a check that admits the peer afterwards does not reopen it.
+BOOST_AUTO_TEST_CASE(serve_init_attest_after_refused_authentication_does_not_reopen_it)
+{
+    if (SkipUnderWine()) return;
+    const bool medium = ProcessIntegrityRid() == ipc::win::INTEGRITY_MEDIUM_RID;
+
+    auto serve = ipc::MakeServeInit(std::make_unique<StubInit>(), "the-cookie", {}, ipc::MakeAttachSlot(), {},
+                                    RequireAttestation());
+    BOOST_CHECK(!serve->authenticate("the-cookie"));
+
+    if (medium) {
+        BOOST_CHECK_NO_THROW(ipc::win::RunClientAttestation(*serve, util::winacl::CurrentTokenUser()));
+    } else {
+        BOOST_CHECK_EXCEPTION(ipc::win::RunClientAttestation(*serve, util::winacl::CurrentTokenUser()),
+                              std::runtime_error, IsMessage(REFUSED_MESSAGE));
+    }
+    BOOST_CHECK(!serve->authenticate("the-cookie"));
+    BOOST_CHECK(!serve->isAuthenticated());
+}
+
+// The GUI's half against the serving Init: it runs the check through the Init's two
+// methods, and the cookie is accepted afterwards. Elevated, the core refuses it, and
+// the GUI says so.
+BOOST_AUTO_TEST_CASE(run_client_attestation_against_the_serving_init)
+{
+    if (SkipUnderWine()) return;
+    const bool medium = ProcessIntegrityRid() == ipc::win::INTEGRITY_MEDIUM_RID;
+
+    auto serve = ipc::MakeServeInit(std::make_unique<StubInit>(), "the-cookie", {}, ipc::MakeAttachSlot(), {},
+                                    RequireAttestation());
+    if (medium) {
+        BOOST_CHECK_NO_THROW(ipc::win::RunClientAttestation(*serve, util::winacl::CurrentTokenUser()));
+    } else {
+        BOOST_CHECK_EXCEPTION(ipc::win::RunClientAttestation(*serve, util::winacl::CurrentTokenUser()),
+                              std::runtime_error, IsMessage(REFUSED_MESSAGE));
+    }
+    BOOST_CHECK_EQUAL(serve->authenticate("the-cookie"), medium);
+}
+
+// A node that does not run the check -- one that does not serve it, one of an
+// older build whose beginAttest fails, or one that answers without a pipe -- is
+// refused before anything is written, and the GUI names the cause.
+BOOST_AUTO_TEST_CASE(run_client_attestation_refuses_a_node_without_the_check)
+{
+    const util::winacl::Sid self = util::winacl::CurrentTokenUser();
+
+    StubInit not_serving;
+    BOOST_CHECK_EXCEPTION(ipc::win::RunClientAttestation(not_serving, self), std::runtime_error,
+                          IsMessage(NOT_CHECKED_MESSAGE));
+
+    OlderNodeInit older;
+    BOOST_CHECK_EXCEPTION(ipc::win::RunClientAttestation(older, self), std::runtime_error,
+                          IsMessage(NOT_CHECKED_MESSAGE));
+
+    auto unchecked = ipc::MakeServeInit(std::make_unique<StubInit>(), "the-cookie", {}, ipc::MakeAttachSlot(), {});
+    BOOST_CHECK_EXCEPTION(ipc::win::RunClientAttestation(*unchecked, self), std::runtime_error,
+                          HasMessage("did not begin the Windows identity check"));
+}
+
+// A node that runs the check and refuses the peer: the GUI says it was refused, after
+// the one finishAttest call.
+BOOST_AUTO_TEST_CASE(run_client_attestation_reports_a_refusal)
+{
+    if (SkipUnderWine()) return;
+    const util::winacl::Sid self = util::winacl::CurrentTokenUser();
+
+    RefusingNodeInit refusing(self);
+    BOOST_CHECK_EXCEPTION(ipc::win::RunClientAttestation(refusing, self), std::runtime_error,
+                          IsMessage(REFUSED_MESSAGE));
+    BOOST_CHECK_EQUAL(refusing.m_finish_calls, 1);
+}
+
+// The GUI checks the pipe's owner before it writes the nonce. Expecting another
+// account (SYSTEM), it refuses this account's pipe, names the owner, and never asks
+// the node to finish, so the node admits nobody.
+BOOST_AUTO_TEST_CASE(run_client_attestation_checks_the_pipe_owner)
+{
+    if (SkipUnderWine()) return;
+
+    RefusingNodeInit node(util::winacl::CurrentTokenUser());
+    BOOST_CHECK_EXCEPTION(ipc::win::RunClientAttestation(node, util::winacl::wellknown::System()),
+                          std::runtime_error, HasMessage("not by the expected node account S-1-5-18"));
+    BOOST_CHECK_EQUAL(node.m_finish_calls, 0);
+
+    auto serve = ipc::MakeServeInit(std::make_unique<StubInit>(), "the-cookie", {}, ipc::MakeAttachSlot(), {},
+                                    RequireAttestation());
+    BOOST_CHECK_EXCEPTION(ipc::win::RunClientAttestation(*serve, util::winacl::wellknown::System()),
+                          std::runtime_error, HasMessage("not by the expected node account S-1-5-18"));
+    BOOST_CHECK(!serve->finishAttest());
+    BOOST_CHECK(!serve->authenticate("the-cookie"));
+}
+#endif // WIN32
 
 BOOST_AUTO_TEST_SUITE_END()

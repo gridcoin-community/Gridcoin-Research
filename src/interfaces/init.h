@@ -58,6 +58,19 @@ struct NodeIdentity
     std::string network;        //!< Chain name ("main" / "test" / "regtest").
 };
 
+//! The node's answer to beginAttest(), the first step of the Windows identity
+//! check (ipc/win_attest.h). served is false only from an Init that does not
+//! serve the check. A serving Init sets it on every answer, with the pipe's
+//! suffix and the nonce when it began the connection's one check, and with both
+//! empty when it did not: no check is required, one was already begun, or it
+//! could not begin. Value snapshot; crosses IPC.
+struct AttestChallenge
+{
+    bool served{false};
+    std::string pipe_suffix; //!< 32 lower-case hex digits, naming \\.\pipe\gridcoin-attest-<suffix>.
+    std::string nonce_hex;   //!< 64 lower-case hex digits, the bytes to write into the pipe.
+};
+
 //! Per-process bootstrap interface: hands out the other interfaces. In the
 //! monolithic build MakeGridcoinInit() returns an implementation whose
 //! factories construct the in-process wrappers; in the Stage 2 multiprocess
@@ -96,6 +109,25 @@ public:
     //! serving Init wrapper grants on a valid cookie, so a base Init served
     //! directly never leaks access. The monolithic build never calls this.
     virtual bool authenticate(const std::string& cookie);
+
+    //! The first step of the Windows identity check, made before authenticate()
+    //! (ipc/win_attest.h): the node creates a one-shot named pipe that only its
+    //! own account and the attach group may open, and answers with the pipe's
+    //! suffix and a nonce. The GUI opens the pipe, checks that its owner is the
+    //! node account it expects, writes the nonce and calls finishAttest(). One
+    //! check per connection. Served before authentication, like authenticate()
+    //! itself (lint-serve-init-complete.py's UNGATED). The base default answers
+    //! served=false, an Init that does not serve the check, which the GUI on
+    //! Windows refuses.
+    virtual AttestChallenge beginAttest();
+
+    //! The second step: the node reads the nonce from the pipe and, through it,
+    //! the token of the process that wrote it, and returns whether that peer may
+    //! use this connection. True at most once per connection, and only after
+    //! beginAttest() began the check. A node that requires the check refuses
+    //! authenticate() on a connection for which this has not returned true. The
+    //! base default returns false.
+    virtual bool finishAttest();
 
     //! Whether authenticate() has already succeeded on this connection.
     //!
@@ -205,6 +237,7 @@ std::unique_ptr<Init> MakeGridcoinInit();
 // boundary and must stay copyable value types.
 INTERFACES_ASSERT_MARSHALABLE(BuildInfo);
 INTERFACES_ASSERT_MARSHALABLE(NodeIdentity);
+INTERFACES_ASSERT_MARSHALABLE(AttestChallenge);
 
 } // namespace interfaces
 

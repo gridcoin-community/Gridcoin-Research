@@ -4,10 +4,18 @@
 
 #include "ipc/peercred.h"
 
+#include "ipc/win_attest.h"
 #include "logging.h"
 #include "tinyformat.h"
 #include "util/strencodings.h"
 #include "util/system.h"
+
+#ifdef WIN32
+#include "ipc/win_endpoint.h"
+#include "util/win_acl.h"
+
+#include <exception>
+#endif
 
 #ifndef WIN32
 #include <algorithm>
@@ -41,6 +49,12 @@ std::optional<uid_t> LookUpAccountUid(const std::string& name)
 }
 #endif
 
+//! A Windows account as a refusal names it.
+std::string ShownSid(const std::string& sid)
+{
+    return sid.empty() ? std::string{"(none)"} : SanitizeString(sid);
+}
+
 } // namespace
 
 std::string ConfiguredOption(const std::string& arg)
@@ -55,6 +69,37 @@ fs::path SocketDirOf(const std::string& canonical_address)
         return {};
     }
     return fs::path(canonical_address.substr(prefix.size())).parent_path();
+}
+
+PeerVerdict ServerPeerDecision(const WinPeerIdentity& peer, const WinServerPeerContext& ctx)
+{
+    const auto refuse = [&](const std::string& rule) {
+        LogPrintf("IPC: refusing the peer %s (this process runs as %s): %s", ShownSid(peer.sid),
+                  ShownSid(ctx.self_sid), rule);
+        return PeerVerdict::Refuse;
+    };
+
+    if (peer.sid.empty()) return refuse("its account was not read");
+    if (peer.integrity_rid != win::INTEGRITY_MEDIUM_RID) {
+        return refuse(strprintf("it runs at integrity level 0x%x, and only Medium (0x%x) is admitted",
+                                peer.integrity_rid, win::INTEGRITY_MEDIUM_RID));
+    }
+
+    if (!ctx.self_sid.empty() && peer.sid == ctx.self_sid) return PeerVerdict::Allow;
+    if (ctx.attach_group_configured && peer.attach_group_member) return PeerVerdict::Allow;
+
+    return refuse(ctx.attach_group_configured
+                      ? "not this process's account and not a member of the -ipcattachgroup group"
+                      : "not this process's account, and no -ipcattachgroup is configured");
+}
+
+PeerVerdict ClientPeerDecision(const WinPeerIdentity& server, const std::string& expected_sid)
+{
+    if (!server.sid.empty() && server.sid == expected_sid) return PeerVerdict::Allow;
+
+    LogPrintf("IPC: refusing the core %s: not the expected node account %s", ShownSid(server.sid),
+              ShownSid(expected_sid));
+    return PeerVerdict::Refuse;
 }
 
 #ifndef WIN32
@@ -161,27 +206,37 @@ PeerVerdict ClientPeerPolicy(const PeerIdentity& server, const fs::path& ipcdir)
 
 #else // WIN32
 
-// The DACLs on node.sock and ipc.cookie are the guard (ipc/win_endpoint.h): with
-// no other account configured only this account (and SYSTEM) can open them. With
-// -ipcattachgroup the group is given its rights on both, but no Windows peer is
-// identified yet, so a peer of another account would be admitted unchecked: every
-// peer is refused instead. The GUI, which has checked the endpoint's owner before
-// connecting, likewise refuses a core when -ipcserviceuser is set.
+// The DACLs on node.sock and ipc.cookie decide who may connect (ipc/win_endpoint.h).
+// Who the peer is comes from the identity check on the connection
+// (ipc/win_attest.h), in the same-account mode and the service mode alike.
 
-PeerVerdict ServerPeerPolicy(const PeerIdentity&)
+PeerVerdict ServerPeerPolicy(const PeerIdentity& peer)
 {
-    if (ConfiguredOption("-ipcattachgroup").empty()) return PeerVerdict::Allow;
-    LogPrintf("IPC: refusing the peer: -ipcattachgroup is set, and this build cannot identify a peer of another "
-              "account on Windows\n");
-    return PeerVerdict::Refuse;
+    WinServerPeerContext ctx;
+    try {
+        ctx.self_sid = util::winacl::FormatSid(util::winacl::CurrentTokenUser());
+    } catch (const std::exception& e) {
+        LogPrintf("IPC: refusing the peer %s: this process's account cannot be read (%s)", ShownSid(peer.sid),
+                  e.what());
+        return PeerVerdict::Refuse;
+    }
+    ctx.attach_group_configured = win::AttachGroupSid().has_value();
+
+    return ServerPeerDecision(peer, ctx);
 }
 
-PeerVerdict ClientPeerPolicy(const PeerIdentity&, const fs::path&)
+PeerVerdict ClientPeerPolicy(const PeerIdentity& server, const fs::path&)
 {
-    if (ConfiguredOption("-ipcserviceuser").empty()) return PeerVerdict::Allow;
-    LogPrintf("IPC: refusing the core: -ipcserviceuser is set, and this build cannot identify a core of another "
-              "account on Windows\n");
-    return PeerVerdict::Refuse;
+    std::string expected;
+    try {
+        expected = util::winacl::FormatSid(win::ExpectedServerSid());
+    } catch (const std::exception& e) {
+        LogPrintf("IPC: refusing the core %s: the node account to expect cannot be determined (%s)",
+                  ShownSid(server.sid), e.what());
+        return PeerVerdict::Refuse;
+    }
+
+    return ClientPeerDecision(server, expected);
 }
 
 #endif // WIN32
@@ -189,9 +244,10 @@ PeerVerdict ClientPeerPolicy(const PeerIdentity&, const fs::path&)
 const char* PeerCredentialEnforcement()
 {
 #ifdef WIN32
-    return "none (Windows AF_UNIX exposes no peer credentials; the DACLs on node.sock and ipc.cookie are the guard. "
-           "With -ipcattachgroup the group is given the right to connect and to read the cookie, but every peer is "
-           "refused, as this build cannot identify a peer of another account on Windows)";
+    return "the named-pipe identity check before authentication (Windows AF_UNIX exposes no peer credentials; the "
+           "peer's token is read through the pipe at the identification level, and this account, or with "
+           "-ipcattachgroup also a member of that group, is admitted at Medium integrity only). The DACLs on "
+           "node.sock and ipc.cookie decide who may connect and read the cookie";
 #elif defined(__linux__)
     // peercred_posix.cpp reads SO_PEERCRED under the same __linux__ test.
 #ifdef SO_PEERGROUPS

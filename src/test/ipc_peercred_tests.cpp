@@ -11,10 +11,15 @@
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <optional>
 #include <string>
 #include <vector>
+
+#ifdef WIN32
+#include "util/win_acl.h"
+#endif
 
 #ifndef WIN32
 #include <grp.h>
@@ -90,6 +95,22 @@ struct TempDir
     }
 };
 #endif
+
+//! A Windows peer's identity, as the rules read it.
+ipc::WinPeerIdentity WinPeer(std::string sid, uint32_t integrity_rid, bool attach_group_member)
+{
+    ipc::WinPeerIdentity peer;
+    peer.sid = std::move(sid);
+    peer.integrity_rid = integrity_rid;
+    peer.attach_group_member = attach_group_member;
+    return peer;
+}
+
+//! SECURITY_MANDATORY_LOW_RID, MEDIUM_RID, MEDIUM_PLUS_RID and HIGH_RID.
+constexpr uint32_t LOW_IL = 0x1000;
+constexpr uint32_t MEDIUM_IL = 0x2000;
+constexpr uint32_t MEDIUM_PLUS_IL = 0x2100;
+constexpr uint32_t HIGH_IL = 0x3000;
 
 } // namespace
 
@@ -422,29 +443,113 @@ BOOST_FIXTURE_TEST_CASE(client_policy_reads_service_user_and_ipcdir, PeerPolicyS
 
 #else // WIN32
 
-// Until a Windows peer can be identified, the policies admit only without a
-// different account: an empty identity, and a refusal as soon as a different
-// account is configured on either side. The attach group itself resolves (its
-// lookup is covered in ipc_win_endpoint_tests), and a group that is not on this
-// computer is refused.
-BOOST_FIXTURE_TEST_CASE(windows_placeholder_admits_only_without_other_account, PeerPolicySetup)
+// kj gives the server no Windows socket, so no identity is read from one, and an
+// identity that was never read is refused by both policies, whatever is
+// configured.
+BOOST_FIXTURE_TEST_CASE(peercred_read_identity_from_fd_is_nullopt, PeerPolicySetup)
 {
-    const auto id = ipc::ReadPeerIdentity(-1);
-    BOOST_REQUIRE(id);
-    BOOST_CHECK(ipc::ConfigureAttachGroup(""));
+    BOOST_CHECK(!ipc::ReadPeerIdentity(-1));
     BOOST_CHECK(!ipc::ConfigureAttachGroup("gridcoin-test-no-such-group"));
 
     gArgs.ClearForcedArg("-ipcattachgroup");
     gArgs.ClearForcedArg("-ipcserviceuser");
-    BOOST_CHECK(ipc::ServerPeerPolicy(*id) == ipc::PeerVerdict::Allow);
-    BOOST_CHECK(ipc::ClientPeerPolicy(*id, GetDataDir()) == ipc::PeerVerdict::Allow);
+    BOOST_REQUIRE(ipc::ConfigureAttachGroup(""));
+    const ipc::PeerIdentity unread;
+    BOOST_CHECK(ipc::ServerPeerPolicy(unread) == ipc::PeerVerdict::Refuse);
+    BOOST_CHECK(ipc::ServerPeerPolicy(WinPeer("", MEDIUM_IL, true)) == ipc::PeerVerdict::Refuse);
+    BOOST_CHECK(ipc::ClientPeerPolicy(unread, GetDataDir()) == ipc::PeerVerdict::Refuse);
+}
 
-    gArgs.ForceSetArg("-ipcattachgroup", "Gridcoin GUI Users");
-    BOOST_CHECK(ipc::ServerPeerPolicy(*id) == ipc::PeerVerdict::Refuse);
-    gArgs.ForceSetArg("-ipcserviceuser", "NT SERVICE\\gridcoinresearchd");
-    BOOST_CHECK(ipc::ClientPeerPolicy(*id, GetDataDir()) == ipc::PeerVerdict::Refuse);
+// ServerPeerPolicy decides with this process's token user and the configured
+// attach group, at Medium integrity only. The group must be a local group of this
+// computer; the case for one runs where "Gridcoin GUI Users" exists, and
+// windows_server_peer_decision covers the rule everywhere.
+BOOST_FIXTURE_TEST_CASE(server_policy_windows_fields, PeerPolicySetup)
+{
+    const std::string self = util::winacl::FormatSid(util::winacl::CurrentTokenUser());
+    // An account of a domain that does not exist, so never this one.
+    const std::string other = "S-1-5-21-1-2-3-1000";
+
+    gArgs.ClearForcedArg("-ipcattachgroup");
+    BOOST_REQUIRE(ipc::ConfigureAttachGroup(""));
+    BOOST_CHECK(ipc::ServerPeerPolicy(WinPeer(self, MEDIUM_IL, false)) == ipc::PeerVerdict::Allow);
+    BOOST_CHECK(ipc::ServerPeerPolicy(WinPeer(self, HIGH_IL, false)) == ipc::PeerVerdict::Refuse);
+    BOOST_CHECK(ipc::ServerPeerPolicy(WinPeer(self, LOW_IL, false)) == ipc::PeerVerdict::Refuse);
+    BOOST_CHECK(ipc::ServerPeerPolicy(WinPeer(other, MEDIUM_IL, true)) == ipc::PeerVerdict::Refuse);
+
+    if (!ipc::ConfigureAttachGroup("Gridcoin GUI Users")) {
+        BOOST_TEST_MESSAGE("this computer has no local group \"Gridcoin GUI Users\"; skipping the attach-group case");
+        return;
+    }
+    BOOST_CHECK(ipc::ServerPeerPolicy(WinPeer(other, MEDIUM_IL, true)) == ipc::PeerVerdict::Allow);
+    BOOST_CHECK(ipc::ServerPeerPolicy(WinPeer(other, MEDIUM_IL, false)) == ipc::PeerVerdict::Refuse);
+    BOOST_CHECK(ipc::ServerPeerPolicy(WinPeer(other, HIGH_IL, true)) == ipc::PeerVerdict::Refuse);
+    BOOST_CHECK(ipc::ServerPeerPolicy(WinPeer(self, MEDIUM_IL, false)) == ipc::PeerVerdict::Allow);
+}
+
+// ClientPeerPolicy admits only the node account the GUI expects: this account
+// without -ipcserviceuser, and with it that account alone, so an account that
+// does not resolve admits no core at all.
+BOOST_FIXTURE_TEST_CASE(client_policy_windows_expected_server, PeerPolicySetup)
+{
+    const std::string self = util::winacl::FormatSid(util::winacl::CurrentTokenUser());
+
+    gArgs.ClearForcedArg("-ipcserviceuser");
+    BOOST_CHECK(ipc::ClientPeerPolicy(WinPeer(self, 0, false), GetDataDir()) == ipc::PeerVerdict::Allow);
+    BOOST_CHECK(ipc::ClientPeerPolicy(WinPeer("S-1-5-21-1-2-3-1000", 0, false), GetDataDir()) ==
+                ipc::PeerVerdict::Refuse);
+
+    gArgs.ForceSetArg("-ipcserviceuser", "NT SERVICE\\gridcoin-test-no-such-service");
+    BOOST_CHECK(ipc::ClientPeerPolicy(WinPeer(self, 0, false), GetDataDir()) == ipc::PeerVerdict::Refuse);
 }
 
 #endif // WIN32
+
+// The core's rule for a Windows peer, which builds everywhere. Exactly Medium
+// integrity, and then this account or, with an attach group, a member of it.
+BOOST_AUTO_TEST_CASE(windows_server_peer_decision)
+{
+    const std::string self = "S-1-5-21-1004336348-1177238915-682003330-1001";
+    const std::string other = "S-1-5-21-1004336348-1177238915-682003330-1002";
+    const ipc::WinServerPeerContext no_group{self, false};
+    const ipc::WinServerPeerContext group{self, true};
+
+    BOOST_CHECK(ipc::ServerPeerDecision(WinPeer(self, MEDIUM_IL, false), no_group) == ipc::PeerVerdict::Allow);
+    BOOST_CHECK(ipc::ServerPeerDecision(WinPeer(self, MEDIUM_IL, false), group) == ipc::PeerVerdict::Allow);
+
+    // Any level but Medium is refused, this account's own included: elevated or
+    // uiAccess above it, sandboxed below it.
+    for (const uint32_t rid : {uint32_t{0}, LOW_IL, MEDIUM_IL - 1, MEDIUM_PLUS_IL, HIGH_IL, uint32_t{0x4000}}) {
+        BOOST_CHECK_MESSAGE(ipc::ServerPeerDecision(WinPeer(self, rid, false), no_group) == ipc::PeerVerdict::Refuse,
+                            "integrity 0x" << std::hex << rid);
+        BOOST_CHECK_MESSAGE(ipc::ServerPeerDecision(WinPeer(other, rid, true), group) == ipc::PeerVerdict::Refuse,
+                            "integrity 0x" << std::hex << rid);
+    }
+
+    // Another account only as a member of a configured attach group.
+    BOOST_CHECK(ipc::ServerPeerDecision(WinPeer(other, MEDIUM_IL, true), group) == ipc::PeerVerdict::Allow);
+    BOOST_CHECK(ipc::ServerPeerDecision(WinPeer(other, MEDIUM_IL, true), no_group) == ipc::PeerVerdict::Refuse);
+    BOOST_CHECK(ipc::ServerPeerDecision(WinPeer(other, MEDIUM_IL, false), group) == ipc::PeerVerdict::Refuse);
+    BOOST_CHECK(ipc::ServerPeerDecision(WinPeer(other, MEDIUM_IL, false), no_group) == ipc::PeerVerdict::Refuse);
+
+    // An identity that was never read, even one that claims the group, and a
+    // context with no account of its own match nobody.
+    BOOST_CHECK(ipc::ServerPeerDecision(ipc::WinPeerIdentity{}, no_group) == ipc::PeerVerdict::Refuse);
+    BOOST_CHECK(ipc::ServerPeerDecision(WinPeer("", MEDIUM_IL, true), group) == ipc::PeerVerdict::Refuse);
+    BOOST_CHECK(ipc::ServerPeerDecision(WinPeer("", MEDIUM_IL, false), {"", false}) == ipc::PeerVerdict::Refuse);
+}
+
+// The GUI's rule for a Windows core: its account is the one expected, and an empty
+// one on either side matches nothing.
+BOOST_AUTO_TEST_CASE(windows_client_peer_decision)
+{
+    const std::string expected = "S-1-5-80-1234-5678-9012-3456-7890";
+
+    BOOST_CHECK(ipc::ClientPeerDecision(WinPeer(expected, 0, false), expected) == ipc::PeerVerdict::Allow);
+    BOOST_CHECK(ipc::ClientPeerDecision(WinPeer("S-1-5-21-1-2-3-1000", 0, false), expected) ==
+                ipc::PeerVerdict::Refuse);
+    BOOST_CHECK(ipc::ClientPeerDecision(ipc::WinPeerIdentity{}, expected) == ipc::PeerVerdict::Refuse);
+    BOOST_CHECK(ipc::ClientPeerDecision(ipc::WinPeerIdentity{}, "") == ipc::PeerVerdict::Refuse);
+}
 
 BOOST_AUTO_TEST_SUITE_END()

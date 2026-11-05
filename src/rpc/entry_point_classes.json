@@ -121,9 +121,17 @@
       "class": "free",
       "effect": "state"
     },
+    "Init.beginAttest": {
+      "class": "free",
+      "effect": "state"
+    },
     "Init.construct": {
       "class": "read_only",
       "effect": "read_only"
+    },
+    "Init.finishAttest": {
+      "class": "free",
+      "effect": "state"
     },
     "Init.getBuildInfo": {
       "class": "read_only",

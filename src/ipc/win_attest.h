@@ -16,6 +16,10 @@
 #include <string_view>
 #include <utility>
 
+namespace interfaces {
+class Init;
+} // namespace interfaces
+
 //! Identifying the peer of a Windows IPC connection through a one-shot named pipe.
 //!
 //! The server (the core) creates a named pipe with a random name, which only its
@@ -23,12 +27,12 @@
 //! the name's suffix and a random nonce over the IPC connection. The client (the
 //! GUI) opens the pipe, checks that its owner is the server account it expects,
 //! writes the nonce, and only then asks the server to finish. The server reads the
-//! nonce, waiting at most ATTEST_FINISH_WAIT for it, so the call returns quickly.
-//! Once the server has read the nonce, the pipe holds the security context of the
-//! client that wrote it. The server impersonates that client just long enough to
-//! open its token, then reads from the token the facts ClassifyTokenFacts decides
-//! on: the user, attach-group membership, integrity level, impersonation level and
-//! whether it is an AppContainer.
+//! nonce, waiting at most ATTEST_FINISH_WAIT for it. Once the server has read the
+//! nonce, the pipe holds the security context of the client that wrote it. The
+//! server impersonates that client just long enough to open its token, then reads
+//! from the token the facts ClassifyTokenFacts decides on: the user, attach-group
+//! membership, integrity level, impersonation level and whether it is an
+//! AppContainer.
 //!
 //! The client opens the pipe at the identification level, so the token the server
 //! gets can be read but cannot be used to act as the client.
@@ -201,7 +205,9 @@ public:
     //! on the calling thread, and the pipe is closed before it returns. nullopt
     //! (logged) when no client has opened the pipe, on any failure, when called more
     //! than the deadline after Begin, without a successful Begin, or on a second
-    //! call. A failure to stop impersonating aborts the process.
+    //! call. A failure to stop impersonating aborts the process. It blocks for up
+    //! to ATTEST_FINISH_WAIT and impersonates the client on the calling thread, so
+    //! it must run on a worker thread, never the IPC event loop.
     std::optional<TokenFacts> Finish();
 
 private:
@@ -239,6 +245,22 @@ private:
 
     util::winacl::UniqueHandle m_handle;
 };
+
+//! The client's half of the check, on the IPC connection whose Init is \p init,
+//! before the client sends its cookie: beginAttest(); the pipe it names opened
+//! with AttestClientPipe::Open against \p expected_server, which the GUI takes from
+//! ExpectedServerSid(); the nonce written; then finishAttest(), with the pipe held
+//! open until it has returned. Throws std::runtime_error with the text to show:
+//! - "The node did not complete the Windows identity check; use matching builds
+//!   of gridcoinresearch and gridcoinresearchd." when beginAttest() throws, as an
+//!   older node's does, or answers served=false;
+//! - "The node refused this GUI's identity (wrong account, not in Gridcoin GUI
+//!   Users, or running elevated). See the node's debug.log." when finishAttest()
+//!   returns false;
+//! - a text naming the cause when the node named no valid pipe, the pipe could
+//!   not be opened or written or has another owner, or finishAttest() throws.
+//! Nothing is written to the pipe unless its owner is \p expected_server.
+void RunClientAttestation(interfaces::Init& init, const Sid& expected_server);
 #endif // WIN32
 
 } // namespace ipc::win

@@ -23,6 +23,10 @@
 #include <fcntl.h> // F_DUPFD_CLOEXEC
 #include <unistd.h>
 #else
+#include "ipc/win_attest.h"
+#include "ipc/win_endpoint.h"
+#include "util/win_acl.h"
+
 #include <winsock2.h> // closesocket, WSADuplicateSocketW, WSASocketW
 #endif
 #include <utility>
@@ -122,11 +126,7 @@ public:
         // account when the socket's directory belongs to that account or root
         // and is not writable by group or others. Two processes of the same
         // account are not told apart by this; the daemon refusing to start when
-        // it cannot bind keeps the socket from being left unowned. On Windows,
-        // where the peer's identity cannot be read, Process::connect has already
-        // checked the socket's owner before connecting, and its directories when
-        // another account can write the socket; in the same-account mode a socket
-        // swapped in between is for the attestation step to find.
+        // it cannot bind keeps the socket from being left unowned.
         //
         // Process::connect rewrote address to its canonical "unix:<path>" form,
         // so the socket's directory is the parent of that path.
@@ -134,6 +134,7 @@ public:
         if (socket_dir.empty()) {
             throw std::logic_error("Process::connect did not return a unix: address");
         }
+#ifndef WIN32
         const std::optional<ipc::PeerIdentity> server = ipc::ReadPeerIdentity(fd);
         if (!server || ipc::ClientPeerPolicy(*server, socket_dir) == ipc::PeerVerdict::Refuse) {
             throw interfaces::PeerRefusedError("The process listening on the multiprocess socket belongs to "
@@ -141,13 +142,23 @@ public:
                                                "or it is not the configured service account; refusing to "
                                                "send the authentication cookie to it.");
         }
-        if (info) {
-#ifndef WIN32
-            info->server_other_account = server->uid != ::geteuid();
+        if (info) info->server_other_account = server->uid != ::geteuid();
 #else
-            info->server_other_account = false;
-#endif
+        // On Windows the socket tells nothing about the process at the other end.
+        // Process::connect has already checked that node.sock is owned by the
+        // expected node account, and its directories when another account can
+        // write the socket. After the connect, the identity check confirms that
+        // account through the pipe it opens, before the cookie is sent, in every
+        // mode: that is what finds a socket swapped in between.
+        util::winacl::Sid expected_server;
+        try {
+            expected_server = ipc::win::ExpectedServerSid();
+            if (info) info->server_other_account = expected_server != util::winacl::CurrentTokenUser();
+        } catch (const std::exception& e) {
+            throw interfaces::PeerRefusedError(
+                strprintf("Refusing to connect: the node account to expect cannot be determined (%s)", e.what()));
         }
+#endif
         // A second handle on the socket lets the caller shut the connection down
         // from another thread (ConnectToNode's handshake watchdog). shutdown()
         // acts on the socket, not on one handle, and the caller closes this one
@@ -160,7 +171,20 @@ public:
         }
         // Protocol::connect owns fd from here, also when it throws.
         guard.release();
-        return m_protocol->connect(fd, m_exe_name, std::move(on_disconnect));
+        std::unique_ptr<interfaces::Init> init = m_protocol->connect(fd, m_exe_name, std::move(on_disconnect));
+#ifdef WIN32
+        // The identity check comes before the caller's first call, which presents
+        // the cookie, and runs over this same connection, which it keeps to: the
+        // pipe stays open until finishAttest() has answered over it.
+        if (init) {
+            try {
+                ipc::win::RunClientAttestation(*init, expected_server);
+            } catch (const std::runtime_error& e) {
+                throw interfaces::PeerRefusedError(e.what());
+            }
+        }
+#endif
+        return init;
     }
 
     void listenAddress(std::string& address) override

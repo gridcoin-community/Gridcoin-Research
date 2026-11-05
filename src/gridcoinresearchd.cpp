@@ -495,9 +495,12 @@ bool AppInit(int argc, char* argv[])
                 // Refuse a peer before serving it when its identity cannot be
                 // read or ServerPeerPolicy refuses it: another OS user outside
                 // the -ipcattachgroup group, or root. Windows has no peer
-                // credentials, so there the DACLs on node.sock and ipc.cookie are
-                // the guard (ipc/win_endpoint.h), and with -ipcattachgroup every
-                // peer is refused until a Windows peer can be identified.
+                // credentials on the socket, and kj gives this factory no socket
+                // there, so nothing is read from it: the DACLs on node.sock and
+                // ipc.cookie decide who may connect (ipc/win_endpoint.h), and
+                // every connection, in every mode, must pass the identity check
+                // (ipc/win_attest.h) before authenticate() will compare its
+                // cookie. ServerPeerPolicy decides on what that check read.
                 // cookie + identity are captured by value and copied into each
                 // ServeInit.
                 //
@@ -513,10 +516,17 @@ bool AppInit(int argc, char* argv[])
                 auto make_serve_init = [cookie = std::move(cookie), identity = std::move(identity),
                                         slot = ipc::MakeAttachSlot()]
                     (int peer_fd) -> std::unique_ptr<interfaces::Init> {
+                        ipc::ServeInitOptions options;
+#ifndef WIN32
                         const std::optional<ipc::PeerIdentity> peer = ipc::ReadPeerIdentity(peer_fd);
                         if (!peer || ipc::ServerPeerPolicy(*peer) == ipc::PeerVerdict::Refuse) return nullptr;
+#else
+                        (void)peer_fd;
+                        options.require_attestation = true;
+#endif
                         return ipc::MakeServeInit(interfaces::MakeGridcoinInit(), cookie, identity, slot,
-                                                  [] { if (pwalletMain) pwalletMain->EndIpcElevation({}); });
+                                                  [] { if (pwalletMain) pwalletMain->EndIpcElevation({}); },
+                                                  options);
                     };
                 // Client notifications are posted to one dispatcher thread, so the
                 // core thread that emits one never waits for the GUI.
@@ -528,9 +538,9 @@ bool AppInit(int argc, char* argv[])
                 ipc->listenAddress(address);
                 LogPrintf("IPC: serving GUI connections on %s\n", address);
                 // Say which access controls are actually in force, rather than
-                // leaving an operator to infer it from the platform. The peer check
-                // is real on POSIX and absent on Windows; debug.log should not
-                // require the reader to know that.
+                // leaving an operator to infer it from the platform. The peer is
+                // identified from the socket on POSIX and by the identity check on
+                // Windows; debug.log should not require the reader to know that.
                 LogPrintf("IPC: peer-credential enforcement: %s\n", ipc::PeerCredentialEnforcement());
             } catch (const std::exception& e) {
                 // Fail loudly and fatally. Previously this was logged and the

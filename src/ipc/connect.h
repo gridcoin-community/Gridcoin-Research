@@ -33,7 +33,7 @@ struct GuiConnection {
     //! mixed-build banner.
     HandshakeResult handshake;
     //! The core runs as another OS account (the -ipcserviceuser account) rather
-    //! than as this process's own. Always false on Windows.
+    //! than as this process's own.
     bool core_other_account{false};
 };
 
@@ -51,7 +51,8 @@ struct GuiConnection {
 //!      with no listener (NotListening);
 //!   2. MakeIpc + connectAddress("unix:<ipc_dir>/node.sock") to obtain the
 //!      remote Init, after the client peer check (PeerRefused). This makes the
-//!      transport's bootstrap round trip (Init.construct);
+//!      transport's bootstrap round trip (Init.construct), and on Windows the
+//!      identity check after it (PeerRefused);
 //!   3. ClientHandshake -- authenticate with the cookie, verify
 //!      schema/protocol/network compatibility, and ask for the attach slot
 //!      (AlreadyAttached; any other failure is Handshake).

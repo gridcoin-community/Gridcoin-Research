@@ -31,7 +31,7 @@ using MakeServeInitFn = std::function<std::unique_ptr<Init>(int peer_fd)>;
 struct ConnectInfo
 {
     //! The core runs as another OS account (the -ipcserviceuser account) rather
-    //! than as this process's own. Always false on Windows.
+    //! than as this process's own.
     bool server_other_account{false};
     //! A duplicate of the connected socket, for shutting the connection down
     //! from another thread; -1 when not provided. The caller owns and closes it.
@@ -50,8 +50,9 @@ struct ConnectInfo
 //! Thrown by Ipc::connectAddress when the process listening on the socket fails
 //! the client peer check (ipc::ClientPeerPolicy) or its identity cannot be read,
 //! and on Windows when the endpoint fails the check made before connecting
-//! (ipc::win::CheckServerEndpointBeforeConnect). Nothing has been sent to that
-//! process.
+//! (ipc::win::CheckServerEndpointBeforeConnect) or the node fails the identity
+//! check after it (ipc::win::RunClientAttestation). The cookie has not been sent
+//! to that process.
 class PeerRefusedError : public std::runtime_error
 {
 public:
@@ -80,10 +81,13 @@ public:
     //! (on the IPC event-loop thread) when the remote drops the connection
     //! unexpectedly — the GUI uses it to quit gracefully when the node exits.
     //! Before anything is sent, the process at the other end is checked with
-    //! ipc::ClientPeerPolicy (on Windows, after the endpoint is checked before
-    //! connecting), and a refusal throws PeerRefusedError. If \p info
-    //! is set it is filled once the socket is connected and the peer accepted,
-    //! before the transport's bootstrap round trip (see ConnectInfo).
+    //! ipc::ClientPeerPolicy. On Windows the endpoint is checked before connecting
+    //! instead, and after the bootstrap round trip the node must pass the identity
+    //! check (ipc::win::RunClientAttestation) before this returns, so the caller's
+    //! first call, which presents the cookie, follows it. A refusal throws
+    //! PeerRefusedError. If \p info is set it is filled once the socket is
+    //! connected and the peer accepted, before the transport's bootstrap round
+    //! trip (see ConnectInfo).
     virtual std::unique_ptr<Init> connectAddress(std::string& address,
                                                  std::function<void()> on_disconnect = {},
                                                  ConnectInfo* info = nullptr) = 0;

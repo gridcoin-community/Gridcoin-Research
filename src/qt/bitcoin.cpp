@@ -40,6 +40,9 @@
 #include "ipc/handshake.h"
 #include "ipc/process.h"
 #include "qt/coreconnectwait.h"
+#ifdef WIN32
+#include "util/win_acl.h"
+#endif
 #endif
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
@@ -1139,6 +1142,28 @@ int main(int argc, char *argv[])
     };
 
     if (refuse_multiprocess_gui_args()) return EXIT_FAILURE;
+
+#if defined(WIN32) && defined(ENABLE_MULTIPROCESS)
+    // The core's identity check admits a GUI at Medium integrity only, so an elevated multiprocess GUI would be
+    // refused at connect. Say so here, before anything connects. The core's refusal does not depend on this: when
+    // the token cannot be read, the GUI goes on and the core decides.
+    if (multiprocess_gui) {
+        bool elevated = false;
+        try {
+            elevated = util::winacl::CurrentTokenIsElevated();
+        } catch (const std::exception& e) {
+            tfm::format(std::cerr, "Could not tell whether this process runs elevated: %s\n", e.what());
+        }
+        if (elevated) {
+            const QString text = QObject::tr("The Gridcoin wallet must not run as administrator in multiprocess mode. "
+                                             "Start it from a normal (not elevated) session. If User Account Control "
+                                             "is turned off, multiprocess mode cannot be used on this account.");
+            tfm::format(std::cerr, "%s\n", text.toStdString());
+            QMessageBox::critical(nullptr, PACKAGE_NAME, text);
+            return EXIT_FAILURE;
+        }
+    }
+#endif
 
     // Do this to pickup -testnet / -regtest from the command line.
     SelectParams(gArgs.GetChainName());

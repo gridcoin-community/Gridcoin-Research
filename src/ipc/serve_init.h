@@ -62,6 +62,18 @@ public:
 //! Return a new, free slot.
 std::shared_ptr<AttachSlot> MakeAttachSlot();
 
+//! How MakeServeInit serves a connection.
+struct ServeInitOptions
+{
+    //! Refuse authenticate() unless the connection's Windows identity check
+    //! (beginAttest, then finishAttest; ipc/win_attest.h) admitted its peer. The
+    //! daemon sets it on Windows, where the server learns nothing about its peer
+    //! from the socket. On POSIX the accepted socket's peer credentials are
+    //! checked instead and the check cannot run, so a connection served with it
+    //! never authenticates.
+    bool require_attestation{false};
+};
+
 //! Wrap the node's real (in-process) Init so it can be served over IPC: it adds
 //! the connect handshake (authenticate / getBuildInfo / getIdentity) and gates
 //! the delegated methods so nothing is served before authenticate() succeeds
@@ -77,11 +89,17 @@ std::shared_ptr<AttachSlot> MakeAttachSlot();
 //! connection's teardown hooks and before the slot is given back; it runs on the
 //! IPC event-loop thread, so it must not block on cs_main or cs_wallet or make an
 //! IPC call. The daemon's ends the wallet's IPC capability.
+//!
+//! Every wrapper serves the Windows identity check (beginAttest, finishAttest)
+//! before authentication. With \p options.require_attestation, authenticate()
+//! compares no cookie and fails, for good, on a connection whose peer that check
+//! has not admitted.
 std::unique_ptr<interfaces::Init> MakeServeInit(std::unique_ptr<interfaces::Init> inner,
                                                 std::string cookie,
                                                 interfaces::NodeIdentity identity,
                                                 std::shared_ptr<AttachSlot> slot,
-                                                std::function<void()> on_slot_closed);
+                                                std::function<void()> on_slot_closed,
+                                                ServeInitOptions options = {});
 
 } // namespace ipc
 

@@ -7,6 +7,7 @@
 
 #include "fs.h"
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #ifndef WIN32
@@ -25,9 +26,9 @@
 //!
 //! The rules are pure functions over plain data (ServerPeerDecision,
 //! ClientPeerDecision), so every branch is unit-testable without a second OS
-//! account. The platform backends plug in at the hooks ReadPeerIdentity,
-//! ConfigureAttachGroup and AttachGroupGid, which live in peercred_posix.cpp and
-//! peercred_win.cpp.
+//! account; the Windows ones build and are tested on every platform. The
+//! platform backends plug in at the hooks ReadPeerIdentity, ConfigureAttachGroup
+//! and AttachGroupGid, which live in peercred_posix.cpp and peercred_win.cpp.
 //!
 //! On POSIX the identity comes from SO_PEERCRED and SO_PEERGROUPS on Linux and getpeereid()
 //! elsewhere, and a peer that cannot be read is refused. The core admits its own
@@ -38,14 +39,17 @@
 //! or root, and not writable by group or others.
 //!
 //! On Windows AF_UNIX exposes no peer credentials, and the server never receives
-//! a socket fd from kj. The DACLs on node.sock and ipc.cookie (ipc/win_endpoint.h)
-//! are the guard: this account and SYSTEM, and with -ipcattachgroup also the
-//! group's right to connect and to read the cookie. The GUI checks the socket's
-//! owner before it connects, and its directories when another account can write
-//! the socket; in the same-account mode a socket swapped between the check and the
-//! connect is for the attestation step to find. Until a Windows peer can be
-//! identified, either side still refuses the other as soon as a different account
-//! is configured (-ipcattachgroup or -ipcserviceuser).
+//! a socket fd from kj, so ReadPeerIdentity reads nothing there. The DACLs on
+//! node.sock and ipc.cookie (ipc/win_endpoint.h) decide who may connect: this
+//! account and SYSTEM, and with -ipcattachgroup also the group's right to connect
+//! and to read the cookie. In every mode the peer is identified by the named-pipe
+//! identity check, which runs on the connection before authentication
+//! (ipc/win_attest.h, Init::beginAttest and Init::finishAttest). The core reads
+//! the GUI's token user, attach-group membership and integrity level through the
+//! pipe and decides with ServerPeerPolicy. The GUI checks that node.sock, before
+//! it connects (and its directories when another account can write the socket),
+//! and the check's pipe, before it writes anything into it, are owned by the
+//! account it expects (ipc::win::ExpectedServerSid).
 namespace ipc {
 
 #ifndef WIN32
@@ -58,20 +62,53 @@ struct PeerIdentity
     gid_t gid{static_cast<gid_t>(-1)};
     std::vector<gid_t> groups;
 };
-#else
-//! The Windows fields arrive with the Windows backend; none is read yet.
-struct PeerIdentity
+#endif
+
+//! The identity of a Windows IPC peer; on Windows it is PeerIdentity. The core
+//! fills it from what the identity check read (ServeInit's finishAttest). The
+//! GUI's connect path builds none: it checks the core's account through the
+//! owners of node.sock and of the check's pipe instead (see ClientPeerPolicy).
+struct WinPeerIdentity
 {
+    //! The peer's account as a SID string, "S-1-5-21-...", from the token user
+    //! the identity check read. Empty when nothing was read.
+    std::string sid;
+    //! The SECURITY_MANDATORY_*_RID of the peer's token; 0 when nothing was read.
+    uint32_t integrity_rid{0};
+    //! CheckTokenMembership's verdict for the attach group, taken while the
+    //! token was held, so a group the token holds for deny only does not count.
+    bool attach_group_member{false};
 };
+
+#ifdef WIN32
+using PeerIdentity = WinPeerIdentity;
 #endif
 
 enum class PeerVerdict { Allow, Refuse };
 
+//! What the core's rule for a Windows peer decides with.
+struct WinServerPeerContext
+{
+    std::string self_sid;                //!< this process's token user, as a SID string
+    bool attach_group_configured{false}; //!< whether -ipcattachgroup resolved a group
+};
+
+//! The core's rule for a Windows peer. Refused unless its SID was read and its
+//! integrity level is Medium (0x2000) exactly. Then allowed when it is this
+//! process's account, or when an attach group is configured and it is a member;
+//! refused for anyone else.
+PeerVerdict ServerPeerDecision(const WinPeerIdentity& peer, const WinServerPeerContext& ctx);
+
+//! The rule for a Windows core: allowed only when its SID is \p expected_sid,
+//! and neither is empty. The rule ClientPeerPolicy applies on Windows.
+PeerVerdict ClientPeerDecision(const WinPeerIdentity& server, const std::string& expected_sid);
+
 //! Hook. On POSIX this is the identity of the peer of a connected or accepted
 //! AF_UNIX \p fd (SO_PEERCRED and SO_PEERGROUPS on Linux, getpeereid() elsewhere, where groups are
 //! left empty), or nullopt, with a log line, when it cannot be read. Callers refuse on
-//! nullopt. On Windows \p fd is ignored (kj gives the server -1) and the
-//! PeerIdentity returned is empty.
+//! nullopt. On Windows it is always nullopt: \p fd is ignored (kj gives the server
+//! -1), and nothing on Windows serves or connects on it. The identity check that
+//! runs on the connection identifies the peer there instead.
 std::optional<PeerIdentity> ReadPeerIdentity(int fd);
 
 //! Hook. Resolve the group \p name and remember it as the attach group; "" clears
@@ -147,8 +184,10 @@ PeerVerdict ClientPeerDecision(const PeerIdentity& server, const ClientPeerConte
 #endif // !WIN32
 
 //! The core's check of an accepted peer: ServerPeerDecision with this process's
-//! effective uid and AttachGroupGid(). On Windows, where no peer is identified
-//! yet, it allows unless -ipcattachgroup is set.
+//! effective uid and AttachGroupGid(). On Windows, ServerPeerDecision with this
+//! process's token user and whether ipc::win::AttachGroupSid() is set, over the
+//! identity the identity check read (ServeInit's finishAttest); refused when the
+//! token user cannot be read.
 PeerVerdict ServerPeerPolicy(const PeerIdentity& peer);
 
 //! The GUI's check of the core it connected to, before it presents the cookie:
@@ -156,8 +195,15 @@ PeerVerdict ServerPeerPolicy(const PeerIdentity& peer);
 //! -ipcserviceuser account and lstat() of \p ipcdir, the directory that holds
 //! the socket. A core at the caller's own uid is allowed at once, without the
 //! account lookup or the lstat; for any other core both are made on each call.
-//! On Windows, where the endpoint was checked before connecting and no peer is
-//! identified yet, it allows unless -ipcserviceuser is set.
+//!
+//! On Windows it is ClientPeerDecision with ipc::win::ExpectedServerSid(), refused
+//! when that cannot be resolved, and \p ipcdir is not read. The Windows connect
+//! path does not call it, as the socket gives no identity to call it with. The
+//! same rule, against the same ExpectedServerSid(), is enforced there on the
+//! objects themselves: ipc::win::CheckServerEndpointBeforeConnect refuses a
+//! node.sock owned by another account before the connect, and
+//! ipc::win::AttestClientPipe::Open refuses an identity-check pipe owned by
+//! another account before anything is written into it.
 PeerVerdict ClientPeerPolicy(const PeerIdentity& server, const fs::path& ipcdir);
 
 //! The value of a name-valued IPC option such as "-ipcserviceuser", or "" when
