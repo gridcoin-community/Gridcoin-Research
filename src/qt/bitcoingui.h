@@ -139,6 +139,13 @@ public:
                                   const QString& warnings);
 
     /**
+     * Whether Settings offers "Autounlock for staking": only in the split
+     * (-multiprocess) build, and only when the core's store \p status says this
+     * platform has one. A monolithic GUI does not ask the core at all.
+     */
+    static bool AutoUnlockActionVisible(bool multiprocess, const AutoUnlockStoreStatus& status);
+
+    /**
      * Begin an explicit application shutdown: the menu Exit / Ctrl-Q / tray
      * Exit, a snapshot or reset-blockchain restart, the post-encryption
      * restart, or a core-initiated QueueShutdown. Sets a flag so closeEvent()
@@ -288,6 +295,8 @@ private:
     QAction *encryptWalletAction;
     QAction *backupWalletAction;
     QAction *changePassphraseAction;
+    //! Settings -> "Autounlock for staking". Hidden unless AutoUnlockActionVisible().
+    QAction* m_autounlock_action{nullptr};
     QAction *unlockWalletAction;
     QAction *lockWalletAction;
     QAction *openRPCConsoleAction;
@@ -433,6 +442,8 @@ private slots:
     void backupWallet();
     /** Change encrypted wallet passphrase */
     void changePassphrase();
+    /** Set up autounlock for staking, store the passphrase again, or turn it off. */
+    void autoUnlock();
     /** The Unlock BUTTON: a directive, offering the staking-only choice. */
     void unlockWallet();
 

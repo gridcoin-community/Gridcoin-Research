@@ -332,6 +332,7 @@ add_library(gridcoin_util STATIC
     validationinterface.cpp
     wallet/autounlock.cpp
     wallet/autounlock_blob.cpp
+    wallet/autounlock_setup.cpp
     wallet/autounlock_store.cpp
     wallet/capability.cpp
     wallet/coinviews.cpp

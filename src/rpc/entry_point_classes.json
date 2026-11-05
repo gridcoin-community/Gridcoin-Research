@@ -279,7 +279,7 @@
     "Node.executeRpcConsoleSecretCommand": {
       "class": "dispatch",
       "effect": "state",
-      "note": "carries walletpassphrase, walletpassphrasechange and encryptwallet with their passphrases as SecureString"
+      "note": "carries walletpassphrase, walletpassphrasechange, encryptwallet, setautounlock and clearautounlock with their passphrases as SecureString"
     },
     "Node.getAlertStatusBarMessage": {
       "class": "read_only",
@@ -782,6 +782,11 @@
       "class": "elevate",
       "effect": "state"
     },
+    "Wallet.clearAutoUnlockSecret": {
+      "authority": "passphrase_argument",
+      "class": "elevate",
+      "effect": "state"
+    },
     "Wallet.computeCoinControlSummary": {
       "class": "read_only",
       "effect": "read_only"
@@ -812,6 +817,10 @@
       "effect": "read_only"
     },
     "Wallet.getAddresses": {
+      "class": "read_only",
+      "effect": "read_only"
+    },
+    "Wallet.getAutoUnlockStatus": {
       "class": "read_only",
       "effect": "read_only"
     },
@@ -917,6 +926,11 @@
     },
     "Wallet.setAddressBook": {
       "class": "free",
+      "effect": "state"
+    },
+    "Wallet.setAutoUnlockSecret": {
+      "authority": "passphrase_argument",
+      "class": "elevate",
       "effect": "state"
     },
     "Wallet.signMessage": {
@@ -1166,6 +1180,11 @@
     "claimhtlc": {
       "class": "elevate",
       "effect": "value"
+    },
+    "clearautounlock": {
+      "authority": "passphrase_argument",
+      "class": "elevate",
+      "effect": "state"
     },
     "clearbanned": {
       "class": "free",
@@ -1774,6 +1793,11 @@
     },
     "setaccount": {
       "class": "free",
+      "effect": "state"
+    },
+    "setautounlock": {
+      "authority": "passphrase_argument",
+      "class": "elevate",
       "effect": "state"
     },
     "setban": {

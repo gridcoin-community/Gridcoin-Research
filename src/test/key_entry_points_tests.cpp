@@ -104,6 +104,7 @@ const std::vector<std::string> INVENTORY_RPCS{
     "restoreseedphrase", "sendfrom", "sendmany", "sendtoaddress", "sethdseed", "splitunspent",
     "signmessage", "signrawtransaction", "signrawtransactionwithkey", "signrawtransactionwithwallet",
     "sweepuncoveredcoins", "upgradewallet", "walletlock", "walletpassphrase", "walletpassphrasechange",
+    "setautounlock", "clearautounlock",
     "walletprocesspsgt", "walletcreatefundedpsgt", "signpsgtinpool",
     "advertisebeacon", "advertisebeaconv3", "beaconauth", "createmrcrequest", "revokebeacon",
     "registerpool", "withdrawpool", "approvepool", "authorizepool", "removepool", "addkey",
@@ -115,7 +116,8 @@ const std::vector<std::string> INVENTORY_RPCS{
 const std::vector<std::string> INVENTORY_IPC{
     "Wallet.backupWallet", "Wallet.beginBackup", "Wallet.beginConsoleDownload", "Wallet.beginConsoleUpload",
     "Wallet.encryptWallet", "Wallet.lockWallet", "Wallet.elevateWallet",
-    "Wallet.unlockWallet", "Wallet.changeWalletPassphrase", "Wallet.getKeyFromPool", "Wallet.sendCoins",
+    "Wallet.unlockWallet", "Wallet.changeWalletPassphrase", "Wallet.setAutoUnlockSecret",
+    "Wallet.clearAutoUnlockSecret", "Wallet.getKeyFromPool", "Wallet.sendCoins",
     "Wallet.signMessage", "Wallet.getNewReceiveAddress", "Wallet.getNewReceiveAddressWithLabel",
     "MRC.snapshot", "MRC.submit", "MRC.submitConfirmed",
     "VotingManager.submitPoll", "VotingManager.submitVote",

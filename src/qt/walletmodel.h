@@ -125,6 +125,11 @@ public:
     int getNumTransactions() const;
     EncryptionStatus getEncryptionStatus() const;
 
+    //! What the core's autounlock store reports (interfaces::Wallet::getAutoUnlockStatus).
+    //! Not supported, with the reason as the problem, when the call fails, as it can
+    //! across IPC.
+    AutoUnlockStoreStatus getAutoUnlockStatus() const;
+
     // Check address for validity
     bool validateAddress(const QString &address);
 

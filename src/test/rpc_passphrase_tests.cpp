@@ -198,6 +198,10 @@ BOOST_AUTO_TEST_CASE(passphrase_param_indexes)
     BOOST_CHECK((*PassphraseParamIndexes("walletpassphrase") == std::vector<int>{0}));
     BOOST_CHECK((*PassphraseParamIndexes("walletpassphrasechange") == std::vector<int>{0, 1}));
     BOOST_CHECK((*PassphraseParamIndexes("encryptwallet") == std::vector<int>{0}));
+    BOOST_REQUIRE(PassphraseParamIndexes("setautounlock") != nullptr);
+    BOOST_CHECK((*PassphraseParamIndexes("setautounlock") == std::vector<int>{0}));
+    BOOST_REQUIRE(PassphraseParamIndexes("clearautounlock") != nullptr);
+    BOOST_CHECK((*PassphraseParamIndexes("clearautounlock") == std::vector<int>{0}));
     BOOST_CHECK(PassphraseParamIndexes("getblockcount") == nullptr);
 }
 
@@ -206,6 +210,10 @@ BOOST_AUTO_TEST_CASE(new_passphrase_indexes)
     BOOST_CHECK((NewPassphraseIndexes("encryptwallet") == std::vector<int>{0}));
     BOOST_CHECK((NewPassphraseIndexes("walletpassphrasechange") == std::vector<int>{1}));
     BOOST_CHECK(NewPassphraseIndexes("walletpassphrase").empty());
+
+    // The wallet checks the passphrase these store or remove, so it is asked for once.
+    BOOST_CHECK(NewPassphraseIndexes("setautounlock").empty());
+    BOOST_CHECK(NewPassphraseIndexes("clearautounlock").empty());
 }
 
 BOOST_AUTO_TEST_CASE(execute_passphrase_command_change)

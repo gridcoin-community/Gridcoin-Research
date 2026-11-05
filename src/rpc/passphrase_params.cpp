@@ -15,6 +15,8 @@ const std::vector<int>* PassphraseParamIndexes(const std::string& method)
         {"walletpassphrase", {0}},
         {"walletpassphrasechange", {0, 1}},
         {"encryptwallet", {0}},
+        {"setautounlock", {0}},
+        {"clearautounlock", {0}},
     };
 
     const auto it = table.find(method);

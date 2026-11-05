@@ -37,6 +37,7 @@ add_executable(test_gridcoin
     autounlock_tests.cpp
     autounlock_blob_tests.cpp
     autounlock_dpapi_tests.cpp
+    autounlock_setup_tests.cpp
     autounlock_socket_tests.cpp
     addrman_tests.cpp
     allocator_tests.cpp

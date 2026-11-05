@@ -496,6 +496,11 @@ void BitcoinGUI::createActions()
     backupWalletAction->setToolTip(tr("Back up the wallet and its settings to another location"));
     changePassphraseAction = new QAction(tr("&Change Passphrase..."), this);
     changePassphraseAction->setToolTip(tr("Change the passphrase used for wallet encryption"));
+    m_autounlock_action = new QAction(tr("Autounlock for staking…"), this);
+    m_autounlock_action->setToolTip(tr("Store the wallet passphrase so that the Gridcoin core unlocks the wallet "
+                                       "for staking when it starts, or turn that off"));
+    // Shown once the wallet model is set, if the core's store says the platform has one.
+    m_autounlock_action->setVisible(false);
     unlockWalletAction = new QAction(tr("&Unlock Wallet..."), this);
     unlockWalletAction->setToolTip(tr("Unlock wallet"));
     lockWalletAction = new QAction(tr("&Lock Wallet"), this);
@@ -526,6 +531,7 @@ void BitcoinGUI::createActions()
     connect(encryptWalletAction, &QAction::triggered, this, &BitcoinGUI::encryptWallet);
     connect(backupWalletAction, &QAction::triggered, this, &BitcoinGUI::backupWallet);
     connect(changePassphraseAction, &QAction::triggered, this, &BitcoinGUI::changePassphrase);
+    connect(m_autounlock_action, &QAction::triggered, this, &BitcoinGUI::autoUnlock);
     connect(unlockWalletAction, &QAction::triggered, this, &BitcoinGUI::unlockWallet);
     connect(lockWalletAction, &QAction::triggered, this, &BitcoinGUI::lockWallet);
     connect(signMessageAction, &QAction::triggered, this, [this]{ this->gotoSignMessageTab(QString {}); });
@@ -660,6 +666,7 @@ void BitcoinGUI::createMenuBar()
     QMenu *settings = appMenuBar->addMenu(tr("&Settings"));
     settings->addAction(encryptWalletAction);
     settings->addAction(changePassphraseAction);
+    settings->addAction(m_autounlock_action);
 
     settings->addAction(unlockWalletAction);
     settings->addAction(lockWalletAction);
@@ -1000,6 +1007,11 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
 
         setEncryptionStatus(walletModel->getEncryptionStatus());
         connect(walletModel, &WalletModel::encryptionStatusChanged, this, &BitcoinGUI::setEncryptionStatus);
+
+        // The core is asked only in the split build; setIpcConnectionInfo() has run by now.
+        const bool autounlock = m_ipc_info.active
+            && AutoUnlockActionVisible(/*multiprocess=*/true, walletModel->getAutoUnlockStatus());
+        m_autounlock_action->setVisible(autounlock);
 
         // Balloon pop-up for new transactions: driven off the drained wallet-event
         // stream (VIEW_FULL RowsInserted records), not a full-replica model row
@@ -1934,6 +1946,8 @@ void BitcoinGUI::setEncryptionStatus(int status)
         labelEncryptionIcon->setToolTip(tr("Wallet is <b>not encrypted</b>!"));
         encryptWalletAction->setChecked(false);
         changePassphraseAction->setEnabled(false);
+        // Autounlock stores the passphrase of an encrypted wallet.
+        m_autounlock_action->setEnabled(false);
         unlockWalletAction->setVisible(false);
         lockWalletAction->setVisible(false);
         encryptWalletAction->setEnabled(true);
@@ -1958,6 +1972,7 @@ void BitcoinGUI::setEncryptionStatus(int status)
                                                                                                tr("<b>unlocked</b>")));
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
+        m_autounlock_action->setEnabled(true);
         unlockWalletAction->setVisible(false);
         unlockWalletAction->setShortcut(QKeySequence());
         lockWalletAction->setVisible(true);
@@ -1970,6 +1985,7 @@ void BitcoinGUI::setEncryptionStatus(int status)
         labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently <b>locked</b>"));
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
+        m_autounlock_action->setEnabled(true);
         unlockWalletAction->setVisible(true);
         unlockWalletAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_7));
         lockWalletAction->setVisible(false);
@@ -2148,6 +2164,59 @@ void BitcoinGUI::changePassphrase()
     AskPassphraseDialog dlg(AskPassphraseDialog::ChangePass, this);
     dlg.setModel(walletModel);
     dlg.exec();
+}
+
+bool BitcoinGUI::AutoUnlockActionVisible(bool multiprocess, const AutoUnlockStoreStatus& status)
+{
+    return multiprocess && status.supported;
+}
+
+void BitcoinGUI::autoUnlock()
+{
+    if (!walletModel) return;
+
+    // Read again now: the file may have been stored or removed since the menu was built.
+    const AutoUnlockStoreStatus status = walletModel->getAutoUnlockStatus();
+    const QString title = tr("Autounlock for staking");
+
+    if (!status.supported) {
+        QMessageBox::warning(this, title, tr("Autounlock setup is not available on this platform."));
+        return;
+    }
+
+    AskPassphraseDialog::Mode mode = AskPassphraseDialog::SetupAutoUnlock;
+
+    // Already set up: turn it off, or store the passphrase again, as after the core
+    // refused the file it found.
+    if (status.configured) {
+        QString text = tr("Autounlock for staking is set up. The passphrase is stored in %1.")
+                           .arg(QString::fromStdString(status.location));
+
+        if (!status.problem.empty()) {
+            text += "\n\n" + tr("The core would not use it: %1").arg(QString::fromStdString(status.problem));
+        }
+
+        QMessageBox box(QMessageBox::Question, title, text, QMessageBox::Cancel, this);
+        box.setTextFormat(Qt::PlainText);
+        QPushButton* const turn_off = box.addButton(tr("Turn off..."), QMessageBox::DestructiveRole);
+        QPushButton* const store_again = box.addButton(tr("Store again..."), QMessageBox::AcceptRole);
+        box.setDefaultButton(QMessageBox::Cancel);
+        box.exec();
+
+        if (box.clickedButton() == turn_off) {
+            mode = AskPassphraseDialog::ClearAutoUnlock;
+        } else if (box.clickedButton() != store_again) {
+            return;
+        }
+    }
+
+    AskPassphraseDialog dlg(mode, this);
+    dlg.setModel(walletModel);
+    dlg.setAutoUnlockStatus(status);
+    dlg.exec();
+
+    // Turning autounlock off locks the wallet.
+    setEncryptionStatus(walletModel->getEncryptionStatus());
 }
 
 void BitcoinGUI::unlockWallet()

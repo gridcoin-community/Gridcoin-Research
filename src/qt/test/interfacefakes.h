@@ -659,6 +659,9 @@ public:
     bool unlockWallet(const SecureString&, bool) override { return false; }
     bool changeWalletPassphrase(const SecureString&, const SecureString&) override { return false; }
     std::vector<std::string> getPreEncryptionBackups() override { return {}; }
+    AutoUnlockSetupResult setAutoUnlockSecret(const SecureString&) override { return AutoUnlockSetupResult::Unsupported; }
+    AutoUnlockSetupResult clearAutoUnlockSecret(const SecureString&) override { return AutoUnlockSetupResult::Unsupported; }
+    AutoUnlockStoreStatus getAutoUnlockStatus() override { return {}; }
     bool getPubKey(const CKeyID&, CPubKey&) override { return false; }
     bool getKeyFromPool(const std::string&, CPubKey&) override { return false; }
     std::vector<interfaces::WalletOutput> getOutputs(const std::vector<COutPoint>&) override { return {}; }
@@ -692,9 +695,9 @@ public:
 };
 
 //! Fake interfaces::Wallet: an encrypted wallet unlocked for staking only,
-//! with nothing in it, for the passphrase prompt. beginElevation() and
-//! changeWalletPassphrase() block, as a passphrase attempt waiting for its turn
-//! does, until the test releases them or until the attempt is cancelled on its
+//! with nothing in it, for the passphrase prompt. beginElevation(),
+//! changeWalletPassphrase() and the two autounlock calls block, as a passphrase
+//! attempt waiting for its turn does, until the test releases them or until the attempt is cancelled on its
 //! thread (PassphraseAttemptCancel), which is how the wallet's own wait ends in
 //! the monolithic build. Everything else answers with an empty default.
 class FakeWallet : public interfaces::Wallet
@@ -711,12 +714,19 @@ public:
     std::atomic<bool> m_encrypt_result{false};
     //! What getPreEncryptionBackups() answers.
     std::vector<std::string> m_pre_encryption_backups;
+    //! What setAutoUnlockSecret() and clearAutoUnlockSecret() answer once
+    //! released (WrongPassphrase when cancelled), and what getAutoUnlockStatus()
+    //! answers.
+    AutoUnlockSetupResult m_autounlock_result{AutoUnlockSetupResult::Ok};
+    AutoUnlockStoreStatus m_autounlock_status{};
 
     // Observed.
     std::atomic<bool> m_waiting{false};
     std::atomic<bool> m_returned{false};
     std::atomic<bool> m_saw_cancel{false};
     std::atomic<int> m_end_elevation_calls{0};
+    std::atomic<int> m_set_autounlock_calls{0};
+    std::atomic<int> m_clear_autounlock_calls{0};
     //! The thread the last passphrase call ran on, written before m_waiting.
     std::atomic<std::thread::id> m_call_thread{};
 
@@ -729,6 +739,20 @@ public:
     {
         return Wait();
     }
+
+    AutoUnlockSetupResult setAutoUnlockSecret(const SecureString& /*passphrase*/) override
+    {
+        ++m_set_autounlock_calls;
+        return Wait() ? m_autounlock_result : AutoUnlockSetupResult::WrongPassphrase;
+    }
+
+    AutoUnlockSetupResult clearAutoUnlockSecret(const SecureString& /*passphrase*/) override
+    {
+        ++m_clear_autounlock_calls;
+        return Wait() ? m_autounlock_result : AutoUnlockSetupResult::WrongPassphrase;
+    }
+
+    AutoUnlockStoreStatus getAutoUnlockStatus() override { return m_autounlock_status; }
 
     interfaces::WalletLockState getLockState() override
     {
@@ -938,6 +962,15 @@ public:
     {
         return false;
     }
+    AutoUnlockSetupResult setAutoUnlockSecret(const SecureString& /*passphrase*/) override
+    {
+        return AutoUnlockSetupResult::Unsupported;
+    }
+    AutoUnlockSetupResult clearAutoUnlockSecret(const SecureString& /*passphrase*/) override
+    {
+        return AutoUnlockSetupResult::Unsupported;
+    }
+    AutoUnlockStoreStatus getAutoUnlockStatus() override { return {}; }
     bool getPubKey(const CKeyID& /*address*/, CPubKey& /*pub_key_out*/) override { return false; }
     bool getKeyFromPool(const std::string& /*label*/, CPubKey& /*pub_key_out*/) override { return false; }
     std::vector<interfaces::WalletOutput> getOutputs(const std::vector<COutPoint>& /*outpoints*/) override

@@ -29,15 +29,16 @@ std::optional<SecureString> FetchAutoUnlockFromDpapiBlob(const fs::path& path, s
 //! The Windows store: the autounlock file at AutoUnlockBlobPath(), encrypted for the
 //! scope this mode reads. Store() writes the file under a temporary name beside it,
 //! owner-only from creation, moves it into place, then reads it back and checks it as
-//! FetchAutoUnlockFromDpapiBlob() would. It removes a file that check refuses for what
-//! it is (its size, layout, scope, network or access control list) and returns false. A
-//! file that could not be read back, after the fetch's retries or because a shutdown
-//! ended them, is kept, logged as not checked, and Store() returns true. Remove()
-//! succeeds when no file is there. Status() checks the file without decrypting it.
+//! FetchAutoUnlockFromDpapiBlob() would: Verified when the check passes. It removes a
+//! file that check refuses for what it is (its size, layout, scope, network or access
+//! control list) and returns Failed. A file that could not be read back, after the
+//! fetch's retries or because a shutdown ended them, is kept, logged as not checked, and
+//! Store() returns Unverified. Remove() succeeds when no file is there. Status() checks
+//! the file without decrypting it.
 class DpapiBlobStore final : public AutoUnlockSecretStore
 {
 public:
-    bool Store(const SecureString& passphrase, std::string& error) override;
+    AutoUnlockStoreOutcome Store(const SecureString& passphrase, std::string& error) override;
     bool Remove(std::string& error) override;
     AutoUnlockStoreStatus Status() override;
 };

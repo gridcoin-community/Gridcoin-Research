@@ -41,6 +41,7 @@
 #include "fs.h"
 #include "ipc/capnp/common-types.h"
 #include "ipc/capnp/protocol.h"
+#include "ipc/capnp/wallet-types.h"
 #include "ipc/connect.h"
 #include "ipc/handshake.h"
 #include "ipc/peercred.h"
@@ -50,12 +51,14 @@
 #include "logging.h"
 #include "node/gui_cache.h"
 #include "sync.h"
+#include "test/autounlock_fake_store.h"
 #include "test/gui_cache_fakes.h"
 #include "test/lone_best_block.h"
 #include "test/staking_test_peers.h"
 #include "test/state_guard.h"
 #include "test/wallet_file_placeholder.h"
 #include "util.h"
+#include "wallet/autounlock_setup.h"
 #include "wallet/capability.h"
 #include "wallet/wallet.h"
 
@@ -1184,6 +1187,69 @@ BOOST_AUTO_TEST_CASE(wire_capability_kind_out_of_range_is_refused)
     BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
 
     wallet.reset();
+}
+
+// Autounlock setup over the real wire: the passphrase crosses as Data, the result as a byte
+// and the status as a struct. It is checked in-band, so the connection's capability slot
+// stays empty throughout.
+BOOST_AUTO_TEST_CASE(wire_autounlock_setup_round_trip)
+{
+    grc_test::EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    grc_test::FakeStoreInstalled fake(/*configured=*/false);
+
+    WireLink link([&fx](int) -> std::unique_ptr<interfaces::Init> {
+        return std::make_unique<WalletServingInit>(&fx.wallet);
+    });
+
+    std::unique_ptr<interfaces::Wallet> wallet = link.client->makeWallet();
+    BOOST_REQUIRE(wallet != nullptr);
+
+    const AutoUnlockStoreStatus status = wallet->getAutoUnlockStatus();
+    BOOST_CHECK(status.supported);
+    BOOST_CHECK(!status.configured);
+    BOOST_CHECK_EQUAL(status.scope, "machine");
+    BOOST_CHECK_EQUAL(status.location, grc_test::FakeAutoUnlockStore::LOCATION);
+    BOOST_CHECK(status.problem.empty());
+
+    BOOST_CHECK(wallet->setAutoUnlockSecret(grc_test::EncryptedWallet::PASSPHRASE) == AutoUnlockSetupResult::Ok);
+    BOOST_CHECK(fake.calls->kept == grc_test::EncryptedWallet::PASSPHRASE);
+    BOOST_CHECK(wallet->getAutoUnlockStatus().configured);
+    BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
+
+    BOOST_CHECK(wallet->clearAutoUnlockSecret(grc_test::EncryptedWallet::PASSPHRASE) == AutoUnlockSetupResult::Ok);
+    BOOST_CHECK(!fake.calls->kept.has_value());
+    BOOST_CHECK(!wallet->getAutoUnlockStatus().configured);
+    BOOST_CHECK(fx.wallet.IsLocked());
+    BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
+
+    wallet.reset();
+}
+
+// A setup result byte outside the enumeration is refused when the client reads it, rather
+// than read as an outcome the client would misreport.
+BOOST_AUTO_TEST_CASE(autounlock_result_read_hook_refuses_unknown_values)
+{
+    struct Input {
+        uint8_t m_value;
+        uint8_t get() const { return m_value; }
+    };
+
+    // The hook never touches the context, so a connection is not needed to call it.
+    alignas(std::max_align_t) static char unused_connection[1];
+    mp::InvokeContext invoke_context{*reinterpret_cast<mp::Connection*>(unused_connection)};
+
+    const AutoUnlockSetupResult last = mp::CustomReadField(mp::TypeList<AutoUnlockSetupResult>(), mp::Priority<2>(),
+                                                           invoke_context, Input{5},
+                                                           mp::ReadDestTemp<AutoUnlockSetupResult>());
+    BOOST_CHECK(last == AutoUnlockSetupResult::OkUnverified);
+
+    for (const uint8_t value : {uint8_t{6}, uint8_t{200}, uint8_t{255}}) {
+        BOOST_CHECK_THROW(mp::CustomReadField(mp::TypeList<AutoUnlockSetupResult>(), mp::Priority<2>(), invoke_context,
+                                              Input{value}, mp::ReadDestTemp<AutoUnlockSetupResult>()),
+                          std::runtime_error);
+    }
 }
 
 // The automatic backups made before an encryption come back over the real wire, so the GUI

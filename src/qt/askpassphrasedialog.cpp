@@ -33,6 +33,12 @@ struct AskPassphraseDialog::CheckState
     //! The passphrase was accepted. Written by the check before it reports.
     std::atomic<bool> accepted{false};
 
+    //! For the autounlock modes: the AutoUnlockSetupResult the core answered,
+    //! as its value, or NO_ANSWER when the call did not return one. Written by
+    //! the check before it reports.
+    static constexpr int NO_ANSWER{-1};
+    std::atomic<int> autounlock_result{NO_ANSWER};
+
     //! Whoever moves this out of QUEUED owns what follows: the check, which
     //! then runs and reports, or the prompt, which then reports for a check
     //! that never ran. A check given up touches nothing of the prompt's when
@@ -56,6 +62,15 @@ struct AskPassphraseDialog::CheckState
         return phase.compare_exchange_strong(expected, GIVEN_UP);
     }
 };
+
+namespace {
+//! What the SetupAutoUnlock prompt says first, above the text for the scope.
+QString AutoUnlockSetupIntro()
+{
+    return AskPassphraseDialog::tr("Enter your wallet passphrase to store it for autounlock. When the Gridcoin "
+                                   "core starts, it then unlocks the wallet for staking only.");
+}
+} // namespace
 
 AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
                  : QDialog(parent)
@@ -114,6 +129,19 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
             setWindowTitle(tr("Change passphrase"));
             ui->warningLabel->setText(tr("Enter the old and new passphrase to the wallet."));
             break;
+        case SetupAutoUnlock:
+        case ClearAutoUnlock:
+            // The scope's text is added once the status is known
+            // (setAutoUnlockStatus()).
+            ui->warningLabel->setText(mode == SetupAutoUnlock
+                ? AutoUnlockSetupIntro()
+                : tr("Turning autounlock off deletes the stored passphrase and locks the wallet now."));
+            ui->newPassphraseLabel->hide();
+            ui->newPassphraseEdit->hide();
+            ui->repeatNewPassphraseLabel->hide();
+            ui->repeatNewPassphraseEdit->hide();
+            setWindowTitle(mode == SetupAutoUnlock ? tr("Autounlock for staking") : tr("Turn off autounlock"));
+            break;
     }
 
     textChanged();
@@ -153,6 +181,36 @@ AskPassphraseDialog::~AskPassphraseDialog()
 
     secureClearPassFields();
     delete ui;
+}
+
+void AskPassphraseDialog::setAutoUnlockStatus(const AutoUnlockStoreStatus& status)
+{
+    m_autounlock_status = status;
+
+    if (mode != SetupAutoUnlock) return;
+
+    const QString scope_text = AutoUnlockScopeText(status.scope);
+
+    if (scope_text.isEmpty()) return;
+
+    ui->warningLabel->setText(AutoUnlockSetupIntro() + "<br><br>" + GUIUtil::HtmlEscape(scope_text));
+}
+
+QString AskPassphraseDialog::AutoUnlockScopeText(const std::string& scope)
+{
+    if (scope == "machine") {
+        return tr("On Windows, any program running as you can obtain your wallet passphrase whenever "
+                  "same-account autounlock is set up. For protection against that, use the service mode. "
+                  "Autounlock only ever unlocks the wallet for staking.");
+    }
+
+    if (scope == "service") {
+        return tr("The passphrase is stored encrypted for the Gridcoin service account. Code running as that "
+                  "service can decrypt it. You are typing it on this desktop, where programs running as you "
+                  "can capture it.");
+    }
+
+    return QString();
 }
 
 void AskPassphraseDialog::setModel(WalletModel *model)
@@ -374,6 +432,13 @@ void AskPassphraseDialog::accept()
         // Both run the check off the GUI thread; checkFinished() reports.
         startCheck(std::move(oldpass));
     } break;
+    case SetupAutoUnlock:
+    case ClearAutoUnlock:
+        // The core checks the passphrase, waiting its turn and out the delay a
+        // wrong one earns, then writes or deletes the stored passphrase: off
+        // the GUI thread, as an unlock is. checkFinished() reports.
+        startCheck(std::move(oldpass));
+        break;
     case ChangePass:
         if(newpass1 == newpass2)
         {
@@ -481,6 +546,15 @@ void AskPassphraseDialog::startCheck(SecureString passphrase, SecureString new_p
                 case ChangePass:
                     accepted = wallet.changeWalletPassphrase(passphrase, new_passphrase);
                     break;
+                case SetupAutoUnlock:
+                case ClearAutoUnlock: {
+                    const AutoUnlockSetupResult result = check_mode == SetupAutoUnlock
+                        ? wallet.setAutoUnlockSecret(passphrase)
+                        : wallet.clearAutoUnlockSecret(passphrase);
+                    check->autounlock_result = static_cast<int>(result);
+                    accepted = result == AutoUnlockSetupResult::Ok || result == AutoUnlockSetupResult::OkUnverified;
+                    break;
+                }
                 case Encrypt:
                     // Encryption checks no passphrase and does not come here.
                     break;
@@ -561,7 +635,26 @@ void AskPassphraseDialog::checkFinished()
                                      tr("Wallet passphrase was successfully changed."));
         }
 
+        // Autounlock was set up or turned off all the same, which the user must
+        // be told.
+        if (accepted && (mode == SetupAutoUnlock || mode == ClearAutoUnlock)) {
+            reportAutoUnlock();
+        }
+
         QDialog::reject();
+        return;
+    }
+
+    if (mode == SetupAutoUnlock || mode == ClearAutoUnlock) {
+        // A wrong passphrase leaves the prompt up, where it is typed again.
+        if (reportAutoUnlock()) return;
+
+        if (accepted) {
+            QDialog::accept();
+        } else {
+            QDialog::reject();
+        }
+
         return;
     }
 
@@ -621,6 +714,65 @@ void AskPassphraseDialog::checkFinished()
     }
 }
 
+bool AskPassphraseDialog::reportAutoUnlock()
+{
+    const bool setup = (mode == SetupAutoUnlock);
+    const QString title = setup ? tr("Autounlock for staking") : tr("Turn off autounlock");
+    const QString location = m_autounlock_status.location.empty()
+        ? tr("the autounlock file")
+        : QString::fromStdString(m_autounlock_status.location);
+    const int value = m_check->autounlock_result;
+
+    if (value == CheckState::NO_ANSWER) {
+        QMessageBox::critical(this, title,
+                              tr("The Gridcoin core did not answer, so it is not known whether autounlock was "
+                                 "changed. Open this again to see how it stands."));
+        return false;
+    }
+
+    switch (static_cast<AutoUnlockSetupResult>(value)) {
+    case AutoUnlockSetupResult::Ok:
+        if (setup) {
+            QMessageBox::information(this, title,
+                                     tr("Autounlock for staking is set up. The passphrase is stored in %1. When "
+                                        "the Gridcoin core starts, it unlocks the wallet for staking only.")
+                                         .arg(location));
+        } else {
+            QMessageBox::information(this, title,
+                                     tr("Autounlock is off. The stored passphrase was deleted, and the wallet is "
+                                        "locked."));
+        }
+        return false;
+    case AutoUnlockSetupResult::OkUnverified:
+        QMessageBox::warning(this, title,
+                             tr("The passphrase was written to %1, but the file could not be read back to check "
+                                "it. It will be checked the next time the Gridcoin core starts. If it cannot be "
+                                "used then, the wallet stays locked and the core's debug.log says why.")
+                                 .arg(location));
+        return false;
+    case AutoUnlockSetupResult::WrongPassphrase:
+        QMessageBox::critical(this, title, tr("The passphrase entered for the wallet decryption was incorrect."));
+        return true;
+    case AutoUnlockSetupResult::NotEncrypted:
+        QMessageBox::critical(this, title, tr("The wallet is not encrypted, so autounlock does not apply to it."));
+        return false;
+    case AutoUnlockSetupResult::Unsupported:
+        QMessageBox::critical(this, title, tr("Autounlock setup is not available on this platform."));
+        return false;
+    case AutoUnlockSetupResult::StoreFailed:
+        QMessageBox::critical(this, title,
+                              setup ? tr("Autounlock was not set up: the passphrase could not be stored. The "
+                                         "Gridcoin core's debug.log says why.")
+                                    : tr("Autounlock was not turned off: the stored passphrase could not be "
+                                         "deleted. The Gridcoin core's debug.log says why. The wallet was left as "
+                                         "it was."));
+        return false;
+    }
+
+    // A value outside the enumeration is refused before it reaches here.
+    return false;
+}
+
 void AskPassphraseDialog::textChanged()
 {
     // Validate input, set Ok button to enabled when acceptable
@@ -632,6 +784,8 @@ void AskPassphraseDialog::textChanged()
         break;
     case UnlockStaking:
     case Elevate: // Old passphrase x1
+    case SetupAutoUnlock:
+    case ClearAutoUnlock:
         acceptable = !ui->oldPassphraseEdit->text().isEmpty();
         break;
     case ChangePass: // Old passphrase x1, new passphrase x2

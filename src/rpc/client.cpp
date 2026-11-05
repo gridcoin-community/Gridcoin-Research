@@ -635,6 +635,8 @@ static std::vector<std::string> PassphrasePrompts(const std::string& method)
 {
     if (method == "walletpassphrasechange") return {"Old wallet passphrase> ", "New wallet passphrase> "};
     if (method == "encryptwallet") return {"New wallet passphrase> "};
+    if (method == "setautounlock") return {"Wallet passphrase to store for autounlock> "};
+    if (method == "clearautounlock") return {"Wallet passphrase> "};
 
     return {"Wallet passphrase> "};
 }
@@ -731,7 +733,8 @@ int CommandLineRPC(int argc, char *argv[])
         const bool passphrase_method = PassphraseParamIndexes(strMethod) != nullptr;
 
         if (stdin_passphrase && !passphrase_method) {
-            throw runtime_error("-stdinwalletpassphrase applies only to walletpassphrase, walletpassphrasechange and encryptwallet");
+            throw runtime_error("-stdinwalletpassphrase applies only to walletpassphrase, walletpassphrasechange, "
+                                "encryptwallet, setautounlock and clearautounlock");
         }
 
         if (stdin_elevate && passphrase_method) {

@@ -301,6 +301,8 @@ const std::set<std::string> SENSITIVE_ARG_COMMANDS = {
     // Takes the HTLC preimage, which is meant to stay secret until the claim
     // is broadcast.
     "claimhtlc",
+    // Both autounlock commands take the wallet passphrase.
+    "clearautounlock",
     "encryptwallet",
     "importprivkey",
     // Takes the phrase password, which restores the wallet together with the
@@ -314,6 +316,7 @@ const std::set<std::string> SENSITIVE_ARG_COMMANDS = {
     // operator under time pressure.
     "sendalert",
     "sendalert2",
+    "setautounlock",
     "sethdseed",
     "signrawtransaction",
     "signrawtransactionwithkey",

@@ -546,12 +546,16 @@ gridcoinresearchd -stdinwalletpassphrase walletpassphrasechange
 # encrypt the wallet
 gridcoinresearchd -stdinwalletpassphrase encryptwallet
 
+# store the passphrase for staking-only autounlock (Windows), or turn that off
+gridcoinresearchd -stdinwalletpassphrase setautounlock
+gridcoinresearchd -stdinwalletpassphrase clearautounlock
+
 # send one command with the passphrase for that request alone
 gridcoinresearchd -stdinelevate sendtoaddress <address> <amount>
 ```
 
-With `-stdinwalletpassphrase` the passphrases of `walletpassphrase`, `walletpassphrasechange` and
-`encryptwallet` are read one per line, in the order of the method's parameters, and the remaining
+With `-stdinwalletpassphrase` the passphrases of `walletpassphrase`, `walletpassphrasechange`,
+`encryptwallet`, `setautounlock` and `clearautounlock` are read one per line, in the order of the method's parameters, and the remaining
 arguments (the timeout, the staking-only flag) stay on the command line. A terminal shows a prompt
 on stderr (`Wallet passphrase> `) and, for a new passphrase (`encryptwallet`, and the second line of
 `walletpassphrasechange`), asks twice and sends nothing if the two entries differ. From a pipe or a
@@ -563,7 +567,7 @@ works and prints a warning on stderr.
 With `-stdinelevate` the client reads one passphrase line and sends it with the request in the
 `X-Gridcoin-Elevate` header (base64), so that one command may use the wallet's keys while the wallet
 stays unlocked for staking only; `getwalletinfo` reports the wallet's `unlock_scope`. The option is
-not used with the three passphrase methods above. The passphrase cannot be sent this way when it is
+not used with the five passphrase methods above. The passphrase cannot be sent this way when it is
 empty or when its encoded form is longer than 8000 bytes (a passphrase of more than 6000 bytes); the
 client then says so and sends nothing, and `walletpassphrase` is the way to unlock.
 

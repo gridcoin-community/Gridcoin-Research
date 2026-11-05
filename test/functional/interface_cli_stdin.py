@@ -5,9 +5,9 @@
 """The RPC client takes wallet passphrases from standard input.
 
 gridcoinresearchd given a non-switch argv acts as the RPC client. With
--stdinwalletpassphrase the passphrases of walletpassphrase, walletpassphrasechange and
-encryptwallet are read from standard input, one line each, and never appear on the command
-line. With -stdinelevate one passphrase is read and sent with the request in the
+-stdinwalletpassphrase the passphrases of walletpassphrase, walletpassphrasechange,
+encryptwallet, setautounlock and clearautounlock are read from standard input, one line each,
+and never appear on the command line. With -stdinelevate one passphrase is read and sent with the request in the
 X-Gridcoin-Elevate header, so that single command may use the wallet's keys while the wallet
 stays unlocked for staking only.
 
@@ -16,7 +16,8 @@ encryptwallet forces. The unlock and elevation calls therefore run against an un
 wallet and are judged by the server's reply to them, not by the wallet's acceptance of the
 passphrase.
 
-  - encryptwallet, walletpassphrase and walletpassphrasechange from standard input;
+  - encryptwallet, walletpassphrase, walletpassphrasechange, setautounlock and clearautounlock
+    from standard input;
   - encryptwallet names the automatic backups from before the encryption and deletes none;
   - -stdinelevate sends the passphrase base64-encoded in the header;
   - the flags are refused for methods they do not apply to, and a short input is reported;
@@ -162,6 +163,12 @@ class InterfaceCLIStdinTest(GridcoinTestFramework):
         assert result.returncode != 0
         assert "-15" in result.stderr and "unencrypted wallet" in result.stderr, result.stderr
 
+        self.log.info("setautounlock and clearautounlock read their passphrase from standard input")
+        for method in ("setautounlock", "clearautounlock"):
+            result = self.run_client("-stdinwalletpassphrase", method, input=PASSPHRASE + "\n")
+            assert result.returncode != 0
+            assert "-15" in result.stderr and "unencrypted wallet" in result.stderr, result.stderr
+
         self.log.info("-stdinelevate sends the passphrase in the request header")
         # The node's wallet is unencrypted here, so its reply cannot show whether the header was
         # sent; a capture listener on the port the node does not use shows what the client wrote.
@@ -175,7 +182,7 @@ class InterfaceCLIStdinTest(GridcoinTestFramework):
         self.log.info("The flags are refused where they do not apply, and a short input is reported")
         self.assert_client_fails(["-stdinwalletpassphrase", "getblockcount"],
                                  "-stdinwalletpassphrase applies only to walletpassphrase, "
-                                 "walletpassphrasechange and encryptwallet")
+                                 "walletpassphrasechange, encryptwallet, setautounlock and clearautounlock")
         self.assert_client_fails(["-stdinwalletpassphrase", "walletpassphrasechange"],
                                  "expected 2 passphrase line(s) on standard input, got 1", input="only one\n")
         self.assert_client_fails(["-stdinwalletpassphrase", "walletpassphrase"],

@@ -50,6 +50,13 @@ interface Wallet $Proxy.wrap("interfaces::Wallet") {
     # in encryptWallet's results, which the generated proxies cannot map.
     getPreEncryptionBackups @43 (context :Proxy.Context) -> (result :List(Text));
     changeWalletPassphrase @13 (context :Proxy.Context, oldPassphrase :Data, newPassphrase :Data) -> (result :Bool);
+    # Autounlock setup. The passphrase comes with the call, not from the connection's
+    # capability, because the store needs the passphrase itself. The result is an
+    # AutoUnlockSetupResult (wallet/autounlock_setup.h) as its integer value; a value
+    # outside the enumeration is refused when the client reads it.
+    setAutoUnlockSecret @44 (context :Proxy.Context, passphrase :Data) -> (result :UInt8);
+    clearAutoUnlockSecret @45 (context :Proxy.Context, passphrase :Data) -> (result :UInt8);
+    getAutoUnlockStatus @46 (context :Proxy.Context) -> (result :AutoUnlockStatus);
     getPubKey @14 (context :Proxy.Context, address :Data) -> (pubKeyOut :Data, result :Bool);
     getKeyFromPool @15 (context :Proxy.Context, label :Text) -> (pubKeyOut :Data, result :Bool);
     getOutputs @16 (context :Proxy.Context, outpoints :List(OutPoint)) -> (result :List(WalletOutput));
@@ -103,6 +110,15 @@ struct WalletBalances $Proxy.wrap("interfaces::WalletBalances") {
     stake @1 :Int64;
     unconfirmedBalance @2 :Int64 $Proxy.name("unconfirmed_balance");
     immatureBalance @3 :Int64 $Proxy.name("immature_balance");
+}
+
+# What the core's autounlock store reports (wallet/autounlock_store.h).
+struct AutoUnlockStatus $Proxy.wrap("AutoUnlockStoreStatus") {
+    supported @0 :Bool;
+    configured @1 :Bool;
+    scope @2 :Text;
+    location @3 :Text;
+    problem @4 :Text;
 }
 
 struct WalletLockState $Proxy.wrap("interfaces::WalletLockState") {

@@ -396,6 +396,73 @@ void CheckTheBackupsAreListed(const EncryptionMessage& run)
     QVERIFY2(run.details.isEmpty(), qPrintable(run.details));
 }
 
+//! What an autounlock prompt showed, and how it ended.
+struct AutoUnlockRun
+{
+    //! The text above the passphrase.
+    QString warning{};
+    //! The messages it showed, in order.
+    QStringList shown{};
+    //! Still open after its message was closed, so ended from outside.
+    bool open_after_message{false};
+    //! What exec() returned.
+    int result{-1};
+};
+
+//! Run an autounlock prompt of \p mode under exec(), over \p wallet, whose call
+//! answers at once, given \p status as BitcoinGUI gives it. The passphrase is
+//! submitted, every message is recorded and closed as the user would close it, and
+//! a prompt still open after its message is ended from outside.
+AutoUnlockRun RunAutoUnlockPrompt(AskPassphraseDialog::Mode mode, qt_test::FakeWallet& wallet,
+                                  const AutoUnlockStoreStatus& status)
+{
+    AutoUnlockRun run;
+    wallet.m_release_result = true;
+    wallet.m_release = true;
+    ModelOverFakeWallet fixture(wallet);
+
+    AskPassphraseDialog dialog(mode);
+    dialog.setModel(&fixture.model);
+    dialog.setAutoUnlockStatus(status);
+
+    if (QLabel* const warning = dialog.findChild<QLabel*>("warningLabel")) run.warning = warning->text();
+
+    QTimer closer;
+    closer.setInterval(20);
+    QObject::connect(&closer, &QTimer::timeout, &dialog, [&run, &dialog] {
+        QMessageBox* const box = VisibleMessageBox();
+        if (!box) return;
+
+        run.shown << box->text();
+        box->accept();
+
+        QTimer::singleShot(300, &dialog, [&run, &dialog] {
+            if (!dialog.isVisible()) return;
+            run.open_after_message = true;
+            dialog.done(ENDED_OUTSIDE);
+        });
+    });
+    closer.start();
+
+    QTimer::singleShot(0, &dialog, [&dialog] { SubmitPassphrase(dialog); });
+    QTimer::singleShot(10000, &dialog, [&dialog] { dialog.done(TIMED_OUT); });
+
+    run.result = dialog.exec();
+    closer.stop();
+
+    return run;
+}
+
+//! A status as the Windows store reports it, in \p scope.
+AutoUnlockStoreStatus WindowsStatus(const std::string& scope)
+{
+    AutoUnlockStoreStatus status;
+    status.supported = true;
+    status.scope = scope;
+    status.location = "C:\\Users\\someone\\AppData\\Roaming\\GridcoinResearch\\autounlock\\passphrase.dpapi";
+    return status;
+}
+
 } // namespace
 
 void AskPassphraseDialogTests::initTestCase()
@@ -789,6 +856,137 @@ void AskPassphraseDialogTests::deletedWhileQueuedGivesTheCheckUp()
     QVERIFY2(took < 1000, qPrintable(QStringLiteral("the deletion took %1 ms").arg(took)));
     QVERIFY(!wallet.m_waiting.load());
     QCOMPARE(wallet.m_end_elevation_calls.load(), 0);
+}
+
+// The setup prompt says, above the passphrase, who can obtain it in the scope the
+// core stores it in. The text is the core's, translated where a translation is
+// loaded, so the RPC and the GUI say the same.
+void AskPassphraseDialogTests::autoUnlockSetupShowsTheScopeText()
+{
+    for (const std::string scope : {"machine", "service"}) {
+        const QString text = AskPassphraseDialog::AutoUnlockScopeText(scope);
+        QCOMPARE(text, QString::fromStdString(AutoUnlockScopeWarning(scope)));
+
+        qt_test::FakeWallet wallet;
+        ModelOverFakeWallet fixture(wallet);
+        AskPassphraseDialog dialog(AskPassphraseDialog::SetupAutoUnlock);
+        dialog.setModel(&fixture.model);
+        dialog.setAutoUnlockStatus(WindowsStatus(scope));
+
+        QLabel* const warning = dialog.findChild<QLabel*>("warningLabel");
+        QVERIFY(warning);
+        QVERIFY2(warning->text().contains(text), qPrintable(warning->text()));
+
+        // One passphrase, which the core checks: there is no new one to type.
+        QLineEdit* const new_passphrase = dialog.findChild<QLineEdit*>("newPassphraseEdit");
+        QVERIFY(new_passphrase);
+        QVERIFY(new_passphrase->isHidden());
+        QVERIFY(!dialog.findChild<QLineEdit*>("oldPassphraseEdit")->isHidden());
+    }
+
+    QVERIFY(AskPassphraseDialog::AutoUnlockScopeText("machine") != AskPassphraseDialog::AutoUnlockScopeText("service"));
+    QVERIFY(AskPassphraseDialog::AutoUnlockScopeText("elsewhere").isEmpty());
+
+    AskPassphraseDialog clear(AskPassphraseDialog::ClearAutoUnlock);
+    QLabel* const warning = clear.findChild<QLabel*>("warningLabel");
+    QVERIFY(warning);
+    QCOMPARE(warning->text(),
+             AskPassphraseDialog::tr("Turning autounlock off deletes the stored passphrase and locks the wallet now."));
+}
+
+void AskPassphraseDialogTests::autoUnlockSetupSaysWhereItIsStored()
+{
+    qt_test::FakeWallet wallet;
+    const AutoUnlockStoreStatus status = WindowsStatus("service");
+
+    const AutoUnlockRun run = RunAutoUnlockPrompt(AskPassphraseDialog::SetupAutoUnlock, wallet, status);
+
+    QCOMPARE(run.result, int(QDialog::Accepted));
+    QCOMPARE(run.shown.size(), 1);
+    QVERIFY2(run.shown[0].contains(QStringLiteral("is set up")), qPrintable(run.shown[0]));
+    QVERIFY2(run.shown[0].contains(QString::fromStdString(status.location)), qPrintable(run.shown[0]));
+    QVERIFY2(!run.shown[0].contains(QStringLiteral("read back")), qPrintable(run.shown[0]));
+    QCOMPARE(wallet.m_set_autounlock_calls.load(), 1);
+    QCOMPARE(wallet.m_clear_autounlock_calls.load(), 0);
+}
+
+// A file written but not read back is stored, and the user is told it is checked at
+// the next start.
+void AskPassphraseDialogTests::autoUnlockSetupUnverifiedSaysItIsCheckedAtNextStart()
+{
+    qt_test::FakeWallet wallet;
+    wallet.m_autounlock_result = AutoUnlockSetupResult::OkUnverified;
+    const AutoUnlockStoreStatus status = WindowsStatus("machine");
+
+    const AutoUnlockRun run = RunAutoUnlockPrompt(AskPassphraseDialog::SetupAutoUnlock, wallet, status);
+
+    QCOMPARE(run.result, int(QDialog::Accepted));
+    QCOMPARE(run.shown.size(), 1);
+    QVERIFY2(run.shown[0].contains(QStringLiteral("could not be read back")), qPrintable(run.shown[0]));
+    QVERIFY2(run.shown[0].contains(QStringLiteral("checked the next time the Gridcoin core starts")),
+             qPrintable(run.shown[0]));
+    QVERIFY2(run.shown[0].contains(QString::fromStdString(status.location)), qPrintable(run.shown[0]));
+    QCOMPARE(wallet.m_set_autounlock_calls.load(), 1);
+}
+
+void AskPassphraseDialogTests::autoUnlockClearSaysTheWalletIsLocked()
+{
+    qt_test::FakeWallet wallet;
+
+    const AutoUnlockRun run = RunAutoUnlockPrompt(AskPassphraseDialog::ClearAutoUnlock, wallet, WindowsStatus("machine"));
+
+    QCOMPARE(run.result, int(QDialog::Accepted));
+    QCOMPARE(run.shown.size(), 1);
+    QVERIFY2(run.shown[0].contains(QStringLiteral("the wallet is locked")), qPrintable(run.shown[0]));
+    QCOMPARE(wallet.m_clear_autounlock_calls.load(), 1);
+    QCOMPARE(wallet.m_set_autounlock_calls.load(), 0);
+}
+
+// A wrong passphrase is said, and the prompt stays up for it to be typed again.
+void AskPassphraseDialogTests::autoUnlockWrongPassphraseKeepsThePromptOpen()
+{
+    for (const AskPassphraseDialog::Mode mode : {AskPassphraseDialog::SetupAutoUnlock,
+                                                 AskPassphraseDialog::ClearAutoUnlock}) {
+        qt_test::FakeWallet wallet;
+        wallet.m_autounlock_result = AutoUnlockSetupResult::WrongPassphrase;
+
+        const AutoUnlockRun run = RunAutoUnlockPrompt(mode, wallet, WindowsStatus("machine"));
+
+        QCOMPARE(run.shown.size(), 1);
+        QVERIFY2(run.shown[0].contains(QStringLiteral("incorrect")), qPrintable(run.shown[0]));
+        QVERIFY(run.open_after_message);
+        QCOMPARE(run.result, ENDED_OUTSIDE);
+    }
+}
+
+void AskPassphraseDialogTests::autoUnlockStoreFailureEndsThePrompt()
+{
+    for (const AskPassphraseDialog::Mode mode : {AskPassphraseDialog::SetupAutoUnlock,
+                                                 AskPassphraseDialog::ClearAutoUnlock}) {
+        qt_test::FakeWallet wallet;
+        wallet.m_autounlock_result = AutoUnlockSetupResult::StoreFailed;
+
+        const AutoUnlockRun run = RunAutoUnlockPrompt(mode, wallet, WindowsStatus("machine"));
+
+        QCOMPARE(run.result, int(QDialog::Rejected));
+        QCOMPARE(run.shown.size(), 1);
+        QVERIFY2(run.shown[0].contains(QStringLiteral("debug.log")), qPrintable(run.shown[0]));
+        QVERIFY(!run.open_after_message);
+    }
+}
+
+void AskPassphraseDialogTests::walletModelPassesTheAutoUnlockStatusOn()
+{
+    qt_test::FakeWallet wallet;
+    wallet.m_autounlock_status = WindowsStatus("service");
+    wallet.m_autounlock_status.configured = true;
+    ModelOverFakeWallet fixture(wallet);
+
+    const AutoUnlockStoreStatus status = fixture.model.getAutoUnlockStatus();
+    QVERIFY(status.supported);
+    QVERIFY(status.configured);
+    QCOMPARE(status.scope, std::string("service"));
+    QCOMPARE(status.location, wallet.m_autounlock_status.location);
 }
 
 // After an encryption in the split build the core stops, when the GUI's

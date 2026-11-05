@@ -1167,8 +1167,8 @@ void SetupServerArgs()
                    "program holds the RPC address).",
                    ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
     argsman.AddArg("-stdinwalletpassphrase", "RPC client: read the wallet passphrase(s) of walletpassphrase, "
-                   "walletpassphrasechange or encryptwallet from standard input, one line each, instead of the "
-                   "command line.",
+                   "walletpassphrasechange, encryptwallet, setautounlock or clearautounlock from standard input, "
+                   "one line each, instead of the command line.",
                    ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
     argsman.AddArg("-stdinelevate", "RPC client: read the wallet passphrase from standard input (one line) and send "
                    "it with the request, so this one command may use the wallet's keys while the wallet stays "

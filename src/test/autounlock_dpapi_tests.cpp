@@ -136,7 +136,7 @@ BOOST_AUTO_TEST_CASE(dpapi_store_fetch_roundtrip_local_machine)
     BOOST_CHECK_EQUAL(status.location, fsbridge::LongPathString(path));
 
     const SecureString passphrase("dpapi-roundtrip-passphrase \xC3\xA9");
-    BOOST_REQUIRE_MESSAGE(store.Store(passphrase, error), error);
+    BOOST_REQUIRE_MESSAGE(store.Store(passphrase, error) == AutoUnlockStoreOutcome::Verified, error);
 
     status = store.Status();
     BOOST_CHECK(status.configured);
@@ -157,7 +157,7 @@ BOOST_AUTO_TEST_CASE(dpapi_store_fetch_roundtrip_local_machine)
 
     // Storing again replaces it.
     const SecureString replacement("dpapi-roundtrip-replacement");
-    BOOST_REQUIRE_MESSAGE(store.Store(replacement, error), error);
+    BOOST_REQUIRE_MESSAGE(store.Store(replacement, error) == AutoUnlockStoreOutcome::Verified, error);
     fetched = FetchAutoUnlockFromDpapiBlob(path, error);
     BOOST_REQUIRE_MESSAGE(fetched.has_value(), error);
     BOOST_CHECK(*fetched == replacement);
@@ -180,7 +180,8 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_loose_acl)
     DpapiBlobStore store;
     std::string error;
 
-    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-loose-acl"), error), error);
+    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-loose-acl"), error) == AutoUnlockStoreOutcome::Verified,
+                          error);
     ApplyAcl(path, OwnerOnlyPlus(wellknown::Users(), FILE_GENERIC_READ));
 
     BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
@@ -203,7 +204,8 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_foreign_writer)
     DpapiBlobStore store;
     std::string error;
 
-    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-foreign-writer"), error), error);
+    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-foreign-writer"), error) == AutoUnlockStoreOutcome::Verified,
+                          error);
     ApplyAcl(path, OwnerOnlyPlus(wellknown::Users(), WRITE_DAC | READ_CONTROL | SYNCHRONIZE));
 
     const std::vector<Sid> allowed{CurrentTokenUser(), wellknown::System(), wellknown::Administrators()};
@@ -224,7 +226,8 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_wrong_network)
     std::string error;
 
     BOOST_REQUIRE_EQUAL(Params().NetworkIDString(), CBaseChainParams::MAIN);
-    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-wrong-network"), error), error);
+    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-wrong-network"), error) == AutoUnlockStoreOutcome::Verified,
+                          error);
 
     // The guard puts mainnet back.
     SelectParams(CBaseChainParams::TESTNET);
@@ -243,7 +246,8 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_scope_mismatch)
     DpapiBlobStore store;
     std::string error;
 
-    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-scope-machine"), error), error);
+    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-scope-machine"), error) == AutoUnlockStoreOutcome::Verified,
+                          error);
     BOOST_REQUIRE(StoredBlob(path).scope == BlobScope::LocalMachine);
 
     {
@@ -259,7 +263,7 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_scope_mismatch)
         // Stored as a service, the file is for the service account. This account's own
         // DPAPI key stands in for the service account's here.
         const SecureString passphrase("dpapi-scope-service");
-        BOOST_REQUIRE_MESSAGE(store.Store(passphrase, error), error);
+        BOOST_REQUIRE_MESSAGE(store.Store(passphrase, error) == AutoUnlockStoreOutcome::Verified, error);
         BOOST_CHECK(StoredBlob(path).scope == BlobScope::ServiceAccount);
 
         const std::optional<SecureString> fetched = FetchAutoUnlockFromDpapiBlob(path, error);
@@ -312,7 +316,7 @@ BOOST_AUTO_TEST_CASE(dpapi_store_keeps_a_file_it_cannot_read_back)
     // each read-back attempt, three over 3 s, meets a sharing violation.
     HANDLE held = INVALID_HANDLE_VALUE;
     const SecureString passphrase("dpapi-unverified");
-    bool stored = false;
+    AutoUnlockStoreOutcome stored = AutoUnlockStoreOutcome::Failed;
     {
         ReadBackHook hook([&held](const fs::path& in_place) {
             held = ::CreateFileW(in_place.wstring().c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING,
@@ -323,7 +327,8 @@ BOOST_AUTO_TEST_CASE(dpapi_store_keeps_a_file_it_cannot_read_back)
     BOOST_REQUIRE(held != INVALID_HANDLE_VALUE);
     ::CloseHandle(held);
 
-    BOOST_REQUIRE_MESSAGE(stored, error);
+    // Kept, and reported as not checked.
+    BOOST_REQUIRE_MESSAGE(stored == AutoUnlockStoreOutcome::Unverified, error);
     BOOST_CHECK(fs::exists(path));
     const std::optional<SecureString> fetched = FetchAutoUnlockFromDpapiBlob(path, error);
     BOOST_REQUIRE_MESSAGE(fetched.has_value(), error);
@@ -333,7 +338,7 @@ BOOST_AUTO_TEST_CASE(dpapi_store_keeps_a_file_it_cannot_read_back)
         ReadBackHook hook([](const fs::path& in_place) {
             ApplyAcl(in_place, OwnerOnlyPlus(wellknown::Users(), FILE_GENERIC_READ));
         });
-        BOOST_CHECK(!store.Store(SecureString("dpapi-refused-on-read-back"), error));
+        BOOST_CHECK(store.Store(SecureString("dpapi-refused-on-read-back"), error) == AutoUnlockStoreOutcome::Failed);
     }
     BOOST_CHECK_MESSAGE(Contains(error, "readable by other accounts"), error);
     BOOST_CHECK_MESSAGE(Contains(error, "so it was removed"), error);
@@ -388,7 +393,7 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_retries_a_sharing_violation)
     std::string error;
 
     const SecureString passphrase("dpapi-sharing-violation");
-    BOOST_REQUIRE_MESSAGE(store.Store(passphrase, error), error);
+    BOOST_REQUIRE_MESSAGE(store.Store(passphrase, error) == AutoUnlockStoreOutcome::Verified, error);
 
     const HANDLE held = ::CreateFileW(path.wstring().c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING,
                                       FILE_ATTRIBUTE_NORMAL, nullptr);

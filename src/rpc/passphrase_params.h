@@ -11,7 +11,8 @@
 #include <vector>
 
 //! Indexes of the parameters that are wallet passphrases: walletpassphrase {0},
-//! walletpassphrasechange {0, 1}, encryptwallet {0}; nullptr for every other method.
+//! walletpassphrasechange {0, 1}, encryptwallet {0}, setautounlock {0}, clearautounlock {0};
+//! nullptr for every other method.
 const std::vector<int>* PassphraseParamIndexes(const std::string& method);
 
 //! memory_cleanse the string bytes of params[i] for each passphrase index i (in place; size kept).

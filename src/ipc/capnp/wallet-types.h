@@ -10,6 +10,7 @@
 // uint256/CKeyID/CPubKey/SecureString <-> Data marshalling.
 #include <ipc/capnp/common-types.h>
 
+#include <wallet/autounlock_setup.h>
 #include <wallet/capability.h>
 
 // The Wallet schema imports file_transfer.capnp (beginBackup and
@@ -65,6 +66,25 @@ decltype(auto) CustomReadField(TypeList<CapabilityKind>, Priority<2>, InvokeCont
     }
 
     return read_dest.construct(static_cast<CapabilityKind>(value));
+}
+
+//! AutoUnlockSetupResult crosses as a UInt8 (wallet.capnp setAutoUnlockSecret and
+//! clearAutoUnlockSecret). A result this build does not know is refused as a kind is
+//! above, here on the client: the call fails rather than reporting an outcome the
+//! client would misread.
+template <typename Input, typename ReadDest>
+decltype(auto) CustomReadField(TypeList<AutoUnlockSetupResult>, Priority<2>, InvokeContext& invoke_context,
+                               Input&& input, ReadDest&& read_dest)
+{
+    const auto value = input.get();
+    static_assert(std::is_same_v<std::decay_t<decltype(value)>, uint8_t>,
+                  "AutoUnlockSetupResult crosses as UInt8, the width of its underlying type");
+
+    if (!IsKnownAutoUnlockSetupResult(static_cast<AutoUnlockSetupResult>(value))) {
+        throw std::runtime_error("AutoUnlockSetupResult IPC field out of range");
+    }
+
+    return read_dest.construct(static_cast<AutoUnlockSetupResult>(value));
 }
 
 } // namespace mp

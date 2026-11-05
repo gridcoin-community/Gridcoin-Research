@@ -25,6 +25,7 @@
 #include "policy/fees.h"
 #include "scheduler.h"
 #include "policy/policy.h"
+#include "wallet/autounlock_setup.h"
 #include "wallet/coincontrol.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/tx_message.h"
@@ -3638,6 +3639,120 @@ static UniValue WalletPassphraseChangeBody(const SecureString& strOldWalletPass,
     return NullUniValue;
 }
 
+static const RPCHelpMan setautounlock_help{
+    "setautounlock",
+    "Stores the wallet passphrase for autounlock, so that the node unlocks the wallet for staking only "
+    "when it starts. The passphrase is checked first, and the wallet's unlock is left as it is. A "
+    "passphrase stored before is replaced. Requires an encrypted wallet, on a platform with a store for "
+    "the passphrase (Windows). "
+    "gridcoinresearchd -stdinwalletpassphrase setautounlock reads the passphrase from standard input, "
+    "so that it is not on the command line.",
+    {
+        {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The wallet passphrase."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "scope", "Who can decrypt the stored passphrase: \"machine\" when the "
+                                            "node runs as your account, \"service\" when it runs as the "
+                                            "Gridcoin service."},
+            {RPCResult::Type::STR, "location", "Where the passphrase is stored."},
+            {RPCResult::Type::STR, "warning", "Who else can obtain the passphrase in this scope."},
+            {RPCResult::Type::BOOL, "verified", "Whether the stored file was read back and checked. False "
+                                                "when it was written but could not be read back; the node "
+                                                "checks it when it next starts."},
+        }},
+    RPCExamples{
+        HelpExampleCli("-stdinwalletpassphrase setautounlock", "")
+      + HelpExampleRpc("setautounlock", "\"passphrase\"")
+    }
+};
+const RPCHelpMan& setautounlock_helpman() { return setautounlock_help; }
+
+static const RPCHelpMan clearautounlock_help{
+    "clearautounlock",
+    "Turns autounlock off: removes the stored wallet passphrase and locks the wallet. The passphrase is "
+    "checked first; on any error nothing is changed. Removing when nothing is stored succeeds. "
+    "gridcoinresearchd -stdinwalletpassphrase clearautounlock reads the passphrase from standard input, "
+    "so that it is not on the command line.",
+    {
+        {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The wallet passphrase."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "removed", "True: no passphrase is stored any more."},
+            {RPCResult::Type::BOOL, "wallet_locked", "Whether the wallet is locked."},
+        }},
+    RPCExamples{
+        HelpExampleCli("-stdinwalletpassphrase clearautounlock", "")
+      + HelpExampleRpc("clearautounlock", "\"passphrase\"")
+    }
+};
+const RPCHelpMan& clearautounlock_helpman() { return clearautounlock_help; }
+
+//! Throws the RPC error for \p result of autounlock setup, unless it is a success.
+static void ThrowUnlessAutoUnlockDone(const std::string& method, AutoUnlockSetupResult result,
+                                      const std::string& error)
+{
+    switch (result) {
+    case AutoUnlockSetupResult::Ok:
+    case AutoUnlockSetupResult::OkUnverified:
+        return;
+    case AutoUnlockSetupResult::WrongPassphrase:
+        throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
+    case AutoUnlockSetupResult::NotEncrypted:
+        throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE,
+                           "Error: running with an unencrypted wallet, but " + method + " was called.");
+    case AutoUnlockSetupResult::Unsupported:
+        throw JSONRPCError(RPC_MISC_ERROR, AUTOUNLOCK_UNSUPPORTED_TEXT);
+    case AutoUnlockSetupResult::StoreFailed:
+        throw JSONRPCError(RPC_MISC_ERROR, error);
+    }
+
+    throw JSONRPCError(RPC_MISC_ERROR, error);
+}
+
+//! The body of setautounlock. params[0] is not read.
+static UniValue SetAutoUnlockBody(const SecureString& passphrase, const UniValue& params)
+{
+    if (passphrase.empty()) throw JSONRPCError(RPC_INVALID_PARAMETER, "Passphrase cannot be empty.");
+
+    // No lock is held across the call: a wrong passphrase waits before it returns, and
+    // the store does file I/O and encryption.
+    std::string error;
+    const AutoUnlockSetupResult result = SetAutoUnlockSecret(*pwalletMain, passphrase, error);
+
+    ThrowUnlessAutoUnlockDone("setautounlock", result, error);
+
+    const AutoUnlockStoreStatus status = GetAutoUnlockStatus();
+
+    UniValue ret(UniValue::VOBJ);
+    ret.pushKV("scope", status.scope);
+    ret.pushKV("location", status.location);
+    ret.pushKV("warning", AutoUnlockScopeWarning(status.scope));
+    ret.pushKV("verified", result == AutoUnlockSetupResult::Ok);
+
+    return ret;
+}
+
+//! The body of clearautounlock. params[0] is not read.
+static UniValue ClearAutoUnlockBody(const SecureString& passphrase, const UniValue& params)
+{
+    if (passphrase.empty()) throw JSONRPCError(RPC_INVALID_PARAMETER, "Passphrase cannot be empty.");
+
+    std::string error;
+    const AutoUnlockSetupResult result = ClearAutoUnlockSecret(*pwalletMain, passphrase, error);
+
+    ThrowUnlessAutoUnlockDone("clearautounlock", result, error);
+
+    UniValue ret(UniValue::VOBJ);
+    ret.pushKV("removed", true);
+    ret.pushKV("wallet_locked", pwalletMain->IsLocked());
+
+    return ret;
+}
+
 /** Classify a wallet transaction's TxState into a human-readable name. */
 static const char* ClassifyWalletTxState(const CWalletTx& wtx)
 {
@@ -4031,6 +4146,8 @@ UniValue ExecutePassphraseCommand(const std::string& method, const std::vector<S
     if (method == "walletpassphrase") return WalletPassphraseBody(passphrases[0], params);
     if (method == "walletpassphrasechange") return WalletPassphraseChangeBody(passphrases[0], passphrases[1], params);
     if (method == "encryptwallet") return EncryptWalletBody(passphrases[0], params);
+    if (method == "setautounlock") return SetAutoUnlockBody(passphrases[0], params);
+    if (method == "clearautounlock") return ClearAutoUnlockBody(passphrases[0], params);
 
     throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
 }
@@ -4048,6 +4165,16 @@ UniValue walletpassphrasechange(const UniValue& params)
 UniValue encryptwallet(const UniValue& params)
 {
     return ExecutePassphraseCommand("encryptwallet", ReadPassphraseParams("encryptwallet", params), params);
+}
+
+UniValue setautounlock(const UniValue& params)
+{
+    return ExecutePassphraseCommand("setautounlock", ReadPassphraseParams("setautounlock", params), params);
+}
+
+UniValue clearautounlock(const UniValue& params)
+{
+    return ExecutePassphraseCommand("clearautounlock", ReadPassphraseParams("clearautounlock", params), params);
 }
 
 class DescribeAddressVisitor

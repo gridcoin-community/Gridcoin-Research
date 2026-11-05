@@ -57,7 +57,9 @@ void OnWalletPassphraseChanged(const SecureString& new_passphrase)
 
         location = status.location;
 
-        if (store->Store(new_passphrase, failure)) {
+        // A file kept but not read back is kept all the same: the store has logged that,
+        // and the fetch at the next start checks it.
+        if (store->Store(new_passphrase, failure) != AutoUnlockStoreOutcome::Failed) {
             LogPrintf("autounlock: the stored passphrase now matches the new wallet passphrase (%s)", location);
             return;
         }

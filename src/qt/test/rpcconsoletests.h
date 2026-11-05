@@ -34,6 +34,7 @@ private slots:
     void handlesLineLongerThanSecurePool();
     void routesPassphraseCommandsOverSecretPath();
     void routesPassphraseChangeWithTwoSecrets();
+    void routesAutoUnlockCommandsOverSecretPath();
     void routesEncryptWalletOverSecretPath();
     void routesOrdinaryCommandOverPlainPath();
     void passphraseCommandWithoutArgsStaysOnSecretPath();

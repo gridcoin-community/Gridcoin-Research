@@ -42,6 +42,13 @@ private slots:
     void destroyedUnderARunningCheckEndsItsCapability();
     void deletedAfterCancelWhileQueuedReturnsAtOnce();
     void deletedWhileQueuedGivesTheCheckUp();
+    void autoUnlockSetupShowsTheScopeText();
+    void autoUnlockSetupSaysWhereItIsStored();
+    void autoUnlockSetupUnverifiedSaysItIsCheckedAtNextStart();
+    void autoUnlockClearSaysTheWalletIsLocked();
+    void autoUnlockWrongPassphraseKeepsThePromptOpen();
+    void autoUnlockStoreFailureEndsThePrompt();
+    void walletModelPassesTheAutoUnlockStatusOn();
     // Last: these quit the application under the application's own event loop.
     void encryptionMessageOutlivesTheCore();
     void terminationSignalDoesNotWaitForTheEncryptionMessage();

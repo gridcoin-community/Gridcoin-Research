@@ -13,6 +13,7 @@
 #include "primitives/transaction.h" // For COutPoint.
 #include "support/allocators/secure.h" // For SecureString.
 #include "uint256.h"
+#include "wallet/autounlock_setup.h" // For AutoUnlockSetupResult and AutoUnlockStoreStatus.
 #include "wallet/capability.h" // For CapabilityKind and PassphraseAttemptCancel.
 
 #include <cstdint>
@@ -395,6 +396,30 @@ public:
     virtual bool changeWalletPassphrase(const SecureString& old_passphrase,
                                         const SecureString& new_passphrase) = 0;
 
+    //! Store the wallet passphrase for staking-only autounlock, once it has been
+    //! checked (SetAutoUnlockSecret()). The passphrase is taken here, not from the
+    //! capability this connection holds: the store needs the passphrase itself.
+    //! The wallet's unlock is left as it was. OkUnverified when the file was
+    //! written but could not be read back to check it; the core checks it when it
+    //! next starts.
+    //!
+    //! The passphrase waits its turn and a wrong one is delayed (up to 30 s), and
+    //! the store does file I/O and encryption, so this can block -- never call it
+    //! on the GUI thread. The wait for its turn can be given up as
+    //! beginElevation()'s can.
+    virtual AutoUnlockSetupResult setAutoUnlockSecret(const SecureString& passphrase) = 0;
+
+    //! Remove the stored autounlock passphrase, once the wallet passphrase has
+    //! been checked, and lock the wallet (ClearAutoUnlockSecret()). Blocks as
+    //! setAutoUnlockSecret() does.
+    virtual AutoUnlockSetupResult clearAutoUnlockSecret(const SecureString& passphrase) = 0;
+
+    //! What the core's autounlock store reports: whether this platform has one,
+    //! whether a passphrase is stored, the scope it is stored in, where, and why
+    //! what is stored would not be used. Not supported on a platform without a
+    //! store. Reads the store's file once, without decrypting it.
+    virtual AutoUnlockStoreStatus getAutoUnlockStatus() = 0;
+
     //! Look up the public key for a key id. Public keys only — the wallet
     //! stays in-node in every build configuration, so this interface never
     //! carries private key material.
@@ -656,6 +681,7 @@ INTERFACES_ASSERT_MARSHALABLE(WalletCoinControl);
 INTERFACES_ASSERT_MARSHALABLE(CoinControlSummary);
 INTERFACES_ASSERT_MARSHALABLE(WalletSendRecipient);
 INTERFACES_ASSERT_MARSHALABLE(SendCoinsResult);
+INTERFACES_ASSERT_MARSHALABLE(AutoUnlockStoreStatus);
 } // namespace interfaces
 
 #endif // GRIDCOIN_INTERFACES_WALLET_H

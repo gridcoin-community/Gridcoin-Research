@@ -523,6 +523,8 @@ void RPCConsoleTests::passphraseCommandsKeepNoSecretInHistoryOrPane()
         QStringLiteral("walletpassphrase ") + PHRASE_PASSWORD + QStringLiteral(" 60 true"),
         QStringLiteral("walletpassphrasechange old-") + PHRASE_PASSWORD + QStringLiteral(" new-") + PHRASE_PASSWORD,
         QStringLiteral("encryptwallet ") + PHRASE_PASSWORD,
+        QStringLiteral("setautounlock ") + PHRASE_PASSWORD,
+        QStringLiteral("clearautounlock ") + PHRASE_PASSWORD,
     };
 
     for (const QString& command : commands) {
@@ -610,6 +612,23 @@ void RPCConsoleTests::routesEncryptWalletOverSecretPath()
     QCOMPARE(node.m_secret_calls.front().passphrases, (std::vector<std::string>{"p\xc3\xa4 ss"}));
     QVERIFY(node.m_secret_calls.front().args.empty());
     QCOMPARE(args[1], std::string(6, '\0'));
+}
+
+void RPCConsoleTests::routesAutoUnlockCommandsOverSecretPath()
+{
+    for (const std::string method : {"setautounlock", "clearautounlock"}) {
+        qt_test::FakeNode node;
+        std::vector<std::string> args{method, "autounlock pw"};
+
+        DispatchConsoleCommand(node, args);
+
+        QVERIFY(node.m_console_calls.empty());
+        QCOMPARE(node.m_secret_calls.size(), size_t{1});
+        QCOMPARE(node.m_secret_calls.front().method, method);
+        QCOMPARE(node.m_secret_calls.front().passphrases, (std::vector<std::string>{"autounlock pw"}));
+        QVERIFY(node.m_secret_calls.front().args.empty());
+        QCOMPARE(args[1], std::string(13, '\0'));
+    }
 }
 
 void RPCConsoleTests::routesOrdinaryCommandOverPlainPath()
@@ -703,8 +722,9 @@ void RPCConsoleTests::everyPassphraseMethodIsRedacted()
                  name + QStringLiteral(" (arguments not shown)"));
     }
 
-    // walletpassphrase, walletpassphrasechange and encryptwallet at least.
-    QVERIFY(passphrase_methods >= 3);
+    // walletpassphrase, walletpassphrasechange, encryptwallet, setautounlock and clearautounlock at
+    // least.
+    QVERIFY(passphrase_methods >= 5);
 }
 
 // A mis-cased passphrase command never runs, but its arguments are still kept out of the history,

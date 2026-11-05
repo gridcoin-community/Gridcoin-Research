@@ -67,3 +67,29 @@ void BitcoinGUITests::unableToStakeToolTipIgnoresMask()
     QCOMPARE(unmasked, QStringLiteral("Unable to stake: No mature coins"));
     QCOMPARE(masked, unmasked);
 }
+
+// Settings offers "Autounlock for staking" only in the split build, and only where the
+// core has a store for the passphrase. Set up or not, it is offered, since it is also
+// where autounlock is turned off.
+void BitcoinGUITests::autoUnlockActionShownOnlyInMultiprocessWithAStore()
+{
+    AutoUnlockStoreStatus windows;
+    windows.supported = true;
+    windows.scope = "machine";
+
+    QVERIFY(BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/true, windows));
+    QVERIFY(!BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/false, windows));
+    QVERIFY(!BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/true, AutoUnlockStoreStatus{}));
+
+    windows.configured = true;
+    windows.problem = "the autounlock file is readable by other accounts";
+    QVERIFY(BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/true, windows));
+
+#ifndef WIN32
+    // What the core answers here, as interfaces::Wallet::getAutoUnlockStatus() does: this
+    // platform has no store, so the action stays hidden even in the split build.
+    const AutoUnlockStoreStatus here = GetAutoUnlockStatus();
+    QVERIFY(!here.supported);
+    QVERIFY(!BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/true, here));
+#endif
+}

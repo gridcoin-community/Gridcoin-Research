@@ -351,7 +351,7 @@ BOOST_AUTO_TEST_CASE(node_secret_console_makes_the_dispatcher_checks)
     BOOST_CHECK(fx.wallet.Unlock(grc_test::EncryptedWallet::PASSPHRASE));
 }
 
-// The plain console call carries its arguments as plain strings, so it refuses the three passphrase
+// The plain console call carries its arguments as plain strings, so it refuses the passphrase
 // methods before anything runs: the right old passphrase sent this way changes nothing, and the
 // wallet stays locked.
 BOOST_AUTO_TEST_CASE(node_plain_console_refuses_passphrase_methods)
@@ -374,6 +374,13 @@ BOOST_AUTO_TEST_CASE(node_plain_console_refuses_passphrase_methods)
     const interfaces::RpcConsoleResult encrypt = node->executeRpcConsoleCommand("encryptwallet", {"another"});
     BOOST_CHECK(!encrypt.ok);
     BOOST_CHECK_EQUAL(encrypt.output, "Error: encryptwallet takes a passphrase; the console sends it separately");
+
+    for (const std::string method : {"setautounlock", "clearautounlock"}) {
+        const interfaces::RpcConsoleResult autounlock = node->executeRpcConsoleCommand(method, {passphrase});
+        BOOST_CHECK(!autounlock.ok);
+        BOOST_CHECK_EQUAL(autounlock.output, "Error: " + method + " takes a passphrase; the console sends it separately");
+        BOOST_CHECK(fx.wallet.IsLocked());
+    }
 
     BOOST_CHECK(fx.wallet.Unlock(grc_test::EncryptedWallet::PASSPHRASE));
 }

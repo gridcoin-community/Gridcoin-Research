@@ -524,6 +524,19 @@ WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
     }
 }
 
+AutoUnlockStoreStatus WalletModel::getAutoUnlockStatus() const
+{
+    try {
+        return m_wallet.getAutoUnlockStatus();
+    } catch (const std::exception& e) {
+        LogPrintf("WARN: %s: could not get the autounlock status: %s", __func__, e.what());
+
+        AutoUnlockStoreStatus status;
+        status.problem = e.what();
+        return status;
+    }
+}
+
 bool WalletModel::setWalletEncrypted(const SecureString& passphrase, std::vector<std::string>& pre_encryption_backups)
 {
     pre_encryption_backups.clear();

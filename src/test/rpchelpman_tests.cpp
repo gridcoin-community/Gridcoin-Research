@@ -892,6 +892,8 @@ BOOST_AUTO_TEST_CASE(pre_2922_and_late_adds_help_renders)
         {"walletlock",             &walletlock_helpman},
         {"walletpassphrase",       &walletpassphrase_helpman},
         {"walletpassphrasechange", &walletpassphrasechange_helpman},
+        {"setautounlock",          &setautounlock_helpman},
+        {"clearautounlock",        &clearautounlock_helpman},
     });
 }
 

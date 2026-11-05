@@ -1252,6 +1252,27 @@ bool CWallet::IsCapabilityLive(CapabilityId id, CapabilityKind kind) const
     return it != m_capabilities.end() && it->second.kind == kind && now < it->second.deadline;
 }
 
+CWallet::CapabilityRun CWallet::RunUnderLiveCapability(CapabilityId id, CapabilityKind kind,
+                                                       const std::function<void()>& action)
+{
+    // Never under cs_wallet or cs_main (the declaration excludes both): the wait for the
+    // turn can last as long as the attempts ahead take, and the action does file I/O.
+    PassphraseTurn turn = AwaitPassphraseTurn();
+
+    if (!turn.Held()) return CapabilityRun::Abandoned;
+
+    // Looked up inside the turn, where no passphrase change can run: a change that ran
+    // before has ended the capability, and one that comes after waits for the action.
+    const CapabilityScope scope(*this, id, kind);
+
+    if (!scope.Active()) return CapabilityRun::NotLive;
+
+    action();
+
+    // No passphrase was checked, so the turn is handed on unused as it goes out of scope.
+    return CapabilityRun::Ran;
+}
+
 bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase,
                                      UnlockFailure* failure_out)
 {

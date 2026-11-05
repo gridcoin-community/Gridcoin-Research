@@ -474,6 +474,41 @@ public:
     std::optional<CapabilityId> IpcCapability(const std::function<bool()>& connection_closed) const
         LOCKS_EXCLUDED(m_capability_mutex);
 
+    //! How RunUnderLiveCapability() ended.
+    enum class CapabilityRun {
+        //! The action ran.
+        Ran,
+
+        //! The capability was not live when the turn came: ended (a passphrase
+        //! change ends every capability), past its deadline, or issued for
+        //! another kind. The action did not run.
+        NotLive,
+
+        //! The wait for the turn was given up, by a shutdown or by the caller
+        //! (PassphraseAttemptCancel). The action did not run.
+        Abandoned,
+    };
+
+    //! \brief Run \p action in a passphrase turn of its own, under capability
+    //! \p id, if it is still live for \p kind.
+    //!
+    //! For an operation that acts on the passphrase the capability was proved
+    //! with, as storing it for autounlock does. A passphrase change takes a turn
+    //! too and ends every capability, so the action either runs before a change,
+    //! which then finds what it did, or does not run at all. A capability looked
+    //! up first and acted on afterwards could act on a passphrase that was
+    //! changed in between.
+    //!
+    //! The turn is waited for as any passphrase attempt's is
+    //! (AwaitPassphraseTurn()), and handed on unused: no passphrase is checked,
+    //! so nothing is counted or delayed. The action runs on the calling thread,
+    //! under a CapabilityScope for \p id, with no lock held, so it may do file
+    //! I/O and encryption. It must make no passphrase attempt of its own: the
+    //! turn that attempt would wait for is the one this holds. The caller must
+    //! hold neither cs_main nor cs_wallet.
+    CapabilityRun RunUnderLiveCapability(CapabilityId id, CapabilityKind kind, const std::function<void()>& action)
+        LOCKS_EXCLUDED(cs_wallet, ::cs_main, m_passphrase_turn_mutex, m_capability_mutex);
+
     //! How many passphrase attempts have failed in a row, across Unlock(),
     //! BeginElevation() and ChangeWalletPassphrase(). An accepted passphrase
     //! resets it to 0.

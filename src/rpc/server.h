@@ -286,15 +286,17 @@ UniValue ExecuteWithElevation(const std::optional<SecureString>& header, const s
 //! before any call runs.
 UniValue ExecuteBatchWithElevation(const UniValue& requests, const std::optional<SecureString>& header);
 
-//! The passphrase parameters of `method` (walletpassphrase, walletpassphrasechange or encryptwallet)
-//! moved out of `params` into SecureStrings, in parameter order, each in a secure buffer of its own
-//! (capacity at least 100), whatever its length. Throws what get_str() throws for a non-string.
+//! The passphrase parameters of `method` (walletpassphrase, walletpassphrasechange, encryptwallet,
+//! setautounlock or clearautounlock) moved out of `params` into SecureStrings, in parameter order,
+//! each in a secure buffer of its own (capacity at least 100), whatever its length. Throws what
+//! get_str() throws for a non-string.
 std::vector<SecureString> ReadPassphraseParams(const std::string& method, const UniValue& params);
 
-//! walletpassphrase, walletpassphrasechange or encryptwallet with the passphrases already in
-//! SecureStrings (parameter order). `params` holds the other parameters at their real indexes; the
-//! passphrase positions are ignored. Throws exactly what the RPCs throw; a wrong passphrase count
-//! throws JSONRPCError(RPC_INVALID_PARAMETER, "<method> takes <n> passphrase(s)").
+//! walletpassphrase, walletpassphrasechange, encryptwallet, setautounlock or clearautounlock with the
+//! passphrases already in SecureStrings (parameter order). `params` holds the other parameters at
+//! their real indexes; the passphrase positions are ignored. Throws exactly what the RPCs throw; a
+//! wrong passphrase count throws JSONRPCError(RPC_INVALID_PARAMETER, "<method> takes <n>
+//! passphrase(s)").
 UniValue ExecutePassphraseCommand(const std::string& method, const std::vector<SecureString>& passphrases, const UniValue& params);
 
 //
@@ -323,6 +325,7 @@ extern UniValue dumpprivkey(const UniValue& params);
 extern UniValue dumpseedphrase(const UniValue& params);
 extern UniValue fundrawtransaction(const UniValue& params);
 extern UniValue dumpwallet(const UniValue& params);
+extern UniValue clearautounlock(const UniValue& params);
 extern UniValue encryptwallet(const UniValue& params);
 extern UniValue getaccount(const UniValue& params);
 extern UniValue getaccountaddress(const UniValue& params);
@@ -378,6 +381,7 @@ extern UniValue sendmany(const UniValue& params);
 extern UniValue sendrawtransaction(const UniValue& params);
 extern UniValue sendtoaddress(const UniValue& params);
 extern UniValue setaccount(const UniValue& params);
+extern UniValue setautounlock(const UniValue& params);
 extern UniValue sethdseed(const UniValue& params);
 extern UniValue setlabel(const UniValue& params);
 extern UniValue settxfee(const UniValue& params);
@@ -609,6 +613,7 @@ extern const RPCHelpMan& dumpcontracts_helpman();
 extern const RPCHelpMan& dumpprivkey_helpman();
 extern const RPCHelpMan& dumpseedphrase_helpman();
 extern const RPCHelpMan& dumpwallet_helpman();
+extern const RPCHelpMan& clearautounlock_helpman();
 extern const RPCHelpMan& encryptwallet_helpman();
 extern const RPCHelpMan& explainmagnitude_helpman();
 extern const RPCHelpMan& fundrawtransaction_helpman();
@@ -747,6 +752,7 @@ extern const RPCHelpMan& signrawtransactionwithkey_helpman();
 extern const RPCHelpMan& signrawtransactionwithwallet_helpman();
 extern const RPCHelpMan& splitunspent_helpman();
 extern const RPCHelpMan& stakelimit_helpman();
+extern const RPCHelpMan& setautounlock_helpman();
 extern const RPCHelpMan& stop_helpman();
 extern const RPCHelpMan& sweepuncoveredcoins_helpman();
 extern const RPCHelpMan& superblockage_helpman();

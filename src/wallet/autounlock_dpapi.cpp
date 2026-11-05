@@ -399,22 +399,22 @@ bool WriteNewFile(const fs::path& path, const std::vector<unsigned char>& bytes,
     return true;
 }
 
-bool StoreBlob(const SecureString& passphrase, std::string& error)
+AutoUnlockStoreOutcome StoreBlob(const SecureString& passphrase, std::string& error)
 {
     const std::optional<fs::path> path = AutoUnlockBlobPath(error);
 
-    if (!path) return false;
+    if (!path) return AutoUnlockStoreOutcome::Failed;
 
     if (passphrase.size() > AUTOUNLOCK_BLOB_MAX_BYTES) {
         error = "the passphrase is too long to store for autounlock";
-        return false;
+        return AutoUnlockStoreOutcome::Failed;
     }
 
     std::string dir_error;
 
     if (!util::CreateOwnerOnlyDirectory(path->parent_path(), dir_error)) {
         error = "could not create the autounlock directory: " + dir_error;
-        return false;
+        return AutoUnlockStoreOutcome::Failed;
     }
 
     AutoUnlockBlob blob;
@@ -433,7 +433,7 @@ bool StoreBlob(const SecureString& passphrase, std::string& error)
 
         if (!::CryptProtectData(&plaintext, DPAPI_DESCRIPTION, &entropy_blob, nullptr, nullptr, flags, &encrypted.blob)) {
             error = "could not encrypt the passphrase: " + Win32Failure("CryptProtectData", ::GetLastError());
-            return false;
+            return AutoUnlockStoreOutcome::Failed;
         }
 
         blob.dpapi.assign(encrypted.blob.pbData, encrypted.blob.pbData + encrypted.blob.cbData);
@@ -444,13 +444,13 @@ bool StoreBlob(const SecureString& passphrase, std::string& error)
     if (bytes.empty()) {
         error = strprintf("the encrypted passphrase does not fit in an autounlock file of %u bytes",
                           AUTOUNLOCK_BLOB_MAX_BYTES);
-        return false;
+        return AutoUnlockStoreOutcome::Failed;
     }
 
     fs::path temporary = *path;
     temporary += ".tmp";
 
-    if (!WriteNewFile(temporary, bytes, error)) return false;
+    if (!WriteNewFile(temporary, bytes, error)) return AutoUnlockStoreOutcome::Failed;
 
     if (!::MoveFileExW(temporary.wstring().c_str(), path->wstring().c_str(),
                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
@@ -458,7 +458,7 @@ bool StoreBlob(const SecureString& passphrase, std::string& error)
         ::DeleteFileW(temporary.wstring().c_str());
         error = strprintf("could not move the autounlock file into place at %s: %s", Display(*path),
                           Win32Failure("MoveFileExW", move_error));
-        return false;
+        return AutoUnlockStoreOutcome::Failed;
     }
 
     if (g_read_back_hook) g_read_back_hook(*path);
@@ -470,17 +470,17 @@ bool StoreBlob(const SecureString& passphrase, std::string& error)
     // written, and only the check is missing.
     const CheckedFile written = ReadChecked(*path, FETCH_ATTEMPTS);
 
-    if (written.state == FileState::Usable && written.bytes == bytes) return true;
+    if (written.state == FileState::Usable && written.bytes == bytes) return AutoUnlockStoreOutcome::Verified;
 
     if (written.state == FileState::Missing) {
         error = strprintf("the autounlock file written to %s was gone when read back", Display(*path));
-        return false;
+        return AutoUnlockStoreOutcome::Failed;
     }
 
     if (written.state == FileState::Refused && !written.definite) {
         LogPrintf("autounlock: the passphrase is stored in %s, but the file could not be read back to check it: "
                   "%s (%s)", Display(*path), written.reason, written.detail);
-        return true;
+        return AutoUnlockStoreOutcome::Unverified;
     }
 
     const std::string reason = written.state == FileState::Usable ? "what was read back differs from what was written"
@@ -495,7 +495,7 @@ bool StoreBlob(const SecureString& passphrase, std::string& error)
                           Display(*path), reason);
     }
 
-    return false;
+    return AutoUnlockStoreOutcome::Failed;
 }
 } // namespace
 
@@ -528,7 +528,7 @@ std::optional<SecureString> FetchAutoUnlockFromDpapiBlob(const fs::path& path, s
     return std::nullopt;
 }
 
-bool DpapiBlobStore::Store(const SecureString& passphrase, std::string& error)
+AutoUnlockStoreOutcome DpapiBlobStore::Store(const SecureString& passphrase, std::string& error)
 {
     error.clear();
 
@@ -536,7 +536,7 @@ bool DpapiBlobStore::Store(const SecureString& passphrase, std::string& error)
         return StoreBlob(passphrase, error);
     } catch (const std::exception& e) {
         error = strprintf("could not store the autounlock passphrase: %s", e.what());
-        return false;
+        return AutoUnlockStoreOutcome::Failed;
     }
 }
 

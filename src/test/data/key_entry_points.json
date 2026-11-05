@@ -70,7 +70,9 @@
     {"name": "sendalert2", "reason": "Signs with the alert key the caller passes."},
     {"name": "walletlock", "reason": "Discards the master key; reads no key."},
     {"name": "walletpassphrase", "reason": "The unlock itself, proved by the passphrase."},
-    {"name": "walletpassphrasechange", "reason": "Re-encrypts the master key, proved by the old passphrase."}
+    {"name": "walletpassphrasechange", "reason": "Re-encrypts the master key, proved by the old passphrase."},
+    {"name": "setautounlock", "reason": "Stores the passphrase for autounlock once it has opened the master key; reads no key."},
+    {"name": "clearautounlock", "reason": "Removes the stored passphrase once it has opened the master key, and locks the wallet; reads no key."}
   ],
   "ipc": [
     {"interface": "Wallet", "method": "signMessage", "kind": "SignMessage", "reaches": "GetKey"},
@@ -101,7 +103,9 @@
     {"interface": "Wallet", "method": "unlockWallet", "reason": "The unlock itself, proved by the passphrase."},
     {"interface": "Wallet", "method": "changeWalletPassphrase", "reason": "Re-encrypts the master key, proved by the old passphrase."},
     {"interface": "Wallet", "method": "beginElevation", "reason": "Begins a capability, proved by the passphrase; reads no key."},
-    {"interface": "Node", "method": "executeRpcConsoleSecretCommand", "reason": "Carries only walletpassphrase, walletpassphrasechange and encryptwallet (each in rpc_not_rows), with the passphrases as SecureString."},
+    {"interface": "Wallet", "method": "setAutoUnlockSecret", "reason": "Stores the passphrase for autounlock once it has opened the master key; reads no key."},
+    {"interface": "Wallet", "method": "clearAutoUnlockSecret", "reason": "Removes the stored passphrase once it has opened the master key, and locks the wallet; reads no key."},
+    {"interface": "Node", "method": "executeRpcConsoleSecretCommand", "reason": "Carries only walletpassphrase, walletpassphrasechange, encryptwallet, setautounlock and clearautounlock (each in rpc_not_rows), with the passphrases as SecureString."},
     {"interface": "Wallet", "method": "elevateWallet", "reason": "Retired: always false, and widens nothing.", "covered_by": "interfaces_tests/ipc_elevatewallet_always_false"},
     {"interface": "MRC", "method": "snapshot", "reason": "Signs a throwaway claim only when the wallet may use its keys, and leaves the signature out otherwise; it refuses nothing.", "covered_by": "mrc_tests/mrc_snapshot_no_error_under_staking_only"}
   ],

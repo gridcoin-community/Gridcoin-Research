@@ -26,6 +26,18 @@ struct AutoUnlockStoreStatus
     std::string problem;
 };
 
+//! What AutoUnlockSecretStore::Store() did with the passphrase.
+enum class AutoUnlockStoreOutcome
+{
+    //! Not kept; the error says why.
+    Failed,
+    //! Kept, then read back and checked as the fetch at the next start will check it.
+    Verified,
+    //! Kept, but it could not be read back to check it, as when another program held the
+    //! file. The fetch at the next start checks it.
+    Unverified,
+};
+
 //! Where the wallet passphrase is kept for autounlock. The interface is the same on every
 //! platform; each platform provides its own store.
 class AutoUnlockSecretStore
@@ -33,9 +45,9 @@ class AutoUnlockSecretStore
 public:
     virtual ~AutoUnlockSecretStore() = default;
 
-    //! Keep \p passphrase in place of anything kept before. False, with \p error saying
+    //! Keep \p passphrase in place of anything kept before. Failed, with \p error saying
     //! why, when it is not kept.
-    virtual bool Store(const SecureString& passphrase, std::string& error) = 0;
+    virtual AutoUnlockStoreOutcome Store(const SecureString& passphrase, std::string& error) = 0;
 
     //! Remove what is kept. True when nothing is kept afterwards, as when nothing was.
     virtual bool Remove(std::string& error) = 0;

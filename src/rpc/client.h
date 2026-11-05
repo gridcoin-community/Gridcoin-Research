@@ -53,7 +53,8 @@ std::optional<std::string> EncodeElevationHeaderValue(const SecureString& passph
 std::string PassphrasePromptAt(const std::vector<std::string>& prompts, size_t index);
 
 //! Passphrase positions confirmed by a second prompt when stdin is a terminal:
-//! encryptwallet {0}, walletpassphrasechange {1}; empty otherwise.
+//! encryptwallet {0}, walletpassphrasechange {1}; empty otherwise, as for walletpassphrase,
+//! setautounlock and clearautounlock, whose passphrase the wallet checks.
 std::vector<int> NewPassphraseIndexes(const std::string& method);
 
 //! One JSON-RPC call to the server named by -rpcconnect and -rpcport, with the credentials of

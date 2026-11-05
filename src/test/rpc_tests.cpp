@@ -302,7 +302,7 @@ BOOST_AUTO_TEST_CASE(rpc_rows_carry_their_access_class)
 
     BOOST_CHECK(tableRPC["encryptwallet"]->access == access_elevate_unencrypted);
 
-    for (const char* name : {"walletpassphrase", "walletpassphrasechange"}) {
+    for (const char* name : {"walletpassphrase", "walletpassphrasechange", "setautounlock", "clearautounlock"}) {
         BOOST_CHECK_MESSAGE(tableRPC[name]->access == access_elevate_inband, name);
     }
 

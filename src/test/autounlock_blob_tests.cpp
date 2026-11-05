@@ -4,6 +4,7 @@
 
 #include "key.h"
 #include "sync.h"
+#include "test/autounlock_fake_store.h"
 #include "test/state_guard.h"
 #include "util/system.h"
 #include "wallet/autounlock_blob.h"
@@ -41,84 +42,8 @@ AutoUnlockBlob MakeBlob(BlobScope scope, const std::string& network, std::vector
     return blob;
 }
 
-//! What the fake store was asked to do.
-struct StoreCalls
-{
-    int stores{0};
-    int removes{0};
-    SecureString last;
-};
-
-//! A store that records its calls and answers as told.
-class FakeStore final : public AutoUnlockSecretStore
-{
-public:
-    enum class Outcome { Succeeds, Fails, Throws };
-
-    FakeStore(std::shared_ptr<StoreCalls> calls, bool configured, Outcome store_outcome, Outcome remove_outcome)
-        : m_calls(std::move(calls)), m_configured(configured), m_store_outcome(store_outcome),
-          m_remove_outcome(remove_outcome)
-    {
-    }
-
-    bool Store(const SecureString& passphrase, std::string& error) override
-    {
-        ++m_calls->stores;
-        m_calls->last = passphrase;
-
-        return Answer(m_store_outcome, error);
-    }
-
-    bool Remove(std::string& error) override
-    {
-        ++m_calls->removes;
-
-        return Answer(m_remove_outcome, error);
-    }
-
-    AutoUnlockStoreStatus Status() override
-    {
-        AutoUnlockStoreStatus status;
-        status.supported = true;
-        status.configured = m_configured;
-        status.scope = "machine";
-        return status;
-    }
-
-private:
-    static bool Answer(Outcome outcome, std::string& error)
-    {
-        if (outcome == Outcome::Throws) throw std::runtime_error("the fake store throws");
-        if (outcome == Outcome::Fails) {
-            error = "the fake store refuses";
-            return false;
-        }
-        return true;
-    }
-
-    std::shared_ptr<StoreCalls> m_calls;
-    bool m_configured{false};
-    Outcome m_store_outcome{Outcome::Succeeds};
-    Outcome m_remove_outcome{Outcome::Succeeds};
-};
-
-//! Installs a fake store for one scope and restores the platform's after it.
-struct FakeStoreInstalled
-{
-    std::shared_ptr<StoreCalls> calls{std::make_shared<StoreCalls>()};
-
-    FakeStoreInstalled(bool configured, FakeStore::Outcome store_outcome,
-                       FakeStore::Outcome remove_outcome = FakeStore::Outcome::Succeeds)
-    {
-        SetAutoUnlockSecretStoreForTesting(
-            std::make_unique<FakeStore>(calls, configured, store_outcome, remove_outcome));
-    }
-
-    ~FakeStoreInstalled()
-    {
-        SetAutoUnlockSecretStoreForTesting(nullptr);
-    }
-};
+using FakeStore = grc_test::FakeAutoUnlockStore;
+using grc_test::FakeStoreInstalled;
 
 //! An encrypted wallet holding one key, in memory.
 void MakeEncryptedWallet(CWallet& wallet, const SecureString& passphrase)
@@ -315,6 +240,15 @@ BOOST_AUTO_TEST_CASE(passphrase_change_reencrypts_only_when_configured)
         FakeStoreInstalled fake(/*configured=*/false, FakeStore::Outcome::Succeeds);
         OnWalletPassphraseChanged(changed);
         BOOST_CHECK_EQUAL(fake.calls->stores, 0);
+        BOOST_CHECK_EQUAL(fake.calls->removes, 0);
+    }
+
+    // A file written but not read back is kept: the fetch at the next start checks it.
+    {
+        FakeStoreInstalled fake(/*configured=*/true, FakeStore::Outcome::Unverified);
+        OnWalletPassphraseChanged(changed);
+        BOOST_CHECK_EQUAL(fake.calls->stores, 1);
+        BOOST_CHECK(fake.calls->kept == changed);
         BOOST_CHECK_EQUAL(fake.calls->removes, 0);
     }
 

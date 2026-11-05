@@ -20,6 +20,7 @@
 #include "util/system.h"
 #include "util/time.h"
 #include "util/transfer_file.h"
+#include "wallet/autounlock_setup.h"
 #include "wallet/coincontrol.h"
 #include "net_processing.h"
 #include "wallet/transfer_sources.h"
@@ -527,6 +528,27 @@ public:
         const std::optional<PassphraseAttemptCancel> given_up = GiveUpWhenConnectionCloses();
         return m_wallet->ChangeWalletPassphrase(old_passphrase, new_passphrase);
     }
+
+    // The passphrase comes with the call, not from this connection's capability:
+    // the store needs the passphrase itself. SetAutoUnlockSecret() and
+    // ClearAutoUnlockSecret() log the outcome, never the passphrase, so the error
+    // they return is not needed here. A wait for its turn ends, unchecked, when the
+    // connection closes.
+    AutoUnlockSetupResult setAutoUnlockSecret(const SecureString& passphrase) override
+    {
+        const std::optional<PassphraseAttemptCancel> given_up = GiveUpWhenConnectionCloses();
+        std::string error;
+        return SetAutoUnlockSecret(*m_wallet, passphrase, error);
+    }
+
+    AutoUnlockSetupResult clearAutoUnlockSecret(const SecureString& passphrase) override
+    {
+        const std::optional<PassphraseAttemptCancel> given_up = GiveUpWhenConnectionCloses();
+        std::string error;
+        return ClearAutoUnlockSecret(*m_wallet, passphrase, error);
+    }
+
+    AutoUnlockStoreStatus getAutoUnlockStatus() override { return GetAutoUnlockStatus(); }
 
     // The core no longer writes to a path the client names. A client that
     // still asks predates beginBackup(), and the handshake's schema major keeps

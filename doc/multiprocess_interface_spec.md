@@ -502,15 +502,15 @@ refused for the wallet's keys (`RPC_WALLET_UNLOCK_NEEDED`) comes back with
 passphrase once, on a wallet unlocked for staking only, and runs the same command
 again under that capability.
 
-The three methods with passphrase parameters (`walletpassphrase`,
-`walletpassphrasechange`, `encryptwallet`) are the exception:
-`executeRpcConsoleCommand` refuses them before anything runs, because there the
-passphrase would cross as plain text. `executeRpcConsoleSecretCommand` runs
-them, with the passphrases as `SecureString` (`List(Data)` on the wire) and the
-other parameters as text, after the same checks the dispatcher makes (the
-argument count, and the passphrase gate, which stops none of the three:
-`walletpassphrase` and `walletpassphrasechange` verify their own passphrase, and
-`encryptwallet` refuses an encrypted wallet itself). It never sets `wallet_unlock_needed`: a passphrase method is
+The methods with passphrase parameters (`walletpassphrase`,
+`walletpassphrasechange`, `encryptwallet`, `setautounlock`, `clearautounlock`)
+are the exception: `executeRpcConsoleCommand` refuses them before anything runs,
+because there the passphrase would cross as plain text.
+`executeRpcConsoleSecretCommand` runs them, with the passphrases as
+`SecureString` (`List(Data)` on the wire) and the other parameters as text, after
+the same checks the dispatcher makes (the argument count, and the passphrase
+gate, which stops none of them: `encryptwallet` refuses an encrypted wallet
+itself, and the others verify their own passphrase). It never sets `wallet_unlock_needed`: a passphrase method is
 not run again under a capability. `interfaces::RpcConsolePassphraseIndexes(method)`
 names the passphrase positions, locally and with no call to the node.
 
@@ -534,6 +534,23 @@ After `encryptWallet`, `getPreEncryptionBackups` (schema major 5) returns the
 paths of the core's automatic wallet backups made before the encryption
 (`GRC::ListAutomaticWalletBackupsBefore`), which still hold the unencrypted keys;
 the GUI names them in the message after the encryption, and nothing deletes them.
+
+Autounlock setup: `setAutoUnlockSecret(passphrase)` stores the wallet passphrase
+for staking-only autounlock, and `clearAutoUnlockSecret(passphrase)` removes it
+and locks the wallet. Both take the passphrase with the call rather than from
+the connection's capability, since the store needs the passphrase itself; they
+check it as `beginElevation` does (an `AutoUnlockSetup` capability, the
+failed-passphrase delay for a wrong one), then write or delete the stored
+passphrase in a passphrase turn of their own while that capability is still
+live, so a passphrase change either follows and re-encrypts what was stored or
+came first and nothing is stored. The result is an `AutoUnlockSetupResult`
+crossing as a `UInt8` (`OkUnverified` when the file was written but could not
+be read back; the core checks it at its next start), and a value outside the
+enumeration is refused when the client reads it. `getAutoUnlockStatus` returns
+the `AutoUnlockStatus` struct: whether the platform has a store (Windows), whether
+a passphrase is stored, its scope (`machine` or `service`), where, and why what
+is stored would not be used. The GUI offers Settings -> "Autounlock for staking"
+only in the split build and only when the store is supported.
 
 Per-operation capabilities (schema major 5): `beginElevation(passphrase, kind)`
 verifies the passphrase and begins a capability for one `CapabilityKind`
