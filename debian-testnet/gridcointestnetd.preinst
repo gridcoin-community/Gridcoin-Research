@@ -92,7 +92,10 @@ record_state() {
     # leaves the pending state as it is. The record then says whether there was one.
     if [ -e "$STATE" ]; then
         before=yes
-        cp -p "$STATE" "$BEFORE"
+        if ! cp -p "$STATE" "$BEFORE"; then
+            rm -f "$new" "$BEFORE"
+            exit 1
+        fi
     else
         before=no
         rm -f "$BEFORE"

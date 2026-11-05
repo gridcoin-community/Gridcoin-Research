@@ -348,21 +348,25 @@ class PreinstTests(unittest.TestCase):
 
     def test_a_failed_copy_of_the_earlier_state_keeps_it(self):
         # The copy of a pending state file fails: the preinst stops before it records or turns
-        # anything off, and the abort that follows leaves the pending state as it is.
-        fake = FakeRoot(self, "main")
-        fake.systemd_running()
-        fake.link("gridcoinresearchd@alice.service", "gridcoinresearchd-autounlock@alice.service")
-        os.makedirs(os.path.dirname(fake.state_path()))
-        with open(fake.state_path(), "w", encoding="utf8") as f:
-            f.write("core-active dave\n")
-        before = fake.state_path().replace(".state", ".before")
-        rc, out, err = fake.run("preinst", "upgrade", OLD, fail=(before,))
-        self.assertNotEqual(rc, 0)
-        self.assertEqual(fake.calls("systemctl disable"), [])
-        rc, out, err = fake.run("postrm", "abort-upgrade", OLD)
-        self.assertEqual(rc, 0, err)
-        self.assertEqual(fake.read(fake.state_path()), "core-active dave\n")
-        self.assertEqual(fake.calls("systemctl"), [])
+        # anything off, leaves nothing of its own behind, and the abort that follows leaves the
+        # pending state as it is.
+        for network in NETWORKS:
+            with self.subTest(network=network):
+                fake = FakeRoot(self, network)
+                fake.systemd_running()
+                fake.link("%s@alice.service" % fake.net["daemon"], "%s@alice.service" % fake.net["old_autounlock"])
+                os.makedirs(os.path.dirname(fake.state_path()))
+                with open(fake.state_path(), "w", encoding="utf8") as f:
+                    f.write("core-active dave\n")
+                before = fake.state_path().replace(".state", ".before")
+                rc, out, err = fake.run("preinst", "upgrade", OLD, fail=(before,))
+                self.assertNotEqual(rc, 0)
+                self.assertEqual(fake.calls("systemctl disable"), [])
+                self.assertEqual(os.listdir(os.path.dirname(fake.state_path())), [os.path.basename(fake.state_path())])
+                rc, out, err = fake.run("postrm", "abort-upgrade", OLD)
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(fake.read(fake.state_path()), "core-active dave\n")
+                self.assertEqual(fake.calls("systemctl"), [])
 
     def test_a_link_without_its_unit_file_is_removed(self):
         fake = FakeRoot(self, "main")
