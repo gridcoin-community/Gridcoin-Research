@@ -235,21 +235,21 @@ int TryConnect(const struct sockaddr_un& addr, int& out_errno)
 
 #ifdef WIN32
 //! The GUI's check of the endpoint at \p socket_path before it connects
-//! (ipc::win::CheckServerEndpointBeforeConnect against ExpectedServerSid()). A
-//! missing endpoint is no server listening, and is passed on as such, so the GUI
-//! keeps waiting. Anything else that stops the check is a refusal, thrown as
+//! (ipc::win::CheckServerEndpointBeforeConnect against ExpectedServerSid()),
+//! returning what must stay open until the connect is made. A missing endpoint is
+//! no server listening, and is passed on as such, so the GUI keeps waiting.
+//! Anything else that stops the check is a refusal, thrown as
 //! interfaces::PeerRefusedError: nothing has been connected or sent.
-void CheckEndpointBeforeConnect(const fs::path& socket_path)
+win::EndpointHold CheckEndpointBeforeConnect(const fs::path& socket_path)
 {
     try {
-        win::CheckServerEndpointBeforeConnect(socket_path, win::ExpectedServerSid());
+        return win::CheckServerEndpointBeforeConnect(socket_path, win::ExpectedServerSid());
     } catch (const std::system_error& e) {
         if (e.code() == std::errc::no_such_file_or_directory) throw;
         throw interfaces::PeerRefusedError(
-            strprintf("The IPC endpoint could not be checked before connecting (%s); refusing to connect.", e.what()));
+            strprintf("Refusing to connect: the IPC endpoint could not be checked (%s)", e.what()));
     } catch (const std::exception& e) {
-        throw interfaces::PeerRefusedError(
-            strprintf("The IPC endpoint is not the expected core's: %s. Refusing to connect.", e.what()));
+        throw interfaces::PeerRefusedError(strprintf("Refusing to connect to the IPC endpoint: %s", e.what()));
     }
 }
 #endif
@@ -609,7 +609,8 @@ public:
         struct sockaddr_un addr;
         [[maybe_unused]] const fs::path path = ParseAddress(address, ipc_dir, addr);
 #ifdef WIN32
-        CheckEndpointBeforeConnect(path);
+        // Held until this returns, after the connect below.
+        const win::EndpointHold hold = CheckEndpointBeforeConnect(path);
 #endif
         int connect_errno = 0;
         int fd = TryConnect(addr, connect_errno);

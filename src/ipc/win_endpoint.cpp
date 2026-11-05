@@ -75,6 +75,7 @@ static_assert((IO_REPARSE_TAG_SYMLINK & REPARSE_TAG_NAME_SURROGATE) != 0 &&
                   (IO_REPARSE_TAG_AF_UNIX & REPARSE_TAG_NAME_SURROGATE) == 0,
               "the name-surrogate bit differs from the Windows SDK's");
 static_assert(IsReparseTagNameSurrogate(REPARSE_TAG_NAME_SURROGATE), "IsReparseTagNameSurrogate tests another bit");
+static_assert(REPARSE_TAG_AF_UNIX == IO_REPARSE_TAG_AF_UNIX, "the AF_UNIX reparse tag differs from the Windows SDK's");
 #endif
 
 AclSpec EndpointAclSpec(IpcObject obj, const Sid& self, const std::optional<Sid>& attach_group)
@@ -98,8 +99,10 @@ AclSpec IpcDirAclSpec(const Sid& self, const Sid& attach_group)
 EntryKind ClassifyEntry(bool directory, std::optional<uint32_t> reparse_tag)
 {
     if (reparse_tag && (*reparse_tag & REPARSE_TAG_NAME_SURROGATE) != 0) return EntryKind::Redirect;
+    if (directory) return EntryKind::Directory;
+    if (reparse_tag == REPARSE_TAG_AF_UNIX) return EntryKind::UnixSocket;
 
-    return directory ? EntryKind::Directory : EntryKind::File;
+    return EntryKind::File;
 }
 
 std::optional<std::string> DirectoryRefusal(const EndpointEntry& dir, const Sid& server, bool require_protected)
@@ -111,6 +114,7 @@ std::optional<std::string> DirectoryRefusal(const EndpointEntry& dir, const Sid&
         break;
     case EntryKind::Redirect:
         return strprintf("the directory '%s' is a junction or link, which is not followed", shown);
+    case EntryKind::UnixSocket:
     case EntryKind::File:
         return strprintf("'%s' is not a directory", shown);
     } // no default case, so the compiler can warn about a kind left out
@@ -132,20 +136,27 @@ std::optional<std::string> DirectoryRefusal(const EndpointEntry& dir, const Sid&
     return std::nullopt;
 }
 
-std::optional<std::string> EndpointRefusal(const EndpointFacts& facts, const Sid& expected, bool require_protected)
+std::optional<std::string> SocketRefusal(const EndpointEntry& socket, const Sid& expected)
 {
-    const EndpointEntry& socket = facts.socket;
     const std::string shown = socket.path.string();
 
     switch (socket.kind) {
-    case EntryKind::File:
+    case EntryKind::UnixSocket:
         break;
     case EntryKind::Redirect:
         return strprintf("the IPC socket '%s' is a link to another place, which is not followed", shown);
     case EntryKind::Directory:
         return strprintf("the IPC socket '%s' is a directory", shown);
+    case EntryKind::File:
+        return socket.reparse_tag
+                   ? strprintf("the IPC socket '%s' is not an AF_UNIX socket (its reparse tag is 0x%08x)", shown,
+                               *socket.reparse_tag)
+                   : strprintf("the IPC socket '%s' is not an AF_UNIX socket (it is a plain file)", shown);
     } // no default case, so the compiler can warn about a kind left out
 
+    if (!socket.acl.dacl_present) {
+        return strprintf("the IPC socket '%s' has no DACL (all users would have access)", shown);
+    }
     if (!socket.acl.owner) {
         return strprintf("the owner of the IPC socket '%s' could not be read", shown);
     }
@@ -154,9 +165,35 @@ std::optional<std::string> EndpointRefusal(const EndpointFacts& facts, const Sid
                          shown, util::winacl::FormatSid(expected), util::winacl::FormatSid(*socket.acl.owner));
     }
 
-    if (std::optional<std::string> reason = DirectoryRefusal(facts.dir, expected, require_protected)) return reason;
+    return std::nullopt;
+}
 
-    return DirectoryRefusal(facts.parent, expected, require_protected);
+bool DirectoryRuleApplies(const util::winacl::ObservedAcl& socket_acl, const Sid& expected, bool service_user_set)
+{
+    if (service_user_set) return true;
+
+    // FILE_WRITE_DATA is the connect right. A list FindForeignWriter cannot accept
+    // for another reason (no DACL, another owner) also applies the rule, though
+    // SocketRefusal has refused such a socket already.
+    const std::vector<Sid> writers{expected, util::winacl::wellknown::System()};
+    return util::winacl::FindForeignWriter(socket_acl, writers, FILE_WRITE_DATA | GENERIC_WRITE | GENERIC_ALL)
+        .has_value();
+}
+
+std::optional<std::string> EndpointRefusal(const EndpointEntry& socket, const Sid& expected, bool service_user_set,
+                                           const std::function<EndpointDirs()>& read_dirs)
+{
+    if (std::optional<std::string> reason = SocketRefusal(socket, expected)) return reason;
+
+    // Only this account and SYSTEM can write the socket: nobody else can connect to
+    // it, and a socket swapped in between is the attestation step's to find, so the
+    // directories are not read.
+    if (!DirectoryRuleApplies(socket.acl, expected, service_user_set)) return std::nullopt;
+
+    const EndpointDirs dirs = read_dirs();
+    if (std::optional<std::string> reason = DirectoryRefusal(dirs.dir, expected, service_user_set)) return reason;
+
+    return DirectoryRefusal(dirs.parent, expected, service_user_set);
 }
 
 std::optional<std::string> LocalGroupLookupName(const std::string& computer, const std::string& name)
@@ -230,13 +267,12 @@ EndpointEntry ReadEntry(HANDLE handle, const fs::path& path)
         ThrowWin32(::GetLastError(), "GetFileInformationByHandleEx " + path.string());
     }
 
-    const bool reparse_point = (info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-
     EndpointEntry entry;
     entry.path = path;
-    entry.kind = ClassifyEntry((info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0,
-                               reparse_point ? std::optional<uint32_t>{static_cast<uint32_t>(info.ReparseTag)}
-                                             : std::nullopt);
+    if ((info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+        entry.reparse_tag = static_cast<uint32_t>(info.ReparseTag);
+    }
+    entry.kind = ClassifyEntry((info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0, entry.reparse_tag);
     entry.acl = util::winacl::ReadAcl(handle, /*kernel_object=*/false);
 
     return entry;
@@ -343,43 +379,72 @@ Sid ExpectedServerSid()
     return *sid;
 }
 
-void CheckServerEndpointBeforeConnect(const fs::path& socket_path, const Sid& expected)
+EndpointEntry ReadEntryNoFollow(const fs::path& path)
 {
-    const fs::path dir = socket_path.parent_path();
-    if (!socket_path.is_absolute() || !dir.has_relative_path()) {
+    const HandleGuard handle(OpenNoFollow(path, /*share_delete=*/true));
+
+    return ReadEntry(handle.get(), path);
+}
+
+EndpointHold::~EndpointHold()
+{
+    for (void* handle : m_handles) ::CloseHandle(static_cast<HANDLE>(handle));
+}
+
+void EndpointHold::Add(void* handle)
+{
+    // Reserved first, so that a failure to grow does not lose the handle.
+    try {
+        m_handles.reserve(m_handles.size() + 1);
+    } catch (...) {
+        ::CloseHandle(static_cast<HANDLE>(handle));
+        throw;
+    }
+    m_handles.push_back(handle);
+}
+
+EndpointHold CheckServerEndpointBeforeConnect(const fs::path& socket_path, const Sid& expected)
+{
+    // Made lexically normal before the parent is taken: Windows resolves "." and
+    // ".." in a path by its spelling too, so the directory taken here is the one
+    // the connect goes through.
+    const fs::path socket = socket_path.lexically_normal();
+    const fs::path dir = socket.parent_path();
+    if (!socket.is_absolute() || !dir.has_relative_path()) {
         throw std::runtime_error(strprintf("the IPC socket '%s' is not in a directory below the root of a volume",
                                            socket_path.string()));
     }
 
     // The socket first: when it is missing no server is listening, which is not a
     // refusal.
-    EndpointFacts facts;
-    {
-        const HandleGuard socket(OpenNoFollow(socket_path, /*share_delete=*/true));
-        facts.socket = ReadEntry(socket.get(), socket_path);
-    }
-    {
-        const HandleGuard directory(OpenNoFollow(dir, /*share_delete=*/true));
-        facts.dir = ReadEntry(directory.get(), dir);
-    }
-    {
-        const HandleGuard parent(OpenNoFollow(dir.parent_path(), /*share_delete=*/true));
-        facts.parent = ReadEntry(parent.get(), dir.parent_path());
-    }
+    const EndpointEntry socket_entry = ReadEntryNoFollow(socket);
 
-    // Protected directories are asked for only at a service -ipcdir (see the header).
+    // When the rule applies, the directory and its parent are held open without
+    // sharing delete until the connect is made, so neither can be renamed or
+    // removed between this check and the connect.
+    EndpointHold hold;
+    const auto read_dirs = [&] {
+        const HANDLE dir_handle = OpenNoFollow(dir, /*share_delete=*/false);
+        hold.Add(dir_handle);
+        const HANDLE parent_handle = OpenNoFollow(dir.parent_path(), /*share_delete=*/false);
+        hold.Add(parent_handle);
+
+        return EndpointDirs{ReadEntry(dir_handle, dir), ReadEntry(parent_handle, dir.parent_path())};
+    };
+
+    // The directory rule's -ipcserviceuser term, and its protected requirement (see
+    // the header).
     const bool service = !ConfiguredOption("-ipcserviceuser").empty();
-    if (std::optional<std::string> reason = EndpointRefusal(facts, expected, service)) {
+    if (std::optional<std::string> reason = EndpointRefusal(socket_entry, expected, service, read_dirs)) {
         throw std::runtime_error(*reason);
     }
+
+    return hold;
 }
 
 std::optional<std::string> ServerIpcDirRefusal(const fs::path& dir)
 {
-    const HandleGuard handle(OpenNoFollow(dir, /*share_delete=*/true));
-
-    return DirectoryRefusal(ReadEntry(handle.get(), dir), util::winacl::CurrentTokenUser(),
-                            /*require_protected=*/false);
+    return DirectoryRefusal(ReadEntryNoFollow(dir), util::winacl::CurrentTokenUser(), /*require_protected=*/false);
 }
 
 void ApplyAttachGroupDirectoryAccess(const fs::path& dir, const Sid& attach_group, bool created)

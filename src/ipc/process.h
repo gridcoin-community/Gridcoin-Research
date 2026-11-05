@@ -32,10 +32,15 @@ public:
 
     //! Canonicalize and connect to \p address under \p ipc_dir, returning the
     //! connected socket descriptor. On Windows the endpoint is checked first
-    //! (ipc::win::CheckServerEndpointBeforeConnect): a refusal throws
+    //! (ipc::win::CheckServerEndpointBeforeConnect): node.sock must be an AF_UNIX
+    //! socket owned by the expected server, and when another account can write it
+    //! its directory and the parent must keep other accounts out too, and are held
+    //! open until the connect is made. A refusal throws
     //! interfaces::PeerRefusedError, and a missing endpoint a std::system_error
-    //! with std::errc::no_such_file_or_directory, before anything is connected.
-    //! On POSIX the peer is checked after connecting, by the caller.
+    //! with std::errc::no_such_file_or_directory, before anything is connected. In
+    //! the same-account mode a socket swapped between the check and the connect is
+    //! for the attestation step after connecting to find. On POSIX the peer is
+    //! checked after connecting, by the caller.
     virtual int connect(const fs::path& ipc_dir, std::string& address) = 0;
 
     //! Canonicalize \p address under \p ipc_dir, create + bind a listening

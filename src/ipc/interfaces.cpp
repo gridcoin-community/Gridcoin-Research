@@ -124,7 +124,9 @@ public:
         // account are not told apart by this; the daemon refusing to start when
         // it cannot bind keeps the socket from being left unowned. On Windows,
         // where the peer's identity cannot be read, Process::connect has already
-        // checked the socket's owner and its directories before connecting.
+        // checked the socket's owner before connecting, and its directories when
+        // another account can write the socket; in the same-account mode a socket
+        // swapped in between is for the attestation step to find.
         //
         // Process::connect rewrote address to its canonical "unix:<path>" form,
         // so the socket's directory is the parent of that path.

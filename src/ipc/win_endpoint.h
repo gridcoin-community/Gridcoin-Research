@@ -8,9 +8,12 @@
 #include "fs.h"
 #include "util/win_acl.h"
 
+#include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 
 //! The access lists of the multiprocess endpoint on Windows, node.sock and
 //! ipc.cookie, in each mode, and the GUI's check of the server's endpoint before
@@ -27,23 +30,34 @@
 //! The access lists and the rules over what was read are pure, so they build and
 //! are tested on every platform. Reading and applying them needs Windows.
 //!
-//! The GUI's directory rule asks for a protected DACL only when -ipcserviceuser is
-//! set, that is at a service -ipcdir. Same-account data directories created by
-//! earlier releases inherit %APPDATA%'s ACL and are not protected; refusing them
-//! would strand existing users, and the server is still pinned by the owner of the
-//! socket and, after connecting, of the attestation pipe. The directory rule is
-//! there for a %ProgramData% directory someone else created before the service was
-//! installed.
+//! The GUI's check before it connects has two parts. In every mode node.sock
+//! must be an AF_UNIX socket with a DACL, owned by the expected server account
+//! (SocketRefusal). The directory rule (DirectoryRefusal on the socket's directory
+//! and on its parent) applies only when someone other than the expected account
+//! and SYSTEM can write the socket, or -ipcserviceuser is set
+//! (DirectoryRuleApplies): the attach-group and service modes, where the
+//! directories are what keep another account from replacing the socket between
+//! the check and the connect. It asks for a protected DACL only when
+//! -ipcserviceuser is set, the service -ipcdir that someone else could have
+//! created before the service was installed.
 //!
-//! Reparse points. node.sock, its directory and the directory's parent are each
-//! opened with FILE_FLAG_OPEN_REPARSE_POINT and backup semantics, so a reparse
-//! point at any of them is opened itself rather than followed, and each owner and
-//! DACL is read through that handle. A reparse point that is a name surrogate (a
-//! junction, a symbolic link, a mount point) at any of the three is then refused,
-//! because through it the object checked would not be the one connect reaches; a
-//! data directory that is itself a junction is refused too. The socket's own
-//! AF_UNIX reparse point is not a name surrogate. The directories above the parent
-//! are resolved by the system as usual.
+//! In the same-account mode the directories are not checked. Data directories
+//! made by earlier releases inherit %APPDATA%'s ACL, and others sit under a volume
+//! root or behind a junction; refusing them would strand existing users. There the
+//! protection against a socket swapped between the check and the connect rests on
+//! the attestation step after connecting, which checks the owner of the
+//! attestation pipe the server opens.
+//!
+//! Reparse points. Each object checked is opened with FILE_FLAG_OPEN_REPARSE_POINT
+//! and backup semantics, so a reparse point at it is opened itself rather than
+//! followed, and its owner and DACL are read through that handle. node.sock must
+//! carry the AF_UNIX reparse tag; a link there (a junction, a symbolic link, a
+//! mount point) or any other object is refused in every mode. When the directory
+//! rule applies, a link at the directory or its parent is refused as well, because
+//! through it the object checked would not be the one connect reaches, and both
+//! are held open without sharing delete until the connect is made. In the
+//! same-account mode a junction above the socket is followed as the system
+//! resolves it. Directories above the parent are always resolved as usual.
 namespace ipc::win {
 
 using util::winacl::Sid;
@@ -87,13 +101,20 @@ util::winacl::AclSpec EndpointAclSpec(IpcObject obj, const Sid& self, const std:
 //! alone.
 util::winacl::AclSpec IpcDirAclSpec(const Sid& self, const Sid& attach_group);
 
+//! IO_REPARSE_TAG_AF_UNIX: the reparse tag an AF_UNIX socket file carries
+//! (checked against the Windows SDK in win_endpoint.cpp).
+constexpr uint32_t REPARSE_TAG_AF_UNIX = 0x80000023;
+
 //! What an open without following found at one path of the endpoint.
 enum class EntryKind : uint8_t
 {
-    //! A directory that does not send its path elsewhere.
+    //! A directory that does not send its path elsewhere; a reparse point that is
+    //! not a name surrogate, such as a cloud-files directory, is one too.
     Directory,
-    //! Anything else that does not, such as a regular file or the socket's own
-    //! AF_UNIX reparse point.
+    //! A reparse point with the AF_UNIX tag that is not a directory: a socket.
+    UnixSocket,
+    //! Anything else that does not send its path elsewhere, such as a regular file
+    //! or a file with another reparse tag.
     File,
     //! A reparse point that is a name surrogate (a junction, a symbolic link, a
     //! mount point): it sends its path elsewhere.
@@ -110,16 +131,31 @@ struct EndpointEntry
 {
     fs::path path;
     EntryKind kind{EntryKind::File};
+    //! Its reparse tag, when it is a reparse point.
+    std::optional<uint32_t> reparse_tag;
     util::winacl::ObservedAcl acl;
 };
 
-//! node.sock, its directory and the directory's parent.
-struct EndpointFacts
+//! The socket's directory and that directory's parent.
+struct EndpointDirs
 {
-    EndpointEntry socket;
     EndpointEntry dir;
     EndpointEntry parent;
 };
+
+//! Why \p socket is not the expected server's socket, or nullopt. In every mode
+//! it must be a UnixSocket (a link at the socket's name is refused), have a DACL,
+//! and be owned by \p expected. The reason names the socket and the rule.
+std::optional<std::string> SocketRefusal(const EndpointEntry& socket, const Sid& expected);
+
+//! Whether the directory rule applies to an endpoint whose socket has
+//! \p socket_acl: when \p service_user_set (-ipcserviceuser), or when the socket's
+//! list is not one only \p expected and SYSTEM can write, that is when
+//! FindForeignWriter(socket_acl, {expected, SYSTEM}, FILE_WRITE_DATA |
+//! GENERIC_WRITE | GENERIC_ALL) finds a reason. FILE_WRITE_DATA is the right an
+//! AF_UNIX connect needs, so this is true when another account holds the right to
+//! connect, as the attach group does.
+bool DirectoryRuleApplies(const util::winacl::ObservedAcl& socket_acl, const Sid& expected, bool service_user_set);
 
 //! Why \p dir may not hold the endpoint of a server running as \p server, or
 //! nullopt. It must be a Directory, and FindForeignWriter(acl, {server, SYSTEM,
@@ -129,12 +165,15 @@ struct EndpointFacts
 //! directory.
 std::optional<std::string> DirectoryRefusal(const EndpointEntry& dir, const Sid& server, bool require_protected);
 
-//! The GUI's rule before it connects, over what was read, or nullopt when the
-//! endpoint may be connected to. node.sock must be neither a Directory nor a
-//! Redirect and must be owned by \p expected, and its directory and the
-//! directory's parent must each pass DirectoryRefusal(entry, \p expected,
-//! \p require_protected). The reason names the object and the rule.
-std::optional<std::string> EndpointRefusal(const EndpointFacts& facts, const Sid& expected, bool require_protected);
+//! The GUI's rule before it connects, or nullopt when the endpoint may be
+//! connected to: SocketRefusal(socket, \p expected); then, only when
+//! DirectoryRuleApplies(socket.acl, \p expected, \p service_user_set),
+//! \p read_dirs is called once and the directory and the parent it returns must
+//! each pass DirectoryRefusal(entry, \p expected, \p service_user_set). Otherwise
+//! \p read_dirs is not called, so in the same-account mode nothing above the
+//! socket is looked at. The reason names the object and the rule.
+std::optional<std::string> EndpointRefusal(const EndpointEntry& socket, const Sid& expected, bool service_user_set,
+                                           const std::function<EndpointDirs()>& read_dirs);
 
 //! The name the local group \p name is looked up by: "<computer>\<name>", so that
 //! only this computer's own accounts are searched and no domain group of the same
@@ -169,15 +208,46 @@ void ApplyEndpointAcl(const fs::path& path, IpcObject obj);
 //! std::system_error when it cannot be looked up.
 Sid ExpectedServerSid();
 
-//! GUI, before connect: node.sock owner == expected; its directory and the
-//! directory's parent owned by expected, SYSTEM or Administrators and free of
-//! foreign IPC_DIR_WRITEISH grants; when -ipcserviceuser is set both must also be
-//! protected (EndpointRefusal). Each is opened and read without following a
-//! reparse point at it. Throws std::runtime_error naming the object and the rule;
-//! std::system_error with std::errc::no_such_file_or_directory when one of the
-//! three does not exist, which is a server not listening; and std::system_error
-//! with the Win32 error when one cannot be opened or read.
-void CheckServerEndpointBeforeConnect(const fs::path& socket_path, const Sid& expected);
+//! \p path opened without following a reparse point at it, as the checks below
+//! read each object: its kind, reparse tag, owner and DACL. Throws
+//! std::system_error with std::errc::no_such_file_or_directory when it does not
+//! exist, and with the Win32 error when it cannot be opened or read.
+EndpointEntry ReadEntryNoFollow(const fs::path& path);
+
+//! What CheckServerEndpointBeforeConnect leaves open until the connect is made:
+//! when the directory rule applied, the socket's directory and its parent, opened
+//! without sharing delete so neither can be renamed or removed in between;
+//! nothing otherwise. Closes what it holds when destroyed.
+class EndpointHold
+{
+public:
+    EndpointHold() = default;
+    ~EndpointHold();
+    EndpointHold(EndpointHold&& other) noexcept = default;
+    EndpointHold& operator=(EndpointHold&&) = delete;
+    EndpointHold(const EndpointHold&) = delete;
+    EndpointHold& operator=(const EndpointHold&) = delete;
+
+    //! Take \p handle, a Win32 HANDLE, to close it when this is destroyed.
+    void Add(void* handle);
+
+    //! How many handles it holds: two when the directory rule applied, else none.
+    size_t size() const { return m_handles.size(); }
+
+private:
+    std::vector<void*> m_handles;
+};
+
+//! GUI, before connect: EndpointRefusal over node.sock and, when the directory
+//! rule applies, its directory and the directory's parent, each read with
+//! ReadEntryNoFollow after \p socket_path is made lexically normal. The protected
+//! requirement and the rule's -ipcserviceuser term follow that option. Returns
+//! what must stay open until the connect is made. Throws std::runtime_error naming
+//! the object and the rule; std::system_error with
+//! std::errc::no_such_file_or_directory when an object read does not exist, which
+//! is a server not listening; and std::system_error with the Win32 error when one
+//! cannot be opened or read.
+EndpointHold CheckServerEndpointBeforeConnect(const fs::path& socket_path, const Sid& expected);
 
 //! Server, for an IPC directory the operator named with -ipcdir: why this account
 //! must not serve in \p dir, or nullopt. DirectoryRefusal(dir as opened without

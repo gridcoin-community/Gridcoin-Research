@@ -40,8 +40,10 @@
 //! On Windows AF_UNIX exposes no peer credentials, and the server never receives
 //! a socket fd from kj. The DACLs on node.sock and ipc.cookie (ipc/win_endpoint.h)
 //! are the guard: this account and SYSTEM, and with -ipcattachgroup also the
-//! group's right to connect and to read the cookie. The GUI checks the endpoint's
-//! owner and directories before it connects. Until a Windows peer can be
+//! group's right to connect and to read the cookie. The GUI checks the socket's
+//! owner before it connects, and its directories when another account can write
+//! the socket; in the same-account mode a socket swapped between the check and the
+//! connect is for the attestation step to find. Until a Windows peer can be
 //! identified, either side still refuses the other as soon as a different account
 //! is configured (-ipcattachgroup or -ipcserviceuser).
 namespace ipc {

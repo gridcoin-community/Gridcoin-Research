@@ -8,10 +8,12 @@
 
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifdef WIN32
 #include "ipc/peercred.h"
+#include "ipc/process.h"
 #include "random.h"
 #include "test/state_guard.h"
 #include "test/wine.h"
@@ -20,9 +22,12 @@
 #include "util/dir_permissions.h"
 #include "util/strencodings.h"
 
+#include <cstring>
+#include <functional>
 #include <system_error>
 
 #include <windows.h>
+#include <winioctl.h>
 #endif
 
 using namespace ipc::win;
@@ -116,10 +121,35 @@ std::vector<AceSpec> EntriesFor(const AclSpec& spec, const Sid& trustee)
     return found;
 }
 
+//! The Modify permission as Explorer grants it (FILE_GENERIC_READ, FILE_GENERIC_WRITE,
+//! FILE_GENERIC_EXECUTE and DELETE).
+constexpr uint32_t MODIFY = 0x1301BF;
+
+//! A socket as the core binds it: an AF_UNIX reparse point owned by \p owner, with
+//! \p owner and SYSTEM at full access and, when given, \p group with the connect
+//! right.
+EndpointEntry Socket(const std::string& path, const Sid& owner, const std::optional<Sid>& group = std::nullopt)
+{
+    std::vector<ObservedAce> aces{Ace(owner, FILE_ALL_ACCESS), Ace(wellknown::System(), FILE_ALL_ACCESS)};
+    if (group) aces.push_back(Ace(*group, SOCKET_CONNECT_MASK));
+
+    EndpointEntry entry = Entry(path, EntryKind::UnixSocket, Acl(owner, std::move(aces)));
+    entry.reparse_tag = REPARSE_TAG_AF_UNIX;
+
+    return entry;
+}
+
+//! An endpoint: its socket, and the directories the rule reads when it applies.
+struct Endpoint
+{
+    EndpointEntry socket;
+    EndpointDirs dirs;
+};
+
 //! A same-account endpoint in a data directory created by an earlier release: the
 //! directory and its parent inherit %APPDATA%'s list (this account, SYSTEM and
 //! Administrators), unprotected.
-EndpointFacts SameAccountFacts()
+Endpoint SameAccount()
 {
     const auto inherited = [] {
         return Acl(Self(),
@@ -129,37 +159,56 @@ EndpointFacts SameAccountFacts()
                    /*is_protected=*/false);
     };
 
-    EndpointFacts facts;
-    facts.socket = Entry("C:\\Users\\a\\AppData\\Roaming\\GridcoinResearch\\node.sock", EntryKind::File,
-                         Acl(Self(), {Ace(Self(), FILE_ALL_ACCESS), Ace(wellknown::System(), FILE_ALL_ACCESS)}));
-    facts.dir = Entry("C:\\Users\\a\\AppData\\Roaming\\GridcoinResearch", EntryKind::Directory, inherited());
-    facts.parent = Entry("C:\\Users\\a\\AppData\\Roaming", EntryKind::Directory, inherited());
+    Endpoint endpoint;
+    endpoint.socket = Socket("C:\\Users\\a\\AppData\\Roaming\\GridcoinResearch\\node.sock", Self());
+    endpoint.dirs.dir = Entry("C:\\Users\\a\\AppData\\Roaming\\GridcoinResearch", EntryKind::Directory, inherited());
+    endpoint.dirs.parent = Entry("C:\\Users\\a\\AppData\\Roaming", EntryKind::Directory, inherited());
 
-    return facts;
+    return endpoint;
+}
+
+//! The same endpoint with the attach group's connect entry on its socket, as a core
+//! of this account binds it with -ipcattachgroup: another account can write the
+//! socket, so the directory rule applies without -ipcserviceuser.
+Endpoint AttachGroup()
+{
+    Endpoint endpoint = SameAccount();
+    endpoint.socket = Socket(endpoint.socket.path.string(), Self(), Group());
+
+    return endpoint;
 }
 
 //! The service endpoint as gridcoin-service.exe lays it out: Administrators-owned,
 //! protected directories, the service may add and remove entries in its own, and
 //! the group may only view them.
-EndpointFacts ServiceFacts()
+Endpoint ServiceLayout()
 {
-    EndpointFacts facts;
-    facts.socket = Entry("C:\\ProgramData\\Gridcoin\\ipc\\mainnet\\node.sock", EntryKind::File,
-                         Acl(Service(), {Ace(Service(), FILE_ALL_ACCESS), Ace(wellknown::System(), FILE_ALL_ACCESS),
-                                         Ace(Group(), SOCKET_CONNECT_MASK)}));
-    facts.dir = Entry("C:\\ProgramData\\Gridcoin\\ipc\\mainnet", EntryKind::Directory,
-                      Acl(wellknown::Administrators(),
-                          {Ace(wellknown::Administrators(), FILE_ALL_ACCESS),
-                           Ace(wellknown::System(), FILE_ALL_ACCESS),
-                           Ace(Service(), DIR_VIEW_MASK | FILE_ADD_FILE | FILE_DELETE_CHILD),
-                           Ace(Group(), DIR_VIEW_MASK)}));
-    facts.parent = Entry("C:\\ProgramData\\Gridcoin\\ipc", EntryKind::Directory,
-                         Acl(wellknown::Administrators(),
-                             {Ace(wellknown::Administrators(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
-                              Ace(wellknown::System(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
-                              Ace(Group(), DIR_VIEW_MASK)}));
+    Endpoint endpoint;
+    endpoint.socket = Socket("C:\\ProgramData\\Gridcoin\\ipc\\mainnet\\node.sock", Service(), Group());
+    endpoint.dirs.dir = Entry("C:\\ProgramData\\Gridcoin\\ipc\\mainnet", EntryKind::Directory,
+                              Acl(wellknown::Administrators(),
+                                  {Ace(wellknown::Administrators(), FILE_ALL_ACCESS),
+                                   Ace(wellknown::System(), FILE_ALL_ACCESS),
+                                   Ace(Service(), DIR_VIEW_MASK | FILE_ADD_FILE | FILE_DELETE_CHILD),
+                                   Ace(Group(), DIR_VIEW_MASK)}));
+    endpoint.dirs.parent = Entry("C:\\ProgramData\\Gridcoin\\ipc", EntryKind::Directory,
+                                 Acl(wellknown::Administrators(),
+                                     {Ace(wellknown::Administrators(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
+                                      Ace(wellknown::System(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
+                                      Ace(Group(), DIR_VIEW_MASK)}));
 
-    return facts;
+    return endpoint;
+}
+
+//! EndpointRefusal over \p endpoint. \p reads, when given, counts the calls that read
+//! the directories.
+std::optional<std::string> Refusal(const Endpoint& endpoint, const Sid& expected, bool service_user_set,
+                                   int* reads = nullptr)
+{
+    return EndpointRefusal(endpoint.socket, expected, service_user_set, [&] {
+        if (reads != nullptr) ++*reads;
+        return endpoint.dirs;
+    });
 }
 
 //! Check that \p reason is a refusal that contains every one of \p words.
@@ -288,20 +337,24 @@ BOOST_AUTO_TEST_CASE(ipc_dir_spec_gives_the_group_view_only)
     BOOST_CHECK(!DirectoryRefusal(dir, Self(), /*require_protected=*/true));
 }
 
-// Only a name surrogate sends a path elsewhere. The socket's own AF_UNIX reparse point
-// is not one, nor is a reparse point that only stores a file's data elsewhere.
+// Only a name surrogate sends a path elsewhere, and only the AF_UNIX tag on a file
+// that is not a directory makes a socket. A directory whose tag is not a surrogate,
+// such as a cloud-files directory, stays a directory.
 BOOST_AUTO_TEST_CASE(classify_entry_by_reparse_tag)
 {
     const uint32_t symlink = 0xA000000C;
     const uint32_t mount_point = 0xA0000003; // a junction
-    const uint32_t af_unix = 0x80000023;
     const uint32_t cloud_files = 0x9000001A;
+    BOOST_CHECK_EQUAL(REPARSE_TAG_AF_UNIX, 0x80000023U);
+
+    BOOST_CHECK(ClassifyEntry(/*directory=*/false, REPARSE_TAG_AF_UNIX) == EntryKind::UnixSocket);
+
+    BOOST_CHECK(ClassifyEntry(/*directory=*/false, std::nullopt) == EntryKind::File);
+    BOOST_CHECK(ClassifyEntry(/*directory=*/false, cloud_files) == EntryKind::File);
 
     BOOST_CHECK(ClassifyEntry(/*directory=*/true, std::nullopt) == EntryKind::Directory);
-    BOOST_CHECK(ClassifyEntry(/*directory=*/false, std::nullopt) == EntryKind::File);
-    BOOST_CHECK(ClassifyEntry(/*directory=*/false, af_unix) == EntryKind::File);
     BOOST_CHECK(ClassifyEntry(/*directory=*/true, cloud_files) == EntryKind::Directory);
-    BOOST_CHECK(ClassifyEntry(/*directory=*/false, cloud_files) == EntryKind::File);
+    BOOST_CHECK(ClassifyEntry(/*directory=*/true, REPARSE_TAG_AF_UNIX) == EntryKind::Directory);
 
     for (const bool directory : {true, false}) {
         BOOST_CHECK(ClassifyEntry(directory, symlink) == EntryKind::Redirect);
@@ -309,15 +362,126 @@ BOOST_AUTO_TEST_CASE(classify_entry_by_reparse_tag)
     }
 }
 
-// A same-account endpoint in an existing data directory passes: its list is inherited
-// and unprotected, which the rule asks for only at a service -ipcdir.
-BOOST_AUTO_TEST_CASE(endpoint_same_account_inherited_directories_accepted)
+// In every mode the socket must be an AF_UNIX socket with a DACL, owned by the
+// expected server: a plain file, a file with another tag, a directory or a link at
+// its name is not the socket.
+BOOST_AUTO_TEST_CASE(socket_must_be_the_expected_servers_socket)
 {
-    const EndpointFacts facts = SameAccountFacts();
-    BOOST_CHECK(!EndpointRefusal(facts, Self(), /*require_protected=*/false));
+    const EndpointEntry socket = Socket("C:\\gr\\node.sock", Self());
+    BOOST_CHECK(!SocketRefusal(socket, Self()));
 
-    // The same directories at a service -ipcdir are refused for not being protected.
-    CheckRefusal(EndpointRefusal(facts, Self(), /*require_protected=*/true), {"protected", facts.dir.path.string()});
+    const std::vector<std::pair<EntryKind, std::optional<uint32_t>>> others{
+        {EntryKind::File, std::nullopt},
+        {EntryKind::File, 0x9000001A},
+        {EntryKind::Directory, std::nullopt},
+        {EntryKind::Redirect, 0xA0000003},
+        {EntryKind::Redirect, 0xA000000C},
+    };
+    for (const auto& [kind, tag] : others) {
+        EndpointEntry other = socket;
+        other.kind = kind;
+        other.reparse_tag = tag;
+        CheckRefusal(SocketRefusal(other, Self()), {"C:\\gr\\node.sock"});
+    }
+
+    // No DACL gives everyone full access.
+    EndpointEntry no_dacl = socket;
+    no_dacl.acl.dacl_present = false;
+    no_dacl.acl.aces.clear();
+    CheckRefusal(SocketRefusal(no_dacl, Self()), {"C:\\gr\\node.sock", "DACL"});
+
+    // Another owner than the expected one, or one that could not be read.
+    CheckRefusal(SocketRefusal(socket, OtherUser()), {"C:\\gr\\node.sock", "owner"});
+    EndpointEntry unread = socket;
+    unread.acl.owner.reset();
+    CheckRefusal(SocketRefusal(unread, Self()), {"C:\\gr\\node.sock", "owner"});
+}
+
+// The directory rule applies when someone other than the expected account and SYSTEM
+// can write the socket, as the attach group's connect right does, or when
+// -ipcserviceuser is set.
+BOOST_AUTO_TEST_CASE(directory_rule_applies_when_another_can_write_the_socket)
+{
+    const ObservedAcl own = Socket("C:\\gr\\node.sock", Self()).acl;
+    BOOST_CHECK(!DirectoryRuleApplies(own, Self(), /*service_user_set=*/false));
+    BOOST_CHECK(DirectoryRuleApplies(own, Self(), /*service_user_set=*/true));
+
+    BOOST_CHECK(DirectoryRuleApplies(Socket("C:\\gr\\node.sock", Self(), Group()).acl, Self(), false));
+
+    for (const uint32_t right : {static_cast<uint32_t>(FILE_WRITE_DATA), static_cast<uint32_t>(GENERIC_WRITE),
+                                 static_cast<uint32_t>(GENERIC_ALL)}) {
+        ObservedAcl acl = own;
+        acl.aces.push_back(Ace(OtherUser(), right));
+        BOOST_CHECK_MESSAGE(DirectoryRuleApplies(acl, Self(), false), "right " << right);
+    }
+
+    // Reading the socket's list or attributes is not the right to connect, and an
+    // entry that denies, or one that only applies to what would be created inside,
+    // grants nothing.
+    ObservedAcl read_only = own;
+    read_only.aces.push_back(Ace(wellknown::Users(), READ_CONTROL | FILE_READ_ATTRIBUTES | SYNCHRONIZE));
+    BOOST_CHECK(!DirectoryRuleApplies(read_only, Self(), false));
+
+    ObservedAcl denied = own;
+    denied.aces.push_back(Ace(OtherUser(), FILE_ALL_ACCESS, Inherit::None, false, AceKind::Deny));
+    BOOST_CHECK(!DirectoryRuleApplies(denied, Self(), false));
+
+    ObservedAcl inherit_only = own;
+    ObservedAce entry = Ace(wellknown::Users(), FILE_ALL_ACCESS, Inherit::ContainerAndObject);
+    entry.inherit_only = true;
+    inherit_only.aces.push_back(entry);
+    BOOST_CHECK(!DirectoryRuleApplies(inherit_only, Self(), false));
+
+    // Asked about a socket another account owns, which SocketRefusal refuses first,
+    // the rule applies.
+    BOOST_CHECK(DirectoryRuleApplies(own, OtherUser(), false));
+}
+
+// A same-account endpoint passes on its socket alone, and its directories are not
+// read: a parent at a volume root that lets Authenticated Users add a directory, a
+// directory with an inherited Modify entry, and a directory behind a junction are
+// all accepted. With -ipcserviceuser set the same directories are read and refused.
+BOOST_AUTO_TEST_CASE(endpoint_same_account_does_not_read_the_directories)
+{
+    int reads = 0;
+    BOOST_CHECK(!Refusal(SameAccount(), Self(), false, &reads));
+
+    Endpoint root_parent = SameAccount();
+    root_parent.dirs.parent.acl.aces.push_back(Ace(AuthenticatedUsers(), FILE_ADD_SUBDIRECTORY));
+    BOOST_CHECK(!Refusal(root_parent, Self(), false, &reads));
+
+    Endpoint inherited_modify = SameAccount();
+    inherited_modify.dirs.dir.acl.aces.push_back(
+        Ace(AuthenticatedUsers(), MODIFY, Inherit::ContainerAndObject, /*inherited=*/true));
+    BOOST_CHECK(!Refusal(inherited_modify, Self(), false, &reads));
+
+    Endpoint junction = SameAccount();
+    junction.dirs.dir.kind = EntryKind::Redirect;
+    junction.dirs.dir.reparse_tag = 0xA0000003;
+    BOOST_CHECK(!Refusal(junction, Self(), false, &reads));
+
+    BOOST_CHECK_EQUAL(reads, 0);
+
+    CheckRefusal(Refusal(SameAccount(), Self(), true, &reads), {"protected", SameAccount().dirs.dir.path.string()});
+    CheckRefusal(Refusal(root_parent, Self(), true), {root_parent.dirs.dir.path.string()});
+    CheckRefusal(Refusal(inherited_modify, Self(), true), {inherited_modify.dirs.dir.path.string()});
+    CheckRefusal(Refusal(junction, Self(), true), {junction.dirs.dir.path.string()});
+    BOOST_CHECK_EQUAL(reads, 1);
+}
+
+// With -ipcattachgroup the socket's group entry lets another account write it, so the
+// directory rule applies with this account as the expected server and no
+// -ipcserviceuser: the directories are read once, and another account's write on the
+// directory is refused.
+BOOST_AUTO_TEST_CASE(endpoint_attach_group_applies_the_directory_rule)
+{
+    int reads = 0;
+    BOOST_CHECK(!Refusal(AttachGroup(), Self(), false, &reads));
+    BOOST_CHECK_EQUAL(reads, 1);
+
+    Endpoint endpoint = AttachGroup();
+    endpoint.dirs.dir.acl.aces.push_back(Ace(OtherUser(), FILE_ADD_FILE));
+    CheckRefusal(Refusal(endpoint, Self(), false), {endpoint.dirs.dir.path.string()});
 }
 
 // The service layout passes the service rule. Its directories are owned by
@@ -325,86 +489,82 @@ BOOST_AUTO_TEST_CASE(endpoint_same_account_inherited_directories_accepted)
 // group's view does not count as a write.
 BOOST_AUTO_TEST_CASE(endpoint_service_layout_accepted)
 {
-    BOOST_CHECK(!EndpointRefusal(ServiceFacts(), Service(), /*require_protected=*/true));
+    BOOST_CHECK(!Refusal(ServiceLayout(), Service(), /*service_user_set=*/true));
 }
 
 // The socket must be the expected server's: another account's, even in a directory
-// that is otherwise clean, is refused before anything is sent to it.
+// that is otherwise clean, is refused before anything is sent to it, and before its
+// directories are read.
 BOOST_AUTO_TEST_CASE(endpoint_socket_of_another_owner_refused)
 {
-    EndpointFacts facts = SameAccountFacts();
-    facts.socket.acl.owner = OtherUser();
-    CheckRefusal(EndpointRefusal(facts, Self(), false), {facts.socket.path.string(), "owner"});
+    int reads = 0;
+    Endpoint endpoint = SameAccount();
+    endpoint.socket.acl.owner = OtherUser();
+    CheckRefusal(Refusal(endpoint, Self(), false, &reads), {endpoint.socket.path.string(), "owner"});
 
     // In the service mode, a socket of this GUI's own account is not the service's.
-    EndpointFacts service = ServiceFacts();
+    Endpoint service = ServiceLayout();
     service.socket.acl.owner = Self();
-    CheckRefusal(EndpointRefusal(service, Service(), true), {service.socket.path.string(), "owner"});
+    CheckRefusal(Refusal(service, Service(), true, &reads), {service.socket.path.string(), "owner"});
 
-    // So is a socket whose owner could not be read.
-    facts = SameAccountFacts();
-    facts.socket.acl.owner.reset();
-    CheckRefusal(EndpointRefusal(facts, Self(), false), {facts.socket.path.string()});
+    // A link at the socket's name is refused in the same-account mode too.
+    endpoint = SameAccount();
+    endpoint.socket.kind = EntryKind::Redirect;
+    endpoint.socket.reparse_tag = 0xA000000C;
+    CheckRefusal(Refusal(endpoint, Self(), false, &reads), {endpoint.socket.path.string()});
+
+    BOOST_CHECK_EQUAL(reads, 0);
 }
 
-// A link or a directory at the socket's name is not the socket.
-BOOST_AUTO_TEST_CASE(endpoint_socket_redirect_or_directory_refused)
-{
-    for (const EntryKind kind : {EntryKind::Redirect, EntryKind::Directory}) {
-        EndpointFacts facts = SameAccountFacts();
-        facts.socket.kind = kind;
-        CheckRefusal(EndpointRefusal(facts, Self(), false), {facts.socket.path.string()});
-    }
-}
-
-// A junction or link at the directory or its parent is refused: through one, what is
-// checked is not what connect reaches.
+// Where the rule applies, a junction or link at the directory or its parent is
+// refused: through one, what is checked is not what connect reaches.
 BOOST_AUTO_TEST_CASE(endpoint_redirected_directory_refused)
 {
-    EndpointFacts facts = SameAccountFacts();
-    facts.dir.kind = EntryKind::Redirect;
-    CheckRefusal(EndpointRefusal(facts, Self(), false), {facts.dir.path.string()});
+    Endpoint endpoint = AttachGroup();
+    endpoint.dirs.dir.kind = EntryKind::Redirect;
+    CheckRefusal(Refusal(endpoint, Self(), false), {endpoint.dirs.dir.path.string()});
 
-    facts = SameAccountFacts();
-    facts.parent.kind = EntryKind::Redirect;
-    CheckRefusal(EndpointRefusal(facts, Self(), false), {facts.parent.path.string()});
+    endpoint = AttachGroup();
+    endpoint.dirs.parent.kind = EntryKind::Redirect;
+    CheckRefusal(Refusal(endpoint, Self(), false), {endpoint.dirs.parent.path.string()});
 
     // And the directory must be one.
-    facts = SameAccountFacts();
-    facts.dir.kind = EntryKind::File;
-    CheckRefusal(EndpointRefusal(facts, Self(), false), {facts.dir.path.string()});
+    endpoint = AttachGroup();
+    endpoint.dirs.dir.kind = EntryKind::File;
+    CheckRefusal(Refusal(endpoint, Self(), false), {endpoint.dirs.dir.path.string()});
 }
 
-// Another account that can add, remove or replace an entry in the socket's directory
-// could swap the socket between this check and the connect.
+// Where the rule applies, another account that can add, remove or replace an entry in
+// the socket's directory, or in its parent, is refused: it could swap the socket
+// between this check and the connect.
 BOOST_AUTO_TEST_CASE(endpoint_directory_with_foreign_writer_refused)
 {
     for (const uint32_t right : {static_cast<uint32_t>(FILE_ADD_FILE), static_cast<uint32_t>(FILE_ADD_SUBDIRECTORY),
                                  static_cast<uint32_t>(FILE_DELETE_CHILD), static_cast<uint32_t>(DELETE),
                                  static_cast<uint32_t>(WRITE_DAC), static_cast<uint32_t>(WRITE_OWNER),
                                  static_cast<uint32_t>(GENERIC_WRITE), static_cast<uint32_t>(GENERIC_ALL)}) {
-        EndpointFacts facts = SameAccountFacts();
-        facts.dir.acl.aces.push_back(Ace(OtherUser(), right));
-        CheckRefusal(EndpointRefusal(facts, Self(), false), {facts.dir.path.string()});
+        Endpoint endpoint = AttachGroup();
+        endpoint.dirs.dir.acl.aces.push_back(Ace(OtherUser(), right));
+        CheckRefusal(Refusal(endpoint, Self(), false), {endpoint.dirs.dir.path.string()});
 
-        facts = SameAccountFacts();
-        facts.parent.acl.aces.push_back(Ace(AuthenticatedUsers(), right, Inherit::None, /*inherited=*/true));
-        CheckRefusal(EndpointRefusal(facts, Self(), false), {facts.parent.path.string()});
+        endpoint = AttachGroup();
+        endpoint.dirs.parent.acl.aces.push_back(Ace(AuthenticatedUsers(), right, Inherit::None, /*inherited=*/true));
+        CheckRefusal(Refusal(endpoint, Self(), false), {endpoint.dirs.parent.path.string()});
     }
 
     // An entry that only applies to what is created inside, or that denies, is not a
     // grant on the directory.
-    EndpointFacts facts = SameAccountFacts();
+    Endpoint endpoint = AttachGroup();
     ObservedAce inherit_only = Ace(AuthenticatedUsers(), FILE_ALL_ACCESS, Inherit::ContainerAndObject);
     inherit_only.inherit_only = true;
-    facts.dir.acl.aces.push_back(inherit_only);
-    facts.dir.acl.aces.push_back(Ace(OtherUser(), FILE_ALL_ACCESS, Inherit::None, false, AceKind::Deny));
-    BOOST_CHECK(!EndpointRefusal(facts, Self(), false));
+    endpoint.dirs.dir.acl.aces.push_back(inherit_only);
+    endpoint.dirs.dir.acl.aces.push_back(Ace(OtherUser(), FILE_ALL_ACCESS, Inherit::None, false, AceKind::Deny));
+    BOOST_CHECK(!Refusal(endpoint, Self(), false));
 
     // Nor is the right to read and traverse it.
-    facts = SameAccountFacts();
-    facts.dir.acl.aces.push_back(Ace(wellknown::Users(), DIR_VIEW_MASK));
-    BOOST_CHECK(!EndpointRefusal(facts, Self(), false));
+    endpoint = AttachGroup();
+    endpoint.dirs.dir.acl.aces.push_back(Ace(wellknown::Users(), DIR_VIEW_MASK));
+    BOOST_CHECK(!Refusal(endpoint, Self(), false));
 }
 
 // A directory another account owns, such as a %ProgramData%\Gridcoin that a standard
@@ -412,44 +572,45 @@ BOOST_AUTO_TEST_CASE(endpoint_directory_with_foreign_writer_refused)
 // its parent.
 BOOST_AUTO_TEST_CASE(endpoint_directory_of_another_owner_refused)
 {
-    EndpointFacts facts = ServiceFacts();
-    facts.parent.acl.owner = OtherUser();
-    CheckRefusal(EndpointRefusal(facts, Service(), true), {facts.parent.path.string(), "owner"});
+    Endpoint endpoint = ServiceLayout();
+    endpoint.dirs.parent.acl.owner = OtherUser();
+    CheckRefusal(Refusal(endpoint, Service(), true), {endpoint.dirs.parent.path.string(), "owner"});
 
-    facts = ServiceFacts();
-    facts.dir.acl.owner = OtherUser();
-    CheckRefusal(EndpointRefusal(facts, Service(), true), {facts.dir.path.string(), "owner"});
+    endpoint = ServiceLayout();
+    endpoint.dirs.dir.acl.owner = OtherUser();
+    CheckRefusal(Refusal(endpoint, Service(), true), {endpoint.dirs.dir.path.string(), "owner"});
 
     // The owner may be the expected server, SYSTEM or Administrators.
     for (const Sid& owner : {Service(), wellknown::System(), wellknown::Administrators()}) {
-        facts = ServiceFacts();
-        facts.dir.acl.owner = owner;
-        facts.parent.acl.owner = owner;
-        BOOST_CHECK(!EndpointRefusal(facts, Service(), true));
+        endpoint = ServiceLayout();
+        endpoint.dirs.dir.acl.owner = owner;
+        endpoint.dirs.parent.acl.owner = owner;
+        BOOST_CHECK(!Refusal(endpoint, Service(), true));
     }
 }
 
-// A directory with no DACL gives everyone full access.
+// Where the rule applies, a directory with no DACL, which gives everyone full access,
+// is refused.
 BOOST_AUTO_TEST_CASE(endpoint_directory_without_dacl_refused)
 {
-    EndpointFacts facts = SameAccountFacts();
-    facts.dir.acl.dacl_present = false;
-    facts.dir.acl.aces.clear();
-    CheckRefusal(EndpointRefusal(facts, Self(), false), {facts.dir.path.string(), "DACL"});
+    Endpoint endpoint = AttachGroup();
+    endpoint.dirs.dir.acl.dacl_present = false;
+    endpoint.dirs.dir.acl.aces.clear();
+    CheckRefusal(Refusal(endpoint, Self(), false), {endpoint.dirs.dir.path.string(), "DACL"});
 }
 
 // The service mode asks for protected directories, at the directory and at its
-// parent alike.
+// parent alike; the attach-group rule without -ipcserviceuser does not.
 BOOST_AUTO_TEST_CASE(endpoint_service_directories_must_be_protected)
 {
-    EndpointFacts facts = ServiceFacts();
-    facts.dir.acl.is_protected = false;
-    CheckRefusal(EndpointRefusal(facts, Service(), true), {facts.dir.path.string(), "protected"});
-    BOOST_CHECK(!EndpointRefusal(facts, Service(), false));
+    Endpoint endpoint = ServiceLayout();
+    endpoint.dirs.dir.acl.is_protected = false;
+    CheckRefusal(Refusal(endpoint, Service(), true), {endpoint.dirs.dir.path.string(), "protected"});
+    BOOST_CHECK(!Refusal(endpoint, Service(), false));
 
-    facts = ServiceFacts();
-    facts.parent.acl.is_protected = false;
-    CheckRefusal(EndpointRefusal(facts, Service(), true), {facts.parent.path.string(), "protected"});
+    endpoint = ServiceLayout();
+    endpoint.dirs.parent.acl.is_protected = false;
+    CheckRefusal(Refusal(endpoint, Service(), true), {endpoint.dirs.parent.path.string(), "protected"});
 }
 
 // What the server checks at an -ipcdir is the directory rule with itself as the
@@ -462,7 +623,7 @@ BOOST_AUTO_TEST_CASE(directory_refusal_for_the_server)
                                                         Ace(wellknown::System(), FILE_ALL_ACCESS,
                                                             Inherit::ContainerAndObject)}));
     BOOST_CHECK(!DirectoryRefusal(owner_only, Self(), false));
-    BOOST_CHECK(!DirectoryRefusal(ServiceFacts().dir, Service(), false));
+    BOOST_CHECK(!DirectoryRefusal(ServiceLayout().dirs.dir, Service(), false));
 
     EndpointEntry redirected = owner_only;
     redirected.kind = EntryKind::Redirect;
@@ -478,7 +639,8 @@ BOOST_AUTO_TEST_CASE(directory_refusal_for_the_server)
 
     // The service account's write in the service layout is its own, not another
     // account's; to any other server it is another account's.
-    CheckRefusal(DirectoryRefusal(ServiceFacts().dir, Self(), false), {ServiceFacts().dir.path.string()});
+    CheckRefusal(DirectoryRefusal(ServiceLayout().dirs.dir, Self(), false),
+                 {ServiceLayout().dirs.dir.path.string()});
 }
 
 // The attach group is looked up on this computer only.
@@ -529,6 +691,73 @@ void WriteFile(const fs::path& path)
 {
     fsbridge::ofstream out(path, std::ios::binary);
     out << "x";
+}
+
+//! Closes a socket descriptor from Process::bind or Process::connect.
+struct SocketCloser
+{
+    int fd{-1};
+    ~SocketCloser()
+    {
+        if (fd == -1) return;
+        SOCKET s = static_cast<SOCKET>(fd);
+        closesocket(s);
+    }
+};
+
+//! Make the new, empty directory \p link a junction (a mount-point reparse point)
+//! to the directory \p target. No privilege is needed for that.
+void MakeJunction(const fs::path& link, const fs::path& target)
+{
+    BOOST_REQUIRE(::CreateDirectoryW(link.wstring().c_str(), nullptr));
+    const HANDLE handle = ::CreateFileW(link.wstring().c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+                                        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    BOOST_REQUIRE(handle != INVALID_HANDLE_VALUE);
+
+    // REPARSE_DATA_BUFFER's mount-point form, which no user-mode header declares:
+    // the tag, the data length and a reserved word, then the offsets and lengths of
+    // the two names, then the names, each followed by a NUL.
+    const std::wstring substitute = L"\\??\\" + target.wstring();
+    const std::wstring print = target.wstring();
+    const size_t names = (substitute.size() + 1 + print.size() + 1) * sizeof(wchar_t);
+    std::vector<unsigned char> buffer(8 + 8 + names, 0);
+    const auto put16 = [&](size_t offset, size_t value) {
+        const auto v = static_cast<uint16_t>(value);
+        std::memcpy(buffer.data() + offset, &v, sizeof(v));
+    };
+    const uint32_t tag = IO_REPARSE_TAG_MOUNT_POINT;
+    std::memcpy(buffer.data(), &tag, sizeof(tag));
+    put16(4, 8 + names);
+    put16(8, 0);
+    put16(10, substitute.size() * sizeof(wchar_t));
+    put16(12, (substitute.size() + 1) * sizeof(wchar_t));
+    put16(14, print.size() * sizeof(wchar_t));
+    std::memcpy(buffer.data() + 16, substitute.c_str(), (substitute.size() + 1) * sizeof(wchar_t));
+    std::memcpy(buffer.data() + 16 + (substitute.size() + 1) * sizeof(wchar_t), print.c_str(),
+                (print.size() + 1) * sizeof(wchar_t));
+
+    DWORD returned = 0;
+    const BOOL set = ::DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, buffer.data(),
+                                       static_cast<DWORD>(buffer.size()), nullptr, 0, &returned, nullptr);
+    const DWORD error = ::GetLastError();
+    ::CloseHandle(handle);
+    BOOST_REQUIRE_MESSAGE(set, "FSCTL_SET_REPARSE_POINT failed with Windows error " << error);
+}
+
+//! Check that \p check throws the endpoint rule's refusal, a std::runtime_error that
+//! is not a std::system_error, naming \p word.
+void CheckRefusedByRule(const std::function<void()>& check, const std::string& word)
+{
+    try {
+        check();
+    } catch (const std::system_error& e) {
+        BOOST_ERROR("a call failed rather than the rule refusing: " << e.what());
+        return;
+    } catch (const std::runtime_error& e) {
+        BOOST_CHECK_MESSAGE(std::string(e.what()).find(word) != std::string::npos, e.what());
+        return;
+    }
+    BOOST_ERROR("the endpoint was not refused");
 }
 
 } // namespace
@@ -591,6 +820,85 @@ BOOST_AUTO_TEST_CASE(win_check_endpoint_own_socket_accepted)
     BOOST_CHECK_NO_THROW(CheckServerEndpointBeforeConnect(ipcdir / "node.sock", CurrentTokenUser()));
     BOOST_CHECK_THROW(CheckServerEndpointBeforeConnect(ipcdir / "node.sock", wellknown::System()),
                       std::runtime_error);
+}
+
+// A socket bound by the IPC process layer carries the AF_UNIX reparse tag and passes
+// the check. With only this account and SYSTEM on its list the directories are not
+// held; with another account's connect right on it they are, and a connect made
+// through Process::connect works while they are held.
+BOOST_FIXTURE_TEST_CASE(win_bound_socket_passes_the_check, grc_test::StateGuard)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
+        return;
+    }
+    gArgs.ClearForcedArg("-ipcdir");
+    gArgs.ClearForcedArg("-ipcattachgroup");
+    gArgs.ClearForcedArg("-ipcserviceuser");
+
+    WinTempDir dir;
+    const fs::path ipcdir = dir.path / "ipc";
+    std::string address = "unix";
+    SocketCloser server{ipc::MakeProcess()->bind(ipcdir, address)};
+    BOOST_REQUIRE(server.fd != -1);
+    BOOST_REQUIRE_EQUAL(::listen(static_cast<SOCKET>(server.fd), 1), 0);
+
+    const fs::path socket = ipcdir / "node.sock";
+    const EndpointEntry entry = ReadEntryNoFollow(socket);
+    BOOST_CHECK(entry.kind == EntryKind::UnixSocket);
+    BOOST_REQUIRE(entry.reparse_tag);
+    BOOST_CHECK_EQUAL(*entry.reparse_tag, REPARSE_TAG_AF_UNIX);
+
+    const Sid self = CurrentTokenUser();
+    BOOST_CHECK_EQUAL(CheckServerEndpointBeforeConnect(socket, self).size(), 0U);
+
+    ApplyEndpointAcl(socket, EndpointAclSpec(IpcObject::Socket, self, wellknown::Users()));
+    BOOST_CHECK_EQUAL(CheckServerEndpointBeforeConnect(socket, self).size(), 2U);
+
+    std::string client_address = "unix";
+    SocketCloser client{ipc::MakeProcess()->connect(ipcdir, client_address)};
+    BOOST_CHECK(client.fd != -1);
+}
+
+// A real junction: in the same-account mode a junction above the socket is followed
+// as the system resolves it; where the directory rule applies it is refused, and a
+// junction at the socket's own name is refused in every mode.
+BOOST_FIXTURE_TEST_CASE(win_junction_followed_above_the_socket_only_in_same_account_mode, grc_test::StateGuard)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
+        return;
+    }
+    gArgs.ClearForcedArg("-ipcdir");
+    gArgs.ClearForcedArg("-ipcattachgroup");
+    gArgs.ClearForcedArg("-ipcserviceuser");
+
+    WinTempDir dir;
+    const fs::path real = dir.path / "real";
+    std::string address = "unix";
+    SocketCloser server{ipc::MakeProcess()->bind(real, address)};
+    BOOST_REQUIRE(server.fd != -1);
+
+    const fs::path linked = dir.path / "linked";
+    MakeJunction(linked, real);
+    BOOST_CHECK(ReadEntryNoFollow(linked).kind == EntryKind::Redirect);
+
+    const Sid self = CurrentTokenUser();
+    BOOST_CHECK_NO_THROW(CheckServerEndpointBeforeConnect(linked / "node.sock", self));
+
+    ApplyEndpointAcl(real / "node.sock", EndpointAclSpec(IpcObject::Socket, self, wellknown::Users()));
+    CheckRefusedByRule([&] { CheckServerEndpointBeforeConnect(linked / "node.sock", self); }, linked.string());
+
+    const fs::path other = dir.path / "other";
+    std::string error;
+    BOOST_REQUIRE_MESSAGE(util::CreateOwnerOnlyDirectory(other, error), error);
+    MakeJunction(other / "node.sock", real);
+    CheckRefusedByRule([&] { CheckServerEndpointBeforeConnect(other / "node.sock", self); },
+                       (other / "node.sock").string());
+
+    // The junctions themselves are removed, so the cleanup does not go through them.
+    BOOST_CHECK(::RemoveDirectoryW((other / "node.sock").wstring().c_str()));
+    BOOST_CHECK(::RemoveDirectoryW(linked.wstring().c_str()));
 }
 
 // An attach group that does not exist on this computer is refused at configuration,
