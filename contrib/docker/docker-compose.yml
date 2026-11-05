@@ -10,6 +10,11 @@ services:
     ports:
       - "${P2P_PORT:-32749}:32749"                       # P2P
       # - "127.0.0.1:${RPC_PORT:-15715}:15715"           # RPC (uncomment if needed)
+    # Publishing RPC also needs GRC_RPC_ALLOW_SUBNET, set to this compose network's
+    # subnet (docker network inspect <project>_default). The entrypoint reads it only
+    # when it creates gridcoinresearch.conf; see README.md, Auto-Generated Config.
+    # environment:
+    #   - GRC_RPC_ALLOW_SUBNET=172.18.0.0/16
     read_only: true
     tmpfs:
       - /tmp
