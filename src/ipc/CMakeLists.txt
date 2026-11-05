@@ -98,12 +98,14 @@ target_link_libraries(gridcoin_ipc PUBLIC
 # dependency is self-documenting, and add mswsock (AcceptEx/ConnectEx) for the
 # kj-async Win32 async I/O backend.
 #
-# advapi32 supplies the DACL hardening the transport applies to the datadir,
-# socket and cookie: SetEntriesInAclW, Get/SetNamedSecurityInfoW (process.cpp,
-# via <aclapi.h>) and InitializeSecurityDescriptor / SetSecurityDescriptorDacl
-# (handshake.cpp, via <securitybaseapi.h>). These compile without it -- the
-# headers only declare them -- so the omission surfaces as five undefined
-# __imp_* symbols at final link, long after every object and archive succeeds.
+# advapi32 supplies the security descriptor the transport builds for the cookie:
+# InitializeSecurityDescriptor / SetSecurityDescriptorDacl /
+# SetSecurityDescriptorControl (handshake.cpp, via <securitybaseapi.h>). The
+# owner-only DACLs on the datadir, socket and cookie are applied through
+# util/dir_permissions.cpp and util/win_acl.cpp in gridcoin_util, which links
+# advapi32 itself. These compile without it -- the headers only declare them --
+# so the omission surfaces as undefined __imp_* symbols at final link, long after
+# every object and archive succeeds.
 if(WIN32)
     target_link_libraries(gridcoin_ipc PUBLIC
         ws2_32

@@ -4,7 +4,7 @@
 
 #include "util/dir_permissions.h"
 
-#include "tinyformat.h" // strprintf, used by the Windows DACL verifier
+#include "tinyformat.h" // strprintf, for the errors when a directory cannot be restricted
 #include "util/win_acl.h"
 
 #include <cerrno>

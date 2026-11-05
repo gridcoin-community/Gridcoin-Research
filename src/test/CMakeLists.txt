@@ -155,13 +155,12 @@ add_executable(test_gridcoin
     # selection mirror, and the value-filter parity semantics. Core lives in
     # gridcoin_util, so only the suite is listed here (GUI-OFF).
     qt_walletcoinstore_tests.cpp
-    # Transport helpers (src/ipc/process.cpp). Also Cap'n Proto-free. Needed here
-    # because on WIN32 handshake.cpp's WriteFileAtomic calls MakeOwnerOnlyDacl /
-    # ApplyOwnerOnlyDacl (defined at process.cpp:587,607) to create the cookie with
-    # an owner-only DACL. gridcoin_ipc would supply them, but it is deliberately
-    # NOT linked here on Windows (see the ENABLE_MULTIPROCESS AND NOT WIN32 guard
-    # below), so without this the win64 test link fails on those two symbols while
-    # every other target succeeds.
+    # Transport helpers (src/ipc/process.cpp), for ipc_process_tests. Also Cap'n
+    # Proto-free. gridcoin_ipc would supply them, but it is deliberately NOT linked
+    # here on Windows (see the ENABLE_MULTIPROCESS AND NOT WIN32 guard below), so
+    # the test target compiles the file itself. The owner-only DACL helpers that
+    # process.cpp and handshake.cpp call are in gridcoin_util
+    # (util/dir_permissions.cpp).
     ${CMAKE_SOURCE_DIR}/src/ipc/process.cpp
     # Multiprocess connect-handshake logic (src/ipc/handshake.cpp): identity-token
     # hashing, the ClientHandshake matching policy, and CheckIdentityBinding. The
@@ -345,9 +344,9 @@ target_link_libraries(test_gridcoin PRIVATE
     ZLIB::ZLIB
 )
 
-# The IPC sources compiled in above use the Win32 DACL API (SetEntriesInAclW,
-# Get/SetNamedSecurityInfoW, InitializeSecurityDescriptor,
-# SetSecurityDescriptorDacl). gridcoin_ipc carries advapi32 for the other
+# The IPC sources compiled in above use the Win32 security API: handshake.cpp
+# calls InitializeSecurityDescriptor, SetSecurityDescriptorDacl and
+# SetSecurityDescriptorControl. gridcoin_ipc carries advapi32 for the other
 # targets, but it is not linked here on Windows, so name it directly.
 if(WIN32)
     target_link_libraries(test_gridcoin PRIVATE advapi32)

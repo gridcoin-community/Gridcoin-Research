@@ -37,7 +37,6 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <afunix.h>
-#include <aclapi.h> // SetEntriesInAclW / Set|GetNamedSecurityInfoW (advapi32)
 #endif
 
 namespace ipc {

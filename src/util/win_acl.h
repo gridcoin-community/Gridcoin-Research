@@ -78,7 +78,9 @@ constexpr uint32_t CHAIN_DIR_WRITEISH = FILE_ADD_FILE | FILE_WRITE_EA | FILE_WRI
 //! An IPC directory, where nobody else may add, remove or replace an entry.
 constexpr uint32_t IPC_DIR_WRITEISH = CHAIN_DIR_WRITEISH | FILE_ADD_SUBDIRECTORY;
 
-//! Anything that reads what a file holds.
+//! Anything that reads what a file holds. For a secret, a check with these rights is
+//! paired with FindForeignWriter(FILE_WRITEISH): a trustee holding WRITE_DAC,
+//! WRITE_OWNER or GENERIC_WRITE can grant itself read, so READISH alone is not enough.
 constexpr uint32_t READISH = FILE_READ_DATA | GENERIC_READ | GENERIC_ALL;
 } // namespace mask
 
@@ -147,7 +149,8 @@ struct ObservedAcl
 std::optional<std::string> FindForeignWriter(const ObservedAcl& acl, const std::vector<Sid>& allowed,
                                              uint32_t writeish);
 
-//! FindForeignWriter with mask::READISH.
+//! FindForeignWriter with mask::READISH. It does not see a trustee that can change the
+//! ACL to grant itself read; for a secret, call FindForeignWriter with FILE_WRITEISH too.
 std::optional<std::string> FindForeignReader(const ObservedAcl& acl, const std::vector<Sid>& allowed);
 
 //! Reason if: no DACL; owner not in \p allowed; or any Allow/OtherAllow ACE, an
