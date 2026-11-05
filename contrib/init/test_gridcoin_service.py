@@ -1185,6 +1185,19 @@ class SwitchTestBase(ServiceTestBase):
     def stashes(self, parent, prefix):
         return sorted(os.path.join(parent, n) for n in os.listdir(parent) if n.startswith(prefix))
 
+    def record_path(self, network="main"):
+        return os.path.join(self.paths.tool_state, network + ".owner")
+
+    def write_record(self, network="main", user="bob", uid=None, stash=None):
+        """The record enable leaves, for tests that set up the service side by hand."""
+        os.makedirs(self.paths.tool_state, 0o700, exist_ok=True)
+        if stash is None:
+            stash = (self.datadir + ".in-service-20260101T000000Z" if network == "main"
+                     else os.path.join(self.datadir, "testnet.in-service-20260101T000000Z"))
+        fd = os.open(self.record_path(network), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf8") as f:
+            json.dump({"uid": self.uid if uid is None else uid, "user": user, "stash": stash}, f)
+
 
 class EnableTests(SwitchTestBase):
     def test_enable_quarantines_conf_settings_db_config(self):
@@ -1268,6 +1281,7 @@ class EnableTests(SwitchTestBase):
         host = FakeHost(users=self.host.users, processes={self.uid: [4242]}, terminate_ends_processes=False)
         write_tree(os.path.join(self.home, ".GridcoinResearch"), {"wallet.dat": b"w"})
         svc_rmtree(self.target())
+        os.unlink(self.record_path())
         rc, out, err = self.run_main("enable", "bob", "--terminate-sessions", host=host)
         self.assertEqual(rc, 1)
         self.assertGreaterEqual(host.clock, 30)
@@ -1439,6 +1453,8 @@ def read_tree_from(files):
 
 class DisableTests(SwitchTestBase):
     def test_disable_refuses_existing_user_datadir(self):
+        self.write_record()
+        self.write_record("test")
         write_tree(self.target(), {"wallet.dat": b"service wallet"})
         write_tree(self.datadir, {"wallet.dat": b"made by a plain GUI meanwhile"})
         rc, out, err = self.run_main("disable", "bob")
@@ -1457,6 +1473,7 @@ class DisableTests(SwitchTestBase):
         self.assertEqual(read_tree(self.target("test")), {"wallet.dat": b"service testnet wallet"})
 
     def test_disable_refuses_without_a_service_datadir(self):
+        self.write_record()
         rc, out, err = self.run_main("disable", "bob")
         self.assertEqual(rc, 1)
         self.assertEqual(self.host.calls, [])
@@ -1521,6 +1538,7 @@ class DisableTests(SwitchTestBase):
     def test_failed_disable_leaves_the_user_side_as_it_was(self):
         # A FIFO in the service datadir stops the copy; the directories disable made go again,
         # so a rerun works once root removes it.
+        self.write_record("test")
         write_tree(self.target("test"), {"wallet.dat": b"service testnet wallet"})
         write_tree(self.datadir, {"gridcoinresearch.conf": b"x=1\n"})
         fifo = os.path.join(self.target("test"), "evil")
@@ -1534,7 +1552,60 @@ class DisableTests(SwitchTestBase):
         self.assertEqual(rc, 0, err)
         self.assertEqual(read_tree(os.path.join(self.datadir, "testnet")), {"wallet.dat": b"service testnet wallet"})
 
+    def test_enable_records_the_user_and_disable_needs_that_record(self):
+        write_tree(self.datadir, self.user_files())
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        [stash] = self.stashes(self.home, ".GridcoinResearch.in-service-")
+        st = os.stat(self.record_path())
+        self.assertEqual(st.st_mode & 0o777, 0o600)
+        with open(self.record_path(), encoding="utf8") as f:
+            self.assertEqual(json.load(f), {"uid": self.uid, "user": "bob", "stash": stash})
+        # A second enable, for anyone, is refused while the record is there.
+        write_tree(self.datadir, {"wallet.dat": b"w"})
+        self.host.calls.clear()
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn(self.record_path(), err)
+        self.assertEqual(self.host.calls, [])
+        svc_rmtree(self.datadir)
+
+        # Another user cannot take the wallet out.
+        alice_home = os.path.join(self.tmp.name, "home", "alice")
+        os.makedirs(alice_home)
+        self.host.users["alice"] = Passwd("alice", self.uid, alice_home)
+        rc, out, err = self.run_main("disable", "alice")
+        self.assertEqual(rc, 1)
+        self.assertIn("bob", err)
+        self.assertEqual(self.host.calls, [])
+        self.assertEqual(os.listdir(alice_home), [])
+        self.assertIn("wallet.dat", os.listdir(self.target()))
+
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertFalse(os.path.exists(self.record_path()))
+
+    def test_disable_refuses_without_the_record(self):
+        write_tree(self.target(), {"wallet.dat": b"service wallet"})
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn(self.record_path(), err)
+        self.assertEqual(self.host.calls, [])
+        # A record that is not root's own 0600 file is not trusted.
+        self.write_record()
+        os.chmod(self.record_path(), 0o644)
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.host.calls, [])
+        # Nor is one for a different uid under the same name.
+        os.unlink(self.record_path())
+        self.write_record(uid=self.uid + 1)
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.host.calls, [])
+
     def test_disable_refuses_running_user_processes(self):
+        self.write_record()
         write_tree(self.target(), {"wallet.dat": b"service wallet"})
         self.host.processes = {self.uid: [4242]}
         rc, out, err = self.run_main("disable", "bob")

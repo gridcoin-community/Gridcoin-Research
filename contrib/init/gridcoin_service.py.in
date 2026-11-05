@@ -1021,15 +1021,52 @@ def stash_source(parent_fd, name, src_fd, stash_name, keep, display):
             os.rmdir(name, dir_fd=parent_fd)
 
 
-def open_quarantine(paths, user, network, host):
+def open_tool_state(paths):
+    """The tool's own state directory, root's (/var/lib/gridcoin-service, from tmpfiles.d)."""
+    os.makedirs(paths.tool_state, 0o700, exist_ok=True)
+    return open_dir(paths.tool_state, uids=(os.geteuid(),))
+
+
+def owner_record_path(paths, network):
+    return os.path.join(paths.tool_state, network + ".owner")
+
+
+def read_owner_record(state_fd, paths, network):
+    """The record enable left for this network: {"uid", "user", "stash"}, or None when there is
+    none. One that is not root's own 0600 regular file, or not in that form, is refused."""
+    name = network + ".owner"
+    display = owner_record_path(paths, network)
+    if name not in os.listdir(state_fd):
+        return None
+    fd, st = open_entry(state_fd, name, display)
+    try:
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o077:
+            raise UserError("%s is not a record this tool wrote (root's own, mode 0600); refusing" % display)
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            data = f.read(MAX_CONFIG_BYTES + 1)
+    finally:
+        os.close(fd)
+    try:
+        record = json.loads(data.decode("utf8"))
+    except ValueError:
+        record = None
+    if (not isinstance(record, dict) or not isinstance(record.get("uid"), int)
+            or not isinstance(record.get("user"), str) or not isinstance(record.get("stash"), str)):
+        raise UserError("%s is not a record this tool wrote; refusing" % display)
+    return record
+
+
+def write_owner_record(state_fd, network, pw, stash_display):
+    """Record, root-only, whose wallet enable moved into this network's service and where the
+    source went, so that only disable for that user takes it out again."""
+    record = {"uid": pw.pw_uid, "user": pw.pw_name, "stash": stash_display}
+    write_new_file(state_fd, network + ".owner", (json.dumps(record) + "\n").encode("utf8"))
+
+
+def open_quarantine(state_fd, paths, user, network, host):
     """Create <tool_state>/quarantine/<user>-<network>-<UTC time>/, root's and 0700. Returns
     (fd, path)."""
-    os.makedirs(paths.tool_state, 0o700, exist_ok=True)
-    state_fd = open_dir(paths.tool_state, uids=(os.geteuid(),))
-    try:
-        root_fd = make_dir("quarantine", state_fd, os.path.join(paths.tool_state, "quarantine"))
-    finally:
-        os.close(state_fd)
+    root_fd = make_dir("quarantine", state_fd, os.path.join(paths.tool_state, "quarantine"))
     try:
         name = "%s-%s-%s" % (user, network, stamp(host))
         display = os.path.join(paths.tool_state, "quarantine", name)
@@ -1041,13 +1078,14 @@ def open_quarantine(paths, user, network, host):
     return fd, display
 
 
-def read_owned_file(dir_fd, name, owner_uid, display):
-    """Read name in dir_fd as root. It must be a regular file owned by owner_uid, so root reads
-    nothing that owner could not (a hard link to another account's file is refused)."""
+def read_owned_file(dir_fd, name, owner_uids, display):
+    """Read name in dir_fd as root. It must be a regular file owned by one of owner_uids, so root
+    reads nothing those owners could not (a hard link to another account's file is refused)."""
     fd, st = open_entry(dir_fd, name, display)
     try:
-        if not stat.S_ISREG(st.st_mode) or st.st_uid != owner_uid:
-            raise TreeError("%r is not a regular file owned by uid %d; refusing" % (display, owner_uid))
+        if not stat.S_ISREG(st.st_mode) or st.st_uid not in owner_uids:
+            raise TreeError("%r is not a regular file owned by uid %s; refusing"
+                            % (display, " or ".join(str(uid) for uid in owner_uids)))
         with os.fdopen(fd, "rb", closefd=False) as f:
             data = f.read(MAX_CONFIG_BYTES + 1)
     finally:
@@ -1061,7 +1099,7 @@ def quarantine_files(src_fd, src_display, owner_uid, q_fd):
     """Copy the QUARANTINE_TOP files of src_fd into q_fd; return their contents by name."""
     found = {}
     for name in sorted(QUARANTINE_TOP & set(os.listdir(src_fd))):
-        found[name] = read_owned_file(src_fd, name, owner_uid, os.path.join(src_display, name))
+        found[name] = read_owned_file(src_fd, name, (owner_uid,), os.path.join(src_display, name))
         write_new_file(q_fd, name, found[name])
     return found
 
@@ -1207,6 +1245,12 @@ def cmd_enable(args, net, host, paths):
         # The stash is a rename next to S, which cannot cross a mount point.
         if os.fstat(s_fd).st_dev != os.fstat(s_parent_fd).st_dev:
             raise UserError("%s is a mount point; move its contents to a plain directory first" % s_display)
+        state_fd = keep(open_tool_state(paths))
+        record = read_owner_record(state_fd, paths, args.network)
+        if record is not None:
+            raise UserError("%s records a wallet moved into the service for %s; run disable for that user first, "
+                            "or remove the record if the service datadir holds no wallet"
+                            % (owner_record_path(paths, args.network), shown(record["user"])))
         try:
             t_check_fd, t_display = open_service_dir(paths, net, acct, create=False)
         except FileNotFoundError:
@@ -1241,7 +1285,7 @@ def cmd_enable(args, net, host, paths):
         if os.geteuid() == 0 and os.fstat(t_fd).st_uid != acct.pw_uid:
             os.fchown(t_fd, acct.pw_uid, acct.pw_gid)
             os.fchmod(t_fd, 0o700)
-        q_fd, q_display = open_quarantine(paths, pw.pw_name, args.network, host)
+        q_fd, q_display = open_quarantine(state_fd, paths, pw.pw_name, args.network, host)
         keep(q_fd)
         found = quarantine_files(s_fd, s_display, pw.pw_uid, q_fd)
         testnet_entries = set() if net.testnet else {n for n in os.listdir(s_fd) if is_testnet_entry(n)}
@@ -1252,6 +1296,7 @@ def cmd_enable(args, net, host, paths):
         stash_name = s_name + STASH_INFIX + stamp(host)
         stash_display = os.path.join(os.path.dirname(s_display), stash_name)
         stash_source(s_parent_fd, s_name, s_fd, stash_name, testnet_entries, stash_display)
+        write_owner_record(state_fd, args.network, pw, stash_display)
 
         # 7. The user attaches through the group; the service runs the wallet now.
         host.add_to_group(pw.pw_name, net.attach_group)
@@ -1267,28 +1312,23 @@ def cmd_enable(args, net, host, paths):
     return 0
 
 
-def restore_conf(stash_parent_fd, prefix, parent_display, s_fd, pw, host):
-    """Copy the user's own gridcoinresearch.conf back from the newest stash that root made.
-    Returns (stash path or None, whether a conf was restored)."""
-    stash = None
-    for name in sorted((n for n in os.listdir(stash_parent_fd) if n.startswith(prefix)), reverse=True):
-        st = os.stat(name, dir_fd=stash_parent_fd, follow_symlinks=False)
-        if stat.S_ISDIR(st.st_mode) and st.st_uid == os.geteuid() and not st.st_mode & 0o077:
-            stash = name
-            break
-        print("warning: %s is not a stash this tool made; skipped" % shown(os.path.join(parent_display, name)))
-    if stash is None:
-        return None, False
-    display = os.path.join(parent_display, stash)
-    stash_fd = open_dir(stash, dir_fd=stash_parent_fd, uids=(os.geteuid(),), display=display)
+def restore_conf(stash_path, parent_fd, parent_display, prefix, s_fd, pw, host):
+    """Copy the user's own gridcoinresearch.conf back from the stash enable recorded, a root-only
+    directory next to the datadir. Returns whether there was one to restore."""
+    name = os.path.basename(stash_path)
+    if parent_fd is None or os.path.dirname(stash_path) != parent_display or not name.startswith(prefix):
+        raise UserError("the recorded stash %s is not where enable puts it" % shown(stash_path))
+    stash_fd = open_dir(name, dir_fd=parent_fd, uids=(os.geteuid(),), display=stash_path)
     try:
+        if os.fstat(stash_fd).st_mode & 0o077:
+            raise UserError("%s is not root-only" % stash_path)
         if CONF_NAME not in os.listdir(stash_fd):
-            return display, False
-        data = read_owned_file(stash_fd, CONF_NAME, pw.pw_uid, os.path.join(display, CONF_NAME))
+            return False
+        data = read_owned_file(stash_fd, CONF_NAME, (pw.pw_uid,), os.path.join(stash_path, CONF_NAME))
     finally:
         os.close(stash_fd)
     write_file_as(s_fd, CONF_NAME, data, pw, host)
-    return display, True
+    return True
 
 
 def cmd_disable(args, net, host, paths):
@@ -1300,6 +1340,17 @@ def cmd_disable(args, net, host, paths):
         def keep(fd):
             stack.callback(os.close, fd)
             return fd
+
+        # Only the user enable moved in takes the wallet out.
+        state_fd = keep(open_tool_state(paths))
+        record = read_owner_record(state_fd, paths, args.network)
+        record_display = owner_record_path(paths, args.network)
+        if record is None:
+            raise UserError("%s is missing, so no %s wallet is recorded as moved into the service; refusing"
+                            % (record_display, args.network))
+        if record["uid"] != pw.pw_uid or record["user"] != pw.pw_name:
+            raise UserError("%s records the wallet in the service as %s's (uid %d), not %s's; refusing"
+                            % (record_display, shown(record["user"]), record["uid"], pw.pw_name))
 
         # The user's side must be free: a datadir made meanwhile, by a plain GUI say, may hold
         # coins of its own. The mainnet datadir may hold testnet's.
@@ -1340,7 +1391,7 @@ def cmd_disable(args, net, host, paths):
             made.append((d_fd, "testnet"))
         else:
             s_fd = d_fd
-        q_fd, q_display = open_quarantine(paths, pw.pw_name, args.network, host)
+        q_fd, q_display = open_quarantine(state_fd, paths, pw.pw_name, args.network, host)
         keep(q_fd)
         testnet_entries = set() if net.testnet else {"testnet"}
         try:
@@ -1356,27 +1407,29 @@ def cmd_disable(args, net, host, paths):
             raise
         report_quarantine(found, q_display, carry_quarantined(found, patterns, q_fd, s_fd, pw, host))
 
-        # The user's own conf comes back from the stash enable made; a failure here leaves
+        # The user's own conf comes back from the stash enable recorded; a failure here leaves
         # the wallet where it now is and says so.
         if net.testnet:
             stash_parent_fd, prefix = d_fd, "testnet" + STASH_INFIX
         else:
             stash_parent_fd, prefix = home_fd, DATADIR_NAME + STASH_INFIX
+        stash_display = record["stash"]
         try:
-            stash_display, restored = restore_conf(stash_parent_fd, prefix, os.path.dirname(s_display), s_fd, pw, host)
+            restored = restore_conf(stash_display, stash_parent_fd, os.path.dirname(s_display), prefix, s_fd, pw,
+                                    host)
         except (UserError, TreeError, CopyError, OSError) as e:
             print("warning: %s was not restored: %s" % (CONF_NAME, e))
-            stash_display, restored = None, False
+            restored = False
 
         # Empty the service datadir as its own account.
         run_as(host, acct, lambda: remove_new_entries(t_fd, testnet_entries), (t_fd,))
         host.remove_from_group(pw.pw_name, net.attach_group)
+        os.unlink(args.network + ".owner", dir_fd=state_fd)
 
     print("%s's wallet is back in %s; %s.service is disabled." % (pw.pw_name, s_display, net.daemon))
     if restored:
         print("%s's own %s was restored from %s." % (pw.pw_name, CONF_NAME, stash_display))
-    if stash_display is not None:
-        print("%s can be removed once the wallet is verified." % stash_display)
+    print("%s can be removed once the wallet is verified." % shown(stash_display))
     print("For a core under %s's own account: %s enable-user %s" % (pw.pw_name, net.tool_name, pw.pw_name))
     return 0
 
