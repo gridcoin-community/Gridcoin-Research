@@ -2608,6 +2608,26 @@ def system_dropped_words(net, words):
             and not core_option(word).startswith("-conf=")]
 
 
+def refuse_testnet_line(fd, path):
+    """Refuse the conf open at fd for the mainnet unit when any line names testnet: testnet= at
+    the top level, the first value winning, would have made the core a testnet node, and rather
+    than read it as the core does, any testnet= line refuses, in a section, with a network
+    prefix, a leading dash or negated (notestnet=) too. Comments are no setting."""
+    with os.fdopen(fd, "rb", closefd=False) as f:
+        data = f.read(MAX_CONFIG_BYTES + 1)
+    if len(data) > MAX_CONFIG_BYTES:
+        raise UserError("%s is larger than %d bytes; refusing" % (path, MAX_CONFIG_BYTES))
+    for line in data.decode("utf8", errors="replace").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name = line.split("=", 1)[0].strip().rsplit(".", 1)[-1].lstrip("-")
+        if name in ("testnet", "notestnet"):
+            raise UserError("%s has a testnet= line, so the core that read it may not have been a mainnet node; "
+                            "if it is a mainnet node, remove that line, and if it is a testnet node, run it from "
+                            "the testnet package's unit, then rerun the switch-over" % path)
+
+
 def check_conf_writers(net, path, name, datadir, host):
     """Refuse a configuration file the service is to read, or a directory above it up to /, that
     anyone but root and the service account can write: that account could add options such as
@@ -2656,6 +2676,8 @@ def check_conf_writers(net, path, name, datadir, host):
             if not stat.S_ISREG(st.st_mode):
                 raise UserError("%s is not a regular file" % name)
             check(st, path, "it")
+            if not net.testnet:
+                refuse_testnet_line(file_fd, path)
         finally:
             os.close(file_fd)
     finally:

@@ -4004,6 +4004,41 @@ class SwitchOverTests(ServiceTestBase):
                 with open(state, encoding="utf8") as f:
                     self.assertEqual(f.read(), "system-core\n")
 
+    def test_switch_over_refuses_a_mainnet_conf_that_names_testnet(self):
+        # A testnet= line in the conf a mainnet unit is to carry may have made the core a testnet
+        # node; any such line refuses, wherever and however it is written.
+        data = os.path.join(self.tmp.name, "data", "grc")
+        os.makedirs(data)
+        inside = os.path.join(data, "gridcoinresearch.conf")
+        outside = os.path.join(self.tmp.name, "etc-other", "gridcoin.conf")
+        os.makedirs(os.path.dirname(outside))
+        for words, conf in (("-datadir=%s" % data, inside), ("-conf=%s -datadir=%s" % (outside, data), outside)):
+            for line in ("testnet=1", "testnet=0", "  testnet = 1", "[main]\ntestnet=1", "main.testnet=1",
+                         "-testnet=1", "notestnet=1"):
+                with self.subTest(conf=conf, line=line):
+                    svc_rmtree(self.system_unit_dir())
+                    self.write_text(conf, "rpcuser=x\n%s\naddnode=a\n" % line)
+                    override = self.system_override(words)
+                    state = self.write_state("system-core\n")
+                    rc, out, err = self.run_main("switch-over", "--state=" + state)
+                    self.assertEqual(rc, 1)
+                    self.assertIn("%s has a testnet= line" % conf, err)
+                    self.assertTrue(os.path.exists(override))
+                    with open(state, encoding="utf8") as f:
+                        self.assertEqual(f.read(), "system-core\n")
+        # A comment is no setting, and the testnet unit's conf may set testnet=.
+        svc_rmtree(self.system_unit_dir())
+        self.write_text(inside, "rpcuser=x\n# testnet=1\n")
+        self.system_override("-datadir=%s" % data)
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+        self.assertEqual(rc, 0, err)
+        os.makedirs(os.path.join(data, "testnet"))
+        self.write_text(os.path.join(data, "testnet", "gridcoinresearch.conf"), "testnet=1\n")
+        self.system_override("-testnet -datadir=%s" % data, daemon="gridcointestnetd")
+        state = self.write_state("system-core\n", network="test")
+        rc, out, err = self.run_main("switch-over", "--state=" + state, "--network=test")
+        self.assertEqual(rc, 0, err)
+
     def test_switch_over_refuses_a_conf_others_can_write(self):
         # A conf anyone but root and the service account can write, or one in such a directory,
         # would let that account add options such as blocknotify= to the service.
