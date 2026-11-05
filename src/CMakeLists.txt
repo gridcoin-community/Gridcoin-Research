@@ -542,7 +542,7 @@ if(ENABLE_DAEMON)
             )
         endif()
         install(FILES "${CMAKE_SOURCE_DIR}/share/gridcoin/refused-setting-keys.txt" COMPONENT daemon
-            DESTINATION "${CMAKE_INSTALL_DATADIR}/gridcoin"
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/${GRC_SHARE_SUBDIR}"
         )
         install(FILES "${CMAKE_SOURCE_DIR}/doc/gridcoinresearchd.1" COMPONENT daemon
             DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"

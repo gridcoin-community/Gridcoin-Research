@@ -2,26 +2,37 @@
 # Copyright (c) 2026 The Gridcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://opensource.org/licenses/mit-license.php.
-"""Tests for gridcoin-service, same-account commands.
+"""Tests for gridcoin-service.
 
 Every side effect goes through a FakeHost and a Paths rooted in a temporary
-directory. No test runs systemctl, usermod, loginctl or any other host command.
+directory. No test runs systemctl, gpasswd, loginctl or any other host command.
+The tests run unprivileged, so the copies run as the test user throughout.
 """
 
 import collections
 import contextlib
 import dataclasses
+import datetime
 import importlib.machinery
 import importlib.util
 import io
+import json
 import os
 import re
+import shutil
+import socket
+import subprocess
+import sys
+import tarfile
 import tempfile
 import unittest
+from unittest import mock
 
 TOOL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gridcoin_service.py.in")
-SYSTEMD_UNITS_CMAKE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "cmake",
-                                   "systemd_units.cmake")
+SOURCE_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+SYSTEMD_UNITS_CMAKE = os.path.join(SOURCE_ROOT, "cmake", "systemd_units.cmake")
+SRC_CMAKELISTS = os.path.join(SOURCE_ROOT, "src", "CMakeLists.txt")
+PATTERNS_FILE = os.path.join(SOURCE_ROOT, "share", "gridcoin", "refused-setting-keys.txt")
 
 
 def load_tool(path=TOOL_PATH):
@@ -34,13 +45,16 @@ def load_tool(path=TOOL_PATH):
 
 svc = load_tool()
 
-Passwd = collections.namedtuple("Passwd", "pw_name pw_uid pw_dir")
+Passwd = collections.namedtuple("Passwd", "pw_name pw_uid pw_dir pw_gid", defaults=(os.getgid(),))
 CONFIGURED = {"bindir": "/usr/bin", "default_network": "main", "python3": "/usr/bin/python3",
-              "libexec_subdir_main": "gridcoin", "libexec_subdir_test": "gridcointestnet"}
+              "libexec_subdir_main": "gridcoin", "libexec_subdir_test": "gridcointestnet",
+              "refused_keys_main": "/usr/share/gridcoin/refused-setting-keys.txt",
+              "refused_keys_test": "/usr/share/gridcoin/refused-setting-keys.txt"}
 
 
 class FakeHost:
-    def __init__(self, users=None, groups=None, root=True, enabled=(), active=(), fail=()):
+    def __init__(self, users=None, groups=None, root=True, enabled=(), active=(), fail=(), processes=None,
+                 terminate_ends_processes=True):
         self.users = users if users is not None else {}
         self.groups = groups if groups is not None else {}
         self.root = root
@@ -48,6 +62,45 @@ class FakeHost:
         self.enabled = set(enabled)
         self.active = set(active)
         self.calls = []
+        self.processes = dict(processes) if processes is not None else {}
+        self.terminate_ends_processes = terminate_ends_processes
+        self.clock = 0.0
+        self.stamps = 0
+
+    def user_processes(self, uid):
+        return list(self.processes.get(uid, []))
+
+    def terminate_user(self, name):
+        self.calls.append(("terminate_user", name))
+        if self.terminate_ends_processes:
+            self.processes.clear()
+
+    def add_to_group(self, user, group):
+        self.calls.append(("add_to_group", user, group))
+
+    def remove_from_group(self, user, group):
+        self.calls.append(("remove_from_group", user, group))
+
+    def sleep(self, seconds):
+        self.clock += seconds
+
+    def monotonic(self):
+        return self.clock
+
+    def utcnow(self):
+        # One second later on every call, so two commands in one test get distinct names.
+        self.stamps += 1
+        return (datetime.datetime(2026, 11, 4, 12, 0, tzinfo=datetime.timezone.utc)
+                + datetime.timedelta(seconds=self.stamps))
+
+    def setgroups(self, groups):
+        self.calls.append(("setgroups", list(groups)))
+
+    def setgid(self, gid):
+        self.calls.append(("setgid", gid))
+
+    def setuid(self, uid):
+        self.calls.append(("setuid", uid))
 
     def systemctl(self, *args):
         self.calls.append(args)
@@ -191,6 +244,39 @@ class CMakeValuesTests(unittest.TestCase):
             configured = load_tool(path)
         self.assertEqual(configured.NETWORKS["main"].subdir, values["MAIN"])
         self.assertEqual(configured.NETWORKS["test"].subdir, values["TEST"])
+
+    def test_refused_keys_path_comes_from_cmake(self):
+        with open(SYSTEMD_UNITS_CMAKE, encoding="utf8") as f:
+            cmake = f.read()
+        subdirs = dict(re.findall(r'set\(GRC_SHARE_SUBDIR_(MAIN|TEST) "([^"]*)"\)', cmake))
+        self.assertEqual(sorted(subdirs), ["MAIN", "TEST"])
+        for net in ("MAIN", "TEST"):
+            self.assertIn('set(GRC_REFUSED_KEYS_FILE_%s "${CMAKE_INSTALL_FULL_DATADIR}/${GRC_SHARE_SUBDIR_%s}/'
+                          'refused-setting-keys.txt")' % (net, net), cmake)
+            branch = re.search(r'GRC_UNIT_NETWORK STREQUAL "%s"\)(.*?)(?:elseif|else)\(' % net.lower(), cmake, re.S)
+            self.assertIsNotNone(branch, net)
+            self.assertIn('set(GRC_SHARE_SUBDIR "${GRC_SHARE_SUBDIR_%s}")' % net, branch.group(1))
+        # The file is installed where this network's tool looks for it.
+        with open(SRC_CMAKELISTS, encoding="utf8") as f:
+            src = f.read()
+        self.assertRegex(src, r'install\(FILES "\$\{CMAKE_SOURCE_DIR\}/share/gridcoin/refused-setting-keys\.txt"'
+                              r' COMPONENT daemon\s+DESTINATION "\$\{CMAKE_INSTALL_DATADIR\}/\$\{GRC_SHARE_SUBDIR\}"')
+
+        with open(TOOL_PATH, encoding="utf8") as f:
+            text = f.read()
+        expected = {}
+        for net in ("MAIN", "TEST"):
+            placeholder = "@GRC_REFUSED_KEYS_FILE_%s@" % net
+            self.assertIn(placeholder, text)
+            expected[net] = "/usr/share/%s/refused-setting-keys.txt" % subdirs[net]
+            text = text.replace(placeholder, expected[net])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "gridcoin_service.py")
+            with open(path, "w", encoding="utf8") as f:
+                f.write(text)
+            configured = load_tool(path)
+        self.assertEqual(configured.NETWORKS["main"].refused_keys, expected["MAIN"])
+        self.assertEqual(configured.NETWORKS["test"].refused_keys, expected["TEST"])
 
 
     def test_tmpfiles_paths_are_declared_once_across_networks(self):
@@ -614,6 +700,804 @@ class FixRoundTests(ServiceTestBase):
         self.assertEqual(len(calls), 3)
         for kw in calls:
             self.assertEqual(kw["env"], {"PATH": "/usr/bin:/bin"})
+
+
+def write_tree(root, files):
+    """Create files ({relative path: bytes}) below root, with their directories."""
+    for rel, data in files.items():
+        path = os.path.join(root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(data)
+
+
+def read_tree(root):
+    """Return {relative path: bytes} for every regular file and "<dir>/" for every directory below root."""
+    found = {}
+    for dirpath, dirnames, filenames in os.walk(root):
+        rel_dir = os.path.relpath(dirpath, root)
+        for name in dirnames:
+            found[os.path.normpath(os.path.join(rel_dir, name)) + "/"] = None
+        for name in filenames:
+            found[os.path.normpath(os.path.join(rel_dir, name))] = read_bytes(os.path.join(dirpath, name))
+    return found
+
+
+def read_bytes(path):
+    with open(path, "rb") as f:
+        return f.read()
+
+
+def make_socket_file(path):
+    # AF_UNIX paths are limited to about 108 bytes, so bind by a relative name.
+    old = os.getcwd()
+    os.chdir(os.path.dirname(path))
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.bind(os.path.basename(path))
+        s.close()
+    finally:
+        os.chdir(old)
+
+
+def crafted_stream(members):
+    """A tar stream with the given (name, type, data) members, written without tarfile's own checks."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w|", format=tarfile.PAX_FORMAT) as tar:
+        for name, kind, data in members:
+            info = tarfile.TarInfo(name)
+            info.type = kind
+            if kind == tarfile.SYMTYPE or kind == tarfile.LNKTYPE:
+                info.linkname = data.decode()
+                tar.addfile(info)
+            elif kind == tarfile.DIRTYPE:
+                tar.addfile(info)
+            else:
+                info.size = len(data)
+                tar.addfile(info, io.BytesIO(data))
+    buf.seek(0)
+    return buf
+
+
+class RefusedKeyTests(unittest.TestCase):
+    def setUp(self):
+        self.patterns = svc.load_refused_patterns(PATTERNS_FILE)
+
+    def test_match_follows_MatchSettingKeyPattern(self):
+        # The vectors of setting_key_patterns_match_whole_names (src/test/util_tests.cpp), which
+        # pin MatchSettingKeyPattern in src/util/system.cpp.
+        vectors = [
+            ("*notify", "blocknotify", True),
+            ("*notify", "notify", True),
+            ("*notify", "notifyx", False),
+            ("rpc*", "rpc", True),
+            ("clear*history", "clearbeaconhistory", True),
+            ("clear*history", "clearbeaconhistoryx", False),
+            ("min", "min", True),
+            ("min", "mininput", False),
+            ("rpc*", "RPCPORT", False),
+            ("*", "", True),
+            ("a*b*c", "acb", False),
+        ]
+        for pattern, name, expected in vectors:
+            self.assertEqual(svc.match_setting_key_pattern(pattern, name), expected, (pattern, name))
+
+    def test_refused_keys_follow_IsRefusedSettingKey(self):
+        # IsRefusedSettingKey (src/util/system.cpp) drops everything up to the first '.' and keeps a
+        # leading "no"; the first six are refused_setting_keys_ignore_a_section_prefix_but_not_no
+        # (src/test/util_tests.cpp).
+        vectors = [
+            ("blocknotify", True),
+            ("test.blocknotify", True),
+            ("rpcpassword", True),
+            ("staking", False),
+            ("noncruncher", False),
+            ("printtoconsole", False),
+            ("main.rpcpassword", True),
+            ("RPCPASSWORD", False),
+            ("noblocknotify", True),
+            ("norpcpassword", False),
+            ("main.test.blocknotify", True),
+            ("x.rpc.y", True),
+        ]
+        for key, expected in vectors:
+            self.assertEqual(svc.is_refused_key(key, self.patterns), expected, key)
+
+    def test_pattern_file_grammar_is_the_build_step_s(self):
+        # build-aux/cmake/refusedkeys2header.cmake: '\r' removed, blank and '#' lines skipped,
+        # every other line ^[a-z0-9_*-]+$, at least one pattern.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "keys.txt")
+            for text, ok in (("# c\r\nrpc*\r\n\r\n*notify\n", True), ("Rpc*\n", False), ("  # c\nrpc*\n", False),
+                             ("rpc* \n", False), ("# only\n\n", False), ("rpc?\n", False)):
+                with open(path, "w", encoding="utf8", newline="") as f:
+                    f.write(text)
+                if ok:
+                    self.assertEqual(svc.load_refused_patterns(path), ["rpc*", "*notify"])
+                else:
+                    with self.assertRaises(svc.UserError, msg=repr(text)):
+                        svc.load_refused_patterns(path)
+            with self.assertRaises(svc.UserError):
+                svc.load_refused_patterns(os.path.join(tmp, "missing.txt"))
+
+    def test_sanitize_settings_strips_what_the_core_refuses(self):
+        # ReadSettingsFile (src/util/system.cpp) refuses IsRefusedSettingKey(name) of each key as written.
+        text = json.dumps({"blocknotify": "x", "main.walletnotify": "x", "test.rpcport": 1, "noncruncher": True,
+                           "norpcpassword": "x", "staking": True, "addnode": ["a", "b"]})
+        out, removed = svc.sanitize_settings(text, self.patterns)
+        self.assertEqual(removed, ["blocknotify", "main.walletnotify", "test.rpcport"])
+        self.assertEqual(json.loads(out), {"noncruncher": True, "norpcpassword": "x", "staking": True,
+                                           "addnode": ["a", "b"]})
+        # The core refuses the file on a duplicate key, a non-object or a non-JSON constant.
+        for bad in ('{"a": 1, "a": 2}', "[]", '{"a": NaN}', "", "{"):
+            with self.assertRaises(ValueError, msg=bad):
+                svc.sanitize_settings(bad, self.patterns)
+
+    def test_sanitize_conf_follows_the_config_reader(self):
+        # GetConfigOptions (src/util/system.cpp) cuts at '#', trims, prefixes "<section>." after a
+        # [section] line; InterpretOption splits at the first '.' and reads a leading "no" as negation.
+        text = ("# rpcpassword=commented\n"
+                "rpcuser=u\n"
+                "staking=1\n"
+                "noblocknotify=0\n"
+                "norpcpassword=1\n"
+                "noncruncher=1\n"
+                "main.walletnotify=x\n"
+                "[test]\n"
+                "rpcpassword=hunter2\n"
+                "addnode=1.2.3.4\n"
+                "  blocknotify = x # trailing\n"
+                "rpcSecretAloneOnALine\n"
+                "-daemon=1\n")
+        out, removed = svc.sanitize_conf(text, self.patterns)
+        self.assertEqual(removed, ["rpcuser", "noblocknotify", "norpcpassword", "main.walletnotify",
+                                   "test.rpcpassword", "test.blocknotify", "line 12 (not a setting)",
+                                   "line 13 (not a setting)"])
+        self.assertEqual(out, "# rpcpassword=commented\nstaking=1\nnoncruncher=1\n[test]\naddnode=1.2.3.4\n")
+        self.assertNotIn("hunter2", " ".join(removed))
+        self.assertNotIn("Secret", " ".join(removed))
+
+    def test_every_command_line_only_example_is_refused(self):
+        # The pattern file covers the switch's own concerns: commands, files and secrets.
+        for key in ("blocknotify", "walletnotify", "alertnotify", "rpcpassword", "rpcuser", "rpcallowip",
+                    "conf", "includeconf", "datadir", "wallet", "walletdir", "autounlocksocket", "ipcbind"):
+            self.assertTrue(svc.is_refused_key(key, self.patterns), key)
+
+
+class CopyTests(ServiceTestBase):
+    def setUp(self):
+        super().setUp()
+        self.src = os.path.join(self.tmp.name, "src")
+        self.dst = os.path.join(self.tmp.name, "dst")
+        os.makedirs(self.src)
+        os.makedirs(self.dst)
+
+    def copy(self, exclude=frozenset()):
+        svc.copy_as(self.src, self.dst, "bob", "bob", set(exclude), self.host)
+
+    def test_copy_makes_fresh_inodes(self):
+        write_tree(self.src, {"wallet.dat": b"w" * 70000, "a/b/c.dat": b"abc", "a/empty": b"", ".lock": b"",
+                              "walletbackups/one": b"1"})
+        os.makedirs(os.path.join(self.src, "emptydir"))
+        os.link(os.path.join(self.src, "wallet.dat"), os.path.join(self.src, "a", "hardlink.dat"))
+        self.copy(exclude={".lock"})
+        src_tree = read_tree(self.src)
+        del src_tree[".lock"]
+        self.assertEqual(read_tree(self.dst), src_tree)
+        src_inodes = set()
+        for dirpath, dirnames, filenames in os.walk(self.src):
+            for name in dirnames + filenames:
+                src_inodes.add(os.lstat(os.path.join(dirpath, name)).st_ino)
+        dst_inodes = []
+        for dirpath, dirnames, filenames in os.walk(self.dst):
+            for name in filenames:
+                st = os.lstat(os.path.join(dirpath, name))
+                self.assertEqual(st.st_mode & 0o777, 0o600, name)
+                self.assertEqual(st.st_nlink, 1, name)
+                dst_inodes.append(st.st_ino)
+            for name in dirnames:
+                st = os.lstat(os.path.join(dirpath, name))
+                self.assertEqual(st.st_mode & 0o777, 0o700, name)
+                dst_inodes.append(st.st_ino)
+        self.assertEqual(len(dst_inodes), len(set(dst_inodes)))
+        self.assertFalse(src_inodes & set(dst_inodes))
+
+    def test_copy_refuses_symlink_fifo_and_socket(self):
+        outside = os.path.join(self.tmp.name, "outside")
+        with open(outside, "wb") as f:
+            f.write(b"secret")
+        makers = {
+            "symlink": lambda p: os.symlink(outside, p),
+            "dirsymlink": lambda p: os.symlink(self.tmp.name, p),
+            "fifo": os.mkfifo,
+            "socket": make_socket_file,
+        }
+        for kind, make in makers.items():
+            for where in ("bad", "a/b/bad"):
+                with self.subTest(kind=kind, where=where):
+                    for d in (self.src, self.dst):
+                        svc_rmtree(d)
+                        os.makedirs(d)
+                    write_tree(self.src, {"a/b/before": b"1", "a/b/z_after": b"2", "z_top": b"3"})
+                    write_tree(self.dst, {"keep": b"k"})
+                    make(os.path.join(self.src, where))
+                    with self.assertRaises(svc.TreeError) as cm:
+                        self.copy()
+                    self.assertIn(where, str(cm.exception))
+                    self.assertNotIn("secret", str(cm.exception))
+                    # Nothing from this run is left in the target; what was there stays.
+                    self.assertEqual(read_tree(self.dst), {"keep": b"k"})
+                    with self.assertRaises(svc.TreeError):
+                        svc.stream_tree(self.src, io.BytesIO(), set())
+
+    def test_copy_target_entry_that_exists_fails_and_cleans_up(self):
+        write_tree(self.src, {"a/x": b"1", "wallet.dat": b"w"})
+        write_tree(self.dst, {"wallet.dat": b"theirs"})
+        with self.assertRaises(svc.CopyError):
+            self.copy()
+        self.assertEqual(read_tree(self.dst), {"wallet.dat": b"theirs"})
+
+    def test_extract_rejects_traversal_names(self):
+        work = os.path.join(self.tmp.name, "work")
+        # Each case and the check that must refuse it. The names are refused by name before any
+        # lookup; a later layer (the parent must be a directory of this stream, O_EXCL) would
+        # stop most of them too, so the message is what pins the first.
+        cases = [
+            ([("../x", tarfile.REGTYPE, b"x")], "plain relative name"),
+            ([("/abs", tarfile.REGTYPE, b"x")], "plain relative name"),
+            ([("a", tarfile.DIRTYPE, b""), ("a/../../x", tarfile.REGTYPE, b"x")], "plain relative name"),
+            ([("a", tarfile.DIRTYPE, b""), ("a/..", tarfile.DIRTYPE, b"")], "plain relative name"),
+            ([("./x", tarfile.REGTYPE, b"x")], "plain relative name"),
+            ([("a", tarfile.DIRTYPE, b""), ("a//x", tarfile.REGTYPE, b"x")], "plain relative name"),
+            ([("..", tarfile.DIRTYPE, b"")], "plain relative name"),
+            ([("link", tarfile.SYMTYPE, b"../outside")], "only directories and regular files"),
+            ([("ok", tarfile.REGTYPE, b"1"), ("hard", tarfile.LNKTYPE, b"ok")], "only directories and regular files"),
+            ([("dev", tarfile.CHRTYPE, b"")], "only directories and regular files"),
+            ([("fifo", tarfile.FIFOTYPE, b"")], "only directories and regular files"),
+            ([("nodir/x", tarfile.REGTYPE, b"x")], "not earlier in the stream"),
+        ]
+        for members, reason in cases:
+            with self.subTest(members=[m[0] for m in members]):
+                svc_rmtree(work)
+                dst = os.path.join(work, "a", "dst")
+                os.makedirs(dst)
+                with self.assertRaisesRegex(svc.TreeError, reason):
+                    svc.extract_stream(crafted_stream(members), dst)
+                self.assertFalse(os.path.lexists(os.path.join(work, "x")))
+                self.assertFalse(os.path.lexists(os.path.join(work, "a", "x")))
+                for name in ("link", "hard", "dev", "fifo", "nodir"):
+                    self.assertFalse(os.path.lexists(os.path.join(dst, name)))
+        # A second file of the same name is never written over.
+        svc_rmtree(work)
+        os.makedirs(os.path.join(work, "dst"))
+        with self.assertRaises(FileExistsError):
+            svc.extract_stream(crafted_stream([("x", tarfile.REGTYPE, b"1"), ("x", tarfile.REGTYPE, b"2")]),
+                               os.path.join(work, "dst"))
+        self.assertEqual(read_bytes(os.path.join(work, "dst", "x")), b"1")
+
+    def test_root_reads_only_files_of_the_source_owner(self):
+        # Root reads the quarantined files itself, so each must belong to the side it comes from:
+        # a hard link to another account's file would otherwise be read with root's rights.
+        write_tree(self.src, {"gridcoinresearch.conf": b"staking=1\n", "DB_CONFIG": b"x"})
+        src_fd = os.open(self.src, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, src_fd)
+        q_fd = os.open(self.dst, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, q_fd)
+        with self.assertRaisesRegex(svc.TreeError, "owned by uid"):
+            svc.quarantine_files(src_fd, self.src, os.getuid() + 1, q_fd)
+        self.assertEqual(os.listdir(self.dst), [])
+        found = svc.quarantine_files(src_fd, self.src, os.getuid(), q_fd)
+        self.assertEqual(found, {"gridcoinresearch.conf": b"staking=1\n", "DB_CONFIG": b"x"})
+        self.assertEqual(read_tree(self.dst), found)
+
+    def test_removal_refuses_an_rmtree_that_follows_symlinks(self):
+        write_tree(self.dst, {"a/b": b"1", "c": b"2"})
+        dst_fd = os.open(self.dst, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, dst_fd)
+        # In a child, as in the tool: the removal changes the working directory.
+        with mock.patch.object(svc.shutil.rmtree, "avoids_symlink_attacks", False):
+            with self.assertRaisesRegex(svc.CopyError, "can follow symlinks"):
+                svc.run_as(self.host, self.host.users["bob"], lambda: svc.remove_new_entries(dst_fd, set()),
+                           (dst_fd,))
+        self.assertEqual(read_tree(self.dst), {"a/": None, "a/b": b"1", "c": b"2"})
+        svc.run_as(self.host, self.host.users["bob"], lambda: svc.remove_new_entries(dst_fd, {"c"}), (dst_fd,))
+        self.assertEqual(read_tree(self.dst), {"c": b"2"})
+
+    def test_extract_accepts_plain_members_and_counts_bytes(self):
+        stream = crafted_stream([("a", tarfile.DIRTYPE, b""), ("a/f", tarfile.REGTYPE, b"12345"),
+                                 ("g", tarfile.REGTYPE, b"")])
+        self.assertEqual(svc.extract_stream(stream, self.dst), 5)
+        self.assertEqual(read_tree(self.dst), {"a/": None, "a/f": b"12345", "g": b""})
+
+    def test_extract_refuses_data_after_the_archive(self):
+        stream = crafted_stream([("f", tarfile.REGTYPE, b"1")])
+        raw = stream.getvalue() + b"trailing"
+        with self.assertRaises(svc.TreeError):
+            svc.extract_stream(io.BytesIO(raw), self.dst)
+
+
+def svc_rmtree(path):
+    if os.path.lexists(path):
+        shutil.rmtree(path)
+
+
+def hold_lock_in_other_process(test, lock_path):
+    """Hold the core's fcntl lock on lock_path from a second process until the test ends."""
+    code = ("import fcntl, os, sys\n"
+            "fd = os.open(sys.argv[1], os.O_RDWR)\n"
+            "fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+            "print('locked', flush=True)\n"
+            "sys.stdin.read()\n")
+    proc = subprocess.Popen([sys.executable, "-I", "-c", code, lock_path], stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE)
+    test.addCleanup(proc.wait)
+    test.addCleanup(proc.stdin.close)
+    test.addCleanup(proc.stdout.close)
+    test.assertEqual(proc.stdout.readline(), b"locked\n")
+
+
+class LockTests(ServiceTestBase):
+    def test_lock_absent_held_and_symlinked(self):
+        d = os.path.join(self.tmp.name, "d")
+        os.makedirs(d)
+        self.assertIsNone(svc.hold_datadir_lock(d))
+        lock = os.path.join(d, ".lock")
+        open(lock, "wb").close()
+        fd = svc.hold_datadir_lock(d)
+        self.assertIsInstance(fd, int)
+        os.close(fd)
+        hold_lock_in_other_process(self, lock)
+        with self.assertRaises(svc.UserError):
+            svc.hold_datadir_lock(d)
+        dir_fd = os.open(d, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, dir_fd)
+        with self.assertRaises(svc.UserError):
+            svc.hold_datadir_lock(dir_fd)
+        e = os.path.join(self.tmp.name, "e")
+        os.makedirs(e)
+        os.symlink(lock, os.path.join(e, ".lock"))
+        with self.assertRaises(svc.UserError):
+            svc.hold_datadir_lock(e)
+
+
+class PrivilegeTests(ServiceTestBase):
+    def test_drop_order_is_groups_gid_uid(self):
+        host = FakeHost()
+        svc.drop_privileges(host, Passwd("gridcoin", 990, "/var/lib/gridcoinresearchd", 991))
+        self.assertEqual(host.calls, [("setgroups", []), ("setgid", 991), ("setuid", 990)])
+
+    def test_real_host_checks_each_drop_result(self):
+        host = svc.Host()
+        with mock.patch.object(svc.os, "setgroups"), mock.patch.object(svc.os, "getgroups", return_value=[27]):
+            with self.assertRaisesRegex(svc.StepError, "setgroups.*did not take effect"):
+                host.setgroups([])
+        with mock.patch.object(svc.os, "setgid"), mock.patch.object(svc.os, "getresgid", return_value=(0, 991, 0)):
+            with self.assertRaisesRegex(svc.StepError, "setgid.*did not take effect"):
+                host.setgid(991)
+        with mock.patch.object(svc.os, "setuid", side_effect=[None, PermissionError()]), \
+                mock.patch.object(svc.os, "getresuid", return_value=(990, 990, 0)):
+            with self.assertRaisesRegex(svc.StepError, "setuid.*did not take effect"):
+                host.setuid(990)
+        # A drop that could be undone is refused too.
+        state = {"uid": 0}
+
+        def fake_setuid(uid):
+            state["uid"] = uid
+
+        with mock.patch.object(svc.os, "setuid", side_effect=fake_setuid), \
+                mock.patch.object(svc.os, "getresuid", side_effect=lambda: (state["uid"],) * 3):
+            with self.assertRaisesRegex(svc.StepError, "could be undone"):
+                host.setuid(990)
+
+    def test_copy_as_drops_each_child_to_its_user_when_root(self):
+        src = os.path.join(self.tmp.name, "src")
+        dst = os.path.join(self.tmp.name, "dst")
+        write_tree(src, {"f": b"1"})
+        os.makedirs(dst)
+        self.host.users["gridcoin"] = Passwd("gridcoin", self.uid, "/", 4321)
+        log = os.path.join(self.tmp.name, "drops")
+
+        def record(host, pw):
+            with open(log, "a", encoding="utf8") as f:
+                f.write("%s %s\n" % (pw.pw_name, pw.pw_gid))
+
+        with mock.patch.object(svc, "drop_privileges", record), mock.patch.object(svc.os, "geteuid", return_value=0):
+            svc.copy_as(src, dst, "bob", "gridcoin", set(), self.host)
+        with open(log, encoding="utf8") as f:
+            self.assertEqual(sorted(f.read().splitlines()), ["bob %d" % os.getgid(), "gridcoin 4321"])
+        # Unprivileged, nothing is dropped.
+        os.unlink(log)
+        svc_rmtree(dst)
+        os.makedirs(dst)
+        with mock.patch.object(svc, "drop_privileges", record):
+            svc.copy_as(src, dst, "bob", "gridcoin", set(), self.host)
+        self.assertFalse(os.path.exists(log))
+
+    def test_real_host_lists_processes_by_uid(self):
+        self.assertIn(os.getpid(), svc.Host().user_processes(os.getuid()))
+
+
+class SwitchTestBase(ServiceTestBase):
+    ORIGINAL_CONF = b"rpcuser=u\nrpcpassword=SECRETPW\nblocknotify=/bin/evil %s\nstaking=1\n"
+    ORIGINAL_SETTINGS = json.dumps({"blocknotify": "evil", "rpcpassword": "SECRETJSON", "staking": True}).encode()
+
+    def setUp(self):
+        super().setUp()
+        for name in ("gridcoin", "gridcointestnet"):
+            self.host.users[name] = Passwd(name, self.uid, os.path.join(self.paths.var_lib, name))
+        os.makedirs(self.paths.var_lib)
+        saved = svc.NETWORKS
+        svc.NETWORKS = {k: dataclasses.replace(v, refused_keys=PATTERNS_FILE) for k, v in saved.items()}
+        self.addCleanup(setattr, svc, "NETWORKS", saved)
+        self.datadir = os.path.join(self.home, ".GridcoinResearch")
+
+    def user_files(self):
+        return {
+            "wallet.dat": b"wallet",
+            "walletbackups/wallet-1.dat": b"backup",
+            "blocks/blk0001.dat": b"\0" * 5000,
+            "gridcoinresearch.conf": self.ORIGINAL_CONF,
+            "gridcoinsettings.json": self.ORIGINAL_SETTINGS,
+            "DB_CONFIG": b"set_lg_dir /tmp\n",
+            ".lock": b"",
+            "ipc.cookie": b"cookie",
+        }
+
+    def target(self, network="main"):
+        if network == "main":
+            return os.path.join(self.paths.var_lib, "gridcoinresearchd")
+        return os.path.join(self.paths.var_lib, "gridcointestnetd", "testnet")
+
+    def quarantine_dirs(self):
+        root = os.path.join(self.paths.tool_state, "quarantine")
+        return sorted(os.path.join(root, n) for n in os.listdir(root)) if os.path.isdir(root) else []
+
+    def stashes(self, parent, prefix):
+        return sorted(os.path.join(parent, n) for n in os.listdir(parent) if n.startswith(prefix))
+
+
+class EnableTests(SwitchTestBase):
+    def test_enable_quarantines_conf_settings_db_config(self):
+        write_tree(self.datadir, self.user_files())
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        t = read_tree(self.target())
+        for name in ("gridcoinresearch.conf", "DB_CONFIG", ".lock", "ipc.cookie"):
+            self.assertNotIn(name, t)
+        self.assertEqual(t["wallet.dat"], b"wallet")
+        self.assertEqual(t["walletbackups/wallet-1.dat"], b"backup")
+        self.assertEqual(json.loads(t["gridcoinsettings.json"]), {"staking": True})
+        [q] = self.quarantine_dirs()
+        self.assertTrue(os.path.basename(q).startswith("bob-main-2026"))
+        self.assertEqual(os.stat(q).st_mode & 0o777, 0o700)
+        quarantined = read_tree(q)
+        self.assertEqual(quarantined["gridcoinresearch.conf"], self.ORIGINAL_CONF)
+        self.assertEqual(quarantined["gridcoinsettings.json"], self.ORIGINAL_SETTINGS)
+        self.assertEqual(quarantined["DB_CONFIG"], b"set_lg_dir /tmp\n")
+        self.assertEqual(quarantined["gridcoinresearch.conf.sanitized"], b"staking=1\n")
+        text = out + err
+        for key in ("blocknotify", "rpcpassword", "rpcuser"):
+            self.assertIn(key, text)
+        for secret in ("SECRETPW", "SECRETJSON", "evil"):
+            self.assertNotIn(secret, text)
+        self.assertIn(q, text)
+
+    def test_enable_stashes_the_source_root_only(self):
+        write_tree(self.datadir, self.user_files())
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertFalse(os.path.lexists(self.datadir))
+        [stash] = self.stashes(self.home, ".GridcoinResearch.in-service-")
+        self.assertEqual(os.stat(stash).st_mode & 0o777, 0o700)
+        self.assertEqual(read_tree(stash), read_tree_from(self.user_files()))
+        self.assertIn(stash, out)
+        self.assertIn("log out and back in", out)
+        self.assertIn("gridcoin-gui", out)
+
+    def test_enable_refuses_nonempty_target(self):
+        write_tree(self.datadir, self.user_files())
+        write_tree(self.target(), {"wallet.dat": b"someone else's"})
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("not empty", err)
+        self.assertEqual(self.host.calls, [])
+        self.assertEqual(read_tree(self.datadir), read_tree_from(self.user_files()))
+        self.assertEqual(read_tree(self.target()), {"wallet.dat": b"someone else's"})
+
+    def test_enable_accepts_an_empty_target(self):
+        write_tree(self.datadir, self.user_files())
+        os.makedirs(self.target())
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("wallet.dat", os.listdir(self.target()))
+
+    def test_enable_refuses_running_user_processes(self):
+        write_tree(self.datadir, self.user_files())
+        self.host.processes = {self.uid: [4242]}
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("--terminate-sessions", err)
+        self.assertEqual(self.host.calls, [
+            ("disable", "--now", "gridcoinresearchd@bob.service", "gridcoin-autounlock@bob.socket"),
+            ("stop", "gridcoinresearchd.service"),
+        ])
+        self.assertFalse(os.path.exists(self.target()))
+        self.assertEqual(read_tree(self.datadir), read_tree_from(self.user_files()))
+
+    def test_enable_terminates_sessions_when_asked(self):
+        write_tree(self.datadir, self.user_files())
+        self.host.processes = {self.uid: [4242]}
+        rc, out, err = self.run_main("enable", "bob", "--terminate-sessions")
+        self.assertEqual(rc, 0, err)
+        calls = self.host.calls
+        self.assertLess(calls.index(("stop", "gridcoinresearchd.service")), calls.index(("terminate_user", "bob")))
+        self.assertLess(calls.index(("terminate_user", "bob")), calls.index(("add_to_group", "bob", "gridcoin-gui")))
+        self.assertIn("wallet.dat", os.listdir(self.target()))
+
+        # Processes that outlive the 30 s wait refuse the command.
+        host = FakeHost(users=self.host.users, processes={self.uid: [4242]}, terminate_ends_processes=False)
+        write_tree(os.path.join(self.home, ".GridcoinResearch"), {"wallet.dat": b"w"})
+        svc_rmtree(self.target())
+        rc, out, err = self.run_main("enable", "bob", "--terminate-sessions", host=host)
+        self.assertEqual(rc, 1)
+        self.assertGreaterEqual(host.clock, 30)
+        self.assertLess(host.clock, 32)
+        self.assertNotIn(("add_to_group", "bob", "gridcoin-gui"), host.calls)
+        self.assertFalse(os.path.exists(self.target()))
+
+    def test_enable_stops_user_instance_before_copy(self):
+        write_tree(self.datadir, self.user_files())
+        calls = self.host.calls
+        patches = []
+        for name in ("hold_datadir_lock", "copy_as", "stash_source"):
+            original = getattr(svc, name)
+
+            def wrapper(*args, _original=original, _name=name, **kwargs):
+                calls.append((_name,))
+                return _original(*args, **kwargs)
+
+            patches.append(mock.patch.object(svc, name, wrapper))
+        with contextlib.ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(calls, [
+            ("disable", "--now", "gridcoinresearchd@bob.service", "gridcoin-autounlock@bob.socket"),
+            ("stop", "gridcoinresearchd.service"),
+            ("hold_datadir_lock",),
+            ("copy_as",),
+            ("stash_source",),
+            ("add_to_group", "bob", "gridcoin-gui"),
+            ("enable", "--now", "gridcoinresearchd.service"),
+        ])
+
+    def test_enable_stops_on_a_failed_systemctl_step(self):
+        write_tree(self.datadir, self.user_files())
+        for verb in ("disable", "stop", "enable"):
+            with self.subTest(verb=verb):
+                host = FakeHost(users=self.host.users, fail=(verb,))
+                rc, out, err = self.run_main("enable", "bob", host=host)
+                self.assertEqual(rc, 1)
+                self.assertIn(verb, err)
+                self.assertNotIn("drop-ins", err)
+                if verb != "enable":
+                    self.assertIn("nothing was copied", err)
+                    self.assertNotIn(("add_to_group", "bob", "gridcoin-gui"), host.calls)
+                    self.assertFalse(os.path.exists(self.target()))
+                else:
+                    self.assertIn("enable the service once the cause is fixed", err)
+
+    def test_enable_refuses_when_lock_held(self):
+        write_tree(self.datadir, self.user_files())
+        hold_lock_in_other_process(self, os.path.join(self.datadir, ".lock"))
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("lock", err)
+        self.assertNotIn(("add_to_group", "bob", "gridcoin-gui"), self.host.calls)
+        self.assertEqual(os.listdir(self.target()) if os.path.exists(self.target()) else [], [])
+        self.assertEqual(read_tree(self.datadir), read_tree_from(self.user_files()))
+
+    def test_mainnet_enable_leaves_testnet_subdir(self):
+        files = self.user_files()
+        files["testnet/wallet.dat"] = b"testnet wallet"
+        files["testnet.in-service-20260101T000000Z/old"] = b"old stash"
+        write_tree(self.datadir, files)
+        before = os.stat(os.path.join(self.datadir, "testnet", "wallet.dat"))
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        after = os.stat(os.path.join(self.datadir, "testnet", "wallet.dat"))
+        self.assertEqual((before.st_ino, before.st_dev), (after.st_ino, after.st_dev))
+        self.assertEqual(sorted(os.listdir(self.datadir)), ["testnet", "testnet.in-service-20260101T000000Z"])
+        self.assertNotIn("testnet/", read_tree(self.target()))
+        self.assertFalse(any(k.startswith("testnet") for k in read_tree(self.target())))
+        [stash] = self.stashes(self.home, ".GridcoinResearch.in-service-")
+        self.assertFalse(any(n.startswith("testnet") for n in os.listdir(stash)))
+
+    def test_testnet_enable_moves_only_testnet(self):
+        files = {"gridcoinresearch.conf": b"testnet=1\n", "wallet.dat": b"main wallet"}
+        files.update({"testnet/" + k: v for k, v in self.user_files().items()})
+        write_tree(self.datadir, files)
+        rc, out, err = self.run_main("enable", "bob", "--network=test")
+        self.assertEqual(rc, 0, err)
+        self.assertIn(("disable", "--now", "gridcointestnetd@bob.service", "gridcointestnet-autounlock@bob.socket"),
+                      self.host.calls)
+        self.assertEqual(self.host.calls[-1], ("enable", "--now", "gridcointestnetd.service"))
+        self.assertIn(("add_to_group", "bob", "gridcointestnet-gui"), self.host.calls)
+        self.assertEqual(read_tree(self.target("test"))["wallet.dat"], b"wallet")
+        self.assertFalse(os.path.lexists(os.path.join(self.datadir, "testnet")))
+        [stash] = self.stashes(self.datadir, "testnet.in-service-")
+        self.assertEqual(os.stat(stash).st_mode & 0o777, 0o700)
+        # The datadir root, the conf there included, belongs to mainnet and stays.
+        self.assertEqual(read_tree(self.datadir)["gridcoinresearch.conf"], b"testnet=1\n")
+        self.assertEqual(read_tree(self.datadir)["wallet.dat"], b"main wallet")
+        [q] = self.quarantine_dirs()
+        self.assertTrue(os.path.basename(q).startswith("bob-test-"))
+
+    def test_enable_refuses_symlinked_datadir_and_special_files(self):
+        real = os.path.join(self.home, "real")
+        write_tree(real, self.user_files())
+        os.symlink(real, self.datadir)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.host.calls, [])
+        os.unlink(self.datadir)
+
+        files = self.user_files()
+        write_tree(self.datadir, files)
+        os.mkfifo(os.path.join(self.datadir, "blocks", "evil"))
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn(os.path.join("blocks", "evil"), err)
+        self.assertNotIn(("enable", "--now", "gridcoinresearchd.service"), self.host.calls)
+        self.assertEqual(os.listdir(self.target()), [])
+        self.assertIn("wallet.dat", os.listdir(self.datadir))
+
+        os.unlink(os.path.join(self.datadir, "blocks", "evil"))
+        os.unlink(os.path.join(self.datadir, "gridcoinsettings.json"))
+        os.symlink(os.path.join(self.tmp.name, "login.defs"), os.path.join(self.datadir, "gridcoinsettings.json"))
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("gridcoinsettings.json", err)
+        self.assertEqual(os.listdir(self.target()), [])
+
+    def test_enable_reports_settings_it_cannot_carry_without_their_bytes(self):
+        files = self.user_files()
+        files["gridcoinsettings.json"] = b'{"rpcpassword": "\xffSECRETBYTES"}'
+        write_tree(self.datadir, files)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("not UTF-8", out)
+        self.assertNotIn("SECRETBYTES", out + err)
+        self.assertNotIn("0xff", out + err)
+        self.assertNotIn("gridcoinsettings.json", os.listdir(self.target()))
+
+    def test_enable_refuses_unknown_user_or_missing_datadir(self):
+        rc, out, err = self.run_main("enable", "nobody")
+        self.assertEqual(rc, 1)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn(".GridcoinResearch", err)
+        self.assertEqual(self.host.calls, [])
+
+
+def read_tree_from(files):
+    """read_tree's view of a write_tree argument."""
+    found = {}
+    for rel, data in files.items():
+        found[os.path.normpath(rel)] = data
+        parent = os.path.dirname(rel)
+        while parent:
+            found[parent + "/"] = None
+            parent = os.path.dirname(parent)
+    return found
+
+
+class DisableTests(SwitchTestBase):
+    def test_disable_refuses_existing_user_datadir(self):
+        write_tree(self.target(), {"wallet.dat": b"service wallet"})
+        write_tree(self.datadir, {"wallet.dat": b"made by a plain GUI meanwhile"})
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("exists", err)
+        self.assertEqual(self.host.calls, [])
+        self.assertEqual(read_tree(self.datadir), {"wallet.dat": b"made by a plain GUI meanwhile"})
+        self.assertEqual(read_tree(self.target()), {"wallet.dat": b"service wallet"})
+
+        write_tree(self.target("test"), {"wallet.dat": b"service testnet wallet"})
+        os.unlink(os.path.join(self.datadir, "wallet.dat"))
+        os.makedirs(os.path.join(self.datadir, "testnet"))
+        rc, out, err = self.run_main("disable", "bob", "--network=test")
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.host.calls, [])
+        self.assertEqual(read_tree(self.target("test")), {"wallet.dat": b"service testnet wallet"})
+
+    def test_disable_refuses_without_a_service_datadir(self):
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.host.calls, [])
+
+    def test_disable_restores_original_conf(self):
+        files = self.user_files()
+        files["testnet/wallet.dat"] = b"testnet wallet"
+        write_tree(self.datadir, files)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        [stash] = self.stashes(self.home, ".GridcoinResearch.in-service-")
+        # The service ran meanwhile and wrote a wallet, settings, a conf and a DB_CONFIG of its own.
+        write_tree(self.target(), {
+            "wallet.dat": b"wallet v2",
+            "gridcoinsettings.json": json.dumps({"guilogfile": "/x", "staking": False}).encode(),
+            "gridcoinresearch.conf": b"blocknotify=/bin/evil\n",
+            "DB_CONFIG": b"set_lg_dir /x\n",
+        })
+        self.host.calls.clear()
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 0, err)
+        s = read_tree(self.datadir)
+        self.assertEqual(s["wallet.dat"], b"wallet v2")
+        self.assertEqual(s["walletbackups/wallet-1.dat"], b"backup")
+        self.assertEqual(s["gridcoinresearch.conf"], self.ORIGINAL_CONF)
+        self.assertEqual(json.loads(s["gridcoinsettings.json"]), {"staking": False})
+        self.assertNotIn("DB_CONFIG", s)
+        self.assertEqual(s["testnet/wallet.dat"], b"testnet wallet")
+        self.assertEqual(os.listdir(self.target()), [])
+        quarantined = read_tree(self.quarantine_dirs()[-1])
+        self.assertEqual(quarantined["gridcoinresearch.conf"], b"blocknotify=/bin/evil\n")
+        self.assertEqual(quarantined["DB_CONFIG"], b"set_lg_dir /x\n")
+        self.assertEqual(self.host.calls[0], ("disable", "--now", "gridcoinresearchd.service",
+                                              "gridcoin-autounlock.socket"))
+        self.assertEqual(self.host.calls[-1], ("remove_from_group", "bob", "gridcoin-gui"))
+        self.assertIn(stash, out)
+        self.assertIn("gridcoin-service enable-user bob", out)
+        self.assertIn("guilogfile", out + err)
+        self.assertNotIn("evil", out + err)
+        # The stash is left for the user to verify against.
+        self.assertTrue(os.path.isdir(stash))
+
+    def test_testnet_round_trip(self):
+        files = {"gridcoinresearch.conf": b"testnet=1\n", "wallet.dat": b"main wallet"}
+        files.update({"testnet/" + k: v for k, v in self.user_files().items()})
+        write_tree(self.datadir, files)
+        rc, out, err = self.run_main("enable", "bob", "--network=test")
+        self.assertEqual(rc, 0, err)
+        rc, out, err = self.run_main("disable", "bob", "--network=test")
+        self.assertEqual(rc, 0, err)
+        s = read_tree(os.path.join(self.datadir, "testnet"))
+        # Created again by the tool, owner-only.
+        self.assertEqual(os.stat(os.path.join(self.datadir, "testnet")).st_mode & 0o777, 0o700)
+        self.assertEqual(s["wallet.dat"], b"wallet")
+        self.assertEqual(s["gridcoinresearch.conf"], self.ORIGINAL_CONF)
+        self.assertEqual(json.loads(s["gridcoinsettings.json"]), {"staking": True})
+        self.assertEqual(os.listdir(self.target("test")), [])
+        self.assertEqual(read_bytes(os.path.join(self.datadir, "wallet.dat")), b"main wallet")
+        self.assertIn(("remove_from_group", "bob", "gridcointestnet-gui"), self.host.calls)
+        self.assertIn("gridcointestnet-service enable-user bob", out)
+
+    def test_failed_disable_leaves_the_user_side_as_it_was(self):
+        # A FIFO in the service datadir stops the copy; the directories disable made go again,
+        # so a rerun works once root removes it.
+        write_tree(self.target("test"), {"wallet.dat": b"service testnet wallet"})
+        write_tree(self.datadir, {"gridcoinresearch.conf": b"x=1\n"})
+        fifo = os.path.join(self.target("test"), "evil")
+        os.mkfifo(fifo)
+        rc, out, err = self.run_main("disable", "bob", "--network=test")
+        self.assertEqual(rc, 1)
+        self.assertIn("evil", err)
+        self.assertEqual(sorted(os.listdir(self.datadir)), ["gridcoinresearch.conf"])
+        os.unlink(fifo)
+        rc, out, err = self.run_main("disable", "bob", "--network=test")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(read_tree(os.path.join(self.datadir, "testnet")), {"wallet.dat": b"service testnet wallet"})
+
+    def test_disable_refuses_running_user_processes(self):
+        write_tree(self.target(), {"wallet.dat": b"service wallet"})
+        self.host.processes = {self.uid: [4242]}
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("--terminate-sessions", err)
+        self.assertEqual(self.host.calls, [])
+        self.assertFalse(os.path.exists(self.datadir))
 
 
 if __name__ == "__main__":

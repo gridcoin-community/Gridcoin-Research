@@ -36,6 +36,14 @@ set(GRC_UNIT_PYTHON3 "/usr/bin/python3" CACHE STRING "Python interpreter the hel
 set(GRC_LIBEXEC_SUBDIR_MAIN "gridcoin")
 set(GRC_LIBEXEC_SUBDIR_TEST "gridcointestnet")
 
+# The data directory under share for each network, and the Refuse class pattern
+# file installed there (refused-setting-keys.txt). gridcoin-service takes both
+# networks' paths from here. Both networks use one directory for now.
+set(GRC_SHARE_SUBDIR_MAIN "gridcoin")
+set(GRC_SHARE_SUBDIR_TEST "gridcoin")
+set(GRC_REFUSED_KEYS_FILE_MAIN "${CMAKE_INSTALL_FULL_DATADIR}/${GRC_SHARE_SUBDIR_MAIN}/refused-setting-keys.txt")
+set(GRC_REFUSED_KEYS_FILE_TEST "${CMAKE_INSTALL_FULL_DATADIR}/${GRC_SHARE_SUBDIR_TEST}/refused-setting-keys.txt")
+
 if(GRC_UNIT_NETWORK STREQUAL "main")
     set(GRC_DAEMON "gridcoinresearchd")
     set(GRC_NET_ARG "")
@@ -46,6 +54,7 @@ if(GRC_UNIT_NETWORK STREQUAL "main")
     set(GRC_AUTOUNLOCK "gridcoin-autounlock")
     set(GRC_CRED_PREFIX "gridcoinresearch")
     set(GRC_LIBEXEC_SUBDIR "${GRC_LIBEXEC_SUBDIR_MAIN}")
+    set(GRC_SHARE_SUBDIR "${GRC_SHARE_SUBDIR_MAIN}")
     set(GRC_SERVICE_TOOL "gridcoin-service")
 elseif(GRC_UNIT_NETWORK STREQUAL "test")
     set(GRC_DAEMON "gridcointestnetd")
@@ -57,6 +66,7 @@ elseif(GRC_UNIT_NETWORK STREQUAL "test")
     set(GRC_AUTOUNLOCK "gridcointestnet-autounlock")
     set(GRC_CRED_PREFIX "gridcointestnet")
     set(GRC_LIBEXEC_SUBDIR "${GRC_LIBEXEC_SUBDIR_TEST}")
+    set(GRC_SHARE_SUBDIR "${GRC_SHARE_SUBDIR_TEST}")
     set(GRC_SERVICE_TOOL "gridcointestnet-service")
 else()
     message(FATAL_ERROR "GRC_UNIT_NETWORK must be main or test, not '${GRC_UNIT_NETWORK}'")
