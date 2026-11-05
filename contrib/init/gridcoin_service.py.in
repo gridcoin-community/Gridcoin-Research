@@ -2815,6 +2815,11 @@ def switch_system_core(net, host, paths):
     command = system_command(net, paths, copy, masked)
     moving = ([copy] if copy is not None and not masked else []) + [path for path, _ in stale]
     try:
+        refuse_unloadable_unit(net, paths, copy, masked)
+    except UserError as e:
+        raise UserError("%s. It stays where it is, and %s does not load until you change it; then rerun"
+                        % (e, unit)) from None
+    try:
         refuse_unseen_unit_files(net, host, paths, copy, masked)
         if command is not None:
             display, value = command
@@ -2856,6 +2861,29 @@ def switch_system_core(net, host, paths):
         step(host, "reenable", unit)
     os.unlink(record_path)
     return True
+
+
+def refuse_unloadable_unit(net, paths, copy, masked):
+    """Refuse when systemd could not load the old system unit: a copy that is a link to nothing, or
+    a unit that its copy and drop-ins leave no ExecStart= (an empty one resets the list; without a
+    copy the list starts with the packaged unit's). Moved aside, such files would give way to the
+    packaged unit on its own datadir."""
+    unit = net.daemon + ".service"
+    if copy is None or masked:
+        commands = ["the packaged unit's"]
+    elif not os.path.exists(copy):
+        raise UserError("%s is a link to %s, which does not exist, so systemd could not load %s from it; remove the "
+                        "link or point it at a unit file, then rerun the switch-over"
+                        % (copy, os.readlink(copy), unit))
+    else:
+        commands = []
+    for _, text in system_sources(net, paths, copy, masked):
+        for value in unit_file_settings(text or "", "Service", "ExecStart"):
+            commands = commands + [value] if value else []
+    if not commands:
+        where = "%s and its drop-ins" % copy if copy is not None and not masked else "the drop-ins of %s" % unit
+        raise UserError("%s leave %s no ExecStart=, so systemd could not load it; give it one, then rerun the "
+                        "switch-over" % (where, unit))
 
 
 def refuse_unseen_unit_files(net, host, paths, copy, masked):

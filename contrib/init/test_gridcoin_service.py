@@ -3661,17 +3661,22 @@ class SwitchOverTests(ServiceTestBase):
 
     def test_switch_over_moves_a_copy_of_the_old_system_unit_aside(self):
         copy = os.path.join(self.paths.etc_systemd, "gridcoinresearchd.service")
-        self.write_text(copy, "[Service]\nType=forking\n")
+        unit_text = ("[Service]\nType=forking\nExecStart=/usr/bin/gridcoinresearchd -daemonwait -conf=%s -datadir=%s\n"
+                     % svc.system_defaults(svc.NETWORKS["main"]))
+        self.write_text(copy, unit_text)
         self.host.enabled.add("gridcoinresearchd.service")
         rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
         self.assertEqual(rc, 0, err)
         self.assertFalse(os.path.lexists(copy))
-        self.assertEqual(read_bytes(copy + ".disabled-by-gridcoin-switchover"), b"[Service]\nType=forking\n")
+        self.assertEqual(read_bytes(copy + ".disabled-by-gridcoin-switchover"), unit_text.encode())
         self.assertIn(copy, out)
         # Its enablement links named the copy; they are made again for the packaged unit.
         self.assertEqual(self.host.calls, [("daemon-reload",), ("reenable", "gridcoinresearchd.service")])
         # A link to another file is a copy too; a mask stays, and is reported.
-        os.symlink("/opt/elsewhere/gridcoinresearchd.service", copy)
+        elsewhere = os.path.join(self.tmp.name, "opt", "gridcoinresearchd.service")
+        os.makedirs(os.path.dirname(elsewhere))
+        self.write_text(elsewhere, unit_text)
+        os.symlink(elsewhere, copy)
         self.host.enabled.clear()
         self.host.calls.clear()
         rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
@@ -4303,6 +4308,50 @@ class SwitchOverTests(ServiceTestBase):
         self.assertEqual(rc, 0, err)
         self.assertFalse(os.path.exists(override))
 
+    def test_switch_over_keeps_an_old_unit_that_cannot_load(self):
+        # Moved aside, a unit systemd could not load would give way to the packaged unit, on its
+        # own datadir.
+        data = os.path.join(self.tmp.name, "data", "grc")
+        os.makedirs(data)
+        self.write_text(os.path.join(data, "gridcoinresearch.conf"), "rpcuser=x\n")
+        copy = os.path.join(self.paths.etc_systemd, "gridcoinresearchd.service")
+        command = "ExecStart=/usr/bin/gridcoinresearchd -daemonwait -datadir=%s\n" % data
+        cases = [
+            ("dangling copy", lambda: os.symlink(os.path.join(self.tmp.name, "nowhere.service"), copy), None,
+             "which does not exist"),
+            ("copy without ExecStart", lambda: self.write_text(copy, "[Service]\nType=forking\n"), None,
+             "no ExecStart="),
+            ("ExecStart reset", lambda: self.write_text(copy, "[Service]\nType=forking\n" + command),
+             "[Service]\nExecStart=\n", "no ExecStart="),
+            ("drop-ins reset the packaged one", lambda: None, "[Service]\nExecStart=\nType=forking\n",
+             "no ExecStart="),
+        ]
+        for name, make_copy, dropin, reason in cases:
+            with self.subTest(case=name):
+                svc_rmtree(self.system_unit_dir())
+                if os.path.lexists(copy):
+                    os.unlink(copy)
+                make_copy()
+                if dropin is not None:
+                    self.write_system_dropin("override.conf", dropin)
+                self.host.calls.clear()
+                state = self.write_state("system-core\n")
+                rc, out, err = self.run_main("switch-over", "--state=" + state)
+                self.assertEqual(rc, 1)
+                self.assertIn(reason, err)
+                self.assertIn("does not load", err)
+                self.assertEqual(os.path.lexists(copy), name != "drop-ins reset the packaged one")
+                self.assertEqual(self.host.calls, [])
+                with open(state, encoding="utf8") as f:
+                    self.assertEqual(f.read(), "system-core\n")
+        # A copy without one of its own loads with the one a drop-in gives it.
+        svc_rmtree(self.system_unit_dir())
+        self.write_text(copy, "[Service]\nType=forking\n")
+        self.write_system_dropin("override.conf", "[Service]\n" + command)
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+        self.assertEqual(rc, 0, err)
+        self.assertIn(" -datadir=%s " % data, self.dropin("gridcoinresearchd.service"))
+
     def test_switch_over_warns_when_the_carried_datadir_is_another_accounts(self):
         data = os.path.join(self.tmp.name, "data", "grc")
         os.makedirs(data)
@@ -4334,7 +4383,8 @@ class SwitchOverTests(ServiceTestBase):
 
     def test_a_partial_system_switch_is_finished_by_a_state_rerun(self):
         copy = os.path.join(self.paths.etc_systemd, "gridcoinresearchd.service")
-        self.write_text(copy, "[Service]\nType=forking\n")
+        self.write_text(copy, "[Service]\nType=forking\nExecStart=/usr/bin/gridcoinresearchd -daemonwait -conf=%s "
+                              "-datadir=%s\n" % svc.system_defaults(svc.NETWORKS["main"]))
         self.host.enabled.add("gridcoinresearchd.service")
         self.host.active.add("gridcoinresearchd.service")
         self.host.fail.add("reenable")
