@@ -46,9 +46,10 @@ struct ModeFinding
 //! Checks the data directory, the wallet file, database/ and database/log.*, the
 //! configuration file, the settings file, the backup directory and the regular files
 //! directly in it, and the debug log. An empty path, and a path that does not exist,
-//! is skipped. Nothing is modified. The data directory itself may be a symbolic link (a data
-//! directory moved to another disk): the link is followed and the rule applies to its target.
-//! Every other path that is a symbolic link is reported and not followed.
+//! is skipped. Nothing is modified. The data directory, the backup directory, the configuration
+//! file and debug.log may each be a symbolic link (moved to another disk): the link is followed
+//! and the rule applies to its target. Every other path that is a symbolic link, including the
+//! files inside the backup directory, is reported and not followed.
 std::vector<ModeFinding> CheckOwnerOnlyModes(const fs::path& datadir, const fs::path& conf,
                                              const fs::path& settings, const fs::path& wallet_file,
                                              const fs::path& backupdir, const fs::path& debuglog);

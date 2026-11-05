@@ -261,6 +261,59 @@ BOOST_AUTO_TEST_CASE(symlinked_datadir_root_is_followed)
     BOOST_CHECK(inner[0].kind == fsmodes::ModeFinding::Kind::Symlink);
 }
 
+// The backup directory, the configuration file and debug.log may be links to another
+// disk, as the data directory may: the link is not reported, and the rule applies to
+// its target. The files inside a linked backup directory keep the rule that a link is
+// reported, and so does the settings file.
+BOOST_AUTO_TEST_CASE(symlinked_backupdir_conf_and_debug_log_are_followed)
+{
+    const ScratchDir scratch;
+    const fs::path datadir = scratch.m_path / "data";
+    MakeDir(datadir, 0700);
+
+    const auto link = [](const fs::path& target, const fs::path& path) {
+        fs::create_symlink(target, path);
+        return path;
+    };
+
+    MakeDir(scratch.m_path / "backups_narrow", 0700);
+    MakeFile(scratch.m_path / "conf_narrow", 0600);
+    MakeFile(scratch.m_path / "log_narrow", 0600);
+    const fs::path backups_narrow = link(scratch.m_path / "backups_narrow", scratch.m_path / "backups_narrow_link");
+    const fs::path conf_narrow = link(scratch.m_path / "conf_narrow", scratch.m_path / "conf_narrow_link");
+    const fs::path log_narrow = link(scratch.m_path / "log_narrow", scratch.m_path / "log_narrow_link");
+
+    BOOST_CHECK(fsmodes::CheckOwnerOnlyModes(datadir, conf_narrow, {}, {}, backups_narrow, log_narrow).empty());
+
+    MakeDir(scratch.m_path / "backups_wide", 0755);
+    MakeFile(scratch.m_path / "conf_wide", 0644);
+    MakeFile(scratch.m_path / "log_wide", 0604);
+    const fs::path backups_wide = link(scratch.m_path / "backups_wide", scratch.m_path / "backups_wide_link");
+    const fs::path conf_wide = link(scratch.m_path / "conf_wide", scratch.m_path / "conf_wide_link");
+    const fs::path log_wide = link(scratch.m_path / "log_wide", scratch.m_path / "log_wide_link");
+
+    const auto wide = fsmodes::CheckOwnerOnlyModes(datadir, conf_wide, {}, {}, backups_wide, log_wide);
+    BOOST_CHECK_EQUAL(wide.size(), 3U);
+    for (const auto& [path, mode] : std::vector<std::pair<fs::path, unsigned>>{
+             {backups_wide, 0755U}, {conf_wide, 0644U}, {log_wide, 0604U}}) {
+        const fsmodes::ModeFinding& finding = FindingFor(wide, path);
+        BOOST_CHECK(finding.kind == fsmodes::ModeFinding::Kind::WideMode);
+        BOOST_CHECK_EQUAL(finding.mode, mode);
+    }
+
+    // Inside the linked backup directory.
+    MakeFile(scratch.m_path / "backups_narrow" / "wallet.dat-wide", 0644);
+    MakeFile(scratch.m_path / "elsewhere", 0600);
+    fs::create_symlink(scratch.m_path / "elsewhere", scratch.m_path / "backups_narrow" / "wallet.dat-link");
+    const fs::path settings = link(scratch.m_path / "elsewhere", datadir / "gridcoinsettings.json");
+
+    const auto inner = fsmodes::CheckOwnerOnlyModes(datadir, {}, settings, {}, backups_narrow, {});
+    BOOST_CHECK_EQUAL(inner.size(), 3U);
+    BOOST_CHECK(FindingFor(inner, backups_narrow / "wallet.dat-wide").kind == fsmodes::ModeFinding::Kind::WideMode);
+    BOOST_CHECK(FindingFor(inner, backups_narrow / "wallet.dat-link").kind == fsmodes::ModeFinding::Kind::Symlink);
+    BOOST_CHECK(FindingFor(inner, settings).kind == fsmodes::ModeFinding::Kind::Symlink);
+}
+
 BOOST_AUTO_TEST_CASE(backupdir_not_writable_reported)
 {
     const ScratchDir scratch;

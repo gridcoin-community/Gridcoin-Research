@@ -48,8 +48,9 @@ class ModeChecker
 public:
     std::vector<ModeFinding> m_findings;
 
-    //! follow_link is for the data directory root only, which may be a link to another disk. Every
-    //! other path keeps the rule that a symbolic link is reported and not followed.
+    //! follow_link is for the paths an operator may move to another disk behind a link: the data
+    //! directory, the backup directory, the configuration file and debug.log. Every other path
+    //! keeps the rule that a symbolic link is reported and not followed.
     void Check(const fs::path& path, bool follow_link = false)
     {
         if (path.empty() || !m_seen.insert(path).second) return;
@@ -84,11 +85,15 @@ public:
     }
 
     //! The entries of a directory whose names pass the filter, each checked as a path of its own.
+    //! follow_link reaches the entries of a directory that is itself a link; the entries keep the
+    //! rule that a link is reported.
     template <typename Filter>
-    void CheckEntries(const fs::path& dir, Filter filter)
+    void CheckEntries(const fs::path& dir, Filter filter, bool follow_link = false)
     {
         struct stat st;
-        if (dir.empty() || ::lstat(dir.string().c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) return;
+        if (dir.empty()) return;
+        if ((follow_link ? ::stat(dir.string().c_str(), &st) : ::lstat(dir.string().c_str(), &st)) != 0) return;
+        if (!S_ISDIR(st.st_mode)) return;
 
         boost::system::error_code ec;
         for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
@@ -124,13 +129,13 @@ std::vector<ModeFinding> CheckOwnerOnlyModes(const fs::path& datadir, const fs::
         checker.CheckEntries(database, [](const std::string& name) { return name.compare(0, 4, "log.") == 0; });
     }
 
-    checker.Check(conf);
+    checker.Check(conf, /*follow_link=*/true);
     checker.Check(settings);
 
-    checker.Check(backupdir);
-    checker.CheckEntries(backupdir, [](const std::string&) { return true; });
+    checker.Check(backupdir, /*follow_link=*/true);
+    checker.CheckEntries(backupdir, [](const std::string&) { return true; }, /*follow_link=*/true);
 
-    checker.Check(debuglog);
+    checker.Check(debuglog, /*follow_link=*/true);
 
     return std::move(checker.m_findings);
 }
