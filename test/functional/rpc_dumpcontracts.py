@@ -49,6 +49,11 @@ class RpcDumpContractsTest(GridcoinTestFramework):
                                 node.dumpcontracts, "*", out, True, -1)
         assert_equal(os.path.exists(out), False)
 
+        self.log.info("negative high_height is refused, not taken as the tip")
+        assert_raises_rpc_error(-8, "high_height -1 is not on the chain: heights run from 0 to 3",
+                                node.dumpcontracts, "*", out, True, 0, -1)
+        assert_equal(os.path.exists(out), False)
+
         # The node is still running and answering.
         assert_equal(node.getblockcount(), 3)
 

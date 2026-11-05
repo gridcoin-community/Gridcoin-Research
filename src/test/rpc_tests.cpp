@@ -269,6 +269,9 @@ BOOST_AUTO_TEST_CASE(dumpcontracts_refuses_heights_off_the_chain)
 
     // Negative low_height.
     CheckDumpContractsRefused(file, -1, 0, "low_height -1 is not on the chain: heights run from 0 to 0");
+
+    // Negative high_height. 0 means the tip, but a negative value is refused rather than taken as 0.
+    CheckDumpContractsRefused(file, 0, -1, "high_height -1 is not on the chain: heights run from 0 to 0");
 }
 
 BOOST_AUTO_TEST_CASE(dumpcontracts_accepts_heights_on_the_chain)

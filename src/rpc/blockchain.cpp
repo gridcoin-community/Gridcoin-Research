@@ -358,7 +358,12 @@ UniValue dumpcontracts(const UniValue& params)
 
     if (params.size() > 4)
     {
-        high_height = std::max(low_height, params[4].get_int());
+        const int requested_high_height = params[4].get_int();
+
+        // A negative high_height is kept so the range check below refuses it; std::max would turn it into
+        // low_height, and 0 means the tip.
+        high_height = requested_high_height < 0 ? requested_high_height
+                                                : std::max(low_height, requested_high_height);
     }
 
     UniValue report(UniValue::VOBJ);
