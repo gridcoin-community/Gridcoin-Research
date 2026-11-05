@@ -174,6 +174,8 @@ class Paths:
     login_defs: str = "/etc/login.defs"
     # The per-user units this release replaces ran -datadir=/home/%i/.GridcoinResearch.
     old_unit_home: str = "/home"
+    # What the system unit's sandbox hides from the core (ProtectHome=yes, PrivateTmp=).
+    unit_hidden: tuple = ("/home", "/root", "/run/user", "/tmp", "/var/tmp")
 
 
 class Host:
@@ -191,6 +193,11 @@ class Host:
 
     def is_active(self, unit):
         return subprocess.call(["systemctl", "is-active", "--quiet", unit], env=SAFE_ENV) == 0
+
+    def run_by_package(self):
+        """Whether a package's maintainer script runs this (dpkg sets DPKG_MAINTSCRIPT_PACKAGE). The
+        package restarts the system service itself after the switch-over."""
+        return bool(os.environ.get("DPKG_MAINTSCRIPT_PACKAGE"))
 
     def active_units(self, pattern):
         """The names of the active units that match the glob pattern."""
@@ -599,14 +606,14 @@ def cmd_disable_user(args, net, host, paths):
     return 0
 
 
-def enable_autounlock(net, user, host, paths):
-    """autounlock enable, after the checks: the core's drop-in, the helper socket, and a restart of a
-    running core so that it pulls the passphrase."""
+def enable_autounlock(net, user, host, paths, restart=True):
+    """autounlock enable, after the checks: the core's drop-in, the helper socket, and, with
+    restart, a restart of a running core so that it pulls the passphrase."""
     unit, socket_unit, _ = autounlock_target(net, user)
     write_dropin(paths, unit, DROPIN_AUTOUNLOCK, render_autounlock_dropin(net, user))
     step(host, "daemon-reload")
     step(host, "enable", "--now", socket_unit)
-    if host.is_active(unit):
+    if restart and host.is_active(unit):
         step(host, "restart", "--no-block", unit)
 
 
@@ -1680,6 +1687,23 @@ def refuse_other_network_core(host, network, user):
                         % (unit, user, unit))
 
 
+def refuse_system_unit_datadir(paths, net):
+    """enable and disable move wallets in and out of /var/lib/<state> only, so the system service
+    must not run on a datadir the switch-over carried from its old override."""
+    unit = net.daemon + ".service"
+    path = os.path.join(dropin_dir(paths, unit), DROPIN_MAIN)
+    if not check_dropin_dir(dropin_dir(paths, unit)) or not os.path.exists(path):
+        return
+    _, default_datadir = system_defaults(net)
+    for value in unit_file_settings(read_dropin_text(path) or "", "Service", "ExecStart"):
+        for word in (command_words(value, path) if value else [])[1:]:
+            option = core_option(word)
+            if option.startswith("-datadir=") and option[len("-datadir="):] != default_datadir:
+                raise UserError("%s runs on %s, from %s; this command moves wallets into and out of %s only. Move "
+                                "that wallet there and remove the drop-in, or keep using it as it is"
+                                % (unit, option[len("-datadir="):], path, default_datadir))
+
+
 def refuse_user_unit_datadir(paths, net, user, d_display):
     """enable moves only the default datadir, so the per-user unit must not have one of its own."""
     unit = "%s@%s.service" % (net.daemon, user)
@@ -1801,6 +1825,7 @@ def enable(args, net, host, paths, progress):
             if list_dir(t_check_fd):
                 raise UserError("%s exists and is not empty; refusing" % t_display)
         refuse_user_unit_datadir(paths, net, pw.pw_name, d_display)
+        refuse_system_unit_datadir(paths, net)
         names = list_dir(d_fd)
         # On mainnet the source is the datadir itself: the recheck compares against this listing.
         s_names = set(list_dir(s_fd)) if net.testnet else set(names)
@@ -1962,6 +1987,7 @@ def disable(args, net, host, paths, progress):
         if record["uid"] != pw.pw_uid or record["user"] != pw.pw_name:
             raise UserError("%s records the wallet in the service as %s's (uid %d), not %s's; refusing"
                             % (record_display, shown(record["user"]), record["uid"], pw.pw_name))
+        refuse_system_unit_datadir(paths, net)
 
         # The user's side must be free: a datadir made meanwhile, by a plain GUI say, may hold
         # coins of its own. The mainnet datadir may hold testnet's.
@@ -2168,7 +2194,11 @@ def scan_old_installs(net, host, paths):
             entries.append(("core-active", user))
     try:
         copy, masked, stale = system_core_overrides(net, paths)
-        system_core = (copy is not None and not masked) or bool(stale)
+        # The system unit's drop-in from an earlier switch-over marks it switched: what was written
+        # since then is for the new unit, and the admin's.
+        switched = os.path.exists(os.path.join(dropin_dir(paths, net.daemon + ".service"), DROPIN_MAIN))
+        system_core = (os.path.exists(system_core_record_path(paths, net))
+                       or (not switched and ((copy is not None and not masked) or bool(stale))))
     except UserError:
         # The switch-over itself says why.
         system_core = True
@@ -2389,36 +2419,218 @@ def system_core_overrides(net, paths):
     return (copy if os.path.lexists(copy) else None), is_mask(copy), stale
 
 
-def switch_system_core(net, host, paths, restart):
+def system_defaults(net):
+    """The system unit's own -conf and -datadir: its configuration file, and its StateDirectory."""
+    return os.path.join(net.conf_dir, "gridcoin.conf"), "/var/lib/" + net.state
+
+
+def system_exec_start(net, conf, datadir):
+    """The system unit's command line (contrib/init/gridcoinresearchd.service.in) with conf and
+    datadir."""
+    return " ".join([os.path.join(CONFIG["bindir"], net.daemon), net.net_arg, "-nodaemon", "-nodaemonwait",
+                     "-multiprocess", "-conf=" + conf, "-datadir=" + datadir, "-ipcdir=/run/" + net.state,
+                     "-ipcattachgroup=" + net.attach_group, "$GRIDCOIN_AUTOUNLOCK_ARGS"])
+
+
+def render_system_dropin(net, conf, datadir):
+    """The system unit's drop-in from the switch-over. It marks the unit switched, and carries the
+    configuration file and datadir (None: the unit's own) the service ran with; a datadir outside
+    the StateDirectory needs ReadWritePaths= under ProtectSystem=strict."""
+    text = header(net) + "# The switch-over moved this unit's overrides for the old forking daemon aside.\n"
+    if conf is None and datadir is None:
+        return text
+    default_conf, default_datadir = system_defaults(net)
+    text += ("# It carries the configuration file and datadir the service ran with.\n"
+             "[Service]\n"
+             "ExecStart=\n"
+             "ExecStart=" + system_exec_start(net, conf or default_conf, datadir or default_datadir) + "\n")
+    if datadir is not None:
+        text += "ReadWritePaths=" + datadir + "\n"
+    return text
+
+
+def system_core_record_path(paths, net):
+    """Where a switch of the system unit in progress is recorded, for a rerun to finish."""
+    return os.path.join(paths.tool_state, "switchover-%s.system-core" % ("test" if net.testnet else "main"))
+
+
+def read_system_core_record(path):
+    """The record of a switch of the system unit in progress: {"reenable": bool}, or None."""
+    try:
+        fd = os.open(path, FILE_FLAGS)
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        raise UserError("%s: %s (a symlink is not followed); refusing" % (path, e.strerror)) from None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o022:
+            raise UserError("%s is not root's own regular file, writable only by root; refusing" % path)
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            data = f.read(MAX_CONFIG_BYTES + 1)
+    finally:
+        os.close(fd)
+    try:
+        record = json.loads(data.decode("utf8"))
+    except ValueError:
+        record = None
+    if not isinstance(record, dict) or not isinstance(record.get("reenable"), bool):
+        raise UserError("%s is not a record this tool wrote; refusing" % path)
+    return record
+
+
+def write_system_core_record(path, reenable):
+    temp = "%s.%d.tmp" % (path, os.getpid())
+    with os.fdopen(os.open(temp, NEW_FILE_FLAGS, 0o600), "w", encoding="utf8") as f:
+        f.write(json.dumps({"reenable": reenable}) + "\n")
+    os.rename(temp, path)
+
+
+def system_command(net, paths, copy, masked):
+    """The command line the system service ran: the last ExecStart= of a copy of the unit in
+    /etc/systemd/system, then of its drop-ins in systemd's order. (path, value), or None for the
+    packaged unit's own."""
+    sources = []
+    if copy is not None and not masked:
+        # A link whose target is gone names no command.
+        sources.append((copy, read_dropin_text(copy) if os.path.exists(copy) else None))
+    sources += dropin_texts(dropin_dir(paths, net.daemon + ".service"))
+    command = None
+    for path, text in sources:
+        for value in unit_file_settings(text or "", "Service", "ExecStart"):
+            if value:
+                command = (path, value)
+    return command
+
+
+def system_dropped_words(net, words):
+    """The words of an old system command line that the new one neither carries nor replaces: the
+    per-user list, -conf=, and the new unit's own words."""
+    own = {"-ipcdir=/run/" + net.state, "-ipcattachgroup=" + net.attach_group, "$GRIDCOIN_AUTOUNLOCK_ARGS"}
+    return [word for word in dropped_words(net, words) if core_option(word) not in own
+            and not core_option(word).startswith("-conf=")]
+
+
+def carried_system_path(net, value, what, display, paths, host):
+    """Check a -conf or -datadir value of the old system command line, for the new unit to run with
+    it; None when it is the unit's own."""
+    name = "the -%s %s in %s" % (what, shown(value), display)
+    if not os.path.isabs(value):
+        raise UserError("%s is not an absolute path" % name)
+    if UNSAFE_PATH_RE.search(value) or any(part in (".", "..") for part in value.split("/")):
+        raise UserError("%s may not contain whitespace, quotes, backslash, $, %%, ;, '.' or '..'" % name)
+    for hidden in paths.unit_hidden:
+        if value == hidden or value.startswith(hidden.rstrip("/") + "/"):
+            raise UserError("%s is under %s, which the unit's sandbox hides (ProtectHome=, PrivateTmp=)"
+                            % (name, hidden))
+    if not (os.path.isdir(value) if what == "datadir" else os.path.isfile(value)):
+        raise UserError("%s does not exist" % name)
+    if what == "datadir":
+        try:
+            acct = host.getpwnam(net.account)
+        except KeyError:
+            acct = None
+        if acct is not None and os.stat(value).st_uid != acct.pw_uid:
+            print("warning: %s is not owned by %s, which the service runs as; it may not start until you chown it "
+                  "(chown -R %s: %s)" % (value, net.account, net.account, value))
+    return value
+
+
+def carried_system_paths(net, display, value, own, paths, host):
+    """The -conf and -datadir of the old system command line value (in display) that the new unit
+    must run with, each None when it is the unit's own. A command line from an override (not own)
+    with any option the new one would drop is refused."""
+    words = command_words(value, display)
+    if not own:
+        dropped = system_dropped_words(net, words)
+        if dropped:
+            raise UserError("the ExecStart= in %s has options the new unit would drop: %s"
+                            % (display, " ".join(shown(word) for word in dropped)))
+    conf = datadir = None
+    for word in words[1:]:
+        option = core_option(word)
+        if option.startswith("-conf="):
+            conf = option[len("-conf="):]
+        elif option.startswith("-datadir="):
+            datadir = option[len("-datadir="):]
+    default_conf, default_datadir = system_defaults(net)
+    if conf is not None and conf != default_conf:
+        conf = carried_system_path(net, conf, "conf", display, paths, host)
+    else:
+        conf = None
+    if datadir is not None and datadir != default_datadir:
+        datadir = carried_system_path(net, datadir, "datadir", display, paths, host)
+    else:
+        datadir = None
+    return conf, datadir
+
+
+def switch_system_core(net, host, paths):
     """Take the system service off what was written for the old forking unit, which would make the
     notify unit fail at every start: a unit file in /etc/systemd/system in the packaged unit's
     place, and the drop-ins that set its command line, type, pid file, notify access or account,
-    are renamed aside. A mask stays, and is reported. With restart (a --scan run, after which
-    nothing else restarts the service), a running service is restarted without waiting."""
+    are renamed aside. A mask stays, and is reported.
+
+    The service must never start on a new datadir: a -conf or -datadir the old command line set is
+    carried into the unit's drop-in from this tool. An old command line with any other option it
+    would drop refuses the switch, and nothing is moved: the service then fails to start on the
+    right data until the admin changes that override.
+
+    A switch in progress is recorded first, with whether the copy was enabled, so a rerun finishes
+    it. Returns whether the unit changed."""
     unit = net.daemon + ".service"
+    record_path = system_core_record_path(paths, net)
+    record = read_system_core_record(record_path)
     copy, masked, stale = system_core_overrides(net, paths)
     if masked:
         print("%s is masked (empty, or a link to /dev/null); it stays masked, so %s does not start." % (copy, unit))
-    renamed = False
-    was_enabled = False
-    if copy is not None and not masked:
-        was_enabled = host.is_enabled(unit)
+    ours = os.path.join(dropin_dir(paths, unit), DROPIN_MAIN)
+    conf = datadir = None
+    command = system_command(net, paths, copy, masked)
+    if command is not None:
+        display, value = command
+        try:
+            conf, datadir = carried_system_paths(net, display, value, display == ours, paths, host)
+        except UserError as e:
+            raise UserError("%s. It stays where it is, and %s will not start until you change it; then rerun"
+                            % (e, unit)) from None
+    moving = ([copy] if copy is not None and not masked else []) + [path for path, _ in stale]
+    if not moving and record is None:
+        return False
+    if record is not None:
+        reenable = record["reenable"]
+    else:
+        # The enablement links name the copy; they are made again for the packaged unit.
+        reenable = copy is not None and not masked and host.is_enabled(unit)
+        os.close(open_tool_state(paths))
+        write_system_core_record(record_path, reenable)
+    write_dropin(paths, unit, DROPIN_MAIN, render_system_dropin(net, conf, datadir))
+    if conf is not None or datadir is not None:
+        print("Carried %s into %s." % (" and ".join("-%s=%s" % (what, value) for what, value in
+                                                    (("conf", conf), ("datadir", datadir)) if value), ours))
+    if copy in moving:
         target = disable_dropin(paths.etc_systemd, unit)
         print("Renamed %s to %s: it took the place of the packaged unit, written for the old forking daemon."
               % (copy, target))
-        renamed = True
     for path, keys in stale:
         target = disable_dropin(os.path.dirname(path), os.path.basename(path))
         print("Renamed %s to %s: it sets %s for the old forking unit." % (path, target, ", ".join(keys)))
-        renamed = True
-    if not renamed:
-        return
     step(host, "daemon-reload")
-    # The enablement links named the copy; make them again for the packaged unit.
-    if was_enabled:
+    if reenable:
         step(host, "reenable", unit)
-    if restart:
-        step(host, "try-restart", "--no-block", unit)
+    os.unlink(record_path)
+    return True
+
+
+def restart_system_service(net, host):
+    """Restart the system service once, without waiting, when it runs, so that it runs as switched
+    over: after a --scan run or a --state rerun by hand. A run from the package leaves it to the
+    package, which restarts the service next."""
+    unit = net.daemon + ".service"
+    if host.run_by_package() or not host.is_active(unit):
+        return
+    step(host, "try-restart", "--no-block", unit)
+    print("Restarted %s without waiting, so that it runs as switched over." % unit)
 
 
 def disable_dropin(directory, name):
@@ -2508,7 +2720,7 @@ def switch_system_autounlock(net, host, paths):
             step(host, "disable", "--now", old)
         print("Autounlock for %s.service is not carried over: %s. %s stays where it is."
               % (net.daemon, NO_AUTOUNLOCK_UNITS, legacy))
-        return
+        return False
     keep_legacy = os.path.lexists(legacy)
     if keep_legacy:
         secure_credential(legacy)
@@ -2524,7 +2736,8 @@ def switch_system_autounlock(net, host, paths):
         write_dropin(paths, net.autounlock + ".service", DROPIN_EXISTING_CREDENTIAL,
                      render_existing_credential_dropin(net))
     check_credential(paths, net, None)
-    enable_autounlock(net, None, host, paths)
+    enable_autounlock(net, None, host, paths, restart=False)
+    return True
 
 
 def switchover_state_path(paths, network):
@@ -2547,10 +2760,11 @@ def cmd_switch_over(args, net, host, paths):
             users.setdefault(user, set()).add(kind)
     # Users and the system entries apart: a user may have any valid name.
     failed = set()
+    system_changed = False
     if (SYSTEM_CORE, None) in entries:
         # First, so that nothing restarts the service on its old overrides.
         try:
-            switch_system_core(net, host, paths, restart=args.state is None)
+            system_changed = switch_system_core(net, host, paths)
         except (UserError, StepError, OSError) as e:
             print("%s: %s.service: %s" % (net.tool_name, net.daemon, e), file=sys.stderr)
             failed.add((SYSTEM_CORE, None))
@@ -2566,7 +2780,7 @@ def cmd_switch_over(args, net, host, paths):
               % (user, net.daemon, user, datadir or "the default, under the home directory"))
     if (SYSTEM_AUTOUNLOCK, None) in entries:
         try:
-            switch_system_autounlock(net, host, paths)
+            system_changed = switch_system_autounlock(net, host, paths) or system_changed
         except (UserError, StepError, OSError) as e:
             print("%s: %s.service's autounlock: %s" % (net.tool_name, net.daemon, e), file=sys.stderr)
             failed.add((SYSTEM_AUTOUNLOCK, None))
@@ -2586,6 +2800,9 @@ def cmd_switch_over(args, net, host, paths):
             write_switchover_state(state_path, left)
         elif os.path.exists(state_path):
             os.unlink(state_path)
+    # Once, for both system entries, and not onto a system entry that failed.
+    if system_changed and not any(key[0] != "user" for key in failed):
+        restart_system_service(net, host)
     if left:
         names = {SYSTEM_CORE: "the system service", SYSTEM_AUTOUNLOCK: "the system service's autounlock"}
         what = [shown(key[1]) for key in sorted(k for k in failed if k[0] == "user")]
