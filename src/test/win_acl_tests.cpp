@@ -592,6 +592,43 @@ struct TempDir
     }
 };
 
+//! Create the file \p path with \p spec as its owner and DACL from the start.
+void CreateWithAcl(const fs::path& path, const AclSpec& spec)
+{
+    void* sd = MakeSecurityDescriptor(spec);
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof(sa);
+    sa.lpSecurityDescriptor = sd;
+    sa.bInheritHandle = FALSE;
+    const HANDLE handle = ::CreateFileW(path.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW,
+                                        FILE_ATTRIBUTE_NORMAL, nullptr);
+    const DWORD error = ::GetLastError();
+    FreeSecurityDescriptor(sd);
+
+    BOOST_REQUIRE_MESSAGE(handle != INVALID_HANDLE_VALUE, "CreateFileW failed with error " << error);
+    ::CloseHandle(handle);
+}
+
+//! The owner this process's token gives what it creates when no descriptor names one.
+Sid DefaultOwner()
+{
+    HANDLE token = nullptr;
+    BOOST_REQUIRE(::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token));
+
+    // The first call sizes the buffer; it fails with ERROR_INSUFFICIENT_BUFFER by design.
+    DWORD length = 0;
+    ::GetTokenInformation(token, TokenOwner, nullptr, 0, &length);
+    std::vector<unsigned char> buffer(length ? length : 1);
+    const bool queried = ::GetTokenInformation(token, TokenOwner, buffer.data(), length, &length);
+    ::CloseHandle(token);
+    BOOST_REQUIRE(queried);
+
+    const PSID owner = reinterpret_cast<const TOKEN_OWNER*>(buffer.data())->Owner;
+    const auto* const bytes = static_cast<const unsigned char*>(owner);
+
+    return Sid(bytes, bytes + ::GetLengthSid(owner));
+}
+
 } // namespace
 
 BOOST_AUTO_TEST_CASE(apply_acl_roundtrip)
@@ -626,17 +663,44 @@ BOOST_AUTO_TEST_CASE(owner_only_dacl_sets_explicit_owner)
 
     TempDir dir;
     const fs::path file = dir.path / "owned";
-    {
-        fsbridge::ofstream stream(file);
-        stream << "win_acl test\n";
+    const Sid self = CurrentTokenUser();
+
+    if (!CurrentTokenIsElevated()) {
+        // This account owns the file and may do anything to it but change its owner.
+        // An owner that is already right is left alone, so restricting it needs no
+        // WRITE_OWNER.
+        CreateWithAcl(file, {self, {
+            {self, FILE_ALL_ACCESS & ~WRITE_OWNER, Inherit::None},
+            {wellknown::System(), FILE_ALL_ACCESS, Inherit::None},
+        }});
+        BOOST_REQUIRE(ReadAcl(file).owner == self);
+
+        BOOST_REQUIRE_NO_THROW(util::ApplyOwnerOnlyDacl(file, /*inheritable=*/false));
+        BOOST_CHECK(ReadAcl(file).owner == self);
+        BOOST_CHECK_NO_THROW(util::VerifyOwnerOnlyDacl(file));
+
+        BOOST_TEST_MESSAGE("owner_only_dacl_sets_explicit_owner: not elevated, so the change of owner from "
+                           "Administrators did not run; run the suite elevated to cover it");
+        return;
     }
+
+    // Only an elevated token may make Administrators a file's owner. The owner-only ACL
+    // has to replace that owner with this account.
+    CreateWithAcl(file, {wellknown::Administrators(), {
+        {self, FILE_ALL_ACCESS, Inherit::None},
+        {wellknown::System(), FILE_ALL_ACCESS, Inherit::None},
+    }});
+    BOOST_REQUIRE(ReadAcl(file).owner == wellknown::Administrators());
 
     util::ApplyOwnerOnlyDacl(file, /*inheritable=*/false);
 
     const ObservedAcl acl = ReadAcl(file);
     BOOST_REQUIRE(acl.owner.has_value());
-    BOOST_CHECK_EQUAL(FormatSid(*acl.owner), FormatSid(CurrentTokenUser()));
+    BOOST_CHECK_EQUAL(FormatSid(*acl.owner), FormatSid(self));
     BOOST_CHECK_NO_THROW(util::VerifyOwnerOnlyDacl(file));
+
+    BOOST_TEST_MESSAGE("owner_only_dacl_sets_explicit_owner: elevated, so keeping an owner that is already right "
+                       "without WRITE_OWNER did not run; run the suite unelevated to cover it");
 }
 
 BOOST_AUTO_TEST_CASE(security_descriptor_creates_a_matching_file)
@@ -673,6 +737,14 @@ BOOST_AUTO_TEST_CASE(security_descriptor_creates_a_matching_file)
 
     const std::optional<std::string> path_reason = CheckMatchesSpec(ReadAcl(file), spec);
     BOOST_CHECK_MESSAGE(!path_reason.has_value(), path_reason.value_or(""));
+
+    // The owner checks above tell the descriptor's owner apart from the creating
+    // token's default owner only when the two differ, as for an elevated token, whose
+    // default owner is normally the Administrators group.
+    if (DefaultOwner() == self) {
+        BOOST_TEST_MESSAGE("security_descriptor_creates_a_matching_file: this token's default owner is this "
+                           "account, so the owner check cannot fail; run the suite elevated to cover it");
+    }
 }
 
 BOOST_AUTO_TEST_CASE(foreign_writer_on_chain_needs_a_plain_absolute_path)
