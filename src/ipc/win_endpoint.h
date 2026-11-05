@@ -182,6 +182,24 @@ std::optional<std::string> EndpointRefusal(const EndpointEntry& socket, const Si
 //! (" / \ [ ] : ; | = , + * ? < > @), so a name that names a domain is refused.
 std::optional<std::string> LocalGroupLookupName(const std::string& computer, const std::string& name);
 
+//! Why \p name cannot name the -ipcserviceuser account, or nullopt. It must name
+//! its domain and the account, "DOMAIN\account" with one backslash and a name on
+//! each side (as "NT SERVICE\gridcoinresearchd"), so it is looked up in that domain
+//! alone and never matched to an account of the same name elsewhere.
+std::optional<std::string> ServiceUserNameRefusal(const std::string& name);
+
+//! Why \p account, what -ipcserviceuser maps to, cannot be the expected server, or
+//! nullopt. It must be a user account, or a service SID: a well-known group under
+//! S-1-5-80 (NT SERVICE). Any group, alias or other kind is refused.
+std::optional<std::string> ServiceUserAccountRefusal(const util::winacl::AccountLookup& account);
+
+//! Why \p account, what LocalGroupLookupName(\p computer, name) maps to, cannot be
+//! the attach group, or nullopt. It must be a local group (an alias) whose domain
+//! is \p computer, compared without regard to ASCII case, so a builtin alias found
+//! under the computer's name, such as BUILTIN\Users, is refused.
+std::optional<std::string> AttachGroupAccountRefusal(const util::winacl::AccountLookup& account,
+                                                     const std::string& computer);
+
 #ifdef WIN32
 //! The group ConfigureAttachGroup(name) resolved (<COMPUTERNAME>\<name>, a local
 //! group, SidTypeAlias, only), or nullopt when none is configured. The WIN32
@@ -204,8 +222,9 @@ void ApplyEndpointAcl(const fs::path& path, const util::winacl::AclSpec& spec);
 void ApplyEndpointAcl(const fs::path& path, IpcObject obj);
 
 //! Expected server: SID of -ipcserviceuser when set, else CurrentTokenUser().
-//! Throws std::runtime_error naming the account when it does not exist, and
-//! std::system_error when it cannot be looked up.
+//! The option must pass ServiceUserNameRefusal and what it maps to
+//! ServiceUserAccountRefusal. Throws std::runtime_error naming the account when it
+//! does not, or does not exist, and std::system_error when it cannot be looked up.
 Sid ExpectedServerSid();
 
 //! \p path opened without following a reparse point at it, as the checks below

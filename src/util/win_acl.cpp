@@ -769,7 +769,7 @@ bool CreateDirectoryWithAcl(const fs::path& dir, const AclSpec& spec)
     return true;
 }
 
-std::optional<Sid> LookupAccountSidByName(const std::wstring& name, bool require_alias)
+std::optional<AccountLookup> LookupAccount(const std::wstring& name)
 {
     DWORD sid_size = 0;
     DWORD domain_size = 0;
@@ -788,13 +788,40 @@ std::optional<Sid> LookupAccountSidByName(const std::wstring& name, bool require
         if (error == ERROR_NONE_MAPPED) return std::nullopt;
         ThrowWin32(error, "LookupAccountNameW");
     }
-
-    if (require_alias && use != SidTypeAlias) return std::nullopt;
+    // On success the domain's size is its length, without the terminating NUL.
+    domain.resize(domain_size);
 
     std::optional<Sid> found = SidOf(sid.data());
     if (!found) ThrowWin32(ERROR_INVALID_SID, "LookupAccountNameW");
 
-    return found;
+    AccountLookup account;
+    account.sid = std::move(*found);
+    account.domain = WideToUtf8(domain);
+    switch (use) {
+    case SidTypeUser: account.type = AccountType::User; break;
+    case SidTypeGroup: account.type = AccountType::Group; break;
+    case SidTypeDomain: account.type = AccountType::Domain; break;
+    case SidTypeAlias: account.type = AccountType::Alias; break;
+    case SidTypeWellKnownGroup: account.type = AccountType::WellKnownGroup; break;
+    case SidTypeDeletedAccount: account.type = AccountType::DeletedAccount; break;
+    case SidTypeInvalid: account.type = AccountType::Invalid; break;
+    case SidTypeUnknown: account.type = AccountType::Unknown; break;
+    case SidTypeComputer: account.type = AccountType::Computer; break;
+    case SidTypeLabel: account.type = AccountType::Label; break;
+    case SidTypeLogonSession: account.type = AccountType::LogonSession; break;
+    default: account.type = AccountType::Other; break;
+    }
+
+    return account;
+}
+
+std::optional<Sid> LookupAccountSidByName(const std::wstring& name, bool require_alias)
+{
+    std::optional<AccountLookup> account = LookupAccount(name);
+    if (!account) return std::nullopt;
+    if (require_alias && account->type != AccountType::Alias) return std::nullopt;
+
+    return std::move(account->sid);
 }
 
 std::optional<std::string> FindForeignWriterOnChain(const fs::path& leaf, const std::vector<Sid>& allowed)

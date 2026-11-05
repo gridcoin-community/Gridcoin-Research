@@ -50,8 +50,10 @@ struct ResolvedGroup
 };
 
 //! Look \p name up on this computer only (<COMPUTERNAME>\<name>), and accept it only
-//! as a local group (SidTypeAlias). A domain-local group is an alias too, which is
-//! why the name is qualified by the computer and may not name a domain itself.
+//! as a local group (SidTypeAlias) found in the computer's own domain. A
+//! domain-local group is an alias too, which is why the name is qualified by the
+//! computer and may not name a domain itself, and why the domain it was found in is
+//! checked.
 ResolvedGroup ResolveAttachGroup(const std::string& name)
 {
     const std::string shown = SanitizeString(name);
@@ -65,27 +67,26 @@ ResolvedGroup ResolveAttachGroup(const std::string& name)
     }
 
     try {
-        const std::optional<std::string> lookup =
-            win::LocalGroupLookupName(WideToUtf8(std::wstring_view(computer, length)), name);
+        const std::string computer_name = WideToUtf8(std::wstring_view(computer, length));
+        const std::optional<std::string> lookup = win::LocalGroupLookupName(computer_name, name);
         if (!lookup) {
             return {std::nullopt, strprintf("'%s' is not a local group name -ipcattachgroup can take. Give the name of "
                                             "a group on this computer, with no domain or computer before it.",
                                             shown)};
         }
 
-        const std::wstring wide = Utf8ToWide(*lookup);
-        if (!util::winacl::LookupAccountSidByName(wide, /*require_alias=*/false)) {
+        const std::optional<util::winacl::AccountLookup> account = util::winacl::LookupAccount(Utf8ToWide(*lookup));
+        if (!account) {
             return {std::nullopt, strprintf("The IPC attach group '%s' does not exist on this computer.", shown)};
         }
 
-        std::optional<util::winacl::Sid> sid = util::winacl::LookupAccountSidByName(wide, /*require_alias=*/true);
-        if (!sid) {
-            return {std::nullopt, strprintf("'%s' on this computer is not a local group, so it cannot be the IPC "
-                                            "attach group.",
-                                            shown)};
+        // Only a local group found among this computer's own accounts: a builtin
+        // alias found under the computer's name is not one.
+        if (std::optional<std::string> reason = win::AttachGroupAccountRefusal(*account, computer_name)) {
+            return {std::nullopt, strprintf("'%s' cannot be the IPC attach group: %s.", shown, *reason)};
         }
 
-        return {std::move(sid), {}};
+        return {account->sid, {}};
     } catch (const std::exception& e) {
         return {std::nullopt, strprintf("The IPC attach group '%s' could not be looked up: %s", shown, e.what())};
     }

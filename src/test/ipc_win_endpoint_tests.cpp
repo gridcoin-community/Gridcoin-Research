@@ -665,6 +665,69 @@ BOOST_AUTO_TEST_CASE(local_group_lookup_name_is_qualified_by_the_computer)
     }
 }
 
+// The -ipcserviceuser account is named with its domain, so the lookup is made there
+// alone.
+BOOST_AUTO_TEST_CASE(service_user_must_name_its_domain)
+{
+    for (const char* name : {"NT SERVICE\\gridcoinresearchd", "NT SERVICE\\gridcointestnetd", "PC\\alice"}) {
+        BOOST_CHECK_MESSAGE(!ServiceUserNameRefusal(name), "refused '" << name << "'");
+    }
+    for (const char* name : {"gridcoinresearchd", "\\gridcoinresearchd", "NT SERVICE\\", "a\\b\\c",
+                             "alice@corp.example", ""}) {
+        CheckRefusal(ServiceUserNameRefusal(name), {"-ipcserviceuser"});
+    }
+}
+
+// The expected server is a user account or a service SID (NT SERVICE, S-1-5-80); a
+// group of any kind, SYSTEM's well-known group and anything else are refused.
+BOOST_AUTO_TEST_CASE(service_user_must_be_a_user_or_a_service)
+{
+    const auto account = [](const Sid& sid, AccountType type, const std::string& domain) {
+        AccountLookup lookup;
+        lookup.sid = sid;
+        lookup.type = type;
+        lookup.domain = domain;
+        return lookup;
+    };
+
+    BOOST_CHECK(!ServiceUserAccountRefusal(account(Self(), AccountType::User, "PC")));
+    BOOST_CHECK(!ServiceUserAccountRefusal(account(Service(), AccountType::WellKnownGroup, "NT SERVICE")));
+
+    CheckRefusal(ServiceUserAccountRefusal(account(wellknown::System(), AccountType::WellKnownGroup, "NT AUTHORITY")),
+                 {"S-1-5-18"});
+    for (const AccountType type : {AccountType::Group, AccountType::Alias, AccountType::Domain, AccountType::Computer,
+                                   AccountType::DeletedAccount, AccountType::Unknown, AccountType::Other}) {
+        CheckRefusal(ServiceUserAccountRefusal(account(Group(), type, "PC")), {FormatSid(Group())});
+    }
+    // A service SID found as another kind is not a service.
+    CheckRefusal(ServiceUserAccountRefusal(account(Service(), AccountType::Alias, "NT SERVICE")),
+                 {FormatSid(Service())});
+}
+
+// The attach group is a local group of this computer, found in the computer's own
+// domain: BUILTIN\Users found under the computer's name, a domain group, or a user is
+// refused.
+BOOST_AUTO_TEST_CASE(attach_group_must_be_an_alias_of_this_computer)
+{
+    const auto account = [](AccountType type, const std::string& domain) {
+        AccountLookup lookup;
+        lookup.sid = Group();
+        lookup.type = type;
+        lookup.domain = domain;
+        return lookup;
+    };
+
+    BOOST_CHECK(!AttachGroupAccountRefusal(account(AccountType::Alias, "DESKTOP-1"), "DESKTOP-1"));
+    BOOST_CHECK(!AttachGroupAccountRefusal(account(AccountType::Alias, "desktop-1"), "DESKTOP-1"));
+
+    CheckRefusal(AttachGroupAccountRefusal(account(AccountType::Alias, "BUILTIN"), "DESKTOP-1"), {"BUILTIN"});
+    CheckRefusal(AttachGroupAccountRefusal(account(AccountType::Alias, "CORP"), "DESKTOP-1"), {"CORP"});
+    CheckRefusal(AttachGroupAccountRefusal(account(AccountType::Alias, ""), "DESKTOP-1"), {"DESKTOP-1"});
+    for (const AccountType type : {AccountType::Group, AccountType::User, AccountType::WellKnownGroup}) {
+        CheckRefusal(AttachGroupAccountRefusal(account(type, "DESKTOP-1"), "DESKTOP-1"), {"local group"});
+    }
+}
+
 #ifdef WIN32
 
 namespace {
@@ -936,6 +999,15 @@ BOOST_FIXTURE_TEST_CASE(win_expected_server_sid, grc_test::StateGuard)
     BOOST_CHECK(ExpectedServerSid() == CurrentTokenUser());
 
     gArgs.ForceSetArg("-ipcserviceuser", "NT SERVICE\\gridcoin-test-no-such-service");
+    BOOST_CHECK_THROW(ExpectedServerSid(), std::runtime_error);
+
+    // A name without its domain is refused before any lookup.
+    gArgs.ForceSetArg("-ipcserviceuser", "gridcoinresearchd");
+    BOOST_CHECK_THROW(ExpectedServerSid(), std::runtime_error);
+
+    // So is a group, here the local Administrators alias by its English builtin name
+    // (where the names are localized it does not resolve, which is refused too).
+    gArgs.ForceSetArg("-ipcserviceuser", "BUILTIN\\Administrators");
     BOOST_CHECK_THROW(ExpectedServerSid(), std::runtime_error);
 
     // An account that exists, named as Windows names it here (well-known names are

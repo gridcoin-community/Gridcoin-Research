@@ -174,6 +174,33 @@ std::optional<std::string> CheckMatchesSpec(const ObservedAcl& acl, const AclSpe
 //! layout is Other, with no trustee and no mask.
 std::optional<ObservedAce> ParseAce(const unsigned char* bytes, size_t size);
 
+//! The kind of account a name maps to, as LookupAccountNameW's SID_NAME_USE gives it.
+enum class AccountType : uint8_t
+{
+    User,
+    Group,
+    Domain,
+    Alias,
+    WellKnownGroup,
+    DeletedAccount,
+    Invalid,
+    Unknown,
+    Computer,
+    Label,
+    LogonSession,
+    Other,
+};
+
+//! What a name maps to: the SID, the domain the account was found in (the
+//! ReferencedDomainName, such as the computer's name for a local account, "BUILTIN"
+//! or "NT SERVICE"), and the kind of account.
+struct AccountLookup
+{
+    Sid sid;
+    std::string domain;
+    AccountType type{AccountType::Other};
+};
+
 #ifdef WIN32
 //! The SID of this process's token user. Throws std::system_error.
 Sid CurrentTokenUser();
@@ -229,7 +256,12 @@ bool CreateDirectoryWithAcl(const fs::path& dir, const AclSpec& spec);
 //! Free a descriptor from MakeSecurityDescriptor. A null \p sd is ignored.
 void FreeSecurityDescriptor(void* sd);
 
-//! The SID \p name maps to (LookupAccountNameW). nullopt when it maps to none, or
+//! What \p name maps to (LookupAccountNameW): its SID, the domain it was found in,
+//! and its kind. nullopt when it maps to none. Throws std::system_error on any other
+//! failure, and std::range_error when the domain is not valid UTF-16.
+std::optional<AccountLookup> LookupAccount(const std::wstring& name);
+
+//! The SID \p name maps to (LookupAccount). nullopt when it maps to none, or
 //! when \p require_alias and it is not an alias (a local group such as BUILTIN\Users).
 //! Throws std::system_error on any other failure.
 std::optional<Sid> LookupAccountSidByName(const std::wstring& name, bool require_alias);

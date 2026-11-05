@@ -5,6 +5,7 @@
 #include "ipc/win_endpoint.h"
 
 #include "tinyformat.h"
+#include "util/strencodings.h"
 
 #include <string_view>
 #include <vector>
@@ -13,7 +14,6 @@
 #include "ipc/peercred.h"
 #include "ipc/process.h"
 #include "logging.h"
-#include "util/strencodings.h"
 #include "util/system.h"
 
 #include <stdexcept>
@@ -55,6 +55,45 @@ uint32_t GroupMask(IpcObject obj)
     } // no default case, so the compiler can warn about an object left out
 
     return 0;
+}
+
+//! \p name as the log and an error show it: each part sanitized, the backslash
+//! between a domain and an account kept.
+std::string ShownAccount(const std::string& name)
+{
+    std::string shown;
+    size_t start = 0;
+    while (true) {
+        const size_t slash = name.find('\\', start);
+        shown += SanitizeString(name.substr(start, slash == std::string::npos ? std::string::npos : slash - start));
+        if (slash == std::string::npos) break;
+        shown += '\\';
+        start = slash + 1;
+    }
+
+    return shown;
+}
+
+//! How a refusal names an account of \p type.
+const char* AccountTypeName(util::winacl::AccountType type)
+{
+    using util::winacl::AccountType;
+    switch (type) {
+    case AccountType::User: return "a user account";
+    case AccountType::Group: return "a domain group";
+    case AccountType::Domain: return "a domain";
+    case AccountType::Alias: return "a local group";
+    case AccountType::WellKnownGroup: return "a well-known group";
+    case AccountType::DeletedAccount: return "a deleted account";
+    case AccountType::Invalid: return "an invalid account";
+    case AccountType::Unknown: return "an unknown account";
+    case AccountType::Computer: return "a computer account";
+    case AccountType::Label: return "an integrity label";
+    case AccountType::LogonSession: return "a logon session";
+    case AccountType::Other: return "an account of another kind";
+    } // no default case, so the compiler can warn about a type left out
+
+    return "an account of another kind";
 }
 
 //! \p self, and SYSTEM unless it is \p self, with FILE_ALL_ACCESS and \p inherit.
@@ -211,6 +250,49 @@ std::optional<std::string> LocalGroupLookupName(const std::string& computer, con
     return computer + "\\" + name;
 }
 
+std::optional<std::string> ServiceUserNameRefusal(const std::string& name)
+{
+    const size_t slash = name.find('\\');
+    if (slash == std::string::npos || slash == 0 || slash + 1 == name.size() ||
+        name.find('\\', slash + 1) != std::string::npos) {
+        return strprintf("-ipcserviceuser must name the account with its domain, as DOMAIN\\account (the service's "
+                         "is NT SERVICE\\gridcoinresearchd), and '%s' does not",
+                         ShownAccount(name));
+    }
+
+    return std::nullopt;
+}
+
+std::optional<std::string> ServiceUserAccountRefusal(const util::winacl::AccountLookup& account)
+{
+    using util::winacl::AccountType;
+    if (account.type == AccountType::User) return std::nullopt;
+
+    // A service SID is NT SERVICE's: S-1-5-80 followed by the hash of the name.
+    const std::string sid = util::winacl::FormatSid(account.sid);
+    if (account.type == AccountType::WellKnownGroup && sid.rfind("S-1-5-80-", 0) == 0) return std::nullopt;
+
+    return strprintf("the -ipcserviceuser account (%s) is %s, and the core runs as a user account or as a service "
+                     "(NT SERVICE)",
+                     sid, AccountTypeName(account.type));
+}
+
+std::optional<std::string> AttachGroupAccountRefusal(const util::winacl::AccountLookup& account,
+                                                     const std::string& computer)
+{
+    if (account.type != util::winacl::AccountType::Alias) {
+        return strprintf("it is %s, not a local group", AccountTypeName(account.type));
+    }
+
+    // Computer names compare without regard to ASCII case.
+    if (account.domain.empty() || ToLower(account.domain) != ToLower(computer)) {
+        return strprintf("it was found in '%s', not among this computer's (%s) own accounts",
+                         SanitizeString(account.domain), SanitizeString(computer));
+    }
+
+    return std::nullopt;
+}
+
 #ifdef WIN32
 namespace {
 
@@ -308,23 +390,6 @@ std::vector<std::pair<fs::path, FileId>> DataDirectoryIds()
     return ids;
 }
 
-//! \p name as the log and an error show it: each part sanitized, the backslash
-//! between a domain and an account kept.
-std::string ShownAccount(const std::string& name)
-{
-    std::string shown;
-    size_t start = 0;
-    while (true) {
-        const size_t slash = name.find('\\', start);
-        shown += SanitizeString(name.substr(start, slash == std::string::npos ? std::string::npos : slash - start));
-        if (slash == std::string::npos) break;
-        shown += '\\';
-        start = slash + 1;
-    }
-
-    return shown;
-}
-
 } // namespace
 
 AclSpec ThisProcessEndpointAclSpec(IpcObject obj, const std::optional<std::string>& attach_group_sid)
@@ -362,21 +427,24 @@ Sid ExpectedServerSid()
     const std::string account = ConfiguredOption("-ipcserviceuser");
     if (account.empty()) return util::winacl::CurrentTokenUser();
 
+    if (std::optional<std::string> reason = ServiceUserNameRefusal(account)) throw std::runtime_error(*reason);
+
     std::wstring wide;
     try {
         wide = Utf8ToWide(account);
     } catch (const std::range_error&) {
         throw std::runtime_error(
-            strprintf("The -ipcserviceuser account '%s' is not valid UTF-8.", ShownAccount(account)));
+            strprintf("the -ipcserviceuser account '%s' is not valid UTF-8", ShownAccount(account)));
     }
 
-    const std::optional<Sid> sid = util::winacl::LookupAccountSidByName(wide, /*require_alias=*/false);
-    if (!sid) {
+    const std::optional<util::winacl::AccountLookup> found = util::winacl::LookupAccount(wide);
+    if (!found) {
         throw std::runtime_error(
-            strprintf("The -ipcserviceuser account '%s' does not exist on this computer.", ShownAccount(account)));
+            strprintf("the -ipcserviceuser account '%s' does not exist on this computer", ShownAccount(account)));
     }
+    if (std::optional<std::string> reason = ServiceUserAccountRefusal(*found)) throw std::runtime_error(*reason);
 
-    return *sid;
+    return found->sid;
 }
 
 EndpointEntry ReadEntryNoFollow(const fs::path& path)
