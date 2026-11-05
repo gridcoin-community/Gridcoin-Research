@@ -3763,16 +3763,71 @@ class SwitchOverTests(ServiceTestBase):
         for path in (inside, outside):
             self.write_text(path, "rpcuser=x\n")
         other = self.uid + 1
-        for words, conf, advice in (("-datadir=%s" % data, inside, "chown gridcoin: %s" % inside),
-                                    ("-conf=%s -datadir=%s" % (outside, data), outside, "chown root: %s" % outside)):
-            with self.subTest(conf=conf):
+        cases = [
+            ("-datadir=%s" % data, {inside: {"uid": other}}, "chown gridcoin: %s" % inside, None),
+            ("-conf=%s -datadir=%s" % (outside, data), {outside: {"uid": other}}, "chown root: %s" % outside, None),
+            # The datadir is the conf's directory: it is the account's, and its warning comes too.
+            ("-datadir=%s" % data, {data: {"uid": other}}, "chown gridcoin: %s" % data, "chown -R gridcoin: %s" % data),
+        ]
+        for words, changes, advice, warning in cases:
+            with self.subTest(changes=sorted(changes)):
                 svc_rmtree(self.system_unit_dir())
                 self.system_override(words)
-                with seen_as({conf: {"uid": other}, data: {"uid": other}}):
+                with seen_as(changes):
                     rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
                 self.assertEqual(rc, 1)
                 self.assertIn(advice, err)
-                self.assertIn("chown -R gridcoin: %s" % data, out)
+                if warning:
+                    self.assertIn(warning, out)
+
+    def test_switch_over_checks_every_directory_above_a_carried_conf(self):
+        data = os.path.join(self.tmp.name, "data", "grc")
+        os.makedirs(data)
+        top = os.path.join(self.tmp.name, "a")
+        conf = os.path.join(top, "b", "gridcoin.conf")
+        os.makedirs(os.path.dirname(conf))
+        self.write_text(conf, "rpcuser=x\n")
+        real = os.path.join(self.tmp.name, "real")
+        os.makedirs(real)
+        self.write_text(os.path.join(real, "gridcoin.conf"), "rpcuser=x\n")
+        linked = os.path.join(self.tmp.name, "linkdir")
+        os.symlink(real, linked)
+        cases = [
+            (conf, {top: {"mode": 0o775}}, "%s above it can be written by group or others" % top),
+            (conf, {top: {"uid": self.uid + 1}}, "chown root: %s" % top),
+            (conf, {top: {"uid": 0, "mode": 0o777}}, "can be written by group or others"),
+            (os.path.join(linked, "gridcoin.conf"), {}, "symlink"),
+        ]
+        for path, changes, reason in cases:
+            with self.subTest(path=path, changes=changes):
+                svc_rmtree(self.system_unit_dir())
+                self.system_override("-conf=%s -datadir=%s" % (path, data))
+                with seen_as(changes):
+                    rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+                self.assertEqual(rc, 1)
+                self.assertIn(reason, err)
+        # A directory of root's with the sticky bit, /tmp say, lets nobody else replace what is in it.
+        svc_rmtree(self.system_unit_dir())
+        self.system_override("-conf=%s -datadir=%s" % (conf, data))
+        with seen_as({top: {"uid": 0, "mode": 0o1777}}):
+            rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+        self.assertEqual(rc, 0, err)
+
+    def test_switch_over_checks_a_carried_conf_on_its_own_descriptors(self):
+        # Each directory and the file are checked with fstat on a descriptor opened without
+        # following a symlink, not by a stat of the path, which a rename could swap meanwhile.
+        data = os.path.join(self.tmp.name, "data", "grc")
+        os.makedirs(data)
+        conf = os.path.join(self.tmp.name, "etc-other", "gridcoin.conf")
+        os.makedirs(os.path.dirname(conf))
+        self.write_text(conf, "rpcuser=x\n")
+        for changes in ({conf: {"uid": self.uid + 1}}, {os.path.dirname(conf): {"mode": 0o777}}):
+            with self.subTest(changes=sorted(changes)):
+                svc_rmtree(self.system_unit_dir())
+                self.system_override("-conf=%s -datadir=%s" % (conf, data))
+                with seen_as(changes, calls=("fstat",)):
+                    rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+                self.assertEqual(rc, 1)
 
     def test_switch_over_refuses_a_conf_others_can_write(self):
         # A conf anyone but root and the service account can write, or one in such a directory,
