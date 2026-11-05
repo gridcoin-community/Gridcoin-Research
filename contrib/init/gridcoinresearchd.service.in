@@ -54,8 +54,9 @@ ExecStart=@GRC_BINDIR@/@GRC_DAEMON@ @GRC_NET_ARG@ -nodaemon -nodaemonwait -multi
 ####################
 Type=notify
 NotifyAccess=main
-# Start is bounded; the core extends it while a long step (a rescan, a reindex)
-# is making progress.
+# Start is bounded. While one long startup step runs (loading the block index, a
+# rescan, a block import) the core extends it, for at most 4 hours per step, and it
+# stops extending it as soon as a stop has been requested.
 TimeoutStartSec=30min
 TimeoutStopSec=600
 # Always restart, so a shutdown requested over IPC does not leave the node down.

@@ -592,6 +592,9 @@ int main(int argc, char* argv[])
     // Capture and remove NOTIFY_SOCKET while the process is still single-threaded.
     // The process-hardening statements come before this one.
     sdnotify::CaptureFromEnvironment();
+    // Once a stop has been requested the start timeout is no longer extended, so the
+    // stop runs into its own timeout.
+    sdnotify::SetShutdownCheck(ShutdownRequested);
 
     // A stop requested at any point of startup must be honoured. Under a unit with
     // PrivatePIDs= this process is process 1 of its PID namespace, and a signal to

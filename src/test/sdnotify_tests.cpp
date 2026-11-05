@@ -8,8 +8,12 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <atomic>
+#include <chrono>
 #include <sstream>
 #include <string>
+#include <thread>
+#include <vector>
 
 #ifdef __linux__
 #include <cstdlib>
@@ -121,6 +125,15 @@ public:
 
     bool Ok() const { return m_fd >= 0; }
 
+    //! Sets how long Receive() waits for a datagram.
+    void SetTimeout(std::chrono::milliseconds timeout)
+    {
+        timeval tv;
+        tv.tv_sec = static_cast<time_t>(timeout.count() / 1000);
+        tv.tv_usec = static_cast<suseconds_t>((timeout.count() % 1000) * 1000);
+        setsockopt(m_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    }
+
     //! One datagram, or the empty string on timeout.
     std::string Receive() const
     {
@@ -133,6 +146,42 @@ public:
 private:
     int m_fd = -1;
 };
+//! What the shutdown check under test returns.
+std::atomic<bool> g_test_shutdown{false};
+
+bool TestShutdownRequested()
+{
+    return g_test_shutdown.load();
+}
+
+//! Installs TestShutdownRequested as the shutdown check, with no shutdown requested,
+//! and clears it at scope end.
+class ShutdownCheckGuard
+{
+public:
+    ShutdownCheckGuard()
+    {
+        g_test_shutdown = false;
+        sdnotify::SetShutdownCheck(TestShutdownRequested);
+    }
+
+    ~ShutdownCheckGuard()
+    {
+        sdnotify::SetShutdownCheck(nullptr);
+        g_test_shutdown = false;
+    }
+
+    ShutdownCheckGuard(const ShutdownCheckGuard&) = delete;
+    ShutdownCheckGuard& operator=(const ShutdownCheckGuard&) = delete;
+};
+
+//! The EXTEND_TIMEOUT_USEC value of an extension datagram, or -1 when it is not one.
+long long ExtensionUsec(const std::string& message)
+{
+    const std::string key = "EXTEND_TIMEOUT_USEC=";
+    if (message.compare(0, key.size(), key) != 0) return -1;
+    return std::stoll(message.substr(key.size()));
+}
 } // namespace
 #endif // __linux__
 
@@ -294,6 +343,86 @@ BOOST_AUTO_TEST_CASE(heartbeat_sends_immediately)
     {
         sdnotify::ScopedStartupHeartbeat heartbeat("Loading block index");
         BOOST_CHECK_EQUAL(listener.Receive(), "EXTEND_TIMEOUT_USEC=1800000000\nSTATUS=Loading block index");
+    }
+}
+
+// Once a shutdown has been requested no extension is sent, from a progress message
+// or from a heartbeat, so a stop during startup runs into the stop timeout.
+BOOST_AUTO_TEST_CASE(no_extension_once_a_shutdown_is_requested)
+{
+    NotifyEnvGuard env;
+    ShutdownCheckGuard check;
+    TempDir dir;
+    BOOST_REQUIRE(!dir.Path().empty());
+    Listener listener(dir.Path() + "/notify");
+    BOOST_REQUIRE(listener.Ok());
+    listener.SetTimeout(std::chrono::milliseconds{300});
+
+    setenv("NOTIFY_SOCKET", (dir.Path() + "/notify").c_str(), 1);
+    sdnotify::CaptureFromEnvironment();
+
+    BOOST_CHECK(sdnotify::ExtendStartTimeout("Loading wallet"));
+    BOOST_CHECK_EQUAL(listener.Receive(), "EXTEND_TIMEOUT_USEC=1800000000\nSTATUS=Loading wallet");
+
+    {
+        sdnotify::ScopedStartupHeartbeat heartbeat("Rescanning", std::chrono::hours{1}, std::chrono::milliseconds{20});
+        BOOST_CHECK_EQUAL(listener.Receive(), "EXTEND_TIMEOUT_USEC=1800000000\nSTATUS=Rescanning");
+
+        g_test_shutdown = true;
+        // A beat that was already past the check may still arrive; nothing comes after it.
+        listener.Receive();
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        listener.SetTimeout(std::chrono::milliseconds{50});
+        while (!listener.Receive().empty()) {}
+        listener.SetTimeout(std::chrono::milliseconds{300});
+        BOOST_CHECK_EQUAL(listener.Receive(), "");
+    }
+
+    BOOST_CHECK(!sdnotify::ExtendStartTimeout("Loading wallet"));
+    BOOST_CHECK_EQUAL(listener.Receive(), "");
+
+    {
+        sdnotify::ScopedStartupHeartbeat heartbeat("Rescanning", std::chrono::hours{1}, std::chrono::milliseconds{20});
+        BOOST_CHECK_EQUAL(listener.Receive(), "");
+    }
+}
+
+// A heartbeat moves the start timeout no further than its cap from its own start:
+// each extension is at most what is left of the cap, and none is sent after it.
+BOOST_AUTO_TEST_CASE(heartbeat_extension_is_capped)
+{
+    NotifyEnvGuard env;
+    TempDir dir;
+    BOOST_REQUIRE(!dir.Path().empty());
+    Listener listener(dir.Path() + "/notify");
+    BOOST_REQUIRE(listener.Ok());
+
+    setenv("NOTIFY_SOCKET", (dir.Path() + "/notify").c_str(), 1);
+    sdnotify::CaptureFromEnvironment();
+
+    constexpr auto cap = std::chrono::milliseconds{400};
+    constexpr auto interval = std::chrono::milliseconds{50};
+
+    std::vector<long long> extensions;
+    {
+        sdnotify::ScopedStartupHeartbeat heartbeat("Loading block index", cap, interval);
+        listener.SetTimeout(std::chrono::milliseconds{300});
+        for (std::string message = listener.Receive(); !message.empty(); message = listener.Receive()) {
+            extensions.push_back(ExtensionUsec(message));
+            BOOST_CHECK_MESSAGE(message.find("\nSTATUS=Loading block index") != std::string::npos, message);
+        }
+        // The heartbeat is still in scope here, so it stopped by itself.
+    }
+
+    BOOST_REQUIRE(!extensions.empty());
+    // At most one beat per interval while the cap lasts, with some slack for scheduling.
+    BOOST_CHECK_LE(extensions.size(), static_cast<size_t>(cap / interval) + 2);
+    long long previous = 0;
+    for (const long long usec : extensions) {
+        BOOST_CHECK_GT(usec, 0);
+        BOOST_CHECK_LE(usec, std::chrono::duration_cast<std::chrono::microseconds>(cap).count());
+        if (previous != 0) BOOST_CHECK_LE(usec, previous);
+        previous = usec;
     }
 }
 

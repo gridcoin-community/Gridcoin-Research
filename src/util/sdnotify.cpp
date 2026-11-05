@@ -5,9 +5,11 @@
 #include <util/sdnotify.h>
 
 #include <logging.h>
+#include <util/string.h>
 #include <util/threadnames.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <utility>
 
@@ -26,6 +28,17 @@ namespace sdnotify {
 
 // Longest STATUS= text sent, in bytes.
 static constexpr size_t MAX_STATUS_BYTES = 200;
+
+namespace {
+// Set from main() before any thread sends, or by the tests.
+std::atomic<bool (*)()> g_shutdown_check{nullptr};
+
+bool ShutdownCheckSaysStop()
+{
+    bool (*const check)() = g_shutdown_check.load();
+    return check != nullptr && check();
+}
+} // namespace
 
 #ifdef __linux__
 
@@ -110,6 +123,7 @@ void ResetForTesting()
     g_active = false;
     g_addr_len = 0;
     g_failure_logged = false;
+    g_shutdown_check = nullptr;
 }
 
 #else // !__linux__
@@ -117,7 +131,10 @@ void ResetForTesting()
 void CaptureFromEnvironment() {}
 bool Active() { return false; }
 bool Send(const std::string&) { return false; }
-void ResetForTesting() {}
+void ResetForTesting()
+{
+    g_shutdown_check = nullptr;
+}
 
 #endif // __linux__
 
@@ -131,9 +148,15 @@ bool NotifyStopping()
     return Send("STOPPING=1\nSTATUS=Shutting down");
 }
 
-bool ExtendStartTimeout(const std::string& status)
+void SetShutdownCheck(bool (*shutdown_requested)())
+{
+    g_shutdown_check = shutdown_requested;
+}
+
+bool ExtendStartTimeout(const std::string& status, std::chrono::microseconds extension)
 {
     if (!Active()) return false;
+    if (ShutdownCheckSaysStop()) return false;
 
     // Cut on a UTF-8 code point boundary, so that a partial sequence is never sent.
     size_t length = std::min(status.size(), MAX_STATUS_BYTES);
@@ -148,11 +171,12 @@ bool ExtendStartTimeout(const std::string& status)
         const unsigned char byte = static_cast<unsigned char>(c);
         if (byte < 0x20 || byte == 0x7f) c = ' ';
     }
-    return Send("EXTEND_TIMEOUT_USEC=1800000000\nSTATUS=" + text);
+    return Send("EXTEND_TIMEOUT_USEC=" + ToString(extension.count()) + "\nSTATUS=" + text);
 }
 
-ScopedStartupHeartbeat::ScopedStartupHeartbeat(std::string status)
-    : m_status(std::move(status))
+ScopedStartupHeartbeat::ScopedStartupHeartbeat(std::string status, std::chrono::milliseconds max_total,
+                                               std::chrono::milliseconds interval)
+    : m_status(std::move(status)), m_max_total(max_total), m_interval(interval)
 {
     if (!Active()) return;
     m_thread = std::thread([this] { Run(); });
@@ -172,13 +196,29 @@ void ScopedStartupHeartbeat::Run()
 {
     util::ThreadRename("sdnotify");
 
+    using std::chrono::microseconds;
+    const auto start = std::chrono::steady_clock::now();
+    const microseconds max_total = std::chrono::duration_cast<microseconds>(m_max_total);
+
     std::unique_lock<std::mutex> lock(m_mutex);
     while (!m_stop) {
+        // A stop requested during this step must run into the stop timeout.
+        if (ShutdownCheckSaysStop()) return;
+
+        // No extension reaches past max_total from the start of the step.
+        const microseconds remaining =
+            max_total - std::chrono::duration_cast<microseconds>(std::chrono::steady_clock::now() - start);
+        if (remaining.count() <= 0) {
+            LogPrintf("sdnotify: %s has run for %d seconds; the start timeout is no longer extended for it\n",
+                      m_status, std::chrono::duration_cast<std::chrono::seconds>(m_max_total).count());
+            return;
+        }
+
         // Only Send() is called from here, never wallet or chain code.
         lock.unlock();
-        ExtendStartTimeout(m_status);
+        ExtendStartTimeout(m_status, std::min(START_EXTENSION, remaining));
         lock.lock();
-        m_cv.wait_for(lock, std::chrono::seconds(60), [this] { return m_stop; });
+        m_cv.wait_for(lock, m_interval, [this] { return m_stop; });
     }
 }
 
