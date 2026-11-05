@@ -1107,6 +1107,16 @@ class CopyTests(ServiceTestBase):
         self.assertEqual(names, ["a", "a/b", "gridcoinresearch.conf-x", "walletbackups",
                                  "walletbackups/gridcoinresearch.conf-2026", "walletbackups/wallet-2026-11-01T00-00-00Z.dat"])
 
+    def test_list_dir_sees_entries_made_since_an_earlier_listing(self):
+        # On btrfs a directory description lists up to where it stood when last rewound, so a
+        # second os.listdir(fd) can miss an entry made after the first; list_dir must not.
+        dst_fd = os.open(self.dst, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, dst_fd)
+        self.assertEqual(svc.list_dir(dst_fd), [])
+        os.listdir(dst_fd)
+        write_tree(self.dst, {"new": b"n"})
+        self.assertEqual(svc.list_dir(dst_fd), ["new"])
+
     def test_open_entry_refuses_an_entry_swapped_after_lstat(self):
         write_tree(self.src, {"a": b"1"})
         real_stat = os.stat
@@ -2024,6 +2034,73 @@ class EnableTests(SwitchTestBase):
         self.assertIn("not UTF-8", err)
         self.assertIn("50-gridcoin-service.conf", err)
         self.assertEqual(self.host.calls, [])
+
+    def shared_conf_files(self):
+        files = self.user_files()
+        files["testnet/wallet.dat"] = b"testnet wallet"
+        return files
+
+    def test_enable_refuses_a_datadir_changed_before_the_lock(self):
+        # Step 1 decides from a listing; the user's processes and the lock come later.
+        original = svc.end_user_processes
+        changes = {
+            "conf deleted": lambda: os.unlink(os.path.join(self.datadir, "gridcoinresearch.conf")),
+            "entry added": lambda: write_tree(self.datadir, {"new.dat": b"n"}),
+            "testnet removed": lambda: svc_rmtree(os.path.join(self.datadir, "testnet")),
+        }
+        for name, change in changes.items():
+            with self.subTest(change=name):
+                svc_rmtree(self.datadir)
+                write_tree(self.datadir, self.shared_conf_files())
+
+                def then_change(*args, _change=change, **kwargs):
+                    original(*args, **kwargs)
+                    _change()
+
+                with mock.patch.object(svc, "end_user_processes", then_change):
+                    rc, out, err = self.run_main("enable", "bob")
+                self.assertEqual(rc, 1)
+                self.assertIn("changed", err)
+                self.assertIn("nothing was copied", err)
+                self.assertNotIn("Traceback", err)
+                self.assertFalse(os.path.exists(self.target()) and os.listdir(self.target()))
+                self.assertEqual(self.stashes(self.home, ".GridcoinResearch.in-service-"), [])
+
+    def test_enable_refuses_a_conf_gone_before_it_is_read(self):
+        write_tree(self.datadir, self.shared_conf_files())
+        original = svc.quarantine_files
+
+        def conf_gone(*args, **kwargs):
+            os.unlink(os.path.join(self.datadir, "gridcoinresearch.conf"))
+            return original(*args, **kwargs)
+
+        with mock.patch.object(svc, "quarantine_files", conf_gone):
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("changed while it was read", err)
+        self.assertIn("nothing was copied", err)
+        self.assertEqual(os.listdir(self.target()), [])
+        self.assertEqual(self.stashes(self.home, ".GridcoinResearch.in-service-"), [])
+
+    def test_an_unforeseen_error_still_ends_with_the_state(self):
+        write_tree(self.datadir, self.user_files())
+
+        def broken(*args, **kwargs):
+            raise KeyError("something")
+
+        with mock.patch.object(svc, "sanitize_quarantined", broken):
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("unexpected KeyError", err)
+        self.assertIn("nothing was copied", err)
+
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        with mock.patch.object(svc, "report_quarantine", broken):
+            rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("unexpected KeyError", err)
+        self.assertIn("the wallet is copied to %s" % self.datadir, err)
 
     def test_enable_refuses_unknown_user_or_missing_datadir(self):
         rc, out, err = self.run_main("enable", "nobody")
