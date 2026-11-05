@@ -342,7 +342,6 @@ class CMakeValuesTests(unittest.TestCase):
                 configured = load_tool(path)
             self.assertEqual(configured.autounlock_units_installed(), installed, value)
 
-
     def test_tmpfiles_paths_are_declared_once_across_networks(self):
         # gridcoin.tmpfiles.in is installed once per network; any other *.tmpfiles file is
         # installed under the same name by both, so it counts once.
@@ -449,8 +448,8 @@ class DesktopFileTests(unittest.TestCase):
         if shutil.which("cmake") is None:
             self.skipTest("cmake is not installed")
         out = os.path.join(tmp, "gridcoinresearch.desktop")
-        args = ["cmake"] + ["-D%s=%s" % item for item in options.items()] + ["-DGRC_DESKTOP_FILE=" + out,
-                                                                              "-P", DESKTOP_MODULE]
+        args = (["cmake"] + ["-D%s=%s" % item for item in options.items()]
+                + ["-DGRC_DESKTOP_FILE=" + out, "-P", DESKTOP_MODULE])
         subprocess.run(args, check=True, capture_output=True)
         with open(out, encoding="utf8") as f:
             return f.read()
@@ -2304,7 +2303,8 @@ class EnableTests(SwitchTestBase):
         advice = {"enable": "enable moves the user's wallet into %s, which the service does not run on; to run it "
                             "there, change that ExecStart= to -datadir=%s first" % (default, default),
                   "disable": "disable moves the wallet in %s back to its user, and the service does not run on "
-                             "that; change that ExecStart= back to -datadir=%s, then rerun disable" % (default, default)}
+                             "that; change that ExecStart= back to -datadir=%s, then rerun disable"
+                             % (default, default)}
         for argv in (("enable", "bob"), ("disable", "bob")):
             with self.subTest(argv=argv):
                 if argv[0] == "disable":
@@ -3769,9 +3769,8 @@ class SwitchOverTests(ServiceTestBase):
             with self.subTest(word=word):
                 svc_rmtree(self.system_unit_dir("gridcointestnetd"))
                 self.system_override("%s -datadir=%s" % (word, data), daemon="gridcointestnetd")
-                rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n",
-                                                                                         network="test"),
-                                             "--network=test")
+                state = self.write_state("system-core\n", network="test")
+                rc, out, err = self.run_main("switch-over", "--state=" + state, "--network=test")
                 self.assertEqual(rc, 0, err)
 
     def test_switch_over_never_takes_the_datadir_from_a_conf(self):
@@ -3956,6 +3955,19 @@ class SwitchOverTests(ServiceTestBase):
                 else:
                     self.assertIn(expected, text)
                     self.assertIn("ReadWritePaths=%s\n" % data, text)
+
+    def test_switch_over_resolves_the_hidden_directories_too(self):
+        # A hidden directory that is a link, as /home is to /data1/home on some hosts, hides where
+        # it leads: systemd resolves the paths it hides.
+        real = os.path.join(self.tmp.name, "data1", "home")
+        os.makedirs(os.path.join(real, "alice", "grc"))
+        hidden = os.path.join(self.tmp.name, "linkhome")
+        os.symlink(real, hidden)
+        self.paths = dataclasses.replace(self.paths, unit_hidden=self.paths.unit_hidden + (hidden,))
+        self.system_override("-datadir=%s" % os.path.join(real, "alice", "grc"))
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+        self.assertEqual(rc, 1)
+        self.assertIn("is under %s, where %s leads, which the unit's sandbox hides" % (real, hidden), err)
 
     def test_switch_over_carries_only_what_differs_from_the_unit(self):
         conf = os.path.join(self.tmp.name, "etc-other.conf")

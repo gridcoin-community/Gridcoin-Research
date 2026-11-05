@@ -2656,13 +2656,18 @@ def carried_system_path(net, value, what, display, paths, host, datadir=None, na
     if UNSAFE_PATH_RE.search(value) or any(part in (".", "..") for part in value.split("/")):
         raise UserError("%s may not contain whitespace, quotes, backslash, $, %%, ;, '.' or '..'" % name)
     value = normalize_path(value)
-    # The path as written and as it resolves through links: either under a hidden directory is
-    # hidden from the core.
+    # The path as written and as it resolves through links: either under a hidden directory, as
+    # written or as it resolves (systemd resolves the paths it hides, so a /home linked to
+    # /data1/home hides /data1/home), is hidden from the core.
+    hidden_dirs = [(hidden, hidden) for hidden in paths.unit_hidden]
+    hidden_dirs += [(os.path.realpath(hidden), hidden) for hidden in paths.unit_hidden
+                    if os.path.realpath(hidden) != hidden]
     for candidate in (value, os.path.realpath(value)):
-        for hidden in paths.unit_hidden:
+        for hidden, written in hidden_dirs:
             if candidate == hidden or candidate.startswith(hidden.rstrip("/") + "/"):
+                where = written if hidden == written else "%s, where %s leads" % (hidden, written)
                 raise UserError("%s is under %s, which the unit's sandbox hides (ProtectHome=, PrivateTmp=)"
-                                % (name, hidden))
+                                % (name, where))
     if not (os.path.isdir(value) if what == "datadir" else os.path.isfile(value)):
         raise UserError("%s does not exist" % name)
     if what == "conf":
