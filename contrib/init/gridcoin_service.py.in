@@ -317,6 +317,8 @@ def validate_user(name, host, paths):
         raise UserError("unknown user '%s'" % name) from None
     if pw.pw_uid == 0:
         raise UserError("refusing uid 0")
+    if pw.pw_gid == 0:
+        raise UserError("'%s' has gid 0 (root's group) as its primary group; refusing" % name)
     if pw.pw_uid < uid_min(paths):
         raise UserError("'%s' is a system account (uid %d below UID_MIN)" % (name, pw.pw_uid))
     return pw
@@ -1334,8 +1336,8 @@ def report_quarantine(found, backups, q_display, lines):
 
 
 def service_account(net, host, paths):
-    """The network's service account, which must be a system account: not uid 0, and below
-    UID_MIN (login.defs, or 1000)."""
+    """The network's service account, which must be a system account: not uid 0, below UID_MIN
+    (login.defs, or 1000), and not in group 0."""
     try:
         acct = host.getpwnam(net.account)
     except KeyError:
@@ -1344,6 +1346,9 @@ def service_account(net, host, paths):
     if acct.pw_uid == 0 or acct.pw_uid >= limit:
         raise UserError("the service account %s has uid %d; it must be a system account (uid 1 to %d)"
                         % (net.account, acct.pw_uid, limit - 1))
+    if acct.pw_gid == 0:
+        raise UserError("the service account %s has gid 0 (root's group) as its primary group; refusing"
+                        % net.account)
     return acct
 
 

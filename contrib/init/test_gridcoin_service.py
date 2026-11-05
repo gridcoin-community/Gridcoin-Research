@@ -217,6 +217,11 @@ class ValidateUserTests(ServiceTestBase):
         self.assertEqual(rc, 1)
         self.assertEqual(host.calls, [])
 
+    def test_validate_user_refuses_gid_0(self):
+        host = FakeHost(users={"bob": Passwd("bob", 1000, self.home, 0)})
+        with self.assertRaisesRegex(svc.UserError, "gid 0"):
+            svc.validate_user("bob", host, self.paths)
+
     def test_uid_min_default_when_login_defs_missing(self):
         os.unlink(self.paths.login_defs)
         host = FakeHost(users={"low": Passwd("low", 999, "/h"), "ok": Passwd("ok", 1000, "/h")})
@@ -1252,6 +1257,11 @@ class PrivilegeTests(ServiceTestBase):
         os.unlink(self.paths.login_defs)
         host = FakeHost(users={"gridcoin": Passwd("gridcoin", 1000, "/", 990)})
         with self.assertRaises(svc.UserError):
+            svc.service_account(net, host, self.paths)
+        with open(self.paths.login_defs, "w", encoding="utf8") as f:
+            f.write("UID_MIN 1000\n")
+        host = FakeHost(users={"gridcoin": Passwd("gridcoin", 990, "/var/lib/gridcoinresearchd", 0)})
+        with self.assertRaisesRegex(svc.UserError, "gid 0"):
             svc.service_account(net, host, self.paths)
 
     def test_real_host_checks_each_drop_result(self):
