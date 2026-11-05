@@ -106,10 +106,8 @@ On every start the entrypoint also sets `printtoconsole=1`, so the core's log go
 `docker logs`.
 
 The entrypoint writes the file only when there is none: `GRC_RPC_ALLOW_SUBNET` changes
-nothing in an existing file, and the RPC lines of an existing file stay as they are. A
-file written by an earlier image has `rpcallowip=` lines for `10.*.*.*`, `172.*.*.*` and
-`192.168.*.*` and no `rpcbind=`. Without `rpcbind=`, any `rpcallowip=` line makes the
-core listen on every interface, so replace those lines with the ones above.
+nothing in an existing file, and the RPC lines of an existing file stay as they are.
+`rpcbind=127.0.0.1` with `rpcallowip=127.0.0.1` keeps RPC on the container's loopback.
 
 RPC is plain HTTP: the password and every request cross the network unencrypted. Keep
 the port on loopback or a Docker network, and tunnel it (SSH, for example) where it must
