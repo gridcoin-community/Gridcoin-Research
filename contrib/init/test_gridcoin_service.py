@@ -1087,7 +1087,8 @@ class CopyTests(ServiceTestBase):
         self.assertEqual(read_tree(self.dst), {"c": b"2"})
 
     def test_stream_leaves_out_config_backups(self):
-        write_tree(self.src, {"walletbackups/gridcoinresearch.conf-x": b"1", "walletbackups/gridcoinsettings.json-y": b"2",
+        write_tree(self.src, {"walletbackups/gridcoinresearch.conf-x": b"1",
+                              "walletbackups/gridcoinsettings.json-y": b"2",
                               "walletbackups/wallet-z.dat": b"3", "gridcoinresearch.conf-x": b"4",
                               "a/walletbackups/gridcoinresearch.conf-x": b"5"})
         buf = io.BytesIO()
@@ -1751,6 +1752,21 @@ class EnableTests(SwitchTestBase):
         self.assertEqual(read_tree(self.datadir)["gridcoinresearch.conf"], self.ORIGINAL_CONF + b"addnode=1.2.3.4\n")
         self.assertIn("Kept the gridcoinresearch.conf", out)
         self.assertEqual(read_tree(self.datadir)["wallet.dat"], b"wallet")
+
+    def test_shared_conf_removed_meanwhile_comes_back_from_the_stash(self):
+        files = self.user_files()
+        files["testnet/wallet.dat"] = b"testnet wallet"
+        write_tree(self.datadir, files)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        [stash] = self.stashes(self.home, ".GridcoinResearch.in-service-")
+        # The copy belongs to the user, like the entries moved in beside it.
+        self.assertEqual(os.stat(os.path.join(stash, "gridcoinresearch.conf")).st_uid, self.uid)
+        os.unlink(os.path.join(self.datadir, "gridcoinresearch.conf"))
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(read_tree(self.datadir)["gridcoinresearch.conf"], self.ORIGINAL_CONF)
+        self.assertIn("restored", out)
 
     def test_mainnet_disable_refuses_more_than_testnet_and_the_conf(self):
         self.write_record()

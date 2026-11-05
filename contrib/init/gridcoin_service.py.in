@@ -1162,11 +1162,11 @@ def is_testnet_entry(name):
     return name == "testnet" or name.startswith("testnet" + STASH_INFIX)
 
 
-def stash_source(parent_fd, name, src_fd, stash_name, keep, display, copies=None):
+def stash_source(parent_fd, name, src_fd, stash_name, keep, display, copies=None, copy_owner=None):
     """Move the entries of src_fd (the directory name in parent_fd), except those in keep, into a
-    new directory stash_name in parent_fd, root's and 0700, write copies ({name: bytes}) there as
-    root's files, and remove src once it is empty. All of it goes through parent_fd, which was
-    opened without following a symlink."""
+    new directory stash_name in parent_fd, root's and 0700, write copies ({name: bytes}) there
+    owned by copy_owner (a passwd entry), like the entries moved in, and remove src once it is
+    empty. All of it goes through parent_fd, which was opened without following a symlink."""
     stash_fd = create_dir(stash_name, parent_fd, display)
     try:
         # root:root, whatever group a setgid parent would hand down.
@@ -1176,7 +1176,10 @@ def stash_source(parent_fd, name, src_fd, stash_name, keep, display, copies=None
             if entry not in keep:
                 os.rename(entry, entry, src_dir_fd=src_fd, dst_dir_fd=stash_fd)
         for entry, data in (copies or {}).items():
-            write_new_file(stash_fd, entry, data)
+            with os.fdopen(os.open(entry, NEW_FILE_FLAGS, 0o600, dir_fd=stash_fd), "wb") as f:
+                if os.geteuid() == 0 and copy_owner is not None:
+                    os.fchown(f.fileno(), copy_owner.pw_uid, copy_owner.pw_gid)
+                f.write(data)
     finally:
         os.close(stash_fd)
     if not os.listdir(src_fd):
@@ -1554,7 +1557,7 @@ def cmd_enable(args, net, host, paths):
         with stage("the wallet is copied to %s; the source may be split between %s and %s, so move the stash's "
                    "entries back, or finish the move, before going on" % (t_display, s_display, stash_display)):
             stash_source(s_parent_fd, s_name, s_fd, stash_name, keep_in_source, stash_display,
-                         copies={CONF_NAME: found[CONF_NAME]} if shared_conf else None)
+                         copies={CONF_NAME: found[CONF_NAME]} if shared_conf else None, copy_owner=pw)
         if shared_conf:
             print("%s stays in %s, as testnet reads it too; copies are in the stash and the quarantine."
                   % (CONF_NAME, d_display))
