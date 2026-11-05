@@ -667,10 +667,14 @@ BOOST_FIXTURE_TEST_CASE(attach_group_ipcdir_inside_or_beside_the_data_directory_
     fs::create_directories(beside);
     gArgs.ForceSetArg("-ipcdir", beside.string());
     BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
+    // Created, so that the comparison is reached: a directory that does not
+    // exist yet is accepted before it.
+    fs::create_directories(beside / "ipc");
     gArgs.ForceSetArg("-ipcdir", (beside / "ipc").string());
     BOOST_CHECK(!ipc::AttachGroupIpcDirRefusal());
 
     fs::remove(inside, ec);
+    fs::remove(beside / "ipc", ec);
     fs::remove(beside, ec);
 }
 
