@@ -7,7 +7,7 @@ CONF=/etc/gridcoin/gridcoin.conf
 TOOL=/usr/sbin/gridcoin-service
 STATE_DIR=/var/lib/gridcoin-service
 STATE=$STATE_DIR/switchover-main.state
-# The preinst's record for an aborted upgrade, no longer needed once configure is done.
+# The preinst's record for an aborted upgrade.
 RECORDED=$STATE_DIR/switchover-main.recorded
 BEFORE=$STATE_DIR/switchover-main.before
 # The first version of this package with the notify units. Set it at the release cut,
@@ -25,9 +25,8 @@ create_conf() {
         exit 1
     fi
     new=$(mktemp "$CONF.XXXXXX")
-    # From here the file holds the password: it goes again on any failure.
-    trap 'rm -f "$new"' EXIT
-    trap 'rm -f "$new"; exit 1' HUP INT TERM
+    # From here the file holds the password: the trap removes it on any failure.
+    conf_tmp=$new
     cat > "$new" <<EOF
 # RPC credentials, generated when the $DAEMON package was installed. The local RPC
 # interface is credential-protected even though it listens on localhost only; the
@@ -46,7 +45,7 @@ EOF
     chgrp "$ACCOUNT" "$new"
     chmod 0640 "$new"
     mv "$new" "$CONF"
-    trap - EXIT HUP INT TERM
+    conf_tmp=
 }
 
 setup_conf() {
@@ -82,8 +81,15 @@ restart_running_cores() {
     done
 }
 
+conf_tmp=
+
 case "$1" in
     configure)
+        # At every exit of configure, failures included: the preinst's record for an aborted
+        # upgrade is of no use once configure runs, and a temporary conf holds a generated
+        # password.
+        trap 'rm -f "$RECORDED" "$BEFORE" ${conf_tmp:+"$conf_tmp"}' EXIT
+        trap 'rm -f "$RECORDED" "$BEFORE" ${conf_tmp:+"$conf_tmp"}; exit 1' HUP INT TERM
         # The service account and attach group, then /etc/gridcoin (root:gridcoin 0710).
         systemd-sysusers /usr/lib/sysusers.d/gridcoinresearchd.conf
         systemd-tmpfiles --create /usr/lib/tmpfiles.d/gridcoinresearchd.conf
@@ -112,7 +118,6 @@ case "$1" in
             echo "$DAEMON: systemd is not running, so nothing was switched over to the new units." >&2
             echo "Once it runs, run: $TOOL switch-over --state=$STATE" >&2
         fi
-        rm -f "$RECORDED" "$BEFORE"
         ;;
 esac
 

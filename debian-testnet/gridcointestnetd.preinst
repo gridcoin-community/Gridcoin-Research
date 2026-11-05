@@ -88,10 +88,25 @@ record_state() {
         rm -f "$new"
         return 0
     fi
-    cp "$new" "$RECORDED"
+    # The pending state is copied first: if that fails, nothing is recorded yet, and an abort
+    # leaves the pending state as it is. The record then says whether there was one.
     if [ -e "$STATE" ]; then
-        # A switch-over that has not finished yet keeps its entries.
+        before=yes
         cp -p "$STATE" "$BEFORE"
+    else
+        before=no
+        rm -f "$BEFORE"
+    fi
+    (
+        umask 077
+        {
+            printf '%s\n' "before $before"
+            cat "$new"
+        } > "$RECORDED.new"
+    )
+    mv "$RECORDED.new" "$RECORDED"
+    if [ "$before" = yes ]; then
+        # A switch-over that has not finished yet keeps its entries.
         cat "$new" >> "$STATE"
         rm -f "$new"
     else

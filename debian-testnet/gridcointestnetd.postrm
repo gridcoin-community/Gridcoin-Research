@@ -14,8 +14,13 @@ undo_preinst() {
     if [ ! -e "$RECORDED" ]; then
         return 0
     fi
+    before=
     while read -r kind user; do
         case $kind in
+            before)
+                before=$user
+                continue
+                ;;
             autounlock) unit=$OLD_AUTOUNLOCK@$user.service ;;
             system-autounlock) unit=$OLD_AUTOUNLOCK.service ;;
             *) continue ;;
@@ -24,12 +29,14 @@ undo_preinst() {
             echo "gridcointestnetd: $unit could not be turned back on, and was left off." >&2
         fi
     done < "$RECORDED"
-    if [ -e "$BEFORE" ]; then
+    if [ "$before" = no ]; then
+        rm -f "$STATE"
+    elif [ "$before" = yes ] && [ -e "$BEFORE" ]; then
         mv "$BEFORE" "$STATE"
     else
-        rm -f "$STATE"
+        echo "gridcointestnetd: $STATE was kept as it is, as its state from before this upgrade is not known." >&2
     fi
-    rm -f "$RECORDED"
+    rm -f "$RECORDED" "$BEFORE"
 }
 
 case "$1" in
@@ -43,6 +50,7 @@ case "$1" in
         for dropin in /etc/systemd/system/gridcointestnetd@*.service.d/50-gridcoin-service.conf \
                       /etc/systemd/system/gridcointestnetd@*.service.d/60-gridcoin-autounlock.conf \
                       /etc/systemd/system/gridcointestnetd.service.d/60-gridcoin-autounlock.conf \
+                      /etc/systemd/system/gridcointestnetd.service.d/50-gridcoin-service.conf \
                       /etc/systemd/system/gridcointestnet-autounlock.service.d/50-existing-credential.conf; do
             if [ -f "$dropin" ] || [ -L "$dropin" ]; then
                 rm -f "$dropin"

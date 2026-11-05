@@ -34,7 +34,11 @@ NEW = "5.5.2.1-1"
 LATER = "5.5.3.0-1"
 # The absolute paths a rewritten script may still name: devices it reads or writes to.
 ALLOWED_ABSOLUTE = {"/dev/null", "/dev/urandom"}
-COREUTILS = ("mkdir", "chmod", "rm", "cat", "mv", "od", "tr", "mktemp", "grep", "ln", "ls", "rmdir", "cp", "sed")
+# The top-level directories of a host: a path into one of them that the rewrite did not take into
+# the fake root is refused wherever it stands, after a word character, "-", "." or "$" too
+# (cp -t/etc/x).
+HOST_TOP = r"(?:etc|var|run|usr|home|root|tmp|srv|opt|lib|lib32|lib64|bin|sbin|boot|proc|sys|mnt|media|dev)"
+COREUTILS = ("mkdir", "chmod", "rm", "cat", "mv", "od", "tr", "mktemp", "grep", "ln", "ls", "rmdir", "sed")
 
 # Debian version comparison (dpkg's verrevcmp), for the dpkg stub.
 DPKG_COMPARE = r'''
@@ -108,16 +112,52 @@ done
 exit 0
 '''
 STAT_STUB = '''#!/bin/sh
-# stat -c %%u <path>: 0 for the paths in $ROOT_OWNED, as if root owned them.
+# stat -c %%u <path>: 0 for the paths in $ROOT_OWNED, as if root owned them, and 1000 for every
+# other path, whoever really owns it (the suite runs as root in CI images).
 if [ "$1" = -c ] && [ "$2" = %%u ]; then
-    case " $ROOT_OWNED " in *" $3 "*) echo 0; exit 0 ;; esac
+    case " $ROOT_OWNED " in
+        *" $3 "*) echo 0 ;;
+        *) echo 1000 ;;
+    esac
+    exit 0
+fi
+exec %(real)s "$@"
+'''
+# cp, failing when one of its arguments is in $FAIL.
+CP_STUB = '''#!/bin/sh
+for word in "$@"; do
+    case " $FAIL " in *" $word "*) exit 1 ;; esac
+done
+exec %(real)s "$@"
+'''
+# What a real stat answers for %%u when root owns every file: the suite must not depend on it.
+ROOT_OWNER_STAT = '''#!/bin/sh
+if [ "$1" = -c ] && [ "$2" = %%u ]; then
+    echo 0
+    exit 0
 fi
 exec %(real)s "$@"
 '''
 
 
+def outside_paths(text):
+    """The absolute paths a rewritten script names outside the fake root, by line: any path into a
+    host directory wherever it stands, and any other absolute path after a separator, apart from
+    ALLOWED_ABSOLUTE. Comment lines are skipped; paths in the fake root are @ROOT@/..."""
+    found = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if line.lstrip().startswith("#"):
+            continue
+        line = re.sub(r"@ROOT@/[^\s\"';|)]*", "@P@", line)
+        paths = [re.match(r"/[^\s\"';|)]*", line[m.start():]).group(0)
+                 for m in re.finditer(r"/%s(?=/|\b)" % HOST_TOP, line)]
+        paths += re.findall(r"(?:^|[\s\"'=<>(|])(/[A-Za-z][^\s\"';|)]*)", line)
+        found += [(number, path) for path in paths if path not in ALLOWED_ABSOLUTE]
+    return found
+
+
 class FakeRoot:
-    def __init__(self, test, network):
+    def __init__(self, test, network, real_owner_root=False):
         self.test = test
         self.net = NETWORKS[network]
         self.network = network
@@ -146,7 +186,14 @@ class FakeRoot:
         for name, extra in stubs.items():
             self.write_executable(os.path.join(self.bin, name), STUB % {"name": name, "extra": extra})
         real_stat = shutil.which("stat", path="/usr/bin:/bin")
+        if real_owner_root or os.environ.get("GRC_HARNESS_SIMULATE_ROOT"):
+            # Behind the stub, a stat that says root owns everything, as it does for a suite run as root.
+            stand_in = os.path.join(self.tmp.name, "root-owner-stat")
+            self.write_executable(stand_in, ROOT_OWNER_STAT % {"real": real_stat})
+            real_stat = stand_in
         self.write_executable(os.path.join(self.bin, "stat"), STAT_STUB % {"real": real_stat})
+        self.write_executable(os.path.join(self.bin, "cp"),
+                              CP_STUB % {"real": shutil.which("cp", path="/usr/bin:/bin")})
         self.set_tool(0)
 
     def path(self, rel):
@@ -193,12 +240,8 @@ class FakeRoot:
         with open(source, encoding="utf8") as f:
             text = f.read()
         text = re.sub(r"(?<![\w.$/-])/(etc|var|run|usr)/", "@ROOT@/\\1/", text)
-        for number, line in enumerate(text.splitlines(), start=1):
-            if line.lstrip().startswith("#"):
-                continue
-            for path in re.findall(r"(?:^|[\s\"'=<>(|])(/[A-Za-z][^\s\"';|)]*)", line):
-                if path not in ALLOWED_ABSOLUTE:
-                    self.test.fail("%s:%d names %s outside the fake root" % (script, number, path))
+        for number, path in outside_paths(text):
+            self.test.fail("%s:%d names %s outside the fake root" % (script, number, path))
         return text.replace("@ROOT@", self.root)
 
     def run(self, script, *args, fail=(), root_owned=()):
@@ -239,6 +282,32 @@ class HarnessTests(unittest.TestCase):
                 self.assertNotRegex(text, r"(?m)^[^#]*(?<![\w.$/-])/(etc|var|run|usr)/", script)
 
 
+class GuardTests(unittest.TestCase):
+    def test_the_guard_flags_host_paths_wherever_they_stand(self):
+        for line in ("cp -t/etc/x y", "a=x/var/lib/y", "echo .$/run/x", "ls $X/usr/bin", "touch /srv/x",
+                     "cat \"/home/x\"", "rm -f /tmp/x"):
+            self.assertTrue(outside_paths(line + "\n"), line)
+        for line in ("echo \"$STATE_DIR/switchover-main.state\"", "rm -f @ROOT@/etc/x @ROOT@/var/lib/y",
+                     "# cp -t/etc/x", "cat /dev/null", "od -N 32 /dev/urandom", "for f in \"$UNIT_DIR\"/*.wants/x; do",
+                     "rmdir \"${dropin%/*}\""):
+            self.assertEqual(outside_paths(line + "\n"), [], line)
+
+
+class OwnerTests(unittest.TestCase):
+    def test_ownership_does_not_come_from_the_real_owner(self):
+        # As root, every file of the fake root is root's; the conf is still not "root-owned" unless
+        # the test says so.
+        fake = FakeRoot(self, "main", real_owner_root=True)
+        conf = fake.path("etc/gridcoin/gridcoin.conf")
+        with open(conf, "w", encoding="utf8") as f:
+            f.write("rpcuser=x\n")
+        os.chmod(conf, 0o604)
+        rc, out, err = fake.run("postinst", "configure", OLD)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(os.stat(conf).st_mode & 0o777, 0o604)
+        self.assertEqual(fake.calls("chgrp"), [])
+
+
 class PreinstTests(unittest.TestCase):
     def test_records_the_old_setup_and_turns_the_old_autounlock_off(self):
         for network in NETWORKS:
@@ -264,7 +333,8 @@ class PreinstTests(unittest.TestCase):
                 self.assertEqual(fake.read(state).splitlines(), expected)
                 self.assertEqual(os.stat(state).st_mode & 0o777, 0o600)
                 self.assertEqual(os.stat(os.path.dirname(state)).st_mode & 0o777, 0o700)
-                self.assertEqual(fake.read(state.replace(".state", ".recorded")).splitlines(), expected)
+                recorded = state.replace(".state", ".recorded")
+                self.assertEqual(fake.read(recorded).splitlines(), ["before no"] + expected)
                 disabled = ["systemctl disable %s@alice.service" % net["old_autounlock"]]
                 if network == "main":
                     disabled.append("systemctl disable %s.service" % net["old_autounlock"])
@@ -274,6 +344,25 @@ class PreinstTests(unittest.TestCase):
                 rc, out, err = fake.run("preinst", "upgrade", OLD)
                 self.assertEqual(rc, 0, err)
                 self.assertEqual(fake.read(state).splitlines(), expected + expected)
+                self.assertEqual(fake.read(recorded).splitlines(), ["before yes"] + expected)
+
+    def test_a_failed_copy_of_the_earlier_state_keeps_it(self):
+        # The copy of a pending state file fails: the preinst stops before it records or turns
+        # anything off, and the abort that follows leaves the pending state as it is.
+        fake = FakeRoot(self, "main")
+        fake.systemd_running()
+        fake.link("gridcoinresearchd@alice.service", "gridcoinresearchd-autounlock@alice.service")
+        os.makedirs(os.path.dirname(fake.state_path()))
+        with open(fake.state_path(), "w", encoding="utf8") as f:
+            f.write("core-active dave\n")
+        before = fake.state_path().replace(".state", ".before")
+        rc, out, err = fake.run("preinst", "upgrade", OLD, fail=(before,))
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(fake.calls("systemctl disable"), [])
+        rc, out, err = fake.run("postrm", "abort-upgrade", OLD)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(fake.read(fake.state_path()), "core-active dave\n")
+        self.assertEqual(fake.calls("systemctl"), [])
 
     def test_a_link_without_its_unit_file_is_removed(self):
         fake = FakeRoot(self, "main")
@@ -331,10 +420,12 @@ class PostinstTests(unittest.TestCase):
                 self.assertEqual(fake.calls("systemctl"), [])
 
     def test_a_failure_while_creating_the_conf_leaves_no_temporary_file(self):
-        fake = FakeRoot(self, "main")
-        rc, out, err = fake.run("postinst", "configure", "", fail=("chgrp",))
-        self.assertNotEqual(rc, 0)
-        self.assertEqual(os.listdir(os.path.dirname(self.conf(fake))), [])
+        for network in NETWORKS:
+            with self.subTest(network=network):
+                fake = FakeRoot(self, network)
+                rc, out, err = fake.run("postinst", "configure", "", fail=("chgrp",))
+                self.assertNotEqual(rc, 0)
+                self.assertEqual(os.listdir(os.path.dirname(self.conf(fake))), [])
 
     def test_regroups_only_a_conf_of_roots(self):
         fake = FakeRoot(self, "test")
@@ -413,6 +504,20 @@ class PostinstTests(unittest.TestCase):
         self.assertIn("%s switch-over --state=%s" % (fake.net["tool"], fake.state_path()), err)
         self.assertTrue(os.path.exists(fake.state_path()))
 
+    def test_a_failed_configure_drops_the_preinst_record_too(self):
+        for network in NETWORKS:
+            with self.subTest(network=network):
+                fake = FakeRoot(self, network)
+                state_dir = fake.path("var/lib/gridcoin-service")
+                os.makedirs(state_dir)
+                for name in ("recorded", "before"):
+                    with open(os.path.join(state_dir, "switchover-%s.%s" % (network, name)), "w", encoding="utf8") as f:
+                        f.write("before no\n")
+                rc, out, err = fake.run("postinst", "configure", OLD, fail=("chgrp",))
+                self.assertNotEqual(rc, 0)
+                self.assertEqual(os.listdir(state_dir), [])
+                self.assertEqual(os.listdir(fake.path(fake.net["conf_dir"])), [])
+
     def test_a_finished_configure_drops_the_preinst_record(self):
         fake = FakeRoot(self, "main")
         fake.systemd_running()
@@ -455,16 +560,37 @@ class AbortTests(unittest.TestCase):
                                  [os.path.basename(fake.state_path())])
 
     def test_an_aborted_install_says_what_was_left_off(self):
-        fake = FakeRoot(self, "main")
-        fake.systemd_running()
-        fake.link("gridcoinresearchd@alice.service", "gridcoinresearchd-autounlock@alice.service")
-        rc, out, err = fake.run("preinst", "install", OLD)
-        self.assertEqual(rc, 0, err)
-        rc, out, err = fake.run("postrm", "abort-install", OLD, fail=("enable",))
-        self.assertEqual(rc, 0, err)
-        self.assertIn("gridcoinresearchd-autounlock@alice.service", err)
-        self.assertIn("left off", err)
-        self.assertEqual(os.listdir(fake.path("var/lib/gridcoin-service")), [])
+        for network in NETWORKS:
+            with self.subTest(network=network):
+                fake = FakeRoot(self, network)
+                fake.systemd_running()
+                old = "%s@alice.service" % fake.net["old_autounlock"]
+                fake.link("%s@alice.service" % fake.net["daemon"], old)
+                rc, out, err = fake.run("preinst", "install", OLD)
+                self.assertEqual(rc, 0, err)
+                rc, out, err = fake.run("postrm", "abort-install", OLD, fail=("enable",))
+                self.assertEqual(rc, 0, err)
+                self.assertIn(old, err)
+                self.assertIn("left off", err)
+                self.assertEqual(os.listdir(fake.path("var/lib/gridcoin-service")), [])
+
+    def test_an_abort_never_drops_a_pending_state_it_cannot_restore(self):
+        for network, recorded in [(n, r) for n in NETWORKS for r in ("before yes\n", "")]:
+            with self.subTest(network=network, recorded=recorded):
+                fake = FakeRoot(self, network)
+                fake.systemd_running()
+                state_dir = os.path.dirname(fake.state_path())
+                os.makedirs(state_dir)
+                with open(fake.state_path(), "w", encoding="utf8") as f:
+                    f.write("core alice\n")
+                # The record says a state file was there before, but its copy is missing; or the
+                # record does not say.
+                with open(os.path.join(state_dir, "switchover-%s.recorded" % network), "w", encoding="utf8") as f:
+                    f.write(recorded + "autounlock alice\n")
+                rc, out, err = fake.run("postrm", "abort-upgrade", OLD)
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(fake.read(fake.state_path()), "core alice\n")
+                self.assertIn(fake.state_path(), err)
 
     def test_an_abort_without_a_record_changes_nothing(self):
         fake = FakeRoot(self, "main")
@@ -498,6 +624,7 @@ class RemovalTests(unittest.TestCase):
                         units + "%s@alice.service.d/60-gridcoin-autounlock.conf" % net["daemon"],
                         units + "%s@bob.service.d/50-gridcoin-service.conf" % net["daemon"],
                         units + "%s.service.d/60-gridcoin-autounlock.conf" % net["daemon"],
+                        units + "%s.service.d/50-gridcoin-service.conf" % net["daemon"],
                         units + "%s.service.d/50-existing-credential.conf" % net["autounlock"],
                         state_dir + "switchover-%s.state" % network,
                         state_dir + "switchover-%s.recorded" % network]
@@ -543,6 +670,15 @@ class VersionTests(unittest.TestCase):
             with open(os.path.join(SOURCE_ROOT, net["tree"], "%s.NEWS" % net["package"]), encoding="utf8") as f:
                 version = re.match(r"\S+ \(([^)]+)\)", f.readline()).group(1)
             self.assertEqual(version.rsplit("-", 1)[0], first[:-1], net["tree"])
+
+
+class NewsTests(unittest.TestCase):
+    def test_news_says_the_system_service_keeps_its_data(self):
+        for net in NETWORKS.values():
+            with open(os.path.join(SOURCE_ROOT, net["tree"], "%s.NEWS" % net["package"]), encoding="utf8") as f:
+                news = " ".join(f.read().split())
+            self.assertIn("-datadir", news, net["tree"])
+            self.assertIn("never starts on a new datadir", news, net["tree"])
 
 
 def maintainer_scripts():
