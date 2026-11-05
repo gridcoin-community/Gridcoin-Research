@@ -62,6 +62,11 @@ STATE_SYSTEM_KINDS = (SYSTEM_CORE, SYSTEM_AUTOUNLOCK)
 # What a drop-in or copy written for the old forking units sets that the notify units cannot keep:
 # the command line, the process type and pid file, notify access, and the account.
 OLD_UNIT_KEYS = ("ExecStart", "Type", "PIDFile", "NotifyAccess", "User", "Group")
+# What sets up the system service's mounts, or the mounts it waits for: a file that sets any of
+# these decides what the paths on its command line lead to. (section, key).
+MOUNT_KEYS = (("Service", "BindPaths"), ("Service", "BindReadOnlyPaths"), ("Service", "RootDirectory"),
+              ("Service", "RootImage"), ("Service", "TemporaryFileSystem"), ("Service", "MountImages"),
+              ("Service", "ExtensionDirectories"), ("Unit", "RequiresMountsFor"))
 # What a drop-in for every per-user instance may not set: the instance's account is its name.
 TEMPLATE_REFUSED_KEYS = ("ExecStart", "Type", "PIDFile", "NotifyAccess", "User")
 # The words of an old per-user command line the new one carries or replaces; any other is lost.
@@ -2745,7 +2750,8 @@ def switch_system_core(net, host, paths):
     The service must never start on a new datadir: a -conf or -datadir the old command line set is
     carried into the unit's drop-in from this tool. An old command line with any other option it
     would drop refuses the switch, and nothing is moved: the service then fails to start on the
-    right data until the admin changes that override.
+    right data until the admin changes that override. So does a file to be moved aside that sets
+    up the service's mounts (MOUNT_KEYS), which the carried paths depend on.
 
     A switch in progress is recorded first, with whether the copy was enabled, so a rerun finishes
     it. Returns whether the unit changed."""
@@ -2759,22 +2765,23 @@ def switch_system_core(net, host, paths):
     ours = os.path.join(dropin_dir(paths, unit), DROPIN_MAIN)
     conf = datadir = None
     command = system_command(net, paths, copy, masked)
-    if command is not None:
-        display, value = command
-        try:
+    moving = ([copy] if copy is not None and not masked else []) + [path for path, _ in stale]
+    try:
+        if command is not None:
+            display, value = command
             conf, datadir = carried_system_paths(net, display, value, display == ours,
                                                  system_sources(net, paths, copy, masked),
                                                  copy is not None and not masked, paths, host)
-        except UserError as e:
-            # Nothing moves: a full copy is the unit still and runs on as it did, while drop-ins on
-            # the notify unit give it a forking command line it fails on.
-            if copy is not None and not masked:
-                outcome = "keeps running on its old command line"
-            else:
-                outcome = "will not start"
-            raise UserError("%s. It stays where it is, and %s %s until you change it; then rerun"
-                            % (e, unit, outcome)) from None
-    moving = ([copy] if copy is not None and not masked else []) + [path for path, _ in stale]
+        refuse_moving_mounts(moving)
+    except UserError as e:
+        # Nothing moves: a full copy is the unit still and runs on as it did, while drop-ins on
+        # the notify unit give it a forking command line it fails on.
+        if copy is not None and not masked:
+            outcome = "keeps running on its old command line"
+        else:
+            outcome = "will not start"
+        raise UserError("%s. It stays where it is, and %s %s until you change it; then rerun"
+                        % (e, unit, outcome)) from None
     if not moving and record is None:
         return False
     if record is not None:
@@ -2800,6 +2807,21 @@ def switch_system_core(net, host, paths):
         step(host, "reenable", unit)
     os.unlink(record_path)
     return True
+
+
+def refuse_moving_mounts(moving):
+    """Refuse to move aside a file (a copy of the unit, or a drop-in) that sets any of MOUNT_KEYS,
+    an empty value included: it would take them along, and the same -datadir and -conf carried
+    into the new unit could then lead elsewhere, or to a directory not yet mounted."""
+    for path in moving:
+        text = read_dropin_text(path) if os.path.exists(path) else None
+        keys = [key for section, key in MOUNT_KEYS if unit_file_settings(text or "", section, key)]
+        if keys:
+            raise UserError("%s sets %s, which decide what the paths on the command line lead to or which mounts the "
+                            "service waits for; moved aside, it would take them along, and the same -datadir and -conf "
+                            "could lead elsewhere. Move %s to a drop-in of its own, then rerun the switch-over"
+                            % (path, ", ".join(key + "=" for key in keys), "that setting" if len(keys) == 1
+                               else "those settings"))
 
 
 def restart_system_service(net, host):
