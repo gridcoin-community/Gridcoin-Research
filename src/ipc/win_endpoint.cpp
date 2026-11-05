@@ -300,21 +300,7 @@ std::optional<std::string> AttachGroupAccountRefusal(const util::winacl::Account
 #ifdef WIN32
 namespace {
 
-//! Closes a handle on every exit.
-class HandleGuard
-{
-public:
-    explicit HandleGuard(HANDLE handle) : m_handle(handle) {}
-    ~HandleGuard() { ::CloseHandle(m_handle); }
-
-    HandleGuard(const HandleGuard&) = delete;
-    HandleGuard& operator=(const HandleGuard&) = delete;
-
-    HANDLE get() const { return m_handle; }
-
-private:
-    HANDLE m_handle;
-};
+using util::winacl::UniqueHandle;
 
 [[noreturn]] void ThrowWin32(DWORD error, const std::string& what)
 {
@@ -392,7 +378,7 @@ std::vector<std::pair<fs::path, FileId>> DataDirectoryIds()
                                             OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
         if (handle == INVALID_HANDLE_VALUE) continue;
 
-        const HandleGuard guard(handle);
+        const UniqueHandle guard(handle);
         if (const std::optional<FileId> id = FileIdOf(handle)) ids.emplace_back(datadir, *id);
     }
 
@@ -462,7 +448,7 @@ Sid ExpectedServerSid()
 
 EndpointEntry ReadEntryNoFollow(const fs::path& path)
 {
-    const HandleGuard handle(OpenNoFollow(path, /*share_delete=*/true));
+    const UniqueHandle handle(OpenNoFollow(path, /*share_delete=*/true));
 
     return ReadEntry(handle.get(), path);
 }
@@ -532,7 +518,7 @@ void ApplyAttachGroupDirectoryAccess(const fs::path& dir, const Sid& attach_grou
 {
     // Opened without following a reparse point at it, and without sharing delete,
     // so that while the handle is open the path keeps naming the directory checked.
-    const HandleGuard handle(OpenNoFollow(dir, /*share_delete=*/false));
+    const UniqueHandle handle(OpenNoFollow(dir, /*share_delete=*/false));
     const EndpointEntry entry = ReadEntry(handle.get(), dir);
     if (entry.kind != EntryKind::Directory) {
         throw std::runtime_error(strprintf("-ipcattachgroup is set and -ipcdir (%s) is not a plain directory; a "

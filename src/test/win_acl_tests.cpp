@@ -6,8 +6,10 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifdef WIN32
@@ -567,6 +569,86 @@ BOOST_AUTO_TEST_CASE(parse_ace_refuses_truncated_entries)
     Bytes revision = AceBytes(0x00, 0x00, FILE_ALL_ACCESS, {}, wellknown::Users());
     revision[8] = 2;
     BOOST_CHECK(!Parse(revision).has_value());
+}
+
+namespace {
+
+//! The handles RecordingCloser was asked to close, in order.
+std::vector<void*> g_closed;
+
+struct RecordingCloser
+{
+    void operator()(void* handle) const noexcept { g_closed.push_back(handle); }
+};
+
+using RecordedHandle = BasicUniqueHandle<RecordingCloser>;
+
+//! A handle value of \p n, never dereferenced.
+void* FakeHandle(std::intptr_t n)
+{
+    return reinterpret_cast<void*>(n);
+}
+
+} // namespace
+
+// Null and INVALID_HANDLE_VALUE are no handle and are never closed. Any other is
+// closed once: when its guard goes, or is reset, and never after it was released or
+// moved to another guard.
+BOOST_AUTO_TEST_CASE(unique_handle_closes_each_handle_once)
+{
+    g_closed.clear();
+    {
+        const RecordedHandle none;
+        const RecordedHandle null(nullptr);
+        const RecordedHandle invalid(FakeHandle(-1));
+        BOOST_CHECK(!none && !null && !invalid);
+        BOOST_CHECK(invalid.get() == nullptr);
+    }
+    BOOST_CHECK(g_closed.empty());
+
+    {
+        const RecordedHandle a(FakeHandle(0x10));
+        BOOST_CHECK(static_cast<bool>(a));
+        BOOST_CHECK(a.get() == FakeHandle(0x10));
+    }
+    BOOST_REQUIRE_EQUAL(g_closed.size(), 1U);
+    BOOST_CHECK(g_closed[0] == FakeHandle(0x10));
+
+    g_closed.clear();
+    {
+        RecordedHandle a(FakeHandle(0x20));
+        a.reset(FakeHandle(0x30));
+        BOOST_REQUIRE_EQUAL(g_closed.size(), 1U);
+        BOOST_CHECK(g_closed[0] == FakeHandle(0x20));
+        a.reset(FakeHandle(-1));
+        BOOST_REQUIRE_EQUAL(g_closed.size(), 2U);
+        BOOST_CHECK(g_closed[1] == FakeHandle(0x30));
+        BOOST_CHECK(!a);
+    }
+    BOOST_CHECK_EQUAL(g_closed.size(), 2U);
+
+    g_closed.clear();
+    {
+        RecordedHandle a(FakeHandle(0x40));
+        BOOST_CHECK(a.release() == FakeHandle(0x40));
+        BOOST_CHECK(!a);
+    }
+    BOOST_CHECK(g_closed.empty());
+
+    {
+        RecordedHandle a(FakeHandle(0x50));
+        RecordedHandle b(std::move(a));
+        BOOST_CHECK(!a);
+        BOOST_CHECK(b.get() == FakeHandle(0x50));
+        RecordedHandle c(FakeHandle(0x60));
+        c = std::move(b);
+        BOOST_REQUIRE_EQUAL(g_closed.size(), 1U);
+        BOOST_CHECK(g_closed[0] == FakeHandle(0x60));
+        BOOST_CHECK(c.get() == FakeHandle(0x50));
+    }
+    BOOST_REQUIRE_EQUAL(g_closed.size(), 2U);
+    BOOST_CHECK(g_closed[1] == FakeHandle(0x50));
+    g_closed.clear();
 }
 
 #ifdef WIN32

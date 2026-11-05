@@ -8,10 +8,12 @@
 #include "fs.h"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 //! Windows access control stated as data, and strict checks against it.
@@ -201,7 +203,70 @@ struct AccountLookup
     AccountType type{AccountType::Other};
 };
 
+//! A Win32 handle, closed by \p Close when its guard goes out of scope or is reset.
+//! Null and INVALID_HANDLE_VALUE (all bits set) both mean no handle, so what a failed
+//! CreateFileW or CreateEventW returns can be taken as it is, and get() then gives
+//! null. Move-only. The closer is a parameter so that these rules are tested on
+//! every platform; Windows code uses UniqueHandle.
+template <typename Close>
+class BasicUniqueHandle
+{
+public:
+    BasicUniqueHandle() = default;
+    explicit BasicUniqueHandle(void* handle) noexcept : m_handle(Holds(handle) ? handle : nullptr) {}
+    ~BasicUniqueHandle() { reset(); }
+
+    BasicUniqueHandle(BasicUniqueHandle&& other) noexcept : m_handle(other.release()) {}
+    BasicUniqueHandle& operator=(BasicUniqueHandle&& other) noexcept
+    {
+        if (this != &other) reset(other.release());
+        return *this;
+    }
+    BasicUniqueHandle(const BasicUniqueHandle&) = delete;
+    BasicUniqueHandle& operator=(const BasicUniqueHandle&) = delete;
+
+    void* get() const noexcept { return m_handle; }
+    explicit operator bool() const noexcept { return m_handle != nullptr; }
+
+    //! Give the handle up without closing it.
+    void* release() noexcept { return std::exchange(m_handle, nullptr); }
+
+    //! Close the handle held, if any, and hold \p handle instead.
+    void reset(void* handle = nullptr) noexcept
+    {
+        void* const old = std::exchange(m_handle, Holds(handle) ? handle : nullptr);
+        if (old != nullptr) Close{}(old);
+    }
+
+private:
+    //! Whether \p handle is a handle: neither null nor INVALID_HANDLE_VALUE.
+    static bool Holds(void* handle) noexcept
+    {
+        return handle != nullptr && reinterpret_cast<std::intptr_t>(handle) != -1;
+    }
+
+    void* m_handle{nullptr};
+};
+
 #ifdef WIN32
+//! Closes a Win32 handle (CloseHandle).
+struct HandleCloser
+{
+    void operator()(void* handle) const noexcept;
+};
+
+//! The Win32 handle guard.
+using UniqueHandle = BasicUniqueHandle<HandleCloser>;
+
+//! A copy of the SID \p psid (a PSID) points to, or nullopt when it is null or not a
+//! well-formed SID with one to fifteen sub-authorities.
+std::optional<Sid> SidAt(void* psid);
+
+//! What GetTokenInformation writes for \p information_class (a
+//! TOKEN_INFORMATION_CLASS) of the access token \p token, in a buffer sized to fit
+//! and aligned for the structure it holds. Throws std::system_error naming \p name.
+std::vector<unsigned char> QueryTokenInformation(void* token, int information_class, const char* name);
+
 //! The SID of this process's token user. Throws std::system_error.
 Sid CurrentTokenUser();
 
@@ -258,6 +323,15 @@ bool CreateDirectoryWithAcl(const fs::path& dir, const AclSpec& spec);
 
 //! Free a descriptor from MakeSecurityDescriptor. A null \p sd is ignored.
 void FreeSecurityDescriptor(void* sd);
+
+//! Frees a descriptor from MakeSecurityDescriptor (FreeSecurityDescriptor).
+struct SecurityDescriptorFreer
+{
+    void operator()(void* sd) const noexcept { FreeSecurityDescriptor(sd); }
+};
+
+//! A descriptor from MakeSecurityDescriptor, freed when it goes out of scope.
+using UniqueSecurityDescriptor = std::unique_ptr<void, SecurityDescriptorFreer>;
 
 //! What \p name maps to (LookupAccountNameW): its SID, the domain it was found in,
 //! and its kind. nullopt when it maps to none. Throws std::system_error on any other

@@ -197,17 +197,16 @@ public:
     //! IsValidNonceHex. False with \p error set on any failure.
     bool WriteNonce(const std::string& nonce_hex, std::string& error);
 
-    ~AttestClientPipe();
-    AttestClientPipe(AttestClientPipe&& other) noexcept;
-    AttestClientPipe& operator=(AttestClientPipe&& other) noexcept;
+    ~AttestClientPipe() = default;
+    AttestClientPipe(AttestClientPipe&&) noexcept = default;
+    AttestClientPipe& operator=(AttestClientPipe&&) noexcept = default;
     AttestClientPipe(const AttestClientPipe&) = delete;
     AttestClientPipe& operator=(const AttestClientPipe&) = delete;
 
 private:
-    //! Take \p handle, a Win32 HANDLE, to close it when this is destroyed.
-    explicit AttestClientPipe(void* handle) : m_handle(handle) {}
+    explicit AttestClientPipe(util::winacl::UniqueHandle handle) : m_handle(std::move(handle)) {}
 
-    void* m_handle{nullptr};
+    util::winacl::UniqueHandle m_handle;
 };
 #endif // WIN32
 

@@ -471,30 +471,11 @@ struct LocalFreeDeleter
 
 using LocalPtr = std::unique_ptr<void, LocalFreeDeleter>;
 
-//! Closes a handle on every exit.
-struct HandleCloser
-{
-    void operator()(HANDLE handle) const
-    {
-        if (handle != nullptr) ::CloseHandle(handle);
-    }
-};
-
-using HandleGuard = std::unique_ptr<void, HandleCloser>;
-
 //! Throw unless \p sid is well formed. Windows reads a SID by the length its count
 //! gives, so a malformed one would be read past its end.
 void RequireWellFormed(const Sid& sid, const char* what)
 {
     if (!WellFormed(sid)) throw std::runtime_error(strprintf("%s is not a well-formed SID", what));
-}
-
-//! A copy of the SID \p psid points to.
-std::optional<Sid> SidOf(PSID psid)
-{
-    if (psid == nullptr || !::IsValidSid(psid)) return std::nullopt;
-
-    return SidIn(static_cast<const unsigned char*>(psid), ::GetLengthSid(psid), 0);
 }
 
 //! What GetNamedSecurityInfoW or GetSecurityInfo returned, as an ObservedAcl. The
@@ -508,7 +489,7 @@ ObservedAcl ToObservedAcl(PSECURITY_DESCRIPTOR sd, PSID owner, PACL dacl)
     }
 
     ObservedAcl acl;
-    acl.owner = SidOf(owner);
+    acl.owner = SidAt(owner);
     // A NULL DACL, like an absent one, gives everyone full access.
     acl.dacl_present = (control & SE_DACL_PRESENT) != 0 && dacl != nullptr;
     acl.is_protected = (control & SE_DACL_PROTECTED) != 0;
@@ -545,7 +526,7 @@ std::optional<Sid> ReadOwner(std::wstring& wpath)
     const LocalPtr sd_guard(sd);
     if (rc != ERROR_SUCCESS) return std::nullopt;
 
-    return SidOf(owner);
+    return SidAt(owner);
 }
 
 //! Query \p what of this process's token into \p buffer.
@@ -555,26 +536,47 @@ void QueryProcessToken(TOKEN_INFORMATION_CLASS what, std::vector<unsigned char>&
     if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token)) {
         ThrowWin32(::GetLastError(), "OpenProcessToken");
     }
-    const HandleGuard token_guard(token);
+    const UniqueHandle token_guard(token);
+
+    buffer = QueryTokenInformation(token, what, name);
+}
+
+} // namespace
+
+void HandleCloser::operator()(void* handle) const noexcept
+{
+    ::CloseHandle(static_cast<HANDLE>(handle));
+}
+
+std::optional<Sid> SidAt(void* psid)
+{
+    if (psid == nullptr || !::IsValidSid(psid)) return std::nullopt;
+
+    return SidIn(static_cast<const unsigned char*>(psid), ::GetLengthSid(psid), 0);
+}
+
+std::vector<unsigned char> QueryTokenInformation(void* token, int information_class, const char* name)
+{
+    const auto what = static_cast<TOKEN_INFORMATION_CLASS>(information_class);
 
     // The first call sizes the buffer; it fails with ERROR_INSUFFICIENT_BUFFER by design.
     DWORD length = 0;
     ::GetTokenInformation(token, what, nullptr, 0, &length);
-    buffer.assign(length ? length : 1, 0);
+    std::vector<unsigned char> buffer(length ? length : 1, 0);
 
-    if (!::GetTokenInformation(token, what, buffer.data(), length, &length)) {
+    if (!::GetTokenInformation(token, what, buffer.data(), static_cast<DWORD>(buffer.size()), &length)) {
         ThrowWin32(::GetLastError(), std::string("GetTokenInformation(") + name + ")");
     }
-}
 
-} // namespace
+    return buffer;
+}
 
 Sid CurrentTokenUser()
 {
     std::vector<unsigned char> buffer;
     QueryProcessToken(TokenUser, buffer, "TokenUser");
 
-    std::optional<Sid> sid = SidOf(reinterpret_cast<const TOKEN_USER*>(buffer.data())->User.Sid);
+    std::optional<Sid> sid = SidAt(reinterpret_cast<const TOKEN_USER*>(buffer.data())->User.Sid);
     if (!sid) ThrowWin32(ERROR_INVALID_SID, "GetTokenInformation(TokenUser)");
 
     return *sid;
@@ -754,7 +756,7 @@ bool CreateDirectoryWithAcl(const fs::path& dir, const AclSpec& spec)
                                                   OPEN_EXISTING,
                                                   FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
             if (existing != INVALID_HANDLE_VALUE) {
-                const HandleGuard guard(existing);
+                const UniqueHandle guard(existing);
                 BY_HANDLE_FILE_INFORMATION info{};
                 if (::GetFileInformationByHandle(existing, &info) &&
                     (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
@@ -775,7 +777,7 @@ bool CreateDirectoryWithAcl(const fs::path& dir, const AclSpec& spec)
                                             OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
                                             nullptr);
         if (handle == INVALID_HANDLE_VALUE) ThrowWin32(::GetLastError(), "open " + dir.string());
-        const HandleGuard guard(handle);
+        const UniqueHandle guard(handle);
 
         if (std::optional<std::string> reason = CheckMatchesSpec(ReadAcl(handle, /*kernel_object=*/false), spec)) {
             throw AclNotKeptError(dir, std::move(*reason));
@@ -810,7 +812,7 @@ std::optional<AccountLookup> LookupAccount(const std::wstring& name)
     // On success the domain's size is its length, without the terminating NUL.
     domain.resize(domain_size);
 
-    std::optional<Sid> found = SidOf(sid.data());
+    std::optional<Sid> found = SidAt(sid.data());
     if (!found) ThrowWin32(ERROR_INVALID_SID, "LookupAccountNameW");
 
     AccountLookup account;

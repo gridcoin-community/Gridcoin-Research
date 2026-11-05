@@ -18,7 +18,9 @@
 
 #include <array>
 #include <cstdlib>
+#include <cstring>
 #include <exception>
+#include <stdexcept>
 #include <system_error>
 #include <vector>
 
@@ -142,24 +144,7 @@ AclSpec AttestPipeAclSpec(const Sid& self, const std::optional<Sid>& attach_grou
 #ifdef WIN32
 namespace {
 
-//! Closes a handle on every exit.
-struct HandleCloser
-{
-    void operator()(HANDLE handle) const
-    {
-        if (handle != nullptr && handle != INVALID_HANDLE_VALUE) ::CloseHandle(handle);
-    }
-};
-
-using HandleGuard = std::unique_ptr<void, HandleCloser>;
-
-//! Frees a descriptor from MakeSecurityDescriptor on every exit.
-struct DescriptorFreer
-{
-    void operator()(void* sd) const { util::winacl::FreeSecurityDescriptor(sd); }
-};
-
-using DescriptorGuard = std::unique_ptr<void, DescriptorFreer>;
+using util::winacl::UniqueHandle;
 
 //! The rights the client opens the pipe with: read and write it, and read its owner.
 //! CreateFileW adds FILE_READ_ATTRIBUTES, which ATTEST_PEER_MASK grants.
@@ -211,83 +196,43 @@ bool CompleteIo(HANDLE pipe, OVERLAPPED& ov, std::chrono::steady_clock::time_poi
     return true;
 }
 
-//! A copy of the SID \p psid points to, or nullopt when it is not valid.
-std::optional<Sid> SidAt(PSID psid)
+//! The DWORD-sized \p what (a TOKEN_INFORMATION_CLASS) of \p token. Throws
+//! std::system_error.
+DWORD QueryTokenDword(HANDLE token, TOKEN_INFORMATION_CLASS what, const char* name)
 {
-    if (psid == nullptr || !::IsValidSid(psid)) return std::nullopt;
-
-    const auto* const bytes = static_cast<const unsigned char*>(psid);
-    return Sid(bytes, bytes + ::GetLengthSid(psid));
-}
-
-//! Read \p what of \p token into \p buffer, sized to fit. False with \p error set.
-bool QueryToken(HANDLE token, TOKEN_INFORMATION_CLASS what, const char* name, std::vector<unsigned char>& buffer,
-                std::string& error)
-{
-    // The first call sizes the buffer; it fails with ERROR_INSUFFICIENT_BUFFER by design.
-    DWORD length = 0;
-    ::GetTokenInformation(token, what, nullptr, 0, &length);
-    buffer.assign(length ? length : 1, 0);
-
-    if (!::GetTokenInformation(token, what, buffer.data(), static_cast<DWORD>(buffer.size()), &length)) {
-        error = Win32Failure(name, ::GetLastError());
-        return false;
+    const std::vector<unsigned char> buffer = util::winacl::QueryTokenInformation(token, what, name);
+    if (buffer.size() < sizeof(DWORD)) {
+        throw std::system_error(static_cast<int>(ERROR_INSUFFICIENT_BUFFER), std::system_category(),
+                                std::string("GetTokenInformation(") + name + ")");
     }
 
-    return true;
-}
-
-//! Read the DWORD-sized \p what of \p token into \p value. False with \p error set.
-bool QueryTokenDword(HANDLE token, TOKEN_INFORMATION_CLASS what, const char* name, DWORD& value, std::string& error)
-{
-    DWORD length = 0;
-    if (!::GetTokenInformation(token, what, &value, sizeof(value), &length)) {
-        error = Win32Failure(name, ::GetLastError());
-        return false;
-    }
-
-    return true;
+    DWORD value = 0;
+    std::memcpy(&value, buffer.data(), sizeof(value));
+    return value;
 }
 
 //! The facts ClassifyTokenFacts decides on, read from \p token, a client's
-//! impersonation token opened for TOKEN_QUERY. nullopt with \p error set.
-std::optional<TokenFacts> ReadTokenFacts(HANDLE token, const std::optional<Sid>& attach_group, std::string& error)
+//! impersonation token opened for TOKEN_QUERY. Throws std::runtime_error or
+//! std::system_error.
+TokenFacts ReadTokenFacts(HANDLE token, const std::optional<Sid>& attach_group)
 {
     TokenFacts facts;
-    std::vector<unsigned char> buffer;
 
-    if (!QueryToken(token, TokenUser, "GetTokenInformation(TokenUser)", buffer, error)) return std::nullopt;
-    std::optional<Sid> user = SidAt(reinterpret_cast<const TOKEN_USER*>(buffer.data())->User.Sid);
-    if (!user) {
-        error = "the token's user is not a valid SID";
-        return std::nullopt;
-    }
+    std::vector<unsigned char> buffer = util::winacl::QueryTokenInformation(token, TokenUser, "TokenUser");
+    std::optional<Sid> user = util::winacl::SidAt(reinterpret_cast<const TOKEN_USER*>(buffer.data())->User.Sid);
+    if (!user) throw std::runtime_error("the token's user is not a well-formed SID");
     facts.user = std::move(*user);
 
-    DWORD level = 0;
-    if (!QueryTokenDword(token, TokenImpersonationLevel, "GetTokenInformation(TokenImpersonationLevel)", level,
-                         error)) {
-        return std::nullopt;
-    }
-    facts.impersonation_level = level;
+    facts.impersonation_level = QueryTokenDword(token, TokenImpersonationLevel, "TokenImpersonationLevel");
 
     // The integrity level is the last sub-authority of the token's mandatory label.
-    if (!QueryToken(token, TokenIntegrityLevel, "GetTokenInformation(TokenIntegrityLevel)", buffer, error)) {
-        return std::nullopt;
-    }
+    buffer = util::winacl::QueryTokenInformation(token, TokenIntegrityLevel, "TokenIntegrityLevel");
     const PSID label = reinterpret_cast<const TOKEN_MANDATORY_LABEL*>(buffer.data())->Label.Sid;
-    if (label == nullptr || !::IsValidSid(label) || *::GetSidSubAuthorityCount(label) == 0) {
-        error = "the token's integrity label is not a valid SID";
-        return std::nullopt;
-    }
+    // SidAt takes only a well-formed SID, which has at least one sub-authority.
+    if (!util::winacl::SidAt(label)) throw std::runtime_error("the token's integrity label is not a well-formed SID");
     facts.integrity_rid = *::GetSidSubAuthority(label, *::GetSidSubAuthorityCount(label) - 1u);
 
-    DWORD appcontainer = 0;
-    if (!QueryTokenDword(token, TokenIsAppContainer, "GetTokenInformation(TokenIsAppContainer)", appcontainer,
-                         error)) {
-        return std::nullopt;
-    }
-    facts.is_appcontainer = appcontainer != 0;
+    facts.is_appcontainer = QueryTokenDword(token, TokenIsAppContainer, "TokenIsAppContainer") != 0;
 
     if (attach_group) {
         // CheckTokenMembership takes a non-const PSID and only reads it. It counts a
@@ -295,8 +240,7 @@ std::optional<TokenFacts> ReadTokenFacts(HANDLE token, const std::optional<Sid>&
         Sid group = *attach_group;
         BOOL member = FALSE;
         if (!::CheckTokenMembership(token, group.data(), &member)) {
-            error = Win32Failure("CheckTokenMembership", ::GetLastError());
-            return std::nullopt;
+            throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(), "CheckTokenMembership");
         }
         facts.member_of_attach_group = member != FALSE;
     }
@@ -350,9 +294,9 @@ struct AttestServer::State
     //! A leaf: nothing else is locked while it is held.
     Mutex mutex;
     Phase phase GUARDED_BY(mutex){Phase::Idle};
-    HandleGuard pipe GUARDED_BY(mutex);
+    UniqueHandle pipe GUARDED_BY(mutex);
     //! The manual-reset event each overlapped operation on the pipe signals.
-    HandleGuard event GUARDED_BY(mutex);
+    UniqueHandle event GUARDED_BY(mutex);
     //! The connect started in Begin. The system writes to it until the connect
     //! completes, so it lives as long as the pipe.
     OVERLAPPED connect_ov GUARDED_BY(mutex){};
@@ -375,7 +319,8 @@ struct AttestServer::State
 
 bool AttestServer::State::Open(const std::wstring& path, std::string& error)
 {
-    const DescriptorGuard sd(util::winacl::MakeSecurityDescriptor(AttestPipeAclSpec(self, attach_group)));
+    const util::winacl::UniqueSecurityDescriptor sd(
+        util::winacl::MakeSecurityDescriptor(AttestPipeAclSpec(self, attach_group)));
     SECURITY_ATTRIBUTES sa{};
     sa.nLength = sizeof(sa);
     sa.lpSecurityDescriptor = sd.get();
@@ -493,9 +438,9 @@ std::optional<TokenFacts> AttestServer::State::Attest(std::string& error)
         error = Win32Failure("OpenThreadToken", open_error);
         return std::nullopt;
     }
-    const HandleGuard token(raw_token);
+    const UniqueHandle token(raw_token);
 
-    return ReadTokenFacts(token.get(), attach_group, error);
+    return ReadTokenFacts(token.get(), attach_group);
 }
 
 void AttestServer::State::Close()
@@ -600,7 +545,7 @@ std::optional<AttestClientPipe> AttestClientPipe::Open(const std::string& suffix
         error = "could not open the node's identity-check pipe: " + Win32Failure("CreateFileW", ::GetLastError());
         return std::nullopt;
     }
-    HandleGuard guard(handle);
+    UniqueHandle guard(handle);
 
     // The owner is read through the handle just opened, so it is the owner of the
     // pipe this process is connected to, and it is checked before anything is
@@ -623,12 +568,12 @@ std::optional<AttestClientPipe> AttestClientPipe::Open(const std::string& suffix
         return std::nullopt;
     }
 
-    return AttestClientPipe(guard.release());
+    return AttestClientPipe(std::move(guard));
 }
 
 bool AttestClientPipe::WriteNonce(const std::string& nonce_hex, std::string& error)
 {
-    if (m_handle == nullptr) {
+    if (!m_handle) {
         error = "the identity-check pipe is not open";
         return false;
     }
@@ -641,7 +586,7 @@ bool AttestClientPipe::WriteNonce(const std::string& nonce_hex, std::string& err
     size_t written = 0;
     while (written < nonce.size()) {
         DWORD n = 0;
-        if (!::WriteFile(m_handle, nonce.data() + written, static_cast<DWORD>(nonce.size() - written), &n, nullptr)) {
+        if (!::WriteFile(m_handle.get(), nonce.data() + written, static_cast<DWORD>(nonce.size() - written), &n, nullptr)) {
             error = "could not write to the node's identity-check pipe: " + Win32Failure("WriteFile", ::GetLastError());
             return false;
         }
@@ -653,25 +598,6 @@ bool AttestClientPipe::WriteNonce(const std::string& nonce_hex, std::string& err
     }
 
     return true;
-}
-
-AttestClientPipe::~AttestClientPipe()
-{
-    if (m_handle != nullptr) ::CloseHandle(m_handle);
-}
-
-AttestClientPipe::AttestClientPipe(AttestClientPipe&& other) noexcept : m_handle(std::exchange(other.m_handle, nullptr))
-{
-}
-
-AttestClientPipe& AttestClientPipe::operator=(AttestClientPipe&& other) noexcept
-{
-    if (this != &other) {
-        if (m_handle != nullptr) ::CloseHandle(m_handle);
-        m_handle = std::exchange(other.m_handle, nullptr);
-    }
-
-    return *this;
 }
 #endif // WIN32
 
