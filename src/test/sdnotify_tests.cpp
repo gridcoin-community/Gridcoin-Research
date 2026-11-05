@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -344,6 +345,46 @@ BOOST_AUTO_TEST_CASE(heartbeat_sends_immediately)
         sdnotify::ScopedStartupHeartbeat heartbeat("Loading block index");
         BOOST_CHECK_EQUAL(listener.Receive(), "EXTEND_TIMEOUT_USEC=1800000000\nSTATUS=Loading block index");
     }
+}
+
+BOOST_AUTO_TEST_CASE(startup_failed_status)
+{
+    NotifyEnvGuard env;
+    TempDir dir;
+    BOOST_REQUIRE(!dir.Path().empty());
+    Listener listener(dir.Path() + "/notify");
+    BOOST_REQUIRE(listener.Ok());
+
+    setenv("NOTIFY_SOCKET", (dir.Path() + "/notify").c_str(), 1);
+    sdnotify::CaptureFromEnvironment();
+
+    BOOST_CHECK(sdnotify::NotifyStartupFailed());
+    const std::string msg = listener.Receive();
+    BOOST_CHECK_EQUAL(msg, "STATUS=Startup failed; see debug.log");
+    BOOST_CHECK(msg.find("READY=1") == std::string::npos);
+}
+
+// A daemonizing start cannot report readiness to a notify unit, so it is refused
+// when a notification address was captured, with a text that names -nodaemon. A
+// start that does not daemonize, or one with no address, is not refused.
+BOOST_AUTO_TEST_CASE(daemonize_refused_under_a_notify_socket)
+{
+    NotifyEnvGuard env;
+    TempDir dir;
+    BOOST_REQUIRE(!dir.Path().empty());
+    Listener listener(dir.Path() + "/notify");
+    BOOST_REQUIRE(listener.Ok());
+
+    BOOST_CHECK(!sdnotify::DaemonizeRefusal(true));
+
+    setenv("NOTIFY_SOCKET", (dir.Path() + "/notify").c_str(), 1);
+    sdnotify::CaptureFromEnvironment();
+    BOOST_REQUIRE(sdnotify::Active());
+
+    const std::optional<std::string> refusal = sdnotify::DaemonizeRefusal(true);
+    BOOST_REQUIRE(refusal);
+    BOOST_CHECK_MESSAGE(refusal->find("-nodaemon") != std::string::npos, *refusal);
+    BOOST_CHECK(!sdnotify::DaemonizeRefusal(false));
 }
 
 // Once a shutdown has been requested no extension is sent, from a progress message

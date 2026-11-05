@@ -148,6 +148,22 @@ bool NotifyStopping()
     return Send("STOPPING=1\nSTATUS=Shutting down");
 }
 
+bool NotifyStartupFailed()
+{
+    return Send("STATUS=Startup failed; see debug.log");
+}
+
+std::optional<std::string> DaemonizeRefusal(bool daemonize)
+{
+    if (!daemonize || !Active()) return std::nullopt;
+
+    // The service manager takes readiness from the process it started, and the
+    // daemonizing parent exits as soon as the child reports, which ends the unit.
+    return std::string{"-daemon and -daemonwait cannot be used under a service manager that expects a readiness "
+                       "notification (NOTIFY_SOCKET is set): the forked process cannot report it. Start with "
+                       "-nodaemon -nodaemonwait, which also override daemon=1 in the configuration file."};
+}
+
 void SetShutdownCheck(bool (*shutdown_requested)())
 {
     g_shutdown_check = shutdown_requested;

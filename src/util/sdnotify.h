@@ -8,6 +8,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 
@@ -36,6 +37,17 @@ bool NotifyReady();
 
 //! "STOPPING=1" with a status line.
 bool NotifyStopping();
+
+//! "STATUS=Startup failed; see debug.log", for a start that failed before READY=1.
+//! The daemon sends it once, before Shutdown().
+bool NotifyStartupFailed();
+
+//! The startup error for a start that would daemonize (\p daemonize: -daemon or
+//! -daemonwait) while a notification address was captured, or nullopt. A notify
+//! unit cannot work with a forking daemon: under NotifyAccess=main the forked
+//! child's READY=1 is dropped, and the parent's exit ends the unit. The text names
+//! -nodaemon.
+std::optional<std::string> DaemonizeRefusal(bool daemonize);
 
 //! How far one extension moves the start timeout, counted from when it is sent: 30
 //! minutes.

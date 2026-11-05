@@ -325,7 +325,14 @@ bool AppInit(int argc, char* argv[])
             return false;
         }
 
-        if (gArgs.GetBoolArg("-daemon", DEFAULT_DAEMON) || gArgs.GetBoolArg("-daemonwait", DEFAULT_DAEMONWAIT)) {
+        const bool daemonize =
+            gArgs.GetBoolArg("-daemon", DEFAULT_DAEMON) || gArgs.GetBoolArg("-daemonwait", DEFAULT_DAEMONWAIT);
+        // A service manager waiting for READY=1 would never get it from a forked child.
+        if (const std::optional<std::string> refusal = sdnotify::DaemonizeRefusal(daemonize)) {
+            return InitError(*refusal);
+        }
+
+        if (daemonize) {
 #if HAVE_DECL_FORK
             tfm::format(std::cout, PACKAGE_NAME " starting\n");
 
@@ -550,7 +557,8 @@ bool AppInit(int argc, char* argv[])
         while (!ShutdownRequested()) {
             UninterruptibleSleep(std::chrono::milliseconds{500});
         }
-        sdnotify::NotifyStopping();
+        // Only a start that reported readiness reports that it is stopping.
+        if (fRet) sdnotify::NotifyStopping();
 #ifdef ENABLE_MULTIPROCESS
         if (ipc) ipc->disconnectIncoming();
         // Also reached on the fatal-error path above, so the thread is never left
@@ -563,6 +571,10 @@ bool AppInit(int argc, char* argv[])
         if (cookie_written) ipc::DeleteCookie(ipc::GetIpcDir());
 #endif
     }
+
+    // A failed start never sent READY=1. Its status says so, rather than the last
+    // startup step.
+    if (!fRet) sdnotify::NotifyStartupFailed();
 
     Shutdown(nullptr);
 #ifndef WIN32
