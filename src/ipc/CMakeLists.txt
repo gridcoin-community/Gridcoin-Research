@@ -43,6 +43,9 @@ add_library(gridcoin_ipc STATIC EXCLUDE_FROM_ALL
     # The Windows endpoint's access lists and the GUI's check before it connects;
     # its rules are pure and build everywhere.
     win_endpoint.cpp
+    # The named pipe that identifies a Windows peer; its token classifier and
+    # name checks are pure and build everywhere.
+    win_attest.cpp
     serve_init.cpp
     connect.cpp
     capnp/protocol.cpp

@@ -188,6 +188,11 @@ add_executable(test_gridcoin
     # process.cpp and handshake.cpp call its Windows half.
     ${CMAKE_SOURCE_DIR}/src/ipc/win_endpoint.cpp
     ipc_win_endpoint_tests.cpp
+    # The named pipe that identifies a Windows peer (src/ipc/win_attest.cpp). Its
+    # token classifier and name checks are pure and tested on every platform; the
+    # pipe itself is tested on Windows.
+    ${CMAKE_SOURCE_DIR}/src/ipc/win_attest.cpp
+    ipc_win_attest_tests.cpp
     # Non-inheritable socket creation/accept and bounded drain (src/util/sock.cpp).
     sock_tests.cpp
     ipc_process_tests.cpp
