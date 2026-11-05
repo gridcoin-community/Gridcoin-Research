@@ -2109,6 +2109,87 @@ class EnableTests(SwitchTestBase):
         self.assertNotIn("planted", os.listdir(self.datadir))
         self.assertEqual(os.listdir(self.target()), [])
 
+    def interrupt_after_the_writer_commits(self):
+        """A finish_child that lets the writer keep its copy (the second child) and then raises
+        KeyboardInterrupt before copy_tree returns."""
+        real = svc.finish_child
+        calls = []
+
+        def finish(pid, fd):
+            report = real(pid, fd)
+            calls.append(pid)
+            if len(calls) == 2:
+                raise KeyboardInterrupt
+            return report
+
+        return mock.patch.object(svc, "finish_child", finish)
+
+    def test_an_interrupt_after_the_copy_leaves_a_cautious_state(self):
+        write_tree(self.datadir, self.user_files())
+        with self.interrupt_after_the_writer_commits():
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("interrupted", err)
+        self.assertNotIn("nothing was copied", err)
+        self.assertIn("find %s -mindepth 1 -delete" % self.target(), err)
+        self.assertIn("wallet.dat", os.listdir(self.target()))
+
+        # disable's copy likewise.
+        # The interrupted enable wrote no record.
+        self.assertFalse(os.path.exists(self.record_path()))
+        svc_rmtree(self.target())
+        svc_rmtree(self.datadir)
+        write_tree(self.datadir, self.user_files())
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        with self.interrupt_after_the_writer_commits():
+            rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("interrupted", err)
+        self.assertNotIn("nothing was copied", err)
+        self.assertIn("%s may hold" % self.datadir, err)
+
+    def test_an_interrupted_rollback_names_what_is_left(self):
+        def fails(*args, **kwargs):
+            raise OSError(28, "No space left on device")
+
+        def interrupted(*args, **kwargs):
+            raise KeyboardInterrupt
+
+        for name in ("unstash", "run_as"):
+            with self.subTest(interrupted=name):
+                svc_rmtree(self.datadir)
+                svc_rmtree(self.target())
+                for path in self.stashes(self.home, ".GridcoinResearch.in-service-"):
+                    svc_rmtree(path)
+                write_tree(self.datadir, self.user_files())
+                original_run_as = svc.run_as
+                calls = []
+
+                def run_as(*args, **kwargs):
+                    # The settings write runs as the account before the window fails; the
+                    # rollback's emptying of the service datadir is the second.
+                    calls.append(args)
+                    if name == "run_as" and len(calls) == 2:
+                        raise KeyboardInterrupt
+                    return original_run_as(*args, **kwargs)
+
+                patches = [mock.patch.object(svc, "write_owner_record", fails),
+                           mock.patch.object(svc, "run_as", run_as)]
+                if name == "unstash":
+                    patches.append(mock.patch.object(svc, "unstash", interrupted))
+                with contextlib.ExitStack() as stack:
+                    for patch in patches:
+                        stack.enter_context(patch)
+                    rc, out, err = self.run_main("enable", "bob")
+                self.assertEqual(rc, 1)
+                self.assertIn("rolling back was interrupted", err)
+                self.assertIn("find %s -mindepth 1 -delete" % self.target(), err)
+                self.assertNotIn("rolled back:", err)
+                if name == "unstash":
+                    self.assertIn("move every entry of", err)
+                self.assertFalse(os.path.exists(self.record_path()))
+
     def test_a_rollback_that_cannot_finish_names_the_steps(self):
         write_tree(self.datadir, self.user_files())
 

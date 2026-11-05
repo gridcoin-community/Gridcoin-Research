@@ -1300,23 +1300,32 @@ def roll_back_enable(host, acct, s_fd, s_display, s_parent_fd, stash_name, stash
                      state_fd, network, record_display, t_fd, t_display):
     """Undo what enable did after the copy: the owner record, the stash and the copy itself, which
     is removed as the account. Returns the state line: what was undone, or the steps that are left
-    to do by hand."""
-    manual = []
-    try:
+    to do by hand. An interrupt stops the rollback, and every step not done is listed."""
+    def remove_record():
         if network + ".owner" in list_dir(state_fd):
             os.unlink(network + ".owner", dir_fd=state_fd)
-    except OSError as e:
-        manual.append("remove %s (%s)" % (record_display, e.strerror))
-    try:
-        if stash_made:
-            unstash(s_parent_fd, stash_name, stash_display, s_fd, copied_names, stash_made[0])
-    except (UserError, OSError) as e:
-        manual.append("move every entry of %s back into %s and remove %s (%s)"
-                      % (stash_display, s_display, stash_display, e))
-    try:
-        run_as(host, acct, lambda: empty_dir(t_fd, set()), (t_fd,))
-    except (StepError, TreeError, CopyError, OSError) as e:
-        manual.append("empty %s (find %s -mindepth 1 -delete) (%s)" % (t_display, t_display, e))
+
+    steps = [("remove %s" % record_display, remove_record)]
+    if stash_made:
+        steps.append(("move every entry of %s back into %s and remove %s" % (stash_display, s_display, stash_display),
+                      lambda: unstash(s_parent_fd, stash_name, stash_display, s_fd, copied_names, stash_made[0])))
+    steps.append(("empty %s (find %s -mindepth 1 -delete)" % (t_display, t_display),
+                  lambda: run_as(host, acct, lambda: empty_dir(t_fd, set()), (t_fd,))))
+    manual = []
+    interrupted = False
+    for text, action in steps:
+        if interrupted:
+            manual.append(text)
+            continue
+        try:
+            action()
+        except KeyboardInterrupt:
+            interrupted = True
+            manual.append(text)
+        except Exception as e:
+            manual.append("%s (%s)" % (text, e))
+    if interrupted:
+        return "rolling back was interrupted; to finish by hand: " + "; ".join(manual)
     if manual:
         return "rolling back did not finish; to finish by hand: " + "; ".join(manual)
     return "the switch was rolled back: %s holds the source again and %s is empty" % (s_display, t_display)
@@ -1740,14 +1749,25 @@ def enable(args, net, host, paths, progress):
         if set(found) != QUARANTINE_TOP & s_names:
             raise UserError("%s changed while it was read; rerun once nothing else uses it" % s_display)
         settings_text, lines = sanitize_quarantined(found, patterns, q_fd, s_display)
+        stopped = progress.state
+        empty_t = "empty %s (find %s -mindepth 1 -delete)" % (t_display, t_display)
+        units = "%s is disabled and %s.service stopped" % (unit, net.daemon)
+        # Until copy_tree returns, an interrupt can leave the writer's files behind, so the state
+        # says that; a failure the writer cleaned up after says nothing was copied.
+        progress.state = ("%s may hold part or all of this copy: %s before rerunning; the source is untouched in %s, "
+                          "%s" % (t_display, empty_t, s_display, units))
         try:
             copy_tree(s_fd, t_fd, pw.pw_name, net.account, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host,
                       s_display)
         except DirtyCopyError:
-            progress.state = ("%s still holds part of this copy: empty it (find %s -mindepth 1 -delete) before "
-                              "rerunning; the source is untouched, %s is disabled and %s.service stopped"
-                              % (t_display, t_display, unit, net.daemon))
+            progress.state = ("%s still holds part of this copy: %s before rerunning; the source is untouched, %s"
+                              % (t_display, empty_t, units))
             raise
+        except (UserError, StepError, TreeError, CopyError, OSError):
+            progress.state = stopped
+            raise
+        progress.state = ("%s holds the copy and the source is untouched in %s: %s before rerunning; %s"
+                          % (t_display, s_display, empty_t, units))
         # 6. Stash the source where only root can reach it, so no second core can stake it, and
         # record whose wallet the service now runs. From the copy until that record is written any
         # failure rolls the switch back, the copy included, so the service datadir is never left
@@ -1762,14 +1782,16 @@ def enable(args, net, host, paths, progress):
             if settings_text is not None:
                 write_file_as(t_fd, SETTINGS_NAME, settings_text.encode("utf8"), acct, host)
             report_quarantine(found, backups, q_display, lines)
+            progress.state = ("the source may be split between %s and %s: move the stash's entries back into %s and "
+                              "remove the stash; %s holds the copy: %s; %s"
+                              % (s_display, stash_display, s_display, t_display, empty_t, units))
             stash_source(s_parent_fd, s_name, s_fd, stash_name, keep_in_source, stash_display,
                          copies={CONF_NAME: found[CONF_NAME]} if shared_conf else None, copy_owner=pw, made=stash_made)
             write_owner_record(state_fd, args.network, pw, stash_display)
         except BaseException:
-            progress.state = "%s; %s is disabled and %s.service stopped" % (
+            progress.state = "%s; %s" % (
                 roll_back_enable(host, acct, s_fd, s_display, s_parent_fd, stash_name, stash_display, stash_made,
-                                 copied_names, state_fd, args.network, record_display, t_fd, t_display),
-                unit, net.daemon)
+                                 copied_names, state_fd, args.network, record_display, t_fd, t_display), units)
             raise
         if shared_conf:
             print("%s stays in %s, as testnet reads it too; copies are in the stash and the quarantine."
@@ -1871,7 +1893,8 @@ def disable(args, net, host, paths, progress):
         system_unit, system_socket, _ = autounlock_target(net, None)
         progress.state = "nothing was copied"
         step(host, "disable", "--now", system_unit, system_socket, state=None)
-        progress.state = "%s.service and %s are disabled; nothing was copied" % (net.daemon, system_socket)
+        stopped = "%s.service and %s are disabled; nothing was copied" % (net.daemon, system_socket)
+        progress.state = stopped
         lock_fd = take_lock(t_fd, t_display, acct.pw_uid)
         if lock_fd is not None:
             keep(lock_fd)
@@ -1895,6 +1918,10 @@ def disable(args, net, host, paths, progress):
             testnet_entries = set() if net.testnet else {"testnet"}
             found, backups = quarantine_files(t_fd, t_display, acct.pw_uid, q_fd, testnet_entries)
             settings_text, lines = sanitize_quarantined(found, patterns, q_fd, t_display)
+            # Until copy_tree returns, an interrupt can leave the writer's files behind.
+            progress.state = ("%s may hold part or all of this copy: remove what this run put there (the entries %s "
+                              "also holds) before rerunning; %s still holds the wallet, and %s.service and %s are "
+                              "disabled" % (s_display, t_display, t_display, net.daemon, system_socket))
             copy_tree(t_fd, s_fd, net.account, pw.pw_name, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host,
                       t_display)
         except DirtyCopyError:
@@ -1902,12 +1929,16 @@ def disable(args, net, host, paths, progress):
                               "%s still holds the wallet, and %s.service and %s are disabled"
                               % (s_display, t_display, net.daemon, system_socket))
             raise
-        except BaseException:
+        except BaseException as e:
             for parent_fd, name in reversed(made):
                 try:
                     os.rmdir(name, dir_fd=parent_fd)
                 except OSError:
                     pass
+            if isinstance(e, (UserError, StepError, TreeError, CopyError, OSError)):
+                # A failure the writer cleaned up after: nothing was copied. An interrupt, or
+                # anything unforeseen, keeps the cautious state.
+                progress.state = stopped
             raise
         copied = ("the wallet is copied to %s, %s still holds it, and %s.service stays disabled"
                   % (s_display, t_display, net.daemon))
