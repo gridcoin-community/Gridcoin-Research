@@ -58,8 +58,10 @@ std::optional<std::string> DaemonizeRefusal(bool daemonize);
 //! minutes.
 static constexpr std::chrono::microseconds START_EXTENSION{std::chrono::minutes{30}};
 
-//! The longest a ScopedStartupHeartbeat keeps the start timeout away, counted from
-//! the start of its step: 4 hours. Loading the block index of a full mainnet chain
+//! The longest a capped ScopedStartupHeartbeat keeps the start timeout away, counted
+//! from the start of its step: 4 hours. The capped scopes are the steps without a
+//! progress counter (the block index load, a block import); a progress scope (a
+//! rescan) has no cap. Loading the block index of a full mainnet chain
 //! (4.13 to 4.15 million blocks) took 17 to 30 seconds in ten starts of one node in
 //! October 2026, and doc/block_corruption_recovery_design.md puts a -reindex at 10 to
 //! 20 minutes on a hard disk. Four hours leaves room for much slower hardware, while a
@@ -112,7 +114,9 @@ private:
     const std::function<long long()> m_progress;
     const std::chrono::milliseconds m_max_total;
     const std::chrono::milliseconds m_interval;
-    // Leaf lock, taken only around the stop flag.
+    // Guards the stop flag. Run() holds it for each beat's decision, so the progress
+    // read and the stall log line (with the logger's own lock) happen under it; it is
+    // released around Send() and while waiting. No other lock is taken under it.
     std::mutex m_mutex;
     std::condition_variable m_cv;
     bool m_stop = false;

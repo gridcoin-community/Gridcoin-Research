@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include <logging.h>
 #include <util/sdnotify.h>
 #include <util/strencodings.h>
 #include <util/system.h>
@@ -506,7 +507,21 @@ BOOST_AUTO_TEST_CASE(heartbeat_with_progress_extends_only_while_advancing)
     setenv("NOTIFY_SOCKET", (dir.Path() + "/notify").c_str(), 1);
     sdnotify::CaptureFromEnvironment();
 
+    // The heartbeat logs one line when a beat finds no progress; that is the moment the
+    // stall is seen, and nothing is sent after it while the progress stays still. The
+    // callback runs on the heartbeat's thread.
+    std::atomic<bool> stall_logged{false};
+    const auto callback = LogInstance().PushBackCallback([&stall_logged](const std::string& line) {
+        if (line.find("Rescanning made no progress") != std::string::npos) stall_logged = true;
+    });
+    struct CallbackRemover {
+        decltype(callback) it;
+        ~CallbackRemover() { LogInstance().DeleteCallback(it); }
+    } const remove_callback{callback};
+
     constexpr auto interval = std::chrono::milliseconds{30};
+    // Generous, so that a heartbeat thread that is late under load cannot fail the case.
+    constexpr auto deadline = std::chrono::seconds{10};
     std::atomic<long long> height{0};
     std::atomic<bool> advancing{true};
     std::thread scanner([&] {
@@ -515,42 +530,54 @@ BOOST_AUTO_TEST_CASE(heartbeat_with_progress_extends_only_while_advancing)
             std::this_thread::sleep_for(std::chrono::milliseconds{5});
         }
     });
+    // Stops and joins the scanner however the case ends: a joinable thread destroyed
+    // during unwinding would end the whole run.
+    struct ScannerJoiner {
+        std::atomic<bool>& advancing;
+        std::thread& thread;
+        ~ScannerJoiner()
+        {
+            advancing = false;
+            if (thread.joinable()) thread.join();
+        }
+    } const join_scanner{advancing, scanner};
 
     {
         sdnotify::ScopedStartupHeartbeat heartbeat("Rescanning", [&height] { return height.load(); }, interval);
 
         // Advancing: every beat extends, by three intervals.
-        listener.SetTimeout(std::chrono::milliseconds{200});
+        listener.SetTimeout(std::chrono::seconds{2});
         std::vector<long long> extensions;
-        const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds{300};
-        while (std::chrono::steady_clock::now() < until) {
+        const auto give_up = std::chrono::steady_clock::now() + deadline;
+        while (extensions.size() < 4 && std::chrono::steady_clock::now() < give_up) {
             const std::string message = listener.Receive();
             BOOST_REQUIRE_MESSAGE(!message.empty(), "no extension while the progress advanced");
             extensions.push_back(ExtensionUsec(message));
         }
-        BOOST_CHECK_GE(extensions.size(), 4U);
+        BOOST_REQUIRE_GE(extensions.size(), 4U);
         for (const long long usec : extensions) {
             BOOST_CHECK_EQUAL(usec, std::chrono::duration_cast<std::chrono::microseconds>(3 * interval).count());
         }
+        BOOST_CHECK(!stall_logged);
 
-        // Stalled: after at most one more beat (the one that still sees the last change),
-        // nothing is sent.
+        // Stalled: wait until a beat has seen the stall, then drain what was sent before it.
+        // Nothing may follow while the progress stays still.
         advancing = false;
         scanner.join();
-        std::this_thread::sleep_for(3 * interval);
-        listener.SetTimeout(std::chrono::milliseconds{20});
+        const auto stall_deadline = std::chrono::steady_clock::now() + deadline;
+        while (!stall_logged && std::chrono::steady_clock::now() < stall_deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds{5});
+        }
+        BOOST_REQUIRE_MESSAGE(stall_logged, "the stall was not seen");
+        listener.SetTimeout(std::chrono::milliseconds{1});
         while (!listener.Receive().empty()) {}
-        listener.SetTimeout(std::chrono::milliseconds{150});
+        listener.SetTimeout(5 * interval);
         BOOST_CHECK_EQUAL(listener.Receive(), "");
 
         // Advancing again: extended again.
         ++height;
-        listener.SetTimeout(std::chrono::milliseconds{200});
+        listener.SetTimeout(std::chrono::seconds{2});
         BOOST_CHECK(!listener.Receive().empty());
-    }
-    if (scanner.joinable()) {
-        advancing = false;
-        scanner.join();
     }
 }
 
