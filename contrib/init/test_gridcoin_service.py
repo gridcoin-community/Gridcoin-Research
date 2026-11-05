@@ -389,10 +389,11 @@ class AutounlockTests(ServiceTestBase):
         self.assertEqual(rc, 0, err)
         self.assertIn("0600", out + err)
 
-    def test_system_credential_may_be_the_existing_install_file(self):
+    def test_system_credential_must_be_where_the_helper_loads_it(self):
         conf = os.path.join(self.tmp.name, "etc-gridcoin")
         os.makedirs(conf)
-        with open(os.path.join(conf, "wallet-passphrase.cred"), "w", encoding="utf8") as f:
+        legacy = os.path.join(conf, "wallet-passphrase.cred")
+        with open(legacy, "w", encoding="utf8") as f:
             f.write("x")
         nets = dict(svc.NETWORKS)
         nets["main"] = dataclasses.replace(svc.NETWORKS["main"], conf_dir=conf)
@@ -400,7 +401,30 @@ class AutounlockTests(ServiceTestBase):
         svc.NETWORKS = nets
         self.addCleanup(lambda: setattr(svc, "NETWORKS", saved))
         rc, out, err = self.run_main("autounlock", "enable", "--system")
+        self.assertEqual(rc, 1)
+        expected = os.path.join(self.paths.credstore, "gridcoinresearch.wallet-passphrase")
+        self.assertIn(expected, err)
+        self.assertIn(legacy, err)
+        self.assertEqual(self.host.calls, [])
+        self.assertEqual(os.listdir(self.paths.etc_systemd), [])
+        # The tool does not move the secret itself.
+        with open(legacy, encoding="utf8") as f:
+            self.assertEqual(f.read(), "x")
+        self.assertFalse(os.path.exists(expected))
+        # In place, it is accepted.
+        self.make_credential("gridcoinresearch.wallet-passphrase")
+        rc, out, err = self.run_main("autounlock", "enable", "--system")
         self.assertEqual(rc, 0, err)
+
+    def test_credential_path_is_what_the_helper_units_load(self):
+        init_dir = os.path.dirname(TOOL_PATH)
+        for net in svc.NETWORKS.values():
+            for template, user in (("gridcoin-autounlock.service.in", None),
+                                   ("gridcoin-autounlock@.service.in", "%i")):
+                with open(os.path.join(init_dir, template), encoding="utf8") as f:
+                    text = f.read().replace("@GRC_CRED_PREFIX@", net.cred_prefix)
+                loaded = re.findall(r"^LoadCredentialEncrypted=wallet-passphrase:(\S+)$", text, re.M)
+                self.assertEqual(loaded, [svc.credential_path(svc.Paths(), net, user)], template)
 
     def test_autounlock_disable_reverses_and_notes_credential(self):
         self.make_credential("gridcoinresearch-bob.wallet-passphrase")

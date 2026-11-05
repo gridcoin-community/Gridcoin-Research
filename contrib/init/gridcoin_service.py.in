@@ -261,13 +261,15 @@ def remove_dropin(paths, unit, filename):
 
 
 def credential_path(paths, net, user):
+    """The credential the helper unit loads (LoadCredentialEncrypted=), the only one the tool accepts."""
     if user is not None:
         return os.path.join(paths.credstore, "%s-%s.wallet-passphrase" % (net.cred_prefix, user))
-    new_install = os.path.join(paths.credstore, net.cred_prefix + ".wallet-passphrase")
-    existing = os.path.join(net.conf_dir, "wallet-passphrase.cred")
-    if not os.path.exists(new_install) and os.path.exists(existing):
-        return existing
-    return new_install
+    return os.path.join(paths.credstore, net.cred_prefix + ".wallet-passphrase")
+
+
+def legacy_credential_path(net):
+    """Where the system service's credential was kept before; the helper does not load it."""
+    return os.path.join(net.conf_dir, "wallet-passphrase.cred")
 
 
 def step(host, *args):
@@ -322,6 +324,10 @@ def cmd_autounlock(args, net, host, paths):
         try:
             st = os.stat(cred)
         except OSError:
+            legacy = legacy_credential_path(net)
+            if user is None and os.path.exists(legacy):
+                raise UserError("no credential at %s, the only place the helper loads it from; %s is not used. "
+                                "Move it there (owned by root, mode 0600) and run this again" % (cred, legacy)) from None
             raise UserError("no credential at %s; create it first" % cred) from None
         if st.st_uid != 0 or (st.st_mode & 0o777) != 0o600:
             print("warning: %s is not owned by root with mode 0600" % cred)
