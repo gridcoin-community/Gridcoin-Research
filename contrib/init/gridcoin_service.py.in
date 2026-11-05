@@ -676,6 +676,35 @@ def sanitize_conf(text, patterns):
     return "\n".join(kept), removed
 
 
+def interpret_bool(value):
+    """InterpretBool in src/util/system.cpp: empty is true; otherwise the value as ParseInt32 reads
+    it (an optional sign and digits, within int32; 0 when it does not parse) is true when not 0."""
+    if value == "":
+        return True
+    if re.fullmatch(r"[+-]?[0-9]+", value) and -2 ** 31 <= int(value) < 2 ** 31:
+        return int(value) != 0
+    return False
+
+
+def conf_selects_testnet(text):
+    """Whether a conf selects testnet in its top level, before any [section] line, as the core reads
+    it: lines as GetConfigOptions reads them, testnet=<v> as InterpretBool(v) and notestnet=<v> as
+    its negation (InterpretOption), the last such line winning."""
+    selected = False
+    for line in text.split("\n"):
+        body = line.split("#", 1)[0].strip(" \t\r\n")
+        if body.startswith("[") and body.endswith("]"):
+            break
+        if "=" not in body:
+            continue
+        name, value = (part.strip(" \t\r\n") for part in body.split("=", 1))
+        if name == "testnet":
+            selected = interpret_bool(value)
+        elif name == "notestnet":
+            selected = not interpret_bool(value)
+    return selected
+
+
 def open_dir(name, dir_fd=None, uids=None, display=None):
     """Open a directory without following a symlink in its last component, and check with fstat
     that it is a directory owned by one of uids (any owner when None). FileNotFoundError passes
@@ -1044,10 +1073,11 @@ def is_testnet_entry(name):
     return name == "testnet" or name.startswith("testnet" + STASH_INFIX)
 
 
-def stash_source(parent_fd, name, src_fd, stash_name, keep, display):
+def stash_source(parent_fd, name, src_fd, stash_name, keep, display, copies=None):
     """Move the entries of src_fd (the directory name in parent_fd), except those in keep, into a
-    new directory stash_name in parent_fd, root's and 0700, and remove src once it is empty. All
-    of it goes through parent_fd, which was opened without following a symlink."""
+    new directory stash_name in parent_fd, root's and 0700, write copies ({name: bytes}) there as
+    root's files, and remove src once it is empty. All of it goes through parent_fd, which was
+    opened without following a symlink."""
     os.mkdir(stash_name, 0o700, dir_fd=parent_fd)
     stash_fd = open_dir(stash_name, dir_fd=parent_fd, uids=(os.geteuid(),), display=display)
     try:
@@ -1057,6 +1087,8 @@ def stash_source(parent_fd, name, src_fd, stash_name, keep, display):
         for entry in sorted(os.listdir(src_fd)):
             if entry not in keep:
                 os.rename(entry, entry, src_dir_fd=src_fd, dst_dir_fd=stash_fd)
+        for entry, data in (copies or {}).items():
+            write_new_file(stash_fd, entry, data)
     finally:
         os.close(stash_fd)
     if not os.listdir(src_fd):
@@ -1282,6 +1314,33 @@ def end_user_processes(host, pw, terminate):
         host.sleep(1)
 
 
+def refuse_other_network_core(host, network, user):
+    """Both networks' per-user cores use the same datadir root and conf, so the other network's
+    must not run during a switch. The tool never stops it itself."""
+    other = NETWORKS["test" if network == "main" else "main"]
+    unit = "%s@%s.service" % (other.daemon, user)
+    if host.is_active(unit):
+        raise UserError("%s is running and shares %s's datadir and conf; stop it first with: systemctl stop %s"
+                        % (unit, user, unit))
+
+
+def refuse_user_unit_datadir(paths, net, user, d_display):
+    """enable moves only the default datadir, so the per-user unit must not have one of its own."""
+    unit = "%s@%s.service" % (net.daemon, user)
+    directory = dropin_dir(paths, unit)
+    if not check_dropin_dir(directory):
+        return
+    path = os.path.join(directory, DROPIN_MAIN)
+    try:
+        with open(path, encoding="utf8") as f:
+            text = f.read()
+    except FileNotFoundError:
+        return
+    if re.search(r"(?m)^ExecStart=.*\s-datadir=", text):
+        raise UserError("%s gives %s a -datadir of its own, but enable moves only %s; move that wallet there "
+                        "first, then rerun enable-user without --datadir" % (path, unit, d_display))
+
+
 def take_lock(fd, display):
     try:
         return hold_datadir_lock(fd)
@@ -1333,6 +1392,18 @@ def cmd_enable(args, net, host, paths):
             keep(t_check_fd)
             if os.listdir(t_check_fd):
                 raise UserError("%s exists and is not empty; refusing" % t_display)
+        refuse_user_unit_datadir(paths, net, pw.pw_name, d_display)
+        names = os.listdir(d_fd)
+        testnet_entries = set() if net.testnet else {n for n in names if is_testnet_entry(n)}
+        # The conf at the datadir root is read by both networks: beside testnet's datadir it stays.
+        shared_conf = bool(testnet_entries) and CONF_NAME in names
+        if not net.testnet and CONF_NAME in names:
+            conf_display = os.path.join(d_display, CONF_NAME)
+            conf = read_owned_file(d_fd, CONF_NAME, (pw.pw_uid,), conf_display)
+            if conf_selects_testnet(conf.decode("utf8", "surrogateescape")):
+                raise UserError("%s sets testnet=1, so this user's node runs testnet; use --network=test"
+                                % conf_display)
+        refuse_other_network_core(host, args.network, pw.pw_name)
 
         # 2. Stop both cores that could use either datadir.
         unit, socket_unit, _ = autounlock_target(net, pw.pw_name)
@@ -1363,7 +1434,6 @@ def cmd_enable(args, net, host, paths):
         keep(q_fd)
         found, backups = quarantine_files(s_fd, s_display, pw.pw_uid, q_fd)
         settings_text, lines = sanitize_quarantined(found, patterns, q_fd, s_display)
-        testnet_entries = set() if net.testnet else {n for n in os.listdir(s_fd) if is_testnet_entry(n)}
         copy_tree(s_fd, t_fd, pw.pw_name, net.account, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host, s_display)
         if settings_text is not None:
             write_file_as(t_fd, SETTINGS_NAME, settings_text.encode("utf8"), acct, host)
@@ -1372,7 +1442,13 @@ def cmd_enable(args, net, host, paths):
         # 6. Stash the source where only root can reach it, so no second core can stake it.
         stash_name = s_name + STASH_INFIX + stamp(host)
         stash_display = os.path.join(os.path.dirname(s_display), stash_name)
-        stash_source(s_parent_fd, s_name, s_fd, stash_name, testnet_entries, stash_display)
+        if shared_conf:
+            stash_source(s_parent_fd, s_name, s_fd, stash_name, testnet_entries | {CONF_NAME}, stash_display,
+                         copies={CONF_NAME: found[CONF_NAME]})
+            print("%s stays in %s, as testnet reads it too; copies are in the stash and the quarantine."
+                  % (CONF_NAME, d_display))
+        else:
+            stash_source(s_parent_fd, s_name, s_fd, stash_name, testnet_entries, stash_display)
         write_owner_record(state_fd, args.network, pw, stash_display)
 
         # 7. The user attaches through the group; the service runs the wallet now.
@@ -1438,17 +1514,20 @@ def cmd_disable(args, net, host, paths):
             d_fd = keep(open_dir(DATADIR_NAME, dir_fd=home_fd, uids=(pw.pw_uid,), display=d_display))
         except FileNotFoundError:
             d_fd = None
-        if d_fd is not None:
-            names = os.listdir(d_fd)
-            if net.testnet and "testnet" in names:
-                raise UserError("%s exists; move it aside first, then rerun" % s_display)
-            if not net.testnet and any(not is_testnet_entry(n) for n in names):
-                raise UserError("%s exists and holds more than testnet's; move it aside first, then rerun" % d_display)
+        names = os.listdir(d_fd) if d_fd is not None else []
+        if net.testnet and "testnet" in names:
+            raise UserError("%s exists; move it aside first, then rerun" % s_display)
+        if not net.testnet and any(not is_testnet_entry(n) and n != CONF_NAME for n in names):
+            raise UserError("%s exists and holds more than testnet's datadir and the conf; move it aside first, "
+                            "then rerun" % d_display)
+        # A mainnet conf left beside testnet's datadir by enable is the user's own and stays.
+        conf_kept = not net.testnet and CONF_NAME in names
         try:
             t_fd, t_display = open_service_dir(paths, net, acct, create=False)
         except FileNotFoundError:
             raise UserError("there is no service datadir at %s" % service_dir_display(paths, net)) from None
         keep(t_fd)
+        refuse_other_network_core(host, args.network, pw.pw_name)
 
         end_user_processes(host, pw, args.terminate_sessions)
         system_unit, system_socket, _ = autounlock_target(net, None)
@@ -1494,12 +1573,17 @@ def cmd_disable(args, net, host, paths):
         else:
             stash_parent_fd, prefix = home_fd, DATADIR_NAME + STASH_INFIX
         stash_display = record["stash"]
-        try:
-            restored = restore_conf(stash_display, stash_parent_fd, os.path.dirname(s_display), prefix, s_fd, pw,
-                                    host)
-        except (UserError, TreeError, CopyError, OSError) as e:
-            print("warning: %s was not restored: %s" % (CONF_NAME, e))
+        if conf_kept:
             restored = False
+            print("Kept the %s already in %s, which testnet reads too; the stash's copy was not restored."
+                  % (CONF_NAME, d_display))
+        else:
+            try:
+                restored = restore_conf(stash_display, stash_parent_fd, os.path.dirname(s_display), prefix, s_fd,
+                                        pw, host)
+            except (UserError, TreeError, CopyError, OSError) as e:
+                print("warning: %s was not restored: %s" % (CONF_NAME, e))
+                restored = False
 
         # Empty the service datadir as its own account.
         run_as(host, acct, lambda: remove_new_entries(t_fd, testnet_entries), (t_fd,))

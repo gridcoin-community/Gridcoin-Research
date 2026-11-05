@@ -872,6 +872,19 @@ class RefusedKeyTests(unittest.TestCase):
         self.assertNotIn("hunter2", " ".join(removed))
         self.assertNotIn("Secret", " ".join(removed))
 
+    def test_conf_selects_testnet_as_the_core_reads_it(self):
+        # Top-level testnet= / notestnet= lines, the last one winning, each value read as
+        # InterpretBool (src/util/system.cpp) reads it: empty is true, else ParseInt32 or 0.
+        cases = [
+            ("testnet=1\n", True), ("testnet=0\n", False), ("testnet=\n", True), ("testnet=abc\n", False),
+            ("testnet = 2 # comment\n", True), ("testnet=1\ntestnet=0\n", False), ("notestnet=0\n", True),
+            ("notestnet=1\n", False), ("[main]\ntestnet=1\n", False), ("staking=1\n[test]\ntestnet=1\n", False),
+            ("main.testnet=1\n", False), ("testnet=+1\n", True), ("testnet=+-1\n", False),
+            ("testnet=99999999999\n", False), ("# testnet=1\n", False), ("", False),
+        ]
+        for text, expected in cases:
+            self.assertEqual(svc.conf_selects_testnet(text), expected, repr(text))
+
     def test_every_command_line_only_example_is_refused(self):
         # The pattern file covers the switch's own concerns: commands, files and secrets.
         for key in ("blocknotify", "walletnotify", "alertnotify", "rpcpassword", "rpcuser", "rpcallowip",
@@ -1420,7 +1433,9 @@ class EnableTests(SwitchTestBase):
         self.assertEqual(rc, 0, err)
         after = os.stat(os.path.join(self.datadir, "testnet", "wallet.dat"))
         self.assertEqual((before.st_ino, before.st_dev), (after.st_ino, after.st_dev))
-        self.assertEqual(sorted(os.listdir(self.datadir)), ["testnet", "testnet.in-service-20260101T000000Z"])
+        # The conf at the root stays too, as testnet reads it.
+        self.assertEqual(sorted(os.listdir(self.datadir)),
+                         ["gridcoinresearch.conf", "testnet", "testnet.in-service-20260101T000000Z"])
         self.assertNotIn("testnet/", read_tree(self.target()))
         self.assertFalse(any(k.startswith("testnet") for k in read_tree(self.target())))
         [stash] = self.stashes(self.home, ".GridcoinResearch.in-service-")
@@ -1517,6 +1532,93 @@ class EnableTests(SwitchTestBase):
         rc, out, err = self.run_main("enable", "bob", host=FakeHost(users=self.host.users, login=0))
         self.assertEqual(rc, 0, err)
 
+    def test_switch_refuses_while_the_other_networks_user_core_runs(self):
+        # Both networks' per-user cores use the same datadir root and conf; the tool never stops
+        # the other one itself.
+        write_tree(self.datadir, self.user_files())
+        write_tree(os.path.join(self.datadir, "testnet"), {"wallet.dat": b"t"})
+        for network, other in (("main", "gridcointestnetd@bob.service"), ("test", "gridcoinresearchd@bob.service")):
+            with self.subTest(network=network):
+                host = FakeHost(users=self.host.users, active=(other,))
+                rc, out, err = self.run_main("enable", "bob", "--network=" + network, host=host)
+                self.assertEqual(rc, 1)
+                self.assertIn("systemctl stop " + other, err)
+                self.assertEqual(host.calls, [])
+        self.write_record()
+        write_tree(self.target(), {"wallet.dat": b"service wallet"})
+        svc_rmtree(self.datadir)
+        host = FakeHost(users=self.host.users, active=("gridcointestnetd@bob.service",))
+        rc, out, err = self.run_main("disable", "bob", host=host)
+        self.assertEqual(rc, 1)
+        self.assertIn("systemctl stop gridcointestnetd@bob.service", err)
+        self.assertEqual(host.calls, [])
+
+    def test_mainnet_enable_refuses_a_node_that_runs_testnet(self):
+        files = self.user_files()
+        files["gridcoinresearch.conf"] = b"staking=1\ntestnet=1\n"
+        write_tree(self.datadir, files)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("runs testnet", err)
+        self.assertEqual(self.host.calls, [])
+        rc, out, err = self.run_main("enable", "bob", "--network=test")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("runs testnet", err)
+
+    def test_mainnet_enable_keeps_a_conf_testnet_shares(self):
+        files = self.user_files()
+        files["testnet/wallet.dat"] = b"testnet wallet"
+        write_tree(self.datadir, files)
+        conf = os.path.join(self.datadir, "gridcoinresearch.conf")
+        before = os.stat(conf)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        after = os.stat(conf)
+        self.assertEqual((before.st_ino, before.st_dev), (after.st_ino, after.st_dev))
+        self.assertEqual(sorted(os.listdir(self.datadir)), ["gridcoinresearch.conf", "testnet"])
+        [stash] = self.stashes(self.home, ".GridcoinResearch.in-service-")
+        self.assertEqual(read_tree(stash)["gridcoinresearch.conf"], self.ORIGINAL_CONF)
+        self.assertNotEqual(os.stat(os.path.join(stash, "gridcoinresearch.conf")).st_ino, after.st_ino)
+        [q] = self.quarantine_dirs()
+        self.assertEqual(read_tree(q)["gridcoinresearch.conf"], self.ORIGINAL_CONF)
+        self.assertIn("testnet", out)
+        self.assertNotIn("gridcoinresearch.conf", os.listdir(self.target()))
+
+        # disable takes a datadir holding only testnet's entries and that conf, and keeps the conf.
+        with open(conf, "ab") as f:
+            f.write(b"addnode=1.2.3.4\n")
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(read_tree(self.datadir)["gridcoinresearch.conf"], self.ORIGINAL_CONF + b"addnode=1.2.3.4\n")
+        self.assertIn("Kept the gridcoinresearch.conf", out)
+        self.assertEqual(read_tree(self.datadir)["wallet.dat"], b"wallet")
+
+    def test_mainnet_disable_refuses_more_than_testnet_and_the_conf(self):
+        self.write_record()
+        write_tree(self.target(), {"wallet.dat": b"service wallet"})
+        write_tree(self.datadir, {"testnet/wallet.dat": b"t", "gridcoinresearch.conf": b"x=1\n", "peers.dat": b"p"})
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.host.calls, [])
+
+    def test_enable_refuses_a_per_user_unit_with_its_own_datadir(self):
+        write_tree(self.datadir, self.user_files())
+        elsewhere = os.path.join(self.home, "elsewhere")
+        os.makedirs(elsewhere)
+        rc, out, err = self.run_main("enable-user", "bob", "--datadir=" + elsewhere)
+        self.assertEqual(rc, 0, err)
+        self.host.calls.clear()
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn(os.path.join(self.paths.etc_systemd, "gridcoinresearchd@bob.service.d",
+                                   "50-gridcoin-service.conf"), err)
+        self.assertEqual(self.host.calls, [])
+        # Without -datadir in it, the drop-in is no obstacle.
+        rc, out, err = self.run_main("enable-user", "bob")
+        self.assertEqual(rc, 0, err)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+
     def test_enable_refuses_unknown_user_or_missing_datadir(self):
         rc, out, err = self.run_main("enable", "nobody")
         self.assertEqual(rc, 1)
@@ -1566,9 +1668,8 @@ class DisableTests(SwitchTestBase):
         self.assertEqual(self.host.calls, [])
 
     def test_disable_restores_original_conf(self):
-        files = self.user_files()
-        files["testnet/wallet.dat"] = b"testnet wallet"
-        write_tree(self.datadir, files)
+        # Without testnet's datadir beside it the conf goes into the stash, and comes back from it.
+        write_tree(self.datadir, self.user_files())
         rc, out, err = self.run_main("enable", "bob")
         self.assertEqual(rc, 0, err)
         [stash] = self.stashes(self.home, ".GridcoinResearch.in-service-")
@@ -1588,7 +1689,8 @@ class DisableTests(SwitchTestBase):
         self.assertEqual(s["gridcoinresearch.conf"], self.ORIGINAL_CONF)
         self.assertEqual(json.loads(s["gridcoinsettings.json"]), {"staking": False})
         self.assertNotIn("DB_CONFIG", s)
-        self.assertEqual(s["testnet/wallet.dat"], b"testnet wallet")
+        self.assertIn("restored", out)
+        self.assertEqual(os.stat(self.datadir).st_mode & 0o777, 0o700)
         self.assertEqual(os.listdir(self.target()), [])
         quarantined = read_tree(self.quarantine_dirs()[-1])
         self.assertEqual(quarantined["gridcoinresearch.conf"], b"blocknotify=/bin/evil\n")
