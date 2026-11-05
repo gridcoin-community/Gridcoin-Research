@@ -57,14 +57,24 @@ namespace util {
 bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error);
 
 //! CreateOwnerOnlyDirectory for a directory whose files are better kept with weaker
-//! protection than not kept at all: wallet backups. When this call created \p path
-//! and cannot restrict it (a filesystem without POSIX modes, such as FAT, or a
-//! volume that keeps no ACL), the directory is kept, \p unrestricted is set to the
-//! reason, and true is returned. False, with \p error set, only when the directory
-//! could not be created. A directory that exists is left as it is, as with
-//! CreateOwnerOnlyDirectory.
+//! protection than not kept at all: wallet backups in -backupdir. When this call
+//! created \p path and cannot restrict it because the filesystem keeps no modes (on
+//! POSIX chmod fails with EPERM, ENOTSUP, EOPNOTSUPP or EROFS, as on FAT; on Windows
+//! the volume lacks FILE_PERSISTENT_ACLS), the directory is kept, \p unrestricted is
+//! set to the reason, and true is returned. Any other failure to restrict it
+//! withdraws it and returns false, as CreateOwnerOnlyDirectory does, so a directory
+//! left with permissive inherited access is never kept. False, with \p error set,
+//! also when the directory could not be created. A directory that exists is left as
+//! it is.
 bool CreateDirectoryRestrictedIfPossible(const fs::path& path, std::string& error,
                                          std::optional<std::string>& unrestricted);
+
+#ifndef WIN32
+//! Whether chmod failing with \p err means the filesystem keeps no POSIX modes
+//! (EPERM, ENOTSUP, EOPNOTSUPP or EROFS), the only failures
+//! CreateDirectoryRestrictedIfPossible tolerates.
+bool RestrictErrorMeansNoModes(int err);
+#endif
 
 //! Restrict the process umask so that every file and directory this process
 //! creates afterwards is owner-only from the moment it exists.

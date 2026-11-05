@@ -207,7 +207,30 @@ void SetOwnerOnlyUmask()
 #endif
 }
 
+#ifndef WIN32
+bool RestrictErrorMeansNoModes(int err)
+{
+    // EOPNOTSUPP and ENOTSUP are the same value on Linux and differ elsewhere.
+    return err == EPERM || err == ENOTSUP || err == EOPNOTSUPP || err == EROFS;
+}
+#endif
+
 namespace {
+#ifdef WIN32
+//! Whether the volume holding \p path keeps ACLs (FILE_PERSISTENT_ACLS). A volume
+//! that cannot be asked is taken to keep them, so a failure there is not tolerated.
+bool VolumeKeepsAcls(const fs::path& path)
+{
+    wchar_t root[MAX_PATH + 1];
+    if (!GetVolumePathNameW(path.wstring().c_str(), root, MAX_PATH + 1)) return true;
+
+    DWORD flags = 0;
+    if (!GetVolumeInformationW(root, nullptr, 0, nullptr, nullptr, &flags, nullptr, 0)) return true;
+
+    return (flags & FILE_PERSISTENT_ACLS) != 0;
+}
+#endif
+
 //! What CreateAndRestrict did.
 enum class CreateResult
 {
@@ -215,8 +238,11 @@ enum class CreateResult
     Existing,
     //! This call created it and restricted it to this account.
     Restricted,
-    //! This call created it and could not restrict it; error says why.
-    Unrestricted,
+    //! This call created it and could not restrict it because its filesystem keeps
+    //! no POSIX modes, or its volume no ACLs; error says why.
+    NoModes,
+    //! This call created it and could not restrict it for another reason; error says why.
+    NotRestricted,
     //! The directory could not be created; error says why.
     Failed,
 };
@@ -255,33 +281,25 @@ CreateResult CreateAndRestrict(const fs::path& path, std::string& error)
         ApplyOwnerOnlyDacl(path, /*inheritable=*/true);
     } catch (const std::exception& e) {
         error = "created " + path.string() + " but could not restrict it to this account: " + e.what();
-        return CreateResult::Unrestricted;
+        if (VolumeKeepsAcls(path)) return CreateResult::NotRestricted;
+        error += " (the volume keeps no ACLs)";
+        return CreateResult::NoModes;
     }
 #else
     if (::chmod(path.string().c_str(), 0700) != 0) {
         const int err = errno;
         error = strprintf("created %s but could not chmod it to 0700: %s (errno %d)", path.string(),
                           std::generic_category().message(err), err);
-        return CreateResult::Unrestricted;
+        return RestrictErrorMeansNoModes(err) ? CreateResult::NoModes : CreateResult::NotRestricted;
     }
 #endif
 
     return CreateResult::Restricted;
 }
-} // namespace
 
-bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
+//! Remove \p path, which this call created and could not restrict, and return false.
+bool Withdraw(const fs::path& path, std::string& error)
 {
-    switch (CreateAndRestrict(path, error)) {
-    case CreateResult::Existing:
-    case CreateResult::Restricted:
-        return true;
-    case CreateResult::Failed:
-        return false;
-    case CreateResult::Unrestricted:
-        break;
-    }
-
     // This call created the directory and could not restrict it, so it is withdrawn
     // again before returning false. Leaving it behind is what made this fail open:
     // on the NEXT start the directory exists, the existing-directory branch returns
@@ -304,6 +322,22 @@ bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
     }
     return false;
 }
+} // namespace
+
+bool CreateOwnerOnlyDirectory(const fs::path& path, std::string& error)
+{
+    switch (CreateAndRestrict(path, error)) {
+    case CreateResult::Existing:
+    case CreateResult::Restricted:
+        return true;
+    case CreateResult::Failed:
+        return false;
+    case CreateResult::NoModes:
+    case CreateResult::NotRestricted:
+        break;
+    }
+    return Withdraw(path, error);
+}
 
 bool CreateDirectoryRestrictedIfPossible(const fs::path& path, std::string& error,
                                          std::optional<std::string>& unrestricted)
@@ -316,11 +350,14 @@ bool CreateDirectoryRestrictedIfPossible(const fs::path& path, std::string& erro
         return true;
     case CreateResult::Failed:
         return false;
-    case CreateResult::Unrestricted:
+    case CreateResult::NotRestricted:
+        return Withdraw(path, error);
+    case CreateResult::NoModes:
         break;
     }
 
-    // Kept, and the reason handed back for the caller to report.
+    // A filesystem without modes: kept, and the reason handed back for the caller to
+    // report.
     unrestricted = error;
     error.clear();
     return true;

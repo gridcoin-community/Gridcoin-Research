@@ -6,6 +6,8 @@
 
 #ifndef WIN32
 
+#include "util/dir_permissions.h"
+
 #include "test/state_guard.h"
 #include <fs.h>
 #include <util/string.h>
@@ -17,6 +19,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdlib>
 #include <set>
 
@@ -373,6 +376,18 @@ BOOST_AUTO_TEST_CASE(a_taken_probe_name_is_freed_and_tried_once_more)
     const auto reason = fsmodes::CheckBackupDir(backups, fixed).not_writable;
     BOOST_CHECK(reason.has_value() && !reason->empty());
     BOOST_CHECK(fs::is_directory(backups / "probe"));
+}
+
+// A backup directory that cannot be restricted is kept only when chmod's failure means the
+// filesystem keeps no POSIX modes. Any other failure is refused as before.
+BOOST_AUTO_TEST_CASE(only_a_filesystem_without_modes_is_tolerated)
+{
+    for (const int err : {EPERM, ENOTSUP, EOPNOTSUPP, EROFS}) {
+        BOOST_CHECK_MESSAGE(util::RestrictErrorMeansNoModes(err), "errno " << err);
+    }
+    for (const int err : {EIO, EACCES, ENOENT, ENOSPC, EINVAL, ENAMETOOLONG, ELOOP, EFAULT}) {
+        BOOST_CHECK_MESSAGE(!util::RestrictErrorMeansNoModes(err), "errno " << err);
+    }
 }
 
 // The startup warning for a backup directory whose files cannot be owner-only names the
