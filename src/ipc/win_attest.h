@@ -113,6 +113,13 @@ constexpr uint32_t ATTEST_PEER_MASK = detail::ATTEST_PEER;
 //! win_attest.cpp).
 constexpr uint32_t INTEGRITY_MEDIUM_RID = 0x2000;
 
+//! Whether a process whose token is \p token_elevated (TokenElevation) and runs at
+//! \p integrity_rid counts as elevated to the multiprocess GUI, which then refuses
+//! to start: its token is elevated, or its integrity level is above Medium, which
+//! ClassifyTokenFacts refuses whatever TokenElevation says. A level below Medium
+//! does not count: ClassifyTokenFacts refuses that one for being sandboxed.
+bool AboveMediumOrElevated(bool token_elevated, uint32_t integrity_rid);
+
 //! SecurityIdentification, the impersonation level at which the server can read a
 //! token but not act with it (checked against the SDK in win_attest.cpp).
 constexpr uint32_t IMPERSONATION_IDENTIFICATION = 1;

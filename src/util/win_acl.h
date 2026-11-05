@@ -273,6 +273,11 @@ Sid CurrentTokenUser();
 //! Whether this process's token is elevated (TokenElevation). Throws std::system_error.
 bool CurrentTokenIsElevated();
 
+//! The integrity level of this process's token, a SECURITY_MANDATORY_*_RID: the last
+//! sub-authority of its mandatory label (TokenIntegrityLevel). Throws
+//! std::system_error.
+uint32_t CurrentTokenIntegrityRid();
+
 //! The owner and DACL of \p path (GetNamedSecurityInfoW). Throws std::system_error.
 ObservedAcl ReadAcl(const fs::path& path);
 

@@ -41,6 +41,7 @@
 #include "ipc/process.h"
 #include "qt/coreconnectwait.h"
 #ifdef WIN32
+#include "ipc/win_attest.h"
 #include "util/win_acl.h"
 #endif
 #endif
@@ -1145,16 +1146,23 @@ int main(int argc, char *argv[])
 
 #if defined(WIN32) && defined(ENABLE_MULTIPROCESS)
     // The core's identity check admits a GUI at Medium integrity only, so an elevated multiprocess GUI would be
-    // refused at connect. Say so here, before anything connects. The core's refusal does not depend on this: when
-    // the token cannot be read, the GUI goes on and the core decides.
+    // refused at connect. Say so here, before anything connects. Both the token's elevation and its integrity
+    // level are read: the core decides on the level, and a token above Medium need not say it is elevated. The
+    // core's refusal does not depend on this: what cannot be read counts as not elevated, and the core decides.
     if (multiprocess_gui) {
-        bool elevated = false;
+        bool token_elevated = false;
+        uint32_t integrity_rid = ipc::win::INTEGRITY_MEDIUM_RID;
         try {
-            elevated = util::winacl::CurrentTokenIsElevated();
+            token_elevated = util::winacl::CurrentTokenIsElevated();
         } catch (const std::exception& e) {
             tfm::format(std::cerr, "Could not tell whether this process runs elevated: %s\n", e.what());
         }
-        if (elevated) {
+        try {
+            integrity_rid = util::winacl::CurrentTokenIntegrityRid();
+        } catch (const std::exception& e) {
+            tfm::format(std::cerr, "Could not read this process's integrity level: %s\n", e.what());
+        }
+        if (ipc::win::AboveMediumOrElevated(token_elevated, integrity_rid)) {
             const QString text = QObject::tr("The Gridcoin wallet must not run as administrator in multiprocess mode. "
                                              "Start it from a normal (not elevated) session. If User Account Control "
                                              "is turned off, multiprocess mode cannot be used on this account.");

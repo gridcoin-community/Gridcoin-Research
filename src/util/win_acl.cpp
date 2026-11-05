@@ -582,6 +582,18 @@ Sid CurrentTokenUser()
     return *sid;
 }
 
+uint32_t CurrentTokenIntegrityRid()
+{
+    std::vector<unsigned char> buffer;
+    QueryProcessToken(TokenIntegrityLevel, buffer, "TokenIntegrityLevel");
+
+    // SidAt takes only a well-formed SID, which has at least one sub-authority.
+    const PSID label = reinterpret_cast<const TOKEN_MANDATORY_LABEL*>(buffer.data())->Label.Sid;
+    if (!SidAt(label)) ThrowWin32(ERROR_INVALID_SID, "GetTokenInformation(TokenIntegrityLevel)");
+
+    return *::GetSidSubAuthority(label, *::GetSidSubAuthorityCount(label) - 1u);
+}
+
 bool CurrentTokenIsElevated()
 {
     std::vector<unsigned char> buffer;

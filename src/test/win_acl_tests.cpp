@@ -863,6 +863,41 @@ BOOST_AUTO_TEST_CASE(security_descriptor_creates_a_matching_file)
     }
 }
 
+// The integrity level is read from this process's token: the last sub-authority of
+// its mandatory label, which Windows' own string form of the label, S-1-16-<level>,
+// names too. An elevated token runs above Medium. An unelevated one above Medium is
+// the case the multiprocess GUI refuses as well (User Account Control off), and is
+// reported rather than failed here.
+BOOST_AUTO_TEST_CASE(current_token_integrity_rid)
+{
+    if (RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine's tokens carry no Windows integrity levels; current_token_integrity_rid runs on Windows");
+        return;
+    }
+
+    const uint32_t rid = CurrentTokenIntegrityRid();
+    const bool elevated = CurrentTokenIsElevated();
+    BOOST_TEST_MESSAGE("this process runs at integrity level 0x" << std::hex << rid << std::dec
+                       << (elevated ? ", elevated" : ", not elevated"));
+
+    HANDLE token = nullptr;
+    BOOST_REQUIRE(::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token));
+    const UniqueHandle token_guard(token);
+    const std::vector<unsigned char> buffer = QueryTokenInformation(token, TokenIntegrityLevel, "TokenIntegrityLevel");
+    LPWSTR text = nullptr;
+    BOOST_REQUIRE(::ConvertSidToStringSidW(reinterpret_cast<const TOKEN_MANDATORY_LABEL*>(buffer.data())->Label.Sid,
+                                           &text));
+    const std::wstring label(text);
+    ::LocalFree(text);
+    BOOST_CHECK(label == L"S-1-16-" + std::to_wstring(rid));
+
+    if (elevated) {
+        BOOST_CHECK_GT(rid, static_cast<uint32_t>(SECURITY_MANDATORY_MEDIUM_RID));
+    } else if (rid > SECURITY_MANDATORY_MEDIUM_RID) {
+        BOOST_TEST_MESSAGE("not elevated, but above Medium integrity: the multiprocess GUI refuses this token too");
+    }
+}
+
 BOOST_AUTO_TEST_CASE(foreign_writer_on_chain_needs_a_plain_absolute_path)
 {
     const std::vector<Sid> allowed{wellknown::System(), wellknown::Administrators(), wellknown::TrustedInstaller()};

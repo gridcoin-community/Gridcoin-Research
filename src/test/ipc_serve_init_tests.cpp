@@ -41,9 +41,6 @@
 #include "util/win_acl.h"
 
 #include <utility>
-#include <vector>
-
-#include <windows.h>
 #endif
 
 namespace {
@@ -111,17 +108,11 @@ bool SkipUnderWine()
     return true;
 }
 
-//! The integrity level of this process's token, a SECURITY_MANDATORY_*_RID. The
-//! core admits only Medium, so a case run elevated expects a refusal.
-uint32_t ProcessIntegrityRid()
+//! Whether this process runs at Medium integrity. The core admits only Medium, so
+//! a case run elevated expects a refusal.
+bool RunsAtMedium()
 {
-    HANDLE raw = nullptr;
-    BOOST_REQUIRE(::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &raw));
-    const util::winacl::UniqueHandle token(raw);
-    const std::vector<unsigned char> buffer =
-        util::winacl::QueryTokenInformation(token.get(), TokenIntegrityLevel, "TokenIntegrityLevel");
-    const PSID label = reinterpret_cast<const TOKEN_MANDATORY_LABEL*>(buffer.data())->Label.Sid;
-    return *::GetSidSubAuthority(label, *::GetSidSubAuthorityCount(label) - 1u);
+    return util::winacl::CurrentTokenIntegrityRid() == ipc::win::INTEGRITY_MEDIUM_RID;
 }
 
 //! Whether \p e's message is \p text, exactly.
@@ -677,7 +668,7 @@ BOOST_AUTO_TEST_CASE(serve_init_attestation_not_required_on_posix_path)
 BOOST_AUTO_TEST_CASE(serve_init_attest_then_authenticate_in_process)
 {
     if (SkipUnderWine()) return;
-    const bool medium = ProcessIntegrityRid() == ipc::win::INTEGRITY_MEDIUM_RID;
+    const bool medium = RunsAtMedium();
     BOOST_TEST_MESSAGE("this process runs at " << (medium ? "Medium" : "another") << " integrity");
 
     auto serve = ipc::MakeServeInit(std::make_unique<StubInit>(), "the-cookie", {}, ipc::MakeAttachSlot(), {},
@@ -711,7 +702,7 @@ BOOST_AUTO_TEST_CASE(serve_init_attest_then_authenticate_in_process)
 BOOST_AUTO_TEST_CASE(serve_init_attest_after_refused_authentication_does_not_reopen_it)
 {
     if (SkipUnderWine()) return;
-    const bool medium = ProcessIntegrityRid() == ipc::win::INTEGRITY_MEDIUM_RID;
+    const bool medium = RunsAtMedium();
 
     auto serve = ipc::MakeServeInit(std::make_unique<StubInit>(), "the-cookie", {}, ipc::MakeAttachSlot(), {},
                                     RequireAttestation());
@@ -733,7 +724,7 @@ BOOST_AUTO_TEST_CASE(serve_init_attest_after_refused_authentication_does_not_reo
 BOOST_AUTO_TEST_CASE(run_client_attestation_against_the_serving_init)
 {
     if (SkipUnderWine()) return;
-    const bool medium = ProcessIntegrityRid() == ipc::win::INTEGRITY_MEDIUM_RID;
+    const bool medium = RunsAtMedium();
 
     auto serve = ipc::MakeServeInit(std::make_unique<StubInit>(), "the-cookie", {}, ipc::MakeAttachSlot(), {},
                                     RequireAttestation());

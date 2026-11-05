@@ -320,6 +320,31 @@ BOOST_AUTO_TEST_CASE(attest_finish_in_time_only_until_the_deadline)
     BOOST_CHECK(ATTEST_FINISH_WAIT < ATTEST_DEADLINE);
 }
 
+// The GUI refuses to start when its token is elevated, and also when it runs above
+// Medium integrity with a token that does not say it is elevated, as an
+// administrator's may with User Account Control off. Medium and below do not
+// count: below Medium the core refuses it for being sandboxed instead.
+BOOST_AUTO_TEST_CASE(gui_elevation_counts_integrity_above_medium)
+{
+    // SECURITY_MANDATORY_LOW_RID, MEDIUM_PLUS_RID, HIGH_RID and SYSTEM_RID.
+    constexpr uint32_t LOW = 0x1000;
+    constexpr uint32_t MEDIUM_PLUS = 0x2100;
+    constexpr uint32_t HIGH = 0x3000;
+    constexpr uint32_t SYSTEM = 0x4000;
+
+    BOOST_CHECK(!AboveMediumOrElevated(false, INTEGRITY_MEDIUM_RID));
+    BOOST_CHECK(!AboveMediumOrElevated(false, LOW));
+    BOOST_CHECK(!AboveMediumOrElevated(false, 0));
+
+    BOOST_CHECK(AboveMediumOrElevated(true, HIGH));
+    BOOST_CHECK(AboveMediumOrElevated(false, HIGH));
+    BOOST_CHECK(AboveMediumOrElevated(false, MEDIUM_PLUS));
+    BOOST_CHECK(AboveMediumOrElevated(false, INTEGRITY_MEDIUM_RID + 1));
+    BOOST_CHECK(AboveMediumOrElevated(false, SYSTEM));
+    // A token that says it is elevated counts, whatever level it reports.
+    BOOST_CHECK(AboveMediumOrElevated(true, INTEGRITY_MEDIUM_RID));
+}
+
 #ifdef WIN32
 namespace {
 
