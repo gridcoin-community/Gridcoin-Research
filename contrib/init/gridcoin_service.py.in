@@ -890,7 +890,10 @@ def extract_stream(inp, dst_dir, created=None):
 
 def drop_privileges(host, pw):
     """Become pw: no supplementary groups, then its group, then its user. The order matters, as
-    the groups can no longer change once the uid has. The host checks each step."""
+    the groups can no longer change once the uid has. The host checks each step. A copy never
+    runs as uid or gid 0."""
+    if pw.pw_uid == 0 or pw.pw_gid == 0:
+        raise StepError("refusing to run as %s (uid %d, gid %d)" % (shown(pw.pw_name), pw.pw_uid, pw.pw_gid))
     host.setgroups([])
     host.setgid(pw.pw_gid)
     host.setuid(pw.pw_uid)
@@ -1327,11 +1330,18 @@ def report_quarantine(found, backups, q_display, lines):
         print(line)
 
 
-def service_account(net, host):
+def service_account(net, host, paths):
+    """The network's service account, which must be a system account: not uid 0, and below
+    UID_MIN (login.defs, or 1000)."""
     try:
-        return host.getpwnam(net.account)
+        acct = host.getpwnam(net.account)
     except KeyError:
         raise UserError("the service account %s does not exist; is the package installed?" % net.account) from None
+    limit = uid_min(paths)
+    if acct.pw_uid == 0 or acct.pw_uid >= limit:
+        raise UserError("the service account %s has uid %d; it must be a system account (uid 1 to %d)"
+                        % (net.account, acct.pw_uid, limit - 1))
+    return acct
 
 
 def open_home(pw):
@@ -1452,7 +1462,7 @@ def copy_tree(src_fd, dst_fd, src_user, dst_user, exclude, host, src_display):
 def cmd_enable(args, net, host, paths):
     pw = validate_user(args.user, host, paths)
     refuse_own_login(host, pw)
-    acct = service_account(net, host)
+    acct = service_account(net, host, paths)
     patterns = load_refused_patterns(net.refused_keys)
     with contextlib.ExitStack() as stack:
         def keep(fd):
@@ -1589,7 +1599,7 @@ def restore_conf(stash_path, parent_fd, parent_display, prefix, s_fd, pw, host):
 def cmd_disable(args, net, host, paths):
     pw = validate_user(args.user, host, paths)
     refuse_own_login(host, pw)
-    acct = service_account(net, host)
+    acct = service_account(net, host, paths)
     patterns = load_refused_patterns(net.refused_keys)
     with contextlib.ExitStack() as stack:
         def keep(fd):

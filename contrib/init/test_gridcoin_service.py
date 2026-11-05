@@ -1232,6 +1232,27 @@ class PrivilegeTests(ServiceTestBase):
         svc.drop_privileges(host, Passwd("gridcoin", 990, "/var/lib/gridcoinresearchd", 991))
         self.assertEqual(host.calls, [("setgroups", []), ("setgid", 991), ("setuid", 990)])
 
+    def test_drop_refuses_root_ids(self):
+        for pw in (Passwd("x", 0, "/", 991), Passwd("x", 990, "/", 0)):
+            host = FakeHost()
+            with self.assertRaises(svc.StepError):
+                svc.drop_privileges(host, pw)
+            self.assertEqual(host.calls, [])
+
+    def test_service_account_must_be_a_system_account(self):
+        net = svc.NETWORKS["main"]
+        for uid, ok in ((0, False), (1000, False), (1500, False), (999, True), (990, True)):
+            host = FakeHost(users={"gridcoin": Passwd("gridcoin", uid, "/var/lib/gridcoinresearchd", 990)})
+            if ok:
+                self.assertEqual(svc.service_account(net, host, self.paths).pw_uid, uid)
+            else:
+                with self.assertRaises(svc.UserError, msg=uid):
+                    svc.service_account(net, host, self.paths)
+        os.unlink(self.paths.login_defs)
+        host = FakeHost(users={"gridcoin": Passwd("gridcoin", 1000, "/", 990)})
+        with self.assertRaises(svc.UserError):
+            svc.service_account(net, host, self.paths)
+
     def test_real_host_checks_each_drop_result(self):
         host = svc.Host()
         with mock.patch.object(svc.os, "setgroups"), mock.patch.object(svc.os, "getgroups", return_value=[27]):
@@ -1322,6 +1343,17 @@ class SwitchTestBase(ServiceTestBase):
         svc.NETWORKS = {k: dataclasses.replace(v, refused_keys=PATTERNS_FILE) for k, v in saved.items()}
         self.addCleanup(setattr, svc, "NETWORKS", saved)
         self.datadir = os.path.join(self.home, ".GridcoinResearch")
+        # The tests run as one uid, which the user (at or above UID_MIN) and the service account
+        # (a system account, below it) share. The account's check reads a login.defs that puts
+        # that uid below UID_MIN; the check itself is the real one.
+        service_defs = os.path.join(self.tmp.name, "login.defs.service")
+        with open(service_defs, "w", encoding="utf8") as f:
+            f.write("UID_MIN %d\n" % (self.uid + 1))
+        self.real_service_account = svc.service_account
+        patcher = mock.patch.object(svc, "service_account", lambda net, host, paths: self.real_service_account(
+            net, host, dataclasses.replace(paths, login_defs=service_defs)))
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def user_files(self):
         return {
@@ -1880,6 +1912,15 @@ class EnableTests(SwitchTestBase):
         self.assertIn("replaced", err)
         self.assertEqual(read_tree(self.datadir), read_tree_from(self.user_files()))
 
+    def test_enable_refuses_a_service_account_that_is_not_a_system_account(self):
+        write_tree(self.datadir, self.user_files())
+        # The plain login.defs: the shared test uid is not below UID_MIN.
+        with mock.patch.object(svc, "service_account", self.real_service_account):
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("system account", err)
+        self.assertEqual(self.host.calls, [])
+
     def test_enable_refuses_unknown_user_or_missing_datadir(self):
         rc, out, err = self.run_main("enable", "nobody")
         self.assertEqual(rc, 1)
@@ -2058,13 +2099,18 @@ class DisableTests(SwitchTestBase):
         self.write_record("test")
         write_tree(self.target("test"), {"wallet.dat": b"service testnet wallet"})
 
+        seen = []
+
         def fails(*args, **kwargs):
+            seen.append(os.path.lexists(self.datadir))
             raise OSError(28, "No space left on device")
 
         with mock.patch.object(svc, "open_quarantine", fails):
             rc, out, err = self.run_main("disable", "bob", "--network=test")
         self.assertEqual(rc, 1)
         self.assertIn("nothing was copied", err)
+        # Nothing was made for the user before the quarantine was there.
+        self.assertEqual(seen, [False])
         self.assertFalse(os.path.lexists(self.datadir))
 
     def test_disable_refuses_running_user_processes(self):
