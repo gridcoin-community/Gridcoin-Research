@@ -2176,10 +2176,10 @@ bool AppInit2(ThreadHandlerPtr threads)
 
         if (const std::optional<std::string> reason = fsmodes::CheckBackupDirWritable(backup_dir)) {
             const std::string text = strprintf("-backupdir %s is not writable (%s): automatic wallet backups will fail. "
-                                               "Under the per-user unit, run gridcoin-service enable-user <user> "
-                                               "--backupdir=%s so the unit can write it.",
-                                               fsbridge::LongPathString(backup_dir), *reason,
-                                               fsbridge::LongPathString(backup_dir));
+                                               "Make it writable by the account the core runs as (under a systemd "
+                                               "unit with ProtectSystem=, also list it in ReadWritePaths=), or set "
+                                               "-backupdir to a directory that account can write.",
+                                               fsbridge::LongPathString(backup_dir), *reason);
             LogPrintf("WARNING: %s", text);
             InitWarning(text);
         }
