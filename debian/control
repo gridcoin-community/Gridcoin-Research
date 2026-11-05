@@ -37,6 +37,8 @@ Build-Depends:
  qt6-l10n-tools,
  qt6-tools-dev-tools,
  libqt6svg6-dev,
+# systemctl --version decides whether the autounlock units are built (debian/rules).
+ systemd,
  debhelper-compat (= 13)
 
 Homepage: https://gridcoin.us
@@ -48,10 +50,10 @@ Architecture: any
 Depends:
  ${shlibs:Depends},
  ${misc:Depends},
- adduser
+ python3,
+ systemd
 Recommends:
- bash-completion,
- python3
+ bash-completion
 Description: Gridcoin Research daemon
  Gridcoin is a proof-of-stake cryptocurrency that rewards BOINC
  (Berkeley Open Infrastructure for Network Computing) participants

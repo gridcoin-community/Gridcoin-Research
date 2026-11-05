@@ -13,8 +13,16 @@ Terminal=false
 Type=Application
 Icon=gridcoinresearch
 StartupWMClass=gridcoinresearch
-Actions=Testnet;
+Actions=Testnet;Multiprocess;SystemService;
 
 [Desktop Action Testnet]
 Name=Testnet
 Exec=sh -c "gridcoinresearch -testnet"
+
+[Desktop Action Multiprocess]
+Name=Connect to your own core
+Exec=gridcoinresearch -multiprocess
+
+[Desktop Action SystemService]
+Name=Connect to the system service
+Exec=gridcoinresearch -multiprocess -ipcdir=/run/gridcoinresearchd -ipcserviceuser=gridcoin

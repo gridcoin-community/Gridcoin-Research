@@ -1,19 +1,16 @@
+# Files under mainnet names: this package installs its own desktop file, icon and
+# completions (debian/rules), and no metainfo.
 usr/share/applications/gridcoinresearch.desktop
-usr/lib/systemd/system/gridcoinresearchd.service
 usr/share/icons/hicolor/*/apps/gridcoinresearch.png
 usr/share/icons/hicolor/scalable/apps/gridcoinresearch.svg
 usr/share/icons/hicolor/48x48/apps/gridcointestnet.png
 usr/share/metainfo/us.gridcoin.GridcoinResearch.metainfo.xml
 usr/share/bash-completion/completions/gridcoinresearchd
 usr/share/bash-completion/completions/gridcoinresearch
-usr/lib/systemd/system/gridcoinresearchd@.service
-usr/lib/systemd/system/gridcoin-autounlock.socket
-usr/lib/systemd/system/gridcoin-autounlock.service
-usr/lib/systemd/system/gridcoin-autounlock@.socket
-usr/lib/systemd/system/gridcoin-autounlock@.service
-usr/lib/sysusers.d/gridcoinresearchd.conf
-usr/lib/tmpfiles.d/gridcoinresearchd.conf
+# The system units reach the package through dh_installsystemd (debian/rules).
+usr/lib/systemd/system/gridcointestnetd.service
+usr/lib/systemd/system/gridcointestnet-autounlock.socket
+usr/lib/systemd/system/gridcointestnet-autounlock.service
+# gridcoin-service's state directory is shared with the mainnet package, and two
+# packages cannot ship one file: each package's postinst creates the directory.
 usr/lib/tmpfiles.d/gridcoin-service.conf
-usr/libexec/gridcoin/gridcoin-autounlock-helper
-usr/sbin/gridcoin-service
-usr/share/gridcoin/refused-setting-keys.txt

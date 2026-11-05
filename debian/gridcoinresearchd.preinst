@@ -1,0 +1,108 @@
+#!/bin/sh
+set -e
+
+# Before this release the per-user core gridcoinresearchd@<user>.service was a forking
+# daemon, and autounlock was done by the RPC helper units
+# gridcoinresearchd-autounlock@<user>.service and gridcoinresearchd-autounlock.service.
+# On an upgrade from such a version, record what was enabled and running, for the
+# postinst to hand to "gridcoin-service switch-over", and turn the old autounlock
+# units off while their unit files still exist. The cores keep running.
+
+DAEMON=gridcoinresearchd
+OLD_AUTOUNLOCK=gridcoinresearchd-autounlock
+UNIT_DIR=/etc/systemd/system
+STATE_DIR=/var/lib/gridcoin-service
+STATE=$STATE_DIR/switchover-main.state
+# The first version of this package with the notify units and gridcoin-service.
+FIRST_NEW_VERSION=5.5.2.1~
+
+# The user in a <prefix>@<user>.service unit name or path ($1, prefix $2), if any.
+instance_user() {
+    name=${1##*/}
+    case $name in
+        "$2"@?*.service)
+            user=${name#"$2"@}
+            printf '%s\n' "${user%.service}"
+            ;;
+    esac
+}
+
+record_state() {
+    mkdir -p "$STATE_DIR"
+    chown root:root "$STATE_DIR"
+    chmod 0700 "$STATE_DIR"
+    active=
+    if [ -d /run/systemd/system ]; then
+        active=$(systemctl list-units --state=active --plain --no-legend "$DAEMON@*.service")
+    fi
+    new=$STATE.new
+    rm -f "$new"
+    (
+        umask 077
+        {
+            for link in "$UNIT_DIR"/*.wants/"$OLD_AUTOUNLOCK"@*.service; do
+                if [ -L "$link" ]; then
+                    user=$(instance_user "$link" "$OLD_AUTOUNLOCK")
+                    if [ -n "$user" ]; then
+                        echo "autounlock $user"
+                    fi
+                fi
+            done
+            for link in "$UNIT_DIR"/*.wants/"$DAEMON"@*.service; do
+                if [ -L "$link" ]; then
+                    user=$(instance_user "$link" "$DAEMON")
+                    if [ -n "$user" ]; then
+                        echo "core $user"
+                    fi
+                fi
+            done
+            printf '%s\n' "$active" | while read -r unit _; do
+                user=$(instance_user "$unit" "$DAEMON")
+                if [ -n "$user" ]; then
+                    echo "core-active $user"
+                fi
+            done
+            for link in "$UNIT_DIR"/*.wants/"$OLD_AUTOUNLOCK".service; do
+                if [ -L "$link" ]; then
+                    echo "system-autounlock"
+                    break
+                fi
+            done
+        } > "$new"
+    )
+    if [ ! -s "$new" ]; then
+        rm -f "$new"
+    elif [ -e "$STATE" ]; then
+        # A switch-over that has not finished yet keeps its entries.
+        cat "$new" >> "$STATE"
+        rm -f "$new"
+    else
+        mv "$new" "$STATE"
+    fi
+}
+
+stop_old_autounlock() {
+    for link in "$UNIT_DIR"/*.wants/"$OLD_AUTOUNLOCK"@*.service "$UNIT_DIR"/*.wants/"$OLD_AUTOUNLOCK".service; do
+        if [ -L "$link" ]; then
+            # A link whose unit file is gone (the package was removed, not purged) is
+            # removed by hand.
+            systemctl disable "${link##*/}" >/dev/null 2>&1 || rm -f "$link"
+        fi
+    done
+    if [ -d /run/systemd/system ]; then
+        systemctl stop "$OLD_AUTOUNLOCK@*.service" "$OLD_AUTOUNLOCK.service" >/dev/null 2>&1 || true
+    fi
+}
+
+case "$1" in
+    install|upgrade)
+        if [ -n "$2" ] && dpkg --compare-versions "$2" lt "$FIRST_NEW_VERSION"; then
+            record_state
+            stop_old_autounlock
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

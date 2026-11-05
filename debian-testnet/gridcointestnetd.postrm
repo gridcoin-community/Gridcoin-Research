@@ -1,0 +1,28 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    purge)
+        # The drop-ins gridcointestnet-service wrote, and the switch-over state of this
+        # network. Datadirs, configuration files, credentials and the record of a wallet
+        # moved into the service stay.
+        for dropin in /etc/systemd/system/gridcointestnetd@*.service.d/50-gridcoin-service.conf \
+                      /etc/systemd/system/gridcointestnetd@*.service.d/60-gridcoin-autounlock.conf \
+                      /etc/systemd/system/gridcointestnetd.service.d/60-gridcoin-autounlock.conf \
+                      /etc/systemd/system/gridcointestnet-autounlock.service.d/50-existing-credential.conf; do
+            if [ -f "$dropin" ] || [ -L "$dropin" ]; then
+                rm -f "$dropin"
+                rmdir "${dropin%/*}" 2>/dev/null || true
+            fi
+        done
+        for state in /var/lib/gridcoin-service/*-test*; do
+            if [ -f "$state" ]; then
+                rm -f "$state"
+            fi
+        done
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

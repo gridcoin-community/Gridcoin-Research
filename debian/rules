@@ -42,6 +42,13 @@ CMAKE_ARCH_FLAGS = \
 	-DZLIB_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libz.so
 endif
 
+# The autounlock helper and its units need systemd 251 or later, so the build host's
+# systemd (Build-Depends) decides whether they are built: Ubuntu 22.04 builds without
+# them, and gridcoin-service then knows there are none.
+SYSTEMD_MAJOR := $(shell systemctl --version 2>/dev/null | sed -n '1s/^systemd \([0-9]*\).*/\1/p')
+AUTOUNLOCK := $(shell [ "$(SYSTEMD_MAJOR)" -ge 251 ] 2>/dev/null && echo ON || echo OFF)
+UNITDIR := debian/tmp/usr/lib/systemd/system
+
 %:
 	dh $@ --buildsystem=cmake
 
@@ -57,6 +64,8 @@ override_dh_auto_configure:
 		-DUSE_DBUS=ON \
 		-DENABLE_PIE=ON \
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DGRC_UNIT_NETWORK=main \
+		-DINSTALL_SYSTEMD_AUTOUNLOCK=$(AUTOUNLOCK) \
 		$(CMAKE_ARCH_FLAGS)
 
 ifeq ($(DEB_HOST_ARCH),armhf)
@@ -71,8 +80,36 @@ override_dh_auto_test:
 	dh_auto_test -- ARGS="--output-on-failure"
 endif
 
+# With autounlock, the helper and its per-user template units go in as files, like the
+# core's template in gridcoinresearchd.install: dh_installsystemd skips template units.
+execute_after_dh_install:
+ifeq ($(AUTOUNLOCK),ON)
+	dh_install -pgridcoinresearchd \
+		usr/lib/systemd/system/gridcoin-autounlock@.socket \
+		usr/lib/systemd/system/gridcoin-autounlock@.service \
+		usr/libexec/gridcoin/gridcoin-autounlock-helper
+endif
+
+# The system units are handed to dh_installsystemd as debian/gridcoinresearchd.<unit>
+# (listed in debian/clean), so it installs them and writes their maintainer script
+# snippets: not enabled or started on install, stopped on removal, and try-restarted
+# after an upgrade so that a running service runs the new daemon and unit.
+execute_before_dh_installsystemd:
+	cp $(UNITDIR)/gridcoinresearchd.service debian/gridcoinresearchd.gridcoinresearchd.service
+ifeq ($(AUTOUNLOCK),ON)
+	cp $(UNITDIR)/gridcoin-autounlock.socket debian/gridcoinresearchd.gridcoin-autounlock.socket
+	cp $(UNITDIR)/gridcoin-autounlock.service debian/gridcoinresearchd.gridcoin-autounlock.service
+endif
+
 override_dh_installsystemd:
-	dh_installsystemd --no-enable --no-start
+	dh_installsystemd -pgridcoinresearchd --name=gridcoinresearchd --no-enable --no-start --restart-after-upgrade
+ifeq ($(AUTOUNLOCK),ON)
+	dh_installsystemd -pgridcoinresearchd --name=gridcoin-autounlock --no-enable --no-start --restart-after-upgrade
+endif
+
+# The daemon is execute-only (0711), as CMake installs it; dh_fixperms makes it 0755.
+execute_after_dh_fixperms:
+	chmod 0711 debian/gridcoinresearchd/usr/bin/gridcoinresearchd
 
 # No automatic -dbgsym packages: they clutter the user-facing repo and almost
 # nobody runs gdb against these; insiders rebuild locally with symbols when needed.

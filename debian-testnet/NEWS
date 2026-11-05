@@ -1,0 +1,57 @@
+gridcoinresearch (5.5.2.1-1) unstable; urgency=medium
+
+  The testnet daemon's systemd units are new in this release. Existing service
+  setups were switched over to them during this upgrade; this is what changed.
+
+  The system service runs as the account gridcointestnet. systemd hands
+  /var/lib/gridcointestnetd to the new account at the service's first start, and /etc/gridcoin-testnet is
+  now root:gridcointestnet 0710. A /etc/gridcoin-testnet/gridcoin.conf owned
+  by root is given the group gridcointestnet and made readable by that group
+  only; one owned by gridcoin must be given to root:gridcointestnet, mode 0640,
+  by hand. A missing one is created as root:gridcointestnet 0640 with
+  generated RPC credentials.
+
+  The units are Type=notify: the core reports to systemd itself when it is
+  ready, with no forking and no pid file. The units pass -nodaemon and
+  -nodaemonwait, so daemon=1 or daemonwait=1 in a configuration file no longer
+  matters.
+
+  Autounlock moved to a socket-activated helper:
+  gridcointestnet-autounlock.socket for the system service, and
+  gridcointestnet-autounlock@<user>.socket for a per-user core. The core asks
+  the helper for the passphrase. Enabled autounlock setups were switched over
+  automatically. No credential was decrypted, re-encrypted or moved: a
+  per-user credential stays in /etc/credstore.encrypted.
+
+  The old unit gridcointestnetd-autounlock@.service and its RPC helper script
+  are removed. Its instances were disabled and stopped before the upgrade.
+
+  A desktop user attaches the GUI to the system service through membership of
+  the gridcointestnet-gui group ("Connect to the system service" in the
+  menu). A new membership takes effect at the user's next login.
+
+  A per-user core now needs "gridcointestnet-service enable-user <user>"
+  before it starts: "systemctl enable gridcointestnetd@<user>" alone gives an
+  instance that stops with exit status 78 and says so. Instances that were
+  enabled or running were set up during the upgrade, with the datadir they
+  used, and running ones were restarted without waiting for them.
+
+  Drop-ins of the old per-user unit (from "systemctl edit
+  gridcointestnetd@<user>") were renamed to
+  <name>.disabled-by-gridcoin-switchover, so that their settings, written for a
+  forking daemon, no longer apply. A -datadir set in one was kept. Review them
+  and put back with "systemctl edit" what still applies.
+
+  Ubuntu 22.04 builds have no autounlock (it needs systemd 251 or later): the
+  old autounlock units were turned off there, and the cores start with the
+  wallet locked.
+
+  If the switch-over did not finish for a user, the upgrade said why, and
+  /var/lib/gridcoin-service/switchover-test.state keeps what is left. Fix the
+  cause and run "gridcointestnet-service switch-over
+  --state=/var/lib/gridcoin-service/switchover-test.state". Until then that
+  user's core is not restarted, and once stopped it may not start again.
+
+  The full description is in doc/running-unattended.md.
+
+ -- Gridcoin Developers <dev@gridcoin.us>  Thu, 05 Nov 2026 12:00:00 +0000

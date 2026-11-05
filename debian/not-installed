@@ -1,12 +1,9 @@
+# The testnet icon: the mainnet GUI package does not ship it.
 usr/share/icons/hicolor/48x48/apps/gridcointestnet.png
+# The system units reach the package through dh_installsystemd (debian/rules).
 usr/lib/systemd/system/gridcoinresearchd.service
-usr/lib/systemd/system/gridcoinresearchd@.service
 usr/lib/systemd/system/gridcoin-autounlock.socket
 usr/lib/systemd/system/gridcoin-autounlock.service
-usr/lib/systemd/system/gridcoin-autounlock@.socket
-usr/lib/systemd/system/gridcoin-autounlock@.service
-usr/lib/sysusers.d/gridcoinresearchd.conf
-usr/lib/tmpfiles.d/gridcoinresearchd.conf
+# gridcoin-service's state directory is shared with the testnet package, and two
+# packages cannot ship one file: each package's postinst creates the directory.
 usr/lib/tmpfiles.d/gridcoin-service.conf
-usr/libexec/gridcoin/gridcoin-autounlock-helper
-usr/sbin/gridcoin-service

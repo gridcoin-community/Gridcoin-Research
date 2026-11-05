@@ -2,3 +2,7 @@ usr/bin/gridcoinresearchd
 usr/share/man/man1/gridcoinresearchd.1
 usr/share/bash-completion/completions/gridcoinresearchd
 usr/share/gridcoin/refused-setting-keys.txt
+usr/lib/systemd/system/gridcoinresearchd@.service
+usr/lib/sysusers.d/gridcoinresearchd.conf
+usr/lib/tmpfiles.d/gridcoinresearchd.conf
+usr/sbin/gridcoin-service

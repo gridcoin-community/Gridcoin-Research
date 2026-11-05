@@ -1,26 +1,79 @@
 #!/bin/sh
 set -e
 
+ACCOUNT=gridcoin
+DAEMON=gridcoinresearchd
+CONF=/etc/gridcoin/gridcoin.conf
+TOOL=/usr/sbin/gridcoin-service
+STATE_DIR=/var/lib/gridcoin-service
+STATE=$STATE_DIR/switchover-main.state
+
+# The configuration a fresh core writes for itself on its first start, as
+# CreateNewConfigFile() in src/init.cpp writes it: generated RPC credentials and its
+# six addnode= lines. The system service cannot write it, as the directory is root's,
+# so it is made here: root's, and readable by the service account.
+create_conf() {
+    password=$(od -A n -t x1 -N 32 /dev/urandom | tr -d ' \n')
+    if [ ${#password} -ne 64 ]; then
+        echo "$DAEMON: could not generate an RPC password for $CONF" >&2
+        exit 1
+    fi
+    new=$(mktemp "$CONF.XXXXXX")
+    cat > "$new" <<EOF
+# RPC credentials, generated when the $DAEMON package was installed. The local RPC
+# interface is credential-protected even though it listens on localhost only; the
+# daemon will not start without them. Change them if you like, but do not leave
+# rpcpassword empty or equal to rpcuser.
+rpcuser=gridcoinrpc
+rpcpassword=$password
+
+addnode=addnode-us-central.cycy.me
+addnode=ec2-3-81-39-58.compute-1.amazonaws.com
+addnode=gridcoin.network
+addnode=seeds.gridcoin.ifoggz-network.xyz
+addnode=seed.gridcoin.pl
+addnode=www.grcpool.com
+EOF
+    chgrp "$ACCOUNT" "$new"
+    chmod 0640 "$new"
+    mv "$new" "$CONF"
+}
+
+setup_conf() {
+    if [ -L "$CONF" ]; then
+        # A link is the administrator's choice and stays as it is.
+        return 0
+    elif [ ! -e "$CONF" ]; then
+        create_conf
+    elif [ "$(stat -c %u "$CONF")" = 0 ]; then
+        # A conf of root's: the service account must be able to read it, and nobody else.
+        chgrp "$ACCOUNT" "$CONF"
+        chmod g=r,o= "$CONF"
+    fi
+}
+
 case "$1" in
     configure)
-        # Create gridcoin system user and group (adduser --group creates the group)
-        if ! getent passwd gridcoin >/dev/null; then
-            adduser --system --group \
-                --home /var/lib/gridcoinresearchd \
-                --no-create-home \
-                --disabled-login \
-                --gecos "Gridcoin daemon" \
-                gridcoin
-        fi
-
-        # Ensure data and config directories have proper ownership
-        if [ -d /var/lib/gridcoinresearchd ]; then
-            chown gridcoin:gridcoin /var/lib/gridcoinresearchd
-            chmod 0710 /var/lib/gridcoinresearchd
-        fi
-        if [ -d /etc/gridcoin ]; then
-            chown root:gridcoin /etc/gridcoin
-            chmod 0710 /etc/gridcoin
+        # The service account and attach group, then /etc/gridcoin (root:gridcoin 0710).
+        systemd-sysusers /usr/lib/sysusers.d/gridcoinresearchd.conf
+        systemd-tmpfiles --create /usr/lib/tmpfiles.d/gridcoinresearchd.conf
+        # gridcoin-service's own state, shared with the testnet package.
+        mkdir -p "$STATE_DIR"
+        chown root:root "$STATE_DIR"
+        chmod 0700 "$STATE_DIR"
+        setup_conf
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload
+            if [ -e "$STATE" ]; then
+                # The services the preinst found move to the new units.
+                if ! "$TOOL" switch-over --state="$STATE"; then
+                    echo "$DAEMON: the switch-over did not finish, for the reasons above." >&2
+                    echo "Once they are fixed, run: $TOOL switch-over --state=$STATE" >&2
+                fi
+            elif [ -n "$2" ]; then
+                # Running per-user cores move to the new daemon; stopped ones stay stopped.
+                systemctl try-restart --no-block "$DAEMON@*.service" || true
+            fi
         fi
         ;;
 esac

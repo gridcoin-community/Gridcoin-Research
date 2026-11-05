@@ -305,6 +305,19 @@ class CMakeValuesTests(unittest.TestCase):
         self.assertEqual(configured.NETWORKS["main"].refused_keys, expected["MAIN"])
         self.assertEqual(configured.NETWORKS["test"].refused_keys, expected["TEST"])
 
+    def test_each_package_ships_its_own_pattern_file(self):
+        with open(SYSTEMD_UNITS_CMAKE, encoding="utf8") as f:
+            subdirs = dict(re.findall(r'set\(GRC_SHARE_SUBDIR_(MAIN|TEST) "([^"]*)"\)', f.read()))
+        for tree, package, net in (("debian", "gridcoinresearchd", "MAIN"),
+                                   ("debian-testnet", "gridcointestnetd", "TEST")):
+            with open(os.path.join(SOURCE_ROOT, tree, package + ".install"), encoding="utf8") as f:
+                installed = f.read().splitlines()
+            with open(os.path.join(SOURCE_ROOT, tree, "not-installed"), encoding="utf8") as f:
+                left_out = f.read().splitlines()
+            path = "usr/share/%s/refused-setting-keys.txt" % subdirs[net]
+            self.assertIn(path, installed, tree)
+            self.assertEqual([line for line in left_out if "refused-setting-keys" in line], [], tree)
+
     def test_autounlock_units_value_comes_from_cmake(self):
         with open(SYSTEMD_UNITS_CMAKE, encoding="utf8") as f:
             cmake = f.read()

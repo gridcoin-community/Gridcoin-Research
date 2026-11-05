@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove)
+        # dh_installsystemd stops the system units. The per-user cores and the helper
+        # sockets and services are stopped here; the units this build left out are
+        # not there to stop.
+        if [ -d /run/systemd/system ]; then
+            systemctl stop 'gridcoinresearchd@*.service' 'gridcoin-autounlock@*.socket' \
+                'gridcoin-autounlock@*.service' gridcoin-autounlock.socket >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
