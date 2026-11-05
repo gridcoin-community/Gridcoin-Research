@@ -1689,19 +1689,26 @@ def refuse_other_network_core(host, network, user):
 
 def refuse_system_unit_datadir(paths, net):
     """enable and disable move wallets in and out of /var/lib/<state> only, so the system service
-    must not run on a datadir the switch-over carried from its old override."""
+    must run on it: the command line it runs (a copy of the unit, its drop-ins, the switch-over's
+    included) must give that -datadir, a trailing slash allowed. Without an ExecStart= of those, the
+    packaged unit's own runs."""
     unit = net.daemon + ".service"
-    path = os.path.join(dropin_dir(paths, unit), DROPIN_MAIN)
-    if not check_dropin_dir(dropin_dir(paths, unit)) or not os.path.exists(path):
+    copy, masked, _ = system_core_overrides(net, paths)
+    command = system_command(net, paths, copy, masked)
+    if command is None:
         return
+    path, value = command
+    datadir = None
+    for word in command_words(value, path)[1:]:
+        if core_option(word).startswith("-datadir="):
+            datadir = core_option(word)[len("-datadir="):]
     _, default_datadir = system_defaults(net)
-    for value in unit_file_settings(read_dropin_text(path) or "", "Service", "ExecStart"):
-        for word in (command_words(value, path) if value else [])[1:]:
-            option = core_option(word)
-            if option.startswith("-datadir=") and option[len("-datadir="):] != default_datadir:
-                raise UserError("%s runs on %s, from %s; this command moves wallets into and out of %s only. Move "
-                                "that wallet there and remove the drop-in, or keep using it as it is"
-                                % (unit, option[len("-datadir="):], path, default_datadir))
+    if datadir is not None and normalize_path(datadir) == default_datadir:
+        return
+    runs_on = datadir if datadir is not None else "the core's default datadir under its account's home"
+    raise UserError("%s runs on %s, from the ExecStart= in %s; this command moves wallets into and out of %s only. "
+                    "Move that wallet there and change that ExecStart=, or keep using it as it is"
+                    % (unit, runs_on, path, default_datadir))
 
 
 def refuse_user_unit_datadir(paths, net, user, d_display):

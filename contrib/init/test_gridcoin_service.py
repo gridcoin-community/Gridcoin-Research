@@ -2261,6 +2261,46 @@ class EnableTests(SwitchTestBase):
                 self.assertEqual(self.host.calls, [])
         self.assertFalse(os.path.exists(self.target()))
 
+    def test_enable_reads_the_command_line_the_system_service_runs(self):
+        directory = os.path.join(self.paths.etc_systemd, "gridcoinresearchd.service.d")
+        copy = os.path.join(self.paths.etc_systemd, "gridcoinresearchd.service")
+        cases = [
+            # An admin's override or a unit copy counts as much as the tool's own drop-in.
+            ("override", "-datadir=/data/x", "/data/x"),
+            ("copy", "-datadir=/srv/grc", "/srv/grc"),
+            # Without -datadir it runs on the core's default, not /var/lib/<state>.
+            ("override", "-daemonwait", "default datadir"),
+            # The unit's own datadir, with a trailing slash, is the unit's own.
+            ("override", "-datadir=/var/lib/gridcoinresearchd/", None),
+        ]
+        for where, words, refused in cases:
+            with self.subTest(where=where, words=words):
+                for path in (copy, directory):
+                    if os.path.isdir(path):
+                        svc_rmtree(path)
+                    elif os.path.lexists(path):
+                        os.unlink(path)
+                svc_rmtree(self.datadir)
+                svc_rmtree(self.target())
+                svc_rmtree(self.paths.tool_state)
+                write_tree(self.datadir, self.user_files())
+                text = "[Service]\nExecStart=\nExecStart=/usr/bin/gridcoinresearchd %s\n" % words
+                if where == "copy":
+                    with open(copy, "w", encoding="utf8") as f:
+                        f.write(text)
+                else:
+                    os.makedirs(directory)
+                    with open(os.path.join(directory, "override.conf"), "w", encoding="utf8") as f:
+                        f.write(text)
+                self.host.calls.clear()
+                rc, out, err = self.run_main("enable", "bob")
+                if refused is None:
+                    self.assertEqual(rc, 0, err)
+                else:
+                    self.assertEqual(rc, 1)
+                    self.assertIn(refused, err)
+                    self.assertEqual(self.host.calls, [])
+
     def test_enable_refuses_a_per_user_unit_with_its_own_datadir(self):
         write_tree(self.datadir, self.user_files())
         elsewhere = os.path.join(self.home, "elsewhere")
