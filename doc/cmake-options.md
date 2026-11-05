@@ -29,6 +29,7 @@ These options toggle specific functionality within the Gridcoin client.
 | `USE_DBUS` | `OFF` | **Desktop Bus.** Enables OS notifications on Linux desktops (e.g., "Staked a block!"). | `QtDBus` |
 | `USE_QT6` | `ON` | Builds against Qt 6. Set to `OFF` to build against Qt 5 (5.15 or later) instead. | `Qt6` (`Qt5` when `OFF`) |
 | `ENABLE_MULTIPROCESS` | `OFF` | **Multiprocess (IPC) build (RFC #2937).** Builds against Cap'n Proto and the vendored libmultiprocess subtree so the `interfaces::` boundaries can be driven over IPC. Toolchain-only for now; see [multiprocess.md](multiprocess.md). | `CapnProto` (external); libmultiprocess is vendored in-tree |
+| `GRC_DESKTOP_CORE_ACTIONS` | `ON` | Lets the GUI's desktop file offer the launcher actions that attach the GUI to a core: "Connect to your own core", and "Connect to the system service" when the units are installed. They are offered only when the build has the multiprocess GUI and the daemon; `OFF` leaves them out even then, as the Flatpak does. | `ENABLE_GUI`, `ENABLE_MULTIPROCESS`, `ENABLE_DAEMON` |
 | `WITH_EXTERNAL_LIBMULTIPROCESS` | `OFF` | Build the vendored in-tree libmultiprocess subtree (default). Set to `ON` to link an external (system / depends) libmultiprocess instead — mainly useful when developing libmultiprocess itself. | `ENABLE_MULTIPROCESS` |
 
 ### systemd units (Linux)

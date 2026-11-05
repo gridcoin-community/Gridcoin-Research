@@ -6,6 +6,8 @@
 # contrib/gridcoinresearch.desktop.in with the launcher actions this build can run.
 # Attaching to a running core needs the multiprocess GUI and a daemon to attach to,
 # and connecting to the system service also needs its units (INSTALL_SYSTEMD_UNITS).
+# GRC_DESKTOP_CORE_ACTIONS=OFF leaves both actions out of a build that could run
+# them, as the Flatpak does: it only turns them off.
 # The system service's names come from cmake/systemd_units.cmake (GRC_NET_ARG,
 # GRC_STATE_NAME, GRC_ACCOUNT).
 #
@@ -13,10 +15,13 @@
 # cmake -D<option>=<value>... -DGRC_DESKTOP_FILE=<path> -P cmake/desktop_file.cmake,
 # which the tests in contrib/init use.
 
+option(GRC_DESKTOP_CORE_ACTIONS
+       "Offer the launcher actions that attach the GUI to a core (needs the multiprocess GUI and the daemon)" ON)
+
 set(GRC_DESKTOP_ACTIONS "Testnet;")
 # Each group starts with a blank line, after the Testnet group the template ends with.
 set(GRC_DESKTOP_ACTION_GROUPS "")
-if(ENABLE_MULTIPROCESS AND ENABLE_DAEMON)
+if(GRC_DESKTOP_CORE_ACTIONS AND ENABLE_MULTIPROCESS AND ENABLE_DAEMON)
     set(_grc_gui_args "-multiprocess")
     if(NOT "${GRC_NET_ARG}" STREQUAL "")
         set(_grc_gui_args "${GRC_NET_ARG} -multiprocess")

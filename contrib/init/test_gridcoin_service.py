@@ -490,7 +490,8 @@ class UnitFileReaderTests(unittest.TestCase):
 
 class DesktopFileTests(unittest.TestCase):
     """The launcher offers only what the build can run: attaching to a running core needs the
-    multiprocess GUI and a daemon, and the system service needs its units as well."""
+    multiprocess GUI and a daemon, and the system service needs its units as well. A build can
+    also leave both actions out (GRC_DESKTOP_CORE_ACTIONS=OFF), as the Flatpak does."""
 
     def generate(self, tmp, **options):
         if shutil.which("cmake") is None:
@@ -516,8 +517,19 @@ class DesktopFileTests(unittest.TestCase):
                                  "-ipcserviceuser=gridcointestnet"}),
             (dict(main, ENABLE_MULTIPROCESS="ON", ENABLE_DAEMON="ON", INSTALL_SYSTEMD_UNITS="OFF"),
              {"Multiprocess": "gridcoinresearch -multiprocess"}),
-            # The Flatpak: no daemon and no units.
-            (dict(ENABLE_MULTIPROCESS="ON", ENABLE_DAEMON="OFF", INSTALL_SYSTEMD_UNITS="OFF"), {}),
+            # The Flatpak (contrib/flatpak): the daemon, no units, and no core actions.
+            (dict(main, ENABLE_MULTIPROCESS="ON", ENABLE_DAEMON="ON", INSTALL_SYSTEMD_UNITS="OFF",
+                  GRC_DESKTOP_CORE_ACTIONS="OFF"), {}),
+            # The option only turns the actions off; the build's own gates stay.
+            (dict(main, ENABLE_MULTIPROCESS="ON", ENABLE_DAEMON="ON", INSTALL_SYSTEMD_UNITS="ON",
+                  GRC_DESKTOP_CORE_ACTIONS="OFF"), {}),
+            (dict(main, ENABLE_MULTIPROCESS="ON", ENABLE_DAEMON="ON", INSTALL_SYSTEMD_UNITS="ON",
+                  GRC_DESKTOP_CORE_ACTIONS="ON"), {
+                "Multiprocess": "gridcoinresearch -multiprocess",
+                "SystemService": "gridcoinresearch -multiprocess -ipcdir=/run/gridcoinresearchd "
+                                 "-ipcserviceuser=gridcoin"}),
+            (dict(ENABLE_MULTIPROCESS="ON", ENABLE_DAEMON="OFF", INSTALL_SYSTEMD_UNITS="OFF",
+                  GRC_DESKTOP_CORE_ACTIONS="ON"), {}),
             (dict(main, ENABLE_MULTIPROCESS="OFF", ENABLE_DAEMON="ON", INSTALL_SYSTEMD_UNITS="ON"), {}),
         ]
         for options, expected in cases:
@@ -545,12 +557,33 @@ class DesktopFileTests(unittest.TestCase):
                              r'DESTINATION "\$\{CMAKE_INSTALL_DATADIR\}/applications"')
         self.assertFalse(os.path.exists(os.path.join(SOURCE_ROOT, "contrib", "gridcoinresearch.desktop")))
 
-    def test_the_flatpak_builds_neither_daemon_nor_units(self):
+    def test_the_flatpak_ships_the_daemon_without_units_or_core_actions(self):
+        # The daemon is the RPC client in the sandbox and the core for a hand-started multiprocess
+        # setup there; the units and the launcher's core actions have nothing to reach.
         with open(os.path.join(SOURCE_ROOT, "contrib", "flatpak", "us.gridcoin.GridcoinResearch.yml"),
                   encoding="utf8") as f:
             manifest = f.read()
-        for option in ("-DENABLE_DAEMON=OFF", "-DINSTALL_SYSTEMD_UNITS=OFF"):
+        for option in ("-DINSTALL_SYSTEMD_UNITS=OFF", "-DGRC_DESKTOP_CORE_ACTIONS=OFF", "-DENABLE_MULTIPROCESS=ON"):
             self.assertRegex(manifest, r"(?m)^      - %s$" % re.escape(option))
+        self.assertNotRegex(manifest, r"(?m)^\s*- -DENABLE_DAEMON=")
+
+    def test_without_units_nothing_of_systemds_is_installed(self):
+        # Every install() in cmake/systemd_units.cmake, gridcoin-service and the libexec helper
+        # included, is inside an if() on INSTALL_SYSTEMD_UNITS.
+        with open(SYSTEMD_UNITS_CMAKE, encoding="utf8") as f:
+            lines = f.read().splitlines()
+        conditions, installs = [], 0
+        for number, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if stripped.startswith("if("):
+                conditions.append(stripped)
+            elif stripped.startswith("endif("):
+                conditions.pop()
+            elif stripped.startswith("install("):
+                installs += 1
+                self.assertTrue(any("INSTALL_SYSTEMD_UNITS" in c and "NOT INSTALL_SYSTEMD_UNITS" not in c
+                                    for c in conditions), "line %d: %s" % (number, stripped))
+        self.assertGreaterEqual(installs, 5)
 
     def test_the_testnet_package_builds_what_its_own_launcher_runs(self):
         # debian-testnet installs its own desktop file with both actions, so its build must have
