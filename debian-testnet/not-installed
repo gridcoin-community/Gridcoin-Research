@@ -13,6 +13,7 @@ usr/lib/systemd/system/gridcoin-autounlock@.socket
 usr/lib/systemd/system/gridcoin-autounlock@.service
 usr/lib/sysusers.d/gridcoinresearchd.conf
 usr/lib/tmpfiles.d/gridcoinresearchd.conf
+usr/lib/tmpfiles.d/gridcoin-service.conf
 usr/libexec/gridcoin/gridcoin-autounlock-helper
 usr/sbin/gridcoin-service
 usr/share/gridcoin/refused-setting-keys.txt

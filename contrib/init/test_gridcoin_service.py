@@ -193,6 +193,29 @@ class CMakeValuesTests(unittest.TestCase):
         self.assertEqual(configured.NETWORKS["test"].subdir, values["TEST"])
 
 
+    def test_tmpfiles_paths_are_declared_once_across_networks(self):
+        # gridcoin.tmpfiles.in is installed once per network; any other *.tmpfiles file is
+        # installed under the same name by both, so it counts once.
+        init_dir = os.path.dirname(TOOL_PATH)
+        declared = []
+        with open(os.path.join(init_dir, "gridcoin.tmpfiles.in"), encoding="utf8") as f:
+            per_network = f.read()
+        for net in svc.NETWORKS.values():
+            text = per_network.replace("@GRC_CONF_DIR@", net.conf_dir).replace("@GRC_ACCOUNT@", net.account)
+            self.assertNotIn("@", text)
+            declared += [line.split()[1] for line in text.splitlines() if line and not line.startswith("#")]
+        shared = sorted(name for name in os.listdir(init_dir) if name.endswith(".tmpfiles"))
+        for name in shared:
+            with open(os.path.join(init_dir, name), encoding="utf8") as f:
+                declared += [line.split()[1] for line in f.read().splitlines() if line and not line.startswith("#")]
+        self.assertEqual(len(declared), len(set(declared)), declared)
+        self.assertIn("/var/lib/gridcoin-service", declared)
+        with open(SYSTEMD_UNITS_CMAKE, encoding="utf8") as f:
+            cmake = f.read()
+        for name in shared:
+            self.assertIn(name, cmake)
+
+
 class ResolveDatadirTests(ServiceTestBase):
     def test_no_override_means_no_datadir(self):
         self.assertIsNone(svc.resolve_datadir(self.host.users["bob"], None))

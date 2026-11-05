@@ -93,6 +93,12 @@ if(INSTALL_SYSTEMD_UNITS)
         DESTINATION "${GRC_TMPFILESDIR}"
         RENAME "${GRC_DAEMON}.conf"
     )
+    # The service tool's state directory, shared by both networks: installed under
+    # one name, so a host with both networks declares it once.
+    install(FILES "${GRC_UNIT_TEMPLATE_DIR}/gridcoin-service.tmpfiles" COMPONENT daemon
+        DESTINATION "${GRC_TMPFILESDIR}"
+        RENAME "gridcoin-service.conf"
+    )
 endif()
 
 # The helper is run by the units above through the interpreter; install(PROGRAMS)
