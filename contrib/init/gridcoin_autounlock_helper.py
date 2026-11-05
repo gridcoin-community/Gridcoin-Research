@@ -5,7 +5,8 @@
 """Socket-activated stake-only wallet passphrase helper.
 
 Started by systemd on a connection to the helper socket (Accept=no, LISTEN_FDS=1,
-fd 3) as a DynamicUser= service whose LoadCredential= holds the wallet passphrase.
+fd 3) as a service under a fixed system account, whose LoadCredential= holds the wallet
+passphrase.
 It serves the passphrase to exactly one client, the MainPID of the bound core unit,
 and exits. Python 3 standard library only.
 

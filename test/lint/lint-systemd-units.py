@@ -218,7 +218,14 @@ comment_forbids("sandbox", AT)
 HS_SYS = ("helper_service_system",)
 HS_AT = ("helper_service_at",)
 exact("Type", "exec", HELPER_SERVICE)
-exact("DynamicUser", "yes", HELPER_SERVICE)
+# A fixed account, not DynamicUser=: the helper asks systemd for the core's main process
+# over D-Bus, and dbus-daemon can close a connection from a dynamic account.
+exact("User", "@GRC_AUTOUNLOCK@", HELPER_SERVICE)
+exact("Group", "@GRC_AUTOUNLOCK@", HELPER_SERVICE)
+absent("DynamicUser", HELPER_SERVICE)
+exact("RemoveIPC", "yes", HELPER_SERVICE)
+comment_has("dbus-daemon can close a connection from a dynamic account", HELPER_SERVICE)
+comment_has("fixed system account", HELPER_SERVICE)
 exact("Restart", "no", HELPER_SERVICE)
 exact("RuntimeMaxSec", "60", HELPER_SERVICE)
 exact("UMask", "0077", HELPER_SERVICE)
@@ -272,7 +279,8 @@ def check_unit(kind, text):
 def check_sysusers_tmpfiles(directory):
     failures = []
     expected = {
-        "gridcoin.sysusers.in": ('u @GRC_ACCOUNT@ - "Gridcoin daemon" /var/lib/@GRC_STATE_NAME@', "g @GRC_ATTACH_GROUP@ -"),
+        "gridcoin.sysusers.in": ('u @GRC_ACCOUNT@ - "Gridcoin daemon" /var/lib/@GRC_STATE_NAME@', "g @GRC_ATTACH_GROUP@ -",
+                               '@GRC_AUTOUNLOCK_SYSUSERS_OFF@u @GRC_AUTOUNLOCK@ - "Gridcoin wallet passphrase helper" - -'),
         "gridcoin.tmpfiles.in": ("d @GRC_CONF_DIR@ 0710 root @GRC_ACCOUNT@ -",),
         # Shared by both networks, so it is declared once.
         "gridcoin-service.tmpfiles": ("d /var/lib/gridcoin-service 0700 root root -",),
@@ -288,6 +296,41 @@ def check_sysusers_tmpfiles(directory):
             if line not in present:
                 failures.append((name, f"line '{line}'"))
     return failures
+
+
+# The substitutions of the sysusers template for each network, as cmake/systemd_units.cmake sets them.
+SYSUSERS_NETWORKS = (
+    {"GRC_ACCOUNT": "gridcoin", "GRC_STATE_NAME": "gridcoinresearchd", "GRC_ATTACH_GROUP": "gridcoin-gui",
+     "GRC_AUTOUNLOCK": "gridcoin-autounlock"},
+    {"GRC_ACCOUNT": "gridcointestnet", "GRC_STATE_NAME": "gridcointestnetd", "GRC_ATTACH_GROUP": "gridcointestnet-gui",
+     "GRC_AUTOUNLOCK": "gridcointestnet-autounlock"},
+)
+
+
+def render_sysusers(text, network, autounlock):
+    """The template as CMake renders it; the helper's line is commented out when its units are not installed."""
+    values = dict(network, GRC_AUTOUNLOCK_SYSUSERS_OFF="" if autounlock else "#")
+    return re.sub(r"@(\w+)@", lambda m: values[m.group(1)], text)
+
+
+def check_sysusers_helper_account(text):
+    """Return what is wrong with the rendered sysusers files: the helper account of each network is a
+    system user with no home, no shell and no groups, and exists only where the helper units are installed."""
+    problems = []
+    for network in SYSUSERS_NETWORKS:
+        name = network["GRC_AUTOUNLOCK"]
+        on = [line.split() for line in render_sysusers(text, network, True).splitlines() if not line.startswith("#")]
+        off = [line.split() for line in render_sysusers(text, network, False).splitlines() if not line.startswith("#")]
+        lines = [f for f in on if len(f) > 1 and f[1] == name]
+        if len(lines) != 1 or lines[0][0] != "u" or lines[0][-2:] != ["-", "-"] or lines[0][2] != "-":
+            problems.append(f"the helper account {name} is not one 'u' line with no home and no shell")
+        if any(f[0] in ("m", "g") and f[-1] != "-" and name in f for f in on):
+            problems.append(f"the helper account {name} has a group membership")
+        if any(len(f) > 1 and f[1] == name for f in off):
+            problems.append(f"the helper account {name} is created without the helper units")
+        if not any(len(f) > 1 and f[1] == network["GRC_ACCOUNT"] for f in off):
+            problems.append(f"the service account {network['GRC_ACCOUNT']} is missing without the helper units")
+    return problems
 
 
 def lint(directory):
@@ -307,6 +350,10 @@ def lint(directory):
         for rule in check_unit(kind, text):
             failures.append((name, rule))
     failures += check_sysusers_tmpfiles(directory)
+    sysusers = os.path.join(directory, "gridcoin.sysusers.in")
+    if os.path.exists(sysusers):
+        with open(sysusers, encoding="utf8") as f:
+            failures += [("gridcoin.sysusers.in", p) for p in check_sysusers_helper_account(f.read())]
     return failures
 
 
@@ -398,8 +445,13 @@ WantedBy=sockets.target
 """,
 }
 
-HELPER_COMMON = """Type=exec
-DynamicUser=yes
+HELPER_COMMON = """# The helper runs under a fixed system account because
+# dbus-daemon can close a connection from a dynamic account
+# (the sample keeps each phrase on one line).
+Type=exec
+User=@GRC_AUTOUNLOCK@
+Group=@GRC_AUTOUNLOCK@
+RemoveIPC=yes
 Restart=no
 RuntimeMaxSec=60
 UMask=0077
@@ -430,6 +482,12 @@ LoadCredentialEncrypted=wallet-passphrase:/etc/credstore.encrypted/@GRC_CRED_PRE
 AT_ABSENT_SAMPLES = {key: f"{key}=yes\n" for key in AT_CORE_ABSENT}
 
 
+SYSUSERS_SAMPLE = """u @GRC_ACCOUNT@ - "Gridcoin daemon" /var/lib/@GRC_STATE_NAME@
+g @GRC_ATTACH_GROUP@ -
+@GRC_AUTOUNLOCK_SYSUSERS_OFF@u @GRC_AUTOUNLOCK@ - "Gridcoin wallet passphrase helper" - -
+"""
+
+
 def break_rule(text, rule):
     """Return the sample with exactly one rule broken, or None if the rule has no mutation."""
     lines = text.splitlines(keepends=True)
@@ -442,6 +500,7 @@ def break_rule(text, rule):
             "PIDFile=": "PIDFile=/run/x.pid\n",
             "ConfigurationDirectory=": "ConfigurationDirectory=gridcoin\n",
             "PrivatePIDs=": "PrivatePIDs=yes\n",
+            "DynamicUser=": "DynamicUser=yes\n",
             "NotifyAccess=all": "NotifyAccess=all\n",
             "RemainAfterExit=yes": "RemainAfterExit=yes\n",
         }
@@ -492,6 +551,16 @@ def self_test():
                 problems.append(f"{kind}: no bad sample for rule '{r['rule']}'")
             elif r["rule"] not in check_unit(kind, bad):
                 problems.append(f"{kind}: rule '{r['rule']}' did not fail on its bad sample")
+    sysusers_good = (SYSUSERS_SAMPLE)
+    if check_sysusers_helper_account(sysusers_good):
+        problems.append(f"sysusers: the good sample fails: {check_sysusers_helper_account(sysusers_good)}")
+    for label, bad in (
+        ("a missing helper account", sysusers_good.replace("@GRC_AUTOUNLOCK_SYSUSERS_OFF@u", "#u")),
+        ("a helper account with a shell", sysusers_good.replace(" - -\n", ' - /bin/sh\n')),
+        ("a helper account that is always created", sysusers_good.replace("@GRC_AUTOUNLOCK_SYSUSERS_OFF@u", "u")),
+    ):
+        if not check_sysusers_helper_account(bad):
+            problems.append(f"sysusers: {label} is not detected")
     # a misclassified file name must be reported, and the @ core must refuse the system sandbox back
     sandboxed = SAMPLES["at_core"] + "ProtectHome=tmpfs\nBindReadOnlyPaths=/run/systemd/notify\n"
     if not {"no ProtectHome=", "no BindReadOnlyPaths="} <= set(check_unit("at_core", sandboxed)):

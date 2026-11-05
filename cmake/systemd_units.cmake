@@ -33,6 +33,13 @@ if(INSTALL_SYSTEMD_AUTOUNLOCK)
 else()
     set(GRC_AUTOUNLOCK_UNITS "no")
 endif()
+# The helper's account is created only where the helper units are installed: the
+# sysusers.d template puts this in front of the account's line.
+if(INSTALL_SYSTEMD_AUTOUNLOCK)
+    set(GRC_AUTOUNLOCK_SYSUSERS_OFF "")
+else()
+    set(GRC_AUTOUNLOCK_SYSUSERS_OFF "#")
+endif()
 set(GRC_SYSTEMD_UNITDIR "lib/systemd/system" CACHE STRING "Unit directory, relative to CMAKE_INSTALL_PREFIX")
 set(GRC_SYSUSERSDIR "lib/sysusers.d" CACHE STRING "sysusers.d directory, relative to CMAKE_INSTALL_PREFIX")
 set(GRC_TMPFILESDIR "lib/tmpfiles.d" CACHE STRING "tmpfiles.d directory, relative to CMAKE_INSTALL_PREFIX")

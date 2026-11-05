@@ -321,8 +321,9 @@ starts with `-autounlocksocket=/run/gridcoin-autounlock/alice.sock`, enables `gr
 and restarts a running core without waiting, so that it unlocks.
 
 How it works: at each start, once the wallet is loaded, the core connects to that socket. systemd starts the
-helper, `gridcoin-autounlock@alice.service`, under a dynamic account of its own, with the credential decrypted for
-it alone. The helper serves the passphrase only to the main process of `gridcoinresearchd@alice.service` as
+helper, `gridcoin-autounlock@alice.service`, under the system account `gridcoin-autounlock` (testnet
+`gridcointestnet-autounlock`), which no desktop process uses, with the credential decrypted for that account
+alone. The helper serves the passphrase only to the main process of `gridcoinresearchd@alice.service` as
 systemd records it (a child of the core, such as a notify command, is refused), and exits. The core unlocks for
 staking only, never fully, and wipes its copy. If the helper does not serve it, the core tries five times over
 about a minute, then logs why and stays locked. The core never sends anything on that socket.
@@ -402,8 +403,8 @@ On an upgrade from a release with the earlier units (a forking `gridcoinresearch
 
 - Before the new files are unpacked, the package records which of the old units were enabled, running or
   overridden, and turns the old autounlock units off. Running cores keep running.
-- After unpacking, it creates the service account and attach group (`systemd-sysusers`) and `/etc/gridcoin`
-  (`systemd-tmpfiles`). It creates `/etc/gridcoin/gridcoin.conf` (`root:gridcoin`, 0640, with generated RPC
+- After unpacking, it creates the service account, the attach group and the helper's account
+  (`systemd-sysusers`) and `/etc/gridcoin` (`systemd-tmpfiles`). It creates `/etc/gridcoin/gridcoin.conf` (`root:gridcoin`, 0640, with generated RPC
   credentials) when there is none, or makes an existing one owned by root readable by the group `gridcoin` and
   nobody else. Then it runs `gridcoin-service switch-over --state=/var/lib/gridcoin-service/switchover-main.state`.
 - The **switch-over** moves each recorded service to the new units:

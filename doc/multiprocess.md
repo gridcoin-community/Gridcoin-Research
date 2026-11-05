@@ -401,7 +401,9 @@ Both units are `Type=notify`: the core starts with `-nodaemon -nodaemonwait` and
 systemd itself when it is ready, so `daemon=1` in a configuration file does not apply to
 them. Stake-only autounlock is a socket-activated helper (`gridcoin-autounlock@<user>.socket`,
 or `gridcoin-autounlock.socket` for the system service) that serves the passphrase only to
-the main process of its core's unit; a core started by hand gets nothing from it.
+the main process of its core's unit; a core started by hand gets nothing from it. The helper runs
+under the system account `gridcoin-autounlock` (testnet `gridcointestnet-autounlock`), which no desktop
+process uses; the `sysusers.d` entry creates it.
 
 The system service runs in a systemd sandbox (`ProtectSystem=strict`, `ProtectHome=yes`,
 `PrivateTmp=`, `PrivateDevices=`, `SystemCallFilter=@system-service`,

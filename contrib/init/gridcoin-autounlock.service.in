@@ -1,10 +1,14 @@
 # Wallet passphrase helper for the system service (different-account mode).
 # Generated from contrib/init/gridcoin-autounlock.service.in by CMake.
 #
-# Started by its socket unit on a connection. It runs as a dynamic user, and systemd
-# decrypts the credential for it alone. It serves the passphrase to the main process
-# of the bound core unit (a child of the core is not served), and exits within a
-# minute. It has no network access. See doc/running-unattended.md.
+# Started by its socket unit on a connection. It runs under the fixed system account
+# @GRC_AUTOUNLOCK@, which no desktop process uses, and systemd decrypts the credential
+# for that account. The account is fixed rather than dynamic because the helper asks
+# systemd for the main process of the bound core unit over D-Bus, and dbus-daemon can
+# close a connection from a dynamic account. The helper serves the
+# passphrase to the main process of the bound core unit (a child of the core is not
+# served), and exits within a minute. It has no network access. See
+# doc/running-unattended.md.
 
 [Unit]
 Description=Gridcoin wallet passphrase helper
@@ -19,7 +23,8 @@ ExecStart=@GRC_UNIT_PYTHON3@ -I @GRC_LIBEXECDIR@/@GRC_LIBEXEC_SUBDIR@/gridcoin-a
 LoadCredentialEncrypted=wallet-passphrase:/etc/credstore.encrypted/@GRC_CRED_PREFIX@.wallet-passphrase
 Restart=no
 RuntimeMaxSec=60
-DynamicUser=yes
+User=@GRC_AUTOUNLOCK@
+Group=@GRC_AUTOUNLOCK@
 UMask=0077
 LimitCORE=0
 
@@ -45,6 +50,7 @@ ProtectKernelLogs=true
 ProtectControlGroups=true
 ProtectClock=true
 ProtectHostname=true
+RemoveIPC=yes
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 SystemCallArchitectures=native
