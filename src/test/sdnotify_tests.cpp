@@ -345,8 +345,9 @@ BOOST_AUTO_TEST_CASE(heartbeat_sends_immediately)
     sdnotify::CaptureFromEnvironment();
 
     {
+        // Each beat extends by three beat intervals: 3 minutes for the default 60 seconds.
         sdnotify::ScopedStartupHeartbeat heartbeat("Loading block index");
-        BOOST_CHECK_EQUAL(listener.Receive(), "EXTEND_TIMEOUT_USEC=1800000000\nSTATUS=Loading block index");
+        BOOST_CHECK_EQUAL(listener.Receive(), "EXTEND_TIMEOUT_USEC=180000000\nSTATUS=Loading block index");
     }
 }
 
@@ -410,7 +411,7 @@ BOOST_AUTO_TEST_CASE(no_extension_once_a_shutdown_is_requested)
 
     {
         sdnotify::ScopedStartupHeartbeat heartbeat("Rescanning", std::chrono::hours{1}, std::chrono::milliseconds{20});
-        BOOST_CHECK_EQUAL(listener.Receive(), "EXTEND_TIMEOUT_USEC=1800000000\nSTATUS=Rescanning");
+        BOOST_CHECK_EQUAL(listener.Receive(), "EXTEND_TIMEOUT_USEC=60000\nSTATUS=Rescanning");
 
         g_test_shutdown = true;
         // A beat that was already past the check may still arrive; nothing comes after it.
@@ -465,6 +466,9 @@ BOOST_AUTO_TEST_CASE(heartbeat_extension_is_capped)
     for (const long long usec : extensions) {
         BOOST_CHECK_GT(usec, 0);
         BOOST_CHECK_LE(usec, std::chrono::duration_cast<std::chrono::microseconds>(cap).count());
+        // A beat extends by at most three beat intervals, so one that passed the stop
+        // check just before a stop extends the stop by little.
+        BOOST_CHECK_LE(usec, std::chrono::duration_cast<std::chrono::microseconds>(3 * interval).count());
         if (previous != 0) BOOST_CHECK_LE(usec, previous);
         previous = usec;
     }

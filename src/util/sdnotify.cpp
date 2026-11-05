@@ -229,9 +229,12 @@ void ScopedStartupHeartbeat::Run()
             return;
         }
 
-        // Only Send() is called from here, never wallet or chain code.
+        // Each beat extends by three beat intervals, so a missed beat is covered while a beat
+        // that passed the stop check just before a stop extends the stop by little. Only
+        // Send() is called from here, never wallet or chain code.
+        const microseconds per_beat = 3 * std::chrono::duration_cast<microseconds>(m_interval);
         lock.unlock();
-        ExtendStartTimeout(m_status, std::min(START_EXTENSION, remaining));
+        ExtendStartTimeout(m_status, std::min(per_beat, remaining));
         lock.lock();
         m_cv.wait_for(lock, m_interval, [this] { return m_stop; });
     }

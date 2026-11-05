@@ -74,7 +74,8 @@ bool ExtendStartTimeout(const std::string& status, std::chrono::microseconds ext
 
 //! Sends an extension immediately and then every \p interval until destroyed, so
 //! that one long startup step does not run into the start timeout. Each extension
-//! is at most what is left of \p max_total, counted from construction, and none is
+//! is three intervals (3 minutes for the default interval), and at most what is left
+//! of \p max_total, counted from construction, and none is
 //! sent once that is used up or a shutdown has been requested: a step that hangs
 //! ends the start at most \p max_total after it began. The steps it covers have no
 //! progress counter another thread can read safely, so it does not wait for one.
