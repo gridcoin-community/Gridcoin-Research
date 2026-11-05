@@ -110,6 +110,11 @@ void SetOwnerOnlyUmask();
 //! token cannot be read.
 winacl::AclSpec OwnerOnlyAclSpec(bool inheritable);
 
+//! Why \p path could not be restricted to this account, \p failure saying how,
+//! worded as the IPC startup error it becomes ("Refusing to serve IPC: ..."), with
+//! the advice that the data directory must live on an NTFS volume.
+std::string OwnerOnlyRefusalText(const fs::path& path, const std::string& failure);
+
 //! Make the current user the owner of an existing file or directory, apply an
 //! owner+SYSTEM PROTECTED DACL to it, and verify both by reading them back exactly.
 //! Throws on failure: std::system_error when a call fails, std::runtime_error when

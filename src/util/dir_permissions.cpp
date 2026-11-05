@@ -21,21 +21,6 @@
 #endif
 
 namespace util {
-namespace {
-
-#ifdef WIN32
-
-//! Why \p path could not be restricted, worded as the IPC startup error it becomes.
-std::string RefusalText(const fs::path& path, const std::string& failure)
-{
-    return strprintf("Refusing to serve IPC: '%s' could not be restricted to the current user -- %s. "
-                     "The data directory must live on an NTFS volume that supports access control.",
-                     path.string(), failure);
-}
-
-#endif // WIN32
-
-} // namespace
 
 #ifdef WIN32
 //! The owner-only access control list: this process's token user owns the object,
@@ -70,6 +55,13 @@ winacl::AclSpec OwnerOnlyAclSpec(bool inheritable)
     return spec;
 }
 
+std::string OwnerOnlyRefusalText(const fs::path& path, const std::string& failure)
+{
+    return strprintf("Refusing to serve IPC: '%s' could not be restricted to the current user -- %s. "
+                     "The data directory must live on an NTFS volume that supports access control.",
+                     path.string(), failure);
+}
+
 void ApplyOwnerOnlyDacl(const fs::path& path, bool inheritable)
 {
     // ApplyAcl reads the ACL back before returning. Some filesystems (FAT/exFAT
@@ -79,7 +71,7 @@ void ApplyOwnerOnlyDacl(const fs::path& path, bool inheritable)
     try {
         winacl::ApplyAcl(path, OwnerOnlyAclSpec(inheritable));
     } catch (const winacl::AclNotKeptError& e) {
-        throw std::runtime_error(RefusalText(path, e.reason()));
+        throw std::runtime_error(OwnerOnlyRefusalText(path, e.reason()));
     }
 }
 
@@ -97,7 +89,7 @@ void VerifyOwnerOnlyDacl(const fs::path& path)
         failure = winacl::FindForeignTrustee(acl, allowed);
     }
 
-    if (failure) throw std::runtime_error(RefusalText(path, *failure));
+    if (failure) throw std::runtime_error(OwnerOnlyRefusalText(path, *failure));
 }
 #endif // WIN32
 

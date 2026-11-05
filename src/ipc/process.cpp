@@ -572,7 +572,12 @@ void PrepareAttachGroupDirectory(const fs::path& dir)
     // A directory made here has the attach group's list from the start. One that
     // exists is refused by its identity, when it is the data directory, before
     // anything is changed.
-    const bool created = MakeIpcDirectory(dir, win::IpcDirAclSpec(util::winacl::CurrentTokenUser(), *group));
+    bool created = false;
+    try {
+        created = MakeIpcDirectory(dir, win::IpcDirAclSpec(util::winacl::CurrentTokenUser(), *group));
+    } catch (const util::winacl::AclNotKeptError& e) {
+        throw std::runtime_error(win::EndpointAclNotKeptText(dir, e.reason()));
+    }
     win::ApplyAttachGroupDirectoryAccess(dir, *group, created);
 }
 #endif // !WIN32
@@ -629,8 +634,13 @@ void PrepareIpcDirectory(const fs::path& dir)
         if (warning) LogPrintf("WARN: %s: %s", __func__, *warning);
     }
 #else
-    // Created with the owner-only list from the start, and read back.
-    if (MakeIpcDirectory(dir, util::OwnerOnlyAclSpec(/*inheritable=*/true))) return;
+    // Created with the owner-only list from the start, and read back. A volume that
+    // does not keep the list gets the same advice as before.
+    try {
+        if (MakeIpcDirectory(dir, util::OwnerOnlyAclSpec(/*inheritable=*/true))) return;
+    } catch (const util::winacl::AclNotKeptError& e) {
+        throw std::runtime_error(util::OwnerOnlyRefusalText(dir, e.reason()));
+    }
 
     if (!ConfiguredOption("-ipcdir").empty()) {
         if (const std::optional<std::string> reason = win::ServerIpcDirRefusal(dir)) {

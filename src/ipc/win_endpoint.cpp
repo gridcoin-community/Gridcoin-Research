@@ -573,8 +573,8 @@ void ApplyAttachGroupDirectoryAccess(const fs::path& dir, const Sid& attach_grou
                                            dir.string(), *reason));
     }
 
-    // A directory made just now was this account's alone; only a change to one that
-    // was there already is logged.
+    // A directory made just now was created with this list and read back, so only a
+    // change to one that was there already is logged.
     if (!created) {
         LogPrintf("IPC: gave the IPC directory %s the attach group's access list (this account and SYSTEM full "
                   "access, the group may view it); before, %s\n",
