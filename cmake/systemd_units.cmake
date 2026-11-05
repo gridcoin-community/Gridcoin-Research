@@ -141,7 +141,14 @@ if(INSTALL_SYSTEMD_UNITS AND INSTALL_SYSTEMD_AUTOUNLOCK)
     )
 endif()
 
-# The per-user service setup tool, generated for this network.
+# The per-user service setup tool, generated for this network. It compares the unit
+# systemd loads with the one installed here, so it takes the unit directory made
+# absolute, as install() makes a relative DESTINATION.
+if(IS_ABSOLUTE "${GRC_SYSTEMD_UNITDIR}")
+    set(GRC_SYSTEMD_UNITDIR_FULL "${GRC_SYSTEMD_UNITDIR}")
+else()
+    set(GRC_SYSTEMD_UNITDIR_FULL "${CMAKE_INSTALL_PREFIX}/${GRC_SYSTEMD_UNITDIR}")
+endif()
 if(INSTALL_SYSTEMD_UNITS)
     configure_file("${GRC_UNIT_TEMPLATE_DIR}/gridcoin_service.py.in" "${GRC_UNIT_OUTPUT_DIR}/${GRC_SERVICE_TOOL}" @ONLY)
     install(PROGRAMS "${GRC_UNIT_OUTPUT_DIR}/${GRC_SERVICE_TOOL}" COMPONENT daemon

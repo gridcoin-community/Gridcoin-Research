@@ -52,7 +52,7 @@ CONFIGURED = {"bindir": "/usr/bin", "default_network": "main", "python3": "/usr/
               "libexec_subdir_main": "gridcoin", "libexec_subdir_test": "gridcointestnet",
               "refused_keys_main": "/usr/share/gridcoin/refused-setting-keys.txt",
               "refused_keys_test": "/usr/share/gridcointestnet/refused-setting-keys.txt",
-              "autounlock_units": "yes"}
+              "autounlock_units": "yes", "unitdir": "/usr/lib/systemd/system"}
 
 
 class FakeHost:
@@ -74,6 +74,29 @@ class FakeHost:
         self.on_systemctl = dict(on_systemctl or {})
         # Whether the run is the package's (its postinst), which restarts the system service itself.
         self.package = package
+        # What systemctl show reports beyond the files a test made (see unit_files): {unit: path}
+        # for a fragment systemd loads from elsewhere, {unit: [path]} for drop-ins from other
+        # directories, and the units whose files changed since the last daemon-reload.
+        self.fragments = {}
+        self.extra_dropins = {}
+        self.need_reload = set()
+        # The test's Paths, as a callable, so that a test that replaces them is seen.
+        self.paths_of = None
+
+    def unit_files(self, unit):
+        """systemctl show's FragmentPath, DropInPaths and NeedDaemonReload for the files a test
+        made: the copy in /etc/systemd/system, else the packaged unit; the *.conf drop-ins of its
+        directory there, then extra_dropins."""
+        if "show" in self.fail:
+            raise svc.StepError("step 'systemctl show %s' failed with exit status 1" % unit)
+        paths = self.paths_of()
+        copy = os.path.join(paths.etc_systemd, unit)
+        fragment = self.fragments.get(unit) or (copy if os.path.lexists(copy) else
+                                                os.path.join(paths.packaged_units, unit))
+        directory = os.path.join(paths.etc_systemd, unit + ".d")
+        dropins = sorted(os.path.join(directory, name) for name in os.listdir(directory)
+                         if name.endswith(".conf")) if os.path.isdir(directory) else []
+        return fragment, dropins + list(self.extra_dropins.get(unit, ())), unit in self.need_reload
 
     def run_by_package(self):
         return self.package
@@ -158,6 +181,7 @@ class ServiceTestBase(unittest.TestCase):
             var_lib=os.path.join(root, "var_lib"),
             tool_state=os.path.join(root, "state"),
             login_defs=os.path.join(root, "login.defs"),
+            packaged_units=os.path.join(root, "usr_lib_systemd"),
         )
         for d in (self.paths.etc_systemd, self.paths.credstore):
             os.makedirs(d)
@@ -172,10 +196,13 @@ class ServiceTestBase(unittest.TestCase):
         self.addCleanup(lambda: (svc.CONFIG.clear(), svc.CONFIG.update(saved)))
 
     def run_main(self, *argv, host=None):
+        host = host or self.host
+        if host.paths_of is None:
+            host.paths_of = lambda: self.paths
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             try:
-                rc = svc.main(list(argv), host or self.host, self.paths)
+                rc = svc.main(list(argv), host, self.paths)
             except SystemExit as e:
                 rc = e.code
         return rc, out.getvalue(), err.getvalue()
@@ -341,6 +368,26 @@ class CMakeValuesTests(unittest.TestCase):
                     f.write(text.replace("@GRC_AUTOUNLOCK_UNITS@", value))
                 configured = load_tool(path)
             self.assertEqual(configured.autounlock_units_installed(), installed, value)
+
+    def test_packaged_unit_directory_comes_from_cmake(self):
+        with open(SYSTEMD_UNITS_CMAKE, encoding="utf8") as f:
+            cmake = f.read()
+        # The directory the units are installed to, made absolute as install() makes it.
+        self.assertIn('DESTINATION "${GRC_SYSTEMD_UNITDIR}"', cmake)
+        self.assertRegex(cmake, r'if\(IS_ABSOLUTE "\$\{GRC_SYSTEMD_UNITDIR\}"\)\s+'
+                                r'set\(GRC_SYSTEMD_UNITDIR_FULL "\$\{GRC_SYSTEMD_UNITDIR\}"\)\s+else\(\)\s+'
+                                r'set\(GRC_SYSTEMD_UNITDIR_FULL '
+                                r'"\$\{CMAKE_INSTALL_PREFIX\}/\$\{GRC_SYSTEMD_UNITDIR\}"\)\s+endif\(\)')
+        self.assertLess(cmake.index("set(GRC_SYSTEMD_UNITDIR_FULL"), cmake.index('gridcoin_service.py.in"'))
+        with open(TOOL_PATH, encoding="utf8") as f:
+            text = f.read()
+        self.assertIn('"unitdir": "@GRC_SYSTEMD_UNITDIR_FULL@"', text)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "gridcoin_service.py")
+            with open(path, "w", encoding="utf8") as f:
+                f.write(text.replace("@GRC_SYSTEMD_UNITDIR_FULL@", "/usr/lib/systemd/system"))
+            configured = load_tool(path)
+        self.assertEqual(configured.Paths().packaged_units, "/usr/lib/systemd/system")
 
     def test_tmpfiles_paths_are_declared_once_across_networks(self):
         # gridcoin.tmpfiles.in is installed once per network; any other *.tmpfiles file is
@@ -1001,6 +1048,33 @@ class FixRoundTests(ServiceTestBase):
         self.assertEqual(len(calls), 3)
         for kw in calls:
             self.assertEqual(kw["env"], {"PATH": "/usr/bin:/bin"})
+
+    def test_real_host_reads_the_units_files_from_systemctl_show(self):
+        def no_real_command(*args, **kwargs):
+            raise AssertionError("a real command would have run: %r" % (args,))
+
+        seen = []
+        output = ("DropInPaths=/etc/systemd/system/x.service.d/a.conf /run/systemd/system/service.d/b.conf\n"
+                  "FragmentPath=/usr/lib/systemd/system/x.service\nNeedDaemonReload=no\n")
+        for rc, stdout, expected in ((0, output, ("/usr/lib/systemd/system/x.service",
+                                                  ["/etc/systemd/system/x.service.d/a.conf",
+                                                   "/run/systemd/system/service.d/b.conf"], False)),
+                                     (0, "FragmentPath=\nDropInPaths=\nNeedDaemonReload=yes\n", ("", [], True)),
+                                     (1, "", None)):
+            def run(cmd, _rc=rc, _out=stdout, **kw):
+                seen.append((cmd, kw["env"]))
+                return subprocess.CompletedProcess(cmd, _rc, stdout=_out)
+
+            with self.subTest(stdout=stdout, rc=rc), mock.patch.object(svc.subprocess, "call", no_real_command), \
+                    mock.patch.object(svc.subprocess, "Popen", no_real_command), \
+                    mock.patch.object(svc.subprocess, "run", run):
+                if expected is None:
+                    with self.assertRaises(svc.StepError):
+                        svc.Host().unit_files("x.service")
+                else:
+                    self.assertEqual(svc.Host().unit_files("x.service"), expected)
+        self.assertEqual(seen[0], (["systemctl", "show", "-p", "FragmentPath,DropInPaths,NeedDaemonReload",
+                                    "x.service"], {"PATH": "/usr/bin:/bin"}))
 
     def test_real_host_knows_a_run_from_the_package(self):
         with mock.patch.dict(svc.os.environ, {"DPKG_MAINTSCRIPT_PACKAGE": "gridcoinresearchd"}):
@@ -4120,6 +4194,79 @@ class SwitchOverTests(ServiceTestBase):
         rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
         self.assertEqual(rc, 0, err)
         self.assertTrue(os.path.exists(bind))
+
+    def test_switch_over_reads_the_unit_as_systemd_loads_it(self):
+        # systemd may load the unit, or drop-ins for it, from directories the switch-over does not
+        # read: what they set decides which command line, account and mounts the service has.
+        data = os.path.join(self.tmp.name, "data", "grc")
+        os.makedirs(data)
+        self.write_text(os.path.join(data, "gridcoinresearch.conf"), "rpcuser=x\n")
+        unit = "gridcoinresearchd.service"
+        elsewhere = os.path.join(self.tmp.name, "run_systemd")
+
+        def outside(name, text):
+            path = os.path.join(elsewhere, name)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            self.write_text(path, text)
+            return path
+
+        refused = [
+            ("drop-in", outside(unit + ".d/60-x.conf", "[Service]\nExecStart=\nExecStart=/usr/bin/x\n"),
+             "sets ExecStart="),
+            ("drop-in", outside("service.d/10-type.conf", "[Service]\nType=forking\n"), "sets Type="),
+            ("drop-in", outside("service.d/20-user.conf", "[Service]\nUser=other\n"), "sets User="),
+            ("drop-in", outside(unit + ".d/70-bind.conf", "[Service]\nBindPaths=/srv:%s\n" % data),
+             "sets BindPaths="),
+            ("fragment", outside(unit, "[Service]\nExecStart=/usr/bin/x\n"), "systemd loads %s from" % unit),
+            ("reload", None, "daemon-reload"),
+        ]
+        for kind, path, reason in refused:
+            with self.subTest(kind=kind, path=path):
+                svc_rmtree(self.system_unit_dir())
+                override = self.system_override("-datadir=%s" % data)
+                self.host.extra_dropins.clear()
+                self.host.fragments.clear()
+                self.host.need_reload.clear()
+                if kind == "drop-in":
+                    self.host.extra_dropins[unit] = [path]
+                elif kind == "fragment":
+                    self.host.fragments[unit] = path
+                else:
+                    self.host.need_reload.add(unit)
+                self.host.calls.clear()
+                state = self.write_state("system-core\n")
+                rc, out, err = self.run_main("switch-over", "--state=" + state)
+                self.assertEqual(rc, 1)
+                self.assertIn(reason, err)
+                if path is not None:
+                    self.assertIn(path, err)
+                self.assertTrue(os.path.exists(override))
+                self.assertEqual(self.host.calls, [])
+                with open(state, encoding="utf8") as f:
+                    self.assertEqual(f.read(), "system-core\n")
+        # systemctl show failing is no answer either.
+        self.host.extra_dropins.clear()
+        self.host.fragments.clear()
+        self.host.need_reload.clear()
+        svc_rmtree(self.system_unit_dir())
+        override = self.system_override("-datadir=%s" % data)
+        self.host.fail.add("show")
+        state = self.write_state("system-core\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 1)
+        self.assertIn("systemctl show", err)
+        self.assertTrue(os.path.exists(override))
+        self.host.fail.discard("show")
+        # The packaged unit's own drop-ins, and a drop-in from elsewhere that sets nothing the
+        # switch-over reads or moves, leave it as it is.
+        packaged = os.path.join(self.paths.packaged_units, unit + ".d", "10-packaged.conf")
+        os.makedirs(os.path.dirname(packaged))
+        self.write_text(packaged, "[Service]\nType=notify\n")
+        harmless = outside("service.d/10-timeout-abort.conf", "[Service]\nTimeoutStopFailureMode=abort\n")
+        self.host.extra_dropins[unit] = [packaged, harmless]
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 0, err)
+        self.assertFalse(os.path.exists(override))
 
     def test_switch_over_warns_when_the_carried_datadir_is_another_accounts(self):
         data = os.path.join(self.tmp.name, "data", "grc")

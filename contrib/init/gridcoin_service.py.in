@@ -44,7 +44,7 @@ import time
 CONFIG = {"bindir": "@GRC_BINDIR@", "default_network": "@GRC_UNIT_NETWORK@", "python3": "@GRC_UNIT_PYTHON3@",
           "libexec_subdir_main": "@GRC_LIBEXEC_SUBDIR_MAIN@", "libexec_subdir_test": "@GRC_LIBEXEC_SUBDIR_TEST@",
           "refused_keys_main": "@GRC_REFUSED_KEYS_FILE_MAIN@", "refused_keys_test": "@GRC_REFUSED_KEYS_FILE_TEST@",
-          "autounlock_units": "@GRC_AUTOUNLOCK_UNITS@"}
+          "autounlock_units": "@GRC_AUTOUNLOCK_UNITS@", "unitdir": "@GRC_SYSTEMD_UNITDIR_FULL@"}
 
 EXIT_USAGE = 64
 DROPIN_MAIN = "50-gridcoin-service.conf"
@@ -182,6 +182,8 @@ class Paths:
     old_unit_home: str = "/home"
     # What the system unit's sandbox hides from the core (ProtectHome=yes, PrivateTmp=).
     unit_hidden: tuple = ("/home", "/root", "/run/user", "/tmp", "/var/tmp")
+    # Where this build installs the units.
+    packaged_units: str = CONFIG["unitdir"]
 
 
 class Host:
@@ -199,6 +201,22 @@ class Host:
 
     def is_active(self, unit):
         return subprocess.call(["systemctl", "is-active", "--quiet", unit], env=SAFE_ENV) == 0
+
+    def unit_files(self, unit):
+        """What systemd loads unit from, as systemctl show reports it: (FragmentPath, DropInPaths
+        as a list, whether NeedDaemonReload is yes)."""
+        proc = subprocess.run(["systemctl", "show", "-p", "FragmentPath,DropInPaths,NeedDaemonReload", unit],
+                              env=SAFE_ENV, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, encoding="utf8",
+                              errors="replace", check=False)
+        if proc.returncode != 0:
+            raise StepError("step 'systemctl show %s' failed with exit status %s" % (unit, proc.returncode))
+        props = {}
+        for line in proc.stdout.splitlines():
+            key, sep, value = line.partition("=")
+            if sep:
+                props[key] = value
+        return (props.get("FragmentPath", ""), props.get("DropInPaths", "").split(),
+                props.get("NeedDaemonReload") == "yes")
 
     def run_by_package(self):
         """Whether a package's maintainer script runs this (dpkg sets DPKG_MAINTSCRIPT_PACKAGE). The
@@ -2758,7 +2776,8 @@ def switch_system_core(net, host, paths):
     carried into the unit's drop-in from this tool. An old command line with any other option it
     would drop refuses the switch, and nothing is moved: the service then fails to start on the
     right data until the admin changes that override. So does a file to be moved aside that sets
-    up the service's mounts (MOUNT_KEYS), which the carried paths depend on.
+    up the service's mounts (MOUNT_KEYS), which the carried paths depend on, and a unit systemd
+    loads from files this does not read (refuse_unseen_unit_files).
 
     A switch in progress is recorded first, with whether the copy was enabled, so a rerun finishes
     it. Returns whether the unit changed."""
@@ -2774,6 +2793,7 @@ def switch_system_core(net, host, paths):
     command = system_command(net, paths, copy, masked)
     moving = ([copy] if copy is not None and not masked else []) + [path for path, _ in stale]
     try:
+        refuse_unseen_unit_files(net, host, paths, copy, masked)
         if command is not None:
             display, value = command
             conf, datadir = carried_system_paths(net, display, value, display == ours,
@@ -2814,6 +2834,40 @@ def switch_system_core(net, host, paths):
         step(host, "reenable", unit)
     os.unlink(record_path)
     return True
+
+
+def refuse_unseen_unit_files(net, host, paths, copy, masked):
+    """Refuse when systemd loads the system unit other than the switch-over reads it, as systemctl
+    show reports: from a file other than the packaged unit or its copy in /etc/systemd/system, or
+    with a drop-in from another directory (/run, /usr/local/lib, /usr/lib, a type-wide service.d)
+    that sets a key the switch-over reads or moves aside (OLD_UNIT_KEYS) or one of MOUNT_KEYS. The
+    packaged unit's own drop-ins are its own. What systemd reports is of its last daemon-reload, so
+    files changed since then are refused too."""
+    unit = net.daemon + ".service"
+    fragment, dropins, need_reload = host.unit_files(unit)
+    if need_reload:
+        raise UserError("the files of %s changed since systemd last read them; run systemctl daemon-reload, then "
+                        "rerun the switch-over" % unit)
+    packaged = os.path.join(paths.packaged_units, unit)
+    if not masked:
+        known = [packaged] + ([copy] if copy is not None else [])
+        if not fragment or os.path.realpath(fragment) not in [os.path.realpath(path) for path in known]:
+            raise UserError("systemd loads %s from %s, not from %s; remove that file or move it to %s, run systemctl "
+                            "daemon-reload, then rerun the switch-over"
+                            % (unit, fragment or "no file", " or ".join(known), os.path.join(paths.etc_systemd, unit)))
+    read_here = [os.path.realpath(dropin_dir(paths, unit)), os.path.realpath(packaged + ".d")]
+    for path in dropins:
+        if os.path.realpath(os.path.dirname(path)) in read_here:
+            continue
+        text = read_dropin_text(path) if os.path.exists(path) else None
+        keys = set_keys(text, OLD_UNIT_KEYS) + [key for section, key in MOUNT_KEYS
+                                                 if unit_file_settings(text or "", section, key)]
+        if keys:
+            raise UserError("%s, a drop-in for %s from outside %s, sets %s, which the switch-over neither reads nor "
+                            "moves aside; move those settings to a drop-in in %s, or remove them, run systemctl "
+                            "daemon-reload, then rerun the switch-over"
+                            % (path, unit, dropin_dir(paths, unit), ", ".join(key + "=" for key in keys),
+                               dropin_dir(paths, unit)))
 
 
 def refuse_moving_mounts(moving):
