@@ -280,7 +280,8 @@ bool AppInit(int argc, char* argv[])
         // The attach group's checks need only the arguments and the data directory, so a
         // -multiprocess start they refuse stops here: before the daemonizing fork, so a -daemon
         // parent reports the failure, and before AppInit2 loads the wallet or binds RPC. The IPC
-        // directory itself is checked again where it is opened (ipc::ApplyAttachGroupAccess).
+        // directory itself is checked again where it is opened (ipc::ApplyAttachGroupAccess; on
+        // Windows ipc::win::ApplyAttachGroupDirectoryAccess).
         // -noipcattachgroup counts as unset.
         if (gArgs.GetBoolArg("-multiprocess", false)) {
             if (const std::optional<std::string> refusal = ipc::AttachGroupIpcDirRefusal()) {

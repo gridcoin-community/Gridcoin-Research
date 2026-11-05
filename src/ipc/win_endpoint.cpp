@@ -362,6 +362,11 @@ EndpointEntry ReadEntry(HANDLE handle, const fs::path& path)
 
 //! The volume serial number and file index of the object \p handle refers to, or
 //! nullopt when they cannot be read.
+//!
+//! On ReFS a file ID is 128 bits (FILE_ID_INFO), and the 64-bit index read here
+//! may then be shared by two objects on the volume. The ID only refuses the data
+//! directory, so such a collision can only refuse a directory that is not the data
+//! directory, never let the data directory through.
 std::optional<FileId> FileIdOf(HANDLE handle)
 {
     BY_HANDLE_FILE_INFORMATION info{};

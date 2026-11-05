@@ -756,6 +756,26 @@ void WriteFile(const fs::path& path)
     out << "x";
 }
 
+//! Whether \p a and \p b read the same: the owner, the DACL's presence and
+//! protection, and every entry, in order.
+bool SameAcl(const ObservedAcl& a, const ObservedAcl& b)
+{
+    if (a.owner != b.owner || a.dacl_present != b.dacl_present || a.is_protected != b.is_protected ||
+        a.aces.size() != b.aces.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < a.aces.size(); ++i) {
+        const ObservedAce& x = a.aces[i];
+        const ObservedAce& y = b.aces[i];
+        if (x.kind != y.kind || x.trustee != y.trustee || x.mask != y.mask || x.inherit_only != y.inherit_only ||
+            x.inherited != y.inherited || x.inherit != y.inherit) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 //! Closes a socket descriptor from Process::bind or Process::connect.
 struct SocketCloser
 {
@@ -865,9 +885,10 @@ BOOST_AUTO_TEST_CASE(win_check_endpoint_missing_socket_is_not_listening)
     }
 }
 
-// An endpoint of this account's own, in an owner-only directory under this account's
-// temp directory, passes; one checked against another expected owner does not.
-BOOST_AUTO_TEST_CASE(win_check_endpoint_own_socket_accepted)
+// A plain file of this account's own at the socket's name, even with the socket's
+// access list, is not a socket: it carries no AF_UNIX reparse tag, and is refused by
+// the rule rather than by a failing call.
+BOOST_AUTO_TEST_CASE(win_check_endpoint_plain_file_is_not_a_socket)
 {
     if (grc_test::RunningUnderWine()) {
         BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
@@ -880,9 +901,12 @@ BOOST_AUTO_TEST_CASE(win_check_endpoint_own_socket_accepted)
     WriteFile(ipcdir / "node.sock");
     ApplyEndpointAcl(ipcdir / "node.sock", IpcObject::Socket);
 
-    BOOST_CHECK_NO_THROW(CheckServerEndpointBeforeConnect(ipcdir / "node.sock", CurrentTokenUser()));
-    BOOST_CHECK_THROW(CheckServerEndpointBeforeConnect(ipcdir / "node.sock", wellknown::System()),
-                      std::runtime_error);
+    const EndpointEntry entry = ReadEntryNoFollow(ipcdir / "node.sock");
+    BOOST_CHECK(entry.kind == EntryKind::File);
+    BOOST_CHECK(!entry.reparse_tag);
+
+    CheckRefusedByRule([&] { CheckServerEndpointBeforeConnect(ipcdir / "node.sock", CurrentTokenUser()); },
+                       "AF_UNIX");
 }
 
 // A socket bound by the IPC process layer carries the AF_UNIX reparse tag and passes
@@ -1029,12 +1053,10 @@ BOOST_FIXTURE_TEST_CASE(win_expected_server_sid, grc_test::StateGuard)
 
 // The attach group's directory is never the data directory, however it is reached;
 // it is refused before its list is changed.
+//
+// It needs no skip under Wine: the refusal comes before any access list is written.
 BOOST_AUTO_TEST_CASE(win_attach_group_directory_refuses_the_data_directory)
 {
-    if (grc_test::RunningUnderWine()) {
-        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
-        return;
-    }
     const fs::path datadir = GetDataDir();
     const ObservedAcl before = ReadAcl(datadir);
 
@@ -1047,10 +1069,7 @@ BOOST_AUTO_TEST_CASE(win_attach_group_directory_refuses_the_data_directory)
         BOOST_CHECK_MESSAGE(what.find("-ipcdir") != std::string::npos, what);
     }
 
-    const ObservedAcl after = ReadAcl(datadir);
-    BOOST_CHECK(after.owner == before.owner);
-    BOOST_CHECK_EQUAL(after.aces.size(), before.aces.size());
-    BOOST_CHECK_EQUAL(after.is_protected, before.is_protected);
+    BOOST_CHECK(SameAcl(ReadAcl(datadir), before));
 }
 
 // A directory of this account's own gets the attach group's view, and the list reads
