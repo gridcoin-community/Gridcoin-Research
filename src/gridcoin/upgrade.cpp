@@ -13,8 +13,10 @@
 #include <boost/thread.hpp>
 #include <boost/exception/exception.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <iostream>
 #include "node/blockstorage.h"
+#include "node/shutdown.h"
 
 using namespace GRC;
 
@@ -430,28 +432,66 @@ bool Upgrade::MoveBlockDataFiles(std::vector<std::pair<fs::path, uintmax_t>>& bl
 
     fs::directory_iterator IterEnd;
 
+    // blk*.dat.orig files already here were left by an earlier -reindex that stopped before its import completed. They
+    // still hold the blocks that reindex was rebuilding from, so they are imported again, and the blk*.dat files that
+    // reindex had begun writing are renamed to the numbers after them rather than over them. The import reads the files
+    // in name order, so the earlier files come first.
+    std::vector<fs::path> orig_files;
+    std::vector<fs::path> dat_files;
+    uint32_t last_orig_number = 0;
+
     try {
         for (fs::directory_iterator Iter(cleanup_path); Iter != IterEnd; ++Iter) {
-            if (fs::is_regular_file(*Iter)) {
-                size_t FileLoc = Iter->path().filename().string().find("blk");
+            if (!fs::is_regular_file(*Iter)) continue;
 
-                if (FileLoc != std::string::npos) {
-                    std::string filetocheck = Iter->path().filename().string();
+            const std::string filename = Iter->path().filename().string();
 
-                    // Check it ends with .dat and starts with blk
-                    if (filetocheck.substr(0, 3) == "blk" && filetocheck.substr(filetocheck.length() - 4, 4) == ".dat") {
-                        fs::path new_name = *Iter;
-                        new_name.replace_extension(".dat.orig");
+            if (!boost::algorithm::starts_with(filename, "blk")) continue;
 
-                        uintmax_t file_size = fs::file_size(Iter->path());
+            if (boost::algorithm::ends_with(filename, ".dat.orig")) {
+                orig_files.push_back(Iter->path());
 
-                        // Rename with orig as the extension, because ProcessBlock will load blocks into a new block data
-                        // file.
-                        fs::rename(*Iter, new_name);
-                        block_data_files.push_back(std::make_pair(new_name, file_size));
-                    }
+                uint32_t number = 0;
+
+                if (ParseUInt32(filename.substr(3, filename.size() - 3 - 9), &number)) {
+                    last_orig_number = std::max(last_orig_number, number);
                 }
+            } else if (boost::algorithm::ends_with(filename, ".dat")) {
+                dat_files.push_back(Iter->path());
             }
+        }
+
+        if (!orig_files.empty()) {
+            LogPrintf("INFO: %s: Found %u block data file(s) (blk*.dat.orig) left by a reindex that did not complete. "
+                      "They will be imported again.", __func__, orig_files.size());
+        }
+
+        for (const auto& orig_file : orig_files) {
+            block_data_files.push_back(std::make_pair(orig_file, fs::file_size(orig_file)));
+        }
+
+        std::sort(dat_files.begin(), dat_files.end());
+
+        for (const auto& dat_file : dat_files) {
+            fs::path new_name = dat_file;
+
+            if (orig_files.empty()) {
+                new_name.replace_extension(".dat.orig");
+            } else {
+                new_name = cleanup_path / strprintf("blk%04u.dat.orig", ++last_orig_number);
+            }
+
+            // Renaming over an existing file would destroy it.
+            if (fs::exists(new_name)) {
+                return error("%s: %s already exists, so %s cannot be renamed to it in preparation for reindexing.",
+                             __func__, new_name.filename().string(), dat_file.filename().string());
+            }
+
+            uintmax_t file_size = fs::file_size(dat_file);
+
+            // Rename with orig as the extension, because ProcessBlock will load blocks into a new block data file.
+            fs::rename(dat_file, new_name);
+            block_data_files.push_back(std::make_pair(new_name, file_size));
         }
     } catch (fs::filesystem_error &ex) {
         error("%s: Exception occurred: %s. Failed to rename block data files to blk*.dat.orig in preparation for "
@@ -495,6 +535,8 @@ bool Upgrade::LoadBlockchainData(std::vector<std::pair<fs::path, uintmax_t>>& bl
 
             LogPrintf("INFO: %s: Loading blocks from %s.", __func__, iter.first.filename().string());
 
+            // LoadExternalBlockFile fails a file that a shutdown request or a read error stopped part way, so the
+            // source files are deleted below only after every one of them was read to its end.
             if (!LoadExternalBlockFile(block_data_file, iter.second, percent_start, percent_end)) {
                 successful = false;
 
@@ -525,6 +567,11 @@ bool Upgrade::LoadBlockchainData(std::vector<std::pair<fs::path, uintmax_t>>& bl
                           "block data files (blk*.dat.orig). You will have to delete these manually.", __func__, ex.what());
             }
         }
+    } else if (ShutdownRequested()) {
+        LogPrintf("INFO: %s: A shutdown was requested before the block data files were fully loaded. No file was "
+                  "deleted.%s", __func__, cleanup_imported_files ? " Restart with -reindex to finish the reindex." : "");
+
+        return false;
     } else {
         error("%s: A failure occurred during the reindexing of the block data files. The blockchain state is invalid and "
               "you should restart the wallet with the -resetblockchaindata option to clear out the blockchain database "

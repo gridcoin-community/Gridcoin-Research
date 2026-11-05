@@ -305,6 +305,8 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
 {
     int64_t nStart = GetTimeMillis();
     int nLoaded = 0;
+    int nAlreadyIndexed = 0;
+    bool read_whole_file = false;
 
     bool display_progress = (file_size > 0 && (percent_end - percent_start) > 0) ? true : false;
     unsigned int cached_percent_progress = 0;
@@ -344,6 +346,9 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                 } while(!ShutdownRequested());
 
                 if (nPos == (unsigned int)-1) {
+                    // The scan stops at the end of the file, and also where a read failed.
+                    read_whole_file = !ferror(blkdat.Get());
+
                     if (display_progress) {
                         uiInterface.InitMessage(_("Block file load progress ") + ToString(percent_end) + "%");
                     }
@@ -352,12 +357,31 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                 }
 
                 fseek(blkdat.Get(), nPos, SEEK_SET);
-                unsigned int nSize;
-                blkdat >> nSize;
+                unsigned int nSize = 0;
+                CBlock block;
+                try {
+                    blkdat >> nSize;
+                    if (nSize > 0 && nSize <= MAX_BLOCK_SIZE) blkdat >> block;
+                } catch (const std::exception& e) {
+                    // A read error ends the load. A record that does not deserialize, such as a block cut off at the
+                    // end of the file by a crash while it was being written, is skipped, and the scan for the next
+                    // block continues after its message start, so the rest of the file is still read.
+                    if (ferror(blkdat.Get())) throw;
+
+                    LogPrintf("WARN: %s: Skipping the block record at offset %u: %s", __func__, nPos, e.what());
+                    continue;
+                }
                 if (nSize > 0 && nSize <= MAX_BLOCK_SIZE)
                 {
-                    CBlock block;
-                    blkdat >> block;
+                    // A block already in the index is skipped rather than passed to ProcessBlock, which would refuse it
+                    // and log an error. A reindex meets genesis this way, and a reindex that resumes an interrupted one
+                    // meets every block the interrupted one had imported.
+                    if (mapBlockIndex.count(block.GetHash(true))) {
+                        ++nAlreadyIndexed;
+                        nPos += 4 + nSize;
+                        continue;
+                    }
+
                     CValidationState load_state;
                     if (ProcessBlock(nullptr, &block, false, load_state)) {
                         ++nLoaded;
@@ -387,8 +411,12 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                    __PRETTY_FUNCTION__);
         }
     }
-    LogPrintf("Loaded %i blocks from external file in %" PRId64 "ms", nLoaded, GetTimeMillis() - nStart);
-    return nLoaded > 0;
+    LogPrintf("Loaded %i blocks from external file in %" PRId64 "ms, skipped %i already in the block index", nLoaded,
+              GetTimeMillis() - nStart, nAlreadyIndexed);
+
+    // A file stopped part way by a shutdown request or a read error is not counted as loaded, whatever it yielded:
+    // a reindex deletes its source files only after every one of them was loaded.
+    return read_whole_file;
 }
 
 
