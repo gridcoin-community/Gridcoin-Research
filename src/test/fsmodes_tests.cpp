@@ -68,6 +68,18 @@ unsigned ModeOf(const fs::path& path)
     return static_cast<unsigned>(st.st_mode & 07777);
 }
 
+//! Sets the process umask for one case and puts the old one back however the case ends.
+struct UmaskGuard
+{
+    const mode_t m_saved;
+
+    explicit UmaskGuard(mode_t mask) : m_saved(::umask(mask)) {}
+    ~UmaskGuard() { ::umask(m_saved); }
+
+    UmaskGuard(const UmaskGuard&) = delete;
+    UmaskGuard& operator=(const UmaskGuard&) = delete;
+};
+
 bool HasFinding(const std::vector<fsmodes::ModeFinding>& findings, const fs::path& path)
 {
     return std::any_of(findings.begin(), findings.end(),
@@ -427,7 +439,7 @@ BOOST_AUTO_TEST_CASE(backup_dir_warning_names_the_cause)
 BOOST_AUTO_TEST_CASE(an_unrestrictable_backup_directory_is_kept_and_reported)
 {
     const ScratchDir scratch;
-    const mode_t saved_umask = ::umask(0);
+    const UmaskGuard permissive(0);
     const fs::path backups = scratch.m_path / "unrestrictable" / "backups";
 
     for (int pass = 0; pass < 2; ++pass) {
@@ -442,8 +454,6 @@ BOOST_AUTO_TEST_CASE(an_unrestrictable_backup_directory_is_kept_and_reported)
             BOOST_TEST_MESSAGE("not owner-only: " << *check.not_owner_only);
         }
     }
-
-    ::umask(saved_umask);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

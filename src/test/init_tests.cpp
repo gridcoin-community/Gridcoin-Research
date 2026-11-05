@@ -252,14 +252,40 @@ BOOST_AUTO_TEST_CASE(gui_only_args_list_matches_the_literal)
 }
 
 #ifndef WIN32
+namespace {
+//! Puts back the dispositions of SIGTERM and SIGINT and clears the shutdown request when
+//! it goes, however the case ends.
+class ShutdownSignalsGuard
+{
+public:
+    ShutdownSignalsGuard()
+    {
+        ::sigaction(SIGTERM, nullptr, &m_term);
+        ::sigaction(SIGINT, nullptr, &m_int);
+    }
+
+    ~ShutdownSignalsGuard()
+    {
+        ::sigaction(SIGTERM, &m_term, nullptr);
+        ::sigaction(SIGINT, &m_int, nullptr);
+        AbortShutdown();
+    }
+
+    ShutdownSignalsGuard(const ShutdownSignalsGuard&) = delete;
+    ShutdownSignalsGuard& operator=(const ShutdownSignalsGuard&) = delete;
+
+private:
+    struct sigaction m_term{};
+    struct sigaction m_int{};
+};
+} // namespace
+
 // The handlers that RegisterShutdownSignalHandlers installs for SIGTERM and SIGINT
 // request a shutdown and do nothing else. The process's dispositions and the request
-// flag are put back afterwards.
+// flag are put back afterwards, however the case ends.
 BOOST_AUTO_TEST_CASE(shutdown_signal_handlers_request_a_shutdown)
 {
-    struct sigaction saved_term, saved_int;
-    BOOST_REQUIRE_EQUAL(::sigaction(SIGTERM, nullptr, &saved_term), 0);
-    BOOST_REQUIRE_EQUAL(::sigaction(SIGINT, nullptr, &saved_int), 0);
+    const ShutdownSignalsGuard guard;
     BOOST_REQUIRE(!ShutdownRequested());
 
     RegisterShutdownSignalHandlers();
@@ -277,9 +303,6 @@ BOOST_AUTO_TEST_CASE(shutdown_signal_handlers_request_a_shutdown)
         BOOST_CHECK_MESSAGE(ShutdownRequested(), "signal " << signal << " did not request a shutdown");
         AbortShutdown();
     }
-
-    BOOST_REQUIRE_EQUAL(::sigaction(SIGTERM, &saved_term, nullptr), 0);
-    BOOST_REQUIRE_EQUAL(::sigaction(SIGINT, &saved_int, nullptr), 0);
 }
 #endif
 

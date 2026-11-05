@@ -533,7 +533,8 @@ the four `SideStakeManager` edits (`Settings`), `beginBackup` (`Backup`), and
 `dumpwallet` source and the `importwallet` sink hold for their run and end at
 its end, on cancel or when destroyed (taking it out of the slot), or when the
 connection closes (the slot is then left as it is); like `beginBackup`, they
-need none on an unencrypted or fully unlocked wallet). A capability applies
+need none on an unencrypted or fully unlocked wallet, and `dumpcontracts`,
+which exports public chain data, needs none on any wallet). A capability applies
 only to the operations of its kind on its connection; a locked wallet is unlocked
 for staking only until the capability ends. A wrong
 passphrase returns false after the failed-passphrase delay (up to 30 s), so a

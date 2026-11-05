@@ -248,18 +248,32 @@ BOOST_AUTO_TEST_CASE(spawned_shell_does_not_inherit_descriptors)
 // the default behaviour.
 BOOST_AUTO_TEST_CASE(spawned_shell_has_default_sigpipe_and_an_empty_mask)
 {
+    // Puts back SIGPIPE's disposition and this thread's signal mask however the case ends.
+    struct SignalStateGuard {
+        struct sigaction pipe_action{};
+        sigset_t mask{};
+        SignalStateGuard()
+        {
+            sigaction(SIGPIPE, nullptr, &pipe_action);
+            pthread_sigmask(SIG_SETMASK, nullptr, &mask);
+        }
+        ~SignalStateGuard()
+        {
+            pthread_sigmask(SIG_SETMASK, &mask, nullptr);
+            sigaction(SIGPIPE, &pipe_action, nullptr);
+        }
+    } const restore;
+
     struct sigaction ignore;
     memset(&ignore, 0, sizeof(ignore));
     ignore.sa_handler = SIG_IGN;
     sigemptyset(&ignore.sa_mask);
-    struct sigaction saved;
-    BOOST_REQUIRE_EQUAL(sigaction(SIGPIPE, &ignore, &saved), 0);
+    BOOST_REQUIRE_EQUAL(sigaction(SIGPIPE, &ignore, nullptr), 0);
 
     sigset_t block;
-    sigset_t old_mask;
     sigemptyset(&block);
     sigaddset(&block, SIGUSR2);
-    BOOST_REQUIRE_EQUAL(pthread_sigmask(SIG_BLOCK, &block, &old_mask), 0);
+    BOOST_REQUIRE_EQUAL(pthread_sigmask(SIG_BLOCK, &block, nullptr), 0);
 
     // Exit status 0 only when the shell does not ignore SIGPIPE (bit 12 of SigIgn) and
     // does not block SIGUSR2 (bit 11 of SigBlk).
@@ -267,9 +281,6 @@ BOOST_AUTO_TEST_CASE(spawned_shell_has_default_sigpipe_and_an_empty_mask)
         "ign=$(sed -n 's/^SigIgn:[[:space:]]*//p' /proc/$$/status); "
         "blk=$(sed -n 's/^SigBlk:[[:space:]]*//p' /proc/$$/status); "
         "[ $(( 0x$ign & 0x1000 )) -eq 0 ] && [ $(( 0x$blk & 0x800 )) -eq 0 ]");
-
-    BOOST_CHECK_EQUAL(pthread_sigmask(SIG_SETMASK, &old_mask, nullptr), 0);
-    BOOST_CHECK_EQUAL(sigaction(SIGPIPE, &saved, nullptr), 0);
 
     BOOST_REQUIRE(status != -1);
     BOOST_CHECK(WIFEXITED(status));
