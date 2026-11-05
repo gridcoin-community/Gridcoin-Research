@@ -167,6 +167,20 @@ Endpoint SameAccount()
     return endpoint;
 }
 
+//! The same-account endpoint with owner-only, protected directories: where the
+//! directory rule applies it has nothing to refuse in them, so a case built on it
+//! is refused only for what it adds.
+Endpoint OwnerOnlySameAccount()
+{
+    Endpoint endpoint = SameAccount();
+    for (EndpointEntry* entry : {&endpoint.dirs.dir, &endpoint.dirs.parent}) {
+        entry->acl = Acl(Self(), {Ace(Self(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
+                                  Ace(wellknown::System(), FILE_ALL_ACCESS, Inherit::ContainerAndObject)});
+    }
+
+    return endpoint;
+}
+
 //! The same endpoint with the attach group's connect entry on its socket, as a core
 //! of this account binds it with -ipcattachgroup: another account can write the
 //! socket, so the directory rule applies without -ipcserviceuser.
@@ -432,6 +446,16 @@ BOOST_AUTO_TEST_CASE(directory_rule_applies_when_another_can_write_the_socket)
     inherit_only.aces.push_back(entry);
     BOOST_CHECK(!DirectoryRuleApplies(inherit_only, Self(), false));
 
+    // An inherited entry and an allow entry of another kind (a callback or object
+    // entry) grant the right as well.
+    ObservedAcl inherited = own;
+    inherited.aces.push_back(Ace(OtherUser(), FILE_WRITE_DATA, Inherit::None, /*inherited=*/true));
+    BOOST_CHECK(DirectoryRuleApplies(inherited, Self(), false));
+
+    ObservedAcl other_allow = own;
+    other_allow.aces.push_back(Ace(OtherUser(), FILE_WRITE_DATA, Inherit::None, false, AceKind::OtherAllow));
+    BOOST_CHECK(DirectoryRuleApplies(other_allow, Self(), false));
+
     // Asked about a socket another account owns, which SocketRefusal refuses first,
     // the rule applies.
     BOOST_CHECK(DirectoryRuleApplies(own, OtherUser(), false));
@@ -440,22 +464,23 @@ BOOST_AUTO_TEST_CASE(directory_rule_applies_when_another_can_write_the_socket)
 // A same-account endpoint passes on its socket alone, and its directories are not
 // read: a parent at a volume root that lets Authenticated Users add a directory, a
 // directory with an inherited Modify entry, and a directory behind a junction are
-// all accepted. With -ipcserviceuser set the same directories are read and refused.
+// all accepted. With -ipcserviceuser set the same directories are read, and each is
+// refused for what it adds to owner-only, protected directories.
 BOOST_AUTO_TEST_CASE(endpoint_same_account_does_not_read_the_directories)
 {
     int reads = 0;
     BOOST_CHECK(!Refusal(SameAccount(), Self(), false, &reads));
 
-    Endpoint root_parent = SameAccount();
+    Endpoint root_parent = OwnerOnlySameAccount();
     root_parent.dirs.parent.acl.aces.push_back(Ace(AuthenticatedUsers(), FILE_ADD_SUBDIRECTORY));
     BOOST_CHECK(!Refusal(root_parent, Self(), false, &reads));
 
-    Endpoint inherited_modify = SameAccount();
+    Endpoint inherited_modify = OwnerOnlySameAccount();
     inherited_modify.dirs.dir.acl.aces.push_back(
         Ace(AuthenticatedUsers(), MODIFY, Inherit::ContainerAndObject, /*inherited=*/true));
     BOOST_CHECK(!Refusal(inherited_modify, Self(), false, &reads));
 
-    Endpoint junction = SameAccount();
+    Endpoint junction = OwnerOnlySameAccount();
     junction.dirs.dir.kind = EntryKind::Redirect;
     junction.dirs.dir.reparse_tag = 0xA0000003;
     BOOST_CHECK(!Refusal(junction, Self(), false, &reads));
@@ -463,10 +488,12 @@ BOOST_AUTO_TEST_CASE(endpoint_same_account_does_not_read_the_directories)
     BOOST_CHECK_EQUAL(reads, 0);
 
     CheckRefusal(Refusal(SameAccount(), Self(), true, &reads), {"protected", SameAccount().dirs.dir.path.string()});
-    CheckRefusal(Refusal(root_parent, Self(), true), {root_parent.dirs.dir.path.string()});
-    CheckRefusal(Refusal(inherited_modify, Self(), true), {inherited_modify.dirs.dir.path.string()});
-    CheckRefusal(Refusal(junction, Self(), true), {junction.dirs.dir.path.string()});
     BOOST_CHECK_EQUAL(reads, 1);
+
+    BOOST_CHECK(!Refusal(OwnerOnlySameAccount(), Self(), true));
+    CheckRefusal(Refusal(root_parent, Self(), true), {root_parent.dirs.parent.path.string(), "S-1-5-11"});
+    CheckRefusal(Refusal(inherited_modify, Self(), true), {inherited_modify.dirs.dir.path.string(), "S-1-5-11"});
+    CheckRefusal(Refusal(junction, Self(), true), {junction.dirs.dir.path.string(), "junction"});
 }
 
 // With -ipcattachgroup the socket's group entry lets another account write it, so the
@@ -949,6 +976,9 @@ BOOST_FIXTURE_TEST_CASE(win_bound_socket_passes_the_check, grc_test::StateGuard)
 
     const Sid self = CurrentTokenUser();
     BOOST_CHECK_EQUAL(CheckServerEndpointBeforeConnect(socket, self).size(), 0U);
+
+    // Expected to be another account's, here SYSTEM's, the same socket is refused.
+    CheckRefusedByRule([&] { CheckServerEndpointBeforeConnect(socket, wellknown::System()); }, "owner");
 
     ApplyEndpointAcl(socket, EndpointAclSpec(IpcObject::Socket, self, wellknown::Users()));
     BOOST_CHECK_EQUAL(CheckServerEndpointBeforeConnect(socket, self).size(), 2U);
