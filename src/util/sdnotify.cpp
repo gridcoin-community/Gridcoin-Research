@@ -152,6 +152,11 @@ bool NotifyStartupFailed()
     return Send("STATUS=Startup failed; see debug.log");
 }
 
+bool NotifyStartupStopped()
+{
+    return Send("STATUS=Startup stopped");
+}
+
 std::optional<std::string> DaemonizeRefusal(bool daemonize)
 {
     if (!daemonize || !Active()) return std::nullopt;

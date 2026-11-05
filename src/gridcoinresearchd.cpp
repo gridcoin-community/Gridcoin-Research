@@ -139,6 +139,8 @@ bool AppInit(int argc, char* argv[])
 
     ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
     bool fRet = false;
+    // AppInit2 failed because a stop was requested during it, not for an error.
+    bool startup_stopped = false;
 
     // Extends the service manager start timeout on each startup progress message.
     // Disconnected once readiness has been reported.
@@ -292,6 +294,14 @@ bool AppInit(int argc, char* argv[])
         }
 #endif
 
+        const bool daemonize =
+            gArgs.GetBoolArg("-daemon", DEFAULT_DAEMON) || gArgs.GetBoolArg("-daemonwait", DEFAULT_DAEMONWAIT);
+        // A service manager waiting for READY=1 would never get it from a forked child. Checked
+        // before anything is changed on disk, -resetblockchaindata included.
+        if (const std::optional<std::string> refusal = sdnotify::DaemonizeRefusal(daemonize)) {
+            return InitError(*refusal);
+        }
+
         // Check to see if the user requested to reset blockchain data -- We allow reset blockchain data on testnet.
         if (gArgs.IsArgSet("-resetblockchaindata"))
         {
@@ -323,13 +333,6 @@ bool AppInit(int argc, char* argv[])
         if (ShutdownRequested()) {
             LogPrintf("Shutdown requested during startup. Exiting.");
             return false;
-        }
-
-        const bool daemonize =
-            gArgs.GetBoolArg("-daemon", DEFAULT_DAEMON) || gArgs.GetBoolArg("-daemonwait", DEFAULT_DAEMONWAIT);
-        // A service manager waiting for READY=1 would never get it from a forked child.
-        if (const std::optional<std::string> refusal = sdnotify::DaemonizeRefusal(daemonize)) {
-            return InitError(*refusal);
         }
 
         if (daemonize) {
@@ -394,6 +397,7 @@ bool AppInit(int argc, char* argv[])
 #endif
 
         fRet = AppInit2(threads);
+        startup_stopped = !fRet && ShutdownRequested();
 #if HAVE_DECL_FORK
         if (daemon_ep.IsOpen()) {
             // Signal initialization status to parent, then close pipe.
@@ -572,9 +576,15 @@ bool AppInit(int argc, char* argv[])
 #endif
     }
 
-    // A failed start never sent READY=1. Its status says so, rather than the last
-    // startup step.
-    if (!fRet) sdnotify::NotifyStartupFailed();
+    // A start that did not finish never sent READY=1. Its status says why, rather than
+    // the last startup step: stopped on request, or failed.
+    if (!fRet) {
+        if (startup_stopped) {
+            sdnotify::NotifyStartupStopped();
+        } else {
+            sdnotify::NotifyStartupFailed();
+        }
+    }
 
     Shutdown(nullptr);
 #ifndef WIN32

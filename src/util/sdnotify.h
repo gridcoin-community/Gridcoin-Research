@@ -42,6 +42,10 @@ bool NotifyStopping();
 //! The daemon sends it once, before Shutdown().
 bool NotifyStartupFailed();
 
+//! "STATUS=Startup stopped", for a start that a requested stop ended before READY=1.
+//! The daemon sends it, rather than NotifyStartupFailed(), once, before Shutdown().
+bool NotifyStartupStopped();
+
 //! The startup error for a start that would daemonize (\p daemonize: -daemon or
 //! -daemonwait) while a notification address was captured, or nullopt. A notify
 //! unit cannot work with a forking daemon: under NotifyAccess=main the forked

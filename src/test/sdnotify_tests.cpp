@@ -368,6 +368,23 @@ BOOST_AUTO_TEST_CASE(startup_failed_status)
     BOOST_CHECK(msg.find("READY=1") == std::string::npos);
 }
 
+BOOST_AUTO_TEST_CASE(startup_stopped_status)
+{
+    NotifyEnvGuard env;
+    TempDir dir;
+    BOOST_REQUIRE(!dir.Path().empty());
+    Listener listener(dir.Path() + "/notify");
+    BOOST_REQUIRE(listener.Ok());
+
+    setenv("NOTIFY_SOCKET", (dir.Path() + "/notify").c_str(), 1);
+    sdnotify::CaptureFromEnvironment();
+
+    BOOST_CHECK(sdnotify::NotifyStartupStopped());
+    const std::string msg = listener.Receive();
+    BOOST_CHECK_EQUAL(msg, "STATUS=Startup stopped");
+    BOOST_CHECK(msg.find("READY=1") == std::string::npos);
+}
+
 // A daemonizing start cannot report readiness to a notify unit, so it is refused
 // when a notification address was captured, with a text that names -nodaemon. A
 // start that does not daemonize, or one with no address, is not refused.
