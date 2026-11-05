@@ -1131,7 +1131,8 @@ class CopyTests(ServiceTestBase):
         with tarfile.open(fileobj=buf, mode="r|") as tar:
             names = sorted(m.name for m in tar)
         self.assertEqual(names, ["a", "a/b", "gridcoinresearch.conf-x", "walletbackups",
-                                 "walletbackups/gridcoinresearch.conf-2026", "walletbackups/wallet-2026-11-01T00-00-00Z.dat"])
+                                 "walletbackups/gridcoinresearch.conf-2026",
+                                 "walletbackups/wallet-2026-11-01T00-00-00Z.dat"])
 
     def test_list_dir_sees_entries_made_since_an_earlier_listing(self):
         # On btrfs a directory description lists up to where it stood when last rewound, so a
@@ -1946,9 +1947,12 @@ class EnableTests(SwitchTestBase):
         with mock.patch.object(svc.os, "rename", rename):
             rc, out, err = run()
         self.assertEqual(rc, 1)
-        [stash] = self.stashes(self.home, ".GridcoinResearch.in-service-")
-        self.assertIn("split between %s and %s" % (self.datadir, stash), err)
-        self.assertEqual(len(os.listdir(stash)), 2)
+        # Between the copy and the record everything is rolled back.
+        self.assertIn("rolled back", err)
+        self.assertEqual(self.stashes(self.home, ".GridcoinResearch.in-service-"), [])
+        self.assertEqual(read_tree(self.datadir), read_tree_from(self.user_files()))
+        self.assertEqual(os.listdir(self.target()), [])
+        self.assertFalse(os.path.exists(self.record_path()))
 
         # gpasswd fails: the wallet is in the service datadir, the source in the stash. The same
         # host keeps the clock going, so each run's quarantine has a name of its own.
@@ -1990,6 +1994,155 @@ class EnableTests(SwitchTestBase):
         self.assertIn("%s still holds part of this copy" % self.datadir, err)
         self.assertIn("partial", err)
         self.assertTrue(os.path.exists(self.record_path()))
+
+    def test_failures_between_the_copy_and_the_record_roll_back(self):
+        def fails(*args, **kwargs):
+            raise OSError(28, "No space left on device")
+
+        for name, files in (("write_file_as", self.user_files()), ("write_owner_record", self.user_files()),
+                            ("write_owner_record", self.shared_conf_files())):
+            with self.subTest(failing=name, shared="testnet/wallet.dat" in files):
+                svc_rmtree(self.datadir)
+                write_tree(self.datadir, files)
+                with mock.patch.object(svc, name, fails):
+                    rc, out, err = self.run_main("enable", "bob")
+                self.assertEqual(rc, 1)
+                self.assertIn("No space left on device", err)
+                self.assertIn("the switch was rolled back: %s holds the source again and %s is empty"
+                              % (self.datadir, self.target()), err)
+                self.assertEqual(read_tree(self.datadir), read_tree_from(files))
+                self.assertEqual(os.listdir(self.target()), [])
+                self.assertEqual(self.stashes(self.home, ".GridcoinResearch.in-service-"), [])
+                self.assertFalse(os.path.exists(self.record_path()))
+                self.assertNotIn(("add_to_group", "bob", "gridcoin-gui"), self.host.calls)
+
+    def test_rollback_removes_a_record_cut_short(self):
+        write_tree(self.datadir, self.user_files())
+
+        def cut_short(state_fd, network, pw, stash_display):
+            fd = os.open(network + ".owner", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600, dir_fd=state_fd)
+            os.write(fd, b'{"uid": ')
+            os.close(fd)
+            raise OSError(28, "No space left on device")
+
+        with mock.patch.object(svc, "write_owner_record", cut_short):
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("rolled back", err)
+        self.assertFalse(os.path.exists(self.record_path()))
+        self.assertEqual(read_tree(self.datadir), read_tree_from(self.user_files()))
+
+    def test_rollback_leaves_a_stash_swapped_after_it_was_made(self):
+        write_tree(self.datadir, self.user_files())
+
+        def swap_then_fail(state_fd, network, pw, stash_display):
+            os.rename(stash_display, stash_display + ".moved")
+            write_tree(stash_display, {"planted": b"p"})
+            raise OSError(28, "No space left on device")
+
+        with mock.patch.object(svc, "write_owner_record", swap_then_fail):
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("rolling back did not finish", err)
+        self.assertIn("not the directory this run made", err)
+        self.assertNotIn("planted", os.listdir(self.datadir))
+        self.assertEqual(os.listdir(self.target()), [])
+
+    def test_a_rollback_that_cannot_finish_names_the_steps(self):
+        write_tree(self.datadir, self.user_files())
+
+        def fails(*args, **kwargs):
+            raise OSError(28, "No space left on device")
+
+        with mock.patch.object(svc, "write_owner_record", fails), mock.patch.object(svc, "empty_dir", fails):
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("rolling back did not finish", err)
+        self.assertIn("find %s -mindepth 1 -delete" % self.target(), err)
+        self.assertNotIn("nothing was copied", err)
+        # What could be undone was.
+        self.assertEqual(read_tree(self.datadir), read_tree_from(self.user_files()))
+        self.assertEqual(self.stashes(self.home, ".GridcoinResearch.in-service-"), [])
+
+    def test_a_missing_record_says_how_to_recover(self):
+        write_tree(self.target(), {"wallet.dat": b"service wallet"})
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn(self.record_path(), err)
+        self.assertIn("If an enable was cut short", err)
+        self.assertIn(self.datadir + ".in-service-", err)
+        self.assertIn("find %s -mindepth 1 -delete" % self.target(), err)
+
+    def test_a_failed_disable_keeps_the_record(self):
+        write_tree(self.datadir, self.user_files())
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        os.mkfifo(os.path.join(self.target(), "fifo"))
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertTrue(os.path.exists(self.record_path()))
+        os.unlink(os.path.join(self.target(), "fifo"))
+        self.host.fail.add("remove_from_group")
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertTrue(os.path.exists(self.record_path()))
+        self.assertIn("%s is still there: remove it by hand" % self.record_path(), err)
+
+    def test_restore_conf_takes_only_the_recorded_root_only_stash(self):
+        home_fd = os.open(self.home, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, home_fd)
+        dst = os.path.join(self.tmp.name, "dst")
+        os.makedirs(dst)
+        dst_fd = os.open(dst, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, dst_fd)
+        prefix = ".GridcoinResearch.in-service-"
+        pw = self.host.users["bob"]
+        stash = os.path.join(self.home, prefix + "20260101T000000Z")
+        write_tree(stash, {"gridcoinresearch.conf": b"x=1\n"})
+        os.chmod(stash, 0o700)
+        for recorded in (os.path.join(self.tmp.name, prefix + "20260101T000000Z"),
+                         os.path.join(self.home, "elsewhere"), os.path.join(stash, "deeper")):
+            with self.assertRaisesRegex(svc.UserError, "not where enable puts it"):
+                svc.restore_conf(recorded, home_fd, self.home, prefix, dst_fd, pw, self.host)
+        os.chmod(stash, 0o755)
+        with self.assertRaisesRegex(svc.UserError, "not root-only"):
+            svc.restore_conf(stash, home_fd, self.home, prefix, dst_fd, pw, self.host)
+        os.chmod(stash, 0o700)
+        self.assertTrue(svc.restore_conf(stash, home_fd, self.home, prefix, dst_fd, pw, self.host))
+        self.assertEqual(read_tree(dst), {"gridcoinresearch.conf": b"x=1\n"})
+
+    def test_read_owned_file_refuses_another_filesystem(self):
+        write_tree(self.home, {"f": b"1"})
+        home_fd = os.open(self.home, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, home_fd)
+        real_stat = os.stat
+
+        def mounted(name, *args, **kwargs):
+            st = real_stat(name, *args, **kwargs)
+            return changed_stat(st, st_dev=st.st_dev + 1) if name == "f" else st
+
+        with mock.patch.object(svc.os, "stat", mounted):
+            with self.assertRaisesRegex(svc.TreeError, "another filesystem"):
+                svc.read_owned_file(home_fd, "f", (self.uid,), "f")
+        self.assertEqual(svc.read_owned_file(home_fd, "f", (self.uid,), "f"), b"1")
+
+    def test_disable_holds_the_lock_through_the_copy(self):
+        write_tree(self.datadir, self.user_files())
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        lock = os.path.join(self.target(), ".lock")
+        open(lock, "wb").close()
+        seen = []
+        original = svc.copy_as
+
+        def probe(*args, **kwargs):
+            seen.append(lock_is_held_elsewhere(lock))
+            return original(*args, **kwargs)
+
+        with mock.patch.object(svc, "copy_as", probe):
+            rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(seen, [True])
 
     def test_disable_failures_report_what_they_left(self):
         write_tree(self.datadir, self.user_files())
@@ -2071,6 +2224,10 @@ class EnableTests(SwitchTestBase):
         self.assertEqual(rc, 1)
         self.assertIn("replaced", err)
         self.assertEqual(read_tree(self.datadir), read_tree_from(self.user_files()))
+        # The rollback leaves the swapped-in directory alone: it is not the one this run made.
+        [planted] = [p for p in self.stashes(self.home, ".GridcoinResearch.in-service-2") if not p.endswith(".moved")]
+        self.assertEqual(sorted(os.listdir(planted)), ["planted"])
+        self.assertEqual(os.listdir(self.target()), [])
 
     def test_enable_refuses_a_service_account_that_is_not_a_system_account(self):
         write_tree(self.datadir, self.user_files())

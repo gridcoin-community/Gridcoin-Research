@@ -1207,12 +1207,16 @@ def is_testnet_entry(name):
     return name == "testnet" or name.startswith("testnet" + STASH_INFIX)
 
 
-def stash_source(parent_fd, name, src_fd, stash_name, keep, display, copies=None, copy_owner=None):
+def stash_source(parent_fd, name, src_fd, stash_name, keep, display, copies=None, copy_owner=None, made=None):
     """Move the entries of src_fd (the directory name in parent_fd), except those in keep, into a
-    new directory stash_name in parent_fd, root's and 0700, write copies ({name: bytes}) there
-    owned by copy_owner (a passwd entry), like the entries moved in, and remove src once it is
-    empty. All of it goes through parent_fd, which was opened without following a symlink."""
+    new directory stash_name in parent_fd, root's and 0700, and write copies ({name: bytes}) there
+    owned by copy_owner (a passwd entry), like the entries moved in. The new directory's
+    (st_dev, st_ino) is appended to made (a list) as soon as it exists. All of it goes through
+    parent_fd, which was opened without following a symlink."""
     stash_fd = create_dir(stash_name, parent_fd, display)
+    if made is not None:
+        st = os.fstat(stash_fd)
+        made.append((st.st_dev, st.st_ino))
     try:
         # root:root, whatever group a setgid parent would hand down.
         if os.geteuid() == 0:
@@ -1227,10 +1231,65 @@ def stash_source(parent_fd, name, src_fd, stash_name, keep, display, copies=None
                 f.write(data)
     finally:
         os.close(stash_fd)
+
+
+def remove_if_empty(parent_fd, name, src_fd):
+    """Remove the directory name in parent_fd once stash_source has emptied it: only that
+    directory, should the name have been replaced meanwhile."""
     if not list_dir(src_fd):
-        # Only the directory that was emptied, should the name have been replaced meanwhile.
         if os.path.samestat(os.stat(name, dir_fd=parent_fd, follow_symlinks=False), os.fstat(src_fd)):
             os.rmdir(name, dir_fd=parent_fd)
+
+
+def unstash(parent_fd, stash_name, display, src_fd, copied_names, identity):
+    """Move the entries of the stash this run made (identity: its (st_dev, st_ino)) back into
+    src_fd and remove it; the copies stash_source wrote are deleted, not moved. An entry src_fd
+    holds again by now is left in the stash."""
+    stash_fd = open_dir(stash_name, dir_fd=parent_fd, uids=(os.geteuid(),), display=display)
+    left = []
+    try:
+        st = os.fstat(stash_fd)
+        if (st.st_dev, st.st_ino) != identity:
+            raise UserError("%s is not the directory this run made" % display)
+        in_source = set(list_dir(src_fd))
+        for entry in sorted(list_dir(stash_fd)):
+            if entry in copied_names:
+                os.unlink(entry, dir_fd=stash_fd)
+            elif entry in in_source:
+                left.append(entry)
+            else:
+                os.rename(entry, entry, src_dir_fd=stash_fd, dst_dir_fd=src_fd)
+    finally:
+        os.close(stash_fd)
+    if left:
+        raise UserError("the source holds %s again, so the stash's copies stay" % ", ".join(shown(n) for n in left))
+    os.rmdir(stash_name, dir_fd=parent_fd)
+
+
+def roll_back_enable(host, acct, s_fd, s_display, s_parent_fd, stash_name, stash_display, stash_made, copied_names,
+                     state_fd, network, record_display, t_fd, t_display):
+    """Undo what enable did after the copy: the owner record, the stash and the copy itself, which
+    is removed as the account. Returns the state line: what was undone, or the steps that are left
+    to do by hand."""
+    manual = []
+    try:
+        if network + ".owner" in list_dir(state_fd):
+            os.unlink(network + ".owner", dir_fd=state_fd)
+    except OSError as e:
+        manual.append("remove %s (%s)" % (record_display, e.strerror))
+    try:
+        if stash_made:
+            unstash(s_parent_fd, stash_name, stash_display, s_fd, copied_names, stash_made[0])
+    except (UserError, OSError) as e:
+        manual.append("move every entry of %s back into %s and remove %s (%s)"
+                      % (stash_display, s_display, stash_display, e))
+    try:
+        run_as(host, acct, lambda: empty_dir(t_fd, set()), (t_fd,))
+    except (StepError, TreeError, CopyError, OSError) as e:
+        manual.append("empty %s (find %s -mindepth 1 -delete) (%s)" % (t_display, t_display, e))
+    if manual:
+        return "rolling back did not finish; to finish by hand: " + "; ".join(manual)
+    return "the switch was rolled back: %s holds the source again and %s is empty" % (s_display, t_display)
 
 
 def open_tool_state(paths):
@@ -1535,7 +1594,8 @@ def refuse_changed_listing(dir_fd, names, display):
     """The decisions of step 1 rest on its listing; the user could change it until the lock."""
     now = set(list_dir(dir_fd))
     if now != names:
-        changes = ["added " + shown(n) for n in sorted(now - names)] + ["removed " + shown(n) for n in sorted(names - now)]
+        changes = (["added " + shown(n) for n in sorted(now - names)]
+                   + ["removed " + shown(n) for n in sorted(names - now)])
         raise UserError("%s changed after it was checked (%s); rerun once nothing else uses it"
                         % (display, ", ".join(changes)))
 
@@ -1649,28 +1709,35 @@ def enable(args, net, host, paths, progress):
                               "rerunning; the source is untouched, %s is disabled and %s.service stopped"
                               % (t_display, t_display, unit, net.daemon))
             raise
-        progress.state = ("the wallet is copied to %s, without its settings, and the source is untouched in %s; "
-                          "empty %s before rerunning" % (t_display, s_display, t_display))
-        if settings_text is not None:
-            write_file_as(t_fd, SETTINGS_NAME, settings_text.encode("utf8"), acct, host)
-        report_quarantine(found, backups, q_display, lines)
-
-        # 6. Stash the source where only root can reach it, so no second core can stake it.
+        # 6. Stash the source where only root can reach it, so no second core can stake it, and
+        # record whose wallet the service now runs. From the copy until that record is written any
+        # failure rolls the switch back, the copy included, so the service datadir is never left
+        # full without a record.
         stash_name = s_name + STASH_INFIX + stamp(host)
         stash_display = os.path.join(os.path.dirname(s_display), stash_name)
         keep_in_source = testnet_entries | ({CONF_NAME} if shared_conf else set())
-        progress.state = ("the wallet is copied to %s; the source may be split between %s and %s, so move the "
-                          "stash's entries back, or finish the move, before going on"
-                          % (t_display, s_display, stash_display))
-        stash_source(s_parent_fd, s_name, s_fd, stash_name, keep_in_source, stash_display,
-                     copies={CONF_NAME: found[CONF_NAME]} if shared_conf else None, copy_owner=pw)
+        copied_names = {CONF_NAME} if shared_conf else set()
+        record_display = owner_record_path(paths, args.network)
+        stash_made = []
+        try:
+            if settings_text is not None:
+                write_file_as(t_fd, SETTINGS_NAME, settings_text.encode("utf8"), acct, host)
+            report_quarantine(found, backups, q_display, lines)
+            stash_source(s_parent_fd, s_name, s_fd, stash_name, keep_in_source, stash_display,
+                         copies={CONF_NAME: found[CONF_NAME]} if shared_conf else None, copy_owner=pw, made=stash_made)
+            write_owner_record(state_fd, args.network, pw, stash_display)
+        except BaseException:
+            progress.state = "%s; %s is disabled and %s.service stopped" % (
+                roll_back_enable(host, acct, s_fd, s_display, s_parent_fd, stash_name, stash_display, stash_made,
+                                 copied_names, state_fd, args.network, record_display, t_fd, t_display),
+                unit, net.daemon)
+            raise
         if shared_conf:
             print("%s stays in %s, as testnet reads it too; copies are in the stash and the quarantine."
                   % (CONF_NAME, d_display))
         moved = "the wallet is in %s and the source in %s" % (t_display, stash_display)
-        progress.state = ("%s; no owner record was written, so disable refuses until %s holds one"
-                          % (moved, owner_record_path(paths, args.network)))
-        write_owner_record(state_fd, args.network, pw, stash_display)
+        progress.state = "%s; the emptied %s is still there" % (moved, s_display)
+        remove_if_empty(s_parent_fd, s_name, s_fd)
 
         # 7. The user attaches through the group; the service runs the wallet now.
         progress.state = "%s; %s is not in %s and the service is not enabled" % (moved, pw.pw_name, net.attach_group)
@@ -1724,8 +1791,15 @@ def disable(args, net, host, paths, progress):
         record = read_owner_record(state_fd, paths, args.network)
         record_display = owner_record_path(paths, args.network)
         if record is None:
-            raise UserError("%s is missing, so no %s wallet is recorded as moved into the service; refusing"
-                            % (record_display, args.network))
+            d_display = os.path.join(pw.pw_dir, DATADIR_NAME)
+            stash_glob = os.path.join(d_display, "testnet") if net.testnet else d_display
+            t_display = service_dir_display(paths, net)
+            raise UserError("%s is missing, so no %s wallet is recorded as moved into the service; refusing. If an "
+                            "enable was cut short, %s may hold a copy and the user's source may be in a stash, "
+                            "%s%s<time>: move that stash's entries back into %s, remove the stash, empty %s (find "
+                            "%s -mindepth 1 -delete), then rerun enable. Otherwise there is nothing to disable"
+                            % (record_display, args.network, t_display, stash_glob, STASH_INFIX, stash_glob,
+                               t_display, t_display))
         if record["uid"] != pw.pw_uid or record["user"] != pw.pw_name:
             raise UserError("%s records the wallet in the service as %s's (uid %d), not %s's; refusing"
                             % (record_display, shown(record["user"]), record["uid"], pw.pw_name))
@@ -1827,7 +1901,8 @@ def disable(args, net, host, paths, progress):
         progress.state = "%s; empty %s as %s before enabling again" % (copied, t_display, net.account)
         run_as(host, acct, lambda: empty_dir(t_fd, testnet_entries), (t_fd,))
         moved = "the wallet is in %s and %s is empty" % (s_display, t_display)
-        progress.state = "%s; %s is still in %s" % (moved, pw.pw_name, net.attach_group)
+        progress.state = ("%s; %s is still in %s (gpasswd -d %s %s), and %s is still there: remove it by hand"
+                          % (moved, pw.pw_name, net.attach_group, pw.pw_name, net.attach_group, record_display))
         host.remove_from_group(pw.pw_name, net.attach_group)
         progress.state = "%s; remove %s by hand" % (moved, record_display)
         os.unlink(args.network + ".owner", dir_fd=state_fd)
