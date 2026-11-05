@@ -2596,18 +2596,28 @@ def check_conf_writers(net, path, name, host):
                             "options; chmod go-w it" % (name, what, stat.S_IMODE(st.st_mode)))
 
 
+def normalize_path(value):
+    """A path with doubled slashes collapsed and a trailing slash dropped, as the kernel reads it."""
+    value = re.sub(r"/+", "/", value)
+    return value.rstrip("/") or value
+
+
 def carried_system_path(net, value, what, display, paths, host):
     """Check a -conf or -datadir value of the old system command line, for the new unit to run with
-    it; None when it is the unit's own."""
+    it. Returns it with doubled and trailing slashes dropped."""
     name = "the -%s %s in %s" % (what, shown(value), display)
     if not os.path.isabs(value):
         raise UserError("%s is not an absolute path" % name)
     if UNSAFE_PATH_RE.search(value) or any(part in (".", "..") for part in value.split("/")):
         raise UserError("%s may not contain whitespace, quotes, backslash, $, %%, ;, '.' or '..'" % name)
-    for hidden in paths.unit_hidden:
-        if value == hidden or value.startswith(hidden.rstrip("/") + "/"):
-            raise UserError("%s is under %s, which the unit's sandbox hides (ProtectHome=, PrivateTmp=)"
-                            % (name, hidden))
+    value = normalize_path(value)
+    # The path as written and as it resolves through links: either under a hidden directory is
+    # hidden from the core.
+    for candidate in (value, os.path.realpath(value)):
+        for hidden in paths.unit_hidden:
+            if candidate == hidden or candidate.startswith(hidden.rstrip("/") + "/"):
+                raise UserError("%s is under %s, which the unit's sandbox hides (ProtectHome=, PrivateTmp=)"
+                                % (name, hidden))
     if not (os.path.isdir(value) if what == "datadir" else os.path.isfile(value)):
         raise UserError("%s does not exist" % name)
     if what == "conf":
@@ -2674,11 +2684,11 @@ def carried_system_paths(net, display, value, own, sources, paths, host):
         if conf is None and start_conf is not None and os.path.lexists(start_conf):
             conf = start_conf
     default_conf, default_datadir = system_defaults(net)
-    if conf is not None and conf != default_conf:
+    if conf is not None and normalize_path(conf) != default_conf:
         conf = carried_system_path(net, conf, "conf", display, paths, host)
     else:
         conf = None
-    if datadir is not None and datadir != default_datadir:
+    if datadir is not None and normalize_path(datadir) != default_datadir:
         datadir = carried_system_path(net, datadir, "datadir", display, paths, host)
     else:
         datadir = None

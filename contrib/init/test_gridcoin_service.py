@@ -375,6 +375,18 @@ def desktop_actions(text):
     return actions, [name for name in listed if name]
 
 
+class HiddenPathTests(unittest.TestCase):
+    def test_the_paths_the_system_unit_hides_by_default(self):
+        # ProtectHome=yes hides /home, /root and /run/user; PrivateTmp= replaces /tmp and /var/tmp.
+        self.assertEqual(svc.Paths().unit_hidden, ("/home", "/root", "/run/user", "/tmp", "/var/tmp"))
+        host = FakeHost(users={"gridcoin": Passwd("gridcoin", os.getuid(), "/var/lib/gridcoinresearchd")})
+        for value, hidden in (("/home/alice/grc", "/home"), ("//home//alice/grc", "/home"), ("/root/", "/root"),
+                              ("/run/user/1000/grc", "/run/user"), ("/var//tmp/grc", "/var/tmp"), ("/tmp", "/tmp")):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(svc.UserError, "under %s, which the unit's sandbox hides" % hidden):
+                    svc.carried_system_path(svc.NETWORKS["main"], value, "datadir", "x.conf", svc.Paths(), host)
+
+
 class UnitFileReaderTests(unittest.TestCase):
     def test_lines_are_read_as_systemd_reads_them(self):
         # config_parse() in systemd's src/shared/conf-parser.c: a line continues only when it ends
@@ -3720,6 +3732,35 @@ class SwitchOverTests(ServiceTestBase):
         self.system_override("-conf=%s -datadir=%s" % (conf, data))
         rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
         self.assertEqual(rc, 0, err)
+
+    def test_switch_over_resolves_a_carried_path_before_it_checks_it(self):
+        hidden = os.path.join(self.tmp.name, "hidden")
+        os.makedirs(os.path.join(hidden, "grc"))
+        self.paths = dataclasses.replace(self.paths, unit_hidden=self.paths.unit_hidden + (hidden,))
+        link = os.path.join(self.tmp.name, "link")
+        os.symlink(os.path.join(hidden, "grc"), link)
+        self.system_override("-datadir=%s" % link)
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+        self.assertEqual(rc, 1)
+        self.assertIn("sandbox hides", err)
+        # Doubled and trailing slashes are the same path, and the unit's own datadir so written is
+        # its own.
+        data = os.path.join(self.tmp.name, "data", "grc")
+        os.makedirs(data)
+        for words, expected in (("-datadir=%s//" % data.replace("/data/", "//data/"), " -datadir=%s " % data),
+                                ("-conf=%s -datadir=/var/lib//gridcoinresearchd/" % svc.system_defaults(
+                                    svc.NETWORKS["main"])[0], None)):
+            with self.subTest(words=words):
+                svc_rmtree(self.system_unit_dir())
+                self.system_override(words)
+                rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+                self.assertEqual(rc, 0, err)
+                text = self.dropin("gridcoinresearchd.service")
+                if expected is None:
+                    self.assertNotIn("ExecStart", text)
+                else:
+                    self.assertIn(expected, text)
+                    self.assertIn("ReadWritePaths=%s\n" % data, text)
 
     def test_switch_over_carries_only_what_differs_from_the_unit(self):
         conf = os.path.join(self.tmp.name, "etc-other.conf")
