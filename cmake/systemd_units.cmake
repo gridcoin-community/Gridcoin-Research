@@ -26,6 +26,13 @@ if(INSTALL_SYSTEMD_UNITS AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(INSTALL_SYSTEMD_UNITS OFF)
 endif()
 option(INSTALL_SYSTEMD_AUTOUNLOCK "Install the autounlock helper and its units (systemd 251 or later)" ON)
+# gridcoin-service is told whether the autounlock units are installed, so that it
+# never operates on units this build left out.
+if(INSTALL_SYSTEMD_AUTOUNLOCK)
+    set(GRC_AUTOUNLOCK_UNITS "yes")
+else()
+    set(GRC_AUTOUNLOCK_UNITS "no")
+endif()
 set(GRC_SYSTEMD_UNITDIR "lib/systemd/system" CACHE STRING "Unit directory, relative to CMAKE_INSTALL_PREFIX")
 set(GRC_SYSUSERSDIR "lib/sysusers.d" CACHE STRING "sysusers.d directory, relative to CMAKE_INSTALL_PREFIX")
 set(GRC_TMPFILESDIR "lib/tmpfiles.d" CACHE STRING "tmpfiles.d directory, relative to CMAKE_INSTALL_PREFIX")
@@ -38,9 +45,11 @@ set(GRC_LIBEXEC_SUBDIR_TEST "gridcointestnet")
 
 # The data directory under share for each network, and the Refuse class pattern
 # file installed there (refused-setting-keys.txt). gridcoin-service takes both
-# networks' paths from here. Both networks use one directory for now.
+# networks' paths from here. Each network has its own directory, named like its
+# helper's under libexec, so that the two networks' packages, which can be
+# installed together, do not ship the same file.
 set(GRC_SHARE_SUBDIR_MAIN "gridcoin")
-set(GRC_SHARE_SUBDIR_TEST "gridcoin")
+set(GRC_SHARE_SUBDIR_TEST "gridcointestnet")
 set(GRC_REFUSED_KEYS_FILE_MAIN "${CMAKE_INSTALL_FULL_DATADIR}/${GRC_SHARE_SUBDIR_MAIN}/refused-setting-keys.txt")
 set(GRC_REFUSED_KEYS_FILE_TEST "${CMAKE_INSTALL_FULL_DATADIR}/${GRC_SHARE_SUBDIR_TEST}/refused-setting-keys.txt")
 

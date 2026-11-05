@@ -39,7 +39,7 @@ On Linux the daemon install generates the systemd units, the sysusers.d entry an
 | :--- | :--- | :--- |
 | `GRC_UNIT_NETWORK` | `main` | Network the generated units serve: `main` (`gridcoinresearchd`, account `gridcoin`) or `test` (`gridcointestnetd`, account `gridcointestnet`, `-testnet`). With `test` the daemon is installed as `gridcointestnetd`. |
 | `INSTALL_SYSTEMD_UNITS` | `ON` on Linux, `OFF` elsewhere | Install the core units (system service and per-user `@` template), the sysusers.d entry, the tmpfiles.d entries and gridcoin-service. Linux only: elsewhere it is ignored with a warning. |
-| `INSTALL_SYSTEMD_AUTOUNLOCK` | `ON` | Install the autounlock helper and its four socket and service units. Needs systemd 251 or later; leave it `OFF` on older distributions. |
+| `INSTALL_SYSTEMD_AUTOUNLOCK` | `ON` | Install the autounlock helper and its four socket and service units. Needs systemd 251 or later; leave it `OFF` on older distributions. gridcoin-service is built knowing the choice: with `OFF` it leaves the helper units alone and refuses `autounlock enable`. |
 | `GRC_SYSTEMD_UNITDIR` | `lib/systemd/system` | Unit directory, relative to `CMAKE_INSTALL_PREFIX`. |
 | `GRC_SYSUSERSDIR` | `lib/sysusers.d` | sysusers.d directory, relative to `CMAKE_INSTALL_PREFIX`. |
 | `GRC_TMPFILESDIR` | `lib/tmpfiles.d` | tmpfiles.d directory, relative to `CMAKE_INSTALL_PREFIX`. |

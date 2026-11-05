@@ -13,6 +13,7 @@ import collections
 import contextlib
 import dataclasses
 import datetime
+import fnmatch
 import importlib.machinery
 import importlib.util
 import io
@@ -49,7 +50,8 @@ Passwd = collections.namedtuple("Passwd", "pw_name pw_uid pw_dir pw_gid", defaul
 CONFIGURED = {"bindir": "/usr/bin", "default_network": "main", "python3": "/usr/bin/python3",
               "libexec_subdir_main": "gridcoin", "libexec_subdir_test": "gridcointestnet",
               "refused_keys_main": "/usr/share/gridcoin/refused-setting-keys.txt",
-              "refused_keys_test": "/usr/share/gridcoin/refused-setting-keys.txt"}
+              "refused_keys_test": "/usr/share/gridcointestnet/refused-setting-keys.txt",
+              "autounlock_units": "yes"}
 
 
 class FakeHost:
@@ -123,6 +125,9 @@ class FakeHost:
 
     def is_active(self, unit):
         return unit in self.active
+
+    def active_units(self, pattern):
+        return sorted(unit for unit in self.active if fnmatch.fnmatchcase(unit, pattern))
 
     def getpwnam(self, name):
         if name not in self.users:
@@ -267,6 +272,11 @@ class CMakeValuesTests(unittest.TestCase):
             cmake = f.read()
         subdirs = dict(re.findall(r'set\(GRC_SHARE_SUBDIR_(MAIN|TEST) "([^"]*)"\)', cmake))
         self.assertEqual(sorted(subdirs), ["MAIN", "TEST"])
+        # The two networks' packages can be installed together, so each has a directory of its
+        # own, named like its helper's directory under libexec.
+        libexec = dict(re.findall(r'set\(GRC_LIBEXEC_SUBDIR_(MAIN|TEST) "([^"]*)"\)', cmake))
+        self.assertEqual(subdirs, libexec)
+        self.assertNotEqual(subdirs["MAIN"], subdirs["TEST"])
         for net in ("MAIN", "TEST"):
             self.assertIn('set(GRC_REFUSED_KEYS_FILE_%s "${CMAKE_INSTALL_FULL_DATADIR}/${GRC_SHARE_SUBDIR_%s}/'
                           'refused-setting-keys.txt")' % (net, net), cmake)
@@ -294,6 +304,24 @@ class CMakeValuesTests(unittest.TestCase):
             configured = load_tool(path)
         self.assertEqual(configured.NETWORKS["main"].refused_keys, expected["MAIN"])
         self.assertEqual(configured.NETWORKS["test"].refused_keys, expected["TEST"])
+
+    def test_autounlock_units_value_comes_from_cmake(self):
+        with open(SYSTEMD_UNITS_CMAKE, encoding="utf8") as f:
+            cmake = f.read()
+        # The value follows the option that decides whether the autounlock units are installed.
+        self.assertRegex(cmake, r'if\(INSTALL_SYSTEMD_AUTOUNLOCK\)\s+set\(GRC_AUTOUNLOCK_UNITS "yes"\)\s+else\(\)\s+'
+                                r'set\(GRC_AUTOUNLOCK_UNITS "no"\)\s+endif\(\)')
+        self.assertIn("if(INSTALL_SYSTEMD_AUTOUNLOCK)\n        list(APPEND _grc_units ${_grc_autounlock_units})", cmake)
+        with open(TOOL_PATH, encoding="utf8") as f:
+            text = f.read()
+        self.assertIn('"autounlock_units": "@GRC_AUTOUNLOCK_UNITS@"', text)
+        for value, installed in (("yes", True), ("no", False)):
+            with tempfile.TemporaryDirectory() as tmp:
+                path = os.path.join(tmp, "gridcoin_service.py")
+                with open(path, "w", encoding="utf8") as f:
+                    f.write(text.replace("@GRC_AUTOUNLOCK_UNITS@", value))
+                configured = load_tool(path)
+            self.assertEqual(configured.autounlock_units_installed(), installed, value)
 
 
     def test_tmpfiles_paths_are_declared_once_across_networks(self):
@@ -551,6 +579,84 @@ class AutounlockTests(ServiceTestBase):
                     text = f.read().replace("@GRC_CRED_PREFIX@", net.cred_prefix)
                 loaded = re.findall(r"^LoadCredentialEncrypted=wallet-passphrase:(\S+)$", text, re.M)
                 self.assertEqual(loaded, [svc.credential_path(svc.Paths(), net, user)], template)
+
+    def use_conf_dir(self):
+        """Point the mainnet system credential's old place into the temporary tree."""
+        conf = os.path.join(self.tmp.name, "etc-gridcoin")
+        os.makedirs(conf)
+        saved = svc.NETWORKS
+        svc.NETWORKS = dict(saved, main=dataclasses.replace(saved["main"], conf_dir=conf))
+        self.addCleanup(setattr, svc, "NETWORKS", saved)
+        return os.path.join(conf, "wallet-passphrase.cred")
+
+    def test_existing_credential_dropin_moves_the_checked_path(self):
+        legacy = self.use_conf_dir()
+        with open(legacy, "wb") as f:
+            f.write(b"old")
+        os.chmod(legacy, 0o600)
+        # Without the switch-over's drop-in the helper loads the credstore path, so the old file
+        # does not count.
+        rc, out, err = self.run_main("autounlock", "enable", "--system")
+        self.assertEqual(rc, 1)
+        # With it, the helper loads the old file, and that is the one checked.
+        net = svc.NETWORKS["main"]
+        svc.write_dropin(self.paths, "gridcoin-autounlock.service", "50-existing-credential.conf",
+                         svc.render_existing_credential_dropin(net))
+        self.assertEqual(svc.loaded_credential_path(self.paths, net, None), legacy)
+        self.assertEqual(svc.loaded_credential_path(self.paths, net, "bob"),
+                         svc.credential_path(self.paths, net, "bob"))
+        rc, out, err = self.run_main("autounlock", "enable", "--system")
+        self.assertEqual(rc, 0, err)
+        self.assertIn(("enable", "--now", "gridcoin-autounlock.socket"), self.host.calls)
+        rc, out, err = self.run_main("autounlock", "disable", "--system")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("remains until you remove it: " + legacy, out)
+        # The credstore file alone is not enough while the drop-in points elsewhere.
+        os.unlink(legacy)
+        self.make_credential("gridcoinresearch.wallet-passphrase")
+        self.host.calls.clear()
+        rc, out, err = self.run_main("autounlock", "enable", "--system")
+        self.assertEqual(rc, 1)
+        self.assertIn(legacy, err)
+        self.assertIn("50-existing-credential.conf", err)
+        self.assertEqual(self.host.calls, [])
+
+    def test_autounlock_socket_is_the_socket_units_and_reaches_the_core(self):
+        init_dir = os.path.dirname(TOOL_PATH)
+
+        def render(template, net):
+            with open(os.path.join(init_dir, template), encoding="utf8") as f:
+                text = f.read()
+            for name, value in (("GRC_AUTOUNLOCK", net.autounlock), ("GRC_ACCOUNT", net.account),
+                                ("GRC_DAEMON", net.daemon), ("GRC_NET_ARG", net.net_arg)):
+                text = text.replace("@%s@" % name, value)
+            # Joined as systemd joins a line that ends in a backslash.
+            return re.sub(r"\\\n\s*", " ", text)
+
+        with open(os.path.join(SOURCE_ROOT, "src", "init.cpp"), encoding="utf8") as f:
+            init_cpp = f.read()
+        self.assertRegex(init_cpp, r'"-autounlocksocket=<path>"[^;]*COMMAND_LINE_ONLY')
+        for net in svc.NETWORKS.values():
+            for socket_template, core_template, user in (
+                    ("gridcoin-autounlock.socket.in", "gridcoinresearchd.service.in", None),
+                    ("gridcoin-autounlock@.socket.in", "gridcoinresearchd@.service.in", "bob")):
+                with self.subTest(net=net.daemon, user=user):
+                    unit, socket_unit, sock_path = svc.autounlock_target(net, user)
+                    listen = re.findall(r"^ListenStream=(\S+)$", render(socket_template, net), re.M)
+                    self.assertEqual([path.replace("%i", user or "") for path in listen], [sock_path])
+                    self.assertIn("-autounlocksocket=" + sock_path, svc.render_autounlock_dropin(net, user))
+                    # The variable reaches the core's command line, and the autounlock drop-in
+                    # comes after the one that empties it.
+                    if user is None:
+                        core = render(core_template, net)
+                        self.assertIn("Environment=GRIDCOIN_AUTOUNLOCK_ARGS=\n", core)
+                        exec_start = re.findall(r"^ExecStart=(.*)$", core, re.M)
+                    else:
+                        exec_start = [line[len("ExecStart="):] for line in
+                                      svc.render_user_dropin(net, None).splitlines() if line.startswith("ExecStart=/")]
+                    self.assertEqual(len(exec_start), 1)
+                    self.assertTrue(exec_start[0].rstrip().endswith(" $GRIDCOIN_AUTOUNLOCK_ARGS"), exec_start)
+                    self.assertLess(svc.DROPIN_MAIN, svc.DROPIN_AUTOUNLOCK)
 
     def test_autounlock_disable_reverses_and_notes_credential(self):
         self.make_credential("gridcoinresearch-bob.wallet-passphrase")
@@ -2707,6 +2813,482 @@ class DisableTests(SwitchTestBase):
         self.assertIn("--terminate-sessions", err)
         self.assertEqual(self.host.calls, [])
         self.assertFalse(os.path.exists(self.datadir))
+
+
+OLD_OVERRIDE = """[Service]
+ExecStart=
+ExecStart=/usr/bin/gridcoinresearchd -daemonwait \\
+    -pid=/run/gridcoinresearchd-%%i/gridcoinresearchd.pid \\
+    -datadir=%s
+ReadWritePaths=%s
+"""
+
+
+class SwitchOverTests(ServiceTestBase):
+    def setUp(self):
+        super().setUp()
+        root = self.tmp.name
+        # The old per-user units ran -datadir=/home/%i/.GridcoinResearch.
+        self.paths = dataclasses.replace(self.paths, old_unit_home=os.path.join(root, "home"))
+        for name in ("alice", "carol"):
+            home = os.path.join(root, "home", name)
+            os.makedirs(home)
+            self.host.users[name] = Passwd(name, self.uid, home)
+        conf_dirs = {"main": os.path.join(root, "etc-gridcoin"), "test": os.path.join(root, "etc-gridcoin-testnet")}
+        for d in conf_dirs.values():
+            os.makedirs(d)
+        saved = svc.NETWORKS
+        svc.NETWORKS = {k: dataclasses.replace(v, conf_dir=conf_dirs[k]) for k, v in saved.items()}
+        self.addCleanup(setattr, svc, "NETWORKS", saved)
+        self.legacy = os.path.join(conf_dirs["main"], "wallet-passphrase.cred")
+
+    def write_state(self, text, network="main"):
+        os.makedirs(self.paths.tool_state, 0o700, exist_ok=True)
+        path = os.path.join(self.paths.tool_state, "switchover-%s.state" % network)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf8") as f:
+            f.write(text)
+        return path
+
+    def instance_dir(self, user, daemon="gridcoinresearchd"):
+        return os.path.join(self.paths.etc_systemd, "%s@%s.service.d" % (daemon, user))
+
+    def write_override(self, user, name, text, daemon="gridcoinresearchd"):
+        os.makedirs(self.instance_dir(user, daemon), exist_ok=True)
+        path = os.path.join(self.instance_dir(user, daemon), name)
+        with open(path, "w", encoding="utf8") as f:
+            f.write(text)
+        return path
+
+    def wants(self, target, unit):
+        d = os.path.join(self.paths.etc_systemd, target + ".wants")
+        os.makedirs(d, exist_ok=True)
+        os.symlink("/usr/lib/systemd/system/" + unit, os.path.join(d, unit))
+
+    def test_switch_over_rewires_autounlock_instance(self):
+        self.make_credential("gridcoinresearch-alice.wallet-passphrase")
+        state = self.write_state("autounlock alice\ncore-active alice\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 0, err)
+        core = self.dropin("gridcoinresearchd@alice.service")
+        self.assertIn("ExecStart=/usr/bin/gridcoinresearchd  -nodaemon -nodaemonwait -multiprocess "
+                      "$GRIDCOIN_AUTOUNLOCK_ARGS\n", core)
+        socket = self.dropin("gridcoinresearchd@alice.service", "60-gridcoin-autounlock.conf")
+        self.assertIn("Wants=gridcoin-autounlock@alice.socket\n", socket)
+        self.assertIn("Environment=GRIDCOIN_AUTOUNLOCK_ARGS=-autounlocksocket=/run/gridcoin-autounlock/alice.sock\n",
+                      socket)
+        self.assertEqual(self.host.calls, [
+            ("daemon-reload",),
+            ("enable", "--now", "gridcoin-autounlock@alice.socket"),
+            ("try-restart", "--no-block", "gridcoinresearchd@alice.service"),
+        ])
+        self.assertFalse(os.path.exists(state))
+
+    def test_switch_over_testnet_instance(self):
+        self.make_credential("gridcointestnet-alice.wallet-passphrase")
+        state = self.write_state("autounlock alice\ncore alice\ncore-active alice\n", network="test")
+        rc, out, err = self.run_main("switch-over", "--state=" + state, "--network=test")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("-testnet -nodaemon", self.dropin("gridcointestnetd@alice.service"))
+        self.assertIn("-autounlocksocket=/run/gridcointestnet-autounlock/alice.sock",
+                      self.dropin("gridcointestnetd@alice.service", "60-gridcoin-autounlock.conf"))
+        self.assertEqual(self.host.calls, [
+            ("daemon-reload",),
+            ("enable", "--now", "gridcointestnet-autounlock@alice.socket"),
+            ("reenable", "gridcointestnetd@alice.service"),
+            ("try-restart", "--no-block", "gridcointestnetd@alice.service"),
+        ])
+
+    def test_switch_over_neutralises_legacy_override(self):
+        data = os.path.join(self.tmp.name, "data", "alice", "grc")
+        os.makedirs(data)
+        self.make_credential("gridcoinresearch-alice.wallet-passphrase")
+        override = self.write_override("alice", "override.conf", OLD_OVERRIDE % (data, data))
+        notes = self.write_override("alice", "notes.txt", "not a drop-in")
+        state = self.write_state("autounlock alice\ncore alice\ncore-active alice\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 0, err)
+        core = self.dropin("gridcoinresearchd@alice.service")
+        self.assertIn(" -multiprocess -datadir=%s $GRIDCOIN_AUTOUNLOCK_ARGS\n" % data, core)
+        self.assertNotIn("ReadWritePaths", core)
+        self.assertNotIn("daemonwait\n", core)
+        self.assertFalse(os.path.exists(override))
+        with open(override + ".disabled-by-gridcoin-switchover", encoding="utf8") as f:
+            self.assertEqual(f.read(), OLD_OVERRIDE % (data, data))
+        self.assertEqual(sorted(os.listdir(self.instance_dir("alice"))), [
+            "50-gridcoin-service.conf", "60-gridcoin-autounlock.conf", "notes.txt",
+            "override.conf.disabled-by-gridcoin-switchover"])
+        self.assertTrue(os.path.exists(notes))
+        self.assertIn(override, out)
+        self.assertEqual(self.host.calls[-2:], [("reenable", "gridcoinresearchd@alice.service"),
+                                                ("try-restart", "--no-block", "gridcoinresearchd@alice.service")])
+
+    def test_switch_over_reads_the_datadir_as_systemd_does(self):
+        pw = self.host.users["alice"]
+        data = os.path.join(pw.pw_dir, "grc")
+        other = os.path.join(self.tmp.name, "srv", "alice")
+        for d in (data, other):
+            os.makedirs(d)
+        cases = [
+            # A specifier, and a quoted --datadir.
+            ({"override.conf": "[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=%h/grc\n"}, data),
+            ({"override.conf": '[Service]\nExecStart=\nExecStart=/usr/bin/x "--datadir=%s"\n' % other}, other),
+            # The last command line is the one that runs, and on it the last -datadir.
+            ({"a.conf": "[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=%s\n" % other,
+              "b.conf": "[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=/nowhere -datadir=%s\n" % data}, data),
+            # A command line without -datadir ran in the core's default, under the home directory.
+            ({"override.conf": "[Service]\nExecStart=\nExecStart=/usr/bin/x -daemonwait\n"}, None),
+            # A -datadir outside [Service], or commented out, did not run.
+            ({"override.conf": "[Unit]\nExecStart=/usr/bin/x -datadir=%s\n[Service]\n# ExecStart=/usr/bin/x "
+                               "-datadir=%s\nNice=5\n" % (other, other)}, None),
+            # The core's default spelled out is still the default.
+            ({"override.conf": "[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=%s/.GridcoinResearch\n"
+                               % pw.pw_dir}, None),
+        ]
+        for files, expected in cases:
+            with self.subTest(files=sorted(files)):
+                svc_rmtree(self.instance_dir("alice"))
+                for name, text in files.items():
+                    self.write_override("alice", name, text)
+                directory = self.instance_dir("alice")
+                self.assertEqual(svc.switched_datadir(pw, directory, self.paths), expected)
+        # What cannot be resolved fails the user and changes nothing.
+        for text in ("[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=%t/grc\n",
+                     "[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=relative\n",
+                     "[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=${D}\n",
+                     "[Service]\nExecStart=\nExecStart=/usr/bin/x '-datadir=%s\n" % other):
+            with self.subTest(text=text):
+                svc_rmtree(self.instance_dir("alice"))
+                path = self.write_override("alice", "override.conf", text)
+                self.host.calls.clear()
+                state = self.write_state("core alice\ncore-active alice\n")
+                rc, out, err = self.run_main("switch-over", "--state=" + state)
+                self.assertEqual(rc, 1)
+                self.assertIn(path, err)
+                self.assertEqual(self.host.calls, [])
+                self.assertEqual(os.listdir(self.instance_dir("alice")), ["override.conf"])
+
+    def test_switch_over_keeps_an_old_unit_datadir_outside_the_home(self):
+        # The old unit's /home/<user>/.GridcoinResearch, for a user whose home is elsewhere.
+        old = os.path.join(self.paths.old_unit_home, "alice", ".GridcoinResearch")
+        os.makedirs(old)
+        self.host.users["alice"] = Passwd("alice", self.uid, os.path.join(self.tmp.name, "srv", "alice"))
+        state = self.write_state("core alice\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("-datadir=%s $GRIDCOIN_AUTOUNLOCK_ARGS" % old, self.dropin("gridcoinresearchd@alice.service"))
+
+    def test_switch_over_system_credential_kept_in_place(self):
+        secret = b"\x00encrypted credential\xff\n"
+        with open(self.legacy, "wb") as f:
+            f.write(secret)
+        os.chmod(self.legacy, 0o400)
+        self.host.active.add("gridcoinresearchd.service")
+        state = self.write_state("system-autounlock\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 0, err)
+        text = self.dropin("gridcoin-autounlock.service", "50-existing-credential.conf")
+        self.assertIn("\n[Service]\nLoadCredentialEncrypted=wallet-passphrase:%s\n" % self.legacy, text)
+        self.assertEqual(read_bytes(self.legacy), secret)
+        self.assertEqual(os.stat(self.legacy).st_mode & 0o7777, 0o600)
+        # Nothing was moved or copied to the credstore.
+        self.assertEqual(os.listdir(self.paths.credstore), [])
+        self.assertIn("-autounlocksocket=/run/gridcoin-autounlock/gridcoin.sock",
+                      self.dropin("gridcoinresearchd.service", "60-gridcoin-autounlock.conf"))
+        self.assertEqual(self.host.calls, [
+            ("daemon-reload",),
+            ("enable", "--now", "gridcoin-autounlock.socket"),
+            ("restart", "--no-block", "gridcoinresearchd.service"),
+        ])
+        # The installed names: the old file in /etc/gridcoin, under the ID the helper unit loads,
+        # which a second LoadCredentialEncrypted= for that ID replaces.
+        real = dataclasses.replace(svc.NETWORKS["main"], conf_dir="/etc/gridcoin")
+        self.assertIn("\nLoadCredentialEncrypted=wallet-passphrase:/etc/gridcoin/wallet-passphrase.cred\n",
+                      svc.render_existing_credential_dropin(real))
+        with open(os.path.join(os.path.dirname(TOOL_PATH), "gridcoin-autounlock.service.in"), encoding="utf8") as f:
+            self.assertIn("\nLoadCredentialEncrypted=wallet-passphrase:", f.read())
+
+    def test_switch_over_system_credential_must_exist(self):
+        state = self.write_state("system-autounlock\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 1)
+        self.assertIn(self.legacy, err)
+        self.assertEqual(self.host.calls, [])
+        self.assertTrue(os.path.exists(state))
+        # One already in the credstore needs no drop-in.
+        self.make_credential("gridcoinresearch.wallet-passphrase")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 0, err)
+        self.assertFalse(os.path.exists(os.path.join(self.paths.etc_systemd, "gridcoin-autounlock.service.d")))
+
+    def test_switch_over_failed_user_not_restarted(self):
+        self.make_credential("gridcoinresearch-alice.wallet-passphrase")
+        # carol's credential is missing, dave does not exist, and bob's reenable fails.
+        self.host.fail.add("reenable")
+        state = self.write_state("autounlock alice\ncore-active alice\nautounlock carol\ncore-active carol\n"
+                                 "core-active dave\ncore bob\ncore-active bob\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 1)
+        self.assertIn(("try-restart", "--no-block", "gridcoinresearchd@alice.service"), self.host.calls)
+        for user in ("bob", "carol", "dave"):
+            self.assertNotIn(("try-restart", "--no-block", "gridcoinresearchd@%s.service" % user), self.host.calls)
+            self.assertRegex(err, r"%s: .*%s's core was not restarted" % (user, user))
+        self.assertFalse(os.path.exists(self.instance_dir("carol")))
+        self.assertNotIn(("enable", "--now", "gridcoin-autounlock@carol.socket"), self.host.calls)
+        # The state file keeps what failed, for a rerun.
+        with open(state, encoding="utf8") as f:
+            self.assertEqual(f.read(), "autounlock carol\ncore-active carol\ncore-active dave\ncore bob\n"
+                                       "core-active bob\n")
+        self.assertEqual(os.stat(state).st_mode & 0o777, 0o600)
+        self.assertIn("switch-over --state=" + state, err)
+        # The rerun takes up only those; alice is done.
+        self.make_credential("gridcoinresearch-carol.wallet-passphrase")
+        self.host.fail.clear()
+        self.host.users.pop("dave", None)
+        self.host.calls.clear()
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 1)
+        self.assertFalse([call for call in self.host.calls if "gridcoinresearchd@alice.service" in call])
+        self.assertIn(("try-restart", "--no-block", "gridcoinresearchd@carol.service"), self.host.calls)
+        self.assertIn(("try-restart", "--no-block", "gridcoinresearchd@bob.service"), self.host.calls)
+        with open(state, encoding="utf8") as f:
+            self.assertEqual(f.read(), "core-active dave\n")
+
+    def full_old_install(self):
+        """An enabled and running old per-user instance with autounlock and an override, and the
+        old system autounlock."""
+        data = os.path.join(self.tmp.name, "data", "alice", "grc")
+        os.makedirs(data)
+        self.make_credential("gridcoinresearch-alice.wallet-passphrase")
+        self.write_override("alice", "override.conf", OLD_OVERRIDE % (data, data))
+        with open(self.legacy, "wb") as f:
+            f.write(b"old")
+        self.host.active.update({"gridcoinresearchd@alice.service", "gridcoinresearchd.service"})
+        return data
+
+    def test_switch_over_idempotent(self):
+        self.full_old_install()
+        state = self.write_state("autounlock alice\ncore alice\ncore-active alice\nsystem-autounlock\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 0, err)
+        self.assertFalse(os.path.exists(state))
+        tree = read_tree(self.paths.etc_systemd)
+        legacy_stat = os.stat(self.legacy)
+        for argv in (("--state=" + state,), ("--scan",)):
+            with self.subTest(argv=argv):
+                self.host.calls.clear()
+                rc, out, err = self.run_main("switch-over", *argv)
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(self.host.calls, [])
+                self.assertIn("Nothing to switch over", out)
+                self.assertEqual(read_tree(self.paths.etc_systemd), tree)
+                self.assertEqual(os.stat(self.legacy), legacy_stat)
+        self.assertFalse(os.path.exists(state))
+
+    def test_switch_over_scan_finds_the_old_units(self):
+        data = self.full_old_install()
+        self.wants("multi-user.target", "gridcoinresearchd@alice.service")
+        self.wants("gridcoinresearchd@alice.service", "gridcoinresearchd-autounlock@alice.service")
+        self.wants("gridcoinresearchd.service", "gridcoinresearchd-autounlock.service")
+        # A link systemctl does not count as enabled (a stale one) is left alone.
+        self.wants("multi-user.target", "gridcoinresearchd@carol.service")
+        self.host.enabled.update({"gridcoinresearchd@alice.service", "gridcoinresearchd-autounlock@alice.service",
+                                  "gridcoinresearchd-autounlock.service"})
+        rc, out, err = self.run_main("switch-over", "--scan")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.host.calls, [
+            ("disable", "--now", "gridcoinresearchd-autounlock@alice.service"),
+            ("daemon-reload",),
+            ("enable", "--now", "gridcoin-autounlock@alice.socket"),
+            ("reenable", "gridcoinresearchd@alice.service"),
+            ("try-restart", "--no-block", "gridcoinresearchd@alice.service"),
+            ("disable", "--now", "gridcoinresearchd-autounlock.service"),
+            ("daemon-reload",),
+            ("enable", "--now", "gridcoin-autounlock.socket"),
+            ("restart", "--no-block", "gridcoinresearchd.service"),
+        ])
+        self.assertIn("-datadir=" + data, self.dropin("gridcoinresearchd@alice.service"))
+        self.assertFalse(os.path.exists(self.instance_dir("carol")))
+
+    def test_switch_over_scan_leaves_a_switched_user_alone(self):
+        # enable-user's drop-in, a later override of the admin's own, and a running core.
+        self.run_main("enable-user", "alice")
+        override = self.write_override("alice", "override.conf", "[Service]\nNice=5\n")
+        self.wants("multi-user.target", "gridcoinresearchd@alice.service")
+        self.host.enabled.add("gridcoinresearchd@alice.service")
+        self.host.active.add("gridcoinresearchd@alice.service")
+        self.host.calls.clear()
+        rc, out, err = self.run_main("switch-over", "--scan")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.host.calls, [])
+        self.assertTrue(os.path.exists(override))
+
+    def test_switch_over_refuses_a_bad_state_file(self):
+        good = "core alice\n"
+        for text, mode, reason in ((good, 0o620, "writable only by root"), (good, 0o602, "writable only by root"),
+                                   ("core alice bob\n", 0o600, "not a switch-over entry"),
+                                   ("enable alice\n", 0o600, "not a switch-over entry"),
+                                   ("core\n", 0o600, "not a switch-over entry")):
+            with self.subTest(text=text, mode=oct(mode)):
+                state = self.write_state(text)
+                os.chmod(state, mode)
+                rc, out, err = self.run_main("switch-over", "--state=" + state)
+                self.assertEqual(rc, 1)
+                self.assertIn(reason, err)
+                self.assertEqual(self.host.calls, [])
+                self.assertTrue(os.path.exists(state))
+        real = self.write_state(good)
+        link = os.path.join(self.tmp.name, "link.state")
+        os.symlink(real, link)
+        rc, out, err = self.run_main("switch-over", "--state=" + link)
+        self.assertEqual(rc, 1)
+        self.assertIn("symlink", err)
+        self.assertEqual(self.host.calls, [])
+
+    def test_switch_over_refuses_what_would_break_the_new_unit(self):
+        state_text = "core alice\ncore-active alice\n"
+        copy = os.path.join(self.paths.etc_systemd, "gridcoinresearchd@alice.service")
+        template_dropin = os.path.join(self.paths.etc_systemd, "gridcoinresearchd@.service.d", "override.conf")
+        os.makedirs(os.path.dirname(template_dropin))
+        cases = [
+            (lambda: open(copy, "w", encoding="utf8").close(), copy),
+            (lambda: os.symlink("/dev/null", copy), copy),
+            (lambda: self.write_text(template_dropin, "[Service]\nExecStart=\nExecStart=/usr/bin/x -daemon\n"),
+             template_dropin),
+        ]
+        for make, named in cases:
+            with self.subTest(named=named):
+                for path in (copy, template_dropin):
+                    if os.path.lexists(path):
+                        os.unlink(path)
+                make()
+                self.host.calls.clear()
+                rc, out, err = self.run_main("switch-over", "--state=" + self.write_state(state_text))
+                self.assertEqual(rc, 1)
+                self.assertIn(named, err)
+                self.assertEqual(self.host.calls, [])
+        # A template drop-in that sets no command line is harmless.
+        self.assertFalse(os.path.lexists(copy))
+        self.write_text(template_dropin, "[Service]\nNice=5\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state(state_text))
+        self.assertEqual(rc, 0, err)
+        # The system service enabled beside the user's: the per-user unit conflicts with it.
+        self.host.enabled.add("gridcoinresearchd.service")
+        self.host.calls.clear()
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state(state_text))
+        self.assertEqual(rc, 1)
+        self.assertIn("conflicts", err)
+        self.assertEqual(self.host.calls, [])
+
+    def write_text(self, path, text):
+        with open(path, "w", encoding="utf8") as f:
+            f.write(text)
+
+    def test_switch_over_renames_without_overwriting(self):
+        earlier = self.write_override("alice", "override.conf.disabled-by-gridcoin-switchover", "earlier")
+        self.write_override("alice", "override.conf", "[Service]\nNice=5\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("core alice\n"))
+        self.assertEqual(rc, 0, err)
+        with open(earlier, encoding="utf8") as f:
+            self.assertEqual(f.read(), "earlier")
+        with open(os.path.join(self.instance_dir("alice"), "override.conf.2.disabled-by-gridcoin-switchover"),
+                  encoding="utf8") as f:
+            self.assertEqual(f.read(), "[Service]\nNice=5\n")
+
+    def test_switch_over_needs_one_source(self):
+        for argv in ((), ("--scan", "--state=/x")):
+            rc, out, err = self.run_main("switch-over", *argv)
+            self.assertEqual(rc, 2)
+        self.assertEqual(self.host.calls, [])
+
+
+class WithoutAutounlockUnitsTests(SwitchOverTests):
+    """A build for systemd older than 251 (INSTALL_SYSTEMD_AUTOUNLOCK=OFF) has no autounlock units."""
+
+    def setUp(self):
+        super().setUp()
+        svc.CONFIG["autounlock_units"] = "no"
+
+    # The switch-over tests above that need the units do not apply here.
+    test_switch_over_rewires_autounlock_instance = None
+    test_switch_over_testnet_instance = None
+    test_switch_over_neutralises_legacy_override = None
+    test_switch_over_system_credential_kept_in_place = None
+    test_switch_over_system_credential_must_exist = None
+    test_switch_over_failed_user_not_restarted = None
+    test_switch_over_scan_finds_the_old_units = None
+
+    def test_no_socket_is_touched_by_the_per_user_commands(self):
+        self.make_credential("gridcoinresearch-bob.wallet-passphrase")
+        rc, out, err = self.run_main("enable-user", "bob")
+        self.assertEqual(rc, 0, err)
+        self.host.calls.clear()
+        rc, out, err = self.run_main("disable-user", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.host.calls[0], ("disable", "--now", "gridcoinresearchd@bob.service"))
+        for who in (["bob"], ["--system"]):
+            with self.subTest(who=who):
+                self.host.calls.clear()
+                rc, out, err = self.run_main("autounlock", "enable", *who)
+                self.assertEqual(rc, 1)
+                self.assertIn("systemd 251", err)
+                self.assertEqual(self.host.calls, [])
+                self.assertEqual(os.listdir(self.paths.etc_systemd), [])
+                rc, out, err = self.run_main("autounlock", "disable", *who)
+                self.assertEqual(rc, 0, err)
+                self.assertFalse([call for call in self.host.calls if any(".socket" in arg for arg in call)])
+
+    def test_switch_over_switches_the_core_without_autounlock(self):
+        data = self.full_old_install()
+        state = self.write_state("autounlock alice\ncore alice\ncore-active alice\nsystem-autounlock\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.host.calls, [
+            ("daemon-reload",),
+            ("reenable", "gridcoinresearchd@alice.service"),
+            ("try-restart", "--no-block", "gridcoinresearchd@alice.service"),
+        ])
+        self.assertIn("-datadir=" + data, self.dropin("gridcoinresearchd@alice.service"))
+        self.assertEqual(sorted(os.listdir(self.instance_dir("alice"))),
+                         ["50-gridcoin-service.conf", "override.conf.disabled-by-gridcoin-switchover"])
+        self.assertFalse(os.path.exists(os.path.join(self.paths.etc_systemd, "gridcoin-autounlock.service.d")))
+        self.assertIn("systemd 251", out)
+        self.assertFalse(os.path.exists(state))
+
+    def test_switch_over_scan_disables_the_old_autounlock_units(self):
+        self.full_old_install()
+        self.wants("gridcoinresearchd@alice.service", "gridcoinresearchd-autounlock@alice.service")
+        self.wants("gridcoinresearchd.service", "gridcoinresearchd-autounlock.service")
+        self.host.enabled.update({"gridcoinresearchd-autounlock@alice.service", "gridcoinresearchd-autounlock.service"})
+        rc, out, err = self.run_main("switch-over", "--scan")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.host.calls, [
+            ("disable", "--now", "gridcoinresearchd-autounlock@alice.service"),
+            ("daemon-reload",),
+            ("try-restart", "--no-block", "gridcoinresearchd@alice.service"),
+            ("disable", "--now", "gridcoinresearchd-autounlock.service"),
+        ])
+
+
+class WithoutAutounlockUnitsSwitchTests(SwitchTestBase):
+    def test_enable_and_disable_leave_the_sockets_out(self):
+        svc.CONFIG["autounlock_units"] = "no"
+        write_tree(self.datadir, self.user_files())
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.host.calls[0], ("disable", "--now", "gridcoinresearchd@bob.service"))
+        self.host.calls.clear()
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.host.calls[0], ("disable", "--now", "gridcoinresearchd.service"))
+        self.assertFalse([call for call in self.host.calls if any(".socket" in arg for arg in call)])
+
+    def test_autounlock_units_value_must_be_yes_or_no(self):
+        svc.CONFIG["autounlock_units"] = "ON"
+        rc, out, err = self.run_main("enable-user", "bob")
+        self.assertEqual(rc, 64)
+        self.assertIn("not configured", err)
+        self.assertEqual(self.host.calls, [])
 
 
 if __name__ == "__main__":

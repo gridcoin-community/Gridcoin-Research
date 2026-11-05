@@ -10,6 +10,8 @@ Run as root. Commands:
   autounlock enable|disable (<user> | --system)
   enable <user>            move the user's wallet into the service account and start <daemon>.service
   disable <user>           move it back to the user and stop <daemon>.service
+  switch-over (--state=FILE | --scan)
+                           move the services of the units this release replaces to the new ones
 
 The per-user core runs with the user's own account, groups and home, as if the user
 had started the daemon by hand; enable-user does not touch the user's configuration
@@ -29,6 +31,7 @@ import os
 import posixpath
 import pwd
 import re
+import shlex
 import shutil
 import subprocess
 import stat
@@ -39,11 +42,20 @@ import time
 
 CONFIG = {"bindir": "@GRC_BINDIR@", "default_network": "@GRC_UNIT_NETWORK@", "python3": "@GRC_UNIT_PYTHON3@",
           "libexec_subdir_main": "@GRC_LIBEXEC_SUBDIR_MAIN@", "libexec_subdir_test": "@GRC_LIBEXEC_SUBDIR_TEST@",
-          "refused_keys_main": "@GRC_REFUSED_KEYS_FILE_MAIN@", "refused_keys_test": "@GRC_REFUSED_KEYS_FILE_TEST@"}
+          "refused_keys_main": "@GRC_REFUSED_KEYS_FILE_MAIN@", "refused_keys_test": "@GRC_REFUSED_KEYS_FILE_TEST@",
+          "autounlock_units": "@GRC_AUTOUNLOCK_UNITS@"}
 
 EXIT_USAGE = 64
 DROPIN_MAIN = "50-gridcoin-service.conf"
 DROPIN_AUTOUNLOCK = "60-gridcoin-autounlock.conf"
+# The system helper's drop-in that keeps loading the credential the old autounlock unit used.
+DROPIN_EXISTING_CREDENTIAL = "50-existing-credential.conf"
+# What the switch-over renames a drop-in of the old per-user unit to: systemd reads only *.conf.
+DISABLED_SUFFIX = ".disabled-by-gridcoin-switchover"
+# The entries of the switch-over state file the package's preinst writes, one per line: these
+# three with a user name, and SYSTEM_AUTOUNLOCK alone.
+STATE_USER_KINDS = ("autounlock", "core", "core-active")
+SYSTEM_AUTOUNLOCK = "system-autounlock"
 # A name made only of dots is refused: "." and ".." name directories. Matched with
 # fullmatch and \Z, so a trailing newline is refused too.
 USER_RE = re.compile(r"(?!\.+\Z)[A-Za-z0-9._-]+\Z")
@@ -150,6 +162,8 @@ class Paths:
     var_lib: str = "/var/lib"
     tool_state: str = "/var/lib/gridcoin-service"
     login_defs: str = "/etc/login.defs"
+    # The per-user units this release replaces ran -datadir=/home/%i/.GridcoinResearch.
+    old_unit_home: str = "/home"
 
 
 class Host:
@@ -163,6 +177,14 @@ class Host:
 
     def is_active(self, unit):
         return subprocess.call(["systemctl", "is-active", "--quiet", unit], env=SAFE_ENV) == 0
+
+    def active_units(self, pattern):
+        """The names of the active units that match the glob pattern."""
+        proc = subprocess.run(["systemctl", "list-units", "--state=active", "--plain", "--no-legend", pattern],
+                              env=SAFE_ENV, stdout=subprocess.PIPE, encoding="utf8", errors="replace", check=False)
+        if proc.returncode != 0:
+            raise StepError("step 'systemctl list-units %s' failed with exit status %s" % (pattern, proc.returncode))
+        return [line.split()[0] for line in proc.stdout.splitlines() if line.split()]
 
     def getpwnam(self, name):
         return pwd.getpwnam(name)
@@ -331,27 +353,28 @@ def validate_user(name, host, paths):
     return pw
 
 
-def resolve_datadir(pw, override):
-    """Return the validated explicit data directory, or None to use the core's default."""
+def resolve_datadir(pw, override, name="--datadir"):
+    """Return the validated explicit data directory, or None to use the core's default. name is
+    what the messages call it."""
     if override is None:
         return None
     if not os.path.isabs(override):
-        raise UserError("--datadir must be an absolute path")
+        raise UserError("%s must be an absolute path" % name)
     if UNSAFE_PATH_RE.search(override):
-        raise UserError("--datadir may not contain whitespace, quotes, backslash, $, % or ;")
+        raise UserError("%s may not contain whitespace, quotes, backslash, $, %% or ;" % name)
     path = ""
     for part in override.split("/"):
         if part == "":
             continue
         if part in (".", ".."):
-            raise UserError("--datadir may not contain '.' or '..' components")
+            raise UserError("%s may not contain '.' or '..' components" % name)
         path += "/" + part
         if os.path.islink(path):
-            raise UserError("--datadir has a symlink component: %s" % path)
+            raise UserError("%s has a symlink component: %s" % (name, path))
     if not os.path.isdir(override):
-        raise UserError("--datadir is not an existing directory")
+        raise UserError("%s is not an existing directory" % name)
     if os.stat(override).st_uid != pw.pw_uid:
-        raise UserError("--datadir is not owned by %s" % pw.pw_name)
+        raise UserError("%s is not owned by %s" % (name, pw.pw_name))
     return override
 
 
@@ -378,6 +401,24 @@ def autounlock_target(net, user):
         return net.daemon + ".service", net.autounlock + ".socket", "/run/%s/%s.sock" % (net.autounlock, net.account)
     return ("%s@%s.service" % (net.daemon, user), "%s@%s.socket" % (net.autounlock, user),
             "/run/%s/%s.sock" % (net.autounlock, user))
+
+
+def autounlock_units_installed():
+    """Whether this build installed the autounlock helper and its units (systemd 251 or later)."""
+    return CONFIG["autounlock_units"] == "yes"
+
+
+NO_AUTOUNLOCK_UNITS = "this build has no autounlock units (they need systemd 251 or later)"
+
+
+def core_units(net, user):
+    """The core unit and, when this build has them, its helper socket: what is disabled together."""
+    unit, socket_unit, _ = autounlock_target(net, user)
+    return [unit, socket_unit] if autounlock_units_installed() else [unit]
+
+
+def are_disabled(units):
+    return "%s %s disabled" % (" and ".join(units), "are" if len(units) > 1 else "is")
 
 
 def render_autounlock_dropin(net, user):
@@ -456,8 +497,50 @@ def credential_path(paths, net, user):
 
 
 def legacy_credential_path(net):
-    """Where the system service's credential was kept before; the helper does not load it."""
+    """Where the system service's credential was kept before. The helper loads it only through the
+    switch-over's existing-credential drop-in."""
     return os.path.join(net.conf_dir, "wallet-passphrase.cred")
+
+
+def existing_credential_dropin(paths, net):
+    return os.path.join(dropin_dir(paths, net.autounlock + ".service"), DROPIN_EXISTING_CREDENTIAL)
+
+
+def render_existing_credential_dropin(net):
+    # The same credential ID as the unit's own line: systemd 251 and later let the later line for
+    # an ID replace the earlier one.
+    return (header(net) + "# The helper loads the credential from where the autounlock unit before it kept it.\n"
+            "[Service]\n"
+            "LoadCredentialEncrypted=wallet-passphrase:" + legacy_credential_path(net) + "\n")
+
+
+def loaded_credential_path(paths, net, user):
+    """The credential the helper loads now: the unit's own, or for the system helper the old one
+    while the existing-credential drop-in points it there."""
+    if user is None and os.path.lexists(existing_credential_dropin(paths, net)):
+        return legacy_credential_path(net)
+    return credential_path(paths, net, user)
+
+
+def check_credential(paths, net, user):
+    """Refuse when the credential the helper loads is absent; warn when it is not root's own 0600
+    file. Returns its path."""
+    cred = loaded_credential_path(paths, net, user)
+    try:
+        st = os.stat(cred)
+    except OSError:
+        legacy = legacy_credential_path(net)
+        if cred == legacy:
+            raise UserError("no credential at %s, where %s points the helper; put it back, or remove that drop-in "
+                            "to use %s" % (cred, existing_credential_dropin(paths, net),
+                                           credential_path(paths, net, None))) from None
+        if user is None and os.path.exists(legacy):
+            raise UserError("no credential at %s, the only place the helper loads it from; %s is not used. "
+                            "Move it there (owned by root, mode 0600) and run this again" % (cred, legacy)) from None
+        raise UserError("no credential at %s; create it first" % cred) from None
+    if st.st_uid != 0 or (st.st_mode & 0o777) != 0o600:
+        print("warning: %s is not owned by root with mode 0600" % cred)
+    return cred
 
 
 def step(host, *args, state="drop-ins already written are kept"):
@@ -489,20 +572,34 @@ def cmd_enable_user(args, net, host, paths):
 
 def cmd_disable_user(args, net, host, paths):
     validate_name(args.user)
-    unit, socket_unit, _ = autounlock_target(net, args.user)
+    unit = "%s@%s.service" % (net.daemon, args.user)
+    units = core_units(net, args.user)
     # Cleanup continues past a failed disable so the drop-ins of a vanished unit can still go.
-    rc = host.systemctl("disable", "--now", unit, socket_unit)
+    rc = host.systemctl("disable", "--now", *units)
     remove_dropin(paths, unit, DROPIN_MAIN)
     remove_dropin(paths, unit, DROPIN_AUTOUNLOCK)
     step(host, "daemon-reload")
     if rc != 0:
-        raise StepError("step 'systemctl disable --now %s %s' failed with exit status %s; the drop-ins were removed"
-                        % (unit, socket_unit, rc))
+        raise StepError("step 'systemctl disable --now %s' failed with exit status %s; the drop-ins were removed"
+                        % (" ".join(units), rc))
     return 0
+
+
+def enable_autounlock(net, user, host, paths):
+    """autounlock enable, after the checks: the core's drop-in, the helper socket, and a restart of a
+    running core so that it pulls the passphrase."""
+    unit, socket_unit, _ = autounlock_target(net, user)
+    write_dropin(paths, unit, DROPIN_AUTOUNLOCK, render_autounlock_dropin(net, user))
+    step(host, "daemon-reload")
+    step(host, "enable", "--now", socket_unit)
+    if host.is_active(unit):
+        step(host, "restart", "--no-block", unit)
 
 
 def cmd_autounlock(args, net, host, paths):
     user = None if args.system else args.user
+    if args.action == "enable" and not autounlock_units_installed():
+        raise UserError("%s, so autounlock cannot be enabled" % NO_AUTOUNLOCK_UNITS)
     if user is not None:
         if args.action == "enable":
             validate_user(user, host, paths)
@@ -510,24 +607,11 @@ def cmd_autounlock(args, net, host, paths):
             validate_name(user)
     unit, socket_unit, _ = autounlock_target(net, user)
     if args.action == "enable":
-        cred = credential_path(paths, net, user)
-        try:
-            st = os.stat(cred)
-        except OSError:
-            legacy = legacy_credential_path(net)
-            if user is None and os.path.exists(legacy):
-                raise UserError("no credential at %s, the only place the helper loads it from; %s is not used. "
-                                "Move it there (owned by root, mode 0600) and run this again" % (cred, legacy)) from None
-            raise UserError("no credential at %s; create it first" % cred) from None
-        if st.st_uid != 0 or (st.st_mode & 0o777) != 0o600:
-            print("warning: %s is not owned by root with mode 0600" % cred)
-        write_dropin(paths, unit, DROPIN_AUTOUNLOCK, render_autounlock_dropin(net, user))
-        step(host, "daemon-reload")
-        step(host, "enable", "--now", socket_unit)
-        if host.is_active(unit):
-            step(host, "restart", "--no-block", unit)
+        check_credential(paths, net, user)
+        enable_autounlock(net, user, host, paths)
     else:
-        rc = host.systemctl("disable", "--now", socket_unit)
+        # Without the units there is no socket to disable; a drop-in left behind still goes.
+        rc = host.systemctl("disable", "--now", socket_unit) if autounlock_units_installed() else 0
         remove_dropin(paths, unit, DROPIN_AUTOUNLOCK)
         step(host, "daemon-reload")
         if rc != 0:
@@ -535,7 +619,7 @@ def cmd_autounlock(args, net, host, paths):
                             % (socket_unit, rc))
         if host.is_active(unit):
             step(host, "restart", "--no-block", unit)
-        print("The credential file remains until you remove it: %s" % credential_path(paths, net, user))
+        print("The credential file remains until you remove it: %s" % loaded_credential_path(paths, net, user))
     return 0
 
 
@@ -1720,8 +1804,8 @@ def enable(args, net, host, paths, progress):
         # 2. Stop both cores that could use either datadir. From here on every failure says what
         # it left behind.
         progress.state = "nothing was copied"
-        unit, socket_unit, _ = autounlock_target(net, pw.pw_name)
-        step(host, "disable", "--now", unit, socket_unit, state=None)
+        unit = "%s@%s.service" % (net.daemon, pw.pw_name)
+        step(host, "disable", "--now", *core_units(net, pw.pw_name), state=None)
         step(host, "stop", net.daemon + ".service", state=None)
         progress.state = "%s is disabled and %s.service stopped; nothing was copied" % (unit, net.daemon)
 
@@ -1890,10 +1974,10 @@ def disable(args, net, host, paths, progress):
         refuse_other_network_core(host, args.network, pw.pw_name)
 
         end_user_processes(host, pw, args.terminate_sessions)
-        system_unit, system_socket, _ = autounlock_target(net, None)
+        system_units = core_units(net, None)
         progress.state = "nothing was copied"
-        step(host, "disable", "--now", system_unit, system_socket, state=None)
-        stopped = "%s.service and %s are disabled; nothing was copied" % (net.daemon, system_socket)
+        step(host, "disable", "--now", *system_units, state=None)
+        stopped = "%s; nothing was copied" % are_disabled(system_units)
         progress.state = stopped
         lock_fd = take_lock(t_fd, t_display, acct.pw_uid)
         if lock_fd is not None:
@@ -1920,14 +2004,14 @@ def disable(args, net, host, paths, progress):
             settings_text, lines = sanitize_quarantined(found, patterns, q_fd, t_display)
             # Until copy_tree returns, an interrupt can leave the writer's files behind.
             progress.state = ("%s may hold part or all of this copy: remove what this run put there (the entries %s "
-                              "also holds) before rerunning; %s still holds the wallet, and %s.service and %s are "
-                              "disabled" % (s_display, t_display, t_display, net.daemon, system_socket))
+                              "also holds) before rerunning; %s still holds the wallet, and %s"
+                              % (s_display, t_display, t_display, are_disabled(system_units)))
             copy_tree(t_fd, s_fd, net.account, pw.pw_name, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host,
                       t_display)
         except DirtyCopyError:
             progress.state = ("%s still holds part of this copy: remove the entries named above before rerunning; "
-                              "%s still holds the wallet, and %s.service and %s are disabled"
-                              % (s_display, t_display, net.daemon, system_socket))
+                              "%s still holds the wallet, and %s"
+                              % (s_display, t_display, are_disabled(system_units)))
             raise
         except BaseException as e:
             for parent_fd, name in reversed(made):
@@ -1985,6 +2069,375 @@ def disable(args, net, host, paths, progress):
     return 0
 
 
+def old_autounlock(net):
+    """The RPC autounlock units this release replaces: <daemon>-autounlock@<user>.service, and the
+    system service's <daemon>-autounlock.service."""
+    return net.daemon + "-autounlock"
+
+
+def unit_instance(name, prefix):
+    """The instance of <prefix>@<instance>.service in the unit name, or None."""
+    if name.startswith(prefix + "@") and name.endswith(".service"):
+        return name[len(prefix) + 1:-len(".service")] or None
+    return None
+
+
+def read_switchover_state(path):
+    """The entries of the state file the package's preinst wrote, [(kind, user or None)] in file
+    order; None when there is no such file. The file must be root's own regular file, writable by
+    nobody else, as the entries decide what the switch-over changes."""
+    try:
+        fd = os.open(path, FILE_FLAGS)
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        raise UserError("%s: %s (a symlink is not followed); refusing" % (path, e.strerror)) from None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o022:
+            raise UserError("%s is not root's own regular file, writable only by root; refusing" % path)
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            data = f.read(MAX_CONFIG_BYTES + 1)
+    finally:
+        os.close(fd)
+    try:
+        text = data.decode("utf8")
+    except UnicodeDecodeError:
+        raise UserError("%s is not UTF-8; refusing" % path) from None
+    entries = []
+    for number, line in enumerate(text.split("\n"), start=1):
+        fields = line.split(" ")
+        if line == "":
+            continue
+        if fields == [SYSTEM_AUTOUNLOCK]:
+            entries.append((SYSTEM_AUTOUNLOCK, None))
+        elif len(fields) == 2 and fields[0] in STATE_USER_KINDS and fields[1]:
+            entries.append((fields[0], fields[1]))
+        else:
+            raise UserError("%s:%d: not a switch-over entry; refusing" % (path, number))
+    return entries
+
+
+def write_switchover_state(path, entries):
+    """Replace the state file with the entries still to do, root's and 0600."""
+    temp = "%s.%d.tmp" % (path, os.getpid())
+    lines = "".join("%s\n" % kind if user is None else "%s %s\n" % (kind, user) for kind, user in entries)
+    with os.fdopen(os.open(temp, NEW_FILE_FLAGS, 0o600), "w", encoding="utf8") as f:
+        f.write(lines)
+    os.rename(temp, path)
+
+
+def scan_old_installs(net, host, paths):
+    """What --scan switches over, as the package's preinst records it: the old units enabled
+    through a link in a *.wants/ directory under /etc/systemd/system and confirmed by systemctl
+    is-enabled, and the running per-user cores. A user whose core has this tool's drop-in already
+    and no old autounlock unit is done, and left out. Returns (entries, {user or None: the old
+    units to disable})."""
+    old = old_autounlock(net)
+    links = set()
+    for name in sorted(os.listdir(paths.etc_systemd)):
+        wants = os.path.join(paths.etc_systemd, name)
+        if name.endswith(".wants") and os.path.isdir(wants) and not os.path.islink(wants):
+            links.update(entry for entry in os.listdir(wants) if os.path.islink(os.path.join(wants, entry)))
+    entries = []
+    old_units = {}
+    for name in sorted(links):
+        user = unit_instance(name, old)
+        if user is not None and host.is_enabled(name):
+            entries.append(("autounlock", user))
+            old_units.setdefault(user, []).append(name)
+    for name in sorted(links):
+        user = unit_instance(name, net.daemon)
+        if user is not None and host.is_enabled(name):
+            entries.append(("core", user))
+    for name in host.active_units(net.daemon + "@*.service"):
+        user = unit_instance(name, net.daemon)
+        if user is not None:
+            entries.append(("core-active", user))
+    if old + ".service" in links and host.is_enabled(old + ".service"):
+        entries.append((SYSTEM_AUTOUNLOCK, None))
+        old_units[None] = [old + ".service"]
+
+    def done(user):
+        unit = "%s@%s.service" % (net.daemon, user)
+        return user not in old_units and os.path.exists(os.path.join(dropin_dir(paths, unit), DROPIN_MAIN))
+
+    return [(kind, user) for kind, user in entries if user is None or not done(user)], old_units
+
+
+def unit_file_settings(text, section, key):
+    """The values of key in section of a unit file text, in order, read as systemd reads them:
+    comment lines skipped, a line that ends in a backslash continued on the next with a space."""
+    values = []
+    current = None
+    pending = None
+    for raw in text.split("\n"):
+        line = raw.strip()
+        if line.startswith(("#", ";")):
+            continue
+        if pending is not None:
+            line = pending + line
+            pending = None
+        if line.endswith("\\"):
+            pending = line[:-1] + " "
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            current = line[1:-1]
+        elif current == section and "=" in line:
+            name, value = line.split("=", 1)
+            if name.strip() == key:
+                values.append(value.strip())
+    return values
+
+
+def expand_specifiers(text, pw, display):
+    """Resolve the systemd specifiers a per-user unit's -datadir can use: %h (home), %i and %u (the
+    user, the instance name), %%."""
+    values = {"h": pw.pw_dir, "i": pw.pw_name, "u": pw.pw_name, "%": "%"}
+    out = []
+    i = 0
+    while i < len(text):
+        if text[i] != "%":
+            out.append(text[i])
+            i += 1
+            continue
+        letter = text[i + 1:i + 2]
+        if letter not in values:
+            raise UserError("the -datadir in %s uses the specifier %%%s, which the switch-over does not resolve; "
+                            "write the path out" % (display, letter))
+        out.append(values[letter])
+        i += 2
+    return "".join(out)
+
+
+def datadir_from_command(command, pw, display):
+    """The last -datadir= (or --datadir=) value of an ExecStart= command line, as the core reads its
+    arguments, or None when it has none."""
+    try:
+        words = shlex.split(command)
+    except ValueError as e:
+        raise UserError("cannot read the ExecStart= in %s: %s" % (display, e)) from None
+    found = None
+    for word in words[1:]:
+        for option in ("-datadir=", "--datadir="):
+            if word.startswith(option):
+                found = word[len(option):]
+    return None if found is None else expand_specifiers(found, pw, display)
+
+
+def read_dropin_text(path):
+    """A drop-in's text; None when it is not a regular file (a link to /dev/null, say). The
+    directory is root's, so a link in it is followed."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError as e:
+        raise UserError("cannot read %s: %s" % (path, e.strerror)) from None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            data = f.read(MAX_CONFIG_BYTES + 1)
+    finally:
+        os.close(fd)
+    try:
+        return data.decode("utf8")
+    except UnicodeDecodeError:
+        raise UserError("%s is not UTF-8, so what it sets cannot be read; refusing" % path) from None
+
+
+def dropin_texts(directory):
+    """The *.conf drop-ins of directory in the order systemd applies them: [(path, text or None)]."""
+    if not check_dropin_dir(directory):
+        return []
+    return [(os.path.join(directory, name), read_dropin_text(os.path.join(directory, name)))
+            for name in sorted(os.listdir(directory)) if name.endswith(".conf")]
+
+
+def switched_datadir(pw, directory, paths):
+    """The datadir the user's core ran in under the old unit, as enable-user's --datadir: None for
+    the core's default under the home directory. It is the last -datadir of the last ExecStart= the
+    drop-ins in directory set, this tool's own included (a rerun); without one, the old unit's
+    /home/<user>/.GridcoinResearch."""
+    command = None
+    for path, text in dropin_texts(directory):
+        for value in unit_file_settings(text or "", "Service", "ExecStart"):
+            if value:
+                command = (path, value)
+    if command is None:
+        display = "the old unit"
+        datadir = os.path.join(paths.old_unit_home, pw.pw_name, DATADIR_NAME)
+    else:
+        display = command[0]
+        datadir = datadir_from_command(command[1], pw, display)
+    if datadir is None or datadir == os.path.join(pw.pw_dir, DATADIR_NAME):
+        return None
+    return resolve_datadir(pw, datadir, "the datadir %s from %s" % (shown(datadir), display))
+
+
+def refuse_unit_replacements(net, user, paths):
+    """Refuse what would keep the new per-user unit from running as written: a unit file in
+    /etc/systemd/system that takes the packaged unit's place (a copy from systemctl edit --full, or
+    a mask), or a drop-in for every instance that sets its own command line."""
+    for name in ("%s@%s.service" % (net.daemon, user), "%s@.service" % net.daemon):
+        path = os.path.join(paths.etc_systemd, name)
+        if os.path.lexists(path):
+            raise UserError("%s takes the place of the packaged unit (a copy made with systemctl edit --full, or a "
+                            "mask); move it aside, then rerun" % path)
+    for path, text in dropin_texts(dropin_dir(paths, "%s@.service" % net.daemon)):
+        # Even an empty ExecStart= would undo this tool's command line when it comes later.
+        if unit_file_settings(text or "", "Service", "ExecStart"):
+            raise UserError("%s sets ExecStart= for every %s@ instance; move it aside, then rerun" % (path, net.daemon))
+
+
+def disable_dropin(directory, name):
+    """Rename a drop-in out of systemd's view, never over an earlier one. Returns the new name."""
+    target = name + DISABLED_SUFFIX
+    number = 1
+    while os.path.lexists(os.path.join(directory, target)):
+        number += 1
+        target = "%s.%d%s" % (name, number, DISABLED_SUFFIX)
+    os.rename(os.path.join(directory, name), os.path.join(directory, target))
+    return target
+
+
+def switch_user(net, user, kinds, old_units, host, paths):
+    """Move one user's per-user core to the new unit: everything is checked before anything
+    changes. The drop-ins of the old unit go out of systemd's view; enable-user's drop-in keeps the
+    datadir the old unit used; with autounlock, the core pulls the passphrase from the user's
+    helper socket, which loads the credential where it is. Then the core is re-enabled if it was
+    enabled, and restarted without waiting if it ran. Returns the datadir (None: the default)."""
+    pw = validate_user(user, host, paths)
+    if host.is_enabled(net.daemon + ".service"):
+        raise UserError("%s.service is enabled and conflicts with the per-user unit; disable it first" % net.daemon)
+    refuse_unit_replacements(net, user, paths)
+    unit, socket_unit, _ = autounlock_target(net, user)
+    directory = dropin_dir(paths, unit)
+    datadir = switched_datadir(pw, directory, paths)
+    foreign = [os.path.basename(path) for path, _ in dropin_texts(directory)
+               if os.path.basename(path) not in (DROPIN_MAIN, DROPIN_AUTOUNLOCK)]
+    autounlock = "autounlock" in kinds and autounlock_units_installed()
+    if autounlock:
+        check_credential(paths, net, user)
+    elif "autounlock" in kinds:
+        print("Autounlock for %s is not carried over: %s. The core starts with the wallet locked."
+              % (user, NO_AUTOUNLOCK_UNITS))
+
+    for old in old_units:
+        step(host, "disable", "--now", old)
+    write_dropin(paths, unit, DROPIN_MAIN, render_user_dropin(net, datadir))
+    if autounlock:
+        write_dropin(paths, unit, DROPIN_AUTOUNLOCK, render_autounlock_dropin(net, user))
+    for name in foreign:
+        target = disable_dropin(directory, name)
+        print("Renamed %s to %s: it was written for the old unit." % (os.path.join(directory, name), target))
+    step(host, "daemon-reload")
+    if autounlock:
+        step(host, "enable", "--now", socket_unit)
+    if "core" in kinds:
+        step(host, "reenable", unit)
+    if "core-active" in kinds:
+        step(host, "try-restart", "--no-block", unit)
+    return datadir
+
+
+def secure_credential(path):
+    """Make the old credential root's own and 0600 where it is, without reading it or following a
+    symlink."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError as e:
+        raise UserError("%s: %s (a symlink is not followed); refusing" % (path, e.strerror)) from None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise UserError("%s is not a regular file; refusing" % path)
+        if os.geteuid() == 0 and (st.st_uid, st.st_gid) != (0, 0):
+            os.fchown(fd, 0, 0)
+        if stat.S_IMODE(st.st_mode) != 0o600:
+            os.fchmod(fd, 0o600)
+    finally:
+        os.close(fd)
+
+
+def switch_system_autounlock(net, old_units, host, paths):
+    """Move the system service's autounlock to the new helper. A credential the old unit used stays
+    where it is, made root's own 0600, and a drop-in points the helper at it; then autounlock enable
+    --system."""
+    legacy = legacy_credential_path(net)
+    if not autounlock_units_installed():
+        for old in old_units:
+            step(host, "disable", "--now", old)
+        print("Autounlock for %s.service is not carried over: %s. %s stays where it is."
+              % (net.daemon, NO_AUTOUNLOCK_UNITS, legacy))
+        return
+    keep_legacy = os.path.lexists(legacy)
+    if keep_legacy:
+        secure_credential(legacy)
+    elif not os.path.exists(credential_path(paths, net, None)):
+        raise UserError("no credential at %s, where the old autounlock unit loaded it, nor at %s"
+                        % (legacy, credential_path(paths, net, None)))
+    elif os.path.lexists(existing_credential_dropin(paths, net)):
+        # A drop-in of an earlier run points the helper at the file that is gone: say so.
+        check_credential(paths, net, None)
+    for old in old_units:
+        step(host, "disable", "--now", old)
+    if keep_legacy:
+        write_dropin(paths, net.autounlock + ".service", DROPIN_EXISTING_CREDENTIAL,
+                     render_existing_credential_dropin(net))
+    check_credential(paths, net, None)
+    enable_autounlock(net, None, host, paths)
+
+
+def cmd_switch_over(args, net, host, paths):
+    if args.state is not None:
+        entries = read_switchover_state(args.state)
+        old_units = {}
+    else:
+        entries, old_units = scan_old_installs(net, host, paths)
+    if not entries:
+        if entries is not None and args.state is not None:
+            os.unlink(args.state)
+        print("Nothing to switch over.")
+        return 0
+    users = {}
+    for kind, user in entries:
+        if user is not None:
+            users.setdefault(user, set()).add(kind)
+    failed = set()
+    for user, kinds in users.items():
+        try:
+            datadir = switch_user(net, user, kinds, old_units.get(user, []), host, paths)
+        except (UserError, StepError, OSError) as e:
+            print("%s: %s: %s; %s's core was not restarted" % (net.tool_name, shown(user), e, shown(user)),
+                  file=sys.stderr)
+            failed.add(user)
+            continue
+        print("Switched %s over to %s@%s.service (datadir %s)."
+              % (user, net.daemon, user, datadir or "the default, under the home directory"))
+    if any(user is None for _, user in entries):
+        try:
+            switch_system_autounlock(net, old_units.get(None, []), host, paths)
+        except (UserError, StepError, OSError) as e:
+            print("%s: %s.service's autounlock: %s" % (net.tool_name, net.daemon, e), file=sys.stderr)
+            failed.add(None)
+        else:
+            print("Switched %s.service's autounlock over to %s.socket." % (net.daemon, net.autounlock))
+    left = [(kind, user) for kind, user in entries if user in failed]
+    if args.state is not None:
+        if left:
+            write_switchover_state(args.state, left)
+        else:
+            os.unlink(args.state)
+    if left:
+        rerun = "--state=" + args.state if args.state is not None else "--scan"
+        print("%s: the switch-over did not finish for %s; fix the cause and rerun: %s switch-over %s"
+              % (net.tool_name, ", ".join("the system service" if user is None else shown(user)
+                                          for user in sorted(failed, key=lambda u: (u is None, u or ""))),
+                 net.tool_name, rerun), file=sys.stderr)
+        return 1
+    return 0
+
+
 def build_parser(default_network):
     parser = argparse.ArgumentParser(prog=NETWORKS[default_network].tool_name)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -2010,11 +2463,17 @@ def build_parser(default_network):
         p.add_argument("--terminate-sessions", action="store_true",
                        help="end the user's sessions (loginctl terminate-user) instead of refusing")
         add_network(p)
+    p = sub.add_parser("switch-over", help="move the services of the units this release replaces to the new units")
+    source = p.add_mutually_exclusive_group(required=True)
+    source.add_argument("--state", help="the state file the package's preinst wrote; removed once done")
+    source.add_argument("--scan", action="store_true",
+                        help="find them under /etc/systemd/system instead (after cmake --install)")
+    add_network(p)
     return parser
 
 
 def main(argv, host=None, paths=None):
-    if any(v.startswith("@") for v in CONFIG.values()):
+    if any(v.startswith("@") for v in CONFIG.values()) or CONFIG["autounlock_units"] not in ("yes", "no"):
         print("gridcoin-service: not configured (build-time values missing)", file=sys.stderr)
         return EXIT_USAGE
     host = host if host is not None else Host()
@@ -2031,7 +2490,7 @@ def main(argv, host=None, paths=None):
         return 1
     net = NETWORKS[args.network]
     handlers = {"enable-user": cmd_enable_user, "disable-user": cmd_disable_user, "autounlock": cmd_autounlock,
-                "enable": cmd_enable, "disable": cmd_disable}
+                "enable": cmd_enable, "disable": cmd_disable, "switch-over": cmd_switch_over}
     try:
         return handlers[args.command](args, net, host, paths)
     except (UserError, StepError, TreeError, CopyError, OSError) as e:
