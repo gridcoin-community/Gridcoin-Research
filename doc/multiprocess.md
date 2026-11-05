@@ -88,6 +88,32 @@ platform-independent even though the procedure there is written for Windows:
 Stop the monolithic wallet before starting the daemon on the same data directory —
 they do not share it, and the second one to start gets a lock error.
 
+#### The Flatpak
+
+The Flatpak (`us.gridcoin.GridcoinResearch`) ships `gridcoinresearchd` alongside the
+GUI. Inside the Flatpak's sandbox it has two uses:
+
+* **The RPC command-line client**, for a core that also runs in the Flatpak:
+
+  ```bash
+  flatpak run --command=gridcoinresearchd us.gridcoin.GridcoinResearch getblockcount
+  ```
+
+* **The core of a multiprocess setup started by hand.** Start the daemon in a
+  terminal and leave it running, in the foreground rather than with `-daemon`. Then
+  start the GUI with `-multiprocess` from another terminal:
+
+  ```bash
+  flatpak run --command=gridcoinresearchd us.gridcoin.GridcoinResearch -multiprocess
+  flatpak run us.gridcoin.GridcoinResearch -multiprocess
+  ```
+
+  Both use the Flatpak's own data directory, so neither needs `-datadir`.
+
+The sandbox reaches neither a core run outside it nor the system service in `/run`.
+The Flatpak therefore installs no systemd units and no gridcoin-service, and its
+launcher offers no "Connect to ..." actions.
+
 ### Windows
 
 The Windows daemon has no Unix-style `-daemon` background mode, and — importantly —
