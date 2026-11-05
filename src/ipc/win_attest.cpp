@@ -88,10 +88,16 @@ Classification ClassifyTokenFacts(const TokenFacts& facts, const Sid& self, bool
                                               "does not identify it",
                                               user)};
     }
+    // An ordinary desktop process runs at Medium integrity, and only Medium is
+    // accepted.
+    if (facts.integrity_rid < INTEGRITY_MEDIUM_RID) {
+        return {PeerClass::Refused, strprintf("the peer %s runs at low integrity (sandboxed), integrity level 0x%x",
+                                              user, facts.integrity_rid)};
+    }
     if (facts.integrity_rid > INTEGRITY_MEDIUM_RID) {
         return {PeerClass::Refused,
-                strprintf("the peer %s runs elevated (integrity level 0x%x, above Medium); the wallet must not run as "
-                          "administrator in multiprocess mode",
+                strprintf("the peer %s runs above Medium integrity (elevated or uiAccess), integrity level 0x%x; "
+                          "the wallet must not run as administrator in multiprocess mode",
                           user, facts.integrity_rid)};
     }
 

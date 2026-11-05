@@ -36,9 +36,20 @@
 //! The classifier, the access list and the name checks are pure, so they build and
 //! are tested on every platform. The pipe itself needs Windows.
 //!
-//! Binding to the IPC connection. This proves who wrote the nonce into the pipe and,
-//! to the client, that the pipe is the expected server's. It does not by itself tie
-//! the pipe to one IPC connection; the handshake that uses it does that:
+//! Binding to the IPC connection. The check proves who wrote the nonce into the pipe
+//! and, to the client, that the pipe belongs to the expected server account. It does
+//! not prove that the client's IPC connection is the one the challenge came over.
+//! That rests on who can reach the real server at all: a challenge from the real
+//! server reaches a client over any other connection only through a process that is
+//! itself connected to the real server. In the same-account mode the socket is
+//! owner-only, so no other account can connect to it. Wherever other accounts can
+//! write the socket, the directory rule in win_endpoint.h keeps it from being
+//! replaced between the client's check and its connect, so the client's connection
+//! is to the real server. The pipe's name is not secret (pipe names can be listed),
+//! and nothing here relies on it being unknown: the access list decides who may open
+//! the pipe, and a name already taken makes Begin fail.
+//!
+//! The handshake that uses the check keeps it to its own connection:
 //! - the server makes one AttestServer for each IPC connection, owned by that
 //!   connection's serving object, and sends its Begin's suffix and nonce over that
 //!   connection alone;
@@ -94,7 +105,7 @@ constexpr uint32_t ATTEST_PEER = FILE_READ_DATA | FILE_WRITE_DATA | FILE_READ_AT
 constexpr uint32_t ATTEST_PEER_MASK = detail::ATTEST_PEER;
 
 //! SECURITY_MANDATORY_MEDIUM_RID, the integrity level of an ordinary desktop
-//! process. A token above it is elevated (checked against the SDK in
+//! process, and the only one ClassifyTokenFacts accepts (checked against the SDK in
 //! win_attest.cpp).
 constexpr uint32_t INTEGRITY_MEDIUM_RID = 0x2000;
 
@@ -135,9 +146,11 @@ struct Classification
 //! The class of the peer whose token gave \p facts, to a server running as \p self.
 //! Refused when its user is not a well-formed SID or is ANONYMOUS LOGON (S-1-5-7),
 //! when it is an AppContainer, when its impersonation level is below
-//! Identification, or when its integrity level is above Medium, with a reason that
-//! says it is elevated. Otherwise Owner when its user is \p self, AttachGroup when
-//! \p attach_group_configured and it is a member, and Refused for anyone else.
+//! Identification, or when its integrity level is not Medium: below it with a
+//! reason that says low integrity (sandboxed), above it with one that says above
+//! Medium integrity (elevated or uiAccess). Otherwise Owner when its user is
+//! \p self, AttachGroup when \p attach_group_configured and it is a member, and
+//! Refused for anyone else.
 Classification ClassifyTokenFacts(const TokenFacts& facts, const Sid& self, bool attach_group_configured);
 
 //! Whether \p s is exactly 2 * ATTEST_SUFFIX_BYTES (32) lower-case hex digits.

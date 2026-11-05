@@ -15,6 +15,7 @@
 #ifdef WIN32
 #include "test/wine.h"
 #include "tinyformat.h"
+#include "util/strencodings.h"
 
 #include <thread>
 #include <utility>
@@ -154,22 +155,52 @@ BOOST_AUTO_TEST_CASE(classify_attach_group_member)
 // says so (High 0x3000, System 0x4000).
 BOOST_AUTO_TEST_CASE(classify_high_integrity_reason_names_elevation)
 {
+    const std::string above = "above Medium integrity (elevated or uiAccess)";
     TokenFacts facts = Facts(Self());
     facts.integrity_rid = 0x3000;
     CheckRefused(ClassifyTokenFacts(facts, Self(), false), "elevated");
+    CheckRefused(ClassifyTokenFacts(facts, Self(), false), above);
 
     facts.integrity_rid = 0x4000;
-    CheckRefused(ClassifyTokenFacts(facts, Self(), false), "elevated");
+    CheckRefused(ClassifyTokenFacts(facts, Self(), false), above);
 
-    // Medium plus is above Medium too.
-    facts.integrity_rid = 0x2100;
-    CheckRefused(ClassifyTokenFacts(facts, Self(), false), "elevated");
+    // Medium plus, and any level just above Medium, is above Medium too.
+    for (const uint32_t rid : {0x2100U, 0x2010U, 0x2001U}) {
+        facts.integrity_rid = rid;
+        CheckRefused(ClassifyTokenFacts(facts, Self(), false), above);
+    }
 
     // An elevated member of the attach group is refused as well.
     TokenFacts member = Facts(OtherUser());
     member.member_of_attach_group = true;
     member.integrity_rid = 0x3000;
-    CheckRefused(ClassifyTokenFacts(member, Self(), true), "elevated");
+    CheckRefused(ClassifyTokenFacts(member, Self(), true), above);
+}
+
+// Below Medium is a sandboxed process (Low 0x1000, Untrusted 0), refused even for the
+// server's own account or a member of the attach group. So are facts whose integrity
+// level was never filled in.
+BOOST_AUTO_TEST_CASE(classify_low_integrity_refused)
+{
+    const std::string low = "low integrity (sandboxed)";
+    for (const uint32_t rid : {0x1000U, 0x0U, 0x1FFFU}) {
+        TokenFacts facts = Facts(Self());
+        facts.integrity_rid = rid;
+        CheckRefused(ClassifyTokenFacts(facts, Self(), false), low);
+
+        TokenFacts member = Facts(OtherUser());
+        member.member_of_attach_group = true;
+        member.integrity_rid = rid;
+        CheckRefused(ClassifyTokenFacts(member, Self(), true), low);
+    }
+
+    TokenFacts unset;
+    unset.user = Self();
+    unset.impersonation_level = 1;
+    CheckRefused(ClassifyTokenFacts(unset, Self(), false), low);
+
+    // Exactly Medium is the one level accepted.
+    BOOST_CHECK(ClassifyTokenFacts(Facts(Self()), Self(), false).cls == PeerClass::Owner);
 }
 
 BOOST_AUTO_TEST_CASE(classify_anonymous_level_refused)
@@ -308,6 +339,32 @@ std::string OtherNonce(std::string nonce_hex)
     return nonce_hex;
 }
 
+//! The error opening \p suffix's pipe as a client gives, or ERROR_SUCCESS when it
+//! opens (it is closed again at once).
+DWORD OpenPipeError(const std::string& suffix)
+{
+    const std::optional<std::wstring> path = AttestPipePath(suffix);
+    BOOST_REQUIRE(path.has_value());
+    const HANDLE handle = ::CreateFileW(path->c_str(), FILE_READ_DATA | FILE_WRITE_DATA | SYNCHRONIZE, 0, nullptr,
+                                        OPEN_EXISTING, SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) return ::GetLastError();
+
+    ::CloseHandle(handle);
+    return ERROR_SUCCESS;
+}
+
+//! Begin \p server, open its pipe as \p self's client and write the nonce.
+std::optional<AttestClientPipe> OpenAndWrite(AttestServer& server, const Sid& self)
+{
+    const std::optional<std::pair<std::string, std::string>> challenge = server.Begin();
+    BOOST_REQUIRE(challenge.has_value());
+    std::string error;
+    std::optional<AttestClientPipe> client = AttestClientPipe::Open(challenge->first, self, error);
+    BOOST_REQUIRE_MESSAGE(client.has_value(), error);
+    BOOST_REQUIRE_MESSAGE(client->WriteNonce(challenge->second, error), error);
+    return client;
+}
+
 } // namespace
 
 // The core and the GUI in one process: the GUI opens the pipe and writes the nonce,
@@ -342,34 +399,110 @@ BOOST_AUTO_TEST_CASE(attest_same_process_roundtrip)
     BOOST_TEST_MESSAGE(strprintf("attested %s: integrity 0x%x, impersonation level %u", FormatSid(facts->user),
                                  facts->integrity_rid, facts->impersonation_level));
 
-    // This account is the owner, unless the test runs elevated.
+    // This account is the owner, unless the test runs elevated (or sandboxed).
     const Classification c = ClassifyTokenFacts(*facts, self, false);
-    BOOST_CHECK(c.cls == (facts->integrity_rid > INTEGRITY_MEDIUM_RID ? PeerClass::Refused : PeerClass::Owner));
+    BOOST_CHECK(c.cls == (facts->integrity_rid == INTEGRITY_MEDIUM_RID ? PeerClass::Owner : PeerClass::Refused));
 
     // Finish is single use as well.
     BOOST_CHECK(!server.Finish());
+
+    // The thread no longer impersonates the client: it has no token of its own.
+    HANDLE thread_token = nullptr;
+    const BOOL opened = ::OpenThreadToken(::GetCurrentThread(), TOKEN_QUERY, TRUE, &thread_token);
+    const DWORD open_error = ::GetLastError();
+    if (opened) ::CloseHandle(thread_token);
+    BOOST_CHECK(!opened);
+    BOOST_CHECK_EQUAL(open_error, static_cast<DWORD>(ERROR_NO_TOKEN));
 }
 
 // With an attach group configured, the client's membership is read from its token.
-// BUILTIN\Users stands in for the group: every interactive account is a member.
+// BUILTIN\Users stands in for a group the client is in: every interactive account is
+// a member. A group of a domain that does not exist stands in for one it is not in.
 BOOST_AUTO_TEST_CASE(attest_reads_attach_group_membership)
 {
     if (SkipUnderWine()) return;
     const Sid self = CurrentTokenUser();
 
-    AttestServer server(self, wellknown::Users());
-    const std::optional<std::pair<std::string, std::string>> challenge = server.Begin();
-    BOOST_REQUIRE(challenge.has_value());
+    {
+        AttestServer server(self, wellknown::Users());
+        const std::optional<AttestClientPipe> client = OpenAndWrite(server, self);
+        const std::optional<TokenFacts> facts = server.Finish();
+        BOOST_REQUIRE(facts.has_value());
+        BOOST_CHECK(facts->user == self);
+        BOOST_CHECK(facts->member_of_attach_group);
+    }
 
-    std::string error;
-    std::optional<AttestClientPipe> client = AttestClientPipe::Open(challenge->first, self, error);
-    BOOST_REQUIRE_MESSAGE(client.has_value(), error);
-    BOOST_REQUIRE_MESSAGE(client->WriteNonce(challenge->second, error), error);
+    {
+        AttestServer server(self, SidOf("S-1-5-21-1-2-3-1000"));
+        const std::optional<AttestClientPipe> client = OpenAndWrite(server, self);
+        const std::optional<TokenFacts> facts = server.Finish();
+        BOOST_REQUIRE(facts.has_value());
+        BOOST_CHECK(facts->user == self);
+        BOOST_CHECK(!facts->member_of_attach_group);
+    }
+}
 
-    const std::optional<TokenFacts> facts = server.Finish();
-    BOOST_REQUIRE(facts.has_value());
-    BOOST_CHECK(facts->user == self);
-    BOOST_CHECK(facts->member_of_attach_group);
+// Exactly the nonce's bytes: a client that writes one more is refused. So is one that
+// wrote the nonce and closed the pipe before the server finished.
+BOOST_AUTO_TEST_CASE(attest_refuses_extra_bytes_and_a_closed_client)
+{
+    if (SkipUnderWine()) return;
+    const Sid self = CurrentTokenUser();
+
+    {
+        AttestServer server(self, std::nullopt);
+        const std::optional<std::pair<std::string, std::string>> challenge = server.Begin();
+        BOOST_REQUIRE(challenge.has_value());
+        const std::optional<std::wstring> path = AttestPipePath(challenge->first);
+        BOOST_REQUIRE(path.has_value());
+
+        const HANDLE handle = ::CreateFileW(path->c_str(), FILE_READ_DATA | FILE_WRITE_DATA | SYNCHRONIZE, 0, nullptr,
+                                            OPEN_EXISTING, SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, nullptr);
+        BOOST_REQUIRE_MESSAGE(handle != INVALID_HANDLE_VALUE, "open failed: " << ::GetLastError());
+        std::vector<unsigned char> bytes = ParseHex(challenge->second);
+        bytes.push_back(0x00);
+        BOOST_REQUIRE_EQUAL(bytes.size(), ATTEST_NONCE_BYTES + 1);
+        DWORD written = 0;
+        const BOOL wrote = ::WriteFile(handle, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr);
+
+        BOOST_CHECK(!server.Finish());
+        ::CloseHandle(handle);
+        BOOST_CHECK(wrote);
+        BOOST_CHECK_EQUAL(written, static_cast<DWORD>(bytes.size()));
+    }
+
+    {
+        AttestServer server(self, std::nullopt);
+        std::optional<AttestClientPipe> client = OpenAndWrite(server, self);
+        client.reset();
+        BOOST_CHECK(!server.Finish());
+    }
+}
+
+// Once Finish has returned, and once a server is destroyed without one, the pipe's
+// name is gone.
+BOOST_AUTO_TEST_CASE(attest_pipe_name_is_gone_after_finish_and_destruction)
+{
+    if (SkipUnderWine()) return;
+    const Sid self = CurrentTokenUser();
+
+    std::string suffix;
+    {
+        AttestServer server(self, std::nullopt);
+        const std::optional<std::pair<std::string, std::string>> challenge = server.Begin();
+        BOOST_REQUIRE(challenge.has_value());
+        suffix = challenge->first;
+        BOOST_CHECK(!server.Finish());
+        BOOST_CHECK_EQUAL(OpenPipeError(suffix), static_cast<DWORD>(ERROR_FILE_NOT_FOUND));
+    }
+
+    {
+        AttestServer server(self, std::nullopt);
+        const std::optional<std::pair<std::string, std::string>> challenge = server.Begin();
+        BOOST_REQUIRE(challenge.has_value());
+        suffix = challenge->first;
+    }
+    BOOST_CHECK_EQUAL(OpenPipeError(suffix), static_cast<DWORD>(ERROR_FILE_NOT_FOUND));
 }
 
 // The pipe carries the access list of AttestPipeAclSpec, and no second instance of
