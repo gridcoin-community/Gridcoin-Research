@@ -990,8 +990,9 @@ class CopyTests(ServiceTestBase):
         with self.assertRaisesRegex(svc.TreeError, "owned by uid"):
             svc.quarantine_files(src_fd, self.src, os.getuid() + 1, q_fd)
         self.assertEqual(os.listdir(self.dst), [])
-        found = svc.quarantine_files(src_fd, self.src, os.getuid(), q_fd)
+        found, backups = svc.quarantine_files(src_fd, self.src, os.getuid(), q_fd)
         self.assertEqual(found, {"gridcoinresearch.conf": b"staking=1\n", "DB_CONFIG": b"x"})
+        self.assertEqual(backups, [])
         self.assertEqual(read_tree(self.dst), found)
 
     def test_removal_refuses_an_rmtree_that_follows_symlinks(self):
@@ -1006,6 +1007,18 @@ class CopyTests(ServiceTestBase):
         self.assertEqual(read_tree(self.dst), {"a/": None, "a/b": b"1", "c": b"2"})
         svc.run_as(self.host, self.host.users["bob"], lambda: svc.remove_new_entries(dst_fd, {"c"}), (dst_fd,))
         self.assertEqual(read_tree(self.dst), {"c": b"2"})
+
+    def test_stream_leaves_out_config_backups(self):
+        write_tree(self.src, {"walletbackups/gridcoinresearch.conf-x": b"1", "walletbackups/gridcoinsettings.json-y": b"2",
+                              "walletbackups/wallet-z.dat": b"3", "gridcoinresearch.conf-x": b"4",
+                              "a/walletbackups/gridcoinresearch.conf-x": b"5"})
+        buf = io.BytesIO()
+        svc.stream_tree(self.src, buf, set())
+        buf.seek(0)
+        with tarfile.open(fileobj=buf, mode="r|") as tar:
+            names = sorted(m.name for m in tar)
+        self.assertEqual(names, ["a", "a/walletbackups", "a/walletbackups/gridcoinresearch.conf-x",
+                                 "gridcoinresearch.conf-x", "walletbackups", "walletbackups/wallet-z.dat"])
 
     def test_extract_accepts_plain_members_and_counts_bytes(self):
         stream = crafted_stream([("a", tarfile.DIRTYPE, b""), ("a/f", tarfile.REGTYPE, b"12345"),
@@ -1224,6 +1237,48 @@ class EnableTests(SwitchTestBase):
         for secret in ("SECRETPW", "SECRETJSON", "evil"):
             self.assertNotIn(secret, text)
         self.assertIn(q, text)
+
+    def test_config_backups_are_quarantined_not_copied(self):
+        # The core keeps dated copies of both files in walletbackups/ (GetBackupFilename).
+        conf_backup = "walletbackups/gridcoinresearch.conf-2026-11-01T00-00-00"
+        settings_backup = "walletbackups/gridcoinsettings.json-2026-11-01T00-00-00-manual"
+        files = self.user_files()
+        files[conf_backup] = b"blocknotify=/bin/evil\n"
+        files[settings_backup] = b'{"blocknotify": "evil"}'
+        write_tree(self.datadir, files)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        t = read_tree(self.target())
+        self.assertNotIn(conf_backup, t)
+        self.assertNotIn(settings_backup, t)
+        self.assertEqual(t["walletbackups/wallet-1.dat"], b"backup")
+        [q] = self.quarantine_dirs()
+        quarantined = read_tree(q)
+        self.assertEqual(quarantined[conf_backup], b"blocknotify=/bin/evil\n")
+        self.assertEqual(quarantined[settings_backup], b'{"blocknotify": "evil"}')
+        self.assertNotIn("evil", out + err)
+
+        # And on the way back.
+        write_tree(self.target(), {"walletbackups/gridcoinresearch.conf-2026-11-02T00-00-00": b"walletnotify=x\n",
+                                   "walletbackups/gridcoinsettings.json-2026-11-02T00-00-00": b"{}"})
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 0, err)
+        s = read_tree(self.datadir)
+        self.assertEqual([k for k in s if "-2026-11-02" in k], [])
+        self.assertEqual(s["walletbackups/wallet-1.dat"], b"backup")
+        back = read_tree(self.quarantine_dirs()[-1])
+        self.assertEqual(back["walletbackups/gridcoinresearch.conf-2026-11-02T00-00-00"], b"walletnotify=x\n")
+        self.assertEqual(back["walletbackups/gridcoinsettings.json-2026-11-02T00-00-00"], b"{}")
+
+    def test_a_config_backup_that_is_not_a_plain_file_refuses(self):
+        write_tree(self.datadir, self.user_files())
+        os.symlink(os.path.join(self.tmp.name, "login.defs"),
+                   os.path.join(self.datadir, "walletbackups", "gridcoinresearch.conf-2026-11-01T00-00-00"))
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("gridcoinresearch.conf-2026-11-01T00-00-00", err)
+        self.assertNotIn(("add_to_group", "bob", "gridcoin-gui"), self.host.calls)
+        self.assertEqual(os.listdir(self.target()), [])
 
     def test_enable_stashes_the_source_root_only(self):
         write_tree(self.datadir, self.user_files())
