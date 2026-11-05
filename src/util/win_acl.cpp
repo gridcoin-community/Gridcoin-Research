@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstring>
 #include <initializer_list>
+#include <memory>
 #include <system_error>
 
 #ifdef WIN32
@@ -451,6 +452,28 @@ namespace {
     throw std::system_error(static_cast<int>(error), std::system_category(), what);
 }
 
+//! Frees memory from LocalAlloc, or from an API that allocates with it, on every exit.
+struct LocalFreeDeleter
+{
+    void operator()(void* p) const
+    {
+        if (p != nullptr) ::LocalFree(p);
+    }
+};
+
+using LocalPtr = std::unique_ptr<void, LocalFreeDeleter>;
+
+//! Closes a handle on every exit.
+struct HandleCloser
+{
+    void operator()(HANDLE handle) const
+    {
+        if (handle != nullptr) ::CloseHandle(handle);
+    }
+};
+
+using HandleGuard = std::unique_ptr<void, HandleCloser>;
+
 //! Throw unless \p sid is well formed. Windows reads a SID by the length its count
 //! gives, so a malformed one would be read past its end.
 void RequireWellFormed(const Sid& sid, const char* what)
@@ -466,15 +489,14 @@ std::optional<Sid> SidOf(PSID psid)
     return SidIn(static_cast<const unsigned char*>(psid), ::GetLengthSid(psid), 0);
 }
 
-//! What GetNamedSecurityInfoW or GetSecurityInfo returned, as an ObservedAcl. Frees \p sd.
+//! What GetNamedSecurityInfoW or GetSecurityInfo returned, as an ObservedAcl. The
+//! caller keeps \p sd, which \p owner and \p dacl point into.
 ObservedAcl ToObservedAcl(PSECURITY_DESCRIPTOR sd, PSID owner, PACL dacl)
 {
     SECURITY_DESCRIPTOR_CONTROL control{};
     DWORD revision = 0;
     if (!::GetSecurityDescriptorControl(sd, &control, &revision)) {
-        const DWORD error = ::GetLastError();
-        ::LocalFree(sd);
-        ThrowWin32(error, "GetSecurityDescriptorControl");
+        ThrowWin32(::GetLastError(), "GetSecurityDescriptorControl");
     }
 
     ObservedAcl acl;
@@ -489,11 +511,7 @@ ObservedAcl ToObservedAcl(PSECURITY_DESCRIPTOR sd, PSID owner, PACL dacl)
 
         for (DWORD i = 0; i < dacl->AceCount; ++i) {
             void* entry = nullptr;
-            if (!::GetAce(dacl, i, &entry)) {
-                const DWORD error = ::GetLastError();
-                ::LocalFree(sd);
-                ThrowWin32(error, "GetAce");
-            }
+            if (!::GetAce(dacl, i, &entry)) ThrowWin32(::GetLastError(), "GetAce");
 
             // An entry lies inside its ACL, and what is left of the ACL is what may be read.
             const auto* const bytes = static_cast<const unsigned char*>(entry);
@@ -501,15 +519,10 @@ ObservedAcl ToObservedAcl(PSECURITY_DESCRIPTOR sd, PSID owner, PACL dacl)
             if (bytes >= acl_begin + sizeof(ACL) && bytes < acl_end) {
                 ace = ParseAce(bytes, static_cast<size_t>(acl_end - bytes));
             }
-            if (!ace) {
-                ::LocalFree(sd);
-                ThrowWin32(ERROR_INVALID_ACL, "ParseAce");
-            }
+            if (!ace) ThrowWin32(ERROR_INVALID_ACL, "ParseAce");
             acl.aces.push_back(std::move(*ace));
         }
     }
-
-    ::LocalFree(sd);
 
     return acl;
 }
@@ -519,15 +532,12 @@ std::optional<Sid> ReadOwner(std::wstring& wpath)
 {
     PSID owner = nullptr;
     PSECURITY_DESCRIPTOR sd = nullptr;
-    if (::GetNamedSecurityInfoW(wpath.data(), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION, &owner, nullptr, nullptr,
-                                nullptr, &sd) != ERROR_SUCCESS) {
-        return std::nullopt;
-    }
+    const DWORD rc = ::GetNamedSecurityInfoW(wpath.data(), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION, &owner, nullptr,
+                                             nullptr, nullptr, &sd);
+    const LocalPtr sd_guard(sd);
+    if (rc != ERROR_SUCCESS) return std::nullopt;
 
-    std::optional<Sid> sid = SidOf(owner);
-    ::LocalFree(sd);
-
-    return sid;
+    return SidOf(owner);
 }
 
 //! Query \p what of this process's token into \p buffer.
@@ -537,6 +547,7 @@ void QueryProcessToken(TOKEN_INFORMATION_CLASS what, std::vector<unsigned char>&
     if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token)) {
         ThrowWin32(::GetLastError(), "OpenProcessToken");
     }
+    const HandleGuard token_guard(token);
 
     // The first call sizes the buffer; it fails with ERROR_INSUFFICIENT_BUFFER by design.
     DWORD length = 0;
@@ -544,12 +555,8 @@ void QueryProcessToken(TOKEN_INFORMATION_CLASS what, std::vector<unsigned char>&
     buffer.assign(length ? length : 1, 0);
 
     if (!::GetTokenInformation(token, what, buffer.data(), length, &length)) {
-        const DWORD error = ::GetLastError();
-        ::CloseHandle(token);
-        ThrowWin32(error, std::string("GetTokenInformation(") + name + ")");
+        ThrowWin32(::GetLastError(), std::string("GetTokenInformation(") + name + ")");
     }
-
-    ::CloseHandle(token);
 }
 
 } // namespace
@@ -591,6 +598,7 @@ ObservedAcl ReadAcl(const fs::path& path)
     const DWORD rc = ::GetNamedSecurityInfoW(wpath.data(), SE_FILE_OBJECT,
                                              OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
                                              &owner, nullptr, &dacl, nullptr, &sd);
+    const LocalPtr sd_guard(sd);
     if (rc != ERROR_SUCCESS) ThrowWin32(rc, "GetNamedSecurityInfo " + path.string());
 
     return ToObservedAcl(sd, owner, dacl);
@@ -605,6 +613,7 @@ ObservedAcl ReadAcl(void* handle, bool kernel_object)
     const DWORD rc = ::GetSecurityInfo(static_cast<HANDLE>(handle), kernel_object ? SE_KERNEL_OBJECT : SE_FILE_OBJECT,
                                        OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
                                        &owner, nullptr, &dacl, nullptr, &sd);
+    const LocalPtr sd_guard(sd);
     if (rc != ERROR_SUCCESS) ThrowWin32(rc, "GetSecurityInfo");
 
     return ToObservedAcl(sd, owner, dacl);
@@ -620,7 +629,7 @@ AclNotKeptError::AclNotKeptError(const fs::path& path, std::string reason)
 void ApplyAcl(const fs::path& path, const AclSpec& spec)
 {
     RequireWellFormed(spec.owner, "the owner");
-    PACL dacl = static_cast<PACL>(BuildDacl(spec.aces));
+    const LocalPtr dacl(BuildDacl(spec.aces));
 
     // SetNamedSecurityInfoW takes a mutable LPWSTR and PSID, hence the local copies.
     std::wstring wpath = path.wstring();
@@ -634,8 +643,7 @@ void ApplyAcl(const fs::path& path, const AclSpec& spec)
 
     const DWORD rc = ::SetNamedSecurityInfoW(wpath.data(), SE_FILE_OBJECT, info,
                                              (info & OWNER_SECURITY_INFORMATION) ? owner.data() : nullptr,
-                                             nullptr, dacl, nullptr);
-    ::LocalFree(dacl);
+                                             nullptr, static_cast<PACL>(dacl.get()), nullptr);
     if (rc != ERROR_SUCCESS) ThrowWin32(rc, "SetNamedSecurityInfo " + path.string());
 
     // Setting an ACL can succeed nominally on a volume that does not store one (FAT and
@@ -657,14 +665,11 @@ void* BuildDacl(const std::vector<AceSpec>& aces)
     // An ACL's size is a 16-bit field, and stays DWORD-aligned.
     if (size > 0xFFFC) throw std::runtime_error("BuildDacl: too many entries for one ACL");
 
-    PACL dacl = static_cast<PACL>(::LocalAlloc(LPTR, size));
-    if (dacl == nullptr) ThrowWin32(::GetLastError(), "LocalAlloc");
+    LocalPtr memory(::LocalAlloc(LPTR, size));
+    if (!memory) ThrowWin32(::GetLastError(), "LocalAlloc");
+    const PACL dacl = static_cast<PACL>(memory.get());
 
-    if (!::InitializeAcl(dacl, static_cast<DWORD>(size), ACL_REVISION)) {
-        const DWORD error = ::GetLastError();
-        ::LocalFree(dacl);
-        ThrowWin32(error, "InitializeAcl");
-    }
+    if (!::InitializeAcl(dacl, static_cast<DWORD>(size), ACL_REVISION)) ThrowWin32(::GetLastError(), "InitializeAcl");
 
     for (const AceSpec& ace : aces) {
         const DWORD flags =
@@ -672,32 +677,30 @@ void* BuildDacl(const std::vector<AceSpec>& aces)
         // AddAccessAllowedAceEx takes a non-const PSID and only reads it.
         if (!::AddAccessAllowedAceEx(dacl, ACL_REVISION, flags, ace.mask,
                                      const_cast<unsigned char*>(ace.trustee.data()))) {
-            const DWORD error = ::GetLastError();
-            ::LocalFree(dacl);
-            ThrowWin32(error, "AddAccessAllowedAceEx");
+            ThrowWin32(::GetLastError(), "AddAccessAllowedAceEx");
         }
     }
 
-    return dacl;
+    return memory.release();
 }
 
 void* MakeSecurityDescriptor(const AclSpec& spec)
 {
     RequireWellFormed(spec.owner, "the owner");
-    PACL dacl = static_cast<PACL>(BuildDacl(spec.aces));
+    const LocalPtr dacl(BuildDacl(spec.aces));
     Sid owner = spec.owner;
 
     // The absolute descriptor points at the owner and DACL above. The self-relative copy
     // made from it holds its own, and outlives them.
     SECURITY_DESCRIPTOR absolute{};
-    void* relative = nullptr;
+    LocalPtr relative;
     const char* failed = nullptr;
 
     if (!::InitializeSecurityDescriptor(&absolute, SECURITY_DESCRIPTOR_REVISION)) {
         failed = "InitializeSecurityDescriptor";
     } else if (!::SetSecurityDescriptorOwner(&absolute, owner.data(), FALSE)) {
         failed = "SetSecurityDescriptorOwner";
-    } else if (!::SetSecurityDescriptorDacl(&absolute, TRUE, dacl, FALSE)) {
+    } else if (!::SetSecurityDescriptorDacl(&absolute, TRUE, static_cast<PACL>(dacl.get()), FALSE)) {
         failed = "SetSecurityDescriptorDacl";
     } else if (!::SetSecurityDescriptorControl(&absolute, SE_DACL_PROTECTED, SE_DACL_PROTECTED)) {
         failed = "SetSecurityDescriptorControl";
@@ -705,20 +708,14 @@ void* MakeSecurityDescriptor(const AclSpec& spec)
         // The first call sizes the buffer; it fails with ERROR_INSUFFICIENT_BUFFER by design.
         DWORD length = 0;
         ::MakeSelfRelativeSD(&absolute, nullptr, &length);
-        relative = length ? ::LocalAlloc(LPTR, length) : nullptr;
-        if (relative == nullptr || !::MakeSelfRelativeSD(&absolute, relative, &length)) {
+        relative.reset(length ? ::LocalAlloc(LPTR, length) : nullptr);
+        if (!relative || !::MakeSelfRelativeSD(&absolute, relative.get(), &length)) {
             failed = "MakeSelfRelativeSD";
         }
     }
-    const DWORD error = failed != nullptr ? ::GetLastError() : ERROR_SUCCESS;
+    if (failed != nullptr) ThrowWin32(::GetLastError(), failed);
 
-    ::LocalFree(dacl);
-    if (failed != nullptr) {
-        if (relative != nullptr) ::LocalFree(relative);
-        ThrowWin32(error, failed);
-    }
-
-    return relative;
+    return relative.release();
 }
 
 void FreeSecurityDescriptor(void* sd)
