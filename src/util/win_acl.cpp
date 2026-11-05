@@ -743,6 +743,25 @@ bool CreateDirectoryWithAcl(const fs::path& dir, const AclSpec& spec)
         if (!::CreateDirectoryW(wdir.c_str(), &sa)) {
             const DWORD error = ::GetLastError();
             if (error == ERROR_ALREADY_EXISTS) return false;
+
+            // Some refusals come before the name is found to exist: a parent that
+            // does not grant FILE_ADD_SUBDIRECTORY answers ERROR_ACCESS_DENIED even
+            // for a directory that is there. A directory at the path, opened as itself
+            // (no reparse point followed), is that existing one, and the caller
+            // checks it as such.
+            const HANDLE existing = ::CreateFileW(wdir.c_str(), FILE_READ_ATTRIBUTES,
+                                                  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                                  OPEN_EXISTING,
+                                                  FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+            if (existing != INVALID_HANDLE_VALUE) {
+                const HandleGuard guard(existing);
+                BY_HANDLE_FILE_INFORMATION info{};
+                if (::GetFileInformationByHandle(existing, &info) &&
+                    (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+                    return false;
+                }
+            }
+
             ThrowWin32(error, "CreateDirectory " + dir.string());
         }
     }

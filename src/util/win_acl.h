@@ -248,9 +248,12 @@ void* MakeSecurityDescriptor(const AclSpec& spec);
 //! start (CreateDirectoryW with MakeSecurityDescriptor(spec)), so it is never there
 //! with another list, then read the list back through a handle on the directory
 //! itself (no reparse point followed) and compare it with CheckMatchesSpec. Returns
-//! false, changing nothing, when \p dir already exists. Throws std::system_error when
-//! a call fails, and AclNotKeptError when what is read back does not match; on
-//! either, after the directory was made, it is removed again.
+//! false, changing nothing, when \p dir already exists: when CreateDirectoryW says
+//! so, or when it fails otherwise (such as ERROR_ACCESS_DENIED from a parent that
+//! does not grant FILE_ADD_SUBDIRECTORY) and \p dir, opened as itself, is a
+//! directory. Throws std::system_error when a call fails, and AclNotKeptError when
+//! what is read back does not match; on either, after the directory was made, it is
+//! removed again.
 bool CreateDirectoryWithAcl(const fs::path& dir, const AclSpec& spec);
 
 //! Free a descriptor from MakeSecurityDescriptor. A null \p sd is ignored.
