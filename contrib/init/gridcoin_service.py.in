@@ -105,6 +105,10 @@ class CopyError(Exception):
     pass
 
 
+class DirtyCopyError(CopyError):
+    """A failed copy whose target still holds entries this run created."""
+
+
 @dataclasses.dataclass(frozen=True)
 class Network:
     daemon: str
@@ -973,6 +977,8 @@ def finish_child(pid, report_fd):
 def child_error(report):
     if report["error"] == "TreeError":
         return TreeError(report["message"])
+    if report["error"] == "DirtyCopyError":
+        return DirtyCopyError(report["message"])
     return CopyError("%s: %s" % (report["error"], report["message"]))
 
 
@@ -1041,6 +1047,16 @@ def stream_to_fd(src_fd, data_fd, exclude_top):
         stream_tree(src_fd, out, exclude_top)
 
 
+def remove_created(dst_fd, created, failure):
+    """Remove what a failed writer created. If that fails too, raise DirtyCopyError naming what may
+    be left, so that nobody is told nothing was copied."""
+    try:
+        remove_entries(dst_fd, created)
+    except BaseException as e:
+        raise DirtyCopyError("%s; removing what this run had created failed (%s), so some of these may be left: %s"
+                             % (failure, e, ", ".join(shown(name) for name in created))) from None
+
+
 def extract_committed(data_fd, dst_fd, commit_fd, record_fd):
     """The writer child: extract, then keep the result only once the parent confirms the reader
     finished cleanly. Otherwise remove what this run created, and nothing else."""
@@ -1049,12 +1065,13 @@ def extract_committed(data_fd, dst_fd, commit_fd, record_fd):
         with os.fdopen(data_fd, "rb") as inp:
             written = extract_stream(inp, dst_fd, created)
         committed = os.read(commit_fd, 1) == b"c"
-    except BaseException:
-        remove_entries(dst_fd, created)
+    except BaseException as e:
+        remove_created(dst_fd, created, e)
         raise
     if not committed:
-        remove_entries(dst_fd, created)
-        raise CopyError("the reading side did not finish; nothing was kept")
+        failure = CopyError("the reading side did not finish; nothing was kept")
+        remove_created(dst_fd, created, failure)
+        raise failure
     return written
 
 
@@ -1101,15 +1118,22 @@ def copy_as(src, dst, src_user, dst_user, exclude_top, host):
                 names = recorded_names(record_fd)
                 cleanup = finish_child(*start_child(host, dst_pw, lambda: remove_entries(dst, names), (dst,)))
                 if cleanup["ok"]:
-                    outcome = "the %d entries it had created were removed" % len(names)
+                    error, outcome = "CopyError", "the %d entries it had created were removed" % len(names)
                 else:
-                    outcome = "removing the %d entries it had created failed (%s)" % (len(names), cleanup["message"])
-                writer_report = {"ok": False, "error": "CopyError",
+                    error = "DirtyCopyError"
+                    outcome = ("removing the entries it had created failed (%s), so some of these may be left: %s"
+                               % (cleanup["message"], ", ".join(shown(name) for name in names)))
+                writer_report = {"ok": False, "error": error,
                                  "message": "the writing side ended without a report (%s); %s"
                                             % (writer_report["message"], outcome)}
         finally:
             for fd in pending:
                 os.close(fd)
+    if writer_report.get("error") == "DirtyCopyError":
+        # What is left in the target matters most; a reader's own failure comes first in the line.
+        if not reader_report["ok"] and reader_report["error"] != "BrokenPipeError":
+            raise DirtyCopyError("%s; %s" % (child_error(reader_report), writer_report["message"]))
+        raise child_error(writer_report)
     if not reader_report["ok"]:
         # A reader cut off by a failed writer reports a broken pipe; the writer's error is the cause.
         if reader_report["error"] == "BrokenPipeError" and not writer_report["ok"]:
@@ -1617,7 +1641,14 @@ def enable(args, net, host, paths, progress):
         if set(found) != QUARANTINE_TOP & s_names:
             raise UserError("%s changed while it was read; rerun once nothing else uses it" % s_display)
         settings_text, lines = sanitize_quarantined(found, patterns, q_fd, s_display)
-        copy_tree(s_fd, t_fd, pw.pw_name, net.account, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host, s_display)
+        try:
+            copy_tree(s_fd, t_fd, pw.pw_name, net.account, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host,
+                      s_display)
+        except DirtyCopyError:
+            progress.state = ("%s still holds part of this copy: empty it (find %s -mindepth 1 -delete) before "
+                              "rerunning; the source is untouched, %s is disabled and %s.service stopped"
+                              % (t_display, t_display, unit, net.daemon))
+            raise
         progress.state = ("the wallet is copied to %s, without its settings, and the source is untouched in %s; "
                           "empty %s before rerunning" % (t_display, s_display, t_display))
         if settings_text is not None:
@@ -1753,6 +1784,11 @@ def disable(args, net, host, paths, progress):
             settings_text, lines = sanitize_quarantined(found, patterns, q_fd, t_display)
             copy_tree(t_fd, s_fd, net.account, pw.pw_name, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host,
                       t_display)
+        except DirtyCopyError:
+            progress.state = ("%s still holds part of this copy: remove the entries named above before rerunning; "
+                              "%s still holds the wallet, and %s.service and %s are disabled"
+                              % (s_display, t_display, net.daemon, system_socket))
+            raise
         except BaseException:
             for parent_fd, name in reversed(made):
                 try:

@@ -1025,6 +1025,32 @@ class CopyTests(ServiceTestBase):
                 self.copy()
         self.assertEqual(read_tree(self.dst), {"keep": b"k", "visitor": b"v"})
 
+    def test_a_cleanup_that_fails_too_says_what_is_left(self):
+        def cannot_remove(*args, **kwargs):
+            raise OSError(16, "Device or resource busy")
+
+        # The writer dies, and the cleanup child cannot remove what it made.
+        write_tree(self.src, {"a/x": b"1"})
+        dst = self.dst
+
+        def dies(inp, dst_dir, created=None):
+            write_tree(dst, {"partial/f": b"1"})
+            created.append("partial")
+            os._exit(9)
+
+        with mock.patch.object(svc, "extract_stream", dies), mock.patch.object(svc, "remove_entries", cannot_remove):
+            with self.assertRaisesRegex(svc.DirtyCopyError, "removing.*failed"):
+                self.copy()
+        self.assertIn("partial", os.listdir(self.dst))
+
+        # The writer fails on its own, and its cleanup fails too.
+        svc_rmtree(self.dst)
+        write_tree(self.src, {"wallet.dat": b"w"})
+        write_tree(self.dst, {"wallet.dat": b"theirs"})
+        with mock.patch.object(svc, "remove_entries", cannot_remove):
+            with self.assertRaisesRegex(svc.DirtyCopyError, "removing.*failed.*may be left: a\\Z"):
+                self.copy()
+
     def test_extract_rejects_traversal_names(self):
         work = os.path.join(self.tmp.name, "work")
         # Each case and the check that must refuse it. The names are refused by name before any
@@ -1934,6 +1960,36 @@ class EnableTests(SwitchTestBase):
         self.assertIn("the wallet is in %s and the source in %s" % (self.target(), stash), err)
         self.assertIn("not enabled", err)
         self.assertNotIn(("enable", "--now", "gridcoinresearchd.service"), self.host.calls)
+
+    def test_a_copy_that_cannot_be_cleaned_up_says_so(self):
+        write_tree(self.datadir, self.user_files())
+
+        def dies(inp, dst_dir, created=None):
+            os.mkdir("partial", dir_fd=dst_dir)
+            created.append("partial")
+            os._exit(9)
+
+        def cannot_remove(*args, **kwargs):
+            raise OSError(16, "Device or resource busy")
+
+        with mock.patch.object(svc, "extract_stream", dies), mock.patch.object(svc, "remove_entries", cannot_remove):
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("nothing was copied", err)
+        self.assertIn("%s still holds part of this copy" % self.target(), err)
+        self.assertIn("find %s -mindepth 1 -delete" % self.target(), err)
+        self.assertEqual(os.listdir(self.target()), ["partial"])
+
+        os.rmdir(os.path.join(self.target(), "partial"))
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        with mock.patch.object(svc, "extract_stream", dies), mock.patch.object(svc, "remove_entries", cannot_remove):
+            rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("nothing was copied", err)
+        self.assertIn("%s still holds part of this copy" % self.datadir, err)
+        self.assertIn("partial", err)
+        self.assertTrue(os.path.exists(self.record_path()))
 
     def test_disable_failures_report_what_they_left(self):
         write_tree(self.datadir, self.user_files())
