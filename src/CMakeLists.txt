@@ -402,6 +402,11 @@ endif()
 
 target_link_libraries(gridcoin_util PUBLIC ${LIBGRIDCOIN_CRYPTO})
 
+# The Unix socket client for the stake-only autounlock helper (Linux service units).
+if(UNIX AND NOT APPLE)
+    target_sources(gridcoin_util PRIVATE wallet/autounlock_socket.cpp)
+endif()
+
 # advapi32: util/dir_permissions.cpp applies the owner-only NTFS DACL that protects
 # a freshly created data directory (SetNamedSecurityInfoW / SetEntriesInAclW /
 # GetNamedSecurityInfoW). This lives in gridcoin_util rather than gridcoin_ipc

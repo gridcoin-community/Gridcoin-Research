@@ -87,6 +87,9 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
         "-rpcsslciphers", "-socks", "-debugallowtracer", "-rpcserviceuser", "-rpcskiplistenercheck",
         "-stdinwalletpassphrase", "-stdinelevate", "-ipcdir", "-ipcattachgroup",
         "-ipcserviceuser"};
+#ifdef __linux__
+    refuse.insert("-autounlocksocket");
+#endif
     for (const auto& type : GRC::RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
         refuse.insert("-clear" + GRC::Contract::Type::ToString(type) + "history");
     }

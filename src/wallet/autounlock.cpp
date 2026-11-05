@@ -5,10 +5,21 @@
 #include "wallet/autounlock.h"
 
 #include "logging.h"
+#include "util/system.h"
 #include "wallet/wallet.h"
+
+#ifdef __linux__
+#include "wallet/autounlock_socket.h"
+#endif
 
 std::optional<SecureString> FetchAutoUnlockPassphrase()
 {
+#ifdef __linux__
+    if (gArgs.IsArgSet("-autounlocksocket")) {
+        return autounlock::FetchFromSocket(fs::path(gArgs.GetArg("-autounlocksocket", "")));
+    }
+#endif
+
     return std::nullopt;
 }
 

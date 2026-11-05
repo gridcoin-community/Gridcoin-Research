@@ -941,6 +941,11 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-rescanmrcrequests", "Rescan the block chain for missing mrc request transactions",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+#ifdef __linux__
+    argsman.AddArg("-autounlocksocket=<path>", "Linux service units only: fetch the stake-only autounlock passphrase from "
+                   "this socket after the wallet loads. Command line only.",
+                   ArgsManager::ALLOW_ANY | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::WALLET);
+#endif
     argsman.AddArg("-salvagewallet", "Attempt to recover private keys from a corrupt wallet.dat",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-zapwallettxes", "Delete all wallet transactions and only recover those parts of the blockchain through"
