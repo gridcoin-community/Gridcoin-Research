@@ -81,9 +81,13 @@ class FakeHost:
 
     def add_to_group(self, user, group):
         self.calls.append(("add_to_group", user, group))
+        if "add_to_group" in self.fail:
+            raise svc.StepError("step 'gpasswd -a %s %s' failed with exit status 3" % (user, group))
 
     def remove_from_group(self, user, group):
         self.calls.append(("remove_from_group", user, group))
+        if "remove_from_group" in self.fail:
+            raise svc.StepError("step 'gpasswd -d %s %s' failed with exit status 3" % (user, group))
 
     def sleep(self, seconds):
         self.clock += seconds
@@ -965,6 +969,37 @@ class CopyTests(ServiceTestBase):
             self.copy()
         self.assertEqual(read_tree(self.dst), {"wallet.dat": b"theirs"})
 
+    def test_writer_removes_only_what_it_created(self):
+        # Something else adds an entry to the target during the copy; the failed writer leaves it.
+        write_tree(self.src, {"a/x": b"1", "wallet.dat": b"w"})
+        write_tree(self.dst, {"wallet.dat": b"theirs"})
+        original = svc.extract_stream
+        dst = self.dst
+
+        def with_a_visitor(inp, dst_dir, created=None):
+            write_tree(dst, {"visitor": b"v"})
+            return original(inp, dst_dir, created)
+
+        with mock.patch.object(svc, "extract_stream", with_a_visitor):
+            with self.assertRaises(svc.CopyError):
+                self.copy()
+        self.assertEqual(read_tree(self.dst), {"wallet.dat": b"theirs", "visitor": b"v"})
+
+    def test_a_writer_that_dies_has_its_entries_removed(self):
+        write_tree(self.src, {"a/x": b"1"})
+        write_tree(self.dst, {"keep": b"k"})
+        dst = self.dst
+
+        def dies(inp, dst_dir, created=None):
+            write_tree(dst, {"partial/f": b"1", "visitor": b"v"})
+            created.append("partial")
+            os._exit(9)
+
+        with mock.patch.object(svc, "extract_stream", dies):
+            with self.assertRaisesRegex(svc.CopyError, "without a report.*removed"):
+                self.copy()
+        self.assertEqual(read_tree(self.dst), {"keep": b"k", "visitor": b"v"})
+
     def test_extract_rejects_traversal_names(self):
         work = os.path.join(self.tmp.name, "work")
         # Each case and the check that must refuse it. The names are refused by name before any
@@ -1026,10 +1061,9 @@ class CopyTests(ServiceTestBase):
         # In a child, as in the tool: the removal changes the working directory.
         with mock.patch.object(svc.shutil.rmtree, "avoids_symlink_attacks", False):
             with self.assertRaisesRegex(svc.CopyError, "can follow symlinks"):
-                svc.run_as(self.host, self.host.users["bob"], lambda: svc.remove_new_entries(dst_fd, set()),
-                           (dst_fd,))
+                svc.run_as(self.host, self.host.users["bob"], lambda: svc.empty_dir(dst_fd, set()), (dst_fd,))
         self.assertEqual(read_tree(self.dst), {"a/": None, "a/b": b"1", "c": b"2"})
-        svc.run_as(self.host, self.host.users["bob"], lambda: svc.remove_new_entries(dst_fd, {"c"}), (dst_fd,))
+        svc.run_as(self.host, self.host.users["bob"], lambda: svc.empty_dir(dst_fd, {"c"}), (dst_fd,))
         self.assertEqual(read_tree(self.dst), {"c": b"2"})
 
     def test_stream_leaves_out_config_backups(self):
@@ -1419,6 +1453,8 @@ class EnableTests(SwitchTestBase):
         rc, out, err = self.run_main("enable", "bob")
         self.assertEqual(rc, 1)
         self.assertIn("lock", err)
+        self.assertIn("gridcoinresearchd@bob.service is disabled and gridcoinresearchd.service stopped; nothing was "
+                      "copied", err)
         self.assertNotIn(("add_to_group", "bob", "gridcoin-gui"), self.host.calls)
         self.assertEqual(os.listdir(self.target()) if os.path.exists(self.target()) else [], [])
         self.assertEqual(read_tree(self.datadir), read_tree_from(self.user_files()))
@@ -1619,6 +1655,69 @@ class EnableTests(SwitchTestBase):
         rc, out, err = self.run_main("enable", "bob")
         self.assertEqual(rc, 0, err)
 
+    def test_every_failure_after_the_stop_reports_what_it_left(self):
+        def run(host=None):
+            svc_rmtree(self.datadir)
+            svc_rmtree(self.target())
+            for path in self.stashes(self.home, ".GridcoinResearch.in-service-"):
+                svc_rmtree(path)
+            if os.path.exists(self.record_path()):
+                os.unlink(self.record_path())
+            write_tree(self.datadir, self.user_files())
+            return self.run_main("enable", "bob", host=host or self.host)
+
+        # The writer dies mid-copy: what it made is removed, nothing else changed.
+        def dies(inp, dst_dir, created=None):
+            os.mkdir("partial", dir_fd=dst_dir)
+            created.append("partial")
+            os._exit(9)
+
+        with mock.patch.object(svc, "extract_stream", dies):
+            rc, out, err = run()
+        self.assertEqual(rc, 1)
+        self.assertIn("without a report", err)
+        self.assertIn("nothing was copied", err)
+        self.assertEqual(os.listdir(self.target()), [])
+        self.assertIn("wallet.dat", os.listdir(self.datadir))
+
+        # A rename into the stash fails halfway: the message names both places.
+        real_rename = os.rename
+        renames = []
+
+        def rename(*args, **kwargs):
+            renames.append(args)
+            if len(renames) == 3:
+                raise OSError(5, "Input/output error")
+            return real_rename(*args, **kwargs)
+
+        with mock.patch.object(svc.os, "rename", rename):
+            rc, out, err = run()
+        self.assertEqual(rc, 1)
+        [stash] = self.stashes(self.home, ".GridcoinResearch.in-service-")
+        self.assertIn("split between %s and %s" % (self.datadir, stash), err)
+        self.assertEqual(len(os.listdir(stash)), 2)
+
+        # gpasswd fails: the wallet is in the service datadir, the source in the stash. The same
+        # host keeps the clock going, so each run's quarantine has a name of its own.
+        self.host.fail.add("add_to_group")
+        self.host.calls.clear()
+        rc, out, err = run()
+        self.assertEqual(rc, 1)
+        [stash] = self.stashes(self.home, ".GridcoinResearch.in-service-")
+        self.assertIn("the wallet is in %s and the source in %s" % (self.target(), stash), err)
+        self.assertIn("not enabled", err)
+        self.assertNotIn(("enable", "--now", "gridcoinresearchd.service"), self.host.calls)
+
+    def test_disable_failures_report_what_they_left(self):
+        write_tree(self.datadir, self.user_files())
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.host.fail.add("remove_from_group")
+        rc, out, err = self.run_main("disable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("the wallet is in %s and %s is empty" % (self.datadir, self.target()), err)
+        self.assertIn("gridcoin-gui", err)
+
     def test_enable_refuses_unknown_user_or_missing_datadir(self):
         rc, out, err = self.run_main("enable", "nobody")
         self.assertEqual(rc, 1)
@@ -1792,6 +1891,19 @@ class DisableTests(SwitchTestBase):
         rc, out, err = self.run_main("disable", "bob")
         self.assertEqual(rc, 1)
         self.assertEqual(self.host.calls, [])
+
+    def test_disable_opens_the_quarantine_before_making_the_users_directories(self):
+        self.write_record("test")
+        write_tree(self.target("test"), {"wallet.dat": b"service testnet wallet"})
+
+        def fails(*args, **kwargs):
+            raise OSError(28, "No space left on device")
+
+        with mock.patch.object(svc, "open_quarantine", fails):
+            rc, out, err = self.run_main("disable", "bob", "--network=test")
+        self.assertEqual(rc, 1)
+        self.assertIn("nothing was copied", err)
+        self.assertFalse(os.path.lexists(self.datadir))
 
     def test_disable_refuses_running_user_processes(self):
         self.write_record()

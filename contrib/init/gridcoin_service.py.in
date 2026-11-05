@@ -819,12 +819,13 @@ def check_member(member):
     return posixpath.split(name)
 
 
-def extract_stream(inp, dst_dir):
+def extract_stream(inp, dst_dir, created=None):
     """Create below dst_dir (a path, or an open directory fd) the directories and regular files of
     the tar stream inp, as new inodes: files 0600 and directories 0700, each created exclusively
     and without following a symlink, inside a directory the same stream created. A member of any
-    other type, or with an absolute or unnormalised name, raises TreeError. Returns the number of
-    file bytes written."""
+    other type, or with an absolute or unnormalised name, raises TreeError. Each top-level name is
+    appended to created (a list) once it exists, so the names are known after a failure too.
+    Returns the number of file bytes written."""
     top = open_dir(dst_dir) if isinstance(dst_dir, str) else dst_dir
     dirs = {"": top}
     written = 0
@@ -837,9 +838,13 @@ def extract_stream(inp, dst_dir):
                     raise TreeError("%r: its directory is not earlier in the stream" % member.name)
                 if member.isdir():
                     os.mkdir(base, 0o700, dir_fd=parent_fd)
+                    if not parent and created is not None:
+                        created.append(base)
                     dirs[member.name] = open_dir(base, dir_fd=parent_fd, display=member.name)
                     continue
                 fd = os.open(base, NEW_FILE_FLAGS, 0o600, dir_fd=parent_fd)
+                if not parent and created is not None:
+                    created.append(base)
                 with os.fdopen(fd, "wb") as f:
                     data = tar.extractfile(member)
                     while True:
@@ -937,20 +942,57 @@ def run_as(host, pw, body, keep):
     return report["value"]
 
 
-def remove_new_entries(dir_fd, keep):
-    """Remove every entry of dir_fd not named in keep. Only ever runs in a child: it changes the
-    working directory, so that shutil.rmtree works relative to dir_fd on any Python 3 (its dir_fd
-    argument needs 3.11), and relies on rmtree's symlink-safe implementation."""
+def remove_entries(dir_fd, names):
+    """Remove the named entries of dir_fd, directories with all they hold. Only ever runs in a
+    child: it changes the working directory, so that shutil.rmtree works relative to dir_fd on any
+    Python 3 (its dir_fd argument needs 3.11), and relies on rmtree's symlink-safe
+    implementation."""
     if not shutil.rmtree.avoids_symlink_attacks:
         raise CopyError("shutil.rmtree can follow symlinks on this platform; nothing was removed")
     os.fchdir(dir_fd)
-    for name in os.listdir("."):
-        if name in keep:
+    for name in names:
+        try:
+            st = os.lstat(name)
+        except FileNotFoundError:
             continue
-        if stat.S_ISDIR(os.lstat(name).st_mode):
+        if stat.S_ISDIR(st.st_mode):
             shutil.rmtree(name)
         else:
             os.unlink(name)
+
+
+def empty_dir(dir_fd, keep):
+    """Remove every entry of dir_fd not named in keep (in a child, as remove_entries)."""
+    remove_entries(dir_fd, [name for name in os.listdir(dir_fd) if name not in keep])
+
+
+class CreatedNames(list):
+    """The top-level names a writer created. Each is also written, as it comes, to record_fd (one
+    JSON string per line), so the parent knows them should the writer die without a report."""
+
+    def __init__(self, record_fd):
+        super().__init__()
+        self.record_fd = record_fd
+
+    def append(self, name):
+        super().append(name)
+        data = (json.dumps(name) + "\n").encode("ascii")
+        while data:
+            data = data[os.write(self.record_fd, data):]
+
+
+def recorded_names(record_fd):
+    """The names a dead writer recorded; a line cut short by its death is skipped."""
+    data = os.pread(record_fd, os.fstat(record_fd).st_size, 0)
+    names = []
+    for line in data.split(b"\n"):
+        try:
+            name = json.loads(line.decode("ascii"))
+        except ValueError:
+            continue
+        if isinstance(name, str):
+            names.append(name)
+    return names
 
 
 def stream_to_fd(src_fd, data_fd, exclude_top):
@@ -958,19 +1000,19 @@ def stream_to_fd(src_fd, data_fd, exclude_top):
         stream_tree(src_fd, out, exclude_top)
 
 
-def extract_committed(data_fd, dst_fd, commit_fd):
+def extract_committed(data_fd, dst_fd, commit_fd, record_fd):
     """The writer child: extract, then keep the result only once the parent confirms the reader
-    finished cleanly. Otherwise remove every entry this run added."""
-    before = set(os.listdir(dst_fd))
+    finished cleanly. Otherwise remove what this run created, and nothing else."""
+    created = CreatedNames(record_fd)
     try:
         with os.fdopen(data_fd, "rb") as inp:
-            written = extract_stream(inp, dst_fd)
+            written = extract_stream(inp, dst_fd, created)
         committed = os.read(commit_fd, 1) == b"c"
     except BaseException:
-        remove_new_entries(dst_fd, before)
+        remove_entries(dst_fd, created)
         raise
     if not committed:
-        remove_new_entries(dst_fd, before)
+        remove_entries(dst_fd, created)
         raise CopyError("the reading side did not finish; nothing was kept")
     return written
 
@@ -980,7 +1022,8 @@ def copy_as(src, dst, src_user, dst_user, exclude_top, host):
     files. A reader child streams src as src_user and a writer child extracts into dst as dst_user,
     with a pipe between them; each takes on its user only when this process is root. The writer
     keeps what it wrote only once the reader has finished cleanly, and otherwise removes every
-    entry it added. A failure of either side raises TreeError or CopyError."""
+    entry it added. Should the writer die without a report, a cleanup child, as dst_user, removes
+    the entries it recorded. A failure of either side raises TreeError or CopyError."""
     src_pw = host.getpwnam(src_user)
     dst_pw = host.getpwnam(dst_user)
     with contextlib.ExitStack() as stack:
@@ -992,11 +1035,13 @@ def copy_as(src, dst, src_user, dst_user, exclude_top, host):
             stack.callback(os.close, dst)
         data_r, data_w = os.pipe()
         commit_r, commit_w = os.pipe()
+        record_fd = os.memfd_create("gridcoin-service-created", os.MFD_CLOEXEC)
+        stack.callback(os.close, record_fd)
         pending = [data_r, data_w, commit_r, commit_w]
         try:
             reader = start_child(host, src_pw, lambda: stream_to_fd(src, data_w, exclude_top), (src, data_w))
-            writer = start_child(host, dst_pw, lambda: extract_committed(data_r, dst, commit_r),
-                                 (dst, data_r, commit_r))
+            writer = start_child(host, dst_pw, lambda: extract_committed(data_r, dst, commit_r, record_fd),
+                                 (dst, data_r, commit_r, record_fd))
             for fd in (data_r, data_w, commit_r):
                 pending.remove(fd)
                 os.close(fd)
@@ -1010,6 +1055,17 @@ def copy_as(src, dst, src_user, dst_user, exclude_top, host):
             pending.remove(commit_w)
             os.close(commit_w)
             writer_report = finish_child(*writer)
+            if writer_report.get("error") == "ChildError":
+                # The writer died without a report, so it removed nothing: remove what it recorded.
+                names = recorded_names(record_fd)
+                cleanup = finish_child(*start_child(host, dst_pw, lambda: remove_entries(dst, names), (dst,)))
+                if cleanup["ok"]:
+                    outcome = "the %d entries it had created were removed" % len(names)
+                else:
+                    outcome = "removing the %d entries it had created failed (%s)" % (len(names), cleanup["message"])
+                writer_report = {"ok": False, "error": "CopyError",
+                                 "message": "the writing side ended without a report (%s); %s"
+                                            % (writer_report["message"], outcome)}
         finally:
             for fd in pending:
                 os.close(fd)
@@ -1341,6 +1397,16 @@ def refuse_user_unit_datadir(paths, net, user, d_display):
                         "first, then rerun enable-user without --datadir" % (path, unit, d_display))
 
 
+@contextlib.contextmanager
+def stage(state):
+    """Add to a failure inside the block the state the command leaves behind, as step() does for
+    systemctl."""
+    try:
+        yield
+    except (UserError, StepError, TreeError, CopyError, OSError) as e:
+        raise StepError("%s; %s" % (e, state)) from None
+
+
 def take_lock(fd, display):
     try:
         return hold_datadir_lock(fd)
@@ -1352,7 +1418,7 @@ def copy_tree(src_fd, dst_fd, src_user, dst_user, exclude, host, src_display):
     try:
         copy_as(src_fd, dst_fd, src_user, dst_user, exclude, host)
     except TreeError as e:
-        raise TreeError("in %s: %s; nothing was copied" % (src_display, e)) from None
+        raise TreeError("in %s: %s" % (src_display, e)) from None
 
 
 def cmd_enable(args, net, host, paths):
@@ -1405,57 +1471,65 @@ def cmd_enable(args, net, host, paths):
                                 % conf_display)
         refuse_other_network_core(host, args.network, pw.pw_name)
 
-        # 2. Stop both cores that could use either datadir.
+        # 2. Stop both cores that could use either datadir. From here on every failure says what
+        # it left behind.
         unit, socket_unit, _ = autounlock_target(net, pw.pw_name)
         step(host, "disable", "--now", unit, socket_unit, state="nothing was copied")
         step(host, "stop", net.daemon + ".service", state="nothing was copied")
+        stopped = "%s is disabled and %s.service stopped; nothing was copied" % (unit, net.daemon)
 
         # 3. The user's own processes, a plain GUI among them.
-        try:
+        with stage(stopped):
             end_user_processes(host, pw, args.terminate_sessions)
-        except UserError as e:
-            raise UserError("%s. %s is disabled and %s.service stopped; nothing was copied"
-                            % (e, unit, net.daemon)) from None
 
         # 4. Hold the source's lock for the rest of the command.
-        lock_fd = take_lock(s_fd, s_display)
+        with stage(stopped):
+            lock_fd = take_lock(s_fd, s_display)
         if lock_fd is not None:
             keep(lock_fd)
 
-        # 5. Copy to fresh files, with the configuration files quarantined instead.
-        t_fd, t_display = open_service_dir(paths, net, acct, create=True)
-        keep(t_fd)
-        if os.listdir(t_fd):
-            raise UserError("%s exists and is not empty; refusing" % t_display)
-        if os.geteuid() == 0 and os.fstat(t_fd).st_uid != acct.pw_uid:
-            os.fchown(t_fd, acct.pw_uid, acct.pw_gid)
-            os.fchmod(t_fd, 0o700)
-        q_fd, q_display = open_quarantine(state_fd, paths, pw.pw_name, args.network, host)
-        keep(q_fd)
-        found, backups = quarantine_files(s_fd, s_display, pw.pw_uid, q_fd)
-        settings_text, lines = sanitize_quarantined(found, patterns, q_fd, s_display)
-        copy_tree(s_fd, t_fd, pw.pw_name, net.account, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host, s_display)
-        if settings_text is not None:
-            write_file_as(t_fd, SETTINGS_NAME, settings_text.encode("utf8"), acct, host)
+        # 5. Copy to fresh files, with the configuration files quarantined and sanitised first.
+        with stage(stopped):
+            t_fd, t_display = open_service_dir(paths, net, acct, create=True)
+            keep(t_fd)
+            if os.listdir(t_fd):
+                raise UserError("%s exists and is not empty; refusing" % t_display)
+            if os.geteuid() == 0 and os.fstat(t_fd).st_uid != acct.pw_uid:
+                os.fchown(t_fd, acct.pw_uid, acct.pw_gid)
+                os.fchmod(t_fd, 0o700)
+            q_fd, q_display = open_quarantine(state_fd, paths, pw.pw_name, args.network, host)
+            keep(q_fd)
+            found, backups = quarantine_files(s_fd, s_display, pw.pw_uid, q_fd)
+            settings_text, lines = sanitize_quarantined(found, patterns, q_fd, s_display)
+            copy_tree(s_fd, t_fd, pw.pw_name, net.account, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host,
+                      s_display)
+        with stage("the wallet is copied to %s, without its settings, and the source is untouched in %s; empty "
+                   "%s before rerunning" % (t_display, s_display, t_display)):
+            if settings_text is not None:
+                write_file_as(t_fd, SETTINGS_NAME, settings_text.encode("utf8"), acct, host)
         report_quarantine(found, backups, q_display, lines)
 
         # 6. Stash the source where only root can reach it, so no second core can stake it.
         stash_name = s_name + STASH_INFIX + stamp(host)
         stash_display = os.path.join(os.path.dirname(s_display), stash_name)
+        keep_in_source = testnet_entries | ({CONF_NAME} if shared_conf else set())
+        with stage("the wallet is copied to %s; the source may be split between %s and %s, so move the stash's "
+                   "entries back, or finish the move, before going on" % (t_display, s_display, stash_display)):
+            stash_source(s_parent_fd, s_name, s_fd, stash_name, keep_in_source, stash_display,
+                         copies={CONF_NAME: found[CONF_NAME]} if shared_conf else None)
         if shared_conf:
-            stash_source(s_parent_fd, s_name, s_fd, stash_name, testnet_entries | {CONF_NAME}, stash_display,
-                         copies={CONF_NAME: found[CONF_NAME]})
             print("%s stays in %s, as testnet reads it too; copies are in the stash and the quarantine."
                   % (CONF_NAME, d_display))
-        else:
-            stash_source(s_parent_fd, s_name, s_fd, stash_name, testnet_entries, stash_display)
-        write_owner_record(state_fd, args.network, pw, stash_display)
+        moved = "the wallet is in %s and the source in %s" % (t_display, stash_display)
+        with stage("%s; no owner record was written, so disable refuses until %s holds one"
+                   % (moved, owner_record_path(paths, args.network))):
+            write_owner_record(state_fd, args.network, pw, stash_display)
 
         # 7. The user attaches through the group; the service runs the wallet now.
-        host.add_to_group(pw.pw_name, net.attach_group)
+        with stage("%s; %s is not in %s and the service is not enabled" % (moved, pw.pw_name, net.attach_group)):
+            host.add_to_group(pw.pw_name, net.attach_group)
         step(host, "enable", "--now", net.daemon + ".service",
-             state="the wallet is in %s and the source in %s; enable the service once the cause is fixed"
-             % (t_display, stash_display))
+             state="%s; enable the service once the cause is fixed" % moved)
 
     # 8. What root and the user do next.
     print("%s's wallet is in %s now, run by %s.service as %s." % (pw.pw_name, t_display, net.daemon, net.account))
@@ -1532,38 +1606,44 @@ def cmd_disable(args, net, host, paths):
         end_user_processes(host, pw, args.terminate_sessions)
         system_unit, system_socket, _ = autounlock_target(net, None)
         step(host, "disable", "--now", system_unit, system_socket, state="nothing was copied")
-        lock_fd = take_lock(t_fd, t_display)
+        stopped = "%s.service and %s are disabled; nothing was copied" % (net.daemon, system_socket)
+        with stage(stopped):
+            lock_fd = take_lock(t_fd, t_display)
         if lock_fd is not None:
             keep(lock_fd)
 
-        # The directories made here go again if the copy fails, so a rerun finds the user's side
-        # as it was.
-        made = []
-        if d_fd is None:
-            d_fd = keep(make_dir(DATADIR_NAME, home_fd, d_display, owner=pw))
-            made.append((home_fd, DATADIR_NAME))
-        if net.testnet:
-            s_fd = keep(make_dir("testnet", d_fd, s_display, owner=pw))
-            made.append((d_fd, "testnet"))
-        else:
-            s_fd = d_fd
-        q_fd, q_display = open_quarantine(state_fd, paths, pw.pw_name, args.network, host)
-        keep(q_fd)
-        testnet_entries = set() if net.testnet else {"testnet"}
-        try:
-            found, backups = quarantine_files(t_fd, t_display, acct.pw_uid, q_fd)
-            settings_text, lines = sanitize_quarantined(found, patterns, q_fd, t_display)
-            copy_tree(t_fd, s_fd, net.account, pw.pw_name, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host,
-                      t_display)
-        except BaseException:
-            for parent_fd, name in reversed(made):
-                try:
-                    os.rmdir(name, dir_fd=parent_fd)
-                except OSError:
-                    pass
-            raise
-        if settings_text is not None:
-            write_file_as(s_fd, SETTINGS_NAME, settings_text.encode("utf8"), pw, host)
+        # The quarantine comes first, and the directories made for the user go again if anything
+        # up to the copy fails, so a rerun finds the user's side as it was.
+        with stage(stopped):
+            q_fd, q_display = open_quarantine(state_fd, paths, pw.pw_name, args.network, host)
+            keep(q_fd)
+            made = []
+            try:
+                if d_fd is None:
+                    d_fd = keep(make_dir(DATADIR_NAME, home_fd, d_display, owner=pw))
+                    made.append((home_fd, DATADIR_NAME))
+                if net.testnet:
+                    s_fd = keep(make_dir("testnet", d_fd, s_display, owner=pw))
+                    made.append((d_fd, "testnet"))
+                else:
+                    s_fd = d_fd
+                testnet_entries = set() if net.testnet else {"testnet"}
+                found, backups = quarantine_files(t_fd, t_display, acct.pw_uid, q_fd)
+                settings_text, lines = sanitize_quarantined(found, patterns, q_fd, t_display)
+                copy_tree(t_fd, s_fd, net.account, pw.pw_name, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host,
+                          t_display)
+            except BaseException:
+                for parent_fd, name in reversed(made):
+                    try:
+                        os.rmdir(name, dir_fd=parent_fd)
+                    except OSError:
+                        pass
+                raise
+        copied = ("the wallet is copied to %s, %s still holds it, and %s.service stays disabled"
+                  % (s_display, t_display, net.daemon))
+        with stage("%s; the settings were not written" % copied):
+            if settings_text is not None:
+                write_file_as(s_fd, SETTINGS_NAME, settings_text.encode("utf8"), pw, host)
         report_quarantine(found, backups, q_display, lines)
 
         # The user's own conf comes back from the stash enable recorded; a failure here leaves
@@ -1586,9 +1666,13 @@ def cmd_disable(args, net, host, paths):
                 restored = False
 
         # Empty the service datadir as its own account.
-        run_as(host, acct, lambda: remove_new_entries(t_fd, testnet_entries), (t_fd,))
-        host.remove_from_group(pw.pw_name, net.attach_group)
-        os.unlink(args.network + ".owner", dir_fd=state_fd)
+        with stage("%s; empty %s as %s before enabling again" % (copied, t_display, net.account)):
+            run_as(host, acct, lambda: empty_dir(t_fd, testnet_entries), (t_fd,))
+        moved = "the wallet is in %s and %s is empty" % (s_display, t_display)
+        with stage("%s; %s is still in %s" % (moved, pw.pw_name, net.attach_group)):
+            host.remove_from_group(pw.pw_name, net.attach_group)
+        with stage("%s; remove %s by hand" % (moved, record_display)):
+            os.unlink(args.network + ".owner", dir_fd=state_fd)
 
     print("%s's wallet is back in %s; %s.service is disabled." % (pw.pw_name, s_display, net.daemon))
     if restored:
