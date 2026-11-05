@@ -3708,6 +3708,40 @@ class SwitchOverTests(ServiceTestBase):
                 with open(state, encoding="utf8") as f:
                     self.assertEqual(f.read(), "system-core\n")
 
+    def test_switch_over_names_the_default_datadir_of_the_user_and_home_the_unit_had(self):
+        # Only a hint: the user is the last User= (an empty one resets it to root), else the
+        # released unit's account for drop-ins on it but root for a full copy. systemd sets HOME
+        # only with a User=, an Environment= HOME= takes its place, and with HOME unset the core
+        # uses /.GridcoinResearch.
+        old = os.path.join(self.tmp.name, "olduser")
+        self.host.users["olduser"] = Passwd("olduser", self.uid, old)
+        command = "ExecStart=\nExecStart=/usr/bin/gridcoinresearchd -daemonwait\n"
+        cases = [
+            ("[Service]\n" + command, None, "/.GridcoinResearch (the core's default for root, whose HOME is not set)"),
+            ("[Service]\n" + command, "[Service]\nUser=olduser\n", os.path.join(old, ".GridcoinResearch")),
+            (None, "[Service]\n" + command + "User=olduser\nUser=\n",
+             "/.GridcoinResearch (the core's default for root, whose HOME is not set)"),
+            (None, "[Service]\n" + command + "User=olduser\nEnvironment=\"A=1 B=2\" HOME=/srv/grc\n",
+             "/srv/grc/.GridcoinResearch"),
+            (None, "[Service]\n" + command + "User=olduser\nEnvironment=HOME=/srv/grc\nEnvironment=\n",
+             os.path.join(old, ".GridcoinResearch")),
+            ("[Service]\n" + command + "Environment=HOME=/srv/grc\n", None, "/srv/grc/.GridcoinResearch"),
+        ]
+        copy = os.path.join(self.paths.etc_systemd, "gridcoinresearchd.service")
+        for unit, dropin, implied in cases:
+            with self.subTest(unit=unit, dropin=dropin):
+                svc_rmtree(self.system_unit_dir())
+                if os.path.lexists(copy):
+                    os.unlink(copy)
+                if unit is not None:
+                    self.write_text(copy, unit)
+                if dropin is not None:
+                    self.write_system_dropin("override.conf", dropin)
+                rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+                self.assertEqual(rc, 1)
+                self.assertIn("no -datadir", err)
+                self.assertIn("probably %s" % implied, err)
+
     def test_switch_over_refuses_a_testnet_override_that_ran_mainnet(self):
         # The testnet unit's command line without -testnet ran a mainnet node.
         data = os.path.join(self.tmp.name, "data", "grc")

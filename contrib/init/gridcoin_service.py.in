@@ -2529,15 +2529,40 @@ def system_command(net, paths, copy, masked):
     return last_setting(system_sources(net, paths, copy, masked), "ExecStart")
 
 
-def default_datadir_hint(sources, host):
-    """The core's default datadir for the unit's user, for a message only: <home>/.GridcoinResearch
-    of the last User= the sources set, else of the account the released units ran as."""
-    user = last_setting(sources, "User")
-    user = user[1] if user is not None else OLD_SYSTEM_ACCOUNT
-    try:
-        return "%s (the core's default for %s)" % (os.path.join(host.getpwnam(user).pw_dir, DATADIR_NAME), shown(user))
-    except KeyError:
-        return "the core's default for %s, a user this host does not know" % shown(user)
+def default_datadir_hint(sources, copied, host):
+    """The core's default datadir for the unit's user and HOME, for a message only. The user is the
+    last User= the sources set, root when that is empty; without one it is the account the released
+    unit ran as, but root for a full copy of the unit (copied). systemd sets HOME only for a User=,
+    to that user's home, and a HOME= in Environment= (whose empty assignment resets it) takes its
+    place. The core's GetDefaultDataDir() is $HOME/.GridcoinResearch, or /.GridcoinResearch when
+    HOME is unset or empty."""
+    users = [value for _, text in sources for value in unit_file_settings(text or "", "Service", "User")]
+    user = (users[-1] or None) if users else (None if copied else OLD_SYSTEM_ACCOUNT)
+    home = None
+    if user is not None:
+        try:
+            home = host.getpwnam(user).pw_dir
+        except KeyError:
+            return "the core's default for %s, a user this host does not know" % shown(user)
+    environment_home = None
+    for _, text in sources:
+        for value in unit_file_settings(text or "", "Service", "Environment"):
+            if not value:
+                environment_home = None
+                continue
+            try:
+                words = shlex.split(value)
+            except ValueError:
+                continue
+            for word in words:
+                if word.startswith("HOME="):
+                    environment_home = word[len("HOME="):]
+    if environment_home is not None:
+        home = environment_home
+    who = "root" if user is None else shown(user)
+    if not home:
+        return "/%s (the core's default for %s, whose HOME is not set)" % (DATADIR_NAME, who)
+    return "%s (the core's default for %s)" % (os.path.join(home, DATADIR_NAME), who)
 
 
 def service_account_uid(net, host):
@@ -2646,15 +2671,16 @@ def carried_system_path(net, value, what, display, paths, host, datadir=None):
     return value
 
 
-def carried_system_paths(net, display, value, own, sources, paths, host):
+def carried_system_paths(net, display, value, own, sources, copied, paths, host):
     """The -conf and -datadir of the old system command line value (in display) that the new unit
     must run with, each None when it is the unit's own. A command line from an override or a copy
     (not own) with any option the new one would drop is refused.
 
     Such a command line without -datadir is refused: which datadir the core ended up on cannot be
-    told from outside it (its default for the unit's user is named as a hint), and the new unit
-    must never start on a new one. Without -conf the core read the configuration file in its
-    datadir, which is carried when it is there."""
+    told from outside it (its default for the unit's user is named as a hint, which copied, whether
+    a full copy of the unit is in effect, feeds), and the new unit must never start on a new one.
+    Without -conf the core read the configuration file in its datadir, which is carried when it is
+    there."""
     words = command_words(value, display)
     if not own:
         dropped = system_dropped_words(net, words)
@@ -2677,7 +2703,7 @@ def carried_system_paths(net, display, value, own, sources, paths, host):
         if datadir is None:
             raise UserError("the ExecStart= in %s has no -datadir; add -datadir=<the directory this node actually "
                             "uses> to ExecStart= in %s, then rerun the switch-over. It is probably %s"
-                            % (display, display, default_datadir_hint(sources, host)))
+                            % (display, display, default_datadir_hint(sources, copied, host)))
         # Without -conf the core read the conf in its datadir, its testnet/ one on testnet
         # (GetConfigFile in src/util/system.cpp is net-specific).
         start_conf = (os.path.join(datadir, *(["testnet"] if net.testnet else []), CONF_NAME)
@@ -2724,7 +2750,8 @@ def switch_system_core(net, host, paths):
         display, value = command
         try:
             conf, datadir = carried_system_paths(net, display, value, display == ours,
-                                                 system_sources(net, paths, copy, masked), paths, host)
+                                                 system_sources(net, paths, copy, masked),
+                                                 copy is not None and not masked, paths, host)
         except UserError as e:
             raise UserError("%s. It stays where it is, and %s will not start until you change it; then rerun"
                             % (e, unit)) from None
