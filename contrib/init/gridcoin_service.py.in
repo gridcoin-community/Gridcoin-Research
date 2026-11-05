@@ -29,8 +29,9 @@ CONFIG = {"bindir": "@GRC_BINDIR@", "default_network": "@GRC_UNIT_NETWORK@", "py
 EXIT_USAGE = 64
 DROPIN_MAIN = "50-gridcoin-service.conf"
 DROPIN_AUTOUNLOCK = "60-gridcoin-autounlock.conf"
-# A name made only of dots is refused: "." and ".." name directories.
-USER_RE = re.compile(r"^(?!\.+$)[A-Za-z0-9._-]+$")
+# A name made only of dots is refused: "." and ".." name directories. Matched with
+# fullmatch and \Z, so a trailing newline is refused too.
+USER_RE = re.compile(r"(?!\.+\Z)[A-Za-z0-9._-]+\Z")
 UNSAFE_PATH_RE = re.compile(r"[\s\"'\\$%;]")
 ROOT_EQUIVALENT_GROUPS = ("docker", "lxd", "incus", "libvirt", "disk", "wheel", "sudo", "adm", "systemd-journal")
 
@@ -122,7 +123,7 @@ def uid_min(paths):
 
 
 def validate_name(name):
-    if not USER_RE.match(name):
+    if not USER_RE.fullmatch(name):
         raise UserError("invalid user name '%s'" % name)
 
 

@@ -141,6 +141,17 @@ class ValidateUserTests(ServiceTestBase):
         for name in (".bob", "bob.", "b.o.b", "a..b"):
             svc.validate_name(name)
 
+    def test_names_with_a_trailing_newline_refused(self):
+        host = FakeHost(users={"bob\n": Passwd("bob\n", 1000, self.home)})
+        for name in ("bob\n", "bob\n\n", "\nbob"):
+            with self.assertRaises(svc.UserError, msg=repr(name)):
+                svc.validate_name(name)
+        with self.assertRaises(svc.UserError):
+            svc.validate_user("bob\n", host, self.paths)
+        rc, out, err = self.run_main("disable-user", "bob\n", host=host)
+        self.assertEqual(rc, 1)
+        self.assertEqual(host.calls, [])
+
     def test_uid_min_default_when_login_defs_missing(self):
         os.unlink(self.paths.login_defs)
         host = FakeHost(users={"low": Passwd("low", 999, "/h"), "ok": Passwd("ok", 1000, "/h")})
