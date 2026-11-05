@@ -196,12 +196,14 @@ class Host:
         return foreign_processes(table, uid, os.getpid())
 
     def login_uid(self):
-        try:
-            with open("/proc/self/loginuid", encoding="utf8") as f:
-                text = f.read()
-        except OSError:
-            text = ""
-        return parse_login_uid(text, os.environ.get("SUDO_UID"))
+        texts = []
+        for path in ("/proc/self/loginuid", "/proc/self/cgroup"):
+            try:
+                with open(path, encoding="utf8", errors="replace") as f:
+                    texts.append(f.read())
+            except OSError:
+                texts.append("")
+        return parse_login_uid(texts[0], os.environ.get("SUDO_UID"), texts[1])
 
     def terminate_user(self, name):
         # loginctl reports its own failure (no session, say); the caller then waits for the
@@ -273,15 +275,16 @@ def foreign_processes(table, uid, self_pid):
                   if uid in uids and pid not in ancestors and self_pid not in chain(pid))
 
 
-def parse_login_uid(loginuid_text, sudo_uid):
-    """The uid whose login this command runs in: /proc/self/loginuid, or SUDO_UID when that is
-    unset. None when neither says."""
+def parse_login_uid(loginuid_text, sudo_uid, cgroup_text=""):
+    """The uid whose login this command runs in: /proc/self/loginuid; SUDO_UID when that is unset;
+    and when neither says, the user-<uid>.slice of /proc/self/cgroup. None when nothing says."""
     text = loginuid_text.strip()
     if text.isdigit() and int(text) != UNSET_LOGIN_UID:
         return int(text)
     if sudo_uid is not None and sudo_uid.isdigit():
         return int(sudo_uid)
-    return None
+    match = re.search(r"/user-([0-9]+)\.slice(?:/|$)", cgroup_text, re.M)
+    return int(match.group(1)) if match else None
 
 
 def refuse_own_login(host, pw):
@@ -1440,6 +1443,10 @@ def refuse_user_unit_datadir(paths, net, user, d_display):
             text = f.read()
     except FileNotFoundError:
         return
+    except UnicodeDecodeError:
+        raise UserError("%s is not UTF-8, so its -datadir cannot be checked; refusing" % path) from None
+    except OSError as e:
+        raise UserError("cannot read %s: %s; refusing" % (path, e.strerror)) from None
     if re.search(r"(?m)^ExecStart=.*\s-datadir=", text):
         raise UserError("%s gives %s a -datadir of its own, but enable moves only %s; move that wallet there "
                         "first, then rerun enable-user without --datadir" % (path, unit, d_display))

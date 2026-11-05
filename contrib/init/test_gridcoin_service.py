@@ -1357,6 +1357,14 @@ class PrivilegeTests(ServiceTestBase):
         self.assertEqual(svc.parse_login_uid("", "1000"), 1000)
         self.assertIsNone(svc.parse_login_uid("4294967295", None))
         self.assertIsNone(svc.parse_login_uid("4294967295", "x"))
+        # Neither: the cgroup of a process in a user's slice names the user.
+        self.assertEqual(svc.parse_login_uid("4294967295", None, "0::/user.slice/user-1000.slice/session-2.scope\n"),
+                         1000)
+        self.assertEqual(svc.parse_login_uid("", None, "12:pids:/user.slice/user-1001.slice/user@1001.service\n"
+                                                       "0::/user.slice/user-1001.slice/user@1001.service\n"), 1001)
+        self.assertEqual(svc.parse_login_uid("1000", None, "0::/user.slice/user-1001.slice\n"), 1000)
+        for cgroup in ("0::/system.slice/ssh.service\n", "0::/user.slice/user-1000.sliced\n", "", "0::/\n"):
+            self.assertIsNone(svc.parse_login_uid("4294967295", None, cgroup), cgroup)
         uid = svc.Host().login_uid()
         self.assertTrue(uid is None or isinstance(uid, int))
 
@@ -1965,6 +1973,16 @@ class EnableTests(SwitchTestBase):
             rc, out, err = self.run_main("enable", "bob")
         self.assertEqual(rc, 1)
         self.assertIn("system account", err)
+        self.assertEqual(self.host.calls, [])
+
+    def test_enable_refuses_a_per_user_drop_in_that_is_not_utf8(self):
+        write_tree(self.datadir, self.user_files())
+        directory = os.path.join(self.paths.etc_systemd, "gridcoinresearchd@bob.service.d")
+        write_tree(directory, {"50-gridcoin-service.conf": b"[Service]\nExecStart=\xff\n"})
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("not UTF-8", err)
+        self.assertIn("50-gridcoin-service.conf", err)
         self.assertEqual(self.host.calls, [])
 
     def test_enable_refuses_unknown_user_or_missing_datadir(self):
