@@ -1071,6 +1071,41 @@ def changed_stat(st, **fields):
     return os.stat_result(values)
 
 
+STAT_EXTRA = ("st_atime", "st_mtime", "st_ctime", "st_atime_ns", "st_mtime_ns", "st_ctime_ns", "st_blksize",
+              "st_blocks", "st_rdev")
+
+
+@contextlib.contextmanager
+def seen_as(changes, calls=("stat", "lstat", "fstat")):
+    """Make the given paths' inodes look owned by another uid, or have another mode, to the tool's
+    stat calls named in calls: {path: {"uid": n, "mode": m}}. A test cannot make files another
+    account owns; this changes only what the checks see."""
+    wanted = {}
+    for path, fields in changes.items():
+        st = os.lstat(path)
+        wanted[(st.st_dev, st.st_ino)] = fields
+
+    def changed(st):
+        fields = wanted.get((st.st_dev, st.st_ino))
+        if fields is None:
+            return st
+        values = list(tuple(st))
+        if "uid" in fields:
+            values[4] = fields["uid"]
+        if "mode" in fields:
+            values[0] = stat.S_IFMT(st.st_mode) | fields["mode"]
+        return os.stat_result(values, {name: getattr(st, name) for name in STAT_EXTRA})
+
+    patches = []
+    for name in calls:
+        real = getattr(os, name)
+        patches.append(mock.patch.object(svc.os, name, lambda *a, _real=real, **k: changed(_real(*a, **k))))
+    with contextlib.ExitStack() as stack:
+        for patch in patches:
+            stack.enter_context(patch)
+        yield
+
+
 def lock_is_held_elsewhere(lock_path):
     """Whether a second process fails to take the core's own lock (F_SETLK through lockf)."""
     code = ("import fcntl, os, sys\n"
@@ -3716,6 +3751,28 @@ class SwitchOverTests(ServiceTestBase):
                 self.assertIn("no -datadir", err)
                 self.assertNotIn(data, out + err)
                 self.assertEqual(os.listdir(self.system_unit_dir()), ["override.conf"])
+
+    def test_switch_over_names_the_owner_a_carried_conf_needs(self):
+        # In the datadir the service account's files belong to it; elsewhere the conf is root's.
+        # The datadir is checked first, so its warning is printed before the conf is refused.
+        data = os.path.join(self.tmp.name, "data", "grc")
+        os.makedirs(data)
+        inside = os.path.join(data, "gridcoinresearch.conf")
+        outside = os.path.join(self.tmp.name, "etc-other", "gridcoin.conf")
+        os.makedirs(os.path.dirname(outside))
+        for path in (inside, outside):
+            self.write_text(path, "rpcuser=x\n")
+        other = self.uid + 1
+        for words, conf, advice in (("-datadir=%s" % data, inside, "chown gridcoin: %s" % inside),
+                                    ("-conf=%s -datadir=%s" % (outside, data), outside, "chown root: %s" % outside)):
+            with self.subTest(conf=conf):
+                svc_rmtree(self.system_unit_dir())
+                self.system_override(words)
+                with seen_as({conf: {"uid": other}, data: {"uid": other}}):
+                    rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
+                self.assertEqual(rc, 1)
+                self.assertIn(advice, err)
+                self.assertIn("chown -R gridcoin: %s" % data, out)
 
     def test_switch_over_refuses_a_conf_others_can_write(self):
         # A conf anyone but root and the service account can write, or one in such a directory,
