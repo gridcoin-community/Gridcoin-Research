@@ -2584,6 +2584,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     // have not yet loaded their LevelDB state -- this is what lets us
     // safely Reset() the beacon registry without invalidating any in-memory
     // state). See doc/block_corruption_recovery_design.md.
+    // A message of its own, so that this step has its own start timeout extension
+    // rather than what is left of the block index load's.
+    uiInterface.InitMessage(_("Checking block files..."));
+    LogPrintf("Checking block files...");
     {
         LOCK(cs_main);
         if (!GRC::RunStartupCoherenceRecovery()) {

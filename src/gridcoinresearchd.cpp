@@ -332,6 +332,8 @@ bool AppInit(int argc, char* argv[])
         // here, before the daemonizing fork and AppInit2.
         if (ShutdownRequested()) {
             LogPrintf("Shutdown requested during startup. Exiting.");
+            // This return skips the status block at the end; say why the start ended.
+            sdnotify::NotifyStartupStopped();
             return false;
         }
 
