@@ -170,12 +170,8 @@ include(CheckAVX2)
 include(CheckSHANI)
 include(CheckARMSHANI)
 
-# Runtime checks must still be skipped during cross-compilation
-if(NOT CMAKE_CROSSCOMPILING)
-    include(CheckStrerrorR)
-else()
-    message(STATUS "Cross-compiling: skipping CheckStrerrorR probe.")
-endif()
+# The strerror_r variant check is compile-only, so it is safe for cross-compilation.
+include(CheckStrerrorR)
 
 include(FindPkgConfig)
 include(HunterGate)

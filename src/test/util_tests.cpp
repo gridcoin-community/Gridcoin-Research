@@ -19,9 +19,12 @@
 #include <util/settings.h>
 #include <util/strencodings.h>
 #include <util/string.h>
+#include <util/syserror.h>
 
+#include <cerrno>
 #include <cstdint>
 #include <stdexcept>
+#include <system_error>
 
 #include <sstream>
 
@@ -1692,5 +1695,18 @@ BOOST_AUTO_TEST_CASE(util_runCommand_does_not_throw_on_malformed_utf8)
 }
 #endif // HAVE_SYSTEM
 #endif // WIN32
+
+// SysErrorString must return the platform's message for an errno value. On glibc it used to return
+// "Unknown error (N)" for every value because the strerror_r variant was detected wrongly at configure time.
+BOOST_AUTO_TEST_CASE(syserror_string_returns_platform_message)
+{
+    const std::string message = std::generic_category().message(ENOENT);
+    const std::string result = SysErrorString(ENOENT);
+
+    BOOST_CHECK(!message.empty());
+    BOOST_CHECK(result.find("Unknown error") == std::string::npos);
+    BOOST_CHECK(result.find(message) != std::string::npos);
+    BOOST_CHECK(result.find(strprintf("(%d)", ENOENT)) != std::string::npos);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
