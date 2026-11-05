@@ -1722,6 +1722,24 @@ bool AppInit2(ThreadHandlerPtr threads)
         gArgs.SoftSetBoolArg("-rescan", true);
     }
 
+    // -reindex rebuilds the index from the block data files already on disk, and -loadblock adds the blocks it imports
+    // to the current index as it loads them, so asking for both at once makes no sense. This is checked here, before
+    // -reindex renames any block data file.
+    if (gArgs.GetBoolArg("-reindex") && !gArgs.GetArgs("-loadblock").empty()) {
+        return InitError(_("-reindex and -loadblock cannot be used together. -reindex rebuilds the index from the "
+                           "existing block data files, and -loadblock adds the blocks it imports to the current "
+                           "index. Use one or the other."));
+    }
+
+    // A bootstrap.dat in the data directory is imported in place of either, so it is refused with them here too.
+    if (fs::exists(GetDataDir() / "bootstrap.dat")
+        && (gArgs.GetBoolArg("-reindex") || !gArgs.GetArgs("-loadblock").empty())) {
+        return InitError(_("-reindex and/or -loadblock was specified as a startup parameter and a bootstrap.dat file "
+                           "was found in the data directory. This combination makes no sense. If you intend on "
+                           "loading the blockchain from a bootstrap.dat, then do not specify -reindex or "
+                           "-loadblock."));
+    }
+
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
@@ -2442,14 +2460,9 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 10: import blocks
 
+    // Step 2 refuses a bootstrap.dat together with -reindex or -loadblock.
     fs::path pathBootstrap = GetDataDir() / "bootstrap.dat";
     if (fs::exists(pathBootstrap)) {
-        if (gArgs.GetBoolArg("-reindex") || gArgs.GetArgs("-loadblock").size()) {
-            return error("%s: -reindex and/or -loadblock was specified as a startup parameter and a bootstrap.dat file "
-                         "was found in the data directory. This combination makes no sense. If you intend on loading "
-                         "the blockchain from a bootstrap.dat, then do not specify -reindex or -loadblock.");
-        }
-
         uiInterface.InitMessage(_("Importing bootstrap blockchain data file."));
 
         FILE *file = fsbridge::fopen(pathBootstrap, "rb");
@@ -2464,9 +2477,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
         g_timer.GetTimes("load bootstrap file complete", "init");
     } else {
-        // Finish off the reindexing, if specified. It actually makes sense to allow this in combination with loadblock.
-        // In that situation the reindex (of the existing block data files) comes first before loading more from a
-        // specified external file.
+        // Finish off the reindexing, if specified. Step 2 refuses -reindex together with -loadblock.
         if (gArgs.GetBoolArg("-reindex")) {
             uiInterface.InitMessage(_("Reindexing blockchain from on disk block data files..."));
 
@@ -2489,8 +2500,7 @@ bool AppInit2(ThreadHandlerPtr threads)
                     return error("%s: a -loadblock argument was provided with a filename of the form blk*.dat "
                                  "that is reserved for the permanent wallet block data files. This does not make "
                                  "any sense. If your intent is to reindex the existing block data files, use "
-                                 "-reindex instead, or if reindexing the existing block data files and also importing "
-                                 "new ones, use filenames that are not reserved.", __func__);
+                                 "-reindex instead.", __func__);
                 }
 
                 fs::path file = GetDataDir() / strFile;
