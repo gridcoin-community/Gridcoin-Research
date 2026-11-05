@@ -118,6 +118,11 @@ modules:
       # matching the other release artifacts. The capnproto module above supplies
       # Cap'n Proto; libmultiprocess is a vendored subtree in this repository.
       - -DENABLE_MULTIPROCESS=ON
+      # The sandbox reaches neither a core run as the user outside it nor the system
+      # service in /run, so the Flatpak ships no daemon and no units, and its launcher
+      # offers neither action (cmake/desktop_file.cmake).
+      - -DENABLE_DAEMON=OFF
+      - -DINSTALL_SYSTEMD_UNITS=OFF
       # ENABLE_PIE defaults OFF and OFF now genuinely disables PIE rather than
       # deferring to the toolchain, so a shipped artifact has to ask for it.
       - -DENABLE_PIE=ON

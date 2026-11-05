@@ -360,6 +360,95 @@ class CMakeValuesTests(unittest.TestCase):
             self.assertIn(name, cmake)
 
 
+DESKTOP_MODULE = os.path.join(SOURCE_ROOT, "cmake", "desktop_file.cmake")
+
+
+def desktop_actions(text):
+    """{action: Exec=} of a desktop file's [Desktop Action ...] groups, and its Actions= list."""
+    actions = dict(re.findall(r"(?ms)^\[Desktop Action ([^\]]+)\]\n.*?^Exec=(.*?)$", text))
+    listed = re.search(r"(?m)^Actions=(.*)$", text).group(1).split(";")
+    return actions, [name for name in listed if name]
+
+
+class DesktopFileTests(unittest.TestCase):
+    """The launcher offers only what the build can run: attaching to a running core needs the
+    multiprocess GUI and a daemon, and the system service needs its units as well."""
+
+    def generate(self, tmp, **options):
+        if shutil.which("cmake") is None:
+            self.skipTest("cmake is not installed")
+        out = os.path.join(tmp, "gridcoinresearch.desktop")
+        args = ["cmake"] + ["-D%s=%s" % item for item in options.items()] + ["-DGRC_DESKTOP_FILE=" + out,
+                                                                              "-P", DESKTOP_MODULE]
+        subprocess.run(args, check=True, capture_output=True)
+        with open(out, encoding="utf8") as f:
+            return f.read()
+
+    def test_actions_follow_the_build(self):
+        main = {"GRC_NET_ARG": "", "GRC_STATE_NAME": "gridcoinresearchd", "GRC_ACCOUNT": "gridcoin"}
+        test = {"GRC_NET_ARG": "-testnet", "GRC_STATE_NAME": "gridcointestnetd", "GRC_ACCOUNT": "gridcointestnet"}
+        cases = [
+            (dict(main, ENABLE_MULTIPROCESS="ON", ENABLE_DAEMON="ON", INSTALL_SYSTEMD_UNITS="ON"), {
+                "Multiprocess": "gridcoinresearch -multiprocess",
+                "SystemService": "gridcoinresearch -multiprocess -ipcdir=/run/gridcoinresearchd "
+                                 "-ipcserviceuser=gridcoin"}),
+            (dict(test, ENABLE_MULTIPROCESS="ON", ENABLE_DAEMON="ON", INSTALL_SYSTEMD_UNITS="ON"), {
+                "Multiprocess": "gridcoinresearch -testnet -multiprocess",
+                "SystemService": "gridcoinresearch -testnet -multiprocess -ipcdir=/run/gridcointestnetd "
+                                 "-ipcserviceuser=gridcointestnet"}),
+            (dict(main, ENABLE_MULTIPROCESS="ON", ENABLE_DAEMON="ON", INSTALL_SYSTEMD_UNITS="OFF"),
+             {"Multiprocess": "gridcoinresearch -multiprocess"}),
+            # The Flatpak: no daemon and no units.
+            (dict(ENABLE_MULTIPROCESS="ON", ENABLE_DAEMON="OFF", INSTALL_SYSTEMD_UNITS="OFF"), {}),
+            (dict(main, ENABLE_MULTIPROCESS="OFF", ENABLE_DAEMON="ON", INSTALL_SYSTEMD_UNITS="ON"), {}),
+        ]
+        for options, expected in cases:
+            with self.subTest(options=options), tempfile.TemporaryDirectory() as tmp:
+                text = self.generate(tmp, **options)
+                self.assertNotIn("@", text)
+                actions, listed = desktop_actions(text)
+                expected = dict(expected, Testnet='sh -c "gridcoinresearch -testnet"')
+                self.assertEqual(actions, expected)
+                self.assertEqual(sorted(listed), sorted(expected))
+                # One final newline, and no blank line after the last group.
+                self.assertTrue(text.endswith("\n") and not text.endswith("\n\n"), repr(text[-40:]))
+                if shutil.which("desktop-file-validate"):
+                    path = os.path.join(tmp, "gridcoinresearch.desktop")
+                    proc = subprocess.run(["desktop-file-validate", path], capture_output=True, encoding="utf8")
+                    self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                    self.assertNotIn("error", (proc.stdout + proc.stderr).lower())
+
+    def test_the_gui_installs_the_generated_file(self):
+        with open(os.path.join(SOURCE_ROOT, "src", "qt", "CMakeLists.txt"), encoding="utf8") as f:
+            qt = f.read()
+        self.assertTrue('include("${CMAKE_SOURCE_DIR}/cmake/desktop_file.cmake")' in qt,
+                        "src/qt/CMakeLists.txt does not include cmake/desktop_file.cmake")
+        self.assertRegex(qt, r'install\(FILES "\$\{GRC_DESKTOP_FILE\}" COMPONENT gui\s+'
+                             r'DESTINATION "\$\{CMAKE_INSTALL_DATADIR\}/applications"')
+        self.assertFalse(os.path.exists(os.path.join(SOURCE_ROOT, "contrib", "gridcoinresearch.desktop")))
+
+    def test_the_flatpak_builds_neither_daemon_nor_units(self):
+        with open(os.path.join(SOURCE_ROOT, "contrib", "flatpak", "us.gridcoin.GridcoinResearch.yml"),
+                  encoding="utf8") as f:
+            manifest = f.read()
+        for option in ("-DENABLE_DAEMON=OFF", "-DINSTALL_SYSTEMD_UNITS=OFF"):
+            self.assertRegex(manifest, r"(?m)^      - %s$" % re.escape(option))
+
+    def test_the_testnet_package_builds_what_its_own_launcher_runs(self):
+        # debian-testnet installs its own desktop file with both actions, so its build must have
+        # the multiprocess GUI, the daemon and the units, and the actions must name its units.
+        with open(os.path.join(SOURCE_ROOT, "debian-testnet", "rules"), encoding="utf8") as f:
+            rules = f.read()
+        for option in ("-DENABLE_MULTIPROCESS=ON", "-DENABLE_DAEMON=ON", "-DGRC_UNIT_NETWORK=test"):
+            self.assertIn(option, rules)
+        self.assertNotIn("INSTALL_SYSTEMD_UNITS", rules)
+        with open(os.path.join(SOURCE_ROOT, "debian-testnet", "gridcointestnet-qt.desktop"), encoding="utf8") as f:
+            actions, listed = desktop_actions(f.read())
+        self.assertEqual(sorted(listed), ["Multiprocess", "SystemService", "Testnet"])
+        self.assertEqual(actions["SystemService"], "/usr/bin/gridcointestnet -testnet -multiprocess "
+                                                   "-ipcdir=/run/gridcointestnetd -ipcserviceuser=gridcointestnet")
+
+
 class ResolveDatadirTests(ServiceTestBase):
     def test_no_override_means_no_datadir(self):
         self.assertIsNone(svc.resolve_datadir(self.host.users["bob"], None))

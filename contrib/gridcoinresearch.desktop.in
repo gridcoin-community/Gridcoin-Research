@@ -1,3 +1,5 @@
+# Generated from contrib/gridcoinresearch.desktop.in by cmake/desktop_file.cmake: the actions
+# after Testnet are added only when the build can run them.
 [Desktop Entry]
 Version=1.0
 Name=Gridcoin
@@ -13,16 +15,8 @@ Terminal=false
 Type=Application
 Icon=gridcoinresearch
 StartupWMClass=gridcoinresearch
-Actions=Testnet;Multiprocess;SystemService;
+Actions=@GRC_DESKTOP_ACTIONS@
 
 [Desktop Action Testnet]
 Name=Testnet
-Exec=sh -c "gridcoinresearch -testnet"
-
-[Desktop Action Multiprocess]
-Name=Connect to your own core
-Exec=gridcoinresearch -multiprocess
-
-[Desktop Action SystemService]
-Name=Connect to the system service
-Exec=gridcoinresearch -multiprocess -ipcdir=/run/gridcoinresearchd -ipcserviceuser=gridcoin
+Exec=sh -c "gridcoinresearch -testnet"@GRC_DESKTOP_ACTION_GROUPS@
