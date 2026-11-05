@@ -58,11 +58,11 @@ SKIP_TOP = {".lock", "node.sock", "ipc.cookie"}
 QUARANTINE_TOP = {"gridcoinresearch.conf", "gridcoinsettings.json", "DB_CONFIG"}
 CONF_NAME = "gridcoinresearch.conf"
 SETTINGS_NAME = "gridcoinsettings.json"
-# The core's dated copies of those two files (GetBackupFilename: "<name>-<time>[-<suffix>]"
-# in walletbackups/), quarantined like the files themselves. Matched against paths relative
-# to the datadir.
-BACKUP_DIR = "walletbackups"
-CONFIG_BACKUP_RE = re.compile(r"walletbackups/(gridcoinresearch\.conf|gridcoinsettings\.json)-")
+# The basename of the core's dated copies of those two files, GetBackupFilename's
+# "<name>-<time>[-<suffix>]" with FormatISO8601DateTimeDashSep's time. They are quarantined
+# like the files themselves, wherever they are in the datadir: -backupdir can put them anywhere.
+CONFIG_BACKUP_RE = re.compile(r"(gridcoinresearch\.conf|gridcoinsettings\.json)-"
+                              r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z(-.*)?", re.S)
 # The core's default datadir under the home directory (GetDefaultDataDir on Linux).
 DATADIR_NAME = ".GridcoinResearch"
 STASH_INFIX = ".in-service-"
@@ -797,7 +797,7 @@ def stream_dir(tar, dir_fd, prefix, exclude_top, dev):
         if not prefix and name in exclude_top:
             continue
         rel = prefix + name
-        if CONFIG_BACKUP_RE.match(rel):
+        if CONFIG_BACKUP_RE.fullmatch(name):
             continue
         fd, st = open_entry(dir_fd, name, rel, dev)
         try:
@@ -821,7 +821,7 @@ def stream_dir(tar, dir_fd, prefix, exclude_top, dev):
 def stream_tree(src_dir, out, exclude_top):
     """Write the directories and regular files below src_dir (a path, or an open directory fd) to
     out as a tar stream, leaving out the top-level names in exclude_top and the core's backups of
-    its conf and settings in walletbackups/ (quarantine_files takes those). Each entry is opened
+    its conf and settings, at any depth (quarantine_files takes those). Each entry is opened
     without following a symlink and checked with fstat; anything else, at any depth, raises
     TreeError naming its path relative to src_dir, as does an entry on another filesystem."""
     top = open_dir(src_dir) if isinstance(src_dir, str) else src_dir
@@ -1268,33 +1268,48 @@ def read_owned_file(dir_fd, name, owner_uids, display):
     return data
 
 
-def quarantine_files(src_fd, src_display, owner_uid, q_fd):
-    """Copy the QUARANTINE_TOP files of src_fd, and the core's backups of them in walletbackups/,
-    into q_fd. Returns the top-level files' contents by name, and the backups' paths."""
+def quarantine_files(src_fd, src_display, owner_uid, q_fd, exclude_top=frozenset()):
+    """Copy the QUARANTINE_TOP files of src_fd, and the core's backups of them anywhere below it
+    apart from the top-level names in exclude_top, into q_fd, the backups at the same relative
+    paths. Directories are walked without following a symlink, and one on another filesystem is
+    refused before anything in it is read. Returns the top-level files' contents by name, and the
+    backups' relative paths."""
     found = {}
     for name in sorted(QUARANTINE_TOP & set(os.listdir(src_fd))):
         found[name] = read_owned_file(src_fd, name, (owner_uid,), os.path.join(src_display, name))
         write_new_file(q_fd, name, found[name])
     backups = []
-    if BACKUP_DIR not in os.listdir(src_fd):
-        return found, backups
-    dir_display = os.path.join(src_display, BACKUP_DIR)
-    backup_fd = open_dir(BACKUP_DIR, dir_fd=src_fd, uids=(owner_uid,), display=dir_display)
-    q_backup_fd = None
-    try:
-        for name in sorted(os.listdir(backup_fd)):
-            rel = BACKUP_DIR + "/" + name
-            if not CONFIG_BACKUP_RE.match(rel):
+    dev = os.fstat(src_fd).st_dev
+
+    def walk(dir_fd, prefix, q_parent):
+        for name in sorted(os.listdir(dir_fd)):
+            rel = prefix + name
+            if not prefix and name in exclude_top:
                 continue
-            data = read_owned_file(backup_fd, name, (owner_uid,), os.path.join(dir_display, name))
-            if q_backup_fd is None:
-                q_backup_fd = create_dir(BACKUP_DIR, q_fd, BACKUP_DIR)
-            write_new_file(q_backup_fd, name, data)
-            backups.append(rel)
-    finally:
-        os.close(backup_fd)
-        if q_backup_fd is not None:
-            os.close(q_backup_fd)
+            if CONFIG_BACKUP_RE.fullmatch(name):
+                data = read_owned_file(dir_fd, name, (owner_uid,), os.path.join(src_display, rel))
+                write_new_file(q_parent(), name, data)
+                backups.append(rel)
+                continue
+            if not stat.S_ISDIR(os.stat(name, dir_fd=dir_fd, follow_symlinks=False).st_mode):
+                continue
+            fd, _ = open_entry(dir_fd, name, rel, dev)
+            q_fds = []
+
+            def q_child(parent=q_parent, child=name):
+                # The quarantine's copy of this directory, made when its first backup is found.
+                if not q_fds:
+                    q_fds.append(make_dir(child, parent(), child))
+                return q_fds[0]
+
+            try:
+                walk(fd, rel + "/", q_child)
+            finally:
+                os.close(fd)
+                for q in q_fds:
+                    os.close(q)
+
+    walk(src_fd, "", lambda: q_fd)
     return found, backups
 
 
@@ -1333,7 +1348,7 @@ def sanitize_quarantined(found, patterns, q_fd, src_display):
 def report_quarantine(found, backups, q_display, lines):
     names = sorted(found)
     if backups:
-        names.append("%d of their backups from %s/" % (len(backups), BACKUP_DIR))
+        names.append("%d backups of them" % len(backups))
     if names:
         print("Quarantined %s in %s (root only); review before using any of it." % (", ".join(names), q_display))
     for line in lines:
@@ -1554,7 +1569,7 @@ def cmd_enable(args, net, host, paths):
                 os.fchmod(t_fd, 0o700)
             q_fd, q_display = open_quarantine(state_fd, paths, pw.pw_name, args.network, host)
             keep(q_fd)
-            found, backups = quarantine_files(s_fd, s_display, pw.pw_uid, q_fd)
+            found, backups = quarantine_files(s_fd, s_display, pw.pw_uid, q_fd, testnet_entries)
             settings_text, lines = sanitize_quarantined(found, patterns, q_fd, s_display)
             copy_tree(s_fd, t_fd, pw.pw_name, net.account, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host,
                       s_display)
@@ -1683,7 +1698,7 @@ def cmd_disable(args, net, host, paths):
                 else:
                     s_fd = d_fd
                 testnet_entries = set() if net.testnet else {"testnet"}
-                found, backups = quarantine_files(t_fd, t_display, acct.pw_uid, q_fd)
+                found, backups = quarantine_files(t_fd, t_display, acct.pw_uid, q_fd, testnet_entries)
                 settings_text, lines = sanitize_quarantined(found, patterns, q_fd, t_display)
                 copy_tree(t_fd, s_fd, net.account, pw.pw_name, SKIP_TOP | QUARANTINE_TOP | testnet_entries, host,
                           t_display)

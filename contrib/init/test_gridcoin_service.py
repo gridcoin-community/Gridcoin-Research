@@ -1092,17 +1092,20 @@ class CopyTests(ServiceTestBase):
         self.assertEqual(read_tree(self.dst), {"c": b"2"})
 
     def test_stream_leaves_out_config_backups(self):
-        write_tree(self.src, {"walletbackups/gridcoinresearch.conf-x": b"1",
-                              "walletbackups/gridcoinsettings.json-y": b"2",
-                              "walletbackups/wallet-z.dat": b"3", "gridcoinresearch.conf-x": b"4",
-                              "a/walletbackups/gridcoinresearch.conf-x": b"5"})
+        # The basename with GetBackupFilename's time (FormatISO8601DateTimeDashSep), at any depth.
+        write_tree(self.src, {"walletbackups/gridcoinresearch.conf-2026-11-01T00-00-00Z": b"1",
+                              "walletbackups/gridcoinsettings.json-2026-11-01T00-00-00Z-x": b"2",
+                              "walletbackups/wallet-2026-11-01T00-00-00Z.dat": b"3",
+                              "gridcoinresearch.conf-2026-11-01T00-00-00Z": b"4",
+                              "a/b/gridcoinsettings.json-2026-11-01T00-00-00Z": b"5",
+                              "gridcoinresearch.conf-x": b"6", "walletbackups/gridcoinresearch.conf-2026": b"7"})
         buf = io.BytesIO()
         svc.stream_tree(self.src, buf, set())
         buf.seek(0)
         with tarfile.open(fileobj=buf, mode="r|") as tar:
             names = sorted(m.name for m in tar)
-        self.assertEqual(names, ["a", "a/walletbackups", "a/walletbackups/gridcoinresearch.conf-x",
-                                 "gridcoinresearch.conf-x", "walletbackups", "walletbackups/wallet-z.dat"])
+        self.assertEqual(names, ["a", "a/b", "gridcoinresearch.conf-x", "walletbackups",
+                                 "walletbackups/gridcoinresearch.conf-2026", "walletbackups/wallet-2026-11-01T00-00-00Z.dat"])
 
     def test_open_entry_refuses_an_entry_swapped_after_lstat(self):
         write_tree(self.src, {"a": b"1"})
@@ -1462,43 +1465,80 @@ class EnableTests(SwitchTestBase):
 
     def test_config_backups_are_quarantined_not_copied(self):
         # The core keeps dated copies of both files in walletbackups/ (GetBackupFilename).
-        conf_backup = "walletbackups/gridcoinresearch.conf-2026-11-01T00-00-00"
-        settings_backup = "walletbackups/gridcoinsettings.json-2026-11-01T00-00-00-manual"
+        # Wherever they are: a -backupdir inside the datadir puts them elsewhere than walletbackups/.
+        backups = {
+            "walletbackups/gridcoinresearch.conf-2026-11-01T00-00-00Z": b"blocknotify=/bin/evil\n",
+            "walletbackups/gridcoinsettings.json-2026-11-01T00-00-00Z-manual": b'{"blocknotify": "evil"}',
+            "mybackups/gridcoinresearch.conf-2026-11-01T00-00-01Z": b"walletnotify=/bin/evil\n",
+            "gridcoinsettings.json-2026-11-01T00-00-02Z": b"{}",
+            "a/b/gridcoinresearch.conf-2026-11-01T00-00-03Z": b"x=1\n",
+        }
         files = self.user_files()
-        files[conf_backup] = b"blocknotify=/bin/evil\n"
-        files[settings_backup] = b'{"blocknotify": "evil"}'
+        files.update(backups)
+        files["mybackups/wallet-2026-11-01T00-00-01Z.dat"] = b"wallet backup"
         write_tree(self.datadir, files)
         rc, out, err = self.run_main("enable", "bob")
         self.assertEqual(rc, 0, err)
         t = read_tree(self.target())
-        self.assertNotIn(conf_backup, t)
-        self.assertNotIn(settings_backup, t)
+        for name in backups:
+            self.assertNotIn(name, t)
         self.assertEqual(t["walletbackups/wallet-1.dat"], b"backup")
+        self.assertEqual(t["mybackups/wallet-2026-11-01T00-00-01Z.dat"], b"wallet backup")
         [q] = self.quarantine_dirs()
         quarantined = read_tree(q)
-        self.assertEqual(quarantined[conf_backup], b"blocknotify=/bin/evil\n")
-        self.assertEqual(quarantined[settings_backup], b'{"blocknotify": "evil"}')
+        for name, data in backups.items():
+            self.assertEqual(quarantined[name], data)
         self.assertNotIn("evil", out + err)
 
         # And on the way back.
-        write_tree(self.target(), {"walletbackups/gridcoinresearch.conf-2026-11-02T00-00-00": b"walletnotify=x\n",
-                                   "walletbackups/gridcoinsettings.json-2026-11-02T00-00-00": b"{}"})
+        write_tree(self.target(), {"walletbackups/gridcoinresearch.conf-2026-11-02T00-00-00Z": b"walletnotify=x\n",
+                                   "walletbackups/gridcoinsettings.json-2026-11-02T00-00-00Z": b"{}"})
         rc, out, err = self.run_main("disable", "bob")
         self.assertEqual(rc, 0, err)
         s = read_tree(self.datadir)
         self.assertEqual([k for k in s if "-2026-11-02" in k], [])
         self.assertEqual(s["walletbackups/wallet-1.dat"], b"backup")
         back = read_tree(self.quarantine_dirs()[-1])
-        self.assertEqual(back["walletbackups/gridcoinresearch.conf-2026-11-02T00-00-00"], b"walletnotify=x\n")
-        self.assertEqual(back["walletbackups/gridcoinsettings.json-2026-11-02T00-00-00"], b"{}")
+        self.assertEqual(back["walletbackups/gridcoinresearch.conf-2026-11-02T00-00-00Z"], b"walletnotify=x\n")
+        self.assertEqual(back["walletbackups/gridcoinsettings.json-2026-11-02T00-00-00Z"], b"{}")
+
+    def test_config_backups_on_a_sub_mount_refuse_before_reading(self):
+        files = self.user_files()
+        files["walletbackups/gridcoinresearch.conf-2026-11-01T00-00-00Z"] = b"x=1\n"
+        write_tree(self.datadir, files)
+        real_stat = os.stat
+
+        def mounted(name, *args, **kwargs):
+            st = real_stat(name, *args, **kwargs)
+            return changed_stat(st, st_dev=st.st_dev + 1) if name == "walletbackups" else st
+
+        with mock.patch.object(svc.os, "stat", mounted):
+            rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("walletbackups", err)
+        self.assertIn("another filesystem", err)
+        [q] = self.quarantine_dirs()
+        self.assertNotIn("walletbackups", os.listdir(q))
+        self.assertEqual(os.listdir(self.target()), [])
+
+    def test_testnet_backups_stay_with_testnet_on_a_mainnet_switch(self):
+        files = self.user_files()
+        files["testnet/walletbackups/gridcoinresearch.conf-2026-11-01T00-00-00Z"] = b"t=1\n"
+        write_tree(self.datadir, files)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(read_tree(self.datadir)["testnet/walletbackups/gridcoinresearch.conf-2026-11-01T00-00-00Z"],
+                         b"t=1\n")
+        [q] = self.quarantine_dirs()
+        self.assertNotIn("testnet", os.listdir(q))
 
     def test_a_config_backup_that_is_not_a_plain_file_refuses(self):
         write_tree(self.datadir, self.user_files())
         os.symlink(os.path.join(self.tmp.name, "login.defs"),
-                   os.path.join(self.datadir, "walletbackups", "gridcoinresearch.conf-2026-11-01T00-00-00"))
+                   os.path.join(self.datadir, "walletbackups", "gridcoinresearch.conf-2026-11-01T00-00-00Z"))
         rc, out, err = self.run_main("enable", "bob")
         self.assertEqual(rc, 1)
-        self.assertIn("gridcoinresearch.conf-2026-11-01T00-00-00", err)
+        self.assertIn("gridcoinresearch.conf-2026-11-01T00-00-00Z", err)
         self.assertNotIn(("add_to_group", "bob", "gridcoin-gui"), self.host.calls)
         self.assertEqual(os.listdir(self.target()), [])
 
