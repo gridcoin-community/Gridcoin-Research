@@ -280,13 +280,15 @@ BOOST_AUTO_TEST_CASE(win_acl_service_conf_is_clean)
     BOOST_CHECK(Classify(acl, ServiceSid()) == fsmodes::WinAclVerdict::Clean);
 }
 
-// Each right that changes a file, given to the Users group on a file this account does not
-// own, is reported as not ours to fix.
+// Each right that changes a path, given to the Users group on a path this account does not
+// own, is reported as not ours to fix. FILE_DELETE_CHILD is among them: on a directory it
+// deletes any entry inside, such as wallet.dat.
 BOOST_AUTO_TEST_CASE(win_acl_not_owned_users_write_warns)
 {
     for (const uint32_t right : {uint32_t{FILE_WRITE_DATA}, uint32_t{FILE_APPEND_DATA}, uint32_t{FILE_WRITE_EA},
                                  uint32_t{FILE_WRITE_ATTRIBUTES}, uint32_t{DELETE}, uint32_t{WRITE_DAC},
-                                 uint32_t{WRITE_OWNER}, uint32_t{GENERIC_WRITE}, uint32_t{GENERIC_ALL}}) {
+                                 uint32_t{WRITE_OWNER}, uint32_t{GENERIC_WRITE}, uint32_t{GENERIC_ALL},
+                                 uint32_t{FILE_DELETE_CHILD}}) {
         const ObservedAcl acl = Acl(wellknown::Administrators(), {
             Ace(wellknown::Administrators(), FILE_ALL_ACCESS),
             Ace(wellknown::System(), FILE_ALL_ACCESS),
@@ -386,6 +388,27 @@ BOOST_AUTO_TEST_CASE(win_acl_warning_for_an_owned_directory_makes_it_owner_only)
     BOOST_CHECK_MESSAGE(IsAsciiLine(warning), warning);
 }
 
+// A directory entry whose only right that changes anything is FILE_DELETE_CHILD (icacls
+// "(DC)") lets that account delete what the directory holds. It is reported, the account is
+// named, and the command removes its entry.
+BOOST_AUTO_TEST_CASE(win_acl_warning_for_a_delete_child_entry)
+{
+    const fs::path path = "D:\\Gridcoin";
+    const ObservedAcl acl = Acl(Self(), {
+        Ace(Self(), FILE_ALL_ACCESS),
+        Ace(wellknown::System(), FILE_ALL_ACCESS),
+        Ace(wellknown::Users(), FILE_DELETE_CHILD | SYNCHRONIZE),
+    });
+    BOOST_REQUIRE(Classify(acl) == fsmodes::WinAclVerdict::Wide);
+
+    const std::string warning = fsmodes::WinAclWarning(path, acl, Self(), /*directory=*/true);
+    BOOST_TEST_MESSAGE(warning);
+
+    CheckHas(warning, "S-1-5-32-545 (Users) can change it (access mask 0x00100040)");
+    CheckHas(warning, "/remove:g *S-1-5-32-545");
+    BOOST_CHECK_MESSAGE(IsAsciiLine(warning), warning);
+}
+
 // For a file, nothing inherits the fix. Two entries for one account are named once, with the
 // rights they give together.
 BOOST_AUTO_TEST_CASE(win_acl_warning_for_an_owned_file)
@@ -414,9 +437,11 @@ BOOST_AUTO_TEST_CASE(win_acl_warning_for_an_owned_file)
     CheckHasNot(no_dacl, "/remove");
 }
 
-// For a path another account owns, the fix only takes away the other accounts' access, which
-// its owner or an administrator can do: who controls the path stays as it is. An entry that is
-// inherited is first made the path's own, so that it can be removed.
+// For a path another account owns, the fix takes the other accounts' access away and gives this
+// account no entry. With an allowed owner (here Administrators) the owner stays, and it or an
+// administrator can run the fix. An entry that is inherited is first made the path's own, so
+// that it can be removed. With an owner outside the allowed accounts, or one that could not be
+// read, the fix makes this account the owner, which takes an administrator.
 BOOST_AUTO_TEST_CASE(win_acl_warning_for_a_path_another_account_owns)
 {
     const fs::path conf = "C:\\ProgramData\\Gridcoin\\gridcoinresearch.conf";
@@ -435,8 +460,10 @@ BOOST_AUTO_TEST_CASE(win_acl_warning_for_a_path_another_account_owns)
     CheckHas(warning, "owned by S-1-5-32-544 (Administrators)");
     CheckHas(warning, "icacls \"" + conf.string() + "\" /inheritance:d && icacls \"" + conf.string() +
                           "\" /remove:g *S-1-5-32-545");
+    CheckHas(warning, "only its owner or an administrator can change it");
     CheckHasNot(warning, "/grant");
     CheckHasNot(warning, "/inheritance:r");
+    CheckHasNot(warning, "/setowner");
     BOOST_CHECK_MESSAGE(IsAsciiLine(warning), warning);
 
     // An entry of the path's own needs no copy of the inherited ones.
@@ -446,8 +473,8 @@ BOOST_AUTO_TEST_CASE(win_acl_warning_for_a_path_another_account_owns)
     CheckHas(explicit_entry, "icacls \"" + conf.string() + "\" /remove:g *S-1-5-32-545");
     CheckHasNot(explicit_entry, "/inheritance");
 
-    // An owner that is another user can change the access list, so an administrator is asked
-    // to make this account the owner.
+    // An owner that is another user can change the access list. Making this account the owner
+    // instead takes an administrator, and the warning says so.
     const ObservedAcl foreign_owner = Acl(OtherUser(), {
         Ace(Self(), FILE_ALL_ACCESS),
         Ace(wellknown::System(), FILE_ALL_ACCESS),
@@ -456,9 +483,18 @@ BOOST_AUTO_TEST_CASE(win_acl_warning_for_a_path_another_account_owns)
     BOOST_TEST_MESSAGE(other);
     CheckHas(other, "owned by " + FormatSid(OtherUser()) + ", which can change its access list");
     BOOST_CHECK_EQUAL(Occurrences(other, FormatSid(OtherUser())), 1U);
-    CheckHas(other, "icacls \"" + conf.string() + "\" /setowner *" + FormatSid(Self()));
+    CheckHas(other, "Only an administrator can give it to this account. In an elevated command prompt, make this "
+                    "account its owner: icacls \"" + conf.string() + "\" /setowner *" + FormatSid(Self()));
     CheckHasNot(other, "/remove");
+    CheckHasNot(other, "/grant");
     BOOST_CHECK_MESSAGE(IsAsciiLine(other), other);
+
+    // With other accounts on its list as well, they are removed after the owner is changed.
+    ObservedAcl foreign_and_users = foreign_owner;
+    foreign_and_users.aces.push_back(Ace(wellknown::Users(), READ_RIGHTS));
+    const std::string both = fsmodes::WinAclWarning(conf, foreign_and_users, Self(), /*directory=*/false);
+    CheckHas(both, "/setowner *" + FormatSid(Self()) + ", then remove the other accounts' access: icacls \"" +
+                       conf.string() + "\" /remove:g *S-1-5-32-545");
 
     // So is an owner that could not be read.
     ObservedAcl unknown_owner = foreign_owner;
@@ -466,6 +502,50 @@ BOOST_AUTO_TEST_CASE(win_acl_warning_for_a_path_another_account_owns)
     const std::string unknown = fsmodes::WinAclWarning(conf, unknown_owner, Self(), /*directory=*/false);
     CheckHas(unknown, "its owner could not be read");
     CheckHas(unknown, "/setowner *" + FormatSid(Self()));
+}
+
+// A path on a volume that keeps no access lists is open to every account, and the warning
+// points to an NTFS volume rather than to an access list that cannot be set.
+BOOST_AUTO_TEST_CASE(win_no_acl_volume_warning_points_to_ntfs)
+{
+    const fs::path path = "E:\\GridcoinResearch";
+    const std::string warning = fsmodes::WinNoAclVolumeWarning(path);
+    BOOST_TEST_MESSAGE(warning);
+
+    CheckHas(warning, "WARNING: E:\\GridcoinResearch ");
+    CheckHas(warning, "FAT or exFAT");
+    CheckHas(warning, "NTFS");
+    CheckHasNot(warning, "/grant");
+    CheckHasNot(warning, "/remove");
+    BOOST_CHECK_MESSAGE(IsAsciiLine(warning), warning);
+}
+
+// Only a reparse point whose tag is a name surrogate (a symbolic link, a junction, a mount
+// point) is a link to the check. Others, such as a cloud file's placeholder, a deduplicated
+// file or an AF_UNIX socket, are the file itself. Without the reparse attribute the tag means
+// nothing.
+BOOST_AUTO_TEST_CASE(classify_win_entry_counts_name_surrogates_as_links)
+{
+    constexpr uint32_t DIRECTORY = 0x10, ARCHIVE = 0x20, REPARSE_POINT = 0x400;
+    constexpr uint32_t TAG_SYMLINK = 0xA000000C, TAG_MOUNT_POINT = 0xA0000003, TAG_CLOUD = 0x9000001A,
+                       TAG_DEDUP = 0x80000013, TAG_AF_UNIX = 0x80000023;
+
+    const auto check = [](uint32_t attributes, uint32_t tag, bool directory, bool reparse, bool link) {
+        const fsmodes::WinEntry entry = fsmodes::ClassifyWinEntry(attributes, tag);
+        BOOST_CHECK_MESSAGE(entry.directory == directory && entry.reparse == reparse && entry.link == link,
+                            "attributes 0x" << std::hex << attributes << ", tag 0x" << tag);
+    };
+
+    check(ARCHIVE, 0, false, false, false);
+    check(DIRECTORY, 0, true, false, false);
+    check(ARCHIVE | REPARSE_POINT, TAG_SYMLINK, false, true, true);
+    check(DIRECTORY | REPARSE_POINT, TAG_SYMLINK, true, true, true);
+    check(DIRECTORY | REPARSE_POINT, TAG_MOUNT_POINT, true, true, true);
+    check(ARCHIVE | REPARSE_POINT, TAG_CLOUD, false, true, false);
+    check(DIRECTORY | REPARSE_POINT, TAG_CLOUD, true, true, false);
+    check(ARCHIVE | REPARSE_POINT, TAG_DEDUP, false, true, false);
+    check(ARCHIVE | REPARSE_POINT, TAG_AF_UNIX, false, true, false);
+    check(ARCHIVE, TAG_SYMLINK, false, false, false);
 }
 
 // The startup warning for a backup directory whose files cannot be owner-only names the
@@ -488,6 +568,11 @@ BOOST_AUTO_TEST_CASE(backup_dir_warning_names_the_cause)
     BOOST_CHECK_MESSAGE(warning->find("other users") != std::string::npos, *warning);
     BOOST_CHECK_MESSAGE(warning->find("not writable") == std::string::npos, *warning);
     BOOST_CHECK_MESSAGE(warning->find("Make it writable") == std::string::npos, *warning);
+#ifdef WIN32
+    // On Windows the cause may be a volume without access lists or a share that refuses one.
+    BOOST_CHECK_MESSAGE(warning->find("FAT or exFAT") != std::string::npos, *warning);
+    BOOST_CHECK_MESSAGE(warning->find("network share") != std::string::npos, *warning);
+#endif
 
     fsmodes::BackupDirCheck locked;
     locked.not_writable = "Permission denied (13)";
@@ -1012,6 +1097,50 @@ BOOST_AUTO_TEST_CASE(owned_by_us_false_for_a_junction)
     BOOST_CHECK(::RemoveDirectoryW(link.wstring().c_str()));
 }
 
+// A file symbolic link is not ours and nothing is appended through it; in the checked set it is
+// reported, not followed. A copy to a name that is a dangling link creates nothing where the
+// link leads: the new-target open does not follow it, and the existing-target open finds no
+// file. Creating the links needs Developer Mode or the privilege to create symbolic links;
+// without either the case says so and stops.
+BOOST_AUTO_TEST_CASE(file_symlinks_are_not_followed)
+{
+    if (SkipUnderWine()) return;
+
+    const WinTempDir dir;
+    const fs::path target = dir.path / "real_wallet";
+    CreateWithAcl(target, util::OwnerOnlyAclSpec(/*inheritable=*/false));
+
+    // SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE: honoured in Developer Mode.
+    const fs::path link = dir.path / "wallet.dat";
+    if (!::CreateSymbolicLinkW(link.wstring().c_str(), target.wstring().c_str(),
+                               SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE)) {
+        BOOST_TEST_MESSAGE("file_symlinks_are_not_followed: cannot create a symbolic link here (error "
+                           << ::GetLastError() << "); enable Developer Mode or run elevated to cover it");
+        return;
+    }
+
+    BOOST_CHECK(fsmodes::OwnedByUs(target));
+    BOOST_CHECK(!fsmodes::OwnedByUs(link));
+    BOOST_CHECK(fsmodes::AppendToOwnedFile(link, "rpcpassword=fsmodes\n").status == fsmodes::AppendStatus::NotOwned);
+    BOOST_CHECK_EQUAL(ReadAll(target), "fsmodes test\n");
+
+    const auto findings = fsmodes::CheckOwnerOnlyModes({}, {}, {}, link, {}, {});
+    BOOST_REQUIRE_EQUAL(findings.size(), 1U);
+    BOOST_CHECK(findings[0].kind == fsmodes::ModeFinding::Kind::Symlink);
+
+    const fs::path source = dir.path / "source";
+    {
+        fsbridge::ofstream stream(source, std::ios::binary);
+        stream << "wallet bytes\n";
+    }
+    const fs::path nowhere = dir.path / "nowhere";
+    const fs::path dangling = dir.path / "dangling";
+    BOOST_REQUIRE(::CreateSymbolicLinkW(dangling.wstring().c_str(), nowhere.wstring().c_str(),
+                                        SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE));
+    BOOST_CHECK_THROW(fsmodes::CopyFileOwnerOnly(source, dangling), fs::filesystem_error);
+    BOOST_CHECK(!fs::exists(nowhere));
+}
+
 // A wallet file this account owns that the Users group can read is reported, naming Users and
 // the command that fixes it, and its access list is left exactly as it was: it still does not
 // match the owner-only list.
@@ -1117,7 +1246,8 @@ BOOST_AUTO_TEST_CASE(check_walks_the_wallet_files_and_changes_nothing)
 }
 
 // A configuration file another account owns, here %SystemRoot%\win.ini, is at most reported
-// as not ours, with a fix that does not take it over, and its access list is left as it is.
+// as not ours, with a fix that gives this account no entry on it, and its access list is left
+// as it is.
 BOOST_AUTO_TEST_CASE(check_leaves_a_foreign_owned_conf)
 {
     if (SkipUnderWine()) return;

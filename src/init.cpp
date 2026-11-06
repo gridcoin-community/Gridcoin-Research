@@ -676,7 +676,8 @@ static void CreateNewConfigFile()
     // and on a data directory the operator had previously widened that window is
     // readable. On Windows there is no meaningful chmod, but the file inherits the
     // data directory's owner+SYSTEM DACL from creation (util::CreateOwnerOnlyDirectory
-    // applies it inheritable), which closes the same window by a different route.
+    // gives it, inheritable, when it creates the directory), which closes the same window
+    // by a different route.
 #ifndef WIN32
     if (::chmod(GetConfigFile().string().c_str(), 0600) != 0) {
         LogPrintf("WARNING: %s: could not restrict %s to owner-only (errno %d); it will contain "

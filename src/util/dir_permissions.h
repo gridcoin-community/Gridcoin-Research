@@ -101,8 +101,9 @@ bool RestrictErrorMeansNoModes(int err);
 //! call site, as ipc/process.cpp does when it creates the IPC socket.
 //!
 //! No-op on Windows, which has no umask. There the equivalent protection is the
-//! data directory's inheritable owner+SYSTEM DACL, applied by
-//! CreateOwnerOnlyDirectory() and inherited by everything created inside it.
+//! data directory's inheritable owner+SYSTEM DACL, which CreateOwnerOnlyDirectory()
+//! gives the directory when it creates it, and which everything created inside
+//! inherits.
 void SetOwnerOnlyUmask();
 
 #ifdef WIN32

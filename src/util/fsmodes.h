@@ -34,7 +34,8 @@ struct ModeFinding
     enum class Kind
     {
         //! An existing path owned by this account has a mode wider than the rule allows. On
-        //! Windows: its access list lets another account read or change it.
+        //! Windows: its access list lets another account read or change it, or it is on a
+        //! volume that keeps no access lists.
         WideMode,
         //! The same for a path owned by another account. Reported only, as this account cannot fix it.
         WideModeNotOwned,
@@ -122,18 +123,41 @@ enum class WinAclVerdict : uint8_t
 
 //! The Windows rule for every checked path. The allowed accounts are \p self, SYSTEM and
 //! Administrators. Anything that lets another account read (mask::READISH) or change
-//! (mask::FILE_WRITEISH) the path is a finding: an allow entry for it, a missing DACL, and an
-//! owner that is not an allowed account, since an owner can always change the access list.
-//! Deny and inherit-only entries are not. A finding on a path \p self owns is Wide, on any
-//! other WideNotOwned. Pure.
+//! (mask::FILE_WRITEISH, or FILE_DELETE_CHILD, which deletes a directory's entries) the path is
+//! a finding: an allow entry for it, a missing DACL, and an owner that is not an allowed
+//! account, since an owner can always change the access list. Deny and inherit-only entries
+//! are not. A finding on a path \p self owns is Wide, on any other WideNotOwned. Pure.
 WinAclVerdict ClassifyWinAcl(const util::winacl::ObservedAcl& acl, const util::winacl::Sid& self);
 
 //! The startup warning for \p path, whose access list ClassifyWinAcl did not find Clean:
-//! which accounts can read or change it, and the icacls command that removes their access
-//! (for a path \p self owns, one that makes it owner-only, as the core creates it).
+//! which accounts can read or change it, and the icacls commands that remove their access. For
+//! a path \p self owns, one command makes it owner-only, as the core creates it. For any other
+//! the commands give this account no entry; they make it the owner only when the owner is
+//! outside the allowed accounts or could not be read, and say that this takes an administrator.
 //! \p directory says whether the path is a directory, whose entries then inherit the fix. Pure.
 std::string WinAclWarning(const fs::path& path, const util::winacl::ObservedAcl& acl,
                           const util::winacl::Sid& self, bool directory);
+
+//! The startup warning for \p path on a volume that keeps no access lists (FAT, exFAT): every
+//! account can read and change it, and the remedy is an NTFS volume, not icacls. Pure.
+std::string WinNoAclVolumeWarning(const fs::path& path);
+
+//! What the startup check makes of a Windows path from its attributes and, for a reparse point,
+//! its reparse tag (FILE_ATTRIBUTE_TAG_INFO).
+struct WinEntry
+{
+    bool directory{false};
+    //! A reparse point of any kind. OwnedByUs and AppendToOwnedFile refuse every one.
+    bool reparse{false};
+    //! A reparse point that names another path (IsReparseTagNameSurrogate): a symbolic link, a
+    //! junction or a mount point. The check reports it as a link. A reparse point that does not,
+    //! such as the placeholder of a cloud file, is checked as the file itself.
+    bool link{false};
+};
+
+//! \p attributes and \p reparse_tag as a WinEntry. The tag is read only when the attributes
+//! mark a reparse point. Pure.
+WinEntry ClassifyWinEntry(uint32_t attributes, uint32_t reparse_tag);
 
 //! What the startup check of the backup directory found.
 struct BackupDirCheck
@@ -144,7 +168,8 @@ struct BackupDirCheck
     //! by the check, could not be restricted, or a file created there with mode 0600 has
     //! another mode (a filesystem without POSIX modes, such as FAT). Backups are still
     //! written there. On Windows the probe is created with the owner-only access list, and
-    //! a volume that does not keep it (FAT, exFAT) gives the reason.
+    //! a volume that does not keep it (FAT, exFAT) or a network share that does not accept it
+    //! gives the reason.
     std::optional<std::string> not_owner_only;
 };
 
@@ -166,8 +191,11 @@ std::optional<std::string> BackupDirWarning(const fs::path& backupdir, const Bac
 //!
 //! On Windows a target that does not exist is created with the owner-only access list (this
 //! account and SYSTEM, protected) and read back through its handle before any data is written;
-//! an existing target keeps its access list. The reason returned is why the new target does not
-//! hold that list (a volume that keeps no access lists, such as FAT).
+//! an existing target keeps its access list. A link at the new target's name is not followed:
+//! the name counts as taken, and the existing-target path, which follows it, applies. The
+//! reason returned is why the new target does not hold that list: a volume that keeps no access
+//! lists, such as FAT, or a network share that refused the list, where the target is created
+//! with the list it inherits. Error texts are ASCII.
 std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::path& target);
 
 } // namespace fsmodes

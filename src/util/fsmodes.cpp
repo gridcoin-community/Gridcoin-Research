@@ -66,6 +66,29 @@ void CheckWalletFiles(Checker& checker, const fs::path& datadir, const fs::path&
     checker.Check(debuglog, /*follow_link=*/true);
 }
 
+// The single rights by their bare names: <windows.h>'s macros where it is included,
+// util::winacl::mask's constants elsewhere, with the same values.
+namespace rights {
+using namespace util::winacl::mask;
+
+//! The rights that change a path: FILE_WRITEISH, and FILE_DELETE_CHILD, with which an account
+//! can delete any entry of a directory, such as wallet.dat, a backup or the conf. On a file
+//! FILE_DELETE_CHILD means nothing, so counting it there changes nothing.
+constexpr uint32_t CHANGE = FILE_WRITEISH | FILE_DELETE_CHILD;
+} // namespace rights
+
+// The file attributes and the reparse tag bit ClassifyWinEntry reads, with their Win32 values.
+constexpr uint32_t ATTRIBUTE_DIRECTORY = 0x10;
+constexpr uint32_t ATTRIBUTE_REPARSE_POINT = 0x400;
+//! The bit IsReparseTagNameSurrogate() tests: a reparse point with it set stands for another
+//! named entity, so a path through it leads elsewhere.
+constexpr uint32_t TAG_NAME_SURROGATE = 0x20000000;
+
+#ifdef WIN32
+static_assert(ATTRIBUTE_DIRECTORY == FILE_ATTRIBUTE_DIRECTORY && ATTRIBUTE_REPARSE_POINT == FILE_ATTRIBUTE_REPARSE_POINT);
+static_assert(IsReparseTagNameSurrogate(TAG_NAME_SURROGATE) && !IsReparseTagNameSurrogate(~TAG_NAME_SURROGATE));
+#endif
+
 //! The accounts the Windows rule allows: this one, SYSTEM and Administrators.
 std::vector<Sid> AllowedAccounts(const Sid& self)
 {
@@ -124,7 +147,7 @@ struct ForeignGrant
 //! entry.
 std::vector<ForeignGrant> ForeignGrants(const ObservedAcl& acl, const std::vector<Sid>& allowed)
 {
-    constexpr uint32_t RIGHTS = util::winacl::mask::READISH | util::winacl::mask::FILE_WRITEISH;
+    constexpr uint32_t RIGHTS = util::winacl::mask::READISH | rights::CHANGE;
 
     std::vector<ForeignGrant> grants;
     if (!acl.dacl_present) return grants;
@@ -148,15 +171,25 @@ std::vector<ForeignGrant> ForeignGrants(const ObservedAcl& acl, const std::vecto
 
 } // anonymous namespace
 
+WinEntry ClassifyWinEntry(uint32_t attributes, uint32_t reparse_tag)
+{
+    WinEntry entry;
+    entry.directory = (attributes & ATTRIBUTE_DIRECTORY) != 0;
+    entry.reparse = (attributes & ATTRIBUTE_REPARSE_POINT) != 0;
+    // The tag means something only on a reparse point.
+    entry.link = entry.reparse && (reparse_tag & TAG_NAME_SURROGATE) != 0;
+
+    return entry;
+}
+
 WinAclVerdict ClassifyWinAcl(const ObservedAcl& acl, const Sid& self)
 {
     const std::vector<Sid> allowed = AllowedAccounts(self);
 
     // Both also count a missing DACL and an owner outside the allowed accounts. Reading the
-    // file needs a right of READISH; FILE_WRITEISH holds the rights that change it, and those
+    // file needs a right of READISH; rights::CHANGE holds the rights that change it, and those
     // (WRITE_DAC, WRITE_OWNER) with which an account can give itself read.
-    if (!util::winacl::FindForeignReader(acl, allowed) &&
-        !util::winacl::FindForeignWriter(acl, allowed, util::winacl::mask::FILE_WRITEISH)) {
+    if (!util::winacl::FindForeignReader(acl, allowed) && !util::winacl::FindForeignWriter(acl, allowed, rights::CHANGE)) {
         return WinAclVerdict::Clean;
     }
 
@@ -178,7 +211,7 @@ std::string WinAclWarning(const fs::path& path, const ObservedAcl& acl, const Si
     }
     for (const ForeignGrant& grant : grants) {
         const bool reads = (grant.mask & util::winacl::mask::READISH) != 0;
-        const bool changes = (grant.mask & util::winacl::mask::FILE_WRITEISH) != 0;
+        const bool changes = (grant.mask & rights::CHANGE) != 0;
         problems.push_back(strprintf("%s can %s it (access mask 0x%08x)", Describe(grant.trustee),
                                      reads && changes ? "read and change" : reads ? "read" : "change", grant.mask));
     }
@@ -208,18 +241,21 @@ std::string WinAclWarning(const fs::path& path, const ObservedAcl& acl, const Si
         return message + "To make it owner-only, run in a command prompt: " + command;
     }
 
-    // Another account's path is reported only. Its owner keeps the list it chose, less the
-    // other accounts' access, and this account is given nothing on it.
-    // A foreign or unknown owner is named among the problems already.
-    message += foreign_owner ? std::string{"Only its owner or an administrator can change it"}
-                             : "It is owned by " + Describe(*acl.owner) +
-                                   ", so only its owner or an administrator can change it";
-    message += ". In a command prompt run as one of them, ";
-
+    // Another account's path is reported only. The fix takes the other accounts' access away
+    // and gives this account no entry. Where the owner itself is the problem, an account
+    // outside the allowed ones or one that could not be read, it also makes this account the
+    // owner, which only an administrator can do (it takes SeRestorePrivilege). Otherwise the
+    // owner stays as it is, and it or an administrator can make the change.
     std::vector<std::string> steps;
     if (foreign_owner) {
+        // Named among the problems already.
+        message += "Only an administrator can give it to this account. In an elevated command prompt, ";
         steps.push_back("make this account its owner: icacls " + quoted + " /setowner *" +
                         util::winacl::FormatSid(self));
+    } else {
+        message += "It is owned by " + Describe(*acl.owner) +
+                   ", so only its owner or an administrator can change it. In a command prompt run as one of "
+                   "them, ";
     }
     if (!removals.empty()) {
         // An inherited entry cannot be removed, so the inherited entries are first made the
@@ -234,6 +270,13 @@ std::string WinAclWarning(const fs::path& path, const ObservedAcl& acl, const Si
     if (steps.empty()) steps.emplace_back("remove the access of the accounts named above");
 
     return message + Join(steps, ", then ");
+}
+
+std::string WinNoAclVolumeWarning(const fs::path& path)
+{
+    return "WARNING: " + path.string() + " is on a volume that keeps no access lists, such as FAT or exFAT, so "
+           "other accounts on this computer can read and change it, and no access list can be set on it. Keep it "
+           "on an NTFS volume instead.";
 }
 
 std::optional<std::string> BackupDirWarning(const fs::path& backupdir, const BackupDirCheck& check)
@@ -253,8 +296,9 @@ std::optional<std::string> BackupDirWarning(const fs::path& backupdir, const Bac
     if (check.not_owner_only) {
 #ifdef WIN32
         return strprintf("Wallet backups in %s cannot be made owner-only (%s). This happens on a volume that keeps "
-                         "no access lists, such as FAT or exFAT. The backups are still written there, but other users "
-                         "of this computer may be able to read them.",
+                         "no access lists, such as FAT or exFAT, and on a network share that does not accept the "
+                         "owner-only access list. The backups are still written there, but other users of this "
+                         "computer, or of the share, may be able to read them.",
                          backupdir.string(), *check.not_owner_only);
 #else
         return strprintf("Wallet backups in %s cannot be made owner-only (%s). This happens on a filesystem without "
@@ -604,16 +648,6 @@ std::string ReasonOf(const std::system_error& e)
     return Win32ErrorText(static_cast<DWORD>(e.code().value()));
 }
 
-//! What an open path is.
-struct Entry
-{
-    bool directory{false};
-    //! A reparse point of any kind.
-    bool reparse{false};
-    //! A reparse point that names another path: a symbolic link, a junction or a mount point.
-    bool link{false};
-};
-
 //! \p path opened to read its attributes and access list, a reparse point at \p path opened as
 //! itself unless \p follow_link. A null handle when it cannot be opened.
 UniqueHandle OpenForCheck(const fs::path& path, bool follow_link)
@@ -627,17 +661,31 @@ UniqueHandle OpenForCheck(const fs::path& path, bool follow_link)
 
 //! What \p handle refers to, read from its attributes and reparse tag, or nullopt when they
 //! cannot be read.
-std::optional<Entry> EntryOf(HANDLE handle)
+std::optional<WinEntry> EntryOf(HANDLE handle)
 {
     FILE_ATTRIBUTE_TAG_INFO info{};
     if (!::GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &info, sizeof(info))) return std::nullopt;
 
-    Entry entry;
-    entry.directory = (info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-    entry.reparse = (info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-    entry.link = entry.reparse && IsReparseTagNameSurrogate(info.ReparseTag);
+    return ClassifyWinEntry(info.FileAttributes, info.ReparseTag);
+}
 
-    return entry;
+//! Whether the volume of the object \p handle refers to keeps access lists
+//! (FILE_PERSISTENT_ACLS). A volume that cannot be asked is taken to keep them.
+bool VolumeKeepsAcls(HANDLE handle)
+{
+    DWORD flags = 0;
+    if (!::GetVolumeInformationByHandleW(handle, nullptr, 0, nullptr, nullptr, &flags, nullptr, 0)) return true;
+
+    return (flags & FILE_PERSISTENT_ACLS) != 0;
+}
+
+//! Whether the directory \p dir is on a network share.
+bool OnRemoteVolume(const fs::path& dir)
+{
+    wchar_t root[MAX_PATH + 1];
+    if (!::GetVolumePathNameW(dir.wstring().c_str(), root, MAX_PATH + 1)) return false;
+
+    return ::GetDriveTypeW(root) == DRIVE_REMOTE;
 }
 
 class AclChecker
@@ -655,13 +703,20 @@ public:
 
         const UniqueHandle handle = OpenForCheck(path, follow_link);
         if (!handle) return;
-        const std::optional<Entry> entry = EntryOf(handle.get());
+        const std::optional<WinEntry> entry = EntryOf(handle.get());
         if (!entry) return;
 
         if (entry->link && !follow_link) {
             m_findings.push_back({path, ModeFinding::Kind::Symlink, 0,
                                   "WARNING: " + path.string() +
                                       " is a symbolic link or junction, so its access list was not checked"});
+            return;
+        }
+
+        // On a volume that keeps no access lists every account has access, whatever is read
+        // back, and only another volume helps.
+        if (!VolumeKeepsAcls(handle.get())) {
+            m_findings.push_back({path, ModeFinding::Kind::WideMode, 0, WinNoAclVolumeWarning(path)});
             return;
         }
 
@@ -696,7 +751,7 @@ public:
         {
             const UniqueHandle handle = OpenForCheck(dir, follow_link);
             if (!handle) return;
-            const std::optional<Entry> entry = EntryOf(handle.get());
+            const std::optional<WinEntry> entry = EntryOf(handle.get());
             if (!entry || !entry->directory || (entry->link && !follow_link)) return;
         }
 
@@ -705,7 +760,7 @@ public:
             const fs::path path = it->path();
             const UniqueHandle handle = OpenForCheck(path, /*follow_link=*/false);
             if (!handle) continue;
-            const std::optional<Entry> entry = EntryOf(handle.get());
+            const std::optional<WinEntry> entry = EntryOf(handle.get());
             if (!entry) continue;
 
             // Subdirectories are not part of the check. A link is, a junction included, so it
@@ -781,14 +836,19 @@ SECURITY_ATTRIBUTES AttributesFor(const NewFileAcl& acl)
 }
 
 //! Creates the new file \p path, with the owner-only list in \p acl from the start, opened with
-//! \p access and \p flags. A volume that refuses that list, such as a network share that does
-//! not take this account as an owner, gets the file with the list it inherits, and
-//! \p not_owner_only says why; it says so too when the new file does not hold the list. Returns
-//! INVALID_HANDLE_VALUE, with \p error, when no file was created, ERROR_FILE_EXISTS or
-//! ERROR_ALREADY_EXISTS when the name is taken.
+//! \p access and \p flags. Where the volume refuses that list for what it is (a network share
+//! that does not take this account as an owner, say), the file is created with the list it
+//! inherits, and \p not_owner_only says why; it says so too when the new file does not hold the
+//! list. Any other failure creates nothing. Returns INVALID_HANDLE_VALUE, with \p error, when no
+//! file was created: ERROR_FILE_EXISTS or ERROR_ALREADY_EXISTS when the name is taken, by a
+//! link too.
 HANDLE CreateOwnerOnlyFile(const fs::path& path, DWORD access, DWORD flags, const NewFileAcl& acl,
                            std::optional<std::string>& not_owner_only, DWORD& error)
 {
+    // FILE_FLAG_OPEN_REPARSE_POINT: a link at the name is not followed, so the name counts as
+    // taken, as O_EXCL treats one on POSIX, and nothing is created where the link leads.
+    flags |= FILE_FLAG_OPEN_REPARSE_POINT;
+
     SECURITY_ATTRIBUTES sa = AttributesFor(acl);
     HANDLE handle = ::CreateFileW(path.wstring().c_str(), access, 0, &sa, CREATE_NEW, flags, nullptr);
     error = ::GetLastError();
@@ -796,15 +856,22 @@ HANDLE CreateOwnerOnlyFile(const fs::path& path, DWORD access, DWORD flags, cons
         not_owner_only = NewFileAclProblem(handle, acl.spec);
         return handle;
     }
-    if (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS) return handle;
 
-    // Where the list itself was refused, the same file without it can be created.
-    const DWORD refused = error;
+    // Only where the list itself was refused is the same file created without it: an owner,
+    // a list or a descriptor the volume does not take, or, from a network share, which may
+    // answer so, a refusal of access.
+    const bool refused = error == ERROR_INVALID_OWNER || error == ERROR_INVALID_PRIMARY_GROUP ||
+                         error == ERROR_INVALID_ACL || error == ERROR_INVALID_SECURITY_DESCR ||
+                         error == ERROR_NOT_SUPPORTED || error == ERROR_PRIVILEGE_NOT_HELD;
+    const bool remote = (refused || error == ERROR_ACCESS_DENIED) && OnRemoteVolume(path.parent_path());
+    if (!refused && !(remote && error == ERROR_ACCESS_DENIED)) return handle;
+
+    const DWORD first = error;
     handle = ::CreateFileW(path.wstring().c_str(), access, 0, nullptr, CREATE_NEW, flags, nullptr);
     error = ::GetLastError();
     if (handle != INVALID_HANDLE_VALUE) {
-        not_owner_only = "the volume did not accept a file with the owner-only access list (" +
-                         Win32ErrorText(refused) + ")";
+        not_owner_only = std::string{remote ? "the network share" : "the volume"} +
+                         " did not accept a file with the owner-only access list (" + Win32ErrorText(first) + ")";
     }
 
     return handle;
@@ -843,10 +910,24 @@ void ProbeBackupDir(const fs::path& probe, BackupDirCheck& check)
     if (!check.not_owner_only) check.not_owner_only = not_owner_only;
 }
 
+//! The Win32 error codes, with the ASCII text Win32ErrorText gives them in place of the
+//! system category's, which Windows words in its display language.
+class AsciiWin32ErrorCategory final : public boost::system::error_category
+{
+public:
+    const char* name() const noexcept override { return "win32"; }
+    std::string message(int code) const override { return Win32ErrorText(static_cast<DWORD>(code)); }
+};
+
+const boost::system::error_category& AsciiWin32Category()
+{
+    static const AsciiWin32ErrorCategory category{};
+    return category;
+}
+
 [[noreturn]] void CopyFailed(const char* what, const fs::path& path, DWORD error)
 {
-    throw fs::filesystem_error(what, path,
-                               boost::system::error_code(static_cast<int>(error), boost::system::system_category()));
+    throw fs::filesystem_error(what, path, boost::system::error_code(static_cast<int>(error), AsciiWin32Category()));
 }
 
 //! Whether \p a and \p b are one file: the same volume and file index. Throws as CopyFailed,
@@ -890,7 +971,7 @@ bool OwnedByUs(const fs::path& path)
     const UniqueHandle handle = OpenForCheck(path, /*follow_link=*/false);
     if (!handle) return false;
 
-    const std::optional<Entry> entry = EntryOf(handle.get());
+    const std::optional<WinEntry> entry = EntryOf(handle.get());
     if (!entry || entry->reparse) return false;
 
     // The owner of what was opened, not of the name.
@@ -913,7 +994,7 @@ AppendResult AppendToOwnedFile(const fs::path& path, const std::string& text)
     const UniqueHandle handle(opened);
 
     // Checked on what was opened, not on the name: the name may lead somewhere else by now.
-    const std::optional<Entry> entry = EntryOf(opened);
+    const std::optional<WinEntry> entry = EntryOf(opened);
     if (!entry) return {AppendStatus::OpenFailed, Win32ErrorText(::GetLastError())};
     if (entry->reparse || entry->directory || ::GetFileType(opened) != FILE_TYPE_DISK) {
         return {AppendStatus::NotOwned, {}};
@@ -958,7 +1039,8 @@ std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::p
     }
 
     // A new target is created with the owner-only access list, so it is owner-only before any
-    // data is written. A target that exists is opened as it is, and keeps its list.
+    // data is written. A target that exists is opened as it is, a link at its name followed as
+    // POSIX's O_WRONLY follows one, and keeps its list.
     std::optional<std::string> not_owner_only;
     DWORD error = 0;
     UniqueHandle out(CreateOwnerOnlyFile(target, GENERIC_WRITE | READ_CONTROL, FILE_ATTRIBUTE_NORMAL, acl,
