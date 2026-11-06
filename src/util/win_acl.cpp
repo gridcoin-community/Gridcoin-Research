@@ -248,6 +248,10 @@ static_assert(OBJECT_GUIDS_OFFSET == offsetof(ACCESS_ALLOWED_OBJECT_ACE, ObjectT
 static_assert(OBJECT_GUIDS_OFFSET + 2 * GUID_SIZE == offsetof(ACCESS_ALLOWED_OBJECT_ACE, SidStart));
 static_assert(OBJECT_GUIDS_OFFSET + 2 * GUID_SIZE == offsetof(ACCESS_DENIED_CALLBACK_OBJECT_ACE, SidStart));
 static_assert(SID_HEADER_SIZE == offsetof(SID, SubAuthority) && MAX_SUB_AUTHORITIES == SID_MAX_SUB_AUTHORITIES);
+
+static_assert(INTEGRITY_MEDIUM_RID == static_cast<uint32_t>(SECURITY_MANDATORY_MEDIUM_RID));
+static_assert(GROUP_ENABLED == static_cast<uint32_t>(SE_GROUP_ENABLED));
+static_assert(GROUP_USE_FOR_DENY_ONLY == static_cast<uint32_t>(SE_GROUP_USE_FOR_DENY_ONLY));
 #endif // WIN32
 
 std::optional<Sid> ParseSidString(std::string_view s)
@@ -306,6 +310,11 @@ Sid TrustedInstaller() { return NtAuthority({80, 956008885, 3418522649, 18310380
 Sid Users() { return NtAuthority({32, 545}); }
 Sid AnonymousLogon() { return NtAuthority({7}); }
 } // namespace wellknown
+
+bool AboveMediumOrElevated(bool token_elevated, uint32_t integrity_rid)
+{
+    return token_elevated || integrity_rid > INTEGRITY_MEDIUM_RID;
+}
 
 std::optional<std::string> FindForeignWriter(const ObservedAcl& acl, const std::vector<Sid>& allowed,
                                              uint32_t writeish)
@@ -562,16 +571,15 @@ std::optional<Sid> ReadOwner(std::wstring& wpath)
     return SidAt(owner);
 }
 
-//! Query \p what of this process's token into \p buffer.
-void QueryProcessToken(TOKEN_INFORMATION_CLASS what, std::vector<unsigned char>& buffer, const char* name)
+//! This process's token, opened for TOKEN_QUERY.
+UniqueHandle OpenOwnTokenForQuery()
 {
     HANDLE token = nullptr;
     if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token)) {
         ThrowWin32(::GetLastError(), "OpenProcessToken");
     }
-    const UniqueHandle token_guard(token);
 
-    buffer = QueryTokenInformation(token, what, name);
+    return UniqueHandle(token);
 }
 
 } // namespace
@@ -604,10 +612,9 @@ std::vector<unsigned char> QueryTokenInformation(void* token, int information_cl
     return buffer;
 }
 
-Sid CurrentTokenUser()
+Sid ReadTokenUser(void* token)
 {
-    std::vector<unsigned char> buffer;
-    QueryProcessToken(TokenUser, buffer, "TokenUser");
+    const std::vector<unsigned char> buffer = QueryTokenInformation(token, TokenUser, "TokenUser");
 
     std::optional<Sid> sid = SidAt(reinterpret_cast<const TOKEN_USER*>(buffer.data())->User.Sid);
     if (!sid) ThrowWin32(ERROR_INVALID_SID, "GetTokenInformation(TokenUser)");
@@ -615,10 +622,25 @@ Sid CurrentTokenUser()
     return *sid;
 }
 
-uint32_t CurrentTokenIntegrityRid()
+std::vector<TokenGroup> ReadTokenGroups(void* token)
 {
-    std::vector<unsigned char> buffer;
-    QueryProcessToken(TokenIntegrityLevel, buffer, "TokenIntegrityLevel");
+    const std::vector<unsigned char> buffer = QueryTokenInformation(token, TokenGroups, "TokenGroups");
+    const auto* const groups = reinterpret_cast<const TOKEN_GROUPS*>(buffer.data());
+
+    std::vector<TokenGroup> result;
+    result.reserve(groups->GroupCount);
+    for (DWORD i = 0; i < groups->GroupCount; ++i) {
+        std::optional<Sid> sid = SidAt(groups->Groups[i].Sid);
+        if (!sid) ThrowWin32(ERROR_INVALID_SID, "GetTokenInformation(TokenGroups)");
+        result.push_back({std::move(*sid), groups->Groups[i].Attributes});
+    }
+
+    return result;
+}
+
+uint32_t ReadTokenIntegrityRid(void* token)
+{
+    const std::vector<unsigned char> buffer = QueryTokenInformation(token, TokenIntegrityLevel, "TokenIntegrityLevel");
 
     // SidAt takes only a well-formed SID, which has at least one sub-authority.
     const PSID label = reinterpret_cast<const TOKEN_MANDATORY_LABEL*>(buffer.data())->Label.Sid;
@@ -627,10 +649,9 @@ uint32_t CurrentTokenIntegrityRid()
     return *::GetSidSubAuthority(label, *::GetSidSubAuthorityCount(label) - 1u);
 }
 
-bool CurrentTokenIsElevated()
+bool ReadTokenElevated(void* token)
 {
-    std::vector<unsigned char> buffer;
-    QueryProcessToken(TokenElevation, buffer, "TokenElevation");
+    const std::vector<unsigned char> buffer = QueryTokenInformation(token, TokenElevation, "TokenElevation");
     if (buffer.size() < sizeof(TOKEN_ELEVATION)) {
         ThrowWin32(ERROR_INSUFFICIENT_BUFFER, "GetTokenInformation(TokenElevation)");
     }
@@ -639,6 +660,26 @@ bool CurrentTokenIsElevated()
     std::memcpy(&elevation, buffer.data(), sizeof(elevation));
 
     return elevation.TokenIsElevated != 0;
+}
+
+Sid CurrentTokenUser()
+{
+    return ReadTokenUser(OpenOwnTokenForQuery().get());
+}
+
+uint32_t CurrentTokenIntegrityRid()
+{
+    return ReadTokenIntegrityRid(OpenOwnTokenForQuery().get());
+}
+
+bool CurrentTokenIsElevated()
+{
+    return ReadTokenElevated(OpenOwnTokenForQuery().get());
+}
+
+std::vector<TokenGroup> CurrentTokenGroups()
+{
+    return ReadTokenGroups(OpenOwnTokenForQuery().get());
 }
 
 ObservedAcl ReadAcl(const fs::path& path)

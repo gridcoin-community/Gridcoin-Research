@@ -54,6 +54,9 @@
 #include "util/proc_hardening.h"
 #include "util/strencodings.h"
 #include "util/threadnames.h"
+#ifdef WIN32
+#include "util/win_admin_drop.h"
+#endif
 #include "winshutdownmonitor.h"
 #include "gridcoin/upgrade.h"
 #include "gridcoin/gridcoin.h"
@@ -849,6 +852,24 @@ int main(int argc, char *argv[])
     SetProcessNonDumpable();
 
 #ifdef WIN32
+    // A GUI started with administrator rights gives them up before it creates the application or
+    // reads anything, so that the core it hosts never runs with them: it starts itself again under
+    // a restricted copy of its token, shows no window, and exits with the copy's exit code. The
+    // refusal of an elevated multiprocess GUI further down stays for a token this could not lower.
+    {
+        const util::winadmin::StartOutcome start =
+            util::winadmin::GiveUpAdminRights(/*service=*/false, /*rpc_client=*/false);
+        if (start.kind == util::winadmin::StartOutcome::Kind::Exited) return static_cast<int>(start.exit_code);
+        if (start.kind == util::winadmin::StartOutcome::Kind::Refused) {
+            tfm::format(std::cerr, "%s\n", start.refusal);
+            // The one case that creates an application with the rights the GUI was started with,
+            // only to show why it stops.
+            QApplication refusal_app(argc, argv);
+            QMessageBox::critical(nullptr, PACKAGE_NAME, QString::fromStdString(start.refusal));
+            return EXIT_FAILURE;
+        }
+    }
+
     util::WinCmdLineArgs winArgs;
     std::tie(argc, argv) = winArgs.get();
 #endif
@@ -1164,8 +1185,8 @@ int main(int argc, char *argv[])
         }
         if (ipc::win::AboveMediumOrElevated(token_elevated, integrity_rid)) {
             const QString text = QObject::tr("The Gridcoin wallet must not run as administrator in multiprocess mode. "
-                                             "Start it from a normal (not elevated) session. If User Account Control "
-                                             "is turned off, multiprocess mode cannot be used on this account.");
+                                             "Start it from a normal (not elevated) session. This happens only when "
+                                             "Gridcoin could not give up the administrator rights it was started with.");
             tfm::format(std::cerr, "%s\n", text.toStdString());
             QMessageBox::critical(nullptr, PACKAGE_NAME, text);
             return EXIT_FAILURE;
@@ -1297,6 +1318,9 @@ int main(int argc, char *argv[])
     // Initialize logging as early as possible.
     InitLogging();
     LogNonDumpableStatus();
+#ifdef WIN32
+    if (util::winadmin::StartedByAdminDrop()) LogPrintf("%s", util::winadmin::STARTED_WITHOUT_ADMIN_RIGHTS);
+#endif
     if (tracer_warning) {
         LogPrintf("%s", *tracer_warning);
     }

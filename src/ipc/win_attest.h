@@ -110,15 +110,18 @@ constexpr uint32_t ATTEST_PEER_MASK = detail::ATTEST_PEER;
 
 //! SECURITY_MANDATORY_MEDIUM_RID, the integrity level of an ordinary desktop
 //! process, and the only one ClassifyTokenFacts accepts (checked against the SDK in
-//! win_attest.cpp).
-constexpr uint32_t INTEGRITY_MEDIUM_RID = 0x2000;
+//! win_attest.cpp). It is util::winacl's, which the start's drop of administrator
+//! rights uses as well (util/win_admin_drop.h).
+using util::winacl::INTEGRITY_MEDIUM_RID;
 
 //! Whether a process whose token is \p token_elevated (TokenElevation) and runs at
 //! \p integrity_rid counts as elevated to the multiprocess GUI, which then refuses
 //! to start: its token is elevated, or its integrity level is above Medium, which
 //! ClassifyTokenFacts refuses whatever TokenElevation says. A level below Medium
-//! does not count: ClassifyTokenFacts refuses that one for being sandboxed.
-bool AboveMediumOrElevated(bool token_elevated, uint32_t integrity_rid);
+//! does not count: ClassifyTokenFacts refuses that one for being sandboxed. It is
+//! util::winacl's, in gridcoin_util, so that a build without multiprocess has it for
+//! the drop of administrator rights too.
+using util::winacl::AboveMediumOrElevated;
 
 //! SecurityIdentification, the impersonation level at which the server can read a
 //! token but not act with it (checked against the SDK in win_attest.cpp).

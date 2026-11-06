@@ -117,11 +117,6 @@ Classification ClassifyTokenFacts(const TokenFacts& facts, const Sid& self, bool
                             FormatSid(self))};
 }
 
-bool AboveMediumOrElevated(bool token_elevated, uint32_t integrity_rid)
-{
-    return token_elevated || integrity_rid > INTEGRITY_MEDIUM_RID;
-}
-
 bool FinishInTime(std::chrono::steady_clock::time_point begun, std::chrono::steady_clock::time_point now,
                   std::chrono::milliseconds deadline)
 {

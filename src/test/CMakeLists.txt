@@ -239,6 +239,7 @@ add_executable(test_gridcoin
     wallet_tests.cpp
     walletdump_tests.cpp
     win_acl_tests.cpp
+    win_admin_drop_tests.cpp
     winservice_tests.cpp
     winsvc_layout_tests.cpp
 )

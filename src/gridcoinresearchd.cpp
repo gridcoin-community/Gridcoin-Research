@@ -33,6 +33,7 @@
 #include "logging.h"
 #include "util/time.h"
 #include "util/win_acl.h"
+#include "util/win_admin_drop.h"
 #include "util/winservice.h"
 
 #include <string>
@@ -59,7 +60,6 @@
 #endif
 
 #include <boost/thread.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 #include <csignal>
 #include <optional>
 #include <stdio.h>
@@ -369,11 +369,9 @@ bool AppInit(int argc, char* argv[])
         }
 
         // Command-line RPC  - single commands execute and exit. Local to this
-        // entry point; formerly a util.h global read nowhere else.
-        bool fCommandLine = false;
-        for (int i = 1; i < argc; i++)
-            if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoinresearchd"))
-                fCommandLine = true;
+        // entry point; formerly a util.h global read nowhere else. On Windows main() reads
+        // the same test before it decides whether to give up administrator rights.
+        const bool fCommandLine = IsRpcClientCommandLine(argc, argv);
 
         if (fCommandLine)
         {
@@ -414,6 +412,9 @@ bool AppInit(int argc, char* argv[])
         // Initialize logging as early as possible.
         InitLogging();
         LogNonDumpableStatus();
+#ifdef WIN32
+        if (util::winadmin::StartedByAdminDrop()) LogPrintf("%s", util::winadmin::STARTED_WITHOUT_ADMIN_RIGHTS);
+#endif
 
         // Best-effort in-process privilege hardening (Linux): NO_NEW_PRIVS +
         // capability-bounding-set drop, inherited across the daemonizing fork
@@ -822,7 +823,25 @@ int main(int argc, char* argv[])
     {
         util::WinCmdLineArgs utf8_args;
         const auto [utf8_argc, utf8_argv] = utf8_args.get();
-        if (util::winsvc::HasServiceFlag(utf8_argc, utf8_argv)) {
+        const bool service = util::winsvc::HasServiceFlag(utf8_argc, utf8_argv);
+
+        // A same-account core started with administrator rights gives them up before it reads
+        // anything: it starts itself again under a restricted copy of its token and exits with
+        // the copy's exit code. Not the service, which runs as its own account, nor the RPC
+        // client, which an administrator runs to read the service's configuration file.
+        const util::winadmin::StartOutcome start =
+            util::winadmin::GiveUpAdminRights(service, IsRpcClientCommandLine(utf8_argc, utf8_argv));
+        switch (start.kind) {
+        case util::winadmin::StartOutcome::Kind::Run:
+            break;
+        case util::winadmin::StartOutcome::Kind::Exited:
+            return static_cast<int>(start.exit_code);
+        case util::winadmin::StartOutcome::Kind::Refused:
+            tfm::format(std::cerr, "%s\n", start.refusal);
+            return static_cast<int>(util::winsvc::EXIT_INIT_FAILED);
+        }
+
+        if (service) {
             return util::winsvc::RunAsService([argc, argv] { return AppInit(argc, argv); });
         }
     }

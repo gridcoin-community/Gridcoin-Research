@@ -721,6 +721,15 @@ static std::vector<SecureString> ReadMethodPassphrases(const std::string& method
     return secrets;
 }
 
+bool IsRpcClientCommandLine(int argc, const char* const argv[])
+{
+    for (int i = 1; i < argc; i++) {
+        if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoinresearchd")) return true;
+    }
+
+    return false;
+}
+
 int CommandLineRPC(int argc, char *argv[])
 {
     string strPrint;

@@ -19,6 +19,11 @@
 
 int CommandLineRPC(int argc, char *argv[]);
 
+//! Whether the command line \p argv asks gridcoinresearchd for the RPC client rather than the
+//! node: an argument after the first is neither an option (IsSwitchChar) nor a word that starts
+//! with "gridcoinresearchd" in any case. Pure.
+bool IsRpcClientCommandLine(int argc, const char* const argv[]);
+
 struct RpcCallOptions {
     //! Runs after the connection is made and before anything is written to it. Refuse closes the
     //! connection and CallRPC throws with the reason. Skipped under -rpcskiplistenercheck.

@@ -50,6 +50,28 @@ Sid Users();            //!< S-1-5-32-545, BUILTIN\Users
 Sid AnonymousLogon();   //!< S-1-5-7, NT AUTHORITY\ANONYMOUS LOGON
 } // namespace wellknown
 
+//! SECURITY_MANDATORY_MEDIUM_RID, the integrity level of an ordinary desktop process
+//! (checked against the SDK in win_acl.cpp).
+constexpr uint32_t INTEGRITY_MEDIUM_RID = 0x2000;
+
+//! Whether a process whose token is \p token_elevated (TokenElevation) and runs at
+//! \p integrity_rid counts as elevated: its token is elevated, or its integrity level is
+//! above Medium, which a token need not report as elevated. A level below Medium does not
+//! count. Pure.
+bool AboveMediumOrElevated(bool token_elevated, uint32_t integrity_rid);
+
+//! The attributes of a token's group that say how it counts, with the Win32 values of
+//! SE_GROUP_ENABLED and SE_GROUP_USE_FOR_DENY_ONLY (checked against the SDK in
+//! win_acl.cpp). A deny-only group only ever denies access.
+constexpr uint32_t GROUP_ENABLED = 0x4, GROUP_USE_FOR_DENY_ONLY = 0x10;
+
+//! One group of an access token: its SID and its SE_GROUP_* attributes.
+struct TokenGroup
+{
+    Sid sid;
+    uint32_t attributes{0};
+};
+
 //! Access rights, with their Win32 values; win_acl.cpp checks each against the SDK.
 //!
 //! <windows.h> defines every single right below as a macro of the same name and
@@ -321,6 +343,25 @@ bool CurrentTokenIsElevated();
 //! sub-authority of its mandatory label (TokenIntegrityLevel). Throws
 //! std::system_error.
 uint32_t CurrentTokenIntegrityRid();
+
+//! The groups of this process's token (ReadTokenGroups). Throws std::system_error.
+std::vector<TokenGroup> CurrentTokenGroups();
+
+//! The user of the access token \p token, opened for TOKEN_QUERY (TokenUser). Throws
+//! std::system_error.
+Sid ReadTokenUser(void* token);
+
+//! The groups of the access token \p token, opened for TOKEN_QUERY, in the token's order
+//! (TokenGroups). Throws std::system_error.
+std::vector<TokenGroup> ReadTokenGroups(void* token);
+
+//! Whether the access token \p token, opened for TOKEN_QUERY, is elevated
+//! (TokenElevation). Throws std::system_error.
+bool ReadTokenElevated(void* token);
+
+//! The integrity level of the access token \p token, opened for TOKEN_QUERY: the last
+//! sub-authority of its mandatory label (TokenIntegrityLevel). Throws std::system_error.
+uint32_t ReadTokenIntegrityRid(void* token);
 
 //! The owner and DACL of \p path (GetNamedSecurityInfoW). Throws std::system_error.
 ObservedAcl ReadAcl(const fs::path& path);
