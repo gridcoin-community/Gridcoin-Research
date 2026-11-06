@@ -103,6 +103,21 @@ class ReleaseSignatureTest(unittest.TestCase):
             self.check(keys=keys)
         self.assertEqual(str(ctx.exception), "no release key is pinned in %s" % keys)
 
+    def test_keys_file_duplicate_keyid(self):
+        line = SIGN.keyline(self.key.public_key())
+        keys = write(self.tmp.name, "dup.txt", (line + "\n" + line + "\n").encode())
+        self.assertEqual(len(VERIFY.read_keys(keys)), 1)
+        self.check(keys=keys)
+
+    def test_keys_file_keyid_mismatch(self):
+        fields = SIGN.keyline(self.key.public_key()).split()
+        other = SIGN.keyline(new_key().public_key()).split()
+        # a keyid that belongs to another key, and a key that does not match its keyid
+        for text in ("%s %s x\n" % (other[0], fields[1]), "%s %s x\n" % (fields[0], other[1])):
+            keys = write(self.tmp.name, "bad.txt", text.encode())
+            with self.assertRaises(VERIFY.VerifyError, msg=text):
+                self.check(keys=keys)
+
     def test_malformed_sig_lines(self):
         good = read(self.sig).split()
         raw = base64.b64decode(good[2])

@@ -54,12 +54,12 @@ function Read-GridcoinReleaseKeys {
         $line = $rawLine.Trim()
         if ($line.Length -eq 0 -or $line.StartsWith('#')) { continue }
         $fields = $line -split '\s+', 3
-        if ($fields.Count -lt 2 -or $fields[0] -notmatch '^[0-9a-f]{16}$' -or $fields[1] -notmatch '^[A-Za-z0-9+/]{86}==$') {
+        if ($fields.Count -lt 2 -or $fields[0] -cnotmatch '^[0-9a-f]{16}$' -or $fields[1] -cnotmatch '^[A-Za-z0-9+/]{86}==$') {
             throw "malformed key line in $KeysPath"
         }
         $xy = [Convert]::FromBase64String($fields[1])
         if ($xy.Length -ne 64) { throw "malformed key line in $KeysPath" }
-        if ((Get-GridcoinReleaseKeyId -PublicXY $xy) -ne $fields[0]) { throw "key line $($fields[0]) in $KeysPath does not match its key id" }
+        if ((Get-GridcoinReleaseKeyId -PublicXY $xy) -cne $fields[0]) { throw "key line $($fields[0]) in $KeysPath does not match its key id" }
         $found[$fields[0]] = $xy
     }
     if ($found.Count -eq 0) { throw "no release key is pinned in $KeysPath" }
@@ -81,9 +81,9 @@ function Test-GridcoinReleaseSignature {
         throw 'the signature file must be exactly one LF-terminated line'
     }
     $parts = $sigText.Substring(0, $sigText.Length - 1).Split(' ')
-    if ($parts.Count -ne 3 -or $parts[0] -ne 'gridcoin-sha256sums-sig-v1') { throw 'the signature line is malformed' }
-    if ($parts[1] -notmatch '^[0-9a-f]{16}$') { throw 'the signature key id is malformed' }
-    if ($parts[2] -notmatch '^[A-Za-z0-9+/]{86}==$') { throw 'the signature is not 64 bytes of base64' }
+    if ($parts.Count -ne 3 -or $parts[0] -cne 'gridcoin-sha256sums-sig-v1') { throw 'the signature line is malformed' }
+    if ($parts[1] -cnotmatch '^[0-9a-f]{16}$') { throw 'the signature key id is malformed' }
+    if ($parts[2] -cnotmatch '^[A-Za-z0-9+/]{86}==$') { throw 'the signature is not 64 bytes of base64' }
     $signature = [Convert]::FromBase64String($parts[2])
     if ($signature.Length -ne 64) { throw 'the signature is not 64 bytes' }
     $keyId = $parts[1]
@@ -124,7 +124,7 @@ function Get-GridcoinReleaseHash {
     $hit = $null
     foreach ($line in $text.Split("`n")) {
         if ($line.Length -eq 0) { continue }
-        if ($line -notmatch '^([0-9a-f]{64})  ([^/\\\s][^/\\]*)$') { throw 'malformed line in the checksum list' }
+        if ($line -cnotmatch '^([0-9a-f]{64})  ([^/\\\s][^/\\]*)$') { throw 'malformed line in the checksum list' }
         if ($Matches[2] -ceq $FileName) {
             if ($null -ne $hit) { throw "$FileName is listed twice" }
             $hit = $Matches[1]

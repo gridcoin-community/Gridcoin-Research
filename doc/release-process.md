@@ -51,6 +51,8 @@ machine that holds the release key, before publishing:
    `Update-GridcoinCore.ps1` refuses every update until one is pinned. The TEST-ONLY key under
    `contrib/release/testdata` must never be pinned there; `test/lint/lint-release-signature.sh` checks.
 
+The pinned key is delivered by the previous installer, so trust is anchored at the first install; a key rotation must ship in a release signed by the old key.
+
 Why a detached ECDSA P-256 signature with a pinned key and not Authenticode: it needs no
 certificate authority, it binds trust to one named key instead of any certificate with a matching
 name, and it works offline. Authenticode can be layered on later for SmartScreen; it does not

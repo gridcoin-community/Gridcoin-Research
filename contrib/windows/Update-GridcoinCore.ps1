@@ -53,12 +53,19 @@ $ErrorActionPreference = 'Stop'
 
 $uninstallKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\GridcoinResearch (64-bit)'
 
-function Stop-GridcoinUpdate {
-    param([Parameter(Mandatory = $true)][string]$Message)
-    Write-Host "Update-GridcoinCore: REFUSED: $Message"
-    exit 1
+function ConvertTo-FourPartVersion {
+    param([Parameter(Mandatory = $true)][version]$Value)
+    return New-Object System.Version($Value.Major, $Value.Minor, [Math]::Max($Value.Build, 0), [Math]::Max($Value.Revision, 0))
 }
 
+# A refusal is a terminating error, so the finally block below always runs before the exit.
+function Stop-GridcoinUpdate {
+    param([Parameter(Mandatory = $true)][string]$Message)
+    throw (New-Object System.InvalidOperationException("REFUSED: $Message"))
+}
+
+$stage = $null
+$exitCode = 1
 try {
     if (-not (Test-GridcoinElevated)) {
         Stop-GridcoinUpdate 'run this script from an elevated PowerShell (Run as administrator).'
@@ -75,9 +82,11 @@ try {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { Stop-GridcoinUpdate "'$path' does not exist." }
     }
 
-    # Stage the inputs where only Administrators and SYSTEM can write.
-    $stage = Join-Path $env:TEMP ('GridcoinUpdate-' + [guid]::NewGuid().ToString('N'))
-    [void](New-Item -ItemType Directory -Path $stage)
+    # Stage the inputs under this script's own directory, which only privileged accounts can
+    # write (checked with the whole parent chain), in a directory that is created with its
+    # protected Administrators+SYSTEM descriptor, so there is no moment when it is open.
+    $vector = Get-GridcoinWriteVector -Path $PSScriptRoot -AllowedSids $privileged -ChainMasks
+    if ($vector) { Stop-GridcoinUpdate "the script directory can be rewritten by an unprivileged account: $vector" }
     $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
     $noProp = [System.Security.AccessControl.PropagationFlags]::None
     $allow = [System.Security.AccessControl.AccessControlType]::Allow
@@ -88,8 +97,10 @@ try {
         $who = New-Object System.Security.Principal.SecurityIdentifier($sid)
         $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($who, 'FullControl', $inherit, $noProp, $allow)))
     }
-    Set-Acl -LiteralPath $stage -AclObject $acl
-    $stageVector = Get-GridcoinWriteVector -Path $stage -AllowedSids $privileged
+    $stagePath = Join-Path $PSScriptRoot ('.update-' + [guid]::NewGuid().ToString('N'))
+    $stage = $stagePath
+    [void][System.IO.Directory]::CreateDirectory($stagePath, $acl)
+    $stageVector = Get-GridcoinWriteVector -Path $stagePath -AllowedSids $privileged -ChainMasks
     if ($stageVector) { Stop-GridcoinUpdate "the staging directory is not protected: $stageVector" }
 
     $installerName = Split-Path -Leaf $Installer
@@ -115,7 +126,7 @@ try {
         Stop-GridcoinUpdate $_.Exception.Message
     }
     $actual = (Get-FileHash -LiteralPath $stagedInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($actual -ne $listed) {
+    if ($actual -cne $listed) {
         Stop-GridcoinUpdate "the SHA-256 of $installerName is $actual, the signed list says $listed."
     }
     Write-Host "$installerName matches the signed list."
@@ -130,6 +141,8 @@ try {
     $installedVersion = $null
     if (-not [version]::TryParse([string]$newText, [ref]$newVersion)) { Stop-GridcoinUpdate "the installer's file version '$newText' cannot be read." }
     if (-not [version]::TryParse([string]$installedText, [ref]$installedVersion)) { Stop-GridcoinUpdate "the installed version '$installedText' cannot be read." }
+    $newVersion = ConvertTo-FourPartVersion $newVersion
+    $installedVersion = ConvertTo-FourPartVersion $installedVersion
     if ($newVersion -le $installedVersion -and -not $AllowDowngrade) {
         Stop-GridcoinUpdate "the installer is $newVersion, not newer than the installed $installedVersion (-AllowDowngrade overrides)."
     }
@@ -138,10 +151,24 @@ try {
     $process = Start-Process -FilePath $stagedInstaller -ArgumentList '/S' -Wait -PassThru
     if ($process.ExitCode -ne 0) { Stop-GridcoinUpdate "the installer exited with code $($process.ExitCode)." }
     $afterText = (Get-ItemProperty -LiteralPath $uninstallKey).DisplayVersion
-    if ($afterText -eq $installedText) { Stop-GridcoinUpdate "the installer exited 0 but DisplayVersion is still $installedText." }
+    $afterVersion = $null
+    if (-not [version]::TryParse([string]$afterText, [ref]$afterVersion)) { Stop-GridcoinUpdate "DisplayVersion '$afterText' after the install cannot be read." }
+    if ((ConvertTo-FourPartVersion $afterVersion) -ne $newVersion) {
+        Stop-GridcoinUpdate "the installer exited 0 but DisplayVersion is '$afterText', not $newVersion."
+    }
     Write-Host "Updated: DisplayVersion is now $afterText."
-    exit 0
+    $exitCode = 0
 } catch {
-    Write-Host "Update-GridcoinCore: FAILED: $($_.Exception.Message)"
-    exit 1
+    $failure = $_.Exception.Message
+    if ($failure.StartsWith('REFUSED: ')) {
+        Write-Host "Update-GridcoinCore: $failure"
+    } else {
+        Write-Host "Update-GridcoinCore: FAILED: $failure"
+    }
+    $exitCode = 1
+} finally {
+    if ($stage -and (Test-Path -LiteralPath $stage)) {
+        Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
+exit $exitCode
