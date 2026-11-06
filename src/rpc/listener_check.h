@@ -6,6 +6,7 @@
 #define GRIDCOIN_RPC_LISTENER_CHECK_H
 
 #include <netaddress.h>
+#include <util/win_acl.h>
 
 #include <chrono>
 #include <cstdint>
@@ -38,8 +39,9 @@ std::optional<TcpConnEntry> FindServerSide(const std::vector<TcpConnEntry>& entr
                                            const CService& client_local, const CService& client_remote);
 
 //! This host's TCP connection table, IPv4 and IPv6 together. Linux reads /proc/net/tcp and
-//! /proc/net/tcp6 (a missing tcp6 is not an error). nullopt when the table cannot be read, and on
-//! platforms without a backend.
+//! /proc/net/tcp6 (a missing tcp6 is not an error); Windows GetExtendedTcpTable's
+//! TCP_TABLE_OWNER_PID_CONNECTIONS for AF_INET and AF_INET6. nullopt when the table cannot be read,
+//! and on platforms without a backend.
 std::optional<std::vector<TcpConnEntry>> ReadTcpConnectionTables();
 
 //! Connecting to addr reaches this host: addr.IsLocal() (127/8, 0/8, ::1), "::", or in host_addrs.
@@ -86,6 +88,37 @@ struct PathSecurityFacts {
 //! A POSIX owner uid and st_mode as PathSecurityFacts: the owner as a decimal uid, writable by
 //! others when the group or world write bit is set or the owner is not root.
 PathSecurityFacts PosixPathFacts(uint64_t uid, uint32_t mode);
+
+//! One entry of a Windows DACL: the trustee as a SID string, the access mask, whether it allows
+//! (not denies), and whether it is inherit-only (it applies to what the object's children inherit,
+//! not to the object itself).
+struct AceFacts {
+    std::string sid;
+    uint32_t mask{0};
+    bool allow{true};
+    bool inherit_only{false};
+};
+
+//! FILE_WRITE_DATA (FILE_ADD_FILE), FILE_APPEND_DATA (FILE_ADD_SUBDIRECTORY), FILE_DELETE_CHILD,
+//! DELETE, WRITE_DAC, WRITE_OWNER, GENERIC_ALL and GENERIC_WRITE: the rights that change what a file
+//! or directory holds, replace an entry in a directory, or take over the access list or the owner.
+constexpr uint32_t WINDOWS_WRITE_RIGHTS = 0x00000002 | 0x00000004 | 0x00000040 | 0x00010000 |
+                                          0x00040000 | 0x00080000 | 0x10000000 | 0x40000000;
+
+//! An allow ACE, not inherit-only, grants any WINDOWS_WRITE_RIGHTS bit to a SID other than
+//! S-1-5-18, S-1-5-32-544 or S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464.
+bool AclGrantsWriteToOthers(const std::vector<AceFacts>& aces);
+
+//! An owner and DACL as util::winacl reads them, as PathSecurityFacts: the owner as a SID string
+//! (empty when it was not read), writable by others when there is no DACL or AclGrantsWriteToOthers
+//! holds for its entries, an allow entry of any kind (callback and object ones included) counted
+//! as an allow.
+PathSecurityFacts WindowsPathFacts(const util::winacl::ObservedAcl& acl);
+
+//! Both strings are Windows paths ('\\' or '/' separators, ASCII case-insensitive). True when
+//! listener_image equals self_image, or is gridcoinresearch.exe in self_image's directory, or in
+//! its parent when that directory is named "daemon" (the NSIS layout).
+bool IsInstalledCoreImage(const std::string& listener_image, const std::string& self_image);
 
 //! The conf may name a service account: conf file and its directory owned by "0" (Windows:
 //! S-1-5-18 or S-1-5-32-544), neither writable by others, and no includeconf in use.

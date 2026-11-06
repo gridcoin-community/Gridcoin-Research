@@ -22,11 +22,16 @@
 #include <cerrno>
 #include <pwd.h>
 #include <unistd.h>
+#elif defined(WIN32)
+#include <cstddef>
+#include <limits>
+
+#include <iphlpapi.h>
 #endif
 
 // The platforms with a backend, where CheckRpcListener identifies the listener's owner. Each one
 // defines the four functions declared in the backend section below.
-#if defined(__linux__)
+#if defined(__linux__) || defined(WIN32)
 #define LISTENER_CHECK_BACKEND 1
 #endif
 
@@ -126,6 +131,113 @@ std::optional<TcpConnEntry> ParseLine(std::string_view line, bool ipv6)
     return entry;
 }
 
+#ifdef WIN32
+
+//! What GetExtendedTcpTable gives for \p family (AF_INET or AF_INET6) with
+//! TCP_TABLE_OWNER_PID_CONNECTIONS, every connection but the listening sockets, in a buffer sized
+//! to fit. nullopt when it fails.
+std::optional<std::vector<unsigned char>> GetConnectionTable(ULONG family)
+{
+    std::vector<unsigned char> buffer;
+    // The table can grow between the call that sizes the buffer and the call that fills it.
+    for (int attempt = 0; attempt < 4; ++attempt) {
+        DWORD size = static_cast<DWORD>(buffer.size());
+        const DWORD rc = ::GetExtendedTcpTable(buffer.empty() ? nullptr : buffer.data(), &size, FALSE, family,
+                                               TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
+        if (rc == NO_ERROR) return buffer;
+        if (rc != ERROR_INSUFFICIENT_BUFFER) return std::nullopt;
+        // Room for a few rows more than the size asked for.
+        buffer.assign(static_cast<size_t>(size) + 16 * sizeof(MIB_TCP6ROW_OWNER_PID), 0);
+    }
+    return std::nullopt;
+}
+
+//! The rows of a table GetConnectionTable read: Table is MIB_TCPTABLE_OWNER_PID or
+//! MIB_TCP6TABLE_OWNER_PID, and Row its row type. nullopt when the count does not fit the buffer.
+template <typename Table, typename Row>
+std::optional<std::vector<Row>> TableRows(const std::vector<unsigned char>& buffer)
+{
+    DWORD count{0};
+    if (buffer.size() < sizeof(count)) return std::nullopt;
+    std::memcpy(&count, buffer.data(), sizeof(count));
+
+    const size_t first = offsetof(Table, table);
+    if (first > buffer.size() || count > (buffer.size() - first) / sizeof(Row)) return std::nullopt;
+
+    std::vector<Row> rows(count);
+    if (count > 0) std::memcpy(rows.data(), buffer.data() + first, rows.size() * sizeof(Row));
+    return rows;
+}
+
+TcpState StateOfRow(DWORD state)
+{
+    // MIB_TCP_STATE_ESTAB covers a connection still waiting in the listener's backlog as well as
+    // an accepted one; MIB_TCP_STATE_SYN_RCVD is one whose handshake has not completed.
+    switch (state) {
+    case MIB_TCP_STATE_ESTAB:
+        return TcpState::Established;
+    case MIB_TCP_STATE_SYN_RCVD:
+        return TcpState::SynReceived;
+    default:
+        return TcpState::Other;
+    }
+}
+
+//! A port as a table row gives it: the low 16 bits of the DWORD, in network order.
+unsigned short PortOfRow(DWORD port)
+{
+    return ntohs(static_cast<u_short>(port));
+}
+
+std::optional<std::vector<TcpConnEntry>> ReadWindowsTcpTable(ULONG family)
+{
+    const std::optional<std::vector<unsigned char>> buffer = GetConnectionTable(family);
+    if (!buffer) return std::nullopt;
+
+    std::vector<TcpConnEntry> entries;
+    if (family == AF_INET) {
+        const std::optional<std::vector<MIB_TCPROW_OWNER_PID>> rows =
+            TableRows<MIB_TCPTABLE_OWNER_PID, MIB_TCPROW_OWNER_PID>(*buffer);
+        if (!rows) return std::nullopt;
+        for (const MIB_TCPROW_OWNER_PID& row : *rows) {
+            // The addresses are in network order, as in_addr holds them.
+            in_addr local{};
+            in_addr remote{};
+            local.s_addr = row.dwLocalAddr;
+            remote.s_addr = row.dwRemoteAddr;
+
+            TcpConnEntry entry;
+            entry.local = CService(local, PortOfRow(row.dwLocalPort));
+            entry.remote = CService(remote, PortOfRow(row.dwRemotePort));
+            entry.state = StateOfRow(row.dwState);
+            entry.owner = row.dwOwningPid;
+            entries.push_back(std::move(entry));
+        }
+        return entries;
+    }
+
+    const std::optional<std::vector<MIB_TCP6ROW_OWNER_PID>> rows =
+        TableRows<MIB_TCP6TABLE_OWNER_PID, MIB_TCP6ROW_OWNER_PID>(*buffer);
+    if (!rows) return std::nullopt;
+    for (const MIB_TCP6ROW_OWNER_PID& row : *rows) {
+        in6_addr local{};
+        in6_addr remote{};
+        static_assert(sizeof(local) == sizeof(row.ucLocalAddr) && sizeof(remote) == sizeof(row.ucRemoteAddr));
+        std::memcpy(&local, row.ucLocalAddr, sizeof(local));
+        std::memcpy(&remote, row.ucRemoteAddr, sizeof(remote));
+
+        TcpConnEntry entry;
+        entry.local = CService(CNetAddr(local, row.dwLocalScopeId), PortOfRow(row.dwLocalPort));
+        entry.remote = CService(CNetAddr(remote, row.dwRemoteScopeId), PortOfRow(row.dwRemotePort));
+        entry.state = StateOfRow(row.dwState);
+        entry.owner = row.dwOwningPid;
+        entries.push_back(std::move(entry));
+    }
+    return entries;
+}
+
+#endif // WIN32
+
 } // namespace
 
 std::vector<TcpConnEntry> ParseProcNetTcp(std::istream& in, bool ipv6)
@@ -169,6 +281,13 @@ std::optional<std::vector<TcpConnEntry>> ReadTcpConnectionTables()
         if (tcp6.bad()) return std::nullopt;
         entries.insert(entries.end(), entries6.begin(), entries6.end());
     }
+    return entries;
+#elif defined(WIN32)
+    std::optional<std::vector<TcpConnEntry>> entries = ReadWindowsTcpTable(AF_INET);
+    if (!entries) return std::nullopt;
+    const std::optional<std::vector<TcpConnEntry>> entries6 = ReadWindowsTcpTable(AF_INET6);
+    if (!entries6) return std::nullopt;
+    entries->insert(entries->end(), entries6->begin(), entries6->end());
     return entries;
 #else
     return std::nullopt;
@@ -226,6 +345,72 @@ PathSecurityFacts PosixPathFacts(uint64_t uid, uint32_t mode)
     // Others are every account but root: group or world write (022), or an owner other than root.
     facts.writable_by_others = (mode & 022) != 0 || uid != 0;
     return facts;
+}
+
+bool AclGrantsWriteToOthers(const std::vector<AceFacts>& aces)
+{
+    // SYSTEM, Administrators and TrustedInstaller, which own and service what Windows installs.
+    const auto trusted = [](const std::string& sid) {
+        return sid == "S-1-5-18" || sid == "S-1-5-32-544" ||
+               sid == "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464";
+    };
+    return std::any_of(aces.begin(), aces.end(), [&](const AceFacts& ace) {
+        return ace.allow && !ace.inherit_only && (ace.mask & WINDOWS_WRITE_RIGHTS) != 0 && !trusted(ace.sid);
+    });
+}
+
+PathSecurityFacts WindowsPathFacts(const util::winacl::ObservedAcl& acl)
+{
+    std::vector<AceFacts> aces;
+    aces.reserve(acl.aces.size());
+    for (const util::winacl::ObservedAce& ace : acl.aces) {
+        AceFacts facts;
+        // An entry whose SID was not well formed has an empty trustee, which formats as an empty
+        // string and so is nobody trusted.
+        facts.sid = util::winacl::FormatSid(ace.trustee);
+        facts.mask = ace.mask;
+        facts.allow = ace.kind == util::winacl::AceKind::Allow || ace.kind == util::winacl::AceKind::OtherAllow;
+        facts.inherit_only = ace.inherit_only;
+        aces.push_back(std::move(facts));
+    }
+
+    PathSecurityFacts facts;
+    if (acl.owner) facts.owner = util::winacl::FormatSid(*acl.owner);
+    // No DACL, or a NULL one, gives everyone full access.
+    facts.writable_by_others = !acl.dacl_present || AclGrantsWriteToOthers(aces);
+    return facts;
+}
+
+namespace {
+
+//! A Windows path to compare: every '/' as '\', and ASCII letters in lower case.
+std::string FoldWindowsPath(const std::string& path)
+{
+    std::string folded = ToLower(path);
+    std::replace(folded.begin(), folded.end(), '/', '\\');
+    return folded;
+}
+
+} // namespace
+
+bool IsInstalledCoreImage(const std::string& listener_image, const std::string& self_image)
+{
+    const std::string listener = FoldWindowsPath(listener_image);
+    const std::string self = FoldWindowsPath(self_image);
+    if (listener.empty() || self.empty()) return false;
+    if (listener == self) return true;
+
+    const size_t name_start = self.rfind('\\');
+    if (name_start == std::string::npos) return false;
+    const std::string dir = self.substr(0, name_start);
+    if (listener == dir + "\\gridcoinresearch.exe") return true;
+
+    // The installer puts the daemon in daemon\ and the GUI in the directory above it.
+    const size_t dir_name_start = dir.rfind('\\');
+    if (dir_name_start == std::string::npos || dir.compare(dir_name_start + 1, std::string::npos, "daemon") != 0) {
+        return false;
+    }
+    return listener == dir.substr(0, dir_name_start) + "\\gridcoinresearch.exe";
 }
 
 ListenerCheckResult DecideListenerOwner(const ListenerOwnerFacts& facts)
@@ -348,7 +533,184 @@ std::optional<std::string> ResolveAccountName(const std::string& name)
     return ToString(pwd.pw_uid);
 }
 
-#endif // __linux__
+#elif defined(WIN32)
+
+using util::winacl::UniqueHandle;
+
+CallerIdentity GetCallerIdentity()
+{
+    // The user of this process's token: S-1-5-18 for SYSTEM.
+    try {
+        const std::string sid = util::winacl::FormatSid(util::winacl::CurrentTokenUser());
+        return {sid, sid == "S-1-5-18"};
+    } catch (const std::exception&) {
+        // An empty caller is never accepted.
+        return {};
+    }
+}
+
+//! SeDebugPrivilege, enabled on this process's token by Enable() when the token holds it (an
+//! elevated administrator's holds it, disabled), and put back as it was when this goes out of scope.
+class DebugPrivilegeScope
+{
+public:
+    DebugPrivilegeScope() = default;
+    ~DebugPrivilegeScope()
+    {
+        // m_previous lists the privilege only when Enable() changed it.
+        if (m_token && m_previous.PrivilegeCount > 0) {
+            ::AdjustTokenPrivileges(m_token.get(), FALSE, &m_previous, 0, nullptr, nullptr);
+        }
+    }
+
+    DebugPrivilegeScope(const DebugPrivilegeScope&) = delete;
+    DebugPrivilegeScope& operator=(const DebugPrivilegeScope&) = delete;
+
+    //! True when the privilege is enabled now.
+    bool Enable()
+    {
+        if (m_enabled) return true;
+        if (m_token) return false;
+
+        HANDLE token = nullptr;
+        if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token)) return false;
+        m_token.reset(token);
+
+        TOKEN_PRIVILEGES wanted{};
+        wanted.PrivilegeCount = 1;
+        wanted.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+        if (!::LookupPrivilegeValueW(nullptr, L"SeDebugPrivilege", &wanted.Privileges[0].Luid)) return false;
+
+        DWORD length{0};
+        if (!::AdjustTokenPrivileges(m_token.get(), FALSE, &wanted, sizeof(m_previous), &m_previous, &length)) {
+            return false;
+        }
+        // The call succeeds without enabling a privilege the token does not hold, and then reports
+        // ERROR_NOT_ALL_ASSIGNED.
+        m_enabled = ::GetLastError() == ERROR_SUCCESS;
+        return m_enabled;
+    }
+
+private:
+    UniqueHandle m_token;
+    TOKEN_PRIVILEGES m_previous{};
+    bool m_enabled{false};
+};
+
+//! What \p open returns: a handle, or null with the error in GetLastError. When it is refused with
+//! ERROR_ACCESS_DENIED, SeDebugPrivilege is enabled through \p debug and \p open is called once more.
+template <typename Open>
+UniqueHandle OpenAllowingDebug(DebugPrivilegeScope& debug, const Open& open)
+{
+    UniqueHandle handle(open());
+    if (!handle && ::GetLastError() == ERROR_ACCESS_DENIED && debug.Enable()) {
+        handle.reset(open());
+    }
+    return handle;
+}
+
+//! Room for the longest path Windows has, 32767 characters, and the terminating null.
+constexpr DWORD LONGEST_PATH{32768};
+
+//! The path of the image \p process runs, in the Win32 form (QueryFullProcessImageNameW with
+//! flags 0), as UTF-8.
+std::optional<std::string> ProcessImagePath(HANDLE process)
+{
+    std::wstring name(LONGEST_PATH, L'\0');
+    DWORD size = LONGEST_PATH;
+    if (!::QueryFullProcessImageNameW(process, 0, name.data(), &size)) return std::nullopt;
+    // On success the size leaves out the terminating null.
+    name.resize(size);
+    return WideToUtf8(name);
+}
+
+//! The path of this process's own image (GetModuleFileNameW), as UTF-8.
+std::optional<std::string> OwnImagePath()
+{
+    std::wstring module(LONGEST_PATH, L'\0');
+    const DWORD length = ::GetModuleFileNameW(nullptr, module.data(), LONGEST_PATH);
+    // A path cut short fills the whole buffer.
+    if (length == 0 || length >= LONGEST_PATH) return std::nullopt;
+    module.resize(length);
+    return WideToUtf8(module);
+}
+
+//! The user of the access token \p token as a SID string.
+std::optional<std::string> TokenUserSid(HANDLE token)
+{
+    const std::vector<unsigned char> buffer = util::winacl::QueryTokenInformation(token, TokenUser, "TokenUser");
+    if (buffer.size() < sizeof(TOKEN_USER)) return std::nullopt;
+    const std::optional<util::winacl::Sid> sid =
+        util::winacl::SidAt(reinterpret_cast<const TOKEN_USER*>(buffer.data())->User.Sid);
+    if (!sid) return std::nullopt;
+    return util::winacl::FormatSid(*sid);
+}
+
+std::optional<ListenerIdentity> IdentifyListener(const TcpConnEntry& server_side)
+{
+    // The table's pid for the server side of a connection: the process that holds the socket, the
+    // listener's while the connection waits in its backlog. 0, the System Idle Process, is no
+    // process that can hold one.
+    if (server_side.owner == 0 || server_side.owner > std::numeric_limits<DWORD>::max()) return std::nullopt;
+    const DWORD pid = static_cast<DWORD>(server_side.owner);
+
+    try {
+        DebugPrivilegeScope debug;
+        const UniqueHandle process = OpenAllowingDebug(debug, [pid]() -> void* {
+            return ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        });
+        if (!process) return std::nullopt;
+
+        // A pid is given to another process only once its process has ended and every handle to it is
+        // closed. With the process held open, the same row giving the same pid again shows that the
+        // process opened holds the connection, and is not a later one that took over the pid.
+        const std::optional<std::vector<TcpConnEntry>> tables = ReadTcpConnectionTables();
+        if (!tables) return std::nullopt;
+        const std::optional<TcpConnEntry> again = FindServerSide(*tables, server_side.remote, server_side.local);
+        if (!again || again->owner != server_side.owner) return std::nullopt;
+
+        const std::optional<std::string> image = ProcessImagePath(process.get());
+        const std::optional<std::string> self = OwnImagePath();
+        if (!image || !self) return std::nullopt;
+
+        const UniqueHandle token = OpenAllowingDebug(debug, [&process]() -> void* {
+            HANDLE opened = nullptr;
+            return ::OpenProcessToken(process.get(), TOKEN_QUERY, &opened) ? opened : nullptr;
+        });
+        if (!token) return std::nullopt;
+
+        const std::optional<std::string> owner = TokenUserSid(token.get());
+        if (!owner) return std::nullopt;
+        return ListenerIdentity{*owner, IsInstalledCoreImage(*image, *self)};
+    } catch (const std::exception&) {
+        // A token query that failed, or a path that is not valid UTF-16.
+        return std::nullopt;
+    }
+}
+
+void GetConfFacts(std::optional<PathSecurityFacts>& conf, std::optional<PathSecurityFacts>& conf_dir)
+{
+    // What ReadConfigFiles recorded from the open file it read, as on Linux.
+    const std::optional<ConfigFileFacts> facts = gArgs.GetConfigFileFacts();
+    if (!facts) return;
+    if (facts->file_acl) conf = WindowsPathFacts(*facts->file_acl);
+    if (facts->dir_acl) conf_dir = WindowsPathFacts(*facts->dir_acl);
+}
+
+std::optional<std::string> ResolveAccountName(const std::string& name)
+{
+    try {
+        const std::optional<util::winacl::Sid> sid =
+            util::winacl::LookupAccountSidByName(Utf8ToWide(name), /*require_alias=*/false);
+        if (!sid) return std::nullopt;
+        return util::winacl::FormatSid(*sid);
+    } catch (const std::exception&) {
+        // A name that cannot be looked up names no account the listener can be checked against.
+        return std::nullopt;
+    }
+}
+
+#endif // __linux__, WIN32
 
 // The client runs one command per process, so once per process is once per run.
 std::atomic<bool> g_service_user_ignored_warned{false};
@@ -376,8 +738,13 @@ std::optional<std::string> GetServiceAccount(const std::optional<PathSecurityFac
     // or a configuration file that cannot name the account differs from the honoured one.
     const std::string requested = gArgs.IsArgNegated("-rpcserviceuser") ? "" : gArgs.GetArg("-rpcserviceuser", "");
     if (requested != honoured) {
+#ifdef WIN32
+        WarnOnce(g_service_user_ignored_warned, "ignoring -rpcserviceuser: it is honoured only from a configuration "
+                                                "file that SYSTEM or Administrators own and nobody else can write");
+#else
         WarnOnce(g_service_user_ignored_warned, "ignoring -rpcserviceuser: it is honoured only from a configuration "
                                                 "file that root owns and nobody else can write");
+#endif
     }
     if (honoured.empty()) return std::nullopt;
 

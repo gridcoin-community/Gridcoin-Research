@@ -387,6 +387,152 @@ BOOST_AUTO_TEST_CASE(posix_path_facts)
     BOOST_CHECK(user_file.writable_by_others);
 }
 
+BOOST_AUTO_TEST_CASE(windows_acl_write_detection)
+{
+    const std::string trusted_installer{"S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464"};
+    const std::string users{"S-1-5-32-545"};
+
+    BOOST_CHECK(!AclGrantsWriteToOthers({{"S-1-5-18", 0x10000000}}));
+    BOOST_CHECK(AclGrantsWriteToOthers({{users, 0x2}}));
+    BOOST_CHECK(!AclGrantsWriteToOthers({{"S-1-5-11", 0x001200A9}}));
+    // An inherit-only entry is what the children receive, not a right on the object.
+    BOOST_CHECK(!AclGrantsWriteToOthers({{users, 0x2, true, true}}));
+    // A deny entry grants nothing.
+    BOOST_CHECK(!AclGrantsWriteToOthers({{users, 0x2, false}}));
+    BOOST_CHECK(!AclGrantsWriteToOthers({{trusted_installer, 0x10000000}}));
+
+    // Each write right alone, and none of the others.
+    for (const uint32_t right : {0x2U, 0x4U, 0x40U, 0x10000U, 0x40000U, 0x80000U, 0x10000000U, 0x40000000U}) {
+        BOOST_CHECK_MESSAGE(AclGrantsWriteToOthers({{users, right}}), right);
+    }
+    for (const uint32_t right : {0x1U, 0x8U, 0x10U, 0x20U, 0x80U, 0x100U, 0x20000U, 0x100000U, 0x20000000U, 0x80000000U}) {
+        BOOST_CHECK_MESSAGE(!AclGrantsWriteToOthers({{users, right}}), right);
+    }
+
+    // The service's configuration file grants Administrators and SYSTEM full control and the service read.
+    const std::vector<AceFacts> service_conf{{"S-1-5-32-544", 0x001F01FF},
+                                             {"S-1-5-18", 0x001F01FF},
+                                             {"S-1-5-80-1-2-3-4-5", 0x00120089}};
+    BOOST_CHECK(!AclGrantsWriteToOthers(service_conf));
+    std::vector<AceFacts> with_user = service_conf;
+    with_user.push_back({users, 0x00120116});
+    BOOST_CHECK(AclGrantsWriteToOthers(with_user));
+    BOOST_CHECK(!AclGrantsWriteToOthers({}));
+}
+
+BOOST_AUTO_TEST_CASE(windows_path_facts)
+{
+    using namespace util::winacl;
+    const Sid admins = wellknown::Administrators();
+    const Sid system = wellknown::System();
+    const Sid users = wellknown::Users();
+    const std::optional<Sid> service = ParseSidString("S-1-5-80-1-2-3-4-5");
+    BOOST_REQUIRE(service);
+    const auto entry = [](AceKind kind, const Sid& trustee, uint32_t mask) {
+        ObservedAce ace;
+        ace.kind = kind;
+        ace.trustee = trustee;
+        ace.mask = mask;
+        return ace;
+    };
+
+    // The service's configuration file, as the Windows service setup makes it.
+    ObservedAcl conf;
+    conf.owner = admins;
+    conf.dacl_present = true;
+    conf.is_protected = true;
+    conf.aces = {entry(AceKind::Allow, admins, 0x001F01FF), entry(AceKind::Allow, system, 0x001F01FF),
+                 entry(AceKind::Allow, *service, 0x00120089)};
+    const PathSecurityFacts conf_facts = WindowsPathFacts(conf);
+    BOOST_CHECK_EQUAL(conf_facts.owner, "S-1-5-32-544");
+    BOOST_CHECK(!conf_facts.writable_by_others);
+    BOOST_CHECK(ConfTrustedForServiceAccount(conf_facts, conf_facts, false));
+
+    // No DACL, or a NULL one, gives everyone full access.
+    ObservedAcl no_dacl = conf;
+    no_dacl.dacl_present = false;
+    no_dacl.aces.clear();
+    BOOST_CHECK(WindowsPathFacts(no_dacl).writable_by_others);
+
+    ObservedAcl user_write = conf;
+    user_write.aces.push_back(entry(AceKind::Allow, users, 0x2));
+    BOOST_CHECK(WindowsPathFacts(user_write).writable_by_others);
+
+    // A callback or object allow entry grants what it names as well.
+    ObservedAcl other_allow = conf;
+    other_allow.aces.push_back(entry(AceKind::OtherAllow, users, 0x2));
+    BOOST_CHECK(WindowsPathFacts(other_allow).writable_by_others);
+
+    // A deny entry, and an entry that is neither an allow nor a deny, grant nothing.
+    ObservedAcl deny = conf;
+    deny.aces.push_back(entry(AceKind::Deny, users, 0x2));
+    deny.aces.push_back(entry(AceKind::Other, users, 0x2));
+    BOOST_CHECK(!WindowsPathFacts(deny).writable_by_others);
+
+    // CREATOR OWNER's inherit-only entry on a directory is for what is created in it.
+    ObservedAcl inherit_only = conf;
+    inherit_only.aces.push_back(entry(AceKind::Allow, *ParseSidString("S-1-3-0"), 0x10000000));
+    inherit_only.aces.back().inherit_only = true;
+    BOOST_CHECK(!WindowsPathFacts(inherit_only).writable_by_others);
+
+    // An entry whose SID could not be read is nobody trusted.
+    ObservedAcl no_sid = conf;
+    no_sid.aces.push_back(entry(AceKind::Allow, Sid{}, 0x2));
+    BOOST_CHECK(WindowsPathFacts(no_sid).writable_by_others);
+
+    // An owner that could not be read is no owner the configuration file may have.
+    ObservedAcl no_owner = conf;
+    no_owner.owner.reset();
+    const PathSecurityFacts no_owner_facts = WindowsPathFacts(no_owner);
+    BOOST_CHECK_EQUAL(no_owner_facts.owner, "");
+    BOOST_CHECK(!ConfTrustedForServiceAccount(no_owner_facts, conf_facts, false));
+
+    // A file a user owns.
+    ObservedAcl user_owned = conf;
+    user_owned.owner = *ParseSidString("S-1-5-21-1-2-3-1001");
+    const PathSecurityFacts user_facts = WindowsPathFacts(user_owned);
+    BOOST_CHECK_EQUAL(user_facts.owner, "S-1-5-21-1-2-3-1001");
+    BOOST_CHECK(!ConfTrustedForServiceAccount(user_facts, conf_facts, false));
+}
+
+BOOST_AUTO_TEST_CASE(installed_core_image_match)
+{
+    const std::string installed{R"(C:\Program Files\GridcoinResearch\daemon\gridcoinresearchd.exe)"};
+    BOOST_CHECK(IsInstalledCoreImage(R"(c:\program files\gridcoinresearch\DAEMON\GridcoinResearchD.exe)", installed));
+    BOOST_CHECK(IsInstalledCoreImage(R"(C:\Program Files\GridcoinResearch\gridcoinresearch.exe)", installed));
+    BOOST_CHECK(!IsInstalledCoreImage(R"(C:\Users\a\AppData\Local\Temp\gridcoinresearchd.exe)", installed));
+    BOOST_CHECK(!IsInstalledCoreImage(R"(C:\Windows\System32\OpenSSH\ssh.exe)", installed));
+    BOOST_CHECK(!IsInstalledCoreImage(R"(C:\Program Files\WSL\wslrelay.exe)", installed));
+
+    const std::string build{R"(C:\src\build\bin\gridcoinresearchd.exe)"};
+    BOOST_CHECK(IsInstalledCoreImage(R"(C:\src\build\bin\gridcoinresearch.exe)", build));
+
+    // Either separator, on either side.
+    BOOST_CHECK(IsInstalledCoreImage("C:/Program Files/GridcoinResearch/daemon/gridcoinresearchd.exe", installed));
+    BOOST_CHECK(IsInstalledCoreImage(R"(C:\src\build\bin\gridcoinresearch.exe)", "C:/src/build/bin/gridcoinresearchd.exe"));
+
+    // The GUI beside the daemon in daemon\ too.
+    BOOST_CHECK(IsInstalledCoreImage(R"(C:\Program Files\GridcoinResearch\daemon\gridcoinresearch.exe)", installed));
+
+    // Only the GUI one level up, and only from a directory named daemon.
+    BOOST_CHECK(!IsInstalledCoreImage(R"(C:\Program Files\GridcoinResearch\gridcoinresearchd.exe)", installed));
+    BOOST_CHECK(!IsInstalledCoreImage(R"(C:\src\build\gridcoinresearch.exe)", build));
+    BOOST_CHECK(!IsInstalledCoreImage(R"(C:\a\gridcoinresearch.exe)", R"(C:\a\xdaemon\gridcoinresearchd.exe)"));
+    BOOST_CHECK(!IsInstalledCoreImage(R"(C:\gridcoinresearch.exe)", R"(C:\Program Files\GridcoinResearch\daemon\gridcoinresearchd.exe)"));
+
+    // Whole names only.
+    BOOST_CHECK(!IsInstalledCoreImage(R"(C:\Program Files\GridcoinResearch\daemon\gridcoinresearchd.exe.bak)", installed));
+    BOOST_CHECK(!IsInstalledCoreImage(R"(C:\Program Files\GridcoinResearch\daemon\xgridcoinresearch.exe)", installed));
+    BOOST_CHECK(!IsInstalledCoreImage(R"(C:\Program Files\GridcoinResearch\daemon\gridcoinresearch.exe\x)", installed));
+
+    // Case folds for ASCII letters only.
+    BOOST_CHECK(!IsInstalledCoreImage("C:\\\xC3\x84\\gridcoinresearchd.exe", "C:\\\xC3\xA4\\gridcoinresearchd.exe"));
+
+    // An image that could not be read is never the core.
+    BOOST_CHECK(!IsInstalledCoreImage("", installed));
+    BOOST_CHECK(!IsInstalledCoreImage("", ""));
+}
+
 BOOST_AUTO_TEST_CASE(owner_policy_table)
 {
     const std::optional<std::string> none;
@@ -453,7 +599,8 @@ BOOST_AUTO_TEST_CASE(conf_trust_predicate)
     BOOST_CHECK(ConfTrustedForServiceAccount({"S-1-5-32-544", false}, {"S-1-5-18", false}, false));
 }
 
-#ifdef __linux__
+// The platforms with a backend.
+#if defined(__linux__) || defined(WIN32)
 
 BOOST_AUTO_TEST_CASE(live_loopback_lookup_own_uid)
 {
@@ -478,7 +625,12 @@ BOOST_AUTO_TEST_CASE(live_loopback_lookup_own_uid)
     BOOST_REQUIRE(tables);
     const std::optional<TcpConnEntry> found = FindServerSide(*tables, client_local, client_remote);
     BOOST_REQUIRE(found);
+#ifdef WIN32
+    // The Windows table gives the process that holds the listener.
+    BOOST_CHECK_EQUAL(found->owner, static_cast<uint64_t>(::GetCurrentProcessId()));
+#else
     BOOST_CHECK_EQUAL(found->owner, static_cast<uint64_t>(::geteuid()));
+#endif
 
     // The production check end to end: our own listener is accepted.
     const ListenerCheckResult result = CheckRpcListener(client_local, client_remote);
@@ -501,7 +653,7 @@ BOOST_AUTO_TEST_CASE(remote_peer_is_not_checked)
     BOOST_CHECK_EQUAL(result.reason, "remote");
 }
 
-#endif // __linux__
+#endif // __linux__ || WIN32
 
 BOOST_AUTO_TEST_CASE(callrpc_sends_nothing_when_refused)
 {

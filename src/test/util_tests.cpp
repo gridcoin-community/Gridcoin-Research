@@ -463,6 +463,57 @@ BOOST_AUTO_TEST_CASE(config_file_facts_are_the_file_read)
 
     fs::remove_all(base);
 }
+#else
+BOOST_AUTO_TEST_CASE(config_file_facts_are_the_file_read)
+{
+    // base/held/real.conf, which sets datadir= to base/other. The file, its directory and the other
+    // directory each have an access list of their own length, so the recorded lists show which one
+    // they came from.
+    const fs::path base = GetDataDir(false) / "config_file_facts";
+    const fs::path held = base / "held";
+    const fs::path other = base / "other";
+    const fs::path real = held / "real.conf";
+    fs::remove_all(base);
+    fs::create_directories(held);
+    fs::create_directories(other);
+    {
+        fsbridge::ofstream out(real);
+        out << "datadir=" << other.string() << "\nrpcport=1\n";
+    }
+
+    const util::winacl::Sid self = util::winacl::CurrentTokenUser();
+    const util::winacl::Sid system = util::winacl::wellknown::System();
+    const util::winacl::Sid admins = util::winacl::wellknown::Administrators();
+    util::winacl::ApplyAcl(real, {self, {{self, 0x001F01FF}}});
+    util::winacl::ApplyAcl(held, {self, {{self, 0x001F01FF}, {system, 0x001F01FF}}});
+    util::winacl::ApplyAcl(other, {self, {{self, 0x001F01FF}, {system, 0x001F01FF}, {admins, 0x001F01FF}}});
+
+    TestArgsManager args;
+    args.SetupArgs({{"-conf", ArgsManager::ALLOW_ANY}, {"-datadir", ArgsManager::ALLOW_ANY}, {"-rpcport", ArgsManager::ALLOW_ANY}});
+    const std::string conf_arg = "-conf=" + real.string();
+    std::array argv{"x", conf_arg.c_str()};
+    std::string error;
+    BOOST_REQUIRE(args.ParseParameters(argv.size(), argv.data(), error));
+    BOOST_CHECK(!args.GetConfigFileFacts());
+    BOOST_REQUIRE_MESSAGE(args.ReadConfigFiles(error), error);
+    BOOST_CHECK_EQUAL(args.GetArg("-rpcport", ""), "1");
+
+    const std::optional<ConfigFileFacts> facts = args.GetConfigFileFacts();
+    BOOST_REQUIRE(facts);
+    BOOST_REQUIRE(facts->file_acl);
+    BOOST_REQUIRE(facts->dir_acl);
+    BOOST_CHECK(facts->file_acl->owner == std::optional<util::winacl::Sid>{self});
+    BOOST_CHECK_EQUAL(facts->file_acl->aces.size(), 1U);
+    BOOST_CHECK(facts->dir_acl->owner == std::optional<util::winacl::Sid>{self});
+    BOOST_CHECK_EQUAL(facts->dir_acl->aces.size(), 2U);
+
+    // A later read that finds no file leaves no facts from the earlier one.
+    fs::remove(real);
+    BOOST_CHECK(!args.ReadConfigFiles(error));
+    BOOST_CHECK(!args.GetConfigFileFacts());
+
+    fs::remove_all(base);
+}
 #endif
 
 BOOST_AUTO_TEST_CASE(util_ParseParameters)

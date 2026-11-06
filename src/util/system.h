@@ -19,6 +19,7 @@
 #include <tinyformat.h>
 #include <util/settings.h>
 #include <util/time.h>
+#include <util/win_acl.h>
 
 #include <locale>
 #include <any>
@@ -118,8 +119,9 @@ struct FileOwnerMode
     uint32_t mode{0};
 };
 
-//! The top-level configuration file ReadConfigFiles read, as fstat reported it on the open file
-//! whose contents were read, and the directory that holds it. POSIX only; Windows records none.
+//! The top-level configuration file ReadConfigFiles read, and the directory that holds it. On POSIX
+//! as fstat reported it on the open file whose contents were read; on Windows the owner and DACL
+//! read through that open file. Each platform leaves the other's members at their defaults.
 struct ConfigFileFacts
 {
     FileOwnerMode file;
@@ -128,6 +130,12 @@ struct ConfigFileFacts
     //! The directory of the file after symbolic links are resolved, while the resolved path still
     //! named the open file. nullopt when that could not be established.
     std::optional<FileOwnerMode> dir;
+    //! On Windows, the owner and DACL of the file (GetSecurityInfo on the open file).
+    std::optional<util::winacl::ObservedAcl> file_acl;
+    //! On Windows, the owner and DACL of the directory that holds the file, read by the name of the
+    //! open file's final path (GetFinalPathNameByHandleW), links and junctions resolved. nullopt
+    //! when that path or that list could not be read.
+    std::optional<util::winacl::ObservedAcl> dir_acl;
 };
 
 class ArgsManager

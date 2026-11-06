@@ -1159,16 +1159,56 @@ bool ArgsManager::ReadConfigStream(std::istream& stream, const std::string& file
 
 enum class ConfigFileRead { NotOpened, Read, ReadError };
 
+#ifdef WIN32
+//! The path of the open file \p handle as Windows resolves it, links and junctions included
+//! (GetFinalPathNameByHandleW, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS, so with the \\?\ prefix),
+//! or nullopt when it cannot be read.
+static std::optional<fs::path> FinalPathOfOpenFile(HANDLE handle)
+{
+    const DWORD flags = FILE_NAME_NORMALIZED | VOLUME_NAME_DOS;
+    std::wstring name(MAX_PATH, L'\0');
+    DWORD length = ::GetFinalPathNameByHandleW(handle, name.data(), static_cast<DWORD>(name.size()), flags);
+    if (length >= name.size()) {
+        // The size needed, with the terminating null.
+        name.resize(length);
+        length = ::GetFinalPathNameByHandleW(handle, name.data(), static_cast<DWORD>(name.size()), flags);
+    }
+    // On success the length leaves out the terminating null, so it is below the buffer's size.
+    if (length == 0 || length >= name.size()) return std::nullopt;
+    name.resize(length);
+    return fs::path(name);
+}
+#endif
+
 //! The whole configuration file at path, read through one open file. On POSIX the facts recorded
 //! come from fstat on that same open file, so they describe the contents read. The directory is
-//! recorded only while the path, symbolic links resolved, still names the file that is open.
+//! recorded only while the path, symbolic links resolved, still names the file that is open. On
+//! Windows the file's owner and DACL are read through the open file, and the directory's by the
+//! name of the open file's final path.
 static ConfigFileRead ReadConfigFileContents(const fs::path& path, std::string& text,
                                              std::optional<ConfigFileFacts>& facts)
 {
     FILE* file = fsbridge::fopen(path, "r");
     if (file == nullptr) return ConfigFileRead::NotOpened;
 
-#ifndef WIN32
+#ifdef WIN32
+    // The handle the C runtime opened with GENERIC_READ, which includes READ_CONTROL.
+    const HANDLE handle = reinterpret_cast<HANDLE>(::_get_osfhandle(::_fileno(file)));
+    try {
+        ConfigFileFacts recorded;
+        recorded.file_acl = util::winacl::ReadAcl(handle, /*kernel_object=*/false);
+        if (const std::optional<fs::path> final_path = FinalPathOfOpenFile(handle)) {
+            try {
+                recorded.dir_acl = util::winacl::ReadAcl(final_path->parent_path());
+            } catch (const std::exception&) {
+                // The directory's list is left out, as on POSIX when its stat fails.
+            }
+        }
+        facts = std::move(recorded);
+    } catch (const std::exception&) {
+        // Nothing is recorded when the file's own list cannot be read, as on POSIX when fstat fails.
+    }
+#else
     struct stat file_st;
     if (::fstat(::fileno(file), &file_st) == 0) {
         ConfigFileFacts recorded;
