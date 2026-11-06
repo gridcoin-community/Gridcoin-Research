@@ -92,6 +92,28 @@ private:
     const std::atomic<bool>* m_previous{nullptr};
 };
 
+//! \brief Ends a capability however the block that began it is left, a throw
+//! included, so that it is not left to its deadline.
+//!
+//! The capability is ended with CWallet::EndElevation(), which takes neither
+//! cs_main nor cs_wallet; neither copyable nor movable, it lives in the block
+//! of the operation the capability was begun for.
+class EndElevationOnExit
+{
+public:
+    EndElevationOnExit(CWallet& wallet, CapabilityId id) : m_wallet(wallet), m_id(id) {}
+    ~EndElevationOnExit();
+
+    EndElevationOnExit(const EndElevationOnExit&) = delete;
+    EndElevationOnExit& operator=(const EndElevationOnExit&) = delete;
+    EndElevationOnExit(EndElevationOnExit&&) = delete;
+    EndElevationOnExit& operator=(EndElevationOnExit&&) = delete;
+
+private:
+    CWallet& m_wallet;
+    CapabilityId m_id{0};
+};
+
 //! \brief Lets the calling thread use the wallet's keys for one operation, under
 //! a capability issued for that kind of operation.
 //!

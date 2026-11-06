@@ -597,7 +597,7 @@ public:
     //! and an unencrypted one; do not read false as "it was locked".
     bool RestrictToStakingOnly();
 
-    //! The wallet's unlock is left exactly as it was, whether or not the
+    //! An unlock the user made is left exactly as it was, whether or not the
     //! change succeeds: a wallet unlocked for staking only stays so, with the
     //! same deadline and relock, a full unlock stays full, and a locked wallet
     //! is never opened. The old passphrase is proved against the keys without

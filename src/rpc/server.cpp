@@ -261,24 +261,6 @@ static std::optional<SecureString> DecodeElevationHeader(const SecureString& enc
     return std::optional<SecureString>{std::move(passphrase)};
 }
 
-namespace {
-//! Ends a capability when the request it was issued for is over, however the
-//! request ends.
-class EndElevationOnExit
-{
-public:
-    EndElevationOnExit(CWallet& wallet, CapabilityId id) : m_wallet(wallet), m_id(id) {}
-    ~EndElevationOnExit() { m_wallet.EndElevation(m_id); }
-
-    EndElevationOnExit(const EndElevationOnExit&) = delete;
-    EndElevationOnExit& operator=(const EndElevationOnExit&) = delete;
-
-private:
-    CWallet& m_wallet;
-    CapabilityId m_id{0};
-};
-} // namespace
-
 UniValue ExecuteWithElevation(const std::optional<SecureString>& header, const std::function<UniValue()>& execute)
 {
     // The listener opens before initialisation finishes, so a request can come

@@ -1424,15 +1424,19 @@ bool CWallet::ChangeWalletPassphraseWithoutDelay(const SecureString& strOldWalle
 
     // Every capability was proved with the old passphrase, so none outlives
     // the change, nor any unlock one of them made: the caller locks those once
-    // cs_wallet is released. The capability mutex is a leaf, so taking it under
+    // cs_wallet is released. They are swapped out, which cannot throw, so they
+    // are gone however the rest goes; their epochs are read from the swapped-out
+    // map afterwards. The capability mutex is a leaf, so taking it under
     // cs_wallet keeps the lock order.
+    std::map<CapabilityId, CapabilityRecord> ended;
     {
         LOCK(m_capability_mutex);
-        for (const auto& entry : m_capabilities) {
-            if (entry.second.relock_epoch) relock_epochs.insert(*entry.second.relock_epoch);
-        }
-        m_capabilities.clear();
+        ended.swap(m_capabilities);
         m_ipc_capability.reset();
+    }
+
+    for (const auto& entry : ended) {
+        if (entry.second.relock_epoch) relock_epochs.insert(*entry.second.relock_epoch);
     }
 
     LogPrintf("Wallet passphrase changed to an nDeriveIterations of %i", new_master_key.nDeriveIterations);

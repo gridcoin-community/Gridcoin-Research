@@ -99,3 +99,8 @@ CapabilityScope::CapabilityScope(CWallet& wallet, std::optional<CapabilityId> id
 }
 
 CapabilityScope::~CapabilityScope() = default;
+
+EndElevationOnExit::~EndElevationOnExit()
+{
+    m_wallet.EndElevation(m_id);
+}

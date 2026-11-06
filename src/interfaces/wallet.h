@@ -383,7 +383,7 @@ public:
     //! given up as beginElevation()'s can.
     virtual bool unlockWallet(const SecureString& passphrase, bool staking_only) = 0;
 
-    //! Change the wallet passphrase. The wallet keeps the unlock it had,
+    //! Change the wallet passphrase. The wallet keeps the unlock the user made,
     //! whether or not the change succeeds: a wallet unlocked for staking only
     //! is still unlocked for staking only, with the same relock deadline, a
     //! full unlock stays full, and a locked wallet stays locked throughout. On

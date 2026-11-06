@@ -447,7 +447,8 @@ AutoUnlockRun RunAutoUnlockPrompt(AskPassphraseDialog::Mode mode, qt_test::FakeW
 
     QTimer::singleShot(0, &dialog, [&dialog, &passphrase] {
         QLineEdit* const edit = dialog.findChild<QLineEdit*>("oldPassphraseEdit");
-        if (edit) edit->setText(passphrase);
+        QVERIFY(edit);
+        edit->setText(passphrase);
         dialog.accept();
     });
     QTimer::singleShot(10000, &dialog, [&dialog] { dialog.done(TIMED_OUT); });
