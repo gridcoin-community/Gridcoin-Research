@@ -375,8 +375,8 @@ bool AppInit(int argc, char* argv[])
         // command line client form has returned and the daemonizing fork, so it sees the process that will run.
         {
             const std::optional<int> tracer_pid = ReadOwnTracerPid();
-            if (!tracer_pid) {
-                LogPrintf("WARNING: could not read the tracer state of this process; the tracer check did not run");
+            if (const std::optional<std::string> warning = TracerStateWarning(tracer_pid, TracerCheckSupported())) {
+                LogPrintf("%s", *warning);
             }
             switch (DecideTracer(tracer_pid, allow_tracer)) {
             case TracerVerdict::Refuse:

@@ -9,6 +9,7 @@
 
 #include <optional>
 #include <sstream>
+#include <string>
 
 #if defined(__linux__)
 #include <sys/prctl.h>
@@ -69,6 +70,29 @@ BOOST_AUTO_TEST_CASE(decide_tracer_table)
     BOOST_CHECK(DecideTracer(std::nullopt, false) == TracerVerdict::Start);
     BOOST_CHECK(DecideTracer(4242, true) == TracerVerdict::StartDumpableForDebugging);
     BOOST_CHECK(DecideTracer(0, true) == TracerVerdict::StartDumpableForDebugging);
+}
+
+// Only Linux has a tracer check. Elsewhere there is nothing to read, which is no failure and
+// is not worth a warning on every start; a read that fails where the check exists is.
+BOOST_AUTO_TEST_CASE(tracer_warning_only_where_the_check_exists)
+{
+#if defined(__linux__)
+    BOOST_CHECK(TracerCheckSupported());
+#else
+    BOOST_CHECK(!TracerCheckSupported());
+#endif
+
+    const std::optional<std::string> failed = TracerStateWarning(std::nullopt, /*supported=*/true);
+    BOOST_REQUIRE(failed.has_value());
+    BOOST_CHECK(failed->find("WARNING: could not read the tracer state") == 0);
+
+    BOOST_CHECK(!TracerStateWarning(std::nullopt, /*supported=*/false).has_value());
+    BOOST_CHECK(!TracerStateWarning(0, /*supported=*/true).has_value());
+    // An attached tracer is DecideTracer's to refuse, not a failed read.
+    BOOST_CHECK(!TracerStateWarning(4242, /*supported=*/true).has_value());
+
+    // What both entry points log on this platform, where the read succeeds or does not exist.
+    BOOST_CHECK(!TracerStateWarning(ReadOwnTracerPid(), TracerCheckSupported()).has_value());
 }
 
 #if defined(__linux__)

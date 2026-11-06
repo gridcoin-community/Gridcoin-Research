@@ -940,10 +940,10 @@ int main(int argc, char *argv[])
     // Refuse to run under a debugger or tracer unless the developer override is set. The dialog is the earliest
     // place this can be shown. The override warning is logged once logging is up, below.
     bool debug_tracer_override = false;
-    bool tracer_unreadable = false;
+    std::optional<std::string> tracer_warning;
     {
         const std::optional<int> tracer_pid = ReadOwnTracerPid();
-        tracer_unreadable = !tracer_pid.has_value();
+        tracer_warning = TracerStateWarning(tracer_pid, TracerCheckSupported());
         switch (DecideTracer(tracer_pid, gArgs.GetBoolArg("-debugallowtracer", false))) {
         case TracerVerdict::Refuse: {
             const std::string msg = strprintf("A debugger or tracer (pid %d) is attached to this process; refusing "
@@ -1297,8 +1297,8 @@ int main(int argc, char *argv[])
     // Initialize logging as early as possible.
     InitLogging();
     LogNonDumpableStatus();
-    if (tracer_unreadable) {
-        LogPrintf("WARNING: could not read the tracer state of this process; the tracer check did not run");
+    if (tracer_warning) {
+        LogPrintf("%s", *tracer_warning);
     }
     if (debug_tracer_override) {
         LogPrintf("WARNING: -debugallowtracer is set: this process is dumpable and may be traced");

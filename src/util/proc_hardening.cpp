@@ -143,6 +143,23 @@ std::optional<int> ReadOwnTracerPid()
 #endif
 }
 
+bool TracerCheckSupported()
+{
+#if defined(__linux__)
+    return true;
+#else
+    return false;
+#endif
+}
+
+std::optional<std::string> TracerStateWarning(std::optional<int> tracer_pid, bool supported)
+{
+    // Where there is no check, nothing was read and nothing failed.
+    if (!supported || tracer_pid) return std::nullopt;
+
+    return std::string("WARNING: could not read the tracer state of this process; the tracer check did not run");
+}
+
 TracerVerdict DecideTracer(std::optional<int> tracer_pid, bool override_set)
 {
     if (override_set) return TracerVerdict::StartDumpableForDebugging;

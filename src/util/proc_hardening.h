@@ -7,6 +7,7 @@
 
 #include <iosfwd>
 #include <optional>
+#include <string>
 
 //! Default for the -nonewprivs startup option (on).
 static const bool DEFAULT_NO_NEW_PRIVS = true;
@@ -48,6 +49,14 @@ std::optional<int> ParseTracerPid(std::istream& status);
 
 //! ParseTracerPid of /proc/self/status (Linux); nullopt elsewhere or when unreadable.
 std::optional<int> ReadOwnTracerPid();
+
+//! Whether this platform has the tracer check: whether ReadOwnTracerPid reads anything (Linux).
+bool TracerCheckSupported();
+
+//! The warning to log for the tracer state \p tracer_pid that ReadOwnTracerPid gave: one when the
+//! platform has the check (\p supported) and the read gave nothing, so the check did not run.
+//! nullopt otherwise, a platform without the check included. Pure.
+std::optional<std::string> TracerStateWarning(std::optional<int> tracer_pid, bool supported);
 
 enum class TracerVerdict { Start, StartDumpableForDebugging, Refuse };
 
