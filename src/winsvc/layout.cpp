@@ -389,4 +389,10 @@ std::optional<std::string> LevelEntryRefusal(const std::vector<LayoutEntry>& lay
            (entry.owner_name.empty() ? sid : entry.owner_name + " (" + sid + ")");
 }
 
+bool DisableTargetOwnerAllowed(const std::optional<Sid>& owner, const Sid& user)
+{
+    return owner && (*owner == user || *owner == util::winacl::wellknown::System() ||
+                     *owner == util::winacl::wellknown::Administrators());
+}
+
 } // namespace winsvc

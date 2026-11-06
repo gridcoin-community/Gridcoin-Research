@@ -1150,4 +1150,18 @@ BOOST_AUTO_TEST_CASE(tool_args_parse_enable_and_disable)
     BOOST_CHECK(Contains(ToolUsage(), "--to=<directory>"));
 }
 
+BOOST_AUTO_TEST_CASE(disable_target_owner_follows_the_core_rule)
+{
+    // A data directory an elevated start created belongs to Administrators; the core's own startup
+    // check (fsmodes) accepts this account, SYSTEM and Administrators as owners, and so does disable.
+    const Sid user = SidOf("S-1-5-21-1547161642-583907252-1801674531-1110");
+    const Sid other = SidOf("S-1-5-21-1547161642-583907252-1801674531-1111");
+    BOOST_CHECK(DisableTargetOwnerAllowed(user, user));
+    BOOST_CHECK(DisableTargetOwnerAllowed(winacl::wellknown::Administrators(), user));
+    BOOST_CHECK(DisableTargetOwnerAllowed(winacl::wellknown::System(), user));
+    BOOST_CHECK(!DisableTargetOwnerAllowed(other, user));
+    BOOST_CHECK(!DisableTargetOwnerAllowed(SidOf("S-1-5-32-545"), user));
+    BOOST_CHECK(!DisableTargetOwnerAllowed(std::nullopt, user));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

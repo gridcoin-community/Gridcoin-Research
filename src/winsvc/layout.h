@@ -210,6 +210,12 @@ std::vector<Sid> LevelEntryOwners(const fs::path& programdata, const fs::path& l
 //! Never a file. Pure.
 bool ChecksLevelEntries(const LayoutEntry& level, bool list_matches_layout);
 
+//! Whether disable may move a wallet into an existing directory whose owner is \p owner, for the
+//! account \p user: the account itself, SYSTEM or Administrators, the owners the core's own startup
+//! check accepts (util/fsmodes). A data directory an elevated start created belongs to
+//! Administrators. Pure.
+bool DisableTargetOwnerAllowed(const std::optional<Sid>& owner, const Sid& user);
+
 //! One entry found directly inside a layout directory, read without following it.
 struct LevelEntryFacts
 {

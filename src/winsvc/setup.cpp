@@ -2231,9 +2231,9 @@ void DisableService(const ToolOptions& options)
                                     "--to=<directory>.",
                                     Shown(target)));
         }
-        if (!target_level.acl.owner || *target_level.acl.owner != *user) {
-            throw Refusal(strprintf("%s is owned by %s, not %s, so the wallet is not moved into it. Give a directory "
-                                    "of the account's own with --to=<directory>.",
+        if (!DisableTargetOwnerAllowed(target_level.acl.owner, *user)) {
+            throw Refusal(strprintf("%s is owned by %s, not %s, SYSTEM or Administrators, so the wallet is not moved "
+                                    "into it. Give a directory of the account's own with --to=<directory>.",
                                     Shown(target),
                                     target_level.acl.owner ? Describe(*target_level.acl.owner)
                                                            : std::string("an owner that cannot be read"),
