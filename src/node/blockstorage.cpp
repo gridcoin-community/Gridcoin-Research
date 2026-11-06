@@ -362,6 +362,9 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                 try {
                     blkdat >> nSize;
                     if (nSize > 0 && nSize <= MAX_BLOCK_SIZE) blkdat >> block;
+                } catch (const std::bad_alloc&) {
+                    // Running out of memory says nothing about the record, so it ends the load like a read error.
+                    throw;
                 } catch (const std::exception& e) {
                     // A read error ends the load. A record that does not deserialize, such as a block cut off at the
                     // end of the file by a crash while it was being written, is skipped, and the scan for the next
