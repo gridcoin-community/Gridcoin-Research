@@ -215,6 +215,10 @@ class FakeRoot:
             body += 'rm -f "%s"\n' % state
         self.write_executable(self.path("usr/sbin/" + self.net["tool"]), "#!/bin/sh\n%sexit %d\n" % (body, rc))
 
+    def set_policy(self, rc):
+        """A /usr/sbin/policy-rc.d that logs what it is asked and exits rc."""
+        self.write_executable(self.path("usr/sbin/policy-rc.d"), '#!/bin/sh\nprintf "%%s\\n" "policy-rc.d $*" >> "$LOG"\nexit %d\n' % rc)
+
     def state_path(self):
         return self.path("var/lib/gridcoin-service/switchover-%s.state" % self.network)
 
@@ -497,6 +501,41 @@ class PostinstTests(unittest.TestCase):
                     rc, out, err = fake.run("postinst", *args)
                     self.assertEqual(rc, 0, err)
                     self.assertEqual(fake.calls("systemctl try-restart"), [])
+
+    def test_restarts_honour_policy_rc_d(self):
+        for network in NETWORKS:
+            with self.subTest(network=network):
+                fake = FakeRoot(self, network)
+                fake.systemd_running()
+                units = ["%s@%s.service" % (fake.net["daemon"], user) for user in ("alice", "bob")]
+                fake.active(*units)
+                # Refused with 101: no restart, and the line deb-systemd-invoke prints.
+                fake.set_policy(101)
+                rc, out, err = fake.run("postinst", "configure", LATER)
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(fake.calls("systemctl try-restart"), [])
+                self.assertEqual(fake.calls("policy-rc.d"), ["policy-rc.d %s try-restart" % unit for unit in units])
+                for unit in units:
+                    self.assertIn("/usr/sbin/policy-rc.d returned 101, not running 'try-restart %s'" % unit, err)
+                # Any other status goes ahead, without the line.
+                for status in (0, 104, 1):
+                    fake.set_policy(status)
+                    rc, out, err = fake.run("postinst", "configure", LATER)
+                    self.assertEqual(rc, 0, err)
+                    self.assertEqual(fake.calls("systemctl try-restart"),
+                                     ["systemctl try-restart --no-block " + unit for unit in units])
+                    self.assertNotIn("policy-rc.d returned", err)
+                # No policy-rc.d: go ahead.
+                os.unlink(fake.path("usr/sbin/policy-rc.d"))
+                rc, out, err = fake.run("postinst", "configure", LATER)
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(len(fake.calls("systemctl try-restart")), 2)
+                # One that is not executable is no policy.
+                fake.set_policy(101)
+                os.chmod(fake.path("usr/sbin/policy-rc.d"), 0o644)
+                rc, out, err = fake.run("postinst", "configure", LATER)
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(len(fake.calls("systemctl try-restart")), 2)
 
     def test_without_systemd_the_rerun_is_named(self):
         fake = FakeRoot(self, "test")

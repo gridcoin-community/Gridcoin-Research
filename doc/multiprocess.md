@@ -636,6 +636,10 @@ runtime (see the macOS section).
   [`running-unattended.md` → *Autounlock setup*](running-unattended.md#autounlock-setup),
   then restart the core's unit. Unlock the wallet by hand in the meantime
   (`walletpassphrase` stake-only) — the core keeps running, it is just not staking.
+- **Autounlock does not unlock at boot inside a systemd container** (the helper logs `credential unusable:
+  missing`; a later restart of the core works). The container's root mount is private, so a unit started at boot
+  does not see the credentials PID 1 mounts for it. Make `/` shared at boot, as a host's systemd does; see
+  [`running-unattended.md`](running-unattended.md#troubleshooting).
 - **"Could not connect to the Gridcoin daemon … node.sock: connection refused."**
   The daemon is not running yet, was not started with `-multiprocess`, is using a
   different `-datadir`, or (Windows) is running as a different user. Start the daemon

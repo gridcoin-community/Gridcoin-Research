@@ -552,6 +552,11 @@ which prints `Nothing to switch over.` when there is nothing left.
 - **D-Bus is missing.** The helper unit requires `dbus.socket`, since it asks systemd over D-Bus which process is
   the core's main process. On a minimal host or container without D-Bus the helper cannot start, and the wallet
   stays locked. Install the distribution's D-Bus package (`dbus`, or `dbus-broker`).
+- **Autounlock does not unlock at boot inside a systemd container.** The helper logs `credential unusable: missing`
+  at boot, while a later restart of the core works. A container started with a private root mount (podman's
+  default) never marks `/` shared at boot, as systemd does only outside a container, so a unit started at boot does
+  not see the credentials PID 1 mounts for it. Make `/` shared at boot, as a host's systemd does: for podman, a unit
+  running `mount --make-rshared /` before `sysinit.target`, or the container manager's own option.
 - **systemd warns that it cannot apply IP firewalling** for the helper. Without BPF support in the kernel,
   `IPAddressDeny=` is not applied. The helper has no network either way: `PrivateNetwork=yes` gives it none.
 - **The switch-over did not finish.** The upgrade, or `--scan`, printed why and the command to rerun once the cause

@@ -61,6 +61,16 @@ setup_conf() {
     fi
 }
 
+# Like deb-systemd-invoke, ask policy-rc.d first: a status of 101 means do not act. That
+# tool has no --no-block, which a core's start (minutes) needs, hence the check here.
+policy_refuses() {
+    [ -x /usr/sbin/policy-rc.d ] || return 1
+    status=0
+    /usr/sbin/policy-rc.d "$1" try-restart || status=$?
+    [ "$status" = 101 ] || return 1
+    echo "/usr/sbin/policy-rc.d returned 101, not running 'try-restart $1'" >&2
+}
+
 # On an upgrade from a version that had these units already, the running per-user cores
 # move to the new daemon; stopped ones stay stopped. A core with a switch-over entry
 # pending when this configure began ($pending) is the switch-over's: restarted by it, or,
@@ -75,6 +85,9 @@ restart_running_cores() {
         user=${unit#"$DAEMON"@}
         user=${user%.service}
         if printf '%s\n' "$pending" | grep -qxF "core-active $user"; then
+            continue
+        fi
+        if policy_refuses "$unit"; then
             continue
         fi
         systemctl try-restart --no-block "$unit" || true

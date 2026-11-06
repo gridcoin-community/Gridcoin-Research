@@ -93,6 +93,9 @@ CONFIG_BACKUP_RE = re.compile(r"(gridcoinresearch\.conf|gridcoinsettings\.json)-
                               r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z(-.*)?", re.S)
 # The core's default datadir under the home directory (GetDefaultDataDir on Linux).
 DATADIR_NAME = ".GridcoinResearch"
+# The policy hook of Debian's maintainer scripts and its exit status for "do not act".
+POLICY_RC_D = "/usr/sbin/policy-rc.d"
+POLICY_REFUSED = 101
 STASH_INFIX = ".in-service-"
 TERMINATE_WAIT_SECONDS = 30
 # /proc/self/loginuid of a process outside any login session.
@@ -222,6 +225,14 @@ class Host:
         """Whether a package's maintainer script runs this (dpkg sets DPKG_MAINTSCRIPT_PACKAGE). The
         package restarts the system service itself after the switch-over."""
         return bool(os.environ.get("DPKG_MAINTSCRIPT_PACKAGE"))
+
+    def policy_status(self, unit, action):
+        """The exit status of /usr/sbin/policy-rc.d for the action on the unit, as deb-systemd-invoke
+        asks it; None where it is not asked: a run by hand, or no executable policy-rc.d. Only a run
+        from a maintainer script (see run_by_package) is bound by it; an administrator's is not."""
+        if not self.run_by_package() or not os.access(POLICY_RC_D, os.X_OK) or os.path.isdir(POLICY_RC_D):
+            return None
+        return subprocess.call([POLICY_RC_D, unit, action], env=SAFE_ENV)
 
     def active_units(self, pattern):
         """The names of the active units that match the glob pattern."""
@@ -586,6 +597,16 @@ def check_credential(paths, net, user):
     if st.st_uid != 0 or (st.st_mode & 0o777) != 0o600:
         print("warning: %s is not owned by root with mode 0600" % cred)
     return cred
+
+
+def try_restart(host, unit):
+    """Restart the unit if it runs, without waiting. From a maintainer script this honours
+    policy-rc.d as deb-systemd-invoke does: status 101 means do not act. Returns whether it ran."""
+    if host.policy_status(unit, "try-restart") == POLICY_REFUSED:
+        print("%s returned %d, not running 'try-restart %s'" % (POLICY_RC_D, POLICY_REFUSED, unit), file=sys.stderr)
+        return False
+    step(host, "try-restart", "--no-block", unit)
+    return True
 
 
 def step(host, *args, state="drop-ins already written are kept"):
@@ -3032,7 +3053,7 @@ def switch_user(net, user, kinds, host, paths):
     if "core" in kinds:
         step(host, "reenable", unit)
     if "core-active" in kinds:
-        step(host, "try-restart", "--no-block", unit)
+        try_restart(host, unit)
     return datadir
 
 

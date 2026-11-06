@@ -58,7 +58,7 @@ CONFIGURED = {"bindir": "/usr/bin", "default_network": "main", "python3": "/usr/
 
 class FakeHost:
     def __init__(self, users=None, groups=None, root=True, enabled=(), active=(), fail=(), processes=None,
-                 terminate_ends_processes=True, login=None, on_systemctl=None, package=False):
+                 terminate_ends_processes=True, login=None, on_systemctl=None, package=False, policy=None):
         self.users = users if users is not None else {}
         self.groups = groups if groups is not None else {}
         self.root = root
@@ -75,6 +75,9 @@ class FakeHost:
         self.on_systemctl = dict(on_systemctl or {})
         # Whether the run is the package's (its postinst), which restarts the system service itself.
         self.package = package
+        # The exit status of /usr/sbin/policy-rc.d (None: there is none), and what it was asked.
+        self.policy = policy
+        self.policy_asked = []
         # What systemctl show reports beyond the files a test made (see unit_files): {unit: path}
         # for a fragment systemd loads from elsewhere, {unit: [path]} for drop-ins from other
         # directories, and the units whose files changed since the last daemon-reload.
@@ -101,6 +104,13 @@ class FakeHost:
 
     def run_by_package(self):
         return self.package
+
+    def policy_status(self, unit, action):
+        # As the real host: policy-rc.d binds only a run from the package.
+        if not self.package:
+            return None
+        self.policy_asked.append((unit, action))
+        return self.policy
 
     def login_uid(self):
         return self.login
@@ -3484,6 +3494,54 @@ class SwitchOverTests(ServiceTestBase):
         rc, out, err = self.run_main("switch-over", "--state=" + state)
         self.assertEqual(rc, 0, err)
         self.assertFalse(os.path.exists(os.path.join(self.paths.etc_systemd, "gridcoin-autounlock.service.d")))
+
+    def test_switch_over_from_the_package_honours_policy_rc_d(self):
+        # A maintainer script's restart asks /usr/sbin/policy-rc.d, as deb-systemd-invoke does; a
+        # 101 means do not act, and the line deb-systemd-invoke prints names it.
+        unit = "gridcoinresearchd@alice.service"
+        for policy, restarts in ((101, False), (0, True), (None, True), (104, True)):
+            with self.subTest(policy=policy):
+                self.host.calls.clear()
+                self.host.package, self.host.policy, self.host.policy_asked = True, policy, []
+                state = self.write_state("core alice\ncore-active alice\n")
+                rc, out, err = self.run_main("switch-over", "--state=" + state)
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(self.host.policy_asked, [(unit, "try-restart")])
+                self.assertEqual(("try-restart", "--no-block", unit) in self.host.calls, restarts)
+                message = "/usr/sbin/policy-rc.d returned 101, not running 'try-restart %s'" % unit
+                self.assertEqual(message in err, not restarts)
+                self.assertFalse(os.path.exists(state))
+
+    def test_switch_over_by_hand_does_not_consult_policy_rc_d(self):
+        self.host.package, self.host.policy = False, 101
+        state = self.write_state("core alice\ncore-active alice\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state)
+        self.assertEqual(rc, 0, err)
+        self.assertIn(("try-restart", "--no-block", "gridcoinresearchd@alice.service"), self.host.calls)
+        self.assertEqual(self.host.policy_asked, [])
+        self.assertNotIn("policy-rc.d", err)
+
+    def test_real_host_asks_policy_rc_d_only_from_the_package(self):
+        script = os.path.join(self.tmp.name, "policy-rc.d")
+        log = os.path.join(self.tmp.name, "policy.log")
+        with open(script, "w", encoding="utf8") as f:
+            f.write('#!/bin/sh\necho "$*" > "%s"\nexit 101\n' % log)
+        os.chmod(script, 0o755)
+        with mock.patch.object(svc, "POLICY_RC_D", script):
+            with mock.patch.dict(svc.os.environ, {"DPKG_MAINTSCRIPT_PACKAGE": "gridcoinresearchd"}):
+                self.assertEqual(svc.Host().policy_status("x.service", "try-restart"), 101)
+            with open(log, encoding="utf8") as f:
+                self.assertEqual(f.read(), "x.service try-restart\n")
+            os.unlink(log)
+            with mock.patch.dict(svc.os.environ, clear=True):
+                self.assertIsNone(svc.Host().policy_status("x.service", "try-restart"))
+            self.assertFalse(os.path.exists(log))
+        # None where there is no policy-rc.d, or it is not executable.
+        for path in (os.path.join(self.tmp.name, "absent"), os.path.join(self.tmp.name, "dir")):
+            os.makedirs(os.path.join(self.tmp.name, "dir"), exist_ok=True)
+            with mock.patch.object(svc, "POLICY_RC_D", path), \
+                    mock.patch.dict(svc.os.environ, {"DPKG_MAINTSCRIPT_PACKAGE": "gridcoinresearchd"}):
+                self.assertIsNone(svc.Host().policy_status("x.service", "try-restart"))
 
     def test_switch_over_failed_user_not_restarted(self):
         self.make_credential("gridcoinresearch-alice.wallet-passphrase")
