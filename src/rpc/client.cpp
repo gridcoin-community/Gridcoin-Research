@@ -523,7 +523,7 @@ UniValue RPCConvertValues(const std::string &strMethod, const std::vector<std::s
     return params;
 }
 
-bool ReadSecureLine(std::istream& in, SecureString& out)
+bool ReadSecureLine(std::istream& in, SecureString& out, bool drop_leading_bom)
 {
     out.clear();
 
@@ -533,6 +533,9 @@ bool ReadSecureLine(std::istream& in, SecureString& out)
     if (out.capacity() < 100) out.reserve(100);
 
     bool any_byte{false};
+
+    // The byte-order mark is looked for once, when the line first holds three bytes.
+    bool bom_checked{!drop_leading_bom};
 
     for (;;) {
         const std::istream::int_type c = in.get();
@@ -548,6 +551,12 @@ bool ReadSecureLine(std::istream& in, SecureString& out)
         }
 
         out.push_back(std::istream::traits_type::to_char_type(c));
+
+        // A byte-order mark is dropped in place, so the bytes stay in the secure allocator's memory.
+        if (!bom_checked && out.size() == 3) {
+            bom_checked = true;
+            if (out == SecureString("\xEF\xBB\xBF")) out.clear();
+        }
     }
 }
 
@@ -654,6 +663,11 @@ static bool PromptSecretLine(const std::string& prompt, SecureString& out)
         unbuffered = true;
     }
 
+    // Only the first line read in the process can start with a byte-order mark of the stream.
+    static bool first_line{true};
+    const bool drop_bom = first_line;
+    first_line = false;
+
     const bool prompting = !StdinReady();
 
     if (prompting) {
@@ -664,7 +678,7 @@ static bool PromptSecretLine(const std::string& prompt, SecureString& out)
     bool got;
     {
         NO_STDIN_ECHO();
-        got = ReadSecureLine(std::cin, out);
+        got = ReadSecureLine(std::cin, out, drop_bom);
     }
 
     // Echo was off, so the person's Enter did not move the cursor.

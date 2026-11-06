@@ -1236,11 +1236,12 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
     argsman.AddArg("-stdinwalletpassphrase", "RPC client: read the wallet passphrase(s) of walletpassphrase, "
                    "walletpassphrasechange, encryptwallet, setautounlock or clearautounlock from standard input, "
-                   "one line each, instead of the command line.",
+                   "one line each, instead of the command line. A UTF-8 byte-order mark at the start of the input is "
+                   "ignored.",
                    ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
     argsman.AddArg("-stdinelevate", "RPC client: read the wallet passphrase from standard input (one line) and send "
                    "it with the request, so this one command may use the wallet's keys while the wallet stays "
-                   "unlocked for staking only.",
+                   "unlocked for staking only. A UTF-8 byte-order mark at the start of the input is ignored.",
                    ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
     argsman.AddArg("-rpcthreads=<n>", "Set the number of threads to service RPC calls (default: 4)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);

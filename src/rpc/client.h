@@ -30,8 +30,9 @@ struct RpcCallOptions {
 };
 
 //! One line into `out`, without its "\n" and one trailing "\r"; no other trimming; NUL bytes kept.
-//! false on end of input before any byte.
-bool ReadSecureLine(std::istream& in, SecureString& out);
+//! false on end of input before any byte. With drop_leading_bom the first three bytes of the line are
+//! dropped when they are a UTF-8 byte-order mark (EF BB BF); only the start of the line is looked at.
+bool ReadSecureLine(std::istream& in, SecureString& out, bool drop_leading_bom = false);
 
 //! Params for `method` with the passphrases at their indexes and visible_args filling the other
 //! positions in order, converted by RPCConvertValues at their final indexes. Throws

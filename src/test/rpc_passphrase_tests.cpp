@@ -100,6 +100,61 @@ BOOST_AUTO_TEST_CASE(read_secure_line_reserves_secure_capacity)
     BOOST_CHECK_GE(kept.capacity(), 500u);
 }
 
+BOOST_AUTO_TEST_CASE(read_secure_line_drops_leading_bom)
+{
+    const auto read = [](const std::string& text, bool drop, std::vector<std::string>& lines) {
+        std::istringstream in(text);
+        SecureString line;
+        bool first{true};
+        lines.clear();
+        while (ReadSecureLine(in, line, drop && first)) {
+            lines.emplace_back(line.begin(), line.end());
+            first = false;
+        }
+    };
+    std::vector<std::string> l;
+
+    read("\xEF\xBB\xBFpass\r\n", true, l);
+    BOOST_REQUIRE_EQUAL(l.size(), 1u);
+    BOOST_CHECK_EQUAL(l[0], "pass");
+
+    read("\xEF\xBB\xBFpass\n", true, l);
+    BOOST_REQUIRE_EQUAL(l.size(), 1u);
+    BOOST_CHECK_EQUAL(l[0], "pass");
+
+    read("pass\n", true, l);
+    BOOST_REQUIRE_EQUAL(l.size(), 1u);
+    BOOST_CHECK_EQUAL(l[0], "pass");
+
+    read("\xEF\xBB\xBFold\nnew\r\n", true, l);
+    BOOST_REQUIRE_EQUAL(l.size(), 2u);
+    BOOST_CHECK_EQUAL(l[0], "old");
+    BOOST_CHECK_EQUAL(l[1], "new");
+
+    read("old\n\xEF\xBB\xBFnew\n", true, l);
+    BOOST_REQUIRE_EQUAL(l.size(), 2u);
+    BOOST_CHECK_EQUAL(l[0], "old");
+    BOOST_CHECK_EQUAL(l[1], "\xEF\xBB\xBFnew");
+
+    read("\xEF\xBBpass\n", true, l);
+    BOOST_REQUIRE_EQUAL(l.size(), 1u);
+    BOOST_CHECK_EQUAL(l[0], "\xEF\xBBpass");
+
+    read("\xEF\xBB\xBF\n", true, l);
+    BOOST_REQUIRE_EQUAL(l.size(), 1u);
+    BOOST_CHECK_EQUAL(l[0], "");
+
+    // Exactly one byte-order mark is dropped.
+    read("\xEF\xBB\xBF\xEF\xBB\xBFpass\n", true, l);
+    BOOST_REQUIRE_EQUAL(l.size(), 1u);
+    BOOST_CHECK_EQUAL(l[0], "\xEF\xBB\xBFpass");
+
+    // Without the flag the line is read as it always was.
+    read("\xEF\xBB\xBFpass\n", false, l);
+    BOOST_REQUIRE_EQUAL(l.size(), 1u);
+    BOOST_CHECK_EQUAL(l[0], "\xEF\xBB\xBFpass");
+}
+
 BOOST_AUTO_TEST_CASE(passphrase_prompt_falls_back)
 {
     const std::vector<std::string> one{"Old> "};
