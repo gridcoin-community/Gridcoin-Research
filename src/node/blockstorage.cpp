@@ -441,10 +441,15 @@ bool ReadFirstExternalBlock(const fs::path& path, CBlock& block)
     if (blkdat.IsNull()) return false;
 
     try {
-        // A block record is the message start, the block size and the block.
+        // A block record is the message start, the block size and the block. Only the start of the file is searched,
+        // a byte at a time: an import file starts with a block record, and a file with none there, such as one for
+        // another network, is left to the import.
+        static constexpr size_t MAX_SEARCH_BYTES = 65536;
         unsigned char window[CMessageHeader::MESSAGE_START_SIZE] = {};
         size_t bytes_read = 0;
         while (bytes_read < sizeof(window) || memcmp(window, Params().MessageStart(), sizeof(window)) != 0) {
+            if (bytes_read == MAX_SEARCH_BYTES) return false;
+
             memmove(window, window + 1, sizeof(window) - 1);
             blkdat >> window[sizeof(window) - 1];
             ++bytes_read;
