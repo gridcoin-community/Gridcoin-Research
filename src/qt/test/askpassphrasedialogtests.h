@@ -48,6 +48,9 @@ private slots:
     void autoUnlockClearSaysTheWalletIsLocked();
     void autoUnlockWrongPassphraseKeepsThePromptOpen();
     void autoUnlockStoreFailureEndsThePrompt();
+    void autoUnlockWrongPassphraseWithANullCharacterSaysSo();
+    void autoUnlockCallThatThrowsSaysItIsNotKnown();
+    void autoUnlockCancelledCallThatThrowsSaysItIsNotKnown();
     void walletModelPassesTheAutoUnlockStatusOn();
     // Last: these quit the application under the application's own event loop.
     void encryptionMessageOutlivesTheCore();

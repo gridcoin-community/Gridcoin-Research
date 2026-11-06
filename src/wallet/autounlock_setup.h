@@ -9,6 +9,7 @@
 #include "wallet/autounlock_store.h"
 
 #include <cstdint>
+#include <functional>
 #include <string>
 
 class CWallet;
@@ -52,9 +53,10 @@ inline constexpr const char* AUTOUNLOCK_UNSUPPORTED_TEXT{"autounlock setup is no
 //! nothing is stored. The wallet's unlock is left as it was.
 //!
 //! The passphrase is taken in-band, not from a capability already held: the store needs
-//! the passphrase itself. \p error says why for every result but Ok. It never holds the
-//! passphrase. The caller must hold neither cs_main nor cs_wallet: the store does file
-//! I/O and encryption, and a wrong passphrase waits out its delay.
+//! the passphrase itself. \p error says why for every result but Ok and OkUnverified, and
+//! may be empty for those two (the store logs why a file was not read back). It never
+//! holds the passphrase. The caller must hold neither cs_main nor cs_wallet: the store does
+//! file I/O and encryption, and a wrong passphrase waits out its delay.
 AutoUnlockSetupResult SetAutoUnlockSecret(CWallet& wallet, const SecureString& passphrase, std::string& error);
 
 //! \brief Remove the stored passphrase, once the wallet passphrase has been checked, and
@@ -72,5 +74,11 @@ AutoUnlockStoreStatus GetAutoUnlockStatus();
 //! What a passphrase stored in \p scope is exposed to, for the user: the text for
 //! "machine" or for "service", and an empty string for any other scope.
 std::string AutoUnlockScopeWarning(const std::string& scope);
+
+//! For tests: \p hook is called by SetAutoUnlockSecret() and ClearAutoUnlockSecret() once
+//! the passphrase is checked, before they wait for the store's passphrase turn, which is
+//! where a passphrase change from another caller can come in between. An empty one
+//! restores the default, which does nothing. Set it only while no setup runs.
+void SetAutoUnlockSetupHookForTesting(std::function<void()> hook);
 
 #endif // GRIDCOIN_WALLET_AUTOUNLOCK_SETUP_H

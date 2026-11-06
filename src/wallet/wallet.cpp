@@ -1290,9 +1290,18 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
     }
 
     std::optional<bool> passphrase_accepted;
+    std::set<uint64_t> relock_epochs;
 
     const bool changed = ChangeWalletPassphraseWithoutDelay(strOldWalletPassphrase, strNewWalletPassphrase,
-                                                            passphrase_accepted);
+                                                            passphrase_accepted, relock_epochs);
+
+    // The capabilities the change ended leave no unlock of theirs behind. Each
+    // is locked as EndElevation() would lock it, under cs_KeyStore alone and
+    // with cs_wallet released; one that has ended already, by its timer or a
+    // manual lock, is left alone.
+    for (const uint64_t epoch : relock_epochs) {
+        LockIfCurrent(epoch);
+    }
 
     // An attempt that never checked the old passphrase hands its turn on
     // unused when the turn goes out of scope.
@@ -1318,7 +1327,8 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
 
 bool CWallet::ChangeWalletPassphraseWithoutDelay(const SecureString& strOldWalletPassphrase,
                                                  const SecureString& strNewWalletPassphrase,
-                                                 std::optional<bool>& passphrase_accepted)
+                                                 std::optional<bool>& passphrase_accepted,
+                                                 std::set<uint64_t>& relock_epochs)
 {
     if (!IsCrypted()) {
         return false;
@@ -1413,10 +1423,14 @@ bool CWallet::ChangeWalletPassphraseWithoutDelay(const SecureString& strOldWalle
     mapMasterKeys[*opened] = new_master_key;
 
     // Every capability was proved with the old passphrase, so none outlives
-    // the change. The capability mutex is a leaf, so taking it under cs_wallet
-    // keeps the lock order.
+    // the change, nor any unlock one of them made: the caller locks those once
+    // cs_wallet is released. The capability mutex is a leaf, so taking it under
+    // cs_wallet keeps the lock order.
     {
         LOCK(m_capability_mutex);
+        for (const auto& entry : m_capabilities) {
+            if (entry.second.relock_epoch) relock_epochs.insert(*entry.second.relock_epoch);
+        }
         m_capabilities.clear();
         m_ipc_capability.reset();
     }

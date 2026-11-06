@@ -1236,6 +1236,42 @@ BOOST_AUTO_TEST_CASE(a_passphrase_change_ends_every_capability)
     fx.wallet.EndElevation(*renewed);
 }
 
+// The unlock a capability made on a locked wallet ends with the capability when a
+// passphrase change ends it, as EndElevation() would end it: the wallet is locked again
+// at once rather than when the capability's timer fires. An unlock the user made is
+// left as it was.
+BOOST_AUTO_TEST_CASE(a_passphrase_change_locks_what_its_capabilities_unlocked)
+{
+    EncryptedWallet fx;
+    SchedulerForThisCase scheduler;
+    BOOST_REQUIRE(fx.wallet.IsLocked());
+    const SecureString changed("capability-test-changed");
+
+    const std::optional<CapabilityId> first = fx.wallet.BeginElevation(Passphrase(), CapabilityKind::Send);
+    const std::optional<CapabilityId> second = fx.wallet.BeginElevation(Passphrase(), CapabilityKind::AutoUnlockSetup);
+    BOOST_REQUIRE(first && second);
+    BOOST_REQUIRE(fx.wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+
+    BOOST_REQUIRE(fx.wallet.ChangeWalletPassphrase(Passphrase(), changed));
+    BOOST_CHECK(fx.wallet.IsLocked());
+
+    // Ending them afterwards is the no-op it is for any ended capability.
+    fx.wallet.EndElevation(*first);
+    fx.wallet.EndElevation(*second);
+    BOOST_CHECK(fx.wallet.IsLocked());
+
+    // A user's own unlock outlives the change, with the capabilities it serves ended.
+    BOOST_REQUIRE(fx.wallet.Unlock(changed, UnlockScope::StakingOnly));
+    const std::optional<CapabilityId> third = fx.wallet.BeginElevation(changed, CapabilityKind::Send);
+    BOOST_REQUIRE(third);
+    BOOST_REQUIRE(fx.wallet.ChangeWalletPassphrase(changed, Passphrase()));
+    BOOST_CHECK(fx.wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+    {
+        CapabilityScope scope(fx.wallet, third, CapabilityKind::Send);
+        BOOST_CHECK(!scope.Active());
+    }
+}
+
 BOOST_AUTO_TEST_CASE(capability_lets_a_staking_only_wallet_send)
 {
     EncryptedWallet fx;

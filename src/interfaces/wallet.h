@@ -387,7 +387,9 @@ public:
     //! whether or not the change succeeds: a wallet unlocked for staking only
     //! is still unlocked for staking only, with the same relock deadline, a
     //! full unlock stays full, and a locked wallet stays locked throughout. On
-    //! success every capability begun with the old passphrase ends.
+    //! success every capability begun with the old passphrase ends, and so does
+    //! an unlock a capability made on a locked wallet: that wallet is locked
+    //! again at once.
     //!
     //! The old passphrase waits its turn and a wrong one is delayed (up to
     //! 30 s) as an unlock's is, and the new key is derived several times to

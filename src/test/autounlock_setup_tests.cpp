@@ -20,10 +20,13 @@
 
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 
 namespace {
 
@@ -35,6 +38,16 @@ const SecureString& Passphrase()
 {
     return EncryptedWallet::PASSPHRASE;
 }
+
+//! Installs \p hook between the passphrase check and the store's turn for one scope.
+struct SetupHookInstalled
+{
+    explicit SetupHookInstalled(std::function<void()> hook) { SetAutoUnlockSetupHookForTesting(std::move(hook)); }
+    ~SetupHookInstalled() { SetAutoUnlockSetupHookForTesting({}); }
+
+    SetupHookInstalled(const SetupHookInstalled&) = delete;
+    SetupHookInstalled& operator=(const SetupHookInstalled&) = delete;
+};
 
 //! The RPC error \p method throws for \p passphrase through the dispatcher, as
 //! {code, message}; nullopt, with the result in \p result_out, when it returns.
@@ -337,6 +350,81 @@ BOOST_AUTO_TEST_CASE(capability_ended_by_a_passphrase_change_runs_nothing)
     }
     BOOST_CHECK(!ran);
     fx.wallet.EndElevation(*id);
+}
+
+// A passphrase change that comes between the check and the store's turn ends the
+// capability. Setting up then stores nothing, and turning off removes nothing; both say
+// nothing was changed. A wallet the check unlocked is locked again by the change at once,
+// so the wallet is left as it was.
+BOOST_AUTO_TEST_CASE(passphrase_change_after_the_check_changes_nothing)
+{
+    EncryptedWallet fx;
+    grc_test::SchedulerForThisCase scheduler;
+    const SecureString changed("autounlock-setup-changed-passphrase");
+    BOOST_REQUIRE(fx.wallet.IsLocked());
+
+    {
+        FakeStoreInstalled fake(/*configured=*/false);
+        bool unlocked_by_the_check = false;
+        bool locked_after_the_change = false;
+
+        const SetupHookInstalled hook([&] {
+            unlocked_by_the_check = fx.wallet.GetUnlockScope() == UnlockScope::StakingOnly;
+            BOOST_REQUIRE(fx.wallet.ChangeWalletPassphrase(Passphrase(), changed));
+            locked_after_the_change = fx.wallet.IsLocked();
+        });
+
+        std::string error;
+        BOOST_CHECK(SetAutoUnlockSecret(fx.wallet, Passphrase(), error) == AutoUnlockSetupResult::StoreFailed);
+        BOOST_CHECK_MESSAGE(error.find("the wallet passphrase was changed meanwhile") != std::string::npos, error);
+        BOOST_CHECK_MESSAGE(error.find("nothing was changed") != std::string::npos, error);
+        BOOST_CHECK(unlocked_by_the_check);
+        BOOST_CHECK(locked_after_the_change);
+        BOOST_CHECK(fx.wallet.IsLocked());
+        BOOST_CHECK_EQUAL(fake.calls->stores, 0);
+        BOOST_CHECK(!fake.calls->kept.has_value());
+    }
+
+    // Turning off, on a wallet the user unlocked for staking: the change re-encrypts what
+    // is stored, the removal does not run, and the unlock is as it was.
+    {
+        BOOST_REQUIRE(fx.wallet.ChangeWalletPassphrase(changed, Passphrase()));
+        fx.UnlockFor(UnlockScope::StakingOnly);
+        FakeStoreInstalled fake(/*configured=*/true);
+
+        const SetupHookInstalled hook([&] {
+            BOOST_REQUIRE(fx.wallet.ChangeWalletPassphrase(Passphrase(), changed));
+        });
+
+        std::string error;
+        BOOST_CHECK(ClearAutoUnlockSecret(fx.wallet, Passphrase(), error) == AutoUnlockSetupResult::StoreFailed);
+        BOOST_CHECK_MESSAGE(error.find("nothing was changed") != std::string::npos, error);
+        BOOST_CHECK_EQUAL(fake.calls->removes, 0);
+        BOOST_CHECK(fake.calls->kept == changed);
+        BOOST_CHECK(fx.wallet.GetUnlockScope() == UnlockScope::StakingOnly);
+    }
+}
+
+// The capability that checked the passphrase is ended however the setup is left, a
+// throw included: on a locked wallet its unlock ends with it, at once.
+BOOST_AUTO_TEST_CASE(setup_ends_its_capability_when_it_throws)
+{
+    EncryptedWallet fx;
+    grc_test::SchedulerForThisCase scheduler;
+    FakeStoreInstalled fake(/*configured=*/false);
+    BOOST_REQUIRE(fx.wallet.IsLocked());
+
+    bool unlocked_by_the_check = false;
+    const SetupHookInstalled hook([&] {
+        unlocked_by_the_check = fx.wallet.GetUnlockScope() == UnlockScope::StakingOnly;
+        throw std::runtime_error("thrown after the check");
+    });
+
+    std::string error;
+    BOOST_CHECK_THROW(SetAutoUnlockSecret(fx.wallet, Passphrase(), error), std::runtime_error);
+    BOOST_CHECK(unlocked_by_the_check);
+    BOOST_CHECK(fx.wallet.IsLocked());
+    BOOST_CHECK_EQUAL(fake.calls->stores, 0);
 }
 
 BOOST_AUTO_TEST_CASE(rpc_setautounlock_wrong_passphrase_code)

@@ -5,6 +5,7 @@
 #include <QSystemTrayIcon>
 #include <QMenu>
 #include <stdint.h>
+#include <functional>
 #include <memory>
 #include <vector>
 #include "guiconstants.h"
@@ -140,10 +141,12 @@ public:
 
     /**
      * Whether Settings offers "Autounlock for staking": only in the split
-     * (-multiprocess) build, and only when the core's store \p status says this
-     * platform has one. A monolithic GUI does not ask the core at all.
+     * (-multiprocess) build, and only when the core's store, as \p status reads
+     * it, says this platform has one. \p status is called only in the split
+     * build: a monolithic GUI does not ask the core at all, and its in-process
+     * store, which on Windows is supported, does not count.
      */
-    static bool AutoUnlockActionVisible(bool multiprocess, const AutoUnlockStoreStatus& status);
+    static bool AutoUnlockActionVisible(bool multiprocess, const std::function<AutoUnlockStoreStatus()>& status);
 
     /**
      * Begin an explicit application shutdown: the menu Exit / Ctrl-Q / tray

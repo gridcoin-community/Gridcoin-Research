@@ -719,6 +719,9 @@ public:
     //! answers.
     AutoUnlockSetupResult m_autounlock_result{AutoUnlockSetupResult::Ok};
     AutoUnlockStoreStatus m_autounlock_status{};
+    //! The two autounlock calls throw once released, as a call does whose
+    //! connection to the core closes under it.
+    std::atomic<bool> m_autounlock_throws{false};
 
     // Observed.
     std::atomic<bool> m_waiting{false};
@@ -743,13 +746,13 @@ public:
     AutoUnlockSetupResult setAutoUnlockSecret(const SecureString& /*passphrase*/) override
     {
         ++m_set_autounlock_calls;
-        return Wait() ? m_autounlock_result : AutoUnlockSetupResult::WrongPassphrase;
+        return AutoUnlockAnswer();
     }
 
     AutoUnlockSetupResult clearAutoUnlockSecret(const SecureString& /*passphrase*/) override
     {
         ++m_clear_autounlock_calls;
-        return Wait() ? m_autounlock_result : AutoUnlockSetupResult::WrongPassphrase;
+        return AutoUnlockAnswer();
     }
 
     AutoUnlockStoreStatus getAutoUnlockStatus() override { return m_autounlock_status; }
@@ -854,6 +857,14 @@ public:
     }
 
 private:
+    //! What the autounlock calls answer once their wait is over.
+    AutoUnlockSetupResult AutoUnlockAnswer()
+    {
+        const bool released = Wait();
+        if (m_autounlock_throws) throw std::runtime_error("the connection to the core closed");
+        return released ? m_autounlock_result : AutoUnlockSetupResult::WrongPassphrase;
+    }
+
     //! A passphrase attempt's wait: until released, with m_release_result, or
     //! until cancelled, with false.
     bool Wait()

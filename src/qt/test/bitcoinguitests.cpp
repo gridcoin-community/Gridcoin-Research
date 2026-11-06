@@ -77,19 +77,33 @@ void BitcoinGUITests::autoUnlockActionShownOnlyInMultiprocessWithAStore()
     windows.supported = true;
     windows.scope = "machine";
 
-    QVERIFY(BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/true, windows));
-    QVERIFY(!BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/false, windows));
-    QVERIFY(!BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/true, AutoUnlockStoreStatus{}));
+    int asked = 0;
+    const auto reads = [&asked](const AutoUnlockStoreStatus& status) {
+        return [&asked, status] {
+            ++asked;
+            return status;
+        };
+    };
+
+    // The monolith hides it, and does not ask the core, even where its own in-process
+    // store is supported, as it is on Windows.
+    QVERIFY(!BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/false, reads(windows)));
+    QCOMPARE(asked, 0);
+
+    QVERIFY(BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/true, reads(windows)));
+    QCOMPARE(asked, 1);
+
+    QVERIFY(!BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/true, reads(AutoUnlockStoreStatus{})));
+    QCOMPARE(asked, 2);
 
     windows.configured = true;
     windows.problem = "the autounlock file is readable by other accounts";
-    QVERIFY(BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/true, windows));
+    QVERIFY(BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/true, reads(windows)));
 
 #ifndef WIN32
     // What the core answers here, as interfaces::Wallet::getAutoUnlockStatus() does: this
     // platform has no store, so the action stays hidden even in the split build.
-    const AutoUnlockStoreStatus here = GetAutoUnlockStatus();
-    QVERIFY(!here.supported);
-    QVERIFY(!BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/true, here));
+    QVERIFY(!GetAutoUnlockStatus().supported);
+    QVERIFY(!BitcoinGUI::AutoUnlockActionVisible(/*multiprocess=*/true, [] { return GetAutoUnlockStatus(); }));
 #endif
 }

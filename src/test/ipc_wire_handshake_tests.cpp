@@ -506,6 +506,148 @@ struct WalletServingInit : interfaces::Init {
     CWallet* m_wallet{nullptr};
 };
 
+//! The in-process wallet, but answering setAutoUnlockSecret with a byte no
+//! AutoUnlockSetupResult of this build has, as a core of a later build could. Every other
+//! call is the wallet's own.
+class UnknownSetupResultWallet final : public interfaces::Wallet
+{
+public:
+    explicit UnknownSetupResultWallet(CWallet* wallet) : m_inner(interfaces::MakeWallet(wallet)) {}
+
+    AutoUnlockSetupResult setAutoUnlockSecret(const SecureString& /*passphrase*/) override
+    {
+        return static_cast<AutoUnlockSetupResult>(200);
+    }
+
+    int64_t getBalance() override { return m_inner->getBalance(); }
+    int64_t getStake() override { return m_inner->getStake(); }
+    int64_t getUnconfirmedBalance() override { return m_inner->getUnconfirmedBalance(); }
+    int64_t getImmatureBalance() override { return m_inner->getImmatureBalance(); }
+    CAmount getTransactionFeeRate() override { return m_inner->getTransactionFeeRate(); }
+    bool tryGetBalances(interfaces::WalletBalances& balances) override { return m_inner->tryGetBalances(balances); }
+    int getNumTransactions() override { return m_inner->getNumTransactions(); }
+    interfaces::WalletLockState getLockState() override { return m_inner->getLockState(); }
+    bool isUnlockedForStakingOnly() override { return m_inner->isUnlockedForStakingOnly(); }
+    bool getUnlockStakingOnlyFlag() override { return m_inner->getUnlockStakingOnlyFlag(); }
+    bool encryptWallet(const SecureString& passphrase) override { return m_inner->encryptWallet(passphrase); }
+    std::vector<std::string> getPreEncryptionBackups() override { return m_inner->getPreEncryptionBackups(); }
+    bool lockWallet() override { return m_inner->lockWallet(); }
+    bool restrictToStakingOnly() override { return m_inner->restrictToStakingOnly(); }
+    bool elevateWallet(const SecureString& passphrase) override { return m_inner->elevateWallet(passphrase); }
+    bool beginElevation(const SecureString& passphrase, CapabilityKind kind) override
+    {
+        return m_inner->beginElevation(passphrase, kind);
+    }
+    void endElevation() override { m_inner->endElevation(); }
+    bool unlockWallet(const SecureString& passphrase, bool staking_only) override
+    {
+        return m_inner->unlockWallet(passphrase, staking_only);
+    }
+    bool changeWalletPassphrase(const SecureString& old_passphrase, const SecureString& new_passphrase) override
+    {
+        return m_inner->changeWalletPassphrase(old_passphrase, new_passphrase);
+    }
+    AutoUnlockSetupResult clearAutoUnlockSecret(const SecureString& passphrase) override
+    {
+        return m_inner->clearAutoUnlockSecret(passphrase);
+    }
+    AutoUnlockStoreStatus getAutoUnlockStatus() override { return m_inner->getAutoUnlockStatus(); }
+    bool getPubKey(const CKeyID& address, CPubKey& pub_key_out) override { return m_inner->getPubKey(address, pub_key_out); }
+    bool getKeyFromPool(const std::string& label, CPubKey& pub_key_out) override
+    {
+        return m_inner->getKeyFromPool(label, pub_key_out);
+    }
+    std::vector<interfaces::WalletOutput> getOutputs(const std::vector<COutPoint>& outpoints) override
+    {
+        return m_inner->getOutputs(outpoints);
+    }
+    interfaces::CoinControlSummary computeCoinControlSummary(const interfaces::WalletCoinControl& selection,
+                                                             const std::vector<int64_t>& recipient_amounts,
+                                                             bool subtract_fee_from_amount) override
+    {
+        return m_inner->computeCoinControlSummary(selection, recipient_amounts, subtract_fee_from_amount);
+    }
+    unsigned int getMaxConsolidationInputs() override { return m_inner->getMaxConsolidationInputs(); }
+    interfaces::SendCoinsResult sendCoins(const std::vector<interfaces::WalletSendRecipient>& recipients,
+                                          const std::optional<interfaces::WalletCoinControl>& coin_control,
+                                          int64_t accepted_fee) override
+    {
+        return m_inner->sendCoins(recipients, coin_control, accepted_fee);
+    }
+    bool backupWallet(const std::string& dest) override { return m_inner->backupWallet(dest); }
+    bool backupConfigFile(const std::string& dest) override { return m_inner->backupConfigFile(dest); }
+    std::unique_ptr<interfaces::FileSource> beginBackup(uint8_t items, std::string& error_out) override
+    {
+        return m_inner->beginBackup(items, error_out);
+    }
+    std::unique_ptr<interfaces::FileSource> beginConsoleDownload(const std::string& method,
+                                                                 const std::vector<std::string>& args,
+                                                                 std::string& error_out) override
+    {
+        return m_inner->beginConsoleDownload(method, args, error_out);
+    }
+    std::unique_ptr<interfaces::FileSink> beginConsoleUpload(const std::string& method,
+                                                             const std::vector<std::string>& args, uint64_t size,
+                                                             std::string& error_out) override
+    {
+        return m_inner->beginConsoleUpload(method, args, size, error_out);
+    }
+    interfaces::MessageSignStatus signMessage(const std::string& address, const std::string& message,
+                                              std::string& signature_out) override
+    {
+        return m_inner->signMessage(address, message, signature_out);
+    }
+    interfaces::MessageVerifyStatus verifyMessage(const std::string& address, const std::string& message,
+                                                  const std::vector<unsigned char>& signature) override
+    {
+        return m_inner->verifyMessage(address, message, signature);
+    }
+    std::vector<interfaces::WalletAddress> getAddresses() override { return m_inner->getAddresses(); }
+    bool getAddressLabel(const std::string& address, std::string& label_out) override
+    {
+        return m_inner->getAddressLabel(address, label_out);
+    }
+    bool isMine(const std::string& address) override { return m_inner->isMine(address); }
+    void setAddressBook(const std::string& address, const std::string& label) override
+    {
+        m_inner->setAddressBook(address, label);
+    }
+    bool delAddressBook(const std::string& address) override { return m_inner->delAddressBook(address); }
+    bool getNewReceiveAddress(std::string& address_out) override { return m_inner->getNewReceiveAddress(address_out); }
+    bool getNewReceiveAddressWithLabel(const std::string& label, std::string& address_out) override
+    {
+        return m_inner->getNewReceiveAddressWithLabel(label, address_out);
+    }
+    std::vector<std::string> getUnbookedReceiveAddresses() override { return m_inner->getUnbookedReceiveAddresses(); }
+    std::unique_ptr<interfaces::Handler> handleStatusChanged(StatusChangedFn fn) override
+    {
+        return m_inner->handleStatusChanged(std::move(fn));
+    }
+    std::unique_ptr<interfaces::Handler> handleAddressBookChanged(AddressBookChangedFn fn) override
+    {
+        return m_inner->handleAddressBookChanged(std::move(fn));
+    }
+    std::unique_ptr<interfaces::Handler> handleTransactionChanged(TransactionChangedFn fn) override
+    {
+        return m_inner->handleTransactionChanged(std::move(fn));
+    }
+
+private:
+    std::unique_ptr<interfaces::Wallet> m_inner;
+};
+
+//! Serves an UnknownSetupResultWallet over \p wallet.
+struct UnknownSetupResultServingInit : interfaces::Init {
+    explicit UnknownSetupResultServingInit(CWallet* wallet) : m_wallet(wallet) {}
+
+    std::unique_ptr<interfaces::Wallet> makeWallet() override
+    {
+        return std::make_unique<UnknownSetupResultWallet>(m_wallet);
+    }
+
+    CWallet* m_wallet{nullptr};
+};
+
 //! A daemon-shaped Ipc pair on <-ipcdir>/node.sock: the server checks each
 //! accepted peer with ServerPeerPolicy as the daemon does, and the client
 //! connects through Ipc::connectAddress as the GUI does. Teardown drops the
@@ -1223,6 +1365,36 @@ BOOST_AUTO_TEST_CASE(wire_autounlock_setup_round_trip)
     BOOST_CHECK(!wallet->getAutoUnlockStatus().configured);
     BOOST_CHECK(fx.wallet.IsLocked());
     BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
+
+    wallet.reset();
+}
+
+// Over the real wire, a setup result the client's build does not know is refused as the
+// client reads it, by the generated proxy's read of the result (the hook in wallet-types.h):
+// the call fails with that hook's message, and the connection goes on serving.
+BOOST_AUTO_TEST_CASE(wire_autounlock_result_out_of_range_is_refused)
+{
+    grc_test::EncryptedWallet fx;
+    fx.UnlockFor(UnlockScope::StakingOnly);
+    grc_test::FakeStoreInstalled fake(/*configured=*/true);
+
+    WireLink link([&fx](int) -> std::unique_ptr<interfaces::Init> {
+        return std::make_unique<UnknownSetupResultServingInit>(&fx.wallet);
+    });
+
+    std::unique_ptr<interfaces::Wallet> wallet = link.client->makeWallet();
+    BOOST_REQUIRE(wallet != nullptr);
+
+    BOOST_CHECK_EXCEPTION(wallet->setAutoUnlockSecret(grc_test::EncryptedWallet::PASSPHRASE), std::runtime_error,
+                          [](const std::runtime_error& e) {
+                              return std::string(e.what()).find("AutoUnlockSetupResult IPC field out of range")
+                                     != std::string::npos;
+                          });
+
+    BOOST_CHECK(wallet->getLockState().unlocked_for_staking_only);
+    BOOST_CHECK(wallet->clearAutoUnlockSecret(grc_test::EncryptedWallet::PASSPHRASE) == AutoUnlockSetupResult::Ok);
+    BOOST_CHECK(!fake.calls->kept.has_value());
+    BOOST_CHECK(fx.wallet.IsLocked());
 
     wallet.reset();
 }

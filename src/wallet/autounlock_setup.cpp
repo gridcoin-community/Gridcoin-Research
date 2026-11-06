@@ -12,8 +12,27 @@
 #include <exception>
 #include <functional>
 #include <optional>
+#include <utility>
 
 namespace {
+//! Called between the passphrase check and the store's turn (SetAutoUnlockSetupHookForTesting()).
+std::function<void()> g_after_check_hook;
+
+//! Ends a capability however the block that began it is left.
+class CapabilityEnder
+{
+public:
+    CapabilityEnder(CWallet& wallet, CapabilityId id) : m_wallet(wallet), m_id(id) {}
+    ~CapabilityEnder() { m_wallet.EndElevation(m_id); }
+
+    CapabilityEnder(const CapabilityEnder&) = delete;
+    CapabilityEnder& operator=(const CapabilityEnder&) = delete;
+
+private:
+    CWallet& m_wallet;
+    CapabilityId m_id{0};
+};
+
 //! The store in use, when it can store: nullptr where the platform has none, and where its
 //! Status() says it is not supported.
 AutoUnlockSecretStore* UsableStore()
@@ -85,23 +104,28 @@ AutoUnlockSetupResult CheckThenAct(CWallet& wallet, const SecureString& passphra
     }
 
     AutoUnlockSetupResult result = AutoUnlockSetupResult::StoreFailed;
+    CWallet::CapabilityRun run = CWallet::CapabilityRun::NotLive;
+    {
+        // Ended on every way out of this block, a throw included.
+        const CapabilityEnder ender(wallet, *id);
 
-    // The store's file I/O and encryption run here, with no lock held. A passphrase change
-    // that comes meanwhile waits for its turn, then re-encrypts what was stored; one that
-    // came first has ended the capability, and nothing is stored.
-    const CWallet::CapabilityRun run = wallet.RunUnderLiveCapability(*id, CapabilityKind::AutoUnlockSetup, [&] {
-        try {
-            result = action(*store, error);
-        } catch (const std::exception& e) {
-            error = e.what();
-            result = AutoUnlockSetupResult::StoreFailed;
-        } catch (...) {
-            error = "an unknown error";
-            result = AutoUnlockSetupResult::StoreFailed;
-        }
-    });
+        if (g_after_check_hook) g_after_check_hook();
 
-    wallet.EndElevation(*id);
+        // The store's file I/O and encryption run here, with no lock held. A passphrase
+        // change that comes meanwhile waits for its turn, then re-encrypts what was stored;
+        // one that came first has ended the capability, and nothing is stored.
+        run = wallet.RunUnderLiveCapability(*id, CapabilityKind::AutoUnlockSetup, [&] {
+            try {
+                result = action(*store, error);
+            } catch (const std::exception& e) {
+                error = e.what();
+                result = AutoUnlockSetupResult::StoreFailed;
+            } catch (...) {
+                error = "an unknown error";
+                result = AutoUnlockSetupResult::StoreFailed;
+            }
+        });
+    }
 
     switch (run) {
     case CWallet::CapabilityRun::Ran:
@@ -232,4 +256,9 @@ std::string AutoUnlockScopeWarning(const std::string& scope)
     }
 
     return {};
+}
+
+void SetAutoUnlockSetupHookForTesting(std::function<void()> hook)
+{
+    g_after_check_hook = std::move(hook);
 }

@@ -496,7 +496,7 @@ void BitcoinGUI::createActions()
     backupWalletAction->setToolTip(tr("Back up the wallet and its settings to another location"));
     changePassphraseAction = new QAction(tr("&Change Passphrase..."), this);
     changePassphraseAction->setToolTip(tr("Change the passphrase used for wallet encryption"));
-    m_autounlock_action = new QAction(tr("Autounlock for staking…"), this);
+    m_autounlock_action = new QAction(tr("&Autounlock for staking..."), this);
     m_autounlock_action->setToolTip(tr("Store the wallet passphrase so that the Gridcoin core unlocks the wallet "
                                        "for staking when it starts, or turn that off"));
     // Shown once the wallet model is set, if the core's store says the platform has one.
@@ -1008,10 +1008,10 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         setEncryptionStatus(walletModel->getEncryptionStatus());
         connect(walletModel, &WalletModel::encryptionStatusChanged, this, &BitcoinGUI::setEncryptionStatus);
 
-        // The core is asked only in the split build; setIpcConnectionInfo() has run by now.
-        const bool autounlock = m_ipc_info.active
-            && AutoUnlockActionVisible(/*multiprocess=*/true, walletModel->getAutoUnlockStatus());
-        m_autounlock_action->setVisible(autounlock);
+        // setIpcConnectionInfo() has run by now.
+        m_autounlock_action->setVisible(AutoUnlockActionVisible(m_ipc_info.active, [walletModel] {
+            return walletModel->getAutoUnlockStatus();
+        }));
 
         // Balloon pop-up for new transactions: driven off the drained wallet-event
         // stream (VIEW_FULL RowsInserted records), not a full-replica model row
@@ -2166,9 +2166,9 @@ void BitcoinGUI::changePassphrase()
     dlg.exec();
 }
 
-bool BitcoinGUI::AutoUnlockActionVisible(bool multiprocess, const AutoUnlockStoreStatus& status)
+bool BitcoinGUI::AutoUnlockActionVisible(bool multiprocess, const std::function<AutoUnlockStoreStatus()>& status)
 {
-    return multiprocess && status.supported;
+    return multiprocess && status().supported;
 }
 
 void BitcoinGUI::autoUnlock()
@@ -2179,8 +2179,13 @@ void BitcoinGUI::autoUnlock()
     const AutoUnlockStoreStatus status = walletModel->getAutoUnlockStatus();
     const QString title = tr("Autounlock for staking");
 
+    // A status that could not be read says why in its problem.
     if (!status.supported) {
-        QMessageBox::warning(this, title, tr("Autounlock setup is not available on this platform."));
+        QMessageBox::warning(this, title,
+                             status.problem.empty()
+                                 ? tr("Autounlock setup is not available on this platform.")
+                                 : tr("The autounlock status could not be read: %1")
+                                       .arg(QString::fromStdString(status.problem)));
         return;
     }
 

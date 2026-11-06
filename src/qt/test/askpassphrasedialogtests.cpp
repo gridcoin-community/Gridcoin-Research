@@ -414,7 +414,8 @@ struct AutoUnlockRun
 //! submitted, every message is recorded and closed as the user would close it, and
 //! a prompt still open after its message is ended from outside.
 AutoUnlockRun RunAutoUnlockPrompt(AskPassphraseDialog::Mode mode, qt_test::FakeWallet& wallet,
-                                  const AutoUnlockStoreStatus& status)
+                                  const AutoUnlockStoreStatus& status,
+                                  const QString& passphrase = QStringLiteral("dialog-test-passphrase"))
 {
     AutoUnlockRun run;
     wallet.m_release_result = true;
@@ -444,7 +445,11 @@ AutoUnlockRun RunAutoUnlockPrompt(AskPassphraseDialog::Mode mode, qt_test::FakeW
     });
     closer.start();
 
-    QTimer::singleShot(0, &dialog, [&dialog] { SubmitPassphrase(dialog); });
+    QTimer::singleShot(0, &dialog, [&dialog, &passphrase] {
+        QLineEdit* const edit = dialog.findChild<QLineEdit*>("oldPassphraseEdit");
+        if (edit) edit->setText(passphrase);
+        dialog.accept();
+    });
     QTimer::singleShot(10000, &dialog, [&dialog] { dialog.done(TIMED_OUT); });
 
     run.result = dialog.exec();
@@ -973,6 +978,74 @@ void AskPassphraseDialogTests::autoUnlockStoreFailureEndsThePrompt()
         QVERIFY2(run.shown[0].contains(QStringLiteral("debug.log")), qPrintable(run.shown[0]));
         QVERIFY(!run.open_after_message);
     }
+}
+
+// A wrong passphrase with a null character in it gets the hint the unlock prompt gives.
+void AskPassphraseDialogTests::autoUnlockWrongPassphraseWithANullCharacterSaysSo()
+{
+    qt_test::FakeWallet wallet;
+    wallet.m_autounlock_result = AutoUnlockSetupResult::WrongPassphrase;
+    const QString with_null = QStringLiteral("before") + QChar(0) + QStringLiteral("after");
+
+    const AutoUnlockRun run = RunAutoUnlockPrompt(AskPassphraseDialog::SetupAutoUnlock, wallet,
+                                                  WindowsStatus("machine"), with_null);
+
+    QCOMPARE(run.shown.size(), 1);
+    QVERIFY2(run.shown[0].contains(QStringLiteral("null character")), qPrintable(run.shown[0]));
+    QVERIFY(run.open_after_message);
+}
+
+// A call that ended without an answer leaves it unknown whether autounlock changed, and
+// the user is told so.
+void AskPassphraseDialogTests::autoUnlockCallThatThrowsSaysItIsNotKnown()
+{
+    qt_test::FakeWallet wallet;
+    wallet.m_autounlock_throws = true;
+
+    const AutoUnlockRun run = RunAutoUnlockPrompt(AskPassphraseDialog::ClearAutoUnlock, wallet,
+                                                  WindowsStatus("machine"));
+
+    QCOMPARE(run.result, int(QDialog::Rejected));
+    QCOMPARE(run.shown.size(), 1);
+    QVERIFY2(run.shown[0].contains(QStringLiteral("not known whether autounlock was changed")),
+             qPrintable(run.shown[0]));
+}
+
+// The same when the prompt was cancelled while the call ran on: the call was made, so its
+// outcome is not known, and that is said before the prompt ends.
+void AskPassphraseDialogTests::autoUnlockCancelledCallThatThrowsSaysItIsNotKnown()
+{
+    qt_test::FakeWallet wallet;
+    ModelOverFakeWallet fixture(wallet);
+    wallet.m_ignore_cancel = true;
+    wallet.m_autounlock_throws = true;
+
+    AskPassphraseDialog dialog(AskPassphraseDialog::SetupAutoUnlock);
+    dialog.setModel(&fixture.model);
+    dialog.setAutoUnlockStatus(WindowsStatus("machine"));
+    const ReleaseOnExit release{wallet};
+
+    QStringList shown;
+    QTimer closer;
+    closer.setInterval(20);
+    QObject::connect(&closer, &QTimer::timeout, &dialog, [&shown] {
+        if (QMessageBox* const box = VisibleMessageBox()) {
+            shown << box->text();
+            box->accept();
+        }
+    });
+    closer.start();
+
+    AtCancel at_cancel;
+    QElapsedTimer since_cancel;
+    const int result = ExecAndCancel(dialog, wallet, at_cancel, since_cancel, [&] {
+        QTimer::singleShot(100, &dialog, [&wallet] { wallet.m_release = true; });
+    });
+
+    QCOMPARE(result, int(QDialog::Rejected));
+    QCOMPARE(shown.size(), 1);
+    QVERIFY2(shown[0].contains(QStringLiteral("not known whether autounlock was changed")), qPrintable(shown[0]));
+    QCOMPARE(wallet.m_set_autounlock_calls.load(), 1);
 }
 
 void AskPassphraseDialogTests::walletModelPassesTheAutoUnlockStatusOn()

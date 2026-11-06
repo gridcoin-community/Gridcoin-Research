@@ -635,9 +635,13 @@ void AskPassphraseDialog::checkFinished()
                                      tr("Wallet passphrase was successfully changed."));
         }
 
-        // Autounlock was set up or turned off all the same, which the user must
-        // be told.
-        if (accepted && (mode == SetupAutoUnlock || mode == ClearAutoUnlock)) {
+        // Autounlock was set up or turned off all the same, or the call ran
+        // and ended without an answer, so that it is not known whether it was:
+        // either way the user must be told.
+        if ((mode == SetupAutoUnlock || mode == ClearAutoUnlock)
+            && (accepted
+                || (m_check->phase == CheckState::RUNNING
+                    && m_check->autounlock_result == CheckState::NO_ANSWER))) {
             reportAutoUnlock();
         }
 
@@ -724,9 +728,13 @@ bool AskPassphraseDialog::reportAutoUnlock()
     const int value = m_check->autounlock_result;
 
     if (value == CheckState::NO_ANSWER) {
+        // The call ran and ended without an answer, as when the connection to the core
+        // closed during it; or it never ran.
         QMessageBox::critical(this, title,
-                              tr("The Gridcoin core did not answer, so it is not known whether autounlock was "
-                                 "changed. Open this again to see how it stands."));
+                              m_check->phase == CheckState::RUNNING
+                                  ? tr("The Gridcoin core did not answer, so it is not known whether autounlock "
+                                       "was changed. Open this again to see how it stands.")
+                                  : tr("The passphrase could not be checked, so autounlock was not changed."));
         return false;
     }
 
@@ -751,7 +759,17 @@ bool AskPassphraseDialog::reportAutoUnlock()
                                  .arg(location));
         return false;
     case AutoUnlockSetupResult::WrongPassphrase:
-        QMessageBox::critical(this, title, tr("The passphrase entered for the wallet decryption was incorrect."));
+        if (!m_check_had_null) {
+            QMessageBox::critical(this, title, tr("The passphrase entered for the wallet decryption was incorrect."));
+        } else {
+            QMessageBox::critical(this, title,
+                                  tr("The passphrase entered for the wallet decryption is incorrect. "
+                                     "It contains a null character (ie - a zero byte). "
+                                     "If the passphrase was set with a version of this software prior to 5.4.6, "
+                                     "please try again with only the characters up to — but not including — "
+                                     "the first null character. If this is successful, please set a new "
+                                     "passphrase to avoid this issue in the future."));
+        }
         return true;
     case AutoUnlockSetupResult::NotEncrypted:
         QMessageBox::critical(this, title, tr("The wallet is not encrypted, so autounlock does not apply to it."));

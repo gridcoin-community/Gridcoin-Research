@@ -607,7 +607,9 @@ public:
     //! A wrong old passphrase is counted and delayed as by Unlock(), and the
     //! caller must not hold cs_wallet. False, with nothing changed, when the
     //! attempt is given up while it waits for its turn. A successful change
-    //! ends every capability: they were proved with the old passphrase.
+    //! ends every capability: they were proved with the old passphrase. An
+    //! unlock a capability made on a locked wallet ends with it, as
+    //! EndElevation() would end it, so that wallet is locked again at once.
     //! It also replaces a stored autounlock passphrase with the new one
     //! (OnWalletPassphraseChanged()) once cs_wallet is released, which is file
     //! I/O and encryption, so the caller must not hold cs_main either.
@@ -762,9 +764,13 @@ private:
     //! true when it opened a master key record and that key opens the keys,
     //! false when it did not. It takes
     //! cs_wallet only to copy the master key records and to write the new one.
+    //! A change that succeeds ends every capability, and puts in \p
+    //! relock_epochs the epochs of the unlocks they made, for the caller to
+    //! lock once cs_wallet is released.
     bool ChangeWalletPassphraseWithoutDelay(const SecureString& strOldWalletPassphrase,
                                             const SecureString& strNewWalletPassphrase,
-                                            std::optional<bool>& passphrase_accepted) LOCKS_EXCLUDED(cs_wallet);
+                                            std::optional<bool>& passphrase_accepted,
+                                            std::set<uint64_t>& relock_epochs) LOCKS_EXCLUDED(cs_wallet);
 
 public:
     void GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet);
