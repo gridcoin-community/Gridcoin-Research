@@ -373,11 +373,13 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                 }
                 if (nSize > 0 && nSize <= MAX_BLOCK_SIZE)
                 {
-                    // As in Bitcoin Core, the scan for the next block starts where this block ends as it was read,
-                    // not where the size in its record says it ends. A size that does not match the block would
-                    // otherwise skip the intact records after it.
-                    const long block_end = ftell(blkdat.Get());
-                    if (block_end < 0) throw std::ios_base::failure("ftell failed after reading a block");
+                    // The scan for the next block starts at the earlier of two ends: where the size in the block's
+                    // record says the block ends, and where reading the block ended. Bitcoin Core does not read a block
+                    // past the end its record gives. If one of the two is damaged, the earlier end is still not past
+                    // the next record, and the scan finds that record's message start from there.
+                    const long read_end = ftell(blkdat.Get());
+                    if (read_end < 0) throw std::ios_base::failure("ftell failed after reading a block");
+                    const uint64_t block_end = std::min<uint64_t>((uint64_t) nPos + 4 + nSize, (uint64_t) read_end);
 
                     // A block already in the index is skipped rather than passed to ProcessBlock, which would refuse it
                     // and log an error. A reindex meets genesis this way, and a reindex that resumes an interrupted one
