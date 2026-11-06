@@ -605,12 +605,14 @@ if(ENABLE_DAEMON)
         )
         if(WIN32)
             # Bundle the PowerShell helpers that run the multiprocess core as a background
-            # scheduled task (registered without a stored password). They install into the
-            # package's windows\ folder (NSIS.template.in Files them into $INSTDIR\windows);
-            # from there the scripts resolve the daemon at ..\daemon\gridcoinresearchd.exe and
-            # the GUI at ..\gridcoinresearch.exe, matching the installed layout.
+            # scheduled task (registered without a stored password), and the installer's own steps
+            # (Invoke-GridcoinInstallStep.ps1). They install into the package's windows\ folder
+            # (NSIS.template.in Files them into $INSTDIR\windows); from there the scripts resolve
+            # the daemon at ..\daemon\gridcoinresearchd.exe and the GUI at ..\gridcoinresearch.exe,
+            # matching the installed layout.
             install(FILES
                 "${CMAKE_SOURCE_DIR}/contrib/windows/Install-GridcoinCoreTask.ps1"
+                "${CMAKE_SOURCE_DIR}/contrib/windows/Invoke-GridcoinInstallStep.ps1"
                 "${CMAKE_SOURCE_DIR}/contrib/windows/Uninstall-GridcoinCoreTask.ps1"
                 "${CMAKE_SOURCE_DIR}/contrib/windows/Update-GridcoinCore.ps1"
                 "${CMAKE_SOURCE_DIR}/contrib/windows/Start-GridcoinGui.ps1"

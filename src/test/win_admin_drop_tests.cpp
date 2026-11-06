@@ -86,6 +86,7 @@ StartAction DecideForCommandLine(std::vector<const char*> args)
     StartFacts facts = AdminToken();
     facts.service = util::winsvc::HasServiceFlag(argc, args.data());
     facts.rpc_client = IsRpcClientCommandLine(argc, args.data());
+    facts.report_permissions = util::winsvc::CommandLineFlag(argc, args.data(), "reportpermissions");
     return DecideStart(facts);
 }
 
@@ -198,12 +199,16 @@ BOOST_AUTO_TEST_CASE(drop_needed_by_elevation_integrity_or_an_enabled_group)
 
 BOOST_AUTO_TEST_CASE(start_decision_across_its_inputs)
 {
-    // The service and the RPC client keep their token, whatever it is.
+    // The service, the RPC client and the report-only permission check keep their token,
+    // whatever it is.
     StartFacts facts = AdminToken();
     facts.service = true;
     BOOST_CHECK(DecideStart(facts) == StartAction::Run);
     facts = AdminToken();
     facts.rpc_client = true;
+    BOOST_CHECK(DecideStart(facts) == StartAction::Run);
+    facts = AdminToken();
+    facts.report_permissions = true;
     BOOST_CHECK(DecideStart(facts) == StartAction::Run);
 
     // A token that needs nothing runs.
@@ -247,7 +252,7 @@ BOOST_AUTO_TEST_CASE(loop_guard_refuses_only_a_copy_that_still_needs_the_drop)
     facts.rights_dropped_marker = true;
     BOOST_CHECK(DecideStart(facts) == StartAction::Run);
 
-    // The service and the RPC client do not look at it.
+    // The service, the RPC client and the permission check do not look at it.
     facts = AdminToken();
     facts.rights_dropped_marker = true;
     facts.service = true;
@@ -255,6 +260,10 @@ BOOST_AUTO_TEST_CASE(loop_guard_refuses_only_a_copy_that_still_needs_the_drop)
     facts = AdminToken();
     facts.rights_dropped_marker = true;
     facts.rpc_client = true;
+    BOOST_CHECK(DecideStart(facts) == StartAction::Run);
+    facts = AdminToken();
+    facts.rights_dropped_marker = true;
+    facts.report_permissions = true;
     BOOST_CHECK(DecideStart(facts) == StartAction::Run);
 }
 
@@ -287,6 +296,31 @@ BOOST_AUTO_TEST_CASE(command_line_decides_service_and_client_form)
     // The first argument is the program, whatever it holds.
     const std::vector<const char*> program_only{"getinfo"};
     BOOST_CHECK(!IsRpcClientCommandLine(static_cast<int>(program_only.size()), program_only.data()));
+}
+
+// -reportpermissions, which the installer runs elevated, starts no core: it keeps its token. It
+// is read as ArgsManager reads a boolean option on Windows, the last one counting.
+BOOST_AUTO_TEST_CASE(command_line_permission_report_keeps_its_token)
+{
+    BOOST_CHECK(DecideForCommandLine({"-reportpermissions"}) == StartAction::Run);
+    BOOST_CHECK(DecideForCommandLine({"-testnet", "-reportpermissions"}) == StartAction::Run);
+    BOOST_CHECK(DecideForCommandLine({"--reportpermissions"}) == StartAction::Run);
+    BOOST_CHECK(DecideForCommandLine({"-reportpermissions=1"}) == StartAction::Run);
+    BOOST_CHECK(DecideForCommandLine({"-noreportpermissions=0"}) == StartAction::Run);
+
+    BOOST_CHECK(DecideForCommandLine({"-reportpermissions=0"}) == StartAction::Drop);
+    BOOST_CHECK(DecideForCommandLine({"-noreportpermissions"}) == StartAction::Drop);
+    BOOST_CHECK(DecideForCommandLine({"-reportpermissions", "-noreportpermissions"}) == StartAction::Drop);
+    BOOST_CHECK(DecideForCommandLine({"-reportpermissionsx"}) == StartAction::Drop);
+    // After the first argument that is not an option, the rest belong to a command.
+    BOOST_CHECK(DecideForCommandLine({"-", "-reportpermissions"}) == StartAction::Drop);
+
+    // "/" starts an option as "-" does, as on Windows, where the drop runs. (Elsewhere the RPC
+    // client form reads "/ReportPermissions" as a command.)
+    const std::vector<const char*> slash{"gridcoinresearchd", "/ReportPermissions"};
+    BOOST_CHECK(util::winsvc::CommandLineFlag(static_cast<int>(slash.size()), slash.data(), "reportpermissions"));
+    const std::vector<const char*> other{"gridcoinresearchd", "-service"};
+    BOOST_CHECK(!util::winsvc::CommandLineFlag(static_cast<int>(other.size()), other.data(), "reportpermissions"));
 }
 
 BOOST_AUTO_TEST_CASE(refusal_names_the_reason_and_ends_with_the_advice)

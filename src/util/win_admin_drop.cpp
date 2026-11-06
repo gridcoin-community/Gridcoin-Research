@@ -136,7 +136,7 @@ bool DropNeeded(bool token_elevated, uint32_t integrity_rid, bool filtered_group
 
 StartAction DecideStart(const StartFacts& facts)
 {
-    if (facts.service || facts.rpc_client) return StartAction::Run;
+    if (facts.service || facts.rpc_client || facts.report_permissions) return StartAction::Run;
     if (!DropNeeded(facts.token_elevated, facts.integrity_rid, facts.filtered_group_enabled)) return StartAction::Run;
 
     return facts.rights_dropped_marker ? StartAction::Refuse : StartAction::Drop;
@@ -485,12 +485,13 @@ uint32_t ResumeAndWait(const RestrictedChild& child)
     return code;
 }
 
-StartOutcome GiveUpAdminRights(bool service, bool rpc_client)
+StartOutcome GiveUpAdminRights(bool service, bool rpc_client, bool report_permissions)
 {
     StartOutcome outcome;
 
-    // The service and the RPC client keep their token, so it is not read for them.
-    if (service || rpc_client) return outcome;
+    // The service, the RPC client and the permission check keep their token, so it is not read
+    // for them.
+    if (service || rpc_client || report_permissions) return outcome;
 
     try {
         StartFacts facts;

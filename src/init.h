@@ -10,6 +10,7 @@
 #include <boost/thread.hpp>
 
 #include <atomic>
+#include <iosfwd>
 #include <optional>
 #include <string>
 #include <utility>
@@ -54,6 +55,14 @@ void AddMissingRpcCredentials();
 //! (AddMissingRpcCredentials), both only when this account owns it. False, with \p error the
 //! message, when the start must stop.
 bool PrepareConfigFile(std::string& error);
+//! -reportpermissions: the start's check of the data directory's files (fsmodes::CheckOwnerOnlyModes
+//! over the paths AppInit2 gives it), report-only, for the installers. The paths come from the
+//! command line alone: the data directory (-datadir, or the default, and the network's directory
+//! below it), the configuration file (-conf), the settings file, the wallet (-wallet), the backup
+//! directory (-backupdir) and debug.log (-debuglogfile). No configuration or settings file is read,
+//! and nothing is created or changed: a data directory that does not exist is reported as such.
+//! Writes each finding to \p out with its fix, and true only when there is none.
+bool ReportDataDirPermissions(std::ostream& out);
 //! Installs the SIGTERM and SIGINT handlers that request a shutdown (POSIX; nothing on
 //! Windows, whose console handler AppInit2 installs). The daemon calls it at the top of
 //! main(), so that a stop sent during startup is not lost; AppInit2 calls it again.

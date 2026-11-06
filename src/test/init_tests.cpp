@@ -2,6 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
+#include "chainparamsbase.h"
 #include "fs.h"
 #include "gridcoin/contract/registry.h"
 #include "gridcoin/gridcoin.h"
@@ -144,7 +146,7 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
         "-pendingpoolretention", "-rpcssl", "-rpcsslcertificatechainfile", "-rpcsslprivatekeyfile",
         "-rpcsslciphers", "-socks", "-debugallowtracer", "-rpcserviceuser", "-rpcskiplistenercheck",
         "-stdinwalletpassphrase", "-stdinelevate", "-ipcdir", "-ipcattachgroup",
-        "-ipcserviceuser"};
+        "-ipcserviceuser", "-reportpermissions"};
 #ifdef __linux__
     refuse.insert("-autounlocksocket");
 #endif
@@ -180,7 +182,7 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
     // The developer and client overrides, and the autounlock options of the service
     // units, are honoured only from the command line.
     std::vector<std::string> command_line_only{"-debugallowtracer", "-rpcskiplistenercheck", "-stdinwalletpassphrase",
-                                               "-stdinelevate"};
+                                               "-stdinelevate", "-reportpermissions"};
 #ifdef __linux__
     command_line_only.push_back("-autounlocksocket");
 #endif
@@ -759,6 +761,120 @@ BOOST_AUTO_TEST_CASE(clean_config_keeps_the_access_list_of_the_conf_windows)
     BOOST_CHECK(std::any_of(after.aces.begin(), after.aces.end(), [](const util::winacl::ObservedAce& ace) {
         return ace.trustee == util::winacl::wellknown::Users();
     }));
+}
+#endif
+
+// -reportpermissions (ReportDataDirPermissions): the start's check of the data directory's files,
+// report-only, for the installers. It names each file that gives other accounts access, with the
+// fix, and creates nothing.
+namespace {
+//! The names of the entries directly in \p dir.
+std::set<std::string> EntryNames(const fs::path& dir)
+{
+    std::set<std::string> names;
+    for (fs::directory_iterator it(dir), end; it != end; ++it) names.insert(it->path().filename().string());
+    return names;
+}
+} // namespace
+
+// A data directory that does not exist is reported as missing and is not created: neither the
+// -datadir that names it nor the network's directory below an existing one, which GetDataDir()
+// would create. Production change that would fail this: resolving the paths through GetDataDir()
+// before checking that the directory is there.
+BOOST_AUTO_TEST_CASE(report_permissions_names_a_missing_data_directory_and_does_not_create_it)
+{
+    ScratchDataDir datadir;
+    const fs::path absent = datadir.path / "absent";
+    gArgs.ForceSetArg("-datadir", absent.string());
+    gArgs.ClearPathCache();
+
+    std::ostringstream main_out;
+    BOOST_CHECK(!ReportDataDirPermissions(main_out));
+    BOOST_CHECK_MESSAGE(main_out.str().find(absent.string() + " does not exist") != std::string::npos, main_out.str());
+    BOOST_CHECK(!fs::exists(absent));
+
+    // The guard puts mainnet back.
+    gArgs.ForceSetArg("-datadir", datadir.path.string());
+    SelectParams(CBaseChainParams::TESTNET);
+    gArgs.ClearPathCache();
+
+    const fs::path testnet = datadir.path / "testnet";
+    std::ostringstream test_out;
+    BOOST_CHECK(!ReportDataDirPermissions(test_out));
+    BOOST_CHECK_MESSAGE(test_out.str().find(testnet.string() + " does not exist") != std::string::npos, test_out.str());
+    BOOST_CHECK(!fs::exists(testnet));
+}
+
+#ifndef WIN32
+// Each file that gives other accounts access is named with the chmod that makes it owner-only,
+// and the report is clean when none does. The configuration file is the one -conf names, where
+// it is. Nothing is created: no settings file, lock, debug.log or backup directory.
+BOOST_AUTO_TEST_CASE(report_permissions_names_each_wide_file_with_its_fix)
+{
+    ScratchDataDir datadir;
+    BOOST_REQUIRE_EQUAL(::chmod(datadir.path.string().c_str(), 0700), 0);
+    const fs::path wallet = datadir.path / "wallet.dat";
+    WriteText(wallet, "w");
+    BOOST_REQUIRE_EQUAL(::chmod(wallet.string().c_str(), 0600), 0);
+    fs::create_directories(datadir.path / "etc");
+    const fs::path conf = datadir.path / "etc" / "node.conf";
+    WriteText(conf, "addnode=127.0.0.1\n");
+    BOOST_REQUIRE_EQUAL(::chmod(conf.string().c_str(), 0600), 0);
+    gArgs.ForceSetArg("-conf", conf.string());
+
+    std::ostringstream clean;
+    BOOST_CHECK_MESSAGE(ReportDataDirPermissions(clean), clean.str());
+    BOOST_CHECK_MESSAGE(clean.str().find("WARNING") == std::string::npos, clean.str());
+
+    BOOST_REQUIRE_EQUAL(::chmod(wallet.string().c_str(), 0644), 0);
+    BOOST_REQUIRE_EQUAL(::chmod(conf.string().c_str(), 0604), 0);
+    std::ostringstream wide;
+    BOOST_CHECK(!ReportDataDirPermissions(wide));
+    const std::string text = wide.str();
+    BOOST_CHECK_MESSAGE(text.find("WARNING: " + wallet.string() + " has mode 0644") != std::string::npos, text);
+    BOOST_CHECK_MESSAGE(text.find("chmod 600 " + wallet.string()) != std::string::npos, text);
+    BOOST_CHECK_MESSAGE(text.find("WARNING: " + conf.string() + " has mode 0604") != std::string::npos, text);
+
+    // Nothing changed and nothing was made.
+    struct stat st;
+    BOOST_REQUIRE_EQUAL(::stat(wallet.string().c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0644U);
+    BOOST_CHECK(EntryNames(datadir.path) == (std::set<std::string>{"etc", "wallet.dat"}));
+}
+#else
+// The same on Windows: a Users entry on wallet.dat is named with the icacls command that removes
+// it, and the file and the directory are left as they were.
+BOOST_AUTO_TEST_CASE(report_permissions_names_each_wide_file_with_its_fix_windows)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
+        return;
+    }
+
+    ScratchDataDir datadir;
+    const fs::path wallet = datadir.path / "wallet.dat";
+    grc_test::WriteOwnFile(wallet, "w");
+
+    std::ostringstream clean;
+    ReportDataDirPermissions(clean);
+    BOOST_CHECK_MESSAGE(clean.str().find(wallet.string()) == std::string::npos, clean.str());
+
+    util::winacl::AclSpec spec = util::OwnerOnlyAclSpec(/*inheritable=*/false);
+    spec.aces.push_back({util::winacl::wellknown::Users(), FILE_GENERIC_READ, util::winacl::Inherit::None});
+    util::winacl::ApplyAcl(wallet, spec);
+
+    std::ostringstream wide;
+    BOOST_CHECK(!ReportDataDirPermissions(wide));
+    const std::string text = wide.str();
+    BOOST_CHECK_MESSAGE(text.find("WARNING: " + wallet.string() + " gives other accounts access") != std::string::npos,
+                        text);
+    BOOST_CHECK_MESSAGE(text.find("icacls \"" + wallet.string() + "\"") != std::string::npos, text);
+
+    const util::winacl::ObservedAcl after = util::winacl::ReadAcl(wallet);
+    BOOST_CHECK(std::any_of(after.aces.begin(), after.aces.end(), [](const util::winacl::ObservedAce& ace) {
+        return ace.trustee == util::winacl::wellknown::Users();
+    }));
+    BOOST_CHECK(EntryNames(datadir.path) == (std::set<std::string>{"wallet.dat"}));
 }
 #endif
 

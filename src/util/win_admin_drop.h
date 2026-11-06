@@ -73,6 +73,9 @@ struct StartFacts
     bool service{false};
     //! The command line asks for the RPC client (IsRpcClientCommandLine).
     bool rpc_client{false};
+    //! The command line asks for the report-only permission check (-reportpermissions, read with
+    //! util::winsvc::CommandLineFlag), which starts no core.
+    bool report_permissions{false};
     //! The token is elevated (TokenElevation).
     bool token_elevated{false};
     //! The token's integrity level, a SECURITY_MANDATORY_*_RID.
@@ -83,11 +86,12 @@ struct StartFacts
     bool rights_dropped_marker{false};
 };
 
-//! Run for the service, which runs as its own virtual account, and for the RPC client, which
-//! must still read the service's configuration file when an administrator runs it, whatever the
-//! token. Otherwise Run when the token does not need the drop (DropNeeded), the marker
-//! notwithstanding; Refuse when it does and the marker is set; Drop when it does and the marker
-//! is not set. Pure.
+//! Run for the service, which runs as its own virtual account; for the RPC client, which must
+//! still read the service's configuration file when an administrator runs it; and for the
+//! report-only permission check, which starts no core and which the installer runs elevated;
+//! whatever the token. Otherwise Run when the token does not need the drop (DropNeeded), the
+//! marker notwithstanding; Refuse when it does and the marker is set; Drop when it does and the
+//! marker is not set. Pure.
 StartAction DecideStart(const StartFacts& facts);
 
 //! The one line that refuses the start, for \p reason: the step that failed and the Windows
@@ -115,8 +119,8 @@ struct StartOutcome
 };
 
 //! The start's drop of administrator rights, first thing in main(), for a process that may host
-//! a same-account core: \p service and \p rpc_client as StartFacts states them. Reads this
-//! process's token and RIGHTS_DROPPED_ENV, then follows DecideStart:
+//! a same-account core: \p service, \p rpc_client and \p report_permissions as StartFacts states
+//! them. Reads this process's token and RIGHTS_DROPPED_ENV, then follows DecideStart:
 //! - Run: removes RIGHTS_DROPPED_ENV from the environment, so that a process this one starts
 //!   does not inherit it, and returns Run;
 //! - Drop: ignores Ctrl+C and Ctrl+Break, which reach the copy through the shared console, and
@@ -130,7 +134,7 @@ struct StartOutcome
 //! changed. The console handler, once the copy runs, does not return from a close, logoff or
 //! shutdown event: it waits for the copy and leaves the exit to the main thread, which then
 //! exits with the copy's exit code.
-StartOutcome GiveUpAdminRights(bool service, bool rpc_client);
+StartOutcome GiveUpAdminRights(bool service, bool rpc_client, bool report_permissions);
 
 //! Whether this process is the copy a drop started: GiveUpAdminRights found RIGHTS_DROPPED_ENV
 //! set and returned Run. For the STARTED_WITHOUT_ADMIN_RIGHTS line only.

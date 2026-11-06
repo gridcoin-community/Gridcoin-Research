@@ -322,6 +322,14 @@ bool AppInit(int argc, char* argv[])
             return true;
         }
 
+        // The report-only check of the data directory's files, for the installers. It reads only
+        // the command line, so it runs before the configuration file is read and the data
+        // directory created, and it starts nothing.
+        if (gArgs.GetBoolArg("-reportpermissions", false)) {
+            SelectParams(gArgs.GetChainName());
+            return ReportDataDirPermissions(std::cout);
+        }
+
 #if HAVE_DECL_FORK
         // Communication with parent after daemonizing. This is used for signalling in the following ways:
         // - a boolean token is sent when the initialization process (all the Init* functions) have finished to indicate
@@ -828,9 +836,11 @@ int main(int argc, char* argv[])
         // A same-account core started with administrator rights gives them up before it reads
         // anything: it starts itself again under a restricted copy of its token and exits with
         // the copy's exit code. Not the service, which runs as its own account, nor the RPC
-        // client, which an administrator runs to read the service's configuration file.
-        const util::winadmin::StartOutcome start =
-            util::winadmin::GiveUpAdminRights(service, IsRpcClientCommandLine(utf8_argc, utf8_argv));
+        // client, which an administrator runs to read the service's configuration file, nor
+        // -reportpermissions, which starts no core and which the installer runs elevated.
+        const util::winadmin::StartOutcome start = util::winadmin::GiveUpAdminRights(
+            service, IsRpcClientCommandLine(utf8_argc, utf8_argv),
+            util::winsvc::CommandLineFlag(utf8_argc, utf8_argv, "reportpermissions"));
         switch (start.kind) {
         case util::winadmin::StartOutcome::Kind::Run:
             break;

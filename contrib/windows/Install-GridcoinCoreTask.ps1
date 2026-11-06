@@ -169,12 +169,7 @@ if ($oldBlob) {
     if ($NoAutounlockMigration) {
         Write-Host "Left the old autounlock file '$oldBlob' in place (-NoAutounlockMigration). The core does not read it." -ForegroundColor Yellow
     } else {
-        $networkName = 'main'
-        $confForNetwork = Join-Path $DataDir 'gridcoinresearch.conf'
-        if (Test-Path -LiteralPath $confForNetwork) {
-            $testnetLines = @(Get-Content -LiteralPath $confForNetwork | Where-Object { $_ -match '^\s*testnet\s*=\s*1\s*$' })
-            if ($testnetLines.Count -gt 0) { $networkName = 'test' }
-        }
+        $networkName = Get-GridcoinConfNetwork -DataDir $DataDir
         # A failed conversion must never leave the user without a boot task: warn and carry on.
         try {
             if (Convert-GridcoinLegacyAutounlockBlob -OldPath $oldBlob -DataDir $DataDir -Network $networkName) {

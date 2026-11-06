@@ -858,7 +858,8 @@ int main(int argc, char *argv[])
     // refusal of an elevated multiprocess GUI further down stays for a token this could not lower.
     {
         const util::winadmin::StartOutcome start =
-            util::winadmin::GiveUpAdminRights(/*service=*/false, /*rpc_client=*/false);
+            util::winadmin::GiveUpAdminRights(/*service=*/false, /*rpc_client=*/false,
+                                              /*report_permissions=*/false);
         if (start.kind == util::winadmin::StartOutcome::Kind::Exited) return static_cast<int>(start.exit_code);
         if (start.kind == util::winadmin::StartOutcome::Kind::Refused) {
             tfm::format(std::cerr, "%s\n", start.refusal);

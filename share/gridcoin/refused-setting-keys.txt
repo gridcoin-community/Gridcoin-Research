@@ -59,6 +59,7 @@ debugallowtracer
 rpcskiplistenercheck
 service
 allowunsafeimagedir
+reportpermissions
 launchdagent
 devallownosecureenclave
 

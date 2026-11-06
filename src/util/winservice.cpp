@@ -308,7 +308,12 @@ void ServiceRunner::Watch()
 
 bool HasServiceFlag(int argc, const char* const argv[])
 {
-    bool service = false;
+    return CommandLineFlag(argc, argv, "service");
+}
+
+bool CommandLineFlag(int argc, const char* const argv[], const std::string& name)
+{
+    bool flag = false;
 
     for (int i = 1; i < argc && argv[i] != nullptr; ++i) {
         std::string key(argv[i]);
@@ -331,20 +336,20 @@ bool HasServiceFlag(int argc, const char* const argv[])
         if (key.size() > 1 && key[1] == '-') key.erase(0, 1);
         key.erase(0, 1);
 
-        // -noservice is -service=0, and -noservice=0 is -service=1.
+        // -no<name> is -<name>=0, and -no<name>=0 is -<name>=1.
         bool negated = false;
         if (key.compare(0, 2, "no") == 0) {
             negated = true;
             key.erase(0, 2);
         }
 
-        if (key != "service") continue;
+        if (key != name) continue;
 
         const bool value_true = InterpretBool(value);
-        service = negated ? !value_true : value_true;
+        flag = negated ? !value_true : value_true;
     }
 
-    return service;
+    return flag;
 }
 
 bool IsRunningAsWindowsService()

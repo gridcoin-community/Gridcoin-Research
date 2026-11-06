@@ -180,6 +180,13 @@ private:
 //! "-servicex". Pure.
 bool HasServiceFlag(int argc, const char* const argv[]);
 
+//! Whether the command line \p argv sets the boolean option \p name (written without its dash, in
+//! lower case) true, read as HasServiceFlag reads -service: "-<name>", "--<name>" or "/<name>" in
+//! any case, "-<name>=<v>" with v empty or a non-zero integer, "-no<name>=0"; the last of them
+//! counts, and nothing after the first argument that is not an option, or after "-", is read.
+//! HasServiceFlag is CommandLineFlag(argc, argv, "service"). Pure.
+bool CommandLineFlag(int argc, const char* const argv[], const std::string& name);
+
 //! Whether this process runs as a Windows service. False unless the service entry point
 //! has said so, and always false on other platforms. Safe to call from any thread.
 bool IsRunningAsWindowsService();

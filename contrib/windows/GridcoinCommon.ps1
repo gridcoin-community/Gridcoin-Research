@@ -340,12 +340,18 @@ function Remove-GridcoinPasswordLogonTasks {
 # \Gridcoin\Autounlock task, and this user's powershell.exe processes that run its script. Returns
 # the old DPAPI file's path when that file exists, else $null. The file is read from the task's
 # arguments, else it is <datadir>\autounlock\passphrase.cred.
+#
+# With AllAccounts (the installer, which replaces the release for every account) the task and the
+# helpers go whichever account they run as. The path returned is still this account's file only:
+# another account's file is never read here.
 function Remove-GridcoinLegacyAutounlock {
     param(
         [Parameter(Mandatory = $true)][string]$DataDir,
-        [string]$TaskFolder = 'Gridcoin'
+        [string]$TaskFolder = 'Gridcoin',
+        [switch]$AllAccounts
     )
     $legacyPath = Join-Path $DataDir 'autounlock\passphrase.cred'
+    $mySid = Get-GridcoinCurrentSid
 
     $service = Get-GridcoinTaskService
     $folder = $null
@@ -353,34 +359,51 @@ function Remove-GridcoinLegacyAutounlock {
     if ($null -ne $folder) {
         $oldTask = $null
         try { $oldTask = $folder.GetTask('Autounlock') } catch { $oldTask = $null }
-        if ($null -ne $oldTask -and (Get-GridcoinTaskPrincipalSid $oldTask) -ne (Get-GridcoinCurrentSid)) {
+        $taskIsMine = $false
+        if ($null -ne $oldTask) { $taskIsMine = ((Get-GridcoinTaskPrincipalSid $oldTask) -eq $mySid) }
+        if ($null -ne $oldTask -and -not $taskIsMine -and -not $AllAccounts) {
             Write-Host ("The \$TaskFolder\Autounlock task belongs to another account (" + (Get-GridcoinTaskPrincipalSid $oldTask) + "); left in place.")
             $oldTask = $null
         }
         if ($null -ne $oldTask) {
-            foreach ($oldAction in $oldTask.Definition.Actions) {
-                $actionText = [string]$oldAction.Arguments
-                if ($actionText -match '-CredPath\s+"([^"]+)"') { $legacyPath = $Matches[1] }
+            if ($taskIsMine) {
+                foreach ($oldAction in $oldTask.Definition.Actions) {
+                    $actionText = [string]$oldAction.Arguments
+                    if ($actionText -match '-CredPath\s+"([^"]+)"') { $legacyPath = $Matches[1] }
+                }
             }
             try { $oldTask.Stop(0) } catch { Write-Verbose 'the Autounlock task was not running' }
             $folder.DeleteTask('Autounlock', 0)
         }
     }
 
-    $mySid = Get-GridcoinCurrentSid
     $helpers = @(Get-CimInstance -ClassName Win32_Process -Filter "Name = 'powershell.exe'")
     foreach ($helper in $helpers) {
         if ($helper.ProcessId -eq $PID) { continue }
         if (-not $helper.CommandLine) { continue }
         if ($helper.CommandLine -notlike '*Invoke-GridcoinAutounlock.ps1*') { continue }
-        $ownerSid = $null
-        try { $ownerSid = (Invoke-CimMethod -InputObject $helper -MethodName GetOwnerSid).Sid } catch { $ownerSid = $null }
-        if ($ownerSid -ne $mySid) { continue }
+        if (-not $AllAccounts) {
+            $ownerSid = $null
+            try { $ownerSid = (Invoke-CimMethod -InputObject $helper -MethodName GetOwnerSid).Sid } catch { $ownerSid = $null }
+            if ($ownerSid -ne $mySid) { continue }
+        }
         Stop-Process -Id $helper.ProcessId -Force
     }
 
     if (Test-Path -LiteralPath $legacyPath) { return $legacyPath }
     return $null
+}
+
+# The network a data directory's core runs on, as the core decides it: 'test' when the top-level
+# gridcoinresearch.conf there has testnet=1, else 'main'.
+function Get-GridcoinConfNetwork {
+    param([Parameter(Mandatory = $true)][string]$DataDir)
+    $confForNetwork = Join-Path $DataDir 'gridcoinresearch.conf'
+    if (Test-Path -LiteralPath $confForNetwork) {
+        $testnetLines = @(Get-Content -LiteralPath $confForNetwork | Where-Object { $_ -match '^\s*testnet\s*=\s*1\s*$' })
+        if ($testnetLines.Count -gt 0) { return 'test' }
+    }
+    return 'main'
 }
 
 # The secret path of the autounlock migration lives in C#, so that no passphrase byte is ever bound

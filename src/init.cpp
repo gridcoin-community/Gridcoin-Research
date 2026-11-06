@@ -539,6 +539,64 @@ static void LogNotAddingRpcCredentials(const fs::path& config_file)
 #endif
 }
 
+namespace {
+//! The start's check of the files of the data directory \p datadir (fsmodes::CheckOwnerOnlyModes):
+//! the directory itself, the configuration and settings files, the wallet, the backup directory and
+//! \p debuglog, as the arguments name them. Nothing is created or changed.
+std::vector<fsmodes::ModeFinding> CheckDataDirFiles(const fs::path& datadir, const fs::path& debuglog)
+{
+    fs::path settings_path;
+    if (!gArgs.GetSettingsPath(&settings_path, /* temp= */ false)) settings_path.clear();
+    const fs::path wallet_file = datadir / gArgs.GetArg("-wallet", "wallet.dat");
+
+    return fsmodes::CheckOwnerOnlyModes(datadir, GetConfigFile(), settings_path, wallet_file,
+                                        GRC::GetBackupPath(), debuglog);
+}
+} // namespace
+
+bool ReportDataDirPermissions(std::ostream& out)
+{
+    // The network's data directory as GetDataDir() resolves it, worked out first without that
+    // call, which creates a directory that is missing.
+    fs::path datadir;
+    const std::string datadir_arg = gArgs.GetArg("-datadir", "");
+    boost::system::error_code ec;
+    if (datadir_arg.empty()) {
+        datadir = GetDefaultDataDir();
+    } else {
+        datadir = fs::system_complete(datadir_arg, ec);
+        if (ec) datadir = datadir_arg;
+    }
+    datadir /= BaseParams().DataDir();
+
+    if (!fs::is_directory(datadir, ec)) {
+        out << "The data directory " << datadir.string()
+            << (fs::exists(datadir, ec) ? " is not a directory" : " does not exist")
+            << ", so nothing was checked.\n";
+        return false;
+    }
+
+    // It is there, so neither GetDataDir() nor the paths below it create anything.
+    const fs::path resolved = GetDataDir();
+    if (resolved.empty()) {
+        out << "The data directory " << datadir.string() << " cannot be used, so nothing was checked.\n";
+        return false;
+    }
+
+    // debug.log where InitLogging puts it.
+    const std::vector<fsmodes::ModeFinding> findings =
+        CheckDataDirFiles(resolved, AbsPathForConfigVal(gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE)));
+    for (const fsmodes::ModeFinding& finding : findings) {
+        out << finding.message;
+        if (finding.message.empty() || finding.message.back() != '\n') out << '\n';
+    }
+    if (findings.empty()) {
+        out << "No file checked in " << resolved.string() << " gives another account access.\n";
+    }
+
+    return findings.empty();
+}
+
 //! Add generated RPC credentials to an EXISTING configuration file that has none.
 //!
 //! CreateNewConfigFile only runs when there is no configuration file at all
@@ -856,6 +914,12 @@ void SetupServerArgs()
     // Listed Options
     // General
     argsman.AddArg("-version", "Print version and exit", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-reportpermissions", "Report the files of the data directory whose permissions give other "
+                   "accounts access, each with the command that removes that access, and exit: 0 when there is "
+                   "none, 1 otherwise. Reads only the command line (-datadir, -testnet, -conf, -wallet, "
+                   "-backupdir, -debuglogfile, -settings), starts no node, and creates and changes nothing. "
+                   "Command line only.",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::OPTIONS);
     // TODO: Read-only config file?
     argsman.AddArg("-conf=<file>", strprintf("Specify path to read-only configuration file. Relative paths will be prefixed"
                                              " by datadir location. (default: %s)", GRIDCOIN_CONF_FILENAME),
@@ -2280,15 +2344,8 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Existing wallet files and directories are never re-moded here: their permissions (on
     // Windows, their access lists) belong to the operator, who may have widened them on purpose.
     // Say which ones give other accounts access, and how to change that.
-    {
-        fs::path settings_path;
-        if (!gArgs.GetSettingsPath(&settings_path, /* temp= */ false)) settings_path.clear();
-
-        for (const fsmodes::ModeFinding& finding : fsmodes::CheckOwnerOnlyModes(
-                datadir, GetConfigFile(), settings_path, datadir / walletFileName,
-                GRC::GetBackupPath(), LogInstance().m_file_path)) {
-            LogPrintf("%s", finding.message);
-        }
+    for (const fsmodes::ModeFinding& finding : CheckDataDirFiles(datadir, LogInstance().m_file_path)) {
+        LogPrintf("%s", finding.message);
     }
 
     // Automatic backups fail late, in the scheduler, when the backup directory cannot be written.
