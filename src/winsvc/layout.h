@@ -73,8 +73,10 @@ namespace detail {
 using namespace util::winacl::mask;
 constexpr uint32_t FULL = FILE_ALL_ACCESS;
 constexpr uint32_t CONF_READ = READ_CONTROL | FILE_READ_DATA | FILE_READ_ATTRIBUTES | FILE_READ_EA | SYNCHRONIZE;
-constexpr uint32_t ROOT_SERVICE = READ_CONTROL | SYNCHRONIZE;
-constexpr uint32_t IPC_SERVICE = ipc::win::DIR_VIEW_MASK | FILE_ADD_FILE | FILE_DELETE_CHILD;
+constexpr uint32_t STAT_AND_ACL = READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_READ_EA | SYNCHRONIZE;
+constexpr uint32_t ROOT_SERVICE = STAT_AND_ACL;
+constexpr uint32_t IPC_PARENT_SERVICE = STAT_AND_ACL;
+constexpr uint32_t IPC_SERVICE = ipc::win::DIR_VIEW_MASK | FILE_READ_EA | FILE_ADD_FILE | FILE_DELETE_CHILD;
 } // namespace detail
 
 //! A service's rights on its configuration file: FILE_GENERIC_READ (checked against the SDK in
@@ -82,12 +84,21 @@ constexpr uint32_t IPC_SERVICE = ipc::win::DIR_VIEW_MASK | FILE_ADD_FILE | FILE_
 //! included; none of them changes the file.
 constexpr uint32_t CONF_READ_MASK = detail::CONF_READ;
 
-//! Each service's rights on Gridcoin\ itself: read its access list, as the core's check of the
-//! directories above its autounlock file does. Not inherited.
+//! Each service's rights on Gridcoin\ itself: read its attributes, as the boost::filesystem calls
+//! that make sure each data directory exists do (a status query opens it with
+//! FILE_READ_ATTRIBUTES | FILE_READ_EA), and its access list, as the core's check of the
+//! directories above its autounlock file does. Not inherited, and nothing that lists or changes
+//! it.
 constexpr uint32_t ROOT_SERVICE_MASK = detail::ROOT_SERVICE;
 
-//! A service's rights on its own IPC directory: view it as the attach group does, and add and
-//! remove the socket and cookie it serves.
+//! Each service's rights on Gridcoin\ipc: read its attributes, as the core's preparation of its
+//! IPC directory makes sure the directory above exists, and its access list. Not inherited, and
+//! nothing that lists or changes it.
+constexpr uint32_t IPC_PARENT_SERVICE_MASK = detail::IPC_PARENT_SERVICE;
+
+//! A service's rights on its own IPC directory: view it as the attach group does, read its
+//! extended attributes, which boost::filesystem::canonical opens it for, and add and remove the
+//! socket and cookie it serves.
 constexpr uint32_t IPC_SERVICE_MASK = detail::IPC_SERVICE;
 
 //! <programdata>\Gridcoin
@@ -121,7 +132,8 @@ fs::path StatePath(const fs::path& programdata, Network net);
 //! - conf, conf\quarantine: nobody else, inherited.
 //! - conf\<net>.conf: also that network's service with CONF_READ_MASK.
 //! - <net> (the data directory): also that network's service with full access, inherited.
-//! - ipc: also each attach group with DIR_VIEW_MASK, not inherited.
+//! - ipc: also each attach group with DIR_VIEW_MASK and each service with
+//!   IPC_PARENT_SERVICE_MASK, not inherited.
 //! - ipc\<net>: also that network's service with IPC_SERVICE_MASK and that network's group with
 //!   DIR_VIEW_MASK. Nothing there is inherited, so the socket and cookie carry only the lists the
 //!   core gives them.
@@ -150,14 +162,53 @@ bool ServiceConfAcceptable(const std::string& conf_text);
 
 //! What install adds to an existing configuration file \p conf_text that it accepts: the lines of
 //! BuildServiceConf that set rpcuser, rpcpassword (\p rpcpassword) and rpcserviceuser, each only
-//! when no line of the file sets that name in any section, after a line break when the text does
-//! not end in one. Empty when the file sets all three. Nothing already there is changed, so a
-//! file the administrators edited keeps their values.
+//! when the file does not set that name for \p net. As ArgsManager reads the file, a name set at
+//! the top, before any [section] header, counts, and so does one in the network's own section
+//! (main or test): under its [main] or [test] header, or as "main.<name>" or "test.<name>". A
+//! negated name ("no<name>") counts as set. When the file has a [section] header, the lines come
+//! under the network's own header, as a line at the end of the file would otherwise land in the
+//! last section. They come after a line break when the text does not end in one. Empty when the
+//! file sets all three. Nothing already there is changed, so a file the administrators edited
+//! keeps their values.
 std::string MissingServiceConfLines(Network net, const std::string& conf_text, const std::string& rpcpassword);
 
 //! The value of the first "<key>=<value>" line of the state file \p text, or nullopt when no line
 //! sets \p key. A line may end in CRLF.
 std::optional<std::string> StateFileValue(const std::string& text, const std::string& key);
+
+//! Why status does not show the state file whose owner and access list are \p acl, or nullopt. It
+//! must have a DACL and be owned by Administrators or SYSTEM, and its list may name only those two,
+//! which is what conf\ passes down to a file created there (util::winacl::FindForeignTrustee). A
+//! file another account owns, or can read or change, may have been put there by that account.
+//! Pure.
+std::optional<std::string> StateFileRefusal(const util::winacl::ObservedAcl& acl);
+
+//! The accounts that may own an entry install finds directly inside \p level, a layout directory
+//! that was there before install: Administrators, SYSTEM and TrustedInstaller, and, inside a
+//! network's data directory or IPC directory, that network's service, whose core makes the entries
+//! there. Pure.
+std::vector<Sid> LevelEntryOwners(const fs::path& programdata, const fs::path& level, const LayoutSids& sids);
+
+//! One entry found directly inside a layout directory, read without following it.
+struct LevelEntryFacts
+{
+    fs::path path;
+    //! A reparse point that names another path: a junction, a symbolic link or a mount point.
+    bool link{false};
+    //! nullopt when the owner could not be read.
+    std::optional<Sid> owner;
+    //! The name Windows gives the owner, empty when it gives none.
+    std::string owner_name;
+};
+
+//! Why install refuses \p entry, found directly inside the layout directory \p level, or nullopt.
+//! An entry that is itself a path of \p layout is nullopt, as install checks it as a level of its
+//! own. Any other is refused when it is a link, which install does not follow, or when its owner
+//! is not one of LevelEntryOwners or cannot be read. The text names the entry, and its owner by
+//! name and SID. Pure.
+std::optional<std::string> LevelEntryRefusal(const std::vector<LayoutEntry>& layout, const fs::path& programdata,
+                                             const fs::path& level, const LevelEntryFacts& entry,
+                                             const LayoutSids& sids);
 
 } // namespace winsvc
 

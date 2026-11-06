@@ -48,20 +48,72 @@ std::optional<std::string> ConfLineName(std::string line)
     return name;
 }
 
+//! Each line of \p text, without its line break.
+std::vector<std::string> Lines(const std::string& text)
+{
+    std::vector<std::string> lines;
+    size_t start = 0;
+    while (start < text.size()) {
+        size_t end = text.find('\n', start);
+        if (end == std::string::npos) end = text.size();
+        lines.push_back(text.substr(start, end - start));
+        start = end + 1;
+    }
+    return lines;
+}
+
 //! Every name \p conf_text sets, in the order of its lines.
 std::vector<std::string> ConfNames(const std::string& conf_text)
 {
     std::vector<std::string> names;
-    size_t start = 0;
-    while (start < conf_text.size()) {
-        size_t end = conf_text.find('\n', start);
-        if (end == std::string::npos) end = conf_text.size();
-        if (std::optional<std::string> name = ConfLineName(conf_text.substr(start, end - start))) {
-            names.push_back(std::move(*name));
-        }
-        start = end + 1;
+    for (const std::string& line : Lines(conf_text)) {
+        if (std::optional<std::string> name = ConfLineName(line)) names.push_back(std::move(*name));
     }
     return names;
+}
+
+//! One name a configuration file sets, and the section it is set in, empty at the top.
+struct ConfSetting
+{
+    std::string section;
+    std::string name;
+};
+
+//! Every name \p conf_text sets, with its section, as ArgsManager reads the file
+//! (GetConfigOptions, then InterpretOption): a [section] header prefixes the names after it with
+//! "<section>.", the text up to the first '.' of a name is its section, and a leading "no" is a
+//! negation of the name after it. Also whether the text has a [section] header.
+std::vector<ConfSetting> ConfSettings(const std::string& conf_text, bool& has_section_header)
+{
+    has_section_header = false;
+    std::vector<ConfSetting> settings;
+    std::string prefix;
+    for (std::string line : Lines(conf_text)) {
+        const size_t hash = line.find('#');
+        if (hash != std::string::npos) line.erase(hash);
+        line = TrimString(line, " \t\r\n");
+        if (line.empty()) continue;
+        if (line.front() == '[' && line.back() == ']') {
+            prefix = line.substr(1, line.size() - 2) + ".";
+            has_section_header = true;
+            continue;
+        }
+        // A line the core does not read as a setting, which it refuses to start with.
+        const size_t equals = line.find('=');
+        if (line.front() == '-' || equals == std::string::npos) continue;
+
+        std::string name = prefix + TrimString(line.substr(0, equals), " \t\r\n");
+        ConfSetting setting;
+        const size_t dot = name.find('.');
+        if (dot != std::string::npos) {
+            setting.section = name.substr(0, dot);
+            name.erase(0, dot + 1);
+        }
+        if (name.compare(0, 2, "no") == 0) name.erase(0, 2);
+        setting.name = std::move(name);
+        settings.push_back(std::move(setting));
+    }
+    return settings;
 }
 
 } // namespace
@@ -153,8 +205,13 @@ std::vector<LayoutEntry> ServiceLayout(const fs::path& programdata, const Layout
         add(DataDir(programdata, net), true, aces(tree, {{service(net), detail::FULL, tree}}));
     }
 
+    // Each service may also read the status and access list of ipc, as the core's preparation of
+    // its IPC directory makes sure the directory above it exists.
     add(root / L"ipc", true,
-        aces(tree, {{sids.grp_main, ipc::win::DIR_VIEW_MASK, here}, {sids.grp_test, ipc::win::DIR_VIEW_MASK, here}}));
+        aces(tree, {{sids.grp_main, ipc::win::DIR_VIEW_MASK, here},
+                    {sids.grp_test, ipc::win::DIR_VIEW_MASK, here},
+                    {sids.svc_main, IPC_PARENT_SERVICE_MASK, here},
+                    {sids.svc_test, IPC_PARENT_SERVICE_MASK, here}}));
     for (const Network net : {Network::Main, Network::Test}) {
         add(IpcDir(programdata, net), true,
             aces(here, {{service(net), IPC_SERVICE_MASK, here}, {group(net), ipc::win::DIR_VIEW_MASK, here}}));
@@ -216,17 +273,26 @@ bool ServiceConfAcceptable(const std::string& conf_text)
 
 std::string MissingServiceConfLines(Network net, const std::string& conf_text, const std::string& rpcpassword)
 {
-    const std::vector<std::string> names = ConfNames(conf_text);
-    const auto sets = [&names](const std::string& name) {
-        return std::find(names.begin(), names.end(), name) != names.end();
+    // CBaseChainParams::MAIN and TESTNET, the sections ArgsManager reads for each network.
+    const std::string own = net == Network::Main ? "main" : "test";
+
+    bool has_section_header = false;
+    const std::vector<ConfSetting> settings = ConfSettings(conf_text, has_section_header);
+    const auto sets = [&settings, &own](const std::string& name) {
+        return std::any_of(settings.begin(), settings.end(), [&](const ConfSetting& setting) {
+            return setting.name == name && (setting.section.empty() || setting.section == own);
+        });
     };
 
     std::string missing;
     if (!sets("rpcuser")) missing += "rpcuser=gridcoinrpc\n";
     if (!sets("rpcpassword")) missing += "rpcpassword=" + rpcpassword + "\n";
     if (!sets("rpcserviceuser")) missing += "rpcserviceuser=" + Ascii(NamesFor(net).account) + "\n";
+    if (missing.empty()) return missing;
 
-    if (!missing.empty() && !conf_text.empty() && conf_text.back() != '\n') missing.insert(0, "\n");
+    // A line at the end of a file with sections lands in its last one.
+    if (has_section_header) missing.insert(0, "[" + own + "]\n");
+    if (!conf_text.empty() && conf_text.back() != '\n') missing.insert(0, "\n");
 
     return missing;
 }
@@ -244,6 +310,46 @@ std::optional<std::string> StateFileValue(const std::string& text, const std::st
         start = end + 1;
     }
     return std::nullopt;
+}
+
+std::optional<std::string> StateFileRefusal(const util::winacl::ObservedAcl& acl)
+{
+    return util::winacl::FindForeignTrustee(acl, {util::winacl::wellknown::Administrators(),
+                                                  util::winacl::wellknown::System()});
+}
+
+std::vector<Sid> LevelEntryOwners(const fs::path& programdata, const fs::path& level, const LayoutSids& sids)
+{
+    std::vector<Sid> owners{sids.admins, sids.system, util::winacl::wellknown::TrustedInstaller()};
+    for (const Network net : {Network::Main, Network::Test}) {
+        if (level == DataDir(programdata, net) || level == IpcDir(programdata, net)) {
+            owners.push_back(net == Network::Main ? sids.svc_main : sids.svc_test);
+        }
+    }
+    return owners;
+}
+
+std::optional<std::string> LevelEntryRefusal(const std::vector<LayoutEntry>& layout, const fs::path& programdata,
+                                             const fs::path& level, const LevelEntryFacts& entry,
+                                             const LayoutSids& sids)
+{
+    const bool in_layout = std::any_of(layout.begin(), layout.end(), [&entry](const LayoutEntry& layout_entry) {
+        return layout_entry.path == entry.path;
+    });
+    if (in_layout) return std::nullopt;
+
+    if (entry.link) {
+        return entry.path.string() +
+               " is a link (a junction, a symbolic link or a mount point), which install does not follow";
+    }
+    if (!entry.owner) return entry.path.string() + ": its owner cannot be read";
+
+    const std::vector<Sid> owners = LevelEntryOwners(programdata, level, sids);
+    if (std::find(owners.begin(), owners.end(), *entry.owner) != owners.end()) return std::nullopt;
+
+    const std::string sid = util::winacl::FormatSid(*entry.owner);
+    return entry.path.string() + " is owned by " +
+           (entry.owner_name.empty() ? sid : entry.owner_name + " (" + sid + ")");
 }
 
 } // namespace winsvc

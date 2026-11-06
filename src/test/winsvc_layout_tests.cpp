@@ -168,7 +168,11 @@ const Sid& OtherGroupOf(const LayoutSids& sids, Network net)
 constexpr uint32_t ANY_WRITE = FILE_WRITEISH | FILE_DELETE_CHILD | FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY;
 //! The rights compared below as uint32_t: the SDK's macros are signed.
 constexpr uint32_t FULL_ACCESS = FILE_ALL_ACCESS;
-constexpr uint32_t READ_ACL_SYNC = READ_CONTROL | SYNCHRONIZE;
+//! What boost::filesystem opens a path with to read its status (and canonical() to resolve it).
+constexpr uint32_t BOOST_STAT = FILE_READ_ATTRIBUTES | FILE_READ_EA;
+//! The rights on Gridcoin\ and on Gridcoin\ipc: their attributes, as a status query reads them,
+//! and their access lists.
+constexpr uint32_t STAT_AND_ACL = READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_READ_EA | SYNCHRONIZE;
 
 } // namespace
 
@@ -318,8 +322,8 @@ BOOST_AUTO_TEST_CASE(layout_ipc_net_dir_nothing_inheritable)
         }
 
         BOOST_CHECK_EQUAL(OnlyAceFor(ipcdir, ServiceOf(sids, net)).mask,
-                          ipc::win::DIR_VIEW_MASK | FILE_ADD_FILE | FILE_DELETE_CHILD);
-        BOOST_CHECK_EQUAL(IPC_SERVICE_MASK, ipc::win::DIR_VIEW_MASK | FILE_ADD_FILE | FILE_DELETE_CHILD);
+                          ipc::win::DIR_VIEW_MASK | FILE_READ_EA | FILE_ADD_FILE | FILE_DELETE_CHILD);
+        BOOST_CHECK_EQUAL(IPC_SERVICE_MASK, ipc::win::DIR_VIEW_MASK | FILE_READ_EA | FILE_ADD_FILE | FILE_DELETE_CHILD);
         BOOST_CHECK_EQUAL(OnlyAceFor(ipcdir, GroupOf(sids, net)).mask, ipc::win::DIR_VIEW_MASK);
         BOOST_CHECK(AcesFor(ipcdir, OtherServiceOf(sids, net)).empty());
         BOOST_CHECK(AcesFor(ipcdir, OtherGroupOf(sids, net)).empty());
@@ -441,6 +445,13 @@ BOOST_AUTO_TEST_CASE(layout_startup_check_paths_readable)
         for (const fs::path& path : checked) {
             BOOST_CHECK_EQUAL(GrantedTo(layout, path, OtherServiceOf(sids, net)), 0U);
         }
+
+        // The directory above the IPC directory, which the core's preparation of that directory
+        // makes sure exists (MakeIpcDirectory: create_directories reads its status), shared by
+        // both networks' IPC directories.
+        const fs::path ipc_parent = IpcDir(pd, net).parent_path();
+        BOOST_CHECK_MESSAGE(GrantedTo(layout, ipc_parent, ServiceOf(sids, net)) & FILE_READ_ATTRIBUTES,
+                            ipc_parent.string() << ": the service cannot read its attributes");
     }
 }
 
@@ -454,10 +465,10 @@ BOOST_AUTO_TEST_CASE(layout_root_lets_each_service_read_its_access_list)
     const LayoutSids sids = Sids();
     const std::vector<LayoutEntry> layout = Layout();
 
-    BOOST_CHECK_EQUAL(ROOT_SERVICE_MASK, READ_ACL_SYNC);
+    BOOST_CHECK_EQUAL(ROOT_SERVICE_MASK, STAT_AND_ACL);
     for (const Network net : Networks()) {
         const AceSpec svc = OnlyAceFor(EntryAt(layout, root), ServiceOf(sids, net));
-        BOOST_CHECK_EQUAL(svc.mask, READ_ACL_SYNC);
+        BOOST_CHECK_EQUAL(svc.mask, STAT_AND_ACL);
         BOOST_CHECK(svc.inherit == Inherit::None);
     }
 
@@ -477,10 +488,60 @@ BOOST_AUTO_TEST_CASE(layout_root_lets_each_service_read_its_access_list)
     }
 
     // Nothing on Gridcoin\ is passed down to the service: what it has in the tree comes from the
-    // entries below.
+    // entries below. On ipc it has its own entry, for the status the core reads there, and nothing
+    // there is passed down either.
     BOOST_CHECK_EQUAL(GrantedTo(layout, root / "conf", sids.svc_main), 0U);
-    BOOST_CHECK_EQUAL(GrantedTo(layout, root / "ipc", sids.svc_main), 0U);
     BOOST_CHECK_EQUAL(GrantedTo(layout, root / "elsewhere", sids.svc_test), 0U);
+    BOOST_CHECK_EQUAL(IPC_PARENT_SERVICE_MASK, STAT_AND_ACL);
+    for (const Network net : Networks()) {
+        const AceSpec svc = OnlyAceFor(EntryAt(layout, root / "ipc"), ServiceOf(sids, net));
+        BOOST_CHECK_EQUAL(svc.mask, IPC_PARENT_SERVICE_MASK);
+        BOOST_CHECK(svc.inherit == Inherit::None);
+        BOOST_CHECK_EQUAL(GrantedTo(layout, root / "ipc" / "elsewhere", ServiceOf(sids, net)), 0U);
+    }
+}
+
+// I-1 and the start-path table: every call the core's -service -multiprocess start makes on a
+// layout path, with the rights it needs there. Each must be granted by the layout itself.
+BOOST_AUTO_TEST_CASE(layout_start_path_calls_succeed)
+{
+    const fs::path pd = ProgramData();
+    const fs::path root = GridcoinRoot(pd);
+    const LayoutSids sids = Sids();
+    const std::vector<LayoutEntry> layout = Layout();
+
+    for (const Network net : Networks()) {
+        const fs::path ipcdir = IpcDir(pd, net);
+        const std::vector<std::pair<fs::path, uint32_t>> calls{
+            // CreateOwnerOnlyDirectory(<datadir>), from GetDataDirPath: create_directories(Gridcoin\).
+            {root, BOOST_STAT},
+            // The autounlock chain check (GetNamedSecurityInfoW).
+            {root, READ_CONTROL},
+            // CheckDataDirOption and GetDataDirPath: is_directory(-datadir); canonical() of it in
+            // AttachGroupIpcDirRefusal; the file ID in DataDirectoryIds.
+            {DataDir(pd, net), BOOST_STAT | READ_CONTROL},
+            // The network data directory and everything the core makes in it.
+            {NetDataDir(pd, net), FULL_ACCESS},
+            // MakeIpcDirectory: create_directories(Gridcoin\ipc).
+            {ipcdir.parent_path(), BOOST_STAT},
+            // canonical(-ipcdir) in AttachGroupIpcDirRefusal; CreateDirectoryWithAcl's open of an
+            // existing directory; OpenNoFollow in ApplyAttachGroupDirectoryAccess and
+            // ServerIpcDirRefusal.
+            {ipcdir, BOOST_STAT | READ_CONTROL},
+            // bind() makes node.sock; the cookie is written beside it and renamed over the old one;
+            // a stale socket is removed.
+            {ipcdir, FILE_ADD_FILE | FILE_DELETE_CHILD},
+            // ReadConfigFiles (_wfopen "r"), CleanConfig and IsConfigFileEmpty (ifstream).
+            {ConfPath(pd, net), CONF_READ_MASK},
+        };
+
+        for (const auto& [path, needed] : calls) {
+            const uint32_t granted = GrantedTo(layout, path, ServiceOf(sids, net));
+            BOOST_CHECK_MESSAGE((granted & needed) == needed,
+                                path.string() << ": the service gets " << strprintf("0x%08x", granted)
+                                              << ", not all of " << strprintf("0x%08x", needed));
+        }
+    }
 }
 
 BOOST_AUTO_TEST_CASE(virtual_service_sid_vectors)
@@ -660,11 +721,20 @@ BOOST_AUTO_TEST_CASE(missing_conf_lines)
     BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Main, "", "NEW"),
                       "rpcuser=gridcoinrpc\nrpcpassword=NEW\nrpcserviceuser=NT SERVICE\\gridcoinresearchd\n");
 
-    // A name set anywhere, in a section, with spaces or empty, is left as it is.
+    // A name set at the top or in the network's section, with spaces or empty, is left as it is.
+    // A "test." name under [main] is in the main section, as ArgsManager reads it.
     BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Main,
                                               "rpcuser=admin\n[main]\nrpcpassword = secret\r\n"
                                               "test.rpcserviceuser=NT SERVICE\\other\n",
                                               "NEW"),
+                      "[main]\nrpcserviceuser=NT SERVICE\\gridcoinresearchd\n");
+    BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Main,
+                                              "rpcuser=admin\n[main]\nrpcpassword = secret\r\n"
+                                              "rpcserviceuser=NT SERVICE\\other\n",
+                                              "NEW"),
+                      "");
+    BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Test,
+                                              "test.rpcuser=a\n[test]\nrpcpassword=b\nnorpcserviceuser=1\n", "NEW"),
                       "");
     BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Main, "rpcuser=\nrpcserviceuser=x\n", "NEW"),
                       "rpcpassword=NEW\n");
@@ -672,6 +742,36 @@ BOOST_AUTO_TEST_CASE(missing_conf_lines)
     // A comment does not set a name.
     BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Main, "# rpcpassword=old\nrpcuser=a\nrpcserviceuser=x\n", "NEW"),
                       "rpcpassword=NEW\n");
+}
+
+// M-2, the review's first case: a name set only for the other network does not count.
+BOOST_AUTO_TEST_CASE(missing_conf_lines_counts_only_the_networks_own_section)
+{
+    BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Main,
+                                              "rpcuser=a\nrpcpassword=b\n[test]\nrpcserviceuser=x\n", "NEW"),
+                      "[main]\nrpcserviceuser=NT SERVICE\\gridcoinresearchd\n");
+    BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Main, "rpcuser=a\nrpcpassword=b\ntest.rpcserviceuser=x\n",
+                                              "NEW"),
+                      "rpcserviceuser=NT SERVICE\\gridcoinresearchd\n");
+    BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Test, "[main]\nrpcuser=a\nrpcpassword=b\nrpcserviceuser=c\n",
+                                              "NEW"),
+                      "[test]\nrpcuser=gridcoinrpc\nrpcpassword=NEW\nrpcserviceuser=NT SERVICE\\gridcointestnetd\n");
+    BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Test, "main.rpcuser=a\nrpcpassword=b\nrpcserviceuser=c\n",
+                                              "NEW"),
+                      "rpcuser=gridcoinrpc\n");
+}
+
+// M-2, the review's second case: the lines go under the network's own header, not into whatever
+// section the file ends in.
+BOOST_AUTO_TEST_CASE(missing_conf_lines_go_under_the_networks_own_header)
+{
+    BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Test, "[main]\nrpcport=1\n", "NEW"),
+                      "[test]\nrpcuser=gridcoinrpc\nrpcpassword=NEW\nrpcserviceuser=NT SERVICE\\gridcointestnetd\n");
+    BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Main, "rpcuser=a\n[test]\nrpcport=1", "NEW"),
+                      "\n[main]\nrpcpassword=NEW\nrpcserviceuser=NT SERVICE\\gridcoinresearchd\n");
+    // Without a header the lines are at the top, where they count for both networks.
+    BOOST_CHECK_EQUAL(MissingServiceConfLines(Network::Test, "rpcport=1\n", "NEW"),
+                      "rpcuser=gridcoinrpc\nrpcpassword=NEW\nrpcserviceuser=NT SERVICE\\gridcointestnetd\n");
 }
 
 BOOST_AUTO_TEST_CASE(state_file_value)
@@ -693,16 +793,147 @@ BOOST_AUTO_TEST_CASE(firewall_rule_args_exact)
     BOOST_CHECK(FirewallRuleName(Network::Main) == L"Gridcoin service (gridcoinresearchd)");
     BOOST_CHECK(FirewallRuleName(Network::Test) == L"Gridcoin service (gridcointestnetd)");
 
-    const std::wstring add = FirewallAddRuleArgs(Network::Main, DaemonExe());
+    BOOST_CHECK(FirewallStagingRuleName(Network::Main) == L"Gridcoin service (gridcoinresearchd) (new)");
+    BOOST_CHECK(FirewallStagingRuleName(Network::Test) == L"Gridcoin service (gridcointestnetd) (new)");
+
+    const std::wstring add = FirewallAddRuleArgs(Network::Main, DaemonExe(), FirewallRuleName(Network::Main));
     BOOST_CHECK_MESSAGE(add == L"advfirewall firewall add rule name=\"Gridcoin service (gridcoinresearchd)\" dir=in "
                                L"action=allow "
                                L"program=\"C:\\Program Files\\GridcoinResearch\\daemon\\gridcoinresearchd.exe\" "
                                L"service=gridcoinresearchd protocol=TCP profile=domain,private",
                         Shown(add));
 
-    const std::wstring remove = FirewallDeleteRuleArgs(Network::Test);
+    const std::wstring staged = FirewallAddRuleArgs(Network::Test, DaemonExe(), FirewallStagingRuleName(Network::Test));
+    BOOST_CHECK_MESSAGE(staged == L"advfirewall firewall add rule name=\"Gridcoin service (gridcointestnetd) (new)\" "
+                                  L"dir=in action=allow "
+                                  L"program=\"C:\\Program Files\\GridcoinResearch\\daemon\\gridcoinresearchd.exe\" "
+                                  L"service=gridcointestnetd protocol=TCP profile=domain,private",
+                        Shown(staged));
+
+    const std::wstring show = FirewallShowRuleArgs(FirewallRuleName(Network::Main));
+    BOOST_CHECK_MESSAGE(show == L"advfirewall firewall show rule name=\"Gridcoin service (gridcoinresearchd)\"",
+                        Shown(show));
+
+    const std::wstring remove = FirewallDeleteRuleArgs(FirewallRuleName(Network::Test));
     BOOST_CHECK_MESSAGE(remove == L"advfirewall firewall delete rule name=\"Gridcoin service (gridcointestnetd)\"",
                         Shown(remove));
+
+    const std::wstring rename =
+        FirewallRenameRuleArgs(FirewallStagingRuleName(Network::Main), FirewallRuleName(Network::Main));
+    BOOST_CHECK_MESSAGE(rename == L"advfirewall firewall set rule name=\"Gridcoin service (gridcoinresearchd) (new)\" "
+                                  L"new name=\"Gridcoin service (gridcoinresearchd)\"",
+                        Shown(rename));
+}
+
+// M-1: who may own what install finds in a layout directory that was there before it.
+BOOST_AUTO_TEST_CASE(level_entry_owners_and_refusals)
+{
+    const fs::path pd = ProgramData();
+    const fs::path root = GridcoinRoot(pd);
+    const LayoutSids sids = Sids();
+    const std::vector<LayoutEntry> layout = Layout();
+    const Sid user = SidOf("S-1-5-21-1004336348-1177238915-682003330-1005");
+    const std::vector<Sid> admin_owners{sids.admins, sids.system, winacl::wellknown::TrustedInstaller()};
+
+    BOOST_CHECK(LevelEntryOwners(pd, root, sids) == admin_owners);
+    BOOST_CHECK(LevelEntryOwners(pd, root / "conf", sids) == admin_owners);
+    BOOST_CHECK(LevelEntryOwners(pd, root / "ipc", sids) == admin_owners);
+    for (const Network net : Networks()) {
+        std::vector<Sid> service_owners = admin_owners;
+        service_owners.push_back(ServiceOf(sids, net));
+        BOOST_CHECK(LevelEntryOwners(pd, DataDir(pd, net), sids) == service_owners);
+        BOOST_CHECK(LevelEntryOwners(pd, IpcDir(pd, net), sids) == service_owners);
+    }
+
+    const auto facts = [](const fs::path& path, std::optional<Sid> owner, bool link = false) {
+        LevelEntryFacts entry;
+        entry.path = path;
+        entry.link = link;
+        entry.owner = std::move(owner);
+        return entry;
+    };
+    const auto refusal = [&](const fs::path& level, const LevelEntryFacts& entry) {
+        return LevelEntryRefusal(layout, pd, level, entry, sids);
+    };
+
+    // A file the administrators or the system made is fine, one another account made is refused,
+    // with its path and owner.
+    BOOST_CHECK(!refusal(root / "conf", facts(StatePath(pd, Network::Main), sids.admins)));
+    BOOST_CHECK(!refusal(root / "conf", facts(root / "conf" / "notes.txt", sids.system)));
+    LevelEntryFacts planted = facts(StatePath(pd, Network::Test), user);
+    planted.owner_name = "W10-1\\svcsec-b";
+    const std::optional<std::string> refused = refusal(root / "conf", planted);
+    BOOST_REQUIRE(refused.has_value());
+    BOOST_CHECK(Contains(*refused, StatePath(pd, Network::Test).string()));
+    BOOST_CHECK(Contains(*refused, "W10-1\\svcsec-b (S-1-5-21-1004336348-1177238915-682003330-1005)"));
+
+    // A service's entries are fine in its own data and IPC directories only.
+    BOOST_CHECK(!refusal(DataDir(pd, Network::Main), facts(DataDir(pd, Network::Main) / "wallet.dat", sids.svc_main)));
+    BOOST_CHECK(refusal(DataDir(pd, Network::Main), facts(DataDir(pd, Network::Main) / "wallet.dat", sids.svc_test)));
+    BOOST_CHECK(!refusal(IpcDir(pd, Network::Test), facts(IpcDir(pd, Network::Test) / "node.sock", sids.svc_test)));
+    BOOST_CHECK(refusal(root / "conf", facts(root / "conf" / "x.conf", sids.svc_main)));
+    BOOST_CHECK(refusal(root, facts(root / "x", sids.svc_test)));
+
+    // A link is refused whoever owns it, and so is an entry whose owner cannot be read.
+    const std::optional<std::string> link = refusal(root / "ipc", facts(root / "ipc" / "x", sids.admins, true));
+    BOOST_REQUIRE(link.has_value());
+    BOOST_CHECK(Contains(*link, "link"));
+    BOOST_CHECK(refusal(QuarantineDir(pd), facts(QuarantineDir(pd) / "x", std::nullopt)));
+
+    // A layout entry is checked as a level of its own, whoever owns it.
+    BOOST_CHECK(!refusal(root / "conf", facts(ConfPath(pd, Network::Main), user)));
+    BOOST_CHECK(!refusal(root, facts(DataDir(pd, Network::Test), user, true)));
+}
+
+// M-1: status shows the state file only when the administrators' alone.
+BOOST_AUTO_TEST_CASE(state_file_refusal)
+{
+    using winacl::AceKind;
+    using winacl::ObservedAce;
+    using winacl::ObservedAcl;
+    const auto ace = [](AceKind kind, const Sid& trustee, uint32_t mask, bool inherited) {
+        ObservedAce entry;
+        entry.kind = kind;
+        entry.trustee = trustee;
+        entry.mask = mask;
+        entry.inherited = inherited;
+        return entry;
+    };
+    const Sid admins = winacl::wellknown::Administrators();
+    const Sid system = winacl::wellknown::System();
+    const Sid user = SidOf("S-1-5-21-1004336348-1177238915-682003330-1005");
+
+    // What conf\ passes down to a file made there.
+    ObservedAcl inherited;
+    inherited.owner = admins;
+    inherited.dacl_present = true;
+    inherited.aces = {ace(AceKind::Allow, admins, FULL_ACCESS, true), ace(AceKind::Allow, system, FULL_ACCESS, true)};
+    BOOST_CHECK(!StateFileRefusal(inherited));
+
+    ObservedAcl by_system = inherited;
+    by_system.owner = system;
+    BOOST_CHECK(!StateFileRefusal(by_system));
+
+    ObservedAcl denied = inherited;
+    denied.aces.push_back(ace(AceKind::Deny, user, FULL_ACCESS, false));
+    BOOST_CHECK(!StateFileRefusal(denied));
+
+    ObservedAcl by_user = inherited;
+    by_user.owner = user;
+    BOOST_CHECK(StateFileRefusal(by_user));
+
+    ObservedAcl no_owner = inherited;
+    no_owner.owner.reset();
+    BOOST_CHECK(StateFileRefusal(no_owner));
+
+    ObservedAcl readable = inherited;
+    readable.aces.push_back(ace(AceKind::Allow, winacl::wellknown::Users(), FILE_READ_DATA, false));
+    BOOST_CHECK(StateFileRefusal(readable));
+
+    ObservedAcl no_dacl = inherited;
+    no_dacl.dacl_present = false;
+    no_dacl.aces.clear();
+    BOOST_CHECK(StateFileRefusal(no_dacl));
 }
 
 BOOST_AUTO_TEST_CASE(service_description_names_the_account)

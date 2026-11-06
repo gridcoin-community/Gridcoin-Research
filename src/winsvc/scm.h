@@ -48,13 +48,26 @@ std::wstring ServiceDescription(Network net);
 //! "Gridcoin service (<service>)", the name of the network's inbound firewall rule.
 std::wstring FirewallRuleName(Network net);
 
-//! The arguments of netsh.exe that add the inbound rule for the daemon \p exe:
-//! advfirewall firewall add rule name="<rule>" dir=in action=allow program="<exe>"
-//! service=<service> protocol=TCP profile=domain,private
-std::wstring FirewallAddRuleArgs(Network net, const fs::path& exe);
+//! "Gridcoin service (<service>) (new)": the name of the rule install adds while a rule named
+//! FirewallRuleName is there, until that one is deleted and this one is renamed to it. So a
+//! failed reinstall never leaves the machine without the rule it had.
+std::wstring FirewallStagingRuleName(Network net);
 
-//! The arguments of netsh.exe that delete every rule named FirewallRuleName.
-std::wstring FirewallDeleteRuleArgs(Network net);
+//! The arguments of netsh.exe that add the inbound rule \p name for the daemon \p exe:
+//! advfirewall firewall add rule name="<name>" dir=in action=allow program="<exe>"
+//! service=<service> protocol=TCP profile=domain,private
+std::wstring FirewallAddRuleArgs(Network net, const fs::path& exe, const std::wstring& name);
+
+//! The arguments of netsh.exe that show the rules named \p name, which exits 0 only when there is
+//! one: advfirewall firewall show rule name="<name>"
+std::wstring FirewallShowRuleArgs(const std::wstring& name);
+
+//! The arguments of netsh.exe that delete every rule named \p name.
+std::wstring FirewallDeleteRuleArgs(const std::wstring& name);
+
+//! The arguments of netsh.exe that rename the rules named \p from to \p to:
+//! advfirewall firewall set rule name="<from>" new name="<to>"
+std::wstring FirewallRenameRuleArgs(const std::wstring& from, const std::wstring& to);
 
 //! How long the service manager waits for the core to stop at a system shutdown.
 constexpr uint32_t PRESHUTDOWN_TIMEOUT_MS = 300000;

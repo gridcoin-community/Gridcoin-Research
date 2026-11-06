@@ -10,7 +10,9 @@
 #include "random.h"
 #include "support/cleanse.h"
 #include "tinyformat.h"
+#include "util/fsmodes.h"
 #include "util/strencodings.h"
+#include "util/string.h"
 #include "util/win_acl.h"
 #include "util/winservice.h"
 #include "winsvc/layout.h"
@@ -98,18 +100,60 @@ std::string Shown(const fs::path& path)
     return Shown(path.wstring());
 }
 
-//! The Win32 error \p error as text: Windows' message when it is printable ASCII, and the number.
-std::string Win32Text(DWORD error)
+//! \p message without the line break and full stop Windows ends it with, or empty when it is not
+//! printable ASCII.
+std::string PrintableMessage(std::string message)
 {
-    std::string message = std::system_category().message(static_cast<int>(error));
     while (!message.empty() && (message.back() == '\r' || message.back() == '\n' || message.back() == ' ' ||
                                 message.back() == '.')) {
         message.pop_back();
     }
     const bool printable = std::all_of(message.begin(), message.end(), [](char c) { return c >= 0x20 && c < 0x7f; });
-    if (message.empty() || !printable) return strprintf("error %u", static_cast<unsigned>(error));
+    return printable ? message : std::string();
+}
+
+//! The Win32 error \p error as text: Windows' message when it is printable ASCII, and the number.
+std::string Win32Text(DWORD error)
+{
+    const std::string message = PrintableMessage(std::system_category().message(static_cast<int>(error)));
+    if (message.empty()) return strprintf("error %u", static_cast<unsigned>(error));
 
     return strprintf("%s (error %u)", message, static_cast<unsigned>(error));
+}
+
+//! A status of the network management functions (NetLocalGroupAdd) as text. Their own codes,
+//! NERR_BASE to MAX_NERR, are not in the system's message table: their messages are in
+//! netmsg.dll, loaded from the system directory as data. Any other code is a Win32 error.
+std::string NetApiText(NET_API_STATUS status)
+{
+    if (status < NERR_BASE || status > MAX_NERR) return Win32Text(status);
+
+    std::string message;
+    std::wstring system(MAX_PATH, L'\0');
+    const UINT length = ::GetSystemDirectoryW(system.data(), static_cast<UINT>(system.size()));
+    if (length > 0 && length < system.size()) {
+        system.resize(length);
+        const HMODULE module = ::LoadLibraryExW((system + L"\\netmsg.dll").c_str(), nullptr,
+                                                LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+        if (module) {
+            wchar_t* buffer = nullptr;
+            const DWORD size = ::FormatMessageW(FORMAT_MESSAGE_FROM_HMODULE | FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                                                    FORMAT_MESSAGE_IGNORE_INSERTS,
+                                                module, status, 0, reinterpret_cast<LPWSTR>(&buffer), 0, nullptr);
+            if (size > 0 && buffer) {
+                try {
+                    message = PrintableMessage(WideToUtf8(std::wstring_view(buffer, size)));
+                } catch (const std::range_error&) {
+                    // Not valid UTF-16: the number alone, below.
+                }
+            }
+            if (buffer) ::LocalFree(buffer);
+            ::FreeLibrary(module);
+        }
+    }
+
+    if (message.empty()) return strprintf("NET_API_STATUS %u", static_cast<unsigned>(status));
+    return strprintf("%s (NET_API_STATUS %u)", message, static_cast<unsigned>(status));
 }
 
 [[noreturn]] void ThrowWin32(DWORD error, const std::string& what)
@@ -331,7 +375,7 @@ Sid EnsureLocalGroup(const std::wstring& name, const std::wstring& comment)
     const NET_API_STATUS status = ::NetLocalGroupAdd(nullptr, 1, reinterpret_cast<LPBYTE>(&info), &bad_parameter);
     const bool created = status == NERR_Success;
     if (!created && status != ERROR_ALIAS_EXISTS && status != NERR_GroupExists) {
-        ThrowWin32(status, "NetLocalGroupAdd \"" + Shown(name) + "\"");
+        throw std::runtime_error("NetLocalGroupAdd \"" + Shown(name) + "\": " + NetApiText(status));
     }
 
     const std::optional<Sid> sid = LocalGroupSid(name);
@@ -380,7 +424,10 @@ struct Level
 {
     bool exists{false};
     bool directory{false};
+    //! A reparse point of any kind.
     bool reparse{false};
+    //! A reparse point that names another path: a junction, a symbolic link or a mount point.
+    bool link{false};
     ObservedAcl acl;
 };
 
@@ -390,22 +437,24 @@ Level LevelOf(HANDLE handle, const fs::path& path)
     if (!::GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &info, sizeof(info))) {
         ThrowLastError("read the attributes of " + Shown(path));
     }
+    const fsmodes::WinEntry entry = fsmodes::ClassifyWinEntry(info.FileAttributes, info.ReparseTag);
 
     Level level;
     level.exists = true;
-    level.directory = (info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-    level.reparse = (info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+    level.directory = entry.directory;
+    level.reparse = entry.reparse;
+    level.link = entry.link;
     level.acl = winacl::ReadAcl(handle, /*kernel_object=*/false);
     return level;
 }
 
-//! What is at \p path, without following a reparse point at it. Absent when nothing is there.
-//! Throws when something is there that cannot be opened or read.
-Level ReadLevel(const fs::path& path)
+//! \p path opened as itself with \p access and \p share, and what is there; a null handle and an
+//! absent level when nothing is there. Throws when something is there that cannot be opened or
+//! read.
+std::pair<UniqueHandle, Level> OpenLevel(const fs::path& path, DWORD access, DWORD share)
 {
     DWORD error = 0;
-    const UniqueHandle handle = OpenAsItself(path, READ_CONTROL | FILE_READ_ATTRIBUTES,
-                                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, error);
+    UniqueHandle handle = OpenAsItself(path, access, share, error);
     if (!handle) {
         if (IsNotFound(error)) return {};
         if (error == winacl::WIN32_UNTRUSTED_MOUNT_POINT) {
@@ -413,7 +462,75 @@ Level ReadLevel(const fs::path& path)
         }
         ThrowWin32(error, "open " + Shown(path));
     }
-    return LevelOf(handle.get(), path);
+    Level level = LevelOf(handle.get(), path);
+    return {std::move(handle), std::move(level)};
+}
+
+//! What is at \p path, without following a reparse point at it. Absent when nothing is there.
+//! Throws when something is there that cannot be opened or read.
+Level ReadLevel(const fs::path& path)
+{
+    return OpenLevel(path, READ_CONTROL | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .second;
+}
+
+//! The layout directory \p path held open as itself, without sharing delete, so that while it is
+//! held its path keeps naming it: it cannot be renamed or removed. Opened to read its attributes
+//! and access list and to list its entries.
+std::pair<UniqueHandle, Level> HoldLevel(const fs::path& path)
+{
+    return OpenLevel(path, READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_LIST_DIRECTORY,
+                     FILE_SHARE_READ | FILE_SHARE_WRITE);
+}
+
+//! Each entry directly inside the directory \p dir, which \p handle holds with
+//! FILE_LIST_DIRECTORY, opened as itself, so a link is read and never followed. An entry gone by
+//! the time it is opened is left out. Throws when the directory cannot be listed.
+std::vector<LevelEntryFacts> ReadLevelEntries(HANDLE handle, const fs::path& dir)
+{
+    std::vector<LevelEntryFacts> entries;
+    // 8-byte aligned, as FILE_ID_BOTH_DIR_INFO is.
+    std::vector<uint64_t> buffer(8192);
+    FILE_INFO_BY_HANDLE_CLASS info_class = FileIdBothDirectoryRestartInfo;
+    for (;;) {
+        if (!::GetFileInformationByHandleEx(handle, info_class, buffer.data(),
+                                            static_cast<DWORD>(buffer.size() * sizeof(uint64_t)))) {
+            if (::GetLastError() == ERROR_NO_MORE_FILES) break;
+            ThrowLastError("list " + Shown(dir));
+        }
+        info_class = FileIdBothDirectoryInfo;
+
+        const auto* bytes = reinterpret_cast<const unsigned char*>(buffer.data());
+        for (size_t offset = 0;;) {
+            const auto* info = reinterpret_cast<const FILE_ID_BOTH_DIR_INFO*>(bytes + offset);
+            const std::wstring name(info->FileName, info->FileNameLength / sizeof(WCHAR));
+            if (name != L"." && name != L"..") {
+                const fs::path path = dir / name;
+                DWORD error = 0;
+                const UniqueHandle entry_handle = OpenAsItself(
+                    path, READ_CONTROL | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                    error);
+                if (entry_handle) {
+                    LevelEntryFacts facts;
+                    facts.path = path;
+                    try {
+                        const Level level = LevelOf(entry_handle.get(), path);
+                        facts.link = level.link;
+                        facts.owner = level.acl.owner;
+                        if (facts.owner) facts.owner_name = winacl::AccountNameOf(*facts.owner);
+                    } catch (const std::exception&) {
+                        // Its owner stays unread, which is refused.
+                    }
+                    entries.push_back(std::move(facts));
+                } else if (!IsNotFound(error)) {
+                    ThrowWin32(error, "open " + Shown(path));
+                }
+            }
+            if (info->NextEntryOffset == 0) break;
+            offset += info->NextEntryOffset;
+        }
+    }
+    return entries;
 }
 
 //! Why install may not take over \p level, found at \p entry's path, or nullopt: it is a reparse
@@ -493,6 +610,8 @@ void WriteAll(HANDLE handle, const fs::path& path, const std::string& text)
         if (!::WriteFile(handle, text.data() + done, static_cast<DWORD>(text.size() - done), &written, nullptr)) {
             ThrowLastError("write " + Shown(path));
         }
+        // A write that succeeds and writes nothing would never finish.
+        if (written == 0) throw std::runtime_error("write " + Shown(path) + ": nothing was written");
         done += written;
     }
     if (!::FlushFileBuffers(handle)) ThrowLastError("flush " + Shown(path));
@@ -629,11 +748,31 @@ void BuildConf(const LayoutEntry& entry, Network net)
     memory_cleanse(missing.data(), missing.size());
 }
 
+//! Why install refuses the entries directly inside the layout directory \p entry, held as
+//! \p handle, or nullopt: each one LevelEntryRefusal refuses, named with its owner or as a link.
+std::optional<std::string> PlantedEntries(const std::vector<LayoutEntry>& layout, const fs::path& programdata,
+                                          const LayoutSids& sids, const LayoutEntry& entry, HANDLE handle)
+{
+    std::vector<std::string> found;
+    for (const LevelEntryFacts& facts : ReadLevelEntries(handle, entry.path)) {
+        if (std::optional<std::string> reason = LevelEntryRefusal(layout, programdata, entry.path, facts, sids)) {
+            found.push_back(std::move(*reason));
+        }
+    }
+    if (found.empty()) return std::nullopt;
+
+    return strprintf("%s holds what install did not make, and its access list let other accounts add entries: %s. "
+                     "Check what each one is, remove it, then run install again.",
+                     Shown(entry.path), Join(found, "; "));
+}
+
 //! Everything install would refuse in place, looked at before anything is changed: each
-//! directory of the layout that exists (LevelRefusal), and the network's configuration file when
-//! it exists (CheckConf). The configuration files' lists name no attach group, so \p layout may be
-//! built before the groups exist.
-void Preflight(const std::vector<LayoutEntry>& layout, Network net, const fs::path& programdata)
+//! directory of the layout that exists (LevelRefusal), with, when its access list is not the
+//! layout's, the entries in it (PlantedEntries), and the network's configuration file when it
+//! exists (CheckConf). \p sids names the groups that exist already; a group install has yet to
+//! create is empty, which only makes the lists that name it differ.
+void Preflight(const std::vector<LayoutEntry>& layout, Network net, const fs::path& programdata,
+               const LayoutSids& sids)
 {
     const fs::path own_conf = ConfPath(programdata, net);
     for (const LayoutEntry& entry : layout) {
@@ -644,17 +783,27 @@ void Preflight(const std::vector<LayoutEntry>& layout, Network net, const fs::pa
         }
         if (!entry.directory) continue;
 
-        const Level level = ReadLevel(entry.path);
+        const auto [handle, level] = HoldLevel(entry.path);
         if (!level.exists) continue;
         if (std::optional<std::string> refusal = LevelRefusal(entry, level)) throw Refusal(*refusal);
+
+        // Only a list other than the layout's could have let another account add an entry.
+        if (winacl::CheckMatchesSpec(level.acl, entry.acl)) {
+            if (std::optional<std::string> planted = PlantedEntries(layout, programdata, sids, entry, handle.get())) {
+                throw Refusal(*planted);
+            }
+        }
     }
 }
 
 //! Each directory of \p layout, parents first: created with its owner and access list from the
-//! start (CreateDirectoryWithAcl), or, when it is there, checked again (LevelRefusal) and given them
-//! when they differ. Then the network's configuration file (BuildConf). The other network's
-//! configuration file is its own install's.
-void BuildLayout(const std::vector<LayoutEntry>& layout, Network net, const fs::path& programdata)
+//! start (CreateDirectoryWithAcl), or, when it is there, held open without sharing delete,
+//! checked again (LevelRefusal) and, when its list differs, given the layout's. Its entries are
+//! checked before the list is applied and again after (PlantedEntries), when no other account can
+//! add one, and the list is confirmed through the handle held. Then the network's configuration
+//! file (BuildConf). The other network's configuration file is its own install's.
+void BuildLayout(const std::vector<LayoutEntry>& layout, Network net, const fs::path& programdata,
+                 const LayoutSids& sids)
 {
     const fs::path own_conf = ConfPath(programdata, net);
     for (const LayoutEntry& entry : layout) {
@@ -668,24 +817,71 @@ void BuildLayout(const std::vector<LayoutEntry>& layout, Network net, const fs::
             continue;
         }
 
-        const Level level = ReadLevel(entry.path);
+        const auto [handle, level] = HoldLevel(entry.path);
         if (!level.exists) throw std::runtime_error(Shown(entry.path) + " was removed while install ran");
         if (std::optional<std::string> refusal = LevelRefusal(entry, level)) throw Refusal(*refusal);
 
-        if (std::optional<std::string> differed = winacl::CheckMatchesSpec(level.acl, entry.acl)) {
-            winacl::ApplyAcl(entry.path, entry.acl);
-            Say(strprintf("Set the owner and access list of %s (before: %s)", Shown(entry.path), *differed));
-        } else {
+        const std::optional<std::string> differed = winacl::CheckMatchesSpec(level.acl, entry.acl);
+        if (!differed) {
             Say(strprintf("Kept %s: it has the layout's owner and access list", Shown(entry.path)));
+            continue;
+        }
+
+        if (std::optional<std::string> planted = PlantedEntries(layout, programdata, sids, entry, handle.get())) {
+            throw Refusal(*planted);
+        }
+
+        // By the path, which the handle held keeps naming the directory checked.
+        winacl::ApplyAcl(entry.path, entry.acl);
+        if (std::optional<std::string> not_kept =
+                winacl::CheckMatchesSpec(winacl::ReadAcl(handle.get(), /*kernel_object=*/false), entry.acl)) {
+            throw std::runtime_error(strprintf("%s did not keep the layout's owner and access list (%s)",
+                                               Shown(entry.path), *not_kept));
+        }
+        Say(strprintf("Set the owner and access list of %s (before: %s)", Shown(entry.path), *differed));
+
+        if (std::optional<std::string> planted = PlantedEntries(layout, programdata, sids, entry, handle.get())) {
+            throw Refusal(*planted);
         }
     }
 }
 
 // The firewall.
 
-//! Runs netsh.exe from the system directory with \p args, its output on this console, and returns
-//! its exit code.
-DWORD RunNetsh(const std::wstring& args)
+//! The null device, opened so that a child process can inherit it.
+UniqueHandle OpenNullDevice()
+{
+    SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE};
+    UniqueHandle null_device(::CreateFileW(L"NUL", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                           &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!null_device) ThrowLastError("open NUL");
+    return null_device;
+}
+
+//! An inheritable copy of this process's standard handle \p which, or nullopt when it has none.
+std::optional<UniqueHandle> InheritableStdHandle(DWORD which)
+{
+    const HANDLE handle = ::GetStdHandle(which);
+    if (handle == nullptr || handle == INVALID_HANDLE_VALUE) return std::nullopt;
+
+    HANDLE copy = nullptr;
+    if (!::DuplicateHandle(::GetCurrentProcess(), handle, ::GetCurrentProcess(), &copy, 0, TRUE,
+                           DUPLICATE_SAME_ACCESS)) {
+        return std::nullopt;
+    }
+    return UniqueHandle(copy);
+}
+
+struct AttributeListDeleter
+{
+    void operator()(LPPROC_THREAD_ATTRIBUTE_LIST list) const noexcept { ::DeleteProcThreadAttributeList(list); }
+};
+
+//! Runs netsh.exe from the system directory with \p args and returns its exit code. Its standard
+//! handles are this program's, so its output goes where this program's goes, a file it is
+//! redirected to included; with \p quiet its output goes to the null device instead. Those three
+//! are the only handles it inherits.
+DWORD RunNetsh(const std::wstring& args, bool quiet)
 {
     std::wstring system(MAX_PATH, L'\0');
     const UINT length = ::GetSystemDirectoryW(system.data(), static_cast<UINT>(system.size()));
@@ -694,13 +890,47 @@ DWORD RunNetsh(const std::wstring& args)
 
     const std::wstring netsh = system + L"\\netsh.exe";
     std::wstring command = QuoteArg(netsh) + L" " + args;
-    Say("Running: netsh.exe " + Shown(args));
+    if (!quiet) Say("Running: netsh.exe " + Shown(args));
 
-    STARTUPINFOW startup{};
-    startup.cb = sizeof(startup);
+    // A missing standard handle, or output that is not wanted, is the null device.
+    const UniqueHandle null_device = OpenNullDevice();
+    std::optional<UniqueHandle> input = InheritableStdHandle(STD_INPUT_HANDLE);
+    std::optional<UniqueHandle> output = quiet ? std::nullopt : InheritableStdHandle(STD_OUTPUT_HANDLE);
+    std::optional<UniqueHandle> error = quiet ? std::nullopt : InheritableStdHandle(STD_ERROR_HANDLE);
+    const auto handle_of = [&null_device](const std::optional<UniqueHandle>& handle) {
+        return handle ? static_cast<HANDLE>(handle->get()) : static_cast<HANDLE>(null_device.get());
+    };
+
+    STARTUPINFOEXW startup{};
+    startup.StartupInfo.cb = sizeof(startup);
+    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    startup.StartupInfo.hStdInput = handle_of(input);
+    startup.StartupInfo.hStdOutput = handle_of(output);
+    startup.StartupInfo.hStdError = handle_of(error);
+
+    // Each handle once: the list may not repeat one.
+    std::vector<HANDLE> inherited{startup.StartupInfo.hStdInput, startup.StartupInfo.hStdOutput,
+                                  startup.StartupInfo.hStdError};
+    std::sort(inherited.begin(), inherited.end(), std::less<HANDLE>());
+    inherited.erase(std::unique(inherited.begin(), inherited.end()), inherited.end());
+
+    SIZE_T list_size = 0;
+    ::InitializeProcThreadAttributeList(nullptr, 1, 0, &list_size);
+    std::vector<unsigned char> list_buffer(list_size);
+    const auto list = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(list_buffer.data());
+    if (!::InitializeProcThreadAttributeList(list, 1, 0, &list_size)) {
+        ThrowLastError("InitializeProcThreadAttributeList");
+    }
+    const std::unique_ptr<std::remove_pointer_t<LPPROC_THREAD_ATTRIBUTE_LIST>, AttributeListDeleter> list_guard(list);
+    if (!::UpdateProcThreadAttribute(list, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherited.data(),
+                                     inherited.size() * sizeof(HANDLE), nullptr, nullptr)) {
+        ThrowLastError("UpdateProcThreadAttribute");
+    }
+    startup.lpAttributeList = list;
+
     PROCESS_INFORMATION process{};
-    if (!::CreateProcessW(netsh.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup,
-                          &process)) {
+    if (!::CreateProcessW(netsh.c_str(), command.data(), nullptr, nullptr, TRUE, EXTENDED_STARTUPINFO_PRESENT,
+                          nullptr, nullptr, &startup.StartupInfo, &process)) {
         ThrowLastError("run " + Shown(netsh));
     }
     const UniqueHandle process_handle(process.hProcess);
@@ -712,21 +942,53 @@ DWORD RunNetsh(const std::wstring& args)
     return code;
 }
 
+//! The network's inbound rule for \p exe. When there is none, it is added. When there is one, the
+//! new rule is added under FirewallStagingRuleName first, then the old one is deleted and the new
+//! one renamed, so a failure never leaves the machine without the rule it had.
 void AddFirewallRule(Network net, const fs::path& exe)
 {
-    // A rule of the same name from an earlier install is replaced, not doubled; netsh.exe says
-    // when there was none.
-    RunNetsh(FirewallDeleteRuleArgs(net));
+    const std::wstring rule = FirewallRuleName(net);
+    const std::wstring staging = FirewallStagingRuleName(net);
+    const std::wstring add = FirewallAddRuleArgs(net, exe, rule);
 
-    const DWORD code = RunNetsh(FirewallAddRuleArgs(net, exe));
-    if (code != 0) {
-        throw std::runtime_error(strprintf("netsh.exe could not add the firewall rule \"%s\" (exit code %u). Add it "
-                                           "from an elevated prompt with: netsh.exe %s",
-                                           Shown(FirewallRuleName(net)), static_cast<unsigned>(code),
-                                           Shown(FirewallAddRuleArgs(net, exe))));
+    // A staged rule left by an earlier install that stopped part-way.
+    RunNetsh(FirewallDeleteRuleArgs(staging), /*quiet=*/true);
+
+    if (RunNetsh(FirewallShowRuleArgs(rule), /*quiet=*/true) != 0) {
+        const DWORD code = RunNetsh(add, /*quiet=*/false);
+        if (code != 0) {
+            throw std::runtime_error(strprintf("netsh.exe could not add the firewall rule \"%s\" (exit code %u). "
+                                               "Add it from an elevated prompt with: netsh.exe %s",
+                                               Shown(rule), static_cast<unsigned>(code), Shown(add)));
+        }
+        Say(strprintf("Firewall rule \"%s\": added; inbound TCP to the daemon, on domain and private networks",
+                      Shown(rule)));
+        return;
     }
-    Say(strprintf("Firewall rule \"%s\": inbound TCP to the daemon, on domain and private networks",
-                  Shown(FirewallRuleName(net))));
+
+    const std::wstring rename = FirewallRenameRuleArgs(staging, rule);
+    DWORD code = RunNetsh(FirewallAddRuleArgs(net, exe, staging), /*quiet=*/false);
+    if (code != 0) {
+        throw std::runtime_error(strprintf("netsh.exe could not add the new firewall rule (exit code %u); the rule "
+                                           "\"%s\" that was there is kept as it was",
+                                           static_cast<unsigned>(code), Shown(rule)));
+    }
+    code = RunNetsh(FirewallDeleteRuleArgs(rule), /*quiet=*/false);
+    if (code != 0) {
+        throw std::runtime_error(strprintf("netsh.exe could not delete the old firewall rule \"%s\" (exit code %u), "
+                                           "so both it and \"%s\" are there. Delete the old one, then rename the new "
+                                           "one from an elevated prompt with: netsh.exe %s",
+                                           Shown(rule), static_cast<unsigned>(code), Shown(staging), Shown(rename)));
+    }
+    code = RunNetsh(rename, /*quiet=*/false);
+    if (code != 0) {
+        throw std::runtime_error(strprintf("netsh.exe could not rename the firewall rule \"%s\" to \"%s\" (exit code "
+                                           "%u); it allows the same. Rename it from an elevated prompt with: "
+                                           "netsh.exe %s",
+                                           Shown(staging), Shown(rule), static_cast<unsigned>(code), Shown(rename)));
+    }
+    Say(strprintf("Firewall rule \"%s\": replaced; inbound TCP to the daemon, on domain and private networks",
+                  Shown(rule)));
 }
 
 // The service's settings.
@@ -947,7 +1209,8 @@ std::pair<std::string, bool> EntryStatus(const LayoutEntry& entry)
     return {"ok", true};
 }
 
-//! Prints whose wallet the service holds, from the network's state file.
+//! Prints whose wallet the service holds, from the network's state file, when the file is the
+//! administrators' alone (StateFileRefusal); otherwise that it was not read, and why.
 void ShowStateFile(const fs::path& path)
 {
     DWORD error = 0;
@@ -966,6 +1229,10 @@ void ShowStateFile(const fs::path& path)
         const Level level = LevelOf(handle.get(), path);
         if (level.reparse || level.directory) {
             Say("Wallet: " + Shown(path) + " is not a plain file, so it was not read");
+            return;
+        }
+        if (const std::optional<std::string> refusal = StateFileRefusal(level.acl)) {
+            Say("Wallet: " + Shown(path) + " was not read, as another account may have written it: " + *refusal);
             return;
         }
         std::string text;
@@ -1062,8 +1329,11 @@ void InstallService(const ToolOptions& options)
                                 Shown(names.service), options.net == Network::Test ? " --network=test" : ""));
     }
 
+    // The groups that exist already, so that a level whose list is the layout's is seen to be so.
     LayoutSids sids = ServiceSids();
-    Preflight(ServiceLayout(programdata, sids), options.net, programdata);
+    sids.grp_main = LocalGroupSid(NamesFor(Network::Main).group).value_or(Sid{});
+    sids.grp_test = LocalGroupSid(NamesFor(Network::Test).group).value_or(Sid{});
+    Preflight(ServiceLayout(programdata, sids), options.net, programdata, sids);
 
     // Both networks' groups, as the shared directories name both.
     sids.grp_main = EnsureLocalGroup(NamesFor(Network::Main).group,
@@ -1112,7 +1382,7 @@ void InstallService(const ToolOptions& options)
     }
     Say(strprintf("  Account: %s, %s", Shown(names.account), winacl::FormatSid(*account)));
 
-    BuildLayout(ServiceLayout(programdata, sids), options.net, programdata);
+    BuildLayout(ServiceLayout(programdata, sids), options.net, programdata, sids);
     AddFirewallRule(options.net, exe);
 
     Say(strprintf("Installed. The service stays disabled until a wallet is moved in: gridcoin-service.exe enable "
@@ -1166,10 +1436,12 @@ void UninstallService(const ToolOptions& options)
         Say(strprintf("Service %s: removed", Shown(names.service)));
     }
 
-    const DWORD code = RunNetsh(FirewallDeleteRuleArgs(options.net));
+    const DWORD code = RunNetsh(FirewallDeleteRuleArgs(FirewallRuleName(options.net)), /*quiet=*/false);
     Say(strprintf("Firewall rule \"%s\": %s", Shown(FirewallRuleName(options.net)),
                   code == 0 ? "removed" : strprintf("not removed; netsh.exe exited with %u, as when there is none",
                                                     static_cast<unsigned>(code))));
+    // And one a stopped install left under its staging name.
+    RunNetsh(FirewallDeleteRuleArgs(FirewallStagingRuleName(options.net)), /*quiet=*/true);
 
     // Bottom-up: this network's directories, then, when the other network's service is not
     // installed either, its directories and the shared ones. Only empty ones go.

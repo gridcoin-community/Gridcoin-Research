@@ -128,16 +128,30 @@ std::wstring FirewallRuleName(Network net)
     return L"Gridcoin service (" + NamesFor(net).service + L")";
 }
 
-std::wstring FirewallAddRuleArgs(Network net, const fs::path& exe)
+std::wstring FirewallStagingRuleName(Network net)
 {
-    return L"advfirewall firewall add rule name=" + Quoted(FirewallRuleName(net)) +
-           L" dir=in action=allow program=" + Quoted(WindowsText(exe)) + L" service=" + NamesFor(net).service +
-           L" protocol=TCP profile=domain,private";
+    return FirewallRuleName(net) + L" (new)";
 }
 
-std::wstring FirewallDeleteRuleArgs(Network net)
+std::wstring FirewallAddRuleArgs(Network net, const fs::path& exe, const std::wstring& name)
 {
-    return L"advfirewall firewall delete rule name=" + Quoted(FirewallRuleName(net));
+    return L"advfirewall firewall add rule name=" + Quoted(name) + L" dir=in action=allow program=" +
+           Quoted(WindowsText(exe)) + L" service=" + NamesFor(net).service + L" protocol=TCP profile=domain,private";
+}
+
+std::wstring FirewallShowRuleArgs(const std::wstring& name)
+{
+    return L"advfirewall firewall show rule name=" + Quoted(name);
+}
+
+std::wstring FirewallDeleteRuleArgs(const std::wstring& name)
+{
+    return L"advfirewall firewall delete rule name=" + Quoted(name);
+}
+
+std::wstring FirewallRenameRuleArgs(const std::wstring& from, const std::wstring& to)
+{
+    return L"advfirewall firewall set rule name=" + Quoted(from) + L" new name=" + Quoted(to);
 }
 
 std::optional<ToolOptions> ParseToolArgs(const std::vector<std::string>& args, std::string& error)

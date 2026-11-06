@@ -8,9 +8,7 @@
 #include "winsvc/scm.h"
 #include "winsvc/setup.h"
 
-#ifdef WIN32
 #include "util/system.h"
-#endif
 
 #include <exception>
 #include <iostream>
@@ -21,6 +19,8 @@
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[])
 {
     try {
+        // On Windows: fs::path::string() in UTF-8, as every message here writes it.
+        SetupEnvironment();
 #ifdef WIN32
         // The arguments as UTF-8, from the wide command line.
         util::WinCmdLineArgs utf8_args;
