@@ -40,11 +40,15 @@ param(
     [Parameter(Mandatory = $true)][string]$Installer,
     [Parameter(Mandatory = $true)][string]$Sums,
     [switch]$AllowDowngrade,
-    [string]$SignerFile = (Join-Path $PSScriptRoot 'release-signer.txt')
+    [string]$SignerFile
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# Windows PowerShell 5.1 leaves $PSScriptRoot empty in a parameter default of a script with
+# [CmdletBinding()], so the default is set here.
+if (-not $SignerFile) { $SignerFile = Join-Path $PSScriptRoot 'release-signer.txt' }
 
 . (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')
 . (Join-Path $PSScriptRoot 'Test-GridcoinRelease.ps1')

@@ -22,7 +22,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$GuiPath = (Join-Path $PSScriptRoot '..\gridcoinresearch.exe'),
+    [string]$GuiPath,
     [string]$DataDir = (Join-Path $env:APPDATA 'GridcoinResearch'),
     [switch]$Service,
     [ValidateSet('main', 'test')]
@@ -43,6 +43,10 @@ if (Test-GridcoinElevated) {
 if ($PSBoundParameters.ContainsKey('Network') -and -not $Service) {
     throw '-Network is for the service mode: use it with -Service.'
 }
+
+# Windows PowerShell 5.1 leaves $PSScriptRoot empty in a parameter default of a script with
+# [CmdletBinding()], so the default is set here.
+if (-not $GuiPath) { $GuiPath = Join-Path $PSScriptRoot '..\gridcoinresearch.exe' }
 
 if (-not (Test-Path -LiteralPath $GuiPath)) {
     throw "gridcoinresearch.exe not found at '$GuiPath'. Pass -GuiPath explicitly."

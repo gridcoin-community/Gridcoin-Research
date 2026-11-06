@@ -338,7 +338,26 @@ def rule9(files):
     return failures
 
 
-RULES = (rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9)
+SCRIPT_PATH_RE = re.compile(r"\$(PSScriptRoot|PSCommandPath|MyInvocation)\b", re.IGNORECASE)
+
+
+def rule10(files):
+    """No script-level parameter default reads the script's own path: Windows PowerShell 5.1 leaves
+    $PSScriptRoot empty there in a script with [CmdletBinding()]. Set such a default in the body."""
+    failures = []
+    for path, text in sorted(ps1_files(files).items()):
+        inside = False
+        for number, line in enumerate(text.splitlines(), 1):
+            if re.match(r"param\s*\(", line, re.IGNORECASE):
+                inside = True
+            if inside and SCRIPT_PATH_RE.search(line):
+                failures.append(f"rule 10: {path}:{number}: a parameter default reads the script's path; set it in the body")
+            if inside and line.startswith(")"):
+                inside = False
+    return failures
+
+
+RULES = (rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9, rule10)
 
 GOOD_PS1 = "#Requires -Version 5.1\nSet-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n"
 
@@ -383,6 +402,7 @@ GOOD_FILES = {
 
 # (rule, a file that breaks it) pairs, applied to GOOD_FILES
 BAD_SAMPLES = (
+    (10, {"contrib/windows/Other.ps1": "#Requires -Version 5.1\n[CmdletBinding()]\nparam(\n    [string]$X = (Join-Path $PSScriptRoot 'x')\n)\nSet-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n"}),
     (1, {"contrib/windows/Other.ps1": GOOD_PS1 + "Register-ScheduledTask -User u -Password p\n"}),
     (1, {"contrib/windows/Other.ps1": GOOD_PS1 + "$x = [TASK_LOGON_PASSWORD]\n"}),
     (1, {"build-aux/cpack/x.in": "$p.LogonType  Password\n"}),
