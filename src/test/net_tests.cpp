@@ -16,8 +16,15 @@
 #include "chainparams.h"
 #include "clientversion.h"
 #include "primitives/block.h"
+#include "test/state_guard.h"
+#include "util.h"
+#include "util/time.h"
+#include "version.h"
 
 using namespace std;
+
+// Defined in validation.cpp; the VERSION handler feeds it the peer's height.
+extern CMedianFilter<int> cPeerBlockCounts GUARDED_BY(cs_main);
 
 BOOST_AUTO_TEST_SUITE(net_tests)
 
@@ -202,6 +209,63 @@ BOOST_AUTO_TEST_CASE(deferred_relay_empties_on_flush_and_is_idempotent)
 
     relay.Flush();
     BOOST_CHECK(relay.empty());
+}
+
+// A VERSION message as a peer sends it, header and checksum included, built as
+// CNode::EndMessage() builds one, in the stream version a new connection
+// starts with. The peer passes the handshake's other checks: a client (not
+// NODE_NETWORK, so it is not asked for blocks) at height 1 (so -autoban lets
+// it through), with a non-routable address and the nonce 1, which skips the
+// check for a connection to ourselves.
+static SerializeData VersionMessage(int64_t peer_time)
+{
+    CDataStream ss(SER_NETWORK, INIT_PROTO_VERSION);
+    ss << CMessageHeader(NetMsgType::ARIES, 0);
+    ss << PROTOCOL_VERSION << (uint64_t)NODE_NONE << peer_time << CAddress() << CAddress() << (uint64_t)1
+       << std::string("/net_tests/") << 1;
+
+    const unsigned int size = ss.size() - CMessageHeader::HEADER_SIZE;
+    memcpy(&ss[CMessageHeader::MESSAGE_SIZE_OFFSET], &size, sizeof(size));
+    const uint256 hash = Hash(Span{ss}.subspan(CMessageHeader::HEADER_SIZE));
+    memcpy(&ss[CMessageHeader::CHECKSUM_OFFSET], &hash, 4);
+
+    return SerializeData(ss.begin(), ss.end());
+}
+
+// A peer's time is compared with ours when its VERSION was received, not when
+// the message handler gets to it: while a node catches up, a VERSION can wait
+// behind a block backlog, and the wait must not count as a difference between
+// the clocks. The peer's clock is 30 s ahead. The message is received, the
+// clock moves on by the wait, and then the message is processed. The 600 s
+// wait is longer than the 8-minute window; the peer is accepted because the
+// check uses the receive time.
+BOOST_AUTO_TEST_CASE(version_time_checks_use_the_receive_time)
+{
+    BOOST_REQUIRE(g_peerman);
+    grc_test::StateGuard guard;
+    const CMedianFilter<int> peer_block_counts = WITH_LOCK(cs_main, return cPeerBlockCounts);
+
+    const int64_t received = 1700000000;
+
+    for (const int64_t wait : {0, 300, 600}) {
+        SetMockTime(received);
+        CNode node(INVALID_SOCKET, CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE), "", true);
+        const SerializeData message = VersionMessage(received + 30);
+
+        LOCK(node.cs_vRecvMsg);
+        BOOST_REQUIRE(node.ReceiveMsgBytes(CharCast(UCharCast(message.data())), message.size()));
+
+        SetMockTime(received + wait);
+        g_peerman->ProcessMessages(&node);
+
+        // The handler sets nVersion only once the time check has passed. The
+        // node cannot send its own VERSION back without a socket, so it is
+        // marked for disconnection either way.
+        BOOST_CHECK_MESSAGE(node.nVersion == PROTOCOL_VERSION, "wait " << wait << ": negotiated version " << node.nVersion.load());
+        BOOST_CHECK_MESSAGE(node.nTimeOffset == 30, "wait " << wait << ": time offset " << node.nTimeOffset.load());
+    }
+
+    WITH_LOCK(cs_main, cPeerBlockCounts = peer_block_counts);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

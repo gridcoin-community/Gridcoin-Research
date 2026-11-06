@@ -655,17 +655,25 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LogPrint(BCLog::LogFlags::NOISY, "received aries version %i ...", nVersion);
 
+        // The peer's time is compared with our clock when its message was
+        // received, not when it is processed. The handler works through each
+        // peer's queue in turn, so a VERSION can wait behind another peer's
+        // messages, a block backlog while the node catches up for one, and the
+        // wait would count as a difference between the clocks. nTimeReceived
+        // is in microseconds.
+        const int64_t received_time = nTimeReceived / 1000000;
+
         // Never by signed subtraction: nTime is peer-supplied, and
-        // GetAdjustedTime() - nTime overflows (undefined behaviour) for extreme
-        // values. For nTime == GetAdjustedTime() + INT64_MIN it wraps to
+        // adjusted_received - nTime overflows (undefined behaviour) for extreme
+        // values. For nTime == adjusted_received + INT64_MIN it wraps to
         // INT64_MIN, whose std::abs() is negative, and GCC builds let the peer
         // through with an extreme time sample. WithinTimeDrift() is exact for
         // every pair of times, a mocked clock near either end included.
-        const int64_t adjusted_now = GetAdjustedTime();
+        const int64_t adjusted_received = received_time + GetTimeOffset();
 
-        if (!WithinTimeDrift(nTime, adjusted_now, 8 * 60))
+        if (!WithinTimeDrift(nTime, adjusted_received, 8 * 60))
         {
-            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting unauthorized peer with Network Time %" PRId64 " so far off our adjusted time %" PRId64 "!", nTime, adjusted_now);
+            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting unauthorized peer with Network Time %" PRId64 " so far off our adjusted time %" PRId64 "!", nTime, adjusted_received);
             pfrom->Misbehaving(100);
             pfrom->fDisconnect = true;
             return false;
@@ -782,8 +790,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         pfrom->SetSubVer(strSubVer);
         pfrom->nTrust = 0;
         pfrom->SetAddrLocal(addrMe);
-        // Moved from AddTimeData to here to follow bitcoin's approach.
-        const int64_t nOffsetSample = nTime - GetTime();
+        // Moved from AddTimeData to here to follow bitcoin's approach. Taken
+        // against the receive time, as the check above is: Bitcoin Core takes
+        // it when the message is processed, but its handler takes one message
+        // per peer in turn, so a VERSION never waits behind a backlog there.
+        const int64_t nOffsetSample = nTime - received_time;
         pfrom->nTimeOffset = nOffsetSample;
         pfrom->nStartingHeight = nStartingHeight;
         pfrom->nVersion = nVersion;
