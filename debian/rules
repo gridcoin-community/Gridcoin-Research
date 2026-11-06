@@ -82,12 +82,17 @@ endif
 
 # With autounlock, the helper and its per-user template units go in as files, like the
 # core's template in gridcoinresearchd.install: dh_installsystemd skips template units.
+# dh_install takes the last of several command-line paths as the destination
+# directory, so each call names its own.
 execute_after_dh_install:
 ifeq ($(AUTOUNLOCK),ON)
 	dh_install -pgridcoinresearchd \
 		usr/lib/systemd/system/gridcoin-autounlock@.socket \
 		usr/lib/systemd/system/gridcoin-autounlock@.service \
-		usr/libexec/gridcoin/gridcoin-autounlock-helper
+		usr/lib/systemd/system
+	dh_install -pgridcoinresearchd \
+		usr/libexec/gridcoin/gridcoin-autounlock-helper \
+		usr/libexec/gridcoin
 endif
 
 # The system units are handed to dh_installsystemd as debian/gridcoinresearchd.<unit>
