@@ -18,7 +18,11 @@
 //! DPAPI. The file must be in the layout, for this network, and of the scope this mode
 //! writes: ServiceAccount when the core runs as a Windows service, LocalMachine
 //! otherwise. A LocalMachine file must also give no account but this one, SYSTEM and
-//! Administrators a right to read it or to change it. A sharing or lock violation is
+//! Administrators a right to read it or to change it. A ServiceAccount file must give no
+//! account but this one, SYSTEM, Administrators and TrustedInstaller a right to change it,
+//! to create a file in its directory, or to replace a directory above
+//! (util::winacl::FindForeignWriterOnDataChain); the access lists are never changed. A
+//! sharing or lock violation is
 //! retried twice, after 1 s and 2 s; anything else fails at once.
 //!
 //! Logs its own outcome, never the passphrase or the file's bytes: on a missing file

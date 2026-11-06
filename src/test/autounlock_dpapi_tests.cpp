@@ -309,6 +309,82 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_scope_mismatch)
     BOOST_CHECK_MESSAGE(Contains(error, "Windows service"), error);
 }
 
+namespace {
+//! The machine's autounlock file at \p path rewritten in place as the service's, so that a
+//! case in the service mode needs no DPAPI key of this account's own: what is decrypted
+//! carries its own scope, and the file keeps the owner-only list Store() gave it.
+void MakeServiceFile(const fs::path& path)
+{
+    AutoUnlockBlob blob = StoredBlob(path);
+    blob.scope = BlobScope::ServiceAccount;
+    const std::vector<unsigned char> bytes = SerializeAutoUnlockBlob(blob);
+    BOOST_REQUIRE(!bytes.empty());
+
+    fsbridge::ofstream file(path, std::ios::binary | std::ios::trunc);
+    BOOST_REQUIRE(file.is_open());
+    file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    BOOST_REQUIRE(file.good());
+}
+} // namespace
+
+// The service's fetch refuses a file that another account can change, or whose directory
+// another account can create files in, or whose directories above can be replaced. A directory
+// above its own that lets other accounts create entries, as C:\ProgramData does, is no reason.
+// The access lists are not changed.
+BOOST_AUTO_TEST_CASE(dpapi_service_fetch_refuses_a_foreign_writer_on_the_chain)
+{
+    if (SkipUnderWine()) return;
+
+    TempDataDir datadir;
+    const fs::path path = datadir.BlobPath();
+    const fs::path dir = path.parent_path();
+    DpapiBlobStore store;
+    std::string error;
+
+    const SecureString passphrase("dpapi-service-chain");
+    BOOST_REQUIRE_MESSAGE(store.Store(passphrase, error) == AutoUnlockStoreOutcome::Verified, error);
+    MakeServiceFile(path);
+
+    ServiceMode service(true);
+    std::optional<SecureString> fetched = FetchAutoUnlockFromDpapiBlob(path, error);
+    BOOST_REQUIRE_MESSAGE(fetched.has_value(), error);
+    BOOST_CHECK(*fetched == passphrase);
+
+    // Users may create files in the data directory, above the file's own directory.
+    AclSpec above = util::OwnerOnlyAclSpec(/*inheritable=*/true);
+    above.aces.push_back({wellknown::Users(), FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY, Inherit::None});
+    ApplyAcl(datadir.path, above);
+    fetched = FetchAutoUnlockFromDpapiBlob(path, error);
+    BOOST_REQUIRE_MESSAGE(fetched.has_value(), error);
+
+    // The same in the file's own directory, where a file could be planted.
+    ApplyAcl(dir, above);
+    BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
+    BOOST_CHECK_MESSAGE(Contains(error, "can be changed by another account"), error);
+    BOOST_CHECK_MESSAGE(Contains(error, dir.string()), error);
+    BOOST_CHECK_MESSAGE(Contains(error, "S-1-5-32-545"), error);
+    BOOST_CHECK_MESSAGE(Contains(error, "icacls"), error);
+    const std::optional<std::string> unchanged = CheckMatchesSpec(ReadAcl(dir), above);
+    BOOST_CHECK_MESSAGE(!unchanged.has_value(), unchanged.value_or(""));
+
+    const AutoUnlockStoreStatus status = store.Status();
+    BOOST_CHECK_MESSAGE(Contains(status.problem, "can be changed by another account"), status.problem);
+
+    // Above the file's own directory, a right that can replace an entry is a reason too.
+    ApplyAcl(dir, util::OwnerOnlyAclSpec(/*inheritable=*/true));
+    BOOST_REQUIRE_MESSAGE(FetchAutoUnlockFromDpapiBlob(path, error).has_value(), error);
+    AclSpec replace = util::OwnerOnlyAclSpec(/*inheritable=*/true);
+    replace.aces.push_back({wellknown::Users(), FILE_DELETE_CHILD, Inherit::None});
+    ApplyAcl(datadir.path, replace);
+    BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
+    BOOST_CHECK_MESSAGE(Contains(error, datadir.path.string()), error);
+
+    // The machine's own file keeps its rule: the file's own access list, nothing above it.
+    ServiceMode machine(false);
+    BOOST_REQUIRE_MESSAGE(store.Store(passphrase, error) == AutoUnlockStoreOutcome::Verified, error);
+    BOOST_CHECK_MESSAGE(FetchAutoUnlockFromDpapiBlob(path, error).has_value(), error);
+}
+
 // Stored as a service, the file is for the service account's DPAPI key, and is read back
 // with it. This account's own key stands in for the service account's here. Where this logon
 // cannot use its own key, the case says so as a warning and checks nothing; the product does

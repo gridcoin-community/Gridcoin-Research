@@ -142,9 +142,12 @@ struct CheckedFile
     //! Where, and anything more the reason has to say.
     std::string detail;
     //! Whether the refusal is about the file itself: its size, layout, scope, network or
-    //! access control list. Such a refusal stands until autounlock is set up again. False
-    //! when the file could not be opened or read, which may pass.
+    //! access control list, or those of the directories above it. Such a refusal stands until
+    //! autounlock is set up again, or the access control lists are fixed. False when the file
+    //! could not be opened or read, which may pass.
     bool definite{false};
+    //! What the user is told to do about a definite refusal, when it is not SET_UP_AGAIN.
+    std::string fix;
     //! For a usable file, its bytes and what they hold.
     std::vector<unsigned char> bytes;
     AutoUnlockBlob blob;
@@ -153,7 +156,9 @@ struct CheckedFile
 //! \p file's reason as the fetch reports it.
 std::string Describe(const CheckedFile& file)
 {
-    return file.reason + (file.definite ? std::string("; ") + SET_UP_AGAIN : std::string()) + " (" + file.detail + ")";
+    const std::string fix = file.fix.empty() ? SET_UP_AGAIN : file.fix;
+
+    return file.reason + (file.definite ? "; " + fix : std::string()) + " (" + file.detail + ")";
 }
 
 CheckedFile Refused(std::string reason, std::string detail, bool definite)
@@ -201,6 +206,34 @@ std::optional<CheckedFile> ForeignAccess(HANDLE handle, const fs::path& path)
     return std::nullopt;
 }
 
+//! Why the service's file at \p path is not used: an account other than this one, SYSTEM,
+//! Administrators and TrustedInstaller can change it, create a file in its directory, or
+//! replace a directory above (winacl::FindForeignWriterOnDataChain). nullopt when none can.
+//! Nothing is changed.
+std::optional<CheckedFile> ForeignWriterOnChain(const fs::path& path)
+{
+    std::optional<std::string> writer;
+
+    try {
+        const std::vector<winacl::Sid> allowed{winacl::CurrentTokenUser(), winacl::wellknown::System(),
+                                               winacl::wellknown::Administrators(),
+                                               winacl::wellknown::TrustedInstaller()};
+        writer = winacl::FindForeignWriterOnDataChain(path, allowed);
+    } catch (const std::exception& e) {
+        return Refused("could not read the access control lists of the autounlock file and the directories above it",
+                       Display(path) + ": " + e.what(), /*definite=*/false);
+    }
+
+    if (!writer) return std::nullopt;
+
+    CheckedFile file = Refused("the autounlock file, or a directory above it, can be changed by another account",
+                               *writer, /*definite=*/true);
+    file.fix = "remove that account's right to change it (an administrator can, with icacls); the core does not "
+               "change access control lists";
+
+    return file;
+}
+
 //! One attempt to read and check the file at \p path, without decrypting it. \p
 //! transient is set when it failed with a sharing or lock violation.
 CheckedFile ReadOnce(const fs::path& path, bool& transient)
@@ -233,6 +266,12 @@ CheckedFile ReadOnce(const fs::path& path, bool& transient)
     // account's alone. Checked on the handle that is read, before it is read.
     if (expected == BlobScope::LocalMachine) {
         if (std::optional<CheckedFile> foreign = ForeignAccess(file.get(), path)) return std::move(*foreign);
+    }
+
+    // The service's file, and the directories above it, may be changed only by the service's
+    // own account and the system's. Checked before the file is read.
+    if (expected == BlobScope::ServiceAccount) {
+        if (std::optional<CheckedFile> foreign = ForeignWriterOnChain(path)) return std::move(*foreign);
     }
 
     // One byte more than the limit tells a file that is too large.
