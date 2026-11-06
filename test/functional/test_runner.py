@@ -265,6 +265,13 @@ BASE_SCRIPTS = [
     # disturbing its header, the one corruption class that arms its
     # CheckBlock branch and that Phase 2 coherence recovery does not cover.
     'feature_blockindex_verification.py',
+    # feature_reindex_interrupted.py: a -reindex stopped after its rename or
+    # during its import keeps the blk*.dat.orig files, and a later -reindex
+    # imports them and restores the whole chain.
+    'feature_reindex_interrupted.py',
+    # feature_reindex_loadblock.py: -reindex together with -loadblock is
+    # refused at startup, before any block data file is renamed.
+    'feature_reindex_loadblock.py',
     # feature_no_mainnet_seeds_on_regtest.py: neither compiled-in mainnet seed
     # list -- the DNS seed hostnames resolved at startup, nor the pnSeed
     # addresses injected after 60 seconds with an empty addrman -- may reach a

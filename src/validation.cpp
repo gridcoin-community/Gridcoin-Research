@@ -36,6 +36,7 @@
 #include "wallet/wallet.h"
 #include "txmempool.h"
 
+#include <cstdlib>
 #include <limits>
 #include <set>
 #include <stdexcept>
@@ -1414,12 +1415,23 @@ bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, 
     pindexNew->phashBlock = &(mi->first);
 
     // Write to disk block index
+    //
+    // The block is in mapBlockIndex already, so a failed write stops the node at once, as a failed commit of a
+    // block's connect does in ReorganizeChain(). Returning false would leave a block in the in-memory index that the
+    // database does not record, and a block import would go on past it and delete its source files. The reindex
+    // that the message asks for rebuilds the index from the block files.
     CTxDB txdb;
-    if (!txdb.TxnBegin())
-        return error("%s: txdb.TxnBegin failed", __func__);
+    if (!txdb.TxnBegin()) {
+        error("%s: txdb.TxnBegin failed. This is a fatal error. The block index may be inconsistent. Aborting. "
+              "Please reindex the chain and restart.", __func__);
+        std::_Exit(EXIT_FAILURE);
+    }
     txdb.WriteBlockIndex(CDiskBlockIndex(pindexNew));
-    if (!txdb.TxnCommit())
-        return error("%s: txdb.TxnCommit failed", __func__);
+    if (!txdb.TxnCommit()) {
+        error("%s: txdb.TxnCommit failed. This is a fatal error. The block index may be inconsistent. Aborting. "
+              "Please reindex the chain and restart.", __func__);
+        std::_Exit(EXIT_FAILURE);
+    }
 
     // cs_main is required on entry (declared EXCLUSIVE_LOCKS_REQUIRED in
     // validation.h). The previous explicit LOCK(cs_main) here was redundant on
@@ -1881,8 +1893,12 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
         return error("%s: out of disk space", __func__);
     unsigned int nFile = std::numeric_limits<unsigned int>::max();
     unsigned int nBlockPos = 0;
-    if (!WriteBlockToDisk(block, nFile, nBlockPos, Params().MessageStart()))
+    // A block that cannot be written is a local fault, not a fault of the block, so it is marked as an error rather
+    // than as invalid. A block import stops on it, rather than going on without the block.
+    if (!WriteBlockToDisk(block, nFile, nBlockPos, Params().MessageStart())) {
+        state.Error("block-write-failed");
         return error("%s: WriteToDisk failed", __func__);
+    }
     if (!AddToBlockIndex(block, nFile, nBlockPos, hashProof))
         return error("%s: AddToBlockIndex failed", __func__);
 

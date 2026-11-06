@@ -66,7 +66,8 @@ public:
     static bool GetActualCleanupPath(fs::path& actual_cleanup_path);
 
     //!
-    //! \brief Cleans up previous blockchain data if any is found
+    //! \brief Cleans up previous blockchain data if any is found. With include_blockchain_data_files, that includes the
+    //! blk*.dat files and any blk*.dat.orig files left by a -reindex that did not complete.
     //!
     //! \return Bool on the success of cleanup
     //!
@@ -80,14 +81,17 @@ public:
     static bool ResetBlockchainData(bool include_blockchain_data_files = true);
 
     //!
-    //! \brief Moves the block data files from .dat to .dat.orig in preparation for reindexing.
+    //! \brief Moves the block data files from .dat to .dat.orig in preparation for reindexing. If .dat.orig files from
+    //! a reindex that did not complete are present, they are kept and listed for import, and the .dat files are
+    //! renamed to the numbers after them. No file is renamed over another.
     //! \return Boolean on success/failure
     //!
     static bool MoveBlockDataFiles(std::vector<std::pair<boost::filesystem::path, uintmax_t>>& block_data_files);
 
     //!
     //! \brief Utility function to support the -reindex startup parameter to rebuild txleveldb and accrual from
-    //! existing blockchain data files.
+    //! existing blockchain data files. With cleanup_imported_files, the files are deleted only if every one of them
+    //! was read to its end.
     //! \return Boolean on success/failure
     //!
     static bool LoadBlockchainData(std::vector<std::pair<boost::filesystem::path, uintmax_t>>& block_data_files,

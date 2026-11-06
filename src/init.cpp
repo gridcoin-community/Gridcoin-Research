@@ -1722,6 +1722,24 @@ bool AppInit2(ThreadHandlerPtr threads)
         gArgs.SoftSetBoolArg("-rescan", true);
     }
 
+    // -reindex rebuilds the index from the block data files already on disk, and -loadblock adds the blocks it imports
+    // to the current index as it loads them, so asking for both at once makes no sense. This is checked here, before
+    // -reindex renames any block data file.
+    if (gArgs.GetBoolArg("-reindex") && !gArgs.GetArgs("-loadblock").empty()) {
+        return InitError(_("-reindex and -loadblock cannot be used together. -reindex rebuilds the index from the "
+                           "existing block data files, and -loadblock adds the blocks it imports to the current "
+                           "index. Use one or the other."));
+    }
+
+    // A bootstrap.dat in the data directory is imported in place of either, so it is refused with them here too.
+    if (fs::exists(GetDataDir() / "bootstrap.dat")
+        && (gArgs.GetBoolArg("-reindex") || !gArgs.GetArgs("-loadblock").empty())) {
+        return InitError(_("-reindex and/or -loadblock was specified as a startup parameter and a bootstrap.dat file "
+                           "was found in the data directory. This combination makes no sense. If you intend on "
+                           "loading the blockchain from a bootstrap.dat, then do not specify -reindex or "
+                           "-loadblock."));
+    }
+
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
@@ -2198,7 +2216,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         return false;
     }
 
-    // This is for the second part of the reindex. We need the set to ensure the order is correct.
+    // The block data files that Step 10 imports, in order: those a -reindex sets aside, or those given by -loadblock.
     std::vector<std::pair<fs::path, uintmax_t>> block_data_files_to_load;
 
     // If -reindex argument passed at startup, then remove existing txleveldb and accrual directories and renaming the
@@ -2257,6 +2275,63 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (nFound == 0)
             LogPrintf("No blocks matching %s were found", strMatch);
         return false;
+    }
+
+    // The block data files to import are checked here, before the wallet loads, so that a refused import changes
+    // nothing. Step 2 refuses -reindex together with -loadblock or a bootstrap.dat, and a bootstrap.dat together with
+    // -loadblock, so the first file to import, if there is one, is the bootstrap.dat or the first -loadblock file.
+    fs::path first_import_file;
+
+    if (fs::exists(GetDataDir() / "bootstrap.dat")) {
+        first_import_file = GetDataDir() / "bootstrap.dat";
+    } else if (gArgs.GetArgs("-loadblock").size()) {
+        // Note that it does not make any sense to load a specified block data file that is of the form blk*.dat,
+        // because those are reserved for the permanent block data files of the wallet to which the import is going.
+        // The only difference really between this and the reindex is that we do not need to rename the input files
+        // to .orig.
+        for (const auto& strFile : gArgs.GetArgs("-loadblock")) {
+            // Check it ends with .dat and starts with blk
+            if (strFile.substr(0, 3) == "blk" && strFile.substr(strFile.length() - 4, 4) == ".dat") {
+                return error("%s: a -loadblock argument was provided with a filename of the form blk*.dat "
+                             "that is reserved for the permanent wallet block data files. This does not make "
+                             "any sense. If your intent is to reindex the existing block data files, use "
+                             "-reindex instead.", __func__);
+            }
+
+            fs::path file = GetDataDir() / strFile;
+            uintmax_t file_size = 0;
+
+            try {
+                file_size = fs::file_size(file);
+            } catch (fs::filesystem_error &ex) {
+                return error("%s: The file %s specified by a -loadblock argument cannot be accessed. Please check the "
+                             "file or directory permissions.", __func__, file.filename().string());
+            }
+
+            block_data_files_to_load.push_back(std::make_pair(file, file_size));
+        }
+
+        first_import_file = block_data_files_to_load.front().first;
+    }
+
+    // A chain can be imported in a series of starts, each adding to the index the ones before it built. The first of
+    // the series starts at the genesis block, and must start on an index that holds only genesis: on one that holds
+    // more, the blocks already there would stay in it whether the import reaches them or not. -resetblockchaindata in
+    // the same start resets the index before this point.
+    CBlock first_block;
+    if (!first_import_file.empty() && ReadFirstExternalBlock(first_import_file, first_block)) {
+        LOCK(cs_main);
+
+        if (pindexGenesisBlock && first_block.GetHash(true) == pindexGenesisBlock->GetBlockHash()
+            && mapBlockIndex.size() > 1) {
+            return InitError(strprintf(_("The block import file %s starts at the genesis block, but the block index "
+                                         "already holds more than the genesis block, and those blocks would stay in "
+                                         "it. To import the chain from the genesis block, add -resetblockchaindata, "
+                                         "which removes the existing blockchain data first. To keep the current chain, "
+                                         "do not import this file. A file that starts after the genesis block adds to "
+                                         "the current chain."),
+                                       first_import_file.filename().string()));
+        }
     }
 
     // ********************************************************* Step 7.5: Phase 2 chain-coherence recovery
@@ -2442,14 +2517,9 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 10: import blocks
 
+    // Step 2 refuses a bootstrap.dat together with -reindex or -loadblock.
     fs::path pathBootstrap = GetDataDir() / "bootstrap.dat";
     if (fs::exists(pathBootstrap)) {
-        if (gArgs.GetBoolArg("-reindex") || gArgs.GetArgs("-loadblock").size()) {
-            return error("%s: -reindex and/or -loadblock was specified as a startup parameter and a bootstrap.dat file "
-                         "was found in the data directory. This combination makes no sense. If you intend on loading "
-                         "the blockchain from a bootstrap.dat, then do not specify -reindex or -loadblock.");
-        }
-
         uiInterface.InitMessage(_("Importing bootstrap blockchain data file."));
 
         FILE *file = fsbridge::fopen(pathBootstrap, "rb");
@@ -2464,9 +2534,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
         g_timer.GetTimes("load bootstrap file complete", "init");
     } else {
-        // Finish off the reindexing, if specified. It actually makes sense to allow this in combination with loadblock.
-        // In that situation the reindex (of the existing block data files) comes first before loading more from a
-        // specified external file.
+        // Finish off the reindexing, if specified. Step 2 refuses -reindex together with -loadblock.
         if (gArgs.GetBoolArg("-reindex")) {
             uiInterface.InitMessage(_("Reindexing blockchain from on disk block data files..."));
 
@@ -2479,33 +2547,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (gArgs.GetArgs("-loadblock").size()) {
             uiInterface.InitMessage(_("Importing blockchain data file(s)."));
 
-            // Note that it does not make any sense to load a specified block data file that is of the form blk*.dat,
-            // because those are reserved for the permanent block data files of the wallet to which the import is going.
-            // The only difference really between this and the reindex is that we do not need to rename the input files
-            // to .orig.
-            for (const auto& strFile : gArgs.GetArgs("-loadblock")) {
-                // Check it ends with .dat and starts with blk
-                if (strFile.substr(0, 3) == "blk" && strFile.substr(strFile.length() - 4, 4) == ".dat") {
-                    return error("%s: a -loadblock argument was provided with a filename of the form blk*.dat "
-                                 "that is reserved for the permanent wallet block data files. This does not make "
-                                 "any sense. If your intent is to reindex the existing block data files, use "
-                                 "-reindex instead, or if reindexing the existing block data files and also importing "
-                                 "new ones, use filenames that are not reserved.", __func__);
-                }
-
-                fs::path file = GetDataDir() / strFile;
-                uintmax_t file_size = 0;
-
-                try {
-                    file_size = fs::file_size(file);
-                } catch (fs::filesystem_error &ex) {
-                    return error("%: The file %s specified by a -loadblock argument cannot be accessed. Please check the "
-                                 "file or directory permissions.", __func__, file.filename().string());
-                }
-
-                block_data_files_to_load.push_back(std::make_pair(file, file_size));
-            }
-
+            // Step 7 checked the files given by -loadblock and put them in block_data_files_to_load.
             if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load, false, false)) return false;
 
             g_timer.GetTimes("load blockchain file(s) complete", "init");

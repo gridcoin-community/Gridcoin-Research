@@ -6,6 +6,7 @@
 #ifndef BITCOIN_NODE_BLOCKSTORAGE_H
 #define BITCOIN_NODE_BLOCKSTORAGE_H
 
+#include "fs.h"
 #include "protocol.h"
 #include "sync.h"
 
@@ -40,8 +41,18 @@ FILE* AppendBlockFile(unsigned int& nFileRet);
 //! FileCommit at shutdown, and any time the handle must not outlive the caller.
 //! Requires cs_main. Safe to call when nothing is open.
 void CloseBlockFile();
+
+//! Load the blocks in a file in block data file format through ProcessBlock, skipping blocks already in the index.
+//! Returns true only if the whole file was read: false if a shutdown request, a read error or a block that could not
+//! be stored stopped the load part way, however many blocks it had loaded by then. Takes ownership of fileIn and closes
+//! it.
 bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
                            unsigned int percent_start = 0, unsigned int percent_end = 100);
+
+//! Read the block in the first block record of a file in block data file format, found as LoadExternalBlockFile finds
+//! it, at the first message start. Returns false if the file cannot be opened, has no message start in its first
+//! 64 KiB, or that record does not hold a block.
+bool ReadFirstExternalBlock(const fs::path& path, CBlock& block);
 
 //! Load the block index from LevelDB, creating and writing the genesis block
 //! first on an empty datadir (via CreateGenesisBlock in chainparams.cpp).
