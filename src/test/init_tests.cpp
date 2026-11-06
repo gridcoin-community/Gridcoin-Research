@@ -146,6 +146,8 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
 #endif
 #ifdef WIN32
     refuse.insert("-autounlockblob");
+    refuse.insert("-service");
+    refuse.insert("-allowunsafeimagedir");
 #endif
     for (const auto& type : GRC::RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
         refuse.insert("-clear" + GRC::Contract::Type::ToString(type) + "history");
@@ -180,6 +182,8 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
 #endif
 #ifdef WIN32
     command_line_only.push_back("-autounlockblob");
+    command_line_only.push_back("-service");
+    command_line_only.push_back("-allowunsafeimagedir");
 #endif
     for (const std::string& name : command_line_only) {
         BOOST_CHECK_MESSAGE(all_flags.at(name) & ArgsManager::COMMAND_LINE_ONLY, name);

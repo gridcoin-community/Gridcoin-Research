@@ -48,8 +48,9 @@ void StartShutdown();
 //! fsmodes::AppendToOwnedFile. AppInit2 calls it when an RPC server is being started.
 void AddMissingRpcCredentials();
 //! The configuration file step of AppInit2. With no configuration file that can be read, it
-//! creates the first-run one, exclusively and owner-only, and never over a name that is taken.
-//! An existing file is cleaned of obsolete keys (GRC::CleanConfig) and given missing RPC credentials
+//! creates the first-run one, exclusively and owner-only, and never over a name that is taken;
+//! a Windows service instead stops, as gridcoin-service.exe writes the service's. An existing
+//! file is cleaned of obsolete keys (GRC::CleanConfig) and given missing RPC credentials
 //! (AddMissingRpcCredentials), both only when this account owns it. False, with \p error the
 //! message, when the start must stop.
 bool PrepareConfigFile(std::string& error);

@@ -47,6 +47,7 @@
 #include <util/strencodings.h>
 #include <util/string.h>
 #include <util/syserror.h>
+#include <util/winservice.h>
 #include "consensus/consensus.h"  // MAX_BLOCK_SIZE_GEN
 
 #include <openssl/crypto.h>
@@ -458,6 +459,12 @@ static void HandleSIGHUP(int)
 #else
 static BOOL WINAPI consoleCtrlHandler(DWORD dwCtrlType)
 {
+    // Windows sends a service CTRL_LOGOFF_EVENT whenever any user signs out. Handled, so that
+    // nothing ends the process, and ignored: the service stops on the service manager's word.
+    if (!util::winsvc::ConsoleEventStopsNode(dwCtrlType, util::winsvc::IsRunningAsWindowsService())) {
+        return TRUE;
+    }
+
     SetShutdownRequested();
     Sleep(INFINITE);
     return true;
@@ -731,6 +738,14 @@ bool PrepareConfigFile(std::string& error)
 
     if (IsConfigFileEmpty())
     {
+        // The service's configuration file is gridcoin-service.exe's, owned by the
+        // administrators. The service never writes one of its own.
+        if (util::winsvc::IsRunningAsWindowsService()) {
+            error = strprintf("The configuration file %s does not exist or cannot be read. %s",
+                              GetConfigFile().string(), util::winsvc::SERVICE_CONF_SETUP);
+            return false;
+        }
+
         if (CreateNewConfigFile()) {
             std::string error_msg;
 
@@ -1227,6 +1242,20 @@ void SetupServerArgs()
 #else
     hidden_args.emplace_back("-daemon");
     hidden_args.emplace_back("-daemonwait");
+#endif
+
+#ifdef WIN32
+    // gridcoinresearchd reads it from the command line before the arguments are parsed
+    // (util::winsvc::HasServiceFlag), so that it reaches the service manager in time. It is
+    // registered so that the parse accepts it.
+    argsman.AddArg("-service", "Run as the Windows service that gridcoin-service.exe install sets up. Only the service "
+                   "control manager starts the core this way. Command line only.",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-allowunsafeimagedir", "Developers only: with -service or -multiprocess, start even when an account "
+                   "other than the administrators (and, without -service, this one) can change this program or a "
+                   "directory above it, and log a warning instead. Command line only.",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::DEBUG_ONLY | ArgsManager::COMMAND_LINE_ONLY,
+                   OptionsCategory::DEBUG_TEST);
 #endif
 
     // Additional hidden options

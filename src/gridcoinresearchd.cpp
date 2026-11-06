@@ -29,6 +29,16 @@
 #include "wallet/autounlock.h"
 #include "wallet/wallet.h"
 
+#ifdef WIN32
+#include "util/win_acl.h"
+#include "util/winservice.h"
+
+#include <string>
+#include <vector>
+
+#include <windows.h>
+#endif
+
 #ifdef ENABLE_MULTIPROCESS
 #include "interfaces/init.h"
 #include "interfaces/ipc.h"
@@ -44,12 +54,12 @@
 #include "wallet/wallet.h" // pwalletMain / CWallet::GetWalletUuid for the identity token
 #include <atomic>
 #include <memory>
-#include <optional>
 #endif
 
 #include <boost/thread.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <csignal>
+#include <optional>
 #include <stdio.h>
 #include <stdexcept>
 
@@ -124,6 +134,66 @@ int fork_daemon(bool nochdir, bool noclose, TokenPipeEnd& endpoint)
     return 0;
 }
 
+#endif
+
+#ifdef WIN32
+//! Why this service may not run under the account its token holds, or nullopt when that is its
+//! own virtual account (util::winsvc::ServiceAccountRefusal).
+static std::optional<std::string> ServiceAccountProblem()
+{
+    try {
+        const util::winacl::Sid user = util::winacl::CurrentTokenUser();
+        return util::winsvc::ServiceAccountRefusal(user, util::winsvc::AccountName(user),
+                                                   util::winsvc::ServiceName());
+    } catch (const std::exception& e) {
+        return strprintf("The Gridcoin service could not read the account it runs as: %s", e.what());
+    }
+}
+
+//! Why the core may not start from its executable's directory, or nullopt: an account outside
+//! util::winsvc::ImageDirectoryAllowed() can change the executable or a directory above it
+//! (util::winacl::FindForeignWriterOnChain). With -allowunsafeimagedir the reason is logged
+//! instead and nullopt returned. An access list that cannot be read is a reason too.
+static std::optional<std::string> ImageDirectoryProblem()
+{
+    const bool allow_unsafe = gArgs.GetBoolArg("-allowunsafeimagedir", false);
+    fs::path exe;
+    std::optional<std::string> reason;
+
+    try {
+        std::wstring module(MAX_PATH, L'\0');
+        for (;;) {
+            const DWORD length = ::GetModuleFileNameW(nullptr, module.data(), static_cast<DWORD>(module.size()));
+            if (length == 0) {
+                throw std::runtime_error(strprintf("GetModuleFileNameW failed with error %u",
+                                                   static_cast<unsigned>(::GetLastError())));
+            }
+            if (length < module.size()) {
+                module.resize(length);
+                break;
+            }
+            // Cut short: try again with room for the whole path.
+            module.resize(module.size() * 2);
+        }
+        exe = fs::path(module);
+
+        const std::vector<util::winacl::Sid> allowed = util::winsvc::ImageDirectoryAllowed(
+            util::winsvc::IsRunningAsWindowsService(), util::winacl::CurrentTokenUser());
+        reason = util::winacl::FindForeignWriterOnChain(exe, allowed);
+    } catch (const std::exception& e) {
+        reason = strprintf("its access lists could not be read (%s)", e.what());
+    }
+
+    if (!reason) return std::nullopt;
+
+    const std::string message = util::winsvc::ImageDirectoryMessage(exe, *reason, allow_unsafe);
+    if (allow_unsafe) {
+        LogPrintf("%s", message);
+        return std::nullopt;
+    }
+
+    return message;
+}
 #endif
 
 bool AppInit(int argc, char* argv[])
@@ -203,8 +273,19 @@ bool AppInit(int argc, char* argv[])
 
         std::string error_msg;
         const auto config_error = [&error_msg] {
-            return InitError(strprintf("Config file cannot be parsed%s. Cannot continue.\n",
-                                       error_msg.empty() ? "" : ": " + error_msg));
+#ifdef WIN32
+            // The service's configuration file is named on its command line, and is not one it
+            // writes. A service has no console, so the error goes to debug.log as well.
+            std::string service_hint;
+            if (util::winsvc::IsRunningAsWindowsService()) {
+                service_hint = std::string(" ") + util::winsvc::SERVICE_CONF_SETUP;
+                InitLogging();
+            }
+#else
+            const std::string service_hint;
+#endif
+            return InitError(strprintf("Config file cannot be parsed%s. Cannot continue.%s\n",
+                                       error_msg.empty() ? "" : ": " + error_msg, service_hint));
         };
 
         if (!gArgs.ReadConfigFiles(error_msg, true))
@@ -247,6 +328,17 @@ bool AppInit(int argc, char* argv[])
             return !CommandLineRPC(argc, argv);
         }
 
+#ifdef WIN32
+        // A service under any account but its own virtual one stops here, before it reads or
+        // writes its settings file, and logs why.
+        if (util::winsvc::IsRunningAsWindowsService()) {
+            if (const std::optional<std::string> refusal = ServiceAccountProblem()) {
+                InitLogging();
+                return InitError(*refusal);
+            }
+        }
+#endif
+
         if (!gArgs.InitSettings(error)) {
             return InitError("Error initializing settings.\n" + error);
         }
@@ -275,6 +367,21 @@ bool AppInit(int argc, char* argv[])
         if (gArgs.GetBoolArg("-nonewprivs", DEFAULT_NO_NEW_PRIVS)) {
             HardenProcess();
         }
+
+#ifdef WIN32
+        if (util::winsvc::IsRunningAsWindowsService()) {
+            LogPrintf("Service token: %s", util::winsvc::DescribeProcessToken());
+        }
+
+        // A core that serves other processes (-multiprocess, and the service, which is one) must
+        // start from where only the administrators, and outside the service this account, can
+        // change it. Before anything is loaded or served.
+        if (util::winsvc::IsRunningAsWindowsService() || gArgs.GetBoolArg("-multiprocess", false)) {
+            if (const std::optional<std::string> refusal = ImageDirectoryProblem()) {
+                return InitError(*refusal);
+            }
+        }
+#endif
 
 #ifdef ENABLE_MULTIPROCESS
         // The attach group's checks need only the arguments and the data directory, so a
@@ -652,6 +759,18 @@ int main(int argc, char* argv[])
 
     // Connect bitcoind signal handlers
     noui_connect();
+
+#ifdef WIN32
+    // Read before AppInit, as the service manager waits only a short time for a service to reach
+    // its dispatcher. The arguments as AppInit reads them, in UTF-8.
+    {
+        util::WinCmdLineArgs utf8_args;
+        const auto [utf8_argc, utf8_argv] = utf8_args.get();
+        if (util::winsvc::HasServiceFlag(utf8_argc, utf8_argv)) {
+            return util::winsvc::RunAsService([argc, argv] { return AppInit(argc, argv); });
+        }
+    }
+#endif
 
     return (AppInit(argc, argv) ? EXIT_SUCCESS : EXIT_FAILURE);
 }

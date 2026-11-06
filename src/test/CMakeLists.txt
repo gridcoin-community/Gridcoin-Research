@@ -239,6 +239,7 @@ add_executable(test_gridcoin
     wallet_tests.cpp
     walletdump_tests.cpp
     win_acl_tests.cpp
+    winservice_tests.cpp
 )
 
 # As in src/ipc/CMakeLists.txt: GCC before 13 ignores handshake.cpp's #pragma for
