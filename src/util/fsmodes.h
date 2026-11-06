@@ -166,9 +166,17 @@ WinEntry ClassifyWinEntry(uint32_t attributes, uint32_t reparse_tag);
 //! without the list (CopyFileOwnerOnly, CheckBackupDir). nullopt when the failure is not such a
 //! refusal, and nothing is created. A refusal is an owner, group, ACL or descriptor the volume
 //! does not take, an operation it does not support, or a privilege not held; on a network share
-//! (\p remote, the parent directory as its handle shows it) also a refusal of access, which a
-//! share may give for the same reason. Pure.
+//! (\p remote, the parent directory as OnNetworkShare reads it) also a refusal of access, which
+//! a share may give for the same reason. Pure.
 std::optional<std::string> AclRefusedBy(uint32_t error, bool remote);
+
+//! Whether the directory a new file is created in is on a network share, AclRefusedBy's
+//! \p remote. \p final_path is the directory's final path as a handle on it gives it
+//! (GetFinalPathNameByHandleW, VOLUME_NAME_DOS), which for anything a network redirector
+//! serves has the UNC form \\?\UNC\server\share\..., or nullopt when the directory could not be
+//! opened or its final path could not be read. Then \p by_name decides, the check on the
+//! directory's name (its volume's drive type); it is called only then. Reads nothing else.
+bool OnNetworkShare(const std::optional<std::wstring>& final_path, const std::function<bool()>& by_name);
 
 //! What the startup check of the backup directory found.
 struct BackupDirCheck

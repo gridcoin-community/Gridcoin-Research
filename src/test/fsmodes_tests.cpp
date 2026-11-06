@@ -599,6 +599,29 @@ BOOST_AUTO_TEST_CASE(acl_refused_by_names_the_volume_or_the_share)
     }
 }
 
+// The directory's final path decides whether it is on a share: the UNC form is what a network
+// redirector serves, however the directory was reached. Where that path could not be read, the
+// check on the name decides, so a refusal of access on a share is still retried.
+BOOST_AUTO_TEST_CASE(network_share_from_the_final_path_or_else_the_name)
+{
+    int asked = 0;
+    const auto by_name = [&asked](bool answer) {
+        return std::function<bool()>([&asked, answer] {
+            ++asked;
+            return answer;
+        });
+    };
+
+    BOOST_CHECK(fsmodes::OnNetworkShare(std::wstring{L"\\\\?\\UNC\\server\\share\\backups"}, by_name(false)));
+    BOOST_CHECK(!fsmodes::OnNetworkShare(std::wstring{L"\\\\?\\C:\\Users\\x\\backups"}, by_name(true)));
+    BOOST_CHECK(!fsmodes::OnNetworkShare(std::wstring{L"\\\\?\\Volume{0}\\backups"}, by_name(true)));
+    BOOST_CHECK_EQUAL(asked, 0);
+
+    BOOST_CHECK(fsmodes::OnNetworkShare(std::nullopt, by_name(true)));
+    BOOST_CHECK(!fsmodes::OnNetworkShare(std::nullopt, by_name(false)));
+    BOOST_CHECK_EQUAL(asked, 2);
+}
+
 // The startup warning for a backup directory whose files cannot be owner-only names the
 // cause and says what it means: backups are still written, and other users may read them.
 // It does not tell the user to make a writable directory writable.

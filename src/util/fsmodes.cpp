@@ -198,6 +198,17 @@ std::optional<std::string> AclRefusedBy(uint32_t error, bool remote)
     return std::nullopt;
 }
 
+bool OnNetworkShare(const std::optional<std::wstring>& final_path, const std::function<bool()>& by_name)
+{
+    // Without a final path the directory is not taken to be local, where a refusal of access
+    // would not be retried: the name still shows a share reached by a UNC path or a mapped
+    // drive letter.
+    if (!final_path) return by_name();
+
+    const std::wstring unc = L"\\\\?\\UNC\\";
+    return final_path->compare(0, unc.size(), unc) == 0;
+}
+
 WinEntry ClassifyWinEntry(uint32_t attributes, uint32_t reparse_tag)
 {
     WinEntry entry;
@@ -711,36 +722,58 @@ bool VolumeKeepsAcls(HANDLE handle)
     return (flags & FILE_PERSISTENT_ACLS) != 0;
 }
 
-//! Whether the directory that \p path is created in is on a network share, as a handle on it
-//! shows. The directory is opened following any link at it, as a backup directory moved behind
-//! a link is supported, and its final path is read (GetFinalPathNameByHandleW): what a network
-//! redirector serves has a UNC final path, \\?\UNC\server\share\..., however it was reached,
-//! through a mapped drive letter, a UNC path or a symbolic link to one. GetVolumePathNameW on the
-//! name would not see through such a link. A directory that cannot be opened or asked counts as
-//! local, where a refusal of access is not retried.
-bool ParentOnShare(const fs::path& path)
+//! The final path of the directory \p dir as a handle on it shows it (GetFinalPathNameByHandleW,
+//! VOLUME_NAME_DOS), or nullopt when the directory cannot be opened or the path cannot be read.
+//! What a network redirector serves has a UNC final path, \\?\UNC\server\share\..., however it
+//! was reached: through a mapped drive letter, a UNC path or a symbolic link to one.
+std::optional<std::wstring> FinalPathOf(const fs::path& dir)
 {
-    const fs::path dir = path.has_parent_path() ? path.parent_path() : fs::path(".");
+    // Opened following any link at it, as a backup directory moved behind a link is supported,
+    // so the handle is on the directory the link leads to.
     const UniqueHandle handle(::CreateFileW(dir.wstring().c_str(), FILE_READ_ATTRIBUTES,
                                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
                                             OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr));
-    if (!handle) return false;
+    if (!handle) return std::nullopt;
+
+    // FILE_NAME_OPENED, the name as it was opened: only its volume part is read, which is the
+    // same as in the normalized name (for a followed link, the volume of its target), and the
+    // normalized query is reported to fail on some third-party redirectors and virtual volumes.
+    const DWORD flags = FILE_NAME_OPENED | VOLUME_NAME_DOS;
 
     // The first call may be short; it then gives the size needed, the terminating null included.
     std::wstring name(MAX_PATH, L'\0');
-    DWORD length = ::GetFinalPathNameByHandleW(handle.get(), name.data(), static_cast<DWORD>(name.size()),
-                                               VOLUME_NAME_DOS);
+    DWORD length = ::GetFinalPathNameByHandleW(handle.get(), name.data(), static_cast<DWORD>(name.size()), flags);
     if (length >= name.size()) {
         name.resize(length);
-        length = ::GetFinalPathNameByHandleW(handle.get(), name.data(), static_cast<DWORD>(name.size()),
-                                             VOLUME_NAME_DOS);
+        length = ::GetFinalPathNameByHandleW(handle.get(), name.data(), static_cast<DWORD>(name.size()), flags);
     }
     // On success the length leaves out the terminating null, so it is below the buffer's size.
-    if (length == 0 || length >= name.size()) return false;
+    if (length == 0 || length >= name.size()) return std::nullopt;
     name.resize(length);
 
-    const std::wstring unc = L"\\\\?\\UNC\\";
-    return name.compare(0, unc.size(), unc) == 0;
+    return name;
+}
+
+//! Whether the volume the name \p dir is on is a network share (GetVolumePathNameW, then
+//! GetDriveTypeW). It sees a UNC path and a mapped drive letter; it reads the name, so it is
+//! asked only where no handle shows where a link leads.
+bool NameOnRemoteVolume(const fs::path& dir)
+{
+    wchar_t root[MAX_PATH + 1];
+    if (!::GetVolumePathNameW(dir.wstring().c_str(), root, MAX_PATH + 1)) return false;
+
+    return ::GetDriveTypeW(root) == DRIVE_REMOTE;
+}
+
+//! Whether the directory that \p path is created in is on a network share (OnNetworkShare). Its
+//! final path decides, since that is read through a link to the directory it leads to. Where the
+//! directory cannot be opened (on a share where this account may add files and not read the
+//! directory's attributes, say) or the path cannot be read, its name decides.
+bool ParentOnShare(const fs::path& path)
+{
+    const fs::path dir = path.has_parent_path() ? path.parent_path() : fs::path(".");
+
+    return OnNetworkShare(FinalPathOf(dir), [&dir] { return NameOnRemoteVolume(dir); });
 }
 
 class AclChecker
