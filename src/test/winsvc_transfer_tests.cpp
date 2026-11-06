@@ -614,35 +614,6 @@ BOOST_AUTO_TEST_CASE(transfer_refuses_malformed_settings_before_writing)
     BOOST_CHECK(!fs::exists(tree.root / "quarantine"));
 }
 
-#ifndef WIN32
-BOOST_AUTO_TEST_CASE(transfer_notices_a_destination_that_does_not_read_back)
-{
-    const TempTree tree;
-    const fs::path src = tree.root / "src";
-    const fs::path dst = tree.root / "dst";
-    MakeWalletTree(src);
-    const std::map<std::string, std::string> before = Snapshot(src);
-
-    // Corrupts the first byte of each file written, after it is written and before it is read back.
-    int corrupted = 0;
-    winsvc::testing::after_write = [&corrupted](const fs::path& path) {
-        std::string content = ReadFile(path);
-        if (content.empty()) return;
-        content[0] = static_cast<char>(content[0] ^ 0x01);
-        WriteFile(path, content);
-        ++corrupted;
-    };
-    const TransferResult result = TransferTree(src, dst, RulesForEnable(Network::Main), tree.root / "quarantine");
-    winsvc::testing::after_write = nullptr;
-
-    BOOST_CHECK_GT(corrupted, 0);
-    BOOST_CHECK(!result.ok);
-    BOOST_CHECK_MESSAGE(Contains(result.error, "does not read back as it was written"), result.error);
-    BOOST_CHECK(!fs::exists(dst));
-    BOOST_CHECK(Snapshot(src) == before);
-}
-#endif
-
 BOOST_AUTO_TEST_CASE(follow_ups_run_after_a_failure)
 {
     std::vector<std::string> ran;

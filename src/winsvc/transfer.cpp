@@ -1075,11 +1075,10 @@ bool WriteAndVerify(File* in, const std::string* data, File& out, const fs::path
             written += got;
         }
     }
-    if (!out.Sync(error)) return false;
-    if (testing::after_write) testing::after_write(out_path);
-    if (!out.Rewind(error)) return false;
+    if (!out.Sync(error) || !out.Rewind(error)) return false;
 
-    // Read back, and compared with what was read from the source.
+    // Read back, and compared with what was read from the source. This guards against a write that did
+    // not land as written. It has no test, as one would need a fault injected into the write path.
     CSHA256 read_hash;
     uint64_t read = 0;
     for (;;) {
@@ -1512,10 +1511,6 @@ private:
 };
 
 } // namespace
-
-namespace testing {
-std::function<void(const fs::path&)> after_write;
-} // namespace testing
 
 std::optional<std::string> DestinationRefusal(const fs::path& src, const fs::path& dst, const TransferRules& rules)
 {

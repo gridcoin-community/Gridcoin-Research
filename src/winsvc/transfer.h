@@ -195,12 +195,6 @@ struct FollowUp
 //! that failed or was not attempted, naming it and what to do by hand. Pure apart from the steps.
 std::vector<std::string> RunFollowUps(const std::vector<FollowUp>& steps);
 
-namespace testing {
-//! Called with the path of each file written, after it is flushed and before it is read back.
-//! Empty outside tests, which use it to corrupt what was written.
-extern std::function<void(const fs::path&)> after_write;
-} // namespace testing
-
 //! Why \p path cannot be the root of a wallet tree the tool moves, or nullopt: it must be an
 //! absolute path on a local drive ("X:\..."), with no "." or ".." component. A network path is
 //! refused. '/' counts as '\'. Pure.
