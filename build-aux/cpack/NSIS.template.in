@@ -1,6 +1,8 @@
 Name "@CPACK_NSIS_PACKAGE_NAME@ (@CPACK_WINDOWS_BITS@-bit)"
 
-RequestExecutionLevel highest
+# Every install and uninstall step needs administrator rights, so a standard user gets the UAC
+# prompt for an administrator's credentials.
+RequestExecutionLevel admin
 SetCompressor /SOLID @CPACK_NSIS_COMPRESSOR@
 Unicode true
 

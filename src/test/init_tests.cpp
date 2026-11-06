@@ -806,6 +806,34 @@ BOOST_AUTO_TEST_CASE(report_permissions_names_a_missing_data_directory_and_does_
 }
 
 #ifndef WIN32
+// A data directory whose state cannot be read is reported as such, not as missing. Production
+// change that would fail this: taking a failed stat for a directory that does not exist.
+BOOST_AUTO_TEST_CASE(report_permissions_names_a_data_directory_it_cannot_read)
+{
+    if (::geteuid() == 0) {
+        BOOST_TEST_MESSAGE("root reads every directory; skipping");
+        return;
+    }
+
+    ScratchDataDir datadir;
+    const fs::path locked = datadir.path / "locked";
+    const fs::path inside = locked / "dd";
+    fs::create_directories(inside);
+    BOOST_REQUIRE_EQUAL(::chmod(locked.string().c_str(), 0), 0);
+    // Put back before the scratch directory is removed.
+    struct Unlock {
+        std::string path;
+        ~Unlock() { ::chmod(path.c_str(), 0700); }
+    } unlock{locked.string()};
+    gArgs.ForceSetArg("-datadir", inside.string());
+    gArgs.ClearPathCache();
+
+    std::ostringstream out;
+    BOOST_CHECK(!ReportDataDirPermissions(out));
+    BOOST_CHECK_MESSAGE(out.str().find(inside.string() + " cannot be read") != std::string::npos, out.str());
+    BOOST_CHECK_MESSAGE(out.str().find("does not exist") == std::string::npos, out.str());
+}
+
 // Each file that gives other accounts access is named with the chmod that makes it owner-only,
 // and the report is clean when none does. The configuration file is the one -conf names, where
 // it is. Nothing is created: no settings file, lock, debug.log or backup directory.

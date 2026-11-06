@@ -10,8 +10,9 @@
     (idempotent).
 
     With -All it also removes the Group Policy shutdown script (Set-GridcoinShutdownFlush.ps1
-    -Remove) and the resident autounlock helper and task that earlier versions left (the old
-    passphrase file is reported, not deleted). Needs an elevated console.
+    -Remove) and the resident autounlock helper and task that earlier versions left, of every
+    account, as the shutdown script is the machine's (this account's old passphrase file is
+    reported, not deleted). Needs an elevated console. The uninstaller runs it this way.
 
     It never deletes a wallet file or the autounlock file the core reads, and it does not stop a
     running core: run the Core-Stop task first for a graceful stop.
@@ -36,7 +37,7 @@ if ($All) {
         throw '-All needs an elevated console (it changes Group Policy and ends the old helper).'
     }
     & (Join-Path $PSScriptRoot 'Set-GridcoinShutdownFlush.ps1') -Remove -TaskFolder $TaskFolder
-    $oldBlob = Remove-GridcoinLegacyAutounlock -DataDir $DataDir -TaskFolder $TaskFolder
+    $oldBlob = Remove-GridcoinLegacyAutounlock -DataDir $DataDir -TaskFolder $TaskFolder -AllAccounts
     if ($oldBlob) {
         Write-Host "An old autounlock file remains at '$oldBlob'; the core does not read it. Delete it when you no longer need it." -ForegroundColor Yellow
     }

@@ -569,10 +569,17 @@ bool ReportDataDirPermissions(std::ostream& out)
     }
     datadir /= BaseParams().DataDir();
 
-    if (!fs::is_directory(datadir, ec)) {
-        out << "The data directory " << datadir.string()
-            << (fs::exists(datadir, ec) ? " is not a directory" : " does not exist")
-            << ", so nothing was checked.\n";
+    // status() sets ec for a path that does not exist too; its type tells that (file_not_found) from
+    // a path it cannot read (status_error), such as one below a directory this account may not search.
+    const fs::file_status status = fs::status(datadir, ec);
+    if (!fs::is_directory(status)) {
+        std::string state = " does not exist";
+        if (status.type() == fs::file_type::status_error) {
+            state = " cannot be read (" + ec.message() + ")";
+        } else if (fs::exists(status)) {
+            state = " is not a directory";
+        }
+        out << "The data directory " << datadir.string() << state << ", so nothing was checked.\n";
         return false;
     }
 
