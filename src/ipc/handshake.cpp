@@ -100,9 +100,10 @@ private:
 //! for an exclusive open, bInheritHandle=FALSE for close-on-exec,
 //! FlushFileBuffers() for fsync, and MoveFileExW(REPLACE_EXISTING) for the atomic
 //! replace (boost::filesystem::rename's overwrite behaviour on Windows is
-//! version-dependent, so do not rely on it). O_NOFOLLOW has no direct analogue;
-//! CREATE_NEW over a pre-planted name fails rather than following it, which covers
-//! the same threat.
+//! version-dependent, so do not rely on it). FILE_FLAG_OPEN_REPARSE_POINT stands in
+//! for O_NOFOLLOW: with it CREATE_NEW over a pre-planted name, a link included, fails
+//! rather than following it. Without it CREATE_NEW would follow a link that leads
+//! nowhere and create the file where it leads.
 //!
 //! This used to open with _wsopen_s(..., _S_IREAD | _S_IWRITE) and rely on the
 //! file inheriting an owner-only datadir ACL. Neither protected anything: the CRT
@@ -138,8 +139,10 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents, const ut
     sa.lpSecurityDescriptor = sd.get();
     sa.bInheritHandle = FALSE; // don't leak the handle into a child process
     // READ_CONTROL, so the list can be read back through this handle below.
+    // FILE_FLAG_OPEN_REPARSE_POINT: a link planted at the name after the removal above
+    // counts as taken, so nothing is created where it leads (POSIX: O_NOFOLLOW).
     const HANDLE handle = ::CreateFileW(tmp.wstring().c_str(), GENERIC_WRITE | READ_CONTROL, /*dwShareMode=*/0, &sa,
-                                        CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+                                        CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
     const DWORD create_err = handle == INVALID_HANDLE_VALUE ? ::GetLastError() : 0;
     if (handle == INVALID_HANDLE_VALUE) {
         throw std::system_error(static_cast<int>(create_err), std::system_category(),

@@ -24,6 +24,8 @@
 #include <vector>
 
 #ifndef WIN32
+#include "test/umask_guard.h"
+
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -43,6 +45,10 @@ using namespace util::winacl;
 // as a macro of the same value (win_acl.cpp checks that), so these cases read the same
 // on every platform.
 using namespace util::winacl::mask;
+
+#ifndef WIN32
+using grc_test::UmaskGuard;
+#endif
 
 namespace {
 
@@ -219,18 +225,6 @@ unsigned ModeOf(const fs::path& path)
     // st_mode is mode_t; the permission bits fit an unsigned.
     return static_cast<unsigned>(st.st_mode & 07777);
 }
-
-//! Sets the process umask for one case and puts the old one back however the case ends.
-struct UmaskGuard
-{
-    const mode_t m_saved;
-
-    explicit UmaskGuard(mode_t mask) : m_saved(::umask(mask)) {}
-    ~UmaskGuard() { ::umask(m_saved); }
-
-    UmaskGuard(const UmaskGuard&) = delete;
-    UmaskGuard& operator=(const UmaskGuard&) = delete;
-};
 
 } // anonymous namespace
 
@@ -654,6 +648,28 @@ BOOST_AUTO_TEST_CASE(unopened_path_is_reported_unless_it_does_not_exist)
     CheckHas(denied->message, "WARNING: " + moved.string());
     CheckHas(denied->message, "(Access is denied.)");
     CheckHas(denied->message, "not checked");
+}
+
+// A directory the Windows check opened but could not list is reported, as the files in it were
+// not checked, unless it is gone since it was opened.
+BOOST_AUTO_TEST_CASE(unlisted_directory_is_reported_unless_it_is_gone)
+{
+    constexpr uint32_t WIN32_FILE_NOT_FOUND = 2, WIN32_PATH_NOT_FOUND = 3, WIN32_ACCESS_DENIED = 5;
+    const fs::path backups{"C:/Users/x/AppData/Roaming/GridcoinResearch/walletbackups"};
+
+    BOOST_CHECK(!fsmodes::UnlistedDirectoryFinding(backups, WIN32_FILE_NOT_FOUND, "not found"));
+    BOOST_CHECK(!fsmodes::UnlistedDirectoryFinding(backups, WIN32_PATH_NOT_FOUND, "not found"));
+
+    const std::optional<fsmodes::ModeFinding> denied =
+        fsmodes::UnlistedDirectoryFinding(backups, WIN32_ACCESS_DENIED, "Access is denied.");
+    BOOST_REQUIRE(denied);
+    BOOST_CHECK(denied->path == backups);
+    BOOST_CHECK(denied->kind == fsmodes::ModeFinding::Kind::Unreadable);
+    BOOST_CHECK_EQUAL(denied->mode, 0U);
+    CheckHas(denied->message, "WARNING: " + backups.string());
+    CheckHas(denied->message, "could not be listed (Access is denied.)");
+    CheckHas(denied->message, "not checked");
+    BOOST_CHECK_MESSAGE(IsAsciiLine(denied->message), denied->message);
 }
 
 // The startup warning for a backup directory whose files cannot be owner-only names the
@@ -1465,6 +1481,8 @@ BOOST_AUTO_TEST_CASE(check_reports_a_junction_and_follows_a_moved_directory)
     grc_test::MakeJunction(moved, wide);
     const bool untrusted = grc_test::JunctionUntrustedOn(moved);
     BOOST_TEST_MESSAGE("Windows " << (untrusted ? "does not follow" : "follows") << " a junction this token made");
+    // An elevated token stands in for "an administrator made it"; that holds for an elevated
+    // administrator and a standard user, not for every elevated token (Backup Operators).
     if (CurrentTokenIsElevated()) BOOST_CHECK_MESSAGE(!untrusted, "a junction an elevated token made is not followed");
 
     const auto followed = fsmodes::CheckOwnerOnlyModes(moved, {}, {}, {}, {}, {});
@@ -1506,6 +1524,34 @@ BOOST_AUTO_TEST_CASE(check_reports_a_junction_and_follows_a_moved_directory)
     BOOST_CHECK(::RemoveDirectoryW((backups / "linked").wstring().c_str()));
     BOOST_CHECK(::RemoveDirectoryW(moved.wstring().c_str()));
     BOOST_CHECK(::RemoveDirectoryW(database.wstring().c_str()));
+}
+
+// A backup directory that opens but cannot be listed is reported, as the files in it were not
+// checked. With SeBackupPrivilege enabled it can still be listed, and the case says so.
+BOOST_AUTO_TEST_CASE(check_reports_a_backup_directory_it_cannot_list)
+{
+    if (SkipUnderWine()) return;
+
+    const WinTempDir dir;
+    const fs::path backups = dir.path / "backups";
+    const Sid self = CurrentTokenUser();
+    BOOST_REQUIRE(CreateDirectoryWithAcl(backups, {self, {{self, FILE_ALL_ACCESS & ~FILE_LIST_DIRECTORY, Inherit::None}}}));
+
+    const auto findings = fsmodes::CheckOwnerOnlyModes({}, {}, {}, {}, backups, {});
+    // Empty, so it is removed without being listed.
+    boost::system::error_code ec;
+    fs::remove(backups, ec);
+    BOOST_CHECK_MESSAGE(!ec, ec.message());
+
+    if (findings.empty() && grc_test::TokenPrivilegeState(L"SeBackupPrivilege") == grc_test::PrivilegeState::Enabled) {
+        BOOST_WARN_MESSAGE(false, "SeBackupPrivilege is enabled in this token, so "
+                                      << backups.string() << " can be listed; the report is not checked");
+        return;
+    }
+    BOOST_REQUIRE_EQUAL(findings.size(), 1U);
+    BOOST_CHECK(findings[0].path == backups);
+    BOOST_CHECK(findings[0].kind == fsmodes::ModeFinding::Kind::Unreadable);
+    CheckHas(findings[0].message, "could not be listed");
 }
 
 // A backup directory that does not exist is created owner-only from creation, a file can be

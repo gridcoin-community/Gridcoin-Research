@@ -952,7 +952,10 @@ BOOST_FIXTURE_TEST_CASE(win_bound_socket_passes_the_check, grc_test::StateGuard)
 // from path.string(). A data directory under a profile with a non-ASCII name puts such bytes
 // there. The bind and the connect must use the directory under its intended name, which they
 // do only if afunix reads sun_path as UTF-8 and not in the system code page; this case is what
-// shows which.
+// shows which. Where the system code page is UTF-8 (65001) the two readings agree, so a pass
+// there does not settle it, and the case warns. The name is short, two characters (one in
+// code page 1252, one outside it), so the path keeps a margin under sun_path's 108 bytes for a
+// longer user name.
 BOOST_FIXTURE_TEST_CASE(win_socket_under_a_non_ascii_directory, grc_test::StateGuard)
 {
     if (grc_test::RunningUnderWine()) {
@@ -963,8 +966,13 @@ BOOST_FIXTURE_TEST_CASE(win_socket_under_a_non_ascii_directory, grc_test::StateG
     gArgs.ClearForcedArg("-ipcattachgroup");
     gArgs.ClearForcedArg("-ipcserviceuser");
 
+    const unsigned code_page = ::GetACP();
+    BOOST_TEST_MESSAGE("the system code page is " << code_page);
+    BOOST_WARN_MESSAGE(code_page != CP_UTF8, "the system code page is UTF-8, so this pass does not show how afunix "
+                                             "reads sun_path");
+
     WinTempDir dir;
-    const std::wstring name = L"ipc \u00e4\u00f6\u00fc \u6d4b\u8bd5";
+    const std::wstring name = L"\u00e4\u6d4b";
     const fs::path ipcdir = dir.path / fs::path(name);
     std::string address = "unix";
     SocketCloser server{ipc::MakeProcess()->bind(ipcdir, address)};
@@ -1017,6 +1025,8 @@ BOOST_FIXTURE_TEST_CASE(win_junction_followed_above_the_socket_only_in_same_acco
 
     const bool untrusted = grc_test::JunctionUntrustedOn(linked);
     BOOST_TEST_MESSAGE("Windows " << (untrusted ? "does not follow" : "follows") << " a junction this token made");
+    // An elevated token stands in for "an administrator made it"; that holds for an elevated
+    // administrator and a standard user, not for every elevated token (Backup Operators).
     if (CurrentTokenIsElevated()) BOOST_CHECK_MESSAGE(!untrusted, "a junction an elevated token made is not followed");
 
     const Sid self = CurrentTokenUser();

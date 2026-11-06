@@ -18,6 +18,8 @@
 #include <util/time.h>
 
 #ifndef WIN32
+#include "test/umask_guard.h"
+
 #include <sys/stat.h>
 #endif
 
@@ -33,6 +35,9 @@ namespace {
 
 using grc_test::RequireWalletFileNotInUse;
 using grc_test::WalletFilePlaceholder;
+#ifndef WIN32
+using grc_test::UmaskGuard;
+#endif
 
 //! A directory for one case's backups, removed when the case ends.
 struct BackupDir
@@ -180,15 +185,6 @@ BOOST_AUTO_TEST_CASE(a_backup_leaves_a_wallet_file_in_the_working_directory_alon
 #ifndef WIN32
 namespace {
 
-//! Sets the process umask for one case and puts the old one back at the end.
-struct UmaskGuard
-{
-    const mode_t m_saved;
-
-    explicit UmaskGuard(mode_t mask) : m_saved(::umask(mask)) {}
-    ~UmaskGuard() { ::umask(m_saved); }
-};
-
 unsigned ModeOf(const fs::path& path)
 {
     struct stat st;
@@ -221,6 +217,22 @@ BOOST_AUTO_TEST_CASE(new_backup_copy_is_0600)
     const fs::path target = dir.m_path / "fresh-backup-name";
 
     BOOST_CHECK(GRC::BackupConfigFile(target.string()));
+    BOOST_CHECK_EQUAL(ModeOf(target), 0600U);
+}
+
+// The mode is set through the copy's own descriptor when it is created, so a umask that would
+// clear the owner's bits does not leave a backup the owner cannot read.
+BOOST_AUTO_TEST_CASE(new_backup_copy_is_0600_whatever_the_umask)
+{
+    const BackupDir dir;
+    const fs::path conf = MakeConf(dir.m_path);
+    grc_test::ForcedArgGuard conf_arg("conf", conf.string());
+
+    const fs::path target = dir.m_path / "fresh-backup-name";
+    {
+        const UmaskGuard narrow(0277);
+        BOOST_CHECK(GRC::BackupConfigFile(target.string()));
+    }
     BOOST_CHECK_EQUAL(ModeOf(target), 0600U);
 }
 

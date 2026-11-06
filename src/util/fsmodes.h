@@ -44,7 +44,8 @@ struct ModeFinding
         //! as a symbolic link or a junction). It is reported and never followed.
         Symlink,
         //! Windows only: the path exists but could not be opened (UnopenedPathFinding), or was
-        //! opened but its access list could not be read, so it was not checked. When this
+        //! opened but its access list could not be read, so it was not checked; or it is a
+        //! directory whose entries could not be listed (UnlistedDirectoryFinding). When this
         //! process's own account could not be read, nothing was checked, and the one finding
         //! names the data directory.
         Unreadable,
@@ -66,6 +67,13 @@ struct ModeFinding
 //! to do, and for any other error gives \p error_text. Pure.
 std::optional<ModeFinding> UnopenedPathFinding(const fs::path& path, uint32_t error, const std::string& error_text);
 
+//! What the Windows check reports for the directory \p dir, which it opened but could not list,
+//! or stopped listing, with the Win32 error \p error: nothing for ERROR_FILE_NOT_FOUND and
+//! ERROR_PATH_NOT_FOUND, as a directory gone since it was opened is skipped; otherwise an
+//! Unreadable finding that names the directory and gives \p error_text, as the files in it were
+//! not checked. Pure.
+std::optional<ModeFinding> UnlistedDirectoryFinding(const fs::path& dir, uint32_t error, const std::string& error_text);
+
 //! Checks the data directory, the wallet file, database/ and database/log.*, the
 //! configuration file, the settings file, the backup directory and the regular files
 //! directly in it, and the debug log. An empty path, and a path that does not exist,
@@ -78,7 +86,8 @@ std::optional<ModeFinding> UnopenedPathFinding(const fs::path& path, uint32_t er
 //! path count as a symbolic link here. A reparse point that does not (the placeholder of a
 //! cloud file, a deduplicated file) is the file itself and is checked as one. A path that
 //! exists but cannot be opened to read its access list, such as one through a junction Windows
-//! does not follow, is reported (UnopenedPathFinding).
+//! does not follow, is reported (UnopenedPathFinding), and so is a directory whose entries cannot
+//! be listed (UnlistedDirectoryFinding).
 std::vector<ModeFinding> CheckOwnerOnlyModes(const fs::path& datadir, const fs::path& conf,
                                              const fs::path& settings, const fs::path& wallet_file,
                                              const fs::path& backupdir, const fs::path& debuglog);
@@ -214,8 +223,8 @@ BackupDirCheck CheckBackupDir(const fs::path& backupdir, const std::function<std
 std::optional<std::string> BackupDirWarning(const fs::path& backupdir, const BackupDirCheck& check);
 
 //! Copies a file, overwriting the target. A target that does not exist is created with mode
-//! 0600 (POSIX), so the mode is right before any data is written. An existing target keeps its
-//! mode. Returns why a target this call created is not owner-only (a filesystem without POSIX
+//! 0600 (POSIX), set through its descriptor whatever the umask, so the mode is right before any
+//! data is written. An existing target keeps its mode. Returns why a target this call created is not owner-only (a filesystem without POSIX
 //! modes gives it another mode), or nullopt. Throws fs::filesystem_error on failure.
 //!
 //! On Windows a target that does not exist is created with the owner-only access list (this

@@ -77,6 +77,8 @@
 
 #include <windows.h>
 #else
+#include "test/umask_guard.h"
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #endif
@@ -182,18 +184,6 @@ struct ClosedEntry
 
     ClosedEntry(const ClosedEntry&) = delete;
     ClosedEntry& operator=(const ClosedEntry&) = delete;
-};
-#else
-//! Sets the process umask for one scope and puts the old one back however it ends.
-struct UmaskGuard
-{
-    const mode_t m_saved;
-
-    explicit UmaskGuard(mode_t mask) : m_saved(::umask(mask)) {}
-    ~UmaskGuard() { ::umask(m_saved); }
-
-    UmaskGuard(const UmaskGuard&) = delete;
-    UmaskGuard& operator=(const UmaskGuard&) = delete;
 };
 #endif
 
@@ -1843,7 +1833,7 @@ BOOST_AUTO_TEST_CASE(dumpwallet_refuses_an_existing_destination)
     // whatever the umask, and on Windows the owner-only access list.
     {
 #ifndef WIN32
-        const UmaskGuard permissive(0);
+        const grc_test::UmaskGuard permissive(0);
 #endif
         const Outcome fresh = Call("dumpwallet", {DUMP_FILE});
         BOOST_CHECK_MESSAGE(fresh.returned, fresh.Describe());

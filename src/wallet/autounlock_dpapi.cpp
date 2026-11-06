@@ -341,7 +341,9 @@ std::optional<SecureString> Decrypt(const AutoUnlockBlob& blob, const fs::path& 
 
 //! Write \p bytes to the new file \p path, owner-only from the moment it exists, and
 //! flush it to disk. A file there already, left by a Store() that did not finish, is
-//! removed first: CREATE_NEW never writes into a file this call did not make.
+//! removed first: CREATE_NEW never writes into a file this call did not make. With
+//! FILE_FLAG_OPEN_REPARSE_POINT a link at the name counts as taken, as a file does, and is
+//! removed itself, so nothing is created where it leads.
 bool WriteNewFile(const fs::path& path, const std::vector<unsigned char>& bytes, std::string& error)
 {
     const winacl::UniqueSecurityDescriptor sd(winacl::MakeSecurityDescriptor(util::OwnerOnlyAclSpec(/*inheritable=*/false)));
@@ -351,12 +353,13 @@ bool WriteNewFile(const fs::path& path, const std::vector<unsigned char>& bytes,
     sa.bInheritHandle = FALSE;
 
     const std::wstring wpath = path.wstring();
-    HANDLE created = ::CreateFileW(wpath.c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    const DWORD flags = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT;
+    HANDLE created = ::CreateFileW(wpath.c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW, flags, nullptr);
     DWORD create_error = ::GetLastError();
 
     if (created == INVALID_HANDLE_VALUE && create_error == ERROR_FILE_EXISTS) {
         if (::DeleteFileW(wpath.c_str())) {
-            created = ::CreateFileW(wpath.c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+            created = ::CreateFileW(wpath.c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW, flags, nullptr);
             create_error = ::GetLastError();
         } else {
             create_error = ::GetLastError();

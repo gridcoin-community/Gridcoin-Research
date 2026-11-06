@@ -216,6 +216,15 @@ std::optional<ModeFinding> UnopenedPathFinding(const fs::path& path, uint32_t er
                            ". Its access list was not checked"};
 }
 
+std::optional<ModeFinding> UnlistedDirectoryFinding(const fs::path& dir, uint32_t error, const std::string& error_text)
+{
+    if (error == WIN32_FILE_NOT_FOUND || error == WIN32_PATH_NOT_FOUND) return std::nullopt;
+
+    return ModeFinding{dir, ModeFinding::Kind::Unreadable, 0,
+                       "WARNING: " + dir.string() + " cannot be checked: its entries could not be listed (" +
+                           error_text + "). The access lists of the files in it were not checked"};
+}
+
 bool OnNetworkShare(const std::optional<std::wstring>& final_path, const std::function<bool()>& by_name)
 {
     // Without a final path the directory is not taken to be local, where a refusal of access
@@ -616,12 +625,16 @@ std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::p
     const int in = ::open(source.string().c_str(), O_RDONLY | O_CLOEXEC);
     if (in < 0) fail("CopyFileOwnerOnly: cannot open the source", source, errno);
 
-    // A new target is created with mode 0600, so it is owner-only before any data is written. A
-    // target that exists is opened as it is, and keeps its mode.
+    // A new target is created with mode 0600, so it is owner-only before any data is written, and
+    // the mode is set again through the descriptor, so a umask that clears the owner's bits does not
+    // leave a copy its owner cannot read. A target that exists is opened as it is, and keeps its mode.
     int out = ::open(target.string().c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
-    // A filesystem without POSIX modes gives a new file a mode of its own.
+    // A filesystem without POSIX modes gives a new file a mode of its own, whatever fchmod says.
     std::optional<std::string> not_owner_only;
-    if (out >= 0) not_owner_only = NewFileModeProblem(out);
+    if (out >= 0) {
+        (void)::fchmod(out, 0600);
+        not_owner_only = NewFileModeProblem(out);
+    }
     if (out < 0 && errno == EEXIST) {
         out = ::open(target.string().c_str(), O_WRONLY | O_CLOEXEC);
 
@@ -918,6 +931,18 @@ public:
             if (entry->directory && !entry->link) continue;
 
             if (filter(path.filename().string())) Check(path);
+        }
+
+        // A directory that opens but cannot be listed, or stops being listed partway, is
+        // reported: what is in it was not checked.
+        if (ec) {
+            const uint32_t error = static_cast<uint32_t>(ec.value());
+            const std::string error_text = ec.category() == boost::system::system_category()
+                                               ? Win32ErrorText(static_cast<DWORD>(error))
+                                               : strprintf("error %d", ec.value());
+            if (std::optional<ModeFinding> finding = UnlistedDirectoryFinding(dir, error, error_text)) {
+                m_findings.push_back(std::move(*finding));
+            }
         }
     }
 

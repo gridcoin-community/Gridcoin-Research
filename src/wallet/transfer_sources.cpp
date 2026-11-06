@@ -584,17 +584,11 @@ std::optional<fs::path> SnapshotWallet(const CWallet& wallet, std::string& error
         return std::nullopt;
     }
 
-#ifndef WIN32
-    // The copy is a new file, which fsmodes::CopyFileOwnerOnly created 0600; this
-    // makes sure of it. On Windows it was created with the owner-only access list
-    // instead.
-    if (::chmod(snapshot.c_str(), S_IRUSR | S_IWUSR) != 0) {
-        error = strprintf("the copy of the wallet file could not be made owner-only: %s", SysErrorString(errno));
-        RemoveFile(snapshot);
-        return std::nullopt;
-    }
-#endif
-
+    // The copy is a new file, which fsmodes::CopyFileOwnerOnly created owner-only through its own
+    // descriptor: mode 0600 on POSIX, whatever the umask, or the owner-only access list on
+    // Windows. A copy that did not keep that was refused and removed above (BackupTarget::
+    // TransferSnapshot). Nothing changes the mode by the name afterwards, which would follow a
+    // link there.
     return snapshot;
 }
 

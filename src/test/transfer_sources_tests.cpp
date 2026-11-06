@@ -40,6 +40,8 @@
 #include <vector>
 
 #ifndef WIN32
+#include "test/umask_guard.h"
+
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -809,6 +811,18 @@ BOOST_FIXTURE_TEST_CASE(snapshot_wallet_copies_the_wallet_file, TransferCase)
     BOOST_CHECK_EQUAL(ModeOf(*snapshot), 0600u);
 #endif
     fs::remove(*snapshot);
+
+#ifndef WIN32
+    // 0600 whatever the umask: the copy sets it through its own descriptor when it creates the
+    // file, and nothing changes the mode by the snapshot's name afterwards.
+    {
+        const grc_test::UmaskGuard narrow(0277);
+        const std::optional<fs::path> narrow_snapshot = wallet::SnapshotWallet(*pwalletMain, error);
+        BOOST_REQUIRE_MESSAGE(narrow_snapshot, error);
+        BOOST_CHECK_EQUAL(ModeOf(*narrow_snapshot), 0600u);
+        fs::remove(*narrow_snapshot);
+    }
+#endif
 
     // A wallet with no file has nothing to copy.
     CWallet in_memory;
