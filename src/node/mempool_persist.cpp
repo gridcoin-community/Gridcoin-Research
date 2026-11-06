@@ -10,6 +10,7 @@
 #include "txmempool.h"
 #include "util.h"
 #include "consensus/validation.h"
+#include "util/fsmodes.h"
 #include "validation.h"
 
 #include <tinyformat.h>
@@ -44,12 +45,17 @@ bool WriteMempoolEntries(const fs::path& path, const MempoolPersistEntries& entr
         fs::remove(tmp, ec);
     };
 
-    FILE* file = fsbridge::fopen(tmp, "wb");
+    // The temporary file is owner-only and has the permissions of the file it will replace, if
+    // there is one.
+    std::string create_error;
+    std::optional<std::string> create_warning;
+    FILE* file = fsmodes::CreateReplacementFile(path, tmp, create_error, create_warning, /*binary=*/true);
     CAutoFile fileout(file, SER_DISK, CLIENT_VERSION);
     if (fileout.IsNull()) {
         fileout.fclose();
-        return fail(strprintf("%s: failed to open %s", __func__, tmp.string()));
+        return fail(strprintf("%s: failed to open %s: %s", __func__, tmp.string(), create_error));
     }
+    if (create_warning) LogPrintf("WARNING: %s: %s", __func__, *create_warning);
 
     try {
         fileout << UNBROADCAST_DUMP_VERSION;

@@ -349,6 +349,16 @@ private:
 //! fails and AclNotKeptError when what is read back does not match \p spec.
 void ApplyAcl(const fs::path& path, const AclSpec& spec);
 
+//! Make the DACL of the file \p to, a handle opened with WRITE_DAC and READ_CONTROL, the DACL of
+//! the file \p from, a handle opened with READ_CONTROL: every entry as it is, a NULL DACL as a
+//! NULL DACL, and protected exactly when \p from is (SetSecurityInfo with PROTECTED_ or
+//! UNPROTECTED_DACL_SECURITY_INFORMATION). The owner of \p to is not touched, so no privilege is
+//! needed. \p to is then read back and its protection and explicit entries compared with \p from's;
+//! the entries a parent hands down (inherited ones) are not compared, as Windows may take them
+//! from the parent again. Throws std::system_error when a call fails and AclNotKeptError when
+//! what is read back is not what was set.
+void CopyDacl(void* from, void* to);
+
 //! \p aces as a DACL of allow entries, in order. The caller owns the result and must
 //! LocalFree() it. Throws std::system_error, or std::runtime_error for an entry whose
 //! trustee is not a well-formed SID.

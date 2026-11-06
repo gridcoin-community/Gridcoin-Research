@@ -7,6 +7,7 @@
 #include <util/threadnames.h>
 #include "util/time.h"
 #include "util/system.h"
+#include "util/fsmodes.h"
 #include "util/syserror.h"
 
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -727,6 +728,7 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
     if (fImmediate || (fArchiveDaily && ArchiveCheckDate > PrevArchiveCheckDate))
     {
         std::string rename_error_msg;
+        std::string keep_warning;
         bool reopened = true;
 
 #ifndef WIN32
@@ -796,6 +798,16 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
             if (new_fileout)
             {
                 setbuf(new_fileout, nullptr); // unbuffered
+
+                // The log recreated at its name has the permissions the rotated log had. When the
+                // rename failed there is no rotated file, and the log opened is the one that was
+                // there.
+                const fsmodes::KeepResult kept = fsmodes::KeepPermissions(pfile_temp, new_fileout);
+                if (kept.kind == fsmodes::KeepResult::Kind::NotKept) {
+                    keep_warning = "the permissions of " + pfile_temp.string() + " could not be kept on the new log (" +
+                                   kept.error + ")";
+                }
+
                 m_fileout = new_fileout;
             }
             else
@@ -810,6 +822,11 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
         {
             LogPrintf("ERROR: Logger: archive: Failed to reopen %s. Logging to the file stops until it is reopened.",
                       plogfile.string());
+        }
+
+        if (!keep_warning.empty())
+        {
+            LogPrintf("WARNING: Logger: archive: %s", keep_warning);
         }
 
         if (!rename_error_msg.empty())

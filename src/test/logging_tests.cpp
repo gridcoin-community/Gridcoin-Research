@@ -288,6 +288,34 @@ BOOST_AUTO_TEST_CASE(secure_archive_writes_a_gzip_file)
     fs::remove(GetDataDir() / "logging_tests_archive_ok.log");
 }
 
+// The log that is recreated at its name after a rotation has the mode the rotated log had, so a
+// log the operator made group-readable stays so. Production change that would fail this:
+// archive() reopening the log with the mode it creates a new log with (0600).
+BOOST_AUTO_TEST_CASE(archive_recreates_the_log_with_the_mode_it_had)
+{
+    const fs::path archive_dir = GetDataDir() / "logarchive";
+    fs::create_directories(archive_dir);
+
+    BCLog::Logger logger;
+    SetUpSecureLogger(logger, "logging_tests_archive_mode.log");
+    BOOST_REQUIRE(logger.StartLogging());
+    logger.LogPrintStr("line\n");
+    const fs::path log = GetDataDir() / "logging_tests_archive_mode.log";
+    BOOST_REQUIRE_EQUAL(::chmod(log.string().c_str(), 0640), 0);
+
+    BOOST_CHECK(logger.archive(/*fImmediate=*/true, fs::path()));
+
+    struct stat st;
+    BOOST_REQUIRE_EQUAL(::stat(log.string().c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+
+    logger.DisconnectTestLogger();
+    for (fs::directory_iterator it(archive_dir), end; it != end; ++it) {
+        if (it->path().filename().string().rfind("logging_tests_archive_mode-", 0) == 0) fs::remove(it->path());
+    }
+    fs::remove(log);
+}
+
 BOOST_AUTO_TEST_CASE(archive_refuses_a_symlinked_archive_directory)
 {
     const fs::path archive_dir = GetDataDir() / "logarchive";

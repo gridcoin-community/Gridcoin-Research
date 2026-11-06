@@ -5,9 +5,11 @@
 #include "util/transfer_file.h"
 
 #include "interfaces/file_transfer.h"
+#include "logging.h"
 #include "random.h"
 #include "tinyformat.h"
 #include "util/dir_permissions.h"
+#include "util/fsmodes.h"
 #include "util/strencodings.h"
 #include "util/syserror.h"
 
@@ -91,7 +93,8 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
     sa.lpSecurityDescriptor = sd.get();
     sa.bInheritHandle = FALSE;
 
-    HANDLE h = ::CreateFileW(temp.c_str(), GENERIC_WRITE | READ_CONTROL, 0, &sa, CREATE_NEW,
+    // WRITE_DAC lets KeepPermissions give the file the access list of the destination it will replace.
+    HANDLE h = ::CreateFileW(temp.c_str(), GENERIC_WRITE | READ_CONTROL | WRITE_DAC, 0, &sa, CREATE_NEW,
                              FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
 
     if (h == INVALID_HANDLE_VALUE) {
@@ -113,6 +116,9 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
         error = strprintf("cannot restrict temporary file %s: %s", temp.string(), e.what());
         return std::nullopt;
     }
+
+    // A destination that exists keeps its permissions when the temporary file replaces it.
+    const fsmodes::KeepResult kept = fsmodes::KeepPermissions(dest, f.m_handle);
 #else
     // O_EXCL refuses any existing name and O_NOFOLLOW refuses a symlink in the last
     // component, so a name planted ahead of time is never written through.
@@ -131,7 +137,15 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
         error = strprintf("cannot restrict temporary file %s: %s", temp.string(), SysErrorString(errno));
         return std::nullopt;
     }
+
+    // A destination that exists keeps its permissions when the temporary file replaces it.
+    const fsmodes::KeepResult kept = fsmodes::KeepPermissions(dest, fd);
 #endif
+
+    if (kept.kind == fsmodes::KeepResult::Kind::NotKept) {
+        LogPrintf("WARNING: the permissions of %s could not be kept on the file that replaces it (%s)\n",
+                  dest.string(), kept.error);
+    }
 
     return std::optional<TransferTempFile>(std::move(f));
 }

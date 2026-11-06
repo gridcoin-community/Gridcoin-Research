@@ -26,7 +26,9 @@
 #include <test/data/refused-setting-keys.txt.h>
 #include <logging.h>
 #include <util/string.h>
+#include <util/dir_permissions.h>
 #include <util/syserror.h>
+#include <util/win_acl.h>
 
 #include <cerrno>
 #include <cstdint>
@@ -2141,6 +2143,62 @@ size_t CountLines(const std::vector<std::string>& lines, const std::string& need
 
 const std::string FILE_NAME_FOR_LOG{"gridcoinsettings.json"};
 } // namespace
+
+#ifndef WIN32
+// A settings file that is wider than owner-only is still that wide after the core rewrites it,
+// and one that is not there is created owner-only. Production change that would fail this: the
+// settings writer creating its temporary file owner-only and renaming it over the old file
+// without carrying the old mode.
+BOOST_AUTO_TEST_CASE(settings_rewrite_keeps_the_mode_of_the_file)
+{
+    SettingsFileScope scope;
+    scope.Write({{"free_probe", "a"}});
+    BOOST_REQUIRE_EQUAL(::chmod(scope.m_path.string().c_str(), 0640), 0);
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    struct stat st;
+    BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+
+    // Again, to show the kept mode is not a one-off.
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+
+    // Nothing there: owner-only from creation.
+    BOOST_REQUIRE(fs::remove(scope.m_path));
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0600U);
+}
+#else
+// A Users read entry on the settings file is still there after the core rewrites it, a
+// protected list stays protected, and a file that is not there is created owner-only.
+BOOST_AUTO_TEST_CASE(settings_rewrite_keeps_the_access_list_of_the_file)
+{
+    SettingsFileScope scope;
+    scope.Write({{"free_probe", "a"}});
+
+    util::winacl::AclSpec spec = util::OwnerOnlyAclSpec(/*inheritable=*/false);
+    spec.aces.push_back({util::winacl::wellknown::Users(), FILE_GENERIC_READ, util::winacl::Inherit::None});
+    // The wider list is applied to the file in place, as an operator would with icacls.
+    util::winacl::ApplyAcl(scope.m_path, spec);
+    BOOST_REQUIRE(gArgs.ReadSettingsFile());
+
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    const util::winacl::ObservedAcl after = util::winacl::ReadAcl(scope.m_path);
+    BOOST_CHECK(after.is_protected);
+    BOOST_CHECK(std::any_of(after.aces.begin(), after.aces.end(), [](const util::winacl::ObservedAce& ace) {
+        return ace.trustee == util::winacl::wellknown::Users();
+    }));
+
+    BOOST_REQUIRE(fs::remove(scope.m_path));
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    BOOST_CHECK(!util::winacl::CheckMatchesSpec(util::winacl::ReadAcl(scope.m_path),
+                                                util::OwnerOnlyAclSpec(/*inheritable=*/false)));
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(refused_settings_are_ignored_at_load_and_kept_in_the_file)
 {

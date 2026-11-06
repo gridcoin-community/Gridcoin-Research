@@ -8,6 +8,7 @@
 #include "gridcoin/beacon.h"
 #include "node/blockstorage.h"
 #include "tinyformat.h"
+#include "util/fsmodes.h"
 #include "util/strencodings.h"
 #include "util/system.h"
 
@@ -572,10 +573,18 @@ bool AccrualSnapshotRegistry::Rewrite()
 
     const fs::path temp_path = TempRegistryPath();
 
-    m_file = fsbridge::fopen(temp_path, "wb");
+    // The temporary file is owner-only and has the permissions of the registry it will replace, if
+    // there is one.
+    std::string create_error;
+    std::optional<std::string> create_warning;
+    m_file = fsmodes::CreateReplacementFile(RegistryPath(), temp_path, create_error, create_warning, /*binary=*/true);
 
     if (!m_file) {
-        return error("%s: failed to open %s for writing", __func__, temp_path.string());
+        return error("%s: failed to open %s for writing: %s", __func__, temp_path.string(), create_error);
+    }
+
+    if (create_warning) {
+        LogPrintf("WARNING: %s: %s", __func__, *create_warning);
     }
 
     // Write the version last in effect: the new file replaces the registry

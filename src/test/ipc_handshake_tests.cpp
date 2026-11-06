@@ -7,6 +7,11 @@
 #include "interfaces/init.h"
 #include "ipc/handshake.h"
 #include "test/wine.h"
+#ifdef WIN32
+#include "test/win_fs_util.h"
+#include "util/dir_permissions.h"
+#include "util/win_acl.h"
+#endif
 #include "util/time.h"
 
 #include <boost/test/unit_test.hpp>
@@ -172,6 +177,70 @@ BOOST_AUTO_TEST_CASE(cookie_with_group_is_0640)
     BOOST_CHECK_EQUAL(mode_of(), static_cast<mode_t>(0600));
     BOOST_CHECK_EQUAL(ipc::ReadCookie(dir).value_or(""), without_group);
     BOOST_CHECK(with_group != without_group);
+
+    fs::remove_all(dir);
+}
+// The cookie is an evanescent file made for access, so it always gets the narrowest mode that
+// works: an old cookie a user widened is replaced by one at the designed mode, 0600 without a
+// group and 0640 with one. The rule that a rewritten file keeps its mode does not apply to it.
+// Production change that would fail this: the cookie writer carrying the old file's mode.
+BOOST_AUTO_TEST_CASE(a_widened_old_cookie_is_replaced_by_one_at_the_designed_mode)
+{
+    const fs::path dir = fs::temp_directory_path() / strprintf("grc_ipc_cookie_wide_%d", GetTimeMillis());
+    fs::create_directories(dir);
+    const fs::path file = dir / "ipc.cookie";
+    const auto mode_of = [&] {
+        struct stat st;
+        BOOST_REQUIRE_EQUAL(::lstat(file.c_str(), &st), 0);
+        return static_cast<mode_t>(st.st_mode & 07777);
+    };
+    const auto seed_wide = [&] {
+        {
+            fsbridge::ofstream out(file, std::ios::binary);
+            out << "old";
+        }
+        BOOST_REQUIRE_EQUAL(::chmod(file.c_str(), 0644), 0);
+    };
+
+    seed_wide();
+    ipc::WriteCookie(dir);
+    BOOST_CHECK_EQUAL(mode_of(), static_cast<mode_t>(0600));
+
+    seed_wide();
+    ipc::WriteCookie(dir, ::getegid());
+    BOOST_CHECK_EQUAL(mode_of(), static_cast<mode_t>(0640));
+
+    fs::remove_all(dir);
+}
+#else
+// The same on Windows: an old cookie that has a Users entry is replaced by one that has the
+// cookie's own list only.
+BOOST_AUTO_TEST_CASE(a_widened_old_cookie_is_replaced_by_one_with_the_designed_list)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; this case runs on Windows");
+        return;
+    }
+
+    const fs::path dir = fs::temp_directory_path() / strprintf("grc_ipc_cookie_wide_%d", GetTimeMillis());
+    fs::create_directories(dir);
+    const fs::path file = dir / "ipc.cookie";
+    const auto has_users = [&file] {
+        const util::winacl::ObservedAcl acl = util::winacl::ReadAcl(file);
+        return std::any_of(acl.aces.begin(), acl.aces.end(), [](const util::winacl::ObservedAce& ace) {
+            return ace.trustee == util::winacl::wellknown::Users();
+        });
+    };
+
+    util::winacl::AclSpec wide = util::OwnerOnlyAclSpec(/*inheritable=*/false);
+    wide.aces.push_back({util::winacl::wellknown::Users(), FILE_GENERIC_READ, util::winacl::Inherit::None});
+    grc_test::CreateFileWithAcl(file, wide, "old");
+    BOOST_REQUIRE(has_users());
+
+    const std::string cookie = ipc::WriteCookie(dir);
+    BOOST_CHECK(!has_users());
+    BOOST_CHECK(util::winacl::ReadAcl(file).is_protected);
+    BOOST_CHECK_EQUAL(ipc::ReadCookie(dir).value_or(""), cookie);
 
     fs::remove_all(dir);
 }

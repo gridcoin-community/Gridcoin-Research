@@ -10,6 +10,10 @@
 
 #include <string>
 
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
+
 BOOST_AUTO_TEST_SUITE(wallet_db_tests)
 
 // Berkeley DB takes narrow paths: the environment's home and log directories,
@@ -51,5 +55,42 @@ BOOST_AUTO_TEST_CASE(environment_and_database_open_under_non_ascii_names)
     boost::system::error_code ec;
     fs::remove_all(dir, ec);
 }
+
+#ifndef WIN32
+// The file Berkeley DB writes for CDB::Rewrite (encryption, keypool rewrite) takes the mode of
+// the wallet file it replaces before it is moved into place. The in-memory wallet database of
+// the test environment cannot run a rewrite on a file, so the step Rewrite calls is checked on
+// two files. Production change that would fail this: Rewrite not carrying the wallet file's
+// permissions onto the file BDB created.
+BOOST_AUTO_TEST_CASE(rewrite_keeps_the_mode_of_the_wallet_file)
+{
+    const fs::path dir = GetDataDir() / "wallet_db_tests_rewrite_mode";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    const fs::path wallet = dir / "wallet.dat";
+    const fs::path rewritten = dir / "wallet.dat.rewrite";
+    for (const fs::path& path : {wallet, rewritten}) {
+        fsbridge::ofstream out(path, std::ios::binary);
+        out << "bdb";
+    }
+    BOOST_REQUIRE_EQUAL(::chmod(wallet.c_str(), 0640), 0);
+    // What BDB gives a file it creates with the environment's mode.
+    BOOST_REQUIRE_EQUAL(::chmod(rewritten.c_str(), 0600), 0);
+
+    BOOST_CHECK(CDB::KeepRewrittenFilePermissions(wallet, rewritten));
+
+    struct stat st;
+    BOOST_REQUIRE_EQUAL(::stat(rewritten.c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+    BOOST_REQUIRE_EQUAL(::stat(wallet.c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+
+    // No wallet file: nothing to keep, and not a failure.
+    fs::remove(wallet);
+    BOOST_CHECK(CDB::KeepRewrittenFilePermissions(wallet, rewritten));
+
+    fs::remove_all(dir);
+}
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()

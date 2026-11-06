@@ -219,6 +219,31 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_loose_acl)
     BOOST_CHECK_MESSAGE(Contains(status.problem, "readable by other accounts"), status.problem);
 }
 
+// The autounlock file is made only for access, so a new Store() always replaces the old file with
+// one that has the owner-only list, whatever list the old one had: the rule that a rewritten
+// file keeps its permissions does not apply to it. Production change that would fail this:
+// Store() carrying the old file's access list onto the new one.
+BOOST_AUTO_TEST_CASE(dpapi_store_replaces_a_widened_file_with_an_owner_only_one)
+{
+    if (SkipUnderWine()) return;
+
+    TempDataDir datadir;
+    const fs::path path = datadir.BlobPath();
+    DpapiBlobStore store;
+    std::string error;
+
+    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-widened-old"), error) == AutoUnlockStoreOutcome::Verified,
+                          error);
+    ApplyAcl(path, OwnerOnlyPlus(wellknown::Users(), FILE_GENERIC_READ));
+    BOOST_REQUIRE(CheckMatchesSpec(ReadAcl(path), util::OwnerOnlyAclSpec(/*inheritable=*/false)).has_value());
+
+    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-narrow-new"), error) == AutoUnlockStoreOutcome::Verified,
+                          error);
+    const std::optional<std::string> reason =
+        CheckMatchesSpec(ReadAcl(path), util::OwnerOnlyAclSpec(/*inheritable=*/false));
+    BOOST_CHECK_MESSAGE(!reason.has_value(), reason.value_or(""));
+}
+
 // An account that may change the file's access control list can grant itself read, which
 // the reader check alone does not see.
 BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_foreign_writer)

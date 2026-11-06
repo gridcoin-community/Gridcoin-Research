@@ -90,7 +90,11 @@ platform-independent even though the procedure there is written for Windows:
 
 * A data directory that already exists keeps its current permissions. We harden only
   what we create, so that a directory someone widened on purpose is not silently
-  re-tightened. `node.sock` and `ipc.cookie` are owner-only either way.
+  re-tightened. `node.sock` and `ipc.cookie` are owner-only either way. A file the core
+  rewrites (the settings file, the configuration file, `peers.dat`, `banlist.dat`, a log after
+  rotation, `wallet.dat` after encryption) keeps the permissions it had, and the core warns
+  where they are wider than it would make them. The two exceptions are `ipc.cookie` and the
+  autounlock file, which the core always writes with the narrowest permissions that work.
 * A config with no `rpcuser`/`rpcpassword` gets generated ones appended, because the
   daemon starts an RPC listener and refuses to run without them. Older configs contain
   only `addnode=` lines, since the monolithic GUI never needed credentials.
@@ -346,7 +350,8 @@ icacls "$env:APPDATA\GridcoinResearch\gridcoinresearch.conf" /inheritance:r /gra
 
 On a fresh install this is already handled: the config is created inside a data
 directory whose owner-only DACL it inherits (POSIX equivalently gets mode 0600,
-applied before the password is written).
+applied before the password is written). When the core later rewrites the file to drop an
+obsolete key, the file keeps the permissions it had.
 
 #### Reference
 

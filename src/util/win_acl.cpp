@@ -709,6 +709,49 @@ void ApplyAcl(const fs::path& path, const AclSpec& spec)
     }
 }
 
+void CopyDacl(void* from, void* to)
+{
+    PACL dacl = nullptr;
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    DWORD rc = ::GetSecurityInfo(static_cast<HANDLE>(from), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr,
+                                 nullptr, &dacl, nullptr, &sd);
+    const LocalPtr sd_guard(sd);
+    if (rc != ERROR_SUCCESS) ThrowWin32(rc, "GetSecurityInfo");
+
+    // The protection is in the descriptor's control bits, and is stated again on the set side.
+    const ObservedAcl wanted = ToObservedAcl(sd, nullptr, dacl);
+    const SECURITY_INFORMATION info = DACL_SECURITY_INFORMATION | (wanted.is_protected
+                                                                      ? PROTECTED_DACL_SECURITY_INFORMATION
+                                                                      : UNPROTECTED_DACL_SECURITY_INFORMATION);
+    rc = ::SetSecurityInfo(static_cast<HANDLE>(to), SE_FILE_OBJECT, info, nullptr, nullptr,
+                           wanted.dacl_present ? dacl : nullptr, nullptr);
+    if (rc != ERROR_SUCCESS) ThrowWin32(rc, "SetSecurityInfo");
+
+    // A volume may accept the call and store nothing, so it is read back. Only the entries that
+    // are not inherited are compared when the list is not protected.
+    const ObservedAcl got = ReadAcl(to, /*kernel_object=*/false);
+    const auto kept = [&wanted](const ObservedAce& ace) { return wanted.is_protected || !ace.inherited; };
+    std::vector<const ObservedAce*> want_aces;
+    std::vector<const ObservedAce*> got_aces;
+    for (const ObservedAce& ace : wanted.aces) {
+        if (kept(ace)) want_aces.push_back(&ace);
+    }
+    for (const ObservedAce& ace : got.aces) {
+        if (kept(ace)) got_aces.push_back(&ace);
+    }
+
+    const bool same = got.dacl_present == wanted.dacl_present && got.is_protected == wanted.is_protected &&
+                      want_aces.size() == got_aces.size() &&
+                      std::equal(want_aces.begin(), want_aces.end(), got_aces.begin(),
+                                 [](const ObservedAce* a, const ObservedAce* b) {
+                                     return a->kind == b->kind && a->trustee == b->trustee && a->mask == b->mask &&
+                                            a->inherit_only == b->inherit_only && a->inherit == b->inherit;
+                                 });
+    if (!same) {
+        throw AclNotKeptError("the new file", "the access list read back is not the one set");
+    }
+}
+
 void* BuildDacl(const std::vector<AceSpec>& aces)
 {
     // Each allow entry is its header and mask followed by the SID.

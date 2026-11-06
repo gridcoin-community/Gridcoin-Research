@@ -735,7 +735,7 @@ std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::p
 }
 
 std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::optional<std::string>& not_owner_only,
-                                  std::string& error)
+                                  std::string& error, bool /*binary*/)
 {
     taken = false;
     not_owner_only.reset();
@@ -764,6 +764,75 @@ std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::option
     }
 
     return file;
+}
+
+KeepResult KeepPermissions(const fs::path& existing, int fd)
+{
+    KeepResult result;
+
+    // The file the name leads to, as a reader of the name sees it. A name that leads nowhere has
+    // nothing to carry.
+    struct stat old_st;
+    if (::stat(existing.string().c_str(), &old_st) != 0) {
+        const int err = errno;
+        if (err == ENOENT || err == ENOTDIR) return result;
+
+        result.kind = KeepResult::Kind::NotKept;
+        result.error = strprintf("cannot read the permissions of %s: %s", existing.string(), SysErrorString(err));
+        return result;
+    }
+
+    struct stat new_st;
+    if (::fstat(fd, &new_st) != 0) {
+        result.kind = KeepResult::Kind::NotKept;
+        result.error = strprintf("cannot read the new file: %s", SysErrorString(errno));
+        return result;
+    }
+
+    // The group is set where this process may set it. EPERM, as for a group it is not in, leaves
+    // the group the new file has, which is not a failure. It comes first, as a change of group
+    // clears the set-user-ID and set-group-ID bits that the mode below puts back.
+    if (new_st.st_gid != old_st.st_gid && ::fchown(fd, static_cast<uid_t>(-1), old_st.st_gid) != 0) {
+        // The group stays as the new file has it.
+    }
+
+    if (::fchmod(fd, old_st.st_mode & 07777) != 0) {
+        result.kind = KeepResult::Kind::NotKept;
+        result.error = strprintf("cannot set the permissions of the new file: %s", SysErrorString(errno));
+        return result;
+    }
+
+    result.kind = KeepResult::Kind::Kept;
+    return result;
+}
+
+KeepResult KeepPermissions(const fs::path& existing, std::FILE* temp)
+{
+    return KeepPermissions(existing, ::fileno(temp));
+}
+
+KeepResult KeepPermissions(const fs::path& existing, const fs::path& temp)
+{
+    // A link at the name is not followed, and only a regular file is changed.
+    const int fd = ::open(temp.string().c_str(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+    if (fd < 0) {
+        KeepResult result;
+        result.kind = KeepResult::Kind::NotKept;
+        result.error = strprintf("cannot open %s: %s", temp.string(), SysErrorString(errno));
+        return result;
+    }
+
+    struct stat st;
+    KeepResult result;
+    if (::fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+        result.kind = KeepResult::Kind::NotKept;
+        result.error = strprintf("%s is not a regular file", temp.string());
+    } else {
+        result = KeepPermissions(existing, fd);
+    }
+    ::close(fd);
+
+    return result;
 }
 
 #else // WIN32
@@ -1372,7 +1441,7 @@ std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::p
 }
 
 std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::optional<std::string>& not_owner_only,
-                                  std::string& error)
+                                  std::string& error, bool binary)
 {
     taken = false;
     not_owner_only.reset();
@@ -1386,8 +1455,9 @@ std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::option
 
     // CREATE_NEW refuses a name that is taken, and a link at the name is not followed
     // (CreateOwnerOnlyFile), so nothing is created where a link leads.
+    // WRITE_DAC lets KeepPermissions set the access list of a file that replaces another.
     DWORD create_error = 0;
-    HANDLE handle = CreateOwnerOnlyFile(path, GENERIC_WRITE | READ_CONTROL, FILE_ATTRIBUTE_NORMAL, acl,
+    HANDLE handle = CreateOwnerOnlyFile(path, GENERIC_WRITE | READ_CONTROL | WRITE_DAC, FILE_ATTRIBUTE_NORMAL, acl,
                                         not_owner_only, create_error);
     if (handle == INVALID_HANDLE_VALUE) {
         taken = create_error == ERROR_FILE_EXISTS || create_error == ERROR_ALREADY_EXISTS;
@@ -1395,16 +1465,16 @@ std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::option
         return nullptr;
     }
 
-    // In text mode, as the file was written before it was created this way. The descriptor
-    // owns the handle once _open_osfhandle succeeds, and the FILE* owns the descriptor.
-    const int fd = ::_open_osfhandle(reinterpret_cast<intptr_t>(handle), _O_TEXT);
+    // In text mode unless \p binary, as the file was written before it was created this way. The
+    // descriptor owns the handle once _open_osfhandle succeeds, and the FILE* owns the descriptor.
+    const int fd = ::_open_osfhandle(reinterpret_cast<intptr_t>(handle), binary ? _O_BINARY : _O_TEXT);
     if (fd == -1) {
         error = strprintf("cannot open %s for writing", path.string());
         ::CloseHandle(handle);
         ::DeleteFileW(path.wstring().c_str());
         return nullptr;
     }
-    std::FILE* const file = ::_fdopen(fd, "w");
+    std::FILE* const file = ::_fdopen(fd, binary ? "wb" : "w");
     if (!file) {
         error = strprintf("cannot open %s for writing", path.string());
         ::_close(fd);
@@ -1415,6 +1485,103 @@ std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::option
     return file;
 }
 
+KeepResult KeepPermissions(const fs::path& existing, void* handle)
+{
+    KeepResult result;
+
+    // The old file is opened for its access list only, and a link at its name as itself.
+    DWORD open_error = 0;
+    const UniqueHandle old = OpenForCheck(existing, /*follow_link=*/false, &open_error);
+    if (!old) {
+        if (open_error == ERROR_FILE_NOT_FOUND || open_error == ERROR_PATH_NOT_FOUND) return result;
+
+        result.kind = KeepResult::Kind::NotKept;
+        result.error = strprintf("cannot read the access list of %s: %s", existing.string(),
+                                 Win32ErrorText(open_error));
+        return result;
+    }
+
+    try {
+        util::winacl::CopyDacl(old.get(), handle);
+        result.kind = KeepResult::Kind::Kept;
+    } catch (const std::system_error& e) {
+        result.kind = KeepResult::Kind::NotKept;
+        result.error = ReasonOf(e);
+    } catch (const std::exception& e) {
+        result.kind = KeepResult::Kind::NotKept;
+        result.error = e.what();
+    }
+
+    return result;
+}
+
+KeepResult KeepPermissions(const fs::path& existing, std::FILE* temp)
+{
+    return KeepPermissions(existing, reinterpret_cast<void*>(::_get_osfhandle(::_fileno(temp))));
+}
+
+KeepResult KeepPermissions(const fs::path& existing, const fs::path& temp)
+{
+    // A link at the name is not followed, and only a file is changed.
+    const UniqueHandle handle(::CreateFileW(temp.wstring().c_str(), READ_CONTROL | WRITE_DAC | FILE_READ_ATTRIBUTES,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                            OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    KeepResult result;
+    if (!handle) {
+        result.kind = KeepResult::Kind::NotKept;
+        result.error = strprintf("cannot open %s: %s", temp.string(), Win32ErrorText(::GetLastError()));
+        return result;
+    }
+
+    const std::optional<WinEntry> entry = EntryOf(handle.get());
+    if (!entry || entry->reparse || entry->directory) {
+        result.kind = KeepResult::Kind::NotKept;
+        result.error = strprintf("%s is not a file that can be changed", temp.string());
+        return result;
+    }
+
+    return KeepPermissions(existing, handle.get());
+}
+
 #endif // WIN32
+
+std::FILE* CreateReplacementFile(const fs::path& target, const fs::path& temp, std::string& error,
+                                 std::optional<std::string>& warning, bool binary)
+{
+    warning.reset();
+    error.clear();
+
+    // A temporary file left by an earlier run, or a link planted at its name, is removed and not
+    // followed; creation below is exclusive. A directory there is left, and the creation fails.
+    boost::system::error_code ec;
+    const fs::file_status left = fs::symlink_status(temp, ec);
+    if (!ec && fs::exists(left) && !fs::is_directory(left)) {
+        fs::remove(temp, ec);
+        if (ec) {
+            error = strprintf("cannot remove %s: %s", temp.string(), ec.message());
+            return nullptr;
+        }
+    }
+
+    bool taken = false;
+    std::optional<std::string> not_owner_only;
+    std::FILE* const file = CreateNewOwnerOnlyFile(temp, taken, not_owner_only, error, binary);
+    if (!file) return nullptr;
+
+    const KeepResult kept = KeepPermissions(target, file);
+    switch (kept.kind) {
+    case KeepResult::Kind::Kept:
+        break;
+    case KeepResult::Kind::NoOldFile:
+        warning = std::move(not_owner_only);
+        break;
+    case KeepResult::Kind::NotKept:
+        warning = strprintf("the permissions of %s could not be kept on %s (%s)", target.string(), temp.string(),
+                            kept.error);
+        break;
+    }
+
+    return file;
+}
 
 } // namespace fsmodes

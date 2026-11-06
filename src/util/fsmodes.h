@@ -300,8 +300,73 @@ std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::p
 //! CopyFileOwnerOnly creates a new target, and in text mode. A volume that keeps no access
 //! lists, or a network share that refuses the list, where the file is created with the list it
 //! inherits, is \p not_owner_only. Error texts are ASCII.
+//!
+//! \p binary opens the file in binary mode on Windows, which a file of bytes needs (the mode
+//! decides whether "\n" is written as "\r\n"); POSIX has no such difference.
 std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::optional<std::string>& not_owner_only,
-                                  std::string& error);
+                                  std::string& error, bool binary = false);
+
+//! What KeepPermissions did.
+struct KeepResult
+{
+    enum class Kind
+    {
+        //! Nothing exists at the old name, so there is nothing to carry. The new file stays as it was
+        //! created, owner-only.
+        NoOldFile,
+        //! The new file now has the permissions of the old one.
+        Kept,
+        //! The old file exists but its permissions could not be read or put on the new file (\p error
+        //! says why). The new file stays as it was created, owner-only.
+        NotKept,
+    };
+
+    Kind kind{Kind::NoOldFile};
+    //! Why, for NotKept. ASCII apart from a path.
+    std::string error;
+};
+
+//! Carries the permissions of the file at \p existing onto \p temp, the file that is about to
+//! replace it (a temporary file renamed over it, or a file recreated at its name after a
+//! rotation). The file the core rewrites keeps the permissions it had, because the operator may
+//! have widened them on purpose; the core warns where it already warns about a wide file
+//! (CheckOwnerOnlyModes) and never changes the file that is being replaced. Call it before the
+//! rename. Neither file is created or removed.
+//!
+//! POSIX: the permission bits (st_mode & 07777) and, where this process may set it, the group,
+//! set through the descriptor (fchown, then fchmod; a group that cannot be set, EPERM, stays as
+//! it is). The path of the new file is never changed.
+//!
+//! Windows: the access list (DACL) and whether it is protected, read through a handle on
+//! \p existing opened with READ_CONTROL and without following a reparse point, and set through
+//! the handle of \p temp (SetSecurityInfo with PROTECTED_ or UNPROTECTED_DACL_SECURITY_
+//! INFORMATION), then read back. The owner stays the account that wrote \p temp: no privilege
+//! is used to set another one. \p temp must have been opened with WRITE_DAC.
+//!
+//! \p temp is a stream the caller holds open (the descriptor or handle under a FILE*), or a path
+//! that is opened and closed here without following a link. The second form is for a file that
+//! a library has created and closed (the Berkeley DB rewrite) or that a stream class holds.
+KeepResult KeepPermissions(const fs::path& existing, std::FILE* temp);
+KeepResult KeepPermissions(const fs::path& existing, const fs::path& temp);
+
+#ifndef WIN32
+//! The same on an open file descriptor, for a caller that holds one and no FILE*.
+KeepResult KeepPermissions(const fs::path& existing, int fd);
+#else
+//! The same on a handle opened with WRITE_DAC.
+KeepResult KeepPermissions(const fs::path& existing, void* handle);
+#endif
+
+//! Creates \p temp, a file that will replace \p target, and returns it open for writing, or
+//! nullptr with \p error saying why. \p temp is removed first if it is there (a link there is
+//! removed, never followed; a directory there is left, and the creation then fails), then created exclusively and owner-only (CreateNewOwnerOnlyFile),
+//! then given the permissions \p target has, if it exists (KeepPermissions). \p warning holds
+//! what the caller should log when the file is not what it should be: that it is not owner-only
+//! on a filesystem that keeps no modes, or that the permissions of \p target could not be kept.
+//! The caller writes the file, closes it and renames it over \p target.
+//! \p binary is CreateNewOwnerOnlyFile's.
+std::FILE* CreateReplacementFile(const fs::path& target, const fs::path& temp, std::string& error,
+                                 std::optional<std::string>& warning, bool binary = false);
 
 } // namespace fsmodes
 

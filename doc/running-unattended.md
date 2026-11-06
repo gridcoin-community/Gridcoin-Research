@@ -108,6 +108,11 @@ this machine. Root on the machine can decrypt it either way: nothing here protec
   own session; for higher security, use the different-account mode.** The per-user core runs as if you had started
   it by hand: your home, your groups, your configuration file, notify scripts, BOINC data and backup directory
   work as they do then, and switching back to the plain GUI is a matter of stopping the unit.
+- **A file the core rewrites keeps the permissions it had.** That covers the settings file, the configuration file,
+  `peers.dat`, `banlist.dat`, the log after a rotation and `wallet.dat` after encryption. The core warns at start
+  where they are wider than it would make them, and never changes them itself. A file it creates new is owner-only.
+  The IPC cookie and the autounlock file are the exceptions: each is written afresh with the narrowest
+  permissions that work.
 - **A core started by hand has no autounlock.** The helper that holds the passphrase serves only the main process
   of the unit it belongs to.
 - **Supplementary groups ride along.** A per-user core has every group your account has, as any program of yours

@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #else
+#include "test/win_fs_util.h"
 #include "test/wine.h"
 #include "util/dir_permissions.h"
 #include "util/win_acl.h"
@@ -547,6 +548,24 @@ BOOST_AUTO_TEST_CASE(clean_config_treats_a_dangling_link_as_a_link)
                         "no log line");
 }
 
+// The cleaned file replaces the old one and has the old one's mode: a conf the operator made
+// group-readable stays so. Production change that would fail this: CleanConfig creating the new
+// file owner-only and renaming it over the conf without carrying the old mode.
+BOOST_AUTO_TEST_CASE(clean_config_keeps_the_mode_of_the_conf)
+{
+    ScratchDataDir datadir;
+    const fs::path conf = GetConfigFile();
+    WriteText(conf, "privatekey=x\nrpcuser=a\n");
+    BOOST_REQUIRE_EQUAL(::chmod(conf.string().c_str(), 0640), 0);
+
+    BOOST_CHECK(GRC::CleanConfig());
+
+    BOOST_CHECK_EQUAL(ReadText(conf).find("privatekey"), std::string::npos);
+    struct stat st;
+    BOOST_REQUIRE_EQUAL(::stat(conf.string().c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+}
+
 // The cleaned file is written under a temporary name that is created exclusively and
 // owner-only. A link left at that name is removed, never followed.
 BOOST_AUTO_TEST_CASE(clean_config_does_not_follow_a_link_at_its_temporary_name)
@@ -713,6 +732,33 @@ BOOST_AUTO_TEST_CASE(first_run_conf_is_created_owner_only_windows)
 
     // Present now, so the next start cleans and completes it instead.
     BOOST_CHECK(!IsConfigFileEmpty());
+}
+
+// The cleaned file keeps the conf's access list: an extra Users entry is still there, and the
+// list is still protected. Production change that would fail this: CleanConfig creating the new
+// file owner-only and renaming it over the conf.
+BOOST_AUTO_TEST_CASE(clean_config_keeps_the_access_list_of_the_conf_windows)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
+        return;
+    }
+
+    ScratchDataDir datadir;
+    const fs::path conf = GetConfigFile();
+    grc_test::WriteOwnFile(conf, "privatekey=x\nrpcuser=a\n");
+    util::winacl::AclSpec spec = util::OwnerOnlyAclSpec(/*inheritable=*/false);
+    spec.aces.push_back({util::winacl::wellknown::Users(), FILE_GENERIC_READ, util::winacl::Inherit::None});
+    util::winacl::ApplyAcl(conf, spec);
+
+    BOOST_CHECK(GRC::CleanConfig());
+
+    BOOST_CHECK_EQUAL(ReadText(conf).find("privatekey"), std::string::npos);
+    const util::winacl::ObservedAcl after = util::winacl::ReadAcl(conf);
+    BOOST_CHECK(after.is_protected);
+    BOOST_CHECK(std::any_of(after.aces.begin(), after.aces.end(), [](const util::winacl::ObservedAce& ace) {
+        return ace.trustee == util::winacl::wellknown::Users();
+    }));
 }
 #endif
 

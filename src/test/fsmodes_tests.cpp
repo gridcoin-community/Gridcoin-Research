@@ -1223,6 +1223,127 @@ BOOST_AUTO_TEST_CASE(create_new_owner_only_file_is_exclusive_and_0600)
     BOOST_CHECK(!error.empty());
 }
 
+// A file that replaces another keeps the permission bits of the one it replaces, set on the open
+// temporary file before the rename, and the old file is not touched. Production change that would
+// fail this: a KeepPermissions that does not fchmod the temporary file.
+BOOST_AUTO_TEST_CASE(keep_permissions_carries_the_mode_onto_the_temp_file)
+{
+    const ScratchDir scratch;
+    const UmaskGuard permissive(0);
+
+    for (const mode_t mode : {mode_t{0640}, mode_t{0664}, mode_t{0604}, mode_t{0400}}) {
+        const fs::path old_file = scratch.m_path / "old";
+        const fs::path temp = scratch.m_path / "old.tmp";
+        fs::remove(old_file);
+        fs::remove(temp);
+        MakeFile(old_file, mode);
+
+        bool taken = false;
+        std::optional<std::string> not_owner_only;
+        std::string error;
+        std::FILE* file = fsmodes::CreateNewOwnerOnlyFile(temp, taken, not_owner_only, error);
+        BOOST_REQUIRE_MESSAGE(file, error);
+        BOOST_CHECK_EQUAL(ModeOf(temp), 0600U);
+
+        const fsmodes::KeepResult result = fsmodes::KeepPermissions(old_file, file);
+        BOOST_CHECK(result.kind == fsmodes::KeepResult::Kind::Kept);
+        BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
+        BOOST_CHECK_EQUAL(std::fclose(file), 0);
+
+        BOOST_CHECK_EQUAL(ModeOf(temp), static_cast<unsigned>(mode));
+        BOOST_CHECK_EQUAL(ModeOf(old_file), static_cast<unsigned>(mode));
+    }
+}
+
+// With nothing at the old name the temporary file stays as created, 0600 whatever the umask.
+BOOST_AUTO_TEST_CASE(keep_permissions_with_no_old_file_leaves_the_temp_file_owner_only)
+{
+    const ScratchDir scratch;
+    const UmaskGuard permissive(0);
+
+    const fs::path temp = scratch.m_path / "new.tmp";
+    bool taken = false;
+    std::optional<std::string> not_owner_only;
+    std::string error;
+    std::FILE* file = fsmodes::CreateNewOwnerOnlyFile(temp, taken, not_owner_only, error);
+    BOOST_REQUIRE_MESSAGE(file, error);
+
+    const fsmodes::KeepResult result = fsmodes::KeepPermissions(scratch.m_path / "absent", file);
+    BOOST_CHECK(result.kind == fsmodes::KeepResult::Kind::NoOldFile);
+    BOOST_CHECK_EQUAL(std::fclose(file), 0);
+    BOOST_CHECK_EQUAL(ModeOf(temp), 0600U);
+}
+
+// The group of the old file is carried when this process may set it, and the form that takes a
+// path does the same. A group this process is not in stays as it is (EPERM is not a failure).
+BOOST_AUTO_TEST_CASE(keep_permissions_carries_the_group_and_works_on_a_path)
+{
+    const ScratchDir scratch;
+    const UmaskGuard permissive(0);
+
+    const int count = ::getgroups(0, nullptr);
+    std::vector<gid_t> groups(count > 0 ? static_cast<size_t>(count) : 0);
+    if (count > 0) BOOST_REQUIRE_EQUAL(::getgroups(count, groups.data()), count);
+    const auto other = std::find_if(groups.begin(), groups.end(), [](gid_t g) { return g != ::getegid(); });
+
+    const fs::path old_file = scratch.m_path / "old";
+    MakeFile(old_file, 0640);
+    if (other != groups.end()) BOOST_REQUIRE_EQUAL(::chown(old_file.c_str(), static_cast<uid_t>(-1), *other), 0);
+
+    const fs::path temp = scratch.m_path / "old.tmp";
+    MakeFile(temp, 0600);
+    BOOST_CHECK(fsmodes::KeepPermissions(old_file, temp).kind == fsmodes::KeepResult::Kind::Kept);
+    BOOST_CHECK_EQUAL(ModeOf(temp), 0640U);
+
+    struct stat st;
+    BOOST_REQUIRE_EQUAL(::lstat(temp.c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(st.st_gid, other != groups.end() ? *other : ::getegid());
+
+    // A link at the temporary name is not followed.
+    const fs::path victim = scratch.m_path / "victim";
+    MakeFile(victim, 0600);
+    const fs::path link = scratch.m_path / "link";
+    fs::create_symlink(victim, link);
+    BOOST_CHECK(fsmodes::KeepPermissions(old_file, link).kind == fsmodes::KeepResult::Kind::NotKept);
+    BOOST_CHECK_EQUAL(ModeOf(victim), 0600U);
+}
+
+// CreateReplacementFile: a stale temporary name (a link too) is removed and never followed, the
+// new file is created owner-only and then takes the mode of the file it will replace.
+BOOST_AUTO_TEST_CASE(create_replacement_file_keeps_the_mode_of_the_target)
+{
+    const ScratchDir scratch;
+    const UmaskGuard permissive(0);
+
+    const fs::path target = scratch.m_path / "target";
+    const fs::path temp = scratch.m_path / "target.tmp";
+    const fs::path victim = scratch.m_path / "victim";
+    MakeFile(target, 0640);
+    MakeFile(victim, 0644);
+    fs::create_symlink(victim, temp);
+
+    std::string error;
+    std::optional<std::string> warning;
+    std::FILE* file = fsmodes::CreateReplacementFile(target, temp, error, warning);
+    BOOST_REQUIRE_MESSAGE(file, error);
+    BOOST_CHECK_MESSAGE(!warning, warning.value_or(""));
+    BOOST_CHECK(std::fputs("new\n", file) >= 0);
+    BOOST_CHECK_EQUAL(std::fclose(file), 0);
+
+    BOOST_CHECK_EQUAL(ModeOf(temp), 0640U);
+    BOOST_CHECK_EQUAL(ModeOf(victim), 0644U);
+    BOOST_CHECK_EQUAL(ReadAll(victim), "fsmodes test\n");
+    BOOST_CHECK_EQUAL(ModeOf(target), 0640U);
+
+    // No target: owner-only.
+    fs::remove(target);
+    fs::remove(temp);
+    file = fsmodes::CreateReplacementFile(target, temp, error, warning);
+    BOOST_REQUIRE_MESSAGE(file, error);
+    BOOST_CHECK_EQUAL(std::fclose(file), 0);
+    BOOST_CHECK_EQUAL(ModeOf(temp), 0600U);
+}
+
 #else // WIN32
 
 namespace {
@@ -1342,6 +1463,89 @@ BOOST_AUTO_TEST_CASE(read_win_ownership_agrees_with_owned_by_us)
 
     BOOST_CHECK(fsmodes::ReadWinOwnership(dir.path / "absent").kind == fsmodes::WinOwnership::Kind::Unopened);
     BOOST_CHECK(!fsmodes::WinNotOwnedText(dir.path / "absent", /*service=*/false).empty());
+}
+
+// A file that replaces another keeps its access list: a Users read entry survives, and a
+// protected list stays protected. Production change that would fail this: a KeepPermissions that
+// leaves the temporary file with the owner-only list it was created with.
+BOOST_AUTO_TEST_CASE(keep_permissions_carries_the_users_entry_and_protection)
+{
+    if (SkipUnderWine()) return;
+
+    const WinTempDir dir;
+    const fs::path old_file = dir.path / "gridcoinsettings.json";
+    CreateWithAcl(old_file, OwnerOnlyPlus(UsersRead(/*directory=*/false), /*directory=*/false));
+    const ObservedAcl before = ReadAcl(old_file);
+    BOOST_REQUIRE(before.is_protected);
+
+    const fs::path temp = dir.path / "gridcoinsettings.json.tmp";
+    std::string error;
+    std::optional<std::string> warning;
+    std::FILE* file = fsmodes::CreateReplacementFile(old_file, temp, error, warning);
+    BOOST_REQUIRE_MESSAGE(file, error);
+    BOOST_CHECK_MESSAGE(!warning, warning.value_or(""));
+    BOOST_CHECK(std::fputs("{}\n", file) >= 0);
+    BOOST_CHECK_EQUAL(std::fclose(file), 0);
+
+    const ObservedAcl after = ReadAcl(temp);
+    BOOST_CHECK(after.is_protected);
+    BOOST_CHECK(after.owner == CurrentTokenUser());
+    BOOST_CHECK_EQUAL(after.aces.size(), before.aces.size());
+    const auto has_users = [](const ObservedAcl& acl) {
+        return std::any_of(acl.aces.begin(), acl.aces.end(), [](const ObservedAce& ace) {
+            return ace.kind == AceKind::Allow && ace.trustee == wellknown::Users();
+        });
+    };
+    BOOST_CHECK(has_users(after));
+
+    // The old file is not changed.
+    BOOST_CHECK(grc_test::SameAcl(ReadAcl(old_file), before));
+}
+
+// A list that was not protected stays unprotected, and its explicit entries stay.
+BOOST_AUTO_TEST_CASE(keep_permissions_keeps_an_unprotected_list_unprotected)
+{
+    if (SkipUnderWine()) return;
+
+    const WinTempDir dir;
+    const fs::path folder = dir.path / "data";
+    BOOST_REQUIRE(CreateDirectoryWithAcl(folder, OwnerOnlyPlus(UsersRead(/*directory=*/true), /*directory=*/true)));
+
+    // Created plainly in a directory that hands down entries, so its list is not protected.
+    const fs::path old_file = folder / "peers.dat";
+    const HANDLE created = ::CreateFileW(old_file.wstring().c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                                         FILE_ATTRIBUTE_NORMAL, nullptr);
+    BOOST_REQUIRE(created != INVALID_HANDLE_VALUE);
+    ::CloseHandle(created);
+    const ObservedAcl before = ReadAcl(old_file);
+    BOOST_REQUIRE(!before.is_protected);
+
+    const fs::path temp = folder / "peers.dat.tmp";
+    std::string error;
+    std::optional<std::string> warning;
+    std::FILE* file = fsmodes::CreateReplacementFile(old_file, temp, error, warning);
+    BOOST_REQUIRE_MESSAGE(file, error);
+    BOOST_CHECK_EQUAL(std::fclose(file), 0);
+
+    const ObservedAcl after = ReadAcl(temp);
+    BOOST_CHECK(!after.is_protected);
+    BOOST_CHECK_EQUAL(after.aces.size(), before.aces.size());
+}
+
+// With nothing at the old name the new file is owner-only from creation.
+BOOST_AUTO_TEST_CASE(create_replacement_file_without_a_target_is_owner_only)
+{
+    if (SkipUnderWine()) return;
+
+    const WinTempDir dir;
+    const fs::path temp = dir.path / "new.tmp";
+    std::string error;
+    std::optional<std::string> warning;
+    std::FILE* file = fsmodes::CreateReplacementFile(dir.path / "absent", temp, error, warning);
+    BOOST_REQUIRE_MESSAGE(file, error);
+    BOOST_CHECK_EQUAL(std::fclose(file), 0);
+
+    BOOST_CHECK(!util::winacl::CheckMatchesSpec(ReadAcl(temp), util::OwnerOnlyAclSpec(/*inheritable=*/false)));
 }
 
 // A junction is not ours, whoever made it: OwnedByUs does not follow it to the directory it

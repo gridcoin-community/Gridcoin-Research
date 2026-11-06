@@ -12,6 +12,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <iterator>
 #include <limits>
@@ -24,6 +25,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #else
+#include "test/win_fs_util.h"
 #include "test/wine.h"
 #include "util/dir_permissions.h"
 #include "util/win_acl.h"
@@ -134,6 +136,40 @@ BOOST_AUTO_TEST_CASE(commit_renames_when_trailer_matches)
             util::winacl::ReadAcl(dir / "out.bin"), util::OwnerOnlyAclSpec(/*inheritable=*/false));
         BOOST_CHECK_MESSAGE(!reason, reason.value_or(""));
     }
+#endif
+}
+
+// A transfer that replaces a destination that exists leaves a file with the permissions that
+// destination had; one to a name that is free is owner-only. Production change that would fail
+// this: Create() not carrying the destination's permissions onto the temporary file before
+// Commit() renames it over the destination.
+BOOST_AUTO_TEST_CASE(commit_over_an_existing_destination_keeps_its_permissions)
+{
+    std::string err;
+    const fs::path dest = dir / "existing.bin";
+#ifndef WIN32
+    WriteAll(dest, "old");
+    BOOST_REQUIRE_EQUAL(::chmod(dest.c_str(), 0640), 0);
+#else
+    if (grc_test::RunningUnderWine()) return;
+    util::winacl::AclSpec spec = util::OwnerOnlyAclSpec(/*inheritable=*/false);
+    spec.aces.push_back({util::winacl::wellknown::Users(), FILE_GENERIC_READ, util::winacl::Inherit::None});
+    grc_test::CreateFileWithAcl(dest, spec, "old");
+#endif
+
+    auto t = util::TransferTempFile::Create(dest, err);
+    BOOST_REQUIRE_MESSAGE(t, err);
+    BOOST_REQUIRE(t->Write(reinterpret_cast<const unsigned char*>(kBytes.data()), kBytes.size(), err));
+    BOOST_REQUIRE_MESSAGE(t->Commit(kBytes.size(), Sha256Of(kBytes), err), err);
+
+    BOOST_CHECK_EQUAL(ReadAll(dest), kBytes);
+#ifndef WIN32
+    BOOST_CHECK_EQUAL(ModeOf(dest), 0640u);
+#else
+    const util::winacl::ObservedAcl acl = util::winacl::ReadAcl(dest);
+    BOOST_CHECK(std::any_of(acl.aces.begin(), acl.aces.end(), [](const util::winacl::ObservedAce& ace) {
+        return ace.trustee == util::winacl::wellknown::Users();
+    }));
 #endif
 }
 

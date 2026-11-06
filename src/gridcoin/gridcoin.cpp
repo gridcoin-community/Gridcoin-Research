@@ -861,7 +861,7 @@ skip:;
     }
 
     // The cleaned file holds the RPC password, so it is written under a temporary name that is
-    // created exclusively and owner-only (fsmodes::CreateNewOwnerOnlyFile). Whatever an earlier
+    // created exclusively and owner-only (fsmodes::CreateReplacementFile). Whatever an earlier
     // run left at that name, a link included, is removed first, never written through.
     fs::path new_config_path(config_file);
     new_config_path.replace_extension("conf~");
@@ -873,16 +873,17 @@ skip:;
                      ec.message());
     }
 
-    bool taken = false;
-    std::optional<std::string> not_owner_only;
+    // Created owner-only, then given the permissions of the conf it will replace, so a conf the
+    // operator made wider stays so.
+    std::optional<std::string> create_warning;
     std::string create_error;
     std::FILE* const new_config_file =
-        fsmodes::CreateNewOwnerOnlyFile(new_config_path, taken, not_owner_only, create_error);
+        fsmodes::CreateReplacementFile(config_file, new_config_path, create_error, create_warning);
     if (new_config_file == nullptr) {
         return error("%s: Error saving config: %s", __func__, create_error);
     }
-    if (not_owner_only) {
-        LogPrintf("WARNING: %s: %s is not owner-only (%s)", __func__, new_config_path.string(), *not_owner_only);
+    if (create_warning) {
+        LogPrintf("WARNING: %s: %s", __func__, *create_warning);
     }
 
     bool written = true;

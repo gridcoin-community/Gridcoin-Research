@@ -6,6 +6,7 @@
 #include "node/ui_interface.h"
 #include <util/system.h>
 #include "util/dir_permissions.h"
+#include "util/fsmodes.h"
 #include <util/strencodings.h>
 #include <util/check.h>
 #include <util/refused_setting_keys.h>
@@ -639,6 +640,21 @@ bool ArgsManager::WriteSettingsFile(std::vector<std::string>* errors) const
     // Refused values are written back unchanged, so ignoring them at load never deletes them.
     std::map<std::string, util::SettingsValue> to_write = m_settings.rw_settings;
     to_write.insert(m_settings.refused_rw_settings.begin(), m_settings.refused_rw_settings.end());
+    // The temporary file is created owner-only and given the permissions of the settings file that
+    // it will replace, if there is one, so a file the operator made wider stays so. WriteSettings
+    // then fills it.
+    std::string create_error;
+    std::optional<std::string> create_warning;
+    std::FILE* const created = fsmodes::CreateReplacementFile(path, path_tmp, create_error, create_warning);
+    if (created == nullptr) {
+        SaveErrors({strprintf("Error: Unable to create settings file %s: %s", path_tmp.string(), create_error)}, errors);
+        return false;
+    }
+    if (create_warning) LogPrintf("WARNING: %s", *create_warning);
+    if (std::fclose(created) != 0) {
+        SaveErrors({strprintf("Error: Unable to create settings file %s", path_tmp.string())}, errors);
+        return false;
+    }
     if (!util::WriteSettings(path_tmp, to_write, write_errors)) {
         SaveErrors(write_errors, errors);
         return false;

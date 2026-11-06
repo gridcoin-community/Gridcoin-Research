@@ -21,6 +21,10 @@
 #include <utility>
 #include <vector>
 
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
+
 namespace {
 
 //!
@@ -266,6 +270,41 @@ BOOST_AUTO_TEST_CASE(a_previous_version_registry_loads_as_a_pending_upgrade)
     BOOST_CHECK_EQUAL(repo.LatestHeight(), 400u);
     BOOST_CHECK(repo.CloseRegistryFile());
 }
+
+#ifndef WIN32
+// The rewritten registry replaces the old one and has its mode: a registry the operator made
+// group-readable stays so. Production change that would fail this: Rewrite() writing its
+// temporary file with the default mode and renaming it over the registry without carrying the
+// old one.
+BOOST_AUTO_TEST_CASE(a_registry_rewrite_keeps_the_mode_of_the_registry)
+{
+    StoreThreeAndClose();
+    const std::string path = RegistryPath().string();
+    BOOST_REQUIRE_EQUAL(::chmod(path.c_str(), 0640), 0);
+
+    {
+        GRC::AccrualSnapshotRepository repo;
+        BOOST_REQUIRE(repo.Initialize());
+        BOOST_REQUIRE(repo.CompleteUpgrade());
+        BOOST_REQUIRE(repo.CloseRegistryFile());
+    }
+
+    struct stat st;
+    BOOST_REQUIRE_EQUAL(::stat(path.c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+
+    // With no registry, the rewrite creates it owner-only.
+    BOOST_REQUIRE(fs::remove(RegistryPath()));
+    {
+        GRC::AccrualSnapshotRepository repo;
+        BOOST_REQUIRE(repo.Initialize());
+        BOOST_REQUIRE(repo.CompleteUpgrade());
+        BOOST_REQUIRE(repo.CloseRegistryFile());
+    }
+    BOOST_REQUIRE_EQUAL(::stat(path.c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0600U);
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(erasing_the_snapshots_writes_the_current_version_at_once)
 {

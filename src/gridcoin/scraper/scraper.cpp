@@ -22,6 +22,7 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
 #include "consensus/consensus.h"
+#include "util/fsmodes.h"
 
 #include <zlib.h>
 #include <limits>
@@ -965,7 +966,19 @@ public:
                 logfile.open(plogfile, std::ios_base::out | std::ios_base::app);
 
                 if (!logfile.is_open())
+                {
                     LogPrintf("ERROR: ScraperLogger: Failed to open logging file\n");
+                }
+                else
+                {
+                    // The log recreated at its name has the permissions the rotated log had.
+                    const fsmodes::KeepResult kept = fsmodes::KeepPermissions(pfile_temp, plogfile);
+                    if (kept.kind == fsmodes::KeepResult::Kind::NotKept)
+                    {
+                        LogPrintf("WARNING: ScraperLogger: the permissions of %s could not be kept on the new log (%s)\n",
+                                  pfile_temp.string(), kept.error);
+                    }
+                }
 
                 PrevArchiveCheckDate = ArchiveCheckDate;
             }
