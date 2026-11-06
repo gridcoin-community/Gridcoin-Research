@@ -22,6 +22,14 @@ namespace winsvc {
 
 namespace {
 
+// The Win32 errors ClassifyServiceOpen reads, checked against the SDK below.
+constexpr uint32_t WIN32_SUCCESS = 0, WIN32_ACCESS_DENIED = 5, WIN32_SERVICE_DOES_NOT_EXIST = 1060;
+#ifdef WIN32
+static_assert(WIN32_SUCCESS == static_cast<uint32_t>(ERROR_SUCCESS));
+static_assert(WIN32_ACCESS_DENIED == static_cast<uint32_t>(ERROR_ACCESS_DENIED));
+static_assert(WIN32_SERVICE_DOES_NOT_EXIST == static_cast<uint32_t>(ERROR_SERVICE_DOES_NOT_EXIST));
+#endif
+
 //! \p arg in double quotes as QuoteArg quotes it, whatever it holds.
 std::wstring Quoted(const std::wstring& arg)
 {
@@ -152,6 +160,48 @@ std::wstring FirewallDeleteRuleArgs(const std::wstring& name)
 std::wstring FirewallRenameRuleArgs(const std::wstring& from, const std::wstring& to)
 {
     return L"advfirewall firewall set rule name=" + Quoted(from) + L" new name=" + Quoted(to);
+}
+
+std::vector<FirewallStep> FirewallSteps(bool rule_exists, bool staging_exists)
+{
+    std::vector<FirewallStep> steps;
+    if (staging_exists) {
+        // A staged rule an earlier install left: deleted while the rule is there, and otherwise
+        // made the rule, as it is the one that allows the traffic.
+        if (rule_exists) {
+            steps.push_back(FirewallStep::DeleteStaging);
+        } else {
+            steps.push_back(FirewallStep::RenameStagingToRule);
+            rule_exists = true;
+        }
+    }
+
+    if (!rule_exists) {
+        steps.push_back(FirewallStep::AddRule);
+        return steps;
+    }
+
+    // The new rule is added under the staging name before the old one goes.
+    steps.insert(steps.end(), {FirewallStep::AddStaging, FirewallStep::DeleteRule, FirewallStep::RenameStagingToRule});
+    return steps;
+}
+
+ServiceOpen ClassifyServiceOpen(uint32_t win32_error)
+{
+    switch (win32_error) {
+    case WIN32_SUCCESS: return ServiceOpen::Opened;
+    case WIN32_SERVICE_DOES_NOT_EXIST: return ServiceOpen::NotInstalled;
+    case WIN32_ACCESS_DENIED: return ServiceOpen::Unreadable;
+    }
+    return ServiceOpen::Failed;
+}
+
+std::string ServiceUnreadableText(Network net)
+{
+    std::string service;
+    for (const wchar_t c : NamesFor(net).service) service += static_cast<char>(c);
+    return "Service " + service + ": this account cannot read the service's settings, as the service's access "
+           "list does not let it; run status from an elevated prompt to see them";
 }
 
 std::optional<ToolOptions> ParseToolArgs(const std::vector<std::string>& args, std::string& error)

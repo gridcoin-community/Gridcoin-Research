@@ -20,8 +20,10 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstdio>
 #include <cwchar>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -83,6 +85,11 @@ void Say(const std::string& line)
 
 void SayError(const std::string& line)
 {
+    // Every line here is written to its handle at once (WriteText), and the C library's streams
+    // are unbuffered (main), so this flush only keeps anything written through them ahead of the
+    // error, as it was written first.
+    std::fflush(stdout);
+    std::cout.flush();
     WriteText(STD_ERROR_HANDLE, line + "\n");
 }
 
@@ -460,6 +467,13 @@ std::pair<UniqueHandle, Level> OpenLevel(const fs::path& path, DWORD access, DWO
         if (error == winacl::WIN32_UNTRUSTED_MOUNT_POINT) {
             throw Refusal(strprintf("%s: %s", Shown(path), winacl::UNTRUSTED_MOUNT_POINT_REASON));
         }
+        // Only a hold meets this: FILE_LIST_DIRECTORY is a data right, refused while another open
+        // of the directory does not share reading, as one made with no sharing at all does not.
+        if (error == ERROR_SHARING_VIOLATION) {
+            throw Refusal(strprintf("%s is open in another process that does not share it, so install cannot hold "
+                                    "it while it checks and changes it. Close that program, then run install again.",
+                                    Shown(path)));
+        }
         ThrowWin32(error, "open " + Shown(path));
     }
     Level level = LevelOf(handle.get(), path);
@@ -476,11 +490,12 @@ Level ReadLevel(const fs::path& path)
 
 //! The layout directory \p path held open as itself, without sharing delete, so that while it is
 //! held its path keeps naming it: it cannot be renamed or removed. Opened to read its attributes
-//! and access list and to list its entries.
-std::pair<UniqueHandle, Level> HoldLevel(const fs::path& path)
+//! and access list and to list its entries, and with \p to_change also to set its owner and list.
+std::pair<UniqueHandle, Level> HoldLevel(const fs::path& path, bool to_change)
 {
-    return OpenLevel(path, READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_LIST_DIRECTORY,
-                     FILE_SHARE_READ | FILE_SHARE_WRITE);
+    const DWORD access =
+        READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_LIST_DIRECTORY | (to_change ? WRITE_DAC | WRITE_OWNER : 0);
+    return OpenLevel(path, access, FILE_SHARE_READ | FILE_SHARE_WRITE);
 }
 
 //! Each entry directly inside the directory \p dir, which \p handle holds with
@@ -761,16 +776,17 @@ std::optional<std::string> PlantedEntries(const std::vector<LayoutEntry>& layout
     }
     if (found.empty()) return std::nullopt;
 
-    return strprintf("%s holds what install did not make, and its access list let other accounts add entries: %s. "
-                     "Check what each one is, remove it, then run install again.",
-                     Shown(entry.path), Join(found, "; "));
+    // Moved out, not removed: what is named can be a wallet.
+    return strprintf("%s holds entries install did not make, which another account may have put there: %s. Check "
+                     "what each one is, move it out of %s, then run install again.",
+                     Shown(entry.path), Join(found, "; "), Shown(entry.path));
 }
 
 //! Everything install would refuse in place, looked at before anything is changed: each
-//! directory of the layout that exists (LevelRefusal), with, when its access list is not the
-//! layout's, the entries in it (PlantedEntries), and the network's configuration file when it
-//! exists (CheckConf). \p sids names the groups that exist already; a group install has yet to
-//! create is empty, which only makes the lists that name it differ.
+//! directory of the layout that exists (LevelRefusal) and the entries directly inside it
+//! (PlantedEntries, for every level: ChecksLevelEntries), and the network's configuration file
+//! when it exists (CheckConf). \p sids names the groups that exist already; a group install has yet
+//! to create is empty, which only makes the lists that name it differ.
 void Preflight(const std::vector<LayoutEntry>& layout, Network net, const fs::path& programdata,
                const LayoutSids& sids)
 {
@@ -783,12 +799,13 @@ void Preflight(const std::vector<LayoutEntry>& layout, Network net, const fs::pa
         }
         if (!entry.directory) continue;
 
-        const auto [handle, level] = HoldLevel(entry.path);
+        const auto [handle, level] = HoldLevel(entry.path, /*to_change=*/false);
         if (!level.exists) continue;
         if (std::optional<std::string> refusal = LevelRefusal(entry, level)) throw Refusal(*refusal);
 
-        // Only a list other than the layout's could have let another account add an entry.
-        if (winacl::CheckMatchesSpec(level.acl, entry.acl)) {
+        // A list that is the layout's now says who can add an entry now, not who added one before.
+        const bool list_matches = !winacl::CheckMatchesSpec(level.acl, entry.acl);
+        if (ChecksLevelEntries(entry, list_matches)) {
             if (std::optional<std::string> planted = PlantedEntries(layout, programdata, sids, entry, handle.get())) {
                 throw Refusal(*planted);
             }
@@ -796,12 +813,34 @@ void Preflight(const std::vector<LayoutEntry>& layout, Network net, const fs::pa
     }
 }
 
+//! Gives the level \p entry, held as \p handle with WRITE_DAC and WRITE_OWNER, its owner and
+//! protected access list through that handle (SetKernelObjectSecurity), which changes the level
+//! alone and passes nothing down to what it holds, and confirms them through the handle.
+void SetLevelListThroughHandle(HANDLE handle, const LayoutEntry& entry)
+{
+    const winacl::UniqueSecurityDescriptor sd(winacl::MakeSecurityDescriptor(entry.acl));
+    if (!::SetKernelObjectSecurity(handle,
+                                   OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION |
+                                       PROTECTED_DACL_SECURITY_INFORMATION,
+                                   sd.get())) {
+        ThrowLastError("set the owner and access list of " + Shown(entry.path));
+    }
+    if (std::optional<std::string> not_kept =
+            winacl::CheckMatchesSpec(winacl::ReadAcl(handle, /*kernel_object=*/false), entry.acl)) {
+        throw std::runtime_error(strprintf("%s did not keep the layout's owner and access list (%s)",
+                                           Shown(entry.path), *not_kept));
+    }
+}
+
 //! Each directory of \p layout, parents first: created with its owner and access list from the
-//! start (CreateDirectoryWithAcl), or, when it is there, held open without sharing delete,
-//! checked again (LevelRefusal) and, when its list differs, given the layout's. Its entries are
-//! checked before the list is applied and again after (PlantedEntries), when no other account can
-//! add one, and the list is confirmed through the handle held. Then the network's configuration
-//! file (BuildConf). The other network's configuration file is its own install's.
+//! start (CreateDirectoryWithAcl), or, when it is there, held open without sharing delete and
+//! checked again (LevelRefusal). A level whose list differs is first given the layout's owner and
+//! list through the handle held, without passing anything down (SetLevelListThroughHandle), so no
+//! other account can add an entry from then on. Then the entries directly inside every level are
+//! checked (PlantedEntries). Then a level that differed is given the list by its path (ApplyAcl),
+//! which passes the inherited entries down to what it holds, and the list is confirmed through
+//! the handle. Then the network's configuration file (BuildConf). The other network's
+//! configuration file is its own install's.
 void BuildLayout(const std::vector<LayoutEntry>& layout, Network net, const fs::path& programdata,
                  const LayoutSids& sids)
 {
@@ -817,18 +856,24 @@ void BuildLayout(const std::vector<LayoutEntry>& layout, Network net, const fs::
             continue;
         }
 
-        const auto [handle, level] = HoldLevel(entry.path);
+        const auto [handle, level] = HoldLevel(entry.path, /*to_change=*/true);
         if (!level.exists) throw std::runtime_error(Shown(entry.path) + " was removed while install ran");
         if (std::optional<std::string> refusal = LevelRefusal(entry, level)) throw Refusal(*refusal);
 
         const std::optional<std::string> differed = winacl::CheckMatchesSpec(level.acl, entry.acl);
+        if (differed) SetLevelListThroughHandle(handle.get(), entry);
+
+        // A refusal from here on leaves the level with its layout list, closed to other accounts,
+        // and the entry named in it, which a rerun refuses again.
+        if (ChecksLevelEntries(entry, !differed)) {
+            if (std::optional<std::string> planted = PlantedEntries(layout, programdata, sids, entry, handle.get())) {
+                throw Refusal(*planted);
+            }
+        }
+
         if (!differed) {
             Say(strprintf("Kept %s: it has the layout's owner and access list", Shown(entry.path)));
             continue;
-        }
-
-        if (std::optional<std::string> planted = PlantedEntries(layout, programdata, sids, entry, handle.get())) {
-            throw Refusal(*planted);
         }
 
         // By the path, which the handle held keeps naming the directory checked.
@@ -839,10 +884,6 @@ void BuildLayout(const std::vector<LayoutEntry>& layout, Network net, const fs::
                                                Shown(entry.path), *not_kept));
         }
         Say(strprintf("Set the owner and access list of %s (before: %s)", Shown(entry.path), *differed));
-
-        if (std::optional<std::string> planted = PlantedEntries(layout, programdata, sids, entry, handle.get())) {
-            throw Refusal(*planted);
-        }
     }
 }
 
@@ -942,53 +983,60 @@ DWORD RunNetsh(const std::wstring& args, bool quiet)
     return code;
 }
 
-//! The network's inbound rule for \p exe. When there is none, it is added. When there is one, the
-//! new rule is added under FirewallStagingRuleName first, then the old one is deleted and the new
-//! one renamed, so a failure never leaves the machine without the rule it had.
+//! The network's inbound rule for \p exe, by the steps FirewallSteps gives for the rules that are
+//! there: a rule already there is replaced by adding the new one under FirewallStagingRuleName,
+//! deleting the old one and renaming the new one, and a staged rule a stopped install left is
+//! deleted only while the rule is there, and otherwise made the rule. No failure leaves the
+//! machine without the rule it had.
 void AddFirewallRule(Network net, const fs::path& exe)
 {
     const std::wstring rule = FirewallRuleName(net);
     const std::wstring staging = FirewallStagingRuleName(net);
-    const std::wstring add = FirewallAddRuleArgs(net, exe, rule);
-
-    // A staged rule left by an earlier install that stopped part-way.
-    RunNetsh(FirewallDeleteRuleArgs(staging), /*quiet=*/true);
-
-    if (RunNetsh(FirewallShowRuleArgs(rule), /*quiet=*/true) != 0) {
-        const DWORD code = RunNetsh(add, /*quiet=*/false);
-        if (code != 0) {
-            throw std::runtime_error(strprintf("netsh.exe could not add the firewall rule \"%s\" (exit code %u). "
-                                               "Add it from an elevated prompt with: netsh.exe %s",
-                                               Shown(rule), static_cast<unsigned>(code), Shown(add)));
-        }
-        Say(strprintf("Firewall rule \"%s\": added; inbound TCP to the daemon, on domain and private networks",
-                      Shown(rule)));
-        return;
-    }
-
     const std::wstring rename = FirewallRenameRuleArgs(staging, rule);
-    DWORD code = RunNetsh(FirewallAddRuleArgs(net, exe, staging), /*quiet=*/false);
-    if (code != 0) {
-        throw std::runtime_error(strprintf("netsh.exe could not add the new firewall rule (exit code %u); the rule "
-                                           "\"%s\" that was there is kept as it was",
-                                           static_cast<unsigned>(code), Shown(rule)));
+    const bool rule_exists = RunNetsh(FirewallShowRuleArgs(rule), /*quiet=*/true) == 0;
+    const bool staging_exists = RunNetsh(FirewallShowRuleArgs(staging), /*quiet=*/true) == 0;
+
+    for (const FirewallStep step : FirewallSteps(rule_exists, staging_exists)) {
+        DWORD code = 0;
+        std::string failed;
+        switch (step) {
+        case FirewallStep::AddRule:
+            code = RunNetsh(FirewallAddRuleArgs(net, exe, rule), /*quiet=*/false);
+            failed = strprintf("could not add the firewall rule \"%s\". Add it from an elevated prompt with: "
+                               "netsh.exe %s",
+                               Shown(rule), Shown(FirewallAddRuleArgs(net, exe, rule)));
+            break;
+        case FirewallStep::AddStaging:
+            code = RunNetsh(FirewallAddRuleArgs(net, exe, staging), /*quiet=*/false);
+            failed = strprintf("could not add the new firewall rule; the rule \"%s\" that was there is kept as it was",
+                               Shown(rule));
+            break;
+        case FirewallStep::DeleteRule:
+            code = RunNetsh(FirewallDeleteRuleArgs(rule), /*quiet=*/false);
+            failed = strprintf("could not delete the old firewall rule \"%s\", so both it and \"%s\" are there. Delete "
+                               "the old one, then rename the new one from an elevated prompt with: netsh.exe %s",
+                               Shown(rule), Shown(staging), Shown(rename));
+            break;
+        case FirewallStep::DeleteStaging:
+            code = RunNetsh(FirewallDeleteRuleArgs(staging), /*quiet=*/false);
+            failed = strprintf("could not delete the firewall rule \"%s\" an earlier install left; the rule \"%s\" is "
+                               "kept as it was",
+                               Shown(staging), Shown(rule));
+            break;
+        case FirewallStep::RenameStagingToRule:
+            code = RunNetsh(rename, /*quiet=*/false);
+            failed = strprintf("could not rename the firewall rule \"%s\" to \"%s\"; it allows the same. Rename it "
+                               "from an elevated prompt with: netsh.exe %s",
+                               Shown(staging), Shown(rule), Shown(rename));
+            break;
+        }
+        if (code != 0) {
+            throw std::runtime_error(strprintf("netsh.exe %s (exit code %u)", failed, static_cast<unsigned>(code)));
+        }
     }
-    code = RunNetsh(FirewallDeleteRuleArgs(rule), /*quiet=*/false);
-    if (code != 0) {
-        throw std::runtime_error(strprintf("netsh.exe could not delete the old firewall rule \"%s\" (exit code %u), "
-                                           "so both it and \"%s\" are there. Delete the old one, then rename the new "
-                                           "one from an elevated prompt with: netsh.exe %s",
-                                           Shown(rule), static_cast<unsigned>(code), Shown(staging), Shown(rename)));
-    }
-    code = RunNetsh(rename, /*quiet=*/false);
-    if (code != 0) {
-        throw std::runtime_error(strprintf("netsh.exe could not rename the firewall rule \"%s\" to \"%s\" (exit code "
-                                           "%u); it allows the same. Rename it from an elevated prompt with: "
-                                           "netsh.exe %s",
-                                           Shown(staging), Shown(rule), static_cast<unsigned>(code), Shown(rename)));
-    }
-    Say(strprintf("Firewall rule \"%s\": replaced; inbound TCP to the daemon, on domain and private networks",
-                  Shown(rule)));
+
+    Say(strprintf("Firewall rule \"%s\": %s; inbound TCP to the daemon, on domain and private networks",
+                  Shown(rule), rule_exists || staging_exists ? "replaced" : "added"));
 }
 
 // The service's settings.
@@ -1465,6 +1513,47 @@ void UninstallService(const ToolOptions& options)
                   Shown(NamesFor(Network::Test).group)));
 }
 
+//! Prints the service's state and settings (ShowServiceSettings), or that it is not installed, or
+//! that this account cannot read them (ClassifyServiceOpen), as the default access list of a
+//! service does not let an account read them unless it is signed in interactively. False unless
+//! the service is installed and every setting is what install sets. Nothing here stops the rest of
+//! status.
+bool ShowService(Network net, const std::optional<fs::path>& exe, const fs::path& programdata)
+{
+    const NetworkNames names = NamesFor(net);
+    const UniqueServiceHandle scm(::OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT));
+    if (!scm) {
+        Say(strprintf("Service %s: the service control manager could not be opened: %s", Shown(names.service),
+                      Win32Text(::GetLastError())));
+        return false;
+    }
+
+    const UniqueServiceHandle service(
+        ::OpenServiceW(scm.get(), names.service.c_str(), SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS));
+    const DWORD error = service ? ERROR_SUCCESS : ::GetLastError();
+    switch (ClassifyServiceOpen(error)) {
+    case ServiceOpen::Opened:
+        break;
+    case ServiceOpen::NotInstalled:
+        Say(strprintf("Service %s: not installed", Shown(names.service)));
+        return false;
+    case ServiceOpen::Unreadable:
+        Say(ServiceUnreadableText(net));
+        return false;
+    case ServiceOpen::Failed:
+        Say(strprintf("Service %s: could not be opened: %s", Shown(names.service), Win32Text(error)));
+        return false;
+    }
+
+    Say(strprintf("Service %s: installed", Shown(names.service)));
+    try {
+        return ShowServiceSettings(service.get(), net, exe, programdata);
+    } catch (const std::exception& e) {
+        Say(std::string("  The service's settings could not be read: ") + e.what());
+        return false;
+    }
+}
+
 bool ShowStatus(const ToolOptions& options)
 {
     const NetworkNames names = NamesFor(options.net);
@@ -1493,16 +1582,7 @@ bool ShowStatus(const ToolOptions& options)
     }
 
     const fs::path programdata = ProgramDataPath();
-    const UniqueServiceHandle scm = OpenScm(SC_MANAGER_CONNECT);
-    const UniqueServiceHandle service =
-        OpenServiceIfInstalled(scm.get(), names.service, SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS);
-    if (service) {
-        Say(strprintf("Service %s: installed", Shown(names.service)));
-        if (!ShowServiceSettings(service.get(), options.net, exe, programdata)) matches = false;
-    } else {
-        matches = false;
-        Say(strprintf("Service %s: not installed", Shown(names.service)));
-    }
+    if (!ShowService(options.net, exe, programdata)) matches = false;
 
     LayoutSids sids = ServiceSids();
     for (const Network net : {Network::Main, Network::Test}) {

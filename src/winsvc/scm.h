@@ -69,6 +69,29 @@ std::wstring FirewallDeleteRuleArgs(const std::wstring& name);
 //! advfirewall firewall set rule name="<from>" new name="<to>"
 std::wstring FirewallRenameRuleArgs(const std::wstring& from, const std::wstring& to);
 
+//! One netsh.exe step of install's firewall rule.
+enum class FirewallStep : uint8_t
+{
+    //! Add FirewallRuleName.
+    AddRule,
+    //! Add FirewallStagingRuleName.
+    AddStaging,
+    //! Delete every rule named FirewallRuleName.
+    DeleteRule,
+    //! Delete every rule named FirewallStagingRuleName.
+    DeleteStaging,
+    //! Rename the staging rules to FirewallRuleName.
+    RenameStagingToRule,
+};
+
+//! The steps install takes for the network's rule, given whether a rule named FirewallRuleName
+//! (\p rule_exists) and one named FirewallStagingRuleName (\p staging_exists) are there. Run in
+//! order, they end with the one rule, for the daemon install names, under FirewallRuleName. A
+//! failed step changes nothing and stops the run, and no step deletes the last rule there: a staging
+//! rule is deleted only while the rule is there, renamed to the rule when the rule is not, and the
+//! rule is deleted only once a new staging rule is there.
+std::vector<FirewallStep> FirewallSteps(bool rule_exists, bool staging_exists);
+
 //! How long the service manager waits for the core to stop at a system shutdown.
 constexpr uint32_t PRESHUTDOWN_TIMEOUT_MS = 300000;
 //! The failure actions: restart after each of these delays, and count the failures from 0 again
@@ -98,6 +121,23 @@ struct ToolOptions
     //! install: apply the settings to a service that is already installed.
     bool reconfigure{false};
 };
+
+//! What opening the network's service for status came to, from OpenServiceW's Win32 error:
+//! Opened (0), NotInstalled (ERROR_SERVICE_DOES_NOT_EXIST), Unreadable (ERROR_ACCESS_DENIED: the
+//! service's security descriptor does not let this account read its settings, as the default one
+//! does not for a user who is not signed in interactively) or Failed (anything else).
+enum class ServiceOpen : uint8_t
+{
+    Opened,
+    NotInstalled,
+    Unreadable,
+    Failed,
+};
+
+ServiceOpen ClassifyServiceOpen(uint32_t win32_error);
+
+//! What status says when the network's service is Unreadable. ASCII.
+std::string ServiceUnreadableText(Network net);
 
 //! The tool's exit codes: done, refused or failed, and a command line it does not take.
 constexpr int EXIT_OK = 0, EXIT_REFUSED = 1, EXIT_USAGE = 2;

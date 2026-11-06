@@ -189,6 +189,12 @@ std::optional<std::string> StateFileRefusal(const util::winacl::ObservedAcl& acl
 //! there. Pure.
 std::vector<Sid> LevelEntryOwners(const fs::path& programdata, const fs::path& level, const LayoutSids& sids);
 
+//! Whether install checks the entries directly inside \p level when it finds the level in place:
+//! every directory level, whether or not its list already matches the layout's
+//! (\p list_matches_layout), as a list says who can add an entry now and not who added one before.
+//! Never a file. Pure.
+bool ChecksLevelEntries(const LayoutEntry& level, bool list_matches_layout);
+
 //! One entry found directly inside a layout directory, read without following it.
 struct LevelEntryFacts
 {
@@ -202,10 +208,14 @@ struct LevelEntryFacts
 };
 
 //! Why install refuses \p entry, found directly inside the layout directory \p level, or nullopt.
-//! An entry that is itself a path of \p layout is nullopt, as install checks it as a level of its
-//! own. Any other is refused when it is a link, which install does not follow, or when its owner
-//! is not one of LevelEntryOwners or cannot be read. The text names the entry, and its owner by
-//! name and SID. Pure.
+//! A link (a junction, a symbolic link or a mount point) is refused whatever its name, a path of
+//! \p layout included: no layout path is ever a link, and the level's list must not be passed down
+//! through one. Any other entry at a path of \p layout is nullopt: a directory of the layout is
+//! checked as a level of its own (by its owner and kind, and its own entries), the network's
+//! configuration file by CheckConf, and the other network's configuration file is left to that
+//! network's install, whose CheckConf refuses one the administrators do not own with the layout's
+//! list. Any other entry is refused when its owner is not one of LevelEntryOwners or cannot be
+//! read. The text names the entry, and its owner by name and SID. Pure.
 std::optional<std::string> LevelEntryRefusal(const std::vector<LayoutEntry>& layout, const fs::path& programdata,
                                              const fs::path& level, const LevelEntryFacts& entry,
                                              const LayoutSids& sids);

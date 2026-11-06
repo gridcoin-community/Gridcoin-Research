@@ -187,8 +187,10 @@ std::vector<LayoutEntry> ServiceLayout(const fs::path& programdata, const Layout
     };
 
     // Each attach group may view the root and ipc, as the GUI's check of the directories above
-    // the socket reads them, and each service may read the root's access list, as the check of
-    // the directories above its autounlock file reads it. Neither is passed down.
+    // the socket reads them. Each service may read the root's attributes and access list
+    // (ROOT_SERVICE_MASK: READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_READ_EA | SYNCHRONIZE): the
+    // creation path of its data directory reads the root's status at every start, and the check of
+    // the directories above its autounlock file reads the root's list. Neither is passed down.
     add(root, true,
         aces(tree, {{sids.grp_main, ipc::win::DIR_VIEW_MASK, here},
                     {sids.grp_test, ipc::win::DIR_VIEW_MASK, here},
@@ -329,19 +331,28 @@ std::vector<Sid> LevelEntryOwners(const fs::path& programdata, const fs::path& l
     return owners;
 }
 
+bool ChecksLevelEntries(const LayoutEntry& level, [[maybe_unused]] bool list_matches_layout)
+{
+    // A list that matches now says nothing of who added an entry before: an earlier install
+    // refused after giving the level its list, or an administrator corrected the list by hand.
+    return level.directory;
+}
+
 std::optional<std::string> LevelEntryRefusal(const std::vector<LayoutEntry>& layout, const fs::path& programdata,
                                              const fs::path& level, const LevelEntryFacts& entry,
                                              const LayoutSids& sids)
 {
-    const bool in_layout = std::any_of(layout.begin(), layout.end(), [&entry](const LayoutEntry& layout_entry) {
-        return layout_entry.path == entry.path;
-    });
-    if (in_layout) return std::nullopt;
-
+    // No layout path is ever a link, and the propagation of the level's list must not reach through
+    // one, so a link is refused here whatever its name.
     if (entry.link) {
         return entry.path.string() +
                " is a link (a junction, a symbolic link or a mount point), which install does not follow";
     }
+
+    const bool in_layout = std::any_of(layout.begin(), layout.end(), [&entry](const LayoutEntry& layout_entry) {
+        return layout_entry.path == entry.path;
+    });
+    if (in_layout) return std::nullopt;
     if (!entry.owner) return entry.path.string() + ": its owner cannot be read";
 
     const std::vector<Sid> owners = LevelEntryOwners(programdata, level, sids);

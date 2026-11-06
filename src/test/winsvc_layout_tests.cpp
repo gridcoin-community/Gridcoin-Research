@@ -455,9 +455,11 @@ BOOST_AUTO_TEST_CASE(layout_startup_check_paths_readable)
     }
 }
 
-// Ruling 3: the service's autounlock check reads the access list of every directory above its
-// file (FindForeignWriterOnDataChain), Gridcoin\ included, so each service may read that
-// directory's list and nothing more there.
+// Ruling 3, as amended in fix round 1: the service's autounlock check reads the access list of
+// every directory above its file (FindForeignWriterOnDataChain), Gridcoin\ included, and the
+// creation path of each data directory reads Gridcoin\'s status at every start (a boost status
+// query opens it with FILE_READ_ATTRIBUTES | FILE_READ_EA). So each service has READ_CONTROL |
+// FILE_READ_ATTRIBUTES | FILE_READ_EA | SYNCHRONIZE there, and nothing that lists or changes it.
 BOOST_AUTO_TEST_CASE(layout_root_lets_each_service_read_its_access_list)
 {
     const fs::path pd = ProgramData();
@@ -825,6 +827,70 @@ BOOST_AUTO_TEST_CASE(firewall_rule_args_exact)
                         Shown(rename));
 }
 
+// N-3: the firewall steps never leave the machine without a rule when it had one, whichever step
+// fails, and end with the one rule under its own name.
+BOOST_AUTO_TEST_CASE(firewall_steps_never_delete_the_last_rule)
+{
+    using Step = FirewallStep;
+    BOOST_CHECK(FirewallSteps(false, false) == std::vector<Step>{Step::AddRule});
+    BOOST_CHECK(FirewallSteps(true, false) ==
+                (std::vector<Step>{Step::AddStaging, Step::DeleteRule, Step::RenameStagingToRule}));
+    BOOST_CHECK(FirewallSteps(true, true) == (std::vector<Step>{Step::DeleteStaging, Step::AddStaging,
+                                                                Step::DeleteRule, Step::RenameStagingToRule}));
+    BOOST_CHECK(FirewallSteps(false, true) ==
+                (std::vector<Step>{Step::RenameStagingToRule, Step::AddStaging, Step::DeleteRule,
+                                   Step::RenameStagingToRule}));
+
+    // Every start, run to every possible failure: the run stops at the failing step, which
+    // changes nothing.
+    for (const bool rule_at_start : {false, true}) {
+        for (const bool staging_at_start : {false, true}) {
+            const std::vector<Step> steps = FirewallSteps(rule_at_start, staging_at_start);
+            for (size_t failing = 0; failing <= steps.size(); ++failing) {
+                bool rule = rule_at_start;
+                bool staging = staging_at_start;
+                for (size_t i = 0; i < failing && i < steps.size(); ++i) {
+                    switch (steps[i]) {
+                    case Step::AddRule: rule = true; break;
+                    case Step::AddStaging: staging = true; break;
+                    case Step::DeleteRule: rule = false; break;
+                    case Step::DeleteStaging: staging = false; break;
+                    case Step::RenameStagingToRule:
+                        BOOST_CHECK_MESSAGE(staging, "a rename with no staged rule");
+                        rule = rule || staging;
+                        staging = false;
+                        break;
+                    }
+                    if (rule_at_start || staging_at_start) {
+                        BOOST_CHECK_MESSAGE(rule || staging, "no rule left after step " << i << " of a run that "
+                                                                                       << "started with "
+                                                                                       << rule_at_start << "/"
+                                                                                       << staging_at_start);
+                    }
+                }
+                // A run that completes ends with the rule alone.
+                if (failing == steps.size()) BOOST_CHECK(rule && !staging);
+            }
+        }
+    }
+}
+
+// W-1: status, run by an account the service's security descriptor does not let read its settings
+// (a standard user over ssh is not INTERACTIVE), reports that and goes on.
+BOOST_AUTO_TEST_CASE(status_classifies_opening_the_service)
+{
+    BOOST_CHECK(ClassifyServiceOpen(0) == ServiceOpen::Opened);
+    BOOST_CHECK(ClassifyServiceOpen(1060) == ServiceOpen::NotInstalled); // ERROR_SERVICE_DOES_NOT_EXIST
+    BOOST_CHECK(ClassifyServiceOpen(5) == ServiceOpen::Unreadable);      // ERROR_ACCESS_DENIED
+    BOOST_CHECK(ClassifyServiceOpen(6) == ServiceOpen::Failed);          // ERROR_INVALID_HANDLE
+    BOOST_CHECK(ClassifyServiceOpen(1072) == ServiceOpen::Failed);       // ERROR_SERVICE_MARKED_FOR_DELETE
+
+    const std::string text = ServiceUnreadableText(Network::Test);
+    BOOST_CHECK(Contains(text, "gridcointestnetd"));
+    BOOST_CHECK(Contains(text, "this account cannot read the service's settings"));
+    BOOST_CHECK(Contains(text, "elevated"));
+}
+
 // M-1: who may own what install finds in a layout directory that was there before it.
 BOOST_AUTO_TEST_CASE(level_entry_owners_and_refusals)
 {
@@ -880,9 +946,27 @@ BOOST_AUTO_TEST_CASE(level_entry_owners_and_refusals)
     BOOST_CHECK(Contains(*link, "link"));
     BOOST_CHECK(refusal(QuarantineDir(pd), facts(QuarantineDir(pd) / "x", std::nullopt)));
 
-    // A layout entry is checked as a level of its own, whoever owns it.
+    // A layout entry is checked as a level of its own, whoever owns it, unless it is a link: no
+    // layout path is ever one, and propagation from its parent must not reach through it.
     BOOST_CHECK(!refusal(root / "conf", facts(ConfPath(pd, Network::Main), user)));
-    BOOST_CHECK(!refusal(root, facts(DataDir(pd, Network::Test), user, true)));
+    BOOST_CHECK(!refusal(root, facts(DataDir(pd, Network::Test), user)));
+    const std::optional<std::string> layout_link = refusal(root, facts(DataDir(pd, Network::Test), user, true));
+    BOOST_REQUIRE(layout_link.has_value());
+    BOOST_CHECK(Contains(*layout_link, DataDir(pd, Network::Test).string()));
+    BOOST_CHECK(Contains(*layout_link, "link"));
+    BOOST_CHECK(refusal(root / "conf", facts(ConfPath(pd, Network::Test), sids.admins, true)));
+}
+
+// N-1: every directory level found in place has its entries checked, whether or not its list is
+// already the layout's: a matching list says who can add an entry now, not who added one before.
+BOOST_AUTO_TEST_CASE(every_existing_level_has_its_entries_checked)
+{
+    for (const LayoutEntry& entry : Layout()) {
+        for (const bool list_matches : {false, true}) {
+            BOOST_CHECK_MESSAGE(ChecksLevelEntries(entry, list_matches) == entry.directory,
+                                entry.path.string() << (list_matches ? ", list matching" : ", list differing"));
+        }
+    }
 }
 
 // M-1: status shows the state file only when the administrators' alone.
