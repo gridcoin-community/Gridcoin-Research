@@ -658,6 +658,96 @@ BOOST_AUTO_TEST_CASE(follow_ups_run_after_a_failure)
     BOOST_CHECK((ran == std::vector<std::string>{"a", "b"}));
 }
 
+BOOST_AUTO_TEST_CASE(transfer_round_trip_into_a_directory_that_kept_a_file)
+{
+    const TempTree tree;
+    const fs::path user = tree.root / "user";
+    const fs::path service = tree.root / "service";
+    MakeWalletTree(user / "testnet");
+    WriteFile(user / "testnet" / ".lock", "");
+    WriteFile(user / "testnet" / "gridcoinresearch.conf", "testnet=1\n");
+    const std::map<std::string, std::string> wallet_before = Snapshot(user / "testnet" / "blocks");
+
+    // Enable: everything but the conf goes in; the conf and the directory it keeps stay.
+    const TransferResult in = TransferTree(user, service, RulesForEnable(Network::Test), tree.root / "quarantine");
+    BOOST_REQUIRE_MESSAGE(in.ok, in.error);
+    std::string error;
+    BOOST_REQUIRE_MESSAGE(RemoveTreeNoFollow(user, in.source_remove, error), error);
+    BOOST_REQUIRE(::unlink((user / "testnet" / ".lock").c_str()) == 0);
+    BOOST_REQUIRE(fs::exists(user / "testnet" / "gridcoinresearch.conf"));
+    BOOST_REQUIRE(!fs::exists(user / "testnet" / "wallet.dat"));
+    WriteFile(service / "testnet" / ".lock", "");
+
+    // Disable: back into the directory that still holds the conf.
+    const TransferRules rules = RulesForDisable(Network::Test);
+    BOOST_CHECK(!DestinationRefusal(service, user, rules).has_value());
+    BOOST_CHECK(MergedDirectories(service, user, rules) == std::vector<fs::path>({"testnet"}));
+    const TransferResult back = TransferTree(service, user, rules, fs::path());
+    BOOST_REQUIRE_MESSAGE(back.ok, back.error);
+    BOOST_CHECK(!back.created_dst);
+    BOOST_CHECK_EQUAL(ReadFile(user / "testnet" / "gridcoinresearch.conf"), "testnet=1\n");
+    BOOST_CHECK_EQUAL(ReadFile(user / "testnet" / "wallet.dat"), "wallet bytes");
+    BOOST_CHECK(Snapshot(user / "testnet" / "blocks") == wallet_before);
+
+    // What was made is named below the directory that was there, which is not named itself.
+    std::set<fs::path> created(back.created_top.begin(), back.created_top.end());
+    BOOST_CHECK(created.count("testnet") == 0);
+    BOOST_CHECK(created.count(fs::path("testnet") / "wallet.dat") == 1);
+    BOOST_CHECK(created.count(fs::path("testnet") / "blocks") == 1);
+    BOOST_CHECK(created.count(fs::path("testnet") / "gridcoinresearch.conf") == 0);
+}
+
+BOOST_AUTO_TEST_CASE(transfer_into_an_existing_directory_refusals)
+{
+    const TempTree tree;
+    const fs::path service = tree.root / "service";
+    MakeWalletTree(service / "testnet");
+    const TransferRules rules = RulesForDisable(Network::Test);
+
+    // A clash one level down.
+    const fs::path clash = tree.root / "clash";
+    WriteFile(clash / "testnet" / "wallet.dat", "other wallet");
+    BOOST_CHECK(DestinationRefusal(service, clash, rules).has_value());
+    BOOST_CHECK(!TransferTree(service, clash, rules, fs::path()).ok);
+    BOOST_CHECK_EQUAL(ReadFile(clash / "testnet" / "wallet.dat"), "other wallet");
+
+    // A file at the name.
+    const fs::path file = tree.root / "file";
+    WriteFile(file / "testnet", "a file");
+    BOOST_CHECK(DestinationRefusal(service, file, rules).has_value());
+    BOOST_CHECK(!TransferTree(service, file, rules, fs::path()).ok);
+
+    // A link at the name, to a directory.
+    const fs::path link = tree.root / "link";
+    fs::create_directories(link);
+    fs::create_directories(tree.root / "elsewhere");
+    BOOST_REQUIRE(::symlink((tree.root / "elsewhere").c_str(), (link / "testnet").c_str()) == 0);
+    BOOST_CHECK(DestinationRefusal(service, link, rules).has_value());
+    BOOST_CHECK(!TransferTree(service, link, rules, fs::path()).ok);
+    BOOST_CHECK(fs::is_empty(tree.root / "elsewhere"));
+}
+
+BOOST_AUTO_TEST_CASE(transfer_failure_into_an_existing_directory_keeps_what_was_there)
+{
+    if (::geteuid() == 0) {
+        BOOST_TEST_MESSAGE("running as root, which reads a mode 000 file; case skipped");
+        return;
+    }
+    const TempTree tree;
+    const fs::path service = tree.root / "service";
+    const fs::path user = tree.root / "user";
+    MakeWalletTree(service / "testnet");
+    WriteFile(service / "testnet" / "zz_unreadable.dat", "unreadable");
+    BOOST_REQUIRE(::chmod((service / "testnet" / "zz_unreadable.dat").c_str(), 0) == 0);
+    WriteFile(user / "testnet" / "gridcoinresearch.conf", "testnet=1\n");
+    const std::map<std::string, std::string> before = Snapshot(user);
+
+    const TransferResult result = TransferTree(service, user, RulesForDisable(Network::Test), fs::path());
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK(Snapshot(user) == before);
+    BOOST_REQUIRE(::chmod((service / "testnet" / "zz_unreadable.dat").c_str(), 0600) == 0);
+}
+
 BOOST_AUTO_TEST_CASE(transfer_failure_midway_removes_partial_destination)
 {
     if (::geteuid() == 0) {

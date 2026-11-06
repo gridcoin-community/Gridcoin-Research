@@ -2249,6 +2249,24 @@ void DisableService(const ToolOptions& options)
     const fs::path datadir = DataDir(programdata, net);
     const TransferRules rules = RulesForDisable(net);
     if (const std::optional<std::string> refusal = DestinationRefusal(datadir, target, rules)) throw Refusal(*refusal);
+    // A directory of the account's that is there already, such as the test network's with the
+    // configuration file enable left in it, is gone into when it is the account's own. What is made
+    // in it is reset below; the directory itself is not.
+    for (const fs::path& merged : MergedDirectories(datadir, target, rules)) {
+        const Level there = ReadLevel(target / merged);
+        if (there.reparse || !there.directory) {
+            throw Refusal(strprintf("%s is not a plain directory. Move it away, then run disable again.",
+                                    Shown(target / merged)));
+        }
+        if (!there.acl.owner || *there.acl.owner != *user) {
+            throw Refusal(strprintf("%s is owned by %s, not %s, so the wallet is not moved into it. Move it away, "
+                                    "then run disable again.",
+                                    Shown(target / merged),
+                                    there.acl.owner ? Describe(*there.acl.owner)
+                                                    : std::string("an owner that cannot be read"),
+                                    user_name));
+        }
+    }
 
     // Disabled first, so that no failure action or automatic start brings the service back while
     // its wallet moves; then stopped.

@@ -123,7 +123,9 @@ struct TransferResult
     //! The files written to the destination, and their bytes.
     uint64_t files{0};
     uint64_t bytes{0};
-    //! The top-level entries created under the destination, as names relative to it.
+    //! The top-level entries created under the destination, as names relative to it; for a
+    //! top-level directory that was there already (MergedDirectories), the entries made in it, as
+    //! paths below it, and not the directory.
     std::vector<fs::path> created_top;
     //! The files written under the quarantine directory, as full paths.
     std::vector<fs::path> quarantined;
@@ -147,8 +149,15 @@ struct TransferResult
 //! \p src cannot be read.
 std::optional<std::string> DestinationRefusal(const fs::path& src, const fs::path& dst, const TransferRules& rules);
 
+//! The top-level directories the transfer would go into rather than create: those it would create
+//! that are there already as directories (not links), as names relative to \p dst. DestinationRefusal
+//! has checked that nothing the transfer would create in them is there. The caller checks who owns
+//! them.
+std::vector<fs::path> MergedDirectories(const fs::path& src, const fs::path& dst, const TransferRules& rules);
+
 //! dst must be absent, an empty directory, or a directory that holds none of the top-level names
-//! the transfer creates (DestinationRefusal); entries of other names are never touched, as when
+//! the transfer creates (DestinationRefusal), except that a directory of one of those names is gone
+//! into (MergedDirectories); entries of other names are never touched, as when
 //! disable copies into a user's directory that kept its configuration file. Every copied file is
 //! re-read and its SHA-256 compared with the source. On any refusal or error, removes everything
 //! it created under dst and in \p quarantine_dir; src is never modified.

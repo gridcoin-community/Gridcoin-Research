@@ -1118,6 +1118,23 @@ bool ReadAll(File& in, const fs::path& path, uint64_t limit, std::string& text, 
     }
 }
 
+//! Removes \p base / \p relative, a path of one or more plain components, through the directories on
+//! the way, held as themselves.
+bool RemoveBelow(const Dir& base, const fs::path& relative, std::string& error)
+{
+    std::vector<Dir> held;
+    held.reserve(std::distance(relative.begin(), relative.end()));
+    const Dir* at = &base;
+    const fs::path dirs = relative.parent_path();
+    for (const fs::path& part : dirs) {
+        std::optional<Dir> next = at->Sub(part, error);
+        if (!next) return false;
+        held.push_back(std::move(*next));
+        at = &held.back();
+    }
+    return at->Remove(relative.filename(), error);
+}
+
 //! One transfer: the copy, and what it created, so that a failure removes all of it.
 class Transfer
 {
@@ -1160,7 +1177,7 @@ public:
         }
 
         bool kept = false;
-        if (!CopyDir(*source, *m_dst, fs::path(), kept)) return Undo();
+        if (!CopyDir(*source, *m_dst, fs::path(), kept, true, fs::path())) return Undo();
         m_result.ok = true;
     }
 
@@ -1236,7 +1253,10 @@ private:
     //! stays in the source (a quarantined entry, or the held file). The entries to remove are added
     //! to the result: those of this directory when something stays in it or it is the root, and
     //! otherwise the caller names the directory itself.
-    bool CopyDir(const Dir& from, const Dir& to, const fs::path& relative, bool& kept)
+    //! The entries made directly in \p to are recorded in the result as created, below \p prefix, when
+    //! \p record is set: the root's, and those of a directory that was there already.
+    bool CopyDir(const Dir& from, const Dir& to, const fs::path& relative, bool& kept, bool record,
+                 const fs::path& prefix)
     {
         const bool top = relative.empty();
         std::vector<fs::path> mine;
@@ -1278,7 +1298,7 @@ private:
                 m_result.source_kept.push_back(entry_relative);
                 continue;
             case EntryDecision::FilterSettings:
-                if (!FilterFile(from, name, to, entry_relative, top)) return false;
+                if (!FilterFile(from, name, to, entry_relative, record ? prefix / name : fs::path())) return false;
                 mine.push_back(entry_relative);
                 continue;
             case EntryDecision::Copy:
@@ -1286,11 +1306,25 @@ private:
             }
 
             if (facts.type == EntryFacts::Type::Directory) {
-                if (!to.MakeDir(name, error)) {
-                    Fail(error);
-                    return false;
+                // A directory that is there already is gone into, and only what is made in it is ours.
+                bool merge = false;
+                if (top) {
+                    EntryFacts there;
+                    bool gone = false;
+                    if (to.Facts(name, there, gone, error)) {
+                        merge = there.type == EntryFacts::Type::Directory;
+                    } else if (!gone) {
+                        Fail(error);
+                        return false;
+                    }
                 }
-                if (top) m_result.created_top.push_back(name);
+                if (!merge) {
+                    if (!to.MakeDir(name, error)) {
+                        Fail(error);
+                        return false;
+                    }
+                    if (record) m_result.created_top.push_back(prefix / name);
+                }
                 const std::optional<Dir> sub_from = from.Sub(name, error);
                 const std::optional<Dir> sub_to = sub_from ? to.Sub(name, error) : std::nullopt;
                 if (!sub_from || !sub_to) {
@@ -1298,7 +1332,9 @@ private:
                     return false;
                 }
                 bool sub_kept = false;
-                if (!CopyDir(*sub_from, *sub_to, entry_relative, sub_kept)) return false;
+                if (!CopyDir(*sub_from, *sub_to, entry_relative, sub_kept, merge, merge ? prefix / name : fs::path())) {
+                    return false;
+                }
                 if (sub_kept) {
                     kept = true;
                 } else {
@@ -1317,7 +1353,7 @@ private:
                 Fail(error);
                 return false;
             }
-            if (top) m_result.created_top.push_back(name);
+            if (record) m_result.created_top.push_back(prefix / name);
             uint64_t bytes = 0;
             if (!WriteAndVerify(&*in, nullptr, *out, to.Child(name), bytes, error)) {
                 Fail(error);
@@ -1335,7 +1371,8 @@ private:
 
     //! The settings file \p name, with the keys the core refuses from it dropped. The file as it
     //! was goes to the quarantine directory when a key was dropped, so nothing of it is lost.
-    bool FilterFile(const Dir& from, const fs::path& name, const Dir& to, const fs::path& relative, bool top)
+    bool FilterFile(const Dir& from, const fs::path& name, const Dir& to, const fs::path& relative,
+                    const fs::path& created_as)
     {
         std::string error;
         std::optional<File> in = from.OpenRead(name, error);
@@ -1363,7 +1400,7 @@ private:
             Fail(error);
             return false;
         }
-        if (top) m_result.created_top.push_back(name);
+        if (!created_as.empty()) m_result.created_top.push_back(created_as);
         uint64_t bytes = 0;
         if (!WriteAndVerify(nullptr, &filtered.first, *out, to.Child(name), bytes, error)) {
             Fail(error);
@@ -1465,7 +1502,7 @@ private:
         std::string error;
         if (m_dst) {
             for (auto it = m_result.created_top.rbegin(); it != m_result.created_top.rend(); ++it) {
-                if (!m_dst->Remove(*it, error)) left.push_back(error);
+                if (!RemoveBelow(*m_dst, *it, error)) left.push_back(error);
             }
         }
         if (m_result.created_dst && m_dst_parent) {
@@ -1512,7 +1549,13 @@ private:
 
 } // namespace
 
-std::optional<std::string> DestinationRefusal(const fs::path& src, const fs::path& dst, const TransferRules& rules)
+namespace {
+
+//! Looks at the top-level names the transfer would create in \p dst. \p there gets the entries that
+//! are in the way; \p merged the names of directories that are there and are gone into, with no
+//! entry of the transfer's in them. Returns an error text when something cannot be read.
+std::optional<std::string> ScanDestination(const fs::path& src, const fs::path& dst, const TransferRules& rules,
+                                           std::vector<std::string>& there, std::vector<fs::path>& merged)
 {
     std::string error;
     bool absent = false;
@@ -1526,7 +1569,6 @@ std::optional<std::string> DestinationRefusal(const fs::path& src, const fs::pat
 
     std::vector<fs::path> names;
     if (!source->Names(names, error)) return error;
-    std::vector<std::string> there;
     for (const fs::path& name : names) {
         EntryFacts facts;
         if (!source->Facts(name, facts, absent, error)) {
@@ -1539,14 +1581,60 @@ std::optional<std::string> DestinationRefusal(const fs::path& src, const fs::pat
 
         bool has = false;
         if (!target->Has(name, has, error)) return error;
-        if (has) there.push_back(Shown(target->Child(name)));
+        if (!has) continue;
+
+        // A real directory at the name is gone into when none of the entries the transfer would
+        // create in it is there. Anything else at the name is in the way.
+        EntryFacts present;
+        if (facts.type != EntryFacts::Type::Directory || !target->Facts(name, present, absent, error) ||
+            present.type != EntryFacts::Type::Directory) {
+            there.push_back(Shown(target->Child(name)));
+            continue;
+        }
+        const std::optional<Dir> source_sub = source->Sub(name, error);
+        const std::optional<Dir> target_sub = source_sub ? target->Sub(name, error) : std::nullopt;
+        if (!source_sub || !target_sub) return error;
+        std::vector<fs::path> children;
+        if (!source_sub->Names(children, error)) return error;
+        const size_t before = there.size();
+        for (const fs::path& child : children) {
+            EntryFacts child_facts;
+            if (!source_sub->Facts(child, child_facts, absent, error)) {
+                if (absent) continue;
+                return error;
+            }
+            child_facts.relative = name / child;
+            if (!Creates(Decide(child_facts, rules, reason))) continue;
+            bool child_has = false;
+            if (!target_sub->Has(child, child_has, error)) return error;
+            if (child_has) there.push_back(Shown(target_sub->Child(child)));
+        }
+        if (there.size() == before) merged.push_back(name);
     }
+    return std::nullopt;
+}
+
+} // namespace
+
+std::optional<std::string> DestinationRefusal(const fs::path& src, const fs::path& dst, const TransferRules& rules)
+{
+    std::vector<std::string> there;
+    std::vector<fs::path> merged;
+    if (const std::optional<std::string> error = ScanDestination(src, dst, rules, there, merged)) return error;
     if (there.empty()) return std::nullopt;
 
     return strprintf("%s already holds %s, which the transfer would create. Nothing is ever copied over an entry "
                      "that is there: check what each one is (a partial copy an interrupted run left can be removed), "
                      "move it away, then try again.",
                      Shown(dst), Join(there, ", "));
+}
+
+std::vector<fs::path> MergedDirectories(const fs::path& src, const fs::path& dst, const TransferRules& rules)
+{
+    std::vector<std::string> there;
+    std::vector<fs::path> merged;
+    if (ScanDestination(src, dst, rules, there, merged) || !there.empty()) return {};
+    return merged;
 }
 
 TransferResult TransferTree(const fs::path& src, const fs::path& dst, const TransferRules& rules,
