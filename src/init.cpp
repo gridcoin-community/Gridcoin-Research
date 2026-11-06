@@ -51,6 +51,7 @@
 
 #include <openssl/crypto.h>
 
+#include <cstdio>
 #include <iostream>
 #include <mutex>
 #include <set>
@@ -537,11 +538,11 @@ static std::string GenerateRpcPassword()
 //!    choice and is honoured -- the config is not touched (and the Windows scheduled
 //!    task's autounlock will not work, which is documented).
 //!  - Only into a file this account owns (fsmodes::OwnedByUs: owned by the effective user,
-//!    and not a symbolic link). A conf owned by root or by another account -- the
-//!    different-account service, whose package or administrator writes the credentials
+//!    and not a symbolic link; on Windows, owned by the process's token user, and not a
+//!    reparse point). A conf owned by root, by the administrators or by another account --
+//!    the different-account service, whose package or administrator writes the credentials
 //!    -- is left alone, with one log line, and StartRPCThreads then names the file and
-//!    what it needs (MissingRpcPasswordMessage). POSIX only for now: on Windows the file
-//!    is still written as before, without that check.
+//!    what it needs (MissingRpcPasswordMessage).
 //!  - Only ever APPENDS. Nothing already in the file is rewritten or removed. A missing
 //!    rpcpassword is an absence rather than a decision -- no interface ever offered the
 //!    user a way to choose it -- which is what separates this from the data directory
@@ -556,14 +557,12 @@ void AddMissingRpcCredentials()
 
     const fs::path config_file = GetConfigFile();
 
-#ifndef WIN32
     if (!fsmodes::OwnedByUs(config_file)) {
         LogPrintf("%s: not adding RPC credentials to %s: it is not owned by this account; the package or the "
                   "administrator provides them",
                   __func__, config_file.string());
         return;
     }
-#endif
 
     // Warn rather than re-tighten. We are adding a secret to a file the operator already
     // owns, and this branch's rule is that permissions the user set are left as the user
@@ -590,10 +589,9 @@ void AddMissingRpcCredentials()
     if (need_user) credentials += "rpcuser=gridcoinrpc\n";
     if (need_password) credentials += "rpcpassword=" + GenerateRpcPassword() + "\n";
 
-#ifndef WIN32
-    // The file is opened without following a link and checked again on the open descriptor,
-    // so one swapped for a link or for another account's file since OwnedByUs() looked is not
-    // written.
+    // The file is opened without following a link and checked again on the open descriptor
+    // (on Windows, the handle), so one swapped for a link or for another account's file since
+    // OwnedByUs() looked is not written.
     const fsmodes::AppendResult appended = fsmodes::AppendToOwnedFile(config_file, credentials);
 
     if (appended.status == fsmodes::AppendStatus::NotOwned) {
@@ -615,22 +613,6 @@ void AddMissingRpcCredentials()
                   __func__, config_file.string(), appended.error);
         return;
     }
-#else
-    {
-        fsbridge::ofstream config(config_file, std::ios_base::app);
-
-        if (!config.good()) {
-            // Not fatal here: fall through to StartRPCThreads, which already fails with a
-            // clear message telling the operator exactly what to put in the file. This is
-            // no worse than the behaviour before this function existed.
-            LogPrintf("WARNING: %s: could not open %s to add the missing RPC credentials",
-                      __func__, config_file.string());
-            return;
-        }
-
-        config << credentials;
-    }
-#endif
 
     // Re-read so THIS start works rather than only the next one -- the whole point is that
     // an unattended boot does not need a human. Same pattern as the fresh-config branch.
@@ -646,7 +628,8 @@ void AddMissingRpcCredentials()
               __func__, config_file.string());
 }
 
-//! Write the first-run configuration file, including RPC credentials.
+//! Write the first-run configuration file, including RPC credentials. Returns whether it
+//! created the file.
 //!
 //! The credentials are not optional garnish. gridcoinresearchd soft-sets
 //! -server (gridcoinresearchd.cpp), so StartRPCThreads() runs on every daemon
@@ -663,35 +646,21 @@ void AddMissingRpcCredentials()
 //! Nobody needs to memorise it -- it exists so the local RPC endpoint is not
 //! open, and local RPC clients read it from this file.
 //!
-//! The file is created owner-only where the platform expresses that as a mode.
-//! On Windows it inherits the data directory's owner+SYSTEM DACL (see
-//! util::CreateOwnerOnlyDirectory), which is applied at creation and inheritable.
-static void CreateNewConfigFile()
+//! The file is created exclusively and owner-only from creation
+//! (fsmodes::CreateNewOwnerOnlyFile): mode 0600 whatever the umask, or on Windows the
+//! owner-only access list rather than the one it would inherit. A name that is taken, by a
+//! file that could not be read or by a link, whether or not it leads anywhere, is left as
+//! it is: nothing there is followed, truncated or written.
+static bool CreateNewConfigFile()
 {
-    fsbridge::ofstream myConfig;
-    myConfig.open(GetConfigFile());
+    const fs::path config_file = GetConfigFile();
 
-    // Narrow the file BEFORE the password is written, not after: between creation
-    // and a trailing chmod the file would briefly sit at whatever the umask allows,
-    // and on a data directory the operator had previously widened that window is
-    // readable. On Windows there is no meaningful chmod, but the file inherits the
-    // data directory's owner+SYSTEM DACL from creation (util::CreateOwnerOnlyDirectory
-    // gives it, inheritable, when it creates the directory), which closes the same window
-    // by a different route.
-#ifndef WIN32
-    if (::chmod(GetConfigFile().string().c_str(), 0600) != 0) {
-        LogPrintf("WARNING: %s: could not restrict %s to owner-only (errno %d); it will contain "
-                  "the generated RPC password", __func__, GetConfigFile().string(), errno);
-    }
-#endif
-
-    myConfig
-        << "# RPC credentials, generated on first run. The local RPC interface is\n"
-        << "# credential-protected even though it listens on localhost only; the\n"
-        << "# daemon will not start without them. Change them if you like, but do\n"
-        << "# not leave rpcpassword empty or equal to rpcuser.\n"
-        << "rpcuser=gridcoinrpc\n"
-        << "rpcpassword=" << GenerateRpcPassword() << "\n";
+    std::string text = "# RPC credentials, generated on first run. The local RPC interface is\n"
+                       "# credential-protected even though it listens on localhost only; the\n"
+                       "# daemon will not start without them. Change them if you like, but do\n"
+                       "# not leave rpcpassword empty or equal to rpcuser.\n"
+                       "rpcuser=gridcoinrpc\n"
+                       "rpcpassword=" + GenerateRpcPassword() + "\n";
 
     // Bootstrap peers for the public networks, and only for those.
     //
@@ -710,15 +679,81 @@ static void CreateNewConfigFile()
     // The credentials above are still written on every network: the daemon soft-sets
     // -server and StartRPCThreads refuses to start without them.
     if (!Params().IsMockableChain()) {
-        myConfig
-            << "\n"
-            << "addnode=addnode-us-central.cycy.me\n"
-            << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
-            << "addnode=gridcoin.network\n"
-            << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
-            << "addnode=seed.gridcoin.pl\n"
-            << "addnode=www.grcpool.com\n";
+        text += "\n"
+                "addnode=addnode-us-central.cycy.me\n"
+                "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
+                "addnode=gridcoin.network\n"
+                "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
+                "addnode=seed.gridcoin.pl\n"
+                "addnode=www.grcpool.com\n";
     }
+
+    bool taken = false;
+    std::optional<std::string> not_owner_only;
+    std::string error;
+    std::FILE* const file = fsmodes::CreateNewOwnerOnlyFile(config_file, taken, not_owner_only, error);
+
+    if (file == nullptr) {
+        if (taken) {
+            LogPrintf("WARNING: %s: not creating the configuration file %s: the name is taken, by a link or by a "
+                      "file this process cannot read, and nothing there is written over",
+                      __func__, config_file.string());
+        } else {
+            LogPrintf("WARNING: %s: could not create the configuration file %s: %s", __func__, config_file.string(),
+                      error);
+        }
+        return false;
+    }
+
+    if (not_owner_only) {
+        LogPrintf("WARNING: %s: %s is not owner-only (%s); it holds the generated RPC password", __func__,
+                  config_file.string(), *not_owner_only);
+    }
+
+    const bool written = std::fwrite(text.data(), 1, text.size(), file) == text.size();
+    const bool closed = std::fclose(file) == 0;
+
+    if (!written || !closed) {
+        // The file was created above, so removing it takes nothing of anyone's, and the next
+        // start creates it again.
+        boost::system::error_code ec;
+        fs::remove(config_file, ec);
+        LogPrintf("WARNING: %s: could not write the configuration file %s", __func__, config_file.string());
+        return false;
+    }
+
+    return true;
+}
+
+bool PrepareConfigFile(std::string& error)
+{
+    error.clear();
+
+    if (IsConfigFileEmpty())
+    {
+        if (CreateNewConfigFile()) {
+            std::string error_msg;
+
+            if (!gArgs.ReadConfigFiles(error_msg, true)) {
+                LogPrintf("WARNING: %s: created %s but could not read it: %s", __func__, GetConfigFile().string(),
+                          error_msg);
+            }
+        }
+    } else {
+        if (!GRC::CleanConfig()) {
+            InitWarning("Failed to clean obsolete config keys.");
+        }
+
+        // An existing config predating first-run credential generation, or a hand-written
+        // one, otherwise leaves a daemon that cannot start. Only when an RPC server is
+        // actually being started; -server is soft-set by gridcoinresearchd before AppInit2
+        // runs, so it is already known here, and an explicit server=0 is honoured.
+        if (gArgs.GetBoolArg("-server", false)) {
+            AddMissingRpcCredentials();
+        }
+    }
+
+    return true;
 }
 
 void AddLoggingArgs(ArgsManager& argsman)
@@ -1854,35 +1889,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     // ********************************************************* Step 2: parameter interactions
 
 
-    if (IsConfigFileEmpty())
     {
-        try
-        {
-            CreateNewConfigFile();
-
-            std::string error_msg;
-
-            if (!gArgs.ReadConfigFiles(error_msg, true))
-            {
-                throw error_msg;
-            }
-        }
-        catch (const std::exception& e)
-        {
-            LogPrintf("WARNING: failed to create configuration file: %s", e.what());
-        }
-    } else {
-        if (!GRC::CleanConfig()) {
-            InitWarning("Failed to clean obsolete config keys.");
-        }
-
-        // An existing config predating first-run credential generation, or a hand-written
-        // one, otherwise leaves a daemon that cannot start. Only when an RPC server is
-        // actually being started; -server is soft-set by gridcoinresearchd before AppInit2
-        // runs, so it is already known here, and an explicit server=0 is honoured.
-        if (gArgs.GetBoolArg("-server", false)) {
-            AddMissingRpcCredentials();
-        }
+        std::string error;
+        if (!PrepareConfigFile(error)) return InitError(error);
     }
 
     //6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:

@@ -18,6 +18,7 @@
 #include "tinyformat.h"
 #include "uint256.h"
 #include "util/dir_permissions.h"
+#include "util/fsmodes.h"
 #include "util/strencodings.h"
 #include "util/syserror.h"
 #include "util/system.h"
@@ -54,10 +55,17 @@ const char* const CONFIG_BACKUP_REFUSED_ATTACH_GROUP =
     "The configuration file belongs to the administrator in this mode and holds the RPC password, so it is not "
     "sent over IPC. Back up the settings file instead.";
 
-//! Worded to be true in both builds, since the monolithic one has no IPC.
+//! Worded to be true in both builds, since the monolithic one has no IPC. On Windows a link is
+//! refused too, as fsmodes::OwnedByUs does not follow one.
+#ifndef WIN32
 const char* const CONFIG_BACKUP_REFUSED_OWNER =
     "The configuration file belongs to another account and holds the RPC password, so it is not included in the "
     "backup. Back up the settings file instead.";
+#else
+const char* const CONFIG_BACKUP_REFUSED_OWNER =
+    "The configuration file belongs to another account, or is a link, and holds the RPC password, so it is not "
+    "included in the backup. Back up the settings file instead.";
+#endif
 
 //! The transfer directory, created owner-only when missing. A symbolic link
 //! there is refused, so every copy lands where CleanTransferDir() reaches;
@@ -546,6 +554,17 @@ bool ConfigBackupPermitted(std::string& reason)
     // (it does not exist, most often) is no other account's to protect.
     struct stat st;
     if (::stat(GetConfigFile().c_str(), &st) == 0 && st.st_uid != ::geteuid()) {
+        reason = CONFIG_BACKUP_REFUSED_OWNER;
+        return false;
+    }
+#else
+    // The owner read through a handle on the file itself (fsmodes::OwnedByUs), which does not
+    // follow a link, so a configuration file that is one is refused whoever owns what it leads
+    // to. A file that does not exist is no other account's to protect; one that cannot be
+    // examined is refused.
+    const fs::path conf = GetConfigFile();
+    boost::system::error_code ec;
+    if (fs::symlink_status(conf, ec).type() != fs::file_not_found && !fsmodes::OwnedByUs(conf)) {
         reason = CONFIG_BACKUP_REFUSED_OWNER;
         return false;
     }

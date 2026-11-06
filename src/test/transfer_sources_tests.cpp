@@ -29,6 +29,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <future>
 #include <iterator>
@@ -38,6 +39,11 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#ifdef WIN32
+#include "test/wine.h"
+#include "util/win_acl.h"
+#endif
 
 #ifndef WIN32
 #include "test/umask_guard.h"
@@ -738,6 +744,46 @@ BOOST_FIXTURE_TEST_CASE(config_backup_refused_with_attach_group, TransferCase)
         BOOST_CHECK(reason.empty());
     }
 }
+
+#ifdef WIN32
+// fsmodes::OwnedByUs decides on Windows: the owner read through a handle on the file, which is
+// not a reparse point. %SystemRoot%\win.ini, which the system owns, stands for a configuration
+// file the administrator owns. It is only read here.
+BOOST_FIXTURE_TEST_CASE(config_backup_refused_for_another_accounts_conf_windows, TransferCase)
+{
+    std::string reason;
+
+    // A configuration file that does not exist counts as permitted.
+    {
+        grc_test::ForcedArgGuard conf_arg("conf", (dir / "missing.conf").string());
+        BOOST_CHECK(wallet::ConfigBackupPermitted(reason));
+        BOOST_CHECK(reason.empty());
+    }
+
+    // This account's own file is permitted.
+    {
+        const fs::path conf = dir / "own.conf";
+        WriteBytes(conf, BytesOf("# transfer_sources_tests\n"));
+        grc_test::ForcedArgGuard conf_arg("conf", conf.string());
+        BOOST_CHECK(wallet::ConfigBackupPermitted(reason));
+        BOOST_CHECK(reason.empty());
+    }
+
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine has no Windows file ownership; the foreign owner is not checked");
+        return;
+    }
+
+    const char* const root = std::getenv("SystemRoot");
+    BOOST_REQUIRE(root != nullptr);
+    const fs::path ini = fs::path(root) / "win.ini";
+    BOOST_REQUIRE(util::winacl::ReadAcl(ini).owner != util::winacl::CurrentTokenUser());
+    grc_test::ForcedArgGuard conf_arg("conf", ini.string());
+    BOOST_CHECK(!wallet::ConfigBackupPermitted(reason));
+    BOOST_CHECK(reason.find("settings file") != std::string::npos);
+    BOOST_CHECK(reason.find("another account") != std::string::npos);
+}
+#endif
 
 #ifndef WIN32
 BOOST_FIXTURE_TEST_CASE(config_backup_refused_for_another_accounts_conf, TransferCase)

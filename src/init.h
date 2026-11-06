@@ -44,9 +44,15 @@ void PlantRegtestPremineKey(CWallet* pwallet);
 void StartShutdown();
 
 //! Appends a generated rpcuser and rpcpassword, whichever is missing, to the existing
-//! configuration file, when this account owns that file (on Windows, always). AppInit2
-//! calls it when an RPC server is being started.
+//! configuration file, when this account owns that file (fsmodes::OwnedByUs), through
+//! fsmodes::AppendToOwnedFile. AppInit2 calls it when an RPC server is being started.
 void AddMissingRpcCredentials();
+//! The configuration file step of AppInit2. With no configuration file that can be read, it
+//! creates the first-run one, exclusively and owner-only, and never over a name that is taken.
+//! An existing file is cleaned of obsolete keys (GRC::CleanConfig) and given missing RPC credentials
+//! (AddMissingRpcCredentials), both only when this account owns it. False, with \p error the
+//! message, when the start must stop.
+bool PrepareConfigFile(std::string& error);
 //! Installs the SIGTERM and SIGINT handlers that request a shutdown (POSIX; nothing on
 //! Windows, whose console handler AppInit2 installs). The daemon calls it at the top of
 //! main(), so that a stop sent during startup is not lost; AppInit2 calls it again.

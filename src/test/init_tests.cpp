@@ -4,6 +4,7 @@
 
 #include "fs.h"
 #include "gridcoin/contract/registry.h"
+#include "gridcoin/gridcoin.h"
 #include "init.h"
 #include "logging.h"
 #include "node/shutdown.h"
@@ -22,7 +23,15 @@
 #include <vector>
 
 #ifndef WIN32
+#include "test/umask_guard.h"
+
 #include <csignal>
+#include <sys/stat.h>
+#include <unistd.h>
+#else
+#include "test/wine.h"
+#include "util/dir_permissions.h"
+#include "util/win_acl.h"
 #endif
 
 namespace {
@@ -43,6 +52,47 @@ void RegisterArgs(ArgsManager& args)
 bool Contains(const std::vector<std::string>& v, const std::string& key)
 {
     return std::find(v.begin(), v.end(), key) != v.end();
+}
+
+//! A fresh, empty data directory with -datadir pointing at it, for one case. The guard,
+//! constructed before -datadir is set, restores the fixture's settings when the case ends.
+struct ScratchDataDir
+{
+    fs::path path{fs::temp_directory_path() / fs::unique_path("init_tests_%%%%-%%%%-%%%%")};
+    grc_test::StateGuard guard;
+
+    ScratchDataDir()
+    {
+        fs::create_directories(path);
+        gArgs.ForceSetArg("-datadir", path.string());
+        gArgs.ForceSetArg("-backupdir", (path / "backups").string());
+        gArgs.ClearPathCache();
+    }
+
+    ~ScratchDataDir()
+    {
+        gArgs.ClearPathCache();
+        boost::system::error_code ec;
+        fs::remove_all(path, ec);
+    }
+};
+
+std::string ReadText(const fs::path& path)
+{
+    fsbridge::ifstream stream(path, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+}
+
+void WriteText(const fs::path& path, const std::string& text)
+{
+    fsbridge::ofstream stream(path, std::ios::binary);
+    stream << text;
+}
+
+//! Whether a line of the log captured in \p lines holds \p text.
+bool Logged(const std::vector<std::string>& lines, const std::string& text)
+{
+    return std::any_of(lines.begin(), lines.end(), [&](const std::string& l) { return l.find(text) != std::string::npos; });
 }
 } // namespace
 
@@ -376,6 +426,188 @@ BOOST_AUTO_TEST_CASE(rpc_credentials_are_not_added_to_a_conf_this_account_does_n
     BOOST_CHECK_MESSAGE(std::any_of(lines.begin(), lines.end(),
                                     [&](const std::string& l) { return l.find(expected) != std::string::npos; }),
                         "no log line: " << expected);
+}
+
+// The first-run configuration file holds the RPC password, so it is created exclusively and
+// owner-only, whatever the umask.
+BOOST_AUTO_TEST_CASE(first_run_conf_is_created_owner_only)
+{
+    const grc_test::UmaskGuard umask(022);
+    ScratchDataDir datadir;
+    const fs::path conf = GetConfigFile();
+    BOOST_REQUIRE(conf.parent_path() == datadir.path);
+    BOOST_REQUIRE(IsConfigFileEmpty());
+
+    std::string error;
+    BOOST_REQUIRE_MESSAGE(PrepareConfigFile(error), error);
+
+    struct stat st;
+    BOOST_REQUIRE_EQUAL(::lstat(conf.string().c_str(), &st), 0);
+    BOOST_CHECK(S_ISREG(st.st_mode));
+    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0600u);
+
+    const std::string text = ReadText(conf);
+    BOOST_CHECK(text.find("rpcuser=gridcoinrpc\n") != std::string::npos);
+    BOOST_CHECK(text.find("rpcpassword=") != std::string::npos);
+}
+
+// A link at the configuration file's name is not followed: nothing is created where it leads,
+// and the start goes on, logging why, to StartRPCThreads' message about the missing password.
+BOOST_AUTO_TEST_CASE(first_run_conf_is_not_created_through_a_link)
+{
+    ScratchDataDir datadir;
+    const fs::path conf = GetConfigFile();
+    const fs::path target = datadir.path / "elsewhere.conf";
+    fs::create_symlink(target, conf);
+    BOOST_REQUIRE(IsConfigFileEmpty());
+
+    std::vector<std::string> lines;
+    const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+    std::string error;
+    const bool prepared = PrepareConfigFile(error);
+    LogInstance().DeleteCallback(callback);
+
+    BOOST_CHECK_MESSAGE(prepared, error);
+    BOOST_CHECK(!fs::exists(fs::symlink_status(target)));
+    BOOST_CHECK(fs::is_symlink(fs::symlink_status(conf)));
+    BOOST_CHECK_MESSAGE(Logged(lines, "not creating the configuration file " + conf.string()), "no log line");
+}
+
+// A configuration file that exists but cannot be read is not the missing file the first-run
+// step creates, so it is never truncated or rewritten.
+BOOST_AUTO_TEST_CASE(unreadable_conf_is_not_rewritten)
+{
+    if (::geteuid() == 0) {
+        BOOST_TEST_MESSAGE("skipped: running as root, which reads a file of any mode");
+        return;
+    }
+
+    ScratchDataDir datadir;
+    const fs::path conf = GetConfigFile();
+    const std::string contents{"addnode=127.0.0.1\n"};
+    WriteText(conf, contents);
+    BOOST_REQUIRE_EQUAL(::chmod(conf.string().c_str(), 0200), 0);
+    BOOST_REQUIRE(IsConfigFileEmpty());
+
+    std::string error;
+    BOOST_CHECK_MESSAGE(PrepareConfigFile(error), error);
+
+    BOOST_REQUIRE_EQUAL(::chmod(conf.string().c_str(), 0600), 0);
+    BOOST_CHECK_EQUAL(ReadText(conf), contents);
+}
+
+// The core rewrites its configuration file to drop obsolete keys only when this account owns
+// it (fsmodes::OwnedByUs). A link is not one: the link and the file it leads to stay as they
+// were.
+BOOST_AUTO_TEST_CASE(clean_config_leaves_a_conf_this_account_does_not_own)
+{
+    ScratchDataDir datadir;
+    const std::string contents{"privatekey=x\nrpcuser=a\n"};
+    const fs::path target = datadir.path / "provided.conf";
+    WriteText(target, contents);
+    const fs::path conf = GetConfigFile();
+    fs::create_symlink(target, conf);
+
+    std::vector<std::string> lines;
+    const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+    const bool cleaned = GRC::CleanConfig();
+    LogInstance().DeleteCallback(callback);
+
+    BOOST_CHECK(cleaned);
+    BOOST_CHECK(fs::is_symlink(fs::symlink_status(conf)));
+    BOOST_CHECK_EQUAL(ReadText(target), contents);
+    BOOST_CHECK_MESSAGE(Logged(lines, "not removing obsolete keys from " + conf.string()), "no log line");
+}
+
+// The cleaned file is written under a temporary name that is created exclusively and
+// owner-only. A link left at that name is removed, never followed.
+BOOST_AUTO_TEST_CASE(clean_config_does_not_follow_a_link_at_its_temporary_name)
+{
+    ScratchDataDir datadir;
+    const fs::path conf = GetConfigFile();
+    WriteText(conf, "privatekey=x\nrpcuser=a\n");
+    BOOST_REQUIRE_EQUAL(::chmod(conf.string().c_str(), 0600), 0);
+
+    const std::string victim_contents{"victim\n"};
+    const fs::path victim = datadir.path / "victim";
+    WriteText(victim, victim_contents);
+    fs::path temporary = conf;
+    temporary.replace_extension("conf~");
+    fs::create_symlink(victim, temporary);
+
+    BOOST_CHECK(GRC::CleanConfig());
+
+    BOOST_CHECK_EQUAL(ReadText(victim), victim_contents);
+    BOOST_CHECK(!fs::exists(fs::symlink_status(temporary)));
+
+    struct stat st;
+    BOOST_REQUIRE_EQUAL(::lstat(conf.string().c_str(), &st), 0);
+    BOOST_CHECK(S_ISREG(st.st_mode));
+    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0600u);
+    BOOST_CHECK_EQUAL(ReadText(conf), "rpcuser=a\n");
+}
+#endif
+
+#ifdef WIN32
+// On Windows too the core adds RPC credentials only to a configuration file this account owns.
+// A symbolic link is not one, so the file it leads to is left as it was. Making the link needs
+// Developer Mode or an elevated token; without either the case says so and checks nothing.
+BOOST_AUTO_TEST_CASE(rpc_credentials_are_not_added_through_a_link_windows)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine has no Windows file ownership; skipping");
+        return;
+    }
+
+    ScratchDataDir datadir;
+    const std::string contents{"addnode=127.0.0.1\n"};
+    const fs::path target = datadir.path / "provided.conf";
+    WriteText(target, contents);
+    const fs::path conf = datadir.path / "gridcoinresearch.conf";
+    boost::system::error_code ec;
+    fs::create_symlink(target, conf, ec);
+    if (ec) {
+        BOOST_WARN_MESSAGE(false, "a symbolic link could not be made (" << ec.message() << "); not checked");
+        return;
+    }
+
+    grc_test::ForcedArgGuard conf_arg("conf", conf.string());
+    BOOST_REQUIRE(GetConfigFile() == conf);
+    BOOST_REQUIRE(gArgs.GetArg("-rpcpassword", "").empty());
+
+    std::vector<std::string> lines;
+    const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+    AddMissingRpcCredentials();
+    LogInstance().DeleteCallback(callback);
+
+    BOOST_CHECK_EQUAL(ReadText(target), contents);
+    BOOST_CHECK(fs::is_symlink(fs::symlink_status(conf)));
+    BOOST_CHECK_MESSAGE(Logged(lines, "not adding RPC credentials to " + conf.string()), "no log line");
+}
+
+// The first-run configuration file is created with the owner-only access list, not the one it
+// would inherit from the data directory.
+BOOST_AUTO_TEST_CASE(first_run_conf_is_created_owner_only_windows)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
+        return;
+    }
+
+    ScratchDataDir datadir;
+    const fs::path conf = GetConfigFile();
+    BOOST_REQUIRE(IsConfigFileEmpty());
+
+    std::string error;
+    BOOST_REQUIRE_MESSAGE(PrepareConfigFile(error), error);
+
+    const std::optional<std::string> reason =
+        util::winacl::CheckMatchesSpec(util::winacl::ReadAcl(conf), util::OwnerOnlyAclSpec(/*inheritable=*/false));
+    BOOST_CHECK_MESSAGE(!reason.has_value(), reason.value_or(""));
+    BOOST_CHECK(ReadText(conf).find("rpcpassword=") != std::string::npos);
+
+    // Present now, so the next start cleans and completes it instead.
+    BOOST_CHECK(!IsConfigFileEmpty());
 }
 #endif
 

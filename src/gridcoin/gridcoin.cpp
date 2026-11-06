@@ -18,8 +18,12 @@
 #include "gridcoin/upgrade.h"
 #include "gridcoin/beacon.h"
 #include "init.h"
+#include "util/fsmodes.h"
 #include "scheduler.h"
 #include "node/ui_interface.h"
+
+#include <cstdio>
+#include <optional>
 
 using namespace GRC;
 
@@ -786,7 +790,8 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
 }
 
 bool GRC::CleanConfig() {
-    fsbridge::ifstream orig_config(GetConfigFile());
+    const fs::path config_file = GetConfigFile();
+    fsbridge::ifstream orig_config(config_file);
     if (!orig_config.good()) {
         return false;
     }
@@ -814,23 +819,63 @@ skip:;
     }
     orig_config.close();
 
-    if (commit) {
-        if (!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"))) {
-            return error("%s: Config backup failed.", __func__);
-        }
+    if (!commit) return true;
 
-        try {
-            fs::path new_config_path(GetConfigFile().replace_extension("conf~"));
-            fsbridge::ofstream new_config_file(new_config_path);
+    // The core never writes a configuration file that belongs to another account, nor one it
+    // reaches through a link (fsmodes::OwnedByUs). Leaving the obsolete keys is no failure: the
+    // core ignores them.
+    if (!fsmodes::OwnedByUs(config_file)) {
+        LogPrintf("%s: not removing obsolete keys from %s: it is not owned by this account", __func__,
+                  config_file.string());
+        return true;
+    }
 
-            std::ostream_iterator<std::string> out(new_config_file, "\n");
-            std::copy(new_config_lines.begin(), new_config_lines.end(), out);
+    if (!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"))) {
+        return error("%s: Config backup failed.", __func__);
+    }
 
-            new_config_file.close();
-            fs::rename(new_config_path, GetConfigFile());
-        } catch (const fs::filesystem_error& e) {
-            return error("%s: Error saving config: %s", __func__, e.what());
-        }
+    // The cleaned file holds the RPC password, so it is written under a temporary name that is
+    // created exclusively and owner-only (fsmodes::CreateNewOwnerOnlyFile). Whatever an earlier
+    // run left at that name, a link included, is removed first, never written through.
+    fs::path new_config_path(config_file);
+    new_config_path.replace_extension("conf~");
+
+    boost::system::error_code ec;
+    fs::remove(new_config_path, ec);
+    if (ec) {
+        return error("%s: Error saving config: cannot remove %s: %s", __func__, new_config_path.string(),
+                     ec.message());
+    }
+
+    bool taken = false;
+    std::optional<std::string> not_owner_only;
+    std::string create_error;
+    std::FILE* const new_config_file =
+        fsmodes::CreateNewOwnerOnlyFile(new_config_path, taken, not_owner_only, create_error);
+    if (new_config_file == nullptr) {
+        return error("%s: Error saving config: %s", __func__, create_error);
+    }
+    if (not_owner_only) {
+        LogPrintf("WARNING: %s: %s is not owner-only (%s)", __func__, new_config_path.string(), *not_owner_only);
+    }
+
+    bool written = true;
+    for (const std::string& kept : new_config_lines) {
+        written = written && std::fwrite(kept.data(), 1, kept.size(), new_config_file) == kept.size()
+                  && std::fputc('\n', new_config_file) != EOF;
+    }
+    if (std::fclose(new_config_file) != 0) written = false;
+
+    if (!written) {
+        fs::remove(new_config_path, ec);
+        return error("%s: Error saving config: cannot write %s", __func__, new_config_path.string());
+    }
+
+    try {
+        fs::rename(new_config_path, config_file);
+    } catch (const fs::filesystem_error& e) {
+        fs::remove(new_config_path, ec);
+        return error("%s: Error saving config: %s", __func__, e.what());
     }
 
     return true;

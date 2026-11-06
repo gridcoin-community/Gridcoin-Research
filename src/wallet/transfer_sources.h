@@ -45,10 +45,11 @@ void CleanTransferDir();
 //! Whether the configuration file may be backed up. False, with \p reason set,
 //! in the deployments where the core runs under another account:
 //! -ipcattachgroup is set (read through GetConfiguredOption, so
-//! -noipcattachgroup is unset), or (POSIX) the configuration file exists and
-//! its owner is not this process's effective uid. The file holds the RPC
-//! password then, and it belongs to the administrator. A configuration file
-//! that does not exist counts as permitted.
+//! -noipcattachgroup is unset), or the configuration file exists and its owner
+//! is not this process's effective uid (POSIX, through a link) or not this
+//! process's token user (Windows, fsmodes::OwnedByUs, which refuses a link). The
+//! file holds the RPC password then, and it belongs to the administrator. A
+//! configuration file that does not exist counts as permitted.
 bool ConfigBackupPermitted(std::string& reason);
 
 //! One file a snapshot source streams. \p path is a file in the transfer
