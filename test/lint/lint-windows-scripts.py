@@ -23,6 +23,9 @@ Rules
      Administrators, protected, full control for Administrators and SYSTEM, and read and
      execute for Users, which holds READ_CONTROL and FILE_READ_ATTRIBUTES (a service reads
      the access lists of its program's directories through Users)
+  9  the update script checks the Authenticode signature (Test-GridcoinReleaseSignature, which
+     calls Get-AuthenticodeSignature) before it runs the installer, and the shipped
+     release-signer.txt pins nothing (no uncommented line) until the release signer is known
 
 Usage
   lint-windows-scripts.py              check the tree
@@ -45,6 +48,9 @@ INSTALL = "contrib/windows/Install-GridcoinCoreTask.ps1"
 GUI = "contrib/windows/Start-GridcoinGui.ps1"
 SHUTDOWN = "contrib/windows/Set-GridcoinShutdownFlush.ps1"
 STEPS = "contrib/windows/Invoke-GridcoinInstallStep.ps1"
+UPDATE = "contrib/windows/Update-GridcoinCore.ps1"
+RELEASE_TEST = "contrib/windows/Test-GridcoinRelease.ps1"
+SIGNER = "contrib/windows/release-signer.txt"
 
 HELPERS = ("Set-GridcoinAutounlock.ps1", "Invoke-GridcoinAutounlock.ps1")
 HELPER_NAME_ALLOWED_IN = (COMMON, STEPS)
@@ -289,7 +295,38 @@ def rule8(files):
     return failures
 
 
-RULES = (rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8)
+def rule9(files):
+    failures = []
+    update = files.get(UPDATE)
+    if update is None:
+        failures.append(f"rule 9: {UPDATE} does not exist")
+    else:
+        # comments do not count: only code lines are searched
+        code = [line for line in update.splitlines() if not line.lstrip().startswith("#")]
+        check = first_line(code, re.compile(r"\bTest-GridcoinReleaseSignature\b"))
+        start = first_line(code, re.compile(r"\bStart-Process\b"))
+        if check is None:
+            failures.append(f"rule 9: {UPDATE}: does not call Test-GridcoinReleaseSignature")
+        if start is None:
+            failures.append(f"rule 9: {UPDATE}: has no Start-Process of the installer")
+        if check is not None and start is not None and check > start:
+            failures.append(f"rule 9: {UPDATE}: runs the installer before it checks the signature")
+    verifier = files.get(RELEASE_TEST)
+    if verifier is None:
+        failures.append(f"rule 9: {RELEASE_TEST} does not exist")
+    elif "Get-AuthenticodeSignature" not in verifier:
+        failures.append(f"rule 9: {RELEASE_TEST}: does not call Get-AuthenticodeSignature")
+    signer = files.get(SIGNER)
+    if signer is None:
+        failures.append(f"rule 9: {SIGNER} does not exist")
+    else:
+        for number, line in enumerate(signer.splitlines(), 1):
+            if line.strip() and not line.lstrip().startswith("#"):
+                failures.append(f"rule 9: {SIGNER}:{number}: pins a value ({line.strip()}); it ships with comments only")
+    return failures
+
+
+RULES = (rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9)
 
 GOOD_PS1 = "#Requires -Version 5.1\nSet-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n"
 
@@ -327,6 +364,9 @@ GOOD_FILES = {
     NSIS: GOOD_NSIS,
     STEPS: GOOD_PS1 + "$script:InstallDirSddl = '" + GOOD_SDDL + "'\n",
     CMAKE: "install(FILES Install-GridcoinCoreTask.ps1)\n",
+    UPDATE: GOOD_PS1 + "# Start-Process in a comment\nTest-GridcoinReleaseSignature -Path $p -SignerFile $s\nStart-Process $p\n",
+    RELEASE_TEST: GOOD_PS1 + "Get-AuthenticodeSignature -LiteralPath $Path\n",
+    SIGNER: "# comments only\n\n",
 }
 
 # (rule, a file that breaks it) pairs, applied to GOOD_FILES
@@ -381,6 +421,14 @@ BAD_SAMPLES = (
     (8, {STEPS: GOOD_PS1 + "$script:InstallDirSddl = '" + GOOD_SDDL + "(A;OICI;0x1200a9;;;AU)'\n"}),
     (8, {STEPS: GOOD_PS1 + "$script:InstallDirSddl = '" + GOOD_SDDL.replace("(A;OICI;FA;;;SY)", "") + "'\n"}),
     (8, {STEPS: GOOD_PS1 + "$script:InstallDirSddl = '" + GOOD_SDDL.replace("(A;OICI;FA;;;SY)", "(A;OICI;FR;;;SY)") + "'\n"}),
+    # the installer run before the check, no check, a verifier without Get-AuthenticodeSignature,
+    # a pinned value in the shipped file, and a missing file
+    (9, {UPDATE: GOOD_PS1 + "Start-Process $p\nTest-GridcoinReleaseSignature -Path $p -SignerFile $s\n"}),
+    (9, {UPDATE: GOOD_PS1 + "# Test-GridcoinReleaseSignature\nStart-Process $p\n"}),
+    (9, {UPDATE: GOOD_PS1 + "Test-GridcoinReleaseSignature -Path $p -SignerFile $s\n"}),
+    (9, {RELEASE_TEST: GOOD_PS1 + "Get-FileHash $Path\n"}),
+    (9, {SIGNER: "# comments\nidentity-eku=1.3.6.1.4.1.311.97.1\n"}),
+    (9, {SIGNER: None}),
 )
 
 

@@ -15,6 +15,12 @@ Unicode true
 !define GRIDCOIN_GUI_NAME gridcoinresearch.exe
 !define GRIDCOIN_DAEMON_NAME gridcoinresearchd.exe
 
+# A release build signs the uninstaller the installer writes, through a command CI provides
+# (CPackOptions.cmake takes it from the environment). Without one nothing changes.
+!if "@CPACK_GRIDCOIN_UNINSTALLER_SIGN_COMMAND@" != ""
+!uninstfinalize '@CPACK_GRIDCOIN_UNINSTALLER_SIGN_COMMAND@ "%1"' = 0
+!endif
+
 # MUI Symbol Definitions
 !define MUI_ICON "${ICONDIR}\gridcoin.ico"
 !define MUI_UNICON "${ICONDIR}\gridcoin.ico"
@@ -138,7 +144,7 @@ Section -Main SEC0000
     SetOutPath $INSTDIR\windows
     File @CPACK_TEMPORARY_DIRECTORY@\daemon\windows\*.ps1
     File @CPACK_TEMPORARY_DIRECTORY@\daemon\windows\README.md
-    File @CPACK_TEMPORARY_DIRECTORY@\daemon\windows\release-keys.txt
+    File @CPACK_TEMPORARY_DIRECTORY@\daemon\windows\release-signer.txt
     SetOutPath $INSTDIR
 
     # After the files, the steps run from the installed $INSTDIR\windows: the switch-over writes the

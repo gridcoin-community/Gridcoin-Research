@@ -1,20 +1,22 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Install a Gridcoin release only after its signed checksum list verifies.
+    Install a Gridcoin release only after its Authenticode signature verifies.
 
 .DESCRIPTION
     Runs elevated and verifies before it touches anything. In order:
 
       1. Refuse unless elevated.
-      2. Refuse unless the pinned keys file, this script and the files it loads are writable by
-         privileged SIDs only (SYSTEM, Administrators, TrustedInstaller).
-      3. Copy the installer, the SHA256SUMS list and its .sig into a new directory under
-         $env:TEMP with a protected Administrators+SYSTEM ACL, so nothing changes them between
-         the checks and the run.
-      4. Verify the detached ECDSA P-256 signature of SHA256SUMS against the pinned key
-         (release-keys.txt). With no key pinned this fails closed.
-      5. The installer's name must be listed and its SHA-256 must match.
+      2. Refuse unless the pinned signer file (release-signer.txt), this script and the files it
+         loads are writable by privileged SIDs only (SYSTEM, Administrators, TrustedInstaller).
+      3. Copy the installer and the SHA256SUMS list into a new directory named .update-<guid>
+         beside this script, with a protected Administrators+SYSTEM ACL, so nothing changes
+         them between the checks and the run. The directory is always removed.
+      4. Check the Authenticode signature of the staged installer: status Valid, a chain to
+         Microsoft's identity-verification code-signing root, the pinned Artifact Signing
+         identity marker, the pinned subject name, and a timestamp. With no signer pinned
+         this fails closed.
+      5. The installer's name must be listed in SHA256SUMS and its SHA-256 must match.
       6. Its file version must exceed the installed DisplayVersion, unless -AllowDowngrade.
       7. Only then run the staged installer with /S, wait, and require exit 0 and a new
          DisplayVersion.
@@ -27,11 +29,8 @@
 .PARAMETER Sums
     The SHA256SUMS list from the release.
 
-.PARAMETER Signature
-    The SHA256SUMS.sig file from the release.
-
-.PARAMETER KeysFile
-    The pinned release keys. Defaults to release-keys.txt beside this script.
+.PARAMETER SignerFile
+    The pinned release signer. Defaults to release-signer.txt beside this script.
 
 .PARAMETER AllowDowngrade
     Install a version that is not newer than the installed one.
@@ -40,9 +39,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$Installer,
     [Parameter(Mandatory = $true)][string]$Sums,
-    [Parameter(Mandatory = $true)][string]$Signature,
-    [string]$KeysFile = (Join-Path $PSScriptRoot 'release-keys.txt'),
-    [switch]$AllowDowngrade
+    [switch]$AllowDowngrade,
+    [string]$SignerFile = (Join-Path $PSScriptRoot 'release-signer.txt')
 )
 
 Set-StrictMode -Version Latest
@@ -72,13 +70,13 @@ try {
     }
 
     $privileged = Get-GridcoinPrivilegedSids
-    $guarded = @($KeysFile, $PSCommandPath, (Join-Path $PSScriptRoot 'GridcoinCommon.ps1'), (Join-Path $PSScriptRoot 'Test-GridcoinRelease.ps1'))
+    $guarded = @($SignerFile, $PSCommandPath, (Join-Path $PSScriptRoot 'GridcoinCommon.ps1'), (Join-Path $PSScriptRoot 'Test-GridcoinRelease.ps1'))
     foreach ($path in $guarded) {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { Stop-GridcoinUpdate "'$path' does not exist." }
         $vector = Get-GridcoinWriteVector -Path $path -AllowedSids $privileged -ChainMasks
         if ($vector) { Stop-GridcoinUpdate "'$path' can be rewritten by an unprivileged account: $vector" }
     }
-    foreach ($path in @($Installer, $Sums, $Signature)) {
+    foreach ($path in @($Installer, $Sums)) {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { Stop-GridcoinUpdate "'$path' does not exist." }
     }
 
@@ -106,19 +104,17 @@ try {
     $installerName = Split-Path -Leaf $Installer
     $stagedInstaller = Join-Path $stage $installerName
     $stagedSums = Join-Path $stage 'SHA256SUMS'
-    $stagedSig = Join-Path $stage 'SHA256SUMS.sig'
-    $stagedKeys = Join-Path $stage 'release-keys.txt'
+    $stagedSigner = Join-Path $stage 'release-signer.txt'
     Copy-Item -LiteralPath $Installer -Destination $stagedInstaller
     Copy-Item -LiteralPath $Sums -Destination $stagedSums
-    Copy-Item -LiteralPath $Signature -Destination $stagedSig
-    Copy-Item -LiteralPath $KeysFile -Destination $stagedKeys
+    Copy-Item -LiteralPath $SignerFile -Destination $stagedSigner
 
     try {
-        Test-GridcoinReleaseSignature -SumsPath $stagedSums -SigPath $stagedSig -KeysPath $stagedKeys
+        Test-GridcoinReleaseSignature -Path $stagedInstaller -SignerFile $stagedSigner
     } catch {
         Stop-GridcoinUpdate "signature check failed: $($_.Exception.Message)"
     }
-    Write-Host 'The signature of the checksum list verifies against the pinned key.'
+    Write-Host "$installerName carries a valid signature of the pinned release signer."
 
     try {
         $listed = Get-GridcoinReleaseHash -SumsPath $stagedSums -FileName $installerName
@@ -127,9 +123,9 @@ try {
     }
     $actual = (Get-FileHash -LiteralPath $stagedInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actual -cne $listed) {
-        Stop-GridcoinUpdate "the SHA-256 of $installerName is $actual, the signed list says $listed."
+        Stop-GridcoinUpdate "the SHA-256 of $installerName is $actual, the checksum list says $listed."
     }
-    Write-Host "$installerName matches the signed list."
+    Write-Host "$installerName matches the checksum list."
 
     $newText = (Get-Item -LiteralPath $stagedInstaller).VersionInfo.FileVersion
     $installedText = $null

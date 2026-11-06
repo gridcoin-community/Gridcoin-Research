@@ -862,20 +862,22 @@ permissions wider than this release sets for new files, and lists what it finds 
 `windows\` folder, which the finish page offers to open. It changes nothing: a file the core rewrites keeps the
 permissions it has. `gridcoinresearchd.exe -reportpermissions` runs the same check at any time.
 
-To upgrade from a console, with the installer, `SHA256SUMS` and `SHA256SUMS.sig` of the release, from an elevated
-PowerShell in the `windows\` folder:
+To upgrade from a console, with the installer and the `SHA256SUMS` of the release, from an elevated PowerShell in the
+`windows\` folder:
 
 ```powershell
-.\Update-GridcoinCore.ps1 -Installer .\gridcoin-5.5.2.1-win64-setup.exe -Sums .\SHA256SUMS -Signature .\SHA256SUMS.sig
+.\Update-GridcoinCore.ps1 -Installer .\gridcoin-5.5.2.1-win64-setup.exe -Sums .\SHA256SUMS
 ```
 
-It verifies before it touches anything: the keys file and the script must be writable by privileged accounts only,
-the signature of `SHA256SUMS` must verify against the key pinned in `release-keys.txt`, the installer must be listed
-with a matching SHA-256, and its version must be newer than the installed one (`-AllowDowngrade` overrides). Only
-then does it run the verified copy of the installer silently. With no key pinned it refuses.
-For a download you install by hand, `.\Test-GridcoinRelease.ps1 -SumsPath .\SHA256SUMS -SigPath .\SHA256SUMS.sig
--KeysPath .\release-keys.txt -FileName gridcoin-5.5.2.1-win64-setup.exe` checks the signature and prints the SHA-256
-that `SHA256SUMS` lists for the file; compare it with `(Get-FileHash .\gridcoin-5.5.2.1-win64-setup.exe).Hash`.
+It verifies before it touches anything: the signer file and the script must be writable by privileged accounts only,
+the installer is copied to a protected staging directory, its Authenticode signature must be valid and from the
+release signer pinned in `release-signer.txt` (a chain to Microsoft's code-signing root, the pinned identity marker
+and subject name, and a timestamp), the installer must be listed in `SHA256SUMS` with a matching SHA-256, and its
+version must be newer than the installed one (`-AllowDowngrade` overrides). Only then does it run the staged copy of
+the installer silently. With no signer pinned it refuses.
+For a download you install by hand, `.\Test-GridcoinRelease.ps1 -InstallerPath .\gridcoin-5.5.2.1-win64-setup.exe
+-SumsPath .\SHA256SUMS` checks the signature and prints the SHA-256 that `SHA256SUMS` lists for the file; compare it
+with `(Get-FileHash .\gridcoin-5.5.2.1-win64-setup.exe).Hash`.
 
 ### Verifying it works (Windows)
 

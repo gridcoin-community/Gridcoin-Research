@@ -110,11 +110,29 @@ The `deploy` job in `cmake_production.yml` automates the release process.
     4.  Creates a **Draft Release** on GitHub with all binaries attached.
 
 The job also attaches `SHA256SUMS` to the draft: `sha256sum` over the flattened assets,
-sorted by file name, one `<64 hex>  <name>` line each (LF, base names only). CI does not sign
-it and holds no release key. The release engineer signs it offline and attaches
-`SHA256SUMS.sig` before publishing (see `doc/release-process.md`). On Windows,
-`Update-GridcoinCore.ps1` installs a release only if that signature verifies against the key
-pinned in `release-keys.txt`.
+sorted by file name, one `<64 hex>  <name>` line each (LF, base names only). It is not signed; on
+Windows the installer itself carries the signature (next section).
+
+### Windows release signing
+
+On release tags the Windows build in `depends-builds` runs under the GitHub environment
+`windows-release` (limit it to tags in the environment's deployment branch and tag rules). It signs
+with Microsoft Artifact Signing: `azure/login` with a federated credential, an access token for
+`https://codesigning.azure.net`, then `jsign` (pinned version, SHA-256 checked) with the timestamp service
+`http://timestamp.acs.microsoft.com` (RFC 3161). The executables and the elevated scripts are signed before
+packing, the uninstaller through an NSIS `!uninstfinalize` hook (defined only when
+`GRIDCOIN_UNINSTALLER_SIGN_COMMAND` is set, so other builds are unchanged), and the installer last.
+
+Environment variables (not secrets) of `windows-release`:
+
+| Variable | Meaning |
+|---|---|
+| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | The Entra ID app with the federated credential |
+| `ARTIFACT_SIGNING_REGION` | The region of the account; the endpoint is `<region>.codesigning.azure.net` |
+| `ARTIFACT_SIGNING_ACCOUNT`, `ARTIFACT_SIGNING_PROFILE` | The account and certificate profile; the jsign alias is `<account>/<profile>` |
+
+With any of them missing the signing steps print a warning and are skipped. See `doc/release-process.md`
+for the one-time setup and for pinning the signer.
 
 -----
 

@@ -34,7 +34,6 @@ src/qt/test/test_gridcoin-qt
 contrib/deprecated
 contrib/deprecated/bin
 release
-!/contrib/release/
 .*.swp
 *.*~*
 *.bak

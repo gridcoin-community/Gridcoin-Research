@@ -1,0 +1,12 @@
+# The pinned release signer, read by Test-GridcoinRelease.ps1 and Update-GridcoinCore.ps1.
+# A release is accepted only when its Authenticode signature is valid, chains to Microsoft's
+# public code-signing root, was timestamped, carries the identity marker below in its extended
+# key usage, and names the subject below. Two lines, each "key=value":
+#
+#   identity-eku=<OID>   the Artifact Signing per-account identity marker, an OID of the form
+#                        1.3.6.1.4.1.311.97.* taken from the account's validated identity
+#   subject-cn=<name>    the common name of the signer certificate's subject
+#
+# Nothing is pinned yet. Until both lines are set, verification refuses with "no release
+# signer is pinned". Take the values from the signed release itself once the signing account
+# exists (doc/release-process.md).

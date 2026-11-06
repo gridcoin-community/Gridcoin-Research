@@ -619,7 +619,7 @@ if(ENABLE_DAEMON)
                 "${CMAKE_SOURCE_DIR}/contrib/windows/GridcoinCommon.ps1"
                 "${CMAKE_SOURCE_DIR}/contrib/windows/Set-GridcoinShutdownFlush.ps1"
                 "${CMAKE_SOURCE_DIR}/contrib/windows/Test-GridcoinRelease.ps1"
-                "${CMAKE_SOURCE_DIR}/contrib/windows/release-keys.txt"
+                "${CMAKE_SOURCE_DIR}/contrib/windows/release-signer.txt"
                 "${CMAKE_SOURCE_DIR}/contrib/windows/README.md"
                 COMPONENT daemon
                 DESTINATION windows

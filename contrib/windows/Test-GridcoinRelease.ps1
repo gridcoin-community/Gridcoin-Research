@@ -1,117 +1,133 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Verify a signed Gridcoin SHA256SUMS release list (detached ECDSA P-256, pinned key).
+    Check the Authenticode signature of a Gridcoin release file against the pinned release signer.
 
 .DESCRIPTION
-    Dot-source this file for the two functions, or run it with -SumsPath, -SigPath and
-    -KeysPath to verify a list and print the result (exit 0 on success, 1 on failure).
+    Dot-source this file for the two functions, or run it with -InstallerPath to check one file
+    and print the result (exit 0 on success, 1 on failure).
 
-        Test-GridcoinReleaseSignature -SumsPath -SigPath -KeysPath   (throws on any failure)
-        Get-GridcoinReleaseHash -SumsPath -FileName                  (the listed SHA-256, or throws)
+        Test-GridcoinReleaseSignature -Path -SignerFile   (throws on any failure)
+        Get-GridcoinReleaseHash -SumsPath -FileName       (the listed SHA-256, or throws)
 
-    Formats are fixed by contrib/release/sign-sha256sums.py. SHA256SUMS.sig is one line,
-    "gridcoin-sha256sums-sig-v1 <keyid> <base64 of r||s, 64 bytes>", an ECDSA P-256 signature over
-    the SHA-256 of the exact bytes of SHA256SUMS. The keyid is the lowercase hex of the first
-    8 bytes of SHA-256(X||Y). release-keys.txt has "#" comments and "<keyid> <base64 of X||Y> <label>"
-    lines. With no key pinned the check fails closed.
+    The signature check requires all of:
+      - a signer pinned in the signer file (release-signer.txt): "identity-eku=<OID>", the
+        Artifact Signing per-account identity marker, and "subject-cn=<name>"; with none, it refuses;
+      - an embedded signature that Get-AuthenticodeSignature reports as Valid;
+      - the pinned identity marker in the signer certificate's extended key usage;
+      - the pinned name as the common name of the signer certificate's subject;
+      - a timestamp;
+      - a chain, built with the machine policy and online revocation checking, to Microsoft's
+        identity-verification code-signing root, matched by its subject name. When no revocation
+        server can be reached the chain is built again without the revocation check, and the
+        message of any later refusal says so.
+    The certificates of the signing service are short-lived, so the time validity of the chain is
+    taken from the timestamped signature that Get-AuthenticodeSignature reports as Valid, and the
+    chain build ignores it.
 
-    Needs Windows PowerShell 5.1 with .NET Framework 4.7.2 or later.
+    Needs Windows PowerShell 5.1.
+
+.PARAMETER InstallerPath
+    The file to check.
+
+.PARAMETER SignerPath
+    The pinned signer file. Defaults to release-signer.txt beside this script.
+
+.PARAMETER SumsPath
+    With -InstallerPath: also print the SHA-256 that this SHA256SUMS list gives for the file's name.
 
 .EXAMPLE
-    .\Test-GridcoinRelease.ps1 -SumsPath SHA256SUMS -SigPath SHA256SUMS.sig -KeysPath release-keys.txt -FileName gridcoin-5.5.2.1-win64-setup.exe
+    .\Test-GridcoinRelease.ps1 -InstallerPath .\gridcoin-5.5.2.1-win64-setup.exe
 #>
 [CmdletBinding()]
 param(
-    [string]$SumsPath,
-    [string]$SigPath,
-    [string]$KeysPath,
-    [string]$FileName
+    [string]$InstallerPath,
+    [string]$SignerPath,
+    [string]$SumsPath
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Get-GridcoinReleaseKeyId {
-    param([Parameter(Mandatory = $true)][byte[]]$PublicXY)
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $digest = $sha.ComputeHash($PublicXY)
-    } finally {
-        $sha.Dispose()
-    }
-    $text = New-Object System.Text.StringBuilder
-    for ($i = 0; $i -lt 8; $i++) { [void]$text.Append($digest[$i].ToString('x2')) }
-    return $text.ToString()
-}
+# The subject of Microsoft's code-signing identity-verification root, matched by name.
+$script:GridcoinMicrosoftRootSubject = '^CN=Microsoft Identity Verification Root Certificate Authority\b'
 
-# {keyid = X||Y bytes} from a release-keys.txt; throws when none is pinned.
-function Read-GridcoinReleaseKeys {
-    param([Parameter(Mandatory = $true)][string]$KeysPath)
-    if (-not (Test-Path -LiteralPath $KeysPath -PathType Leaf)) { throw "the release keys file '$KeysPath' does not exist" }
+# {identity-eku, subject-cn} from a release-signer.txt; throws when nothing is pinned.
+function Read-GridcoinReleaseSigner {
+    param([Parameter(Mandatory = $true)][string]$SignerFile)
+    if (-not (Test-Path -LiteralPath $SignerFile -PathType Leaf)) { throw "the signer file '$SignerFile' does not exist" }
     $found = @{}
-    foreach ($rawLine in [System.IO.File]::ReadAllLines($KeysPath)) {
+    foreach ($rawLine in [System.IO.File]::ReadAllLines($SignerFile)) {
         $line = $rawLine.Trim()
         if ($line.Length -eq 0 -or $line.StartsWith('#')) { continue }
-        $fields = $line -split '\s+', 3
-        if ($fields.Count -lt 2 -or $fields[0] -cnotmatch '^[0-9a-f]{16}$' -or $fields[1] -cnotmatch '^[A-Za-z0-9+/]{86}==$') {
-            throw "malformed key line in $KeysPath"
-        }
-        $xy = [Convert]::FromBase64String($fields[1])
-        if ($xy.Length -ne 64) { throw "malformed key line in $KeysPath" }
-        if ((Get-GridcoinReleaseKeyId -PublicXY $xy) -cne $fields[0]) { throw "key line $($fields[0]) in $KeysPath does not match its key id" }
-        $found[$fields[0]] = $xy
+        if ($line -cnotmatch '^(identity-eku|subject-cn)=(.+)$') { throw "malformed line in $SignerFile" }
+        $name = $Matches[1]
+        $value = $Matches[2].Trim()
+        if ($found.ContainsKey($name)) { throw "$name is pinned twice in $SignerFile" }
+        $found[$name] = $value
     }
-    if ($found.Count -eq 0) { throw "no release key is pinned in $KeysPath" }
+    if ($found.Count -eq 0) { throw "no release signer is pinned in $SignerFile" }
+    if (-not $found.ContainsKey('identity-eku') -or -not $found.ContainsKey('subject-cn')) {
+        throw "the release signer in $SignerFile needs both identity-eku and subject-cn"
+    }
+    if ($found['identity-eku'] -cnotmatch '^1\.3\.6\.1\.4\.1\.311\.97(\.[0-9]+)+$') {
+        throw "identity-eku in $SignerFile is not an Artifact Signing identity OID (1.3.6.1.4.1.311.97.*)"
+    }
     return $found
 }
 
 function Test-GridcoinReleaseSignature {
     param(
-        [Parameter(Mandatory = $true)][string]$SumsPath,
-        [Parameter(Mandatory = $true)][string]$SigPath,
-        [Parameter(Mandatory = $true)][string]$KeysPath
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$SignerFile
     )
-    $pinned = Read-GridcoinReleaseKeys -KeysPath $KeysPath
+    $pinned = Read-GridcoinReleaseSigner -SignerFile $SignerFile
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "the file '$Path' does not exist" }
 
-    $sigBytes = [System.IO.File]::ReadAllBytes($SigPath)
-    foreach ($b in $sigBytes) { if ($b -gt 127) { throw 'the signature file is not ASCII' } }
-    $sigText = [System.Text.Encoding]::ASCII.GetString($sigBytes)
-    if (-not $sigText.EndsWith("`n") -or $sigText.IndexOf("`n") -ne ($sigText.Length - 1)) {
-        throw 'the signature file must be exactly one LF-terminated line'
-    }
-    $parts = $sigText.Substring(0, $sigText.Length - 1).Split(' ')
-    if ($parts.Count -ne 3 -or $parts[0] -cne 'gridcoin-sha256sums-sig-v1') { throw 'the signature line is malformed' }
-    if ($parts[1] -cnotmatch '^[0-9a-f]{16}$') { throw 'the signature key id is malformed' }
-    if ($parts[2] -cnotmatch '^[A-Za-z0-9+/]{86}==$') { throw 'the signature is not 64 bytes of base64' }
-    $signature = [Convert]::FromBase64String($parts[2])
-    if ($signature.Length -ne 64) { throw 'the signature is not 64 bytes' }
-    $keyId = $parts[1]
-    if (-not $pinned.ContainsKey($keyId)) { throw "the signature key $keyId is not pinned in $KeysPath" }
-    $pubXY = [byte[]]$pinned[$keyId]
+    $sig = Get-AuthenticodeSignature -LiteralPath $Path
+    if ($sig.Status -ne 'Valid') { throw "the Authenticode signature of $Path is $($sig.Status): $($sig.StatusMessage)" }
+    if ($sig.SignatureType -ne 'Authenticode') { throw "$Path is not signed inside the file (signature type $($sig.SignatureType))" }
+    $cert = $sig.SignerCertificate
+    if ($null -eq $cert) { throw "$Path has no signer certificate" }
 
-    # ECCPUBLICBLOB: magic 0x31534345 (ECS1, P-256 public), the coordinate length, X, Y
-    $blob = New-Object System.Collections.Generic.List[byte]
-    $blob.AddRange([BitConverter]::GetBytes([uint32]0x31534345))
-    $blob.AddRange([BitConverter]::GetBytes([uint32]32))
-    $blob.AddRange($pubXY)
-
-    $sumsBytes = [System.IO.File]::ReadAllBytes($SumsPath)
-    $cngKey = $null
-    $verifier = $null
-    try {
-        try {
-            $cngKey = [System.Security.Cryptography.CngKey]::Import($blob.ToArray(), [System.Security.Cryptography.CngKeyBlobFormat]::EccPublicBlob)
-        } catch {
-            throw "the pinned key $keyId is not a valid P-256 public key"
+    $hasMarker = $false
+    foreach ($ext in $cert.Extensions) {
+        if ($ext.Oid.Value -ceq '2.5.29.37') {
+            $eku = New-Object System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension($ext, $false)
+            foreach ($oid in $eku.EnhancedKeyUsages) {
+                if ($oid.Value -ceq $pinned['identity-eku']) { $hasMarker = $true }
+            }
         }
-        $verifier = New-Object System.Security.Cryptography.ECDsaCng($cngKey)
-        $good = $verifier.VerifyData($sumsBytes, $signature, [System.Security.Cryptography.HashAlgorithmName]::SHA256)
-    } finally {
-        if ($null -ne $verifier) { $verifier.Dispose() }
-        if ($null -ne $cngKey) { $cngKey.Dispose() }
     }
-    if (-not $good) { throw "the signature does not match $SumsPath" }
+    if (-not $hasMarker) { throw "the signer certificate of $Path does not carry the pinned identity marker $($pinned['identity-eku'])" }
+
+    $commonName = $cert.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+    if ($commonName -cne $pinned['subject-cn']) { throw "the signer of $Path is '$commonName', not the pinned '$($pinned['subject-cn'])'" }
+
+    if ($null -eq $sig.TimeStamperCertificate) { throw "the signature of $Path has no timestamp" }
+
+    $chain = New-Object System.Security.Cryptography.X509Certificates.X509Chain($true)
+    $chain.ChainPolicy.RevocationMode = [System.Security.Cryptography.X509Certificates.X509RevocationMode]::Online
+    $chain.ChainPolicy.RevocationFlag = [System.Security.Cryptography.X509Certificates.X509RevocationFlag]::EntireChain
+    $chain.ChainPolicy.VerificationFlags = [System.Security.Cryptography.X509Certificates.X509VerificationFlags]::IgnoreNotTimeValid
+    $note = ''
+    if (-not $chain.Build($cert)) {
+        $revocationOnly = $true
+        foreach ($status in $chain.ChainStatus) {
+            if ($status.Status -ne 'RevocationStatusUnknown' -and $status.Status -ne 'OfflineRevocation') { $revocationOnly = $false }
+        }
+        if (-not $revocationOnly) { throw "the certificate chain of $Path is not valid: $($chain.ChainStatus[0].StatusInformation.Trim())" }
+        $chain.Reset()
+        $chain.ChainPolicy.RevocationMode = [System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
+        $chain.ChainPolicy.VerificationFlags = [System.Security.Cryptography.X509Certificates.X509VerificationFlags]::IgnoreNotTimeValid
+        if (-not $chain.Build($cert)) { throw "the certificate chain of $Path is not valid: $($chain.ChainStatus[0].StatusInformation.Trim())" }
+        $note = ' (revocation could not be checked: no revocation server was reachable)'
+    }
+    $root = $chain.ChainElements[$chain.ChainElements.Count - 1].Certificate
+    if ($root.Subject -cnotmatch $script:GridcoinMicrosoftRootSubject) {
+        throw "the certificate chain of $Path ends at '$($root.Subject)', not at Microsoft's identity-verification root$note"
+    }
+    if ($note) { Write-Host "Test-GridcoinRelease: note$note." }
 }
 
 # The SHA-256 (lowercase hex) the list gives for FileName. Call only after the signature verified.
@@ -134,17 +150,17 @@ function Get-GridcoinReleaseHash {
     return $hit
 }
 
-if ($SumsPath -or $SigPath -or $KeysPath) {
-    if (-not ($SumsPath -and $SigPath -and $KeysPath)) {
-        Write-Host 'Test-GridcoinRelease: -SumsPath, -SigPath and -KeysPath are all needed.'
+if ($InstallerPath -or $SignerPath -or $SumsPath) {
+    if (-not $InstallerPath) {
+        Write-Host 'Test-GridcoinRelease: -InstallerPath is needed.'
         exit 1
     }
+    if (-not $SignerPath) { $SignerPath = Join-Path $PSScriptRoot 'release-signer.txt' }
     try {
-        Test-GridcoinReleaseSignature -SumsPath $SumsPath -SigPath $SigPath -KeysPath $KeysPath
-        if ($FileName) {
-            Write-Host (Get-GridcoinReleaseHash -SumsPath $SumsPath -FileName $FileName)
-        } else {
-            Write-Host 'signature ok'
+        Test-GridcoinReleaseSignature -Path $InstallerPath -SignerFile $SignerPath
+        Write-Host 'signature ok'
+        if ($SumsPath) {
+            Write-Host (Get-GridcoinReleaseHash -SumsPath $SumsPath -FileName (Split-Path -Leaf $InstallerPath))
         }
         exit 0
     } catch {

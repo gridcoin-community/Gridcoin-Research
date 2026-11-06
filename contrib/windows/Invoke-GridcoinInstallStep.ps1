@@ -22,7 +22,7 @@
                         and carries this account's autounlock file over. Another account's
                         such tasks are removed, and UPGRADE-NOTICE.txt says how that account
                         restores unattended start. Ends the earlier versions' autounlock helper and
-                        task, replaces their shutdown script, and deletes their helper scripts.
+                        task, replaces their shutdown script, and deletes their helper scripts and release-keys.txt.
       StartCore         starts again what StopCore found running.
       ReportPermissions runs the new core's -reportpermissions over this account's data
                         directories, and writes what it finds into UPGRADE-NOTICE.txt. It changes
@@ -608,7 +608,7 @@ function Invoke-GridcoinSwitchOver {
         $failures += "the shutdown script was not replaced ($($_.Exception.Message))"
     }
 
-    foreach ($oldName in @('Set-GridcoinAutounlock.ps1', 'Invoke-GridcoinAutounlock.ps1')) {
+    foreach ($oldName in @('Set-GridcoinAutounlock.ps1', 'Invoke-GridcoinAutounlock.ps1', 'release-keys.txt')) {
         $oldPath = Join-Path $script:WindowsDir $oldName
         try {
             if (Test-Path -LiteralPath $oldPath) {
