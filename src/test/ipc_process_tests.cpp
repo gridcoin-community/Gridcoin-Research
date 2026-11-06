@@ -160,8 +160,21 @@ BOOST_FIXTURE_TEST_CASE(ipcdir_defaults_to_datadir, grc_test::StateGuard)
 
 BOOST_FIXTURE_TEST_CASE(ipcdir_absolute_is_used_verbatim, grc_test::StateGuard)
 {
-    gArgs.ForceSetArg("-ipcdir", "/run/gridcointestnetd");
-    BOOST_CHECK(ipc::GetIpcDir() == fs::path("/run/gridcointestnetd"));
+#ifdef WIN32
+    // An absolute path on Windows names its drive.
+    const std::string absolute = "C:\\ProgramData\\gridcointestnetd";
+#else
+    const std::string absolute = "/run/gridcointestnetd";
+#endif
+    gArgs.ForceSetArg("-ipcdir", absolute);
+    BOOST_CHECK(ipc::GetIpcDir() == fs::path(absolute));
+
+#ifdef WIN32
+    // A path with a root and no drive is not absolute on Windows: it is read on the
+    // data directory's drive, as every path option is (AbsPathForConfigVal).
+    gArgs.ForceSetArg("-ipcdir", "\\run\\gridcointestnetd");
+    BOOST_CHECK(ipc::GetIpcDir() == GetDataDir().root_name() / "\\run\\gridcointestnetd");
+#endif
 }
 
 BOOST_FIXTURE_TEST_CASE(ipcdir_relative_resolves_against_datadir, grc_test::StateGuard)
@@ -212,14 +225,34 @@ BOOST_AUTO_TEST_CASE(data_directory_refused_by_file_id)
 // On Windows the IPC directory is created and checked by a plain spelling: a "." or
 // ".." component is refused, since "<datadir>/x/.." would make x inside the data
 // directory and name the data directory itself. A trailing or doubled separator is
-// not such a component, and is dropped.
+// not such a component, and is dropped. The result is written with the platform's
+// separator, on Windows the backslash, where either separator is read.
 BOOST_AUTO_TEST_CASE(plain_ipc_directory_refuses_dot_components)
 {
-    BOOST_CHECK_EQUAL(ipc::PlainIpcDirectory("/run/gridcoin").value_or("refused").string(), "/run/gridcoin");
-    BOOST_CHECK_EQUAL(ipc::PlainIpcDirectory("/run/gridcoin/").value_or("refused").string(), "/run/gridcoin");
-    BOOST_CHECK_EQUAL(ipc::PlainIpcDirectory("/run/gridcoin//").value_or("refused").string(), "/run/gridcoin");
-    BOOST_CHECK_EQUAL(ipc::PlainIpcDirectory("/run//gridcoin").value_or("refused").string(), "/run/gridcoin");
-    BOOST_CHECK_EQUAL(ipc::PlainIpcDirectory("/").value_or("refused").string(), "/");
+    const auto plain = [](const char* dir) { return ipc::PlainIpcDirectory(dir).value_or("refused").string(); };
+
+#ifdef WIN32
+    BOOST_CHECK_EQUAL(plain("C:\\ProgramData\\Gridcoin"), "C:\\ProgramData\\Gridcoin");
+    BOOST_CHECK_EQUAL(plain("C:\\ProgramData\\Gridcoin\\"), "C:\\ProgramData\\Gridcoin");
+    BOOST_CHECK_EQUAL(plain("C:\\ProgramData\\Gridcoin\\\\"), "C:\\ProgramData\\Gridcoin");
+    BOOST_CHECK_EQUAL(plain("C:\\ProgramData\\\\Gridcoin"), "C:\\ProgramData\\Gridcoin");
+    BOOST_CHECK_EQUAL(plain("C:/ProgramData/Gridcoin/"), "C:\\ProgramData\\Gridcoin");
+    BOOST_CHECK_EQUAL(plain("C:\\"), "C:\\");
+    BOOST_CHECK_EQUAL(plain("/run//gridcoin/"), "\\run\\gridcoin");
+    BOOST_CHECK_EQUAL(plain("/"), "\\");
+
+    for (const char* refused : {"C:\\ProgramData\\Gridcoin\\x\\..", "C:\\ProgramData\\..", "C:\\ProgramData\\.\\Gridcoin",
+                                "C:\\ProgramData\\Gridcoin\\.", "C:\\ProgramData\\Gridcoin\\.\\",
+                                "C:/ProgramData/Gridcoin/x/..", "..\\ipc", ".\\ipc"}) {
+        BOOST_CHECK_MESSAGE(!ipc::PlainIpcDirectory(refused), "accepted '" << refused << "'");
+    }
+#else
+    BOOST_CHECK_EQUAL(plain("/run/gridcoin"), "/run/gridcoin");
+    BOOST_CHECK_EQUAL(plain("/run/gridcoin/"), "/run/gridcoin");
+    BOOST_CHECK_EQUAL(plain("/run/gridcoin//"), "/run/gridcoin");
+    BOOST_CHECK_EQUAL(plain("/run//gridcoin"), "/run/gridcoin");
+    BOOST_CHECK_EQUAL(plain("/"), "/");
+#endif
 
     for (const char* refused : {"/var/lib/gridcoin/x/..", "/var/lib/gridcoin/..", "/run/./gridcoin", "/run/gridcoin/.",
                                 "/run/gridcoin/./", "../ipc", "./ipc"}) {

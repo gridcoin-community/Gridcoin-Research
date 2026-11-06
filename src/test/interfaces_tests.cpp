@@ -2356,9 +2356,11 @@ struct BackupCase
         return n;
     }
 
+    //! Writes \p text as it is. In text mode Windows would write each "\n" as "\r\n", and
+    //! the backup, which sends a file's bytes as they are, would then send those.
     static void Write(const fs::path& path, const std::string& text)
     {
-        fsbridge::ofstream stream(path);
+        fsbridge::ofstream stream(path, std::ios_base::out | std::ios_base::binary);
         stream << text;
     }
 };

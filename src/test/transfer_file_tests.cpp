@@ -13,7 +13,6 @@
 #include <boost/test/unit_test.hpp>
 
 #include <cstdint>
-#include <fstream>
 #include <iterator>
 #include <limits>
 #include <string>
@@ -36,15 +35,18 @@ uint256 Sha256Of(const std::string& s)
     return out;
 }
 
+// Opened through fsbridge, which takes the path itself. On Windows a std::fstream given
+// p.string(), which is UTF-8, reads that name in the system code page, so a name with
+// non-ASCII characters opens another file, or none.
 std::string ReadAll(const fs::path& p)
 {
-    std::ifstream in(p.string(), std::ios::binary);
+    fsbridge::ifstream in(p, std::ios::binary);
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
 void WriteAll(const fs::path& p, const std::string& s)
 {
-    std::ofstream out(p.string(), std::ios::binary | std::ios::trunc);
+    fsbridge::ofstream out(p, std::ios::binary | std::ios::trunc);
     out << s;
 }
 

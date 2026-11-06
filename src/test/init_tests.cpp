@@ -94,6 +94,9 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
 #ifdef __linux__
     refuse.insert("-autounlocksocket");
 #endif
+#ifdef WIN32
+    refuse.insert("-autounlockblob");
+#endif
     for (const auto& type : GRC::RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
         refuse.insert("-clear" + GRC::Contract::Type::ToString(type) + "history");
     }
