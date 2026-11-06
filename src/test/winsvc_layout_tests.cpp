@@ -1164,4 +1164,84 @@ BOOST_AUTO_TEST_CASE(disable_target_owner_follows_the_core_rule)
     BOOST_CHECK(!DisableTargetOwnerAllowed(std::nullopt, user));
 }
 
+BOOST_AUTO_TEST_CASE(launcher_core_line_gives_network_flag_and_datadir)
+{
+    const std::string head = "@echo off\r\nrem BEGIN GENERATED\r\nrem Gridcoin Core-Start launcher. Do not edit it.\r\n";
+    const std::string tail = "if %ERRORLEVEL% EQU 0 goto end\r\n\"%SystemRoot%\\System32\\PING.EXE\" -n 121 127.0.0.1 >nul\r\n"
+                             ":end\r\nrem END GENERATED\r\n";
+    const std::string err = " 2>>\"%TEMP%\\gridcoin-core-start.err.log\"\r\n";
+
+    // The default data directory: no -datadir.
+    std::optional<LauncherCore> core = ParseLauncherCoreLine(
+        head + "\"C:\\Program Files\\Gridcoin\\gridcoinresearchd.exe\" -multiprocess -autounlockblob" + err + tail);
+    BOOST_REQUIRE(core.has_value());
+    BOOST_CHECK(!core->testnet);
+    BOOST_CHECK(!core->datadir.has_value());
+
+    // A -datadir with a space and doubled percent signs.
+    core = ParseLauncherCoreLine(head + "\"C:\\G\\gridcoinresearchd.exe\" -datadir=\"D:\\My 100%%\\gdata\" -multiprocess "
+                                        "-autounlockblob" + err + tail);
+    BOOST_REQUIRE(core.has_value());
+    BOOST_CHECK(!core->testnet);
+    BOOST_REQUIRE(core->datadir.has_value());
+    BOOST_CHECK_EQUAL(*core->datadir, "D:\\My 100%\\gdata");
+
+    // -testnet, with and without a data directory, and LF line ends.
+    core = ParseLauncherCoreLine(head + "\"C:\\G\\gridcoinresearchd.exe\" -testnet -multiprocess -autounlockblob\n" + tail);
+    BOOST_REQUIRE(core.has_value());
+    BOOST_CHECK(core->testnet);
+    BOOST_CHECK(!core->datadir.has_value());
+    core = ParseLauncherCoreLine(head + "\"C:\\G\\g.exe\" -datadir=\"E:\\t\" -testnet -multiprocess" + err + tail);
+    BOOST_REQUIRE(core.has_value());
+    BOOST_CHECK(core->testnet);
+    BOOST_CHECK_EQUAL(core->datadir.value_or(""), "E:\\t");
+
+    // A -testnet inside the quoted data directory is no flag.
+    core = ParseLauncherCoreLine(head + "\"C:\\G\\g.exe\" -datadir=\"E:\\x -testnet y\" -multiprocess" + err + tail);
+    BOOST_REQUIRE(core.has_value());
+    BOOST_CHECK(!core->testnet);
+
+    // The first core line counts, and one outside the generated block does not.
+    core = ParseLauncherCoreLine("\"C:\\G\\g.exe\" -testnet\r\nrem BEGIN GENERATED\r\n\"C:\\G\\g.exe\" -multiprocess\r\n"
+                                 "\"C:\\G\\g.exe\" -testnet\r\nrem END GENERATED\r\n");
+    BOOST_REQUIRE(core.has_value());
+    BOOST_CHECK(!core->testnet);
+
+    // No generated block, an empty block, or no core line in it.
+    BOOST_CHECK(!ParseLauncherCoreLine("").has_value());
+    BOOST_CHECK(!ParseLauncherCoreLine("\"C:\\G\\g.exe\" -testnet\r\n").has_value());
+    BOOST_CHECK(!ParseLauncherCoreLine("rem BEGIN GENERATED\r\nrem END GENERATED\r\n").has_value());
+    BOOST_CHECK(!ParseLauncherCoreLine("rem BEGIN GENERATED\r\necho hi\r\nrem END GENERATED\r\n").has_value());
+    BOOST_CHECK(!ParseLauncherCoreLine("rem BEGIN GENERATED\r\n\"C:\\G\\g.exe\" -testnet\r\n").has_value());
+}
+
+BOOST_AUTO_TEST_CASE(launcher_path_comes_from_the_action_arguments)
+{
+    BOOST_CHECK_EQUAL(LauncherPathOfArguments("/s /c \"\"C:\\Program Files\\Gridcoin\\windows\\core-autostart.cmd\"\"")
+                          .value_or("-"),
+                      "C:\\Program Files\\Gridcoin\\windows\\core-autostart.cmd");
+    BOOST_CHECK(!LauncherPathOfArguments("").has_value());
+    BOOST_CHECK(!LauncherPathOfArguments("/s /c").has_value());
+    BOOST_CHECK(!LauncherPathOfArguments("/s /c \"\"\"\"").has_value());
+    BOOST_CHECK(!LauncherPathOfArguments("stop").has_value());
+}
+
+BOOST_AUTO_TEST_CASE(conf_network_follows_the_last_testnet_line)
+{
+    BOOST_CHECK(NetworkOfConf("") == Network::Main);
+    BOOST_CHECK(NetworkOfConf("server=1\nrpcuser=x\n") == Network::Main);
+    BOOST_CHECK(NetworkOfConf("testnet=1\n") == Network::Test);
+    BOOST_CHECK(NetworkOfConf("testnet=0\n") == Network::Main);
+    BOOST_CHECK(NetworkOfConf("  testnet = 1  \r\nserver=1\r\n") == Network::Test);
+    BOOST_CHECK(NetworkOfConf("testnet=1 # the test network\n") == Network::Test);
+    // A comment line is no setting, and the last setting wins.
+    BOOST_CHECK(NetworkOfConf("#testnet=1\n") == Network::Main);
+    BOOST_CHECK(NetworkOfConf("testnet=1\ntestnet=0\n") == Network::Main);
+    BOOST_CHECK(NetworkOfConf("testnet=0\ntestnet=1") == Network::Test);
+    // Another name that holds the text, and a section header, are not the setting.
+    BOOST_CHECK(NetworkOfConf("mytestnet=1\n") == Network::Main);
+    BOOST_CHECK(NetworkOfConf("[test]\nserver=1\n") == Network::Main);
+    BOOST_CHECK(NetworkOfConf("testnet=1\n[test]\nserver=1\n") == Network::Test);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

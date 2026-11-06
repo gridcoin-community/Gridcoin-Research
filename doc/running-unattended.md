@@ -763,7 +763,7 @@ cd "C:\Program Files\GridcoinResearch\daemon"
   change it.
 - **`enable --user=alice`** moves alice's wallet into the service and starts it. alice's cores must be stopped: it
   refuses while a `gridcoinresearch.exe` or `gridcoinresearchd.exe` of hers runs, or while her data directory is
-  locked. It disables her Core-Start task if she has one, copies her data directory (`--from=` for another one),
+  locked. It disables her Core-Start task of the same network if she has one, copies her data directory (`--from=` for another one),
   reads every copied file back, and then removes her copy. Her configuration file and `DB_CONFIG` are not carried
   over (the service reads only its own configuration file); `enable` names each file it set aside, and each setting
   it dropped from `gridcoinsettings.json` because the core takes it only from its configuration file. It adds alice

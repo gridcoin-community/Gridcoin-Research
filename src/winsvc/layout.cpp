@@ -12,6 +12,7 @@
 #include <array>
 #include <initializer_list>
 #include <utility>
+#include <vector>
 
 namespace winsvc {
 
@@ -297,6 +298,117 @@ std::string MissingServiceConfLines(Network net, const std::string& conf_text, c
     if (!conf_text.empty() && conf_text.back() != '\n') missing.insert(0, "\n");
 
     return missing;
+}
+
+namespace {
+
+//! \p text without the spaces and tabs at its ends.
+std::string Trimmed(const std::string& text)
+{
+    const size_t first = text.find_first_not_of(" \t");
+    if (first == std::string::npos) return std::string();
+    return text.substr(first, text.find_last_not_of(" \t") - first + 1);
+}
+
+//! The lines of \p text, without their line ends (LF or CRLF).
+std::vector<std::string> LinesOf(const std::string& text)
+{
+    std::vector<std::string> lines;
+    size_t start = 0;
+    while (start < text.size()) {
+        size_t end = text.find('\n', start);
+        if (end == std::string::npos) end = text.size();
+        std::string line = text.substr(start, end - start);
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        lines.push_back(std::move(line));
+        start = end + 1;
+    }
+    return lines;
+}
+
+//! \p text with each doubled percent sign of a launcher line made one.
+std::string UndoublePercents(const std::string& text)
+{
+    std::string out;
+    for (size_t i = 0; i < text.size(); ++i) {
+        out += text[i];
+        if (text[i] == '%' && i + 1 < text.size() && text[i + 1] == '%') ++i;
+    }
+    return out;
+}
+
+} // namespace
+
+std::optional<LauncherCore> ParseLauncherCoreLine(const std::string& text)
+{
+    bool inside = false;
+    std::optional<LauncherCore> found;
+    for (const std::string& line : LinesOf(text)) {
+        if (!inside) {
+            inside = line == "rem BEGIN GENERATED";
+            continue;
+        }
+        if (line == "rem END GENERATED") return found;
+        if (found || line.empty() || line[0] != '"') continue;
+
+        // The core's quoted path, then its options. An option ends at a space outside quotes, and a
+        // redirection ends the options.
+        const size_t path_end = line.find('"', 1);
+        if (path_end == std::string::npos) return std::nullopt;
+        LauncherCore core;
+        std::vector<std::string> options;
+        std::string option;
+        bool quoted = false;
+        for (size_t i = path_end + 1; i < line.size(); ++i) {
+            const char c = line[i];
+            if (c == '"') quoted = !quoted;
+            if (c == ' ' && !quoted) {
+                if (!option.empty()) options.push_back(std::move(option));
+                option.clear();
+            } else {
+                option += c;
+            }
+        }
+        if (!option.empty()) options.push_back(std::move(option));
+        for (const std::string& item : options) {
+            if (item.compare(0, 2, "2>") == 0) break;
+            if (item == "-testnet" || item == "-testnet=1") core.testnet = true;
+            const std::string prefix = "-datadir=";
+            if (item.compare(0, prefix.size(), prefix) == 0) {
+                std::string value = item.substr(prefix.size());
+                value.erase(std::remove(value.begin(), value.end(), '"'), value.end());
+                core.datadir = UndoublePercents(value);
+            }
+        }
+        found = core;
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> LauncherPathOfArguments(const std::string& arguments)
+{
+    const std::string head = "/s /c ";
+    if (arguments.compare(0, head.size(), head) != 0) return std::nullopt;
+    std::string path = Trimmed(arguments.substr(head.size()));
+    while (!path.empty() && path.front() == '"') path.erase(path.begin());
+    while (!path.empty() && path.back() == '"') path.pop_back();
+    if (path.empty()) return std::nullopt;
+    return path;
+}
+
+Network NetworkOfConf(const std::string& conf_text)
+{
+    bool test = false;
+    for (std::string line : LinesOf(conf_text)) {
+        const size_t comment = line.find('#');
+        if (comment != std::string::npos) line.erase(comment);
+        const size_t equals = line.find('=');
+        if (equals == std::string::npos || Trimmed(line.substr(0, equals)) != "testnet") continue;
+        // As the core reads a boolean: empty is true, otherwise a number other than 0.
+        const std::string value = Trimmed(line.substr(equals + 1));
+        test = value.empty() || LocaleIndependentAtoi<int>(value) != 0;
+    }
+    return test ? Network::Test : Network::Main;
 }
 
 std::optional<std::string> StateFileValue(const std::string& text, const std::string& key)

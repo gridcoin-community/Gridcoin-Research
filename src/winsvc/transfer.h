@@ -186,6 +186,12 @@ bool RemoveTreeNoFollow(const fs::path& root, const std::vector<fs::path>& only_
 //! (PlainRelative), or that cannot be read or removed.
 bool RemoveDirIfEmpty(const fs::path& root, const fs::path& relative, bool& removed, std::string& error);
 
+//! Reads \p path, a file with one link, into \p text as data, opened as itself: a link or other
+//! reparse point at the end is refused, and the directory above it is opened as itself too. At most
+//! \p limit bytes. False, with \p error, when it cannot be read; \p absent says that nothing is
+//! there.
+bool ReadFileNoFollow(const fs::path& path, uint64_t limit, std::string& text, bool& absent, std::string& error);
+
 //! One step to do after the point of no return of enable or disable.
 struct FollowUp
 {

@@ -1876,6 +1876,54 @@ std::string RemoveCopy(const fs::path& root, const std::vector<fs::path>& top)
     return error;
 }
 
+//! The network of the core that \p task starts, in \p core_net, or false with \p why when it cannot
+//! be told. The task runs the launcher named in its action; the launcher's core line says -testnet
+//! or, otherwise, the data directory whose configuration file selects the network (\p default_root,
+//! the account's, when the line gives none). Both files are read as data, as the transfer reads
+//! the account's files, and nothing in them is run.
+bool CoreStartNetwork(const CoreStartTask& task, const fs::path& default_root, Network& core_net, std::string& why)
+{
+    if (!task.arguments) {
+        why = "its action is not a single program";
+        return false;
+    }
+    const std::optional<std::string> launcher_path = LauncherPathOfArguments(*task.arguments);
+    if (!launcher_path) {
+        why = "its action does not run a launcher";
+        return false;
+    }
+    try {
+        std::string text;
+        bool absent = false;
+        std::string error;
+        const fs::path launcher = Utf8ToWide(*launcher_path);
+        if (!ReadFileNoFollow(launcher, SETTINGS_SIZE_LIMIT, text, absent, error)) {
+            why = absent ? "its launcher " + Shown(launcher) + " is not there" : error;
+            return false;
+        }
+        const std::optional<LauncherCore> core = ParseLauncherCoreLine(text);
+        if (!core) {
+            why = "its launcher " + Shown(launcher) + " has no generated core line";
+            return false;
+        }
+        if (core->testnet) {
+            core_net = Network::Test;
+            return true;
+        }
+        const fs::path conf = (core->datadir ? fs::path(Utf8ToWide(*core->datadir)) : default_root) /
+                              L"gridcoinresearch.conf";
+        if (!ReadFileNoFollow(conf, SETTINGS_SIZE_LIMIT, text, absent, error)) {
+            why = absent ? Shown(conf) + " is not there" : error;
+            return false;
+        }
+        core_net = NetworkOfConf(text);
+        return true;
+    } catch (const std::exception& e) {
+        why = e.what();
+        return false;
+    }
+}
+
 void EnableService(const ToolOptions& options)
 {
     const NetworkNames names = NamesFor(options.net);
@@ -2007,10 +2055,24 @@ void EnableService(const ToolOptions& options)
         } else if (!task.enabled) {
             Say("Core-Start: disabled already, and left so");
         } else {
-            SetCoreStartTaskEnabled(false);
-            task_disabled = true;
-            Say(strprintf("Core-Start: disabled, so that it does not start a core of %s without its wallet",
-                          user->name));
+            // Only a task that runs a core of this network is turned off. When its network cannot
+            // be told, it is, as a core started without its wallet is the worse outcome.
+            Network task_net = net;
+            std::string unknown;
+            const bool known = CoreStartNetwork(task, root, task_net, unknown);
+            if (known && task_net != net) {
+                Say(strprintf("Core-Start: left as it is; it runs the %s network, not this one",
+                              task_net == Network::Main ? "main" : "test"));
+            } else {
+                SetCoreStartTaskEnabled(false);
+                task_disabled = true;
+                if (known) {
+                    Say(strprintf("Core-Start: disabled, so that it does not start a core of %s without its wallet",
+                                  user->name));
+                } else {
+                    Say(strprintf("Core-Start: disabled; its network could not be told (%s)", unknown));
+                }
+            }
         }
 
         if (remove_empty_net_dir && !::RemoveDirectoryW(net_dir.wstring().c_str())) {

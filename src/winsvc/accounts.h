@@ -68,6 +68,9 @@ struct CoreStartTask
     std::string principal;
     //! Its SID, or nullopt when it does not resolve to one.
     std::optional<Sid> principal_sid;
+    //! The arguments of its action, in UTF-8, when the task has exactly one action and it starts a
+    //! program; nullopt otherwise.
+    std::optional<std::string> arguments;
 };
 
 //! \Gridcoin\Core-Start, read through the Task Scheduler (COM). Throws std::runtime_error when the

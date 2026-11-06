@@ -172,6 +172,32 @@ bool ServiceConfAcceptable(const std::string& conf_text);
 //! keeps their values.
 std::string MissingServiceConfLines(Network net, const std::string& conf_text, const std::string& rpcpassword);
 
+//! What the core line of a Core-Start launcher says of the network and the data directory.
+struct LauncherCore
+{
+    //! The line passes -testnet.
+    bool testnet{false};
+    //! The value of its -datadir, with the launcher's doubled percent signs undone, or nullopt
+    //! when it has none.
+    std::optional<std::string> datadir;
+};
+
+//! The core line of the launcher \p text that Register-GridcoinCoreTasks (GridcoinCommon.ps1)
+//! writes: the first line between "rem BEGIN GENERATED" and "rem END GENERATED" that starts with
+//! the core's quoted path. Nullopt when the text has no such line, or no END marker after it. Pure, and reads the text as
+//! data only.
+std::optional<LauncherCore> ParseLauncherCoreLine(const std::string& text);
+
+//! The launcher's path in the arguments of Core-Start's action, /s /c ""<launcher>"", or nullopt
+//! when the arguments are not of that form.
+std::optional<std::string> LauncherPathOfArguments(const std::string& arguments);
+
+//! The network a configuration file \p conf_text selects: Test when the last "testnet=" line, with
+//! comments after '#' and spaces around the name and the value taken off, is true as the core
+//! reads a boolean (empty, or a number other than 0), Main otherwise. Section headers are not
+//! interpreted.
+Network NetworkOfConf(const std::string& conf_text);
+
 //! The value of the first "<key>=<value>" line of the state file \p text, or nullopt when no line
 //! sets \p key. A line may end in CRLF.
 std::optional<std::string> StateFileValue(const std::string& text, const std::string& key);

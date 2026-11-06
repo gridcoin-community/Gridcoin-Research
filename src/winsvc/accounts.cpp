@@ -366,6 +366,26 @@ CoreStartTask ReadCoreStartTask()
     status = principal->get_UserId(user_id.Out());
     if (FAILED(status)) ThrowHresult(status, "IPrincipal::get_UserId");
 
+    // Its action: one, and one that starts a program.
+    ComPtr<IActionCollection> actions;
+    status = definition->get_Actions(actions.Out());
+    if (FAILED(status)) ThrowHresult(status, "ITaskDefinition::get_Actions");
+    long action_count = 0;
+    status = actions->get_Count(&action_count);
+    if (FAILED(status)) ThrowHresult(status, "IActionCollection::get_Count");
+    if (action_count == 1) {
+        ComPtr<IAction> action;
+        status = actions->get_Item(1, action.Out());
+        if (FAILED(status)) ThrowHresult(status, "IActionCollection::get_Item");
+        ComPtr<IExecAction> exec;
+        if (SUCCEEDED(action->QueryInterface(__uuidof(IExecAction), reinterpret_cast<void**>(exec.Out())))) {
+            Bstr arguments;
+            status = exec->get_Arguments(arguments.Out());
+            if (FAILED(status)) ThrowHresult(status, "IExecAction::get_Arguments");
+            result.arguments = Narrow(arguments.Text());
+        }
+    }
+
     const std::wstring id = user_id.Text();
     result.principal = Narrow(id);
     // A principal registered by SID, or by name.

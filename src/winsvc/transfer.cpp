@@ -1112,7 +1112,7 @@ bool ReadAll(File& in, const fs::path& path, uint64_t limit, std::string& text, 
         if (got == 0) return true;
         text.append(reinterpret_cast<const char*>(buffer.data()), got);
         if (text.size() > limit) {
-            error = strprintf("%s is larger than %u bytes, too large for a settings file", Shown(path), limit);
+            error = strprintf("%s is larger than %u bytes, too large to read", Shown(path), limit);
             return false;
         }
     }
@@ -1720,6 +1720,18 @@ bool RemoveDirIfEmpty(const fs::path& root, const fs::path& relative, bool& remo
     if (!at->Remove(relative.filename(), error)) return false;
     removed = true;
     return true;
+}
+
+bool ReadFileNoFollow(const fs::path& path, uint64_t limit, std::string& text, bool& absent, std::string& error)
+{
+    text.clear();
+    const std::optional<Dir> parent = Dir::Open(path.parent_path(), absent, error);
+    if (!parent) return false;
+    EntryFacts facts;
+    if (!parent->Facts(path.filename(), facts, absent, error)) return false;
+    std::optional<File> in = parent->OpenRead(path.filename(), error);
+    if (!in) return false;
+    return ReadAll(*in, path, limit, text, error);
 }
 
 std::vector<std::string> RunFollowUps(const std::vector<FollowUp>& steps)
