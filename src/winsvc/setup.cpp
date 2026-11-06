@@ -2080,28 +2080,85 @@ void EnableService(const ToolOptions& options)
         throw std::runtime_error(std::string(e.what()) + ". " + undo);
     }
 
-    // The rest of the account's copy, the lock file with it once it is let go.
-    lock.reset();
-    std::string error;
+    // From here the service holds the only wallet, so nothing is undone: a step that fails is
+    // named, with what to do by hand, and the steps after it still run.
+    std::vector<std::string> warnings;
+
+    // The rest of the account's copy, with the lock held, so that no core of the account starts in
+    // a half-emptied tree; then the lock file goes when the handle closes, and the directory it
+    // was in if nothing else is left there.
     std::string left_behind;
-    if (RemoveTreeNoFollow(root, result.source_top, error)) {
-        Say(strprintf("Removed the wallet's tree from %s", Shown(net_root)));
-    } else {
-        left_behind = error;
+    try {
+        std::string error;
+        if (RemoveTreeNoFollow(root, result.source_remove, error)) {
+            Say(strprintf("Removed the wallet's tree from %s", Shown(net_root)));
+        } else {
+            left_behind = error;
+        }
+    } catch (const std::exception& e) {
+        left_behind = e.what();
+    }
+    if (!left_behind.empty()) {
+        warnings.push_back(strprintf("Warning: the wallet is in the service, but part of its old tree was not "
+                                     "removed: %s. Remove what is left of %s by hand; its wallet.dat is gone "
+                                     "already.",
+                                     left_behind, Shown(net_root)));
+    }
+    if (!MarkForRemoval(lock.get())) {
+        warnings.push_back(strprintf("Warning: %s could not be marked for removal. Delete it by hand.",
+                                     Shown(net_root / L".lock")));
+    }
+    lock.reset();
+    if (net == Network::Test) {
+        try {
+            std::string error;
+            bool removed = false;
+            if (RemoveDirIfEmpty(root, L"testnet", removed, error)) {
+                if (!removed) Say(strprintf("Left in place, as it still holds files: %s",
+                                            Shown(net_root)));
+            } else {
+                warnings.push_back("Warning: " + error);
+            }
+        } catch (const std::exception& e) {
+            warnings.push_back(std::string("Warning: ") + e.what());
+        }
+    }
+    for (const fs::path& kept : result.source_kept) {
+        Say("Left where it was, the account's own: " + Shown(root / kept));
     }
 
-    const bool added = AddGroupMember(names.group, user->sid);
-    Say(strprintf("Group \"%s\": %s %s", Shown(names.group), user->name, added ? "added" : "is a member already"));
+    const std::string group_command = strprintf("net localgroup \"%s\" \"%s\" /add", Shown(names.group), user->name);
+    const std::string start_command = strprintf("sc config %s start= delayed-auto", Shown(names.service));
+    const std::vector<FollowUp> steps = {
+        {strprintf("adding %s to the group \"%s\"", user->name, Shown(names.group)), group_command,
+         [&] {
+             const bool added = AddGroupMember(names.group, user->sid);
+             Say(strprintf("Group \"%s\": %s %s", Shown(names.group), user->name,
+                           added ? "added" : "is a member already"));
+         },
+         -1},
+        {strprintf("setting the service %s to start automatically", Shown(names.service)), start_command,
+         [&] {
+             SetStartType(service.get(), names, SERVICE_AUTO_START);
+             Say(strprintf("Service %s: set to start automatically (delayed start)", Shown(names.service)));
+         },
+         -1},
+        {strprintf("starting the service %s", Shown(names.service)), "sc start " + Shown(names.service),
+         [&] {
+             const DWORD pid = StartAndWait(service.get(), names);
+             Say(strprintf("Service %s: running, process %u", Shown(names.service), static_cast<unsigned>(pid)));
+         },
+         1},
+    };
+    for (const std::string& warning : RunFollowUps(steps)) {
+        warnings.push_back("Warning: the wallet is now in the service's data directory, but " + warning);
+    }
 
-    SetStartType(service.get(), names, SERVICE_AUTO_START);
-    Say(strprintf("Service %s: set to start automatically (delayed start)", Shown(names.service)));
-    const DWORD pid = StartAndWait(service.get(), names);
-    Say(strprintf("Service %s: running, process %u", Shown(names.service), static_cast<unsigned>(pid)));
-
-    if (!left_behind.empty()) {
-        SayError(strprintf("Warning: the wallet is in the service, but part of its old tree was not removed: %s. "
-                           "Remove what is left of %s by hand; its wallet.dat is gone already.",
-                           left_behind, Shown(net_root)));
+    if (!warnings.empty()) {
+        for (const std::string& warning : warnings) SayError(warning);
+        throw std::runtime_error(strprintf("the wallet was moved into the service %s, but enable is not finished: see "
+                                           "the warnings above. Nothing was undone",
+                                           Shown(names.service)));
     }
     Say(strprintf("Enabled. %s must sign out and sign in again before a GUI can attach (group membership is read at "
                   "sign-in).",
@@ -2202,6 +2259,8 @@ void DisableService(const ToolOptions& options)
 
     bool copied = false;
     TransferResult result;
+    bool lock_created = false;
+    UniqueHandle lock;
     try {
         if (was_running) {
             SERVICE_STATUS control{};
@@ -2220,8 +2279,7 @@ void DisableService(const ToolOptions& options)
         }
         Say(strprintf("Service %s: stopped", Shown(names.service)));
 
-        bool lock_created = false;
-        UniqueHandle lock = HoldDataDirectoryLock(NetDataDir(programdata, net) / L".lock", lock_created);
+        lock = HoldDataDirectoryLock(NetDataDir(programdata, net) / L".lock", lock_created);
 
         result = TransferTree(datadir, target, rules, fs::path());
         if (!result.ok) throw std::runtime_error("the copy failed: " + result.error);
@@ -2238,8 +2296,7 @@ void DisableService(const ToolOptions& options)
         }
         Say(strprintf("Gave what was copied the owner-only access list of %s", user_name));
 
-        // The service's copy of the wallet goes first.
-        lock.reset();
+        // The service's copy of the wallet goes first. The lock stays held until the rest is gone.
         const fs::path wallet_relative =
             net == Network::Test ? fs::path(L"testnet") / L"wallet.dat" : fs::path(L"wallet.dat");
         std::string error;
@@ -2257,7 +2314,11 @@ void DisableService(const ToolOptions& options)
             }
             if (std::string error = RemoveCopy(root, made); !error.empty()) left.push_back(error);
         }
-        // As it was before.
+        // As it was before, with the lock let go so that the core can start again.
+        if (lock) {
+            if (lock_created) MarkForRemoval(lock.get());
+            lock.reset();
+        }
         try {
             SetStartType(service.get(), names, previous_start);
             if (was_running) StartAndWait(service.get(), names);
@@ -2274,38 +2335,87 @@ void DisableService(const ToolOptions& options)
         throw std::runtime_error(std::string(e.what()) + ". " + undo);
     }
 
-    // The rest of the service's copy, its autounlock file with it.
-    std::string error;
+    // From here the account holds the only wallet, so nothing is undone: a step that fails is
+    // named, with what to do by hand, and the steps after it still run.
+    std::vector<std::string> warnings;
+    const fs::path net_dir = NetDataDir(programdata, net);
+
+    // The rest of the service's copy, its autounlock file with it, with the lock held, so that no
+    // core starts in a half-emptied tree; then the lock file goes when the handle closes, and the
+    // directory it was in.
     std::string left_behind;
-    if (RemoveTreeNoFollow(datadir, result.source_top, error)) {
-        Say(strprintf("Removed the wallet's tree from %s", Shown(NetDataDir(programdata, net))));
-    } else {
-        left_behind = error;
-    }
-
-    const bool removed = RemoveGroupMember(names.group, *user);
-    Say(strprintf("Group \"%s\": %s %s", Shown(names.group), user_name, removed ? "removed" : "was not a member"));
-
-    if (task_disabled) {
-        const CoreStartTask task = ReadCoreStartTask();
-        if (!task.exists) {
-            Say("Core-Start: not there any more, so not turned back on");
-        } else if (!task.principal_sid || *task.principal_sid != *user) {
-            Say(strprintf("Core-Start: left as it is; it runs as %s now, not %s",
-                          task.principal.empty() ? std::string("nobody named") : task.principal, user_name));
+    try {
+        std::string error;
+        if (RemoveTreeNoFollow(datadir, result.source_remove, error)) {
+            Say(strprintf("Removed the wallet's tree from %s", Shown(net_dir)));
         } else {
-            SetCoreStartTaskEnabled(true);
-            Say("Core-Start: turned back on, as enable had turned it off");
+            left_behind = error;
+        }
+    } catch (const std::exception& e) {
+        left_behind = e.what();
+    }
+    if (!left_behind.empty()) {
+        warnings.push_back(strprintf("Warning: the wallet is back, but part of the service's copy was not removed: "
+                                     "%s. Remove what is left of %s by hand; its wallet.dat is gone already.",
+                                     left_behind, Shown(net_dir)));
+    }
+    if (!MarkForRemoval(lock.get())) {
+        warnings.push_back(strprintf("Warning: %s could not be marked for removal. Delete it by hand.",
+                                     Shown(net_dir / L".lock")));
+    }
+    lock.reset();
+    if (net == Network::Test) {
+        try {
+            std::string error;
+            bool removed = false;
+            if (!RemoveDirIfEmpty(datadir, L"testnet", removed, error)) warnings.push_back("Warning: " + error);
+        } catch (const std::exception& e) {
+            warnings.push_back(std::string("Warning: ") + e.what());
         }
     }
 
-    if (!::DeleteFileW(state_path.wstring().c_str())) ThrowLastError("delete " + Shown(state_path));
-    Say("Deleted " + Shown(state_path));
+    const std::vector<FollowUp> steps = {
+        {strprintf("removing %s from the group \"%s\"", user_name, Shown(names.group)),
+         strprintf("net localgroup \"%s\" <the account> /delete", Shown(names.group)),
+         [&] {
+             const bool removed = RemoveGroupMember(names.group, *user);
+             Say(strprintf("Group \"%s\": %s %s", Shown(names.group), user_name,
+                           removed ? "removed" : "was not a member"));
+         },
+         -1},
+        {"turning Core-Start back on", "Enable-ScheduledTask -TaskPath \\Gridcoin\\ -TaskName Core-Start",
+         [&] {
+             if (!task_disabled) return;
+             const CoreStartTask task = ReadCoreStartTask();
+             if (!task.exists) {
+                 Say("Core-Start: not there any more, so not turned back on");
+             } else if (!task.principal_sid || *task.principal_sid != *user) {
+                 Say(strprintf("Core-Start: left as it is; it runs as %s now, not %s",
+                               task.principal.empty() ? std::string("nobody named") : task.principal, user_name));
+             } else {
+                 SetCoreStartTaskEnabled(true);
+                 Say("Core-Start: turned back on, as enable had turned it off");
+             }
+         },
+         -1},
+        // The state's job ended when the wallet left the service; keeping it would stop a later
+        // enable or disable.
+        {"deleting the state file " + Shown(state_path), "del \"" + Shown(state_path) + "\"",
+         [&] {
+             if (!::DeleteFileW(state_path.wstring().c_str())) ThrowLastError("delete " + Shown(state_path));
+             Say("Deleted " + Shown(state_path));
+         },
+         -1},
+    };
+    for (const std::string& warning : RunFollowUps(steps)) {
+        warnings.push_back("Warning: the wallet is back in " + Shown(net_target) + ", but " + warning);
+    }
 
-    if (!left_behind.empty()) {
-        SayError(strprintf("Warning: the wallet is back, but part of the service's copy was not removed: %s. Remove "
-                           "what is left of %s by hand; its wallet.dat is gone already.",
-                           left_behind, Shown(NetDataDir(programdata, net))));
+    if (!warnings.empty()) {
+        for (const std::string& warning : warnings) SayError(warning);
+        throw std::runtime_error(strprintf("the wallet was moved back to %s, but disable is not finished: see the "
+                                           "warnings above. Nothing was undone",
+                                           Shown(net_target)));
     }
     Say(strprintf("Disabled. The wallet is back in %s; run Install-GridcoinCoreTask.ps1 as %s or start the plain GUI.",
                   Shown(net_target), user_name));

@@ -10,6 +10,7 @@
 #include "winsvc/layout.h"
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <utility>
@@ -75,6 +76,10 @@ struct TransferRules
     std::vector<std::string> exclude_top_dirs;
     //! When set, the only top-level entry of the source that is part of the transfer.
     std::optional<std::string> only_top_dir;
+    //! A file the caller holds open until the source is gone and removes itself: the data
+    //! directory's lock file, as a path below the source's root. The transfer skips it, and
+    //! leaves it and the directories it is in out of TransferResult::source_remove.
+    std::optional<fs::path> hold;
 };
 
 //! The most a settings file may hold for FilterSettings to read it.
@@ -124,10 +129,14 @@ struct TransferResult
     std::vector<fs::path> quarantined;
     //! The keys FilterSettingsJson dropped.
     std::vector<std::string> dropped_settings;
-    //! The top-level entries of the source that the transfer took, as names relative to it:
-    //! copied, filtered or skipped, but not quarantined and not outside the rules' scope. The
-    //! caller removes these from the source once the copy is complete.
-    std::vector<fs::path> source_top;
+    //! The entries of the source that the transfer took and the caller removes once the copy is
+    //! complete, as paths relative to it: copied, filtered or skipped, but not quarantined, not
+    //! outside the rules' scope and not the held file. A directory is named whole when nothing in
+    //! it stays; otherwise its other entries are named one by one and it stays with them.
+    std::vector<fs::path> source_remove;
+    //! The quarantined entries, which stay in the source because the account's own programs read
+    //! them there, as paths relative to it.
+    std::vector<fs::path> source_kept;
     //! Whether the destination directory itself was created.
     bool created_dst{false};
 };
@@ -161,6 +170,36 @@ TransferResult TransferTree(const fs::path& src, const fs::path& dst, const Tran
 //! \p error naming the path, at the first entry that cannot be removed, or for a path in
 //! \p only_top that is not relative or has a "." or ".." component.
 bool RemoveTreeNoFollow(const fs::path& root, const std::vector<fs::path>& only_top, std::string& error);
+
+//! Removes \p root / \p relative when it is a directory with nothing in it, without following
+//! anything; \p removed says whether it did. A directory that holds something, or is not there, is
+//! left as it is and is not an error. False, with \p error, for a path that is not plain
+//! (PlainRelative), or that cannot be read or removed.
+bool RemoveDirIfEmpty(const fs::path& root, const fs::path& relative, bool& removed, std::string& error);
+
+//! One step to do after the point of no return of enable or disable.
+struct FollowUp
+{
+    //! What the step does, for the warning.
+    std::string name;
+    //! What to do by hand to finish it.
+    std::string finish;
+    //! Throws when it fails.
+    std::function<void()> run;
+    //! Index of an earlier step this one needs to have succeeded, or -1.
+    int needs{-1};
+};
+
+//! Runs \p steps in order, each on its own: one that throws is recorded and the ones after it still
+//! run, except one whose \p needs step failed, which is not run. Returns a warning for each step
+//! that failed or was not attempted, naming it and what to do by hand. Pure apart from the steps.
+std::vector<std::string> RunFollowUps(const std::vector<FollowUp>& steps);
+
+namespace testing {
+//! Called with the path of each file written, after it is flushed and before it is read back.
+//! Empty outside tests, which use it to corrupt what was written.
+extern std::function<void(const fs::path&)> after_write;
+} // namespace testing
 
 //! Why \p path cannot be the root of a wallet tree the tool moves, or nullopt: it must be an
 //! absolute path on a local drive ("X:\..."), with no "." or ".." component. A network path is

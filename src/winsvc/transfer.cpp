@@ -86,8 +86,10 @@ TransferRules WithScope(Network net, TransferRules rules)
 {
     if (net == Network::Main) {
         rules.exclude_top_dirs = {"testnet"};
+        rules.hold = fs::path(".lock");
     } else {
         rules.only_top_dir = "testnet";
+        rules.hold = fs::path("testnet") / ".lock";
     }
     return rules;
 }
@@ -1073,7 +1075,9 @@ bool WriteAndVerify(File* in, const std::string* data, File& out, const fs::path
             written += got;
         }
     }
-    if (!out.Sync(error) || !out.Rewind(error)) return false;
+    if (!out.Sync(error)) return false;
+    if (testing::after_write) testing::after_write(out_path);
+    if (!out.Rewind(error)) return false;
 
     // Read back, and compared with what was read from the source.
     CSHA256 read_hash;
@@ -1156,7 +1160,8 @@ public:
             if (!m_dst) return FailAndUndo(error);
         }
 
-        if (!CopyDir(*source, *m_dst, fs::path())) return Undo();
+        bool kept = false;
+        if (!CopyDir(*source, *m_dst, fs::path(), kept)) return Undo();
         m_result.ok = true;
     }
 
@@ -1199,6 +1204,23 @@ private:
                 Fail(Shown(dir.Child(name)) + ": " + reason + ". Nothing was copied.");
                 return false;
             }
+            if (decision == EntryDecision::FilterSettings) {
+                // Read and parsed now, so that a settings file the core would refuse stops the
+                // transfer before anything is written.
+                std::optional<File> in = dir.OpenRead(name, error);
+                std::string text;
+                if (!in || !ReadAll(*in, dir.Child(name), SETTINGS_SIZE_LIMIT, text, error)) {
+                    Fail(error);
+                    return false;
+                }
+                try {
+                    FilterSettingsJson(text);
+                } catch (const std::runtime_error& e) {
+                    Fail(Shown(dir.Child(name)) + ": " + e.what() + ". Correct or remove it, then try again. "
+                         "Nothing was copied.");
+                    return false;
+                }
+            }
             if (decision == EntryDecision::Copy && facts.type == EntryFacts::Type::Directory) {
                 const std::optional<Dir> sub = dir.Sub(name, error);
                 if (!sub) {
@@ -1211,9 +1233,14 @@ private:
         return true;
     }
 
-    bool CopyDir(const Dir& from, const Dir& to, const fs::path& relative)
+    //! Copies what \p from holds into \p to. \p kept is set when something in \p from or below it
+    //! stays in the source (a quarantined entry, or the held file). The entries to remove are added
+    //! to the result: those of this directory when something stays in it or it is the root, and
+    //! otherwise the caller names the directory itself.
+    bool CopyDir(const Dir& from, const Dir& to, const fs::path& relative, bool& kept)
     {
         const bool top = relative.empty();
+        std::vector<fs::path> mine;
         std::vector<fs::path> names;
         std::string error;
         if (!from.Names(names, error)) {
@@ -1234,21 +1261,26 @@ private:
             facts.relative = entry_relative;
             std::string reason;
             const EntryDecision decision = Decide(facts, m_rules, reason);
-            if (top && decision != EntryDecision::Quarantine && decision != EntryDecision::Refuse) {
-                m_result.source_top.push_back(name);
-            }
 
             switch (decision) {
             case EntryDecision::Skip:
+                if (m_rules.hold && entry_relative == *m_rules.hold) {
+                    kept = true;
+                } else {
+                    mine.push_back(entry_relative);
+                }
                 continue;
             case EntryDecision::Refuse:
                 Fail(Shown(from.Child(name)) + ": " + reason + " (it changed while the tree was copied)");
                 return false;
             case EntryDecision::Quarantine:
                 if (!QuarantineFile(from, name, entry_relative, nullptr)) return false;
+                kept = true;
+                m_result.source_kept.push_back(entry_relative);
                 continue;
             case EntryDecision::FilterSettings:
                 if (!FilterFile(from, name, to, entry_relative, top)) return false;
+                mine.push_back(entry_relative);
                 continue;
             case EntryDecision::Copy:
                 break;
@@ -1266,7 +1298,13 @@ private:
                     Fail(error);
                     return false;
                 }
-                if (!CopyDir(*sub_from, *sub_to, entry_relative)) return false;
+                bool sub_kept = false;
+                if (!CopyDir(*sub_from, *sub_to, entry_relative, sub_kept)) return false;
+                if (sub_kept) {
+                    kept = true;
+                } else {
+                    mine.push_back(entry_relative);
+                }
                 continue;
             }
 
@@ -1288,6 +1326,10 @@ private:
             }
             ++m_result.files;
             m_result.bytes += bytes;
+            mine.push_back(entry_relative);
+        }
+        if (kept || top) {
+            m_result.source_remove.insert(m_result.source_remove.end(), mine.begin(), mine.end());
         }
         return true;
     }
@@ -1451,7 +1493,8 @@ private:
         m_result.created_top.clear();
         m_result.quarantined.clear();
         m_result.dropped_settings.clear();
-        m_result.source_top.clear();
+        m_result.source_remove.clear();
+        m_result.source_kept.clear();
         m_result.created_dst = false;
     }
 
@@ -1469,6 +1512,10 @@ private:
 };
 
 } // namespace
+
+namespace testing {
+std::function<void(const fs::path&)> after_write;
+} // namespace testing
 
 std::optional<std::string> DestinationRefusal(const fs::path& src, const fs::path& dst, const TransferRules& rules)
 {
@@ -1554,6 +1601,63 @@ bool RemoveTreeNoFollow(const fs::path& root, const std::vector<fs::path>& only_
         if (there && !at->Remove(relative.filename(), error)) return false;
     }
     return true;
+}
+
+bool RemoveDirIfEmpty(const fs::path& root, const fs::path& relative, bool& removed, std::string& error)
+{
+    removed = false;
+    if (!PlainRelative(relative)) {
+        error = Shown(relative) + " is not a path below " + Shown(root);
+        return false;
+    }
+    bool absent = false;
+    const std::optional<Dir> top = Dir::Open(root, absent, error);
+    if (!top) return absent;
+
+    std::vector<Dir> held;
+    held.reserve(std::distance(relative.begin(), relative.end()));
+    const Dir* at = &*top;
+    const fs::path dirs = relative.parent_path();
+    for (const fs::path& part : dirs) {
+        std::optional<Dir> next = at->Sub(part, error);
+        if (!next) return false;
+        held.push_back(std::move(*next));
+        at = &held.back();
+    }
+
+    EntryFacts facts;
+    if (!at->Facts(relative.filename(), facts, absent, error)) return absent;
+    if (facts.type != EntryFacts::Type::Directory) return true;
+    std::optional<Dir> dir = at->Sub(relative.filename(), error);
+    if (!dir) return false;
+    std::vector<fs::path> names;
+    if (!dir->Names(names, error)) return false;
+    dir.reset();
+    if (!names.empty()) return true;
+    if (!at->Remove(relative.filename(), error)) return false;
+    removed = true;
+    return true;
+}
+
+std::vector<std::string> RunFollowUps(const std::vector<FollowUp>& steps)
+{
+    std::vector<std::string> warnings;
+    std::vector<bool> ok(steps.size(), false);
+    for (size_t i = 0; i < steps.size(); ++i) {
+        const FollowUp& step = steps[i];
+        if (step.needs >= 0 && static_cast<size_t>(step.needs) < i && !ok[step.needs]) {
+            warnings.push_back(strprintf("%s was not attempted, as %s failed. To finish it: %s", step.name,
+                                         steps[step.needs].name, step.finish));
+            continue;
+        }
+        try {
+            step.run();
+            ok[i] = true;
+        } catch (const std::exception& e) {
+            warnings.push_back(strprintf("%s failed: %s. To finish it: %s", step.name, e.what(), step.finish));
+        }
+    }
+    return warnings;
 }
 
 #ifdef WIN32

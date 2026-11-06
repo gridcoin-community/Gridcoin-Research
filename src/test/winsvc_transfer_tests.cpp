@@ -230,7 +230,7 @@ BOOST_AUTO_TEST_CASE(transfer_copies_tree_and_verifies)
 
     std::set<fs::path> created(result.created_top.begin(), result.created_top.end());
     BOOST_CHECK(created == std::set<fs::path>({"wallet.dat", "blocks", "peers.dat", "walletbackups"}));
-    std::set<fs::path> taken(result.source_top.begin(), result.source_top.end());
+    std::set<fs::path> taken(result.source_remove.begin(), result.source_remove.end());
     BOOST_CHECK(taken == created);
     BOOST_CHECK(result.quarantined.empty());
     BOOST_CHECK(!fs::exists(tree.root / "quarantine"));
@@ -359,10 +359,12 @@ BOOST_AUTO_TEST_CASE(transfer_skips_runtime_files)
     BOOST_CHECK(fs::exists(dst / "wallet.dat"));
 
     // Skipped entries are taken from the source with the rest: the user's autounlock file goes.
-    std::set<fs::path> taken(result.source_top.begin(), result.source_top.end());
-    for (const char* name : {"node.sock", "ipc.cookie", ".lock", "gridcoinresearchd.pid", "autounlock"}) {
+    std::set<fs::path> taken(result.source_remove.begin(), result.source_remove.end());
+    for (const char* name : {"node.sock", "ipc.cookie", "gridcoinresearchd.pid", "autounlock"}) {
         BOOST_CHECK_MESSAGE(taken.count(name) == 1, name << " is not among the entries taken");
     }
+    // The caller holds the lock file and removes it last, so it is not among them.
+    BOOST_CHECK(taken.count(".lock") == 0);
     std::set<fs::path> created(result.created_top.begin(), result.created_top.end());
     BOOST_CHECK(created.count("autounlock") == 0);
 }
@@ -388,7 +390,7 @@ BOOST_AUTO_TEST_CASE(transfer_quarantines_conf_and_db_config)
     BOOST_CHECK(quarantined == std::set<fs::path>({quarantine / "gridcoinresearch.conf", quarantine / "DB_CONFIG"}));
 
     // A quarantined file stays in the source: it is not among the entries taken.
-    std::set<fs::path> taken(result.source_top.begin(), result.source_top.end());
+    std::set<fs::path> taken(result.source_remove.begin(), result.source_remove.end());
     BOOST_CHECK(taken.count("gridcoinresearch.conf") == 0);
     BOOST_CHECK(taken.count("DB_CONFIG") == 0);
     BOOST_CHECK(fs::exists(src / "gridcoinresearch.conf"));
@@ -431,8 +433,8 @@ BOOST_AUTO_TEST_CASE(transfer_main_excludes_testnet)
     BOOST_REQUIRE_MESSAGE(result.ok, result.error);
     BOOST_CHECK(fs::exists(dst / "wallet.dat"));
     BOOST_CHECK(!fs::exists(dst / "testnet"));
-    BOOST_CHECK(std::find(result.source_top.begin(), result.source_top.end(), fs::path("testnet")) ==
-                result.source_top.end());
+    BOOST_CHECK(std::find(result.source_remove.begin(), result.source_remove.end(), fs::path("testnet")) ==
+                result.source_remove.end());
 }
 
 BOOST_AUTO_TEST_CASE(transfer_test_takes_only_testnet)
@@ -455,7 +457,11 @@ BOOST_AUTO_TEST_CASE(transfer_test_takes_only_testnet)
     expected["testnet"] = "dir";
     BOOST_CHECK(Snapshot(dst) == expected);
     BOOST_CHECK(result.created_top == std::vector<fs::path>({"testnet"}));
-    BOOST_CHECK(result.source_top == std::vector<fs::path>({"testnet"}));
+    // Not the directory as a whole, which holds the lock file the caller removes last, but what is in it.
+    std::set<fs::path> taken(result.source_remove.begin(), result.source_remove.end());
+    BOOST_CHECK(taken.count("testnet") == 0);
+    BOOST_CHECK(taken.count(fs::path("testnet") / "wallet.dat") == 1);
+    BOOST_CHECK(taken.count(fs::path("testnet") / ".lock") == 0);
     // The configuration file at the top is the main network's, outside the test network's tree.
     BOOST_CHECK(result.quarantined.empty());
 }
@@ -520,6 +526,167 @@ BOOST_AUTO_TEST_CASE(transfer_keeps_unrelated_destination_entries)
 }
 
 #ifndef WIN32
+BOOST_AUTO_TEST_CASE(transfer_test_leaves_the_users_conf_at_the_source)
+{
+    const TempTree tree;
+    const fs::path src = tree.root / "src";
+    const fs::path dst = tree.root / "dst";
+    const fs::path quarantine = tree.root / "quarantine";
+    MakeWalletTree(src / "testnet");
+    WriteFile(src / "testnet" / ".lock", "");
+    WriteFile(src / "testnet" / "gridcoinresearch.conf", "testnet=1\n");
+    WriteFile(src / "testnet" / "DB_CONFIG", "set_lg_dir /elsewhere\n");
+    WriteFile(src / "testnet" / "blocks" / "autounlock", "blob");
+
+    const TransferResult result = TransferTree(src, dst, RulesForEnable(Network::Test), quarantine);
+    BOOST_REQUIRE_MESSAGE(result.ok, result.error);
+    BOOST_CHECK_EQUAL(ReadFile(quarantine / "testnet" / "gridcoinresearch.conf"), "testnet=1\n");
+    std::set<fs::path> kept(result.source_kept.begin(), result.source_kept.end());
+    BOOST_CHECK(kept == std::set<fs::path>({fs::path("testnet") / "gridcoinresearch.conf",
+                                            fs::path("testnet") / "DB_CONFIG"}));
+
+    // The removal step: the wallet and the rest go, the quarantined files stay where the user keeps them.
+    std::string error;
+    BOOST_REQUIRE_MESSAGE(RemoveTreeNoFollow(src, result.source_remove, error), error);
+    BOOST_CHECK(!fs::exists(src / "testnet" / "wallet.dat"));
+    BOOST_CHECK(!fs::exists(src / "testnet" / "blocks"));
+    BOOST_CHECK(!fs::exists(src / "testnet" / "peers.dat"));
+    BOOST_CHECK_EQUAL(ReadFile(src / "testnet" / "gridcoinresearch.conf"), "testnet=1\n");
+    BOOST_CHECK_EQUAL(ReadFile(src / "testnet" / "DB_CONFIG"), "set_lg_dir /elsewhere\n");
+    BOOST_CHECK(fs::exists(src / "testnet" / ".lock"));
+
+    // The lock file goes last; the directory it was in stays, as it holds the kept files.
+    BOOST_REQUIRE(::unlink((src / "testnet" / ".lock").c_str()) == 0);
+    bool removed = true;
+    BOOST_REQUIRE_MESSAGE(RemoveDirIfEmpty(src, "testnet", removed, error), error);
+    BOOST_CHECK(!removed);
+    BOOST_CHECK(fs::exists(src / "testnet" / "gridcoinresearch.conf"));
+}
+
+BOOST_AUTO_TEST_CASE(transfer_test_removes_the_emptied_source_directory)
+{
+    const TempTree tree;
+    const fs::path src = tree.root / "src";
+    MakeWalletTree(src / "testnet");
+    WriteFile(src / "testnet" / ".lock", "");
+
+    const TransferResult result = TransferTree(src, tree.root / "dst", RulesForEnable(Network::Test),
+                                               tree.root / "quarantine");
+    BOOST_REQUIRE_MESSAGE(result.ok, result.error);
+    BOOST_CHECK(result.source_kept.empty());
+    BOOST_CHECK(RulesForEnable(Network::Test).hold == fs::path("testnet") / ".lock");
+    BOOST_CHECK(RulesForEnable(Network::Main).hold == fs::path(".lock"));
+    BOOST_CHECK(RulesForDisable(Network::Test).hold == fs::path("testnet") / ".lock");
+
+    std::string error;
+    BOOST_REQUIRE_MESSAGE(RemoveTreeNoFollow(src, result.source_remove, error), error);
+    // Only the held lock file is left, so the directory is not empty yet.
+    bool removed = true;
+    BOOST_REQUIRE_MESSAGE(RemoveDirIfEmpty(src, "testnet", removed, error), error);
+    BOOST_CHECK(!removed);
+    BOOST_CHECK(fs::exists(src / "testnet" / ".lock"));
+    BOOST_REQUIRE(::unlink((src / "testnet" / ".lock").c_str()) == 0);
+    BOOST_REQUIRE_MESSAGE(RemoveDirIfEmpty(src, "testnet", removed, error), error);
+    BOOST_CHECK(removed);
+    BOOST_CHECK(!fs::exists(src / "testnet"));
+    BOOST_CHECK(fs::exists(src));
+    // Nothing there is not an error, and a path that is not plain is refused.
+    BOOST_CHECK(RemoveDirIfEmpty(src, "testnet", removed, error));
+    BOOST_CHECK(!removed);
+    BOOST_CHECK(!RemoveDirIfEmpty(src, "..", removed, error));
+}
+
+BOOST_AUTO_TEST_CASE(transfer_refuses_malformed_settings_before_writing)
+{
+    const TempTree tree;
+    const fs::path src = tree.root / "src";
+    const fs::path dst = tree.root / "dst";
+    MakeWalletTree(src);
+    WriteFile(src / "gridcoinresearch.conf", "conf\n");
+    WriteFile(src / "gridcoinsettings.json", "{\"a\":1,\"a\":2}");
+
+    const TransferResult result = TransferTree(src, dst, RulesForEnable(Network::Main), tree.root / "quarantine");
+    BOOST_CHECK(!result.ok);
+    // Found in the planning pass, which writes nothing, and not part way through the copy.
+    BOOST_CHECK_MESSAGE(Contains(result.error, "Nothing was copied"), result.error);
+    BOOST_CHECK(Contains(result.error, "gridcoinsettings.json"));
+    BOOST_CHECK(!fs::exists(dst));
+    BOOST_CHECK(!fs::exists(tree.root / "quarantine"));
+}
+
+#ifndef WIN32
+BOOST_AUTO_TEST_CASE(transfer_notices_a_destination_that_does_not_read_back)
+{
+    const TempTree tree;
+    const fs::path src = tree.root / "src";
+    const fs::path dst = tree.root / "dst";
+    MakeWalletTree(src);
+    const std::map<std::string, std::string> before = Snapshot(src);
+
+    // Corrupts the first byte of each file written, after it is written and before it is read back.
+    int corrupted = 0;
+    winsvc::testing::after_write = [&corrupted](const fs::path& path) {
+        std::string content = ReadFile(path);
+        if (content.empty()) return;
+        content[0] = static_cast<char>(content[0] ^ 0x01);
+        WriteFile(path, content);
+        ++corrupted;
+    };
+    const TransferResult result = TransferTree(src, dst, RulesForEnable(Network::Main), tree.root / "quarantine");
+    winsvc::testing::after_write = nullptr;
+
+    BOOST_CHECK_GT(corrupted, 0);
+    BOOST_CHECK(!result.ok);
+    BOOST_CHECK_MESSAGE(Contains(result.error, "does not read back as it was written"), result.error);
+    BOOST_CHECK(!fs::exists(dst));
+    BOOST_CHECK(Snapshot(src) == before);
+}
+#endif
+
+BOOST_AUTO_TEST_CASE(follow_ups_run_after_a_failure)
+{
+    std::vector<std::string> ran;
+    const auto step = [&ran](const std::string& name, bool fail) {
+        return [&ran, name, fail] {
+            ran.push_back(name);
+            if (fail) throw std::runtime_error(name + " broke");
+        };
+    };
+
+    // A failing step is named with what to do by hand, and the steps after it still run.
+    std::vector<FollowUp> steps = {
+        {"one", "do one", step("one", false), -1},
+        {"two", "do two", step("two", true), -1},
+        {"three", "do three", step("three", false), -1},
+    };
+    std::vector<std::string> warnings = RunFollowUps(steps);
+    BOOST_CHECK((ran == std::vector<std::string>{"one", "two", "three"}));
+    BOOST_REQUIRE_EQUAL(warnings.size(), 1U);
+    BOOST_CHECK(Contains(warnings[0], "two"));
+    BOOST_CHECK(Contains(warnings[0], "two broke"));
+    BOOST_CHECK(Contains(warnings[0], "do two"));
+
+    // A step that needs another is not run when that one failed, and says so.
+    ran.clear();
+    steps = {
+        {"config", "sc config", step("config", true), -1},
+        {"start", "sc start", step("start", false), 0},
+        {"other", "do other", step("other", false), -1},
+    };
+    warnings = RunFollowUps(steps);
+    BOOST_CHECK((ran == std::vector<std::string>{"config", "other"}));
+    BOOST_REQUIRE_EQUAL(warnings.size(), 2U);
+    BOOST_CHECK(Contains(warnings[1], "start"));
+    BOOST_CHECK(Contains(warnings[1], "not attempted"));
+    BOOST_CHECK(Contains(warnings[1], "sc start"));
+
+    // Nothing failing gives nothing to say.
+    ran.clear();
+    steps = {{"a", "x", step("a", false), -1}, {"b", "y", step("b", false), 0}};
+    BOOST_CHECK(RunFollowUps(steps).empty());
+    BOOST_CHECK((ran == std::vector<std::string>{"a", "b"}));
+}
+
 BOOST_AUTO_TEST_CASE(transfer_failure_midway_removes_partial_destination)
 {
     if (::geteuid() == 0) {
