@@ -140,6 +140,77 @@ enum class CreateResult
     Failed,
 };
 
+#ifdef WIN32
+//! \p path without separators at its end, so that its parent is the directory above it.
+//! A root such as "C:\" keeps its separator.
+fs::path WithoutTrailingSeparators(const fs::path& path)
+{
+    std::wstring text = path.wstring();
+    while (text.size() > 1 && (text.back() == L'\\' || text.back() == L'/') && text[text.size() - 2] != L':') {
+        text.pop_back();
+    }
+
+    return fs::path(text);
+}
+
+//! Create \p path and, if this call created it, restrict it to this account.
+CreateResult CreateAndRestrict(const fs::path& path, std::string& error)
+{
+    error.clear();
+
+    // The parents get the lists they inherit. The directory itself is created with the
+    // owner-only list, inheritable so that entries created inside are owner-only from
+    // creation, and read back, so it is never there with another list.
+    const fs::path dir = WithoutTrailingSeparators(path);
+    const fs::path parent = dir.has_parent_path() ? dir.parent_path() : fs::path(".");
+
+    boost::system::error_code ec;
+    if (dir.has_parent_path()) fs::create_directories(parent, ec);
+    if (ec) {
+        error = "could not create the directory " + path.string() + ": " + ec.message();
+        return CreateResult::Failed;
+    }
+
+    try {
+        if (winacl::CreateDirectoryWithAcl(dir, OwnerOnlyAclSpec(/*inheritable=*/true))) return CreateResult::Restricted;
+    } catch (const std::exception& e) {
+        // CreateDirectoryWithAcl took away anything it made.
+        const auto* const not_kept = dynamic_cast<const winacl::AclNotKeptError*>(&e);
+        if (VolumeKeepsAcls(parent)) {
+            if (!not_kept) {
+                error = "could not create the directory " + path.string() + ": " + e.what();
+                return CreateResult::Failed;
+            }
+            error = "created " + path.string() + " but could not restrict it to this account: " +
+                    OwnerOnlyRefusalText(path, not_kept->reason());
+            return CreateResult::NotRestricted;
+        }
+
+        // A volume that keeps no ACLs: the directory is made without one, for the caller
+        // that keeps such a directory.
+        boost::system::error_code plain_ec;
+        if (!fs::create_directory(dir, plain_ec)) {
+            error = "could not create the directory " + path.string() + ": " +
+                    (plain_ec ? plain_ec.message() : std::string{e.what()});
+            return CreateResult::Failed;
+        }
+        error = "created " + path.string() + " but could not restrict it to this account: " + e.what() +
+                " (the volume keeps no ACLs)";
+        return CreateResult::NoModes;
+    }
+
+    // Already there: leave it exactly as the operator configured it. Re-tightening a
+    // directory somebody widened on purpose is not ours to do. Anything else in its
+    // place is an error.
+    boost::system::error_code stat_ec;
+    if (!fs::is_directory(dir, stat_ec)) {
+        error = "could not create the directory " + path.string() + ": something that is not a directory is there";
+        return CreateResult::Failed;
+    }
+
+    return CreateResult::Existing;
+}
+#else
 //! Create \p path and, if this call created it, restrict it to this account.
 CreateResult CreateAndRestrict(const fs::path& path, std::string& error)
 {
@@ -167,28 +238,16 @@ CreateResult CreateAndRestrict(const fs::path& path, std::string& error)
     if (!created) return CreateResult::Existing;
 
     // We made it, so we set the terms.
-#ifdef WIN32
-    try {
-        // Inheritable: entries created inside are owner-only from creation rather
-        // than after the fact.
-        ApplyOwnerOnlyDacl(path, /*inheritable=*/true);
-    } catch (const std::exception& e) {
-        error = "created " + path.string() + " but could not restrict it to this account: " + e.what();
-        if (VolumeKeepsAcls(path)) return CreateResult::NotRestricted;
-        error += " (the volume keeps no ACLs)";
-        return CreateResult::NoModes;
-    }
-#else
     if (::chmod(path.string().c_str(), 0700) != 0) {
         const int err = errno;
         error = strprintf("created %s but could not chmod it to 0700: %s (errno %d)", path.string(),
                           std::generic_category().message(err), err);
         return RestrictErrorMeansNoModes(err) ? CreateResult::NoModes : CreateResult::NotRestricted;
     }
-#endif
 
     return CreateResult::Restricted;
 }
+#endif // WIN32
 
 //! Remove \p path, which this call created and could not restrict, and return false.
 bool Withdraw(const fs::path& path, std::string& error)

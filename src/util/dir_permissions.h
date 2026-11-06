@@ -28,8 +28,10 @@ namespace util {
 
 //! Create \p path (and any missing parents) and, IF THIS CALL CREATED IT, restrict
 //! it to the current user: mode 0700 on POSIX, an explicit owner+SYSTEM PROTECTED
-//! DACL on Windows (read back and verified, so a volume that silently stores no
-//! ACL is reported rather than trusted).
+//! DACL on Windows, given when the directory is created (CreateDirectoryWithAcl), so
+//! it is never there with another list, and read back and verified, so a volume that
+//! silently stores no ACL is reported rather than trusted. Missing parents get the
+//! lists they inherit.
 //!
 //! CREATE-ONLY, and that is a rule rather than an accident: a directory that
 //! already exists is left exactly as the operator configured it. Someone who
