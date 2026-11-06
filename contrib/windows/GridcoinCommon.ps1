@@ -369,6 +369,81 @@ function Remove-GridcoinLegacyAutounlock {
     return $null
 }
 
+# CryptProtectData with the flags the core's own writer uses (src/wallet/autounlock_dpapi.cpp):
+# CRYPTPROTECT_UI_FORBIDDEN | CRYPTPROTECT_AUDIT | CRYPTPROTECT_LOCAL_MACHINE, the description
+# "Gridcoin autounlock" and the given entropy. The unmanaged copies of the passphrase are zeroed
+# and the output blob is freed with LocalFree.
+function Add-GridcoinDpapiType {
+    if ('GridcoinDpapi' -as [type]) { return }
+    $source = @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+
+public static class GridcoinDpapi
+{
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DataBlob
+    {
+        public int cbData;
+        public IntPtr pbData;
+    }
+
+    [DllImport("crypt32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool CryptProtectData(ref DataBlob dataIn, string description, ref DataBlob entropy,
+        IntPtr reserved, IntPtr prompt, int flags, out DataBlob dataOut);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr LocalFree(IntPtr memory);
+
+    private const int UI_FORBIDDEN = 0x1;
+    private const int LOCAL_MACHINE = 0x4;
+    private const int AUDIT = 0x10;
+
+    private static DataBlob Copy(byte[] bytes)
+    {
+        DataBlob blob = new DataBlob();
+        blob.cbData = bytes.Length;
+        blob.pbData = Marshal.AllocHGlobal(bytes.Length);
+        Marshal.Copy(bytes, 0, blob.pbData, bytes.Length);
+        return blob;
+    }
+
+    private static void Wipe(DataBlob blob)
+    {
+        if (blob.pbData == IntPtr.Zero) return;
+        Marshal.Copy(new byte[blob.cbData], 0, blob.pbData, blob.cbData);
+        Marshal.FreeHGlobal(blob.pbData);
+    }
+
+    public static byte[] Protect(byte[] plain, byte[] entropy)
+    {
+        DataBlob input = Copy(plain);
+        DataBlob extra = Copy(entropy);
+        DataBlob output = new DataBlob();
+        try
+        {
+            if (!CryptProtectData(ref input, "Gridcoin autounlock", ref extra, IntPtr.Zero, IntPtr.Zero,
+                    UI_FORBIDDEN | AUDIT | LOCAL_MACHINE, out output))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            byte[] result = new byte[output.cbData];
+            Marshal.Copy(output.pbData, result, 0, output.cbData);
+            return result;
+        }
+        finally
+        {
+            Wipe(input);
+            Wipe(extra);
+            if (output.pbData != IntPtr.Zero) LocalFree(output.pbData);
+        }
+    }
+}
+'@
+    Add-Type -TypeDefinition $source
+}
+
 # Writes the autounlock file the core reads (src/wallet/autounlock_blob.h): "GRCAUB01", the scope
 # (1, the machine's DPAPI key), the length of the network name, the name, then the DPAPI blob made
 # with the entropy "gridcoin-autounlock-v1:<network>". The file is created beside Path under a
@@ -381,11 +456,10 @@ function Write-GridcoinAutounlockBlob {
     )
     if ($Network -cnotmatch '^[a-z]{1,16}$') { throw "The network name '$Network' is not 1 to 16 letters a-z." }
     if ($Passphrase.Length -eq 0) { throw 'The passphrase is empty.' }
-    Add-Type -AssemblyName System.Security
+    Add-GridcoinDpapiType
 
     $entropy = [System.Text.Encoding]::ASCII.GetBytes('gridcoin-autounlock-v1:' + $Network)
-    $dpapi = [System.Security.Cryptography.ProtectedData]::Protect(
-        $Passphrase, $entropy, [System.Security.Cryptography.DataProtectionScope]::LocalMachine)
+    $dpapi = [GridcoinDpapi]::Protect($Passphrase, $entropy)
 
     $header = [System.Text.Encoding]::ASCII.GetBytes('GRCAUB01')
     $name = [System.Text.Encoding]::ASCII.GetBytes($Network)

@@ -37,7 +37,7 @@ $ErrorActionPreference = 'Stop'
 
 if (Test-GridcoinElevated) {
     throw ("The Gridcoin wallet must not run as administrator in multiprocess mode. Start it from a normal " +
-           "(not elevated) session. If User Account Control is turned off, multiprocess mode cannot be used on this account.")
+           "(not elevated) session. This happens only when Gridcoin could not give up the administrator rights it was started with.")
 }
 
 if ($PSBoundParameters.ContainsKey('Network') -and -not $Service) {

@@ -166,17 +166,22 @@ function Set-ShutdownScriptState([string]$cmdFullPath) {
     New-ItemProperty -LiteralPath $gKey -Name 'PSScriptOrder' -Value $count -PropertyType DWord -Force | Out-Null
 }
 function Remove-ShutdownScriptState([string]$cmdFullPath) {
+    $removedAny = $false
     $gi = Get-LocalGpoStateIndex
-    if ($null -eq $gi) { return }
+    if ($null -eq $gi) { return $false }
     $gKey = Join-Path $stateBase $gi
-    if (-not (Test-Path -LiteralPath $gKey)) { return }
+    if (-not (Test-Path -LiteralPath $gKey)) { return $false }
     foreach ($s in Get-ChildItem -LiteralPath $gKey -EA SilentlyContinue) {
         if ($s.PSChildName -notmatch '^\d+$') { continue }
-        if ((Read-RegString $s.PSPath 'Script') -ieq $cmdFullPath) { Remove-Item -LiteralPath $s.PSPath -Recurse -Force -EA SilentlyContinue }
+        if ((Read-RegString $s.PSPath 'Script') -ieq $cmdFullPath) {
+            Remove-Item -LiteralPath $s.PSPath -Recurse -Force -EA SilentlyContinue
+            $removedAny = $true
+        }
     }
     $remaining = @(Get-ChildItem -LiteralPath $gKey -EA SilentlyContinue | Where-Object { $_.PSChildName -match '^\d+$' })
     if ($remaining.Count -eq 0) { Remove-Item -LiteralPath $gKey -Recurse -Force -EA SilentlyContinue }  # local GPO has no scripts left
     else { New-ItemProperty -LiteralPath $gKey -Name 'PSScriptOrder' -Value $remaining.Count -PropertyType DWord -Force | Out-Null }
+    return $removedAny
 }
 
 # --- -Remove ---------------------------------------------------------------------------
@@ -206,8 +211,11 @@ if ($Remove) {
     }
     if (Test-Path -LiteralPath $cmdPath) { Remove-Item -LiteralPath $cmdPath -Force; Write-Host "Deleted $cmdPath" }
     if (Test-Path -LiteralPath $ps1Path) { Remove-Item -LiteralPath $ps1Path -Force; Write-Host "Deleted $ps1Path" }
-    Remove-ShutdownScriptState $cmdPath
-    Write-Host "Removed the run-time shutdown-script state. Reboot to confirm it no longer runs."
+    if (Remove-ShutdownScriptState $cmdPath) {
+        Write-Host "Removed the run-time shutdown-script state. Reboot to confirm it no longer runs."
+    } else {
+        Write-Host "No run-time shutdown-script state for Gridcoin (ok)."
+    }
     return
 }
 
