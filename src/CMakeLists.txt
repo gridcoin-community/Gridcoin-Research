@@ -360,6 +360,7 @@ add_library(gridcoin_util STATIC
     wallet/walletutil.cpp
     winsvc/layout.cpp
     winsvc/scm.cpp
+    winsvc/transfer.cpp
 )
 
 if(USE_ASM_SCRYPT)
@@ -544,7 +545,7 @@ if(ENABLE_DAEMON)
     # sessions' processes), ole32 and oleaut32 (Task Scheduler, reached through COM) and
     # shell32 (SHGetKnownFolderPath).
     if(WIN32 AND ENABLE_MULTIPROCESS)
-        add_executable(gridcoin-service gridcoin-service.cpp winsvc/setup.cpp)
+        add_executable(gridcoin-service gridcoin-service.cpp winsvc/accounts.cpp winsvc/setup.cpp)
         target_include_directories(gridcoin-service PRIVATE ${CMAKE_BINARY_DIR})
         target_compile_definitions(gridcoin-service PRIVATE CURL_STATICLIB)
         target_link_libraries(gridcoin-service PRIVATE gridcoin_ipc)

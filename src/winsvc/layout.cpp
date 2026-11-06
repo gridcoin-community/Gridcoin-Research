@@ -314,6 +314,32 @@ std::optional<std::string> StateFileValue(const std::string& text, const std::st
     return std::nullopt;
 }
 
+std::string StateFileText(const std::string& user_sid, const std::string& from, const std::string& enabled_at,
+                          bool task_disabled)
+{
+    return "user_sid=" + user_sid + "\nfrom=" + from + "\nenabled_at=" + enabled_at +
+           "\ntask_disabled=" + (task_disabled ? "1" : "0") + "\n";
+}
+
+AclSpec StateFileSpec(const LayoutSids& sids)
+{
+    return AclSpec{sids.admins, {{sids.admins, detail::FULL, Inherit::None}, {sids.system, detail::FULL, Inherit::None}}};
+}
+
+bool IsCoreImageName(const std::wstring& image)
+{
+    // Without regard to case, as Windows compares the names. Only ASCII is folded, as both names
+    // are ASCII.
+    const auto folded = [](std::wstring text) {
+        for (wchar_t& c : text) {
+            if (c >= L'A' && c <= L'Z') c = static_cast<wchar_t>(c - L'A' + L'a');
+        }
+        return text;
+    };
+    const std::wstring name = folded(image);
+    return name == L"gridcoinresearch.exe" || name == L"gridcoinresearchd.exe";
+}
+
 std::optional<std::string> StateFileRefusal(const util::winacl::ObservedAcl& acl)
 {
     return util::winacl::FindForeignTrustee(acl, {util::winacl::wellknown::Administrators(),

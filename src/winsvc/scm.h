@@ -110,6 +110,8 @@ enum class Verb : uint8_t
     Install,
     Uninstall,
     Status,
+    Enable,
+    Disable,
 };
 
 struct ToolOptions
@@ -120,6 +122,14 @@ struct ToolOptions
     bool restricted_sid{true};
     //! install: apply the settings to a service that is already installed.
     bool reconfigure{false};
+    //! enable: the account whose wallet is moved in (--user, required).
+    std::optional<std::string> user;
+    //! enable: the data directory the wallet is moved from (--from), instead of the account's
+    //! %APPDATA%\GridcoinResearch.
+    std::optional<std::string> from;
+    //! disable: the data directory the wallet is moved back to (--to), instead of the one it came
+    //! from.
+    std::optional<std::string> to;
 };
 
 //! What opening the network's service for status came to, from OpenServiceW's Win32 error:
@@ -143,9 +153,11 @@ std::string ServiceUnreadableText(Network net);
 constexpr int EXIT_OK = 0, EXIT_REFUSED = 1, EXIT_USAGE = 2;
 
 //! \p args, the tool's arguments after its own name, as ToolOptions: one command (install,
-//! uninstall, status or help), --network=main|test (main when absent), and for install alone
-//! --sid-type=restricted|unrestricted and --reconfigure. "--help", "-h" and "/?" anywhere are
-//! help. nullopt, with \p error saying why, for anything else.
+//! uninstall, status, enable, disable or help), --network=main|test (main when absent), for
+//! install alone --sid-type=restricted|unrestricted and --reconfigure, for enable alone
+//! --user=<account> (required) and --from=<directory>, and for disable alone --to=<directory>.
+//! A value may not be empty. "--help", "-h" and "/?" anywhere are help. nullopt, with \p error
+//! saying why, for anything else.
 std::optional<ToolOptions> ParseToolArgs(const std::vector<std::string>& args, std::string& error);
 
 //! The tool's usage text, in lines ending in LF.

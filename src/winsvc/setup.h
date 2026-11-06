@@ -36,6 +36,31 @@ int Install(const ToolOptions& options);
 //! ones. A directory that is not empty is kept, and so are the configuration file and the groups.
 int Uninstall(const ToolOptions& options);
 
+//! Elevated only. Moves the wallet of the account options.user into the service and starts it.
+//! Refuses, before anything is changed, unless the service is installed, disabled and stopped, no
+//! state file says a wallet was moved in, the data directory is the layout's and the network data
+//! directory is empty; and unless the account is a user account whose data directory (--from, or
+//! its profile's AppData\Roaming\GridcoinResearch, and testnet\ below it for Test) holds a
+//! wallet.dat, no core runs as the account in any session, and no core holds the data directory's
+//! lock. Then, holding that lock, it turns \Gridcoin\Core-Start off when it runs as the account,
+//! copies the tree in (TransferTree with RulesForEnable), gives it the service's owner and list
+//! (ResetTreeSecurity), writes the state file and removes the account's wallet.dat; a failure up
+//! to there undoes all of it. Then it removes the rest of the account's tree, adds the account to
+//! the attach group, sets the service to start automatically and starts it, and waits for it to
+//! run.
+int Enable(const ToolOptions& options);
+
+//! Elevated only. Moves the wallet in the service back to the account the state file names, at
+//! options.to or where it came from. Refuses, before anything is changed, unless the state file is
+//! the administrators' alone, the target is the account's own directory or can be made, and the
+//! target holds no name the copy would create. Then it disables and stops the service, copies its
+//! tree out (RulesForDisable), gives what was copied the account's owner-only list and removes the
+//! service's wallet.dat; a failure up to there undoes all of it and gives the service its start
+//! type back. Then it removes the rest of the service's tree, the autounlock file with it, takes
+//! the account out of the attach group, turns Core-Start back on when enable turned it off, and
+//! deletes the state file.
+int Disable(const ToolOptions& options);
+
 //! The service's state, start type, account, SID type, required privileges, preshutdown timeout,
 //! failure actions and ImagePath, with any difference from what install sets; each layout
 //! entry's CheckMatchesSpec result; the configuration file's check; and whose wallet the service

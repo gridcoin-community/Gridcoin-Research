@@ -52,6 +52,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[])
             return winsvc::Uninstall(*options);
         case winsvc::Verb::Status:
             return winsvc::Status(*options);
+        case winsvc::Verb::Enable:
+            return winsvc::Enable(*options);
+        case winsvc::Verb::Disable:
+            return winsvc::Disable(*options);
 #else
         default:
             std::cerr << "gridcoin-service.exe: this program sets up a Windows service and runs on Windows only\n";

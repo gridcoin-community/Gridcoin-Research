@@ -242,6 +242,7 @@ add_executable(test_gridcoin
     win_admin_drop_tests.cpp
     winservice_tests.cpp
     winsvc_layout_tests.cpp
+    winsvc_transfer_tests.cpp
 )
 
 # As in src/ipc/CMakeLists.txt: GCC before 13 ignores handshake.cpp's #pragma for

@@ -13,9 +13,12 @@
 #include "util/fsmodes.h"
 #include "util/strencodings.h"
 #include "util/string.h"
+#include "util/time.h"
 #include "util/win_acl.h"
 #include "util/winservice.h"
+#include "winsvc/accounts.h"
 #include "winsvc/layout.h"
+#include "winsvc/transfer.h"
 
 #include <algorithm>
 #include <array>
@@ -390,6 +393,30 @@ Sid EnsureLocalGroup(const std::wstring& name, const std::wstring& comment)
 
     Say(strprintf("Group \"%s\": %s, %s", Shown(name), created ? "created" : "already there", winacl::FormatSid(*sid)));
     return *sid;
+}
+
+//! Adds \p user to the local group \p group (NetLocalGroupAddMembers). False when it was a member
+//! already.
+bool AddGroupMember(const std::wstring& group, const Sid& user)
+{
+    Sid member = user;
+    LOCALGROUP_MEMBERS_INFO_0 info{member.data()};
+    const NET_API_STATUS status = ::NetLocalGroupAddMembers(nullptr, group.c_str(), 0, reinterpret_cast<LPBYTE>(&info), 1);
+    if (status == NERR_Success) return true;
+    if (status == ERROR_MEMBER_IN_ALIAS) return false;
+    throw std::runtime_error("NetLocalGroupAddMembers \"" + Shown(group) + "\": " + NetApiText(status));
+}
+
+//! Removes \p user from the local group \p group (NetLocalGroupDelMembers). False when it was not a
+//! member.
+bool RemoveGroupMember(const std::wstring& group, const Sid& user)
+{
+    Sid member = user;
+    LOCALGROUP_MEMBERS_INFO_0 info{member.data()};
+    const NET_API_STATUS status = ::NetLocalGroupDelMembers(nullptr, group.c_str(), 0, reinterpret_cast<LPBYTE>(&info), 1);
+    if (status == NERR_Success) return true;
+    if (status == ERROR_MEMBER_NOT_IN_ALIAS) return false;
+    throw std::runtime_error("NetLocalGroupDelMembers \"" + Shown(group) + "\": " + NetApiText(status));
 }
 
 //! The layout's accounts. The attach groups are left empty; the caller fills them in once they
@@ -1257,34 +1284,64 @@ std::pair<std::string, bool> EntryStatus(const LayoutEntry& entry)
     return {"ok", true};
 }
 
-//! Prints whose wallet the service holds, from the network's state file, when the file is the
-//! administrators' alone (StateFileRefusal); otherwise that it was not read, and why.
-void ShowStateFile(const fs::path& path)
+//! The network's state file as status and disable read it: opened as itself, and read only when
+//! it is a plain file that is the administrators' alone (StateFileRefusal).
+struct StateFile
 {
+    bool exists{false};
+    //! A link, a directory or another kind of reparse point, which is not read.
+    bool plain{true};
+    //! Why it was not read when it is plain: its owner or access list, with the owner named.
+    std::optional<std::string> refusal;
+    std::string text;
+};
+
+//! \p path read as StateFile says. Throws when it is there and cannot be opened or read.
+StateFile ReadStateFile(const fs::path& path)
+{
+    StateFile state;
     DWORD error = 0;
     const UniqueHandle handle =
         OpenAsItself(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, error);
     if (!handle) {
-        if (IsNotFound(error)) {
-            Say("Wallet: none moved in (no " + Shown(path) + ")");
-        } else {
-            Say("Wallet: " + Shown(path) + " could not be read: " + Win32Text(error));
-        }
-        return;
+        if (IsNotFound(error)) return state;
+        ThrowWin32(error, "open " + Shown(path));
     }
+    state.exists = true;
 
+    const Level level = LevelOf(handle.get(), path);
+    if (level.reparse || level.directory) {
+        state.plain = false;
+        return state;
+    }
+    if (const std::optional<std::string> refusal = StateFileRefusal(level.acl)) {
+        state.refusal = strprintf("%s; it is owned by %s", *refusal,
+                                  level.acl.owner ? Describe(*level.acl.owner) : std::string("an owner that cannot be read"));
+        return state;
+    }
+    ReadAll(handle.get(), path, state.text);
+    return state;
+}
+
+//! Prints whose wallet the service holds, from the network's state file, when the file is the
+//! administrators' alone (StateFileRefusal); otherwise that it was not read, and why.
+void ShowStateFile(const fs::path& path)
+{
     try {
-        const Level level = LevelOf(handle.get(), path);
-        if (level.reparse || level.directory) {
+        const StateFile state = ReadStateFile(path);
+        if (!state.exists) {
+            Say("Wallet: none moved in (no " + Shown(path) + ")");
+            return;
+        }
+        if (!state.plain) {
             Say("Wallet: " + Shown(path) + " is not a plain file, so it was not read");
             return;
         }
-        if (const std::optional<std::string> refusal = StateFileRefusal(level.acl)) {
-            Say("Wallet: " + Shown(path) + " was not read, as another account may have written it: " + *refusal);
+        if (state.refusal) {
+            Say("Wallet: " + Shown(path) + " was not read, as another account may have written it: " + *state.refusal);
             return;
         }
-        std::string text;
-        ReadAll(handle.get(), path, text);
+        const std::string& text = state.text;
 
         const std::optional<std::string> user_sid = StateFileValue(text, "user_sid");
         const std::optional<Sid> sid = user_sid ? winacl::ParseSidString(*user_sid) : std::nullopt;
@@ -1636,6 +1693,624 @@ bool ShowStatus(const ToolOptions& options)
     return matches;
 }
 
+// Moving a wallet in and out.
+
+//! How long enable waits for the service to run, and disable for it to stop.
+constexpr DWORD START_WAIT_SECONDS = 120;
+constexpr DWORD STOP_WAIT_SECONDS = 600;
+
+DWORD StartTypeOf(SC_HANDLE service)
+{
+    const std::vector<unsigned char> buffer = QueryConfig(service);
+    return reinterpret_cast<const QUERY_SERVICE_CONFIGW*>(buffer.data())->dwStartType;
+}
+
+//! Gives the service the start type \p start_type, and an automatic start the delayed start
+//! install configures.
+void SetStartType(SC_HANDLE service, const NetworkNames& names, DWORD start_type)
+{
+    if (!::ChangeServiceConfigW(service, SERVICE_NO_CHANGE, start_type, SERVICE_NO_CHANGE, nullptr, nullptr, nullptr,
+                                nullptr, nullptr, nullptr, nullptr)) {
+        ThrowLastError("ChangeServiceConfigW " + Shown(names.service));
+    }
+    if (start_type == SERVICE_AUTO_START) {
+        SERVICE_DELAYED_AUTO_START_INFO delayed{TRUE};
+        if (!::ChangeServiceConfig2W(service, SERVICE_CONFIG_DELAYED_AUTO_START_INFO, &delayed)) {
+            ThrowLastError("ChangeServiceConfig2W delayed automatic start " + Shown(names.service));
+        }
+    }
+}
+
+//! The service's status once it has left the pending state \p pending, or after \p seconds,
+//! looked at once a second.
+SERVICE_STATUS_PROCESS WaitWhilePending(SC_HANDLE service, DWORD pending, DWORD seconds)
+{
+    SERVICE_STATUS_PROCESS status = QueryStatus(service);
+    for (DWORD waited = 0; status.dwCurrentState == pending && waited < seconds; ++waited) {
+        ::Sleep(1000);
+        status = QueryStatus(service);
+    }
+    return status;
+}
+
+//! Starts the service and waits for it to run. Throws, saying how it ended, when it does not run
+//! within START_WAIT_SECONDS.
+DWORD StartAndWait(SC_HANDLE service, const NetworkNames& names)
+{
+    if (!::StartServiceW(service, 0, nullptr) && ::GetLastError() != ERROR_SERVICE_ALREADY_RUNNING) {
+        ThrowLastError("StartServiceW " + Shown(names.service));
+    }
+    const SERVICE_STATUS_PROCESS status = WaitWhilePending(service, SERVICE_START_PENDING, START_WAIT_SECONDS);
+    if (status.dwCurrentState != SERVICE_RUNNING) {
+        throw std::runtime_error(strprintf("the service %s did not reach running within %u s: it is %s (exit %u/%u)",
+                                           Shown(names.service), static_cast<unsigned>(START_WAIT_SECONDS),
+                                           StateName(status.dwCurrentState),
+                                           static_cast<unsigned>(status.dwWin32ExitCode),
+                                           static_cast<unsigned>(status.dwServiceSpecificExitCode)));
+    }
+    return status.dwProcessId;
+}
+
+//! Marks what \p handle, opened with DELETE, refers to for removal when the handle closes.
+bool MarkForRemoval(HANDLE handle)
+{
+    FILE_DISPOSITION_INFO disposition{TRUE};
+    return ::SetFileInformationByHandle(handle, FileDispositionInfo, &disposition, sizeof(disposition)) != FALSE;
+}
+
+//! The lock file \p lock of a data directory, opened as itself with backup semantics and locked
+//! over its whole range, as a core locks it (fsbridge::FileLock), until the handle closes: no
+//! core starts on the directory meanwhile. Made when it is not there, which \p created says.
+//! Refused when a core holds it.
+UniqueHandle HoldDataDirectoryLock(const fs::path& lock, bool& created)
+{
+    const std::string busy = strprintf("a Gridcoin core is using %s: it holds %s. Stop that core, then run this again.",
+                                       Shown(lock.parent_path()), Shown(lock));
+    const HANDLE raw = ::CreateFileW(lock.wstring().c_str(), GENERIC_READ | DELETE,
+                                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_ALWAYS,
+                                     FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+                                     nullptr);
+    const DWORD error = ::GetLastError();
+    UniqueHandle handle(raw);
+    if (!handle) {
+        if (error == ERROR_SHARING_VIOLATION || error == ERROR_LOCK_VIOLATION) throw Refusal(busy);
+        ThrowWin32(error, "open " + Shown(lock));
+    }
+    created = error != ERROR_ALREADY_EXISTS;
+
+    const Level level = LevelOf(handle.get(), lock);
+    if (level.reparse || level.directory) {
+        throw Refusal(strprintf("%s is not a plain file, so it cannot be held as the core's lock. Check what it is and "
+                                "move it away, then run this again.",
+                                Shown(lock)));
+    }
+    OVERLAPPED overlapped{};
+    if (!::LockFileEx(handle.get(), LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, MAXDWORD, MAXDWORD,
+                      &overlapped)) {
+        const DWORD code = ::GetLastError();
+        if (created) MarkForRemoval(handle.get());
+        if (code == ERROR_LOCK_VIOLATION) throw Refusal(busy);
+        ThrowWin32(code, "lock " + Shown(lock));
+    }
+    return handle;
+}
+
+//! \p text, a directory given as \p option, as a path a wallet tree is moved at. Refused unless it
+//! is an absolute path on a local drive (LocalTreePathProblem).
+fs::path TreePathOption(const std::string& option, const std::string& text)
+{
+    std::wstring wide;
+    try {
+        wide = Utf8ToWide(text);
+    } catch (const std::range_error&) {
+        throw Refusal(option + " is not valid UTF-8");
+    }
+    std::replace(wide.begin(), wide.end(), L'/', L'\\');
+    if (const std::optional<std::string> problem = LocalTreePathProblem(wide)) {
+        throw Refusal(strprintf("%s %s cannot be used: %s.", option, text, *problem));
+    }
+    return fs::path(wide);
+}
+
+//! The names of \p entries, at most five of them, for a message.
+std::string FirstNames(const std::vector<LevelEntryFacts>& entries)
+{
+    std::vector<std::string> names;
+    for (size_t i = 0; i < entries.size() && i < 5; ++i) names.push_back(Shown(entries[i].path.filename()));
+    std::string text = Join(names, ", ");
+    if (entries.size() > names.size()) text += strprintf(" and %u more", static_cast<unsigned>(entries.size() - names.size()));
+    return text;
+}
+
+//! Refused unless the service's data directory \p datadir is there as install made it and the
+//! network data directory holds nothing: a wallet is moved only into an empty one, so nothing of
+//! another wallet or chain is mixed with it. True when the network data directory is an empty
+//! directory below the data directory (the test network's, which a run of the service made), which
+//! the caller removes, as the transfer creates it.
+bool RequireEmptyNetDataDir(const LayoutEntry& datadir, Network net, const fs::path& programdata)
+{
+    const std::string net_flag = net == Network::Test ? " --network=test" : "";
+    const fs::path net_dir = NetDataDir(programdata, net);
+    std::vector<LevelEntryFacts> entries;
+    {
+        const auto [handle, level] = HoldLevel(datadir.path, /*to_change=*/false);
+        if (!level.exists) {
+            throw Refusal(strprintf("%s is not there. Run gridcoin-service.exe install%s first.", Shown(datadir.path),
+                                    net_flag));
+        }
+        if (std::optional<std::string> refusal = LevelRefusal(datadir, level)) throw Refusal(*refusal);
+        if (std::optional<std::string> differs = winacl::CheckMatchesSpec(level.acl, datadir.acl)) {
+            throw Refusal(strprintf("%s does not have the layout's owner and access list (%s), which the moved wallet "
+                                    "takes. Run gridcoin-service.exe install --reconfigure%s, then enable again.",
+                                    Shown(datadir.path), *differs, net_flag));
+        }
+        if (net == Network::Main) entries = ReadLevelEntries(handle.get(), datadir.path);
+    }
+    bool empty_below = false;
+    if (net == Network::Test) {
+        const auto [handle, level] = HoldLevel(net_dir, /*to_change=*/false);
+        if (level.exists) {
+            if (level.reparse || !level.directory) {
+                throw Refusal(strprintf("%s is not a plain directory. Check what it is and move it away, then run "
+                                        "enable again.",
+                                        Shown(net_dir)));
+            }
+            entries = ReadLevelEntries(handle.get(), net_dir);
+            empty_below = entries.empty();
+        }
+    }
+    if (!entries.empty()) {
+        throw Refusal(strprintf("%s is not empty: it holds %s. A wallet is moved only into an empty data directory, so "
+                                "that nothing of another wallet or chain is mixed with it. Check what is there (it may "
+                                "hold a wallet), move it out, then run enable again.",
+                                Shown(net_dir), FirstNames(entries)));
+    }
+    return empty_below;
+}
+
+//! What removing a moved copy again came to, for a message: empty when all of it went.
+std::string RemoveCopy(const fs::path& root, const std::vector<fs::path>& top)
+{
+    std::string error;
+    if (top.empty() || RemoveTreeNoFollow(root, top, error)) return {};
+    return error;
+}
+
+void EnableService(const ToolOptions& options)
+{
+    const NetworkNames names = NamesFor(options.net);
+    const Network net = options.net;
+    const std::string net_flag = net == Network::Test ? " --network=test" : "";
+    const std::string user_arg = options.user.value_or("");
+    Say(strprintf("Enabling the %s service %s with the wallet of %s.", Shown(names.datadir_leaf), Shown(names.service),
+                  user_arg));
+
+    RequireElevated("enable");
+    // SeBackupPrivilege reads the account's owner-only data directory, and SeRestorePrivilege
+    // removes entries there and gives the moved tree the service's owner.
+    EnablePrivilege(SE_BACKUP_NAME);
+    EnablePrivilege(SE_RESTORE_NAME);
+    const fs::path programdata = ProgramDataPath();
+
+    // The service must be installed, disabled and stopped.
+    const UniqueServiceHandle scm = OpenScm(SC_MANAGER_CONNECT);
+    const UniqueServiceHandle service =
+        OpenServiceIfInstalled(scm.get(), names.service,
+                               SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS | SERVICE_CHANGE_CONFIG | SERVICE_START);
+    if (!service) {
+        throw Refusal(strprintf("the service %s is not installed. Run gridcoin-service.exe install%s first.",
+                                Shown(names.service), net_flag));
+    }
+    const DWORD start_type = StartTypeOf(service.get());
+    if (start_type != SERVICE_DISABLED) {
+        throw Refusal(strprintf("the service %s is not disabled (start type %s), so a wallet may be moved in already. "
+                                "Run gridcoin-service.exe status%s to see whose.",
+                                Shown(names.service), StartTypeName(start_type, false), net_flag));
+    }
+    const DWORD state = QueryStatus(service.get()).dwCurrentState;
+    if (state != SERVICE_STOPPED) {
+        throw Refusal(strprintf("the service %s is %s. Stop it first (Stop-Service %s), then run enable again.",
+                                Shown(names.service), StateName(state), Shown(names.service)));
+    }
+
+    // No wallet moved in already, and the network data directory empty.
+    const fs::path state_path = StatePath(programdata, net);
+    if (Exists(state_path)) {
+        throw Refusal(strprintf("%s is there, so a wallet was moved in already. Run gridcoin-service.exe status%s to "
+                                "see whose, and disable%s to move it back.",
+                                Shown(state_path), net_flag, net_flag));
+    }
+    LayoutSids sids = ServiceSids();
+    sids.grp_main = LocalGroupSid(NamesFor(Network::Main).group).value_or(Sid{});
+    sids.grp_test = LocalGroupSid(NamesFor(Network::Test).group).value_or(Sid{});
+    if ((net == Network::Main ? sids.grp_main : sids.grp_test).empty()) {
+        throw Refusal(strprintf("the group \"%s\" is not there. Run gridcoin-service.exe install --reconfigure%s first.",
+                                Shown(names.group), net_flag));
+    }
+    const fs::path datadir = DataDir(programdata, net);
+    const fs::path net_dir = NetDataDir(programdata, net);
+    std::optional<LayoutEntry> datadir_entry;
+    for (const LayoutEntry& entry : ServiceLayout(programdata, sids)) {
+        if (entry.path == datadir) datadir_entry = entry;
+    }
+    if (!datadir_entry) throw std::logic_error("the layout has no data directory");
+    const bool remove_empty_net_dir = RequireEmptyNetDataDir(*datadir_entry, net, programdata);
+
+    // The account, and where its wallet is.
+    std::string why;
+    const std::optional<UserAccount> user = FindUserAccount(user_arg, why);
+    if (!user) throw Refusal(strprintf("--user=%s cannot be used: %s.", user_arg, why));
+    Say(strprintf("Account: %s, %s", user->name, winacl::FormatSid(user->sid)));
+
+    fs::path root;
+    if (options.from) {
+        root = TreePathOption("--from", *options.from);
+    } else {
+        const std::optional<fs::path> profile = ProfileDirectory(user->sid);
+        if (!profile) {
+            throw Refusal(strprintf("%s has no profile on this computer, as an account that never signed in here has "
+                                    "none. Give its data directory with --from=<directory>.",
+                                    user->name));
+        }
+        root = *profile / L"AppData" / L"Roaming" / L"GridcoinResearch";
+        if (const std::optional<std::string> problem = LocalTreePathProblem(root.wstring())) {
+            throw Refusal(strprintf("its data directory %s cannot be used: %s. Give it with --from=<directory>.",
+                                    Shown(root), *problem));
+        }
+    }
+    const fs::path net_root = net == Network::Test ? root / L"testnet" : root;
+    Say("From: " + Shown(net_root));
+    const Level wallet = ReadLevel(net_root / L"wallet.dat");
+    if (!wallet.exists) {
+        throw Refusal(strprintf("%s holds no wallet.dat, so there is no wallet to move. Give the data directory with "
+                                "--from=<directory>.",
+                                Shown(net_root)));
+    }
+    if (wallet.reparse || wallet.directory) {
+        throw Refusal(strprintf("%s is not a plain file, so it is not moved.", Shown(net_root / L"wallet.dat")));
+    }
+
+    // No core of the account's running, in any session: a GUI, a daemon, or the two processes of
+    // one started elevated.
+    const std::vector<CoreProcess> cores = CoresRunningAs(user->sid);
+    if (!cores.empty()) {
+        std::vector<std::string> running;
+        for (const CoreProcess& core : cores) {
+            running.push_back(strprintf("%s (process %u, session %u%s)", core.image, core.pid, core.session,
+                                        core.account_unknown ? ", whose account cannot be read" : ""));
+        }
+        throw Refusal(strprintf("a Gridcoin core of %s is running: %s. Close every Gridcoin GUI and core of %s, then "
+                                "run enable again.",
+                                user->name, Join(running, ", "), user->name));
+    }
+
+    // No core starts on the data directory while it is copied.
+    bool lock_created = false;
+    UniqueHandle lock = HoldDataDirectoryLock(net_root / L".lock", lock_created);
+    Say("Holding " + Shown(net_root / L".lock"));
+
+    // Everything from here up to the removal of the account's wallet.dat is undone on a failure.
+    bool task_disabled = false;
+    bool copied = false;
+    bool state_written = false;
+    TransferResult result;
+    const fs::path quarantine =
+        QuarantineDir(programdata) /
+        Utf8ToWide(strprintf("%s-%s", Shown(names.datadir_leaf), FormatISO8601DateTimeDashSep(GetTime())));
+    try {
+        const CoreStartTask task = ReadCoreStartTask();
+        if (!task.exists) {
+            Say("Core-Start: there is no \\Gridcoin\\Core-Start task");
+        } else if (!task.principal_sid || *task.principal_sid != user->sid) {
+            Say(strprintf("Core-Start: left as it is; it runs as %s, not %s",
+                          task.principal.empty() ? std::string("nobody named") : task.principal, user->name));
+        } else if (!task.enabled) {
+            Say("Core-Start: disabled already, and left so");
+        } else {
+            SetCoreStartTaskEnabled(false);
+            task_disabled = true;
+            Say(strprintf("Core-Start: disabled, so that it does not start a core of %s without its wallet",
+                          user->name));
+        }
+
+        if (remove_empty_net_dir && !::RemoveDirectoryW(net_dir.wstring().c_str())) {
+            ThrowLastError("remove the empty " + Shown(net_dir));
+        }
+
+        result = TransferTree(root, datadir, RulesForEnable(net), quarantine);
+        if (!result.ok) throw std::runtime_error("the copy failed: " + result.error);
+        copied = true;
+        Say(strprintf("Copied %u files (%u bytes) from %s to %s; each was read back and matched", result.files,
+                      result.bytes, Shown(net_root), Shown(net_dir)));
+        for (const fs::path& path : result.quarantined) {
+            Say("Quarantined, as the service does not read it: " + Shown(path));
+        }
+        if (!result.dropped_settings.empty()) {
+            Say(strprintf("Dropped from gridcoinsettings.json, as the core takes them only from its configuration file: "
+                          "%s",
+                          Join(result.dropped_settings, ", ")));
+        }
+
+        const MovedTreeSecurity security = EnableSecurity(programdata, net, sids);
+        ResetTreeSecurity(net_dir, security.owner, security.root_spec);
+        Say(strprintf("Gave %s the service's access list; %s owns everything in it", Shown(net_dir),
+                      Shown(names.account)));
+
+        CreateConf(LayoutEntry{state_path, false, StateFileSpec(sids)},
+                   StateFileText(winacl::FormatSid(user->sid), Shown(root), FormatISO8601DateTime(GetTime()),
+                                 task_disabled));
+        state_written = true;
+        Say("Wrote " + Shown(state_path));
+
+        // The account's copy of the wallet goes first. Once it has, the service holds the only one.
+        const fs::path wallet_relative =
+            net == Network::Test ? fs::path(L"testnet") / L"wallet.dat" : fs::path(L"wallet.dat");
+        std::string error;
+        if (!RemoveTreeNoFollow(root, {wallet_relative}, error)) {
+            throw std::runtime_error("the wallet could not be removed from where it came from: " + error);
+        }
+    } catch (const std::exception& e) {
+        std::vector<std::string> left;
+        if (state_written && !::DeleteFileW(state_path.wstring().c_str())) {
+            left.push_back("delete " + Shown(state_path) + ": " + Win32Text(::GetLastError()));
+        }
+        if (copied) {
+            if (std::string error = RemoveCopy(datadir, result.created_top); !error.empty()) left.push_back(error);
+            if (!result.quarantined.empty()) {
+                if (std::string error = RemoveCopy(QuarantineDir(programdata), {quarantine.filename()});
+                    !error.empty()) {
+                    left.push_back(error);
+                }
+            }
+        }
+        if (task_disabled) {
+            try {
+                SetCoreStartTaskEnabled(true);
+            } catch (const std::exception& task_error) {
+                left.push_back(std::string("turn Core-Start back on: ") + task_error.what());
+            }
+        }
+        if (lock_created) MarkForRemoval(lock.get());
+
+        const std::string undo =
+            left.empty() ? std::string("Nothing was changed: what was copied was removed again, and the data "
+                                       "directory the wallet came from is as it was.")
+                         : "Undoing it was not complete, so finish it by hand: " + Join(left, "; ") + ".";
+        if (dynamic_cast<const Refusal*>(&e) != nullptr) throw Refusal(std::string(e.what()) + " " + undo);
+        throw std::runtime_error(std::string(e.what()) + ". " + undo);
+    }
+
+    // The rest of the account's copy, the lock file with it once it is let go.
+    lock.reset();
+    std::string error;
+    std::string left_behind;
+    if (RemoveTreeNoFollow(root, result.source_top, error)) {
+        Say(strprintf("Removed the wallet's tree from %s", Shown(net_root)));
+    } else {
+        left_behind = error;
+    }
+
+    const bool added = AddGroupMember(names.group, user->sid);
+    Say(strprintf("Group \"%s\": %s %s", Shown(names.group), user->name, added ? "added" : "is a member already"));
+
+    SetStartType(service.get(), names, SERVICE_AUTO_START);
+    Say(strprintf("Service %s: set to start automatically (delayed start)", Shown(names.service)));
+    const DWORD pid = StartAndWait(service.get(), names);
+    Say(strprintf("Service %s: running, process %u", Shown(names.service), static_cast<unsigned>(pid)));
+
+    if (!left_behind.empty()) {
+        SayError(strprintf("Warning: the wallet is in the service, but part of its old tree was not removed: %s. "
+                           "Remove what is left of %s by hand; its wallet.dat is gone already.",
+                           left_behind, Shown(net_root)));
+    }
+    Say(strprintf("Enabled. %s must sign out and sign in again before a GUI can attach (group membership is read at "
+                  "sign-in).",
+                  user->name));
+    Say(std::string("GUI: Start-GridcoinGui.ps1 -Service") + (net == Network::Test ? " -Network test" : ""));
+    Say("Autounlock: set it up again in the GUI or with setautounlock from an administrator console.");
+}
+
+void DisableService(const ToolOptions& options)
+{
+    const NetworkNames names = NamesFor(options.net);
+    const Network net = options.net;
+    const std::string net_flag = net == Network::Test ? " --network=test" : "";
+    Say(strprintf("Disabling the %s service %s and moving its wallet back.", Shown(names.datadir_leaf),
+                  Shown(names.service)));
+
+    RequireElevated("disable");
+    // SeBackupPrivilege reads the service's data directory, and SeRestorePrivilege gives the
+    // moved tree the account's owner.
+    EnablePrivilege(SE_BACKUP_NAME);
+    EnablePrivilege(SE_RESTORE_NAME);
+    const fs::path programdata = ProgramDataPath();
+
+    const UniqueServiceHandle scm = OpenScm(SC_MANAGER_CONNECT);
+    const UniqueServiceHandle service =
+        OpenServiceIfInstalled(scm.get(), names.service,
+                               SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS | SERVICE_CHANGE_CONFIG | SERVICE_START |
+                                   SERVICE_STOP);
+    if (!service) {
+        throw Refusal(strprintf("the service %s is not installed, so there is no wallet in it to move back.",
+                                Shown(names.service)));
+    }
+
+    // Whose wallet it is, from the state file, read only when it is the administrators' alone.
+    const fs::path state_path = StatePath(programdata, net);
+    const StateFile state = ReadStateFile(state_path);
+    if (!state.exists) {
+        throw Refusal(strprintf("no wallet was moved into the service %s: %s is not there.", Shown(names.service),
+                                Shown(state_path)));
+    }
+    if (!state.plain) {
+        throw Refusal(strprintf("%s is not a plain file, so it is not read. Check what it is.", Shown(state_path)));
+    }
+    if (state.refusal) {
+        throw Refusal(strprintf("%s was not read, as another account may have written it: %s. Check it; the file "
+                                "enable writes is the administrators' alone.",
+                                Shown(state_path), *state.refusal));
+    }
+    const std::optional<std::string> user_text = StateFileValue(state.text, "user_sid");
+    const std::optional<Sid> user = user_text ? winacl::ParseSidString(*user_text) : std::nullopt;
+    if (!user) throw Refusal(strprintf("%s names no account (user_sid).", Shown(state_path)));
+    const std::string user_name = Describe(*user);
+    const bool task_disabled = StateFileValue(state.text, "task_disabled") == std::optional<std::string>("1");
+    const std::optional<std::string> from = StateFileValue(state.text, "from");
+    if (!options.to && !from) {
+        throw Refusal(strprintf("%s does not say where the wallet came from (from). Give it with --to=<directory>.",
+                                Shown(state_path)));
+    }
+    const fs::path target = options.to ? TreePathOption("--to", *options.to)
+                                       : TreePathOption("from in " + Shown(state_path), *from);
+    const fs::path net_target = net == Network::Test ? target / L"testnet" : target;
+    Say("Account: " + user_name);
+    Say("To: " + Shown(net_target));
+
+    // The target is the account's own directory, or one to be made.
+    const Level target_level = ReadLevel(target);
+    if (target_level.exists) {
+        if (target_level.reparse || !target_level.directory) {
+            throw Refusal(strprintf("%s is not a plain directory. Give the account's data directory with "
+                                    "--to=<directory>.",
+                                    Shown(target)));
+        }
+        if (!target_level.acl.owner || *target_level.acl.owner != *user) {
+            throw Refusal(strprintf("%s is owned by %s, not %s, so the wallet is not moved into it. Give a directory "
+                                    "of the account's own with --to=<directory>.",
+                                    Shown(target),
+                                    target_level.acl.owner ? Describe(*target_level.acl.owner)
+                                                           : std::string("an owner that cannot be read"),
+                                    user_name));
+        }
+    } else {
+        const Level parent = ReadLevel(target.parent_path());
+        if (!parent.exists || parent.reparse || !parent.directory) {
+            throw Refusal(strprintf("%s is not there, and neither is the directory it would be made in, %s.",
+                                    Shown(target), Shown(target.parent_path())));
+        }
+    }
+    const fs::path datadir = DataDir(programdata, net);
+    const TransferRules rules = RulesForDisable(net);
+    if (const std::optional<std::string> refusal = DestinationRefusal(datadir, target, rules)) throw Refusal(*refusal);
+
+    // Disabled first, so that no failure action or automatic start brings the service back while
+    // its wallet moves; then stopped.
+    const DWORD previous_start = StartTypeOf(service.get());
+    const bool was_running = QueryStatus(service.get()).dwCurrentState != SERVICE_STOPPED;
+    SetStartType(service.get(), names, SERVICE_DISABLED);
+    Say(strprintf("Service %s: set to disabled", Shown(names.service)));
+
+    bool copied = false;
+    TransferResult result;
+    try {
+        if (was_running) {
+            SERVICE_STATUS control{};
+            if (!::ControlService(service.get(), SERVICE_CONTROL_STOP, &control) &&
+                ::GetLastError() != ERROR_SERVICE_NOT_ACTIVE) {
+                ThrowLastError("ControlService stop " + Shown(names.service));
+            }
+            Say(strprintf("Service %s: stopping (the core flushes its wallet and chain first; up to %u s)",
+                          Shown(names.service), static_cast<unsigned>(STOP_WAIT_SECONDS)));
+        }
+        const SERVICE_STATUS_PROCESS stopped = WaitWhilePending(service.get(), SERVICE_STOP_PENDING, STOP_WAIT_SECONDS);
+        if (stopped.dwCurrentState != SERVICE_STOPPED) {
+            throw std::runtime_error(strprintf("the service %s did not stop within %u s: it is %s",
+                                               Shown(names.service), static_cast<unsigned>(STOP_WAIT_SECONDS),
+                                               StateName(stopped.dwCurrentState)));
+        }
+        Say(strprintf("Service %s: stopped", Shown(names.service)));
+
+        bool lock_created = false;
+        UniqueHandle lock = HoldDataDirectoryLock(NetDataDir(programdata, net) / L".lock", lock_created);
+
+        result = TransferTree(datadir, target, rules, fs::path());
+        if (!result.ok) throw std::runtime_error("the copy failed: " + result.error);
+        copied = true;
+        Say(strprintf("Copied %u files (%u bytes) from %s to %s; each was read back and matched", result.files,
+                      result.bytes, Shown(NetDataDir(programdata, net)), Shown(net_target)));
+
+        // Owner-only for the account: the target when this made it, and otherwise each entry made.
+        const winacl::AclSpec owner_only = OwnerOnlySpec(*user);
+        if (result.created_dst) {
+            ResetTreeSecurity(target, *user, owner_only);
+        } else {
+            for (const fs::path& top : result.created_top) ResetTreeSecurity(target / top, *user, owner_only);
+        }
+        Say(strprintf("Gave what was copied the owner-only access list of %s", user_name));
+
+        // The service's copy of the wallet goes first.
+        lock.reset();
+        const fs::path wallet_relative =
+            net == Network::Test ? fs::path(L"testnet") / L"wallet.dat" : fs::path(L"wallet.dat");
+        std::string error;
+        if (!RemoveTreeNoFollow(datadir, {wallet_relative}, error)) {
+            throw std::runtime_error("the wallet could not be removed from the service: " + error);
+        }
+    } catch (const std::exception& e) {
+        std::vector<std::string> left;
+        if (copied) {
+            std::vector<fs::path> made = result.created_top;
+            fs::path root = target;
+            if (result.created_dst) {
+                made = {target.filename()};
+                root = target.parent_path();
+            }
+            if (std::string error = RemoveCopy(root, made); !error.empty()) left.push_back(error);
+        }
+        // As it was before.
+        try {
+            SetStartType(service.get(), names, previous_start);
+            if (was_running) StartAndWait(service.get(), names);
+        } catch (const std::exception& service_error) {
+            left.push_back(std::string("restore the service: ") + service_error.what());
+        }
+
+        const std::string undo =
+            left.empty() ? strprintf("Nothing was changed: what was copied was removed again, and the service has its "
+                                     "wallet and its start type back%s.",
+                                     was_running ? " and runs again" : "")
+                         : "Undoing it was not complete, so finish it by hand: " + Join(left, "; ") + ".";
+        if (dynamic_cast<const Refusal*>(&e) != nullptr) throw Refusal(std::string(e.what()) + " " + undo);
+        throw std::runtime_error(std::string(e.what()) + ". " + undo);
+    }
+
+    // The rest of the service's copy, its autounlock file with it.
+    std::string error;
+    std::string left_behind;
+    if (RemoveTreeNoFollow(datadir, result.source_top, error)) {
+        Say(strprintf("Removed the wallet's tree from %s", Shown(NetDataDir(programdata, net))));
+    } else {
+        left_behind = error;
+    }
+
+    const bool removed = RemoveGroupMember(names.group, *user);
+    Say(strprintf("Group \"%s\": %s %s", Shown(names.group), user_name, removed ? "removed" : "was not a member"));
+
+    if (task_disabled) {
+        const CoreStartTask task = ReadCoreStartTask();
+        if (!task.exists) {
+            Say("Core-Start: not there any more, so not turned back on");
+        } else if (!task.principal_sid || *task.principal_sid != *user) {
+            Say(strprintf("Core-Start: left as it is; it runs as %s now, not %s",
+                          task.principal.empty() ? std::string("nobody named") : task.principal, user_name));
+        } else {
+            SetCoreStartTaskEnabled(true);
+            Say("Core-Start: turned back on, as enable had turned it off");
+        }
+    }
+
+    if (!::DeleteFileW(state_path.wstring().c_str())) ThrowLastError("delete " + Shown(state_path));
+    Say("Deleted " + Shown(state_path));
+
+    if (!left_behind.empty()) {
+        SayError(strprintf("Warning: the wallet is back, but part of the service's copy was not removed: %s. Remove "
+                           "what is left of %s by hand; its wallet.dat is gone already.",
+                           left_behind, Shown(NetDataDir(programdata, net))));
+    }
+    Say(strprintf("Disabled. The wallet is back in %s; run Install-GridcoinCoreTask.ps1 as %s or start the plain GUI.",
+                  Shown(net_target), user_name));
+}
+
 } // namespace
 
 int Install(const ToolOptions& options)
@@ -1646,6 +2321,16 @@ int Install(const ToolOptions& options)
 int Uninstall(const ToolOptions& options)
 {
     return RunVerb([&options] { UninstallService(options); });
+}
+
+int Enable(const ToolOptions& options)
+{
+    return RunVerb([&options] { EnableService(options); });
+}
+
+int Disable(const ToolOptions& options)
+{
+    return RunVerb([&options] { DisableService(options); });
 }
 
 int Status(const ToolOptions& options)

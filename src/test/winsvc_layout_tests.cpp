@@ -1090,4 +1090,64 @@ BOOST_AUTO_TEST_CASE(tool_args_parse)
     BOOST_CHECK(Contains(ToolUsage(), "--network=main|test"));
 }
 
+BOOST_AUTO_TEST_CASE(tool_args_parse_enable_and_disable)
+{
+    std::string error;
+
+    std::optional<ToolOptions> options = ParseToolArgs({"enable", "--user=svcsec-b"}, error);
+    BOOST_REQUIRE(options.has_value());
+    BOOST_CHECK(options->verb == Verb::Enable);
+    BOOST_CHECK(options->net == Network::Main);
+    BOOST_CHECK(options->user == std::optional<std::string>("svcsec-b"));
+    BOOST_CHECK(!options->from.has_value());
+    BOOST_CHECK(!options->to.has_value());
+
+    options = ParseToolArgs({"enable", "--network=test", "--user=DOMAIN\\Jos\xc3\xa9 Garc\xc3\xad"
+                                                         "a",
+                             "--from=D:\\Grid coin\\data"},
+                            error);
+    BOOST_REQUIRE(options.has_value());
+    BOOST_CHECK(options->net == Network::Test);
+    BOOST_CHECK(options->user == std::optional<std::string>("DOMAIN\\Jos\xc3\xa9 Garc\xc3\xad"
+                                                            "a"));
+    BOOST_CHECK(options->from == std::optional<std::string>("D:\\Grid coin\\data"));
+
+    options = ParseToolArgs({"disable"}, error);
+    BOOST_REQUIRE(options.has_value());
+    BOOST_CHECK(options->verb == Verb::Disable);
+    BOOST_CHECK(!options->to.has_value());
+
+    options = ParseToolArgs({"disable", "--to=C:\\Users\\svcsec-b\\AppData\\Roaming\\GridcoinResearch",
+                             "--network=test"},
+                            error);
+    BOOST_REQUIRE(options.has_value());
+    BOOST_CHECK(options->net == Network::Test);
+    BOOST_CHECK(options->to == std::optional<std::string>("C:\\Users\\svcsec-b\\AppData\\Roaming\\GridcoinResearch"));
+
+    const std::vector<std::vector<std::string>> refused{
+        {"enable"},
+        {"enable", "--user="},
+        {"enable", "--user"},
+        {"enable", "--user=a", "--from="},
+        {"enable", "--user=a", "--to=C:\\x"},
+        {"enable", "--user=a", "--reconfigure"},
+        {"disable", "--user=a"},
+        {"disable", "--from=C:\\x"},
+        {"disable", "--to="},
+        {"install", "--user=a"},
+        {"status", "--from=C:\\x"},
+        {"enable", "disable", "--user=a"},
+    };
+    for (const std::vector<std::string>& args : refused) {
+        error.clear();
+        BOOST_CHECK(!ParseToolArgs(args, error).has_value());
+        BOOST_CHECK(!error.empty());
+    }
+
+    BOOST_CHECK(Contains(ToolUsage(), "enable"));
+    BOOST_CHECK(Contains(ToolUsage(), "--user=<account>"));
+    BOOST_CHECK(Contains(ToolUsage(), "disable"));
+    BOOST_CHECK(Contains(ToolUsage(), "--to=<directory>"));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

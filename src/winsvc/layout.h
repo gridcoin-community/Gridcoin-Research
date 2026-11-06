@@ -176,6 +176,21 @@ std::string MissingServiceConfLines(Network net, const std::string& conf_text, c
 //! sets \p key. A line may end in CRLF.
 std::optional<std::string> StateFileValue(const std::string& text, const std::string& key);
 
+//! What enable writes to the state file: user_sid=\p user_sid, from=\p from (the root the wallet
+//! came from, in UTF-8), enabled_at=\p enabled_at and task_disabled=0 or 1, one line each, ending
+//! in LF.
+std::string StateFileText(const std::string& user_sid, const std::string& from, const std::string& enabled_at,
+                          bool task_disabled);
+
+//! The owner and access list enable gives the state file from its creation: owned by
+//! \p sids' Administrators, with Administrators and SYSTEM given full access and nothing passed
+//! down. StateFileRefusal accepts it.
+util::winacl::AclSpec StateFileSpec(const LayoutSids& sids);
+
+//! Whether \p image, a process's image name, is the core's: gridcoinresearch.exe (the GUI, which
+//! hosts a core) or gridcoinresearchd.exe, in any case.
+bool IsCoreImageName(const std::wstring& image);
+
 //! Why status does not show the state file whose owner and access list are \p acl, or nullopt. It
 //! must have a DACL and be owned by Administrators or SYSTEM, and its list may name only those two,
 //! which is what conf\ passes down to a file created there (util::winacl::FindForeignTrustee). A

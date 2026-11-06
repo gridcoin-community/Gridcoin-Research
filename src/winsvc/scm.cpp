@@ -74,6 +74,8 @@ std::optional<Verb> ParseVerb(const std::string& value)
     if (value == "install") return Verb::Install;
     if (value == "uninstall") return Verb::Uninstall;
     if (value == "status") return Verb::Status;
+    if (value == "enable") return Verb::Enable;
+    if (value == "disable") return Verb::Disable;
     if (value == "help") return Verb::Help;
     return std::nullopt;
 }
@@ -209,6 +211,15 @@ std::optional<ToolOptions> ParseToolArgs(const std::vector<std::string>& args, s
     ToolOptions options;
     std::optional<Verb> verb;
     bool install_only = false;
+    // A value an option needs, which may not be empty.
+    const auto take = [&error](const std::string& name, const std::string& value, std::optional<std::string>& to) {
+        if (value.empty()) {
+            error = name + " needs a value";
+            return false;
+        }
+        to = value;
+        return true;
+    };
 
     for (const std::string& arg : args) {
         if (arg == "--help" || arg == "-h" || arg == "/?") {
@@ -234,6 +245,12 @@ std::optional<ToolOptions> ParseToolArgs(const std::vector<std::string>& args, s
             } else if (arg == "--reconfigure") {
                 options.reconfigure = true;
                 install_only = true;
+            } else if (const std::optional<std::string> user = OptionValue(arg, "--user")) {
+                if (!take("--user", *user, options.user)) return std::nullopt;
+            } else if (const std::optional<std::string> from = OptionValue(arg, "--from")) {
+                if (!take("--from", *from, options.from)) return std::nullopt;
+            } else if (const std::optional<std::string> to = OptionValue(arg, "--to")) {
+                if (!take("--to", *to, options.to)) return std::nullopt;
             } else {
                 error = "unknown option '" + arg + "'";
                 return std::nullopt;
@@ -265,6 +282,18 @@ std::optional<ToolOptions> ParseToolArgs(const std::vector<std::string>& args, s
         error = "--sid-type and --reconfigure are options of install";
         return std::nullopt;
     }
+    if ((options.user || options.from) && *verb != Verb::Enable) {
+        error = "--user and --from are options of enable";
+        return std::nullopt;
+    }
+    if (options.to && *verb != Verb::Disable) {
+        error = "--to is an option of disable";
+        return std::nullopt;
+    }
+    if (*verb == Verb::Enable && !options.user) {
+        error = "enable needs --user=<account>, the account whose wallet is moved into the service";
+        return std::nullopt;
+    }
 
     options.verb = *verb;
     return options;
@@ -287,6 +316,11 @@ std::string ToolUsage()
            "             the service is enabled or its data directory holds a wallet.\n"
            "  status     Show the service's settings and check every directory and file of the\n"
            "             layout against its access list.\n"
+           "  enable     Move an account's wallet into the service and start it. The account's\n"
+           "             cores must be stopped. Its data directory is copied, every file checked,\n"
+           "             and then removed; the account joins the attach group.\n"
+           "  disable    Stop the service and move the wallet back to the account it came from,\n"
+           "             owner-only; the account leaves the attach group.\n"
            "  help       Show this text.\n"
            "\n"
            "Options:\n"
@@ -294,7 +328,13 @@ std::string ToolUsage()
            "  --sid-type=restricted|unrestricted  install: the service's SID type (default:\n"
            "                                      restricted).\n"
            "  --reconfigure                       install: apply these settings to a service that is\n"
-           "                                      already installed.\n";
+           "                                      already installed.\n"
+           "  --user=<account>                    enable: the account whose wallet is moved in, by name\n"
+           "                                      or SID (required).\n"
+           "  --from=<directory>                  enable: its data directory (default: its\n"
+           "                                      %APPDATA%\\GridcoinResearch).\n"
+           "  --to=<directory>                    disable: where the wallet goes (default: where it\n"
+           "                                      came from).\n";
 }
 
 #ifdef WIN32
