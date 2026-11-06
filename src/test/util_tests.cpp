@@ -23,6 +23,7 @@
 #include <util/settings.h>
 #include <util/strencodings.h>
 #include <util/refused_setting_keys.h>
+#include <test/data/refused-setting-keys.txt.h>
 #include <logging.h>
 #include <util/string.h>
 #include <util/syserror.h>
@@ -1899,15 +1900,20 @@ BOOST_AUTO_TEST_CASE(refused_setting_keys_ignore_a_section_prefix_but_not_no)
 }
 
 // The compiled list is exactly the data file's patterns, in order (drift guard for the generator).
+// The file is compiled into this binary (src/test/data/CMakeLists.txt), so the check does not
+// need the source tree where it runs.
 BOOST_AUTO_TEST_CASE(compiled_refused_patterns_follow_the_data_file)
 {
-    std::ifstream file(GRIDCOIN_REFUSED_SETTING_KEYS_FILE);
-    BOOST_REQUIRE(file.is_open());
+    std::istringstream file(std::string(reinterpret_cast<const char*>(refused_setting_keys_txt),
+                                        refused_setting_keys_txt_len));
 
     std::vector<std::string> from_file;
     std::string line;
 
     while (std::getline(file, line)) {
+        // The generator drops carriage returns, so a checkout with Windows line ends gives
+        // the same list.
+        if (!line.empty() && line.back() == '\r') line.pop_back();
         if (line.empty() || line[0] == '#') continue;
 
         from_file.push_back(line);
