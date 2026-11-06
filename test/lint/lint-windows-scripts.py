@@ -25,7 +25,8 @@ Rules
      the access lists of its program's directories through Users)
   9  the update script checks the Authenticode signature (Test-GridcoinReleaseSignature, which
      calls Get-AuthenticodeSignature) before it runs the installer, and the shipped
-     release-signer.txt pins nothing (no uncommented line) until the release signer is known
+     release-signer.txt has the right shape: every non-comment line is identity-eku=<dotted OID>
+     or subject-cn=<text>, each at most once, and nothing else (it ships with comments only)
 
 Usage
   lint-windows-scripts.py              check the tree
@@ -51,6 +52,7 @@ STEPS = "contrib/windows/Invoke-GridcoinInstallStep.ps1"
 UPDATE = "contrib/windows/Update-GridcoinCore.ps1"
 RELEASE_TEST = "contrib/windows/Test-GridcoinRelease.ps1"
 SIGNER = "contrib/windows/release-signer.txt"
+SIGNER_LINE_RE = re.compile(r"^(identity-eku=[0-9]+(?:\.[0-9]+)+|subject-cn=\S.*)$")
 
 HELPERS = ("Set-GridcoinAutounlock.ps1", "Invoke-GridcoinAutounlock.ps1")
 HELPER_NAME_ALLOWED_IN = (COMMON, STEPS)
@@ -320,9 +322,19 @@ def rule9(files):
     if signer is None:
         failures.append(f"rule 9: {SIGNER} does not exist")
     else:
+        seen = set()
         for number, line in enumerate(signer.splitlines(), 1):
-            if line.strip() and not line.lstrip().startswith("#"):
-                failures.append(f"rule 9: {SIGNER}:{number}: pins a value ({line.strip()}); it ships with comments only")
+            text = line.strip()
+            if not text or text.startswith("#"):
+                continue
+            match = SIGNER_LINE_RE.match(text)
+            if not match:
+                failures.append(f"rule 9: {SIGNER}:{number}: not identity-eku=<dotted OID> or subject-cn=<text>: {text}")
+            else:
+                key = match.group(1).split("=")[0]
+                if key in seen:
+                    failures.append(f"rule 9: {SIGNER}:{number}: {key} is set twice")
+                seen.add(key)
     return failures
 
 
@@ -366,7 +378,7 @@ GOOD_FILES = {
     CMAKE: "install(FILES Install-GridcoinCoreTask.ps1)\n",
     UPDATE: GOOD_PS1 + "# Start-Process in a comment\nTest-GridcoinReleaseSignature -Path $p -SignerFile $s\nStart-Process $p\n",
     RELEASE_TEST: GOOD_PS1 + "Get-AuthenticodeSignature -LiteralPath $Path\n",
-    SIGNER: "# comments only\n\n",
+    SIGNER: "# comments only\n\nidentity-eku=1.3.6.1.4.1.311.97.1.2\nsubject-cn=Some Name\n",
 }
 
 # (rule, a file that breaks it) pairs, applied to GOOD_FILES
@@ -427,7 +439,12 @@ BAD_SAMPLES = (
     (9, {UPDATE: GOOD_PS1 + "# Test-GridcoinReleaseSignature\nStart-Process $p\n"}),
     (9, {UPDATE: GOOD_PS1 + "Test-GridcoinReleaseSignature -Path $p -SignerFile $s\n"}),
     (9, {RELEASE_TEST: GOOD_PS1 + "Get-FileHash $Path\n"}),
-    (9, {SIGNER: "# comments\nidentity-eku=1.3.6.1.4.1.311.97.1\n"}),
+    # a stray key, a malformed OID, an empty name, a key twice, and a bare word
+    (9, {SIGNER: "# comments\nthumbprint=ab12\n"}),
+    (9, {SIGNER: "identity-eku=not-an-oid\n"}),
+    (9, {SIGNER: "subject-cn=\n"}),
+    (9, {SIGNER: "identity-eku=1.3.6.1.4.1.311.97.1\nidentity-eku=1.3.6.1.4.1.311.97.2\n"}),
+    (9, {SIGNER: "junk\n"}),
     (9, {SIGNER: None}),
 )
 

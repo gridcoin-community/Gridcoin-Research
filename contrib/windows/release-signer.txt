@@ -7,6 +7,8 @@
 #                        1.3.6.1.4.1.311.97.* taken from the account's validated identity
 #   subject-cn=<name>    the common name of the signer certificate's subject
 #
+# A line holds the key and its value only: a comment is a whole line starting with "#".
+#
 # Nothing is pinned yet. Until both lines are set, verification refuses with "no release
 # signer is pinned". Take the values from the signed release itself once the signing account
 # exists (doc/release-process.md).

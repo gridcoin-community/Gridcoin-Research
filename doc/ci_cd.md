@@ -115,10 +115,13 @@ Windows the installer itself carries the signature (next section).
 
 ### Windows release signing
 
-On release tags the Windows build in `depends-builds` runs under the GitHub environment
-`windows-release` (limit it to tags in the environment's deployment branch and tag rules). It signs
+On release tags the separate job `windows-sign` runs under the GitHub environment
+`windows-release` (limit it to tags in the environment's deployment branch and tag rules); only that job has
+`id-token: write`. The Windows build job strips the executables and uploads its install tree (`win-pack-tree`);
+`windows-sign` unpacks it, signs, packs with CPack again and uploads `gridcoin-windows-signed`, which the deploy
+job uses in place of the unsigned Windows files. Other runs are unchanged. It signs
 with Microsoft Artifact Signing: `azure/login` with a federated credential, an access token for
-`https://codesigning.azure.net`, then `jsign` (pinned version, SHA-256 checked) with the timestamp service
+`https://codesigning.azure.net`, then `jsign` (pinned version, SHA-256 checked, the token passed by file and deleted after each call) with the timestamp service
 `http://timestamp.acs.microsoft.com` (RFC 3161). The executables and the elevated scripts are signed before
 packing, the uninstaller through an NSIS `!uninstfinalize` hook (defined only when
 `GRIDCOIN_UNINSTALLER_SIGN_COMMAND` is set, so other builds are unchanged), and the installer last.
@@ -131,7 +134,7 @@ Environment variables (not secrets) of `windows-release`:
 | `ARTIFACT_SIGNING_REGION` | The region of the account; the endpoint is `<region>.codesigning.azure.net` |
 | `ARTIFACT_SIGNING_ACCOUNT`, `ARTIFACT_SIGNING_PROFILE` | The account and certificate profile; the jsign alias is `<account>/<profile>` |
 
-With any of them missing the signing steps print a warning and are skipped. See `doc/release-process.md`
+With any of them missing the signing steps print a warning and are skipped, and the release keeps the unsigned Windows files. See `doc/release-process.md`
 for the one-time setup and for pinning the signer.
 
 -----

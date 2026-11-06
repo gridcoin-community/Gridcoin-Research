@@ -81,17 +81,6 @@ jobs:
               -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/wine
               -DCMAKE_EXE_LINKER_FLAGS="-static"
             cpack_generator: NSIS64
-            # The Windows build is signed on release tags only, in the GitHub environment
-            # windows-release (doc/ci_cd.md, doc/release-process.md).
-            signing_environment: windows-release
-
-    # id-token: write lets the signing steps exchange the job's OIDC token for an Entra ID
-    # token (a federated credential scoped to the windows-release environment); no secret is
-    # stored. The environment is set for the Windows build on release tags only.
-    permissions:
-      contents: read
-      id-token: write
-    environment: ${{ (startsWith(github.ref, 'refs/tags/') && matrix.signing_environment) || '' }}
 
     steps:
       - uses: actions/checkout@v5
@@ -269,106 +258,30 @@ jobs:
           # Removed -j flag; CTest reads env var
           ctest --test-dir ${{ matrix.build_dir }} --output-on-failure --timeout 1800
 
-      # 8c. Windows release signing (release tags only, environment windows-release).
-      # Microsoft Artifact Signing through jsign. Every value comes from environment
-      # variables (vars.*) and the federated credential; with any of them missing the signing
-      # steps print a warning and are skipped, and the build is unchanged.
-      - name: Check Signing Configuration
-        if: contains(matrix.host, 'mingw') && startsWith(github.ref, 'refs/tags/')
-        env:
-          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          ARTIFACT_SIGNING_REGION: ${{ vars.ARTIFACT_SIGNING_REGION }}
-          ARTIFACT_SIGNING_ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
-          ARTIFACT_SIGNING_PROFILE: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+      # 8c. Release tags only: strip the Windows executables and hand the install tree to the
+      # windows-sign job, which signs them and packs (CPack must not strip signed files). The
+      # unsigned installer built below stays the artifact when that job signs nothing.
+      - name: Upload Windows Install Tree
+        if: contains(matrix.host, 'mingw') && startsWith(github.ref, 'refs/tags/') && !env.ACT
         run: |
-          missing=""
-          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID \
-                      ARTIFACT_SIGNING_REGION ARTIFACT_SIGNING_ACCOUNT ARTIFACT_SIGNING_PROFILE; do
-            if [ -z "${!name}" ]; then missing="$missing $name"; fi
-          done
-          if [ -n "$missing" ]; then
-            echo "::warning::Windows signing is skipped; these environment variables are not set:$missing"
-          else
-            echo "SIGNING=true" >> "$GITHUB_ENV"
-          fi
+          set -euo pipefail
+          ${{ matrix.host }}-strip ${{ matrix.build_dir }}/bin/gridcoinresearch.exe ${{ matrix.build_dir }}/bin/gridcoinresearchd.exe ${{ matrix.build_dir }}/bin/gridcoin-service.exe
+          tar --exclude='*.o' --exclude='*.a' --exclude='${{ matrix.build_dir }}/src/test' \
+              -czf "$RUNNER_TEMP/win-pack-tree.tar.gz" ${{ matrix.build_dir }}
+          ls -la "$RUNNER_TEMP/win-pack-tree.tar.gz"
 
-      - name: Azure Login
-        if: env.SIGNING == 'true'
-        uses: azure/login@v2
+      - name: Upload Windows Install Tree Artifact
+        if: contains(matrix.host, 'mingw') && startsWith(github.ref, 'refs/tags/') && !env.ACT
+        uses: actions/upload-artifact@v5
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Prepare Signing Tool
-        if: env.SIGNING == 'true'
-        env:
-          ARTIFACT_SIGNING_REGION: ${{ vars.ARTIFACT_SIGNING_REGION }}
-          ARTIFACT_SIGNING_ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
-          ARTIFACT_SIGNING_PROFILE: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
-        run: |
-          set -euo pipefail
-          # jsign 7.6. The digest is the one the GitHub release API reports for the asset
-          # (gh api repos/ebourg/jsign/releases/tags/7.6, assets[].digest, 2026-11-06).
-          JSIGN_VERSION=7.6
-          JSIGN_SHA256=6cf58aa080e7ff82656f320cff8d4a3bff30408df8766806dcba3740dd839fa5
-          jar="$RUNNER_TEMP/jsign-$JSIGN_VERSION.jar"
-          curl -fsSL -o "$jar" "https://github.com/ebourg/jsign/releases/download/$JSIGN_VERSION/jsign-$JSIGN_VERSION.jar"
-          echo "$JSIGN_SHA256  $jar" | sha256sum -c -
-          java -version
-
-          umask 077
-          token_file="$RUNNER_TEMP/acs-token"
-          az account get-access-token --resource https://codesigning.azure.net --query accessToken -o tsv > "$token_file"
-          echo "::add-mask::$(cat "$token_file")"
-
-          # One command signs the files it is given; the uninstaller hook of NSIS runs it too.
-          script="$RUNNER_TEMP/grc-sign.sh"
-          cat > "$script" <<SCRIPT
-          #!/bin/bash
-          set -euo pipefail
-          exec java -jar "$jar" --storetype TRUSTEDSIGNING \\
-            --keystore "$ARTIFACT_SIGNING_REGION.codesigning.azure.net" \\
-            --storepass "\$(cat "$token_file")" \\
-            --alias "$ARTIFACT_SIGNING_ACCOUNT/$ARTIFACT_SIGNING_PROFILE" \\
-            --tsaurl http://timestamp.acs.microsoft.com --tsmode RFC3161 "\$@"
-          SCRIPT
-          chmod 700 "$script"
-          echo "GRC_SIGN_SCRIPT=$script" >> "$GITHUB_ENV"
-
-      # The executables are stripped here, once, because CPack's own strip would invalidate
-      # the signature (the packaging step is told not to strip). The standalone executables
-      # that Prepare Artifacts copies from bin/ are the signed ones.
-      - name: Sign Windows Executables and Scripts
-        if: env.SIGNING == 'true'
-        run: |
-          set -euo pipefail
-          cd ${{ matrix.build_dir }}/bin
-          ${{ matrix.host }}-strip gridcoinresearch.exe gridcoinresearchd.exe gridcoin-service.exe
-          "$GRC_SIGN_SCRIPT" gridcoinresearch.exe gridcoinresearchd.exe gridcoin-service.exe
-          cd "$GITHUB_WORKSPACE/contrib/windows"
-          "$GRC_SIGN_SCRIPT" Install-GridcoinCoreTask.ps1 Uninstall-GridcoinCoreTask.ps1 \
-            Set-GridcoinShutdownFlush.ps1 Start-GridcoinGui.ps1 Update-GridcoinCore.ps1 \
-            Test-GridcoinRelease.ps1 GridcoinCommon.ps1 Invoke-GridcoinInstallStep.ps1
+          name: win-pack-tree
+          path: ${{ runner.temp }}/win-pack-tree.tar.gz
+          retention-days: 1
 
       # 9. Package
       - name: Create Package
-        env:
-          # Set only when signing: CPackOptions.cmake then does not strip again and NSIS signs
-          # the uninstaller through the finalize hook (NSIS.template.in).
-          GRIDCOIN_PRESIGNED_BINARIES: ${{ env.SIGNING == 'true' && '1' || '' }}
-          GRIDCOIN_UNINSTALLER_SIGN_COMMAND: ${{ env.SIGNING == 'true' && env.GRC_SIGN_SCRIPT || '' }}
         run: |
           cpack -G ${{ matrix.cpack_generator }} --config ${{ matrix.build_dir }}/CPackConfig.cmake -B release_packages
-
-      # 9b. The installer is signed last.
-      - name: Sign Windows Installer
-        if: env.SIGNING == 'true'
-        run: |
-          set -euo pipefail
-          "$GRC_SIGN_SCRIPT" release_packages/gridcoin-*-win64-setup.exe
 
       # 10. Prepare Flat Artifacts
       - name: Prepare Artifacts
@@ -1640,6 +1553,156 @@ jobs:
   # ----------------------------------------------------------------------
 
   # ----------------------------------------------------------------------
+  # JOB 4b: Sign and pack the Windows release (release tags only)
+  # ----------------------------------------------------------------------
+  # Microsoft Artifact Signing through jsign. The id-token permission and the environment
+  # are confined to this job. Every value comes from environment variables (vars.*) and a
+  # federated credential; with any of them missing the signing steps print a warning and are
+  # skipped, no signed artifact is produced and the release keeps the unsigned installer.
+  windows-sign:
+    name: Sign Windows Release
+    needs: [depends-builds]
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/')
+    environment: windows-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check Signing Configuration
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARTIFACT_SIGNING_REGION: ${{ vars.ARTIFACT_SIGNING_REGION }}
+          ARTIFACT_SIGNING_ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          ARTIFACT_SIGNING_PROFILE: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+        run: |
+          missing=""
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID \
+                      ARTIFACT_SIGNING_REGION ARTIFACT_SIGNING_ACCOUNT ARTIFACT_SIGNING_PROFILE; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::Windows signing is skipped; these environment variables are not set:$missing"
+          else
+            echo "SIGNING=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install System Dependencies
+        if: env.SIGNING == 'true'
+        run: |
+          source ./install_dependencies.sh
+          install_deps all false false
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y wine-stable wine64 wine32
+
+      - name: Download Windows Install Tree
+        if: env.SIGNING == 'true'
+        uses: actions/download-artifact@v5
+        with:
+          name: win-pack-tree
+          path: ${{ runner.temp }}/tree
+
+      - name: Unpack Windows Install Tree
+        if: env.SIGNING == 'true'
+        run: tar -xzf "$RUNNER_TEMP/tree/win-pack-tree.tar.gz"
+
+      - name: Azure Login
+        if: env.SIGNING == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Prepare Signing Tool
+        if: env.SIGNING == 'true'
+        env:
+          ARTIFACT_SIGNING_REGION: ${{ vars.ARTIFACT_SIGNING_REGION }}
+          ARTIFACT_SIGNING_ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          ARTIFACT_SIGNING_PROFILE: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+        run: |
+          set -euo pipefail
+          # jsign 7.6. The digest is the one the GitHub release API reports for the asset
+          # (gh api repos/ebourg/jsign/releases/tags/7.6, assets[].digest, 2026-11-06).
+          JSIGN_VERSION=7.6
+          JSIGN_SHA256=6cf58aa080e7ff82656f320cff8d4a3bff30408df8766806dcba3740dd839fa5
+          jar="$RUNNER_TEMP/jsign-$JSIGN_VERSION.jar"
+          curl -fsSL -o "$jar" "https://github.com/ebourg/jsign/releases/download/$JSIGN_VERSION/jsign-$JSIGN_VERSION.jar"
+          echo "$JSIGN_SHA256  $jar" | sha256sum -c -
+          java -version
+
+          # The wrapper below reads the token from a file (jsign: --storepass file:<path>), so it
+          # is never on a command line. The wrapper creates the file and deletes it on every exit.
+          script="$RUNNER_TEMP/grc-sign.sh"
+          cat > "$script" <<SCRIPT
+          #!/bin/bash
+          set -euo pipefail
+          umask 077
+          token_file="\$(mktemp "$RUNNER_TEMP/acs-token.XXXXXX")"
+          trap 'rm -f "\$token_file"' EXIT
+          az account get-access-token --resource https://codesigning.azure.net --query accessToken -o tsv > "\$token_file"
+          java -jar "$jar" --storetype TRUSTEDSIGNING \\
+            --keystore "$ARTIFACT_SIGNING_REGION.codesigning.azure.net" \\
+            --storepass "file:\$token_file" \\
+            --alias "$ARTIFACT_SIGNING_ACCOUNT/$ARTIFACT_SIGNING_PROFILE" \\
+            --tsaurl http://timestamp.acs.microsoft.com --tsmode RFC3161 "\$@"
+          SCRIPT
+          chmod 700 "$script"
+          echo "GRC_SIGN_SCRIPT=$script" >> "$GITHUB_ENV"
+
+      - name: Sign Windows Executables and Scripts
+        if: env.SIGNING == 'true'
+        run: |
+          set -euo pipefail
+          cd build_win64/bin
+          "$GRC_SIGN_SCRIPT" gridcoinresearch.exe gridcoinresearchd.exe gridcoin-service.exe
+          cd "$GITHUB_WORKSPACE/contrib/windows"
+          "$GRC_SIGN_SCRIPT" Install-GridcoinCoreTask.ps1 Uninstall-GridcoinCoreTask.ps1 \
+            Set-GridcoinShutdownFlush.ps1 Start-GridcoinGui.ps1 Update-GridcoinCore.ps1 \
+            Test-GridcoinRelease.ps1 GridcoinCommon.ps1 Invoke-GridcoinInstallStep.ps1
+
+      # The executables were stripped by the build job: CPack must not strip them again, and the
+      # NSIS finalize hook signs the uninstaller (NSIS.template.in, CPackOptions.cmake.in).
+      - name: Create Signed Package
+        if: env.SIGNING == 'true'
+        env:
+          GRIDCOIN_PRESIGNED_BINARIES: "1"
+          GRIDCOIN_UNINSTALLER_SIGN_COMMAND: ${{ env.GRC_SIGN_SCRIPT }}
+        run: |
+          cpack -G NSIS64 --config build_win64/CPackConfig.cmake -B release_packages
+
+      - name: Sign Windows Installer
+        if: env.SIGNING == 'true'
+        run: |
+          set -euo pipefail
+          "$GRC_SIGN_SCRIPT" release_packages/gridcoin-*-win64-setup.exe
+
+      - name: Prepare Signed Artifacts
+        if: env.SIGNING == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          INSTALLER=$(find release_packages -maxdepth 1 -name "gridcoin-*-setup.exe" | head -n 1)
+          cp "$INSTALLER" dist/
+          VERSION=$(awk -F '-' '{ print $2 }' <<< "$(basename "$INSTALLER")")
+          cp build_win64/bin/gridcoinresearchd.exe "dist/gridcoinresearchd-${VERSION}-win64.exe"
+          cp build_win64/bin/gridcoinresearch.exe "dist/gridcoinresearch-${VERSION}-win64.exe"
+
+      # Same file names as the unsigned artifact of the build job; the deploy job takes these.
+      - name: Upload Signed Artifacts
+        if: env.SIGNING == 'true' && !env.ACT
+        uses: actions/upload-artifact@v5
+        with:
+          name: gridcoin-windows-signed
+          path: dist/*.exe
+          retention-days: 5
+
+  # ----------------------------------------------------------------------
   # JOB 5: Deploy (GitHub Release)
   # ----------------------------------------------------------------------
   deploy:
@@ -1653,7 +1716,7 @@ jobs:
     # while the ARM64 build happened to finish 17 minutes before it and was included.
     # The docker-* artifacts are deliberately NOT needed: they feed docker-publish and
     # are excluded from the release by the gridcoin-* glob below.
-    needs: [depends-builds, flatpak-build, macos-native-arm64, macos-native-intel]
+    needs: [depends-builds, windows-sign, flatpak-build, macos-native-arm64, macos-native-intel]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -1680,6 +1743,10 @@ jobs:
             exit 1
           fi
           for dir in "${dirs[@]}"; do
+            # The signed Windows files replace the unsigned ones of the build job (same names).
+            if [ "$dir" = "artifacts/gridcoin-x86_64-w64-mingw32/" ] && [ -d artifacts/gridcoin-windows-signed ]; then
+              continue
+            fi
             cp "$dir"* release_assets/
           done
 

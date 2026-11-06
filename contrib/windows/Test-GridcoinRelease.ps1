@@ -101,7 +101,9 @@ function Test-GridcoinReleaseSignature {
     }
     if (-not $hasMarker) { throw "the signer certificate of $Path does not carry the pinned identity marker $($pinned['identity-eku'])" }
 
-    $commonName = $cert.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+    # The CN of the subject itself (GetNameInfo would fall back to other name parts).
+    $commonName = ''
+    if ($cert.Subject -cmatch '(?:^|, )CN=([^,]+)(?:,|$)') { $commonName = $Matches[1] }
     if ($commonName -cne $pinned['subject-cn']) { throw "the signer of $Path is '$commonName', not the pinned '$($pinned['subject-cn'])'" }
 
     if ($null -eq $sig.TimeStamperCertificate) { throw "the signature of $Path has no timestamp" }
@@ -116,7 +118,7 @@ function Test-GridcoinReleaseSignature {
         foreach ($status in $chain.ChainStatus) {
             if ($status.Status -ne 'RevocationStatusUnknown' -and $status.Status -ne 'OfflineRevocation') { $revocationOnly = $false }
         }
-        if (-not $revocationOnly) { throw "the certificate chain of $Path is not valid: $($chain.ChainStatus[0].StatusInformation.Trim())" }
+        if (-not $revocationOnly) { throw "the certificate chain of $Path is not valid: $($chain.ChainStatus[0].StatusInformation.Trim()) (an offline machine may lack the intermediate certificate)" }
         $chain.Reset()
         $chain.ChainPolicy.RevocationMode = [System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
         $chain.ChainPolicy.VerificationFlags = [System.Security.Cryptography.X509Certificates.X509VerificationFlags]::IgnoreNotTimeValid
