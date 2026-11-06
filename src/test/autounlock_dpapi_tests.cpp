@@ -10,6 +10,7 @@
 #include "logging.h"
 #include "test/state_guard.h"
 #include "test/wine.h"
+#include "tinyformat.h"
 #include "util/dir_permissions.h"
 #include "util/system.h"
 #include "util/win_acl.h"
@@ -29,6 +30,7 @@
 #include <vector>
 
 #include <windows.h>
+#include <wincrypt.h>
 #endif
 
 // The DPAPI store and fetch exist only on Windows, so elsewhere this suite is empty.
@@ -113,6 +115,30 @@ AclSpec OwnerOnlyPlus(const Sid& trustee, uint32_t rights)
 bool Contains(const std::string& text, const std::string& part)
 {
     return text.find(part) != std::string::npos;
+}
+
+//! Why this logon cannot encrypt and decrypt with its own DPAPI key (CryptProtectData
+//! without CRYPTPROTECT_LOCAL_MACHINE), or nullopt when it can. A logon without a password,
+//! such as one by ssh key, may not have the key's master key available.
+std::optional<std::string> OwnDpapiKeyUnusable()
+{
+    unsigned char byte = 0x5a;
+    DATA_BLOB plain{sizeof(byte), &byte};
+    DATA_BLOB encrypted{};
+    if (!::CryptProtectData(&plain, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &encrypted)) {
+        const DWORD error = ::GetLastError();
+        return strprintf("CryptProtectData failed with error %u", static_cast<unsigned>(error));
+    }
+
+    DATA_BLOB decrypted{};
+    const bool round_trip =
+        ::CryptUnprotectData(&encrypted, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &decrypted);
+    const DWORD error = ::GetLastError();
+    ::LocalFree(encrypted.pbData);
+    if (!round_trip) return strprintf("CryptUnprotectData failed with error %u", static_cast<unsigned>(error));
+
+    ::LocalFree(decrypted.pbData);
+    return std::nullopt;
 }
 
 } // namespace
@@ -237,6 +263,10 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_wrong_network)
     BOOST_CHECK_MESSAGE(Contains(error, "main"), error);
 }
 
+// A file set up for the other mode is refused before it is decrypted, in both directions.
+// The service's file is made here from the machine's by changing its scope, so the case does
+// not need this account's own DPAPI key, which a logon without a password (an ssh key, or
+// S4U, as the same-account Core-Start task logs on) may not be able to use.
 BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_scope_mismatch)
 {
     if (SkipUnderWine()) return;
@@ -248,7 +278,8 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_scope_mismatch)
 
     BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-scope-machine"), error) == AutoUnlockStoreOutcome::Verified,
                           error);
-    BOOST_REQUIRE(StoredBlob(path).scope == BlobScope::LocalMachine);
+    AutoUnlockBlob blob = StoredBlob(path);
+    BOOST_REQUIRE(blob.scope == BlobScope::LocalMachine);
 
     {
         ServiceMode service(true);
@@ -259,20 +290,52 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_scope_mismatch)
         BOOST_CHECK_EQUAL(status.scope, "service");
         BOOST_CHECK(status.configured);
         BOOST_CHECK(!status.problem.empty());
-
-        // Stored as a service, the file is for the service account. This account's own
-        // DPAPI key stands in for the service account's here.
-        const SecureString passphrase("dpapi-scope-service");
-        BOOST_REQUIRE_MESSAGE(store.Store(passphrase, error) == AutoUnlockStoreOutcome::Verified, error);
-        BOOST_CHECK(StoredBlob(path).scope == BlobScope::ServiceAccount);
-
-        const std::optional<SecureString> fetched = FetchAutoUnlockFromDpapiBlob(path, error);
-        BOOST_REQUIRE_MESSAGE(fetched.has_value(), error);
-        BOOST_CHECK(*fetched == passphrase);
     }
+
+    // What Store() writes as a service, but for the DPAPI blob, which is not read before the
+    // scope is. Written over the file in place, so it keeps the owner-only list Store() gave it.
+    blob.scope = BlobScope::ServiceAccount;
+    const std::vector<unsigned char> service_file = SerializeAutoUnlockBlob(blob);
+    BOOST_REQUIRE(!service_file.empty());
+    {
+        fsbridge::ofstream file(path, std::ios::binary | std::ios::trunc);
+        BOOST_REQUIRE(file.is_open());
+        file.write(reinterpret_cast<const char*>(service_file.data()), static_cast<std::streamsize>(service_file.size()));
+        BOOST_REQUIRE(file.good());
+    }
+    BOOST_REQUIRE(StoredBlob(path).scope == BlobScope::ServiceAccount);
 
     BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
     BOOST_CHECK_MESSAGE(Contains(error, "Windows service"), error);
+}
+
+// Stored as a service, the file is for the service account's DPAPI key, and is read back
+// with it. This account's own key stands in for the service account's here. Where this logon
+// cannot use its own key, the case says so as a warning and checks nothing; the product does
+// not use that key outside the service mode.
+BOOST_AUTO_TEST_CASE(dpapi_service_scope_round_trip)
+{
+    if (SkipUnderWine()) return;
+
+    if (const std::optional<std::string> unusable = OwnDpapiKeyUnusable()) {
+        BOOST_WARN_MESSAGE(false, "this logon cannot use its own DPAPI key (" << *unusable
+                                      << "); the service scope's round trip is not checked");
+        return;
+    }
+
+    TempDataDir datadir;
+    const fs::path path = datadir.BlobPath();
+    DpapiBlobStore store;
+    std::string error;
+
+    ServiceMode service(true);
+    const SecureString passphrase("dpapi-scope-service");
+    BOOST_REQUIRE_MESSAGE(store.Store(passphrase, error) == AutoUnlockStoreOutcome::Verified, error);
+    BOOST_CHECK(StoredBlob(path).scope == BlobScope::ServiceAccount);
+
+    const std::optional<SecureString> fetched = FetchAutoUnlockFromDpapiBlob(path, error);
+    BOOST_REQUIRE_MESSAGE(fetched.has_value(), error);
+    BOOST_CHECK(*fetched == passphrase);
 }
 
 BOOST_AUTO_TEST_CASE(dpapi_fetch_missing_or_oversize_file)

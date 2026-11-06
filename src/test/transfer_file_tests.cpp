@@ -277,6 +277,18 @@ BOOST_AUTO_TEST_CASE(non_ascii_destination_round_trips)
     BOOST_CHECK(fs::exists(dest));
     BOOST_CHECK_EQUAL(ReadAll(dest), kBytes);
     BOOST_CHECK_EQUAL(CountPartFiles(dir), 0u);
+
+#ifdef WIN32
+    // The name on disk is the one intended: the UTF-8 above read as UTF-8, not in the system
+    // code page.
+    const std::wstring intended = L"Sicherung \u00e4\u00f6\u00fc \u6d4b\u8bd5.dat";
+    BOOST_CHECK(dest.filename().wstring() == intended);
+    bool found = false;
+    for (fs::directory_iterator it(dir); it != fs::directory_iterator(); ++it) {
+        found = found || it->path().filename().wstring() == intended;
+    }
+    BOOST_CHECK_MESSAGE(found, "no entry of " << dir.string() << " has the intended name");
+#endif
 }
 
 BOOST_AUTO_TEST_CASE(free_space_check)

@@ -121,8 +121,17 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
         if (refuse.count(name)) BOOST_CHECK_MESSAGE(!(flags & ArgsManager::SETTING_FREE), name);
     }
 
-    // The developer and client overrides are honoured only from the command line.
-    for (const char* name : {"-debugallowtracer", "-rpcskiplistenercheck", "-stdinwalletpassphrase", "-stdinelevate"}) {
+    // The developer and client overrides, and the autounlock options of the service
+    // units, are honoured only from the command line.
+    std::vector<std::string> command_line_only{"-debugallowtracer", "-rpcskiplistenercheck", "-stdinwalletpassphrase",
+                                               "-stdinelevate"};
+#ifdef __linux__
+    command_line_only.push_back("-autounlocksocket");
+#endif
+#ifdef WIN32
+    command_line_only.push_back("-autounlockblob");
+#endif
+    for (const std::string& name : command_line_only) {
         BOOST_CHECK_MESSAGE(all_flags.at(name) & ArgsManager::COMMAND_LINE_ONLY, name);
     }
 

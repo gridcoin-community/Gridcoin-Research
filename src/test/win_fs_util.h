@@ -18,6 +18,21 @@ bool SameAcl(const util::winacl::ObservedAcl& a, const util::winacl::ObservedAcl
 //! Make the new, empty directory \p link a junction (a mount-point reparse point)
 //! to the directory \p target. No privilege is needed for that.
 void MakeJunction(const fs::path& link, const fs::path& target);
+
+//! Whether Windows refuses to open \p path, following any junction on it, with
+//! ERROR_UNTRUSTED_MOUNT_POINT: current Windows 11 builds do not follow a junction that
+//! an account that is not an administrator made. Decides which behaviour a case states.
+bool JunctionUntrustedOn(const fs::path& path);
+
+//! Whether this process's token holds the privilege \p name (such as SE_BACKUP_NAME),
+//! and whether it is enabled.
+enum class PrivilegeState
+{
+    NotHeld,
+    Disabled,
+    Enabled,
+};
+PrivilegeState TokenPrivilegeState(const wchar_t* name);
 #endif
 
 } // namespace grc_test

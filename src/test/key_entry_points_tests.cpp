@@ -70,8 +70,11 @@
 #include <vector>
 
 #ifdef WIN32
+#include "test/win_fs_util.h"
 #include "test/wine.h"
 #include "util/win_acl.h"
+
+#include <windows.h>
 #endif
 
 // The scraper's directory for its log, set by the scraper threads.
@@ -98,6 +101,85 @@ namespace {
 
 using grc_test::MockWalletDbScope;
 using grc_test::SwapMainWallet;
+
+#ifdef WIN32
+//! On Windows, a path this account cannot examine: an entry whose access list grants this
+//! account nothing that reads it, in a directory this account may not list (listing a
+//! directory lets the attributes of what is in it be read, whatever their own lists say).
+//! Every account may bypass traverse checking, so a name that is not there would read as
+//! missing under any directory. A step that throws is reported, and what was made is
+//! removed when the scope ends.
+struct ClosedEntry
+{
+    const fs::path m_dir;
+    const fs::path m_entry;
+    util::winacl::Sid m_self;
+    bool m_made_dir{false};
+    bool m_made_entry{false};
+    //! Whether the entry was made and given the list that grants nothing.
+    bool m_closed{false};
+
+    //! \p rights for this account alone.
+    util::winacl::AclSpec SelfOnly(uint32_t rights) const
+    {
+        return util::winacl::AclSpec{m_self, {{m_self, rights, util::winacl::Inherit::None}}};
+    }
+
+    ClosedEntry(fs::path dir, fs::path entry) : m_dir(std::move(dir)), m_entry(std::move(entry))
+    {
+        // On Windows <windows.h> defines each mask constant as a macro of the same value.
+        using namespace util::winacl::mask;
+        try {
+            m_self = util::winacl::CurrentTokenUser();
+            m_made_dir = util::winacl::CreateDirectoryWithAcl(m_dir, SelfOnly(FILE_ALL_ACCESS & ~FILE_LIST_DIRECTORY));
+            if (!m_made_dir) {
+                BOOST_ERROR(m_dir.string() << " exists already");
+                return;
+            }
+            // CreateFileW asks for SYNCHRONIZE and FILE_READ_ATTRIBUTES on every open, and
+            // CreateDirectoryWithAcl reads the list back through a handle, so the entry is
+            // made with those. Its last list keeps SYNCHRONIZE, so that the list can be put
+            // back for the removal; without FILE_READ_ATTRIBUTES nothing about it can be read.
+            m_made_entry = util::winacl::CreateDirectoryWithAcl(m_entry, SelfOnly(FILE_READ_ATTRIBUTES | SYNCHRONIZE));
+            if (!m_made_entry) {
+                BOOST_ERROR(m_entry.string() << " exists already");
+                return;
+            }
+            util::winacl::ApplyAcl(m_entry, SelfOnly(SYNCHRONIZE));
+            m_closed = true;
+        } catch (const std::exception& e) {
+            BOOST_ERROR("the path that cannot be examined could not be made: " << e.what());
+        }
+    }
+
+    ~ClosedEntry()
+    {
+        using namespace util::winacl::mask;
+        // The directory cannot be listed, so its one entry is removed by its name: with its
+        // list put back, or else through the directory's FILE_DELETE_CHILD, which
+        // RemoveDirectoryW can use with the SYNCHRONIZE the entry keeps.
+        if (m_made_entry) {
+            try {
+                util::winacl::ApplyAcl(m_entry, SelfOnly(FILE_ALL_ACCESS));
+                fs::remove(m_entry);
+            } catch (const std::exception& e) {
+                BOOST_TEST_MESSAGE("the list of " << m_entry.string() << " was not put back: " << e.what());
+                if (!::RemoveDirectoryW(m_entry.wstring().c_str())) {
+                    BOOST_ERROR(m_entry.string() << " was not removed (Windows error " << ::GetLastError() << ")");
+                }
+            }
+        }
+        if (m_made_dir) {
+            boost::system::error_code ec;
+            fs::remove(m_dir, ec);
+            if (ec) BOOST_ERROR(m_dir.string() << " was not removed: " << ec.message());
+        }
+    }
+
+    ClosedEntry(const ClosedEntry&) = delete;
+    ClosedEntry& operator=(const ClosedEntry&) = delete;
+};
+#endif
 
 //! The RPCs found handling a private key or the seed phrase when every command
 //! was inventoried. Each is a row of the table, or is listed there with the
@@ -1695,61 +1777,51 @@ BOOST_AUTO_TEST_CASE(dumpwallet_refuses_an_existing_destination)
 
     // A path that cannot be examined is refused with the reason, not as a file
     // that exists. On POSIX it is a name under a directory this account may not
-    // search. On Windows every account may bypass traverse checking, so a name
-    // that is not there reads as missing under any directory; there the path is
-    // an entry whose access list grants nothing, in a directory this account may
-    // not list. Where the path can still be examined (as root, or with the backup
-    // privilege enabled) this part is skipped.
+    // search; on Windows, ClosedEntry. Where the path can still be examined, as
+    // root on POSIX, or with the backup privilege enabled on Windows, this part is
+    // skipped; a Windows setup that leaves it examinable otherwise fails the case.
     const fs::path closed = GetDataDir() / "key_entry_points_closed";
     const fs::path unexaminable = closed / DUMP_FILE;
+    {
 #ifdef WIN32
-    // On Windows <windows.h> defines each mask constant as a macro of the same value.
-    using namespace util::winacl::mask;
-    const util::winacl::Sid self = util::winacl::CurrentTokenUser();
-    const auto self_only = [&self](uint32_t rights) {
-        return util::winacl::AclSpec{self, {{self, rights, util::winacl::Inherit::None}}};
-    };
-    // Wine keeps no access lists, so there the path stays examinable and the part
-    // is skipped.
-    const bool closable = !grc_test::RunningUnderWine();
-    if (closable) {
-        // Everything but listing it. A directory that may be listed lets the
-        // attributes of what is in it be read, whatever their own lists say.
-        BOOST_REQUIRE(util::winacl::CreateDirectoryWithAcl(closed, self_only(FILE_ALL_ACCESS & ~FILE_LIST_DIRECTORY)));
-        // Created readable, as CreateDirectoryWithAcl reads the list back through
-        // a handle, then given a list that grants nothing.
-        BOOST_REQUIRE(util::winacl::CreateDirectoryWithAcl(unexaminable, self_only(FILE_READ_ATTRIBUTES)));
-        util::winacl::ApplyAcl(unexaminable, {self, {}});
-    }
+        // Wine keeps no access lists, so there the path is not made.
+        const bool closable = !grc_test::RunningUnderWine();
+        std::optional<ClosedEntry> entry;
+        if (closable) entry.emplace(closed, unexaminable);
 #else
-    fs::create_directories(closed);
-    fs::permissions(closed, fs::no_perms);
+        fs::create_directories(closed);
+        fs::permissions(closed, fs::no_perms);
 #endif
 
-    // The kind of status decides, as in dumpwallet: on Windows a missing name
-    // sets the error code too.
-    boost::system::error_code probe;
-    if (fs::symlink_status(unexaminable, probe).type() == fs::status_error) {
-        const Outcome unexamined = Call("dumpwallet", {unexaminable.string()});
-        const std::string expected = "Cannot check the destination " + unexaminable.string() + ": ";
+        // The kind of status decides, as in dumpwallet: on Windows a missing name
+        // sets the error code too.
+        boost::system::error_code probe;
+        if (fs::symlink_status(unexaminable, probe).type() == fs::status_error) {
+            const Outcome unexamined = Call("dumpwallet", {unexaminable.string()});
+            const std::string expected = "Cannot check the destination " + unexaminable.string() + ": ";
 
-        BOOST_CHECK_MESSAGE(unexamined.code == RPC_INVALID_PARAMETER, unexamined.Describe());
-        BOOST_CHECK_MESSAGE(unexamined.message.rfind(expected, 0) == 0, unexamined.message);
-    } else {
-        BOOST_TEST_MESSAGE("the destination can still be examined; skipping");
-    }
-
+            BOOST_CHECK_MESSAGE(unexamined.code == RPC_INVALID_PARAMETER, unexamined.Describe());
+            BOOST_CHECK_MESSAGE(unexamined.message.rfind(expected, 0) == 0, unexamined.message);
 #ifdef WIN32
-    // The directory cannot be listed, so its one entry is removed by its name.
-    if (closable) {
-        util::winacl::ApplyAcl(unexaminable, self_only(FILE_ALL_ACCESS));
-        fs::remove(unexaminable);
-        fs::remove(closed);
-    }
-#else
-    fs::permissions(closed, fs::owner_all);
-    fs::remove_all(closed);
+        } else if (entry && entry->m_closed) {
+            if (grc_test::TokenPrivilegeState(L"SeBackupPrivilege") == grc_test::PrivilegeState::Enabled) {
+                BOOST_WARN_MESSAGE(false, "SeBackupPrivilege is enabled in this token, so "
+                                              << unexaminable.string()
+                                              << " can still be examined; the refusal of a path that cannot be "
+                                                 "examined is not checked");
+            } else {
+                BOOST_ERROR(unexaminable.string() << " can still be examined, and SeBackupPrivilege is not enabled");
+            }
 #endif
+        } else {
+            BOOST_TEST_MESSAGE("the destination can still be examined; skipping");
+        }
+
+#ifndef WIN32
+        fs::permissions(closed, fs::owner_all);
+        fs::remove_all(closed);
+#endif
+    }
 
     // Where nothing is, the dump is written.
     const Outcome fresh = Call("dumpwallet", {DUMP_FILE});

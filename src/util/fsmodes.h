@@ -42,9 +42,10 @@ struct ModeFinding
         //! The path is a symbolic link (on Windows, a reparse point that names another path, such
         //! as a symbolic link or a junction). It is reported and never followed.
         Symlink,
-        //! Windows only: the path was opened, but its access list could not be read, so it was
-        //! not checked. When this process's own account could not be read, nothing was checked,
-        //! and the one finding names the data directory.
+        //! Windows only: the path exists but could not be opened (UnopenedPathFinding), or was
+        //! opened but its access list could not be read, so it was not checked. When this
+        //! process's own account could not be read, nothing was checked, and the one finding
+        //! names the data directory.
         Unreadable,
     };
 
@@ -57,6 +58,13 @@ struct ModeFinding
     std::string message;
 };
 
+//! What the Windows check reports for \p path, which it could not open with the Win32 error
+//! \p error: nothing for ERROR_FILE_NOT_FOUND and ERROR_PATH_NOT_FOUND, as a path that does
+//! not exist is skipped; otherwise an Unreadable finding that names the path and why, which for
+//! a junction Windows does not follow (util::winacl::WIN32_UNTRUSTED_MOUNT_POINT) also says what
+//! to do, and for any other error gives \p error_text. Pure.
+std::optional<ModeFinding> UnopenedPathFinding(const fs::path& path, uint32_t error, const std::string& error_text);
+
 //! Checks the data directory, the wallet file, database/ and database/log.*, the
 //! configuration file, the settings file, the backup directory and the regular files
 //! directly in it, and the debug log. An empty path, and a path that does not exist,
@@ -68,7 +76,8 @@ struct ModeFinding
 //! On Windows a junction, a symbolic link and every other reparse point that names another
 //! path count as a symbolic link here. A reparse point that does not (the placeholder of a
 //! cloud file, a deduplicated file) is the file itself and is checked as one. A path that
-//! cannot be opened to read its access list is skipped, as one that does not exist is.
+//! exists but cannot be opened to read its access list, such as one through a junction Windows
+//! does not follow, is reported (UnopenedPathFinding).
 std::vector<ModeFinding> CheckOwnerOnlyModes(const fs::path& datadir, const fs::path& conf,
                                              const fs::path& settings, const fs::path& wallet_file,
                                              const fs::path& backupdir, const fs::path& debuglog);

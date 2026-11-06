@@ -126,6 +126,12 @@ enum class EntryKind : uint8_t
 //! whether or not the object is a directory.
 EntryKind ClassifyEntry(bool directory, std::optional<uint32_t> reparse_tag);
 
+//! The refusal for \p path when opening it on the endpoint's path failed with the Win32
+//! error \p error because Windows does not follow a junction on that path
+//! (util::winacl::WIN32_UNTRUSTED_MOUNT_POINT); nullopt for any other error, which stays a
+//! failure to open. The text names the path and says what to do. Pure.
+std::optional<std::string> UntrustedPathRefusal(uint32_t error, const fs::path& path);
+
 //! One object on the endpoint's path, as opened without following it.
 struct EndpointEntry
 {
@@ -235,7 +241,9 @@ Sid ExpectedServerSid();
 //! \p path opened without following a reparse point at it, as the checks below
 //! read each object: its kind, reparse tag, owner and DACL. Throws
 //! std::system_error with std::errc::no_such_file_or_directory when it does not
-//! exist, and with the Win32 error when it cannot be opened or read.
+//! exist, std::runtime_error (UntrustedPathRefusal) when its path goes through a
+//! junction Windows does not follow, and std::system_error with the Win32 error
+//! when it cannot be opened or read otherwise.
 EndpointEntry ReadEntryNoFollow(const fs::path& path);
 
 //! What CheckServerEndpointBeforeConnect leaves open until the connect is made:
@@ -267,7 +275,8 @@ private:
 //! ReadEntryNoFollow after \p socket_path is made lexically normal. The protected
 //! requirement and the rule's -ipcserviceuser term follow that option. Returns
 //! what must stay open until the connect is made. Throws std::runtime_error naming
-//! the object and the rule; std::system_error with
+//! the object and the rule, or the junction on its path that Windows does not
+//! follow (UntrustedPathRefusal); std::system_error with
 //! std::errc::no_such_file_or_directory when an object read does not exist, which
 //! is a server not listening; and std::system_error with the Win32 error when one
 //! cannot be opened or read.
@@ -275,8 +284,9 @@ EndpointHold CheckServerEndpointBeforeConnect(const fs::path& socket_path, const
 
 //! Server, for an IPC directory the operator named with -ipcdir: why this account
 //! must not serve in \p dir, or nullopt. DirectoryRefusal(dir as opened without
-//! following it, CurrentTokenUser(), false). Throws std::system_error when \p dir
-//! cannot be opened or its ACL read.
+//! following it, CurrentTokenUser(), false). Throws std::runtime_error when its
+//! path goes through a junction Windows does not follow (UntrustedPathRefusal), and
+//! std::system_error when \p dir cannot be opened or its ACL read otherwise.
 std::optional<std::string> ServerIpcDirRefusal(const fs::path& dir);
 
 //! Server, with -ipcattachgroup: make the existing IPC directory \p dir ready for

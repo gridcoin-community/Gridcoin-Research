@@ -86,7 +86,8 @@ constexpr uint32_t ATTRIBUTE_REPARSE_POINT = 0x400;
 //! named entity, so a path through it leads elsewhere.
 constexpr uint32_t TAG_NAME_SURROGATE = 0x20000000;
 
-// The Win32 errors AclRefusedBy reads, with their values.
+// The Win32 errors AclRefusedBy and UnopenedPathFinding read, with their values.
+constexpr uint32_t WIN32_FILE_NOT_FOUND = 2, WIN32_PATH_NOT_FOUND = 3;
 constexpr uint32_t WIN32_ACCESS_DENIED = 5, WIN32_NOT_SUPPORTED = 50, WIN32_INVALID_OWNER = 1307,
                    WIN32_INVALID_PRIMARY_GROUP = 1308, WIN32_PRIVILEGE_NOT_HELD = 1314, WIN32_INVALID_ACL = 1336,
                    WIN32_INVALID_SECURITY_DESCR = 1338;
@@ -95,6 +96,7 @@ constexpr uint32_t WIN32_ACCESS_DENIED = 5, WIN32_NOT_SUPPORTED = 50, WIN32_INVA
 static_assert(ATTRIBUTE_DIRECTORY == FILE_ATTRIBUTE_DIRECTORY);
 static_assert(ATTRIBUTE_REPARSE_POINT == FILE_ATTRIBUTE_REPARSE_POINT);
 static_assert(IsReparseTagNameSurrogate(TAG_NAME_SURROGATE) && !IsReparseTagNameSurrogate(~TAG_NAME_SURROGATE));
+static_assert(WIN32_FILE_NOT_FOUND == ERROR_FILE_NOT_FOUND && WIN32_PATH_NOT_FOUND == ERROR_PATH_NOT_FOUND);
 static_assert(WIN32_ACCESS_DENIED == ERROR_ACCESS_DENIED && WIN32_NOT_SUPPORTED == ERROR_NOT_SUPPORTED);
 static_assert(WIN32_INVALID_OWNER == ERROR_INVALID_OWNER && WIN32_INVALID_PRIMARY_GROUP == ERROR_INVALID_PRIMARY_GROUP);
 static_assert(WIN32_PRIVILEGE_NOT_HELD == ERROR_PRIVILEGE_NOT_HELD && WIN32_INVALID_ACL == ERROR_INVALID_ACL);
@@ -196,6 +198,19 @@ std::optional<std::string> AclRefusedBy(uint32_t error, bool remote)
     if (remote && error == WIN32_ACCESS_DENIED) return std::string{"the network share"};
 
     return std::nullopt;
+}
+
+std::optional<ModeFinding> UnopenedPathFinding(const fs::path& path, uint32_t error, const std::string& error_text)
+{
+    if (error == WIN32_FILE_NOT_FOUND || error == WIN32_PATH_NOT_FOUND) return std::nullopt;
+
+    const std::string why = error == util::winacl::WIN32_UNTRUSTED_MOUNT_POINT
+                                ? std::string{util::winacl::UNTRUSTED_MOUNT_POINT_REASON}
+                                : "it could not be opened (" + error_text + ")";
+
+    return ModeFinding{path, ModeFinding::Kind::Unreadable, 0,
+                       "WARNING: " + path.string() + " cannot be checked: " + why +
+                           ". Its access list was not checked"};
 }
 
 bool OnNetworkShare(const std::optional<std::wstring>& final_path, const std::function<bool()>& by_name)
@@ -692,14 +707,18 @@ std::string ReasonOf(const std::system_error& e)
 }
 
 //! \p path opened to read its attributes and access list, a reparse point at \p path opened as
-//! itself unless \p follow_link. A null handle when it cannot be opened.
-UniqueHandle OpenForCheck(const fs::path& path, bool follow_link)
+//! itself unless \p follow_link. A null handle when it cannot be opened, with the Win32 error in
+//! \p error when it is given.
+UniqueHandle OpenForCheck(const fs::path& path, bool follow_link, DWORD* error = nullptr)
 {
     const DWORD flags = FILE_FLAG_BACKUP_SEMANTICS | (follow_link ? 0 : FILE_FLAG_OPEN_REPARSE_POINT);
 
-    return UniqueHandle(::CreateFileW(path.wstring().c_str(), READ_CONTROL | FILE_READ_ATTRIBUTES,
+    UniqueHandle handle(::CreateFileW(path.wstring().c_str(), READ_CONTROL | FILE_READ_ATTRIBUTES,
                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
                                       flags, nullptr));
+    if (!handle && error) *error = ::GetLastError();
+
+    return handle;
 }
 
 //! What \p handle refers to, read from its attributes and reparse tag, or nullopt when they
@@ -789,8 +808,12 @@ public:
     {
         if (path.empty() || !m_seen.insert(path).second) return;
 
-        const UniqueHandle handle = OpenForCheck(path, follow_link);
-        if (!handle) return;
+        DWORD open_error = 0;
+        const UniqueHandle handle = OpenForCheck(path, follow_link, &open_error);
+        if (!handle) {
+            Unopened(path, open_error);
+            return;
+        }
         const std::optional<WinEntry> entry = EntryOf(handle.get());
         if (!entry) return;
 
@@ -846,8 +869,12 @@ public:
         boost::system::error_code ec;
         for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
             const fs::path path = it->path();
-            const UniqueHandle handle = OpenForCheck(path, /*follow_link=*/false);
-            if (!handle) continue;
+            DWORD open_error = 0;
+            const UniqueHandle handle = OpenForCheck(path, /*follow_link=*/false, &open_error);
+            if (!handle) {
+                if (filter(path.filename().string()) && m_seen.insert(path).second) Unopened(path, open_error);
+                continue;
+            }
             const std::optional<WinEntry> entry = EntryOf(handle.get());
             if (!entry) continue;
 
@@ -862,6 +889,26 @@ public:
 private:
     Sid m_self;
     std::set<fs::path> m_seen;
+    //! The paths reported as reached through a junction Windows does not follow. A path below
+    //! one of them fails to open for the same reason, and is not reported again.
+    std::vector<fs::path> m_untrusted;
+
+    //! Reports \p path, which exists but could not be opened with \p error (UnopenedPathFinding),
+    //! once for each junction Windows does not follow.
+    void Unopened(const fs::path& path, DWORD error)
+    {
+        if (error == util::winacl::WIN32_UNTRUSTED_MOUNT_POINT) {
+            const auto below = [&path](const fs::path& reported) {
+                return std::mismatch(reported.begin(), reported.end(), path.begin(), path.end()).first == reported.end();
+            };
+            if (std::any_of(m_untrusted.begin(), m_untrusted.end(), below)) return;
+            m_untrusted.push_back(path);
+        }
+
+        if (std::optional<ModeFinding> finding = UnopenedPathFinding(path, error, Win32ErrorText(error))) {
+            m_findings.push_back(std::move(*finding));
+        }
+    }
 
     void Unreadable(const fs::path& path, const std::string& reason)
     {

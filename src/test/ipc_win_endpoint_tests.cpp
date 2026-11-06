@@ -375,6 +375,26 @@ BOOST_AUTO_TEST_CASE(classify_entry_by_reparse_tag)
     }
 }
 
+// A junction on the endpoint's path that Windows does not follow is a refusal that names
+// the path and says what to do, not a failure to open. Every other error stays one.
+BOOST_AUTO_TEST_CASE(untrusted_junction_on_the_path_is_a_refusal)
+{
+    constexpr uint32_t WIN32_FILE_NOT_FOUND = 2, WIN32_PATH_NOT_FOUND = 3, WIN32_ACCESS_DENIED = 5;
+    BOOST_CHECK_EQUAL(WIN32_UNTRUSTED_MOUNT_POINT, 448U);
+
+    const fs::path socket{"C:/Users/x/AppData/Roaming/GridcoinResearch/node.sock"};
+    const std::optional<std::string> refusal = UntrustedPathRefusal(WIN32_UNTRUSTED_MOUNT_POINT, socket);
+    BOOST_REQUIRE(refusal);
+    for (const std::string& part : {socket.string(), std::string{"junction"}, std::string{"administrator"},
+                                    std::string{"untrusted mount point"}, std::string{"directory the junction leads to"}}) {
+        BOOST_CHECK_MESSAGE(refusal->find(part) != std::string::npos, *refusal << " lacks '" << part << "'");
+    }
+
+    for (const uint32_t error : {WIN32_FILE_NOT_FOUND, WIN32_PATH_NOT_FOUND, WIN32_ACCESS_DENIED, 0U}) {
+        BOOST_CHECK_MESSAGE(!UntrustedPathRefusal(error, socket), "error " << error);
+    }
+}
+
 // In every mode the socket must be an AF_UNIX socket with a DACL, owned by the
 // expected server: a plain file, a file with another tag, a directory or a link at
 // its name is not the socket.
@@ -928,9 +948,53 @@ BOOST_FIXTURE_TEST_CASE(win_bound_socket_passes_the_check, grc_test::StateGuard)
     BOOST_CHECK(client.fd != -1);
 }
 
+// The socket's path reaches afunix as UTF-8: ParseAddress (ipc/process.cpp) fills sun_path
+// from path.string(). A data directory under a profile with a non-ASCII name puts such bytes
+// there. The bind and the connect must use the directory under its intended name, which they
+// do only if afunix reads sun_path as UTF-8 and not in the system code page; this case is what
+// shows which.
+BOOST_FIXTURE_TEST_CASE(win_socket_under_a_non_ascii_directory, grc_test::StateGuard)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine's AF_UNIX is not Windows' own; skipping");
+        return;
+    }
+    gArgs.ClearForcedArg("-ipcdir");
+    gArgs.ClearForcedArg("-ipcattachgroup");
+    gArgs.ClearForcedArg("-ipcserviceuser");
+
+    WinTempDir dir;
+    const std::wstring name = L"ipc \u00e4\u00f6\u00fc \u6d4b\u8bd5";
+    const fs::path ipcdir = dir.path / fs::path(name);
+    std::string address = "unix";
+    SocketCloser server{ipc::MakeProcess()->bind(ipcdir, address)};
+    BOOST_REQUIRE(server.fd != -1);
+    BOOST_REQUIRE_EQUAL(::listen(static_cast<SOCKET>(server.fd), 1), 0);
+
+    std::vector<std::wstring> names;
+    for (fs::directory_iterator it(dir.path); it != fs::directory_iterator(); ++it) {
+        names.push_back(it->path().filename().wstring());
+    }
+    BOOST_CHECK_MESSAGE(names.size() == 1 && names[0] == name, "the IPC directory is not there under its name alone");
+
+    bool socket_found = false;
+    for (fs::directory_iterator it(ipcdir); it != fs::directory_iterator(); ++it) {
+        socket_found = socket_found || it->path().filename() == "node.sock";
+    }
+    BOOST_CHECK_MESSAGE(socket_found, "no node.sock in the IPC directory under its intended name");
+    BOOST_CHECK(ReadEntryNoFollow(ipcdir / "node.sock").kind == EntryKind::UnixSocket);
+
+    std::string client_address = "unix";
+    SocketCloser client{ipc::MakeProcess()->connect(ipcdir, client_address)};
+    BOOST_CHECK(client.fd != -1);
+}
+
 // A real junction: in the same-account mode a junction above the socket is followed
 // as the system resolves it; where the directory rule applies it is refused, and a
-// junction at the socket's own name is refused in every mode.
+// junction at the socket's own name is refused in every mode. Current Windows 11 builds
+// do not follow a junction an account that is not an administrator made; there the one
+// above the socket is a refusal that says so, never a failure to open. Which applies is
+// read from the system, and a junction made with an elevated token is always followed.
 BOOST_FIXTURE_TEST_CASE(win_junction_followed_above_the_socket_only_in_same_account_mode, grc_test::StateGuard)
 {
     if (grc_test::RunningUnderWine()) {
@@ -951,11 +1015,22 @@ BOOST_FIXTURE_TEST_CASE(win_junction_followed_above_the_socket_only_in_same_acco
     grc_test::MakeJunction(linked, real);
     BOOST_CHECK(ReadEntryNoFollow(linked).kind == EntryKind::Redirect);
 
+    const bool untrusted = grc_test::JunctionUntrustedOn(linked);
+    BOOST_TEST_MESSAGE("Windows " << (untrusted ? "does not follow" : "follows") << " a junction this token made");
+    if (CurrentTokenIsElevated()) BOOST_CHECK_MESSAGE(!untrusted, "a junction an elevated token made is not followed");
+
     const Sid self = CurrentTokenUser();
-    BOOST_CHECK_NO_THROW(CheckServerEndpointBeforeConnect(linked / "node.sock", self));
+    if (untrusted) {
+        CheckRefusedByRule([&] { CheckServerEndpointBeforeConnect(linked / "node.sock", self); }, "junction");
+        CheckRefusedByRule([&] { CheckServerEndpointBeforeConnect(linked / "node.sock", self); },
+                           (linked / "node.sock").string());
+    } else {
+        BOOST_CHECK_NO_THROW(CheckServerEndpointBeforeConnect(linked / "node.sock", self));
+    }
 
     ApplyEndpointAcl(real / "node.sock", EndpointAclSpec(IpcObject::Socket, self, wellknown::Users()));
-    CheckRefusedByRule([&] { CheckServerEndpointBeforeConnect(linked / "node.sock", self); }, linked.string());
+    CheckRefusedByRule([&] { CheckServerEndpointBeforeConnect(linked / "node.sock", self); },
+                       untrusted ? "junction" : linked.string());
 
     const fs::path other = dir.path / "other";
     std::string error;

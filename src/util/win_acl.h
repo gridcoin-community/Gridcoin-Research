@@ -203,6 +203,18 @@ struct AccountLookup
     AccountType type{AccountType::Other};
 };
 
+//! ERROR_UNTRUSTED_MOUNT_POINT, which an open gets where Windows will not follow a junction
+//! on the path: current Windows 11 builds do not follow one that an account that is not an
+//! administrator made. win_acl.cpp checks the value against the SDK where it defines it.
+constexpr uint32_t WIN32_UNTRUSTED_MOUNT_POINT = 448;
+
+//! Why a path refused with WIN32_UNTRUSTED_MOUNT_POINT cannot be used, and what to do, for a
+//! message that names the path. ASCII.
+inline constexpr const char* UNTRUSTED_MOUNT_POINT_REASON =
+    "Windows does not follow a junction on this path, because an account that is not an administrator made it "
+    "(an untrusted mount point). Use the path of the directory the junction leads to, or have an administrator "
+    "make the junction";
+
 //! A Win32 handle, closed by \p Close when its guard goes out of scope or is reset.
 //! Null and INVALID_HANDLE_VALUE (all bits set) both mean no handle, so what a failed
 //! CreateFileW or CreateEventW returns can be taken as it is, and get() then gives

@@ -7,6 +7,7 @@
 #ifdef WIN32
 #include <boost/test/unit_test.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -75,6 +76,52 @@ void MakeJunction(const fs::path& link, const fs::path& target)
     const DWORD error = ::GetLastError();
     ::CloseHandle(handle);
     BOOST_REQUIRE_MESSAGE(set, "FSCTL_SET_REPARSE_POINT failed with Windows error " << error);
+}
+
+bool JunctionUntrustedOn(const fs::path& path)
+{
+    const HANDLE handle = ::CreateFileW(path.wstring().c_str(), FILE_READ_ATTRIBUTES,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                        FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    if (handle != INVALID_HANDLE_VALUE) {
+        ::CloseHandle(handle);
+        return false;
+    }
+
+    return ::GetLastError() == util::winacl::WIN32_UNTRUSTED_MOUNT_POINT;
+}
+
+PrivilegeState TokenPrivilegeState(const wchar_t* name)
+{
+    LUID luid{};
+    BOOST_REQUIRE_MESSAGE(::LookupPrivilegeValueW(nullptr, name, &luid),
+                          "LookupPrivilegeValueW failed with Windows error " << ::GetLastError());
+
+    HANDLE token = nullptr;
+    BOOST_REQUIRE_MESSAGE(::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token),
+                          "OpenProcessToken failed with Windows error " << ::GetLastError());
+    const util::winacl::UniqueHandle guard(token);
+    const std::vector<unsigned char> buffer = util::winacl::QueryTokenInformation(token, TokenPrivileges,
+                                                                                  "TokenPrivileges");
+
+    // TOKEN_PRIVILEGES is a count followed by that many entries; each is copied out of
+    // the buffer, whose size was checked, rather than indexed past the declared array.
+    DWORD count = 0;
+    BOOST_REQUIRE(buffer.size() >= sizeof(count));
+    std::memcpy(&count, buffer.data(), sizeof(count));
+    const size_t first = offsetof(TOKEN_PRIVILEGES, Privileges);
+    BOOST_REQUIRE(buffer.size() >= first + size_t{count} * sizeof(LUID_AND_ATTRIBUTES));
+
+    for (DWORD i = 0; i < count; ++i) {
+        LUID_AND_ATTRIBUTES entry{};
+        std::memcpy(&entry, buffer.data() + first + i * sizeof(LUID_AND_ATTRIBUTES), sizeof(entry));
+        if (entry.Luid.LowPart == luid.LowPart && entry.Luid.HighPart == luid.HighPart) {
+            return (entry.Attributes & SE_PRIVILEGE_ENABLED) != 0 ? PrivilegeState::Enabled
+                                                                  : PrivilegeState::Disabled;
+        }
+    }
+
+    return PrivilegeState::NotHeld;
 }
 #endif // WIN32
 

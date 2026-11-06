@@ -145,6 +145,14 @@ EntryKind ClassifyEntry(bool directory, std::optional<uint32_t> reparse_tag)
     return EntryKind::File;
 }
 
+std::optional<std::string> UntrustedPathRefusal(uint32_t error, const fs::path& path)
+{
+    if (error != util::winacl::WIN32_UNTRUSTED_MOUNT_POINT) return std::nullopt;
+
+    return strprintf("the IPC endpoint '%s' cannot be checked: %s.", path.string(),
+                     util::winacl::UNTRUSTED_MOUNT_POINT_REASON);
+}
+
 std::optional<std::string> DirectoryRefusal(const EndpointEntry& dir, const Sid& server, bool require_protected)
 {
     const std::string shown = dir.path.string();
@@ -311,8 +319,11 @@ using util::winacl::UniqueHandle;
 //! semantics so a directory opens too, and FILE_FLAG_OPEN_REPARSE_POINT so a
 //! reparse point at \p path is opened itself rather than followed. Without
 //! \p share_delete nobody can rename or delete it while the handle is open. A
-//! missing path throws std::system_error with std::errc::no_such_file_or_directory,
-//! anything else the Win32 error.
+//! missing path throws std::system_error with std::errc::no_such_file_or_directory.
+//! A path through a junction Windows does not follow throws std::runtime_error, a
+//! refusal naming the path and what to do (UntrustedPathRefusal): that is not a
+//! passing failure but how the path is laid out. Anything else throws the Win32
+//! error.
 HANDLE OpenNoFollow(const fs::path& path, bool share_delete)
 {
     const DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | (share_delete ? FILE_SHARE_DELETE : 0);
@@ -324,6 +335,7 @@ HANDLE OpenNoFollow(const fs::path& path, bool share_delete)
         if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
             throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory), path.string());
         }
+        if (std::optional<std::string> refusal = UntrustedPathRefusal(error, path)) throw std::runtime_error(*refusal);
         ThrowWin32(error, "open " + path.string());
     }
 

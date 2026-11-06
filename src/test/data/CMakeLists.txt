@@ -60,12 +60,12 @@ add_custom_target(generate_entry_point_classes.json.h DEPENDS entry_point_classe
 add_dependencies(test_gridcoin generate_entry_point_classes.json.h)
 
 # The Refuse class pattern file, which util_tests compares with the list compiled into
-# the core, as the bytes refused_setting_keys_txt. txt2header.cmake cannot embed it,
-# because it names the variable after the file and refused-setting-keys is not an
-# identifier.
+# the core, as the bytes refused_setting_keys_txt: REFUSED_SETTING_KEYS_FILE, the file the
+# generator reads (src/CMakeLists.txt). txt2header.cmake cannot embed it, because it names
+# the variable after the file and refused-setting-keys is not an identifier.
 add_custom_command(OUTPUT refused-setting-keys.txt.h
-    COMMAND ${XXD} -i -n refused_setting_keys_txt ${CMAKE_SOURCE_DIR}/share/gridcoin/refused-setting-keys.txt ${CMAKE_CURRENT_BINARY_DIR}/refused-setting-keys.txt.h
-    DEPENDS ${CMAKE_SOURCE_DIR}/share/gridcoin/refused-setting-keys.txt
+    COMMAND ${XXD} -i -n refused_setting_keys_txt ${REFUSED_SETTING_KEYS_FILE} ${CMAKE_CURRENT_BINARY_DIR}/refused-setting-keys.txt.h
+    DEPENDS ${REFUSED_SETTING_KEYS_FILE}
 )
 add_custom_target(generate_refused-setting-keys.txt.h DEPENDS refused-setting-keys.txt.h)
 add_dependencies(test_gridcoin generate_refused-setting-keys.txt.h)

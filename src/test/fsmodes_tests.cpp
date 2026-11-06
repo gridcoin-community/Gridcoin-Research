@@ -622,6 +622,40 @@ BOOST_AUTO_TEST_CASE(network_share_from_the_final_path_or_else_the_name)
     BOOST_CHECK_EQUAL(asked, 2);
 }
 
+// A path the Windows check cannot open is reported with the reason, unless it does not exist.
+// A data or backup directory moved behind a junction that Windows does not follow is named,
+// with what to do, rather than passed over in silence.
+BOOST_AUTO_TEST_CASE(unopened_path_is_reported_unless_it_does_not_exist)
+{
+    constexpr uint32_t WIN32_FILE_NOT_FOUND = 2, WIN32_PATH_NOT_FOUND = 3, WIN32_ACCESS_DENIED = 5;
+    const fs::path moved{"C:/Users/x/AppData/Roaming/GridcoinResearch"};
+
+    BOOST_CHECK(!fsmodes::UnopenedPathFinding(moved, WIN32_FILE_NOT_FOUND, "not found"));
+    BOOST_CHECK(!fsmodes::UnopenedPathFinding(moved, WIN32_PATH_NOT_FOUND, "not found"));
+
+    const std::optional<fsmodes::ModeFinding> untrusted =
+        fsmodes::UnopenedPathFinding(moved, util::winacl::WIN32_UNTRUSTED_MOUNT_POINT, "ignored");
+    BOOST_REQUIRE(untrusted);
+    BOOST_CHECK(untrusted->path == moved);
+    BOOST_CHECK(untrusted->kind == fsmodes::ModeFinding::Kind::Unreadable);
+    BOOST_CHECK_EQUAL(untrusted->mode, 0U);
+    for (const std::string& part : {"WARNING: " + moved.string(), std::string{"junction"},
+                                    std::string{"administrator"}, std::string{"directory the junction leads to"},
+                                    std::string{"not checked"}}) {
+        CheckHas(untrusted->message, part);
+    }
+    CheckHasNot(untrusted->message, "ignored");
+    BOOST_CHECK_MESSAGE(IsAsciiLine(untrusted->message), untrusted->message);
+
+    const std::optional<fsmodes::ModeFinding> denied =
+        fsmodes::UnopenedPathFinding(moved, WIN32_ACCESS_DENIED, "Access is denied.");
+    BOOST_REQUIRE(denied);
+    BOOST_CHECK(denied->kind == fsmodes::ModeFinding::Kind::Unreadable);
+    CheckHas(denied->message, "WARNING: " + moved.string());
+    CheckHas(denied->message, "(Access is denied.)");
+    CheckHas(denied->message, "not checked");
+}
+
 // The startup warning for a backup directory whose files cannot be owner-only names the
 // cause and says what it means: backups are still written, and other users may read them.
 // It does not tell the user to make a writable directory writable.
@@ -1347,7 +1381,10 @@ BOOST_AUTO_TEST_CASE(check_leaves_a_foreign_owned_conf)
 
 // A junction in the set is reported and not followed, so nothing behind it is checked. A data
 // directory or a backup directory moved to another disk behind a junction is followed, and the
-// rule applies to what it leads to; inside it, the files are checked as before.
+// rule applies to what it leads to; inside it, the files are checked as before. Current Windows
+// 11 builds do not follow a junction an account that is not an administrator made: there the
+// moved directory is reported, once, as one that could not be checked and why. Which applies is
+// read from the system, and a junction made with an elevated token is always followed.
 BOOST_AUTO_TEST_CASE(check_reports_a_junction_and_follows_a_moved_directory)
 {
     if (SkipUnderWine()) return;
@@ -1370,12 +1407,23 @@ BOOST_AUTO_TEST_CASE(check_reports_a_junction_and_follows_a_moved_directory)
 
     const fs::path moved = dir.path / "moved";
     grc_test::MakeJunction(moved, wide);
+    const bool untrusted = grc_test::JunctionUntrustedOn(moved);
+    BOOST_TEST_MESSAGE("Windows " << (untrusted ? "does not follow" : "follows") << " a junction this token made");
+    if (CurrentTokenIsElevated()) BOOST_CHECK_MESSAGE(!untrusted, "a junction an elevated token made is not followed");
+
     const auto followed = fsmodes::CheckOwnerOnlyModes(moved, {}, {}, {}, {}, {});
     BOOST_REQUIRE_EQUAL(followed.size(), 1U);
     BOOST_CHECK(followed[0].path == moved);
-    BOOST_CHECK(followed[0].kind == fsmodes::ModeFinding::Kind::WideMode);
-    CheckHas(followed[0].message, "icacls \"" + moved.string() + "\"");
-    CheckHas(followed[0].message, ":(OI)(CI)F\"");
+    if (untrusted) {
+        BOOST_CHECK(followed[0].kind == fsmodes::ModeFinding::Kind::Unreadable);
+        CheckHas(followed[0].message, "WARNING: " + moved.string());
+        CheckHas(followed[0].message, "junction");
+        CheckHas(followed[0].message, "administrator");
+    } else {
+        BOOST_CHECK(followed[0].kind == fsmodes::ModeFinding::Kind::WideMode);
+        CheckHas(followed[0].message, "icacls \"" + moved.string() + "\"");
+        CheckHas(followed[0].message, ":(OI)(CI)F\"");
+    }
 
     const fs::path backups = dir.path / "backups";
     BOOST_REQUIRE(CreateDirectoryWithAcl(backups, util::OwnerOnlyAclSpec(/*inheritable=*/true)));
@@ -1386,9 +1434,16 @@ BOOST_AUTO_TEST_CASE(check_reports_a_junction_and_follows_a_moved_directory)
     grc_test::MakeJunction(backups_link, backups);
 
     const auto inner = fsmodes::CheckOwnerOnlyModes({}, {}, {}, {}, backups_link, {});
-    BOOST_CHECK_EQUAL(inner.size(), 2U);
-    BOOST_CHECK(FindingFor(inner, backups_link / "wallet.dat-x").kind == fsmodes::ModeFinding::Kind::WideMode);
-    BOOST_CHECK(FindingFor(inner, backups_link / "linked").kind == fsmodes::ModeFinding::Kind::Symlink);
+    if (untrusted) {
+        BOOST_REQUIRE_EQUAL(inner.size(), 1U);
+        BOOST_CHECK(inner[0].path == backups_link);
+        BOOST_CHECK(inner[0].kind == fsmodes::ModeFinding::Kind::Unreadable);
+        CheckHas(inner[0].message, "junction");
+    } else {
+        BOOST_CHECK_EQUAL(inner.size(), 2U);
+        BOOST_CHECK(FindingFor(inner, backups_link / "wallet.dat-x").kind == fsmodes::ModeFinding::Kind::WideMode);
+        BOOST_CHECK(FindingFor(inner, backups_link / "linked").kind == fsmodes::ModeFinding::Kind::Symlink);
+    }
 
     // The junctions themselves are removed, so the cleanup does not go through them.
     BOOST_CHECK(::RemoveDirectoryW(backups_link.wstring().c_str()));
