@@ -28,6 +28,10 @@ The .orig files are removed only once every one was read to its end, so a block
 record cut off at the end of the last file, which a crash while a block was
 being written leaves, must not stop that: a third case reindexes a block file
 with such a record appended.
+
+A -resetblockchaindata start removes the block data, and the last case checks
+that this includes the .orig files that a stop after the rename leaves, so that
+a later -reindex does not import them.
 """
 
 import os
@@ -133,31 +137,37 @@ class ReindexInterruptedTest(GridcoinTestFramework):
         self.assert_whole_chain(height, best)
         self.stop_node(0)
 
-        if sys.platform == "win32":
-            # terminate() is TerminateProcess on Windows, not a shutdown request.
-            return
+        # terminate() is TerminateProcess on Windows, not a shutdown request.
+        if sys.platform != "win32":
+            self.log.info("A stop during the import keeps the .orig files, then -reindex restores the chain")
+            offset = self.log_size()
+            node.start(["-reindex"])
+            # Poll faster than wait_until does: the import is about a second long.
+            deadline = time.time() + 120
+            while "LoadExternalBlockFile: blocks/s:" not in self.log_since(offset):
+                assert time.time() < deadline, "the import did not start"
+                assert node.process.poll() is None, "the node exited before its import started"
+                time.sleep(0.01)
+            node.process.terminate()
+            node.process.wait(timeout=120)
+            self.mark_node_stopped()
 
-        self.log.info("A stop during the import keeps the .orig files, then -reindex restores the chain")
-        offset = self.log_size()
-        node.start(["-reindex"])
-        # Poll faster than wait_until does: the import is about a second long.
-        deadline = time.time() + 120
-        while "LoadExternalBlockFile: blocks/s:" not in self.log_since(offset):
-            assert time.time() < deadline, "the import did not start"
-            assert node.process.poll() is None, "the node exited before its import started"
-            time.sleep(0.01)
-        node.process.terminate()
-        node.process.wait(timeout=120)
-        self.mark_node_stopped()
+            loaded = [int(n) for n in re.findall(r"Loaded (\d+) blocks from external file", self.log_since(offset))]
+            assert_equal(len(loaded), 1)
+            # The import must have been cut short for this case to test anything.
+            assert loaded[0] < height, "the import finished before SIGTERM arrived; raise CHAIN_LENGTH"
+            assert_greater_than(len(self.orig_files()), 0)
 
-        loaded = [int(n) for n in re.findall(r"Loaded (\d+) blocks from external file", self.log_since(offset))]
-        assert_equal(len(loaded), 1)
-        # The import must have been cut short for this case to test anything.
-        assert loaded[0] < height, "the import finished before SIGTERM arrived; raise CHAIN_LENGTH"
+            self.start_node(0, ["-reindex"])
+            self.assert_whole_chain(height, best)
+            self.stop_node(0)
+
+        self.log.info("-resetblockchaindata after a stop after the rename removes the .orig files too")
+        node.assert_start_raises_init_error(["-reindex", "-printblocktree"])
         assert_greater_than(len(self.orig_files()), 0)
-
-        self.start_node(0, ["-reindex"])
-        self.assert_whole_chain(height, best)
+        self.start_node(0, ["-resetblockchaindata"])
+        assert_equal(node.getblockcount(), 0)
+        assert_equal(self.orig_files(), [])
 
 
 if __name__ == '__main__':

@@ -66,7 +66,8 @@ public:
     static bool GetActualCleanupPath(fs::path& actual_cleanup_path);
 
     //!
-    //! \brief Cleans up previous blockchain data if any is found
+    //! \brief Cleans up previous blockchain data if any is found. With include_blockchain_data_files, that includes the
+    //! blk*.dat files and any blk*.dat.orig files left by a -reindex that did not complete.
     //!
     //! \return Bool on the success of cleanup
     //!

@@ -251,6 +251,7 @@ void Upgrade::CleanupBlockchainData(bool include_blockchain_data_files)
     // txleveldb
     // accrual
     // blk*.dat
+    // blk*.dat.orig, left by a -reindex that did not complete
     fs::directory_iterator IterEnd;
 
     // Count for progress bar first
@@ -292,8 +293,10 @@ void Upgrade::CleanupBlockchainData(bool include_blockchain_data_files)
                 {
                     std::string filetocheck = Iter->path().filename().string();
 
-                    // Check it ends with .dat and starts with blk
-                    if (filetocheck.substr(0, 3) == "blk" && filetocheck.substr(filetocheck.length() - 4, 4) == ".dat")
+                    // Check it starts with blk and ends with .dat, or with .dat.orig
+                    if (boost::algorithm::starts_with(filetocheck, "blk")
+                        && (boost::algorithm::ends_with(filetocheck, ".dat")
+                            || boost::algorithm::ends_with(filetocheck, ".dat.orig")))
                     {
                         ++total_items;
                     }
@@ -381,8 +384,10 @@ void Upgrade::CleanupBlockchainData(bool include_blockchain_data_files)
                 {
                     std::string filetocheck = Iter->path().filename().string();
 
-                    // Check it ends with .dat and starts with blk
-                    if (filetocheck.substr(0, 3) == "blk" && filetocheck.substr(filetocheck.length() - 4, 4) == ".dat")
+                    // Check it starts with blk and ends with .dat, or with .dat.orig
+                    if (boost::algorithm::starts_with(filetocheck, "blk")
+                        && (boost::algorithm::ends_with(filetocheck, ".dat")
+                            || boost::algorithm::ends_with(filetocheck, ".dat.orig")))
                     {
                         if (fs::remove(*Iter))
                         {
