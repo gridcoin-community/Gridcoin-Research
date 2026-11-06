@@ -585,8 +585,9 @@ std::optional<fs::path> SnapshotWallet(const CWallet& wallet, std::string& error
     }
 
 #ifndef WIN32
-    // The copy takes the wallet file's mode. On Windows it inherits the
-    // directory's owner-only access instead.
+    // The copy is a new file, which fsmodes::CopyFileOwnerOnly created 0600; this
+    // makes sure of it. On Windows it was created with the owner-only access list
+    // instead.
     if (::chmod(snapshot.c_str(), S_IRUSR | S_IWUSR) != 0) {
         error = strprintf("the copy of the wallet file could not be made owner-only: %s", SysErrorString(errno));
         RemoveFile(snapshot);

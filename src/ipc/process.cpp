@@ -607,7 +607,10 @@ void PrepareIpcDirectory(const fs::path& dir)
     // socket or cookie is refused rather than warned about, because on Windows the
     // directory's list, not its traverse right, is what keeps them in place. The
     // default, the data directory, keeps the warning: data directories made by
-    // earlier releases inherit %APPDATA%'s list.
+    // earlier releases inherit %APPDATA%'s list. The startup check of the wallet
+    // files (fsmodes::CheckOwnerOnlyModes, from AppInit2, on every platform) also
+    // reports a data directory that lets another account read or change it, with
+    // the command that fixes it, and changes nothing.
     //
     // When the directory is created here, restricting it fails closed: if we
     // cannot restrict a directory we just made, throw rather than expose the

@@ -2,8 +2,6 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef WIN32
-
 #include "util/fsmodes.h"
 
 #include "util/dir_permissions.h"
@@ -11,6 +9,17 @@
 #include "span.h"
 #include "tinyformat.h"
 #include "util/strencodings.h"
+#include "util/string.h"
+
+#include <algorithm>
+#include <set>
+#include <utility>
+
+#ifdef WIN32
+#include <system_error>
+
+#include <windows.h>
+#else
 #include "util/syserror.h"
 
 #include <fcntl.h>
@@ -18,9 +27,281 @@
 #include <unistd.h>
 
 #include <cerrno>
-#include <set>
+#endif
 
 namespace fsmodes {
+
+namespace {
+
+using util::winacl::AceKind;
+using util::winacl::ObservedAce;
+using util::winacl::ObservedAcl;
+using util::winacl::Sid;
+
+//! The paths CheckOwnerOnlyModes checks, in the same order on every platform, through the
+//! platform's checker.
+//!
+//! follow_link is for the paths an operator may move to another disk behind a link: the data
+//! directory, the backup directory, the configuration file and debug.log. Every other path
+//! keeps the rule that a link is reported and not followed.
+template <typename Checker>
+void CheckWalletFiles(Checker& checker, const fs::path& datadir, const fs::path& conf, const fs::path& settings,
+                      const fs::path& wallet_file, const fs::path& backupdir, const fs::path& debuglog)
+{
+    checker.Check(datadir, /*follow_link=*/true);
+    checker.Check(wallet_file);
+
+    if (!datadir.empty()) {
+        const fs::path database = datadir / "database";
+        checker.Check(database);
+        checker.CheckEntries(database, [](const std::string& name) { return name.compare(0, 4, "log.") == 0; });
+    }
+
+    checker.Check(conf, /*follow_link=*/true);
+    checker.Check(settings);
+
+    checker.Check(backupdir, /*follow_link=*/true);
+    checker.CheckEntries(backupdir, [](const std::string&) { return true; }, /*follow_link=*/true);
+
+    checker.Check(debuglog, /*follow_link=*/true);
+}
+
+//! The accounts the Windows rule allows: this one, SYSTEM and Administrators.
+std::vector<Sid> AllowedAccounts(const Sid& self)
+{
+    return {self, util::winacl::wellknown::System(), util::winacl::wellknown::Administrators()};
+}
+
+bool IsAllowed(const std::vector<Sid>& allowed, const Sid& sid)
+{
+    return std::find(allowed.begin(), allowed.end(), sid) != allowed.end();
+}
+
+//! The name Windows shows for a group that the access lists of a volume commonly hold, or
+//! nullptr.
+const char* WellKnownName(const std::string& sid)
+{
+    static const std::pair<const char*, const char*> NAMES[] = {
+        {"S-1-1-0", "Everyone"},
+        {"S-1-5-7", "ANONYMOUS LOGON"},
+        {"S-1-5-11", "Authenticated Users"},
+        {"S-1-5-18", "SYSTEM"},
+        {"S-1-5-32-544", "Administrators"},
+        {"S-1-5-32-545", "Users"},
+        {"S-1-5-32-546", "Guests"},
+    };
+
+    for (const auto& [text, name] : NAMES) {
+        if (sid == text) return name;
+    }
+
+    return nullptr;
+}
+
+//! \p sid as the warning shows it: its string form, followed by the name of a well-known group.
+std::string Describe(const Sid& sid)
+{
+    const std::string text = util::winacl::FormatSid(sid);
+    if (text.empty()) return "an account with an unreadable SID";
+
+    if (const char* name = WellKnownName(text)) return text + " (" + name + ")";
+
+    return text;
+}
+
+//! An account outside the allowed ones that the access list lets read or change the path.
+struct ForeignGrant
+{
+    Sid trustee;
+    //! Every right its entries give it.
+    uint32_t mask{0};
+    //! Whether one of those entries is inherited.
+    bool inherited{false};
+};
+
+//! The accounts outside \p allowed that an allow entry lets read or change the path, as
+//! FindForeignReader and FindForeignWriter find them, each once, in the order of its first
+//! entry.
+std::vector<ForeignGrant> ForeignGrants(const ObservedAcl& acl, const std::vector<Sid>& allowed)
+{
+    constexpr uint32_t RIGHTS = util::winacl::mask::READISH | util::winacl::mask::FILE_WRITEISH;
+
+    std::vector<ForeignGrant> grants;
+    if (!acl.dacl_present) return grants;
+
+    for (const ObservedAce& ace : acl.aces) {
+        const bool grant = ace.kind == AceKind::Allow || ace.kind == AceKind::OtherAllow;
+        if (!grant || ace.inherit_only || (ace.mask & RIGHTS) == 0 || IsAllowed(allowed, ace.trustee)) continue;
+
+        const auto it = std::find_if(grants.begin(), grants.end(),
+                                     [&ace](const ForeignGrant& g) { return g.trustee == ace.trustee; });
+        if (it == grants.end()) {
+            grants.push_back({ace.trustee, ace.mask, ace.inherited});
+        } else {
+            it->mask |= ace.mask;
+            it->inherited = it->inherited || ace.inherited;
+        }
+    }
+
+    return grants;
+}
+
+} // anonymous namespace
+
+WinAclVerdict ClassifyWinAcl(const ObservedAcl& acl, const Sid& self)
+{
+    const std::vector<Sid> allowed = AllowedAccounts(self);
+
+    // Both also count a missing DACL and an owner outside the allowed accounts. Reading the
+    // file needs a right of READISH; FILE_WRITEISH holds the rights that change it, and those
+    // (WRITE_DAC, WRITE_OWNER) with which an account can give itself read.
+    if (!util::winacl::FindForeignReader(acl, allowed) &&
+        !util::winacl::FindForeignWriter(acl, allowed, util::winacl::mask::FILE_WRITEISH)) {
+        return WinAclVerdict::Clean;
+    }
+
+    return acl.owner == self ? WinAclVerdict::Wide : WinAclVerdict::WideNotOwned;
+}
+
+std::string WinAclWarning(const fs::path& path, const ObservedAcl& acl, const Sid& self, bool directory)
+{
+    const std::vector<Sid> allowed = AllowedAccounts(self);
+    const std::vector<ForeignGrant> grants = ForeignGrants(acl, allowed);
+    const bool foreign_owner = !acl.owner || !IsAllowed(allowed, *acl.owner);
+
+    std::vector<std::string> problems;
+    if (!acl.dacl_present) problems.emplace_back("it has no DACL, so every account has full access");
+    if (!acl.owner) {
+        problems.emplace_back("its owner could not be read");
+    } else if (foreign_owner) {
+        problems.push_back("it is owned by " + Describe(*acl.owner) + ", which can change its access list");
+    }
+    for (const ForeignGrant& grant : grants) {
+        const bool reads = (grant.mask & util::winacl::mask::READISH) != 0;
+        const bool changes = (grant.mask & util::winacl::mask::FILE_WRITEISH) != 0;
+        problems.push_back(strprintf("%s can %s it (access mask 0x%08x)", Describe(grant.trustee),
+                                     reads && changes ? "read and change" : reads ? "read" : "change", grant.mask));
+    }
+
+    // The accounts to take off the list, as icacls reads a SID: marked with an asterisk.
+    std::string removals;
+    bool inherited = false;
+    for (const ForeignGrant& grant : grants) {
+        const std::string text = util::winacl::FormatSid(grant.trustee);
+        if (!text.empty()) removals += " *" + text;
+        inherited = inherited || grant.inherited;
+    }
+
+    const std::string quoted = "\"" + path.string() + "\"";
+    std::string message = "WARNING: " + path.string() + " gives other accounts access to wallet data: " +
+                          Join(problems, "; ") + ". ";
+
+    if (acl.owner == self) {
+        // The list the core gives what it creates: this account and SYSTEM, protected, and on a
+        // directory inherited by what is inside. /inheritance:r drops every inherited entry,
+        // and /remove:g the other accounts' own entries.
+        const std::string rights = directory ? ":(OI)(CI)F\"" : ":F\"";
+        std::string command = "icacls " + quoted + " /inheritance:r /grant:r \"*" + util::winacl::FormatSid(self) + rights;
+        if (self != util::winacl::wellknown::System()) command += " \"*S-1-5-18" + rights;
+        if (!removals.empty()) command += " /remove:g" + removals;
+
+        return message + "To make it owner-only, run in a command prompt: " + command;
+    }
+
+    // Another account's path is reported only. Its owner keeps the list it chose, less the
+    // other accounts' access, and this account is given nothing on it.
+    // A foreign or unknown owner is named among the problems already.
+    message += foreign_owner ? std::string{"Only its owner or an administrator can change it"}
+                             : "It is owned by " + Describe(*acl.owner) +
+                                   ", so only its owner or an administrator can change it";
+    message += ". In a command prompt run as one of them, ";
+
+    std::vector<std::string> steps;
+    if (foreign_owner) {
+        steps.push_back("make this account its owner: icacls " + quoted + " /setowner *" +
+                        util::winacl::FormatSid(self));
+    }
+    if (!removals.empty()) {
+        // An inherited entry cannot be removed, so the inherited entries are first made the
+        // path's own.
+        steps.push_back("remove the other accounts' access: " +
+                        (inherited ? "icacls " + quoted + " /inheritance:d && " : std::string{}) + "icacls " + quoted +
+                        " /remove:g" + removals);
+    }
+    if (!acl.dacl_present) {
+        steps.emplace_back("give it an access list that names only this account, SYSTEM and Administrators");
+    }
+    if (steps.empty()) steps.emplace_back("remove the access of the accounts named above");
+
+    return message + Join(steps, ", then ");
+}
+
+std::optional<std::string> BackupDirWarning(const fs::path& backupdir, const BackupDirCheck& check)
+{
+    if (check.not_writable) {
+#ifdef WIN32
+        return strprintf("-backupdir %s is not writable (%s): automatic wallet backups will fail. Make it writable "
+                         "by the account the core runs as, or set -backupdir to a directory that account can write.",
+                         backupdir.string(), *check.not_writable);
+#else
+        return strprintf("-backupdir %s is not writable (%s): automatic wallet backups will fail. Make it writable "
+                         "by the account the core runs as (under a systemd unit with ProtectSystem=, also list it in "
+                         "ReadWritePaths=), or set -backupdir to a directory that account can write.",
+                         backupdir.string(), *check.not_writable);
+#endif
+    }
+    if (check.not_owner_only) {
+#ifdef WIN32
+        return strprintf("Wallet backups in %s cannot be made owner-only (%s). This happens on a volume that keeps "
+                         "no access lists, such as FAT or exFAT. The backups are still written there, but other users "
+                         "of this computer may be able to read them.",
+                         backupdir.string(), *check.not_owner_only);
+#else
+        return strprintf("Wallet backups in %s cannot be made owner-only (%s). This happens on a filesystem without "
+                         "POSIX permissions, such as FAT. The backups are still written there, but other users of "
+                         "this computer may be able to read them.",
+                         backupdir.string(), *check.not_owner_only);
+#endif
+    }
+    return std::nullopt;
+}
+
+namespace {
+//! Creates \p probe, a new file, as a backup copy is created, and removes it again. \p check
+//! receives why it could not be created, or why it is not owner-only.
+void ProbeBackupDir(const fs::path& probe, BackupDirCheck& check);
+} // anonymous namespace
+
+BackupDirCheck CheckBackupDir(const fs::path& backupdir)
+{
+    // A random name: under PrivatePIDs= every start has the same pid, so a name made
+    // of the pid would meet the probe of an earlier start that was killed before it
+    // removed it.
+    return CheckBackupDir(backupdir, [] {
+        unsigned char random[8];
+        GetRandBytes(Span<unsigned char>(random, sizeof(random)));
+        return ".gridcoin-write-test-" + HexStr(Span<const unsigned char>(random, sizeof(random)));
+    });
+}
+
+BackupDirCheck CheckBackupDir(const fs::path& backupdir, const std::function<std::string()>& probe_name)
+{
+    BackupDirCheck check;
+
+    // Restricted where the filesystem allows it. A directory that cannot be is kept:
+    // backups that other users might read are better than no backups.
+    std::string error;
+    if (!util::CreateDirectoryRestrictedIfPossible(backupdir, error, check.not_owner_only)) {
+        check.not_writable = error;
+        return check;
+    }
+
+    ProbeBackupDir(backupdir / probe_name(), check);
+
+    return check;
+}
+
+#ifndef WIN32
 
 namespace {
 
@@ -48,9 +329,7 @@ class ModeChecker
 public:
     std::vector<ModeFinding> m_findings;
 
-    //! follow_link is for the paths an operator may move to another disk behind a link: the data
-    //! directory, the backup directory, the configuration file and debug.log. Every other path
-    //! keeps the rule that a symbolic link is reported and not followed.
+    //! follow_link: see CheckWalletFiles.
     void Check(const fs::path& path, bool follow_link = false)
     {
         if (path.empty() || !m_seen.insert(path).second) return;
@@ -119,23 +398,7 @@ std::vector<ModeFinding> CheckOwnerOnlyModes(const fs::path& datadir, const fs::
                                              const fs::path& backupdir, const fs::path& debuglog)
 {
     ModeChecker checker;
-
-    checker.Check(datadir, /*follow_link=*/true);
-    checker.Check(wallet_file);
-
-    if (!datadir.empty()) {
-        const fs::path database = datadir / "database";
-        checker.Check(database);
-        checker.CheckEntries(database, [](const std::string& name) { return name.compare(0, 4, "log.") == 0; });
-    }
-
-    checker.Check(conf, /*follow_link=*/true);
-    checker.Check(settings);
-
-    checker.Check(backupdir, /*follow_link=*/true);
-    checker.CheckEntries(backupdir, [](const std::string&) { return true; }, /*follow_link=*/true);
-
-    checker.Check(debuglog, /*follow_link=*/true);
+    CheckWalletFiles(checker, datadir, conf, settings, wallet_file, backupdir, debuglog);
 
     return std::move(checker.m_findings);
 }
@@ -212,33 +475,9 @@ std::optional<std::string> NewFileModeProblem(int fd)
 
     return strprintf("a file created there with mode 0600 has mode %04o", mode);
 }
-} // anonymous namespace
 
-BackupDirCheck CheckBackupDir(const fs::path& backupdir)
+void ProbeBackupDir(const fs::path& probe, BackupDirCheck& check)
 {
-    // A random name: under PrivatePIDs= every start has the same pid, so a name made
-    // of the pid would meet the probe of an earlier start that was killed before it
-    // removed it.
-    return CheckBackupDir(backupdir, [] {
-        unsigned char random[8];
-        GetRandBytes(Span<unsigned char>(random, sizeof(random)));
-        return ".gridcoin-write-test-" + HexStr(Span<const unsigned char>(random, sizeof(random)));
-    });
-}
-
-BackupDirCheck CheckBackupDir(const fs::path& backupdir, const std::function<std::string()>& probe_name)
-{
-    BackupDirCheck check;
-
-    // Restricted where the filesystem allows it. A directory that cannot be is kept:
-    // backups that other users might read are better than no backups.
-    std::string error;
-    if (!util::CreateDirectoryRestrictedIfPossible(backupdir, error, check.not_owner_only)) {
-        check.not_writable = error;
-        return check;
-    }
-
-    const fs::path probe = backupdir / probe_name();
     const auto create = [&probe] {
         return ::open(probe.string().c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
     };
@@ -251,7 +490,7 @@ BackupDirCheck CheckBackupDir(const fs::path& backupdir, const std::function<std
     }
     if (fd < 0) {
         check.not_writable = SysErrorString(errno);
-        return check;
+        return;
     }
 
     // A directory that was there already is not restricted here, but the probe shows
@@ -260,26 +499,8 @@ BackupDirCheck CheckBackupDir(const fs::path& backupdir, const std::function<std
 
     ::close(fd);
     ::unlink(probe.string().c_str());
-
-    return check;
 }
-
-std::optional<std::string> BackupDirWarning(const fs::path& backupdir, const BackupDirCheck& check)
-{
-    if (check.not_writable) {
-        return strprintf("-backupdir %s is not writable (%s): automatic wallet backups will fail. Make it writable "
-                         "by the account the core runs as (under a systemd unit with ProtectSystem=, also list it in "
-                         "ReadWritePaths=), or set -backupdir to a directory that account can write.",
-                         backupdir.string(), *check.not_writable);
-    }
-    if (check.not_owner_only) {
-        return strprintf("Wallet backups in %s cannot be made owner-only (%s). This happens on a filesystem without "
-                         "POSIX permissions, such as FAT. The backups are still written there, but other users of "
-                         "this computer may be able to read them.",
-                         backupdir.string(), *check.not_owner_only);
-    }
-    return std::nullopt;
-}
+} // anonymous namespace
 
 std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::path& target)
 {
@@ -354,6 +575,432 @@ std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::p
     return not_owner_only;
 }
 
-} // namespace fsmodes
+#else // WIN32
 
-#endif // !WIN32
+namespace {
+
+using util::winacl::UniqueHandle;
+
+//! "<message> (error <n>)", the message left out unless it is printable ASCII, as every log
+//! line must be: Windows words it in its display language.
+std::string Win32ErrorText(DWORD error)
+{
+    std::string message = std::system_category().message(static_cast<int>(error));
+
+    while (!message.empty() && (message.back() == '\r' || message.back() == '\n' || message.back() == ' ' ||
+                                message.back() == '.')) {
+        message.pop_back();
+    }
+
+    const bool printable = std::all_of(message.begin(), message.end(), [](char c) { return c >= 0x20 && c < 0x7f; });
+    if (message.empty() || !printable) return strprintf("error %u", error);
+
+    return strprintf("%s (error %u)", message, error);
+}
+
+//! The reason a std::system_error from util::winacl gives, in ASCII. Its code is the Win32 error.
+std::string ReasonOf(const std::system_error& e)
+{
+    return Win32ErrorText(static_cast<DWORD>(e.code().value()));
+}
+
+//! What an open path is.
+struct Entry
+{
+    bool directory{false};
+    //! A reparse point of any kind.
+    bool reparse{false};
+    //! A reparse point that names another path: a symbolic link, a junction or a mount point.
+    bool link{false};
+};
+
+//! \p path opened to read its attributes and access list, a reparse point at \p path opened as
+//! itself unless \p follow_link. A null handle when it cannot be opened.
+UniqueHandle OpenForCheck(const fs::path& path, bool follow_link)
+{
+    const DWORD flags = FILE_FLAG_BACKUP_SEMANTICS | (follow_link ? 0 : FILE_FLAG_OPEN_REPARSE_POINT);
+
+    return UniqueHandle(::CreateFileW(path.wstring().c_str(), READ_CONTROL | FILE_READ_ATTRIBUTES,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                      flags, nullptr));
+}
+
+//! What \p handle refers to, read from its attributes and reparse tag, or nullopt when they
+//! cannot be read.
+std::optional<Entry> EntryOf(HANDLE handle)
+{
+    FILE_ATTRIBUTE_TAG_INFO info{};
+    if (!::GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &info, sizeof(info))) return std::nullopt;
+
+    Entry entry;
+    entry.directory = (info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    entry.reparse = (info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+    entry.link = entry.reparse && IsReparseTagNameSurrogate(info.ReparseTag);
+
+    return entry;
+}
+
+class AclChecker
+{
+public:
+    explicit AclChecker(Sid self) : m_self(std::move(self)) {}
+
+    std::vector<ModeFinding> m_findings;
+
+    //! follow_link: see CheckWalletFiles. Without it a link is opened as itself, never as what
+    //! it leads to.
+    void Check(const fs::path& path, bool follow_link = false)
+    {
+        if (path.empty() || !m_seen.insert(path).second) return;
+
+        const UniqueHandle handle = OpenForCheck(path, follow_link);
+        if (!handle) return;
+        const std::optional<Entry> entry = EntryOf(handle.get());
+        if (!entry) return;
+
+        if (entry->link && !follow_link) {
+            m_findings.push_back({path, ModeFinding::Kind::Symlink, 0,
+                                  "WARNING: " + path.string() +
+                                      " is a symbolic link or junction, so its access list was not checked"});
+            return;
+        }
+
+        // Read through the handle: the path may lead somewhere else by now.
+        ObservedAcl acl;
+        try {
+            acl = util::winacl::ReadAcl(handle.get(), /*kernel_object=*/false);
+        } catch (const std::system_error& e) {
+            Unreadable(path, ReasonOf(e));
+            return;
+        } catch (const std::exception& e) {
+            Unreadable(path, e.what());
+            return;
+        }
+
+        const WinAclVerdict verdict = ClassifyWinAcl(acl, m_self);
+        if (verdict == WinAclVerdict::Clean) return;
+
+        m_findings.push_back({path,
+                              verdict == WinAclVerdict::Wide ? ModeFinding::Kind::WideMode
+                                                             : ModeFinding::Kind::WideModeNotOwned,
+                              0, WinAclWarning(path, acl, m_self, entry->directory)});
+    }
+
+    //! The entries of a directory whose names pass the filter, each checked as a path of its own.
+    //! follow_link reaches the entries of a directory that is itself a link; the entries keep the
+    //! rule that a link is reported.
+    template <typename Filter>
+    void CheckEntries(const fs::path& dir, Filter filter, bool follow_link = false)
+    {
+        if (dir.empty()) return;
+        {
+            const UniqueHandle handle = OpenForCheck(dir, follow_link);
+            if (!handle) return;
+            const std::optional<Entry> entry = EntryOf(handle.get());
+            if (!entry || !entry->directory || (entry->link && !follow_link)) return;
+        }
+
+        boost::system::error_code ec;
+        for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
+            const fs::path path = it->path();
+            const UniqueHandle handle = OpenForCheck(path, /*follow_link=*/false);
+            if (!handle) continue;
+            const std::optional<Entry> entry = EntryOf(handle.get());
+            if (!entry) continue;
+
+            // Subdirectories are not part of the check. A link is, a junction included, so it
+            // is reported.
+            if (entry->directory && !entry->link) continue;
+
+            if (filter(path.filename().string())) Check(path);
+        }
+    }
+
+private:
+    Sid m_self;
+    std::set<fs::path> m_seen;
+
+    void Unreadable(const fs::path& path, const std::string& reason)
+    {
+        m_findings.push_back({path, ModeFinding::Kind::Unreadable, 0,
+                              "WARNING: the access list of " + path.string() + " could not be read (" + reason +
+                                  "), so it was not checked"});
+    }
+};
+
+//! Why the file this process created through \p handle with \p spec does not hold that list
+//! now, or nullopt.
+std::optional<std::string> NewFileAclProblem(HANDLE handle, const util::winacl::AclSpec& spec)
+{
+    try {
+        if (std::optional<std::string> reason =
+                util::winacl::CheckMatchesSpec(util::winacl::ReadAcl(handle, /*kernel_object=*/false), spec)) {
+            return "a file created there with the owner-only access list does not keep it: " + *reason;
+        }
+    } catch (const std::system_error& e) {
+        return "the access list of a file created there could not be read back (" + ReasonOf(e) + ")";
+    } catch (const std::exception& e) {
+        return std::string{"the access list of a file created there could not be read back ("} + e.what() + ")";
+    }
+
+    return std::nullopt;
+}
+
+//! The owner-only access list of a new file and a security descriptor that holds it, or why
+//! they could not be made.
+struct NewFileAcl
+{
+    util::winacl::AclSpec spec;
+    util::winacl::UniqueSecurityDescriptor sd;
+    std::optional<std::string> error;
+};
+
+NewFileAcl MakeNewFileAcl()
+{
+    NewFileAcl acl;
+    try {
+        acl.spec = util::OwnerOnlyAclSpec(/*inheritable=*/false);
+        acl.sd.reset(util::winacl::MakeSecurityDescriptor(acl.spec));
+    } catch (const std::system_error& e) {
+        acl.error = ReasonOf(e);
+    } catch (const std::exception& e) {
+        acl.error = e.what();
+    }
+
+    return acl;
+}
+
+SECURITY_ATTRIBUTES AttributesFor(const NewFileAcl& acl)
+{
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof(sa);
+    sa.lpSecurityDescriptor = acl.sd.get();
+    sa.bInheritHandle = FALSE;
+
+    return sa;
+}
+
+//! Creates the new file \p path, with the owner-only list in \p acl from the start, opened with
+//! \p access and \p flags. A volume that refuses that list, such as a network share that does
+//! not take this account as an owner, gets the file with the list it inherits, and
+//! \p not_owner_only says why; it says so too when the new file does not hold the list. Returns
+//! INVALID_HANDLE_VALUE, with \p error, when no file was created, ERROR_FILE_EXISTS or
+//! ERROR_ALREADY_EXISTS when the name is taken.
+HANDLE CreateOwnerOnlyFile(const fs::path& path, DWORD access, DWORD flags, const NewFileAcl& acl,
+                           std::optional<std::string>& not_owner_only, DWORD& error)
+{
+    SECURITY_ATTRIBUTES sa = AttributesFor(acl);
+    HANDLE handle = ::CreateFileW(path.wstring().c_str(), access, 0, &sa, CREATE_NEW, flags, nullptr);
+    error = ::GetLastError();
+    if (handle != INVALID_HANDLE_VALUE) {
+        not_owner_only = NewFileAclProblem(handle, acl.spec);
+        return handle;
+    }
+    if (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS) return handle;
+
+    // Where the list itself was refused, the same file without it can be created.
+    const DWORD refused = error;
+    handle = ::CreateFileW(path.wstring().c_str(), access, 0, nullptr, CREATE_NEW, flags, nullptr);
+    error = ::GetLastError();
+    if (handle != INVALID_HANDLE_VALUE) {
+        not_owner_only = "the volume did not accept a file with the owner-only access list (" +
+                         Win32ErrorText(refused) + ")";
+    }
+
+    return handle;
+}
+
+void ProbeBackupDir(const fs::path& probe, BackupDirCheck& check)
+{
+    // Created as a backup copy is, with the owner-only list, and removed when it is closed.
+    // Without that list the probe still shows whether the directory can be written.
+    const NewFileAcl acl = MakeNewFileAcl();
+    if (acl.error && !check.not_owner_only) {
+        check.not_owner_only = "the owner-only access list could not be made (" + *acl.error + ")";
+    }
+
+    const auto create = [&](std::optional<std::string>& not_owner_only, DWORD& error) {
+        return CreateOwnerOnlyFile(probe, GENERIC_WRITE | READ_CONTROL | DELETE,
+                                   FILE_ATTRIBUTE_NORMAL | FILE_FLAG_DELETE_ON_CLOSE, acl, not_owner_only, error);
+    };
+
+    std::optional<std::string> not_owner_only;
+    DWORD error = 0;
+    HANDLE handle = create(not_owner_only, error);
+    if (handle == INVALID_HANDLE_VALUE && (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS)) {
+        // Taken: a probe that was never removed. It is removed, and the probe tried once more.
+        ::DeleteFileW(probe.wstring().c_str());
+        handle = create(not_owner_only, error);
+    }
+    if (handle == INVALID_HANDLE_VALUE) {
+        check.not_writable = Win32ErrorText(error);
+        return;
+    }
+    const UniqueHandle guard(handle);
+
+    // A directory that was there already is not restricted here, but the probe shows
+    // whether the files written into it can be owner-only.
+    if (!check.not_owner_only) check.not_owner_only = not_owner_only;
+}
+
+[[noreturn]] void CopyFailed(const char* what, const fs::path& path, DWORD error)
+{
+    throw fs::filesystem_error(what, path,
+                               boost::system::error_code(static_cast<int>(error), boost::system::system_category()));
+}
+
+//! Whether \p a and \p b are one file: the same volume and file index. Throws as CopyFailed,
+//! naming \p target, when that cannot be read.
+bool SameFile(HANDLE a, HANDLE b, const fs::path& target)
+{
+    BY_HANDLE_FILE_INFORMATION ia{};
+    BY_HANDLE_FILE_INFORMATION ib{};
+    if (!::GetFileInformationByHandle(a, &ia) || !::GetFileInformationByHandle(b, &ib)) {
+        CopyFailed("CopyFileOwnerOnly: cannot tell whether the source and the target are the same file", target,
+                   ::GetLastError());
+    }
+
+    return ia.dwVolumeSerialNumber == ib.dwVolumeSerialNumber && ia.nFileIndexHigh == ib.nFileIndexHigh &&
+           ia.nFileIndexLow == ib.nFileIndexLow;
+}
+
+} // anonymous namespace
+
+std::vector<ModeFinding> CheckOwnerOnlyModes(const fs::path& datadir, const fs::path& conf,
+                                             const fs::path& settings, const fs::path& wallet_file,
+                                             const fs::path& backupdir, const fs::path& debuglog)
+{
+    Sid self;
+    try {
+        self = util::winacl::CurrentTokenUser();
+    } catch (const std::system_error& e) {
+        return {{datadir, ModeFinding::Kind::Unreadable, 0,
+                 "WARNING: the access lists of the wallet files were not checked: this process's account could not "
+                 "be read (" + ReasonOf(e) + ")"}};
+    }
+
+    AclChecker checker(std::move(self));
+    CheckWalletFiles(checker, datadir, conf, settings, wallet_file, backupdir, debuglog);
+
+    return std::move(checker.m_findings);
+}
+
+bool OwnedByUs(const fs::path& path)
+{
+    const UniqueHandle handle = OpenForCheck(path, /*follow_link=*/false);
+    if (!handle) return false;
+
+    const std::optional<Entry> entry = EntryOf(handle.get());
+    if (!entry || entry->reparse) return false;
+
+    // The owner of what was opened, not of the name.
+    try {
+        return util::winacl::ReadAcl(handle.get(), /*kernel_object=*/false).owner == util::winacl::CurrentTokenUser();
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+AppendResult AppendToOwnedFile(const fs::path& path, const std::string& text)
+{
+    // FILE_FLAG_OPEN_REPARSE_POINT opens a link as itself, so whatever it leads to is never
+    // opened, and the check below refuses it. FILE_APPEND_DATA without FILE_WRITE_DATA writes
+    // only at the end. OPEN_EXISTING: the file must exist.
+    const HANDLE opened = ::CreateFileW(path.wstring().c_str(),
+                                        FILE_APPEND_DATA | READ_CONTROL | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                                        FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (opened == INVALID_HANDLE_VALUE) return {AppendStatus::OpenFailed, Win32ErrorText(::GetLastError())};
+    const UniqueHandle handle(opened);
+
+    // Checked on what was opened, not on the name: the name may lead somewhere else by now.
+    const std::optional<Entry> entry = EntryOf(opened);
+    if (!entry) return {AppendStatus::OpenFailed, Win32ErrorText(::GetLastError())};
+    if (entry->reparse || entry->directory || ::GetFileType(opened) != FILE_TYPE_DISK) {
+        return {AppendStatus::NotOwned, {}};
+    }
+    try {
+        if (util::winacl::ReadAcl(opened, /*kernel_object=*/false).owner != util::winacl::CurrentTokenUser()) {
+            return {AppendStatus::NotOwned, {}};
+        }
+    } catch (const std::system_error& e) {
+        return {AppendStatus::OpenFailed, ReasonOf(e)};
+    } catch (const std::exception& e) {
+        return {AppendStatus::OpenFailed, e.what()};
+    }
+
+    size_t done = 0;
+    while (done < text.size()) {
+        // WriteFile takes a DWORD count, so a larger text goes in pieces.
+        const DWORD chunk = static_cast<DWORD>(std::min<size_t>(text.size() - done, size_t{1} << 30));
+        DWORD written = 0;
+        if (!::WriteFile(opened, text.data() + done, chunk, &written, nullptr)) {
+            return {AppendStatus::WriteFailed, Win32ErrorText(::GetLastError())};
+        }
+        if (written == 0) return {AppendStatus::WriteFailed, "nothing was written"};
+        done += written;
+    }
+
+    return {AppendStatus::Appended, {}};
+}
+
+std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::path& target)
+{
+    // Shared for writing too, so a source that is open elsewhere is still copied.
+    const UniqueHandle in(::CreateFileW(source.wstring().c_str(), GENERIC_READ,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                        FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!in) CopyFailed("CopyFileOwnerOnly: cannot open the source", source, ::GetLastError());
+
+    const NewFileAcl acl = MakeNewFileAcl();
+    if (acl.error) {
+        throw fs::filesystem_error("CopyFileOwnerOnly: the owner-only access list could not be made: " + *acl.error,
+                                   target, boost::system::errc::make_error_code(boost::system::errc::io_error));
+    }
+
+    // A new target is created with the owner-only access list, so it is owner-only before any
+    // data is written. A target that exists is opened as it is, and keeps its list.
+    std::optional<std::string> not_owner_only;
+    DWORD error = 0;
+    UniqueHandle out(CreateOwnerOnlyFile(target, GENERIC_WRITE | READ_CONTROL, FILE_ATTRIBUTE_NORMAL, acl,
+                                         not_owner_only, error));
+    if (!out && (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS)) {
+        out.reset(::CreateFileW(target.wstring().c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                FILE_ATTRIBUTE_NORMAL, nullptr));
+        error = ::GetLastError();
+
+        if (out && SameFile(in.get(), out.get(), target)) {
+            CopyFailed("CopyFileOwnerOnly: the source and the target are the same file", target, ERROR_FILE_EXISTS);
+        }
+
+        // Truncated only after the same-file check above. A file just opened is at its start.
+        if (out && !::SetEndOfFile(out.get())) {
+            CopyFailed("CopyFileOwnerOnly: cannot truncate the target", target, ::GetLastError());
+        }
+    }
+    if (!out) CopyFailed("CopyFileOwnerOnly: cannot open the target", target, error);
+
+    char buffer[65536];
+    for (;;) {
+        DWORD read = 0;
+        if (!::ReadFile(in.get(), buffer, sizeof(buffer), &read, nullptr)) {
+            CopyFailed("CopyFileOwnerOnly: copy failed", target, ::GetLastError());
+        }
+        if (read == 0) break;
+
+        DWORD done = 0;
+        while (done < read) {
+            DWORD written = 0;
+            if (!::WriteFile(out.get(), buffer + done, read - done, &written, nullptr)) {
+                CopyFailed("CopyFileOwnerOnly: copy failed", target, ::GetLastError());
+            }
+            if (written == 0) CopyFailed("CopyFileOwnerOnly: copy failed", target, ERROR_WRITE_FAULT);
+            done += written;
+        }
+    }
+
+    return not_owner_only;
+}
+
+#endif // WIN32
+
+} // namespace fsmodes

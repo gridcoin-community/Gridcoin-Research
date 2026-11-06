@@ -12,10 +12,7 @@
 #include "util/time.h"
 #include <algorithm>
 #include <atomic>
-#include <filesystem>
 #include <optional>
-
-#include <boost/version.hpp>
 
 #include <string>
 
@@ -160,14 +157,13 @@ void CreateBackupDirectory(const fs::path& dir, GRC::BackupTarget kind = GRC::Ba
     if (unrestricted) GRC::LogUnrestrictedBackupOnce(dir, *unrestricted);
 }
 
-//! Copies a backup file over its target. On POSIX a new target is created owner-only (0600) and
-//! its mode is right before any data is written; a target that exists keeps its mode. A new
-//! target that the filesystem does not keep owner-only is logged as CreateBackupDirectory logs,
-//! or, for a transfer snapshot, removed and refused.
+//! Copies a backup file over its target. A new target is created owner-only (0600 on POSIX, the
+//! owner-only access list on Windows), so it is owner-only before any data is written; a target
+//! that exists keeps its mode or list. A new target that the filesystem does not keep owner-only
+//! is logged as CreateBackupDirectory logs, or, for a transfer snapshot, removed and refused.
 void CopyBackupFile(const fs::path& source, const fs::path& target,
-                    [[maybe_unused]] GRC::BackupTarget kind = GRC::BackupTarget::BackupDirectory)
+                    GRC::BackupTarget kind = GRC::BackupTarget::BackupDirectory)
 {
-#ifndef WIN32
     if (const std::optional<std::string> unrestricted = fsmodes::CopyFileOwnerOnly(source, target)) {
         if (kind == GRC::BackupTarget::TransferSnapshot) {
             boost::system::error_code ec;
@@ -178,28 +174,13 @@ void CopyBackupFile(const fs::path& source, const fs::path& target,
         }
         GRC::LogUnrestrictedBackupOnce(target.parent_path(), *unrestricted);
     }
-#elif BOOST_VERSION > 107400
-    fs::copy_file(source, target, fs::copy_options::overwrite_existing);
-#elif BOOST_VERSION == 107400
-    // Workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
-    // The std paths are built from the native strings as they are. Going through wstring()
-    // converts with the locale, and a non-ASCII path fails: Boost throws
-    // boost::system::system_error under the C locale, and std::filesystem refuses the wide
-    // string under a UTF-8 one.
-    std::filesystem::path StdSource = source.native();
-    std::filesystem::path StdTarget = target.native();
-    std::filesystem::copy_file(StdSource, StdTarget, std::filesystem::copy_options::overwrite_existing);
-#else
-    fs::copy_file(source, target, fs::copy_option::overwrite_if_exists);
-#endif
 }
 } // anonymous namespace
 
 namespace {
 //! Shared implementation of the file-copy logic used by BackupConfigFile and
-//! BackupSettingsFile. Encapsulates the Boost 1.74 symlink-target workaround
-//! so callers only have to provide the source path, the destination string,
-//! and a label for logging.
+//! BackupSettingsFile, so callers only have to provide the source path, the
+//! destination string, and a label for logging.
 bool BackupPlainFile(const fs::path& source, const std::string& strDest, const char* label)
 {
     fs::path target = strDest;
@@ -215,16 +196,6 @@ bool BackupPlainFile(const fs::path& source, const std::string& strDest, const c
         LogPrintf("%s: Error copying %s to %s - %s", __func__, label, target.string(), e.what());
         return false;
     }
-#if BOOST_VERSION == 107400
-    // The Boost 1.74 workaround copies with std::filesystem, which throws its own type. It is
-    // named only here, with the code that throws it: libc++ makes the type unavailable before
-    // macOS 10.15.
-    catch (const std::filesystem::filesystem_error& e)
-    {
-        LogPrintf("%s: Error copying %s to %s - %s", __func__, label, target.string(), e.what());
-        return false;
-    }
-#endif
 }
 } // anonymous namespace
 
@@ -283,13 +254,6 @@ bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest, Backup
             LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s", WalletTarget.string(), e.what());
             return false;
         }
-#if BOOST_VERSION == 107400
-        // The Boost 1.74 workaround copies with std::filesystem; see BackupPlainFile above.
-        catch(const std::filesystem::filesystem_error &e) {
-            LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s", WalletTarget.string(), e.what());
-            return false;
-        }
-#endif
 
         return true;
     }

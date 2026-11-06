@@ -540,8 +540,8 @@ static std::string GenerateRpcPassword()
 //!    and not a symbolic link). A conf owned by root or by another account -- the
 //!    different-account service, whose package or administrator writes the credentials
 //!    -- is left alone, with one log line, and StartRPCThreads then names the file and
-//!    what it needs (MissingRpcPasswordMessage). POSIX only for now: fsmodes has no
-//!    Windows owner check yet, so on Windows the file is written as before.
+//!    what it needs (MissingRpcPasswordMessage). POSIX only for now: on Windows the file
+//!    is still written as before, without that check.
 //!  - Only ever APPENDS. Nothing already in the file is rewritten or removed. A missing
 //!    rpcpassword is an absence rather than a decision -- no interface ever offered the
 //!    user a way to choose it -- which is what separates this from the data directory
@@ -2220,10 +2220,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("init: -server=%d, %s RPC server\n", fStartRPC, fStartRPC ? "starting" : "skipping");
     if (fStartRPC) StartRPCThreads();
 
-#ifndef WIN32
-    // Existing wallet files and directories are never re-moded here: their permissions belong to
-    // the operator, who may have widened them on purpose. Say which ones give other accounts
-    // access, and how to change that.
+    // Existing wallet files and directories are never re-moded here: their permissions (on
+    // Windows, their access lists) belong to the operator, who may have widened them on purpose.
+    // Say which ones give other accounts access, and how to change that.
     {
         fs::path settings_path;
         if (!gArgs.GetSettingsPath(&settings_path, /* temp= */ false)) settings_path.clear();
@@ -2245,7 +2244,6 @@ bool AppInit2(ThreadHandlerPtr threads)
             InitWarning(*text);
         }
     }
-#endif
 
 #ifdef WIN32
     // Until the bundled Berkeley DB was built with UNICODE (src/bdb53/CMakeLists.txt), it read the
