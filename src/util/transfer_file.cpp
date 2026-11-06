@@ -75,7 +75,23 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
     f.m_temp = temp;
 
 #ifdef WIN32
-    HANDLE h = ::CreateFileW(temp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+    // Owner-only from creation: the list is given to CreateFileW, so the file never exists
+    // with the list it would inherit, and it is read back through the handle, because a
+    // volume may accept the list and keep nothing (FAT, exFAT).
+    const winacl::AclSpec spec = OwnerOnlyAclSpec(/*inheritable=*/false);
+    winacl::UniqueSecurityDescriptor sd;
+    try {
+        sd.reset(winacl::MakeSecurityDescriptor(spec));
+    } catch (const std::exception& e) {
+        error = strprintf("cannot make the access list for temporary file %s: %s", temp.string(), e.what());
+        return std::nullopt;
+    }
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof(sa);
+    sa.lpSecurityDescriptor = sd.get();
+    sa.bInheritHandle = FALSE;
+
+    HANDLE h = ::CreateFileW(temp.c_str(), GENERIC_WRITE | READ_CONTROL, 0, &sa, CREATE_NEW,
                              FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
 
     if (h == INVALID_HANDLE_VALUE) {
@@ -88,7 +104,11 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
     f.m_active = true;
 
     try {
-        ApplyOwnerOnlyDacl(temp, false);
+        if (const std::optional<std::string> reason =
+                winacl::CheckMatchesSpec(winacl::ReadAcl(h, /*kernel_object=*/false), spec)) {
+            error = strprintf("cannot restrict temporary file %s: %s", temp.string(), OwnerOnlyRefusalText(temp, *reason));
+            return std::nullopt;
+        }
     } catch (const std::exception& e) {
         error = strprintf("cannot restrict temporary file %s: %s", temp.string(), e.what());
         return std::nullopt;

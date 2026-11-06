@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#else
+#include "test/wine.h"
+#include "util/dir_permissions.h"
+#include "util/win_acl.h"
 #endif
 
 namespace {
@@ -122,6 +127,13 @@ BOOST_AUTO_TEST_CASE(commit_renames_when_trailer_matches)
     BOOST_CHECK_EQUAL(CountPartFiles(dir), 0u);
 #ifndef WIN32
     BOOST_CHECK_EQUAL(ModeOf(dir / "out.bin"), 0600u);
+#else
+    // The owner-only list the temporary file was created with, kept through the rename.
+    if (!grc_test::RunningUnderWine()) {
+        const std::optional<std::string> reason = util::winacl::CheckMatchesSpec(
+            util::winacl::ReadAcl(dir / "out.bin"), util::OwnerOnlyAclSpec(/*inheritable=*/false));
+        BOOST_CHECK_MESSAGE(!reason, reason.value_or(""));
+    }
 #endif
 }
 

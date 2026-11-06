@@ -15,14 +15,17 @@
 #include <set>
 #include <utility>
 
+// open() on POSIX, _O_TEXT on Windows.
+#include <fcntl.h>
+
 #ifdef WIN32
 #include <system_error>
 
+#include <io.h>
 #include <windows.h>
 #else
 #include "util/syserror.h"
 
-#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -677,6 +680,38 @@ std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::p
     return not_owner_only;
 }
 
+std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::optional<std::string>& not_owner_only,
+                                  std::string& error)
+{
+    taken = false;
+    not_owner_only.reset();
+    error.clear();
+
+    // O_EXCL refuses any name that is taken, a symbolic link included whether or not it
+    // leads anywhere; O_NOFOLLOW says so twice. Mode 0600 from creation, which a umask can
+    // only narrow.
+    const int fd = ::open(path.string().c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+    if (fd < 0) {
+        const int err = errno;
+        taken = err == EEXIST;
+        error = strprintf("cannot create %s: %s", path.string(), SysErrorString(err));
+        return nullptr;
+    }
+
+    // A filesystem without POSIX modes gives a new file a mode of its own.
+    not_owner_only = NewFileModeProblem(fd);
+
+    std::FILE* const file = ::fdopen(fd, "w");
+    if (!file) {
+        error = strprintf("cannot open %s for writing: %s", path.string(), SysErrorString(errno));
+        ::close(fd);
+        ::unlink(path.string().c_str());
+        return nullptr;
+    }
+
+    return file;
+}
+
 #else // WIN32
 
 namespace {
@@ -1213,6 +1248,50 @@ std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::p
     }
 
     return not_owner_only;
+}
+
+std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::optional<std::string>& not_owner_only,
+                                  std::string& error)
+{
+    taken = false;
+    not_owner_only.reset();
+    error.clear();
+
+    const NewFileAcl acl = MakeNewFileAcl();
+    if (acl.error) {
+        error = "the owner-only access list could not be made: " + *acl.error;
+        return nullptr;
+    }
+
+    // CREATE_NEW refuses a name that is taken, and a link at the name is not followed
+    // (CreateOwnerOnlyFile), so nothing is created where a link leads.
+    DWORD create_error = 0;
+    HANDLE handle = CreateOwnerOnlyFile(path, GENERIC_WRITE | READ_CONTROL, FILE_ATTRIBUTE_NORMAL, acl,
+                                        not_owner_only, create_error);
+    if (handle == INVALID_HANDLE_VALUE) {
+        taken = create_error == ERROR_FILE_EXISTS || create_error == ERROR_ALREADY_EXISTS;
+        error = strprintf("cannot create %s: %s", path.string(), Win32ErrorText(create_error));
+        return nullptr;
+    }
+
+    // In text mode, as the file was written before it was created this way. The descriptor
+    // owns the handle once _open_osfhandle succeeds, and the FILE* owns the descriptor.
+    const int fd = ::_open_osfhandle(reinterpret_cast<intptr_t>(handle), _O_TEXT);
+    if (fd == -1) {
+        error = strprintf("cannot open %s for writing", path.string());
+        ::CloseHandle(handle);
+        ::DeleteFileW(path.wstring().c_str());
+        return nullptr;
+    }
+    std::FILE* const file = ::_fdopen(fd, "w");
+    if (!file) {
+        error = strprintf("cannot open %s for writing", path.string());
+        ::_close(fd);
+        ::DeleteFileW(path.wstring().c_str());
+        return nullptr;
+    }
+
+    return file;
 }
 
 #endif // WIN32

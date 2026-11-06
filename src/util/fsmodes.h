@@ -9,6 +9,7 @@
 #include "util/win_acl.h"
 
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 #include <optional>
 #include <string>
@@ -225,6 +226,22 @@ std::optional<std::string> BackupDirWarning(const fs::path& backupdir, const Bac
 //! lists, such as FAT, or a network share that refused the list, where the target is created
 //! with the list it inherits. Error texts are ASCII.
 std::optional<std::string> CopyFileOwnerOnly(const fs::path& source, const fs::path& target);
+
+//! Creates the new file \p path for writing, exclusively and owner-only from creation, and
+//! returns it open as a FILE* in mode "w", or nullptr with \p error saying why. A name that is
+//! taken, by a link too, whether or not the link leads anywhere, is refused with \p taken set:
+//! nothing there is opened, followed or truncated, and the refusal and the creation are one
+//! step. \p not_owner_only says why a file created is not owner-only, or is nullopt.
+//!
+//! POSIX: open(O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC) with mode 0600. A filesystem
+//! without POSIX modes, which gives the file a mode of its own, is \p not_owner_only.
+//!
+//! Windows: CREATE_NEW with the owner-only access list, a link at the name not followed, as
+//! CopyFileOwnerOnly creates a new target, and in text mode. A volume that keeps no access
+//! lists, or a network share that refuses the list, where the file is created with the list it
+//! inherits, is \p not_owner_only. Error texts are ASCII.
+std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::optional<std::string>& not_owner_only,
+                                  std::string& error);
 
 } // namespace fsmodes
 

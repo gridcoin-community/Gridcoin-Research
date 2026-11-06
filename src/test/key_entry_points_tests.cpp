@@ -72,9 +72,13 @@
 #ifdef WIN32
 #include "test/win_fs_util.h"
 #include "test/wine.h"
+#include "util/dir_permissions.h"
 #include "util/win_acl.h"
 
 #include <windows.h>
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
 #endif
 
 // The scraper's directory for its log, set by the scraper threads.
@@ -178,6 +182,18 @@ struct ClosedEntry
 
     ClosedEntry(const ClosedEntry&) = delete;
     ClosedEntry& operator=(const ClosedEntry&) = delete;
+};
+#else
+//! Sets the process umask for one scope and puts the old one back however it ends.
+struct UmaskGuard
+{
+    const mode_t m_saved;
+
+    explicit UmaskGuard(mode_t mask) : m_saved(::umask(mask)) {}
+    ~UmaskGuard() { ::umask(m_saved); }
+
+    UmaskGuard(const UmaskGuard&) = delete;
+    UmaskGuard& operator=(const UmaskGuard&) = delete;
 };
 #endif
 
@@ -1823,10 +1839,27 @@ BOOST_AUTO_TEST_CASE(dumpwallet_refuses_an_existing_destination)
 #endif
     }
 
-    // Where nothing is, the dump is written.
-    const Outcome fresh = Call("dumpwallet", {DUMP_FILE});
-    BOOST_CHECK_MESSAGE(fresh.returned, fresh.Describe());
+    // Where nothing is, the dump is written, owner-only from creation: mode 0600
+    // whatever the umask, and on Windows the owner-only access list.
+    {
+#ifndef WIN32
+        const UmaskGuard permissive(0);
+#endif
+        const Outcome fresh = Call("dumpwallet", {DUMP_FILE});
+        BOOST_CHECK_MESSAGE(fresh.returned, fresh.Describe());
+    }
     BOOST_CHECK(ReadFile(path).find("# End of dump\n") != std::string::npos);
+#ifndef WIN32
+    struct stat st{};
+    BOOST_REQUIRE_EQUAL(::lstat(path.c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0600U);
+#else
+    if (!grc_test::RunningUnderWine()) {
+        const std::optional<std::string> reason =
+            util::winacl::CheckMatchesSpec(util::winacl::ReadAcl(path), util::OwnerOnlyAclSpec(/*inheritable=*/false));
+        BOOST_CHECK_MESSAGE(!reason, reason.value_or(""));
+    }
+#endif
     fs::remove(path);
 }
 

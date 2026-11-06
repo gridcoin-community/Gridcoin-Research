@@ -28,7 +28,8 @@ public:
     //! Creates "<dest>.<16 hex random>.part" in dest's directory. POSIX opens it with
     //! O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC and mode 0600, then fchmod(fd, 0600)
     //! so the mode does not depend on the umask. Windows uses CreateFileW(CREATE_NEW)
-    //! and then applies an owner-only DACL.
+    //! with the owner-only DACL, so the file has it from creation, and reads it back
+    //! through the handle.
     static std::optional<TransferTempFile> Create(const fs::path& dest, std::string& error);
 
     //! The same with the temporary name given. Create() calls this with a random name;

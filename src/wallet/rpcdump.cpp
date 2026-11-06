@@ -11,8 +11,11 @@
 #include "rpc/util.h"
 #include "node/ui_interface.h"
 #include "support/cleanse.h"
+#include "util/fsmodes.h"
 #include "wallet/walletdump.h"
 
+#include <cstdio>
+#include <optional>
 #include <stdexcept>
 
 using namespace std;
@@ -221,20 +224,19 @@ const RPCHelpMan& dumpwallet_helpman() { return dumpwallet_help; }
 
 namespace {
 
-//! Removes a dump file that was not written to the end, however the writer
-//! leaves: a dump with keys missing must not stay on disk looking complete.
-//! Only a regular file is removed. A symbolic link or a special file at the
-//! path is left as it is.
-class PartialDumpRemover
+//! The dump file being written. It is closed when it goes out of scope, and removed
+//! then unless Complete() was called, however the writer leaves: a dump with keys
+//! missing must not stay on disk looking complete. Only a regular file is removed. A
+//! symbolic link or a special file at the path is left as it is.
+class DumpFile
 {
 public:
-    PartialDumpRemover(fsbridge::ofstream& file, const fs::path& path) : m_file(file), m_path(path) {}
+    DumpFile(std::FILE* file, const fs::path& path) : m_file(file), m_path(path) {}
 
-    ~PartialDumpRemover()
+    ~DumpFile()
     {
+        if (m_file) std::fclose(m_file);
         if (m_complete) return;
-
-        m_file.close();
 
         // A destructor may not throw, and a file that cannot be removed leaves
         // nothing better to do here.
@@ -244,14 +246,29 @@ public:
         }
     }
 
-    PartialDumpRemover(const PartialDumpRemover&) = delete;
-    PartialDumpRemover& operator=(const PartialDumpRemover&) = delete;
+    DumpFile(const DumpFile&) = delete;
+    DumpFile& operator=(const DumpFile&) = delete;
+
+    //! Writes \p text. Once a write has failed nothing more is written.
+    void Write(const std::string& text)
+    {
+        if (m_ok && !text.empty()) m_ok = std::fwrite(text.data(), 1, text.size(), m_file) == text.size();
+    }
+
+    //! Flushes and closes the file. False when that, or a write before it, failed.
+    bool Close()
+    {
+        const bool closed = std::fclose(m_file) == 0;
+        m_file = nullptr;
+        return m_ok && closed;
+    }
 
     void Complete() { m_complete = true; }
 
 private:
-    fsbridge::ofstream& m_file;
+    std::FILE* m_file;
     const fs::path m_path;
+    bool m_ok{true};
     bool m_complete{false};
 };
 
@@ -269,24 +286,37 @@ void WriteWalletDump(CWallet& wallet, const std::string& filename)
     // Nothing at the path is written over: a bare name lands in the data
     // directory, among the node's own files. A symbolic link counts, also one
     // that leads nowhere. A path that cannot be examined is refused too, with
-    // the reason it could not be. Refused before the file is opened, so nothing
-    // there is truncated or removed.
+    // the reason it could not be.
+    const std::string taken_text = "File already exists at location. Please delete or rename old file first.";
     boost::system::error_code ec;
     if (fs::symlink_status(PathForDump, ec).type() != fs::file_not_found) {
         if (ec) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Cannot check the destination %s: %s",
                                                                 PathForDump.string(), ec.message()));
         }
-        throw JSONRPCError(RPC_INVALID_PARAMETER,
-                           "File already exists at location. Please delete or rename old file first.");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, taken_text);
     }
 
-    fsbridge::ofstream file;
-    file.open(PathForDump);
-    if (!file.is_open())
+    // The keys are plaintext, so the file is created exclusively and owner-only
+    // from creation. A name taken since the check above, by a link too, is refused
+    // in the same step that would create the file, so nothing there is opened,
+    // followed or truncated.
+    bool taken = false;
+    std::optional<std::string> not_owner_only;
+    std::string error;
+    std::FILE* const created = fsmodes::CreateNewOwnerOnlyFile(PathForDump, taken, not_owner_only, error);
+    if (!created) {
+        if (taken) throw JSONRPCError(RPC_INVALID_PARAMETER, taken_text);
+        LogPrintf("dumpwallet: %s", error);
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
+    }
+    if (not_owner_only) {
+        LogPrintf("WARNING: dumpwallet: %s is not owner-only (%s); other users of this computer may be able to read "
+                  "it",
+                  PathForDump.string(), *not_owner_only);
+    }
 
-    PartialDumpRemover remover(file, PathForDump);
+    DumpFile file(created, PathForDump);
 
     // Held across the generator's calls, as across the whole dump before it, so
     // the file is one picture of the wallet.
@@ -302,7 +332,7 @@ void WriteWalletDump(CWallet& wallet, const std::string& filename)
     try {
         for (bool more = true; more;) {
             more = generator.Next(lines, 64 * 1024);
-            file << lines;
+            file.Write(lines);
             memory_cleanse(lines.data(), lines.size());
             lines.clear();
         }
@@ -310,15 +340,13 @@ void WriteWalletDump(CWallet& wallet, const std::string& filename)
         if (!lines.empty()) memory_cleanse(lines.data(), lines.size());
         throw;
     }
-    file.close();
-
     // The close flushes what is still buffered. A write that failed leaves a
-    // dump with its end cut off, which the remover takes away.
-    if (file.fail()) {
+    // dump with its end cut off, which DumpFile takes away.
+    if (!file.Close()) {
         throw JSONRPCError(RPC_WALLET_ERROR, "dumpwallet: cannot write the dump file");
     }
 
-    remover.Complete();
+    file.Complete();
 }
 
 UniValue dumpwallet(const UniValue& params)

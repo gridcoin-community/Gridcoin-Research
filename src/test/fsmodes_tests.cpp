@@ -1077,6 +1077,62 @@ BOOST_AUTO_TEST_CASE(append_to_owned_file_refuses_a_fifo)
     BOOST_CHECK_MESSAGE(read <= 0, "the FIFO received " << read << " bytes");
 }
 
+// A new file for secret material is created exclusively, 0600 from creation whatever the
+// umask. A name that is taken, by a file, a link to one or a link that leads nowhere, is
+// refused in the same step, and nothing there or where a link leads is opened or changed.
+BOOST_AUTO_TEST_CASE(create_new_owner_only_file_is_exclusive_and_0600)
+{
+    const ScratchDir scratch;
+    const UmaskGuard permissive(0);
+
+    bool taken = true;
+    std::optional<std::string> not_owner_only{"not set"};
+    std::string error;
+
+    const fs::path fresh = scratch.m_path / "fresh";
+    std::FILE* file = fsmodes::CreateNewOwnerOnlyFile(fresh, taken, not_owner_only, error);
+    BOOST_REQUIRE_MESSAGE(file, error);
+    BOOST_CHECK(!taken);
+    BOOST_CHECK_MESSAGE(!not_owner_only, not_owner_only.value_or(""));
+    BOOST_CHECK(std::fputs("dump\n", file) >= 0);
+    BOOST_CHECK_EQUAL(std::fclose(file), 0);
+    BOOST_CHECK_EQUAL(ModeOf(fresh), 0600U);
+    BOOST_CHECK_EQUAL(ReadAll(fresh), "dump\n");
+
+    const fs::path existing = scratch.m_path / "existing";
+    MakeFile(existing, 0644);
+    const fs::path target = scratch.m_path / "target";
+    MakeFile(target, 0644);
+    const fs::path link = scratch.m_path / "link";
+    fs::create_symlink(target, link);
+    const fs::path nowhere = scratch.m_path / "nowhere";
+    const fs::path dangling = scratch.m_path / "dangling";
+    fs::create_symlink(nowhere, dangling);
+
+    for (const fs::path& name : {existing, link, dangling}) {
+        taken = false;
+        error.clear();
+        std::FILE* refused = fsmodes::CreateNewOwnerOnlyFile(name, taken, not_owner_only, error);
+        BOOST_CHECK_MESSAGE(!refused, name.string() << " was opened");
+        if (refused) std::fclose(refused);
+        BOOST_CHECK_MESSAGE(taken, name.string());
+        BOOST_CHECK_MESSAGE(!error.empty(), name.string());
+    }
+    BOOST_CHECK_EQUAL(ReadAll(existing), "fsmodes test\n");
+    BOOST_CHECK_EQUAL(ModeOf(existing), 0644U);
+    BOOST_CHECK_EQUAL(ReadAll(target), "fsmodes test\n");
+    BOOST_CHECK_EQUAL(ModeOf(target), 0644U);
+    BOOST_CHECK(fs::is_symlink(fs::symlink_status(link)));
+    BOOST_CHECK(!fs::exists(fs::symlink_status(nowhere)));
+
+    // A directory that is not there: refused, and the name is not taken.
+    taken = true;
+    error.clear();
+    BOOST_CHECK(!fsmodes::CreateNewOwnerOnlyFile(scratch.m_path / "absent" / "file", taken, not_owner_only, error));
+    BOOST_CHECK(!taken);
+    BOOST_CHECK(!error.empty());
+}
+
 #else // WIN32
 
 namespace {
@@ -1526,6 +1582,49 @@ BOOST_AUTO_TEST_CASE(copy_file_owner_only_creates_the_target_owner_only)
 
     BOOST_CHECK_THROW(fsmodes::CopyFileOwnerOnly(dir.path / "absent", dir.path / "never"), fs::filesystem_error);
     BOOST_CHECK(!fs::exists(dir.path / "never"));
+}
+
+// A new file for secret material is created exclusively, with the owner-only list from
+// creation. A name that is taken, by a file or by a link that leads nowhere, is refused in the
+// same step, and nothing there or where the link leads is opened or changed.
+BOOST_AUTO_TEST_CASE(create_new_owner_only_file_is_exclusive_and_owner_only)
+{
+    if (SkipUnderWine()) return;
+
+    const WinTempDir dir;
+    bool taken = true;
+    std::optional<std::string> not_owner_only{"not set"};
+    std::string error;
+
+    const fs::path fresh = dir.path / "fresh";
+    std::FILE* file = fsmodes::CreateNewOwnerOnlyFile(fresh, taken, not_owner_only, error);
+    BOOST_REQUIRE_MESSAGE(file, error);
+    BOOST_CHECK(!taken);
+    BOOST_CHECK_MESSAGE(!not_owner_only, not_owner_only.value_or(""));
+    BOOST_CHECK(std::fputs("dump\n", file) >= 0);
+    BOOST_CHECK_EQUAL(std::fclose(file), 0);
+    const std::optional<std::string> reason = CheckMatchesSpec(ReadAcl(fresh), util::OwnerOnlyAclSpec(false));
+    BOOST_CHECK_MESSAGE(!reason, reason.value_or(""));
+    BOOST_CHECK_EQUAL(ReadAll(fresh), "dump\n");
+
+    const fs::path existing = dir.path / "existing";
+    CreateWithAcl(existing, util::OwnerOnlyAclSpec(/*inheritable=*/false), "earlier\n");
+    const fs::path nowhere = dir.path / "nowhere";
+    const fs::path dangling = dir.path / "dangling";
+    BOOST_REQUIRE(::CreateSymbolicLinkW(dangling.wstring().c_str(), nowhere.wstring().c_str(),
+                                        SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE));
+
+    for (const fs::path& name : {existing, dangling}) {
+        taken = false;
+        error.clear();
+        std::FILE* refused = fsmodes::CreateNewOwnerOnlyFile(name, taken, not_owner_only, error);
+        BOOST_CHECK_MESSAGE(!refused, name.string() << " was opened");
+        if (refused) std::fclose(refused);
+        BOOST_CHECK_MESSAGE(taken, name.string());
+        BOOST_CHECK_MESSAGE(!error.empty(), name.string());
+    }
+    BOOST_CHECK_EQUAL(ReadAll(existing), "earlier\n");
+    BOOST_CHECK(!fs::exists(nowhere));
 }
 
 // A directory the core creates is owner-only from creation, and the parents it needs get the
