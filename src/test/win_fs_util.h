@@ -23,6 +23,10 @@ bool SameAcl(const util::winacl::ObservedAcl& a, const util::winacl::ObservedAcl
 void WriteOwnFile(const fs::path& path, const std::string& text);
 
 #ifdef WIN32
+//! Create the new file \p path holding \p text, with \p spec as its owner and access list from
+//! the start (CreateFileW with MakeSecurityDescriptor(spec)).
+void CreateFileWithAcl(const fs::path& path, const util::winacl::AclSpec& spec, const std::string& text);
+
 //! Make the new, empty directory \p link a junction (a mount-point reparse point)
 //! to the directory \p target. No privilege is needed for that.
 void MakeJunction(const fs::path& link, const fs::path& target);

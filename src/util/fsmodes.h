@@ -117,28 +117,35 @@ struct WinOwnership
     };
 
     Kind kind{Kind::Unreadable};
-    //! For Foreign: the owner, and the name Windows gives it, empty when it gives none.
+    //! For Foreign: the owner, and the name Windows gives it, empty when it gives none or when it
+    //! was not looked up.
     util::winacl::Sid owner;
     std::string owner_name;
     std::string error;
 };
 
 //! Why the Windows path \p path is not this account's (\p ownership), as one clause for a log
-//! line or a note, with what to do: for a path another account owns, its owner by name and SID
-//! and the icacls command an administrator runs, elevated, to make \p self (named
-//! \p self_name, empty when it has no name) the owner; that a link is not followed; or that a
-//! volume without owners or access lists cannot show whose a file is. Empty for Owned. ASCII
-//! apart from the path and the names. Pure.
+//! line or a note: for a path another account owns, its owner by name and SID; that a link is
+//! not followed; or that a volume without owners or access lists cannot show whose a file is.
+//! \p self, named \p self_name (empty when it has no name), is this account. Empty for Owned.
+//!
+//! Without \p service it also gives the icacls command that makes \p self the owner, to run as
+//! an administrator (elevated) or as this account where it may change the owner. With
+//! \p service (the configuration file of the Windows service) it says instead that the file
+//! belongs to the administrators by design, and never gives the service the file: the caller
+//! names the fixes that keep it theirs. ASCII apart from the path and the names. Pure.
 std::string WinNotOwnedText(const fs::path& path, const WinOwnership& ownership, const util::winacl::Sid& self,
-                            const std::string& self_name);
+                            const std::string& self_name, bool service);
 
 #ifdef WIN32
 //! What OwnedByUs reads for \p path, without following a reparse point: OwnedByUs(path) is
-//! ReadWinOwnership(path).kind == Owned.
+//! ReadWinOwnership(path).kind == Owned. It looks up no account name, which the message alone
+//! needs: \p owner_name is left empty.
 WinOwnership ReadWinOwnership(const fs::path& path);
 
-//! WinNotOwnedText for \p path as it is now, with this process's token user as \p self.
-std::string WinNotOwnedText(const fs::path& path);
+//! WinNotOwnedText for \p path as it is now, with this process's token user as \p self and the
+//! owner's name looked up (LookupAccountSidW).
+std::string WinNotOwnedText(const fs::path& path, bool service);
 #endif
 
 //! What AppendToOwnedFile did.

@@ -35,7 +35,7 @@
 namespace fsmodes {
 
 std::string WinNotOwnedText(const fs::path& path, const WinOwnership& ownership, const util::winacl::Sid& self,
-                            const std::string& self_name)
+                            const std::string& self_name, bool service)
 {
     const auto shown = [](const util::winacl::Sid& sid, const std::string& name) {
         std::string text = util::winacl::FormatSid(sid);
@@ -59,11 +59,20 @@ std::string WinNotOwnedText(const fs::path& path, const WinOwnership& ownership,
         break;
     }
 
-    // As icacls reads a SID: marked with an asterisk. Setting another account as the owner
-    // needs an administrator's privileges, so the command is run elevated.
+    // The service's configuration file is the administrators' by design: the service only reads
+    // it, and making the service its owner would let the service change it.
+    if (service) {
+        return "it is owned by " + shown(ownership.owner, ownership.owner_name) + ", not by the service's account, " +
+               shown(self, self_name) + ": the service's configuration file belongs to the administrators by "
+               "design, and the service only reads it";
+    }
+
+    // As icacls reads a SID: marked with an asterisk. An administrator can make any account the
+    // owner; this account can make itself the owner where its entry lets it (WRITE_OWNER).
     return "it is owned by " + shown(ownership.owner, ownership.owner_name) + ", not by this account, " +
-           shown(self, self_name) + ". To make it this account's, in a command prompt opened as an administrator "
-           "(elevated) run: icacls \"" + path.string() + "\" /setowner *" + util::winacl::FormatSid(self);
+           shown(self, self_name) + ". To make it this account's, in a command prompt run as an administrator "
+           "(elevated), or as this account where it may change the owner, run: icacls \"" + path.string() +
+           "\" /setowner *" + util::winacl::FormatSid(self);
 }
 
 namespace {
@@ -1233,7 +1242,6 @@ WinOwnership ReadWinOwnership(const fs::path& path)
     } else if (owner) {
         ownership.kind = WinOwnership::Kind::Foreign;
         ownership.owner = *owner;
-        ownership.owner_name = util::winacl::AccountNameOf(*owner);
     } else {
         ownership.kind = WinOwnership::Kind::Unreadable;
         if (ownership.error.empty()) ownership.error = "it has no owner";
@@ -1242,14 +1250,15 @@ WinOwnership ReadWinOwnership(const fs::path& path)
     return ownership;
 }
 
-std::string WinNotOwnedText(const fs::path& path)
+std::string WinNotOwnedText(const fs::path& path, bool service)
 {
-    const WinOwnership ownership = ReadWinOwnership(path);
+    WinOwnership ownership = ReadWinOwnership(path);
     if (ownership.kind == WinOwnership::Kind::Owned) return {};
+    if (ownership.kind == WinOwnership::Kind::Foreign) ownership.owner_name = util::winacl::AccountNameOf(ownership.owner);
 
     try {
         const util::winacl::Sid self = util::winacl::CurrentTokenUser();
-        return WinNotOwnedText(path, ownership, self, util::winacl::AccountNameOf(self));
+        return WinNotOwnedText(path, ownership, self, util::winacl::AccountNameOf(self), service);
     } catch (const std::exception& e) {
         return std::string("it is not this account's, and this process's account could not be read (") + e.what() +
                ")";

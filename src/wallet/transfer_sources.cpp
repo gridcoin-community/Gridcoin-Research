@@ -23,6 +23,7 @@
 #include "util/syserror.h"
 #include "util/system.h"
 #include "util/transfer_file.h"
+#include "util/winservice.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdump.h"
 
@@ -563,7 +564,8 @@ bool ConfigBackupPermitted(std::string& reason)
         // Who owns it and how to make it this account's, or why that cannot be shown. Worded to be
         // true in both builds, since the monolithic one has no IPC.
         reason = "The configuration file holds the RPC password, and was left out of the backup: " +
-                 fsmodes::WinNotOwnedText(conf) + ". Back up the settings file instead.";
+                 fsmodes::WinNotOwnedText(conf, util::winsvc::IsRunningAsWindowsService()) +
+                 ". Back up the settings file instead.";
         return false;
     }
 #endif

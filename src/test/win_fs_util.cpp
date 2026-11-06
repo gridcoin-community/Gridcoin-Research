@@ -49,17 +49,7 @@ void WriteOwnFile(const fs::path& path, const std::string& text)
 {
 #ifdef WIN32
     if (!RunningUnderWine()) {
-        const util::winacl::UniqueSecurityDescriptor sd(
-            util::winacl::MakeSecurityDescriptor(util::OwnerOnlyAclSpec(/*inheritable=*/false)));
-        SECURITY_ATTRIBUTES sa{};
-        sa.nLength = sizeof(sa);
-        sa.lpSecurityDescriptor = sd.get();
-        const util::winacl::UniqueHandle file(::CreateFileW(path.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW,
-                                                            FILE_ATTRIBUTE_NORMAL, nullptr));
-        BOOST_REQUIRE_MESSAGE(file, "cannot create " << path.string() << ": error " << ::GetLastError());
-        DWORD written = 0;
-        BOOST_REQUIRE(::WriteFile(file.get(), text.data(), static_cast<DWORD>(text.size()), &written, nullptr));
-        BOOST_REQUIRE_EQUAL(written, text.size());
+        CreateFileWithAcl(path, util::OwnerOnlyAclSpec(/*inheritable=*/false), text);
         return;
     }
 #endif
@@ -69,6 +59,25 @@ void WriteOwnFile(const fs::path& path, const std::string& text)
 }
 
 #ifdef WIN32
+void CreateFileWithAcl(const fs::path& path, const util::winacl::AclSpec& spec, const std::string& text)
+{
+    const util::winacl::UniqueSecurityDescriptor sd(util::winacl::MakeSecurityDescriptor(spec));
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof(sa);
+    sa.lpSecurityDescriptor = sd.get();
+    sa.bInheritHandle = FALSE;
+
+    const HANDLE handle = ::CreateFileW(path.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW,
+                                        FILE_ATTRIBUTE_NORMAL, nullptr);
+    const DWORD error = ::GetLastError();
+    BOOST_REQUIRE_MESSAGE(handle != INVALID_HANDLE_VALUE, "CreateFileW failed with error " << error);
+    const util::winacl::UniqueHandle guard(handle);
+
+    DWORD written = 0;
+    BOOST_REQUIRE(::WriteFile(handle, text.data(), static_cast<DWORD>(text.size()), &written, nullptr));
+    BOOST_REQUIRE_EQUAL(written, static_cast<DWORD>(text.size()));
+}
+
 void MakeJunction(const fs::path& link, const fs::path& target)
 {
     BOOST_REQUIRE(::CreateDirectoryW(link.wstring().c_str(), nullptr));

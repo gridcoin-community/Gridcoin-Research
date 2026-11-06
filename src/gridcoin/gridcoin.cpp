@@ -19,11 +19,16 @@
 #include "gridcoin/beacon.h"
 #include "init.h"
 #include "util/fsmodes.h"
+#include "util/winservice.h"
 #include "scheduler.h"
 #include "node/ui_interface.h"
 
 #include <cstdio>
 #include <optional>
+
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
 
 using namespace GRC;
 
@@ -791,6 +796,22 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
 
 bool GRC::CleanConfig() {
     const fs::path config_file = GetConfigFile();
+
+    // A link at the name is never followed, so it is not even read, and the outcome is the same
+    // whoever made it: Windows follows an administrator's link and may refuse to follow a
+    // standard user's. The core ignores the obsolete keys anyway.
+#ifndef WIN32
+    struct stat st;
+    const bool link = ::lstat(config_file.string().c_str(), &st) == 0 && S_ISLNK(st.st_mode);
+#else
+    const bool link = fsmodes::ReadWinOwnership(config_file).kind == fsmodes::WinOwnership::Kind::Link;
+#endif
+    if (link) {
+        LogPrintf("%s: not checking %s for obsolete keys: it is a link, which is not followed", __func__,
+                  config_file.string());
+        return true;
+    }
+
     fsbridge::ifstream orig_config(config_file);
     if (!orig_config.good()) {
         return false;
@@ -830,7 +851,7 @@ skip:;
                   config_file.string());
 #else
         LogPrintf("%s: not removing obsolete keys from %s: %s", __func__, config_file.string(),
-                  fsmodes::WinNotOwnedText(config_file));
+                  fsmodes::WinNotOwnedText(config_file, util::winsvc::IsRunningAsWindowsService()));
 #endif
         return true;
     }

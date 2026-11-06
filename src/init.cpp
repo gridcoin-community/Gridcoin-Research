@@ -518,6 +518,27 @@ static std::string GenerateRpcPassword()
     return EncodeBase58(rand_pwd);
 }
 
+//! Logs that the RPC credentials are not added to \p config_file, which is not this account's,
+//! and what to do instead. On Windows it names the owner and the fixes: for the service, whose
+//! file belongs to the administrators by design, adding the credentials by hand or rerunning
+//! gridcoin-service.exe install --reconfigure, and otherwise also making the file this
+//! account's (fsmodes::WinNotOwnedText).
+static void LogNotAddingRpcCredentials(const fs::path& config_file)
+{
+#ifndef WIN32
+    LogPrintf("AddMissingRpcCredentials: not adding RPC credentials to %s: it is not owned by this account; the "
+              "package or the administrator provides them",
+              config_file.string());
+#else
+    const bool service = util::winsvc::IsRunningAsWindowsService();
+    LogPrintf("AddMissingRpcCredentials: not adding RPC credentials to %s: %s. %s", config_file.string(),
+              fsmodes::WinNotOwnedText(config_file, service),
+              service ? "Add rpcuser and rpcpassword to the file by hand, or rerun gridcoin-service.exe install "
+                        "--reconfigure as an administrator"
+                      : "Otherwise add rpcuser and rpcpassword to the file by hand");
+#endif
+}
+
 //! Add generated RPC credentials to an EXISTING configuration file that has none.
 //!
 //! CreateNewConfigFile only runs when there is no configuration file at all
@@ -565,16 +586,7 @@ void AddMissingRpcCredentials()
     const fs::path config_file = GetConfigFile();
 
     if (!fsmodes::OwnedByUs(config_file)) {
-#ifndef WIN32
-        LogPrintf("%s: not adding RPC credentials to %s: it is not owned by this account; the package or the "
-                  "administrator provides them",
-                  __func__, config_file.string());
-#else
-        // Who owns it, and the two fixes. A conf an elevated token created belongs to
-        // Administrators, though it may sit in this account's own data directory.
-        LogPrintf("%s: not adding RPC credentials to %s: %s. Otherwise add rpcuser and rpcpassword to the file by hand",
-                  __func__, config_file.string(), fsmodes::WinNotOwnedText(config_file));
-#endif
+        LogNotAddingRpcCredentials(config_file);
         return;
     }
 
@@ -609,9 +621,7 @@ void AddMissingRpcCredentials()
     const fsmodes::AppendResult appended = fsmodes::AppendToOwnedFile(config_file, credentials);
 
     if (appended.status == fsmodes::AppendStatus::NotOwned) {
-        LogPrintf("%s: not adding RPC credentials to %s: it is not owned by this account; the package or the "
-                  "administrator provides them",
-                  __func__, config_file.string());
+        LogNotAddingRpcCredentials(config_file);
         return;
     }
     if (appended.status == fsmodes::AppendStatus::OpenFailed) {

@@ -133,10 +133,11 @@ public:
 
     //! Reports Start(), then InitBegun(), runs \p app_main with a watcher that reports
     //! ShutdownObserved() once a shutdown is requested and Tick() every tick until app_main
-    //! returns, then reports Exit(). Nothing is reported after the stopped report, and
-    //! OnControl() does nothing from then on. Returns what app_main returned, false when it
-    //! threw. Call once.
-    bool Run(const std::function<bool()>& app_main) LOCKS_EXCLUDED(m_mutex);
+    //! returns, then calls \p before_stopped_report with what app_main returned, and reports
+    //! Exit(). Nothing is reported after the stopped report, and OnControl() does nothing from
+    //! then on. Returns what app_main returned, false when it threw. Call once.
+    bool Run(const std::function<bool()>& app_main,
+             const std::function<void(bool)>& before_stopped_report = {}) LOCKS_EXCLUDED(m_mutex);
 
     //! The service manager's \p control. Before the first report and after the stopped one it
     //! does nothing and returns HANDLER_OK. Otherwise ServiceStatusMachine::Control():

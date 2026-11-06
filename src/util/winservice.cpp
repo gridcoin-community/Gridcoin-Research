@@ -20,6 +20,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <mutex>
 #include <optional>
 
 #include <windows.h>
@@ -207,7 +208,7 @@ ServiceRunner::ServiceRunner(ReportFunction report, std::function<bool()> shutdo
 {
 }
 
-bool ServiceRunner::Run(const std::function<bool()>& app_main)
+bool ServiceRunner::Run(const std::function<bool()>& app_main, const std::function<void(bool)>& before_stopped_report)
 {
     {
         LOCK(m_mutex);
@@ -243,6 +244,7 @@ bool ServiceRunner::Run(const std::function<bool()>& app_main)
     // service manager may end the process once it has this one, so a control that is waiting
     // for the lock finds the run stopped and does nothing.
     LOCK(m_mutex);
+    if (before_stopped_report) before_stopped_report(app_ok);
     m_report(m_machine.Exit(app_ok));
     m_phase = Phase::Stopped;
 
@@ -481,8 +483,27 @@ std::atomic<SERVICE_STATUS_HANDLE> g_status_handle{nullptr};
 std::function<bool()> g_app_main;
 std::optional<ServiceRunner> g_runner;
 
-//! Written on the service's thread, read on the dispatcher's once the service has stopped.
+//! Written on the service's thread before its stopped report, read on the dispatcher's once the
+//! service has stopped.
 std::atomic<int> g_exit_code{EXIT_FAILURE};
+
+//! Set when ServiceMain is about to return, so that RunAsService does not return, and the
+//! runtime's statics are not destroyed, while the service's thread is still inside the runner.
+std::mutex g_main_mutex;
+std::condition_variable g_main_cv;
+bool g_main_done{false};
+
+//! How long RunAsService waits for ServiceMain to return once the dispatcher has.
+constexpr std::chrono::seconds SERVICE_MAIN_WAIT{10};
+
+void MarkServiceMainDone()
+{
+    {
+        std::lock_guard<std::mutex> lock(g_main_mutex);
+        g_main_done = true;
+    }
+    g_main_cv.notify_all();
+}
 
 //! One report to the service manager. ServiceRunner makes every report under one lock.
 void ReportToServiceManager(const SvcStatus& status)
@@ -519,6 +540,7 @@ void WINAPI ServiceMain(DWORD argc, LPWSTR* argv)
         // Nothing can be reported without the handle; the service manager sees the service
         // end without a stopped report.
         g_exit_code = EXIT_FAILURE;
+        MarkServiceMainDone();
         return;
     }
     g_status_handle.store(handle);
@@ -530,9 +552,10 @@ void WINAPI ServiceMain(DWORD argc, LPWSTR* argv)
     }
     g_running_as_service.store(true);
 
-    const bool app_ok = g_runner->Run(g_app_main);
-    // Not reported: the stopped report is out, and this is only what RunAsService returns.
-    g_exit_code = app_ok ? EXIT_SUCCESS : EXIT_FAILURE;
+    // The exit code is stored before the stopped report: once the service manager has that, the
+    // dispatcher may return, and RunAsService reads the code.
+    g_runner->Run(g_app_main, [](bool app_ok) { g_exit_code = app_ok ? EXIT_SUCCESS : EXIT_FAILURE; });
+    MarkServiceMainDone();
 }
 } // namespace
 
@@ -557,6 +580,17 @@ int RunAsService(const std::function<bool()>& app_main)
                         static_cast<unsigned>(error));
         }
         return EXIT_FAILURE;
+    }
+
+    // The dispatcher returns once the stopped report is processed, which may be before the
+    // service's thread has left the runner. Waited for, with a bound, so that what it uses is not
+    // destroyed under it as the process ends.
+    {
+        std::unique_lock<std::mutex> lock(g_main_mutex);
+        if (!g_main_cv.wait_for(lock, SERVICE_MAIN_WAIT, [] { return g_main_done; })) {
+            LogPrintf("Service: the service's thread had not finished %d s after it stopped",
+                      static_cast<int>(SERVICE_MAIN_WAIT.count()));
+        }
     }
 
     return g_exit_code.load();

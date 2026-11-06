@@ -32,6 +32,9 @@
 #include "test/wine.h"
 #include "util/dir_permissions.h"
 #include "util/win_acl.h"
+#include "util/winservice.h"
+
+#include <cstdlib>
 #endif
 
 namespace {
@@ -501,8 +504,8 @@ BOOST_AUTO_TEST_CASE(unreadable_conf_is_not_rewritten)
 }
 
 // The core rewrites its configuration file to drop obsolete keys only when this account owns
-// it (fsmodes::OwnedByUs). A link is not one: the link and the file it leads to stay as they
-// were.
+// it (fsmodes::OwnedByUs). A link is never followed: the link and the file it leads to stay as
+// they were, and the file is not even read.
 BOOST_AUTO_TEST_CASE(clean_config_leaves_a_conf_this_account_does_not_own)
 {
     ScratchDataDir datadir;
@@ -520,7 +523,28 @@ BOOST_AUTO_TEST_CASE(clean_config_leaves_a_conf_this_account_does_not_own)
     BOOST_CHECK(cleaned);
     BOOST_CHECK(fs::is_symlink(fs::symlink_status(conf)));
     BOOST_CHECK_EQUAL(ReadText(target), contents);
-    BOOST_CHECK_MESSAGE(Logged(lines, "not removing obsolete keys from " + conf.string()), "no log line");
+    BOOST_CHECK_MESSAGE(Logged(lines, "not checking " + conf.string() + " for obsolete keys: it is a link"),
+                        "no log line");
+}
+
+// The outcome for a link does not depend on whether what it leads to can be read: one that
+// leads nowhere, as one that Windows will not follow, is a link all the same, and nothing fails.
+BOOST_AUTO_TEST_CASE(clean_config_treats_a_dangling_link_as_a_link)
+{
+    ScratchDataDir datadir;
+    const fs::path conf = GetConfigFile();
+    fs::create_symlink(datadir.path / "missing.conf", conf);
+
+    std::vector<std::string> lines;
+    const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+    const bool cleaned = GRC::CleanConfig();
+    LogInstance().DeleteCallback(callback);
+
+    BOOST_CHECK(cleaned);
+    BOOST_CHECK(fs::is_symlink(fs::symlink_status(conf)));
+    BOOST_CHECK(!fs::exists(fs::symlink_status(datadir.path / "missing.conf")));
+    BOOST_CHECK_MESSAGE(Logged(lines, "not checking " + conf.string() + " for obsolete keys: it is a link"),
+                        "no log line");
 }
 
 // The cleaned file is written under a temporary name that is created exclusively and
@@ -591,9 +615,11 @@ BOOST_AUTO_TEST_CASE(rpc_credentials_are_not_added_through_a_link_windows)
     BOOST_CHECK_MESSAGE(Logged(lines, "add rpcuser and rpcpassword to the file by hand"), "no hand-edit fix");
 }
 
-// CleanConfig's gate on Windows: a configuration file that is a link is not this account's
-// (fsmodes::OwnedByUs), so neither it nor the file it leads to is rewritten. Making the link
-// needs Developer Mode or an elevated token; without either the case says so and checks nothing.
+// CleanConfig on Windows: a configuration file that is a link is never followed, so neither it
+// nor the file it leads to is read or rewritten, and the outcome is the same whoever made the
+// link: Windows follows an administrator's link, and may refuse to follow one that a standard
+// user made. Making the link needs Developer Mode or an elevated token; without either the case
+// says so and checks nothing.
 BOOST_AUTO_TEST_CASE(clean_config_leaves_a_linked_conf_windows)
 {
     if (grc_test::RunningUnderWine()) {
@@ -624,8 +650,44 @@ BOOST_AUTO_TEST_CASE(clean_config_leaves_a_linked_conf_windows)
     fs::path temporary = conf;
     temporary.replace_extension("conf~");
     BOOST_CHECK(!fs::exists(fs::symlink_status(temporary)));
-    BOOST_CHECK_MESSAGE(Logged(lines, "not removing obsolete keys from " + conf.string() + ": it is a link"),
+    BOOST_CHECK_MESSAGE(Logged(lines, "not checking " + conf.string() + " for obsolete keys: it is a link"),
                         "no log line");
+}
+
+// As a service, the configuration file belongs to the administrators by design: the text says so
+// and gives only the fixes that keep it theirs, never making the service its owner.
+// %SystemRoot%\win.ini stands for an administrator's file; it is only read.
+BOOST_AUTO_TEST_CASE(rpc_credentials_text_as_a_service_windows)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine has no Windows file ownership; skipping");
+        return;
+    }
+
+    const grc_test::StateGuard state;
+    const char* const root = std::getenv("SystemRoot");
+    BOOST_REQUIRE(root != nullptr);
+    const fs::path ini = fs::path(root) / "win.ini";
+    const std::string before = ReadText(ini);
+    grc_test::ForcedArgGuard conf_arg("conf", ini.string());
+    BOOST_REQUIRE(gArgs.GetArg("-rpcpassword", "").empty());
+
+    struct ServiceMode {
+        ServiceMode() { util::winsvc::SetRunningAsWindowsServiceForTesting(true); }
+        ~ServiceMode() { util::winsvc::SetRunningAsWindowsServiceForTesting(false); }
+    } service;
+
+    std::vector<std::string> lines;
+    const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+    AddMissingRpcCredentials();
+    LogInstance().DeleteCallback(callback);
+
+    BOOST_CHECK_EQUAL(ReadText(ini), before);
+    BOOST_CHECK_MESSAGE(Logged(lines, "not adding RPC credentials to " + ini.string()), "no log line");
+    BOOST_CHECK_MESSAGE(Logged(lines, "belongs to the administrators by design"), "no design note");
+    BOOST_CHECK_MESSAGE(Logged(lines, "Add rpcuser and rpcpassword to the file by hand"), "no hand-edit fix");
+    BOOST_CHECK_MESSAGE(Logged(lines, "gridcoin-service.exe install --reconfigure"), "no reconfigure fix");
+    BOOST_CHECK_MESSAGE(!Logged(lines, "/setowner"), "a /setowner fix for the service's conf");
 }
 
 // The first-run configuration file is created with the owner-only access list, not the one it

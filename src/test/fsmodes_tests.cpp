@@ -541,46 +541,67 @@ BOOST_AUTO_TEST_CASE(win_not_owned_text_names_the_owner_and_the_fix)
     foreign.kind = fsmodes::WinOwnership::Kind::Foreign;
     foreign.owner = wellknown::Administrators();
     foreign.owner_name = "BUILTIN\\Administrators";
-    const std::string admins = fsmodes::WinNotOwnedText(conf, foreign, Self(), "PC\\jim");
+    const std::string admins = fsmodes::WinNotOwnedText(conf, foreign, Self(), "PC\\jim", /*service=*/false);
     BOOST_TEST_MESSAGE(admins);
     CheckHas(admins, "owned by BUILTIN\\Administrators (S-1-5-32-544)");
     CheckHas(admins, "not by this account, PC\\jim (" + FormatSid(Self()) + ")");
-    CheckHas(admins, "elevated");
+    CheckHas(admins, "in a command prompt run as an administrator (elevated), or as this account where it may "
+                     "change the owner");
     CheckHas(admins, "icacls \"" + conf.string() + "\" /setowner *" + FormatSid(Self()));
     BOOST_CHECK_MESSAGE(IsAsciiLine(admins), admins);
 
+    // The service's own configuration file belongs to the administrators by design, and the service
+    // only reads it: no text gives the service its ownership.
+    const fs::path service_conf = "C:\\ProgramData\\Gridcoin\\conf\\mainnet.conf";
+    const Sid service_sid = SidOf("S-1-5-80-3522172824-109097731-499206491-3348895147-1114477730");
+    const std::string service =
+        fsmodes::WinNotOwnedText(service_conf, foreign, service_sid, "NT SERVICE\\gridcoinresearchd", /*service=*/true);
+    BOOST_TEST_MESSAGE(service);
+    CheckHas(service, "owned by BUILTIN\\Administrators (S-1-5-32-544)");
+    CheckHas(service, "belongs to the administrators by design");
+    CheckHasNot(service, "/setowner");
+    CheckHasNot(service, "icacls");
+    BOOST_CHECK_MESSAGE(IsAsciiLine(service), service);
+    for (const fsmodes::WinOwnership::Kind kind :
+         {fsmodes::WinOwnership::Kind::Link, fsmodes::WinOwnership::Kind::NoAclVolume,
+          fsmodes::WinOwnership::Kind::Unreadable, fsmodes::WinOwnership::Kind::Unopened}) {
+        fsmodes::WinOwnership other;
+        other.kind = kind;
+        CheckHasNot(fsmodes::WinNotOwnedText(service_conf, other, service_sid, "", /*service=*/true), "/setowner");
+    }
+
     // Without names, the SIDs alone.
     foreign.owner_name.clear();
-    const std::string unnamed = fsmodes::WinNotOwnedText(conf, foreign, Self(), "");
+    const std::string unnamed = fsmodes::WinNotOwnedText(conf, foreign, Self(), "", /*service=*/false);
     CheckHas(unnamed, "owned by S-1-5-32-544,");
     CheckHas(unnamed, "not by this account, " + FormatSid(Self()));
     CheckHasNot(unnamed, "()");
 
     fsmodes::WinOwnership link;
     link.kind = fsmodes::WinOwnership::Kind::Link;
-    const std::string linked = fsmodes::WinNotOwnedText(conf, link, Self(), "PC\\jim");
+    const std::string linked = fsmodes::WinNotOwnedText(conf, link, Self(), "PC\\jim", /*service=*/false);
     CheckHas(linked, "link");
     CheckHasNot(linked, "/setowner");
 
     fsmodes::WinOwnership fat;
     fat.kind = fsmodes::WinOwnership::Kind::NoAclVolume;
-    const std::string no_owner = fsmodes::WinNotOwnedText(conf, fat, Self(), "PC\\jim");
+    const std::string no_owner = fsmodes::WinNotOwnedText(conf, fat, Self(), "PC\\jim", /*service=*/false);
     CheckHas(no_owner, "FAT or exFAT");
     CheckHasNot(no_owner, "/setowner");
 
     fsmodes::WinOwnership unreadable;
     unreadable.kind = fsmodes::WinOwnership::Kind::Unreadable;
     unreadable.error = "GetSecurityInfo failed with error 5";
-    CheckHas(fsmodes::WinNotOwnedText(conf, unreadable, Self(), ""), "GetSecurityInfo failed with error 5");
+    CheckHas(fsmodes::WinNotOwnedText(conf, unreadable, Self(), "", /*service=*/false), "GetSecurityInfo failed with error 5");
 
     fsmodes::WinOwnership unopened;
     unopened.kind = fsmodes::WinOwnership::Kind::Unopened;
     unopened.error = "The system cannot find the file specified";
-    CheckHas(fsmodes::WinNotOwnedText(conf, unopened, Self(), ""), "The system cannot find the file specified");
+    CheckHas(fsmodes::WinNotOwnedText(conf, unopened, Self(), "", /*service=*/false), "The system cannot find the file specified");
 
     fsmodes::WinOwnership owned;
     owned.kind = fsmodes::WinOwnership::Kind::Owned;
-    BOOST_CHECK(fsmodes::WinNotOwnedText(conf, owned, Self(), "PC\\jim").empty());
+    BOOST_CHECK(fsmodes::WinNotOwnedText(conf, owned, Self(), "PC\\jim", /*service=*/false).empty());
 }
 
 // Only a reparse point whose tag is a name surrogate (a symbolic link, a junction, a mount
@@ -1232,25 +1253,10 @@ struct WinTempDir
     }
 };
 
-//! Create the file \p path holding \p text, with \p spec as its owner and access list from the
-//! start.
+//! grc_test::CreateFileWithAcl, with this suite's usual contents.
 void CreateWithAcl(const fs::path& path, const AclSpec& spec, const std::string& text = "fsmodes test\n")
 {
-    const UniqueSecurityDescriptor sd(MakeSecurityDescriptor(spec));
-    SECURITY_ATTRIBUTES sa{};
-    sa.nLength = sizeof(sa);
-    sa.lpSecurityDescriptor = sd.get();
-    sa.bInheritHandle = FALSE;
-
-    const HANDLE handle = ::CreateFileW(path.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW,
-                                        FILE_ATTRIBUTE_NORMAL, nullptr);
-    const DWORD error = ::GetLastError();
-    BOOST_REQUIRE_MESSAGE(handle != INVALID_HANDLE_VALUE, "CreateFileW failed with error " << error);
-    const UniqueHandle guard(handle);
-
-    DWORD written = 0;
-    BOOST_REQUIRE(::WriteFile(handle, text.data(), static_cast<DWORD>(text.size()), &written, nullptr));
-    BOOST_REQUIRE_EQUAL(written, static_cast<DWORD>(text.size()));
+    grc_test::CreateFileWithAcl(path, spec, text);
 }
 
 //! The owner-only access list (this account and SYSTEM) with \p extra after it.
@@ -1315,7 +1321,7 @@ BOOST_AUTO_TEST_CASE(owned_by_us_false_for_foreign_owner)
     const fsmodes::WinOwnership ownership = fsmodes::ReadWinOwnership(ini);
     BOOST_CHECK(ownership.kind == fsmodes::WinOwnership::Kind::Foreign);
     BOOST_CHECK(ownership.owner == *owner);
-    const std::string text = fsmodes::WinNotOwnedText(ini);
+    const std::string text = fsmodes::WinNotOwnedText(ini, /*service=*/false);
     BOOST_TEST_MESSAGE(text);
     CheckHas(text, FormatSid(*owner));
     CheckHas(text, "/setowner *" + FormatSid(CurrentTokenUser()));
@@ -1332,10 +1338,10 @@ BOOST_AUTO_TEST_CASE(read_win_ownership_agrees_with_owned_by_us)
     CreateWithAcl(own, util::OwnerOnlyAclSpec(/*inheritable=*/false));
     BOOST_CHECK(fsmodes::ReadWinOwnership(own).kind == fsmodes::WinOwnership::Kind::Owned);
     BOOST_CHECK(fsmodes::OwnedByUs(own));
-    BOOST_CHECK(fsmodes::WinNotOwnedText(own).empty());
+    BOOST_CHECK(fsmodes::WinNotOwnedText(own, /*service=*/false).empty());
 
     BOOST_CHECK(fsmodes::ReadWinOwnership(dir.path / "absent").kind == fsmodes::WinOwnership::Kind::Unopened);
-    BOOST_CHECK(!fsmodes::WinNotOwnedText(dir.path / "absent").empty());
+    BOOST_CHECK(!fsmodes::WinNotOwnedText(dir.path / "absent", /*service=*/false).empty());
 }
 
 // A junction is not ours, whoever made it: OwnedByUs does not follow it to the directory it

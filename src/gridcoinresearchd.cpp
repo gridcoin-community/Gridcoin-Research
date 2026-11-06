@@ -152,10 +152,18 @@ static std::optional<std::string> ServiceAccountProblem()
     }
 }
 
+//! Whether \p dir is a reparse point (a link, a junction or another kind), read without following it.
+static bool IsReparsePoint(const fs::path& dir)
+{
+    const DWORD attributes = ::GetFileAttributesW(dir.wstring().c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+}
+
 //! Writes a refusal from before the configuration is read, for a service, which has no console:
 //! to stderr, and to debug.log in the network's data directory as the command line names it, only
-//! when that directory exists. Nothing but the log file is created, and nothing is written through
-//! a link at its name (util::winsvc::AppendToLogNoFollow).
+//! when that directory exists and neither it nor the data directory is a reparse point. Nothing
+//! but the log file is created, and nothing is written through a link at its name
+//! (util::winsvc::AppendToLogNoFollow). Best effort: the log write may not happen.
 static void WriteEarlyServiceRefusal(const std::string& message)
 {
     tfm::format(std::cerr, "Error: %s\n", message);
@@ -165,10 +173,12 @@ static void WriteEarlyServiceRefusal(const std::string& message)
         if (datadir.empty()) return;
 
         boost::system::error_code ec;
-        fs::path dir = fs::system_complete(datadir, ec);
+        const fs::path root = fs::system_complete(datadir, ec);
         if (ec) return;
-        dir /= CreateBaseChainParams(gArgs.GetChainName())->DataDir();
+        const fs::path dir = root / CreateBaseChainParams(gArgs.GetChainName())->DataDir();
         if (!fs::is_directory(dir, ec)) return;
+        // A junction there would lead the write elsewhere.
+        if (IsReparsePoint(root) || IsReparsePoint(dir)) return;
 
         util::winsvc::AppendToLogNoFollow(dir / DEFAULT_DEBUGLOGFILE,
                                           strprintf("%s Error: %s\n", FormatISO8601DateTime(GetTime()), message));
@@ -266,9 +276,10 @@ bool AppInit(int argc, char* argv[])
 #ifdef WIN32
         if (util::winsvc::IsRunningAsWindowsService()) {
             // First of all, as it needs only the token and the service's name: a service under any
-            // account but its own virtual one reads and writes nothing of the service's, and exits
-            // with its own code, which event 7024 shows. Such an account, LocalService for one, may
-            // not be able to read the data directory, so the refusal goes where it can be seen.
+            // account but its own virtual one reads none of the service's files, writes none but the
+            // refusal's line in debug.log, and exits with its own code, which event 7024 shows. Such
+            // an account, LocalService for one, may not be able to write the data directory, so the
+            // refusal also goes to stderr, and the exit code is what always reaches the operator.
             if (const std::optional<std::string> refusal = ServiceAccountProblem()) {
                 WriteEarlyServiceRefusal(*refusal);
                 util::winsvc::RefuseServiceStart(util::winsvc::EXIT_WRONG_ACCOUNT);

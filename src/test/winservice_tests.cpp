@@ -638,6 +638,32 @@ BOOST_AUTO_TEST_CASE(runner_self_stop_reports_progress_and_exits_1)
     BOOST_CHECK_EQUAL(reports.back().specific_exit_code, EXIT_SELF_STOP);
 }
 
+// The exit code is settled before the stopped report: after it, the process may end at once.
+BOOST_AUTO_TEST_CASE(runner_settles_the_exit_before_the_stopped_report)
+{
+    FakeScm scm;
+    ServiceRunner runner = MakeRunner(scm);
+
+    std::vector<std::string> order;
+    std::mutex order_mutex;
+    scm.on_report = [&](const SvcStatus& status) {
+        std::lock_guard<std::mutex> lock(order_mutex);
+        order.push_back(status.state == SvcState::Stopped ? "stopped" : "report");
+    };
+
+    std::optional<bool> settled;
+    BOOST_CHECK(!runner.Run([] { return false; }, [&](bool app_ok) {
+        std::lock_guard<std::mutex> lock(order_mutex);
+        settled = app_ok;
+        order.push_back("exit settled");
+    }));
+
+    BOOST_REQUIRE(settled.has_value());
+    BOOST_CHECK(!*settled);
+    const std::vector<std::string> expected{"report", "report", "exit settled", "stopped"};
+    BOOST_CHECK_EQUAL_COLLECTIONS(order.begin(), order.end(), expected.begin(), expected.end());
+}
+
 // A start that fails, one that throws, and one refused for its account.
 BOOST_AUTO_TEST_CASE(runner_failed_and_refused_starts)
 {
@@ -681,18 +707,32 @@ BOOST_AUTO_TEST_CASE(runner_reports_nothing_after_stopped)
     ServiceRunner runner = MakeRunner(scm);
 
     std::thread late;
+    std::atomic<bool> entering{false};
     std::atomic<uint32_t> late_result{999};
+    std::atomic<bool> waited_during_report{false};
     scm.on_report = [&](const SvcStatus& status) {
-        // The handler on the dispatcher's thread, which blocks on the runner's lock that this
-        // report holds.
+        // The handler on the dispatcher's thread. The stopped report waits until the control is
+        // on its way, then a little longer, so that the control reaches the runner's lock while
+        // this report holds it.
         if (status.state == SvcState::Stopped && !late.joinable()) {
-            late = std::thread([&] { late_result = runner.OnControl(CONTROL_STOP); });
+            late = std::thread([&] {
+                entering = true;
+                late_result = runner.OnControl(CONTROL_STOP);
+            });
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+            while (!entering && std::chrono::steady_clock::now() < deadline) {
+                std::this_thread::yield();
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds{40});
+            // Still waiting: the control could not act while this report held the lock.
+            waited_during_report = entering && late_result == 999;
         }
     };
 
     BOOST_CHECK(!runner.Run([] { return false; }));
     BOOST_REQUIRE(late.joinable());
     late.join();
+    BOOST_CHECK(waited_during_report.load());
 
     BOOST_CHECK_EQUAL(late_result.load(), HANDLER_OK);
     BOOST_CHECK_EQUAL(scm.requests.load(), 0);
