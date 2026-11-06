@@ -7,6 +7,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <cstdint>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <utility>
@@ -319,6 +320,181 @@ BOOST_AUTO_TEST_CASE(chain_mask_accepts_program_files_defaults)
     ObservedAcl widened = program_files;
     widened.aces.push_back(Ace(AceKind::Allow, wellknown::Users(), 0x1301BF));
     BOOST_CHECK(FindForeignWriter(widened, allowed, CHAIN_DIR_WRITEISH).has_value());
+}
+
+namespace {
+//! NT SERVICE\gridcoinresearchd.
+Sid ServiceSid()
+{
+    return SidOf("S-1-5-80-3522172824-109097731-499206491-3348895147-1114477730");
+}
+
+//! The accounts the service's autounlock file may be changed by.
+std::vector<Sid> ServiceAllowed()
+{
+    return {ServiceSid(), wellknown::System(), wellknown::Administrators(), wellknown::TrustedInstaller()};
+}
+
+//! C:\ProgramData as Windows sets it up (icacls on Windows 11 26H2): Users may create files
+//! and directories in it, and change its attributes and extended attributes, for themselves.
+ObservedAcl StockProgramData()
+{
+    ObservedAce users_create = Ace(AceKind::Allow, wellknown::Users(),
+                                   FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY | FILE_WRITE_EA | FILE_WRITE_ATTRIBUTES);
+    // (CI) alone: container-only, which no AceSpec states.
+    users_create.inherit.reset();
+
+    return Acl(wellknown::System(), {
+        Ace(AceKind::Allow, wellknown::System(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
+        Ace(AceKind::Allow, wellknown::Administrators(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
+        Ace(AceKind::Allow, SidOf("S-1-3-0"), FILE_ALL_ACCESS, Inherit::ContainerAndObject, /*inherit_only=*/true),
+        Ace(AceKind::Allow, wellknown::Users(), 0x1200A9, Inherit::ContainerAndObject),
+        users_create,
+    });
+}
+
+//! C:\ as Windows sets it up.
+ObservedAcl StockVolumeRoot()
+{
+    return Acl(wellknown::TrustedInstaller(), {
+        Ace(AceKind::Allow, wellknown::Administrators(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
+        Ace(AceKind::Allow, wellknown::System(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
+        Ace(AceKind::Allow, wellknown::Users(), 0x1200A9, Inherit::ContainerAndObject),
+        Ace(AceKind::Allow, AuthenticatedUsers(), FILE_ADD_SUBDIRECTORY),
+        Ace(AceKind::Allow, AuthenticatedUsers(), 0x1301BF, Inherit::ContainerAndObject, /*inherit_only=*/true),
+    });
+}
+
+//! The service's autounlock file and the directories above it, as gridcoin-service.exe
+//! install lays them out under the stock C:\ProgramData and C:\.
+std::vector<PathAcl> ServiceBlobChain()
+{
+    const ObservedAcl owner_only = Acl(ServiceSid(), {
+        Ace(AceKind::Allow, ServiceSid(), FILE_ALL_ACCESS),
+        Ace(AceKind::Allow, wellknown::System(), FILE_ALL_ACCESS),
+    });
+    const ObservedAcl datadir = Acl(wellknown::Administrators(), {
+        Ace(AceKind::Allow, wellknown::Administrators(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
+        Ace(AceKind::Allow, wellknown::System(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
+        Ace(AceKind::Allow, ServiceSid(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
+    });
+    const ObservedAcl root = Acl(wellknown::Administrators(), {
+        Ace(AceKind::Allow, wellknown::Administrators(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
+        Ace(AceKind::Allow, wellknown::System(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
+        Ace(AceKind::Allow, SidOf("S-1-5-21-1004336348-1177238915-682003330-1010"), 0x1200A9),
+    });
+
+    return {
+        {fs::path("C:\\ProgramData\\Gridcoin\\mainnet\\autounlock\\passphrase.dpapi"), owner_only},
+        {fs::path("C:\\ProgramData\\Gridcoin\\mainnet\\autounlock"), owner_only},
+        {fs::path("C:\\ProgramData\\Gridcoin\\mainnet"), datadir},
+        {fs::path("C:\\ProgramData\\Gridcoin"), root},
+        {fs::path("C:\\ProgramData"), StockProgramData()},
+        {fs::path("C:\\"), StockVolumeRoot()},
+    };
+}
+} // namespace
+
+// Above a data file's own directory only an existing entry matters, so the stock C:\ProgramData
+// and C:\, where every account may create a file or a directory, are no finding there. The
+// same ProgramData entries on the file's own directory are, as a file could be planted there.
+BOOST_AUTO_TEST_CASE(data_chain_accepts_stock_programdata_and_root_above_the_parent)
+{
+    const std::vector<PathAcl> chain = ServiceBlobChain();
+    const std::optional<std::string> clean = FindForeignWriterOnDataChain(chain, ServiceAllowed());
+    BOOST_CHECK_MESSAGE(!clean.has_value(), clean.value_or(""));
+
+    // The whole-chain check for executables refuses the same ProgramData.
+    BOOST_CHECK(FindForeignWriter(StockProgramData(), ServiceAllowed(), CHAIN_DIR_WRITEISH).has_value());
+
+    // A file directly in C:\ProgramData: its own directory lets Users create files.
+    const std::vector<PathAcl> planted{
+        {fs::path("C:\\ProgramData\\passphrase.dpapi"), chain[0].acl},
+        {fs::path("C:\\ProgramData"), StockProgramData()},
+        {fs::path("C:\\"), StockVolumeRoot()},
+    };
+    const std::optional<std::string> reason = FindForeignWriterOnDataChain(planted, ServiceAllowed());
+    BOOST_CHECK_MESSAGE(Contains(reason, "'C:\\ProgramData'"), reason.value_or("(none)"));
+    BOOST_CHECK_MESSAGE(Contains(reason, "S-1-5-32-545"), reason.value_or("(none)"));
+
+    // C:\ itself grants only the creation of directories, which cannot take the place of a
+    // file, so a file directly in it is no finding either.
+    const std::vector<PathAcl> in_root{
+        {fs::path("C:\\passphrase.dpapi"), chain[0].acl},
+        {fs::path("C:\\"), StockVolumeRoot()},
+    };
+    const std::optional<std::string> root = FindForeignWriterOnDataChain(in_root, ServiceAllowed());
+    BOOST_CHECK_MESSAGE(!root.has_value(), root.value_or(""));
+
+    BOOST_CHECK(!FindForeignWriterOnDataChain(std::vector<PathAcl>{}, ServiceAllowed()).has_value());
+}
+
+// Above the parent, each right that can replace, re-point or take over an existing entry is a
+// finding; creating an entry, or changing attributes, is not.
+BOOST_AUTO_TEST_CASE(data_chain_ancestor_rights)
+{
+    // A list of one type: on Windows the rights are the SDK's macros, of more than one type.
+    for (const uint32_t right : std::initializer_list<uint32_t>{FILE_DELETE_CHILD, DELETE, WRITE_DAC, WRITE_OWNER,
+                                                                GENERIC_ALL}) {
+        std::vector<PathAcl> chain = ServiceBlobChain();
+        chain[4].acl.aces.push_back(Ace(AceKind::Allow, wellknown::Users(), right));
+        const std::optional<std::string> reason = FindForeignWriterOnDataChain(chain, ServiceAllowed());
+        BOOST_CHECK_MESSAGE(Contains(reason, "'C:\\ProgramData'"), "right 0x" << std::hex << right << ": "
+                                                                              << reason.value_or("(none)"));
+        BOOST_CHECK(right == (right & ANCESTOR_DIR_WRITEISH));
+    }
+
+    for (const uint32_t right : std::initializer_list<uint32_t>{FILE_ADD_FILE, FILE_ADD_SUBDIRECTORY, FILE_WRITE_EA,
+                                                                FILE_WRITE_ATTRIBUTES, GENERIC_WRITE, 0x1200A9}) {
+        std::vector<PathAcl> chain = ServiceBlobChain();
+        chain[3].acl.aces.push_back(Ace(AceKind::Allow, wellknown::Users(), right));
+        const std::optional<std::string> reason = FindForeignWriterOnDataChain(chain, ServiceAllowed());
+        BOOST_CHECK_MESSAGE(!reason.has_value(), "right 0x" << std::hex << right << ": " << reason.value_or(""));
+    }
+
+    // An owner outside the allowed accounts can change the DACL, at any level.
+    std::vector<PathAcl> owned = ServiceBlobChain();
+    owned[3].acl.owner = wellknown::Users();
+    BOOST_CHECK(Contains(FindForeignWriterOnDataChain(owned, ServiceAllowed()), "'C:\\ProgramData\\Gridcoin'"));
+
+    // A directory with no DACL gives everyone everything.
+    std::vector<PathAcl> open = ServiceBlobChain();
+    open[5].acl.dacl_present = false;
+    BOOST_CHECK(Contains(FindForeignWriterOnDataChain(open, ServiceAllowed()), "'C:\\'"));
+
+    // What Users may do to what CREATOR OWNER gives them is not a grant on the directory itself.
+    std::vector<PathAcl> inherit_only = ServiceBlobChain();
+    inherit_only[3].acl.aces.push_back(
+        Ace(AceKind::Allow, wellknown::Users(), FILE_ALL_ACCESS, Inherit::ContainerAndObject, /*inherit_only=*/true));
+    BOOST_CHECK(!FindForeignWriterOnDataChain(inherit_only, ServiceAllowed()).has_value());
+}
+
+// The file and its own directory keep the masks they have elsewhere.
+BOOST_AUTO_TEST_CASE(data_chain_file_and_parent_rights)
+{
+    std::vector<PathAcl> file = ServiceBlobChain();
+    file[0].acl.aces.push_back(Ace(AceKind::Allow, wellknown::Users(), FILE_WRITE_DATA));
+    const std::optional<std::string> written = FindForeignWriterOnDataChain(file, ServiceAllowed());
+    BOOST_CHECK_MESSAGE(Contains(written, "passphrase.dpapi'"), written.value_or("(none)"));
+
+    // Reading is not this check's: FindForeignReader is.
+    std::vector<PathAcl> read = ServiceBlobChain();
+    read[0].acl.aces.push_back(Ace(AceKind::Allow, wellknown::Users(), 0x1200A9));
+    BOOST_CHECK(!FindForeignWriterOnDataChain(read, ServiceAllowed()).has_value());
+
+    for (const uint32_t right : std::initializer_list<uint32_t>{FILE_ADD_FILE, FILE_WRITE_EA, FILE_WRITE_ATTRIBUTES,
+                                                                FILE_DELETE_CHILD}) {
+        std::vector<PathAcl> parent = ServiceBlobChain();
+        parent[1].acl.aces.push_back(Ace(AceKind::Allow, wellknown::Users(), right));
+        const std::optional<std::string> reason = FindForeignWriterOnDataChain(parent, ServiceAllowed());
+        BOOST_CHECK_MESSAGE(Contains(reason, "\\autounlock'"), "right 0x" << std::hex << right << ": "
+                                                                         << reason.value_or("(none)"));
+    }
+
+    // The service account itself is allowed everywhere.
+    std::vector<PathAcl> own = ServiceBlobChain();
+    own[4].acl.aces.push_back(Ace(AceKind::Allow, ServiceSid(), FILE_ALL_ACCESS));
+    BOOST_CHECK(!FindForeignWriterOnDataChain(own, ServiceAllowed()).has_value());
 }
 
 BOOST_AUTO_TEST_CASE(foreign_reader_flags_read_grants)
@@ -905,6 +1081,58 @@ BOOST_AUTO_TEST_CASE(foreign_writer_on_chain_needs_a_plain_absolute_path)
     BOOST_CHECK(FindForeignWriterOnChain(fs::path("relative") / "file.exe", allowed).has_value());
     BOOST_CHECK(FindForeignWriterOnChain(fs::path("C:\\Windows\\..\\file.exe"), allowed).has_value());
     BOOST_CHECK(FindForeignWriterOnChain(fs::path("C:\\Windows\\.\\file.exe"), allowed).has_value());
+
+    BOOST_CHECK(FindForeignWriterOnDataChain(fs::path("relative") / "file.dat", allowed).has_value());
+    BOOST_CHECK(FindForeignWriterOnDataChain(fs::path("C:\\Windows\\..\\file.dat"), allowed).has_value());
+    BOOST_CHECK(FindForeignWriterOnDataChain(fs::path("C:\\Windows\\.\\file.dat"), allowed).has_value());
+}
+
+// The data chain read from the disk: a file this account made in a directory of its own
+// under the temporary directory is clean, and a Users entry that may create files in that
+// directory, its parent, is a finding naming it. The same entry one level higher is not.
+BOOST_AUTO_TEST_CASE(data_chain_reads_the_disk)
+{
+    if (RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; data_chain_reads_the_disk runs on Windows");
+        return;
+    }
+
+    const fs::path top = fs::temp_directory_path() / fs::unique_path("win_acl_chain_%%%%-%%%%");
+    const fs::path dir = top / "inner";
+    const fs::path file = dir / "file.dat";
+    struct RemoveOnExit {
+        fs::path path;
+        ~RemoveOnExit()
+        {
+            boost::system::error_code ec;
+            fs::remove_all(path, ec);
+        }
+    } cleanup{top};
+
+    std::string error;
+    BOOST_REQUIRE_MESSAGE(util::CreateOwnerOnlyDirectory(top, error), error);
+    BOOST_REQUIRE_MESSAGE(util::CreateOwnerOnlyDirectory(dir, error), error);
+    {
+        fsbridge::ofstream stream(file);
+        stream << "x";
+    }
+
+    const std::vector<Sid> allowed{CurrentTokenUser(), wellknown::System(), wellknown::Administrators(),
+                                   wellknown::TrustedInstaller()};
+    const std::optional<std::string> clean = FindForeignWriterOnDataChain(file, allowed);
+    BOOST_CHECK_MESSAGE(!clean.has_value(), clean.value_or(""));
+
+    AclSpec with_users = util::OwnerOnlyAclSpec(/*inheritable=*/true);
+    with_users.aces.push_back({wellknown::Users(), FILE_ADD_FILE, Inherit::None});
+
+    ApplyAcl(top, with_users);
+    const std::optional<std::string> above = FindForeignWriterOnDataChain(file, allowed);
+    BOOST_CHECK_MESSAGE(!above.has_value(), above.value_or(""));
+
+    ApplyAcl(dir, with_users);
+    const std::optional<std::string> parent = FindForeignWriterOnDataChain(file, allowed);
+    BOOST_CHECK_MESSAGE(Contains(parent, dir.string()), parent.value_or("(none)"));
+    BOOST_CHECK_MESSAGE(Contains(parent, "S-1-5-32-545"), parent.value_or("(none)"));
 }
 
 BOOST_AUTO_TEST_CASE(parse_ace_reads_entries_windows_builds)

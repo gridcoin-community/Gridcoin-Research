@@ -80,6 +80,17 @@ constexpr uint32_t CHAIN_DIR_WRITEISH = FILE_ADD_FILE | FILE_WRITE_EA | FILE_WRI
 //! An IPC directory, where nobody else may add, remove or replace an entry.
 constexpr uint32_t IPC_DIR_WRITEISH = CHAIN_DIR_WRITEISH | FILE_ADD_SUBDIRECTORY;
 
+//! A directory above a data file's own directory, where only the entries that already
+//! exist on the path matter: the rights that replace or re-point one (FILE_DELETE_CHILD, and
+//! DELETE, which renames the directory itself away) or take the directory over (WRITE_DAC,
+//! WRITE_OWNER, GENERIC_ALL). Creating an entry, or changing the directory's attributes or
+//! extended attributes, does neither, so FILE_ADD_FILE, FILE_ADD_SUBDIRECTORY, FILE_WRITE_EA,
+//! FILE_WRITE_ATTRIBUTES and GENERIC_WRITE (which maps to those for a directory) are left
+//! out. FILE_ADD_FILE matters only where a name can be planted: in the data file's own
+//! directory, and in an executable's directory, which the loader searches for libraries.
+//! Both of those are checked with CHAIN_DIR_WRITEISH.
+constexpr uint32_t ANCESTOR_DIR_WRITEISH = FILE_DELETE_CHILD | DELETE | WRITE_DAC | WRITE_OWNER | GENERIC_ALL;
+
 //! Anything that reads what a file holds. For a secret, a check with these rights is
 //! paired with FindForeignWriter(FILE_WRITEISH): a trustee holding WRITE_DAC,
 //! WRITE_OWNER or GENERIC_WRITE can grant itself read, so READISH alone is not enough.
@@ -154,6 +165,23 @@ std::optional<std::string> FindForeignWriter(const ObservedAcl& acl, const std::
 //! FindForeignWriter with mask::READISH. It does not see a trustee that can change the
 //! ACL to grant itself read; for a secret, call FindForeignWriter with FILE_WRITEISH too.
 std::optional<std::string> FindForeignReader(const ObservedAcl& acl, const std::vector<Sid>& allowed);
+
+//! One path, and its owner and DACL as read.
+struct PathAcl
+{
+    fs::path path;
+    ObservedAcl acl;
+};
+
+//! Reason if a data file, or a directory above it, can be changed by a trustee not in
+//! \p allowed. \p chain is the file first, then its directory, then each directory above
+//! that up to the root of its volume. The file is checked with mask::FILE_WRITEISH, its
+//! directory with mask::CHAIN_DIR_WRITEISH, as a name can be planted there, and every
+//! directory above with mask::ANCESTOR_DIR_WRITEISH. A missing DACL, or an owner not in
+//! \p allowed, is a reason at every level, as an owner can always change the DACL. The
+//! reason names the path. nullopt when clean, and for an empty \p chain. Pure.
+std::optional<std::string> FindForeignWriterOnDataChain(const std::vector<PathAcl>& chain,
+                                                        const std::vector<Sid>& allowed);
 
 //! Reason if: no DACL; owner not in \p allowed; or any Allow/OtherAllow ACE, an
 //! inherit-only one included, names a trustee not in \p allowed, whatever it grants.
@@ -365,6 +393,12 @@ std::optional<Sid> LookupAccountSidByName(const std::wstring& name, bool require
 //! root with CHAIN_DIR_WRITEISH. A reason too when \p leaf is not absolute or has a
 //! "." or ".." component. Throws std::system_error when an ACL cannot be read.
 std::optional<std::string> FindForeignWriterOnChain(const fs::path& leaf, const std::vector<Sid>& allowed);
+
+//! The pure FindForeignWriterOnDataChain for the data file \p leaf, with the owner and DACL
+//! of it and of every directory above it read by name (ReadAcl). A reason too when \p leaf is
+//! not absolute or has a "." or ".." component. Throws std::system_error when an ACL cannot
+//! be read.
+std::optional<std::string> FindForeignWriterOnDataChain(const fs::path& leaf, const std::vector<Sid>& allowed);
 #endif // WIN32
 
 } // namespace util::winacl

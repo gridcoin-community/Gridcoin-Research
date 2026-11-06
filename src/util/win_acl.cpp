@@ -332,6 +332,24 @@ std::optional<std::string> FindForeignTrustee(const ObservedAcl& acl, const std:
     return std::nullopt;
 }
 
+std::optional<std::string> FindForeignWriterOnDataChain(const std::vector<PathAcl>& chain,
+                                                        const std::vector<Sid>& allowed)
+{
+    for (size_t level = 0; level < chain.size(); ++level) {
+        // The file, then its own directory, where a name can be planted, then the directories
+        // above, where only an entry that already exists matters.
+        const uint32_t writeish = level == 0 ? mask::FILE_WRITEISH
+                                : level == 1 ? mask::CHAIN_DIR_WRITEISH
+                                             : mask::ANCESTOR_DIR_WRITEISH;
+
+        if (std::optional<std::string> reason = FindForeignWriter(chain[level].acl, allowed, writeish)) {
+            return strprintf("'%s': %s", chain[level].path.string(), *reason);
+        }
+    }
+
+    return std::nullopt;
+}
+
 std::optional<std::string> CheckMatchesSpec(const ObservedAcl& acl, const AclSpec& spec)
 {
     if (!acl.dacl_present) return NO_DACL;
@@ -862,12 +880,22 @@ std::optional<Sid> LookupAccountSidByName(const std::wstring& name, bool require
     return std::move(account->sid);
 }
 
-std::optional<std::string> FindForeignWriterOnChain(const fs::path& leaf, const std::vector<Sid>& allowed)
+namespace {
+//! Why \p leaf cannot be checked as a chain: it is not absolute, or has a "." or ".." component.
+std::optional<std::string> ChainPathProblem(const fs::path& leaf)
 {
     if (!leaf.is_absolute()) return strprintf("'%s' is not an absolute path", leaf.string());
     for (const fs::path& part : leaf) {
         if (part == "." || part == "..") return strprintf("'%s' has a '.' or '..' component", leaf.string());
     }
+
+    return std::nullopt;
+}
+} // namespace
+
+std::optional<std::string> FindForeignWriterOnChain(const fs::path& leaf, const std::vector<Sid>& allowed)
+{
+    if (std::optional<std::string> problem = ChainPathProblem(leaf)) return problem;
 
     if (std::optional<std::string> reason = FindForeignWriter(ReadAcl(leaf), allowed, mask::FILE_WRITEISH)) {
         return strprintf("'%s': %s", leaf.string(), *reason);
@@ -883,6 +911,22 @@ std::optional<std::string> FindForeignWriterOnChain(const fs::path& leaf, const 
     }
 
     return std::nullopt;
+}
+
+std::optional<std::string> FindForeignWriterOnDataChain(const fs::path& leaf, const std::vector<Sid>& allowed)
+{
+    if (std::optional<std::string> problem = ChainPathProblem(leaf)) return problem;
+
+    std::vector<PathAcl> chain{{leaf, ReadAcl(leaf)}};
+
+    // Every directory above it, up to and including the root of its volume.
+    fs::path dir = leaf;
+    while (dir.has_relative_path()) {
+        dir = dir.parent_path();
+        chain.push_back({dir, ReadAcl(dir)});
+    }
+
+    return FindForeignWriterOnDataChain(chain, allowed);
 }
 #endif // WIN32
 
