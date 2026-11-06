@@ -72,8 +72,10 @@ namespace rights {
 using namespace util::winacl::mask;
 
 //! The rights that change a path: FILE_WRITEISH, and FILE_DELETE_CHILD, with which an account
-//! can delete any entry of a directory, such as wallet.dat, a backup or the conf. On a file
-//! FILE_DELETE_CHILD means nothing, so counting it there changes nothing.
+//! can delete any entry of a directory, such as wallet.dat, a backup or the conf. A file grants
+//! nothing by FILE_DELETE_CHILD, but an entry giving it there, such as one inherited from an
+//! (OI)(DC) grant on the directory, is reported too. That is harmless: the directory is
+//! reported as well, and removing the entry from the file is right.
 constexpr uint32_t CHANGE = FILE_WRITEISH | FILE_DELETE_CHILD;
 } // namespace rights
 
@@ -84,9 +86,19 @@ constexpr uint32_t ATTRIBUTE_REPARSE_POINT = 0x400;
 //! named entity, so a path through it leads elsewhere.
 constexpr uint32_t TAG_NAME_SURROGATE = 0x20000000;
 
+// The Win32 errors AclRefusedBy reads, with their values.
+constexpr uint32_t WIN32_ACCESS_DENIED = 5, WIN32_NOT_SUPPORTED = 50, WIN32_INVALID_OWNER = 1307,
+                   WIN32_INVALID_PRIMARY_GROUP = 1308, WIN32_PRIVILEGE_NOT_HELD = 1314, WIN32_INVALID_ACL = 1336,
+                   WIN32_INVALID_SECURITY_DESCR = 1338;
+
 #ifdef WIN32
-static_assert(ATTRIBUTE_DIRECTORY == FILE_ATTRIBUTE_DIRECTORY && ATTRIBUTE_REPARSE_POINT == FILE_ATTRIBUTE_REPARSE_POINT);
+static_assert(ATTRIBUTE_DIRECTORY == FILE_ATTRIBUTE_DIRECTORY);
+static_assert(ATTRIBUTE_REPARSE_POINT == FILE_ATTRIBUTE_REPARSE_POINT);
 static_assert(IsReparseTagNameSurrogate(TAG_NAME_SURROGATE) && !IsReparseTagNameSurrogate(~TAG_NAME_SURROGATE));
+static_assert(WIN32_ACCESS_DENIED == ERROR_ACCESS_DENIED && WIN32_NOT_SUPPORTED == ERROR_NOT_SUPPORTED);
+static_assert(WIN32_INVALID_OWNER == ERROR_INVALID_OWNER && WIN32_INVALID_PRIMARY_GROUP == ERROR_INVALID_PRIMARY_GROUP);
+static_assert(WIN32_PRIVILEGE_NOT_HELD == ERROR_PRIVILEGE_NOT_HELD && WIN32_INVALID_ACL == ERROR_INVALID_ACL);
+static_assert(WIN32_INVALID_SECURITY_DESCR == ERROR_INVALID_SECURITY_DESCR);
 #endif
 
 //! The accounts the Windows rule allows: this one, SYSTEM and Administrators.
@@ -171,6 +183,21 @@ std::vector<ForeignGrant> ForeignGrants(const ObservedAcl& acl, const std::vecto
 
 } // anonymous namespace
 
+std::optional<std::string> AclRefusedBy(uint32_t error, bool remote)
+{
+    const bool refused = error == WIN32_INVALID_OWNER || error == WIN32_INVALID_PRIMARY_GROUP ||
+                         error == WIN32_INVALID_ACL || error == WIN32_INVALID_SECURITY_DESCR ||
+                         error == WIN32_NOT_SUPPORTED || error == WIN32_PRIVILEGE_NOT_HELD;
+
+    if (refused) return std::string{remote ? "the network share" : "the volume"};
+
+    // A share may refuse an owner it does not take with a refusal of access. On a local volume
+    // that refusal is about the directory, and the file is not created at all.
+    if (remote && error == WIN32_ACCESS_DENIED) return std::string{"the network share"};
+
+    return std::nullopt;
+}
+
 WinEntry ClassifyWinEntry(uint32_t attributes, uint32_t reparse_tag)
 {
     WinEntry entry;
@@ -189,7 +216,8 @@ WinAclVerdict ClassifyWinAcl(const ObservedAcl& acl, const Sid& self)
     // Both also count a missing DACL and an owner outside the allowed accounts. Reading the
     // file needs a right of READISH; rights::CHANGE holds the rights that change it, and those
     // (WRITE_DAC, WRITE_OWNER) with which an account can give itself read.
-    if (!util::winacl::FindForeignReader(acl, allowed) && !util::winacl::FindForeignWriter(acl, allowed, rights::CHANGE)) {
+    if (!util::winacl::FindForeignReader(acl, allowed) &&
+        !util::winacl::FindForeignWriter(acl, allowed, rights::CHANGE)) {
         return WinAclVerdict::Clean;
     }
 
@@ -233,9 +261,10 @@ std::string WinAclWarning(const fs::path& path, const ObservedAcl& acl, const Si
         // The list the core gives what it creates: this account and SYSTEM, protected, and on a
         // directory inherited by what is inside. /inheritance:r drops every inherited entry,
         // and /remove:g the other accounts' own entries.
-        const std::string rights = directory ? ":(OI)(CI)F\"" : ":F\"";
-        std::string command = "icacls " + quoted + " /inheritance:r /grant:r \"*" + util::winacl::FormatSid(self) + rights;
-        if (self != util::winacl::wellknown::System()) command += " \"*S-1-5-18" + rights;
+        const std::string full = directory ? ":(OI)(CI)F\"" : ":F\"";
+        std::string command =
+            "icacls " + quoted + " /inheritance:r /grant:r \"*" + util::winacl::FormatSid(self) + full;
+        if (self != util::winacl::wellknown::System()) command += " \"*S-1-5-18" + full;
         if (!removals.empty()) command += " /remove:g" + removals;
 
         return message + "To make it owner-only, run in a command prompt: " + command;
@@ -244,18 +273,21 @@ std::string WinAclWarning(const fs::path& path, const ObservedAcl& acl, const Si
     // Another account's path is reported only. The fix takes the other accounts' access away
     // and gives this account no entry. Where the owner itself is the problem, an account
     // outside the allowed ones or one that could not be read, it also makes this account the
-    // owner, which only an administrator can do (it takes SeRestorePrivilege). Otherwise the
-    // owner stays as it is, and it or an administrator can make the change.
+    // owner. Who can run it: an administrator always, elevated (SeTakeOwnershipPrivilege and
+    // SeRestorePrivilege, which sets another account as owner); this account where its own
+    // entry lets it take ownership (WRITE_OWNER) or change the permissions (WRITE_DAC); and,
+    // where the owner stays, the owner, which may always change the permissions.
     std::vector<std::string> steps;
     if (foreign_owner) {
         // Named among the problems already.
-        message += "Only an administrator can give it to this account. In an elevated command prompt, ";
+        message += "To fix it, in a command prompt run as an administrator (elevated), or as this account where it "
+                   "may take ownership, ";
         steps.push_back("make this account its owner: icacls " + quoted + " /setowner *" +
                         util::winacl::FormatSid(self));
     } else {
         message += "It is owned by " + Describe(*acl.owner) +
-                   ", so only its owner or an administrator can change it. In a command prompt run as one of "
-                   "them, ";
+                   ". To fix it, in a command prompt run as its owner, as an administrator (elevated), or as this "
+                   "account where it may change the permissions, ";
     }
     if (!removals.empty()) {
         // An inherited entry cannot be removed, so the inherited entries are first made the
@@ -679,13 +711,36 @@ bool VolumeKeepsAcls(HANDLE handle)
     return (flags & FILE_PERSISTENT_ACLS) != 0;
 }
 
-//! Whether the directory \p dir is on a network share.
-bool OnRemoteVolume(const fs::path& dir)
+//! Whether the directory that \p path is created in is on a network share, as a handle on it
+//! shows. The directory is opened following any link at it, as a backup directory moved behind
+//! a link is supported, and its final path is read (GetFinalPathNameByHandleW): what a network
+//! redirector serves has a UNC final path, \\?\UNC\server\share\..., however it was reached,
+//! through a mapped drive letter, a UNC path or a symbolic link to one. GetVolumePathNameW on the
+//! name would not see through such a link. A directory that cannot be opened or asked counts as
+//! local, where a refusal of access is not retried.
+bool ParentOnShare(const fs::path& path)
 {
-    wchar_t root[MAX_PATH + 1];
-    if (!::GetVolumePathNameW(dir.wstring().c_str(), root, MAX_PATH + 1)) return false;
+    const fs::path dir = path.has_parent_path() ? path.parent_path() : fs::path(".");
+    const UniqueHandle handle(::CreateFileW(dir.wstring().c_str(), FILE_READ_ATTRIBUTES,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                            OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr));
+    if (!handle) return false;
 
-    return ::GetDriveTypeW(root) == DRIVE_REMOTE;
+    // The first call may be short; it then gives the size needed, the terminating null included.
+    std::wstring name(MAX_PATH, L'\0');
+    DWORD length = ::GetFinalPathNameByHandleW(handle.get(), name.data(), static_cast<DWORD>(name.size()),
+                                               VOLUME_NAME_DOS);
+    if (length >= name.size()) {
+        name.resize(length);
+        length = ::GetFinalPathNameByHandleW(handle.get(), name.data(), static_cast<DWORD>(name.size()),
+                                             VOLUME_NAME_DOS);
+    }
+    // On success the length leaves out the terminating null, so it is below the buffer's size.
+    if (length == 0 || length >= name.size()) return false;
+    name.resize(length);
+
+    const std::wstring unc = L"\\\\?\\UNC\\";
+    return name.compare(0, unc.size(), unc) == 0;
 }
 
 class AclChecker
@@ -857,21 +912,18 @@ HANDLE CreateOwnerOnlyFile(const fs::path& path, DWORD access, DWORD flags, cons
         return handle;
     }
 
-    // Only where the list itself was refused is the same file created without it: an owner,
-    // a list or a descriptor the volume does not take, or, from a network share, which may
-    // answer so, a refusal of access.
-    const bool refused = error == ERROR_INVALID_OWNER || error == ERROR_INVALID_PRIMARY_GROUP ||
-                         error == ERROR_INVALID_ACL || error == ERROR_INVALID_SECURITY_DESCR ||
-                         error == ERROR_NOT_SUPPORTED || error == ERROR_PRIVILEGE_NOT_HELD;
-    const bool remote = (refused || error == ERROR_ACCESS_DENIED) && OnRemoteVolume(path.parent_path());
-    if (!refused && !(remote && error == ERROR_ACCESS_DENIED)) return handle;
+    // Only where the list itself was refused is the same file created without it. Whether the
+    // parent is on a share is asked only where the answer can matter.
+    const bool maybe_refused = error == ERROR_ACCESS_DENIED || AclRefusedBy(error, /*remote=*/false);
+    const std::optional<std::string> refused_by = AclRefusedBy(error, maybe_refused && ParentOnShare(path));
+    if (!refused_by) return handle;
 
     const DWORD first = error;
     handle = ::CreateFileW(path.wstring().c_str(), access, 0, nullptr, CREATE_NEW, flags, nullptr);
     error = ::GetLastError();
     if (handle != INVALID_HANDLE_VALUE) {
-        not_owner_only = std::string{remote ? "the network share" : "the volume"} +
-                         " did not accept a file with the owner-only access list (" + Win32ErrorText(first) + ")";
+        not_owner_only = *refused_by + " did not accept a file with the owner-only access list (" +
+                         Win32ErrorText(first) + ")";
     }
 
     return handle;

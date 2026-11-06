@@ -407,6 +407,15 @@ BOOST_AUTO_TEST_CASE(win_acl_warning_for_a_delete_child_entry)
     CheckHas(warning, "S-1-5-32-545 (Users) can change it (access mask 0x00100040)");
     CheckHas(warning, "/remove:g *S-1-5-32-545");
     BOOST_CHECK_MESSAGE(IsAsciiLine(warning), warning);
+
+    // With read and execute too (icacls "RX" and "DC") the account can read and change it.
+    const ObservedAcl read_and_delete = Acl(Self(), {
+        Ace(Self(), FILE_ALL_ACCESS),
+        Ace(wellknown::System(), FILE_ALL_ACCESS),
+        Ace(wellknown::Users(), READ_EXECUTE_RIGHTS | FILE_DELETE_CHILD),
+    });
+    CheckHas(fsmodes::WinAclWarning(path, read_and_delete, Self(), /*directory=*/true),
+             "S-1-5-32-545 (Users) can read and change it (access mask 0x001200e9)");
 }
 
 // For a file, nothing inherits the fix. Two entries for one account are named once, with the
@@ -438,10 +447,11 @@ BOOST_AUTO_TEST_CASE(win_acl_warning_for_an_owned_file)
 }
 
 // For a path another account owns, the fix takes the other accounts' access away and gives this
-// account no entry. With an allowed owner (here Administrators) the owner stays, and it or an
-// administrator can run the fix. An entry that is inherited is first made the path's own, so
-// that it can be removed. With an owner outside the allowed accounts, or one that could not be
-// read, the fix makes this account the owner, which takes an administrator.
+// account no entry. With an allowed owner (here Administrators) the owner stays, and its owner,
+// an administrator, or this account where it may change the permissions can run the fix. An
+// entry that is inherited is first made the path's own, so that it can be removed. With an owner
+// outside the allowed accounts, or one that could not be read, the fix makes this account the
+// owner, which an administrator can do, and this account too where it may take ownership.
 BOOST_AUTO_TEST_CASE(win_acl_warning_for_a_path_another_account_owns)
 {
     const fs::path conf = "C:\\ProgramData\\Gridcoin\\gridcoinresearch.conf";
@@ -460,7 +470,10 @@ BOOST_AUTO_TEST_CASE(win_acl_warning_for_a_path_another_account_owns)
     CheckHas(warning, "owned by S-1-5-32-544 (Administrators)");
     CheckHas(warning, "icacls \"" + conf.string() + "\" /inheritance:d && icacls \"" + conf.string() +
                           "\" /remove:g *S-1-5-32-545");
-    CheckHas(warning, "only its owner or an administrator can change it");
+    CheckHas(warning, "It is owned by S-1-5-32-544 (Administrators). To fix it, in a command prompt run as its owner, "
+                      "as an administrator (elevated), or as this account where it may change the permissions, remove "
+                      "the other accounts' access: icacls \"" + conf.string() + "\" /inheritance:d");
+    CheckHasNot(warning, "only its owner");
     CheckHasNot(warning, "/grant");
     CheckHasNot(warning, "/inheritance:r");
     CheckHasNot(warning, "/setowner");
@@ -473,8 +486,9 @@ BOOST_AUTO_TEST_CASE(win_acl_warning_for_a_path_another_account_owns)
     CheckHas(explicit_entry, "icacls \"" + conf.string() + "\" /remove:g *S-1-5-32-545");
     CheckHasNot(explicit_entry, "/inheritance");
 
-    // An owner that is another user can change the access list. Making this account the owner
-    // instead takes an administrator, and the warning says so.
+    // An owner that is another user can change the access list. The warning says who can make
+    // this account the owner instead: an administrator, and this account where it may take
+    // ownership (here it holds FILE_ALL_ACCESS, WRITE_OWNER included).
     const ObservedAcl foreign_owner = Acl(OtherUser(), {
         Ace(Self(), FILE_ALL_ACCESS),
         Ace(wellknown::System(), FILE_ALL_ACCESS),
@@ -483,8 +497,10 @@ BOOST_AUTO_TEST_CASE(win_acl_warning_for_a_path_another_account_owns)
     BOOST_TEST_MESSAGE(other);
     CheckHas(other, "owned by " + FormatSid(OtherUser()) + ", which can change its access list");
     BOOST_CHECK_EQUAL(Occurrences(other, FormatSid(OtherUser())), 1U);
-    CheckHas(other, "Only an administrator can give it to this account. In an elevated command prompt, make this "
-                    "account its owner: icacls \"" + conf.string() + "\" /setowner *" + FormatSid(Self()));
+    CheckHas(other, "To fix it, in a command prompt run as an administrator (elevated), or as this account where it "
+                    "may take ownership, make this account its owner: icacls \"" + conf.string() + "\" /setowner *" +
+                        FormatSid(Self()));
+    CheckHasNot(other, "Only an administrator");
     CheckHasNot(other, "/remove");
     CheckHasNot(other, "/grant");
     BOOST_CHECK_MESSAGE(IsAsciiLine(other), other);
@@ -546,6 +562,41 @@ BOOST_AUTO_TEST_CASE(classify_win_entry_counts_name_surrogates_as_links)
     check(ARCHIVE | REPARSE_POINT, TAG_DEDUP, false, true, false);
     check(ARCHIVE | REPARSE_POINT, TAG_AF_UNIX, false, true, false);
     check(ARCHIVE, TAG_SYMLINK, false, false, false);
+}
+
+// A new file whose creation with the owner-only list failed is created again without it only
+// where the list itself was refused, and the reason says by whom. Access denied counts only from
+// a network share; any other failure creates nothing.
+BOOST_AUTO_TEST_CASE(acl_refused_by_names_the_volume_or_the_share)
+{
+    constexpr uint32_t WIN32_ACCESS_DENIED = 5, WIN32_PATH_NOT_FOUND = 3, WIN32_NOT_SUPPORTED = 50,
+                       WIN32_FILE_EXISTS = 80, WIN32_INVALID_PARAMETER = 87, WIN32_DISK_FULL = 112,
+                       WIN32_INVALID_OWNER = 1307, WIN32_INVALID_PRIMARY_GROUP = 1308, WIN32_PRIVILEGE_NOT_HELD = 1314,
+                       WIN32_INVALID_ACL = 1336, WIN32_INVALID_SECURITY_DESCR = 1338;
+#ifdef WIN32
+    static_assert(WIN32_ACCESS_DENIED == ERROR_ACCESS_DENIED && WIN32_PATH_NOT_FOUND == ERROR_PATH_NOT_FOUND &&
+                  WIN32_NOT_SUPPORTED == ERROR_NOT_SUPPORTED && WIN32_FILE_EXISTS == ERROR_FILE_EXISTS &&
+                  WIN32_INVALID_PARAMETER == ERROR_INVALID_PARAMETER && WIN32_DISK_FULL == ERROR_DISK_FULL &&
+                  WIN32_INVALID_OWNER == ERROR_INVALID_OWNER &&
+                  WIN32_INVALID_PRIMARY_GROUP == ERROR_INVALID_PRIMARY_GROUP &&
+                  WIN32_PRIVILEGE_NOT_HELD == ERROR_PRIVILEGE_NOT_HELD && WIN32_INVALID_ACL == ERROR_INVALID_ACL &&
+                  WIN32_INVALID_SECURITY_DESCR == ERROR_INVALID_SECURITY_DESCR);
+#endif
+
+    for (const uint32_t error : {WIN32_NOT_SUPPORTED, WIN32_INVALID_OWNER, WIN32_INVALID_PRIMARY_GROUP,
+                                 WIN32_PRIVILEGE_NOT_HELD, WIN32_INVALID_ACL, WIN32_INVALID_SECURITY_DESCR}) {
+        BOOST_CHECK_EQUAL(fsmodes::AclRefusedBy(error, /*remote=*/false).value_or("nothing"), "the volume");
+        BOOST_CHECK_EQUAL(fsmodes::AclRefusedBy(error, /*remote=*/true).value_or("nothing"), "the network share");
+    }
+
+    BOOST_CHECK(!fsmodes::AclRefusedBy(WIN32_ACCESS_DENIED, /*remote=*/false));
+    BOOST_CHECK_EQUAL(fsmodes::AclRefusedBy(WIN32_ACCESS_DENIED, /*remote=*/true).value_or("nothing"),
+                      "the network share");
+
+    for (const uint32_t error : {WIN32_PATH_NOT_FOUND, WIN32_FILE_EXISTS, WIN32_INVALID_PARAMETER, WIN32_DISK_FULL}) {
+        BOOST_CHECK_MESSAGE(!fsmodes::AclRefusedBy(error, /*remote=*/false), "error " << error);
+        BOOST_CHECK_MESSAGE(!fsmodes::AclRefusedBy(error, /*remote=*/true), "error " << error);
+    }
 }
 
 // The startup warning for a backup directory whose files cannot be owner-only names the

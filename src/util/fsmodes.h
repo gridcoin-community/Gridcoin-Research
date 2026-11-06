@@ -133,7 +133,9 @@ WinAclVerdict ClassifyWinAcl(const util::winacl::ObservedAcl& acl, const util::w
 //! which accounts can read or change it, and the icacls commands that remove their access. For
 //! a path \p self owns, one command makes it owner-only, as the core creates it. For any other
 //! the commands give this account no entry; they make it the owner only when the owner is
-//! outside the allowed accounts or could not be read, and say that this takes an administrator.
+//! outside the allowed accounts or could not be read. The text says who can run them: an
+//! administrator (elevated), this account where it may take ownership or change the
+//! permissions, and an owner that stays.
 //! \p directory says whether the path is a directory, whose entries then inherit the fix. Pure.
 std::string WinAclWarning(const fs::path& path, const util::winacl::ObservedAcl& acl,
                           const util::winacl::Sid& self, bool directory);
@@ -158,6 +160,15 @@ struct WinEntry
 //! \p attributes and \p reparse_tag as a WinEntry. The tag is read only when the attributes
 //! mark a reparse point. Pure.
 WinEntry ClassifyWinEntry(uint32_t attributes, uint32_t reparse_tag);
+
+//! Who refused the owner-only access list of a new file whose creation with it failed with the
+//! Win32 error \p error: "the volume" or "the network share", and the file is then created
+//! without the list (CopyFileOwnerOnly, CheckBackupDir). nullopt when the failure is not such a
+//! refusal, and nothing is created. A refusal is an owner, group, ACL or descriptor the volume
+//! does not take, an operation it does not support, or a privilege not held; on a network share
+//! (\p remote, the parent directory as its handle shows it) also a refusal of access, which a
+//! share may give for the same reason. Pure.
+std::optional<std::string> AclRefusedBy(uint32_t error, bool remote);
 
 //! What the startup check of the backup directory found.
 struct BackupDirCheck
