@@ -1,0 +1,277 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include "winsvc/scm.h"
+
+#include <algorithm>
+
+#ifdef WIN32
+#include <system_error>
+
+#include <windows.h>
+#endif
+
+#ifdef WIN32
+static_assert(winsvc::CONF_READ_MASK == static_cast<uint32_t>(FILE_GENERIC_READ));
+static_assert(winsvc::SID_TYPE_UNRESTRICTED == static_cast<uint32_t>(SERVICE_SID_TYPE_UNRESTRICTED));
+static_assert(winsvc::SID_TYPE_RESTRICTED == static_cast<uint32_t>(SERVICE_SID_TYPE_RESTRICTED));
+#endif
+
+namespace winsvc {
+
+namespace {
+
+//! \p arg in double quotes as QuoteArg quotes it, whatever it holds.
+std::wstring Quoted(const std::wstring& arg)
+{
+    std::wstring quoted{L'"'};
+    size_t backslashes = 0;
+    for (const wchar_t c : arg) {
+        if (c == L'\\') {
+            ++backslashes;
+            continue;
+        }
+        // Backslashes are literal unless a double quote follows them: before one inside, each is
+        // doubled and one more escapes the quote.
+        quoted.append(c == L'"' ? backslashes * 2 + 1 : backslashes, L'\\');
+        backslashes = 0;
+        quoted += c;
+    }
+    // Before the closing quote, so that it still closes.
+    quoted.append(backslashes * 2, L'\\');
+    quoted += L'"';
+
+    return quoted;
+}
+
+//! \p path as Windows writes it, with backslashes. On Windows that is how it is joined already;
+//! elsewhere, where tests build these paths, the platform's separator is replaced.
+std::wstring WindowsText(const fs::path& path)
+{
+    std::wstring text = path.wstring();
+    std::replace(text.begin(), text.end(), L'/', L'\\');
+    return text;
+}
+
+std::optional<Network> ParseNetwork(const std::string& value)
+{
+    if (value == "main") return Network::Main;
+    if (value == "test") return Network::Test;
+    return std::nullopt;
+}
+
+std::optional<Verb> ParseVerb(const std::string& value)
+{
+    if (value == "install") return Verb::Install;
+    if (value == "uninstall") return Verb::Uninstall;
+    if (value == "status") return Verb::Status;
+    if (value == "help") return Verb::Help;
+    return std::nullopt;
+}
+
+//! The value of the option \p arg when it is "<name>=<value>", or nullopt.
+std::optional<std::string> OptionValue(const std::string& arg, const std::string& name)
+{
+    const std::string prefix = name + "=";
+    if (arg.compare(0, prefix.size(), prefix) != 0) return std::nullopt;
+    return arg.substr(prefix.size());
+}
+
+} // namespace
+
+std::wstring QuoteArg(const std::wstring& arg)
+{
+    if (!arg.empty() && arg.find_first_of(L" \t\n\v\"") == std::wstring::npos) return arg;
+    return Quoted(arg);
+}
+
+std::wstring BuildImagePath(const fs::path& exe, Network net, const fs::path& programdata)
+{
+    const NetworkNames names = NamesFor(net);
+
+    std::wstring image_path = Quoted(WindowsText(exe)) + L" -service -multiprocess";
+    if (names.testnet) image_path += L" -testnet";
+    image_path += L" -conf=" + Quoted(WindowsText(ConfPath(programdata, net)));
+    image_path += L" -datadir=" + Quoted(WindowsText(DataDir(programdata, net)));
+    image_path += L" -ipcdir=" + Quoted(WindowsText(IpcDir(programdata, net)));
+    image_path += L" -ipcattachgroup=" + Quoted(names.group);
+    // Without a value: the default file in the data directory.
+    image_path += L" -autounlockblob";
+
+    return image_path;
+}
+
+std::optional<std::wstring> ImagePathExecutable(const std::wstring& image_path)
+{
+    if (image_path.empty()) return std::nullopt;
+
+    // As CreateProcess reads the program's name: up to the next double quote, with no escapes.
+    if (image_path.front() == L'"') {
+        const size_t close = image_path.find(L'"', 1);
+        if (close == std::wstring::npos) return std::nullopt;
+        return image_path.substr(1, close - 1);
+    }
+
+    return image_path.substr(0, image_path.find_first_of(L" \t"));
+}
+
+std::wstring ServiceDescription(Network net)
+{
+    const NetworkNames names = NamesFor(net);
+    return L"The Gridcoin Research core for " + names.datadir_leaf + L", running as its own account, " +
+           names.account + L". Set up, enabled and disabled with gridcoin-service.exe.";
+}
+
+std::wstring FirewallRuleName(Network net)
+{
+    return L"Gridcoin service (" + NamesFor(net).service + L")";
+}
+
+std::wstring FirewallAddRuleArgs(Network net, const fs::path& exe)
+{
+    return L"advfirewall firewall add rule name=" + Quoted(FirewallRuleName(net)) +
+           L" dir=in action=allow program=" + Quoted(WindowsText(exe)) + L" service=" + NamesFor(net).service +
+           L" protocol=TCP profile=domain,private";
+}
+
+std::wstring FirewallDeleteRuleArgs(Network net)
+{
+    return L"advfirewall firewall delete rule name=" + Quoted(FirewallRuleName(net));
+}
+
+std::optional<ToolOptions> ParseToolArgs(const std::vector<std::string>& args, std::string& error)
+{
+    ToolOptions options;
+    std::optional<Verb> verb;
+    bool install_only = false;
+
+    for (const std::string& arg : args) {
+        if (arg == "--help" || arg == "-h" || arg == "/?") {
+            options.verb = Verb::Help;
+            return options;
+        }
+
+        if (arg.compare(0, 2, "--") == 0) {
+            if (const std::optional<std::string> value = OptionValue(arg, "--network")) {
+                const std::optional<Network> net = ParseNetwork(*value);
+                if (!net) {
+                    error = "--network takes main or test, not '" + *value + "'";
+                    return std::nullopt;
+                }
+                options.net = *net;
+            } else if (const std::optional<std::string> sid_type = OptionValue(arg, "--sid-type")) {
+                if (*sid_type != "restricted" && *sid_type != "unrestricted") {
+                    error = "--sid-type takes restricted or unrestricted, not '" + *sid_type + "'";
+                    return std::nullopt;
+                }
+                options.restricted_sid = *sid_type == "restricted";
+                install_only = true;
+            } else if (arg == "--reconfigure") {
+                options.reconfigure = true;
+                install_only = true;
+            } else {
+                error = "unknown option '" + arg + "'";
+                return std::nullopt;
+            }
+            continue;
+        }
+
+        const std::optional<Verb> named = ParseVerb(arg);
+        if (!named) {
+            error = "unknown command '" + arg + "'";
+            return std::nullopt;
+        }
+        if (*named == Verb::Help) {
+            options.verb = Verb::Help;
+            return options;
+        }
+        if (verb) {
+            error = "more than one command";
+            return std::nullopt;
+        }
+        verb = named;
+    }
+
+    if (!verb) {
+        error = "no command given";
+        return std::nullopt;
+    }
+    if (install_only && *verb != Verb::Install) {
+        error = "--sid-type and --reconfigure are options of install";
+        return std::nullopt;
+    }
+
+    options.verb = *verb;
+    return options;
+}
+
+std::string ToolUsage()
+{
+    return "Usage: gridcoin-service.exe <command> [options]\n"
+           "\n"
+           "Sets up the Gridcoin core as a Windows service that runs under its own account,\n"
+           "NT SERVICE\\gridcoinresearchd (testnet: NT SERVICE\\gridcointestnetd). Run it from an\n"
+           "elevated (administrator) prompt; status also works without one, showing less.\n"
+           "\n"
+           "Commands:\n"
+           "  install    Create the service, disabled; the attach groups \"Gridcoin GUI Users\" and\n"
+           "             \"Gridcoin Testnet GUI Users\"; the directories under %ProgramData%\\Gridcoin\n"
+           "             with their access lists; the service's configuration file when there is\n"
+           "             none; and the inbound firewall rule for the daemon.\n"
+           "  uninstall  Remove the service, its firewall rule and the empty directories. Refused while\n"
+           "             the service is enabled or its data directory holds a wallet.\n"
+           "  status     Show the service's settings and check every directory and file of the\n"
+           "             layout against its access list.\n"
+           "  help       Show this text.\n"
+           "\n"
+           "Options:\n"
+           "  --network=main|test                 The network (default: main).\n"
+           "  --sid-type=restricted|unrestricted  install: the service's SID type (default:\n"
+           "                                      restricted).\n"
+           "  --reconfigure                       install: apply these settings to a service that is\n"
+           "                                      already installed.\n";
+}
+
+#ifdef WIN32
+void ConfigureService(void* service, Network net, bool restricted_sid)
+{
+    const SC_HANDLE handle = static_cast<SC_HANDLE>(service);
+    const auto change = [handle](DWORD level, void* info, const char* what) {
+        if (!::ChangeServiceConfig2W(handle, level, info)) {
+            throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
+                                    std::string("ChangeServiceConfig2W ") + what);
+        }
+    };
+
+    std::wstring description = ServiceDescription(net);
+    SERVICE_DESCRIPTIONW description_info{description.data()};
+    change(SERVICE_CONFIG_DESCRIPTION, &description_info, "description");
+
+    SERVICE_SID_INFO sid_info{restricted_sid ? SID_TYPE_RESTRICTED : SID_TYPE_UNRESTRICTED};
+    change(SERVICE_CONFIG_SERVICE_SID_INFO, &sid_info, "SID type");
+
+    // A list of strings, each ending in a null, with one more null after the last.
+    std::wstring privileges = std::wstring(REQUIRED_PRIVILEGE) + L'\0' + L'\0';
+    SERVICE_REQUIRED_PRIVILEGES_INFOW privileges_info{privileges.data()};
+    change(SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO, &privileges_info, "required privileges");
+
+    SERVICE_PRESHUTDOWN_INFO preshutdown{PRESHUTDOWN_TIMEOUT_MS};
+    change(SERVICE_CONFIG_PRESHUTDOWN_INFO, &preshutdown, "preshutdown timeout");
+
+    std::array<SC_ACTION, FAILURE_RESTART_DELAYS_MS.size()> actions{};
+    for (size_t i = 0; i < actions.size(); ++i) actions[i] = SC_ACTION{SC_ACTION_RESTART, FAILURE_RESTART_DELAYS_MS[i]};
+    SERVICE_FAILURE_ACTIONSW failure{FAILURE_RESET_SECONDS, nullptr, nullptr, static_cast<DWORD>(actions.size()),
+                                     actions.data()};
+    change(SERVICE_CONFIG_FAILURE_ACTIONS, &failure, "failure actions");
+
+    // The core's own stop exits with a service-specific error, which these actions restart too.
+    SERVICE_FAILURE_ACTIONS_FLAG failure_flag{TRUE};
+    change(SERVICE_CONFIG_FAILURE_ACTIONS_FLAG, &failure_flag, "failure actions flag");
+
+    SERVICE_DELAYED_AUTO_START_INFO delayed{TRUE};
+    change(SERVICE_CONFIG_DELAYED_AUTO_START_INFO, &delayed, "delayed automatic start");
+}
+#endif // WIN32
+
+} // namespace winsvc

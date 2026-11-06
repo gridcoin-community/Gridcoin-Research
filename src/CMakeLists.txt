@@ -357,6 +357,8 @@ add_library(gridcoin_util STATIC
     wallet/walletdump.cpp
     wallet/wallettxstore.cpp
     wallet/walletutil.cpp
+    winsvc/layout.cpp
+    winsvc/scm.cpp
 )
 
 if(USE_ASM_SCRYPT)
@@ -533,6 +535,37 @@ if(ENABLE_DAEMON)
     set_target_properties(gridcoinresearchd PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     )
+
+    # gridcoin-service.exe, which installs, checks and removes the Windows service that runs
+    # the daemon under its own account. The service runs the daemon with -multiprocess, so the
+    # tool is built with the multiprocess daemon, and it resolves the attach group by the IPC
+    # layer's rule. Linked as the daemon is, plus netapi32 (the local groups), wtsapi32 (the
+    # sessions' processes), ole32 and oleaut32 (Task Scheduler, reached through COM) and
+    # shell32 (SHGetKnownFolderPath).
+    if(WIN32 AND ENABLE_MULTIPROCESS)
+        add_executable(gridcoin-service gridcoin-service.cpp winsvc/setup.cpp)
+        target_include_directories(gridcoin-service PRIVATE ${CMAKE_BINARY_DIR})
+        target_compile_definitions(gridcoin-service PRIVATE CURL_STATICLIB)
+        target_link_libraries(gridcoin-service PRIVATE gridcoin_ipc)
+        target_link_libraries(gridcoin-service PUBLIC
+            ${RUNTIME_LIBS}
+            gridcoin_util
+
+            # Dependencies of gridcoin_util
+            ${LIBBDB_CXX} ${LIBLEVELDB} ${LIBSECP256K1} ${LIBUNIVALUE}
+            Boost::boost Boost::filesystem Boost::iostreams Boost::thread Boost::date_time
+            CURL::libcurl
+            OpenSSL::Crypto OpenSSL::SSL
+            Threads::Threads
+            ZLIB::ZLIB
+
+            wsock32 ws2_32 netapi32 wtsapi32 ole32 oleaut32 shell32
+        )
+        set_target_properties(gridcoin-service PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        )
+        install(TARGETS gridcoin-service COMPONENT daemon RUNTIME DESTINATION bin)
+    endif()
 
     # Installation
     if(UNIX AND NOT APPLE)

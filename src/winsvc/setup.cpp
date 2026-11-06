@@ -1,0 +1,1309 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include "winsvc/setup.h"
+
+#ifdef WIN32
+#include "base58.h"
+#include "ipc/win_endpoint.h"
+#include "random.h"
+#include "support/cleanse.h"
+#include "tinyformat.h"
+#include "util/strencodings.h"
+#include "util/win_acl.h"
+#include "util/winservice.h"
+#include "winsvc/layout.h"
+
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <cwchar>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <system_error>
+#include <type_traits>
+#include <vector>
+
+#include <windows.h>
+#include <knownfolders.h>
+#include <lm.h>
+#include <shlobj.h>
+
+namespace winsvc {
+
+namespace {
+
+namespace winacl = util::winacl;
+using winacl::AclSpec;
+using winacl::ObservedAcl;
+using winacl::UniqueHandle;
+
+//! What install, uninstall and status refuse with: the reason, printed, and EXIT_REFUSED. Nothing
+//! after the refusal is changed.
+class Refusal : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
+// Output.
+
+//! \p text, in UTF-8, written to the console as wide characters when \p which is one, so that a
+//! path with non-ASCII characters shows as it is, and as bytes otherwise.
+void WriteText(DWORD which, const std::string& text)
+{
+    const HANDLE handle = ::GetStdHandle(which);
+    if (handle == nullptr || handle == INVALID_HANDLE_VALUE) return;
+
+    DWORD mode = 0;
+    if (::GetConsoleMode(handle, &mode)) {
+        try {
+            const std::wstring wide = Utf8ToWide(text);
+            DWORD written = 0;
+            ::WriteConsoleW(handle, wide.data(), static_cast<DWORD>(wide.size()), &written, nullptr);
+            return;
+        } catch (const std::range_error&) {
+            // Not UTF-8: written as bytes, below.
+        }
+    }
+    DWORD written = 0;
+    ::WriteFile(handle, text.data(), static_cast<DWORD>(text.size()), &written, nullptr);
+}
+
+void Say(const std::string& line)
+{
+    WriteText(STD_OUTPUT_HANDLE, line + "\n");
+}
+
+void SayError(const std::string& line)
+{
+    WriteText(STD_ERROR_HANDLE, line + "\n");
+}
+
+std::string Shown(const std::wstring& text)
+{
+    try {
+        return WideToUtf8(text);
+    } catch (const std::range_error&) {
+        return "(a name that is not valid UTF-16)";
+    }
+}
+
+std::string Shown(const fs::path& path)
+{
+    return Shown(path.wstring());
+}
+
+//! The Win32 error \p error as text: Windows' message when it is printable ASCII, and the number.
+std::string Win32Text(DWORD error)
+{
+    std::string message = std::system_category().message(static_cast<int>(error));
+    while (!message.empty() && (message.back() == '\r' || message.back() == '\n' || message.back() == ' ' ||
+                                message.back() == '.')) {
+        message.pop_back();
+    }
+    const bool printable = std::all_of(message.begin(), message.end(), [](char c) { return c >= 0x20 && c < 0x7f; });
+    if (message.empty() || !printable) return strprintf("error %u", static_cast<unsigned>(error));
+
+    return strprintf("%s (error %u)", message, static_cast<unsigned>(error));
+}
+
+[[noreturn]] void ThrowWin32(DWORD error, const std::string& what)
+{
+    throw std::runtime_error(what + ": " + Win32Text(error));
+}
+
+[[noreturn]] void ThrowLastError(const std::string& what)
+{
+    ThrowWin32(::GetLastError(), what);
+}
+
+//! The verb's body, its refusal or failure printed, as the tool's exit code.
+int RunVerb(const std::function<void()>& body)
+{
+    try {
+        body();
+        return EXIT_OK;
+    } catch (const Refusal& e) {
+        SayError(std::string("Refused: ") + e.what());
+    } catch (const std::exception& e) {
+        SayError(std::string("Error: ") + e.what());
+    }
+    return EXIT_REFUSED;
+}
+
+// Handles.
+
+struct ServiceHandleCloser
+{
+    void operator()(SC_HANDLE handle) const noexcept { ::CloseServiceHandle(handle); }
+};
+using UniqueServiceHandle = std::unique_ptr<std::remove_pointer_t<SC_HANDLE>, ServiceHandleCloser>;
+
+struct TaskMemFreer
+{
+    void operator()(wchar_t* p) const noexcept { ::CoTaskMemFree(p); }
+};
+
+UniqueServiceHandle OpenScm(DWORD access)
+{
+    UniqueServiceHandle scm(::OpenSCManagerW(nullptr, nullptr, access));
+    if (!scm) ThrowLastError("OpenSCManagerW");
+    return scm;
+}
+
+//! The service \p name opened with \p access, or null when it is not installed.
+UniqueServiceHandle OpenServiceIfInstalled(SC_HANDLE scm, const std::wstring& name, DWORD access)
+{
+    UniqueServiceHandle service(::OpenServiceW(scm, name.c_str(), access));
+    if (!service && ::GetLastError() != ERROR_SERVICE_DOES_NOT_EXIST) ThrowLastError("OpenServiceW " + Shown(name));
+    return service;
+}
+
+// This computer.
+
+fs::path ProgramDataPath()
+{
+    wchar_t* raw = nullptr;
+    const HRESULT result = ::SHGetKnownFolderPath(FOLDERID_ProgramData, 0, nullptr, &raw);
+    const std::unique_ptr<wchar_t, TaskMemFreer> path(raw);
+    if (FAILED(result) || !path) {
+        throw std::runtime_error(strprintf("the ProgramData folder could not be found (SHGetKnownFolderPath: 0x%08x)",
+                                           static_cast<unsigned>(result)));
+    }
+    return fs::path(std::wstring(path.get()));
+}
+
+fs::path ModulePath()
+{
+    std::wstring module(MAX_PATH, L'\0');
+    for (;;) {
+        const DWORD length = ::GetModuleFileNameW(nullptr, module.data(), static_cast<DWORD>(module.size()));
+        if (length == 0) ThrowLastError("GetModuleFileNameW");
+        if (length < module.size()) {
+            module.resize(length);
+            return fs::path(module);
+        }
+        // Cut short: try again with room for the whole path.
+        module.resize(module.size() * 2);
+    }
+}
+
+//! The path of the file \p handle refers to as Windows resolves it (GetFinalPathNameByHandleW), a
+//! drive path without the \\?\ prefix. \p shown names it in an error. A file on a network share
+//! is refused.
+fs::path FinalPathOf(HANDLE handle, const fs::path& shown)
+{
+    const DWORD flags = FILE_NAME_NORMALIZED | VOLUME_NAME_DOS;
+    std::wstring name(MAX_PATH, L'\0');
+    DWORD length = ::GetFinalPathNameByHandleW(handle, name.data(), static_cast<DWORD>(name.size()), flags);
+    if (length >= name.size()) {
+        // The size needed, with the terminating null.
+        name.resize(length);
+        length = ::GetFinalPathNameByHandleW(handle, name.data(), static_cast<DWORD>(name.size()), flags);
+    }
+    if (length == 0 || length >= name.size()) ThrowLastError("GetFinalPathNameByHandleW " + Shown(shown));
+    name.resize(length);
+
+    if (name.compare(0, 8, L"\\\\?\\UNC\\") == 0) {
+        throw Refusal(strprintf("%s is on a network share. The service runs the daemon from a local disk: install "
+                                "Gridcoin on one, then run install again.",
+                                Shown(shown)));
+    }
+    if (name.compare(0, 4, L"\\\\?\\") == 0) name.erase(0, 4);
+
+    return fs::path(name);
+}
+
+//! The daemon the service runs: gridcoinresearchd.exe in this program's own folder, as Windows
+//! resolves its path. Refused when it is not there.
+fs::path DaemonPath()
+{
+    const fs::path candidate = ModulePath().parent_path() / L"gridcoinresearchd.exe";
+    const UniqueHandle handle(::CreateFileW(candidate.wstring().c_str(), FILE_READ_ATTRIBUTES,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!handle) {
+        const DWORD error = ::GetLastError();
+        if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
+            throw Refusal(strprintf("the daemon %s is not there. The service runs the gridcoinresearchd.exe installed "
+                                    "in the same folder as gridcoin-service.exe; run the gridcoin-service.exe that "
+                                    "was installed with it.",
+                                    Shown(candidate)));
+        }
+        ThrowWin32(error, "open " + Shown(candidate));
+    }
+
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!::GetFileInformationByHandle(handle.get(), &info)) {
+        ThrowLastError("read the attributes of " + Shown(candidate));
+    }
+    if (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+        throw Refusal(strprintf("%s is a directory, not the daemon", Shown(candidate)));
+    }
+
+    return FinalPathOf(handle.get(), candidate);
+}
+
+void RequireElevated(const char* verb)
+{
+    if (!winacl::CurrentTokenIsElevated()) {
+        throw Refusal(strprintf("%s needs an elevated prompt. Open the Command Prompt or PowerShell with \"Run as "
+                                "administrator\" and run it again.",
+                                verb));
+    }
+}
+
+void EnablePrivilege(const wchar_t* name)
+{
+    HANDLE raw = nullptr;
+    if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &raw)) {
+        ThrowLastError("OpenProcessToken");
+    }
+    const UniqueHandle token(raw);
+
+    TOKEN_PRIVILEGES privileges{};
+    privileges.PrivilegeCount = 1;
+    privileges.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+    if (!::LookupPrivilegeValueW(nullptr, name, &privileges.Privileges[0].Luid)) {
+        ThrowLastError("LookupPrivilegeValueW " + Shown(std::wstring(name)));
+    }
+    if (!::AdjustTokenPrivileges(token.get(), FALSE, &privileges, 0, nullptr, nullptr)) {
+        ThrowLastError("AdjustTokenPrivileges " + Shown(std::wstring(name)));
+    }
+    // AdjustTokenPrivileges succeeds without enabling a privilege the token does not hold.
+    if (::GetLastError() == ERROR_NOT_ALL_ASSIGNED) {
+        throw Refusal(strprintf("this account's token does not hold %s, which this command needs. Run it as an "
+                                "administrator, elevated.",
+                                Shown(std::wstring(name))));
+    }
+}
+
+// Accounts.
+
+//! An account by name and SID, or by SID alone when it has no name.
+std::string Describe(const Sid& sid)
+{
+    const std::string name = winacl::AccountNameOf(sid);
+    const std::string text = winacl::FormatSid(sid);
+    return name.empty() ? text : name + " (" + text + ")";
+}
+
+std::string ComputerName()
+{
+    wchar_t computer[MAX_COMPUTERNAME_LENGTH + 1] = {};
+    DWORD length = MAX_COMPUTERNAME_LENGTH + 1;
+    if (!::GetComputerNameW(computer, &length)) ThrowLastError("GetComputerNameW");
+    return WideToUtf8(std::wstring_view(computer, length));
+}
+
+//! The SID of the local group \p name, looked up as the core looks up -ipcattachgroup: on this
+//! computer only (<computer>\<name>), and only a local group of the computer's own. nullopt when
+//! there is no account of that name. Refused when the name is another kind of account.
+std::optional<Sid> LocalGroupSid(const std::wstring& name)
+{
+    const std::string computer = ComputerName();
+    const std::string group = WideToUtf8(name);
+    const std::optional<std::string> lookup = ipc::win::LocalGroupLookupName(computer, group);
+    if (!lookup) throw std::logic_error("'" + group + "' is not a local group name");
+
+    const std::optional<winacl::AccountLookup> account = winacl::LookupAccount(Utf8ToWide(*lookup));
+    if (!account) return std::nullopt;
+    if (std::optional<std::string> reason = ipc::win::AttachGroupAccountRefusal(*account, computer)) {
+        throw Refusal(strprintf("\"%s\" cannot be the attach group: %s. Remove or rename that account, then run "
+                                "install again.",
+                                group, *reason));
+    }
+    return account->sid;
+}
+
+//! The attach group \p name, created with \p comment when there is none, and its SID.
+Sid EnsureLocalGroup(const std::wstring& name, const std::wstring& comment)
+{
+    std::wstring group = name;
+    std::wstring remark = comment;
+    LOCALGROUP_INFO_1 info{group.data(), remark.data()};
+    DWORD bad_parameter = 0;
+    const NET_API_STATUS status = ::NetLocalGroupAdd(nullptr, 1, reinterpret_cast<LPBYTE>(&info), &bad_parameter);
+    const bool created = status == NERR_Success;
+    if (!created && status != ERROR_ALIAS_EXISTS && status != NERR_GroupExists) {
+        ThrowWin32(status, "NetLocalGroupAdd \"" + Shown(name) + "\"");
+    }
+
+    const std::optional<Sid> sid = LocalGroupSid(name);
+    if (!sid) throw std::runtime_error("the group \"" + Shown(name) + "\" cannot be found after it was added");
+
+    Say(strprintf("Group \"%s\": %s, %s", Shown(name), created ? "created" : "already there", winacl::FormatSid(*sid)));
+    return *sid;
+}
+
+//! The layout's accounts. The attach groups are left empty; the caller fills them in once they
+//! are known.
+LayoutSids ServiceSids()
+{
+    LayoutSids sids;
+    sids.admins = winacl::wellknown::Administrators();
+    sids.system = winacl::wellknown::System();
+    const std::optional<Sid> svc_main = VirtualServiceSid(NamesFor(Network::Main).service);
+    const std::optional<Sid> svc_test = VirtualServiceSid(NamesFor(Network::Test).service);
+    if (!svc_main || !svc_test) throw std::logic_error("the service names have no service SID");
+    sids.svc_main = *svc_main;
+    sids.svc_test = *svc_test;
+    return sids;
+}
+
+// The layout on disk.
+
+bool IsNotFound(DWORD error)
+{
+    return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
+}
+
+//! \p path opened as itself (a reparse point at it is opened, not followed) with backup
+//! semantics, which also opens a directory and, with SeBackupPrivilege enabled, gives read access
+//! whatever the access list. A null handle, with the Win32 error in \p error, when it cannot be
+//! opened.
+UniqueHandle OpenAsItself(const fs::path& path, DWORD access, DWORD share, DWORD& error)
+{
+    UniqueHandle handle(::CreateFileW(path.wstring().c_str(), access, share, nullptr, OPEN_EXISTING,
+                                      FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    error = handle ? ERROR_SUCCESS : ::GetLastError();
+    return handle;
+}
+
+//! What is at one path of the layout, read through a handle on it.
+struct Level
+{
+    bool exists{false};
+    bool directory{false};
+    bool reparse{false};
+    ObservedAcl acl;
+};
+
+Level LevelOf(HANDLE handle, const fs::path& path)
+{
+    FILE_ATTRIBUTE_TAG_INFO info{};
+    if (!::GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &info, sizeof(info))) {
+        ThrowLastError("read the attributes of " + Shown(path));
+    }
+
+    Level level;
+    level.exists = true;
+    level.directory = (info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    level.reparse = (info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+    level.acl = winacl::ReadAcl(handle, /*kernel_object=*/false);
+    return level;
+}
+
+//! What is at \p path, without following a reparse point at it. Absent when nothing is there.
+//! Throws when something is there that cannot be opened or read.
+Level ReadLevel(const fs::path& path)
+{
+    DWORD error = 0;
+    const UniqueHandle handle = OpenAsItself(path, READ_CONTROL | FILE_READ_ATTRIBUTES,
+                                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, error);
+    if (!handle) {
+        if (IsNotFound(error)) return {};
+        if (error == winacl::WIN32_UNTRUSTED_MOUNT_POINT) {
+            throw Refusal(strprintf("%s: %s", Shown(path), winacl::UNTRUSTED_MOUNT_POINT_REASON));
+        }
+        ThrowWin32(error, "open " + Shown(path));
+    }
+    return LevelOf(handle.get(), path);
+}
+
+//! Why install may not take over \p level, found at \p entry's path, or nullopt: it is a reparse
+//! point, it is a file where the layout has a directory (or the reverse), or an account other
+//! than Administrators, SYSTEM and TrustedInstaller owns it, which an account that could create
+//! it before the service was installed would.
+std::optional<std::string> LevelRefusal(const LayoutEntry& entry, const Level& level)
+{
+    const std::string path = Shown(entry.path);
+    if (level.reparse) {
+        return strprintf("%s is a reparse point (a junction or a link), which install does not follow. Remove it, "
+                         "then run install again.",
+                         path);
+    }
+    if (level.directory != entry.directory) {
+        return strprintf("%s is a %s where install keeps a %s. Move it away, then run install again.", path,
+                         level.directory ? "directory" : "file", entry.directory ? "directory" : "file");
+    }
+
+    const std::vector<Sid> owners{winacl::wellknown::Administrators(), winacl::wellknown::System(),
+                                  winacl::wellknown::TrustedInstaller()};
+    if (!level.acl.owner || std::find(owners.begin(), owners.end(), *level.acl.owner) == owners.end()) {
+        return strprintf("%s is owned by %s, not by Administrators, SYSTEM or TrustedInstaller, so another account "
+                         "may have made it before the service was installed. Check what it holds, remove it, then "
+                         "run install again.",
+                         path, level.acl.owner ? Describe(*level.acl.owner) : "an owner that cannot be read");
+    }
+    return std::nullopt;
+}
+
+//! The most install reads of a configuration file.
+constexpr uint64_t CONF_SIZE_LIMIT = 1 << 20;
+
+//! The service's configuration file as install and status check it.
+struct ConfState
+{
+    bool exists{false};
+    //! Why install does not accept it, when it does not.
+    std::optional<std::string> problem;
+    std::string text;
+
+    ConfState() = default;
+    ConfState(const ConfState&) = delete;
+    ConfState& operator=(const ConfState&) = delete;
+    ConfState(ConfState&&) = default;
+    ConfState& operator=(ConfState&&) = default;
+    ~ConfState() { memory_cleanse(text.data(), text.size()); }
+};
+
+void ReadAll(HANDLE handle, const fs::path& path, std::string& text)
+{
+    LARGE_INTEGER size{};
+    if (!::GetFileSizeEx(handle, &size)) ThrowLastError("read the size of " + Shown(path));
+    if (size.QuadPart < 0 || static_cast<uint64_t>(size.QuadPart) > CONF_SIZE_LIMIT) {
+        throw Refusal(strprintf("%s is larger than %u bytes, too large for a configuration file", Shown(path),
+                                static_cast<unsigned>(CONF_SIZE_LIMIT)));
+    }
+
+    text.assign(static_cast<size_t>(size.QuadPart), '\0');
+    size_t done = 0;
+    while (done < text.size()) {
+        DWORD read = 0;
+        if (!::ReadFile(handle, text.data() + done, static_cast<DWORD>(text.size() - done), &read, nullptr)) {
+            ThrowLastError("read " + Shown(path));
+        }
+        if (read == 0) break;
+        done += read;
+    }
+    text.resize(done);
+}
+
+void WriteAll(HANDLE handle, const fs::path& path, const std::string& text)
+{
+    size_t done = 0;
+    while (done < text.size()) {
+        DWORD written = 0;
+        if (!::WriteFile(handle, text.data() + done, static_cast<DWORD>(text.size() - done), &written, nullptr)) {
+            ThrowLastError("write " + Shown(path));
+        }
+        done += written;
+    }
+    if (!::FlushFileBuffers(handle)) ThrowLastError("flush " + Shown(path));
+}
+
+//! The configuration file at \p entry's path, opened as itself with GENERIC_READ and
+//! \p extra_access: absent, or there, with its text and why install does not accept it, if it
+//! does not: a reparse point, a directory, another owner or access list than \p entry's, or an
+//! includeconf line. The handle is kept in \p keep, when given, for a file there.
+ConfState CheckConf(const LayoutEntry& entry, DWORD extra_access, UniqueHandle* keep)
+{
+    DWORD error = 0;
+    UniqueHandle handle = OpenAsItself(entry.path, GENERIC_READ | extra_access, FILE_SHARE_READ, error);
+    if (!handle) {
+        if (IsNotFound(error)) return {};
+        ThrowWin32(error, "open " + Shown(entry.path));
+    }
+
+    ConfState conf;
+    conf.exists = true;
+    const Level level = LevelOf(handle.get(), entry.path);
+    if (level.reparse) {
+        conf.problem = "it is a reparse point (a link)";
+    } else if (level.directory) {
+        conf.problem = "it is a directory";
+    } else if (std::optional<std::string> differs = winacl::CheckMatchesSpec(level.acl, entry.acl)) {
+        conf.problem = "its owner or access list is not the one install gives it (" + *differs + ")";
+    } else {
+        ReadAll(handle.get(), entry.path, conf.text);
+        if (!ServiceConfAcceptable(conf.text)) conf.problem = "it has an includeconf line";
+    }
+
+    if (keep) *keep = std::move(handle);
+    return conf;
+}
+
+std::string ConfRefusal(const fs::path& path, const std::string& problem)
+{
+    return strprintf("the configuration file %s cannot be used: %s. The CLI honours rpcserviceuser only from an "
+                     "Administrators-owned file with install's access list and no includeconf, so it would refuse "
+                     "the service's RPC listener. Correct the file, or move it away for install to write a new one, "
+                     "then run install again.",
+                     Shown(path), problem);
+}
+
+//! The base58 text of 32 random bytes.
+std::string NewRpcPassword()
+{
+    std::array<unsigned char, 32> bytes{};
+    GetStrongRandBytes(bytes);
+    std::string password = EncodeBase58(bytes);
+    memory_cleanse(bytes.data(), bytes.size());
+    return password;
+}
+
+//! The names \p lines set, for a message that does not show their values.
+std::string NamesSet(const std::string& lines)
+{
+    std::string names;
+    size_t start = 0;
+    while (start < lines.size()) {
+        size_t end = lines.find('\n', start);
+        if (end == std::string::npos) end = lines.size();
+        const std::string line = lines.substr(start, end - start);
+        if (!line.empty()) names += (names.empty() ? "" : ", ") + line.substr(0, line.find('='));
+        start = end + 1;
+    }
+    return names;
+}
+
+//! Creates the configuration file \p entry.path with \p text, owned and listed as \p entry says
+//! from its creation, a link at the name not followed. The list is read back through the new
+//! handle before anything is written. On a failure after the file was made it is removed again.
+void CreateConf(const LayoutEntry& entry, const std::string& text)
+{
+    const winacl::UniqueSecurityDescriptor sd(winacl::MakeSecurityDescriptor(entry.acl));
+    SECURITY_ATTRIBUTES sa{sizeof(sa), sd.get(), FALSE};
+    UniqueHandle handle(::CreateFileW(entry.path.wstring().c_str(), GENERIC_WRITE | READ_CONTROL, 0, &sa, CREATE_NEW,
+                                      FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    if (!handle) ThrowLastError("create " + Shown(entry.path));
+
+    try {
+        if (std::optional<std::string> differs =
+                winacl::CheckMatchesSpec(winacl::ReadAcl(handle.get(), /*kernel_object=*/false), entry.acl)) {
+            throw std::runtime_error(strprintf("%s did not keep the access list it was created with (%s)",
+                                               Shown(entry.path), *differs));
+        }
+        WriteAll(handle.get(), entry.path, text);
+    } catch (...) {
+        handle.reset();
+        ::DeleteFileW(entry.path.wstring().c_str());
+        throw;
+    }
+}
+
+//! The network's configuration file: written when there is none, and otherwise given the lines
+//! MissingServiceConfLines finds missing. A file install does not accept was refused before
+//! anything was changed (Preflight); it is checked again here, through the handle that writes.
+void BuildConf(const LayoutEntry& entry, Network net)
+{
+    UniqueHandle handle;
+    const ConfState conf = CheckConf(entry, FILE_APPEND_DATA, &handle);
+
+    std::string password = NewRpcPassword();
+    if (!conf.exists) {
+        std::string text = BuildServiceConf(net, password);
+        CreateConf(entry, text);
+        memory_cleanse(text.data(), text.size());
+        memory_cleanse(password.data(), password.size());
+        Say(strprintf("Wrote %s: rpcuser, a new rpcpassword, server=1 and rpcserviceuser=%s%s", Shown(entry.path),
+                      Shown(NamesFor(net).account), NamesFor(net).testnet ? ", testnet=1" : ""));
+        return;
+    }
+    if (conf.problem) {
+        memory_cleanse(password.data(), password.size());
+        throw Refusal(ConfRefusal(entry.path, *conf.problem));
+    }
+
+    std::string missing = MissingServiceConfLines(net, conf.text, password);
+    memory_cleanse(password.data(), password.size());
+    if (missing.empty()) {
+        Say(strprintf("Kept %s: it already sets rpcuser, rpcpassword and rpcserviceuser", Shown(entry.path)));
+        return;
+    }
+
+    // Opened without FILE_WRITE_DATA, so every write goes to the end of the file.
+    try {
+        WriteAll(handle.get(), entry.path, missing);
+    } catch (...) {
+        memory_cleanse(missing.data(), missing.size());
+        throw;
+    }
+    Say(strprintf("Added %s to %s", NamesSet(missing), Shown(entry.path)));
+    memory_cleanse(missing.data(), missing.size());
+}
+
+//! Everything install would refuse in place, looked at before anything is changed: each
+//! directory of the layout that exists (LevelRefusal), and the network's configuration file when
+//! it exists (CheckConf). The configuration files' lists name no attach group, so \p layout may be
+//! built before the groups exist.
+void Preflight(const std::vector<LayoutEntry>& layout, Network net, const fs::path& programdata)
+{
+    const fs::path own_conf = ConfPath(programdata, net);
+    for (const LayoutEntry& entry : layout) {
+        if (entry.path == own_conf) {
+            const ConfState conf = CheckConf(entry, 0, nullptr);
+            if (conf.exists && conf.problem) throw Refusal(ConfRefusal(entry.path, *conf.problem));
+            continue;
+        }
+        if (!entry.directory) continue;
+
+        const Level level = ReadLevel(entry.path);
+        if (!level.exists) continue;
+        if (std::optional<std::string> refusal = LevelRefusal(entry, level)) throw Refusal(*refusal);
+    }
+}
+
+//! Each directory of \p layout, parents first: created with its owner and access list from the
+//! start (CreateDirectoryWithAcl), or, when it is there, checked again (LevelRefusal) and given them
+//! when they differ. Then the network's configuration file (BuildConf). The other network's
+//! configuration file is its own install's.
+void BuildLayout(const std::vector<LayoutEntry>& layout, Network net, const fs::path& programdata)
+{
+    const fs::path own_conf = ConfPath(programdata, net);
+    for (const LayoutEntry& entry : layout) {
+        if (!entry.directory) {
+            if (entry.path == own_conf) BuildConf(entry, net);
+            continue;
+        }
+
+        if (winacl::CreateDirectoryWithAcl(entry.path, entry.acl)) {
+            Say("Created " + Shown(entry.path));
+            continue;
+        }
+
+        const Level level = ReadLevel(entry.path);
+        if (!level.exists) throw std::runtime_error(Shown(entry.path) + " was removed while install ran");
+        if (std::optional<std::string> refusal = LevelRefusal(entry, level)) throw Refusal(*refusal);
+
+        if (std::optional<std::string> differed = winacl::CheckMatchesSpec(level.acl, entry.acl)) {
+            winacl::ApplyAcl(entry.path, entry.acl);
+            Say(strprintf("Set the owner and access list of %s (before: %s)", Shown(entry.path), *differed));
+        } else {
+            Say(strprintf("Kept %s: it has the layout's owner and access list", Shown(entry.path)));
+        }
+    }
+}
+
+// The firewall.
+
+//! Runs netsh.exe from the system directory with \p args, its output on this console, and returns
+//! its exit code.
+DWORD RunNetsh(const std::wstring& args)
+{
+    std::wstring system(MAX_PATH, L'\0');
+    const UINT length = ::GetSystemDirectoryW(system.data(), static_cast<UINT>(system.size()));
+    if (length == 0 || length >= system.size()) ThrowLastError("GetSystemDirectoryW");
+    system.resize(length);
+
+    const std::wstring netsh = system + L"\\netsh.exe";
+    std::wstring command = QuoteArg(netsh) + L" " + args;
+    Say("Running: netsh.exe " + Shown(args));
+
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (!::CreateProcessW(netsh.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup,
+                          &process)) {
+        ThrowLastError("run " + Shown(netsh));
+    }
+    const UniqueHandle process_handle(process.hProcess);
+    const UniqueHandle thread_handle(process.hThread);
+
+    if (::WaitForSingleObject(process.hProcess, INFINITE) != WAIT_OBJECT_0) ThrowLastError("wait for netsh.exe");
+    DWORD code = 0;
+    if (!::GetExitCodeProcess(process.hProcess, &code)) ThrowLastError("read the exit code of netsh.exe");
+    return code;
+}
+
+void AddFirewallRule(Network net, const fs::path& exe)
+{
+    // A rule of the same name from an earlier install is replaced, not doubled; netsh.exe says
+    // when there was none.
+    RunNetsh(FirewallDeleteRuleArgs(net));
+
+    const DWORD code = RunNetsh(FirewallAddRuleArgs(net, exe));
+    if (code != 0) {
+        throw std::runtime_error(strprintf("netsh.exe could not add the firewall rule \"%s\" (exit code %u). Add it "
+                                           "from an elevated prompt with: netsh.exe %s",
+                                           Shown(FirewallRuleName(net)), static_cast<unsigned>(code),
+                                           Shown(FirewallAddRuleArgs(net, exe))));
+    }
+    Say(strprintf("Firewall rule \"%s\": inbound TCP to the daemon, on domain and private networks",
+                  Shown(FirewallRuleName(net))));
+}
+
+// The service's settings.
+
+std::vector<unsigned char> QueryConfig(SC_HANDLE service)
+{
+    DWORD needed = 0;
+    if (!::QueryServiceConfigW(service, nullptr, 0, &needed) && ::GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+        ThrowLastError("QueryServiceConfigW");
+    }
+    std::vector<unsigned char> buffer(std::max<DWORD>(needed, sizeof(QUERY_SERVICE_CONFIGW)));
+    if (!::QueryServiceConfigW(service, reinterpret_cast<QUERY_SERVICE_CONFIGW*>(buffer.data()),
+                               static_cast<DWORD>(buffer.size()), &needed)) {
+        ThrowLastError("QueryServiceConfigW");
+    }
+    return buffer;
+}
+
+//! What QueryServiceConfig2W gives for \p level, in a buffer at least \p minimum bytes long.
+std::vector<unsigned char> QueryConfig2(SC_HANDLE service, DWORD level, size_t minimum, const char* what)
+{
+    DWORD needed = 0;
+    if (!::QueryServiceConfig2W(service, level, nullptr, 0, &needed) && ::GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+        ThrowLastError(std::string("QueryServiceConfig2W ") + what);
+    }
+    std::vector<unsigned char> buffer(std::max<size_t>(needed, minimum));
+    if (!::QueryServiceConfig2W(service, level, buffer.data(), static_cast<DWORD>(buffer.size()), &needed)) {
+        ThrowLastError(std::string("QueryServiceConfig2W ") + what);
+    }
+    return buffer;
+}
+
+SERVICE_STATUS_PROCESS QueryStatus(SC_HANDLE service)
+{
+    SERVICE_STATUS_PROCESS status{};
+    DWORD needed = 0;
+    if (!::QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, reinterpret_cast<LPBYTE>(&status), sizeof(status),
+                                &needed)) {
+        ThrowLastError("QueryServiceStatusEx");
+    }
+    return status;
+}
+
+std::string StateName(DWORD state)
+{
+    switch (state) {
+    case SERVICE_STOPPED: return "stopped";
+    case SERVICE_START_PENDING: return "starting";
+    case SERVICE_STOP_PENDING: return "stopping";
+    case SERVICE_RUNNING: return "running";
+    case SERVICE_CONTINUE_PENDING: return "continuing";
+    case SERVICE_PAUSE_PENDING: return "pausing";
+    case SERVICE_PAUSED: return "paused";
+    }
+    return strprintf("state %u", static_cast<unsigned>(state));
+}
+
+std::string StartTypeName(DWORD start_type, bool delayed)
+{
+    switch (start_type) {
+    case SERVICE_AUTO_START: return delayed ? "automatic (delayed start)" : "automatic";
+    case SERVICE_DEMAND_START: return "manual";
+    case SERVICE_DISABLED: return "disabled";
+    case SERVICE_BOOT_START: return "boot";
+    case SERVICE_SYSTEM_START: return "system";
+    }
+    return strprintf("start type %u", static_cast<unsigned>(start_type));
+}
+
+std::string SidTypeName(DWORD sid_type)
+{
+    if (sid_type == SID_TYPE_RESTRICTED) return "restricted";
+    if (sid_type == SID_TYPE_UNRESTRICTED) return "unrestricted";
+    if (sid_type == SERVICE_SID_TYPE_NONE) return "none";
+    return strprintf("type %u", static_cast<unsigned>(sid_type));
+}
+
+bool SamePath(const std::wstring& a, const std::wstring& b)
+{
+    // As NTFS compares names: without regard to case, by Windows' own upper-case table.
+    return ::CompareStringOrdinal(a.c_str(), static_cast<int>(a.size()), b.c_str(), static_cast<int>(b.size()),
+                                  TRUE) == CSTR_EQUAL;
+}
+
+//! Prints the service's settings, each with what install sets when it differs. False when one
+//! differs.
+bool ShowServiceSettings(SC_HANDLE service, Network net, const std::optional<fs::path>& exe,
+                         const fs::path& programdata)
+{
+    const NetworkNames names = NamesFor(net);
+    bool matches = true;
+    const auto note = [&matches](bool ok, const std::string& expected) {
+        if (ok) return std::string();
+        matches = false;
+        return " (install sets " + expected + ")";
+    };
+
+    const SERVICE_STATUS_PROCESS status = QueryStatus(service);
+    std::string state = StateName(status.dwCurrentState);
+    if (status.dwCurrentState == SERVICE_RUNNING) {
+        state += strprintf(", process %u", static_cast<unsigned>(status.dwProcessId));
+    }
+    if (status.dwCurrentState == SERVICE_STOPPED && status.dwWin32ExitCode != NO_ERROR) {
+        state += strprintf(", last exit %u/%u", static_cast<unsigned>(status.dwWin32ExitCode),
+                           static_cast<unsigned>(status.dwServiceSpecificExitCode));
+    }
+    Say("  State: " + state);
+
+    const std::vector<unsigned char> config_buffer = QueryConfig(service);
+    const auto* config = reinterpret_cast<const QUERY_SERVICE_CONFIGW*>(config_buffer.data());
+    const std::vector<unsigned char> delayed_buffer =
+        QueryConfig2(service, SERVICE_CONFIG_DELAYED_AUTO_START_INFO, sizeof(SERVICE_DELAYED_AUTO_START_INFO),
+                     "delayed automatic start");
+    const bool delayed_start =
+        reinterpret_cast<const SERVICE_DELAYED_AUTO_START_INFO*>(delayed_buffer.data())->fDelayedAutostart != FALSE;
+    Say("  Start type: " + StartTypeName(config->dwStartType, delayed_start) +
+        note(config->dwStartType == SERVICE_DISABLED || (config->dwStartType == SERVICE_AUTO_START && delayed_start),
+             "disabled, and automatic with a delayed start once a wallet is moved in"));
+
+    const std::wstring account = config->lpServiceStartName ? config->lpServiceStartName : L"";
+    Say("  Account: " + Shown(account) + note(SamePath(account, names.account), Shown(names.account)));
+
+    const std::vector<unsigned char> sid_buffer =
+        QueryConfig2(service, SERVICE_CONFIG_SERVICE_SID_INFO, sizeof(SERVICE_SID_INFO), "SID type");
+    const DWORD sid_type = reinterpret_cast<const SERVICE_SID_INFO*>(sid_buffer.data())->dwServiceSidType;
+    Say("  SID type: " + SidTypeName(sid_type) +
+        note(sid_type == SID_TYPE_RESTRICTED || sid_type == SID_TYPE_UNRESTRICTED,
+             "restricted, or unrestricted with --sid-type=unrestricted"));
+
+    const std::vector<unsigned char> privileges_buffer =
+        QueryConfig2(service, SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO, sizeof(SERVICE_REQUIRED_PRIVILEGES_INFOW),
+                     "required privileges");
+    std::wstring privileges;
+    for (const wchar_t* p = reinterpret_cast<const SERVICE_REQUIRED_PRIVILEGES_INFOW*>(privileges_buffer.data())
+                                ->pmszRequiredPrivileges;
+         p && *p; p += wcslen(p) + 1) {
+        privileges += (privileges.empty() ? L"" : L", ") + std::wstring(p);
+    }
+    Say("  Required privileges: " + (privileges.empty() ? std::string("(all the account holds)") : Shown(privileges)) +
+        note(privileges == REQUIRED_PRIVILEGE, Shown(std::wstring(REQUIRED_PRIVILEGE)) + " alone"));
+
+    const std::vector<unsigned char> preshutdown_buffer =
+        QueryConfig2(service, SERVICE_CONFIG_PRESHUTDOWN_INFO, sizeof(SERVICE_PRESHUTDOWN_INFO), "preshutdown timeout");
+    const DWORD preshutdown =
+        reinterpret_cast<const SERVICE_PRESHUTDOWN_INFO*>(preshutdown_buffer.data())->dwPreshutdownTimeout;
+    Say(strprintf("  Preshutdown timeout: %u ms", static_cast<unsigned>(preshutdown)) +
+        note(preshutdown == PRESHUTDOWN_TIMEOUT_MS, strprintf("%u ms", PRESHUTDOWN_TIMEOUT_MS)));
+
+    const std::vector<unsigned char> failure_buffer =
+        QueryConfig2(service, SERVICE_CONFIG_FAILURE_ACTIONS, sizeof(SERVICE_FAILURE_ACTIONSW), "failure actions");
+    const auto* failure = reinterpret_cast<const SERVICE_FAILURE_ACTIONSW*>(failure_buffer.data());
+    std::string actions;
+    bool actions_match = failure->cActions == FAILURE_RESTART_DELAYS_MS.size() &&
+                         failure->dwResetPeriod == FAILURE_RESET_SECONDS;
+    for (DWORD i = 0; i < failure->cActions; ++i) {
+        const SC_ACTION& action = failure->lpsaActions[i];
+        const std::string described = action.Type == SC_ACTION_RESTART
+                                          ? strprintf("restart after %u ms", static_cast<unsigned>(action.Delay))
+                                          : strprintf("action %u", static_cast<unsigned>(action.Type));
+        actions += (actions.empty() ? "" : ", ") + described;
+        if (i < FAILURE_RESTART_DELAYS_MS.size() &&
+            (action.Type != SC_ACTION_RESTART || action.Delay != FAILURE_RESTART_DELAYS_MS[i])) {
+            actions_match = false;
+        }
+    }
+    const std::vector<unsigned char> flag_buffer =
+        QueryConfig2(service, SERVICE_CONFIG_FAILURE_ACTIONS_FLAG, sizeof(SERVICE_FAILURE_ACTIONS_FLAG),
+                     "failure actions flag");
+    const auto* flag = reinterpret_cast<const SERVICE_FAILURE_ACTIONS_FLAG*>(flag_buffer.data());
+    const bool on_error = flag->fFailureActionsOnNonCrashFailures != FALSE;
+    Say(strprintf("  Failure actions: %s; reset after %u s; also after a stop with an error: %s",
+                  actions.empty() ? std::string("none") : actions, static_cast<unsigned>(failure->dwResetPeriod),
+                  on_error ? "yes" : "no") +
+        note(actions_match && on_error,
+             strprintf("a restart after %u, %u and %u ms, reset after %u s, also after a stop with an error",
+                       FAILURE_RESTART_DELAYS_MS[0], FAILURE_RESTART_DELAYS_MS[1], FAILURE_RESTART_DELAYS_MS[2],
+                       FAILURE_RESET_SECONDS)));
+
+    const std::wstring image_path = config->lpBinaryPathName ? config->lpBinaryPathName : L"";
+    Say("  ImagePath: " + Shown(image_path));
+    const std::optional<std::wstring> image_exe = ImagePathExecutable(image_path);
+    if (!exe) {
+        matches = false;
+        Say("  ImagePath check: not made, as the daemon next to this program was not found");
+    } else if (!image_exe || !SamePath(*image_exe, exe->wstring())) {
+        matches = false;
+        Say(strprintf("  ImagePath check: it runs %s, not the daemon next to this program, %s. Run install "
+                      "--reconfigure from the Gridcoin installation the service should run.",
+                      image_exe ? Shown(*image_exe) : std::string("no executable"), Shown(*exe)));
+    } else if (image_path != BuildImagePath(*exe, net, programdata)) {
+        matches = false;
+        Say("  ImagePath check: its arguments differ from the ones install writes, " +
+            Shown(BuildImagePath(*exe, net, programdata)) + ". Run install --reconfigure to apply them.");
+    } else {
+        Say("  ImagePath check: the command line install writes, for the daemon next to this program");
+    }
+
+    return matches;
+}
+
+//! One layout entry as status reports it, and whether it matches.
+std::pair<std::string, bool> EntryStatus(const LayoutEntry& entry)
+{
+    Level level;
+    try {
+        level = ReadLevel(entry.path);
+    } catch (const std::exception& e) {
+        return {std::string("could not be read: ") + e.what(), false};
+    }
+    if (!level.exists) return {"absent", false};
+    if (level.reparse) return {"a reparse point (a junction or a link)", false};
+    if (level.directory != entry.directory) {
+        return {level.directory ? "a directory, not a file" : "a file, not a directory", false};
+    }
+    if (std::optional<std::string> differs = winacl::CheckMatchesSpec(level.acl, entry.acl)) {
+        return {"differs from the layout: " + *differs, false};
+    }
+    return {"ok", true};
+}
+
+//! Prints whose wallet the service holds, from the network's state file.
+void ShowStateFile(const fs::path& path)
+{
+    DWORD error = 0;
+    const UniqueHandle handle =
+        OpenAsItself(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, error);
+    if (!handle) {
+        if (IsNotFound(error)) {
+            Say("Wallet: none moved in (no " + Shown(path) + ")");
+        } else {
+            Say("Wallet: " + Shown(path) + " could not be read: " + Win32Text(error));
+        }
+        return;
+    }
+
+    try {
+        const Level level = LevelOf(handle.get(), path);
+        if (level.reparse || level.directory) {
+            Say("Wallet: " + Shown(path) + " is not a plain file, so it was not read");
+            return;
+        }
+        std::string text;
+        ReadAll(handle.get(), path, text);
+
+        const std::optional<std::string> user_sid = StateFileValue(text, "user_sid");
+        const std::optional<Sid> sid = user_sid ? winacl::ParseSidString(*user_sid) : std::nullopt;
+        const std::string user = sid ? Describe(*sid) : user_sid ? "'" + *user_sid + "' (not a SID)" : "nobody named";
+        Say(strprintf("Wallet: moved in from %s by enable for %s, at %s", StateFileValue(text, "from").value_or("?"),
+                      user, StateFileValue(text, "enabled_at").value_or("?")));
+    } catch (const std::exception& e) {
+        Say("Wallet: " + Shown(path) + " could not be read: " + e.what());
+    }
+}
+
+//! Whether something is at \p path, opened as itself with backup semantics. Throws when that
+//! cannot be told.
+bool Exists(const fs::path& path)
+{
+    DWORD error = 0;
+    const UniqueHandle handle =
+        OpenAsItself(path, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, error);
+    if (handle) return true;
+    if (IsNotFound(error)) return false;
+    ThrowWin32(error, "check for " + Shown(path));
+}
+
+//! Removes each directory of \p dirs, in order, when it is empty, and says what it kept and why.
+void RemoveEmptyDirectories(const std::vector<fs::path>& dirs)
+{
+    for (const fs::path& dir : dirs) {
+        Level level;
+        try {
+            level = ReadLevel(dir);
+        } catch (const std::exception& e) {
+            Say("Kept " + Shown(dir) + ": " + e.what());
+            continue;
+        }
+        if (!level.exists) continue;
+        if (level.reparse || !level.directory) {
+            Say("Kept " + Shown(dir) + ": it is not a plain directory");
+            continue;
+        }
+
+        if (::RemoveDirectoryW(dir.wstring().c_str())) {
+            Say("Removed " + Shown(dir));
+            continue;
+        }
+        const DWORD error = ::GetLastError();
+        Say("Kept " + Shown(dir) + ": " + (error == ERROR_DIR_NOT_EMPTY ? "it is not empty" : Win32Text(error)));
+    }
+}
+
+void InstallService(const ToolOptions& options)
+{
+    const NetworkNames names = NamesFor(options.net);
+    Say(strprintf("Installing the %s service %s.", Shown(names.datadir_leaf), Shown(names.service)));
+
+    RequireElevated("install");
+    // SeRestorePrivilege gives the layout an owner other than this account and writes the access
+    // list of an entry whose list does not let this account; SeBackupPrivilege reads any entry.
+    EnablePrivilege(SE_RESTORE_NAME);
+    EnablePrivilege(SE_BACKUP_NAME);
+
+    const fs::path exe = DaemonPath();
+    Say("Daemon: " + Shown(exe));
+    // The daemon refuses -service from a folder another account can change; so does install,
+    // before anything is changed.
+    if (const std::optional<std::string> writer =
+            winacl::FindForeignWriterOnChain(exe, util::winsvc::ImageDirectoryAllowed(/*service=*/true, Sid{}))) {
+        throw Refusal(strprintf("%s, or a directory above it, can be changed by an account other than SYSTEM, "
+                                "Administrators and TrustedInstaller: %s. The service refuses to start from there. "
+                                "Install Gridcoin where only administrators can change it, such as the default folder "
+                                "under Program Files, then run install again.",
+                                Shown(exe), *writer));
+    }
+
+    const fs::path programdata = ProgramDataPath();
+    Say("Data: " + Shown(GridcoinRoot(programdata)));
+    const std::wstring image_path = BuildImagePath(exe, options.net, programdata);
+    // The service manager expands %NAME% in a command line from the system's environment.
+    if (image_path.find(L'%') != std::wstring::npos) {
+        throw Refusal(strprintf("the service's command line, %s, holds a '%%', which the service manager would read "
+                                "as part of an environment variable. Install Gridcoin in a folder whose path has none.",
+                                Shown(image_path)));
+    }
+
+    const UniqueServiceHandle scm = OpenScm(SC_MANAGER_CONNECT | SC_MANAGER_CREATE_SERVICE);
+    const DWORD service_access = SERVICE_CHANGE_CONFIG | SERVICE_START | SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS;
+    UniqueServiceHandle service = OpenServiceIfInstalled(scm.get(), names.service, service_access);
+    if (service && !options.reconfigure) {
+        throw Refusal(strprintf("the service %s is already installed. To give it this release's settings, run "
+                                "gridcoin-service.exe install --reconfigure%s.",
+                                Shown(names.service), options.net == Network::Test ? " --network=test" : ""));
+    }
+
+    LayoutSids sids = ServiceSids();
+    Preflight(ServiceLayout(programdata, sids), options.net, programdata);
+
+    // Both networks' groups, as the shared directories name both.
+    sids.grp_main = EnsureLocalGroup(NamesFor(Network::Main).group,
+                                     L"Members may attach a Gridcoin GUI to the mainnet service");
+    sids.grp_test = EnsureLocalGroup(NamesFor(Network::Test).group,
+                                     L"Members may attach a Gridcoin GUI to the testnet service");
+
+    if (service) {
+        if (!::ChangeServiceConfigW(service.get(), SERVICE_WIN32_OWN_PROCESS, SERVICE_NO_CHANGE, SERVICE_ERROR_NORMAL,
+                                    image_path.c_str(), nullptr, nullptr, nullptr, names.account.c_str(), nullptr,
+                                    names.display.c_str())) {
+            ThrowLastError("ChangeServiceConfigW " + Shown(names.service));
+        }
+        Say(strprintf("Service %s: reconfigured; its start type is kept", Shown(names.service)));
+    } else {
+        service.reset(::CreateServiceW(scm.get(), names.service.c_str(), names.display.c_str(), service_access,
+                                       SERVICE_WIN32_OWN_PROCESS, SERVICE_DISABLED, SERVICE_ERROR_NORMAL,
+                                       image_path.c_str(), nullptr, nullptr, nullptr, names.account.c_str(), nullptr));
+        if (!service) {
+            if (::GetLastError() == ERROR_SERVICE_MARKED_FOR_DELETE) {
+                throw Refusal(strprintf("the service %s was uninstalled and Windows has not finished removing it. "
+                                        "Close the Services console and any other program that has it open, or "
+                                        "restart Windows, then run install again.",
+                                        Shown(names.service)));
+            }
+            ThrowLastError("CreateServiceW " + Shown(names.service));
+        }
+        Say(strprintf("Service %s: created, disabled", Shown(names.service)));
+    }
+    Say("  ImagePath: " + Shown(image_path));
+
+    ConfigureService(service.get(), options.net, options.restricted_sid);
+    Say(strprintf("  SID type %s; required privileges %s alone; preshutdown timeout %u ms; a restart after %u, %u "
+                  "and %u ms, reset after %u s; a delayed automatic start once it is enabled",
+                  options.restricted_sid ? "restricted" : "unrestricted", Shown(std::wstring(REQUIRED_PRIVILEGE)),
+                  PRESHUTDOWN_TIMEOUT_MS, FAILURE_RESTART_DELAYS_MS[0], FAILURE_RESTART_DELAYS_MS[1],
+                  FAILURE_RESTART_DELAYS_MS[2], FAILURE_RESET_SECONDS));
+
+    // The account the service manager gives the service is the one the layout's lists name.
+    const Sid& expected = options.net == Network::Main ? sids.svc_main : sids.svc_test;
+    const std::optional<Sid> account = winacl::LookupAccountSidByName(names.account, /*require_alias=*/false);
+    if (!account || *account != expected) {
+        throw std::runtime_error(strprintf("the service's account %s has the SID %s, not %s", Shown(names.account),
+                                           account ? winacl::FormatSid(*account) : std::string("(none)"),
+                                           winacl::FormatSid(expected)));
+    }
+    Say(strprintf("  Account: %s, %s", Shown(names.account), winacl::FormatSid(*account)));
+
+    BuildLayout(ServiceLayout(programdata, sids), options.net, programdata);
+    AddFirewallRule(options.net, exe);
+
+    Say(strprintf("Installed. The service stays disabled until a wallet is moved in: gridcoin-service.exe enable "
+                  "--user=<account>%s moves that account's wallet into it and starts it.",
+                  options.net == Network::Test ? " --network=test" : ""));
+}
+
+void UninstallService(const ToolOptions& options)
+{
+    const NetworkNames names = NamesFor(options.net);
+    const Network other = options.net == Network::Main ? Network::Test : Network::Main;
+    Say(strprintf("Uninstalling the %s service %s.", Shown(names.datadir_leaf), Shown(names.service)));
+
+    RequireElevated("uninstall");
+    EnablePrivilege(SE_BACKUP_NAME);
+    EnablePrivilege(SE_RESTORE_NAME);
+
+    const fs::path programdata = ProgramDataPath();
+    const UniqueServiceHandle scm = OpenScm(SC_MANAGER_CONNECT);
+    UniqueServiceHandle service =
+        OpenServiceIfInstalled(scm.get(), names.service, DELETE | SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS);
+
+    const std::string disable_first = strprintf("Run gridcoin-service.exe disable%s first: it stops the service, "
+                                                "moves the wallet back to its user and disables the service.",
+                                                options.net == Network::Test ? " --network=test" : "");
+    if (service) {
+        const std::vector<unsigned char> config_buffer = QueryConfig(service.get());
+        const DWORD start_type = reinterpret_cast<const QUERY_SERVICE_CONFIGW*>(config_buffer.data())->dwStartType;
+        if (start_type != SERVICE_DISABLED) {
+            throw Refusal(strprintf("the service %s is enabled (start type %s). %s", Shown(names.service),
+                                    StartTypeName(start_type, false), disable_first));
+        }
+        const DWORD state = QueryStatus(service.get()).dwCurrentState;
+        if (state != SERVICE_STOPPED) {
+            throw Refusal(strprintf("the service %s is %s. %s", Shown(names.service), StateName(state), disable_first));
+        }
+    } else {
+        Say(strprintf("The service %s is not installed; removing what is left of it.", Shown(names.service)));
+    }
+
+    const fs::path wallet = NetDataDir(programdata, options.net) / L"wallet.dat";
+    if (Exists(wallet)) {
+        throw Refusal(strprintf("%s holds a wallet. %s", Shown(wallet),
+                                service ? disable_first
+                                        : std::string("Move it out of the service's data directory first.")));
+    }
+
+    if (service) {
+        if (!::DeleteService(service.get())) ThrowLastError("DeleteService " + Shown(names.service));
+        service.reset();
+        Say(strprintf("Service %s: removed", Shown(names.service)));
+    }
+
+    const DWORD code = RunNetsh(FirewallDeleteRuleArgs(options.net));
+    Say(strprintf("Firewall rule \"%s\": %s", Shown(FirewallRuleName(options.net)),
+                  code == 0 ? "removed" : strprintf("not removed; netsh.exe exited with %u, as when there is none",
+                                                    static_cast<unsigned>(code))));
+
+    // Bottom-up: this network's directories, then, when the other network's service is not
+    // installed either, its directories and the shared ones. Only empty ones go.
+    std::vector<fs::path> dirs{IpcDir(programdata, options.net)};
+    if (options.net == Network::Test) dirs.push_back(NetDataDir(programdata, options.net));
+    dirs.push_back(DataDir(programdata, options.net));
+    if (!OpenServiceIfInstalled(scm.get(), NamesFor(other).service, SERVICE_QUERY_STATUS)) {
+        dirs.push_back(IpcDir(programdata, other));
+        if (other == Network::Test) dirs.push_back(NetDataDir(programdata, other));
+        dirs.push_back(DataDir(programdata, other));
+        dirs.push_back(GridcoinRoot(programdata) / L"ipc");
+        dirs.push_back(QuarantineDir(programdata));
+        dirs.push_back(GridcoinRoot(programdata) / L"conf");
+        dirs.push_back(GridcoinRoot(programdata));
+    }
+    RemoveEmptyDirectories(dirs);
+
+    Say(strprintf("Uninstalled. Kept: the configuration file %s, which a later install uses again, and the groups "
+                  "\"%s\" and \"%s\".",
+                  Shown(ConfPath(programdata, options.net)), Shown(NamesFor(Network::Main).group),
+                  Shown(NamesFor(Network::Test).group)));
+}
+
+bool ShowStatus(const ToolOptions& options)
+{
+    const NetworkNames names = NamesFor(options.net);
+    Say(strprintf("Status of the %s service %s (%s).", Shown(names.datadir_leaf), Shown(names.service),
+                  Shown(names.display)));
+
+    bool matches = true;
+    if (winacl::CurrentTokenIsElevated()) {
+        try {
+            EnablePrivilege(SE_BACKUP_NAME);
+        } catch (const std::exception& e) {
+            Say(std::string("Note: ") + e.what());
+        }
+    } else {
+        Say("Not elevated: the entries this account cannot read are reported as such. Run it from an elevated "
+            "prompt to check every one.");
+    }
+
+    std::optional<fs::path> exe;
+    try {
+        exe = DaemonPath();
+        Say("Daemon next to this program: " + Shown(*exe));
+    } catch (const std::exception& e) {
+        matches = false;
+        Say(std::string("Daemon next to this program: ") + e.what());
+    }
+
+    const fs::path programdata = ProgramDataPath();
+    const UniqueServiceHandle scm = OpenScm(SC_MANAGER_CONNECT);
+    const UniqueServiceHandle service =
+        OpenServiceIfInstalled(scm.get(), names.service, SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS);
+    if (service) {
+        Say(strprintf("Service %s: installed", Shown(names.service)));
+        if (!ShowServiceSettings(service.get(), options.net, exe, programdata)) matches = false;
+    } else {
+        matches = false;
+        Say(strprintf("Service %s: not installed", Shown(names.service)));
+    }
+
+    LayoutSids sids = ServiceSids();
+    for (const Network net : {Network::Main, Network::Test}) {
+        const std::wstring& group = NamesFor(net).group;
+        std::optional<Sid> sid;
+        try {
+            sid = LocalGroupSid(group);
+        } catch (const std::exception& e) {
+            Say(strprintf("Group \"%s\": %s", Shown(group), e.what()));
+        }
+        if (sid) {
+            Say(strprintf("Group \"%s\": %s", Shown(group), winacl::FormatSid(*sid)));
+            (net == Network::Main ? sids.grp_main : sids.grp_test) = *sid;
+        } else {
+            matches = false;
+            Say(strprintf("Group \"%s\": missing, so the entries that name it are reported as differing",
+                          Shown(group)));
+        }
+    }
+
+    Say("Layout:");
+    const fs::path own_conf = ConfPath(programdata, options.net);
+    const fs::path other_conf = ConfPath(programdata, options.net == Network::Main ? Network::Test : Network::Main);
+    for (const LayoutEntry& entry : ServiceLayout(programdata, sids)) {
+        const auto [text, ok] = EntryStatus(entry);
+        // The other network's configuration file is its own install's.
+        if (!ok && entry.path != other_conf) matches = false;
+        Say("  " + Shown(entry.path) + ": " + text);
+    }
+
+    for (const LayoutEntry& entry : ServiceLayout(programdata, sids)) {
+        if (entry.path != own_conf) continue;
+        try {
+            const ConfState conf = CheckConf(entry, 0, nullptr);
+            if (!conf.exists) {
+                matches = false;
+                Say("Configuration file: absent; install writes it");
+            } else if (conf.problem) {
+                matches = false;
+                Say("Configuration file: " + ConfRefusal(entry.path, *conf.problem));
+            } else {
+                Say("Configuration file: accepted (the layout's owner and access list, no includeconf line)");
+            }
+        } catch (const std::exception& e) {
+            matches = false;
+            Say(std::string("Configuration file: could not be read: ") + e.what());
+        }
+    }
+
+    ShowStateFile(StatePath(programdata, options.net));
+    return matches;
+}
+
+} // namespace
+
+int Install(const ToolOptions& options)
+{
+    return RunVerb([&options] { InstallService(options); });
+}
+
+int Uninstall(const ToolOptions& options)
+{
+    return RunVerb([&options] { UninstallService(options); });
+}
+
+int Status(const ToolOptions& options)
+{
+    bool matches = false;
+    const int code = RunVerb([&options, &matches] { matches = ShowStatus(options); });
+    if (code != EXIT_OK) return code;
+    return matches ? EXIT_OK : EXIT_REFUSED;
+}
+
+} // namespace winsvc
+
+#endif // WIN32

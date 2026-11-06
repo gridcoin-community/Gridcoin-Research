@@ -1,0 +1,113 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef GRIDCOIN_WINSVC_SCM_H
+#define GRIDCOIN_WINSVC_SCM_H
+
+#include "fs.h"
+#include "winsvc/layout.h"
+
+#include <array>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <vector>
+
+//! How gridcoin-service.exe registers the service with the service control manager: the command
+//! line the service runs (its ImagePath), its settings, its firewall rule, and the tool's own
+//! command line.
+//!
+//! The command lines are pure, so they build and are tested on every platform. Applying the
+//! settings needs Windows.
+namespace winsvc {
+
+//! \p arg as one argument of a Windows command line, as CommandLineToArgvW reads it back: as it
+//! is when it is not empty and holds no space, tab, line feed, vertical tab or double quote;
+//! otherwise in double quotes, each double quote inside after a backslash, and the backslashes
+//! before a double quote, and before the closing one, doubled. Other characters are kept as
+//! they are.
+std::wstring QuoteArg(const std::wstring& arg);
+
+//! The command line the service runs, its ImagePath, for the daemon \p exe:
+//! "<exe>" -service -multiprocess -conf="<conf>" -datadir="<datadir>" -ipcdir="<ipcdir>"
+//! -ipcattachgroup="<group>" -autounlockblob, with -testnet after -multiprocess for Test, the
+//! paths from \p programdata (ConfPath, DataDir, IpcDir) and the group from NamesFor. The
+//! executable and every value are quoted whatever they hold, and every path is written with
+//! backslashes.
+std::wstring BuildImagePath(const fs::path& exe, Network net, const fs::path& programdata);
+
+//! The executable at the start of the ImagePath \p image_path: the text inside its opening double
+//! quote, or, when it does not start with one, the text up to the first space or tab. nullopt
+//! when \p image_path is empty or its opening quote is not closed.
+std::optional<std::wstring> ImagePathExecutable(const std::wstring& image_path);
+
+//! The service's description, shown in the Services console.
+std::wstring ServiceDescription(Network net);
+
+//! "Gridcoin service (<service>)", the name of the network's inbound firewall rule.
+std::wstring FirewallRuleName(Network net);
+
+//! The arguments of netsh.exe that add the inbound rule for the daemon \p exe:
+//! advfirewall firewall add rule name="<rule>" dir=in action=allow program="<exe>"
+//! service=<service> protocol=TCP profile=domain,private
+std::wstring FirewallAddRuleArgs(Network net, const fs::path& exe);
+
+//! The arguments of netsh.exe that delete every rule named FirewallRuleName.
+std::wstring FirewallDeleteRuleArgs(Network net);
+
+//! How long the service manager waits for the core to stop at a system shutdown.
+constexpr uint32_t PRESHUTDOWN_TIMEOUT_MS = 300000;
+//! The failure actions: restart after each of these delays, and count the failures from 0 again
+//! after FAILURE_RESET_SECONDS without one.
+constexpr std::array<uint32_t, 3> FAILURE_RESTART_DELAYS_MS{10000, 60000, 300000};
+constexpr uint32_t FAILURE_RESET_SECONDS = 86400;
+//! SERVICE_SID_TYPE_UNRESTRICTED and SERVICE_SID_TYPE_RESTRICTED.
+constexpr uint32_t SID_TYPE_UNRESTRICTED = 1, SID_TYPE_RESTRICTED = 3;
+//! The one privilege the service's token keeps.
+inline constexpr const wchar_t* REQUIRED_PRIVILEGE = L"SeChangeNotifyPrivilege";
+
+//! What gridcoin-service.exe was asked to do.
+enum class Verb : uint8_t
+{
+    Help,
+    Install,
+    Uninstall,
+    Status,
+};
+
+struct ToolOptions
+{
+    Verb verb{Verb::Help};
+    Network net{Network::Main};
+    //! install: SID_TYPE_RESTRICTED, or SID_TYPE_UNRESTRICTED with --sid-type=unrestricted.
+    bool restricted_sid{true};
+    //! install: apply the settings to a service that is already installed.
+    bool reconfigure{false};
+};
+
+//! The tool's exit codes: done, refused or failed, and a command line it does not take.
+constexpr int EXIT_OK = 0, EXIT_REFUSED = 1, EXIT_USAGE = 2;
+
+//! \p args, the tool's arguments after its own name, as ToolOptions: one command (install,
+//! uninstall, status or help), --network=main|test (main when absent), and for install alone
+//! --sid-type=restricted|unrestricted and --reconfigure. "--help", "-h" and "/?" anywhere are
+//! help. nullopt, with \p error saying why, for anything else.
+std::optional<ToolOptions> ParseToolArgs(const std::vector<std::string>& args, std::string& error);
+
+//! The tool's usage text, in lines ending in LF.
+std::string ToolUsage();
+
+#ifdef WIN32
+//! Give the service \p service (an SC_HANDLE opened with SERVICE_CHANGE_CONFIG and SERVICE_START)
+//! the rest of its settings (ChangeServiceConfig2W): ServiceDescription(\p net), the SID type
+//! (SID_TYPE_RESTRICTED, or SID_TYPE_UNRESTRICTED unless \p restricted_sid), REQUIRED_PRIVILEGE
+//! alone, PRESHUTDOWN_TIMEOUT_MS, a restart after each of FAILURE_RESTART_DELAYS_MS with
+//! FAILURE_RESET_SECONDS, failure actions on a stop with an error too, and a delayed automatic
+//! start once it is set to start automatically. Throws std::system_error naming the setting.
+void ConfigureService(void* service, Network net, bool restricted_sid);
+#endif
+
+} // namespace winsvc
+
+#endif // GRIDCOIN_WINSVC_SCM_H
