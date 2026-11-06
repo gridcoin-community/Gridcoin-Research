@@ -1,0 +1,6 @@
+# Pinned Gridcoin release signing keys, one per line:
+#   <keyid> <base64 of X||Y, 64 bytes> <label>
+# Print a line for a public key with: contrib/release/sign-sha256sums.py keyline --pubkey pub.pem
+#
+# No release key is pinned yet (Decision D-P4-1), so Update-GridcoinCore.ps1 refuses every
+# update. Do not add the TEST-ONLY key from contrib/release/testdata here.

@@ -14,7 +14,9 @@ them from there in an **elevated** PowerShell. (In a source checkout they live h
 |---|---|
 | `Install-GridcoinCoreTask.ps1` | Register the **Core-Start** (boot) and **Core-Stop** (graceful) tasks for your own account, S4U, with no stored password. Needs an elevated console. |
 | `Uninstall-GridcoinCoreTask.ps1` | Remove them (`-All` also removes the shutdown script and the old autounlock helper). |
-| `Update-GridcoinCore.ps1` | Graceful upgrade engine for the locked-exe problem. |
+| `Update-GridcoinCore.ps1` | Installs a release only after its signed `SHA256SUMS` verifies against the pinned key. |
+| `Test-GridcoinRelease.ps1` | Verifies a signed `SHA256SUMS` (also runnable on its own). |
+| `release-keys.txt` | The pinned release signing key(s); ships with none. |
 | `Set-GridcoinShutdownFlush.ps1` | **Opt-in**: configure/remove a Group Policy shutdown script for a reliable DB flush on OS shutdown. |
 | `Start-GridcoinGui.ps1` | Launch the `-multiprocess` GUI from a normal (not elevated) console, for the task or, with `-Service`, for the Windows service (or drop a Start-Menu shortcut with `-CreateShortcut`). |
 | `GridcoinCommon.ps1` | Functions the scripts share (dot-sourced; not run on its own). |
@@ -50,10 +52,10 @@ Then, from a normal (not elevated) console, attach the GUI:
 .\Start-GridcoinGui.ps1 -Service -Network test  # the Windows service for testnet (gridcoin-service.exe enable prints this line)
 ```
 
-The core then autostarts on every boot. To upgrade:
+The core then autostarts on every boot. To upgrade, from an elevated console, with the installer, `SHA256SUMS` and `SHA256SUMS.sig` of the release:
 
 ```powershell
-.\Update-GridcoinCore.ps1 -NewBinariesDir C:\path\to\new\bin   # graceful stop -> replace -> restart
+.\Update-GridcoinCore.ps1 -Installer .\gridcoin-5.5.2.1-win64-setup.exe -Sums .\SHA256SUMS -Signature .\SHA256SUMS.sig
 ```
 
 ## Two things to know

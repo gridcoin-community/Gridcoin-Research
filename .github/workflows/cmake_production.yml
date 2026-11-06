@@ -1576,7 +1576,13 @@ jobs:
             cp "$dir"* release_assets/
           done
 
+          # The checksum list of the flattened assets, sorted by name, base names only. It is
+          # attached unsigned; the release engineer signs it offline (doc/release-process.md).
+          # SHA256SUMS and its .sig are not themselves listed.
           cd release_assets
+          rm -f SHA256SUMS SHA256SUMS.sig
+          find . -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort | xargs -d '\n' sha256sum > SHA256SUMS
+          cat SHA256SUMS
           ls -la
 
       - name: Publish Release

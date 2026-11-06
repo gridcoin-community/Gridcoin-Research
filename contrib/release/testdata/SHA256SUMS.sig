@@ -1,0 +1,1 @@
+gridcoin-sha256sums-sig-v1 44e673e7d16ad3d7 anNLpMzryPmttzZU9NEobhVVe47a1dSSW+j9cF5Bd5PPtrL+Dc2PCFUNjQmfVozgQwVPWk4/r6yAlLWYw+aczQ==

@@ -1,0 +1,2 @@
+# TEST-ONLY: pins the test key for the cross-language check. Not a release key.
+44e673e7d16ad3d7 8bJI1Ypkue7GWQEiOcZtgRFMkYfOOJjhoUkBqfR006wtOg62Wyvmc+Qvu7WaaMzQKRHpFn4kcF1ZuwFoXCbysQ== TEST-ONLY

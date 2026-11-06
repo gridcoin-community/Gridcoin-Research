@@ -732,14 +732,16 @@ listener-ownership gate). Detail: [`../contrib/windows/README.md` →
 
 ### Upgrading (Windows)
 
-With the core running, from the `windows\` folder:
+From an elevated PowerShell in the `windows\` folder, with the installer, `SHA256SUMS` and `SHA256SUMS.sig` of the release:
 
 ```powershell
-.\Update-GridcoinCore.ps1 -NewBinariesDir C:\path\to\new\bin
+.\Update-GridcoinCore.ps1 -Installer .\gridcoin-5.5.2.1-win64-setup.exe -Sums .\SHA256SUMS -Signature .\SHA256SUMS.sig
 ```
 
-It gracefully stops the core, waits for the exe lock to release, copies the new binaries, and restarts. If the
-stop times out it aborts and leaves the old binary in place (safe by default).
+It verifies before it touches anything: the keys file and the script must be writable by privileged accounts only, the
+signature of `SHA256SUMS` must verify against the key pinned in `release-keys.txt`, the installer must be listed with a
+matching SHA-256, and its version must be newer than the installed one (`-AllowDowngrade` overrides). Only then does it run
+the verified copy of the installer silently, which stops and restarts the cores. With no key pinned it refuses.
 
 ### Verifying it works (Windows)
 

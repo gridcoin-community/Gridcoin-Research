@@ -109,9 +109,12 @@ The `deploy` job in `cmake_production.yml` automates the release process.
     3.  **Flattens** them (moves files from subfolders to root).
     4.  Creates a **Draft Release** on GitHub with all binaries attached.
 
-Checksums are not generated. The GitHub release page publishes a SHA-256 digest for every
-attached asset, so a separate `SHA256SUMS.txt` duplicated information the platform already
-provides.
+The job also attaches `SHA256SUMS` to the draft: `sha256sum` over the flattened assets,
+sorted by file name, one `<64 hex>  <name>` line each (LF, base names only). CI does not sign
+it and holds no release key. The release engineer signs it offline and attaches
+`SHA256SUMS.sig` before publishing (see `doc/release-process.md`). On Windows,
+`Update-GridcoinCore.ps1` installs a release only if that signature verifies against the key
+pinned in `release-keys.txt`.
 
 -----
 

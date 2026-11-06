@@ -1,0 +1,3 @@
+# TEST-ONLY key pair for contrib/release tests. The private key test-key.pem is public
+# by design and must never be pinned in contrib/windows/release-keys.txt.
+44e673e7d16ad3d7 8bJI1Ypkue7GWQEiOcZtgRFMkYfOOJjhoUkBqfR006wtOg62Wyvmc+Qvu7WaaMzQKRHpFn4kcF1ZuwFoXCbysQ== TEST-ONLY
