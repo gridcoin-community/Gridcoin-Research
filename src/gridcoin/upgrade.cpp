@@ -535,8 +535,9 @@ bool Upgrade::LoadBlockchainData(std::vector<std::pair<fs::path, uintmax_t>>& bl
 
             LogPrintf("INFO: %s: Loading blocks from %s.", __func__, iter.first.filename().string());
 
-            // LoadExternalBlockFile fails a file that a shutdown request or a read error stopped part way, so the
-            // source files are deleted below only after every one of them was read to its end.
+            // LoadExternalBlockFile fails a file that a shutdown request, a read error or a block that could not be
+            // stored stopped part way, so the source files are deleted below only after every one of them was read to
+            // its end.
             if (!LoadExternalBlockFile(block_data_file, iter.second, percent_start, percent_end)) {
                 successful = false;
 

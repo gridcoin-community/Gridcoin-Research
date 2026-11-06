@@ -402,6 +402,11 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                         }
 
                         nPos += 4 + nSize;
+                    } else if (load_state.IsError()) {
+                        // A block that could not be stored ends the load, so that the file is not counted as loaded.
+                        LogPrintf("WARN: %s: The block at offset %u could not be stored. The load stops here.",
+                                  __func__, nPos);
+                        break;
                     }
                 }
             }
@@ -414,8 +419,8 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
     LogPrintf("Loaded %i blocks from external file in %" PRId64 "ms, skipped %i already in the block index", nLoaded,
               GetTimeMillis() - nStart, nAlreadyIndexed);
 
-    // A file stopped part way by a shutdown request or a read error is not counted as loaded, whatever it yielded:
-    // a reindex deletes its source files only after every one of them was loaded.
+    // A file stopped part way by a shutdown request, a read error or a block that could not be stored is not counted
+    // as loaded, whatever it yielded: a reindex deletes its source files only after every one of them was loaded.
     return read_whole_file;
 }
 

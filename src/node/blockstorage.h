@@ -43,8 +43,9 @@ FILE* AppendBlockFile(unsigned int& nFileRet);
 void CloseBlockFile();
 
 //! Load the blocks in a file in block data file format through ProcessBlock, skipping blocks already in the index.
-//! Returns true only if the whole file was read: false if a shutdown request or a read error stopped the load part way,
-//! however many blocks it had loaded by then. Takes ownership of fileIn and closes it.
+//! Returns true only if the whole file was read: false if a shutdown request, a read error or a block that could not
+//! be stored stopped the load part way, however many blocks it had loaded by then. Takes ownership of fileIn and closes
+//! it.
 bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
                            unsigned int percent_start = 0, unsigned int percent_end = 100);
 

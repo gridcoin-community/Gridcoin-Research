@@ -1881,8 +1881,12 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
         return error("%s: out of disk space", __func__);
     unsigned int nFile = std::numeric_limits<unsigned int>::max();
     unsigned int nBlockPos = 0;
-    if (!WriteBlockToDisk(block, nFile, nBlockPos, Params().MessageStart()))
+    // A block that cannot be written is a local fault, not a fault of the block, so it is marked as an error rather
+    // than as invalid. A block import stops on it, rather than going on without the block.
+    if (!WriteBlockToDisk(block, nFile, nBlockPos, Params().MessageStart())) {
+        state.Error("block-write-failed");
         return error("%s: WriteToDisk failed", __func__);
+    }
     if (!AddToBlockIndex(block, nFile, nBlockPos, hashProof))
         return error("%s: AddToBlockIndex failed", __func__);
 
