@@ -96,6 +96,10 @@ class ReindexInterruptedTest(GridcoinTestFramework):
 
     def run_test(self):
         node = self.nodes[0]
+        # Arguments given to a start replace the node's extra_args, so each start
+        # passes them again: on regtest a node stakes without peers, and a staked
+        # block would move the chain under the checks.
+        base = self.extra_args[0]
 
         # Mine one block per target spacing, starting far enough in the past
         # that the whole chain is older than the real clock. Blocks mined faster
@@ -119,9 +123,9 @@ class ReindexInterruptedTest(GridcoinTestFramework):
 
         self.log.info("A stop after the rename, twice, then -reindex restores the chain")
         for _ in range(2):
-            node.assert_start_raises_init_error(["-reindex", "-printblocktree"])
+            node.assert_start_raises_init_error(base + ["-reindex", "-printblocktree"])
             assert_greater_than(len(self.orig_files()), 0)
-        self.start_node(0, ["-reindex"])
+        self.start_node(0, base + ["-reindex"])
         self.assert_whole_chain(height, best)
         self.stop_node(0)
 
@@ -133,7 +137,7 @@ class ReindexInterruptedTest(GridcoinTestFramework):
             record_start = f.read(8 + 40)
             f.seek(0, os.SEEK_END)
             f.write(record_start)
-        self.start_node(0, ["-reindex"])
+        self.start_node(0, base + ["-reindex"])
         self.assert_whole_chain(height, best)
         self.stop_node(0)
 
@@ -141,7 +145,7 @@ class ReindexInterruptedTest(GridcoinTestFramework):
         if sys.platform != "win32":
             self.log.info("A stop during the import keeps the .orig files, then -reindex restores the chain")
             offset = self.log_size()
-            node.start(["-reindex"])
+            node.start(base + ["-reindex"])
             # Poll faster than wait_until does: the import is about a second long.
             deadline = time.time() + 120
             while "LoadExternalBlockFile: blocks/s:" not in self.log_since(offset):
@@ -158,14 +162,14 @@ class ReindexInterruptedTest(GridcoinTestFramework):
             assert loaded[0] < height, "the import finished before SIGTERM arrived; raise CHAIN_LENGTH"
             assert_greater_than(len(self.orig_files()), 0)
 
-            self.start_node(0, ["-reindex"])
+            self.start_node(0, base + ["-reindex"])
             self.assert_whole_chain(height, best)
             self.stop_node(0)
 
         self.log.info("-resetblockchaindata after a stop after the rename removes the .orig files too")
-        node.assert_start_raises_init_error(["-reindex", "-printblocktree"])
+        node.assert_start_raises_init_error(base + ["-reindex", "-printblocktree"])
         assert_greater_than(len(self.orig_files()), 0)
-        self.start_node(0, ["-resetblockchaindata"])
+        self.start_node(0, base + ["-resetblockchaindata"])
         assert_equal(node.getblockcount(), 0)
         assert_equal(self.orig_files(), [])
 

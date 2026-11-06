@@ -87,6 +87,10 @@ class ReindexLoadblockTest(GridcoinTestFramework):
 
     def run_test(self):
         node = self.nodes[0]
+        # Arguments given to a start replace the node's extra_args, so each start
+        # passes them again: on regtest a node stakes without peers, and a staked
+        # block would move the chain under the checks.
+        base = self.extra_args[0]
 
         # Mine one block per target spacing, starting in the past, so that the
         # chain is older than the real clock: a restarted node's clock is no
@@ -113,7 +117,7 @@ class ReindexLoadblockTest(GridcoinTestFramework):
 
         self.log.info("-reindex with -loadblock is refused before any block data file is renamed")
         node.assert_start_raises_init_error(
-            ["-reindex", "-loadblock=first.dat"],
+            base + ["-reindex", "-loadblock=first.dat"],
             "-reindex and -loadblock cannot be used together",
             match=ErrorMatch.PARTIAL_REGEX)
         assert_equal(self.block_files(), files)
@@ -123,7 +127,7 @@ class ReindexLoadblockTest(GridcoinTestFramework):
         shutil.copy(os.path.join(self.chain_dir(), "blk0001.dat"), bootstrap)
         for args in (["-reindex"], ["-loadblock=first.dat"]):
             node.assert_start_raises_init_error(
-                args,
+                base + args,
                 "a bootstrap.dat file was found in the data directory",
                 match=ErrorMatch.PARTIAL_REGEX)
             assert_equal(self.block_files(), files)
@@ -131,7 +135,7 @@ class ReindexLoadblockTest(GridcoinTestFramework):
 
         self.log.info("A -loadblock that starts at genesis is refused on an index that holds more than genesis")
         node.assert_start_raises_init_error(
-            ["-loadblock=first.dat"],
+            base + ["-loadblock=first.dat"],
             "starts at the genesis block",
             match=ErrorMatch.PARTIAL_REGEX)
         assert_equal(self.block_files(), files)
@@ -139,7 +143,7 @@ class ReindexLoadblockTest(GridcoinTestFramework):
         self.log.info("A bootstrap.dat that starts at genesis is refused on an index that holds more than genesis")
         shutil.copy(os.path.join(self.chain_dir(), "first.dat"), bootstrap)
         node.assert_start_raises_init_error(
-            [],
+            base,
             "starts at the genesis block",
             match=ErrorMatch.PARTIAL_REGEX)
         assert_equal(self.block_files(), files)
@@ -153,20 +157,20 @@ class ReindexLoadblockTest(GridcoinTestFramework):
         self.stop_node(0)
 
         self.log.info("-resetblockchaindata lets the first load of a series start at genesis")
-        self.start_node(0, ["-resetblockchaindata", "-loadblock=first.dat"])
+        self.start_node(0, base + ["-resetblockchaindata", "-loadblock=first.dat"])
         assert_equal(node.getblockcount(), SPLIT_HEIGHT)
         assert_equal(node.getbestblockhash(), hashes[SPLIT_HEIGHT])
         self.stop_node(0)
 
         self.log.info("A later load that starts further up adds to the index")
-        self.start_node(0, ["-loadblock=second.dat"])
+        self.start_node(0, base + ["-loadblock=second.dat"])
         assert_equal(node.getblockcount(), CHAIN_LENGTH)
         assert_equal(node.getbestblockhash(), hashes[CHAIN_LENGTH])
         self.stop_node(0)
 
         self.log.info("-resetblockchaindata lets a bootstrap.dat that starts at genesis load")
         shutil.copy(os.path.join(self.chain_dir(), "first.dat"), bootstrap)
-        self.start_node(0, ["-resetblockchaindata"])
+        self.start_node(0, base + ["-resetblockchaindata"])
         assert_equal(node.getblockcount(), SPLIT_HEIGHT)
         assert_equal(node.getbestblockhash(), hashes[SPLIT_HEIGHT])
         assert not os.path.exists(bootstrap)
