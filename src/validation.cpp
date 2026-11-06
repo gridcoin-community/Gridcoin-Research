@@ -36,6 +36,7 @@
 #include "wallet/wallet.h"
 #include "txmempool.h"
 
+#include <cstdlib>
 #include <limits>
 #include <set>
 #include <stdexcept>
@@ -1414,12 +1415,23 @@ bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, 
     pindexNew->phashBlock = &(mi->first);
 
     // Write to disk block index
+    //
+    // The block is in mapBlockIndex already, so a failed write stops the node at once, as a failed commit of a
+    // block's connect does in ReorganizeChain(). Returning false would leave a block in the in-memory index that the
+    // database does not record, and a block import would go on past it and delete its source files. The reindex
+    // that the message asks for rebuilds the index from the block files.
     CTxDB txdb;
-    if (!txdb.TxnBegin())
-        return error("%s: txdb.TxnBegin failed", __func__);
+    if (!txdb.TxnBegin()) {
+        error("%s: txdb.TxnBegin failed. This is a fatal error. The block index may be inconsistent. Aborting. "
+              "Please reindex the chain and restart.", __func__);
+        std::_Exit(EXIT_FAILURE);
+    }
     txdb.WriteBlockIndex(CDiskBlockIndex(pindexNew));
-    if (!txdb.TxnCommit())
-        return error("%s: txdb.TxnCommit failed", __func__);
+    if (!txdb.TxnCommit()) {
+        error("%s: txdb.TxnCommit failed. This is a fatal error. The block index may be inconsistent. Aborting. "
+              "Please reindex the chain and restart.", __func__);
+        std::_Exit(EXIT_FAILURE);
+    }
 
     // cs_main is required on entry (declared EXCLUSIVE_LOCKS_REQUIRED in
     // validation.h). The previous explicit LOCK(cs_main) here was redundant on
