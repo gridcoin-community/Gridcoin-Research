@@ -16,18 +16,17 @@
 #include "ipc/process.h"
 #include "random.h"
 #include "test/state_guard.h"
+#include "test/win_fs_util.h"
 #include "test/wine.h"
 #include "tinyformat.h"
 #include "util.h"
 #include "util/dir_permissions.h"
 #include "util/strencodings.h"
 
-#include <cstring>
 #include <functional>
 #include <system_error>
 
 #include <windows.h>
-#include <winioctl.h>
 #endif
 
 using namespace ipc::win;
@@ -794,26 +793,6 @@ void WriteFile(const fs::path& path)
     out << "x";
 }
 
-//! Whether \p a and \p b read the same: the owner, the DACL's presence and
-//! protection, and every entry, in order.
-bool SameAcl(const ObservedAcl& a, const ObservedAcl& b)
-{
-    if (a.owner != b.owner || a.dacl_present != b.dacl_present || a.is_protected != b.is_protected ||
-        a.aces.size() != b.aces.size()) {
-        return false;
-    }
-    for (size_t i = 0; i < a.aces.size(); ++i) {
-        const ObservedAce& x = a.aces[i];
-        const ObservedAce& y = b.aces[i];
-        if (x.kind != y.kind || x.trustee != y.trustee || x.mask != y.mask || x.inherit_only != y.inherit_only ||
-            x.inherited != y.inherited || x.inherit != y.inherit) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 //! Closes a socket descriptor from Process::bind or Process::connect.
 struct SocketCloser
 {
@@ -825,45 +804,6 @@ struct SocketCloser
         closesocket(s);
     }
 };
-
-//! Make the new, empty directory \p link a junction (a mount-point reparse point)
-//! to the directory \p target. No privilege is needed for that.
-void MakeJunction(const fs::path& link, const fs::path& target)
-{
-    BOOST_REQUIRE(::CreateDirectoryW(link.wstring().c_str(), nullptr));
-    const HANDLE handle = ::CreateFileW(link.wstring().c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
-                                        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-    BOOST_REQUIRE(handle != INVALID_HANDLE_VALUE);
-
-    // REPARSE_DATA_BUFFER's mount-point form, which no user-mode header declares:
-    // the tag, the data length and a reserved word, then the offsets and lengths of
-    // the two names, then the names, each followed by a NUL.
-    const std::wstring substitute = L"\\??\\" + target.wstring();
-    const std::wstring print = target.wstring();
-    const size_t names = (substitute.size() + 1 + print.size() + 1) * sizeof(wchar_t);
-    std::vector<unsigned char> buffer(8 + 8 + names, 0);
-    const auto put16 = [&](size_t offset, size_t value) {
-        const auto v = static_cast<uint16_t>(value);
-        std::memcpy(buffer.data() + offset, &v, sizeof(v));
-    };
-    const uint32_t tag = IO_REPARSE_TAG_MOUNT_POINT;
-    std::memcpy(buffer.data(), &tag, sizeof(tag));
-    put16(4, 8 + names);
-    put16(8, 0);
-    put16(10, substitute.size() * sizeof(wchar_t));
-    put16(12, (substitute.size() + 1) * sizeof(wchar_t));
-    put16(14, print.size() * sizeof(wchar_t));
-    std::memcpy(buffer.data() + 16, substitute.c_str(), (substitute.size() + 1) * sizeof(wchar_t));
-    std::memcpy(buffer.data() + 16 + (substitute.size() + 1) * sizeof(wchar_t), print.c_str(),
-                (print.size() + 1) * sizeof(wchar_t));
-
-    DWORD returned = 0;
-    const BOOL set = ::DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, buffer.data(),
-                                       static_cast<DWORD>(buffer.size()), nullptr, 0, &returned, nullptr);
-    const DWORD error = ::GetLastError();
-    ::CloseHandle(handle);
-    BOOST_REQUIRE_MESSAGE(set, "FSCTL_SET_REPARSE_POINT failed with Windows error " << error);
-}
 
 //! Check that \p check throws the endpoint rule's refusal, a std::runtime_error that
 //! is not a std::system_error, naming \p word.
@@ -1008,7 +948,7 @@ BOOST_FIXTURE_TEST_CASE(win_junction_followed_above_the_socket_only_in_same_acco
     BOOST_REQUIRE(server.fd != -1);
 
     const fs::path linked = dir.path / "linked";
-    MakeJunction(linked, real);
+    grc_test::MakeJunction(linked, real);
     BOOST_CHECK(ReadEntryNoFollow(linked).kind == EntryKind::Redirect);
 
     const Sid self = CurrentTokenUser();
@@ -1020,7 +960,7 @@ BOOST_FIXTURE_TEST_CASE(win_junction_followed_above_the_socket_only_in_same_acco
     const fs::path other = dir.path / "other";
     std::string error;
     BOOST_REQUIRE_MESSAGE(util::CreateOwnerOnlyDirectory(other, error), error);
-    MakeJunction(other / "node.sock", real);
+    grc_test::MakeJunction(other / "node.sock", real);
     CheckRefusedByRule([&] { CheckServerEndpointBeforeConnect(other / "node.sock", self); },
                        (other / "node.sock").string());
 
@@ -1110,7 +1050,7 @@ BOOST_AUTO_TEST_CASE(win_attach_group_directory_refuses_the_data_directory)
         BOOST_CHECK_MESSAGE(what.find("-ipcdir") != std::string::npos, what);
     }
 
-    BOOST_CHECK(SameAcl(ReadAcl(datadir), before));
+    BOOST_CHECK(grc_test::SameAcl(ReadAcl(datadir), before));
 }
 
 // A directory of this account's own gets the attach group's view, and the list reads

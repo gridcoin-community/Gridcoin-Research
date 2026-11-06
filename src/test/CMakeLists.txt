@@ -18,6 +18,8 @@ add_executable(test_gridcoin
     state_guard.cpp
     # RunningUnderWine, for the cases that need Windows' own access control.
     wine.cpp
+    # SameAcl and, on Windows, MakeJunction, for the cases that read access lists.
+    win_fs_util.cpp
     gridcoin/message_contract_tests.cpp
     state_leak_detector.cpp
     state_guard_tests.cpp
