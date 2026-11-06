@@ -8,11 +8,19 @@
 #include "fs.h"
 #include "util/win_acl.h"
 
+#include <string>
+
 namespace grc_test {
 
 //! Whether \p a and \p b read the same: the owner, the DACL's presence and
 //! protection, and every entry, in order.
 bool SameAcl(const util::winacl::ObservedAcl& a, const util::winacl::ObservedAcl& b);
+
+//! Writes \p text to the new file \p path, a file of this account's own. On Windows it is
+//! created with this account as its owner and the owner-only list, as the core creates a file:
+//! a file an elevated token creates otherwise belongs to Administrators, which is not this
+//! account (fsmodes::OwnedByUs). Under Wine, which may not keep the list, it is written plainly.
+void WriteOwnFile(const fs::path& path, const std::string& text);
 
 #ifdef WIN32
 //! Make the new, empty directory \p link a junction (a mount-point reparse point)

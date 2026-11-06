@@ -49,7 +49,9 @@ void CleanTransferDir();
 //! is not this process's effective uid (POSIX, through a link) or not this
 //! process's token user (Windows, fsmodes::OwnedByUs, which refuses a link). The
 //! file holds the RPC password then, and it belongs to the administrator. A
-//! configuration file that does not exist counts as permitted.
+//! configuration file that does not exist counts as permitted. On Windows the
+//! reason names the owner and how to make the file this account's
+//! (fsmodes::WinNotOwnedText).
 bool ConfigBackupPermitted(std::string& reason);
 
 //! One file a snapshot source streams. \p path is a file in the transfer

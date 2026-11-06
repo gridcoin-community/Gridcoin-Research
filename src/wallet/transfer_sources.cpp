@@ -55,16 +55,11 @@ const char* const CONFIG_BACKUP_REFUSED_ATTACH_GROUP =
     "The configuration file belongs to the administrator in this mode and holds the RPC password, so it is not "
     "sent over IPC. Back up the settings file instead.";
 
-//! Worded to be true in both builds, since the monolithic one has no IPC. On Windows a link is
-//! refused too, as fsmodes::OwnedByUs does not follow one.
 #ifndef WIN32
+//! Worded to be true in both builds, since the monolithic one has no IPC.
 const char* const CONFIG_BACKUP_REFUSED_OWNER =
     "The configuration file belongs to another account and holds the RPC password, so it is not included in the "
     "backup. Back up the settings file instead.";
-#else
-const char* const CONFIG_BACKUP_REFUSED_OWNER =
-    "The configuration file belongs to another account, or is a link, and holds the RPC password, so it is not "
-    "included in the backup. Back up the settings file instead.";
 #endif
 
 //! The transfer directory, created owner-only when missing. A symbolic link
@@ -565,7 +560,10 @@ bool ConfigBackupPermitted(std::string& reason)
     const fs::path conf = GetConfigFile();
     boost::system::error_code ec;
     if (fs::symlink_status(conf, ec).type() != fs::file_not_found && !fsmodes::OwnedByUs(conf)) {
-        reason = CONFIG_BACKUP_REFUSED_OWNER;
+        // Who owns it and how to make it this account's, or why that cannot be shown. Worded to be
+        // true in both builds, since the monolithic one has no IPC.
+        reason = "The configuration file holds the RPC password, and was left out of the backup: " +
+                 fsmodes::WinNotOwnedText(conf) + ". Back up the settings file instead.";
         return false;
     }
 #endif

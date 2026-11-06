@@ -530,6 +530,59 @@ BOOST_AUTO_TEST_CASE(win_no_acl_volume_warning_points_to_ntfs)
     BOOST_CHECK_MESSAGE(IsAsciiLine(warning), warning);
 }
 
+// Why a Windows path is not this account's, worded for the conf writers' log lines and the
+// backup note: the owner by name and SID and the elevated icacls command that makes this
+// account the owner, or that a link is not followed, or that a FAT volume shows no owner.
+BOOST_AUTO_TEST_CASE(win_not_owned_text_names_the_owner_and_the_fix)
+{
+    const fs::path conf = "C:\\Users\\jim\\AppData\\Roaming\\GridcoinResearch\\gridcoinresearch.conf";
+
+    fsmodes::WinOwnership foreign;
+    foreign.kind = fsmodes::WinOwnership::Kind::Foreign;
+    foreign.owner = wellknown::Administrators();
+    foreign.owner_name = "BUILTIN\\Administrators";
+    const std::string admins = fsmodes::WinNotOwnedText(conf, foreign, Self(), "PC\\jim");
+    BOOST_TEST_MESSAGE(admins);
+    CheckHas(admins, "owned by BUILTIN\\Administrators (S-1-5-32-544)");
+    CheckHas(admins, "not by this account, PC\\jim (" + FormatSid(Self()) + ")");
+    CheckHas(admins, "elevated");
+    CheckHas(admins, "icacls \"" + conf.string() + "\" /setowner *" + FormatSid(Self()));
+    BOOST_CHECK_MESSAGE(IsAsciiLine(admins), admins);
+
+    // Without names, the SIDs alone.
+    foreign.owner_name.clear();
+    const std::string unnamed = fsmodes::WinNotOwnedText(conf, foreign, Self(), "");
+    CheckHas(unnamed, "owned by S-1-5-32-544,");
+    CheckHas(unnamed, "not by this account, " + FormatSid(Self()));
+    CheckHasNot(unnamed, "()");
+
+    fsmodes::WinOwnership link;
+    link.kind = fsmodes::WinOwnership::Kind::Link;
+    const std::string linked = fsmodes::WinNotOwnedText(conf, link, Self(), "PC\\jim");
+    CheckHas(linked, "link");
+    CheckHasNot(linked, "/setowner");
+
+    fsmodes::WinOwnership fat;
+    fat.kind = fsmodes::WinOwnership::Kind::NoAclVolume;
+    const std::string no_owner = fsmodes::WinNotOwnedText(conf, fat, Self(), "PC\\jim");
+    CheckHas(no_owner, "FAT or exFAT");
+    CheckHasNot(no_owner, "/setowner");
+
+    fsmodes::WinOwnership unreadable;
+    unreadable.kind = fsmodes::WinOwnership::Kind::Unreadable;
+    unreadable.error = "GetSecurityInfo failed with error 5";
+    CheckHas(fsmodes::WinNotOwnedText(conf, unreadable, Self(), ""), "GetSecurityInfo failed with error 5");
+
+    fsmodes::WinOwnership unopened;
+    unopened.kind = fsmodes::WinOwnership::Kind::Unopened;
+    unopened.error = "The system cannot find the file specified";
+    CheckHas(fsmodes::WinNotOwnedText(conf, unopened, Self(), ""), "The system cannot find the file specified");
+
+    fsmodes::WinOwnership owned;
+    owned.kind = fsmodes::WinOwnership::Kind::Owned;
+    BOOST_CHECK(fsmodes::WinNotOwnedText(conf, owned, Self(), "PC\\jim").empty());
+}
+
 // Only a reparse point whose tag is a name surrogate (a symbolic link, a junction, a mount
 // point) is a link to the check. Others, such as a cloud file's placeholder, a deduplicated
 // file or an AF_UNIX socket, are the file itself. Without the reparse attribute the tag means
@@ -1253,9 +1306,36 @@ BOOST_AUTO_TEST_CASE(owned_by_us_false_for_foreign_owner)
 
     const fs::path ini = WinIni();
     BOOST_REQUIRE(fs::exists(ini));
-    BOOST_REQUIRE(ReadAcl(ini).owner != CurrentTokenUser());
+    const std::optional<Sid> owner = ReadAcl(ini).owner;
+    BOOST_REQUIRE(owner && *owner != CurrentTokenUser());
 
     BOOST_CHECK(!fsmodes::OwnedByUs(ini));
+
+    // What the conf writers' messages say about it: its owner, and the fix.
+    const fsmodes::WinOwnership ownership = fsmodes::ReadWinOwnership(ini);
+    BOOST_CHECK(ownership.kind == fsmodes::WinOwnership::Kind::Foreign);
+    BOOST_CHECK(ownership.owner == *owner);
+    const std::string text = fsmodes::WinNotOwnedText(ini);
+    BOOST_TEST_MESSAGE(text);
+    CheckHas(text, FormatSid(*owner));
+    CheckHas(text, "/setowner *" + FormatSid(CurrentTokenUser()));
+}
+
+// A file whose owner this account set is this account's, also under an elevated token, whose
+// new files otherwise belong to Administrators.
+BOOST_AUTO_TEST_CASE(read_win_ownership_agrees_with_owned_by_us)
+{
+    if (SkipUnderWine()) return;
+
+    const WinTempDir dir;
+    const fs::path own = dir.path / "own.conf";
+    CreateWithAcl(own, util::OwnerOnlyAclSpec(/*inheritable=*/false));
+    BOOST_CHECK(fsmodes::ReadWinOwnership(own).kind == fsmodes::WinOwnership::Kind::Owned);
+    BOOST_CHECK(fsmodes::OwnedByUs(own));
+    BOOST_CHECK(fsmodes::WinNotOwnedText(own).empty());
+
+    BOOST_CHECK(fsmodes::ReadWinOwnership(dir.path / "absent").kind == fsmodes::WinOwnership::Kind::Unopened);
+    BOOST_CHECK(!fsmodes::WinNotOwnedText(dir.path / "absent").empty());
 }
 
 // A junction is not ours, whoever made it: OwnedByUs does not follow it to the directory it

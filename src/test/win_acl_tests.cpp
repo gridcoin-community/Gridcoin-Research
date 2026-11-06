@@ -366,7 +366,10 @@ ObservedAcl StockVolumeRoot()
 }
 
 //! The service's autounlock file and the directories above it, as gridcoin-service.exe
-//! install lays them out under the stock C:\ProgramData and C:\.
+//! install lays them out under the stock C:\ProgramData and C:\. The check reads the access
+//! list of every level, so the service must be able to: it has full access to its own levels,
+//! READ_CONTROL on Gridcoin\, and reads C:\ProgramData and C:\ as one of Users (0x1200A9
+//! holds READ_CONTROL). Without that the check cannot read a level, and the file is refused.
 std::vector<PathAcl> ServiceBlobChain()
 {
     const ObservedAcl owner_only = Acl(ServiceSid(), {
@@ -382,6 +385,7 @@ std::vector<PathAcl> ServiceBlobChain()
         Ace(AceKind::Allow, wellknown::Administrators(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
         Ace(AceKind::Allow, wellknown::System(), FILE_ALL_ACCESS, Inherit::ContainerAndObject),
         Ace(AceKind::Allow, SidOf("S-1-5-21-1004336348-1177238915-682003330-1010"), 0x1200A9),
+        Ace(AceKind::Allow, ServiceSid(), READ_CONTROL),
     });
 
     return {
@@ -495,6 +499,21 @@ BOOST_AUTO_TEST_CASE(data_chain_file_and_parent_rights)
     std::vector<PathAcl> own = ServiceBlobChain();
     own[4].acl.aces.push_back(Ace(AceKind::Allow, ServiceSid(), FILE_ALL_ACCESS));
     BOOST_CHECK(!FindForeignWriterOnDataChain(own, ServiceAllowed()).has_value());
+}
+
+// A chain is walked only from a plain absolute path. The forms are this platform's.
+BOOST_AUTO_TEST_CASE(chain_path_problem_names_relative_and_dot_paths)
+{
+#ifdef WIN32
+    const fs::path plain("C:\\ProgramData\\Gridcoin\\mainnet\\autounlock\\passphrase.dpapi");
+    const fs::path dotted("C:\\ProgramData\\Gridcoin\\..\\x\\passphrase.dpapi");
+#else
+    const fs::path plain("/var/lib/gridcoin/autounlock/passphrase.dpapi");
+    const fs::path dotted("/var/lib/gridcoin/./autounlock/passphrase.dpapi");
+#endif
+    BOOST_CHECK(!ChainPathProblem(plain).has_value());
+    BOOST_CHECK(Contains(ChainPathProblem(dotted), "'.' or '..' component"));
+    BOOST_CHECK(Contains(ChainPathProblem(fs::path("autounlock") / "passphrase.dpapi"), "not an absolute path"));
 }
 
 BOOST_AUTO_TEST_CASE(foreign_reader_flags_read_grants)

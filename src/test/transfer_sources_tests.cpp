@@ -17,6 +17,7 @@
 #include "test/staking_test_peers.h"
 #include "test/state_guard.h"
 #include "test/wallet_file_placeholder.h"
+#include "test/win_fs_util.h"
 #include "uint256.h"
 #include "util/system.h"
 #include "util/time.h"
@@ -713,9 +714,10 @@ BOOST_FIXTURE_TEST_CASE(transfer_dir_is_0700, TransferCase)
 
 BOOST_FIXTURE_TEST_CASE(config_backup_refused_with_attach_group, TransferCase)
 {
-    // This account's own configuration file.
+    // This account's own configuration file, its owner this account even under an elevated
+    // Windows token.
     const fs::path conf = dir / "own.conf";
-    WriteBytes(conf, BytesOf("# transfer_sources_tests\n"));
+    grc_test::WriteOwnFile(conf, "# transfer_sources_tests\n");
     grc_test::ForcedArgGuard conf_arg("conf", conf.string());
     BOOST_REQUIRE(GetConfigFile() == conf);
 
@@ -760,10 +762,11 @@ BOOST_FIXTURE_TEST_CASE(config_backup_refused_for_another_accounts_conf_windows,
         BOOST_CHECK(reason.empty());
     }
 
-    // This account's own file is permitted.
+    // This account's own file is permitted. A file an elevated token creates belongs to
+    // Administrators unless its owner is set, and is then not this account's.
     {
         const fs::path conf = dir / "own.conf";
-        WriteBytes(conf, BytesOf("# transfer_sources_tests\n"));
+        grc_test::WriteOwnFile(conf, "# transfer_sources_tests\n");
         grc_test::ForcedArgGuard conf_arg("conf", conf.string());
         BOOST_CHECK(wallet::ConfigBackupPermitted(reason));
         BOOST_CHECK(reason.empty());
@@ -777,11 +780,17 @@ BOOST_FIXTURE_TEST_CASE(config_backup_refused_for_another_accounts_conf_windows,
     const char* const root = std::getenv("SystemRoot");
     BOOST_REQUIRE(root != nullptr);
     const fs::path ini = fs::path(root) / "win.ini";
-    BOOST_REQUIRE(util::winacl::ReadAcl(ini).owner != util::winacl::CurrentTokenUser());
+    const std::optional<util::winacl::Sid> owner = util::winacl::ReadAcl(ini).owner;
+    BOOST_REQUIRE(owner && *owner != util::winacl::CurrentTokenUser());
     grc_test::ForcedArgGuard conf_arg("conf", ini.string());
     BOOST_CHECK(!wallet::ConfigBackupPermitted(reason));
-    BOOST_CHECK(reason.find("settings file") != std::string::npos);
-    BOOST_CHECK(reason.find("another account") != std::string::npos);
+    BOOST_CHECK_MESSAGE(reason.find("left out of the backup") != std::string::npos, reason);
+    BOOST_CHECK_MESSAGE(reason.find("settings file") != std::string::npos, reason);
+    // The owner it found, and how to make the file this account's.
+    BOOST_CHECK_MESSAGE(reason.find(util::winacl::FormatSid(*owner)) != std::string::npos, reason);
+    BOOST_CHECK_MESSAGE(reason.find("/setowner *" + util::winacl::FormatSid(util::winacl::CurrentTokenUser())) !=
+                            std::string::npos,
+                        reason);
 }
 #endif
 

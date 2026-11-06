@@ -97,6 +97,50 @@ std::vector<ModeFinding> CheckOwnerOnlyModes(const fs::path& datadir, const fs::
 //! on it is this process's token user.
 bool OwnedByUs(const fs::path& path);
 
+//! What makes a Windows path this account's or not, as OwnedByUs reads it.
+struct WinOwnership
+{
+    enum class Kind
+    {
+        //! Its owner is this process's token user: OwnedByUs is true.
+        Owned,
+        //! It could not be opened (\p error says why), as when it does not exist.
+        Unopened,
+        //! It is a reparse point of any kind, which OwnedByUs refuses.
+        Link,
+        //! It is on a volume that keeps no owners or access lists (FAT, exFAT).
+        NoAclVolume,
+        //! Another account owns it.
+        Foreign,
+        //! Its owner could not be read (\p error says why).
+        Unreadable,
+    };
+
+    Kind kind{Kind::Unreadable};
+    //! For Foreign: the owner, and the name Windows gives it, empty when it gives none.
+    util::winacl::Sid owner;
+    std::string owner_name;
+    std::string error;
+};
+
+//! Why the Windows path \p path is not this account's (\p ownership), as one clause for a log
+//! line or a note, with what to do: for a path another account owns, its owner by name and SID
+//! and the icacls command an administrator runs, elevated, to make \p self (named
+//! \p self_name, empty when it has no name) the owner; that a link is not followed; or that a
+//! volume without owners or access lists cannot show whose a file is. Empty for Owned. ASCII
+//! apart from the path and the names. Pure.
+std::string WinNotOwnedText(const fs::path& path, const WinOwnership& ownership, const util::winacl::Sid& self,
+                            const std::string& self_name);
+
+#ifdef WIN32
+//! What OwnedByUs reads for \p path, without following a reparse point: OwnedByUs(path) is
+//! ReadWinOwnership(path).kind == Owned.
+WinOwnership ReadWinOwnership(const fs::path& path);
+
+//! WinNotOwnedText for \p path as it is now, with this process's token user as \p self.
+std::string WinNotOwnedText(const fs::path& path);
+#endif
+
 //! What AppendToOwnedFile did.
 enum class AppendStatus
 {

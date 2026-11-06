@@ -30,6 +30,8 @@
 #include "wallet/wallet.h"
 
 #ifdef WIN32
+#include "logging.h"
+#include "util/time.h"
 #include "util/win_acl.h"
 #include "util/winservice.h"
 
@@ -143,10 +145,35 @@ static std::optional<std::string> ServiceAccountProblem()
 {
     try {
         const util::winacl::Sid user = util::winacl::CurrentTokenUser();
-        return util::winsvc::ServiceAccountRefusal(user, util::winsvc::AccountName(user),
+        return util::winsvc::ServiceAccountRefusal(user, util::winacl::AccountNameOf(user),
                                                    util::winsvc::ServiceName());
     } catch (const std::exception& e) {
         return strprintf("The Gridcoin service could not read the account it runs as: %s", e.what());
+    }
+}
+
+//! Writes a refusal from before the configuration is read, for a service, which has no console:
+//! to stderr, and to debug.log in the network's data directory as the command line names it, only
+//! when that directory exists. Nothing but the log file is created, and nothing is written through
+//! a link at its name (util::winsvc::AppendToLogNoFollow).
+static void WriteEarlyServiceRefusal(const std::string& message)
+{
+    tfm::format(std::cerr, "Error: %s\n", message);
+
+    try {
+        const std::string datadir = gArgs.GetArg("-datadir", "");
+        if (datadir.empty()) return;
+
+        boost::system::error_code ec;
+        fs::path dir = fs::system_complete(datadir, ec);
+        if (ec) return;
+        dir /= CreateBaseChainParams(gArgs.GetChainName())->DataDir();
+        if (!fs::is_directory(dir, ec)) return;
+
+        util::winsvc::AppendToLogNoFollow(dir / DEFAULT_DEBUGLOGFILE,
+                                          strprintf("%s Error: %s\n", FormatISO8601DateTime(GetTime()), message));
+    } catch (const std::exception&) {
+        // stderr has it; a log there is only what can be done besides.
     }
 }
 
@@ -186,7 +213,8 @@ static std::optional<std::string> ImageDirectoryProblem()
 
     if (!reason) return std::nullopt;
 
-    const std::string message = util::winsvc::ImageDirectoryMessage(exe, *reason, allow_unsafe);
+    const std::string message =
+        util::winsvc::ImageDirectoryMessage(exe, *reason, util::winsvc::IsRunningAsWindowsService(), allow_unsafe);
     if (allow_unsafe) {
         LogPrintf("%s", message);
         return std::nullopt;
@@ -227,8 +255,36 @@ bool AppInit(int argc, char* argv[])
         // If Qt is used, parameters/gridcoinresearch.conf are parsed in qt/bitcoin.cpp's main()
         std::string error;
         if (!gArgs.ParseParameters(argc, argv, error)) {
+#ifdef WIN32
+            if (util::winsvc::IsRunningAsWindowsService()) {
+                WriteEarlyServiceRefusal(strprintf("Error parsing command line arguments: %s", error));
+            }
+#endif
             return InitError(strprintf("Error parsing command line arguments: %s\n", error));
         }
+
+#ifdef WIN32
+        if (util::winsvc::IsRunningAsWindowsService()) {
+            // First of all, as it needs only the token and the service's name: a service under any
+            // account but its own virtual one reads and writes nothing of the service's, and exits
+            // with its own code, which event 7024 shows. Such an account, LocalService for one, may
+            // not be able to read the data directory, so the refusal goes where it can be seen.
+            if (const std::optional<std::string> refusal = ServiceAccountProblem()) {
+                WriteEarlyServiceRefusal(*refusal);
+                util::winsvc::RefuseServiceStart(util::winsvc::EXIT_WRONG_ACCOUNT);
+                return false;
+            }
+
+            // Help and the version are printed to a console, which a service does not have. The
+            // service stops, says why, and stays stopped: no restart can fix its command line.
+            if (HelpRequested(gArgs) || gArgs.IsArgSet("-version")) {
+                WriteEarlyServiceRefusal("-help and -version print to a console, and the service has none; remove them "
+                                         "from the service's command line");
+                util::winsvc::RefuseServiceStart(0);
+                return false;
+            }
+        }
+#endif
 
         // The tracer override is read here, from the command line only, before the config file and the settings
         // file are read, so a line in either cannot enable it.
@@ -327,17 +383,6 @@ bool AppInit(int argc, char* argv[])
             }
             return !CommandLineRPC(argc, argv);
         }
-
-#ifdef WIN32
-        // A service under any account but its own virtual one stops here, before it reads or
-        // writes its settings file, and logs why.
-        if (util::winsvc::IsRunningAsWindowsService()) {
-            if (const std::optional<std::string> refusal = ServiceAccountProblem()) {
-                InitLogging();
-                return InitError(*refusal);
-            }
-        }
-#endif
 
         if (!gArgs.InitSettings(error)) {
             return InitError("Error initializing settings.\n" + error);

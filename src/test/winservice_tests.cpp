@@ -12,9 +12,16 @@
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
+#include <functional>
+#include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace util::winsvc;
@@ -72,6 +79,90 @@ struct ScratchDataDir
         fs::remove_all(path, ec);
     }
 };
+
+//! The service manager and the node's shutdown flag, as fakes for a ServiceRunner.
+struct FakeScm
+{
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::vector<SvcStatus> reports;
+    std::atomic<bool> shutdown{false};
+    std::atomic<int> requests{0};
+    //! Called with each report, as the runner makes it: under the runner's lock.
+    std::function<void(const SvcStatus&)> on_report;
+
+    ServiceRunner::ReportFunction Report()
+    {
+        return [this](const SvcStatus& status) {
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                reports.push_back(status);
+            }
+            cv.notify_all();
+            if (on_report) on_report(status);
+        };
+    }
+
+    std::function<bool()> Requested()
+    {
+        return [this] { return shutdown.load(); };
+    }
+
+    std::function<void()> Request()
+    {
+        return [this] {
+            ++requests;
+            shutdown = true;
+        };
+    }
+
+    std::vector<SvcStatus> Reports()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        return reports;
+    }
+
+    //! Whether a report in \p state came within ten seconds.
+    bool WaitFor(SvcState state)
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        return cv.wait_for(lock, std::chrono::seconds{10}, [&] {
+            return std::any_of(reports.begin(), reports.end(), [&](const SvcStatus& s) { return s.state == state; });
+        });
+    }
+};
+
+//! A runner on \p scm that looks for a shutdown every 5 ms and reports a stop's progress every
+//! 10 ms. Returned as a prvalue, which C++17 constructs in place: a runner cannot be moved.
+ServiceRunner MakeRunner(FakeScm& scm)
+{
+    return ServiceRunner(scm.Report(), scm.Requested(), scm.Request(), std::chrono::milliseconds{5},
+                         std::chrono::milliseconds{10});
+}
+
+//! Waits, for at most ten seconds, until \p flag is set: a core that runs until it is stopped.
+bool RunUntil(const std::atomic<bool>& flag)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+    while (!flag) {
+        if (std::chrono::steady_clock::now() > deadline) return false;
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    }
+    return true;
+}
+
+//! The checks every run's reports must pass: Start() and InitBegun() first, one Stopped report
+//! and it last.
+void CheckFrame(const std::vector<SvcStatus>& reports)
+{
+    BOOST_REQUIRE_GE(reports.size(), 3u);
+    BOOST_CHECK(reports[0].state == SvcState::StartPending);
+    BOOST_CHECK(reports[1].state == SvcState::Running);
+    BOOST_CHECK(reports.back().state == SvcState::Stopped);
+    BOOST_CHECK_EQUAL(std::count_if(reports.begin(), reports.end(),
+                                    [](const SvcStatus& s) { return s.state == SvcState::Stopped; }),
+                      1);
+}
 
 } // namespace
 
@@ -197,6 +288,43 @@ BOOST_AUTO_TEST_CASE(status_scm_stop_during_failed_init_exits_zero)
     machine.ShutdownObserved();
     machine.Tick();
 
+    const SvcStatus stopped = machine.Exit(/*app_ok=*/false);
+    BOOST_CHECK(stopped.state == SvcState::Stopped);
+    BOOST_CHECK_EQUAL(stopped.win32_exit_code, 0u);
+    BOOST_CHECK_EQUAL(stopped.specific_exit_code, 0u);
+}
+
+// A service started under any account but its own virtual one stops with its own code, which
+// event 7024 shows, whoever asked for a stop meanwhile.
+BOOST_AUTO_TEST_CASE(status_wrong_account_exits_service_specific_3)
+{
+    BOOST_CHECK_EQUAL(EXIT_WRONG_ACCOUNT, 3u);
+
+    ServiceStatusMachine machine;
+    machine.Start();
+    machine.InitBegun();
+    machine.RefuseStart(EXIT_WRONG_ACCOUNT);
+    const SvcStatus stopped = machine.Exit(/*app_ok=*/false);
+    BOOST_CHECK(stopped.state == SvcState::Stopped);
+    BOOST_CHECK_EQUAL(stopped.win32_exit_code, ERROR_SERVICE_SPECIFIC);
+    BOOST_CHECK_EQUAL(stopped.specific_exit_code, EXIT_WRONG_ACCOUNT);
+
+    ServiceStatusMachine stopped_by_scm;
+    stopped_by_scm.Start();
+    stopped_by_scm.InitBegun();
+    BOOST_REQUIRE(stopped_by_scm.Control(CONTROL_STOP).has_value());
+    stopped_by_scm.RefuseStart(EXIT_WRONG_ACCOUNT);
+    BOOST_CHECK_EQUAL(stopped_by_scm.Exit(/*app_ok=*/false).specific_exit_code, EXIT_WRONG_ACCOUNT);
+}
+
+// A start refused with 0, such as one asked for help, exits 0 and stays stopped, even though no
+// one asked for a stop.
+BOOST_AUTO_TEST_CASE(status_start_refused_with_zero_exits_zero)
+{
+    ServiceStatusMachine machine;
+    machine.Start();
+    machine.InitBegun();
+    machine.RefuseStart(0);
     const SvcStatus stopped = machine.Exit(/*app_ok=*/false);
     BOOST_CHECK(stopped.state == SvcState::Stopped);
     BOOST_CHECK_EQUAL(stopped.win32_exit_code, 0u);
@@ -417,16 +545,161 @@ BOOST_AUTO_TEST_CASE(image_directory_message_names_the_override)
     const fs::path exe("C:\\Apps\\Gridcoin\\daemon\\gridcoinresearchd.exe");
     const std::string reason = "'C:\\Apps\\Gridcoin\\daemon': its DACL lets S-1-5-32-545 change it (access mask 0x00000002)";
 
-    const std::string refused = ImageDirectoryMessage(exe, reason, /*allow_unsafe=*/false);
-    BOOST_CHECK_MESSAGE(HasText(refused, exe.string()), refused);
-    BOOST_CHECK_MESSAGE(HasText(refused, "S-1-5-32-545"), refused);
-    BOOST_CHECK_MESSAGE(HasText(refused, "-allowunsafeimagedir"), refused);
+    // Each mode states its own rule: the service's executable only the administrators' accounts
+    // may change, a -multiprocess core's this account too.
+    const std::string service = ImageDirectoryMessage(exe, reason, /*service=*/true, /*allow_unsafe=*/false);
+    BOOST_CHECK_MESSAGE(HasText(service, exe.string()), service);
+    BOOST_CHECK_MESSAGE(HasText(service, "S-1-5-32-545"), service);
+    BOOST_CHECK_MESSAGE(HasText(service, "-allowunsafeimagedir"), service);
+    BOOST_CHECK_MESSAGE(HasText(service, "-service"), service);
+    BOOST_CHECK_MESSAGE(HasText(service, "other than SYSTEM, Administrators and TrustedInstaller"), service);
+    BOOST_CHECK_MESSAGE(HasText(service, "not even the service's own account"), service);
 
-    const std::string allowed = ImageDirectoryMessage(exe, reason, /*allow_unsafe=*/true);
+    const std::string multiprocess = ImageDirectoryMessage(exe, reason, /*service=*/false, /*allow_unsafe=*/false);
+    BOOST_CHECK_MESSAGE(HasText(multiprocess, "-multiprocess"), multiprocess);
+    BOOST_CHECK_MESSAGE(HasText(multiprocess, "other than this one, SYSTEM, Administrators and TrustedInstaller"),
+                        multiprocess);
+    BOOST_CHECK_MESSAGE(!HasText(multiprocess, "-service"), multiprocess);
+    BOOST_CHECK_MESSAGE(HasText(multiprocess, "-allowunsafeimagedir"), multiprocess);
+
+    const std::string allowed = ImageDirectoryMessage(exe, reason, /*service=*/true, /*allow_unsafe=*/true);
     BOOST_CHECK_MESSAGE(HasText(allowed, "WARNING"), allowed);
     BOOST_CHECK_MESSAGE(HasText(allowed, "S-1-5-32-545"), allowed);
     BOOST_CHECK_MESSAGE(HasText(allowed, "-allowunsafeimagedir"), allowed);
-    BOOST_CHECK(allowed != refused);
+    BOOST_CHECK(allowed != service);
+}
+
+// The run against a fake service manager: an SCM stop is reported in order and exits 0, and
+// once the stopped report is made nothing more is reported or requested.
+BOOST_AUTO_TEST_CASE(runner_scm_stop_is_reported_in_order)
+{
+    FakeScm scm;
+    ServiceRunner runner = MakeRunner(scm);
+
+    // Before the first report a control does nothing.
+    BOOST_CHECK_EQUAL(runner.OnControl(CONTROL_INTERROGATE), HANDLER_OK);
+    BOOST_CHECK(scm.Reports().empty());
+
+    bool ran_ok = false;
+    std::thread service([&] { ran_ok = runner.Run([&] { return RunUntil(scm.shutdown); }); });
+    BOOST_REQUIRE(scm.WaitFor(SvcState::Running));
+
+    BOOST_CHECK_EQUAL(runner.OnControl(0x2), HANDLER_NOT_IMPLEMENTED);
+    BOOST_CHECK_EQUAL(runner.OnControl(CONTROL_STOP), HANDLER_OK);
+    service.join();
+
+    BOOST_CHECK(ran_ok);
+    BOOST_CHECK_EQUAL(scm.requests.load(), 1);
+    const std::vector<SvcStatus> reports = scm.Reports();
+    CheckFrame(reports);
+    BOOST_CHECK(reports[2].state == SvcState::StopPending);
+    BOOST_CHECK_EQUAL(reports[2].controls_accepted, 0u);
+    BOOST_CHECK_EQUAL(reports.back().win32_exit_code, 0u);
+    BOOST_CHECK_EQUAL(reports.back().specific_exit_code, 0u);
+
+    // After the stopped report: nothing reported, nothing requested.
+    BOOST_CHECK_EQUAL(runner.OnControl(CONTROL_STOP), HANDLER_OK);
+    BOOST_CHECK_EQUAL(runner.OnControl(CONTROL_PRESHUTDOWN), HANDLER_OK);
+    BOOST_CHECK_EQUAL(runner.OnControl(CONTROL_INTERROGATE), HANDLER_OK);
+    BOOST_CHECK_EQUAL(scm.Reports().size(), reports.size());
+    BOOST_CHECK_EQUAL(scm.requests.load(), 1);
+}
+
+// The core's own stop: the watcher reports it, then its progress, and the exit is 1066/1.
+BOOST_AUTO_TEST_CASE(runner_self_stop_reports_progress_and_exits_1)
+{
+    FakeScm scm;
+    ServiceRunner runner = MakeRunner(scm);
+
+    std::thread service([&] {
+        runner.Run([&] {
+            const bool stopped = RunUntil(scm.shutdown);
+            // The shutdown takes a while, long enough for several progress reports.
+            std::this_thread::sleep_for(std::chrono::milliseconds{80});
+            return stopped;
+        });
+    });
+    BOOST_REQUIRE(scm.WaitFor(SvcState::Running));
+    // The RPC stop: the flag set by the core itself, not through the service manager.
+    scm.shutdown = true;
+    service.join();
+
+    BOOST_CHECK_EQUAL(scm.requests.load(), 0);
+    const std::vector<SvcStatus> reports = scm.Reports();
+    CheckFrame(reports);
+    std::vector<uint32_t> checkpoints;
+    for (const SvcStatus& status : reports) {
+        if (status.state == SvcState::StopPending) checkpoints.push_back(status.checkpoint);
+    }
+    BOOST_REQUIRE_GE(checkpoints.size(), 3u);
+    BOOST_CHECK_EQUAL(checkpoints.front(), 1u);
+    for (size_t i = 1; i < checkpoints.size(); ++i) BOOST_CHECK_GT(checkpoints[i], checkpoints[i - 1]);
+    BOOST_CHECK_EQUAL(reports.back().win32_exit_code, ERROR_SERVICE_SPECIFIC);
+    BOOST_CHECK_EQUAL(reports.back().specific_exit_code, EXIT_SELF_STOP);
+}
+
+// A start that fails, one that throws, and one refused for its account.
+BOOST_AUTO_TEST_CASE(runner_failed_and_refused_starts)
+{
+    {
+        FakeScm scm;
+        ServiceRunner runner = MakeRunner(scm);
+        BOOST_CHECK(!runner.Run([] { return false; }));
+        const std::vector<SvcStatus> reports = scm.Reports();
+        CheckFrame(reports);
+        BOOST_CHECK_EQUAL(reports.size(), 3u);
+        BOOST_CHECK_EQUAL(reports.back().win32_exit_code, ERROR_SERVICE_SPECIFIC);
+        BOOST_CHECK_EQUAL(reports.back().specific_exit_code, EXIT_INIT_FAILED);
+    }
+    {
+        FakeScm scm;
+        ServiceRunner runner = MakeRunner(scm);
+        BOOST_CHECK(!runner.Run([]() -> bool { throw std::runtime_error("init threw"); }));
+        const std::vector<SvcStatus> reports = scm.Reports();
+        CheckFrame(reports);
+        BOOST_CHECK_EQUAL(reports.back().specific_exit_code, EXIT_INIT_FAILED);
+    }
+    {
+        FakeScm scm;
+        ServiceRunner runner = MakeRunner(scm);
+        BOOST_CHECK(!runner.Run([&] {
+            runner.RefuseStart(EXIT_WRONG_ACCOUNT);
+            return false;
+        }));
+        const std::vector<SvcStatus> reports = scm.Reports();
+        CheckFrame(reports);
+        BOOST_CHECK_EQUAL(reports.back().win32_exit_code, ERROR_SERVICE_SPECIFIC);
+        BOOST_CHECK_EQUAL(reports.back().specific_exit_code, EXIT_WRONG_ACCOUNT);
+    }
+}
+
+// A control that reaches the handler while the stopped report is being made waits for it, and
+// then does nothing: no second report, no shutdown request, as the process may already be ending.
+BOOST_AUTO_TEST_CASE(runner_reports_nothing_after_stopped)
+{
+    FakeScm scm;
+    ServiceRunner runner = MakeRunner(scm);
+
+    std::thread late;
+    std::atomic<uint32_t> late_result{999};
+    scm.on_report = [&](const SvcStatus& status) {
+        // The handler on the dispatcher's thread, which blocks on the runner's lock that this
+        // report holds.
+        if (status.state == SvcState::Stopped && !late.joinable()) {
+            late = std::thread([&] { late_result = runner.OnControl(CONTROL_STOP); });
+        }
+    };
+
+    BOOST_CHECK(!runner.Run([] { return false; }));
+    BOOST_REQUIRE(late.joinable());
+    late.join();
+
+    BOOST_CHECK_EQUAL(late_result.load(), HANDLER_OK);
+    BOOST_CHECK_EQUAL(scm.requests.load(), 0);
+    BOOST_CHECK(!scm.shutdown.load());
+    const std::vector<SvcStatus> reports = scm.Reports();
+    CheckFrame(reports);
+    BOOST_CHECK_EQUAL(reports.size(), 3u);
 }
 
 // The service's configuration is written by gridcoin-service.exe install, owned by the

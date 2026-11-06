@@ -34,6 +34,38 @@
 
 namespace fsmodes {
 
+std::string WinNotOwnedText(const fs::path& path, const WinOwnership& ownership, const util::winacl::Sid& self,
+                            const std::string& self_name)
+{
+    const auto shown = [](const util::winacl::Sid& sid, const std::string& name) {
+        std::string text = util::winacl::FormatSid(sid);
+        if (text.empty()) text = "an unreadable SID";
+        return name.empty() ? text : name + " (" + text + ")";
+    };
+
+    switch (ownership.kind) {
+    case WinOwnership::Kind::Owned:
+        return {};
+    case WinOwnership::Kind::Unopened:
+        return "it could not be opened (" + ownership.error + ")";
+    case WinOwnership::Kind::Link:
+        return "it is a link (a reparse point), which is not followed; use the file it leads to instead";
+    case WinOwnership::Kind::NoAclVolume:
+        return "it is on a volume that keeps no owners or access lists, such as FAT or exFAT, so it cannot be shown "
+               "to be this account's; keep it on an NTFS volume";
+    case WinOwnership::Kind::Unreadable:
+        return "its owner could not be read (" + ownership.error + ")";
+    case WinOwnership::Kind::Foreign:
+        break;
+    }
+
+    // As icacls reads a SID: marked with an asterisk. Setting another account as the owner
+    // needs an administrator's privileges, so the command is run elevated.
+    return "it is owned by " + shown(ownership.owner, ownership.owner_name) + ", not by this account, " +
+           shown(self, self_name) + ". To make it this account's, in a command prompt opened as an administrator "
+           "(elevated) run: icacls \"" + path.string() + "\" /setowner *" + util::winacl::FormatSid(self);
+}
+
 namespace {
 
 using util::winacl::AceKind;
@@ -1158,20 +1190,75 @@ std::vector<ModeFinding> CheckOwnerOnlyModes(const fs::path& datadir, const fs::
     return std::move(checker.m_findings);
 }
 
-bool OwnedByUs(const fs::path& path)
+WinOwnership ReadWinOwnership(const fs::path& path)
 {
-    const UniqueHandle handle = OpenForCheck(path, /*follow_link=*/false);
-    if (!handle) return false;
+    WinOwnership ownership;
+
+    DWORD open_error = 0;
+    const UniqueHandle handle = OpenForCheck(path, /*follow_link=*/false, &open_error);
+    if (!handle) {
+        ownership.kind = WinOwnership::Kind::Unopened;
+        ownership.error = Win32ErrorText(open_error);
+        return ownership;
+    }
 
     const std::optional<WinEntry> entry = EntryOf(handle.get());
-    if (!entry || entry->reparse) return false;
+    if (!entry) {
+        ownership.kind = WinOwnership::Kind::Unreadable;
+        ownership.error = Win32ErrorText(::GetLastError());
+        return ownership;
+    }
+    if (entry->reparse) {
+        ownership.kind = WinOwnership::Kind::Link;
+        return ownership;
+    }
 
     // The owner of what was opened, not of the name.
+    std::optional<util::winacl::Sid> owner;
     try {
-        return util::winacl::ReadAcl(handle.get(), /*kernel_object=*/false).owner == util::winacl::CurrentTokenUser();
-    } catch (const std::exception&) {
-        return false;
+        owner = util::winacl::ReadAcl(handle.get(), /*kernel_object=*/false).owner;
+        if (owner && *owner == util::winacl::CurrentTokenUser()) {
+            ownership.kind = WinOwnership::Kind::Owned;
+            return ownership;
+        }
+    } catch (const std::system_error& e) {
+        ownership.error = ReasonOf(e);
+    } catch (const std::exception& e) {
+        ownership.error = e.what();
     }
+
+    // Not this account's. Why, for the message.
+    if (!VolumeKeepsAcls(handle.get())) {
+        ownership.kind = WinOwnership::Kind::NoAclVolume;
+    } else if (owner) {
+        ownership.kind = WinOwnership::Kind::Foreign;
+        ownership.owner = *owner;
+        ownership.owner_name = util::winacl::AccountNameOf(*owner);
+    } else {
+        ownership.kind = WinOwnership::Kind::Unreadable;
+        if (ownership.error.empty()) ownership.error = "it has no owner";
+    }
+
+    return ownership;
+}
+
+std::string WinNotOwnedText(const fs::path& path)
+{
+    const WinOwnership ownership = ReadWinOwnership(path);
+    if (ownership.kind == WinOwnership::Kind::Owned) return {};
+
+    try {
+        const util::winacl::Sid self = util::winacl::CurrentTokenUser();
+        return WinNotOwnedText(path, ownership, self, util::winacl::AccountNameOf(self));
+    } catch (const std::exception& e) {
+        return std::string("it is not this account's, and this process's account could not be read (") + e.what() +
+               ")";
+    }
+}
+
+bool OwnedByUs(const fs::path& path)
+{
+    return ReadWinOwnership(path).kind == WinOwnership::Kind::Owned;
 }
 
 AppendResult AppendToOwnedFile(const fs::path& path, const std::string& text)

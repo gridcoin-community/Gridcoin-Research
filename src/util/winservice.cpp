@@ -4,23 +4,23 @@
 
 #include "util/winservice.h"
 
+#include "logging.h"
 #include "tinyformat.h"
 #include "util/strencodings.h"
 
 #include <atomic>
-
-#ifdef WIN32
-#include "logging.h"
-#include "node/shutdown.h"
-#include "sync.h"
-
 #include <chrono>
 #include <condition_variable>
-#include <cstdlib>
 #include <exception>
-#include <iostream>
 #include <system_error>
 #include <thread>
+
+#ifdef WIN32
+#include "node/shutdown.h"
+
+#include <cstdlib>
+#include <iostream>
+#include <optional>
 
 #include <windows.h>
 #endif
@@ -37,6 +37,7 @@ static_assert(util::winsvc::CONTROL_INTERROGATE == SERVICE_CONTROL_INTERROGATE);
 static_assert(util::winsvc::CONTROL_PRESHUTDOWN == SERVICE_CONTROL_PRESHUTDOWN);
 static_assert(util::winsvc::ERROR_SERVICE_SPECIFIC == ERROR_SERVICE_SPECIFIC_ERROR);
 static_assert(util::winsvc::CONSOLE_LOGOFF_EVENT == CTRL_LOGOFF_EVENT);
+static_assert(util::winsvc::HANDLER_OK == NO_ERROR && util::winsvc::HANDLER_NOT_IMPLEMENTED == ERROR_CALL_NOT_IMPLEMENTED);
 static_assert(SECURITY_MANDATORY_UNTRUSTED_RID == 0x0000 && SECURITY_MANDATORY_LOW_RID == 0x1000);
 static_assert(SECURITY_MANDATORY_MEDIUM_RID == 0x2000 && SECURITY_MANDATORY_MEDIUM_PLUS_RID == 0x2100);
 static_assert(SECURITY_MANDATORY_HIGH_RID == 0x3000 && SECURITY_MANDATORY_SYSTEM_RID == 0x4000);
@@ -175,7 +176,12 @@ SvcStatus ServiceStatusMachine::Exit(bool app_ok)
     m_status = SvcStatus{};
     m_status.state = SvcState::Stopped;
 
-    if (m_origin != StopOrigin::Scm) {
+    if (m_refused) {
+        if (*m_refused != 0) {
+            m_status.win32_exit_code = ERROR_SERVICE_SPECIFIC;
+            m_status.specific_exit_code = *m_refused;
+        }
+    } else if (m_origin != StopOrigin::Scm) {
         m_status.win32_exit_code = ERROR_SERVICE_SPECIFIC;
         m_status.specific_exit_code = app_ok ? EXIT_SELF_STOP : EXIT_INIT_FAILED;
     }
@@ -186,6 +192,116 @@ SvcStatus ServiceStatusMachine::Exit(bool app_ok)
 bool ServiceStatusMachine::ScmRequestedStop() const
 {
     return m_origin == StopOrigin::Scm;
+}
+
+void ServiceStatusMachine::RefuseStart(uint32_t specific_exit_code)
+{
+    m_refused = specific_exit_code;
+}
+
+ServiceRunner::ServiceRunner(ReportFunction report, std::function<bool()> shutdown_requested,
+                             std::function<void()> request_shutdown, std::chrono::milliseconds poll,
+                             std::chrono::milliseconds tick)
+    : m_report(std::move(report)), m_shutdown_requested(std::move(shutdown_requested)),
+      m_request_shutdown(std::move(request_shutdown)), m_poll(poll), m_tick(tick)
+{
+}
+
+bool ServiceRunner::Run(const std::function<bool()>& app_main)
+{
+    {
+        LOCK(m_mutex);
+        m_report(m_machine.Start());
+        m_report(m_machine.InitBegun());
+        m_phase = Phase::Reporting;
+    }
+
+    std::thread watcher;
+    try {
+        watcher = std::thread([this] { Watch(); });
+    } catch (const std::system_error& e) {
+        // The stop is still honoured and the exit reported; only the progress of a stop the
+        // core began on its own is not.
+        LogPrintf("Service: the stop progress reporter could not be started: %s", e.what());
+    }
+
+    bool app_ok = false;
+    try {
+        app_ok = app_main();
+    } catch (...) {
+        app_ok = false;
+    }
+
+    {
+        LOCK(m_mutex);
+        m_app_done = true;
+    }
+    m_cv.notify_all();
+    if (watcher.joinable()) watcher.join();
+
+    // The stopped report, and in the same hold of the lock the end of every other report: the
+    // service manager may end the process once it has this one, so a control that is waiting
+    // for the lock finds the run stopped and does nothing.
+    LOCK(m_mutex);
+    m_report(m_machine.Exit(app_ok));
+    m_phase = Phase::Stopped;
+
+    return app_ok;
+}
+
+uint32_t ServiceRunner::OnControl(uint32_t control)
+{
+    bool stop = false;
+    {
+        LOCK(m_mutex);
+        if (m_phase != Phase::Reporting) return HANDLER_OK;
+
+        const std::optional<SvcStatus> status = m_machine.Control(control);
+        if (!status) return HANDLER_NOT_IMPLEMENTED;
+
+        m_report(*status);
+
+        if (control == CONTROL_STOP || control == CONTROL_PRESHUTDOWN) {
+            // Recorded as the service manager's stop above, before the request below, so the
+            // watcher never takes it for the core's own.
+            LogPrintf("Service: the service manager asked the core to stop (%s)",
+                      control == CONTROL_STOP ? "stop" : "system shutdown");
+            m_request_shutdown();
+            stop = true;
+        }
+    }
+    if (stop) m_cv.notify_all();
+
+    return HANDLER_OK;
+}
+
+void ServiceRunner::RefuseStart(uint32_t specific_exit_code)
+{
+    LOCK(m_mutex);
+    m_machine.RefuseStart(specific_exit_code);
+}
+
+void ServiceRunner::Watch()
+{
+    WAIT_LOCK(m_mutex, lock);
+    bool stopping = false;
+    auto next_tick = std::chrono::steady_clock::now();
+
+    while (!m_app_done) {
+        const auto now = std::chrono::steady_clock::now();
+
+        if (!stopping && m_shutdown_requested()) {
+            m_report(m_machine.ShutdownObserved());
+            stopping = true;
+            next_tick = now + m_tick;
+        } else if (stopping && now >= next_tick) {
+            m_report(m_machine.Tick());
+            next_tick = now + m_tick;
+        }
+
+        const auto wake = stopping ? next_tick : now + m_poll;
+        m_cv.wait_until(lock, wake, [this]() EXCLUSIVE_LOCKS_REQUIRED(m_mutex) { return m_app_done; });
+    }
 }
 
 bool HasServiceFlag(int argc, const char* const argv[])
@@ -319,7 +435,7 @@ std::vector<winacl::Sid> ImageDirectoryAllowed(bool service, const winacl::Sid& 
     return allowed;
 }
 
-std::string ImageDirectoryMessage(const fs::path& exe, const std::string& reason, bool allow_unsafe)
+std::string ImageDirectoryMessage(const fs::path& exe, const std::string& reason, bool service, bool allow_unsafe)
 {
     if (allow_unsafe) {
         return strprintf("WARNING: -allowunsafeimagedir is set: %s, or a directory above it, can be changed by "
@@ -327,9 +443,19 @@ std::string ImageDirectoryMessage(const fs::path& exe, const std::string& reason
                          exe.string(), reason);
     }
 
-    return strprintf("This program, %s, or a directory above it, can be changed by another account: %s. A core run "
-                     "with -service or -multiprocess must be installed where only administrators can change it, "
-                     "such as the default location under Program Files. -allowunsafeimagedir starts it anyway.",
+    if (service) {
+        return strprintf("This program, %s, or a directory above it, can be changed by an account other than "
+                         "SYSTEM, Administrators and TrustedInstaller: %s. A core run with -service may be changed only "
+                         "by those, not even the service's own account: install it where only administrators can "
+                         "change it, such as the default location under Program Files. -allowunsafeimagedir starts it "
+                         "anyway.",
+                         exe.string(), reason);
+    }
+
+    return strprintf("This program, %s, or a directory above it, can be changed by an account other than this one, "
+                     "SYSTEM, Administrators and TrustedInstaller: %s. A core run with -multiprocess may be changed only "
+                     "by those: install it where only administrators and this account can change it, such as the "
+                     "default location under Program Files. -allowunsafeimagedir starts it anyway.",
                      exe.string(), reason);
 }
 
@@ -346,173 +472,79 @@ constexpr DWORD TOKEN_FLAG_WRITE_RESTRICTED = 0x8;
 //! How often the watcher looks for a shutdown request before the core begins to stop.
 constexpr std::chrono::milliseconds SHUTDOWN_POLL{200};
 
-//! The service's run: what it reports and when app_main has returned.
-class ServiceRuntime
+//! The handle the service reports through, stored once the handler is registered and before
+//! the first report.
+std::atomic<SERVICE_STATUS_HANDLE> g_status_handle{nullptr};
+
+//! What RunAsService runs, and the run, both made before the dispatcher starts and kept for
+//! the life of the process, as the handler may be called until it ends.
+std::function<bool()> g_app_main;
+std::optional<ServiceRunner> g_runner;
+
+//! Written on the service's thread, read on the dispatcher's once the service has stopped.
+std::atomic<int> g_exit_code{EXIT_FAILURE};
+
+//! One report to the service manager. ServiceRunner makes every report under one lock.
+void ReportToServiceManager(const SvcStatus& status)
 {
-public:
-    void SetMain(std::function<bool()> app_main) { m_app_main = std::move(app_main); }
+    const SERVICE_STATUS_HANDLE handle = g_status_handle.load();
+    if (handle == nullptr) return;
 
-    //! The service's entry point, on the thread the dispatcher gives it.
-    void Main(DWORD argc, LPWSTR* argv) LOCKS_EXCLUDED(m_mutex)
-    {
-        const wchar_t* const name = argc > 0 && argv != nullptr && argv[0] != nullptr ? argv[0] : L"";
+    SERVICE_STATUS report{};
+    report.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
+    report.dwCurrentState = static_cast<DWORD>(status.state);
+    report.dwControlsAccepted = status.controls_accepted;
+    report.dwWin32ExitCode = status.win32_exit_code;
+    report.dwServiceSpecificExitCode = status.specific_exit_code;
+    report.dwCheckPoint = status.checkpoint;
+    report.dwWaitHint = status.wait_hint_ms;
 
-        const SERVICE_STATUS_HANDLE handle = ::RegisterServiceCtrlHandlerExW(name, &ServiceRuntime::Handler, this);
-        if (handle == nullptr) {
-            // Nothing can be reported without the handle; the service manager sees the
-            // service end without a stopped report.
-            m_exit_code = EXIT_FAILURE;
-            return;
-        }
-
-        try {
-            g_service_name = WideToUtf8(name);
-        } catch (const std::range_error&) {
-            g_service_name.clear();
-        }
-        g_running_as_service.store(true);
-
-        {
-            LOCK(m_mutex);
-            m_handle = handle;
-            Report(m_machine.Start());
-            Report(m_machine.InitBegun());
-        }
-
-        std::thread watcher;
-        try {
-            watcher = std::thread([this] { Watch(); });
-        } catch (const std::system_error& e) {
-            // The stop is still honoured and the exit reported; only the progress of a stop
-            // the core began on its own is not.
-            LogPrintf("Service: the stop progress reporter could not be started: %s", e.what());
-        }
-
-        bool app_ok = false;
-        try {
-            app_ok = m_app_main();
-        } catch (...) {
-            app_ok = false;
-        }
-
-        {
-            LOCK(m_mutex);
-            m_app_done = true;
-        }
-        m_cv.notify_all();
-        if (watcher.joinable()) watcher.join();
-
-        m_exit_code = app_ok ? EXIT_SUCCESS : EXIT_FAILURE;
-
-        LOCK(m_mutex);
-        Report(m_machine.Exit(app_ok));
-        // The service manager may end the process once it has the stopped report, so nothing
-        // follows it.
+    if (!::SetServiceStatus(handle, &report)) {
+        LogPrintf("Service: SetServiceStatus failed with error %u", static_cast<unsigned>(::GetLastError()));
     }
+}
 
-    int ExitCode() const { return m_exit_code.load(); }
-
-    static void WINAPI ServiceMain(DWORD argc, LPWSTR* argv);
-
-private:
-    static DWORD WINAPI Handler(DWORD control, DWORD /*event_type*/, LPVOID /*event_data*/, LPVOID context)
-    {
-        return static_cast<ServiceRuntime*>(context)->OnControl(control);
-    }
-
-    DWORD OnControl(DWORD control) LOCKS_EXCLUDED(m_mutex)
-    {
-        {
-            LOCK(m_mutex);
-            const std::optional<SvcStatus> status = m_machine.Control(control);
-            if (!status) return ERROR_CALL_NOT_IMPLEMENTED;
-
-            Report(*status);
-
-            if (control == CONTROL_STOP || control == CONTROL_PRESHUTDOWN) {
-                // Recorded as the service manager's stop above, before the request below, so
-                // the watcher never takes it for the core's own.
-                LogPrintf("Service: the service manager asked the core to stop (%s)",
-                          control == CONTROL_STOP ? "stop" : "system shutdown");
-                SetShutdownRequested();
-            }
-        }
-        m_cv.notify_all();
-
-        return NO_ERROR;
-    }
-
-    //! Reports the core's own stop once a shutdown is requested, then the stop's progress
-    //! every STOP_TICK_MS, until app_main has returned.
-    void Watch() LOCKS_EXCLUDED(m_mutex)
-    {
-        WAIT_LOCK(m_mutex, lock);
-        bool stopping = false;
-        auto next_tick = std::chrono::steady_clock::now();
-
-        while (!m_app_done) {
-            const auto now = std::chrono::steady_clock::now();
-
-            if (!stopping && ShutdownRequested()) {
-                Report(m_machine.ShutdownObserved());
-                stopping = true;
-                next_tick = now + std::chrono::milliseconds{STOP_TICK_MS};
-            } else if (stopping && now >= next_tick) {
-                Report(m_machine.Tick());
-                next_tick = now + std::chrono::milliseconds{STOP_TICK_MS};
-            }
-
-            const auto wake = stopping ? next_tick : now + SHUTDOWN_POLL;
-            m_cv.wait_until(lock, wake, [this]() EXCLUSIVE_LOCKS_REQUIRED(m_mutex) { return m_app_done; });
-        }
-    }
-
-    void Report(const SvcStatus& status) EXCLUSIVE_LOCKS_REQUIRED(m_mutex)
-    {
-        SERVICE_STATUS report{};
-        report.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
-        report.dwCurrentState = static_cast<DWORD>(status.state);
-        report.dwControlsAccepted = status.controls_accepted;
-        report.dwWin32ExitCode = status.win32_exit_code;
-        report.dwServiceSpecificExitCode = status.specific_exit_code;
-        report.dwCheckPoint = status.checkpoint;
-        report.dwWaitHint = status.wait_hint_ms;
-
-        // A control that came before the handle was stored has nothing to report through.
-        if (m_handle == nullptr) return;
-
-        if (!::SetServiceStatus(m_handle, &report)) {
-            LogPrintf("Service: SetServiceStatus failed with error %u", static_cast<unsigned>(::GetLastError()));
-        }
-    }
-
-    std::function<bool()> m_app_main;
-    //! Written on the service's thread, read on the dispatcher's once the service has stopped.
-    std::atomic<int> m_exit_code{EXIT_FAILURE};
-
-    Mutex m_mutex;
-    std::condition_variable m_cv;
-    //! Stored by Main before the first report.
-    SERVICE_STATUS_HANDLE m_handle GUARDED_BY(m_mutex){nullptr};
-    ServiceStatusMachine m_machine GUARDED_BY(m_mutex);
-    bool m_app_done GUARDED_BY(m_mutex){false};
-};
-
-ServiceRuntime g_runtime;
-
-void WINAPI ServiceRuntime::ServiceMain(DWORD argc, LPWSTR* argv)
+DWORD WINAPI Handler(DWORD control, DWORD /*event_type*/, LPVOID /*event_data*/, LPVOID /*context*/)
 {
-    g_runtime.Main(argc, argv);
+    return g_runner->OnControl(control);
+}
+
+//! The service's entry point, on the thread the dispatcher gives it.
+void WINAPI ServiceMain(DWORD argc, LPWSTR* argv)
+{
+    const wchar_t* const name = argc > 0 && argv != nullptr && argv[0] != nullptr ? argv[0] : L"";
+
+    const SERVICE_STATUS_HANDLE handle = ::RegisterServiceCtrlHandlerExW(name, &Handler, nullptr);
+    if (handle == nullptr) {
+        // Nothing can be reported without the handle; the service manager sees the service
+        // end without a stopped report.
+        g_exit_code = EXIT_FAILURE;
+        return;
+    }
+    g_status_handle.store(handle);
+
+    try {
+        g_service_name = WideToUtf8(name);
+    } catch (const std::range_error&) {
+        g_service_name.clear();
+    }
+    g_running_as_service.store(true);
+
+    const bool app_ok = g_runner->Run(g_app_main);
+    // Not reported: the stopped report is out, and this is only what RunAsService returns.
+    g_exit_code = app_ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 } // namespace
 
 int RunAsService(const std::function<bool()>& app_main)
 {
-    g_runtime.SetMain(app_main);
+    g_app_main = app_main;
+    g_runner.emplace(&ReportToServiceManager, [] { return ShutdownRequested(); }, [] { SetShutdownRequested(); },
+                     SHUTDOWN_POLL, std::chrono::milliseconds{STOP_TICK_MS});
 
     // The name is ignored for a service of its own process, and may be empty.
     wchar_t empty_name[] = L"";
-    SERVICE_TABLE_ENTRYW table[] = {{empty_name, &ServiceRuntime::ServiceMain}, {nullptr, nullptr}};
+    SERVICE_TABLE_ENTRYW table[] = {{empty_name, &ServiceMain}, {nullptr, nullptr}};
 
     if (!::StartServiceCtrlDispatcherW(table)) {
         const DWORD error = ::GetLastError();
@@ -527,7 +559,12 @@ int RunAsService(const std::function<bool()>& app_main)
         return EXIT_FAILURE;
     }
 
-    return g_runtime.ExitCode();
+    return g_exit_code.load();
+}
+
+void RefuseServiceStart(uint32_t specific_exit_code)
+{
+    if (g_runner) g_runner->RefuseStart(specific_exit_code);
 }
 
 std::string ServiceName()
@@ -537,29 +574,27 @@ std::string ServiceName()
     return g_service_name;
 }
 
-std::string AccountName(const winacl::Sid& sid)
+bool AppendToLogNoFollow(const fs::path& path, const std::string& text)
 {
-    if (winacl::FormatSid(sid).empty()) return {};
+    // FILE_FLAG_OPEN_REPARSE_POINT opens a link as itself, which the check below refuses, so
+    // nothing is written where it leads. OPEN_ALWAYS creates the log in a directory that
+    // exists; nothing creates the directory.
+    const winacl::UniqueHandle file(::CreateFileW(path.wstring().c_str(),
+                                                  FILE_APPEND_DATA | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                                                  FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                                                  FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    if (!file) return false;
 
-    PSID psid = const_cast<unsigned char*>(sid.data());
-    DWORD name_size = 0;
-    DWORD domain_size = 0;
-    SID_NAME_USE use;
-    ::LookupAccountSidW(nullptr, psid, nullptr, &name_size, nullptr, &domain_size, &use);
-    if (name_size == 0) return {};
+    // Checked on what was opened: a regular file, not a reparse point, with no second name,
+    // so that no other file is reached through a hard link.
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!::GetFileInformationByHandle(file.get(), &info)) return false;
+    if (info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)) return false;
+    if (info.nNumberOfLinks != 1 || ::GetFileType(file.get()) != FILE_TYPE_DISK) return false;
 
-    std::wstring name(name_size, L'\0');
-    std::wstring domain(domain_size, L'\0');
-    if (!::LookupAccountSidW(nullptr, psid, name.data(), &name_size, domain.data(), &domain_size, &use)) return {};
-    // On success each size is its length, without the terminating NUL.
-    name.resize(name_size);
-    domain.resize(domain_size);
-
-    try {
-        return domain.empty() ? WideToUtf8(name) : WideToUtf8(domain) + "\\" + WideToUtf8(name);
-    } catch (const std::range_error&) {
-        return {};
-    }
+    DWORD written = 0;
+    return ::WriteFile(file.get(), text.data(), static_cast<DWORD>(text.size()), &written, nullptr) &&
+           written == text.size();
 }
 
 std::string DescribeProcessToken()
@@ -576,7 +611,7 @@ std::string DescribeProcessToken()
 
     try {
         const winacl::Sid user = winacl::CurrentTokenUser();
-        const std::string name = AccountName(user);
+        const std::string name = winacl::AccountNameOf(user);
         facts.user = name.empty() ? winacl::FormatSid(user) : name + " (" + winacl::FormatSid(user) + ")";
     } catch (const std::exception& e) {
         unread.push_back(e.what());

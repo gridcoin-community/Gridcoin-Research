@@ -565,9 +565,16 @@ void AddMissingRpcCredentials()
     const fs::path config_file = GetConfigFile();
 
     if (!fsmodes::OwnedByUs(config_file)) {
+#ifndef WIN32
         LogPrintf("%s: not adding RPC credentials to %s: it is not owned by this account; the package or the "
                   "administrator provides them",
                   __func__, config_file.string());
+#else
+        // Who owns it, and the two fixes. A conf an elevated token created belongs to
+        // Administrators, though it may sit in this account's own data directory.
+        LogPrintf("%s: not adding RPC credentials to %s: %s. Otherwise add rpcuser and rpcpassword to the file by hand",
+                  __func__, config_file.string(), fsmodes::WinNotOwnedText(config_file));
+#endif
         return;
     }
 

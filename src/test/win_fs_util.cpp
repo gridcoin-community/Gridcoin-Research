@@ -4,8 +4,13 @@
 
 #include "test/win_fs_util.h"
 
-#ifdef WIN32
 #include <boost/test/unit_test.hpp>
+
+#include <fstream>
+
+#ifdef WIN32
+#include "test/wine.h"
+#include "util/dir_permissions.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -38,6 +43,29 @@ bool SameAcl(const ObservedAcl& a, const ObservedAcl& b)
     }
 
     return true;
+}
+
+void WriteOwnFile(const fs::path& path, const std::string& text)
+{
+#ifdef WIN32
+    if (!RunningUnderWine()) {
+        const util::winacl::UniqueSecurityDescriptor sd(
+            util::winacl::MakeSecurityDescriptor(util::OwnerOnlyAclSpec(/*inheritable=*/false)));
+        SECURITY_ATTRIBUTES sa{};
+        sa.nLength = sizeof(sa);
+        sa.lpSecurityDescriptor = sd.get();
+        const util::winacl::UniqueHandle file(::CreateFileW(path.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW,
+                                                            FILE_ATTRIBUTE_NORMAL, nullptr));
+        BOOST_REQUIRE_MESSAGE(file, "cannot create " << path.string() << ": error " << ::GetLastError());
+        DWORD written = 0;
+        BOOST_REQUIRE(::WriteFile(file.get(), text.data(), static_cast<DWORD>(text.size()), &written, nullptr));
+        BOOST_REQUIRE_EQUAL(written, text.size());
+        return;
+    }
+#endif
+    std::ofstream out(path.string(), std::ios::binary | std::ios::trunc);
+    out << text;
+    BOOST_REQUIRE(out.good());
 }
 
 #ifdef WIN32

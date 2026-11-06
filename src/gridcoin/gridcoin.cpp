@@ -825,8 +825,13 @@ skip:;
     // reaches through a link (fsmodes::OwnedByUs). Leaving the obsolete keys is no failure: the
     // core ignores them.
     if (!fsmodes::OwnedByUs(config_file)) {
+#ifndef WIN32
         LogPrintf("%s: not removing obsolete keys from %s: it is not owned by this account", __func__,
                   config_file.string());
+#else
+        LogPrintf("%s: not removing obsolete keys from %s: %s", __func__, config_file.string(),
+                  fsmodes::WinNotOwnedText(config_file));
+#endif
         return true;
     }
 

@@ -350,6 +350,16 @@ std::optional<std::string> FindForeignWriterOnDataChain(const std::vector<PathAc
     return std::nullopt;
 }
 
+std::optional<std::string> ChainPathProblem(const fs::path& leaf)
+{
+    if (!leaf.is_absolute()) return strprintf("'%s' is not an absolute path", leaf.string());
+    for (const fs::path& part : leaf) {
+        if (part == "." || part == "..") return strprintf("'%s' has a '.' or '..' component", leaf.string());
+    }
+
+    return std::nullopt;
+}
+
 std::optional<std::string> CheckMatchesSpec(const ObservedAcl& acl, const AclSpec& spec)
 {
     if (!acl.dacl_present) return NO_DACL;
@@ -871,6 +881,31 @@ std::optional<AccountLookup> LookupAccount(const std::wstring& name)
     return account;
 }
 
+std::string AccountNameOf(const Sid& sid)
+{
+    if (FormatSid(sid).empty()) return {};
+
+    PSID psid = const_cast<unsigned char*>(sid.data());
+    DWORD name_size = 0;
+    DWORD domain_size = 0;
+    SID_NAME_USE use;
+    ::LookupAccountSidW(nullptr, psid, nullptr, &name_size, nullptr, &domain_size, &use);
+    if (name_size == 0) return {};
+
+    std::wstring name(name_size, L'\0');
+    std::wstring domain(domain_size, L'\0');
+    if (!::LookupAccountSidW(nullptr, psid, name.data(), &name_size, domain.data(), &domain_size, &use)) return {};
+    // On success each size is its length, without the terminating NUL.
+    name.resize(name_size);
+    domain.resize(domain_size);
+
+    try {
+        return domain.empty() ? WideToUtf8(name) : WideToUtf8(domain) + "\\" + WideToUtf8(name);
+    } catch (const std::range_error&) {
+        return {};
+    }
+}
+
 std::optional<Sid> LookupAccountSidByName(const std::wstring& name, bool require_alias)
 {
     std::optional<AccountLookup> account = LookupAccount(name);
@@ -880,19 +915,6 @@ std::optional<Sid> LookupAccountSidByName(const std::wstring& name, bool require
     return std::move(account->sid);
 }
 
-namespace {
-//! Why \p leaf cannot be checked as a chain: it is not absolute, or has a "." or ".." component.
-std::optional<std::string> ChainPathProblem(const fs::path& leaf)
-{
-    if (!leaf.is_absolute()) return strprintf("'%s' is not an absolute path", leaf.string());
-    for (const fs::path& part : leaf) {
-        if (part == "." || part == "..") return strprintf("'%s' has a '.' or '..' component", leaf.string());
-    }
-
-    return std::nullopt;
-}
-} // namespace
-
 std::optional<std::string> FindForeignWriterOnChain(const fs::path& leaf, const std::vector<Sid>& allowed)
 {
     if (std::optional<std::string> problem = ChainPathProblem(leaf)) return problem;
@@ -901,7 +923,8 @@ std::optional<std::string> FindForeignWriterOnChain(const fs::path& leaf, const 
         return strprintf("'%s': %s", leaf.string(), *reason);
     }
 
-    // Every directory above it, up to and including the root of its volume.
+    // Every directory above it, up to and including the root of its volume, by name: the walk
+    // is lexical, and a level that is a junction or a link is read as what it leads to.
     fs::path dir = leaf;
     while (dir.has_relative_path()) {
         dir = dir.parent_path();
@@ -913,13 +936,15 @@ std::optional<std::string> FindForeignWriterOnChain(const fs::path& leaf, const 
     return std::nullopt;
 }
 
-std::optional<std::string> FindForeignWriterOnDataChain(const fs::path& leaf, const std::vector<Sid>& allowed)
+std::optional<std::string> FindForeignWriterOnDataChain(const fs::path& leaf, const std::vector<Sid>& allowed,
+                                                        const ObservedAcl* leaf_acl)
 {
     if (std::optional<std::string> problem = ChainPathProblem(leaf)) return problem;
 
-    std::vector<PathAcl> chain{{leaf, ReadAcl(leaf)}};
+    std::vector<PathAcl> chain{{leaf, leaf_acl ? *leaf_acl : ReadAcl(leaf)}};
 
-    // Every directory above it, up to and including the root of its volume.
+    // Every directory above it, up to and including the root of its volume, by name: the walk
+    // is lexical, and a level that is a junction or a link is read as what it leads to.
     fs::path dir = leaf;
     while (dir.has_relative_path()) {
         dir = dir.parent_path();

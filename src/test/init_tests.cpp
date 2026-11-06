@@ -586,7 +586,46 @@ BOOST_AUTO_TEST_CASE(rpc_credentials_are_not_added_through_a_link_windows)
 
     BOOST_CHECK_EQUAL(ReadText(target), contents);
     BOOST_CHECK(fs::is_symlink(fs::symlink_status(conf)));
-    BOOST_CHECK_MESSAGE(Logged(lines, "not adding RPC credentials to " + conf.string()), "no log line");
+    BOOST_CHECK_MESSAGE(Logged(lines, "not adding RPC credentials to " + conf.string() + ": it is a link"),
+                        "no log line");
+    BOOST_CHECK_MESSAGE(Logged(lines, "add rpcuser and rpcpassword to the file by hand"), "no hand-edit fix");
+}
+
+// CleanConfig's gate on Windows: a configuration file that is a link is not this account's
+// (fsmodes::OwnedByUs), so neither it nor the file it leads to is rewritten. Making the link
+// needs Developer Mode or an elevated token; without either the case says so and checks nothing.
+BOOST_AUTO_TEST_CASE(clean_config_leaves_a_linked_conf_windows)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine has no Windows file ownership; skipping");
+        return;
+    }
+
+    ScratchDataDir datadir;
+    const std::string contents{"privatekey=x\nrpcuser=a\n"};
+    const fs::path target = datadir.path / "provided.conf";
+    WriteText(target, contents);
+    const fs::path conf = GetConfigFile();
+    boost::system::error_code ec;
+    fs::create_symlink(target, conf, ec);
+    if (ec) {
+        BOOST_WARN_MESSAGE(false, "a symbolic link could not be made (" << ec.message() << "); not checked");
+        return;
+    }
+
+    std::vector<std::string> lines;
+    const auto callback = LogInstance().PushBackCallback([&lines](const std::string& s) { lines.push_back(s); });
+    const bool cleaned = GRC::CleanConfig();
+    LogInstance().DeleteCallback(callback);
+
+    BOOST_CHECK(cleaned);
+    BOOST_CHECK(fs::is_symlink(fs::symlink_status(conf)));
+    BOOST_CHECK_EQUAL(ReadText(target), contents);
+    fs::path temporary = conf;
+    temporary.replace_extension("conf~");
+    BOOST_CHECK(!fs::exists(fs::symlink_status(temporary)));
+    BOOST_CHECK_MESSAGE(Logged(lines, "not removing obsolete keys from " + conf.string() + ": it is a link"),
+                        "no log line");
 }
 
 // The first-run configuration file is created with the owner-only access list, not the one it

@@ -183,6 +183,10 @@ struct PathAcl
 std::optional<std::string> FindForeignWriterOnDataChain(const std::vector<PathAcl>& chain,
                                                         const std::vector<Sid>& allowed);
 
+//! Why \p leaf cannot be checked as a chain: it is not absolute (on this platform's terms), or
+//! it has a "." or ".." component. nullopt when it can. Pure.
+std::optional<std::string> ChainPathProblem(const fs::path& leaf);
+
 //! Reason if: no DACL; owner not in \p allowed; or any Allow/OtherAllow ACE, an
 //! inherit-only one included, names a trustee not in \p allowed, whatever it grants.
 //! nullopt when clean. An inherit-only entry counts because on a directory it is
@@ -378,6 +382,10 @@ struct SecurityDescriptorFreer
 //! A descriptor from MakeSecurityDescriptor, freed when it goes out of scope.
 using UniqueSecurityDescriptor = std::unique_ptr<void, SecurityDescriptorFreer>;
 
+//! The name Windows gives the account \p sid (LookupAccountSidW), as "DOMAIN\name" in UTF-8,
+//! or empty when it gives none.
+std::string AccountNameOf(const Sid& sid);
+
 //! What \p name maps to (LookupAccountNameW): its SID, the domain it was found in,
 //! and its kind. nullopt when it maps to none. Throws std::system_error on any other
 //! failure, and std::range_error when the domain is not valid UTF-16.
@@ -391,14 +399,26 @@ std::optional<Sid> LookupAccountSidByName(const std::wstring& name, bool require
 //! Reason if \p leaf, or a directory above it, can be changed by a trustee not in
 //! \p allowed: the leaf is checked with FILE_WRITEISH and every ancestor up to the
 //! root with CHAIN_DIR_WRITEISH. A reason too when \p leaf is not absolute or has a
-//! "." or ".." component. Throws std::system_error when an ACL cannot be read.
+//! "." or ".." component (ChainPathProblem). Throws std::system_error when an ACL cannot be
+//! read.
+//!
+//! The walk is lexical: the directories checked are the ones \p leaf names. Each access list
+//! is read by name (GetNamedSecurityInfoW), which follows a junction or a symbolic link on the
+//! path, so a level that is one is checked as what it leads to, and the directories above that
+//! target are not checked.
 std::optional<std::string> FindForeignWriterOnChain(const fs::path& leaf, const std::vector<Sid>& allowed);
 
-//! The pure FindForeignWriterOnDataChain for the data file \p leaf, with the owner and DACL
-//! of it and of every directory above it read by name (ReadAcl). A reason too when \p leaf is
-//! not absolute or has a "." or ".." component. Throws std::system_error when an ACL cannot
-//! be read.
-std::optional<std::string> FindForeignWriterOnDataChain(const fs::path& leaf, const std::vector<Sid>& allowed);
+//! The pure FindForeignWriterOnDataChain for the data file \p leaf, with the owner and DACL of
+//! every directory above it read by name (ReadAcl), and of the file itself as \p leaf_acl
+//! gives it, read through a handle the caller holds on it, or by name when \p leaf_acl is
+//! null. A reason too when \p leaf is not absolute or has a "." or ".." component
+//! (ChainPathProblem). Throws std::system_error when an ACL cannot be read.
+//!
+//! The walk is lexical, as FindForeignWriterOnChain's is: a junction or a symbolic link among
+//! the directories is checked as what it leads to, and the directories above that target are
+//! not checked.
+std::optional<std::string> FindForeignWriterOnDataChain(const fs::path& leaf, const std::vector<Sid>& allowed,
+                                                        const ObservedAcl* leaf_acl = nullptr);
 #endif // WIN32
 
 } // namespace util::winacl

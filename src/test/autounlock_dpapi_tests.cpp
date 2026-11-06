@@ -385,6 +385,29 @@ BOOST_AUTO_TEST_CASE(dpapi_service_fetch_refuses_a_foreign_writer_on_the_chain)
     BOOST_CHECK_MESSAGE(FetchAutoUnlockFromDpapiBlob(path, error).has_value(), error);
 }
 
+// A service's file named with a "." or ".." component is refused for its path, as the check of
+// the directories above it walks only a plain path; that is not a finding about who can change it.
+BOOST_AUTO_TEST_CASE(dpapi_service_fetch_refuses_a_dotted_path)
+{
+    if (SkipUnderWine()) return;
+
+    TempDataDir datadir;
+    const fs::path path = datadir.BlobPath();
+    DpapiBlobStore store;
+    std::string error;
+
+    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-dotted-path"), error) == AutoUnlockStoreOutcome::Verified,
+                          error);
+    MakeServiceFile(path);
+
+    ServiceMode service(true);
+    const fs::path dotted = datadir.path / "autounlock" / ".." / "autounlock" / "passphrase.dpapi";
+    BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(dotted, error).has_value());
+    BOOST_CHECK_MESSAGE(Contains(error, "'.' or '..' component"), error);
+    BOOST_CHECK_MESSAGE(!Contains(error, "can be changed by another account"), error);
+    BOOST_CHECK_MESSAGE(FetchAutoUnlockFromDpapiBlob(path, error).has_value(), error);
+}
+
 // Stored as a service, the file is for the service account's DPAPI key, and is read back
 // with it. This account's own key stands in for the service account's here. Where this logon
 // cannot use its own key, the case says so as a warning and checks nothing; the product does

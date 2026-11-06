@@ -40,6 +40,7 @@
 #include "test/wallet_file_placeholder.h"
 #include "txmempool.h"
 #include "util.h"
+#include "util/dir_permissions.h"
 #include "util/strencodings.h"
 #include "wallet/capability.h"
 #include "wallet/transfer_sources.h"
@@ -2658,9 +2659,12 @@ BOOST_FIXTURE_TEST_CASE(begin_backup_failure_removes_the_snapshots_made, BackupC
     grc_test::RequireWalletFileNotInUse();
 
     // -conf names a directory: the wallet is snapshotted first, and then the
-    // configuration file cannot be.
+    // configuration file cannot be. Its owner is this account, even under an elevated
+    // Windows token, whose new directories otherwise belong to Administrators and are not
+    // this account's, so it is not left out of the backup instead (ConfigBackupPermitted).
     const fs::path conf_dir = dir / "conf.d";
-    fs::create_directories(conf_dir);
+    std::string dir_error;
+    BOOST_REQUIRE_MESSAGE(util::CreateOwnerOnlyDirectory(conf_dir, dir_error), dir_error);
     grc_test::ForcedArgGuard conf_arg("conf", conf_dir.string());
 
     std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
