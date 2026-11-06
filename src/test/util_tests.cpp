@@ -2166,6 +2166,14 @@ BOOST_AUTO_TEST_CASE(settings_rewrite_keeps_the_mode_of_the_file)
     BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
     BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
 
+    // A read-only settings file is rewritten and stays read-only. Production change that would
+    // fail this: giving the temporary file the old mode before WriteSettings reopens it to write.
+    BOOST_REQUIRE_EQUAL(::chmod(scope.m_path.string().c_str(), 0400), 0);
+    BOOST_REQUIRE(gArgs.WriteSettingsFile());
+    BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
+    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0400U);
+    BOOST_REQUIRE_EQUAL(::chmod(scope.m_path.string().c_str(), 0600), 0);
+
     // Nothing there: owner-only from creation.
     BOOST_REQUIRE(fs::remove(scope.m_path));
     BOOST_REQUIRE(gArgs.WriteSettingsFile());

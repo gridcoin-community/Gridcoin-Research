@@ -640,12 +640,13 @@ bool ArgsManager::WriteSettingsFile(std::vector<std::string>* errors) const
     // Refused values are written back unchanged, so ignoring them at load never deletes them.
     std::map<std::string, util::SettingsValue> to_write = m_settings.rw_settings;
     to_write.insert(m_settings.refused_rw_settings.begin(), m_settings.refused_rw_settings.end());
-    // The temporary file is created owner-only and given the permissions of the settings file that
-    // it will replace, if there is one, so a file the operator made wider stays so. WriteSettings
-    // then fills it.
+    // The temporary file is created owner-only and WriteSettings fills it, reopening it by path. It
+    // is then given the permissions of the settings file that it will replace, if there is one, so
+    // a file the operator made wider stays so, and one made read-only does not stop the write.
     std::string create_error;
     std::optional<std::string> create_warning;
-    std::FILE* const created = fsmodes::CreateReplacementFile(path, path_tmp, create_error, create_warning);
+    std::FILE* const created = fsmodes::CreateReplacementFile(path, path_tmp, create_error, create_warning,
+                                                              /*binary=*/false, /*keep_now=*/false);
     if (created == nullptr) {
         SaveErrors({strprintf("Error: Unable to create settings file %s: %s", path_tmp.string(), create_error)}, errors);
         return false;
@@ -658,6 +659,11 @@ bool ArgsManager::WriteSettingsFile(std::vector<std::string>* errors) const
     if (!util::WriteSettings(path_tmp, to_write, write_errors)) {
         SaveErrors(write_errors, errors);
         return false;
+    }
+    const fsmodes::KeepResult kept = fsmodes::KeepPermissions(path, path_tmp);
+    if (kept.kind == fsmodes::KeepResult::Kind::NotKept) {
+        LogPrintf("WARNING: the permissions of %s could not be kept on the new settings file (%s)\n",
+                  path.string(), kept.error);
     }
     if (!RenameOver(path_tmp, path)) {
         SaveErrors({strprintf("Failed renaming settings file %s to %s\n", path_tmp.string(), path.string())}, errors);

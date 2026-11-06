@@ -770,10 +770,9 @@ KeepResult KeepPermissions(const fs::path& existing, int fd)
 {
     KeepResult result;
 
-    // The file the name leads to, as a reader of the name sees it. A name that leads nowhere has
-    // nothing to carry.
+    // The name itself, a link not followed. A name that leads nowhere has nothing to carry.
     struct stat old_st;
-    if (::stat(existing.string().c_str(), &old_st) != 0) {
+    if (::lstat(existing.string().c_str(), &old_st) != 0) {
         const int err = errno;
         if (err == ENOENT || err == ENOTDIR) return result;
 
@@ -781,6 +780,10 @@ KeepResult KeepPermissions(const fs::path& existing, int fd)
         result.error = strprintf("cannot read the permissions of %s: %s", existing.string(), SysErrorString(err));
         return result;
     }
+
+    // A link has no permissions of its own, and the file that replaces it is not the file it
+    // leads to, so the new file stays as created.
+    if (S_ISLNK(old_st.st_mode)) return result;
 
     struct stat new_st;
     if (::fstat(fd, &new_st) != 0) {
@@ -796,7 +799,8 @@ KeepResult KeepPermissions(const fs::path& existing, int fd)
         // The group stays as the new file has it.
     }
 
-    if (::fchmod(fd, old_st.st_mode & 07777) != 0) {
+    // The permission bits only: never set-user-ID, set-group-ID or sticky.
+    if (::fchmod(fd, old_st.st_mode & 0777) != 0) {
         result.kind = KeepResult::Kind::NotKept;
         result.error = strprintf("cannot set the permissions of the new file: %s", SysErrorString(errno));
         return result;
@@ -1546,7 +1550,7 @@ KeepResult KeepPermissions(const fs::path& existing, const fs::path& temp)
 #endif // WIN32
 
 std::FILE* CreateReplacementFile(const fs::path& target, const fs::path& temp, std::string& error,
-                                 std::optional<std::string>& warning, bool binary)
+                                 std::optional<std::string>& warning, bool binary, bool keep_now)
 {
     warning.reset();
     error.clear();
@@ -1567,6 +1571,11 @@ std::FILE* CreateReplacementFile(const fs::path& target, const fs::path& temp, s
     std::optional<std::string> not_owner_only;
     std::FILE* const file = CreateNewOwnerOnlyFile(temp, taken, not_owner_only, error, binary);
     if (!file) return nullptr;
+
+    if (!keep_now) {
+        warning = std::move(not_owner_only);
+        return file;
+    }
 
     const KeepResult kept = KeepPermissions(target, file);
     switch (kept.kind) {

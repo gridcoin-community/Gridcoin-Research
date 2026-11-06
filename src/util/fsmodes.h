@@ -333,7 +333,8 @@ struct KeepResult
 //! (CheckOwnerOnlyModes) and never changes the file that is being replaced. Call it before the
 //! rename. Neither file is created or removed.
 //!
-//! POSIX: the permission bits (st_mode & 07777) and, where this process may set it, the group,
+//! POSIX: the permission bits (st_mode & 0777, never set-user-ID, set-group-ID or sticky) of the
+//! name itself (lstat; a link has none to carry, so a link at \p existing is NoOldFile) and, where this process may set it, the group,
 //! set through the descriptor (fchown, then fchmod; a group that cannot be set, EPERM, stays as
 //! it is). The path of the new file is never changed.
 //!
@@ -364,9 +365,11 @@ KeepResult KeepPermissions(const fs::path& existing, void* handle);
 //! what the caller should log when the file is not what it should be: that it is not owner-only
 //! on a filesystem that keeps no modes, or that the permissions of \p target could not be kept.
 //! The caller writes the file, closes it and renames it over \p target.
-//! \p binary is CreateNewOwnerOnlyFile's.
+//! \p binary is CreateNewOwnerOnlyFile's. With \p keep_now false the permissions are not carried
+//! over here: the caller does it with KeepPermissions(target, temp) once the file has been written,
+//! for a writer that reopens the file by path and would be refused by a read-only old mode.
 std::FILE* CreateReplacementFile(const fs::path& target, const fs::path& temp, std::string& error,
-                                 std::optional<std::string>& warning, bool binary = false);
+                                 std::optional<std::string>& warning, bool binary = false, bool keep_now = true);
 
 } // namespace fsmodes
 

@@ -23,6 +23,14 @@
 #include <string>
 #include <vector>
 
+#ifdef WIN32
+#include "test/wine.h"
+#include "util/dir_permissions.h"
+#include "util/win_acl.h"
+
+#include <algorithm>
+#endif
+
 #ifndef WIN32
 #include <signal.h>
 #include <sys/resource.h>
@@ -471,6 +479,37 @@ BOOST_AUTO_TEST_CASE(create_directory_under_does_not_follow_a_link)
     BOOST_CHECK(!BCLog::CreateDirectoryUnder(root, root / "real", "lnk"));
 
     fs::remove_all(root);
+}
+#endif
+
+#ifdef WIN32
+// The log recreated at its name after a rotation keeps the access list the rotated log had: an
+// extra Users entry survives. Production change that would fail this: archive() passing the CRT
+// handle of the new log to KeepPermissions, which has no right to change the list.
+BOOST_AUTO_TEST_CASE(archive_recreates_the_log_with_the_access_list_it_had)
+{
+    if (grc_test::RunningUnderWine()) return;
+
+    fs::create_directories(GetDataDir() / "logarchive");
+
+    BCLog::Logger logger;
+    logger.m_print_to_file = true;
+    logger.m_file_path = GetDataDir() / "logging_tests_archive_acl.log";
+    BOOST_REQUIRE(logger.StartLogging());
+    logger.LogPrintStr("line\n");
+
+    util::winacl::AclSpec spec = util::OwnerOnlyAclSpec(/*inheritable=*/false);
+    spec.aces.push_back({util::winacl::wellknown::Users(), FILE_GENERIC_READ, util::winacl::Inherit::None});
+    util::winacl::ApplyAcl(logger.m_file_path, spec);
+
+    BOOST_CHECK(logger.archive(/*fImmediate=*/true, fs::path()));
+
+    const util::winacl::ObservedAcl acl = util::winacl::ReadAcl(logger.m_file_path);
+    BOOST_CHECK(std::any_of(acl.aces.begin(), acl.aces.end(), [](const util::winacl::ObservedAce& ace) {
+        return ace.trustee == util::winacl::wellknown::Users();
+    }));
+
+    logger.DisconnectTestLogger();
 }
 #endif
 

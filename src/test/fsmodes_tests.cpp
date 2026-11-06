@@ -1255,6 +1255,31 @@ BOOST_AUTO_TEST_CASE(keep_permissions_carries_the_mode_onto_the_temp_file)
     }
 }
 
+// Only the permission bits are carried: a set-group-ID bit on the old file is not, and a link at
+// the old name is read as the link, not as what it leads to (a link has no bits to carry).
+BOOST_AUTO_TEST_CASE(keep_permissions_copies_only_the_permission_bits)
+{
+    const ScratchDir scratch;
+    const UmaskGuard permissive(0);
+
+    const fs::path old_file = scratch.m_path / "old";
+    MakeFile(old_file, 0640);
+    BOOST_REQUIRE_EQUAL(::chmod(old_file.c_str(), 02640), 0);
+    const fs::path temp = scratch.m_path / "old.tmp";
+    MakeFile(temp, 0600);
+    BOOST_CHECK(fsmodes::KeepPermissions(old_file, temp).kind == fsmodes::KeepResult::Kind::Kept);
+    BOOST_CHECK_EQUAL(ModeOf(temp), 0640U);
+
+    // A link at the old name is not followed and has no permissions to carry: the new file stays
+    // as created.
+    const fs::path link = scratch.m_path / "link";
+    fs::create_symlink(old_file, link);
+    const fs::path temp2 = scratch.m_path / "link.tmp";
+    MakeFile(temp2, 0600);
+    BOOST_CHECK(fsmodes::KeepPermissions(link, temp2).kind == fsmodes::KeepResult::Kind::NoOldFile);
+    BOOST_CHECK_EQUAL(ModeOf(temp2), 0600U);
+}
+
 // With nothing at the old name the temporary file stays as created, 0600 whatever the umask.
 BOOST_AUTO_TEST_CASE(keep_permissions_with_no_old_file_leaves_the_temp_file_owner_only)
 {

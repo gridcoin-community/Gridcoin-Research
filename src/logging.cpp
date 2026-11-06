@@ -802,7 +802,13 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
                 // The log recreated at its name has the permissions the rotated log had. When the
                 // rename failed there is no rotated file, and the log opened is the one that was
                 // there.
+#ifdef WIN32
+                // The CRT handle of the new log has no right to change its access list, so the
+                // file is opened again by name for that.
+                const fsmodes::KeepResult kept = fsmodes::KeepPermissions(pfile_temp, m_file_path);
+#else
                 const fsmodes::KeepResult kept = fsmodes::KeepPermissions(pfile_temp, new_fileout);
+#endif
                 if (kept.kind == fsmodes::KeepResult::Kind::NotKept) {
                     keep_warning = "the permissions of " + pfile_temp.string() + " could not be kept on the new log (" +
                                    kept.error + ")";
