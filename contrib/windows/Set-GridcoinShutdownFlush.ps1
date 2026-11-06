@@ -227,6 +227,21 @@ if ($WaitSeconds -lt 10 -or $WaitSeconds -gt 580) {
     throw '-WaitSeconds must be between 10 and 580 (Group Policy waits 600 seconds by default).'
 }
 
+# SYSTEM runs the script written below at every shutdown, so nobody but SYSTEM, Administrators and
+# TrustedInstaller may be able to write the folder it goes in, or any folder above it.
+$guardDir = $shutdownDir
+while (-not (Test-Path -LiteralPath $guardDir)) { $guardDir = Split-Path -Parent $guardDir }
+$offender = Get-GridcoinWriteVector -Path $guardDir -AllowedSids (Get-GridcoinPrivilegedSids) -ChainMasks
+if ($offender) {
+    throw "Refusing to write a script that SYSTEM runs at shutdown into '$shutdownDir': $offender."
+}
+foreach ($guardFile in @($cmdPath, $ps1Path)) {
+    if (Test-Path -LiteralPath $guardFile) {
+        $offender = Get-GridcoinWriteVector -Path $guardFile -AllowedSids (Get-GridcoinPrivilegedSids)
+        if ($offender) { throw "Refusing to replace '$guardFile': $offender." }
+    }
+}
+
 # The shutdown script starts Core-Stop; without it the flush would do nothing.
 $stopService = Get-GridcoinTaskService
 $stopFolder = $null

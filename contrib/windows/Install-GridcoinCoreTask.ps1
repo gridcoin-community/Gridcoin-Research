@@ -175,8 +175,14 @@ if ($oldBlob) {
             $testnetLines = @(Get-Content -LiteralPath $confForNetwork | Where-Object { $_ -match '^\s*testnet\s*=\s*1\s*$' })
             if ($testnetLines.Count -gt 0) { $networkName = 'test' }
         }
-        if (Convert-GridcoinLegacyAutounlockBlob -OldPath $oldBlob -DataDir $DataDir -Network $networkName) {
-            Write-Host "Converted the autounlock passphrase file for the $networkName network. The old file and its logs are deleted."
+        # A failed conversion must never leave the user without a boot task: warn and carry on.
+        try {
+            if (Convert-GridcoinLegacyAutounlockBlob -OldPath $oldBlob -DataDir $DataDir -Network $networkName) {
+                Write-Host "Converted the autounlock passphrase file for the $networkName network. The old file and its logs are deleted."
+            }
+        } catch {
+            Write-Host ("WARNING: could not convert the old autounlock file '$oldBlob' ($($_.Exception.Message)). " +
+                        "It is left in place and the core does not read it. Set autounlock up again in the wallet (setautounlock).") -ForegroundColor Yellow
         }
     }
 }

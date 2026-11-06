@@ -266,6 +266,16 @@ function Register-GridcoinCoreTasks {
         ':end',
         'rem END GENERATED'
     )
+    # cmd reads the launcher in the OEM code page, and -Encoding Oem replaces a character it cannot
+    # represent with '?', which would point the launcher at another path. Refuse such a path.
+    $oemPage = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage
+    $oemEncoding = [System.Text.Encoding]::GetEncoding($oemPage)
+    foreach ($oemCheck in @($CorePath, $DataDir, $launcher)) {
+        if ($oemEncoding.GetString($oemEncoding.GetBytes($oemCheck)) -cne $oemCheck) {
+            throw ("The path '$oemCheck' has characters the console code page ($oemPage) cannot hold, and the " +
+                   "launcher is written in that code page. Install where the path has only characters of the console code page.")
+        }
+    }
     Set-Content -LiteralPath $launcher -Encoding Oem -Value $launcherLines
 
     $service = Get-GridcoinTaskService
@@ -284,7 +294,7 @@ function Register-GridcoinCoreTasks {
     $trigger.Enabled = $true
     $startAction = $startDefinition.Actions.Create(0)
     $startAction.Path = '%SystemRoot%\System32\cmd.exe'
-    $startAction.Arguments = '/c "' + $launcher + '"'
+    $startAction.Arguments = '/s /c ""' + $launcher + '""'
     Register-GridcoinTask -TargetFolder $folder -RegisteredName 'Core-Start' -TaskDefinition $startDefinition -AccountSid $userSid
 
     # Core-Stop has no trigger, on purpose: a stop at shutdown is the Group Policy script's job
@@ -343,6 +353,10 @@ function Remove-GridcoinLegacyAutounlock {
     if ($null -ne $folder) {
         $oldTask = $null
         try { $oldTask = $folder.GetTask('Autounlock') } catch { $oldTask = $null }
+        if ($null -ne $oldTask -and (Get-GridcoinTaskPrincipalSid $oldTask) -ne (Get-GridcoinCurrentSid)) {
+            Write-Host ("The \$TaskFolder\Autounlock task belongs to another account (" + (Get-GridcoinTaskPrincipalSid $oldTask) + "); left in place.")
+            $oldTask = $null
+        }
         if ($null -ne $oldTask) {
             foreach ($oldAction in $oldTask.Definition.Actions) {
                 $actionText = [string]$oldAction.Arguments
@@ -369,16 +383,28 @@ function Remove-GridcoinLegacyAutounlock {
     return $null
 }
 
-# CryptProtectData with the flags the core's own writer uses (src/wallet/autounlock_dpapi.cpp):
+# The secret path of the autounlock migration lives in C#, so that no passphrase byte is ever bound
+# to a PowerShell parameter or held in a PowerShell variable (module logging, event 4103, records
+# bound parameters). PowerShell passes paths, the network name and SIDs only.
+#
+# Convert reads the old file with this user's DPAPI key, protects the passphrase with
+# CryptProtectData and the flags the core's own writer uses (src/wallet/autounlock_dpapi.cpp:
 # CRYPTPROTECT_UI_FORBIDDEN | CRYPTPROTECT_AUDIT | CRYPTPROTECT_LOCAL_MACHINE, the description
-# "Gridcoin autounlock" and the given entropy. The unmanaged copies of the passphrase are zeroed
-# and the output blob is freed with LocalFree.
+# "Gridcoin autounlock", the entropy "gridcoin-autounlock-v1:<network>"), builds the layout of
+# src/wallet/autounlock_blob.h ("GRCAUB01", scope 1, name length, name, DPAPI blob), and writes it
+# beside the target under a temporary name with a protected DACL, then moves it into place. The
+# plaintext and the unmanaged copies are zeroed; the output blob is freed with LocalFree.
 function Add-GridcoinDpapiType {
     if ('GridcoinDpapi' -as [type]) { return }
     $source = @'
 using System;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
+using System.Security.Cryptography;
+using System.Security.Principal;
+using System.Text;
 
 public static class GridcoinDpapi
 {
@@ -399,6 +425,7 @@ public static class GridcoinDpapi
     private const int UI_FORBIDDEN = 0x1;
     private const int LOCAL_MACHINE = 0x4;
     private const int AUDIT = 0x10;
+    private const int MAX_BYTES = 65536;
 
     private static DataBlob Copy(byte[] bytes)
     {
@@ -416,7 +443,7 @@ public static class GridcoinDpapi
         Marshal.FreeHGlobal(blob.pbData);
     }
 
-    public static byte[] Protect(byte[] plain, byte[] entropy)
+    private static byte[] Protect(byte[] plain, byte[] entropy)
     {
         DataBlob input = Copy(plain);
         DataBlob extra = Copy(entropy);
@@ -439,93 +466,90 @@ public static class GridcoinDpapi
             if (output.pbData != IntPtr.Zero) LocalFree(output.pbData);
         }
     }
+
+    public static void Convert(string oldPath, string newPath, string network, string[] sids)
+    {
+        if (network.Length < 1 || network.Length > 16) throw new ArgumentException("network name length");
+        foreach (char letter in network)
+        {
+            if (letter < 'a' || letter > 'z') throw new ArgumentException("network name letters");
+        }
+
+        byte[] plain = null;
+        byte[] entropy = Encoding.ASCII.GetBytes("gridcoin-autounlock-v1:" + network);
+        try
+        {
+            plain = ProtectedData.Unprotect(File.ReadAllBytes(oldPath), null, DataProtectionScope.CurrentUser);
+            if (plain.Length == 0) throw new InvalidDataException("the old autounlock file holds an empty passphrase");
+            byte[] dpapi = Protect(plain, entropy);
+
+            byte[] name = Encoding.ASCII.GetBytes(network);
+            byte[] magic = Encoding.ASCII.GetBytes("GRCAUB01");
+            byte[] file = new byte[magic.Length + 2 + name.Length + dpapi.Length];
+            Buffer.BlockCopy(magic, 0, file, 0, magic.Length);
+            file[magic.Length] = 1;
+            file[magic.Length + 1] = (byte)name.Length;
+            Buffer.BlockCopy(name, 0, file, magic.Length + 2, name.Length);
+            Buffer.BlockCopy(dpapi, 0, file, magic.Length + 2 + name.Length, dpapi.Length);
+            if (file.Length > MAX_BYTES) throw new InvalidDataException("the encrypted passphrase is too large");
+
+            WriteProtected(newPath, file, sids);
+        }
+        finally
+        {
+            if (plain != null) Array.Clear(plain, 0, plain.Length);
+            Array.Clear(entropy, 0, entropy.Length);
+        }
+    }
+
+    private static void WriteProtected(string path, byte[] file, string[] sids)
+    {
+        string directory = Path.GetDirectoryName(path);
+        if (!Directory.Exists(directory))
+        {
+            string parent = Path.GetDirectoryName(directory);
+            if (!Directory.Exists(parent)) Directory.CreateDirectory(parent);
+            DirectorySecurity directorySecurity = new DirectorySecurity();
+            directorySecurity.SetAccessRuleProtection(true, false);
+            foreach (string sid in sids)
+            {
+                directorySecurity.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(sid),
+                    FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+                    PropagationFlags.None, AccessControlType.Allow));
+            }
+            Directory.CreateDirectory(directory, directorySecurity);
+        }
+
+        FileSecurity fileSecurity = new FileSecurity();
+        fileSecurity.SetAccessRuleProtection(true, false);
+        foreach (string sid in sids)
+        {
+            fileSecurity.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(sid),
+                FileSystemRights.FullControl, AccessControlType.Allow));
+        }
+
+        string temporary = path + ".tmp";
+        if (File.Exists(temporary)) File.Delete(temporary);
+        using (FileStream stream = new FileStream(temporary, FileMode.CreateNew,
+            FileSystemRights.Write | FileSystemRights.Delete, FileShare.None, 4096, FileOptions.WriteThrough,
+            fileSecurity))
+        {
+            stream.Write(file, 0, file.Length);
+            stream.Flush();
+        }
+        if (File.Exists(path)) File.Replace(temporary, path, null);
+        else File.Move(temporary, path);
+    }
 }
 '@
-    Add-Type -TypeDefinition $source
+    Add-Type -TypeDefinition $source -ReferencedAssemblies 'System.Security'
 }
 
-# Writes the autounlock file the core reads (src/wallet/autounlock_blob.h): "GRCAUB01", the scope
-# (1, the machine's DPAPI key), the length of the network name, the name, then the DPAPI blob made
-# with the entropy "gridcoin-autounlock-v1:<network>". The file is created beside Path under a
-# temporary name, readable by this account, SYSTEM and Administrators only, and moved into place.
-function Write-GridcoinAutounlockBlob {
-    param(
-        [Parameter(Mandatory = $true)][string]$Path,
-        [Parameter(Mandatory = $true)][byte[]]$Passphrase,
-        [Parameter(Mandatory = $true)][string]$Network
-    )
-    if ($Network -cnotmatch '^[a-z]{1,16}$') { throw "The network name '$Network' is not 1 to 16 letters a-z." }
-    if ($Passphrase.Length -eq 0) { throw 'The passphrase is empty.' }
-    Add-GridcoinDpapiType
-
-    $entropy = [System.Text.Encoding]::ASCII.GetBytes('gridcoin-autounlock-v1:' + $Network)
-    $dpapi = [GridcoinDpapi]::Protect($Passphrase, $entropy)
-
-    $header = [System.Text.Encoding]::ASCII.GetBytes('GRCAUB01')
-    $name = [System.Text.Encoding]::ASCII.GetBytes($Network)
-    $bytes = New-Object System.Collections.Generic.List[byte]
-    $bytes.AddRange($header)
-    $bytes.Add([byte]1)
-    $bytes.Add([byte]$name.Length)
-    $bytes.AddRange($name)
-    $bytes.AddRange($dpapi)
-    if ($bytes.Count -gt 65536) { throw 'The encrypted passphrase does not fit in an autounlock file of 65536 bytes.' }
-
-    $accounts = @(
-        (Get-GridcoinCurrentSid),
-        'S-1-5-18',
-        'S-1-5-32-544'
-    )
-
-    $directory = Split-Path -Parent $Path
-    if (-not (Test-Path -LiteralPath $directory)) {
-        $parentDirectory = Split-Path -Parent $directory
-        if (-not (Test-Path -LiteralPath $parentDirectory)) {
-            $null = New-Item -ItemType Directory -Path $parentDirectory
-        }
-        $directorySecurity = New-Object System.Security.AccessControl.DirectorySecurity
-        $directorySecurity.SetAccessRuleProtection($true, $false)
-        foreach ($aclSid in $accounts) {
-            $account = New-Object System.Security.Principal.SecurityIdentifier($aclSid)
-            $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-                $account, [System.Security.AccessControl.FileSystemRights]::FullControl,
-                'ContainerInherit, ObjectInherit', 'None', 'Allow')
-            $directorySecurity.AddAccessRule($rule)
-        }
-        $null = [System.IO.Directory]::CreateDirectory($directory, $directorySecurity)
-    }
-
-    $fileSecurity = New-Object System.Security.AccessControl.FileSecurity
-    $fileSecurity.SetAccessRuleProtection($true, $false)
-    foreach ($aclSid in $accounts) {
-        $account = New-Object System.Security.Principal.SecurityIdentifier($aclSid)
-        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-            $account, [System.Security.AccessControl.FileSystemRights]::FullControl, 'Allow')
-        $fileSecurity.AddAccessRule($rule)
-    }
-
-    $temporary = $Path + '.tmp'
-    if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
-    $stream = New-Object System.IO.FileStream($temporary, [System.IO.FileMode]::CreateNew,
-        [System.Security.AccessControl.FileSystemRights]'Write, Delete', [System.IO.FileShare]::None,
-        4096, [System.IO.FileOptions]::WriteThrough, $fileSecurity)
-    try {
-        $stream.Write($bytes.ToArray(), 0, $bytes.Count)
-        $stream.Flush()
-    } finally {
-        $stream.Dispose()
-    }
-    if (Test-Path -LiteralPath $Path) {
-        [System.IO.File]::Replace($temporary, $Path, $null)
-    } else {
-        [System.IO.File]::Move($temporary, $Path)
-    }
-    [Array]::Clear($entropy, 0, $entropy.Length)
-}
-
-# Carries autounlock across the upgrade: reads the old file with the current user's DPAPI key
-# (which only this user's own session can do), writes the new file for Network, then deletes the old
-# file and the helper's two logs. The passphrase bytes are zeroed. True when a file was converted.
+# Carries autounlock across the upgrade: converts the old file (decrypted with the current user's
+# DPAPI key, which only this user's own session can do) into the file the core reads for Network,
+# then deletes the old file and the helper's two logs. Takes paths only: the passphrase never
+# leaves the C# type. Throws when the conversion fails, and then leaves the old file in place.
+# True when a file was converted.
 function Convert-GridcoinLegacyAutounlockBlob {
     param(
         [Parameter(Mandatory = $true)][string]$OldPath,
@@ -533,21 +557,15 @@ function Convert-GridcoinLegacyAutounlockBlob {
         [Parameter(Mandatory = $true)][string]$Network
     )
     if (-not (Test-Path -LiteralPath $OldPath)) { return $false }
-    Add-Type -AssemblyName System.Security
+    if ($Network -cnotmatch '^[a-z]{1,16}$') { throw "The network name '$Network' is not 1 to 16 letters a-z." }
+    Add-GridcoinDpapiType
 
     $netDir = $DataDir
     if ($Network -eq 'test') { $netDir = Join-Path $DataDir 'testnet' }
     $newPath = Join-Path $netDir 'autounlock\passphrase.dpapi'
+    $aclSids = [string[]]@((Get-GridcoinCurrentSid), 'S-1-5-18', 'S-1-5-32-544')
 
-    $plain = $null
-    try {
-        $oldBytes = [System.IO.File]::ReadAllBytes($OldPath)
-        $plain = [System.Security.Cryptography.ProtectedData]::Unprotect(
-            $oldBytes, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
-        Write-GridcoinAutounlockBlob -Path $newPath -Passphrase $plain -Network $Network
-    } finally {
-        if ($null -ne $plain) { [Array]::Clear($plain, 0, $plain.Length) }
-    }
+    [GridcoinDpapi]::Convert($OldPath, $newPath, $Network, $aclSids)
 
     Remove-Item -LiteralPath $OldPath -Force
     $oldDirectory = Split-Path -Parent $OldPath
