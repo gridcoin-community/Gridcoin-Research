@@ -53,9 +53,13 @@ foreach ($name in 'Core-Start', 'Core-Stop') {
     }
 }
 
-# Remove the Core-Start launcher Install-GridcoinCoreTask.ps1 generated (idempotent).
-$launcher = Join-Path $PSScriptRoot 'core-autostart.cmd'
-if (Test-Path -LiteralPath $launcher) {
+# Remove the Core-Start launcher Install-GridcoinCoreTask.ps1 generated (idempotent), unless a
+# Core-Start in another folder still runs it.
+$launcher = Get-GridcoinLauncherPath
+$launcherUsers = @(Get-GridcoinLauncherFolders -LauncherPath $launcher -ExceptFolder $TaskFolder)
+if ($launcherUsers.Count -gt 0) {
+    Write-Host "Kept the Core-Start launcher ($launcher): \$($launcherUsers[0])\Core-Start runs it."
+} elseif (Test-Path -LiteralPath $launcher) {
     Remove-Item -LiteralPath $launcher -Force
     Write-Host "Removed the Core-Start launcher ($launcher)."
 }

@@ -264,7 +264,7 @@ the config file.
 2. **Back up `wallet.dat`** before changing how the wallet is launched.
 
 3. **Install the new build and register the task**: steps A1 to A3 above, unchanged. An installer upgrade from the
-   earlier task scripts replaces their tasks with the S4U ones and converts their autounlock file; see
+   earlier task scripts replaces their tasks with the S4U ones and converts their autounlock file when it was on; see
    [`running-unattended.md`](running-unattended.md#same-account-the-core-task).
 
 4. **Expect these two differences from a fresh install:**

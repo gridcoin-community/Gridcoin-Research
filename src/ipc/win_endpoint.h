@@ -74,7 +74,7 @@ namespace detail {
 // same values in a file that included it first (see util/win_acl.h).
 using namespace util::winacl::mask;
 constexpr uint32_t SOCKET_CONNECT = FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | READ_CONTROL | SYNCHRONIZE;
-constexpr uint32_t COOKIE_READ = FILE_READ_DATA | FILE_READ_ATTRIBUTES | READ_CONTROL | SYNCHRONIZE;
+constexpr uint32_t COOKIE_READ = FILE_READ_DATA | FILE_READ_EA | FILE_READ_ATTRIBUTES | READ_CONTROL | SYNCHRONIZE;
 constexpr uint32_t DIR_VIEW = FILE_TRAVERSE | FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | READ_CONTROL | SYNCHRONIZE;
 } // namespace detail
 
@@ -83,7 +83,9 @@ constexpr uint32_t DIR_VIEW = FILE_TRAVERSE | FILE_LIST_DIRECTORY | FILE_READ_AT
 //! attributes and DACL that the GUI reads before it connects.
 constexpr uint32_t SOCKET_CONNECT_MASK = detail::SOCKET_CONNECT;
 
-//! The attach group's rights on ipc.cookie: read it, its attributes and its DACL.
+//! The attach group's rights on ipc.cookie: FILE_GENERIC_READ, which the GUI's open for reading
+//! (_wfopen "rb", GENERIC_READ) asks for in full: the data, its extended attributes, its attributes
+//! and its DACL. An open is granted only when every right asked for is.
 constexpr uint32_t COOKIE_READ_MASK = detail::COOKIE_READ;
 
 //! The attach group's rights on an IPC directory: traverse and list it, and read

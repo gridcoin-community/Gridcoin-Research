@@ -116,6 +116,9 @@ static_assert((IO_REPARSE_TAG_SYMLINK & REPARSE_TAG_NAME_SURROGATE) != 0 &&
               "the name-surrogate bit differs from the Windows SDK's");
 static_assert(IsReparseTagNameSurrogate(REPARSE_TAG_NAME_SURROGATE), "IsReparseTagNameSurrogate tests another bit");
 static_assert(REPARSE_TAG_AF_UNIX == IO_REPARSE_TAG_AF_UNIX, "the AF_UNIX reparse tag differs from the Windows SDK's");
+// The GUI reads the cookie with _wfopen "rb", which asks for GENERIC_READ, that is FILE_GENERIC_READ.
+static_assert(COOKIE_READ_MASK == static_cast<uint32_t>(FILE_GENERIC_READ),
+              "the attach group's cookie mask is not what an open for reading asks for");
 #endif
 
 AclSpec EndpointAclSpec(IpcObject obj, const Sid& self, const std::optional<Sid>& attach_group)

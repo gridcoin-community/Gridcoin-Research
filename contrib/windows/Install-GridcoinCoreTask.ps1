@@ -26,6 +26,15 @@
     unregistered, the resident autounlock helper is ended and removed, and its passphrase file is
     converted into the file the core reads itself (skip with -NoAutounlockMigration).
 
+    One installation registers one pair of tasks: they share its launcher and the shutdown script.
+    -TaskFolder names another folder for that pair; the script refuses while the pair is already
+    registered in another folder (Uninstall-GridcoinCoreTask.ps1 -TaskFolder <that folder> first).
+    A second wallet runs in the service mode instead.
+
+    The tasks are for the account that runs the script. It refuses when another account is signed in
+    to the session, as when an administrator's credentials were given for a standard account: that
+    account's wallet uses the service mode.
+
 .NOTES
     Run from an elevated console: Windows lets only administrators create a start-at-boot task.
     The scripts must sit where only administrators can write (for example Program Files).
@@ -39,6 +48,7 @@ param(
     # The datadir the core owns. Default: %APPDATA%\GridcoinResearch of this account.
     [string]$DataDir,
 
+    # The task folder of this installation's one pair of tasks (see the description).
     [string]$TaskFolder = 'Gridcoin',
 
     # Skip the inbound firewall rule for the daemon.
@@ -64,6 +74,19 @@ if (-not (Test-GridcoinElevated)) {
            "administrator to set up the service mode: gridcoin-service.exe install, then enable.")
 }
 $mySid = Get-GridcoinCurrentSid
+
+# The tasks are this account's. An elevated console opened with another administrator's credentials,
+# from a session someone else is signed in to, would register them for that administrator and leave
+# the signed-in account's wallet without them.
+$sessionUser = Get-GridcoinSessionUserSid
+if ($sessionUser -and $sessionUser -ne $mySid) {
+    throw ("This console runs as $(Get-GridcoinAccountName $mySid), but $(Get-GridcoinAccountName $sessionUser) " +
+           "is signed in to this session, so the tasks would start $(Get-GridcoinAccountName $mySid)'s wallet, not " +
+           "the signed-in account's. Task mode is for an administrator's own wallet: run this signed in as the " +
+           "administrator whose wallet it is. For a standard account's wallet, ask an administrator to set up " +
+           "the service mode: gridcoin-service.exe install, then gridcoin-service.exe enable " +
+           "--user=`"$(Get-GridcoinAccountName $sessionUser)`".")
+}
 
 if (-not $CorePath) {
     $CorePath = @(
@@ -129,7 +152,16 @@ if ($null -ne $existingFolder) {
 $privileged = @(Get-GridcoinPrivilegedSids)
 $ownAndPrivileged = $privileged + @($mySid)
 
-$launcherPath = Join-Path $PSScriptRoot 'core-autostart.cmd'
+$launcherPath = Get-GridcoinLauncherPath
+
+# One pair of tasks per installation: they share the launcher and the shutdown script.
+$otherFolders = @(Get-GridcoinLauncherFolders -LauncherPath $launcherPath -ExceptFolder $TaskFolder)
+if ($otherFolders.Count -gt 0) {
+    throw ("The tasks of this installation are already registered in \$($otherFolders[0])\, and one installation " +
+           "registers one pair: they share the launcher '$launcherPath' and the shutdown script. Run " +
+           "Uninstall-GridcoinCoreTask.ps1 -TaskFolder '$($otherFolders[0])' first, or run a second wallet in the " +
+           "service mode.")
+}
 $launcherGuard = $launcherPath
 if (-not (Test-Path -LiteralPath $launcherGuard)) { $launcherGuard = $PSScriptRoot }
 $offender = Get-GridcoinWriteVector -Path $launcherGuard -AllowedSids $ownAndPrivileged -ChainMasks
@@ -182,6 +214,7 @@ if ($oldBlob) {
     }
 }
 
+Write-Host "Registering \$TaskFolder\Core-Start and \$TaskFolder\Core-Stop for $(Get-GridcoinAccountName $mySid), with the data directory $DataDir."
 $launcher = Register-GridcoinCoreTasks -CorePath $CorePath -DataDir $DataDir -TaskFolder $TaskFolder
 
 # Inbound firewall rule for the daemon. Program based, so it covers both networks. A failure warns

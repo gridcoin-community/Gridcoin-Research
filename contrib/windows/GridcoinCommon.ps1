@@ -31,6 +31,17 @@ function Get-GridcoinCurrentSid {
     return [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 }
 
+# The account name of a SID, or the SID when it has none.
+function Get-GridcoinAccountName {
+    param([string]$Sid)
+    if (-not $Sid) { return '(an account that cannot be named)' }
+    try {
+        return (New-Object System.Security.Principal.SecurityIdentifier($Sid)).Translate([System.Security.Principal.NTAccount]).Value
+    } catch {
+        return $Sid
+    }
+}
+
 function Test-GridcoinElevated {
     $currentIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object System.Security.Principal.WindowsPrincipal($currentIdentity)
@@ -224,13 +235,50 @@ function New-GridcoinTaskDefinition {
     return $definition
 }
 
+# The Core-Start launcher of this installation, beside the scripts. There is one per installation,
+# so one pair of tasks may use it (Get-GridcoinLauncherFolders).
+function Get-GridcoinLauncherPath {
+    return (Join-Path $script:GridcoinScriptDir 'core-autostart.cmd')
+}
+
+# The task folders directly under the root, other than ExceptFolder, whose Core-Start runs the
+# launcher at LauncherPath.
+function Get-GridcoinLauncherFolders {
+    param(
+        [Parameter(Mandatory = $true)][string]$LauncherPath,
+        [string]$ExceptFolder = ''
+    )
+    $found = @()
+    $service = Get-GridcoinTaskService
+    foreach ($rootChild in @($service.GetFolder('\').GetFolders(0))) {
+        $folderName = [string]$rootChild.Name
+        if ($folderName -ieq $ExceptFolder) { continue }
+        $startTask = $null
+        try { $startTask = $rootChild.GetTask('Core-Start') } catch { $startTask = $null }
+        if ($null -eq $startTask) { continue }
+        foreach ($action in $startTask.Definition.Actions) {
+            if ([int]$action.Type -ne 0) { continue }
+            if (([string]$action.Arguments).IndexOf($LauncherPath, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                $found += $folderName
+                break
+            }
+        }
+    }
+    return $found
+}
+
 # Registers \TaskFolder\Core-Start (boot trigger, through a generated launcher) and
 # \TaskFolder\Core-Stop (on demand) for the current account, S4U. Returns the launcher's path.
+# StartEnabled, BootTriggerEnabled and StopEnabled keep the state of earlier tasks (the installer's
+# switch-over); a new registration has all three on.
 function Register-GridcoinCoreTasks {
     param(
         [Parameter(Mandatory = $true)][string]$CorePath,
         [Parameter(Mandatory = $true)][string]$DataDir,
-        [string]$TaskFolder = 'Gridcoin'
+        [string]$TaskFolder = 'Gridcoin',
+        [bool]$StartEnabled = $true,
+        [bool]$BootTriggerEnabled = $true,
+        [bool]$StopEnabled = $true
     )
     $userSid = Get-GridcoinCurrentSid
 
@@ -249,7 +297,7 @@ function Register-GridcoinCoreTasks {
     # own restart does not fire on a program's exit code). It lives beside the scripts, which the
     # caller has checked, and its stderr goes to %TEMP% so that the core creates and protects its own
     # data directory. cmd reads the file in the OEM codepage and expands % even inside quotes.
-    $launcher = Join-Path $script:GridcoinScriptDir 'core-autostart.cmd'
+    $launcher = Get-GridcoinLauncherPath
     $coreText = $CorePath -replace '%', '%%'
     $errLog = '%TEMP%\gridcoin-core-start.err.log'
     $daemonLine = '"' + $coreText + '"' + $dataDirText + ' -multiprocess -autounlockblob 2>>"' + $errLog + '"'
@@ -267,10 +315,14 @@ function Register-GridcoinCoreTasks {
         'rem END GENERATED'
     )
     # cmd reads the launcher in the OEM code page, and -Encoding Oem replaces a character it cannot
-    # represent with '?', which would point the launcher at another path. Refuse such a path.
+    # represent with '?', which would point the launcher at another path. Refuse such a path among
+    # those written into it: the core's, and the data directory's when it is not the default. The
+    # launcher's own path goes to Task Scheduler, in Unicode.
     $oemPage = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage
     $oemEncoding = [System.Text.Encoding]::GetEncoding($oemPage)
-    foreach ($oemCheck in @($CorePath, $DataDir, $launcher)) {
+    $inLauncher = @($CorePath)
+    if ($dataDirText) { $inLauncher += $DataDir }
+    foreach ($oemCheck in $inLauncher) {
         if ($oemEncoding.GetString($oemEncoding.GetBytes($oemCheck)) -cne $oemCheck) {
             throw ("The path '$oemCheck' has characters the console code page ($oemPage) cannot hold, and the " +
                    "launcher is written in that code page. Install where the path has only characters of the console code page.")
@@ -290,8 +342,9 @@ function Register-GridcoinCoreTasks {
 
     $startDefinition = New-GridcoinTaskDefinition -SchedulerService $service -TimeLimit 'PT0S' `
         -Description 'Start the Gridcoin multiprocess core at boot (S4U, no stored password).'
+    $startDefinition.Settings.Enabled = $StartEnabled
     $trigger = $startDefinition.Triggers.Create(8)
-    $trigger.Enabled = $true
+    $trigger.Enabled = $BootTriggerEnabled
     $startAction = $startDefinition.Actions.Create(0)
     $startAction.Path = '%SystemRoot%\System32\cmd.exe'
     $startAction.Arguments = '/s /c ""' + $launcher + '""'
@@ -301,6 +354,7 @@ function Register-GridcoinCoreTasks {
     # (Set-GridcoinShutdownFlush.ps1), and two of them would race.
     $stopDefinition = New-GridcoinTaskDefinition -SchedulerService $service -TimeLimit 'PT10M' `
         -Description 'Graceful RPC stop of the Gridcoin core. Start this task to stop the core; never end Core-Start.'
+    $stopDefinition.Settings.Enabled = $StopEnabled
     $stopAction = $stopDefinition.Actions.Create(0)
     $stopAction.Path = $CorePath
     $stopAction.Arguments = $stopText
@@ -404,6 +458,73 @@ function Get-GridcoinConfNetwork {
         if ($testnetLines.Count -gt 0) { return 'test' }
     }
     return 'main'
+}
+
+# Whether the account Sid is a direct member of the local Administrators group: task mode is for an
+# administrator's own wallet. False when it is not or when it cannot be told, so that a standard
+# account is never pointed at task mode; a member only through a domain group counts as not one.
+function Test-GridcoinLocalAdministrator {
+    param([string]$Sid)
+    if (-not $Sid) { return $false }
+    try {
+        $adminsName = (New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')).Translate(
+            [System.Security.Principal.NTAccount]).Value.Split('\')[-1]
+        $adminsGroup = [ADSI]('WinNT://./' + $adminsName + ',group')
+        foreach ($member in @($adminsGroup.psbase.Invoke('Members'))) {
+            $sidBytes = $member.GetType().InvokeMember('objectSid', 'GetProperty', $null, $member, $null)
+            if ((New-Object System.Security.Principal.SecurityIdentifier($sidBytes, 0)).Value -eq $Sid) { return $true }
+        }
+    } catch {
+        return $false
+    }
+    return $false
+}
+
+# The account signed in to this process's session, as the owner of its explorer.exe, or $null when
+# the session has none (a service or a remote shell).
+function Get-GridcoinSessionUserSid {
+    $sessionId = (Get-Process -Id $PID).SessionId
+    foreach ($shell in @(Get-CimInstance -ClassName Win32_Process -Filter "Name = 'explorer.exe' AND SessionId = $sessionId")) {
+        try {
+            $shellOwner = (Invoke-CimMethod -InputObject $shell -MethodName GetOwnerSid).Sid
+            if ($shellOwner) { return $shellOwner }
+        } catch {
+            Write-Verbose 'the owner of explorer.exe could not be read'
+        }
+    }
+    return $null
+}
+
+# Deletes an earlier version's autounlock passphrase file and the old helper's two logs beside it.
+# A file 5.5.2.0 wrote from an elevated console belongs to Administrators but grants only its
+# account, so when the delete is refused and the owner is privileged, Administrators are first given
+# the right to delete it. Returns what is left, each with why; empty when nothing is.
+function Remove-GridcoinLegacyPassphraseFile {
+    param([Parameter(Mandatory = $true)][string]$CredPath)
+    $left = @()
+    $oldDirectory = Split-Path -Parent $CredPath
+    foreach ($oldFile in @($CredPath, (Join-Path $oldDirectory 'autounlock.log'), (Join-Path $oldDirectory 'autounlock.log.1'))) {
+        try {
+            # No error for a file that does not exist; one for a directory that does not.
+            [System.IO.File]::Delete($oldFile)
+        } catch {
+            $failure = $_.Exception
+            if ($failure.InnerException) { $failure = $failure.InnerException }
+            if ($failure -is [System.IO.DirectoryNotFoundException]) { continue }
+            try {
+                $oldAcl = Get-Acl -LiteralPath $oldFile
+                $oldOwner = $oldAcl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+                if ((Get-GridcoinPrivilegedSids) -notcontains $oldOwner) { throw $failure.Message }
+                $oldAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+                    (New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')), 'Delete', 'Allow')))
+                Set-Acl -LiteralPath $oldFile -AclObject $oldAcl
+                [System.IO.File]::Delete($oldFile)
+            } catch {
+                $left += "$oldFile ($($failure.Message))"
+            }
+        }
+    }
+    return $left
 }
 
 # The secret path of the autounlock migration lives in C#, so that no passphrase byte is ever bound

@@ -155,6 +155,8 @@ function Start-GridcoinCore {
         $startTask = Get-GridcoinTask -Name 'Core-Start'
         if ($null -eq $startTask) {
             Write-Host 'The core of \Gridcoin\Core-Start is not started again: that task no longer exists (see UPGRADE-NOTICE.txt).'
+        } elseif (-not [bool]$startTask.Enabled) {
+            Write-Host 'The core of \Gridcoin\Core-Start is not started again: the task is disabled, as it was before.'
         } elseif ($RequireS4U -and [int]$startTask.Definition.Principal.LogonType -ne 2) {
             $problems += '\Gridcoin\Core-Start is still registered by an earlier version, so it was not started; run Install-GridcoinCoreTask.ps1'
         } else {
@@ -291,17 +293,6 @@ function Set-GridcoinInstallDirAcl {
     }
 }
 
-# The account name of a SID, or the SID when it has none.
-function Get-GridcoinAccountName {
-    param([string]$Sid)
-    if (-not $Sid) { return '(an account that cannot be named)' }
-    try {
-        return (New-Object System.Security.Principal.SecurityIdentifier($Sid)).Translate([System.Security.Principal.NTAccount]).Value
-    } catch {
-        return $Sid
-    }
-}
-
 # The data directory an earlier version's task names with -datadir="..." (the core tasks) or
 # -DataDir "..." (the autounlock task), or $null for the default.
 function Get-GridcoinTaskDataDir {
@@ -314,32 +305,82 @@ function Get-GridcoinTaskDataDir {
     return $null
 }
 
-# The notice lines for an account whose earlier tasks this upgrade removed: unattended start when
-# its core tasks went, autounlock when its Autounlock task went. Reason says why, or is empty.
-function Add-GridcoinRemovedNotice {
+# Whether an earlier task started by itself at boot: some boot trigger of it is enabled.
+function Get-GridcoinBootTriggerOn {
+    param($RegisteredTask)
+    foreach ($taskTrigger in $RegisteredTask.Definition.Triggers) {
+        if ([int]$taskTrigger.Type -eq 8 -and [bool]$taskTrigger.Enabled) { return $true }
+    }
+    return $false
+}
+
+# The notice line for an account whose earlier start tasks this upgrade removed. Task mode is for an
+# administrator's own wallet, so a standard account is pointed at the service mode only.
+# AccountDataDir is the account's data directory when its tasks named one, else empty.
+function Add-GridcoinStartNotice {
     param(
         [Parameter(Mandatory = $true)][string]$AccountName,
-        [bool]$CoreTasks = $false,
-        [bool]$Autounlock = $false,
-        [string]$DataDirText = '',
+        [bool]$Administrator = $false,
+        [string]$AccountDataDir = '',
         [string]$Reason = ''
     )
     $because = ''
     if ($Reason) { $because = " ($Reason)" }
-    if ($CoreTasks) {
-        Add-GridcoinUpgradeNotice -Lines @(
-            ("Unattended start for $AccountName was removed by the upgrade$because. Sign in as $AccountName and run, from an " +
-             "elevated PowerShell: $script:WindowsDir\Install-GridcoinCoreTask.ps1$DataDirText -- or ask an " +
-             'administrator to set up the service mode.'),
-            '')
+    if ($Administrator) {
+        $dataDirText = ''
+        if ($AccountDataDir) { $dataDirText = " -DataDir `"$AccountDataDir`"" }
+        $line = ("Unattended start for $AccountName was removed by the upgrade$because. Sign in as $AccountName and " +
+                 "run, from an elevated PowerShell: & `"$script:WindowsDir\Install-GridcoinCoreTask.ps1`"$dataDirText " +
+                 '-- or ask an administrator to set up the service mode.')
+    } else {
+        $fromText = ''
+        if ($AccountDataDir) { $fromText = " --from=`"$AccountDataDir`"" }
+        $tool = Join-Path $script:InstallRoot 'daemon\gridcoin-service.exe'
+        $line = ("Unattended start for $AccountName was removed by the upgrade$because. Task mode is for an " +
+                 "administrator's own wallet; for this one, ask an administrator to set up the service mode, from an " +
+                 "elevated command prompt: `"$tool`" install, then `"$tool`" enable --user=`"$AccountName`"$fromText.")
     }
-    if ($Autounlock) {
-        Add-GridcoinUpgradeNotice -Lines @(
-            ("Unattended autounlock for $AccountName was removed by the upgrade and not carried over$because. To set it " +
-             'up again, open the wallet as that account and use Settings -> Autounlock for staking..., or run ' +
-             'setautounlock.'),
-            '')
+    Add-GridcoinUpgradeNotice -Lines @($line, '')
+}
+
+# The notice line for an account whose earlier autounlock is gone, and what became of its old
+# passphrase file. Off: it was turned off before the upgrade and stays off. CredPath is the file
+# (empty when it is not known), NotDeleted what Remove-GridcoinLegacyPassphraseFile could not delete;
+# NoFile: there was none to delete.
+function Add-GridcoinAutounlockNotice {
+    param(
+        [Parameter(Mandatory = $true)][string]$AccountName,
+        [bool]$Off = $false,
+        [string]$Reason = '',
+        [string]$CredPath = '',
+        [AllowEmptyCollection()][string[]]$NotDeleted = @(),
+        [switch]$NoFile
+    )
+    if ($Off) {
+        $line = "Unattended autounlock for $AccountName was turned off before the upgrade and stays off."
+    } else {
+        $because = ''
+        if ($Reason) { $because = " ($Reason)" }
+        $line = "Unattended autounlock for $AccountName was removed by the upgrade and not carried over$because."
     }
+    $credLeft = @($NotDeleted | Where-Object { $CredPath -and $_.StartsWith($CredPath) })
+    $logsLeft = @($NotDeleted | Where-Object { -not ($CredPath -and $_.StartsWith($CredPath)) })
+    if ($NoFile) {
+        $line += ' No old passphrase file was found.'
+    } elseif (-not $CredPath) {
+        $line += (" If that account's data directory holds autounlock\passphrase.cred, delete it: it holds the wallet " +
+                  'passphrase, and the core does not read it.')
+    } elseif ($credLeft.Count -gt 0) {
+        $line += (" Its old passphrase file could not be deleted: $($credLeft -join '; '). It still holds the wallet " +
+                  "passphrase, and the core does not read it: " +
+                  'delete it.')
+    } else {
+        $line += " Its old passphrase file, $CredPath, was deleted."
+    }
+    if ($logsLeft.Count -gt 0) { $line += " The old helper's logs could not be deleted: $($logsLeft -join '; ')." }
+    $line += (' To set autounlock up, open the wallet as that account and use Settings -> Autounlock for ' +
+              'staking..., or run setautounlock.')
+    Add-GridcoinUpgradeNotice -Lines @($line, '')
 }
 
 # SwitchOver. Throws at the end, after every cleanup has run, when a part of it failed.
@@ -360,53 +401,103 @@ function Invoke-GridcoinSwitchOver {
     $folder = $null
     try { $folder = $taskService.GetFolder('\Gridcoin') } catch { $folder = $null }
 
-    # The tasks earlier versions registered (logon type 1), by their names.
+    # The tasks earlier versions registered (logon type 1), by their names,
+    # with what each says: whether it was on, the data directory and the passphrase file it names.
     # Another account's cannot be registered again without that account, so they go.
-    $ownTasks = @()
-    $otherAccounts = [ordered]@{}
-    $coreDataDir = $null
-    $autounlockDataDir = $null
+    $own = @{}
+    $others = [ordered]@{}
     if ($null -ne $folder) {
         foreach ($oldTask in @($folder.GetTasks(1))) {
             $taskName = [string]$oldTask.Name
             if ($oldTaskNames -notcontains $taskName) { continue }
             if ([int]$oldTask.Definition.Principal.LogonType -ne 1) { continue }
+            $taskFacts = @{
+                Enabled = [bool]$oldTask.Enabled
+                BootOn = (Get-GridcoinBootTriggerOn $oldTask)
+                DataDir = (Get-GridcoinTaskDataDir $oldTask)
+                CredPath = $null
+            }
+            foreach ($oldAction in $oldTask.Definition.Actions) {
+                if ([int]$oldAction.Type -ne 0) { continue }
+                if (([string]$oldAction.Arguments) -match '-CredPath\s+"([^"]+)"') { $taskFacts.CredPath = $Matches[1] }
+            }
             $taskSid = Get-GridcoinTaskPrincipalSid $oldTask
             if ($taskSid -and $taskSid -eq $mySid) {
-                $ownTasks += $taskName
-                $named = Get-GridcoinTaskDataDir $oldTask
-                if ($named -and $taskName -eq 'Autounlock') { $autounlockDataDir = $named }
-                if ($named -and $taskName -ne 'Autounlock' -and $null -eq $coreDataDir) { $coreDataDir = $named }
+                $own[$taskName] = $taskFacts
                 continue
             }
             $account = Get-GridcoinAccountName $taskSid
             if (-not $taskSid) { $account = [string]$oldTask.Definition.Principal.UserId }
-            try { $oldTask.Stop(0) } catch { Write-Verbose "\Gridcoin\$taskName was not running" }
-            $folder.DeleteTask($taskName, 0)
-            Write-Host "Removed \Gridcoin\$taskName of $account, which an earlier version registered."
-            if (-not $otherAccounts.Contains($account)) { $otherAccounts[$account] = @{ CoreTasks = $false; Autounlock = $false } }
-            if ($taskName -eq 'Autounlock') { $otherAccounts[$account].Autounlock = $true } else { $otherAccounts[$account].CoreTasks = $true }
+            if (-not $others.Contains($account)) { $others[$account] = @{ Sid = $taskSid; Tasks = @{} } }
+            $others[$account].Tasks[$taskName] = $taskFacts
+            try {
+                try { $oldTask.Stop(0) } catch { Write-Verbose "\Gridcoin\$taskName was not running" }
+                $folder.DeleteTask($taskName, 0)
+                Write-Host "Removed \Gridcoin\$taskName of $account, which an earlier version registered."
+            } catch {
+                $failures += "\Gridcoin\$taskName of $account could not be removed ($($_.Exception.Message))"
+            }
         }
     }
-    foreach ($account in $otherAccounts.Keys) {
-        Add-GridcoinRemovedNotice -AccountName $account -CoreTasks $otherAccounts[$account].CoreTasks `
-            -Autounlock $otherAccounts[$account].Autounlock
+
+    # Another account's notice lines. Its old passphrase file is deleted, as it is not converted.
+    foreach ($account in $others.Keys) {
+        $accountTasks = $others[$account].Tasks
+        $coreDir = ''
+        foreach ($coreName in @('Core-Stop', 'Core-Start')) {
+            if (-not $coreDir -and $accountTasks.Contains($coreName) -and $accountTasks[$coreName].DataDir) {
+                $coreDir = $accountTasks[$coreName].DataDir
+            }
+        }
+        if ($accountTasks.Contains('Core-Start') -or $accountTasks.Contains('Core-Stop')) {
+            $startReason = ''
+            if ($accountTasks.Contains('Core-Start') -and
+                -not ($accountTasks['Core-Start'].Enabled -and $accountTasks['Core-Start'].BootOn)) {
+                $startReason = 'it was turned off'
+            }
+            Add-GridcoinStartNotice -AccountName $account -AccountDataDir $coreDir -Reason $startReason `
+                -Administrator (Test-GridcoinLocalAdministrator $others[$account].Sid)
+        }
+        if ($accountTasks.Contains('Autounlock')) {
+            $unlockFacts = $accountTasks['Autounlock']
+            $otherCred = $unlockFacts.CredPath
+            if (-not $otherCred -and $unlockFacts.DataDir) { $otherCred = Join-Path $unlockFacts.DataDir 'autounlock\passphrase.cred' }
+            $otherLeft = @()
+            if ($otherCred) { $otherLeft = @(Remove-GridcoinLegacyPassphraseFile -CredPath $otherCred) }
+            Add-GridcoinAutounlockNotice -AccountName $account -Off (-not ($unlockFacts.Enabled -and $unlockFacts.BootOn)) `
+                -CredPath ([string]$otherCred) -NotDeleted $otherLeft
+        }
     }
 
-    # The core's data directory is the one its tasks name (none: the default). The autounlock task
-    # names one too, which decides only when there is no core task.
-    $dataDir = Join-Path $env:APPDATA 'GridcoinResearch'
-    if ($coreDataDir) {
-        $dataDir = $coreDataDir
-    } elseif ($autounlockDataDir -and $ownTasks -notcontains 'Core-Start' -and $ownTasks -notcontains 'Core-Stop') {
-        $dataDir = $autounlockDataDir
+    # This account's data directory is the one its core tasks name (none: the default). The
+    # autounlock task names one too, which decides only when there is no core task.
+    $defaultDataDir = Join-Path $env:APPDATA 'GridcoinResearch'
+    $dataDir = $defaultDataDir
+    $ownCore = $own.Contains('Core-Start') -or $own.Contains('Core-Stop')
+    $namedDir = $null
+    foreach ($coreName in @('Core-Stop', 'Core-Start')) {
+        if (-not $namedDir -and $own.Contains($coreName) -and $own[$coreName].DataDir) { $namedDir = $own[$coreName].DataDir }
+    }
+    if ($namedDir) {
+        $dataDir = $namedDir
+    } elseif (-not $ownCore -and $own.Contains('Autounlock') -and $own['Autounlock'].DataDir) {
+        $dataDir = $own['Autounlock'].DataDir
     }
 
-    # This account's core tasks are registered again, S4U, for the same data directory. When that
-    # fails, its tasks go as another account's do, whatever was registered before the failure, and
-    # the notice says how to set them up.
+    # This account's core tasks are registered again, S4U, for the same data directory and in the
+    # state they were in: a task or a boot trigger that was off stays off. When that fails, its
+    # tasks go as another account's do, whatever was registered before the failure.
     $reregistered = $false
-    if ($ownTasks -contains 'Core-Start' -or $ownTasks -contains 'Core-Stop') {
+    $registrationWhy = ''
+    if ($ownCore) {
+        $startOn = $true
+        $bootOn = $true
+        if ($own.Contains('Core-Start')) {
+            $startOn = $own['Core-Start'].Enabled
+            $bootOn = $own['Core-Start'].BootOn
+        }
+        $stopOn = $true
+        if ($own.Contains('Core-Stop')) { $stopOn = $own['Core-Stop'].Enabled }
         try {
             if ($dataDir -match '["%]' -or $dataDir -match '\\$') {
                 throw "the data directory '$dataDir' of the old tasks cannot be written into the new launcher"
@@ -416,13 +507,27 @@ function Invoke-GridcoinSwitchOver {
                 $offender = Get-GridcoinWriteVector -Path $guarded -AllowedSids $ownAndPrivileged -ChainMasks
                 if ($offender) { throw "refusing to register a boot task that runs from '$guarded': $offender" }
             }
-            $null = Register-GridcoinCoreTasks -CorePath $script:CorePath -DataDir $dataDir
+            $null = Register-GridcoinCoreTasks -CorePath $script:CorePath -DataDir $dataDir -StartEnabled $startOn `
+                -BootTriggerEnabled $bootOn -StopEnabled $stopOn
             Write-Host 'Registered \Gridcoin\Core-Start and \Gridcoin\Core-Stop again for this account, without a stored password (S4U).'
             $reregistered = $true
+            $keptOff = @()
+            if (-not $startOn) {
+                $keptOff += '\Gridcoin\Core-Start is disabled'
+            } elseif (-not $bootOn) {
+                $keptOff += 'the boot trigger of \Gridcoin\Core-Start is off'
+            }
+            if (-not $stopOn) { $keptOff += '\Gridcoin\Core-Stop is disabled' }
+            if ($keptOff.Count -gt 0) {
+                Add-GridcoinUpgradeNotice -Lines @(
+                    ("The tasks of $myAccount are registered again without a stored password, and what was off before " +
+                     "the upgrade stays off: $($keptOff -join ', and '). Turn it on in Task Scheduler when you want it."),
+                    '')
+            }
         } catch {
-            $why = $_.Exception.Message
-            Write-Host "WARNING: the tasks of this account were not registered again: $why."
-            $failures += "the tasks of $myAccount were not registered again ($why)"
+            $registrationWhy = $_.Exception.Message
+            Write-Host "WARNING: the tasks of this account were not registered again: $registrationWhy."
+            $failures += "the tasks of $myAccount were not registered again ($registrationWhy)"
             foreach ($taskName in $oldTaskNames) {
                 try {
                     $ownTask = $taskService.GetFolder('\Gridcoin').GetTask($taskName)
@@ -438,23 +543,29 @@ function Invoke-GridcoinSwitchOver {
                     $failures += "\Gridcoin\$taskName of $myAccount could not be removed ($($_.Exception.Message))"
                 }
             }
-            Add-GridcoinRemovedNotice -AccountName $myAccount -CoreTasks $true -DataDirText " -DataDir `"$dataDir`"" -Reason $why
+            $ownDirText = ''
+            if ($dataDir -ine $defaultDataDir) { $ownDirText = $dataDir }
+            Add-GridcoinStartNotice -AccountName $myAccount -Administrator $true -AccountDataDir $ownDirText -Reason $registrationWhy
         }
     }
 
-    # The earlier versions' autounlock helper goes for every account; its file is this account's,
-    # converted only with this account's core tasks registered again.
-    $ownAutounlock = $ownTasks -contains 'Autounlock'
+    # The earlier versions' autounlock helper goes for every account. This account's file is
+    # converted only when its Autounlock task was on and its core tasks are registered again;
+    # otherwise it is deleted, and the notice says so.
+    $ownUnlock = $own.Contains('Autounlock')
+    $unlockOn = $ownUnlock -and $own['Autounlock'].Enabled -and $own['Autounlock'].BootOn
     $converted = $false
-    $autounlockWhy = ''
+    $unlockWhy = ''
     $oldBlob = $null
     try {
         $oldBlob = Remove-GridcoinLegacyAutounlock -DataDir $dataDir -AllAccounts
     } catch {
-        $autounlockWhy = $_.Exception.Message
-        $failures += "the earlier autounlock helper was not removed ($autounlockWhy)"
+        $failures += "the earlier autounlock helper was not removed ($($_.Exception.Message))"
     }
-    if ($reregistered -and $ownAutounlock -and $oldBlob) {
+    if (-not $oldBlob -and $ownUnlock -and $own['Autounlock'].CredPath -and (Test-Path -LiteralPath $own['Autounlock'].CredPath)) {
+        $oldBlob = $own['Autounlock'].CredPath
+    }
+    if ($reregistered -and $unlockOn -and $oldBlob) {
         $networkName = Get-GridcoinConfNetwork -DataDir $dataDir
         try {
             if (Convert-GridcoinLegacyAutounlockBlob -OldPath $oldBlob -DataDir $dataDir -Network $networkName) {
@@ -462,12 +573,20 @@ function Invoke-GridcoinSwitchOver {
                 $converted = $true
             }
         } catch {
-            $autounlockWhy = "the old file '$oldBlob' could not be converted: $($_.Exception.Message); it is left in place, and the core does not read it"
-            Write-Host "WARNING: $autounlockWhy."
+            $unlockWhy = "the old file could not be converted: $($_.Exception.Message)"
+            Write-Host "WARNING: $unlockWhy."
         }
+    } elseif ($registrationWhy) {
+        $unlockWhy = 'the tasks of this account were not registered again'
+    } elseif ($ownUnlock -and -not $ownCore) {
+        $unlockWhy = 'this account had no core tasks to start the core'
     }
-    if ($ownAutounlock -and -not $converted) {
-        Add-GridcoinRemovedNotice -AccountName $myAccount -Autounlock $true -Reason $autounlockWhy
+    if (-not $converted -and ($ownUnlock -or $oldBlob)) {
+        $ownLeft = @()
+        if ($oldBlob) { $ownLeft = @(Remove-GridcoinLegacyPassphraseFile -CredPath $oldBlob) }
+        if (-not $ownUnlock -and -not $unlockWhy) { $unlockWhy = 'the earlier Autounlock task was already gone' }
+        Add-GridcoinAutounlockNotice -AccountName $myAccount -Off ($ownUnlock -and -not $unlockOn) -Reason $unlockWhy `
+            -CredPath ([string]$oldBlob) -NotDeleted $ownLeft -NoFile:(-not $oldBlob)
     }
 
     # The earlier versions' shutdown script ran the core as SYSTEM. It is replaced by the one that

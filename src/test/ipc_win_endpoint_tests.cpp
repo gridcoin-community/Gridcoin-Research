@@ -279,7 +279,11 @@ BOOST_AUTO_TEST_CASE(endpoint_socket_group_gets_connect_mask_only)
     BOOST_CHECK_EQUAL(EntriesFor(spec, wellknown::System())[0].mask, static_cast<uint32_t>(FILE_ALL_ACCESS));
 }
 
-// The group may read the cookie and nothing that changes it.
+// The group may read the cookie and nothing that changes it. The GUI opens it with _wfopen("rb"),
+// which asks for GENERIC_READ, mapped for a file to FILE_GENERIC_READ (0x00120089: READ_CONTROL,
+// SYNCHRONIZE, FILE_READ_DATA, FILE_READ_ATTRIBUTES and FILE_READ_EA), and an open is granted only
+// when every right asked for is. Production change that would fail this: a mask without
+// FILE_READ_EA, which denies every member's GUI the cookie.
 BOOST_AUTO_TEST_CASE(endpoint_cookie_group_read_only)
 {
     const AclSpec spec = EndpointAclSpec(IpcObject::Cookie, Self(), Group());
@@ -290,6 +294,7 @@ BOOST_AUTO_TEST_CASE(endpoint_cookie_group_read_only)
     const std::vector<AceSpec> group = EntriesFor(spec, Group());
     BOOST_REQUIRE_EQUAL(group.size(), 1U);
     BOOST_CHECK_EQUAL(group[0].mask, COOKIE_READ_MASK);
+    BOOST_CHECK_EQUAL(group[0].mask, 0x00120089U);
     BOOST_CHECK_EQUAL(group[0].mask & FILE_WRITEISH, 0U);
     BOOST_CHECK_EQUAL(group[0].mask & static_cast<uint32_t>(FILE_DELETE_CHILD | FILE_EXECUTE), 0U);
 }

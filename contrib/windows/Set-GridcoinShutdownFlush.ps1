@@ -41,6 +41,7 @@ param(
     # under "Maximum wait time for Group Policy scripts" (default 600s).
     [int]$WaitSeconds = 300,
 
+    # The folder of the Core-Start/Core-Stop pair to flush. One script serves one folder.
     [string]$TaskFolder = 'Gridcoin',
 
     [switch]$Remove
@@ -252,6 +253,24 @@ if ($null -ne $stopFolder) {
 }
 if ($null -eq $stopTask) {
     throw "The task \$TaskFolder\Core-Stop does not exist. Run Install-GridcoinCoreTask.ps1 first."
+}
+
+# The script is the computer's one: it flushes one task folder. Another folder's, whose Core-Stop
+# still exists, is not replaced.
+if (Test-Path -LiteralPath $ps1Path) {
+    $writtenFolder = $null
+    foreach ($writtenLine in @(Get-Content -LiteralPath $ps1Path)) {
+        if ($writtenLine -match "^\`$flushFolder = '([^']*)'\s*$") { $writtenFolder = $Matches[1] }
+    }
+    if ($writtenFolder -and $writtenFolder -ine $TaskFolder) {
+        $writtenStop = $null
+        try { $writtenStop = $stopService.GetFolder("\$writtenFolder").GetTask('Core-Stop') } catch { $writtenStop = $null }
+        if ($null -ne $writtenStop) {
+            throw ("The shutdown script already flushes the core of \$writtenFolder\, and there is one shutdown script " +
+                   "per computer. Run .\Set-GridcoinShutdownFlush.ps1 -Remove, and Uninstall-GridcoinCoreTask.ps1 " +
+                   "-TaskFolder '$writtenFolder', first.")
+        }
+    }
 }
 
 # The shutdown script that SYSTEM runs. It parses no file of the wallet user and starts no

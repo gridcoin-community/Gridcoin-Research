@@ -731,14 +731,20 @@ cd "C:\Program Files\GridcoinResearch\windows"
   [`../contrib/windows/README.md`](../contrib/windows/README.md#clean-database-flush-on-os-shutdown).
 - **Remove the tasks:** `.\Uninstall-GridcoinCoreTask.ps1` (elevated); `-All` also removes the shutdown script and
   the firewall rule. It never deletes a wallet file.
-- **A second wallet in the same account** gets its own pair of tasks: `-DataDir` for its data directory and
-  `-TaskFolder` for a folder other than `\Gridcoin\`.
+- **One pair of tasks per installation.** The pair shares the installation's launcher and the shutdown script, so
+  `Install-GridcoinCoreTask.ps1` refuses a second pair in another `-TaskFolder`. Run a second wallet, such as
+  testnet's, in the service mode.
 
 **Coming from the earlier task scripts.** `Install-GridcoinCoreTask.ps1`, and the installer on an upgrade, replace
 the earlier tasks with the S4U ones, end the earlier resident autounlock helper,
 and convert its `passphrase.cred` into the new autounlock file. The conversion decrypts the old file with your own
 DPAPI key, so it works only in a desktop session of yours; pass `-NoAutounlockMigration` to skip it and set
-autounlock up again in the wallet instead.
+autounlock up again in the wallet instead. The installer keeps what was turned off: a disabled Core-Start, or one
+whose boot trigger is off, is registered again the same way, and an Autounlock task that was turned off is not
+converted. Where it does not convert, it deletes the old `passphrase.cred`, and `UPGRADE-NOTICE.txt` says so, or
+names the file to delete when it could not. Another account's earlier tasks are removed; the notice tells an
+administrator's account to run `Install-GridcoinCoreTask.ps1` signed in as itself, and a standard account to ask an
+administrator for the service mode (`gridcoin-service.exe install`, then `enable --user=<account>`).
 
 ### Service mode: the Windows service
 
@@ -777,8 +783,9 @@ cd "C:\Program Files\GridcoinResearch\daemon"
   followed by a restart: the service's recovery actions start it again.
 - **`disable`** stops the service, sets it to Disabled, and moves the wallet back where it came from (`--to=` for
   another place), owner-only for alice; she leaves the attach group, and a Core-Start task that `enable` disabled
-  is enabled again. It ends with `Disabled. The wallet is back in <directory>; run Install-GridcoinCoreTask.ps1 as
-  alice or start the plain GUI.`
+  is enabled again. It ends with `Disabled. The wallet is back in <directory>; <account> can start the plain GUI.`,
+  and how to get unattended start: `Install-GridcoinCoreTask.ps1` for an administrator's own wallet, the service mode
+  for a standard account's.
 - **`uninstall`** removes the service, its firewall rule and the empty directories. It refuses while the service is
   enabled or its data directory holds a wallet.
 - **The stored passphrase** is encrypted for the service account. Code that runs as the service can decrypt it, as
@@ -839,7 +846,8 @@ in plain text: delete it.
   both: `enable` disables the Core-Start task it replaces, and `Install-GridcoinCoreTask.ps1` refuses while the
   service is enabled.
 - **Mainnet and testnet run side by side.** Their services, accounts, groups, directories and ports differ, so the
-  two services, or two same-account cores with their own data directories and task folders, run together.
+  two services, or one service and the same-account core, run together. One installation registers one pair of
+  same-account tasks.
 - **Both networks in one data directory.** Testnet's data directory is `%APPDATA%\GridcoinResearch\testnet`, so a
   mainnet `enable` leaves `testnet\` in place, and a testnet `enable --network=test` moves only `testnet\`.
 

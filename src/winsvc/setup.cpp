@@ -2435,7 +2435,11 @@ void DisableService(const ToolOptions& options)
                                            "warnings above. Nothing was undone",
                                            Shown(net_target)));
     }
-    Say(strprintf("Disabled. The wallet is back in %s; run Install-GridcoinCoreTask.ps1 as %s or start the plain GUI.",
+    // Task mode is for an administrator's own wallet: a standard account cannot elevate as itself, and
+    // the script registers the tasks for whoever runs it.
+    Say(strprintf("Disabled. The wallet is back in %s; %s can start the plain GUI. For unattended start, an "
+                  "administrator's own wallet uses Install-GridcoinCoreTask.ps1, run signed in as that account; a "
+                  "standard account's uses the service mode.",
                   Shown(net_target), user_name));
 }
 
