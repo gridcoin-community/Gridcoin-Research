@@ -1,0 +1,485 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    Shared functions of the Gridcoin Windows scripts (dot-source it; it runs nothing).
+
+.DESCRIPTION
+    Install-GridcoinCoreTask.ps1, Uninstall-GridcoinCoreTask.ps1, Set-GridcoinShutdownFlush.ps1,
+    Start-GridcoinGui.ps1 and the installer's steps dot-source this file from their own directory:
+
+        . (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')
+
+    Same-account (task) mode registers its tasks with Task Scheduler's S4U logon (no password is
+    stored anywhere) and keeps the wallet passphrase for autounlock in a DPAPI file that only the
+    core reads. The file layout is the one src/wallet/autounlock_blob.h fixes.
+#>
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$script:GridcoinScriptDir = $PSScriptRoot
+
+# SYSTEM, Administrators, TrustedInstaller.
+function Get-GridcoinPrivilegedSids {
+    return @(
+        'S-1-5-18',
+        'S-1-5-32-544',
+        'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'
+    )
+}
+
+function Get-GridcoinCurrentSid {
+    return [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+}
+
+function Test-GridcoinElevated {
+    $currentIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object System.Security.Principal.WindowsPrincipal($currentIdentity)
+    return $principal.IsInRole([System.Security.Principal.WindowsBuiltinRole]::Administrator)
+}
+
+function Get-GridcoinTaskService {
+    $service = New-Object -ComObject 'Schedule.Service'
+    $service.Connect()
+    return $service
+}
+
+# The SID string of an ACE identity or an owner, which Get-Acl shows as an object or a bare string.
+function Resolve-GridcoinSid {
+    param($Identity)
+    if ($null -eq $Identity) { return $null }
+    if ($Identity -is [System.Security.Principal.SecurityIdentifier]) { return $Identity.Value }
+    try {
+        return $Identity.Translate([System.Security.Principal.SecurityIdentifier]).Value
+    } catch {
+        # a bare string has no Translate()
+    }
+    try {
+        $account = New-Object System.Security.Principal.NTAccount(([string]$Identity))
+        return $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
+    } catch {
+        return $null
+    }
+}
+
+# The SID of the account a registered task runs as, or $null when it cannot be told.
+function Get-GridcoinTaskPrincipalSid {
+    param($Task)
+    $userId = [string]$Task.Definition.Principal.UserId
+    if (-not $userId) { return $null }
+    try {
+        return (New-Object System.Security.Principal.SecurityIdentifier($userId)).Value
+    } catch {
+        # not a SID string, try it as an account name
+    }
+    try {
+        $account = New-Object System.Security.Principal.NTAccount($userId)
+        return $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
+    } catch {
+        return $null
+    }
+}
+
+# The first way an account outside AllowedSids can change what Path is or holds, or $null when
+# there is none. It looks at the three things a plain scan of the access entries misses: an empty
+# DACL (everyone has full control), the owner (who can rewrite the DACL), and Allow entries that
+# grant write, delete or ownership rights. Only those rights are tested, not the composite Modify
+# or FullControl, whose bit patterns overlap ReadAndExecute and Synchronize. On a file, appending
+# counts. On a directory, the mask adds CreateFiles (a new entry can shadow the item) but leaves
+# out AppendData, which the default volume root grants to Users. With ChainMasks, Path and every
+# ancestor directory are checked, because write access to a containing directory is enough to
+# replace the item. Without it, Path alone.
+function Get-GridcoinWriteVector {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string[]]$AllowedSids,
+        [switch]$ChainMasks
+    )
+    $fileMask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
+    $dirMask = [int]([System.Security.AccessControl.FileSystemRights]'CreateFiles, WriteExtendedAttributes, WriteAttributes, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
+    $inheritOnly = [int][System.Security.AccessControl.PropagationFlags]::InheritOnly
+
+    $current = $Path
+    while ($current) {
+        try {
+            $acl = Get-Acl -LiteralPath $current
+        } catch {
+            return "the access control list of '$current' could not be read"
+        }
+        $entries = @($acl.Access)
+        if ($entries.Count -eq 0) { return "'$current' has an empty DACL (everyone has full control)" }
+
+        $ownerSid = $null
+        try { $ownerSid = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value } catch { $ownerSid = $null }
+        if ($null -eq $ownerSid) { $ownerSid = Resolve-GridcoinSid $acl.Owner }
+        if ($null -eq $ownerSid) { return "'$current' has an owner that cannot be resolved ($($acl.Owner))" }
+        if ($AllowedSids -notcontains $ownerSid) {
+            return "'$current' is owned by $($acl.Owner), who can rewrite its DACL at will"
+        }
+
+        $mask = $fileMask
+        if (Test-Path -LiteralPath $current -PathType Container) { $mask = $dirMask }
+        foreach ($entry in $entries) {
+            if ($entry.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
+            # An inherit-only entry grants nothing on this object; its children carry it as a real
+            # entry, and the walk checks them in their own right.
+            if (([int]$entry.PropagationFlags -band $inheritOnly) -ne 0) { continue }
+            if (([int]$entry.FileSystemRights -band $mask) -eq 0) { continue }
+            $entrySid = Resolve-GridcoinSid $entry.IdentityReference
+            if ($null -eq $entrySid) {
+                return "'$current': $($entry.IdentityReference) (a SID that cannot be resolved) has '$($entry.FileSystemRights)'"
+            }
+            if ($AllowedSids -notcontains $entrySid) {
+                return "'$current': $($entry.IdentityReference) has '$($entry.FileSystemRights)'"
+            }
+        }
+
+        if (-not $ChainMasks) { return $null }
+        $parent = Split-Path -Parent $current
+        if (-not $parent -or $parent -eq $current) { return $null }
+        $current = $parent
+    }
+    return $null
+}
+
+# The PIDs of the running Core-Start instances, the launcher cmd.exe of each. The core and its
+# restricted copy are children of that process, which exits only after they have.
+function Get-GridcoinCoreStartPids {
+    param([string]$TaskFolder = 'Gridcoin')
+    $service = Get-GridcoinTaskService
+    $startPath = "\$TaskFolder\Core-Start"
+    $found = @()
+    foreach ($running in $service.GetRunningTasks(1)) {
+        if ([string]$running.Path -eq $startPath) { $found += [int]$running.EnginePID }
+    }
+    return $found
+}
+
+# Ends the core the way the shutdown script does: it runs Core-Stop, then waits for the launcher of
+# the running Core-Start instance to exit. True when no instance is left within TimeoutSec.
+function Wait-GridcoinCoreStopped {
+    param(
+        [int]$TimeoutSec = 300,
+        [string]$TaskFolder = 'Gridcoin'
+    )
+    $startPids = @(Get-GridcoinCoreStartPids -TaskFolder $TaskFolder)
+    if ($startPids.Count -eq 0) { return $true }
+
+    $service = Get-GridcoinTaskService
+    $folder = $service.GetFolder("\$TaskFolder")
+    $null = $folder.GetTask('Core-Stop').Run($null)
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    foreach ($launcherPid in $startPids) {
+        if ($launcherPid -gt 0) {
+            $left = [int][Math]::Ceiling(($deadline - (Get-Date)).TotalSeconds)
+            if ($left -lt 1) { $left = 1 }
+            try {
+                Wait-Process -Id $launcherPid -Timeout $left
+            } catch {
+                # the process was already gone, or the wait timed out; the check below decides
+            }
+            if (Get-Process -Id $launcherPid -ErrorAction SilentlyContinue) { return $false }
+        } else {
+            # No PID to wait on: poll the task until it leaves the running state (4).
+            $startTask = $folder.GetTask('Core-Start')
+            while ([int]$startTask.State -eq 4) {
+                if ((Get-Date) -gt $deadline) { return $false }
+                Start-Sleep -Seconds 2
+            }
+        }
+    }
+    return $true
+}
+
+# Writes one task into a folder by Task Scheduler's COM interface and registers it as S4U (logon type
+# 2) for AccountSid. Nothing is stored for the account: S4U needs no password.
+function Register-GridcoinTask {
+    param(
+        $TargetFolder,
+        [string]$RegisteredName,
+        $TaskDefinition,
+        [string]$AccountSid
+    )
+    $sddl = 'D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;' + $AccountSid + ')'
+    $createOrUpdate = 6
+    $logonS4U = 2
+    $null = $TargetFolder.RegisterTaskDefinition($RegisteredName, $TaskDefinition, $createOrUpdate, $AccountSid, $null, $logonS4U, $sddl)
+}
+
+function New-GridcoinTaskDefinition {
+    param(
+        $SchedulerService,
+        [string]$Description,
+        [string]$TimeLimit
+    )
+    $definition = $SchedulerService.NewTask(0)
+    $definition.RegistrationInfo.Description = $Description
+    $definition.Principal.RunLevel = 0
+    $definition.Settings.Enabled = $true
+    $definition.Settings.StartWhenAvailable = $true
+    $definition.Settings.DisallowStartIfOnBatteries = $false
+    $definition.Settings.StopIfGoingOnBatteries = $false
+    $definition.Settings.ExecutionTimeLimit = $TimeLimit
+    $definition.Settings.MultipleInstances = 2
+    return $definition
+}
+
+# Registers \TaskFolder\Core-Start (boot trigger, through a generated launcher) and
+# \TaskFolder\Core-Stop (on demand) for the current account, S4U. Returns the launcher's path.
+function Register-GridcoinCoreTasks {
+    param(
+        [Parameter(Mandatory = $true)][string]$CorePath,
+        [Parameter(Mandatory = $true)][string]$DataDir,
+        [string]$TaskFolder = 'Gridcoin'
+    )
+    $userSid = Get-GridcoinCurrentSid
+
+    # The data directory is passed only when it is not the default. With no -datadir the core
+    # resolves and creates the default itself, with its owner-only DACL; with one it refuses a
+    # missing directory.
+    $defaultDataDir = Join-Path $env:APPDATA 'GridcoinResearch'
+    $dataDirText = ''
+    $stopText = 'stop'
+    if ($DataDir -ne $defaultDataDir) {
+        $dataDirText = ' -datadir="' + ($DataDir -replace '%', '%%') + '"'
+        $stopText = '-datadir="' + $DataDir + '" stop'
+    }
+
+    # The launcher retries once, after two minutes, when the core exits non-zero (Task Scheduler's
+    # own restart does not fire on a program's exit code). It lives beside the scripts, which the
+    # caller has checked, and its stderr goes to %TEMP% so that the core creates and protects its own
+    # data directory. cmd reads the file in the OEM codepage and expands % even inside quotes.
+    $launcher = Join-Path $script:GridcoinScriptDir 'core-autostart.cmd'
+    $coreText = $CorePath -replace '%', '%%'
+    $errLog = '%TEMP%\gridcoin-core-start.err.log'
+    $daemonLine = '"' + $coreText + '"' + $dataDirText + ' -multiprocess -autounlockblob 2>>"' + $errLog + '"'
+    $launcherLines = @(
+        '@echo off',
+        'rem BEGIN GENERATED',
+        'rem Gridcoin Core-Start launcher, written by Install-GridcoinCoreTask.ps1. Do not edit it.',
+        'rem A clean run blocks until shutdown and exits 0. After a failure it waits two minutes and tries once more.',
+        $daemonLine,
+        'if %ERRORLEVEL% EQU 0 goto end',
+        ('echo ==== attempt 1 failed exit %ERRORLEVEL% at %DATE% %TIME%, retrying in 2 min ==== >>"' + $errLog + '"'),
+        '"%SystemRoot%\System32\PING.EXE" -n 121 127.0.0.1 >nul',
+        $daemonLine,
+        ':end',
+        'rem END GENERATED'
+    )
+    Set-Content -LiteralPath $launcher -Encoding Oem -Value $launcherLines
+
+    $service = Get-GridcoinTaskService
+    $root = $service.GetFolder('\')
+    $folder = $null
+    try {
+        $folder = $service.GetFolder("\$TaskFolder")
+    } catch {
+        $folderSddl = 'D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
+        $folder = $root.CreateFolder($TaskFolder, $folderSddl)
+    }
+
+    $startDefinition = New-GridcoinTaskDefinition -SchedulerService $service -TimeLimit 'PT0S' `
+        -Description 'Start the Gridcoin multiprocess core at boot (S4U, no stored password).'
+    $trigger = $startDefinition.Triggers.Create(8)
+    $trigger.Enabled = $true
+    $startAction = $startDefinition.Actions.Create(0)
+    $startAction.Path = '%SystemRoot%\System32\cmd.exe'
+    $startAction.Arguments = '/c "' + $launcher + '"'
+    Register-GridcoinTask -TargetFolder $folder -RegisteredName 'Core-Start' -TaskDefinition $startDefinition -AccountSid $userSid
+
+    # Core-Stop has no trigger, on purpose: a stop at shutdown is the Group Policy script's job
+    # (Set-GridcoinShutdownFlush.ps1), and two of them would race.
+    $stopDefinition = New-GridcoinTaskDefinition -SchedulerService $service -TimeLimit 'PT10M' `
+        -Description 'Graceful RPC stop of the Gridcoin core. Start this task to stop the core; never end Core-Start.'
+    $stopAction = $stopDefinition.Actions.Create(0)
+    $stopAction.Path = $CorePath
+    $stopAction.Arguments = $stopText
+    Register-GridcoinTask -TargetFolder $folder -RegisteredName 'Core-Stop' -TaskDefinition $stopDefinition -AccountSid $userSid
+
+    foreach ($taskName in @('Core-Start', 'Core-Stop')) {
+        $registered = $folder.GetTask($taskName)
+        if ([int]$registered.Definition.Principal.LogonType -ne 2) {
+            throw "\$TaskFolder\$taskName was registered with logon type $($registered.Definition.Principal.LogonType), not S4U (2)."
+        }
+    }
+    return $launcher
+}
+
+# Unregisters the tasks of the given folder that run as the current account with logon
+# type 1, the registration earlier versions made. Returns their names.
+function Remove-GridcoinPasswordLogonTasks {
+    param([string]$TaskFolder = 'Gridcoin')
+    $removed = @()
+    $service = Get-GridcoinTaskService
+    $folder = $null
+    try { $folder = $service.GetFolder("\$TaskFolder") } catch { return $removed }
+    $userSid = Get-GridcoinCurrentSid
+    foreach ($taskName in @('Core-Start', 'Core-Stop')) {
+        $existing = $null
+        try { $existing = $folder.GetTask($taskName) } catch { $existing = $null }
+        if ($null -eq $existing) { continue }
+        if ([int]$existing.Definition.Principal.LogonType -ne 1) { continue }
+        if ((Get-GridcoinTaskPrincipalSid $existing) -ne $userSid) { continue }
+        $folder.DeleteTask($taskName, 0)
+        $removed += $taskName
+    }
+    return $removed
+}
+
+# Ends and unregisters the resident autounlock helper that earlier versions ran: the
+# \Gridcoin\Autounlock task, and this user's powershell.exe processes that run its script. Returns
+# the old DPAPI file's path when that file exists, else $null. The file is read from the task's
+# arguments, else it is <datadir>\autounlock\passphrase.cred.
+function Remove-GridcoinLegacyAutounlock {
+    param(
+        [Parameter(Mandatory = $true)][string]$DataDir,
+        [string]$TaskFolder = 'Gridcoin'
+    )
+    $legacyPath = Join-Path $DataDir 'autounlock\passphrase.cred'
+
+    $service = Get-GridcoinTaskService
+    $folder = $null
+    try { $folder = $service.GetFolder("\$TaskFolder") } catch { $folder = $null }
+    if ($null -ne $folder) {
+        $oldTask = $null
+        try { $oldTask = $folder.GetTask('Autounlock') } catch { $oldTask = $null }
+        if ($null -ne $oldTask) {
+            foreach ($oldAction in $oldTask.Definition.Actions) {
+                $actionText = [string]$oldAction.Arguments
+                if ($actionText -match '-CredPath\s+"([^"]+)"') { $legacyPath = $Matches[1] }
+            }
+            try { $oldTask.Stop(0) } catch { Write-Verbose 'the Autounlock task was not running' }
+            $folder.DeleteTask('Autounlock', 0)
+        }
+    }
+
+    $mySid = Get-GridcoinCurrentSid
+    $helpers = @(Get-CimInstance -ClassName Win32_Process -Filter "Name = 'powershell.exe'")
+    foreach ($helper in $helpers) {
+        if ($helper.ProcessId -eq $PID) { continue }
+        if (-not $helper.CommandLine) { continue }
+        if ($helper.CommandLine -notlike '*Invoke-GridcoinAutounlock.ps1*') { continue }
+        $ownerSid = $null
+        try { $ownerSid = (Invoke-CimMethod -InputObject $helper -MethodName GetOwnerSid).Sid } catch { $ownerSid = $null }
+        if ($ownerSid -ne $mySid) { continue }
+        Stop-Process -Id $helper.ProcessId -Force
+    }
+
+    if (Test-Path -LiteralPath $legacyPath) { return $legacyPath }
+    return $null
+}
+
+# Writes the autounlock file the core reads (src/wallet/autounlock_blob.h): "GRCAUB01", the scope
+# (1, the machine's DPAPI key), the length of the network name, the name, then the DPAPI blob made
+# with the entropy "gridcoin-autounlock-v1:<network>". The file is created beside Path under a
+# temporary name, readable by this account, SYSTEM and Administrators only, and moved into place.
+function Write-GridcoinAutounlockBlob {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][byte[]]$Passphrase,
+        [Parameter(Mandatory = $true)][string]$Network
+    )
+    if ($Network -cnotmatch '^[a-z]{1,16}$') { throw "The network name '$Network' is not 1 to 16 letters a-z." }
+    if ($Passphrase.Length -eq 0) { throw 'The passphrase is empty.' }
+    Add-Type -AssemblyName System.Security
+
+    $entropy = [System.Text.Encoding]::ASCII.GetBytes('gridcoin-autounlock-v1:' + $Network)
+    $dpapi = [System.Security.Cryptography.ProtectedData]::Protect(
+        $Passphrase, $entropy, [System.Security.Cryptography.DataProtectionScope]::LocalMachine)
+
+    $header = [System.Text.Encoding]::ASCII.GetBytes('GRCAUB01')
+    $name = [System.Text.Encoding]::ASCII.GetBytes($Network)
+    $bytes = New-Object System.Collections.Generic.List[byte]
+    $bytes.AddRange($header)
+    $bytes.Add([byte]1)
+    $bytes.Add([byte]$name.Length)
+    $bytes.AddRange($name)
+    $bytes.AddRange($dpapi)
+    if ($bytes.Count -gt 65536) { throw 'The encrypted passphrase does not fit in an autounlock file of 65536 bytes.' }
+
+    $accounts = @(
+        (Get-GridcoinCurrentSid),
+        'S-1-5-18',
+        'S-1-5-32-544'
+    )
+
+    $directory = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $directory)) {
+        $parentDirectory = Split-Path -Parent $directory
+        if (-not (Test-Path -LiteralPath $parentDirectory)) {
+            $null = New-Item -ItemType Directory -Path $parentDirectory
+        }
+        $directorySecurity = New-Object System.Security.AccessControl.DirectorySecurity
+        $directorySecurity.SetAccessRuleProtection($true, $false)
+        foreach ($aclSid in $accounts) {
+            $account = New-Object System.Security.Principal.SecurityIdentifier($aclSid)
+            $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                $account, [System.Security.AccessControl.FileSystemRights]::FullControl,
+                'ContainerInherit, ObjectInherit', 'None', 'Allow')
+            $directorySecurity.AddAccessRule($rule)
+        }
+        $null = [System.IO.Directory]::CreateDirectory($directory, $directorySecurity)
+    }
+
+    $fileSecurity = New-Object System.Security.AccessControl.FileSecurity
+    $fileSecurity.SetAccessRuleProtection($true, $false)
+    foreach ($aclSid in $accounts) {
+        $account = New-Object System.Security.Principal.SecurityIdentifier($aclSid)
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $account, [System.Security.AccessControl.FileSystemRights]::FullControl, 'Allow')
+        $fileSecurity.AddAccessRule($rule)
+    }
+
+    $temporary = $Path + '.tmp'
+    if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
+    $stream = New-Object System.IO.FileStream($temporary, [System.IO.FileMode]::CreateNew,
+        [System.Security.AccessControl.FileSystemRights]'Write, Delete', [System.IO.FileShare]::None,
+        4096, [System.IO.FileOptions]::WriteThrough, $fileSecurity)
+    try {
+        $stream.Write($bytes.ToArray(), 0, $bytes.Count)
+        $stream.Flush()
+    } finally {
+        $stream.Dispose()
+    }
+    if (Test-Path -LiteralPath $Path) {
+        [System.IO.File]::Replace($temporary, $Path, $null)
+    } else {
+        [System.IO.File]::Move($temporary, $Path)
+    }
+    [Array]::Clear($entropy, 0, $entropy.Length)
+}
+
+# Carries autounlock across the upgrade: reads the old file with the current user's DPAPI key
+# (which only this user's own session can do), writes the new file for Network, then deletes the old
+# file and the helper's two logs. The passphrase bytes are zeroed. True when a file was converted.
+function Convert-GridcoinLegacyAutounlockBlob {
+    param(
+        [Parameter(Mandatory = $true)][string]$OldPath,
+        [Parameter(Mandatory = $true)][string]$DataDir,
+        [Parameter(Mandatory = $true)][string]$Network
+    )
+    if (-not (Test-Path -LiteralPath $OldPath)) { return $false }
+    Add-Type -AssemblyName System.Security
+
+    $netDir = $DataDir
+    if ($Network -eq 'test') { $netDir = Join-Path $DataDir 'testnet' }
+    $newPath = Join-Path $netDir 'autounlock\passphrase.dpapi'
+
+    $plain = $null
+    try {
+        $oldBytes = [System.IO.File]::ReadAllBytes($OldPath)
+        $plain = [System.Security.Cryptography.ProtectedData]::Unprotect(
+            $oldBytes, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
+        Write-GridcoinAutounlockBlob -Path $newPath -Passphrase $plain -Network $Network
+    } finally {
+        if ($null -ne $plain) { [Array]::Clear($plain, 0, $plain.Length) }
+    }
+
+    Remove-Item -LiteralPath $OldPath -Force
+    $oldDirectory = Split-Path -Parent $OldPath
+    foreach ($logName in @('autounlock.log', 'autounlock.log.1')) {
+        $logPath = Join-Path $oldDirectory $logName
+        if (Test-Path -LiteralPath $logPath) { Remove-Item -LiteralPath $logPath -Force }
+    }
+    return $true
+}

@@ -13,8 +13,8 @@
       3. Wait for the process to exit AND the exe's write-lock to release (a
          connected -multiprocess GUI also quit on core-stop, releasing its lock).
       4. Optionally copy new binaries in (or the caller already did).
-      5. Restart via the Core-Start task. Autounlock (Plan 5) self-heals on the
-         fresh instance.
+      5. Restart via the Core-Start task (the core reads its autounlock file at
+         startup, so a configured autounlock applies to the fresh instance).
 
     SAFE BY DEFAULT: graceful-only; on stop/lock-release timeout it ABORTS and
     leaves the old binary in place -- it never corrupts the datadir to force an
@@ -136,4 +136,4 @@ if ($NewBinariesDir) {
 
 # 5. Restart.
 Start-ScheduledTask -TaskPath "\$TaskFolder\" -TaskName 'Core-Start'
-Write-Host "Restarted \$TaskFolder\Core-Start. Autounlock (if enabled) self-heals on the new instance." -ForegroundColor Green
+Write-Host "Restarted \$TaskFolder\Core-Start. Autounlock (if set up) applies at the core's startup." -ForegroundColor Green

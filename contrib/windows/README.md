@@ -12,15 +12,14 @@ them from there in an **elevated** PowerShell. (In a source checkout they live h
 
 | Script | Purpose |
 |---|---|
-| `Install-GridcoinCoreTask.ps1` | Register the **Core-Start** (boot) and **Core-Stop** (graceful) tasks, run-as the wallet user. |
-| `Uninstall-GridcoinCoreTask.ps1` | Remove them. |
+| `Install-GridcoinCoreTask.ps1` | Register the **Core-Start** (boot) and **Core-Stop** (graceful) tasks for your own account, S4U, with no stored password. Needs an elevated console. |
+| `Uninstall-GridcoinCoreTask.ps1` | Remove them (`-All` also removes the shutdown script and the old autounlock helper). |
 | `Update-GridcoinCore.ps1` | Graceful upgrade engine for the locked-exe problem. |
 | `Set-GridcoinShutdownFlush.ps1` | **Opt-in**: configure/remove a Group Policy shutdown script for a reliable DB flush on OS shutdown. |
-| `Start-GridcoinGui.ps1` | Launch the `-multiprocess` GUI (or drop a Start-Menu shortcut with `-CreateShortcut`). |
-| `Set-GridcoinAutounlock.ps1` | **Opt-in**: enable/remove stake-only autounlock (DPAPI secret + resident task). |
-| `Invoke-GridcoinAutounlock.ps1` | The resident autounlock helper the task runs (not called directly). |
+| `Start-GridcoinGui.ps1` | Launch the `-multiprocess` GUI from a normal (not elevated) console, for the task or, with `-Service`, for the Windows service (or drop a Start-Menu shortcut with `-CreateShortcut`). |
+| `GridcoinCommon.ps1` | Functions the scripts share (dot-sourced; not run on its own). |
 
-Autounlock is **opt-in** and independent of the core tasks — see [Autounlock](#autounlock-opt-in-stake-only-dpapi) below.
+Autounlock is **opt-in** and is set up in the wallet itself (see [Autounlock](#autounlock-opt-in-stake-only-dpapi) below); there is no separate helper to run.
 
 ## Quick start
 
@@ -32,7 +31,9 @@ Autounlock is **opt-in** and independent of the core tasks — see [Autounlock](
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 cd "C:\Program Files\GridcoinResearch\windows"
 
-# Run-as the account that owns the wallet; it will prompt for that account's Windows password.
+# Registered for the account you are running as (S4U: no password is asked for or stored). That
+# account must be an administrator. For a standard-user wallet, an administrator sets up the
+# service mode instead: gridcoin-service.exe install, then enable.
 # Do NOT pass -DataDir for a default install: the daemon resolves the Windows default itself
 # (CSIDL_APPDATA\GridcoinResearch) and creates it owner-only on first run, whereas an explicit
 # -datadir takes the branch that refuses to create a missing directory. Pass -DataDir only for a
@@ -40,7 +41,13 @@ cd "C:\Program Files\GridcoinResearch\windows"
 .\Install-GridcoinCoreTask.ps1
 
 Start-ScheduledTask -TaskPath '\Gridcoin\' -TaskName 'Core-Start'   # start the core now
-.\Start-GridcoinGui.ps1                                             # attach the GUI
+```
+
+Then, from a normal (not elevated) console, attach the GUI:
+
+```powershell
+.\Start-GridcoinGui.ps1                       # task mode
+.\Start-GridcoinGui.ps1 -Service -Network test  # the Windows service for testnet (gridcoin-service.exe enable prints this line)
 ```
 
 The core then autostarts on every boot. To upgrade:
@@ -51,7 +58,7 @@ The core then autostarts on every boot. To upgrade:
 
 ## Two things to know
 
-**Run-as the wallet user, never SYSTEM.** The IPC socket (`node.sock`) and cookie
+**Run as the wallet user, never SYSTEM, with no stored password.** The tasks are registered with the S4U logon, so Windows keeps no password for them; a password change on the account needs nothing re-registered. The IPC socket (`node.sock`) and cookie
 (`ipc.cookie`) are created **owner-only** in the datadir (NTFS ACL), so on Windows
 only that user can open them. (The Linux `SO_PEERCRED`/peer-UID check has no Windows
 equivalent — AF_UNIX on Windows exposes no peer credentials — so the ACL is the
@@ -75,10 +82,9 @@ already exists but predates this and holds only `addnode=` lines, a generated
 `rpcuser`/`rpcpassword` is appended to it and nothing else is touched. You do not need
 to do anything, and there is nothing to memorise.
 
-Two Windows features depend on that RPC endpoint, which is why `server=0` is a poor
-idea here even though it is honoured: **autounlock** is pure RPC, and **`Core-Stop`
-runs `gridcoinresearchd.exe stop`**, which is also RPC. Turn RPC off and the only
-remaining way to stop the core is a hard kill with no database flush.
+`Core-Stop` runs `gridcoinresearchd.exe stop`, which is also RPC, so `server=0` is a poor idea
+here even though it is honoured: with RPC off the only remaining way to stop the core is a hard
+kill with no database flush.
 
 ## Windows Defender exclusion (do this before syncing)
 
@@ -179,25 +185,23 @@ for** (bounded by *Maximum wait time for Group Policy scripts*, default 600 s).
 Configure it (opt-in, elevated):
 
 ```powershell
-.\Set-GridcoinShutdownFlush.ps1 -DataDir "$env:APPDATA\GridcoinResearch"   # -Remove to undo
+.\Set-GridcoinShutdownFlush.ps1   # -Remove to undo; -WaitSeconds N caps the wait (default 300)
 ```
 
-It writes a small `.cmd` that runs the graceful RPC stop **as SYSTEM** (so it doesn't depend
-on the wallet user's session still being loaded late in shutdown) and waits for the core to
-exit, then wires it into the local machine shutdown scripts and runs `gpupdate`. **Validate
-by rebooting once** and confirming a full `Shutdown: … Final flush of wallet database …`
-sequence in `debug.log` just before the restart. (We deliberately don't *also* put a shutdown
-trigger on `Core-Stop` — the two would double-stop and race.)
+It writes two small files into the machine shutdown script folder: `GridcoinShutdownFlush.cmd`
+(one line that starts Windows PowerShell) and `GridcoinShutdownFlush.ps1`. At shutdown the `.ps1`
+runs **as SYSTEM**, reads the process ID of the running **Core-Start** instance (the launcher, which
+exits only after the core), starts the **Core-Stop** task and waits for that process to exit. SYSTEM
+reads no file of the wallet user and runs no Gridcoin program: the task stops the core, as the
+wallet user. The script then wires the `.cmd` into the local machine shutdown scripts and the
+run-time state. **Validate by rebooting once** and confirming a full `Shutdown: … Final flush of
+wallet database …` sequence in `debug.log` just before the restart. (We deliberately don't *also*
+put a shutdown trigger on `Core-Stop` — the two would double-stop and race.)
 
 **Domains.** Local and domain-GPO shutdown scripts **stack** — all run at shutdown,
 additively, bounded collectively by the max-wait-time. But if a domain GPO enables **"Turn
 off Local Group Policy Objects processing,"** this *local* script is ignored; in that case
-deploy the same `.cmd` (graceful RPC stop + wait-for-exit) via a **domain GPO** instead.
-
-**Manual alternative** (if you'd rather not run the helper): `gpedit.msc` → Computer
-Configuration → Windows Settings → Scripts → **Shutdown**, and add a `.cmd` that runs
-`"…\daemon\gridcoinresearchd.exe" -datadir="…" stop` followed by a loop on
-`tasklist | find /i "gridcoinresearchd.exe"` until it's gone.
+deploy the same two files via a **domain GPO** instead.
 
 ## Crash recovery
 
@@ -216,99 +220,33 @@ on-device), so the `-RestartCount` it used to be registered with never actually 
 
 ## Autounlock (opt-in, stake-only, DPAPI)
 
-Unattended **staking** on an encrypted wallet needs the wallet unlocked after every boot
-or restart. This is opt-in and deliberately **external** to the wallet (the in-wallet
-auto-unlock was removed years ago as insecure): the passphrase lives in the OS credential
-store, and the wallet is unlocked over RPC **for staking only** — never for spending. It is
-the Windows analogue of the Linux `gridcoinresearchd-autounlock.service` (systemd
-`LoadCredentialEncrypted`); the security contract mirrors
-[`contrib/wallettools/gridcoin_autounlock.py`](../wallettools/gridcoin_autounlock.py).
+Unattended **staking** on an encrypted wallet needs the wallet unlocked after every boot or
+restart. Autounlock is opt-in and unlocks **for staking only**, never for spending. The core does
+it itself: you set it up once in the wallet (the GUI's *Autounlock for staking* dialog, or the
+`setautounlock` RPC; `clearautounlock` turns it off), and the core reads its own file at startup.
+The Core-Start launcher passes `-autounlockblob`, which names that file.
 
-Enable it **as the wallet user, from an elevated console** (Run as administrator):
+- **Secret at rest = DPAPI (machine key).** The passphrase is encrypted with `CryptProtectData` and
+  the machine's key, and written to `<datadir>\autounlock\passphrase.dpapi` (`testnet\autounlock`
+  for testnet), readable by the account, SYSTEM and Administrators only. It is never stored in the
+  wallet, on a command line, or in a log. **Every account on the machine can decrypt a file made
+  with the machine key**, so only the file's access control list keeps it to the wallet's account:
+  it protects the wallet from other accounts, not from a program running as the wallet's account.
+  For a wallet that must resist its own account being compromised, use the service mode.
+- **No resident helper.** Earlier versions ran a resident PowerShell helper
+  (`\Gridcoin\Autounlock`) from a scheduled task.
+  `Install-GridcoinCoreTask.ps1` removes that task, ends the helper and converts the old
+  `passphrase.cred` file (decrypted with your own DPAPI key, so it must run as you) into the new
+  file; pass `-NoAutounlockMigration` to skip the conversion and set autounlock up again in the
+  wallet instead.
 
-```powershell
-.\Set-GridcoinAutounlock.ps1 -DataDir "$env:APPDATA\GridcoinResearch"
-# Prompts: the WALLET passphrase (twice), then the account's Windows LOGIN password.
-```
-
-Run it **at the machine's own console, not over SSH/PSRemoting**: DPAPI CurrentUser encryption
-needs an interactive or batch logon and fails over a network logon (no master key). Elevation is
-needed because the resident task carries a boot trigger.
-
-What it does:
-
-- **Secret at rest = DPAPI (CurrentUser).** The passphrase is encrypted with
-  `CryptProtectData` and written to `<datadir>\autounlock\passphrase.cred` — decryptable
-  only by **that Windows account on that machine**, and additionally locked owner-only by
-  NTFS ACL. It is never stored in the wallet, on a command line, or in a log. Because DPAPI
-  CurrentUser is per-account, the task **must run as the same user that ran setup** — the
-  script refuses a mismatched `-TaskUser`.
-- **Registers `\Gridcoin\Autounlock`**, a resident task (run-as the wallet user) that runs
-  `Invoke-GridcoinAutounlock.ps1`: it waits for the core, unlocks **stake-only**
-  (`walletpassphrase … true`), and **self-heals** — it re-unlocks after each core restart.
-- **Native listener-ownership gate.** Before any credential goes on the wire it verifies
-  that our own SID owns every LISTEN socket on the RPC port (`Get-NetTCPConnection` →
-  `Win32_Process` owner SID). The RPC port is unbound for minutes during core startup and an
-  unprivileged loopback port can be squatted by a local account first; a **foreign or
-  unverifiable owner makes it refuse** and log — that is the gate working, not a bug.
-
-**Changing the wallet passphrase.** Re-running the script is necessary but **not sufficient**.
-The helper decrypts the blob **once at startup** and never re-reads it, so a helper that is
-already running keeps the OLD passphrase in memory. It will not notice until it next sees a fresh
-core instance; then `walletpassphrase` is rejected with `-14`, it logs "retrying cannot fix this"
-and exits — and because `-AtStartup` is its only trigger, nothing restarts it until the next boot.
-The result is a correct blob on disk, no helper running, and a wallet that stays locked. Restart
-the task after re-running setup:
-
-```powershell
-.\Set-GridcoinAutounlock.ps1                     # writes the new DPAPI blob
-schtasks /end /tn "\Gridcoin\Autounlock"         # drop the helper holding the old passphrase
-schtasks /run /tn "\Gridcoin\Autounlock"         # restart so it re-reads the blob
-```
-
-(A reboot does both.)
-
-In the Task Scheduler GUI the equivalent is **End** and then **Run** — in that order. The task is
-registered `MultipleInstancesPolicy = IgnoreNew`, so hitting **Run** while the old helper is still
-running is **silently discarded**: no error, no new `autounlock.log` line, the task still shows
-Running (that is the OLD instance, still holding the OLD passphrase), and the wallet stays locked.
-Confirm the restart took effect by checking that `autounlock.log` gained a new
-`wallet unlocked (stake-only)` line, not by the task's Status column.
-
-A running log (redacted — no secrets) is at `<datadir>\autounlock\autounlock.log`. To
-remove everything:
-
-```powershell
-.\Set-GridcoinAutounlock.ps1 -Remove   # unregister the task and delete the DPAPI blob
-```
-
-Note: a `-17 already unlocked` in the log means the wallet was unlocked by another path
-(e.g. a GUI unlock) and the **staking-only restriction was not re-asserted** — it may be
-spendable until the next restart.
+**Changing the wallet passphrase** needs autounlock set up again: the file holds the old one.
+Use the same dialog or `setautounlock`.
 
 ## Status
 
-Runtime-validated on Windows 11 (2026-08-12) against a populated mainnet wallet.
+The S4U registration, the shutdown script, the guards and the switch-over from the earlier
+tasks are tested on a Windows 11 machine before each release. The earlier
+registration was validated on Windows 11 against a populated mainnet wallet (2026-08-12).
 
-**Confirmed on device:** core autostart via the `Core-Start` task across two reboots; GUI attach
-to an already-running core; GUI quit leaving core serving; core exit taking the GUI down cleanly;
-ordered shutdown flush; stale `node.sock`/`ipc.cookie` replaced after an abrupt reboot kill; RPC
-credentials generated into a credential-less config on start. Autounlock: elevated registration
-with a stored password, **DPAPI decrypt inside the batch-logon task** (the primary unknown —
-confirmed), and a cold stake-only unlock taking `getstakinginfo` from `mining-error: [Wallet
-locked]`/`staking: False` to `[]`/`staking: True` with the staking loop observed running. The
-secret stayed in the DPAPI blob alone: `passphrase.cred` owner-only with no inherited ACEs, no
-secret in the task arguments, the config, or either log. The `-AtStartup` trigger was then confirmed on a
-real boot: task launched 9s after boot, wallet unlocked (stake-only) 1m45s later once core was
-ready, decrypting a blob that had been rewritten by a passphrase change 20 minutes earlier.
-
-**Still unconfirmed — do not read the above as covering these:** the foreign-listener refusal
-path; the stale-passphrase `-14` exit (described under Autounlock, read from the code but not
-observed); self-heal after a core restart; `-Remove`; the upgrade path; different-user
-connection-refused; the "Log on as a batch job" right when it is not already granted; and
-Microsoft/AzureAD-account principal forms.
-
-**Gotcha worth knowing:** `-AtStartup` is the task's only trigger, so registering it does not run
-it and restarting the *core* does not either. `Last Result 267011` (`SCHED_S_TASK_HAS_NOT_RUN`)
-with no `autounlock.log` is that state, not a failure. Force it with
-`schtasks /run /tn "\Gridcoin\Autounlock"`.
+**Gotcha worth knowing:** to stop the core, start the `Core-Stop` task; never end `Core-Start`.

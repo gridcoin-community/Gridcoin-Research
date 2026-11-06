@@ -11,48 +11,47 @@
     SYNCHRONOUSLY and WAITS for it (bounded by "Maximum wait time for Group Policy scripts",
     default 600s).
 
-    This writes a small .cmd (run as SYSTEM at shutdown) that issues the graceful RPC stop
-    and waits for the core to exit, then wires it into the LOCAL Group Policy machine
-    shutdown scripts (scripts.ini + gpt.ini) and runs gpupdate so the change takes effect.
-    The stop runs as SYSTEM (which has ACL access to the datadir and can reach the loopback
-    RPC), so it does not depend on the wallet user's session still being available late in
-    shutdown.
+    This writes two small files into the machine shutdown script folder, GridcoinShutdownFlush.cmd
+    (one line, which starts Windows PowerShell) and GridcoinShutdownFlush.ps1, then wires the .cmd
+    into the LOCAL Group Policy machine shutdown scripts (scripts.ini + gpt.ini) and the run-time
+    state. At shutdown the .ps1 runs as SYSTEM. By Task Scheduler's COM interface it reads the
+    process ID of the running Core-Start instance (the launcher, which exits only after the core
+    has), starts the Core-Stop task, and waits for that process to exit, for at most -WaitSeconds.
+    SYSTEM reads no file of the wallet user and runs no Gridcoin program: the core is stopped by
+    the task, as the wallet user.
 
-    DO NOT also put an OS-shutdown trigger on Core-Stop -- the two would double-stop and
-    race. Install-GridcoinCoreTask.ps1 deliberately leaves Core-Stop on-demand.
+    DO NOT also put an OS-shutdown trigger on Core-Stop -- the two would double-stop and race.
 
     DOMAINS: local and domain-GPO shutdown scripts STACK -- all applicable scripts run,
     additively, no override, bounded collectively by the max-wait-time. BUT if a domain GPO
     enables "Turn off Local Group Policy Objects processing", this LOCAL script is IGNORED;
-    in that case deploy the same .cmd via a DOMAIN GPO instead (see contrib/windows/README.md).
+    in that case deploy the same two files via a DOMAIN GPO instead (see contrib/windows/README.md).
 
     VALIDATE: after running this, reboot once and confirm a clean flush in the core's
     debug.log -- a full "Shutdown: ... Final flush of wallet database ..." sequence logged
     immediately before the restart (rather than a bare restart with no shutdown lines).
 
 .NOTES
-    Requires an ELEVATED PowerShell (writes under %SystemRoot%\System32\GroupPolicy and HKLM).
+    Requires an ELEVATED PowerShell (writes under %SystemRoot%\System32\GroupPolicy and HKLM), and
+    the \Gridcoin\Core-Stop task (Install-GridcoinCoreTask.ps1).
 #>
 [CmdletBinding()]
 param(
-    [string]$DataDir = (Join-Path $env:APPDATA 'GridcoinResearch'),
-
-    # Path to gridcoinresearchd.exe; resolved across the installer (daemon\) and build-tree
-    # layouts if not given (same logic as Install-GridcoinCoreTask.ps1).
-    [string]$CorePath,
-
     # Cap on how long the shutdown script waits for the core to exit (seconds). Keep it well
     # under "Maximum wait time for Group Policy scripts" (default 600s).
     [int]$WaitSeconds = 300,
 
+    [string]$TaskFolder = 'Gridcoin',
+
     [switch]$Remove
 )
 
-$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 
-$id = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
-if (-not $id.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
+. (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')
+
+if (-not (Test-GridcoinElevated)) {
     throw "Run this from an ELEVATED PowerShell (it writes to %SystemRoot%\System32\GroupPolicy and HKLM)."
 }
 
@@ -61,6 +60,7 @@ $shutdownDir = Join-Path $gpMachine 'Scripts\Shutdown'
 $scriptsIni  = Join-Path $gpMachine 'Scripts\scripts.ini'
 $gptIni      = Join-Path $env:SystemRoot 'System32\GroupPolicy\gpt.ini'
 $cmdPath     = Join-Path $shutdownDir 'GridcoinShutdownFlush.cmd'
+$ps1Path     = Join-Path $shutdownDir 'GridcoinShutdownFlush.ps1'
 # Group Policy "Scripts" client-side extension GUID + the scripts snap-in GUID.
 $scriptsCse  = '[{42B5FAAE-6536-11D2-AE5A-0000F87571E3}{40B6664F-4972-11D1-A7CA-0000F87571E3}]'
 
@@ -205,162 +205,81 @@ if ($Remove) {
         Write-Host "No local shutdown scripts.ini present (ok)."
     }
     if (Test-Path -LiteralPath $cmdPath) { Remove-Item -LiteralPath $cmdPath -Force; Write-Host "Deleted $cmdPath" }
+    if (Test-Path -LiteralPath $ps1Path) { Remove-Item -LiteralPath $ps1Path -Force; Write-Host "Deleted $ps1Path" }
     Remove-ShutdownScriptState $cmdPath
     Write-Host "Removed the run-time shutdown-script state. Reboot to confirm it no longer runs."
     return
 }
 
 # --- add ------------------------------------------------------------------------------
-if (-not $CorePath) {
-    $CorePath = @(
-        (Join-Path $PSScriptRoot '..\daemon\gridcoinresearchd.exe'),
-        (Join-Path $PSScriptRoot '..\gridcoinresearchd.exe')
-    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-    if (-not $CorePath) { $CorePath = (Join-Path $PSScriptRoot '..\daemon\gridcoinresearchd.exe') }
+if ($TaskFolder -notmatch '^[A-Za-z0-9 _.-]+$') {
+    throw '-TaskFolder may contain only letters, digits, space, underscore, dot and hyphen.'
 }
-if (-not (Test-Path -LiteralPath $CorePath)) { throw "gridcoinresearchd.exe not found at '$CorePath'. Pass -CorePath." }
-$CorePath = (Resolve-Path -LiteralPath $CorePath).Path
-# Both get baked into a batch script: reject the chars that would break/expand there.
-if ($DataDir -match '["%]') { throw "-DataDir must not contain a double-quote or percent character (it is baked into a batch script)." }
-if ($CorePath -match '%')   { throw "-CorePath must not contain a percent character (it is baked into a batch script)." }
+if ($WaitSeconds -lt 10 -or $WaitSeconds -gt 580) {
+    throw '-WaitSeconds must be between 10 and 580 (Group Policy waits 600 seconds by default).'
+}
 
-# SECURITY: the shutdown .cmd runs as SYSTEM and invokes $CorePath. If a standard user can
-# replace that exe, they gain SYSTEM code execution at shutdown (local privilege escalation).
-# Fail CLOSED: only privileged principals (SYSTEM, Administrators, TrustedInstaller) may hold
-# write/delete/ownership on the binary. ANY other principal with such rights -- a specific
-# user, a custom group -- or an ACE whose SID cannot be resolved is treated as a risk. Test
-# ONLY the write/delete/own-change bits, NOT the composite Modify/FullControl rights, whose
-# bit patterns overlap ReadAndExecute/Synchronize (masking those would wrongly flag the
-# read-only Program Files "Users: ReadAndExecute, Synchronize" ACE).
-$script:PrivilegedSids = @(
-    'S-1-5-18',                                                        # SYSTEM
-    'S-1-5-32-544',                                                    # Administrators
-    'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'  # TrustedInstaller
+# The shutdown script starts Core-Stop; without it the flush would do nothing.
+$stopService = Get-GridcoinTaskService
+$stopFolder = $null
+$stopTask = $null
+try { $stopFolder = $stopService.GetFolder("\$TaskFolder") } catch { $stopFolder = $null }
+if ($null -ne $stopFolder) {
+    try { $stopTask = $stopFolder.GetTask('Core-Stop') } catch { $stopTask = $null }
+}
+if ($null -eq $stopTask) {
+    throw "The task \$TaskFolder\Core-Stop does not exist. Run Install-GridcoinCoreTask.ps1 first."
+}
+
+# The shutdown script that SYSTEM runs. It parses no file of the wallet user and starts no
+# Gridcoin program: the Core-Stop task stops the core as the wallet user, and the script waits for
+# the process of the running Core-Start instance, the launcher, which exits only after the core.
+$psText = @'
+#Requires -Version 5.1
+# Gridcoin graceful shutdown flush (Group Policy Computer->Shutdown script; runs as SYSTEM).
+# Written by Set-GridcoinShutdownFlush.ps1 -- do not edit by hand.
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$flushWait = @WAIT@
+$flushFolder = '@FOLDER@'
+$service = New-Object -ComObject 'Schedule.Service'
+$service.Connect()
+$startPath = '\' + $flushFolder + '\Core-Start'
+$startPid = 0
+$isRunning = $false
+foreach ($runningTask in $service.GetRunningTasks(1)) {
+    if ([string]$runningTask.Path -eq $startPath) {
+        $isRunning = $true
+        $startPid = [int]$runningTask.EnginePID
+    }
+}
+if (-not $isRunning) { exit 0 }
+$folder = $service.GetFolder('\' + $flushFolder)
+$null = $folder.GetTask('Core-Stop').Run($null)
+if ($startPid -gt 0) {
+    try { Wait-Process -Id $startPid -Timeout $flushWait } catch { Write-Verbose 'the launcher exited, or the wait timed out' }
+} else {
+    $startTask = $folder.GetTask('Core-Start')
+    $deadline = (Get-Date).AddSeconds($flushWait)
+    while (([int]$startTask.State -eq 4) -and ((Get-Date) -lt $deadline)) { Start-Sleep -Seconds 2 }
+}
+exit 0
+'@
+$psText = $psText.Replace('@WAIT@', [string]$WaitSeconds).Replace('@FOLDER@', $TaskFolder)
+
+# The .cmd that Group Policy runs: one command line, with the full path of every system program.
+$cmdLines = @(
+    '@echo off',
+    'rem BEGIN GENERATED',
+    'rem Gridcoin graceful shutdown flush (Group Policy Computer->Shutdown script; runs as SYSTEM).',
+    'rem Written by Set-GridcoinShutdownFlush.ps1 -- do not edit by hand.',
+    '"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%SystemRoot%\System32\GroupPolicy\Machine\Scripts\Shutdown\GridcoinShutdownFlush.ps1"',
+    'rem END GENERATED'
 )
-# Two masks, because the threat differs by object type and a single mask produces
-# false positives that would make this refuse on EVERY machine:
-#   * On the FILE, any write/delete/ownership right is enough to replace it.
-#   * On an ANCESTOR DIRECTORY, only rights that let you delete or re-permission
-#     that directory matter. Notably NOT AppendData/CreateFiles: being able to
-#     create a NEW entry in C:\ does not let you touch an existing subtree, and
-#     the default volume root really does carry 'Authenticated Users: AppendData'
-#     (verified on Windows 11), so including it would refuse everywhere.
-$script:FileWriteMask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete, ChangePermissions, TakeOwnership')
-$script:DirWriteMask  = [int]([System.Security.AccessControl.FileSystemRights]'Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
-
-function Resolve-AceSid($idr) {
-    if ($null -eq $idr) { return $null }
-    if ($idr -is [System.Security.Principal.SecurityIdentifier]) { return $idr.Value }
-    try { return $idr.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { }
-    # Get-Acl surfaces some identities as a bare string (notably $acl.Owner), which has
-    # no Translate() -- resolve those through NTAccount rather than reporting them as
-    # unresolvable (which would fail closed on every path, including admin-owned ones).
-    try { return ([System.Security.Principal.NTAccount]([string]$idr)).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { return $null }
-}
-
-# Returns a description of the first non-privileged write vector found on $p, or
-# $null if it is safe. Checks THREE things, all of which are ways to replace the
-# binary that a plain ACE scan misses:
-#   1. an empty Access collection -- a NULL DACL grants everyone full control, so
-#      "no ACEs" must read as UNSAFE, not as "no offender";
-#   2. the OWNER -- an owner always holds implicit WRITE_DAC and can simply rewrite
-#      the DACL, so a non-privileged owner defeats any ACE check;
-#   3. Allow ACEs granting write/delete/ownership to a non-privileged principal.
-function Get-NonAdminWriteVector([string]$p, [bool]$IsDirectory) {
-    try { $acl = Get-Acl -LiteralPath $p } catch { return "the ACL of '$p' could not be read" }
-
-    $access = @($acl.Access)
-    if ($access.Count -eq 0) { return "'$p' has a NULL/empty DACL (everyone has full control)" }
-
-    # Ask for the owner AS A SID: $acl.Owner is a string, so translating it directly
-    # is unreliable (see Resolve-AceSid).
-    $ownerSid = $null
-    try { $ownerSid = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value } catch { }
-    if ($null -eq $ownerSid) { $ownerSid = Resolve-AceSid $acl.Owner }
-    if ($null -eq $ownerSid) { return "'$p' has an unresolvable owner ($($acl.Owner))" }
-    if ($script:PrivilegedSids -notcontains $ownerSid) {
-        return "'$p' is owned by $($acl.Owner), who can rewrite its DACL at will"
-    }
-
-    $mask = if ($IsDirectory) { $script:DirWriteMask } else { $script:FileWriteMask }
-    foreach ($ace in $access) {
-        if ($ace.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
-        # InheritOnly ACEs do not grant anything on the object that carries them; they
-        # exist purely to be inherited by children. Judging them here would flag the
-        # default inheritable ACEs present on every volume root.
-        if (($ace.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0) { continue }
-        if (([int]$ace.FileSystemRights -band $mask) -eq 0) { continue }
-        $sid = Resolve-AceSid $ace.IdentityReference
-        if ($null -eq $sid) { return "'$p': $($ace.IdentityReference) (unresolvable SID) has '$($ace.FileSystemRights)'" }
-        if ($script:PrivilegedSids -notcontains $sid) { return "'$p': $($ace.IdentityReference) has '$($ace.FileSystemRights)'" }
-    }
-    return $null
-}
-
-# Walk the binary AND every ancestor directory: write access to a CONTAINING
-# directory is enough to delete and recreate the exe, regardless of the exe's own
-# ACL, so checking the file alone is not sufficient.
-function Get-NonAdminWriteVectorForPath([string]$p) {
-    $current = $p
-    $isDir = $false   # the leaf is the binary itself; every step above it is a directory
-    while ($current) {
-        $vector = Get-NonAdminWriteVector $current $isDir
-        if ($vector) { return $vector }
-        $parent = Split-Path -Parent $current
-        if (-not $parent -or $parent -eq $current) { break }
-        $current = $parent
-        $isDir = $true
-    }
-    return $null
-}
-
-$offender = Get-NonAdminWriteVectorForPath $CorePath
-if ($offender) {
-    throw "Refusing to wire a SYSTEM shutdown script to '$CorePath' -- $offender. That is enough for a non-admin " +
-          "to replace the binary this script runs, and so to gain SYSTEM code execution at every shutdown. " +
-          "Install the core under an admin-only location (e.g. Program Files), with every parent directory " +
-          "admin-owned, and point -CorePath there."
-}
-
-# The shutdown stop needs rpcuser/rpcpassword from the datadir conf. Warn if it's not there
-# (e.g. run from a different admin account whose %APPDATA% is not the core's datadir).
-if (-not (Test-Path -LiteralPath (Join-Path $DataDir 'gridcoinresearch.conf'))) {
-    Write-Host ("WARNING: no gridcoinresearch.conf in '$DataDir'. The shutdown stop needs its rpcuser/rpcpassword; " +
-                "if this is not the core's datadir the flush will be a silent no-op. Pass the correct -DataDir.") -ForegroundColor Yellow
-}
-
-# The shutdown .cmd (runs as SYSTEM). Issue the graceful RPC stop, then poll until the core
-# exits or the cap is hit. `ping` is the sleep (timeout.exe needs a console and fails here).
-#
-# -nosettings is REQUIRED here, not cosmetic. gridcoinresearchd calls InitSettings()
-# before it dispatches a command-line RPC, and InitSettings unconditionally READS AND
-# REWRITES <datadir>\settings.json. Since this script runs as SYSTEM against a datadir
-# that the (unprivileged) wallet user owns and can write, that would hand SYSTEM a file
-# write into an attacker-controlled directory on every shutdown -- the classic
-# hardlink-the-temp-file privilege escalation, with partially attacker-chosen content
-# because unknown keys in settings.json are preserved verbatim. -nosettings makes
-# GetSettingsPath() return false so InitSettings() does nothing at all, which removes
-# the write primitive rather than trying to defend it. The RPC stop itself needs only
-# to READ gridcoinresearch.conf for the credentials.
-$loops = [Math]::Max(1, [int]($WaitSeconds / 2))
-$cmd = @"
-@echo off
-rem Gridcoin graceful shutdown flush (Group Policy Computer->Shutdown script; runs as SYSTEM).
-rem Managed by Set-GridcoinShutdownFlush.ps1 -- do not edit by hand.
-rem -nosettings: never let SYSTEM write into the wallet user's datadir (see the script).
-"$CorePath" -nosettings -datadir="$DataDir" stop
-set /a n=0
-:wait
-tasklist /fi "imagename eq gridcoinresearchd.exe" | find /i "gridcoinresearchd.exe" >nul || goto done
-set /a n+=1
-if %n% geq $loops goto done
-ping -n 3 127.0.0.1 >nul
-goto wait
-:done
-"@
 if (-not (Test-Path -LiteralPath $shutdownDir)) { New-Item -ItemType Directory -Path $shutdownDir -Force | Out-Null }
-Set-Content -LiteralPath $cmdPath -Value $cmd -Encoding Ascii
-Write-Host "Wrote shutdown script: $cmdPath"
+Set-Content -LiteralPath $ps1Path -Value $psText -Encoding Ascii
+Set-Content -LiteralPath $cmdPath -Value $cmdLines -Encoding Ascii
+Write-Host "Wrote shutdown scripts: $cmdPath and $ps1Path"
 
 # Wire it into the local machine shutdown scripts (add our entry; don't clobber existing ones).
 $lines = Read-IniLines $scriptsIni
@@ -409,7 +328,7 @@ if ($ok) {
     Write-Host "Wrote scripts.ini + gpt.ini, but could not confirm the run-time state key." -ForegroundColor Yellow
 }
 Write-Host "NOTE: if a DOMAIN GPO enables 'Turn off Local Group Policy Objects processing', this local"
-Write-Host "script is ignored at boot -- deploy the .cmd via a domain GPO instead (see README)."
+Write-Host "script is ignored at boot -- deploy the .cmd and .ps1 via a domain GPO instead (see README)."
 Write-Host ""
 Write-Host "VALIDATE: reboot once, then check the core's debug.log for a full graceful shutdown"
 Write-Host "sequence ('Shutdown: ... Final flush of wallet database ...') just before the restart."
