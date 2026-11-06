@@ -342,10 +342,13 @@ endif()
 # ENABLE_MULTIPROCESS also covers the win64 MP port, which lacks those APIs; the
 # handshake logic itself is covered cross-platform by the capnp-free ipc suites
 # and validated live on Windows. Linking gridcoin_ipc propagates C++20 and the
-# capnp/kj headers to test_gridcoin in multiprocess builds.
+# capnp/kj headers to test_gridcoin in multiprocess builds. The suite also includes
+# the ipc/capnp/*-types.h headers, which include libmultiprocess's mp/ headers and
+# its generated mp/proxy.capnp.h; target_capnp_sources links libmultiprocess into
+# gridcoin_ipc privately, so test_gridcoin links it as well for that include dir.
 if(ENABLE_MULTIPROCESS AND NOT WIN32)
     target_sources(test_gridcoin PRIVATE ipc_wire_handshake_tests.cpp)
-    target_link_libraries(test_gridcoin PRIVATE gridcoin_ipc)
+    target_link_libraries(test_gridcoin PRIVATE gridcoin_ipc Libmultiprocess::multiprocess)
 endif()
 
 # BOTH halves are required on musl; neither is sufficient alone.
