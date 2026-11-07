@@ -45,6 +45,7 @@ struct MRCSnapshot $Proxy.wrap("interfaces::MRCSnapshot") {
     queueHeadFee @14 :Int64 $Proxy.name("queue_head_fee");
     queueTailFee @15 :Int64 $Proxy.name("queue_tail_fee");
     queuePayLimitFee @16 :Int64 $Proxy.name("queue_pay_limit_fee");
+    matureBalance @17 :Int64 $Proxy.name("mature_balance");
 }
 
 struct MRCSubmitResult $Proxy.wrap("interfaces::MRCSubmitResult") {

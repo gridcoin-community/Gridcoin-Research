@@ -19,6 +19,9 @@
 #include "random.h"
 #include "rpc/server.h"
 #include "init.h"
+#include "interfaces/gui_state.h"
+#include "interfaces/handler.h"
+#include "node/gui_cache.h"
 #include "node/ui_interface.h"
 #include "scheduler.h"
 #include "validationinterface.h"
@@ -90,6 +93,10 @@ std::atomic<CScheduler*> g_scheduler_handle{nullptr};
 //! init that never loaded it. Never enabled under -persistmempool=0, or when an
 //! unreadable unbroadcast.dat could not be moved aside.
 static node::UnbroadcastPersister g_unbroadcast_persister;
+
+//! The GUI state cache's triggers (AppInit2 Step 13): each only marks the parts
+//! its signal changes. Disconnected at the top of Shutdown(), with the cache.
+static std::vector<std::unique_ptr<interfaces::Handler>> g_gui_cache_handlers;
 
 namespace {
 //! Bridges the validation-signal layer to the legacy ui_interface block
@@ -200,6 +207,15 @@ void Shutdown(void* parg)
         #endif
 
         SetShutdownInProgress();
+
+        // Stop the GUI state cache before anything it reads goes: its timer takes
+        // cs_main and reads the chain and the wallet. Disconnect its triggers,
+        // unpublish it so SetBestChain stops updating it, and join the timer, not
+        // under cs_main, which the timer may be waiting for. A no-op after an
+        // early AppInit2 failure that never started it.
+        LogPrintf("INFO: %s: Stopping the GUI state cache.", __func__);
+        g_gui_cache_handlers.clear();
+        node::StopGuiCache();
 
         // Signal to the scheduler to stop. Guarded because Shutdown() can run
         // after an early AppInit2 failure, before the scheduler is constructed.
@@ -2739,6 +2755,51 @@ bool AppInit2(ThreadHandlerPtr threads)
     // no longer relays (the pre-move AcceptBlock loop did) -- a sub-second
     // window, registration cannot precede the scheduler wiring above.
     RegisterValidationInterface(g_peerman.get());
+
+    // The GUI state cache (node/gui_cache.h): the node computes the state the GUI
+    // shows that needs cs_main and pushes it, so the GUI never takes cs_main to
+    // refresh it. Chain state and the wallet are loaded by here. SetBestChain
+    // keeps it fresh in its own scope; the timer delivers each new snapshot, and
+    // takes cs_main only for what SetBestChain leaves pending.
+    node::StartGuiCache(std::make_unique<node::GuiCache>(
+        node::MakeProductionCompute(),
+        [](const interfaces::GuiStateSnapshot& snapshot) { uiInterface.GuiStateChanged(snapshot); },
+        node::GUI_CACHE_MIN_INTERVAL, node::GUI_CACHE_TICK));
+
+    // The cache's other triggers. Their signals are emitted under other locks
+    // (MinerStatusChanged under the miner-status lock, the wallet's transaction
+    // signal under cs_wallet), so each handler only marks the parts its signal
+    // changes and wakes the timer; it never updates in its own scope.
+    {
+        const auto mark = [](uint32_t parts) {
+            return interfaces::GuardNotify([parts](auto&&...) {
+                if (node::GuiCache* cache = node::GetGuiCache()) cache->MarkDirty(parts);
+            });
+        };
+
+        const uint32_t researcher = node::GuiCache::RESEARCHER | node::GuiCache::MRC;
+        const uint32_t wallet = node::GuiCache::BALANCES | node::GuiCache::MRC | node::GuiCache::ETTS;
+
+        g_gui_cache_handlers.push_back(interfaces::MakeSignalHandler(
+            uiInterface.MRCChanged_connect(mark(node::GuiCache::MRC))));
+        g_gui_cache_handlers.push_back(interfaces::MakeSignalHandler(
+            uiInterface.ResearcherChanged_connect(mark(researcher))));
+        g_gui_cache_handlers.push_back(interfaces::MakeSignalHandler(
+            uiInterface.BeaconChanged_connect(mark(researcher))));
+        g_gui_cache_handlers.push_back(interfaces::MakeSignalHandler(
+            uiInterface.AccrualChangedFromStakeOrMRC_connect(mark(researcher))));
+        g_gui_cache_handlers.push_back(interfaces::MakeSignalHandler(
+            uiInterface.MinerStatusChanged_connect(mark(node::GuiCache::MINER | node::GuiCache::ETTS))));
+
+        if (pwalletMain) {
+            g_gui_cache_handlers.push_back(interfaces::MakeSignalHandler(
+                pwalletMain->NotifyStatusChanged.connect(mark(wallet))));
+            g_gui_cache_handlers.push_back(interfaces::MakeSignalHandler(
+                pwalletMain->NotifyTransactionChanged.connect(mark(wallet))));
+            g_gui_cache_handlers.push_back(interfaces::MakeSignalHandler(
+                pwalletMain->NotifyTransactionsBulkChanged.connect(mark(wallet))));
+        }
+    }
 
     // Three-layer PSGT pool notification (#2910), the -pollnotify pattern:
     // the pool fires this hook outside its lock for every mutation; it fans

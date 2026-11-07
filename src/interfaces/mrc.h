@@ -83,6 +83,12 @@ struct MRCSnapshot
     CAmount queue_head_fee = 0;
     CAmount queue_tail_fee = 0;
     CAmount queue_pay_limit_fee = 0;
+
+    //! The wallet's mature balance (CWallet::GetBalance()), for the page's check
+    //! that a claim has at least 1 GRC mature, so the GUI needs no getBalance()
+    //! of its own. Read only when synced and researcher_eligible, before the
+    //! version gate, as that check is; 0 otherwise.
+    CAmount mature_balance = 0;
 };
 
 //! Result of an MRC submission (Phase 1d-i).

@@ -18,6 +18,10 @@ class CWallet;
 class uint256;
 enum class scrapereventtypes;
 
+namespace interfaces {
+struct GuiStateSnapshot;
+} // namespace interfaces
+
 namespace boost {
 namespace signals2 {
 class connection;
@@ -140,6 +144,10 @@ public:
 
     /** Read-write settings file updated **/
     ADD_SIGNALS_DECL_WRAPPER(RwSettingsUpdated, void);
+
+    /** The node's GUI state cache has a new snapshot (node/gui_cache.h).
+     *  @note emitted from the cache's timer thread with no lock held. */
+    ADD_SIGNALS_DECL_WRAPPER(GuiStateChanged, void, const interfaces::GuiStateSnapshot& snapshot);
 
     /** A mandatory (contract) sidestake entry was added, deleted, or reverted.
      *  Payload-free refetch trigger for the GUI sidestake table (the mandatory

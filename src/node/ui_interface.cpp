@@ -5,6 +5,7 @@
 
 #include "uint256.h"
 #include <gridcoin/scraper/fwd.h>
+#include <interfaces/gui_state.h>
 #include <node/ui_interface.h>
 
 #include <boost/signals2/optional_last_value.hpp>
@@ -35,6 +36,7 @@ struct UISignals {
     boost::signals2::signal<CClientUIInterface::UpdateMessageBoxSig> UpdateMessageBox;
     boost::signals2::signal<CClientUIInterface::RwSettingsUpdatedSig> RwSettingsUpdated;
     boost::signals2::signal<CClientUIInterface::MandatorySideStakeChangedSig> MandatorySideStakeChanged;
+    boost::signals2::signal<CClientUIInterface::GuiStateChangedSig> GuiStateChanged;
 };
 static UISignals g_ui_signals;
 
@@ -64,6 +66,7 @@ ADD_SIGNALS_IMPL_WRAPPER(NotifyBlocksChanged);
 ADD_SIGNALS_IMPL_WRAPPER(UpdateMessageBox);
 ADD_SIGNALS_IMPL_WRAPPER(RwSettingsUpdated);
 ADD_SIGNALS_IMPL_WRAPPER(MandatorySideStakeChanged);
+ADD_SIGNALS_IMPL_WRAPPER(GuiStateChanged);
 
 void CClientUIInterface::ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style) { return g_ui_signals.ThreadSafeMessageBox(message, caption, style); }
 void CClientUIInterface::UpdateMessageBox(const std::string& version, const int& update_type, const std::string& message) { return g_ui_signals.UpdateMessageBox(version, update_type, message); }
@@ -107,6 +110,7 @@ bool CClientUIInterface::GetLastScraperEvent(int& event_type, int& status) const
 }
 void CClientUIInterface::RwSettingsUpdated() { return g_ui_signals.RwSettingsUpdated(); }
 void CClientUIInterface::MandatorySideStakeChanged() { return g_ui_signals.MandatorySideStakeChanged(); }
+void CClientUIInterface::GuiStateChanged(const interfaces::GuiStateSnapshot& snapshot) { return g_ui_signals.GuiStateChanged(snapshot); }
 
 bool InitError(const std::string &str)
 {

@@ -12,6 +12,7 @@
 #include "net_processing.h"
 #include "txdb.h"
 #include "node/blockstorage.h"
+#include "node/gui_cache.h"
 #include "node/orphan_blocks.h"
 #include "node/ui_interface.h"
 #include "validation.h"
@@ -993,6 +994,25 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     // the genesis block.
     if (!reorged_back) {
         GetMainSignals().UpdatedBlockTip(pindexBest, pfork, fIsInitialDownload);
+    }
+
+    // Keep the GUI state cache fresh here, under the cs_main this function
+    // already holds, after the block's effects are applied. The update is a
+    // no-op unless the cache's interval has passed, so during a sync it runs at
+    // most every four seconds, from the latest tip. It never delivers: the
+    // cache's timer does that, holding no lock. Unconditional, reorg-back
+    // included, as that path changes the wallet and mempool too. A failure is
+    // logged and never leaves SetBestChain.
+    if (auto* cache = node::GetGuiCache()) {
+        try {
+            cache->MarkDirty(node::GuiCache::CHAIN | node::GuiCache::BALANCES | node::GuiCache::MRC
+                             | node::GuiCache::ETTS | node::GuiCache::RESEARCHER);
+            cache->UpdateLocked(false);
+        } catch (const std::exception& e) {
+            LogPrintf("ERROR: %s: the GUI state update failed: %s", __func__, e.what());
+        } catch (...) {
+            LogPrintf("ERROR: %s: the GUI state update failed with an unknown exception", __func__);
+        }
     }
 
     return GridcoinServices();

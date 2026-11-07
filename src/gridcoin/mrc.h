@@ -18,7 +18,12 @@
 #include <stdexcept>
 
 class CPubKey;
+class CWallet;
 extern CCriticalSection cs_main;
+
+namespace interfaces {
+struct MRCSnapshot;
+} // namespace interfaces
 
 namespace GRC {
 class MRC_error : public std::runtime_error
@@ -375,6 +380,24 @@ public:
 //! \return
 //!
 void CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet, bool no_sign = false);
+
+//!
+//! \brief The MRC request page's state at the chain tip, read in one cs_main hold:
+//! the version gate, a trial claim at the given fee boost, the mempool MRC queue
+//! measured against it, and the wallet's mature balance. The body of
+//! interfaces::MRC::snapshot(), shared with the node's GUI state cache
+//! (node/gui_cache.cpp), which pushes the unboosted quote. Defined in
+//! gridcoin/interfaces.cpp, beside the MRC interface.
+//!
+//! \param wallet: The wallet the claim is for; not null.
+//! \param fee_boost: Added to the minimum fee for the boosted trial; 0 for none.
+//! \param no_sign: Build the trial claim unsigned. A quote needs no signature,
+//! and a locked wallet cannot give one.
+//! \param researcher_eligible: Active beacon, not non-cruncher, not pool. When
+//! false the trial claim, the queue scan and the balance read are skipped.
+//!
+interfaces::MRCSnapshot BuildMRCSnapshot(CWallet* wallet, CAmount fee_boost, bool no_sign, bool researcher_eligible)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 
 } // namespace GRC
