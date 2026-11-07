@@ -263,8 +263,15 @@ function Set-GridcoinInstallDirAcl {
     # The list set below protects the directory only while every folder above it is closed to
     # non-administrators too: whoever can write a parent can rename the directory away and put
     # their own in its place. Checked before anything changes, so a refusal leaves every core running.
+    # Folders that do not exist yet are created below the nearest one that does, and inherit from it.
     $parentPath = Split-Path -Parent $script:InstallRoot
-    $parentOffender = Get-GridcoinWriteVector -Path $parentPath -AllowedSids (Get-GridcoinPrivilegedSids) -ChainMasks
+    while ($parentPath -and -not (Test-Path -LiteralPath $parentPath)) {
+        $parentPath = Split-Path -Parent $parentPath
+    }
+    $parentOffender = $null
+    if ($parentPath) {
+        $parentOffender = Get-GridcoinWriteVector -Path $parentPath -AllowedSids (Get-GridcoinPrivilegedSids) -ChainMasks
+    }
     if ($parentOffender) {
         throw ("a folder above the install directory $script:InstallRoot can be changed by accounts that are not administrators, " +
                "so no access list on the directory itself can protect it. Found: $parentOffender. Install under Program Files " +
