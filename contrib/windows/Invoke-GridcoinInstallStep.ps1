@@ -70,6 +70,8 @@ $script:GridcoinServices = @(
 $script:InstallRoot = $null
 $script:WindowsDir = $null
 $script:CorePath = $null
+$script:StartedServices = @()
+$script:StartedTaskSid = ''
 $script:NoticePath = $null
 
 # Runs a program and returns its exit code and the lines it wrote, standard error after standard
@@ -147,6 +149,7 @@ function Start-GridcoinCore {
         try {
             Start-Service -Name $serviceName
             Write-Host "Started the service $serviceName."
+            $script:StartedServices += $serviceName
         } catch {
             $problems += "the service $serviceName did not start ($($_.Exception.Message))"
         }
@@ -163,6 +166,7 @@ function Start-GridcoinCore {
             try {
                 $null = $startTask.Run($null)
                 Write-Host 'Started \Gridcoin\Core-Start.'
+                $script:StartedTaskSid = Get-GridcoinTaskPrincipalSid $startTask
             } catch {
                 $problems += "\Gridcoin\Core-Start did not start ($($_.Exception.Message))"
             }
@@ -623,15 +627,68 @@ function Invoke-GridcoinSwitchOver {
     if ($failures.Count -gt 0) { throw (($failures -join '; ') + '.') }
 }
 
+# The -datadir that the core line of the Core-Start launcher names, with the doubled % undone, or
+# '' when it names none (or there is no launcher).
+function Get-GridcoinLauncherDataDir {
+    $launcher = Join-Path $script:WindowsDir 'core-autostart.cmd'
+    if (-not (Test-Path -LiteralPath $launcher)) { return '' }
+    $inside = $false
+    foreach ($line in @(Get-Content -LiteralPath $launcher)) {
+        if ($line -eq 'rem BEGIN GENERATED') { $inside = $true; continue }
+        if ($line -eq 'rem END GENERATED') { break }
+        if ($inside -and $line -match '-datadir="([^"]+)"') { return ($Matches[1] -replace '%%', '%') }
+    }
+    return ''
+}
+
+# What the finish page's Run does, from what StartCore restarted. The first four characters of the
+# file are the case, the rest is the data directory:
+#   task  the installing account's own Core-Start was restarted: the GUI attaches to it
+#   othr  a service, or a core of another account, was restarted: Run is not ticked
+#   none  nothing was restarted: the plain GUI
+# The file is written in the ANSI code page, which the installer reads it in.
+function Write-GridcoinFinishRun {
+    param([bool]$OwnTask, [bool]$Other)
+    $mode = 'none'
+    $dataDirText = ''
+    if ($OwnTask) {
+        $mode = 'task'
+        $dataDirText = Get-GridcoinLauncherDataDir
+        $ansi = [System.Text.Encoding]::Default
+        if ($ansi.GetString($ansi.GetBytes($dataDirText)) -cne $dataDirText) {
+            $mode = 'othr'
+            $dataDirText = ''
+        }
+    } elseif ($Other) {
+        $mode = 'othr'
+    }
+    $finishPath = Join-Path (Split-Path -Parent $StateFile) 'finish-run.txt'
+    [System.IO.File]::WriteAllText($finishPath, ($mode + $dataDirText), [System.Text.Encoding]::Default)
+}
+
 # StartCore.
 function Invoke-GridcoinStartCore {
+    $script:StartedServices = @()
+    $script:StartedTaskSid = ''
     if (-not $StateFile -or -not (Test-Path -LiteralPath $StateFile)) {
         Write-Host 'Nothing was recorded as running before the upgrade, so nothing is started.'
+        if ($StateFile) { Write-GridcoinFinishRun -OwnTask $false -Other $false }
         return
     }
     $saved = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json
     $serviceNames = @(([string]$saved.services) -split ',' | Where-Object { $_ })
     $problems = @(Start-GridcoinCore -Services $serviceNames -CoreStartTask ([bool]$saved.coreStartTask) -RequireS4U)
+
+    $ownTask = ($script:StartedTaskSid -and $script:StartedTaskSid -eq (Get-GridcoinCurrentSid))
+    $otherTask = ($script:StartedTaskSid -and -not $ownTask)
+    $serviceStarted = (@($script:StartedServices).Count -gt 0)
+    Write-GridcoinFinishRun -OwnTask $ownTask -Other ($otherTask -or $serviceStarted)
+    if ($serviceStarted -and -not $ownTask) {
+        Add-GridcoinUpgradeNotice -Lines @(
+            ('The Gridcoin service was restarted. To attach a GUI, run, from a normal (not elevated) PowerShell: ' +
+             (Join-Path $script:WindowsDir 'Start-GridcoinGui.ps1') + ' -Service (add -Network test for testnet).'),
+            '')
+    }
     if ($problems.Count -gt 0) { throw (($problems -join '; ') + '.') }
 }
 

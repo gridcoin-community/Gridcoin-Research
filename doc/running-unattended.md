@@ -855,7 +855,11 @@ in plain text: delete it.
 
 Run the new installer as an administrator. It stops the running cores (Core-Stop for a task, `Stop-Service` for the
 service), installs, replaces the earlier tasks as above, and starts the cores it stopped. It refuses to
-uninstall while the service mode is on: run `gridcoin-service.exe disable` for each network first.
+uninstall while the service mode is on: run `gridcoin-service.exe disable` for each network first. On the finish page,
+Run starts `gridcoinresearch.exe -multiprocess` (with the `-datadir` of the launcher, if it names one) when the
+installing account's own Core-Start was restarted, so the GUI attaches to that core; it is not ticked when a service or
+another account's core was restarted (the notes then say how to attach a GUI); and it starts the plain GUI when nothing
+was restarted.
 
 On an upgrade the installer also checks the files of the default data directory (and of its `testnet\`) for
 permissions wider than this release sets for new files, and lists what it finds in `UPGRADE-NOTICE.txt` in the

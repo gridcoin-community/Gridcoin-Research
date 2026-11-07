@@ -35,6 +35,8 @@ Unicode true
 !define MUI_STARTMENUPAGE_REGISTRY_VALUENAME StartMenuGroup
 !define MUI_STARTMENUPAGE_DEFAULTFOLDER "@CPACK_NSIS_PACKAGE_NAME@"
 !define MUI_FINISHPAGE_RUN $INSTDIR\${GRIDCOIN_GUI_NAME}
+# What Run does follows what the StartCore step restarted (GrcFinishRun, GrcFinishPageShow).
+!define MUI_FINISHPAGE_RUN_FUNCTION GrcFinishRun
 # What the upgrade could not do by itself, and the files whose permissions are wider than this
 # release sets for new ones: written by Invoke-GridcoinInstallStep.ps1, and shown only when there is
 # something to say (GrcFinishPageShow).
@@ -68,6 +70,10 @@ Unicode true
 
 # Variables
 Var StartMenuGroup
+# From the StartCore step: task (the account's own Core-Start was restarted), othr (a service or
+# another account's core was restarted) or none; and the data directory of the task's launcher.
+Var GrcFinishMode
+Var GrcFinishDataDir
 
 # Installer pages
 !insertmacro MUI_PAGE_WELCOME
@@ -165,6 +171,17 @@ Section -Main SEC0000
     Pop $0
     ${If} $0 != 0
         MessageBox MB_OK|MB_ICONEXCLAMATION "A Gridcoin core that ran before the upgrade did not start again. The details above say why." /SD IDOK
+    ${EndIf}
+    # What StartCore restarted: the first four characters are the case, the rest the data directory.
+    StrCpy $GrcFinishMode none
+    StrCpy $GrcFinishDataDir ""
+    ClearErrors
+    FileOpen $1 "$PLUGINSDIR\finish-run.txt" r
+    ${IfNot} ${Errors}
+        FileRead $1 $2
+        FileClose $1
+        StrCpy $GrcFinishMode $2 4
+        StrCpy $GrcFinishDataDir $2 "" 4
     ${EndIf}
     # Report only: the files of this account's data directories whose permissions are wider than
     # this release sets for new files go into UPGRADE-NOTICE.txt. Nothing is changed.
@@ -306,10 +323,27 @@ FunctionEnd
 # The finish page offers the upgrade notes only when Invoke-GridcoinInstallStep.ps1 wrote some in
 # this run: not after an install that stopped before the switch-over, which removes earlier notes.
 Function GrcFinishPageShow
+    ${If} $GrcFinishMode == othr
+        SendMessage $mui.FinishPage.Run ${BM_SETCHECK} ${BST_UNCHECKED} 0
+    ${EndIf}
     ${If} ${Abort}
     ${OrIfNot} ${FileExists} "$INSTDIR\windows\UPGRADE-NOTICE.txt"
         SendMessage $mui.FinishPage.ShowReadme ${BM_SETCHECK} ${BST_UNCHECKED} 0
         ShowWindow $mui.FinishPage.ShowReadme ${SW_HIDE}
+    ${EndIf}
+FunctionEnd
+
+# Run starts the GUI that attaches to the account's own core when StartCore restarted it, with the
+# data directory of its launcher if that names one; otherwise the plain GUI.
+Function GrcFinishRun
+    ${If} $GrcFinishMode == task
+        ${If} $GrcFinishDataDir != ""
+            Exec '"$INSTDIR\${GRIDCOIN_GUI_NAME}" -multiprocess -datadir="$GrcFinishDataDir"'
+        ${Else}
+            Exec '"$INSTDIR\${GRIDCOIN_GUI_NAME}" -multiprocess'
+        ${EndIf}
+    ${Else}
+        Exec '"$INSTDIR\${GRIDCOIN_GUI_NAME}"'
     ${EndIf}
 FunctionEnd
 
