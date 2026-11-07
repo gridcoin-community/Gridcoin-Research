@@ -538,4 +538,53 @@ BOOST_AUTO_TEST_CASE(retry_policy)
     BOOST_CHECK(ipc::ConnectFailure{}.kind == K::Handshake);
 }
 
+// The ten seconds a denied cookie is tried again count from the first denial of an unbroken run,
+// not from the first attempt of the wait; the overall cap still holds.
+BOOST_AUTO_TEST_CASE(connect_retry_counts_the_denied_window_from_the_first_denial)
+{
+    using K = ipc::ConnectFailureKind;
+    using S = ipc::ConnectStep;
+    const auto secs = [](int n) { return std::chrono::seconds{n}; };
+
+    {
+        ipc::ConnectRetry retry;
+        BOOST_CHECK(retry.Next({K::CookieDenied, ""}, secs(0)) == S::Retry);
+        BOOST_CHECK(retry.Next({K::CookieDenied, ""}, secs(9)) == S::Retry);
+        BOOST_CHECK(retry.Next({K::CookieDenied, ""}, secs(10)) == S::GiveUp);
+    }
+
+    // A core that was starting for 100 seconds, then a momentary denial.
+    {
+        ipc::ConnectRetry retry;
+        for (int t = 0; t <= 98; t += 2) BOOST_CHECK(retry.Next({K::NoCookie, ""}, secs(t)) == S::Retry);
+        BOOST_CHECK(retry.Next({K::CookieDenied, ""}, secs(100)) == S::Retry);
+        BOOST_CHECK(retry.Next({K::CookieDenied, ""}, secs(109)) == S::Retry);
+        BOOST_CHECK(retry.Next({K::CookieDenied, ""}, secs(110)) == S::GiveUp);
+    }
+
+    // A failure of another kind between denials starts a new run.
+    {
+        ipc::ConnectRetry retry;
+        BOOST_CHECK(retry.Next({K::CookieDenied, ""}, secs(0)) == S::Retry);
+        BOOST_CHECK(retry.Next({K::CookieDenied, ""}, secs(8)) == S::Retry);
+        BOOST_CHECK(retry.Next({K::NoCookie, ""}, secs(10)) == S::Retry);
+        BOOST_CHECK(retry.Next({K::CookieDenied, ""}, secs(12)) == S::Retry);
+        BOOST_CHECK(retry.Next({K::CookieDenied, ""}, secs(21)) == S::Retry);
+        BOOST_CHECK(retry.Next({K::CookieDenied, ""}, secs(22)) == S::GiveUp);
+    }
+
+    // The overall cap holds whatever the run.
+    {
+        ipc::ConnectRetry retry;
+        BOOST_CHECK(retry.Next({K::CookieDenied, ""}, secs(295)) == S::Retry);
+        BOOST_CHECK(retry.Next({K::CookieDenied, ""}, secs(300)) == S::GiveUp);
+    }
+
+    // Kinds that are never retried stay so.
+    {
+        ipc::ConnectRetry retry;
+        BOOST_CHECK(retry.Next({K::PeerRefused, ""}, secs(0)) == S::GiveUp);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -527,4 +527,17 @@ ConnectStep NextConnectStep(const ConnectFailure& f, std::chrono::seconds elapse
     return ConnectStep::GiveUp;
 }
 
+ConnectStep ConnectRetry::Next(const ConnectFailure& f, std::chrono::seconds elapsed)
+{
+    if (f.kind != ConnectFailureKind::CookieDenied) {
+        m_denied_since.reset();
+        return NextConnectStep(f, elapsed);
+    }
+
+    if (!m_denied_since) m_denied_since = elapsed;
+    if (elapsed >= IPC_CONNECT_WAIT_MAX) return ConnectStep::GiveUp;
+
+    return NextConnectStep(f, elapsed - *m_denied_since);
+}
+
 } // namespace ipc

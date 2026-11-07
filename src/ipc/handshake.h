@@ -227,9 +227,25 @@ enum class ConnectStep {
 //! Retry NoCookie and NotListening while elapsed < IPC_CONNECT_WAIT_MAX: those two are how a
 //! core that is still starting looks. Retry CookieDenied while elapsed < IPC_COOKIE_DENIED_WAIT,
 //! for a cookie the core is replacing or deleting. Every other kind is a core that answered, or
-//! one that cannot be reached, and waiting does not change it. \p elapsed counts from the first
-//! attempt.
+//! one that cannot be reached, and waiting does not change it. \p elapsed counts from the start of
+//! what is being timed: for the denied cookie, ConnectRetry gives it the time since the first denial.
 ConnectStep NextConnectStep(const ConnectFailure& f, std::chrono::seconds elapsed);
+
+//! The retry decision of one wait for the core, across its attempts. It is NextConnectStep, except
+//! that the IPC_COOKIE_DENIED_WAIT of a denied cookie counts from the first denial of an unbroken
+//! run of denials (a failure of another kind ends the run), not from the first attempt, so a core
+//! that was slow to start does not leave a momentary denial with no time to clear. The cap of
+//! IPC_CONNECT_WAIT_MAX on the whole wait holds for every kind.
+class ConnectRetry
+{
+public:
+    //! \p elapsed counts from the first attempt.
+    ConnectStep Next(const ConnectFailure& f, std::chrono::seconds elapsed);
+
+private:
+    //! When, on that clock, the current run of denials began.
+    std::optional<std::chrono::seconds> m_denied_since;
+};
 
 //! This process's build fingerprint (git commit, build time, schema/protocol
 //! versions) for the handshake build-info exchange.

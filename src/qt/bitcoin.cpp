@@ -548,9 +548,10 @@ static CoreConnectAttempt AttemptCoreConnect(const fs::path& ipc_dir)
 //! Connect to the core in \p ipc_dir, waiting for one that is still starting.
 //!
 //! Every attempt runs on the modal GuiIpcWorker while WaitForCore keeps the GUI
-//! thread's event loop running (qt/coreconnectwait.h). NextConnectStep decides
-//! which failures are retried (no cookie yet, or nothing listening), every
-//! IPC_CONNECT_RETRY_INTERVAL, for up to IPC_CONNECT_WAIT_MAX. On failure,
+//! thread's event loop running (qt/coreconnectwait.h). ConnectRetry decides
+//! which failures are retried (no cookie yet, or nothing listening, for up to
+//! IPC_CONNECT_WAIT_MAX; a cookie that is denied, for IPC_COOKIE_DENIED_WAIT from
+//! its first denial), every IPC_CONNECT_RETRY_INTERVAL. On failure,
 //! including a canceled wait, \p failure says why.
 static std::optional<ipc::GuiConnection> ConnectToCore(const fs::path& ipc_dir, ipc::ConnectFailure& failure)
 {
@@ -559,8 +560,9 @@ static std::optional<ipc::GuiConnection> ConnectToCore(const fs::path& ipc_dir, 
     CoreWaitOutcome<CoreConnectAttempt> outcome = WaitForCore<CoreConnectAttempt>(
         [ipc_dir] { return AttemptCoreConnect(ipc_dir); },
         [](const CoreConnectAttempt& attempt) { return attempt.connection.has_value(); },
-        [logged = false](const CoreConnectAttempt& attempt, std::chrono::seconds elapsed) mutable {
-            if (ipc::NextConnectStep(attempt.failure, elapsed) != ipc::ConnectStep::Retry) return false;
+        [logged = false, retry = ipc::ConnectRetry{}](const CoreConnectAttempt& attempt,
+                                                      std::chrono::seconds elapsed) mutable {
+            if (retry.Next(attempt.failure, elapsed) != ipc::ConnectStep::Retry) return false;
             if (!logged) {
                 GUILogPrintf("IPC: waiting for the Gridcoin core to start: %s", attempt.failure.message);
                 logged = true;
