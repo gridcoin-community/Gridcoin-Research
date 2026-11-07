@@ -617,8 +617,10 @@ bool CNode::ReceiveMsgBytes(const char *pch, unsigned int nBytes)
         pch += handled;
         nBytes -= handled;
 
+        // The mockable clock, the one the VERSION handler compares the peer's
+        // time against, as Bitcoin Core stamps it.
         if (msg.complete())
-            msg.nTime = GetTimeMicros();
+            msg.nTime = GetTime<std::chrono::microseconds>().count();
     }
 
     return true;
