@@ -86,6 +86,18 @@ BOOST_AUTO_TEST_CASE(cookie_read_tells_missing_from_unreadable_from_read)
     const fs::path dir = fs::temp_directory_path() / strprintf("grc_ipc_cookie_denied_%d", GetTimeMillis());
     fs::create_directories(dir);
 
+    // However the case ends, the modes are put back so that the directory can be removed.
+    struct Cleanup {
+        const fs::path& dir;
+        ~Cleanup()
+        {
+            ::chmod(dir.c_str(), 0700);
+            ::chmod((dir / "ipc.cookie").c_str(), 0600);
+            boost::system::error_code ec;
+            fs::remove_all(dir, ec);
+        }
+    } const cleanup{dir};
+
     // No file.
     {
         const ipc::CookieRead missing = ipc::ReadCookie(dir);
@@ -129,8 +141,6 @@ BOOST_AUTO_TEST_CASE(cookie_read_tells_missing_from_unreadable_from_read)
         BOOST_CHECK(ipc::ReadCookie(dir).status == ipc::CookieStatus::Read);
     }
 
-    boost::system::error_code ec;
-    fs::remove_all(dir, ec);
 }
 #endif
 
