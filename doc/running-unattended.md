@@ -863,6 +863,9 @@ installing account's own Core-Start was restarted, so the GUI attaches to that c
 another account's core was restarted (the notes then say how to attach a GUI); and it starts the plain GUI when nothing
 was restarted.
 
+From an earlier version, upgrade with the installer: the `Update-GridcoinCore.ps1 -NewBinariesDir` of earlier
+versions copies only the programs and does not replace the earlier tasks.
+
 On an upgrade the installer also checks the files of the default data directory (and of its `testnet\`) for
 permissions wider than this release sets for new files, and lists what it finds in `UPGRADE-NOTICE.txt` in the
 `windows\` folder, which the finish page offers to open. It changes nothing: a file the core rewrites keeps the

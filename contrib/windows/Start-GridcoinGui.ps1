@@ -36,8 +36,8 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')
 
 if (Test-GridcoinElevated) {
-    throw ("The Gridcoin wallet must not run as administrator in multiprocess mode. Start it from a normal " +
-           "(not elevated) session. This happens only when Gridcoin could not give up the administrator rights it was started with.")
+    throw ("The Gridcoin wallet must not run as administrator in multiprocess mode. Run this script from a " +
+           "normal (not elevated) PowerShell window.")
 }
 
 if ($PSBoundParameters.ContainsKey('Network') -and -not $Service) {
