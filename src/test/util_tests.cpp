@@ -2626,4 +2626,59 @@ BOOST_AUTO_TEST_CASE(printable_ascii_keeps_only_plain_ascii_messages)
     BOOST_CHECK_EQUAL(PrintableAscii("Access\x7f" "denied."), "");
 }
 
+BOOST_AUTO_TEST_CASE(without_system_message_removes_only_the_final_message_suffix)
+{
+    // What std::system_error(code, category, what_arg) makes: what_arg + ": " + message.
+    BOOST_CHECK_EQUAL(WithoutSystemMessage("open x: Access is denied.", "Access is denied.").value_or("none"), "open x");
+
+    // No what_arg: ": " + message, or the message alone (the constructor without a what_arg).
+    BOOST_CHECK_EQUAL(WithoutSystemMessage(": Access is denied.", "Access is denied.").value_or("none"), "");
+    BOOST_CHECK_EQUAL(WithoutSystemMessage("Access is denied.", "Access is denied.").value_or("none"), "");
+
+    // The message twice: only the final one is the message.
+    BOOST_CHECK_EQUAL(WithoutSystemMessage("odd: Access is denied.: Access is denied.", "Access is denied.")
+                          .value_or("none"),
+                      "odd: Access is denied.");
+
+    // The what does not end with the message: what_arg cannot be told from the message.
+    BOOST_CHECK(!WithoutSystemMessage("open x: Acces refuse.", "Access is denied.").has_value());
+    BOOST_CHECK(!WithoutSystemMessage("open xAccess is denied.", "Access is denied.").has_value());
+    BOOST_CHECK(!WithoutSystemMessage("", "Access is denied.").has_value());
+}
+
+BOOST_AUTO_TEST_CASE(ascii_what_leaves_other_exceptions_alone)
+{
+    BOOST_CHECK_EQUAL(AsciiWhat(std::runtime_error("plain reason")), "plain reason");
+    BOOST_CHECK_EQUAL(AsciiWhat(std::logic_error("Acc\xc3\xa8s")), "Acc\xc3\xa8s");
+
+#ifndef WIN32
+    // Off Windows what() is returned as it is.
+    const std::system_error e(EACCES, std::system_category(), "open x");
+    BOOST_CHECK_EQUAL(AsciiWhat(e), std::string(e.what()));
+#else
+    // 5 is ERROR_ACCESS_DENIED.
+    const std::system_error denied(5, std::system_category(), "open x");
+    const std::string text = AsciiWhat(denied);
+    BOOST_CHECK(text.rfind("open x: ", 0) == 0);
+    BOOST_CHECK_MESSAGE(text.size() >= 9 && text.compare(text.size() - 9, 9, "(error 5)") == 0, text);
+    for (const char c : text) BOOST_CHECK(c >= 0x20 && c < 0x7f);
+
+    // The what_arg is the caller's own text, a path with a non-ASCII name included: it is kept, and only
+    // Windows' message is replaced.
+    const std::string path_arg = "open C:\\Users\\J\xc3\xbcrgen\\x";
+    const std::string with_path = AsciiWhat(std::system_error(5, std::system_category(), path_arg));
+    BOOST_CHECK_MESSAGE(with_path.rfind(path_arg + ": ", 0) == 0, with_path);
+    BOOST_CHECK_MESSAGE(with_path.size() >= 9 && with_path.compare(with_path.size() - 9, 9, "(error 5)") == 0, with_path);
+
+    // Without a what_arg: the error text alone.
+    const std::string bare = AsciiWhat(std::system_error(5, std::system_category()));
+    BOOST_CHECK(bare.find("(error 5)") != std::string::npos || bare == "error 5");
+    for (const char c : bare) BOOST_CHECK(c >= 0x20 && c < 0x7f);
+
+    // Another category is not Windows' text.
+    const std::system_error other(std::make_error_code(std::errc::invalid_argument), "parse");
+    BOOST_CHECK_EQUAL(AsciiWhat(other), std::string(other.what()));
+#endif
+}
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -37,6 +37,13 @@ std::string SysErrorString(int err)
     }
 }
 
+#ifndef WIN32
+std::string AsciiWhat(const std::exception& e)
+{
+    return e.what();
+}
+#endif
+
 std::string PrintableAscii(std::string message)
 {
     while (!message.empty() && (message.back() == '\r' || message.back() == '\n' || message.back() == ' ' ||
@@ -49,7 +56,33 @@ std::string PrintableAscii(std::string message)
     return printable ? message : std::string();
 }
 
+std::optional<std::string> WithoutSystemMessage(const std::string& what, const std::string& message)
+{
+    if (what == message) return std::string();
+
+    const std::string suffix = ": " + message;
+    if (what.size() < suffix.size() || what.compare(what.size() - suffix.size(), suffix.size(), suffix) != 0) {
+        return std::nullopt;
+    }
+
+    return what.substr(0, what.size() - suffix.size());
+}
+
 #ifdef WIN32
+std::string AsciiWhat(const std::exception& e)
+{
+    const auto* system = dynamic_cast<const std::system_error*>(&e);
+    if (system == nullptr || system->code().category() != std::system_category()) return e.what();
+
+    const std::string error_text = Win32ErrorText(static_cast<unsigned long>(system->code().value()));
+    const std::optional<std::string> what_arg = WithoutSystemMessage(e.what(), system->code().message());
+    if (!what_arg || what_arg->empty()) return error_text;
+
+    // The what_arg is the caller's own text and is kept as it is, a path with a non-ASCII name included:
+    // only Windows' wording of the code is replaced.
+    return *what_arg + ": " + error_text;
+}
+
 std::string Win32ErrorText(unsigned long error)
 {
     const std::string message = PrintableAscii(std::system_category().message(static_cast<int>(error)));
