@@ -145,7 +145,9 @@ public:
     /** Read-write settings file updated **/
     ADD_SIGNALS_DECL_WRAPPER(RwSettingsUpdated, void);
 
-    /** The node's GUI state cache has a new snapshot (node/gui_cache.h).
+    /** The node's GUI state cache has a new snapshot (node/gui_cache.h). The
+     *  sequences delivered never decrease but may repeat, so a subscriber
+     *  keeps a snapshot only when its sequence is higher than the last one's.
      *  @note emitted from the cache's timer thread with no lock held. */
     ADD_SIGNALS_DECL_WRAPPER(GuiStateChanged, void, const interfaces::GuiStateSnapshot& snapshot);
 

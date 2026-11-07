@@ -2769,7 +2769,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     // The cache's other triggers. Their signals are emitted under other locks
     // (MinerStatusChanged under the miner-status lock, the wallet's transaction
     // signal under cs_wallet), so each handler only marks the parts its signal
-    // changes and wakes the timer; it never updates in its own scope.
+    // changes and wakes the timer; it never updates in its own scope. A miner
+    // pass, about every eight seconds while staking, changes no input of the
+    // staking-time estimate, so it marks MINER alone; the cache recomputes the
+    // estimate when the pushed staking flag flips.
     {
         const auto mark = [](uint32_t parts) {
             return interfaces::GuardNotify([parts](auto&&...) {
@@ -2789,7 +2792,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_gui_cache_handlers.push_back(interfaces::MakeSignalHandler(
             uiInterface.AccrualChangedFromStakeOrMRC_connect(mark(researcher))));
         g_gui_cache_handlers.push_back(interfaces::MakeSignalHandler(
-            uiInterface.MinerStatusChanged_connect(mark(node::GuiCache::MINER | node::GuiCache::ETTS))));
+            uiInterface.MinerStatusChanged_connect(mark(node::GuiCache::MINER))));
 
         if (pwalletMain) {
             g_gui_cache_handlers.push_back(interfaces::MakeSignalHandler(

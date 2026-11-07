@@ -76,6 +76,8 @@ extern ConvergedScraperStats ConvergedScraperStatsCache;
 interfaces::MRCSnapshot GRC::BuildMRCSnapshot(CWallet* wallet, CAmount fee_boost, bool no_sign,
                                               bool researcher_eligible)
 {
+    AssertLockHeld(cs_main);
+
     interfaces::MRCSnapshot snap;
 
     // Defensive: before the chain tip exists, present as out-of-sync rather
@@ -125,9 +127,11 @@ interfaces::MRCSnapshot GRC::BuildMRCSnapshot(CWallet* wallet, CAmount fee_boost
     CAmount min_fee = 0;
 
     // First run with fee = 0 computes the minimum required fee. CreateMRC
-    // takes the wallet lock in its own scope.
+    // takes the wallet lock in its own scope. Quiet: an error is reported in the
+    // snapshot, and "no positive research reward pending" is routine for a
+    // researcher just paid, on every tip the GUI state cache quotes.
     try {
-        GRC::CreateMRC(pindexBest, mrc, reward, min_fee, wallet, no_sign);
+        GRC::CreateMRC(pindexBest, mrc, reward, min_fee, wallet, no_sign, /*quiet=*/true);
     } catch (GRC::MRC_error& e) {
         snap.create_error = true;
         snap.create_error_msg = e.what();
@@ -150,7 +154,7 @@ interfaces::MRCSnapshot GRC::BuildMRCSnapshot(CWallet* wallet, CAmount fee_boost
         // total.
         CAmount rerun_fee = total_fee;
         try {
-            GRC::CreateMRC(pindexBest, mrc, reward, rerun_fee, wallet, no_sign);
+            GRC::CreateMRC(pindexBest, mrc, reward, rerun_fee, wallet, no_sign, /*quiet=*/true);
         } catch (GRC::MRC_error& e) {
             snap.boosted_fee_error = true;
             snap.boosted_fee_error_msg = e.what();

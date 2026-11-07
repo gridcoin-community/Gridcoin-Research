@@ -66,7 +66,8 @@ class GuiCache
 {
 public:
     //! The parts of the snapshot, by the inputs that change them. A tip changes
-    //! CHAIN, BALANCES, MRC, ETTS and RESEARCHER.
+    //! CHAIN, BALANCES, MRC, ETTS and RESEARCHER. A MINER update whose staking
+    //! flag flips recomputes ETTS too.
     enum Part : uint32_t { CHAIN = 1, BALANCES = 2, MINER = 4, MRC = 8, ETTS = 16, RESEARCHER = 32, ALL = 63 };
 
     //!
@@ -91,7 +92,9 @@ public:
         std::function<void(const std::function<void()>&)> run_under_cs_main;
     };
 
-    //! Receives every new snapshot, on the timer thread, holding no lock.
+    //! Receives every new snapshot, on the timer thread, holding no lock. The
+    //! sequences it sees never decrease but may repeat: an update that lands
+    //! while a delivery copies the snapshot is delivered then and again after.
     using DeliverFn = std::function<void(const interfaces::GuiStateSnapshot&)>;
 
     //! How long the timer waits, once an update looks due to it, before it takes
@@ -117,8 +120,9 @@ public:
     GuiCache& operator=(const GuiCache&) = delete;
 
     //! Recompute the marked parts and swap the new snapshot in, if an update is
-    //! due: the marks are pending and the interval has passed since the last
-    //! update, or \p force. Not due, it returns at once, having taken no lock.
+    //! due: marks are pending, or the out-of-sync test has turned, and the
+    //! interval has passed since the last update; or \p force. Not due, it
+    //! returns at once, having taken no lock.
     //! Never takes cs_main itself, and never delivers: it leaves the delivery to
     //! the timer and wakes it. An exception from a part propagates, the snapshot is
     //! left as it was, and the parts stay marked for the next due update.
@@ -189,7 +193,10 @@ private:
     Mutex m_timer_mutex;
     std::thread m_timer GUARDED_BY(m_timer_mutex);
 
-    //! Pending marks and the interval has passed (lock-free).
+    //! Marks are pending, or the out-of-sync test has turned (lock-free).
+    bool IsPending() const;
+
+    //! Pending, and the interval has passed since the last update (lock-free).
     bool IsDue(int64_t now_ms) const;
 
     //! The out-of-sync test has turned since the last update (lock-free).

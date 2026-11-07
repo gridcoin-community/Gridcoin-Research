@@ -30,6 +30,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -75,8 +76,12 @@ public:
     //! The thread the chain part last ran on.
     std::atomic<std::thread::id> chain_thread{};
 
-    //! What the chain part reports.
+    //! What the chain and miner parts report.
     std::atomic<int> height{0};
+    std::atomic<bool> staking{false};
+
+    //! The MRC part throws while set.
+    std::atomic<bool> mrc_throws{false};
 
     std::atomic<bool> out_of_sync{false};
     std::atomic<int64_t> clock_ms{1000000};
@@ -99,9 +104,13 @@ public:
             ++balances_calls;
             snap.has_balances = true;
         };
-        compute.miner = [this](GuiStateSnapshot&) { ++miner_calls; };
+        compute.miner = [this](GuiStateSnapshot& snap) {
+            ++miner_calls;
+            snap.staking = staking.load();
+        };
         compute.mrc = [this](GuiStateSnapshot& snap) {
             ++mrc_calls;
+            if (mrc_throws) throw std::runtime_error("the MRC part failed");
             snap.has_mrc = true;
         };
         compute.etts = [this](GuiStateSnapshot& snap) {
@@ -408,9 +417,10 @@ BOOST_AUTO_TEST_CASE(periodic_tick_flips_synced_parts_without_a_block)
     BOOST_CHECK(!deliveries.Last().has_mrc);
     std::this_thread::sleep_for(GuiCache::SETTLE + INTERVAL);
 
-    // The time-based test turns, with no block, no mark and no clock movement:
-    // the next tick sees it and the synced parts arrive.
+    // The time-based test turns as time passes, with no block and no mark: the
+    // next tick sees it and the synced parts arrive.
     compute.out_of_sync = false;
+    compute.Advance(INTERVAL);
     BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.has_mrc; }));
 
     const GuiStateSnapshot snap = deliveries.Last();
@@ -419,6 +429,85 @@ BOOST_AUTO_TEST_CASE(periodic_tick_flips_synced_parts_without_a_block)
     BOOST_CHECK(snap.has_researcher);
     BOOST_CHECK_EQUAL(compute.mrc_calls.load(), 1);
     BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), 1);
+
+    cache.Stop();
+}
+
+BOOST_AUTO_TEST_CASE(a_miner_pass_recomputes_etts_only_when_staking_flips)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms);
+
+    InScope(cache, GuiCache::CHAIN);
+    BOOST_CHECK_EQUAL(compute.etts_calls.load(), 1);
+
+    // Miner passes that leave the staking flag as it was change no input of the
+    // estimate: the miner part alone runs.
+    for (int i = 0; i < 3; ++i) {
+        compute.Advance(4000ms);
+        InScope(cache, GuiCache::MINER);
+    }
+    BOOST_CHECK_EQUAL(compute.miner_calls.load(), 4);
+    BOOST_CHECK_EQUAL(compute.etts_calls.load(), 1);
+
+    // The miner starts staking: the estimate follows in the same update.
+    compute.staking = true;
+    compute.Advance(4000ms);
+    InScope(cache, GuiCache::MINER);
+    BOOST_CHECK_EQUAL(compute.etts_calls.load(), 2);
+    BOOST_CHECK(cache.Current().staking);
+
+    // A pass while it keeps staking: no estimate.
+    compute.Advance(4000ms);
+    InScope(cache, GuiCache::MINER);
+    BOOST_CHECK_EQUAL(compute.etts_calls.load(), 2);
+
+    // It stops: the estimate follows again.
+    compute.staking = false;
+    compute.Advance(4000ms);
+    InScope(cache, GuiCache::MINER);
+    BOOST_CHECK_EQUAL(compute.etts_calls.load(), 3);
+    BOOST_CHECK(!cache.Current().staking);
+}
+
+BOOST_AUTO_TEST_CASE(a_failing_part_is_retried_at_the_interval_while_sync_has_turned)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    GuiCache cache(compute.Make(), deliveries.Make(), INTERVAL, TICK);
+
+    compute.out_of_sync = true;
+    InScope(cache, GuiCache::CHAIN);
+    cache.StartTimer();
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+
+    // The node syncs with no block as an interval passes, and the MRC part, one
+    // of those that now appear, fails.
+    compute.mrc_throws = true;
+    compute.out_of_sync = false;
+    compute.Advance(INTERVAL);
+    BOOST_REQUIRE(WaitUntil([&] { return compute.mrc_calls.load() >= 1; }));
+
+    // While the clock stands still nothing is retried, however long the timer
+    // runs: the failure keeps the turn pending, and a retry waits for the
+    // interval like any other update.
+    std::this_thread::sleep_for(3 * TIMER_CHANCE);
+    BOOST_CHECK_EQUAL(compute.mrc_calls.load(), 1);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), 1);
+
+    // An interval later, one retry.
+    compute.Advance(INTERVAL);
+    BOOST_REQUIRE(WaitUntil([&] { return compute.mrc_calls.load() >= 2; }));
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    BOOST_CHECK_EQUAL(compute.mrc_calls.load(), 2);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), 2);
+
+    // The part recovers: the next due update lands, with the synced parts.
+    compute.mrc_throws = false;
+    compute.Advance(INTERVAL);
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.has_mrc; }));
+    BOOST_CHECK_EQUAL(compute.mrc_calls.load(), 3);
 
     cache.Stop();
 }

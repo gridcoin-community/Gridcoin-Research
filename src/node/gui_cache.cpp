@@ -50,7 +50,7 @@ void GuiCache::UpdateLocked(bool force)
     // Read the time-based test once, so the whole snapshot agrees with it. When
     // it has turned since the last update, the chain part (which reports it)
     // and the synced parts (which appear or go) are recomputed whatever was
-    // marked.
+    // marked. A turn is due like a mark: once the interval has passed (IsDue).
     const bool out_of_sync = m_compute.out_of_sync();
 
     uint32_t parts = m_dirty.exchange(0);
@@ -59,8 +59,9 @@ void GuiCache::UpdateLocked(bool force)
         parts |= CHAIN | SYNCED_PARTS;
     }
 
-    // Only a forced update can find nothing to do: an update in scope took the
-    // marks of a request after it was made, and that update's delivery answers it.
+    // Nothing to do only when forced (an update in scope took a request's marks
+    // after it was made, and that update's delivery answers it), or when the
+    // out-of-sync test turned back between the due check and the read above.
     if (parts == 0) {
         return;
     }
@@ -75,7 +76,15 @@ void GuiCache::UpdateLocked(bool force)
     try {
         if (parts & CHAIN) m_compute.chain(next);
         if (parts & BALANCES) m_compute.balances(next);
-        if (parts & MINER) m_compute.miner(next);
+
+        if (parts & MINER) {
+            const bool was_staking = next.staking;
+            m_compute.miner(next);
+
+            // A miner pass changes no input of the staking-time estimate, but
+            // whether the miner stakes is one: recompute it when that flips.
+            if (next.staking != was_staking) parts |= ETTS;
+        }
 
         if (out_of_sync) {
             // Meaningless until synced: absent, and not computed.
@@ -174,9 +183,14 @@ interfaces::GuiStateSnapshot GuiCache::Current() const
     return m_snapshot;
 }
 
+bool GuiCache::IsPending() const
+{
+    return m_dirty.load() != 0 || SyncTurned();
+}
+
 bool GuiCache::IsDue(int64_t now_ms) const
 {
-    if (m_dirty.load() == 0) {
+    if (!IsPending()) {
         return false;
     }
 
@@ -192,7 +206,7 @@ bool GuiCache::SyncTurned() const
 
 std::chrono::milliseconds GuiCache::NextWait() const
 {
-    if (m_dirty.load() == 0) {
+    if (!IsPending()) {
         return m_tick;
     }
 
@@ -273,7 +287,7 @@ void GuiCache::TimerLoop()
         const bool request = m_request.exchange(false);
 
         if (!request) {
-            if (!SyncTurned() && !IsDue(m_compute.now_ms())) continue;
+            if (!IsDue(m_compute.now_ms())) continue;
 
             // An update SetBestChain is making in its own scope lands in this
             // time, and then there is nothing left for the timer to do.
@@ -281,18 +295,17 @@ void GuiCache::TimerLoop()
 
             Deliver();
 
-            if (!SyncTurned() && !IsDue(m_compute.now_ms())) continue;
+            if (!IsDue(m_compute.now_ms())) continue;
         }
-
-        // The turn of the out-of-sync test is due whatever the interval says.
-        const bool force = request || SyncTurned();
 
         try {
             // run_under_cs_main holds cs_main around this lambda, which the
-            // thread-safety analyzer cannot see through std::function.
-            m_compute.run_under_cs_main([this, force]() NO_THREAD_SAFETY_ANALYSIS {
+            // thread-safety analyzer cannot see through std::function. Only a
+            // request is forced: anything else is due, and an update that fails
+            // is retried when it is due again, an interval after the attempt.
+            m_compute.run_under_cs_main([this, request]() NO_THREAD_SAFETY_ANALYSIS {
                 AssertLockHeld(cs_main);
-                UpdateLocked(force);
+                UpdateLocked(request);
             });
         } catch (const std::exception& e) {
             LogPrintf("ERROR: %s: the GUI state update failed: %s", __func__, e.what());

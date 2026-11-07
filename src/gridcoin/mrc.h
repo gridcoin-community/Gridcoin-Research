@@ -29,9 +29,11 @@ namespace GRC {
 class MRC_error : public std::runtime_error
 {
 public:
-    explicit MRC_error(const std::string& str) : std::runtime_error("ERROR: " + str)
+    //! \p log false leaves the error to the exception alone: a trial claim's,
+    //! whose caller reports it (see CreateMRC's quiet).
+    explicit MRC_error(const std::string& str, bool log = true) : std::runtime_error("ERROR: " + str)
     {
-        LogPrintf("ERROR: %s", str);
+        if (log) LogPrintf("ERROR: %s", str);
     }
 };
 
@@ -377,9 +379,14 @@ public:
 //! \param fee: The MRC fees to be taken out of the research reward (in/out parameter)
 //! \param pwallet: The wallet object
 //! \param no_sign: If true, don't sign the MRC (trial run).
+//! \param quiet: If true, report an error by the MRC_error alone, without its
+//! default-level log line: a trial claim whose caller reports the error (the MRC
+//! request page's quote, which the GUI state cache makes on every tip, where "no
+//! positive research reward pending" is routine). The RPC and the submit log.
 //! \return
 //!
-void CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet, bool no_sign = false);
+void CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet, bool no_sign = false,
+               bool quiet = false);
 
 //!
 //! \brief The MRC request page's state at the chain tip, read in one cs_main hold:
@@ -392,7 +399,8 @@ void CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CW
 //! \param wallet: The wallet the claim is for; not null.
 //! \param fee_boost: Added to the minimum fee for the boosted trial; 0 for none.
 //! \param no_sign: Build the trial claim unsigned. A quote needs no signature,
-//! and a locked wallet cannot give one.
+//! and a locked wallet cannot give one. The trial is quiet either way: its
+//! errors go into the snapshot, not the log.
 //! \param researcher_eligible: Active beacon, not non-cruncher, not pool. When
 //! false the trial claim, the queue scan and the balance read are skipped.
 //!

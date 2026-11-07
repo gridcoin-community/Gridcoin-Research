@@ -9,14 +9,43 @@
 #include <gridcoin/cpid.h>
 #include <gridcoin/mrc.h>
 #include <gridcoin/tally.h>
+#include <interfaces/gui_state.h>
 #include <key.h>
+#include <logging.h>
 #include <miner.h>
+#include <node/gui_cache.h>
 #include <primitives/transaction.h>
 #include <rpc/blockchain.h>
 #include <test/state_guard.h>
 #include <test/test_gridcoin.h>
 
+#include <functional>
+#include <list>
+#include <string>
+#include <vector>
+
 namespace {
+//! Collects the log lines containing "ERROR" while alive.
+class CapturedErrors
+{
+public:
+    std::vector<std::string> m_lines;
+
+    CapturedErrors()
+        : m_callback(LogInstance().PushBackCallback([this](const std::string& line) {
+              if (line.find("ERROR") != std::string::npos) m_lines.push_back(line);
+          }))
+    {
+    }
+
+    ~CapturedErrors() { LogInstance().DeleteCallback(m_callback); }
+    CapturedErrors(const CapturedErrors&) = delete;
+    CapturedErrors& operator=(const CapturedErrors&) = delete;
+
+private:
+    std::list<std::function<void(const std::string&)>>::iterator m_callback;
+};
+
 struct Setup {
     // First member: restores the tip globals, mock time and the arguments
     // this fixture forces, after the members below are gone. The destructor
@@ -301,6 +330,49 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
     // Currently the miner code is too coupled together which makes this
     // infeasible without having a mess of spaghetti code for working
     // around this.
+}
+
+// The node's GUI state cache quotes the MRC request page's figures on every tip
+// once synced, with a trial claim. For a researcher just paid, with nothing
+// accrued, the trial's "no positive research reward pending" is routine, and must
+// not write a default-level ERROR line per tip. The RPC and submit paths still do.
+BOOST_AUTO_TEST_CASE(the_gui_cache_trial_with_nothing_accrued_logs_no_error)
+{
+    // Regtest opens the MRC version gate from genesis, so the quote reaches its
+    // trial claim on this mock chain. The fixture's StateGuard puts the network,
+    // the tip and the clock back.
+    SelectParams(CBaseChainParams::REGTEST);
+    account.m_accrual = 0;
+    g_previous_block_time = GetAdjustedTime();
+
+    LOCK(cs_main);
+    pindexBest = pindex;
+    nBestHeight = pindex->nHeight;
+
+    // A synced, eligible researcher: what the cache's researcher part reports
+    // for this fixture's active beacon.
+    interfaces::GuiStateSnapshot snap;
+    snap.out_of_sync = false;
+    snap.has_researcher = true;
+    snap.researcher.has_active_beacon = true;
+
+    CapturedErrors errors;
+
+    node::MakeProductionCompute().mrc(snap);
+
+    BOOST_REQUIRE(snap.has_mrc);
+    BOOST_CHECK(!snap.mrc.out_of_sync);
+    BOOST_CHECK(snap.mrc.block_version_valid);
+    BOOST_CHECK(snap.mrc.create_error);
+    BOOST_CHECK(snap.mrc.create_error_msg.find("No positive research reward pending") != std::string::npos);
+    BOOST_CHECK(errors.m_lines.empty());
+
+    // The same claim through the RPC's and the submit's call still logs it.
+    GRC::MRC mrc;
+    CAmount reward{0}, fee{0};
+    BOOST_CHECK_THROW(GRC::CreateMRC(pindex, mrc, reward, fee, wallet), GRC::MRC_error);
+    BOOST_REQUIRE_EQUAL(errors.m_lines.size(), 1U);
+    BOOST_CHECK(errors.m_lines[0].find("No positive research reward pending") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
