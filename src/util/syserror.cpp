@@ -9,7 +9,11 @@
 #include <tinyformat.h>
 #include <util/syserror.h>
 
+#include <algorithm>
 #include <cstring>
+#ifdef WIN32
+#include <system_error>
+#endif
 
 std::string SysErrorString(int err)
 {
@@ -32,3 +36,26 @@ std::string SysErrorString(int err)
         return strprintf("Unknown error (%d)", err);
     }
 }
+
+std::string PrintableAscii(std::string message)
+{
+    while (!message.empty() && (message.back() == '\r' || message.back() == '\n' || message.back() == ' ' ||
+                                message.back() == '.')) {
+        message.pop_back();
+    }
+
+    const bool printable = std::all_of(message.begin(), message.end(), [](char c) { return c >= 0x20 && c < 0x7f; });
+
+    return printable ? message : std::string();
+}
+
+#ifdef WIN32
+std::string Win32ErrorText(unsigned long error)
+{
+    const std::string message = PrintableAscii(std::system_category().message(static_cast<int>(error)));
+
+    if (message.empty()) return strprintf("error %lu", error);
+
+    return strprintf("%s (error %lu)", message, error);
+}
+#endif

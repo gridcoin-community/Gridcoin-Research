@@ -13,6 +13,7 @@
 #include "util/fsmodes.h"
 #include "util/strencodings.h"
 #include "util/string.h"
+#include "util/syserror.h"
 #include "util/time.h"
 #include "util/win_acl.h"
 #include "util/winservice.h"
@@ -110,33 +111,12 @@ std::string Shown(const fs::path& path)
     return Shown(path.wstring());
 }
 
-//! \p message without the line break and full stop Windows ends it with, or empty when it is not
-//! printable ASCII.
-std::string PrintableMessage(std::string message)
-{
-    while (!message.empty() && (message.back() == '\r' || message.back() == '\n' || message.back() == ' ' ||
-                                message.back() == '.')) {
-        message.pop_back();
-    }
-    const bool printable = std::all_of(message.begin(), message.end(), [](char c) { return c >= 0x20 && c < 0x7f; });
-    return printable ? message : std::string();
-}
-
-//! The Win32 error \p error as text: Windows' message when it is printable ASCII, and the number.
-std::string Win32Text(DWORD error)
-{
-    const std::string message = PrintableMessage(std::system_category().message(static_cast<int>(error)));
-    if (message.empty()) return strprintf("error %u", static_cast<unsigned>(error));
-
-    return strprintf("%s (error %u)", message, static_cast<unsigned>(error));
-}
-
 //! A status of the network management functions (NetLocalGroupAdd) as text. Their own codes,
 //! NERR_BASE to MAX_NERR, are not in the system's message table: their messages are in
 //! netmsg.dll, loaded from the system directory as data. Any other code is a Win32 error.
 std::string NetApiText(NET_API_STATUS status)
 {
-    if (status < NERR_BASE || status > MAX_NERR) return Win32Text(status);
+    if (status < NERR_BASE || status > MAX_NERR) return Win32ErrorText(status);
 
     std::string message;
     std::wstring system(MAX_PATH, L'\0');
@@ -152,7 +132,7 @@ std::string NetApiText(NET_API_STATUS status)
                                                 module, status, 0, reinterpret_cast<LPWSTR>(&buffer), 0, nullptr);
             if (size > 0 && buffer) {
                 try {
-                    message = PrintableMessage(WideToUtf8(std::wstring_view(buffer, size)));
+                    message = PrintableAscii(WideToUtf8(std::wstring_view(buffer, size)));
                 } catch (const std::range_error&) {
                     // Not valid UTF-16: the number alone, below.
                 }
@@ -168,7 +148,7 @@ std::string NetApiText(NET_API_STATUS status)
 
 [[noreturn]] void ThrowWin32(DWORD error, const std::string& what)
 {
-    throw std::runtime_error(what + ": " + Win32Text(error));
+    throw std::runtime_error(what + ": " + Win32ErrorText(error));
 }
 
 [[noreturn]] void ThrowLastError(const std::string& what)
@@ -1387,7 +1367,7 @@ void RemoveEmptyDirectories(const std::vector<fs::path>& dirs)
             continue;
         }
         const DWORD error = ::GetLastError();
-        Say("Kept " + Shown(dir) + ": " + (error == ERROR_DIR_NOT_EMPTY ? "it is not empty" : Win32Text(error)));
+        Say("Kept " + Shown(dir) + ": " + (error == ERROR_DIR_NOT_EMPTY ? "it is not empty" : Win32ErrorText(error)));
     }
 }
 
@@ -1581,7 +1561,7 @@ bool ShowService(Network net, const std::optional<fs::path>& exe, const fs::path
     const UniqueServiceHandle scm(::OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT));
     if (!scm) {
         Say(strprintf("Service %s: the service control manager could not be opened: %s", Shown(names.service),
-                      Win32Text(::GetLastError())));
+                      Win32ErrorText(::GetLastError())));
         return false;
     }
 
@@ -1598,7 +1578,7 @@ bool ShowService(Network net, const std::optional<fs::path>& exe, const fs::path
         Say(ServiceUnreadableText(net));
         return false;
     case ServiceOpen::Failed:
-        Say(strprintf("Service %s: could not be opened: %s", Shown(names.service), Win32Text(error)));
+        Say(strprintf("Service %s: could not be opened: %s", Shown(names.service), Win32ErrorText(error)));
         return false;
     }
 
@@ -2114,7 +2094,7 @@ void EnableService(const ToolOptions& options)
     } catch (const std::exception& e) {
         std::vector<std::string> left;
         if (state_written && !::DeleteFileW(state_path.wstring().c_str())) {
-            left.push_back("delete " + Shown(state_path) + ": " + Win32Text(::GetLastError()));
+            left.push_back("delete " + Shown(state_path) + ": " + Win32ErrorText(::GetLastError()));
         }
         if (copied) {
             if (std::string error = RemoveCopy(datadir, result.created_top); !error.empty()) left.push_back(error);

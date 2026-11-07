@@ -9,6 +9,7 @@
 #include "univalue.h"
 #include "util/strencodings.h"
 #include "util/string.h"
+#include "util/syserror.h"
 #include "util/system.h"
 
 #include <algorithm>
@@ -24,8 +25,6 @@
 
 #include <windows.h>
 #else
-#include "util/syserror.h"
-
 #include <cerrno>
 #include <dirent.h>
 #include <fcntl.h>
@@ -318,15 +317,6 @@ constexpr size_t COPY_CHUNK = 1 << 20;
 
 #ifdef WIN32
 
-std::string Win32Text(DWORD error)
-{
-    std::string message = std::system_category().message(static_cast<int>(error));
-    while (!message.empty() && (message.back() == '\r' || message.back() == '\n' || message.back() == '.')) {
-        message.pop_back();
-    }
-    return strprintf("%s (error %u)", message, static_cast<unsigned>(error));
-}
-
 bool IsNotFound(DWORD error)
 {
     return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
@@ -433,7 +423,7 @@ public:
         DWORD read = 0;
         if (!::ReadFile(m_handle.get(), buffer, static_cast<DWORD>(std::min<size_t>(size, COPY_CHUNK)), &read,
                         nullptr)) {
-            error = "read " + Shown(m_path) + ": " + Win32Text(::GetLastError());
+            error = "read " + Shown(m_path) + ": " + Win32ErrorText(::GetLastError());
             return false;
         }
         got = read;
@@ -447,7 +437,7 @@ public:
             DWORD written = 0;
             if (!::WriteFile(m_handle.get(), data + done, static_cast<DWORD>(std::min<size_t>(size - done, COPY_CHUNK)),
                              &written, nullptr)) {
-                error = "write " + Shown(m_path) + ": " + Win32Text(::GetLastError());
+                error = "write " + Shown(m_path) + ": " + Win32ErrorText(::GetLastError());
                 return false;
             }
             // A write that succeeds and writes nothing would never finish.
@@ -463,7 +453,7 @@ public:
     bool Sync(std::string& error)
     {
         if (::FlushFileBuffers(m_handle.get())) return true;
-        error = "flush " + Shown(m_path) + ": " + Win32Text(::GetLastError());
+        error = "flush " + Shown(m_path) + ": " + Win32ErrorText(::GetLastError());
         return false;
     }
 
@@ -471,7 +461,7 @@ public:
     {
         LARGE_INTEGER zero{};
         if (::SetFilePointerEx(m_handle.get(), zero, nullptr, FILE_BEGIN)) return true;
-        error = "seek " + Shown(m_path) + ": " + Win32Text(::GetLastError());
+        error = "seek " + Shown(m_path) + ": " + Win32ErrorText(::GetLastError());
         return false;
     }
 
@@ -493,13 +483,13 @@ public:
         if (!handle) {
             const DWORD code = ::GetLastError();
             absent = IsNotFound(code);
-            error = absent ? Shown(path) + " is not there" : "open " + Shown(path) + ": " + Win32Text(code);
+            error = absent ? Shown(path) + " is not there" : "open " + Shown(path) + ": " + Win32ErrorText(code);
             return std::nullopt;
         }
         DWORD code = 0;
         const std::optional<std::wstring> final_path = FinalPath(handle.get(), code);
         if (!final_path) {
-            error = "read the path of " + Shown(path) + ": " + Win32Text(code);
+            error = "read the path of " + Shown(path) + ": " + Win32ErrorText(code);
             return std::nullopt;
         }
         if (final_path->compare(0, 8, L"\\\\?\\UNC\\") == 0) {
@@ -529,7 +519,7 @@ public:
                                                 static_cast<DWORD>(buffer.size() * sizeof(uint64_t)))) {
                 const DWORD code = ::GetLastError();
                 if (code == ERROR_NO_MORE_FILES) break;
-                error = "list " + Shown(m_path) + ": " + Win32Text(code);
+                error = "list " + Shown(m_path) + ": " + Win32ErrorText(code);
                 return false;
             }
             info_class = FileIdBothDirectoryInfo;
@@ -560,7 +550,7 @@ public:
         }
         HandleFacts read;
         if (!ReadHandleFacts(handle.get(), read, code)) {
-            error = "read the attributes of " + Shown(Child(name)) + ": " + Win32Text(code);
+            error = "read the attributes of " + Shown(Child(name)) + ": " + Win32ErrorText(code);
             return false;
         }
         facts.type = read.type;
@@ -578,7 +568,7 @@ public:
         HandleFacts facts;
         DWORD code = 0;
         if (!ReadHandleFacts(handle.get(), facts, code)) {
-            error = "read the attributes of " + Shown(Child(name)) + ": " + Win32Text(code);
+            error = "read the attributes of " + Shown(Child(name)) + ": " + Win32ErrorText(code);
             return std::nullopt;
         }
         if (facts.type != EntryFacts::Type::Regular || facts.links != 1) {
@@ -601,7 +591,7 @@ public:
         if (!handle) {
             const DWORD code = ::GetLastError();
             error = code == ERROR_FILE_EXISTS ? Shown(Child(name)) + " is already there"
-                                              : "create " + Shown(Child(name)) + ": " + Win32Text(code);
+                                              : "create " + Shown(Child(name)) + ": " + Win32ErrorText(code);
             return std::nullopt;
         }
         if (!CheckCreatedWhereAsked(handle.get(), name, error)) return std::nullopt;
@@ -616,14 +606,14 @@ public:
         if (!::CreateDirectoryW(path.c_str(), nullptr)) {
             const DWORD code = ::GetLastError();
             error = code == ERROR_ALREADY_EXISTS ? Shown(Child(name)) + " is already there"
-                                                 : "create " + Shown(Child(name)) + ": " + Win32Text(code);
+                                                 : "create " + Shown(Child(name)) + ": " + Win32ErrorText(code);
             return false;
         }
         winacl::UniqueHandle handle(::CreateFileW(path.c_str(), DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE, SHARE,
                                                   nullptr, OPEN_EXISTING,
                                                   FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
         if (!handle) {
-            error = "open " + Shown(Child(name)) + " after creating it: " + Win32Text(::GetLastError());
+            error = "open " + Shown(Child(name)) + " after creating it: " + Win32ErrorText(::GetLastError());
             ::RemoveDirectoryW(path.c_str());
             return false;
         }
@@ -653,7 +643,7 @@ public:
 
         HandleFacts facts;
         if (!ReadHandleFacts(handle.get(), facts, code)) {
-            error = "read the attributes of " + Shown(Child(name)) + ": " + Win32Text(code);
+            error = "read the attributes of " + Shown(Child(name)) + ": " + Win32ErrorText(code);
             return false;
         }
         if (facts.type == EntryFacts::Type::Directory) {
@@ -664,13 +654,13 @@ public:
                 if (!dir.Remove(entry, error)) return false;
             }
             if (!DisposeOf(dir.m_handle.get(), facts.attributes, code)) {
-                error = "remove " + Shown(Child(name)) + ": " + Win32Text(code);
+                error = "remove " + Shown(Child(name)) + ": " + Win32ErrorText(code);
                 return false;
             }
             return true;
         }
         if (!DisposeOf(handle.get(), facts.attributes, code)) {
-            error = "remove " + Shown(Child(name)) + ": " + Win32Text(code);
+            error = "remove " + Shown(Child(name)) + ": " + Win32ErrorText(code);
             return false;
         }
         return true;
@@ -684,7 +674,7 @@ public:
         if (!handle) return handle;
         DWORD code = 0;
         if (!ReadHandleFacts(handle.get(), facts, code)) {
-            error = "read the attributes of " + Shown(Child(name)) + ": " + Win32Text(code);
+            error = "read the attributes of " + Shown(Child(name)) + ": " + Win32ErrorText(code);
             return winacl::UniqueHandle();
         }
         return handle;
@@ -697,7 +687,7 @@ public:
         HandleFacts facts;
         DWORD code = 0;
         if (!ReadHandleFacts(handle.get(), facts, code)) {
-            error = "read the attributes of " + Shown(shown) + ": " + Win32Text(code);
+            error = "read the attributes of " + Shown(shown) + ": " + Win32ErrorText(code);
             return std::nullopt;
         }
         if (facts.type == EntryFacts::Type::Symlink || facts.type == EntryFacts::Type::Reparse) {
@@ -742,7 +732,7 @@ private:
             const DWORD code = ::GetLastError();
             if (code_out) *code_out = code;
             error = IsNotFound(code) ? Shown(Child(name)) + " is not there"
-                                     : "open " + Shown(Child(name)) + ": " + Win32Text(code);
+                                     : "open " + Shown(Child(name)) + ": " + Win32ErrorText(code);
             return handle;
         }
         if (code_out) *code_out = ERROR_SUCCESS;
@@ -1777,7 +1767,7 @@ public:
         m_acl.assign((size + sizeof(DWORD) - 1) / sizeof(DWORD), 0);
         const PACL acl = reinterpret_cast<PACL>(m_acl.data());
         if (!::InitializeAcl(acl, static_cast<DWORD>(m_acl.size() * sizeof(DWORD)), ACL_REVISION)) {
-            throw std::runtime_error("InitializeAcl: " + Win32Text(::GetLastError()));
+            throw std::runtime_error("InitializeAcl: " + Win32ErrorText(::GetLastError()));
         }
         const DWORD flags = INHERITED_ACE | (directory ? (OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE) : 0);
         for (const AceSpec& ace : root_spec.aces) {
@@ -1785,7 +1775,7 @@ public:
             // AddAccessAllowedAceEx takes a non-const PSID and only reads it.
             if (!::AddAccessAllowedAceEx(acl, ACL_REVISION, flags, ace.mask,
                                          const_cast<unsigned char*>(ace.trustee.data()))) {
-                throw std::runtime_error("AddAccessAllowedAceEx: " + Win32Text(::GetLastError()));
+                throw std::runtime_error("AddAccessAllowedAceEx: " + Win32ErrorText(::GetLastError()));
             }
         }
 
@@ -1796,7 +1786,7 @@ public:
                                             static_cast<SECURITY_DESCRIPTOR_CONTROL>(SE_DACL_AUTO_INHERITED |
                                                                                      SE_DACL_PROTECTED),
                                             SE_DACL_AUTO_INHERITED)) {
-            throw std::runtime_error("build a security descriptor: " + Win32Text(::GetLastError()));
+            throw std::runtime_error("build a security descriptor: " + Win32ErrorText(::GetLastError()));
         }
     }
 
@@ -1847,7 +1837,7 @@ void ResetBelow(const Dir& dir, const Sid& owner, const AclSpec& root_spec)
                                            UNPROTECTED_DACL_SECURITY_INFORMATION,
                                        sd.Get())) {
             throw std::runtime_error("set the owner and access list of " + Shown(path) + ": " +
-                                     Win32Text(::GetLastError()));
+                                     Win32ErrorText(::GetLastError()));
         }
         if (const std::optional<std::string> refusal =
                 InheritedOnlyRefusal(winacl::ReadAcl(handle.get(), /*kernel_object=*/false), owner, root_spec)) {
@@ -1857,7 +1847,7 @@ void ResetBelow(const Dir& dir, const Sid& owner, const AclSpec& root_spec)
         if (directory) {
             DWORD code = 0;
             const std::optional<std::wstring> final_path = FinalPath(handle.get(), code);
-            if (!final_path) throw std::runtime_error("read the path of " + Shown(path) + ": " + Win32Text(code));
+            if (!final_path) throw std::runtime_error("read the path of " + Shown(path) + ": " + Win32ErrorText(code));
             std::optional<Dir> sub = Dir::FromHandle(std::move(handle), *final_path, path, error);
             if (!sub) throw std::runtime_error(error);
             ResetBelow(*sub, owner, root_spec);
@@ -1888,7 +1878,7 @@ void ResetTreeSecurity(const fs::path& root, const Sid& owner, const AclSpec& ro
                                    OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION |
                                        PROTECTED_DACL_SECURITY_INFORMATION,
                                    sd.get())) {
-        throw std::runtime_error("set the owner and access list of " + Shown(root) + ": " + Win32Text(::GetLastError()));
+        throw std::runtime_error("set the owner and access list of " + Shown(root) + ": " + Win32ErrorText(::GetLastError()));
     }
     if (const std::optional<std::string> differs =
             winacl::CheckMatchesSpec(winacl::ReadAcl(handle.get(), /*kernel_object=*/false), spec)) {
@@ -1898,7 +1888,7 @@ void ResetTreeSecurity(const fs::path& root, const Sid& owner, const AclSpec& ro
     if (!directory) return;
     DWORD code = 0;
     const std::optional<std::wstring> final_path = FinalPath(handle.get(), code);
-    if (!final_path) throw std::runtime_error("read the path of " + Shown(root) + ": " + Win32Text(code));
+    if (!final_path) throw std::runtime_error("read the path of " + Shown(root) + ": " + Win32ErrorText(code));
     const std::optional<Dir> dir = Dir::FromHandle(std::move(handle), *final_path, root, error);
     if (!dir) throw std::runtime_error(error);
     ResetBelow(*dir, owner, root_spec);

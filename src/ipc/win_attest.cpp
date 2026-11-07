@@ -16,6 +16,7 @@
 #include "random.h"
 #include "sync.h"
 #include "util/strencodings.h"
+#include "util/syserror.h"
 
 #include <array>
 #include <cstdlib>
@@ -164,12 +165,6 @@ using util::winacl::UniqueHandle;
 constexpr DWORD CLIENT_ACCESS = FILE_READ_DATA | FILE_WRITE_DATA | READ_CONTROL | SYNCHRONIZE;
 static_assert((CLIENT_ACCESS & ~ATTEST_PEER_MASK) == 0, "the client asks only for rights a peer is given");
 
-//! \p call and the Win32 \p error as a reason.
-std::string Win32Failure(const char* call, DWORD error)
-{
-    return strprintf("%s failed: %s (%u)", call, std::system_category().message(static_cast<int>(error)), error);
-}
-
 //! The milliseconds left until \p expires: zero once it has passed, and never
 //! INFINITE.
 DWORD MillisecondsUntil(std::chrono::steady_clock::time_point expires)
@@ -198,11 +193,11 @@ bool CompleteIo(HANDLE pipe, OVERLAPPED& ov, std::chrono::steady_clock::time_poi
         ::CancelIoEx(pipe, &ov);
         ::GetOverlappedResult(pipe, &ov, &transferred, TRUE);
         error = waited == WAIT_TIMEOUT ? std::string("nothing arrived in time")
-                                       : Win32Failure("WaitForSingleObject", wait_error);
+                                       : "WaitForSingleObject failed: " + Win32ErrorText(wait_error);
         return false;
     }
     if (!::GetOverlappedResult(pipe, &ov, &transferred, FALSE)) {
-        error = Win32Failure("GetOverlappedResult", ::GetLastError());
+        error = "GetOverlappedResult failed: " + Win32ErrorText(::GetLastError());
         return false;
     }
 
@@ -337,7 +332,7 @@ bool AttestServer::State::Open(const std::wstring& path, std::string& error)
     const DWORD pipe_mode = PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS;
     const HANDLE handle = ::CreateNamedPipeW(path.c_str(), open_mode, pipe_mode, 1, 64, 64, 0, &sa);
     if (handle == INVALID_HANDLE_VALUE) {
-        error = Win32Failure("CreateNamedPipeW", ::GetLastError());
+        error = "CreateNamedPipeW failed: " + Win32ErrorText(::GetLastError());
         return false;
     }
     pipe.reset(handle);
@@ -350,7 +345,7 @@ std::optional<TokenFacts> AttestServer::State::Attest(std::string& error)
     const HANDLE handle = pipe.get();
     const UniqueHandle event(::CreateEventW(nullptr, /*bManualReset=*/TRUE, /*bInitialState=*/FALSE, nullptr));
     if (!event) {
-        error = Win32Failure("CreateEventW", ::GetLastError());
+        error = "CreateEventW failed: " + Win32ErrorText(::GetLastError());
         return std::nullopt;
     }
 
@@ -370,7 +365,7 @@ std::optional<TokenFacts> AttestServer::State::Attest(std::string& error)
             return std::nullopt;
         }
         if (rc != ERROR_PIPE_CONNECTED) {
-            error = "the client is not connected: " + Win32Failure("ConnectNamedPipe", rc);
+            error = "the client is not connected: ConnectNamedPipe failed: " + Win32ErrorText(rc);
             return std::nullopt;
         }
     }
@@ -384,13 +379,13 @@ std::optional<TokenFacts> AttestServer::State::Attest(std::string& error)
         OVERLAPPED ov{};
         ov.hEvent = event.get();
         if (!::ResetEvent(ov.hEvent)) {
-            error = Win32Failure("ResetEvent", ::GetLastError());
+            error = "ResetEvent failed: " + Win32ErrorText(::GetLastError());
             return std::nullopt;
         }
         if (!::ReadFile(handle, got.data() + have, static_cast<DWORD>(got.size() - have), nullptr, &ov)) {
             const DWORD rc = ::GetLastError();
             if (rc != ERROR_IO_PENDING) {
-                error = "the client did not write the nonce: " + Win32Failure("ReadFile", rc);
+                error = "the client did not write the nonce: ReadFile failed: " + Win32ErrorText(rc);
                 return std::nullopt;
             }
         }
@@ -408,7 +403,7 @@ std::optional<TokenFacts> AttestServer::State::Attest(std::string& error)
 
     DWORD more = 0;
     if (!::PeekNamedPipe(handle, nullptr, 0, nullptr, &more, nullptr)) {
-        error = Win32Failure("PeekNamedPipe", ::GetLastError());
+        error = "PeekNamedPipe failed: " + Win32ErrorText(::GetLastError());
         return std::nullopt;
     }
     if (more != 0) {
@@ -423,7 +418,7 @@ std::optional<TokenFacts> AttestServer::State::Attest(std::string& error)
     // The pipe now holds the security context of the client that wrote the nonce.
     // Impersonate it only to open its token, and nothing else, then stop.
     if (!::ImpersonateNamedPipeClient(handle)) {
-        error = Win32Failure("ImpersonateNamedPipeClient", ::GetLastError());
+        error = "ImpersonateNamedPipeClient failed: " + Win32ErrorText(::GetLastError());
         return std::nullopt;
     }
     HANDLE raw_token = nullptr;
@@ -437,7 +432,7 @@ std::optional<TokenFacts> AttestServer::State::Attest(std::string& error)
         }
     }
     if (open_error != ERROR_SUCCESS) {
-        error = Win32Failure("OpenThreadToken", open_error);
+        error = "OpenThreadToken failed: " + Win32ErrorText(open_error);
         return std::nullopt;
     }
     const UniqueHandle token(raw_token);
@@ -532,7 +527,7 @@ std::optional<AttestClientPipe> AttestClientPipe::Open(const std::string& suffix
     const HANDLE handle = ::CreateFileW(path->c_str(), CLIENT_ACCESS, 0, nullptr, OPEN_EXISTING,
                                         SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
-        error = "could not open the node's identity-check pipe: " + Win32Failure("CreateFileW", ::GetLastError());
+        error = "could not open the node's identity-check pipe: CreateFileW failed: " + Win32ErrorText(::GetLastError());
         return std::nullopt;
     }
     UniqueHandle guard(handle);
@@ -578,7 +573,7 @@ bool AttestClientPipe::WriteNonce(const std::string& nonce_hex, std::string& err
         DWORD n = 0;
         const DWORD left = static_cast<DWORD>(nonce.size() - written);
         if (!::WriteFile(m_handle.get(), nonce.data() + written, left, &n, nullptr)) {
-            error = "could not write to the node's identity-check pipe: " + Win32Failure("WriteFile", ::GetLastError());
+            error = "could not write to the node's identity-check pipe: WriteFile failed: " + Win32ErrorText(::GetLastError());
             return false;
         }
         if (n == 0) {

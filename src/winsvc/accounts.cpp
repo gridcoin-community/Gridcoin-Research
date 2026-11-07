@@ -7,6 +7,7 @@
 #ifdef WIN32
 #include "tinyformat.h"
 #include "util/strencodings.h"
+#include "util/syserror.h"
 #include "winsvc/layout.h"
 
 #include <cwchar>
@@ -53,18 +54,9 @@ namespace {
 
 namespace winacl = util::winacl;
 
-std::string Win32Text(DWORD error)
-{
-    std::string message = std::system_category().message(static_cast<int>(error));
-    while (!message.empty() && (message.back() == '\r' || message.back() == '\n' || message.back() == '.')) {
-        message.pop_back();
-    }
-    return strprintf("%s (error %u)", message, static_cast<unsigned>(error));
-}
-
 [[noreturn]] void ThrowWin32(DWORD error, const std::string& what)
 {
-    throw std::runtime_error(what + ": " + Win32Text(error));
+    throw std::runtime_error(what + ": " + Win32ErrorText(error));
 }
 
 [[noreturn]] void ThrowHresult(HRESULT result, const std::string& what)

@@ -10,6 +10,7 @@
 #include "tinyformat.h"
 #include "util/strencodings.h"
 #include "util/string.h"
+#include "util/syserror.h"
 
 #include <algorithm>
 #include <set>
@@ -24,8 +25,6 @@
 #include <io.h>
 #include <windows.h>
 #else
-#include "util/syserror.h"
-
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -844,23 +843,6 @@ KeepResult KeepPermissions(const fs::path& existing, const fs::path& temp)
 namespace {
 
 using util::winacl::UniqueHandle;
-
-//! "<message> (error <n>)", the message left out unless it is printable ASCII, as every log
-//! line must be: Windows words it in its display language.
-std::string Win32ErrorText(DWORD error)
-{
-    std::string message = std::system_category().message(static_cast<int>(error));
-
-    while (!message.empty() && (message.back() == '\r' || message.back() == '\n' || message.back() == ' ' ||
-                                message.back() == '.')) {
-        message.pop_back();
-    }
-
-    const bool printable = std::all_of(message.begin(), message.end(), [](char c) { return c >= 0x20 && c < 0x7f; });
-    if (message.empty() || !printable) return strprintf("error %u", error);
-
-    return strprintf("%s (error %u)", message, error);
-}
 
 //! The reason a std::system_error from util::winacl gives, in ASCII. Its code is the Win32 error.
 std::string ReasonOf(const std::system_error& e)

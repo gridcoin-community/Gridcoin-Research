@@ -10,6 +10,7 @@
 #include "support/cleanse.h"
 #include "tinyformat.h"
 #include "util/dir_permissions.h"
+#include "util/syserror.h"
 #include "util/time.h"
 #include "util/win_acl.h"
 #include "util/winservice.h"
@@ -42,23 +43,6 @@ const char* const SET_UP_AGAIN = "turn autounlock off and set it up again";
 
 //! SetAutoUnlockReadBackHookForTesting()'s hook. Set only by tests.
 std::function<void(const fs::path&)> g_read_back_hook;
-
-//! "<call> failed with error <n> (<message>)". The message is left out unless it is
-//! printable ASCII, as every log line must be: Windows words it in its display language.
-std::string Win32Failure(const char* call, DWORD error)
-{
-    std::string message = std::system_category().message(static_cast<int>(error));
-
-    while (!message.empty() && (message.back() == '\r' || message.back() == '\n' || message.back() == ' ')) {
-        message.pop_back();
-    }
-
-    const bool printable = std::all_of(message.begin(), message.end(), [](char c) { return c >= 0x20 && c < 0x7F; });
-
-    if (message.empty() || !printable) return strprintf("%s failed with error %u", call, error);
-
-    return strprintf("%s failed with error %u (%s)", call, error, message);
-}
 
 std::string Display(const fs::path& path)
 {
@@ -265,7 +249,7 @@ CheckedFile ReadOnce(const fs::path& path, bool& transient)
         }
 
         transient = IsTransient(open_error);
-        return Refused("could not open the autounlock file", Display(path) + ": " + Win32Failure("CreateFileW", open_error),
+        return Refused("could not open the autounlock file", Display(path) + ": CreateFileW failed: " + Win32ErrorText(open_error),
                        /*definite=*/false);
     }
 
@@ -293,7 +277,7 @@ CheckedFile ReadOnce(const fs::path& path, bool& transient)
         if (!::ReadFile(file.get(), bytes.data() + total, static_cast<DWORD>(bytes.size() - total), &read, nullptr)) {
             const DWORD read_error = ::GetLastError();
             transient = IsTransient(read_error);
-            return Refused("could not read the autounlock file", Display(path) + ": " + Win32Failure("ReadFile", read_error),
+            return Refused("could not read the autounlock file", Display(path) + ": ReadFile failed: " + Win32ErrorText(read_error),
                            /*definite=*/false);
         }
 
@@ -374,7 +358,7 @@ std::optional<SecureString> Decrypt(const AutoUnlockBlob& blob, const fs::path& 
                               &plaintext.blob)) {
         const DWORD decrypt_error = ::GetLastError();
         error = strprintf("the autounlock file could not be decrypted; %s (%s: %s)", SET_UP_AGAIN, Display(path),
-                          Win32Failure("CryptUnprotectData", decrypt_error));
+                          "CryptUnprotectData failed: " + Win32ErrorText(decrypt_error));
         return std::nullopt;
     }
 
@@ -417,7 +401,7 @@ bool WriteNewFile(const fs::path& path, const std::vector<unsigned char>& bytes,
     winacl::UniqueHandle file(created);
 
     if (!file) {
-        error = strprintf("could not create %s: %s", Display(path), Win32Failure("CreateFileW", create_error));
+        error = strprintf("could not create %s: %s", Display(path), "CreateFileW failed: " + Win32ErrorText(create_error));
         return false;
     }
 
@@ -428,7 +412,7 @@ bool WriteNewFile(const fs::path& path, const std::vector<unsigned char>& bytes,
         DWORD written = 0;
 
         if (!::WriteFile(file.get(), bytes.data() + total, static_cast<DWORD>(bytes.size() - total), &written, nullptr)) {
-            failure = Win32Failure("WriteFile", ::GetLastError());
+            failure = "WriteFile failed: " + Win32ErrorText(::GetLastError());
         } else if (written == 0) {
             failure = "WriteFile wrote nothing";
         }
@@ -437,7 +421,7 @@ bool WriteNewFile(const fs::path& path, const std::vector<unsigned char>& bytes,
     }
 
     if (failure.empty() && !::FlushFileBuffers(file.get())) {
-        failure = Win32Failure("FlushFileBuffers", ::GetLastError());
+        failure = "FlushFileBuffers failed: " + Win32ErrorText(::GetLastError());
     }
 
     if (!failure.empty()) {
@@ -483,7 +467,7 @@ AutoUnlockStoreOutcome StoreBlob(const SecureString& passphrase, std::string& er
         DpapiOutput encrypted;
 
         if (!::CryptProtectData(&plaintext, DPAPI_DESCRIPTION, &entropy_blob, nullptr, nullptr, flags, &encrypted.blob)) {
-            error = "could not encrypt the passphrase: " + Win32Failure("CryptProtectData", ::GetLastError());
+            error = "could not encrypt the passphrase: CryptProtectData failed: " + Win32ErrorText(::GetLastError());
             return AutoUnlockStoreOutcome::Failed;
         }
 
@@ -508,7 +492,7 @@ AutoUnlockStoreOutcome StoreBlob(const SecureString& passphrase, std::string& er
         const DWORD move_error = ::GetLastError();
         ::DeleteFileW(temporary.wstring().c_str());
         error = strprintf("could not move the autounlock file into place at %s: %s", Display(*path),
-                          Win32Failure("MoveFileExW", move_error));
+                          "MoveFileExW failed: " + Win32ErrorText(move_error));
         return AutoUnlockStoreOutcome::Failed;
     }
 
@@ -612,7 +596,7 @@ bool DpapiBlobStore::Remove(std::string& error)
         if (delete_error == ERROR_FILE_NOT_FOUND || delete_error == ERROR_PATH_NOT_FOUND) return true;
 
         error = strprintf("could not remove the autounlock file %s: %s", Display(*path),
-                          Win32Failure("DeleteFileW", delete_error));
+                          "DeleteFileW failed: " + Win32ErrorText(delete_error));
     } catch (const std::exception& e) {
         error = strprintf("could not remove the autounlock file: %s", e.what());
     }

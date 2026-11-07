@@ -2607,4 +2607,23 @@ BOOST_AUTO_TEST_CASE(changesettings_caps_paytxfee)
 }
 
 
+BOOST_AUTO_TEST_CASE(printable_ascii_keeps_only_plain_ascii_messages)
+{
+    // The line break and full stop Windows ends a message with are dropped.
+    BOOST_CHECK_EQUAL(PrintableAscii("Access is denied.\r\n"), "Access is denied");
+    BOOST_CHECK_EQUAL(PrintableAscii("Access is denied"), "Access is denied");
+    BOOST_CHECK_EQUAL(PrintableAscii("The system cannot find the file. \r\n"), "The system cannot find the file");
+
+    // A message in another language is not shown.
+    BOOST_CHECK_EQUAL(PrintableAscii("Acc\xc3\xa8s refus\xc3\xa9.\r\n"), "");
+
+    BOOST_CHECK_EQUAL(PrintableAscii(""), "");
+    BOOST_CHECK_EQUAL(PrintableAscii("\r\n"), "");
+
+    // A control character inside the message is not printable.
+    BOOST_CHECK_EQUAL(PrintableAscii("Access\tdenied."), "");
+    BOOST_CHECK_EQUAL(PrintableAscii("Access\ndenied."), "");
+    BOOST_CHECK_EQUAL(PrintableAscii("Access\x7f" "denied."), "");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
