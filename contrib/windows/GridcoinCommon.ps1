@@ -345,6 +345,12 @@ function Register-GridcoinCoreTasks {
     $startDefinition.Settings.Enabled = $StartEnabled
     $trigger = $startDefinition.Triggers.Create(8)
     $trigger.Enabled = $BootTriggerEnabled
+    # The S4U logon of a domain account needs a domain controller, which is often not reachable in
+    # the first seconds after boot: Task Scheduler then fails the logon and does not try again. A
+    # minute's delay lets the network come up, and the restarts cover a slower one.
+    $trigger.Delay = 'PT1M'
+    $startDefinition.Settings.RestartInterval = 'PT1M'
+    $startDefinition.Settings.RestartCount = 5
     $startAction = $startDefinition.Actions.Create(0)
     $startAction.Path = '%SystemRoot%\System32\cmd.exe'
     $startAction.Arguments = '/s /c ""' + $launcher + '""'

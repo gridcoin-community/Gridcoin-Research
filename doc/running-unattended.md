@@ -647,7 +647,9 @@ mode concedes the list for a core that runs as you, and the service mode the lis
 - **The limits of an S4U task.** It has no network credentials and no access to your own DPAPI keys. A data
   directory or backup directory on a network share is out of its reach, and so is an AppData folder redirected to a
   network share: use a local data directory (`-DataDir`) or the service mode. Some accounts cannot get an S4U logon
-  (some Microsoft Entra-only accounts); for them, use the service mode.
+  (some Microsoft Entra-only accounts); for them, use the service mode. A domain account's S4U logon needs a domain
+  controller, so Core-Start waits a minute after boot and retries; a domain-joined machine that may start away from its
+  domain is better served by the service mode.
 - **Started elevated, the core and the GUI give up the administrator rights first.** They start themselves again
   without them, so what they create belongs to you and not to Administrators; `debug.log` then has
   `Started without administrator rights: the process that started Gridcoin had them.`

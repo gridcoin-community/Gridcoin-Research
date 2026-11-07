@@ -116,7 +116,9 @@ kill with no database flush.
 keys. A data directory or backup directory on a network share is out of its reach, and so is an
 AppData folder redirected to a network share: use a local data directory (`-DataDir`) or the
 service mode. Some accounts cannot get an S4U logon (some Microsoft Entra-only accounts); for
-them, use the service mode.
+them, use the service mode. A domain account's S4U logon needs a domain controller, so Core-Start
+waits a minute after boot and retries; a domain-joined machine that may start away from its
+domain is better served by the service mode.
 
 **Started elevated, the core and the GUI give up the administrator rights first.** They start
 themselves again without them, so the files they create are yours, not Administrators'.
