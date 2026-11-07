@@ -524,6 +524,7 @@ UniValue stop(const UniValue& params)
 {
     // Shutdown will take long enough that the response should get back
     LogPrintf("Stopping...");
+    MarkStopRequested();
     StartShutdown();
     return "Gridcoin server stopping";
 }

@@ -567,8 +567,13 @@ void WINAPI ServiceMain(DWORD argc, LPWSTR* argv)
 int RunAsService(const std::function<bool()>& app_main)
 {
     g_app_main = app_main;
-    g_runner.emplace(&ReportToServiceManager, [] { return ShutdownRequested(); }, [] { SetShutdownRequested(); },
-                     SHUTDOWN_POLL, std::chrono::milliseconds{STOP_TICK_MS});
+    // The service manager's stop is a stop someone asked for.
+    const auto request_stop = [] {
+        MarkStopRequested();
+        SetShutdownRequested();
+    };
+    g_runner.emplace(&ReportToServiceManager, [] { return ShutdownRequested(); }, request_stop, SHUTDOWN_POLL,
+                     std::chrono::milliseconds{STOP_TICK_MS});
 
     // The name is ignored for a service of its own process, and may be empty.
     wchar_t empty_name[] = L"";

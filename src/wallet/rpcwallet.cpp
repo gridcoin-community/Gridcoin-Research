@@ -13,6 +13,7 @@
 #include "rpc/protocol.h"
 #include "rpc/util.h"
 #include "init.h"
+#include "node/shutdown.h"
 #include "miner.h"
 #include "net_processing.h"
 #include "streams.h"
@@ -4092,6 +4093,7 @@ static UniValue EncryptWalletBody(const SecureString& strWalletPass, const UniVa
     // BDB seems to have a bad habit of writing old data into
     // slack space in .dat files; that is bad if the old data is
     // unencrypted private keys. So:
+    MarkStopRequested();
     StartShutdown();
 
     // The automatic backups made before the encryption hold the unencrypted keys, and are

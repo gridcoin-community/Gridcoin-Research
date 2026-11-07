@@ -12,6 +12,7 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/upgrade.h"
 #include "init.h"
+#include "node/shutdown.h"
 #include "interfaces/connection_scope.h"
 #include "interfaces/file_transfer.h"
 #include "interfaces/gui_state.h"
@@ -237,7 +238,11 @@ public:
         return paths;
     }
 
-    void startShutdown() override { StartShutdown(); }
+    void startShutdown() override
+    {
+        MarkStopRequested();
+        StartShutdown();
+    }
 
     LatestVersionInfo checkForLatestUpdate() override
     {

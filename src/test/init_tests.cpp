@@ -104,6 +104,36 @@ bool Logged(const std::vector<std::string>& lines, const std::string& text)
 
 BOOST_AUTO_TEST_SUITE(init_tests)
 
+// A stop someone asked for is marked apart from a shutdown that an error asked for: the request
+// flag alone does not mark it, and AbortShutdown clears both.
+BOOST_AUTO_TEST_CASE(a_requested_stop_is_marked_apart_from_a_shutdown_request)
+{
+    struct Restore {
+        ~Restore() { AbortShutdown(); }
+    } const restore;
+
+    BOOST_REQUIRE(!ShutdownRequested());
+    BOOST_REQUIRE(!StopWasRequested());
+
+    // An error path asks for a shutdown.
+    SetShutdownRequested();
+    BOOST_CHECK(ShutdownRequested());
+    BOOST_CHECK(!StopWasRequested());
+
+    MarkStopRequested();
+    BOOST_CHECK(StopWasRequested());
+
+    AbortShutdown();
+    BOOST_CHECK(!ShutdownRequested());
+    BOOST_CHECK(!StopWasRequested());
+
+    // The mark alone is not a shutdown request.
+    MarkStopRequested();
+    BOOST_CHECK(!ShutdownRequested());
+    AbortShutdown();
+    BOOST_CHECK(!StopWasRequested());
+}
+
 BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
 {
     gArgs.ClearArgs();

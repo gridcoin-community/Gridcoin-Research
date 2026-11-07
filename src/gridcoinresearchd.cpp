@@ -250,7 +250,7 @@ bool AppInit(int argc, char* argv[])
 
     ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
     bool fRet = false;
-    // AppInit2 failed because a stop was requested during it, not for an error.
+    // AppInit2 failed because someone requested a stop during it, not for an error.
     bool startup_stopped = false;
 
     // Extends the service manager start timeout on each startup progress message.
@@ -508,8 +508,15 @@ bool AppInit(int argc, char* argv[])
         // here, before the daemonizing fork and AppInit2.
         if (ShutdownRequested()) {
             LogPrintf("Shutdown requested during startup. Exiting.");
-            // This return skips the status block at the end; say why the start ended.
-            sdnotify::NotifyStartupStopped();
+            // This return skips the status block at the end; say why the start ended. A stop
+            // someone asked for ends cleanly, as at the end of this function; a shutdown that an
+            // error asked for is a failure.
+            if (StopWasRequested()) {
+                sdnotify::NotifyStartupStopped();
+                return true;
+            }
+
+            sdnotify::NotifyStartupFailed();
             return false;
         }
 
@@ -575,11 +582,11 @@ bool AppInit(int argc, char* argv[])
 #endif
 
         fRet = AppInit2(threads);
-        startup_stopped = !fRet && ShutdownRequested();
+        startup_stopped = !fRet && ShutdownRequested() && StopWasRequested();
 #if HAVE_DECL_FORK
         if (daemon_ep.IsOpen()) {
             // Signal initialization status to parent, then close pipe.
-            daemon_ep.TokenWrite(fRet);
+            daemon_ep.TokenWrite(fRet || startup_stopped);
             daemon_ep.Close();
         }
 #endif
@@ -787,7 +794,7 @@ bool AppInit(int argc, char* argv[])
     threads->removeAll();
     threads.reset();
 
-    // A stop requested during startup ends the core cleanly, not in failure, so that what restarts
+    // A stop someone requested during startup ends the core cleanly, not in failure, so that what restarts
     // a failed core (the Windows Core-Start launcher, systemd's Restart=on-failure, the service
     // manager's recovery) does not start it again.
     return fRet || startup_stopped;

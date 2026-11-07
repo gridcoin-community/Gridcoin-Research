@@ -13,6 +13,9 @@ namespace {
 //! is async-signal-safe); this replaces the former plain-bool fRequestShutdown.
 std::atomic<bool> g_shutdown_requested{false};
 
+//! Set when the shutdown requested is a stop someone asked for, not one an error asked for.
+std::atomic<bool> g_stop_requested{false};
+
 //! Set once node teardown begins; observed by worker threads as their loop-exit
 //! condition. Replaces the former std::atomic<bool> fShutdown.
 std::atomic<bool> g_shutdown_in_progress{false};
@@ -40,9 +43,20 @@ bool ShutdownRequested()
     return g_shutdown_requested.load(std::memory_order_relaxed);
 }
 
+void MarkStopRequested()
+{
+    g_stop_requested.store(true, std::memory_order_relaxed);
+}
+
+bool StopWasRequested()
+{
+    return g_stop_requested.load(std::memory_order_relaxed);
+}
+
 void AbortShutdown()
 {
     g_shutdown_requested.store(false, std::memory_order_relaxed);
+    g_stop_requested.store(false, std::memory_order_relaxed);
 }
 
 void SetShutdownInProgress(bool in_progress)

@@ -8,6 +8,7 @@
 #include "gridcoin/tx_message.h"
 #include "hash.h"
 #include "init.h"
+#include "node/shutdown.h"
 #include "interfaces/connection_scope.h"
 #include "interfaces/handler.h"
 #include "interfaces/notification_dispatcher.h"
@@ -68,6 +69,7 @@ void RequestShutdownAfterEncryption()
     if (fn) {
         fn();
     } else {
+        MarkStopRequested();
         StartShutdown();
     }
 }

@@ -442,6 +442,7 @@ void Shutdown(void* parg)
 #ifndef WIN32
 static void HandleSIGTERM(int)
 {
+    MarkStopRequested();
     SetShutdownRequested();
 }
 
@@ -465,6 +466,7 @@ static BOOL WINAPI consoleCtrlHandler(DWORD dwCtrlType)
         return TRUE;
     }
 
+    MarkStopRequested();
     SetShutdownRequested();
     Sleep(INFINITE);
     return true;
