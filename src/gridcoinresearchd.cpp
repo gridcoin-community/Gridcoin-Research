@@ -787,7 +787,10 @@ bool AppInit(int argc, char* argv[])
     threads->removeAll();
     threads.reset();
 
-    return fRet;
+    // A stop requested during startup ends the core cleanly, not in failure, so that what restarts
+    // a failed core (the Windows Core-Start launcher, systemd's Restart=on-failure, the service
+    // manager's recovery) does not start it again.
+    return fRet || startup_stopped;
 
 }
 
