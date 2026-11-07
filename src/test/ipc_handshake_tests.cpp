@@ -514,7 +514,13 @@ BOOST_AUTO_TEST_CASE(retry_policy)
     BOOST_CHECK(ipc::NextConnectStep({K::NotListening, ""}, std::chrono::seconds{0}) == S::Retry);
     BOOST_CHECK(ipc::NextConnectStep({K::NotListening, ""}, std::chrono::seconds{299}) == S::Retry);
     BOOST_CHECK(ipc::NextConnectStep({K::NotListening, ""}, std::chrono::seconds{300}) == S::GiveUp);
-    for (auto k : {K::CookieDenied, K::PeerRefused, K::AlreadyAttached, K::Timeout, K::Handshake}) {
+    // A denied cookie is retried briefly: the core replacing or deleting the file can deny an open
+    // for a moment. One still denied after that is reported.
+    BOOST_CHECK(ipc::IPC_COOKIE_DENIED_WAIT == std::chrono::seconds{10});
+    BOOST_CHECK(ipc::NextConnectStep({K::CookieDenied, ""}, std::chrono::seconds{0}) == S::Retry);
+    BOOST_CHECK(ipc::NextConnectStep({K::CookieDenied, ""}, std::chrono::seconds{9}) == S::Retry);
+    BOOST_CHECK(ipc::NextConnectStep({K::CookieDenied, ""}, std::chrono::seconds{10}) == S::GiveUp);
+    for (auto k : {K::PeerRefused, K::AlreadyAttached, K::Timeout, K::Handshake}) {
         BOOST_CHECK(ipc::NextConnectStep({k, ""}, std::chrono::seconds{0}) == S::GiveUp);
     }
 

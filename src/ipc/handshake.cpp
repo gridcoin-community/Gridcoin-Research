@@ -517,6 +517,7 @@ ConnectStep NextConnectStep(const ConnectFailure& f, std::chrono::seconds elapse
     case ConnectFailureKind::NotListening:
         return elapsed < IPC_CONNECT_WAIT_MAX ? ConnectStep::Retry : ConnectStep::GiveUp;
     case ConnectFailureKind::CookieDenied:
+        return elapsed < IPC_COOKIE_DENIED_WAIT ? ConnectStep::Retry : ConnectStep::GiveUp;
     case ConnectFailureKind::PeerRefused:
     case ConnectFailureKind::AlreadyAttached:
     case ConnectFailureKind::Timeout:

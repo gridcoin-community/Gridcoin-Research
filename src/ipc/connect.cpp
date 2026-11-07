@@ -208,8 +208,9 @@ std::optional<GuiConnection> ConnectToNode(const fs::path& ipc_dir, ConnectFailu
     //    dial.
     const CookieRead cookie_read = ReadCookie(ipc_dir);
     if (cookie_read.status == CookieStatus::Unreadable) {
-        // The core is there, and this account may not read what lets it in. Waiting will not
-        // change that; signing in again will, for an account just added to the attach group.
+        // The core is there, and this account may not read what lets it in. NextConnectStep tries
+        // again for a moment, for a cookie the core is replacing; a denial that lasts needs signing
+        // in again, for an account just added to the attach group.
         failure_out = {ConnectFailureKind::CookieDenied,
                        strprintf("the Gridcoin core is there, but this account may not read its IPC cookie %s (%s). "
                                  "If this account was just added to the group allowed to attach, sign out and sign in "

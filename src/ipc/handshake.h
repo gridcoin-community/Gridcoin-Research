@@ -197,6 +197,9 @@ constexpr std::chrono::seconds IPC_CLIENT_HANDSHAKE_TIMEOUT{30};
 constexpr std::chrono::seconds IPC_CONNECT_RETRY_INTERVAL{2};
 //! How long, from its first attempt, the GUI waits for a core that is starting.
 constexpr std::chrono::seconds IPC_CONNECT_WAIT_MAX{300};
+//! How long, from its first attempt, the GUI tries again on a cookie it may not open before it says
+//! so: the core replacing or deleting the file can deny an open for a moment.
+constexpr std::chrono::seconds IPC_COOKIE_DENIED_WAIT{10};
 
 //! Why ConnectToNode did not connect.
 enum class ConnectFailureKind {
@@ -221,10 +224,11 @@ enum class ConnectStep {
     GiveUp, //!< Report the failure.
 };
 
-//! Retry only NoCookie and NotListening, and only while elapsed < IPC_CONNECT_WAIT_MAX.
-//! Those two are how a core that is still starting looks; every other kind is a
-//! core that answered, or one that cannot be reached, and waiting does not change
-//! it. \p elapsed counts from the first attempt.
+//! Retry NoCookie and NotListening while elapsed < IPC_CONNECT_WAIT_MAX: those two are how a
+//! core that is still starting looks. Retry CookieDenied while elapsed < IPC_COOKIE_DENIED_WAIT,
+//! for a cookie the core is replacing or deleting. Every other kind is a core that answered, or
+//! one that cannot be reached, and waiting does not change it. \p elapsed counts from the first
+//! attempt.
 ConnectStep NextConnectStep(const ConnectFailure& f, std::chrono::seconds elapsed);
 
 //! This process's build fingerprint (git commit, build time, schema/protocol
@@ -267,7 +271,8 @@ struct CookieRead {
 //! serving <dir> (none is running with -multiprocess, one is still starting, or the last one shut
 //! down cleanly) -- do not dial. Unreadable means a file is there that this account may not open
 //! (an account just added to the attach group has not signed in again, for one): a node is
-//! probably serving <dir>, and waiting will not change it.
+//! probably serving <dir>. A denial can also last a moment while the node replaces or deletes the
+//! file.
 CookieRead ReadCookie(const fs::path& dir);
 
 //! Node side: remove <dir>/ipc.cookie at shutdown, mirroring upstream's
