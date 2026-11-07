@@ -70,7 +70,7 @@ SYSDIR_POWERSHELL = "$SYSDIR\\WindowsPowerShell\\v1.0\\"
 # line that runs each: from $PLUGINSDIR (copied there before anything is installed) or from the
 # installed $INSTDIR\windows, with the install directory and, optionally, the state file.
 INSTALL_STEPS = ("StopCore", "HardenInstallDir", "SwitchOver", "StartCore", "ReportPermissions",
-                 "UninstallCheck", "PreUninstall")
+                 "UninstallCheck", "PreUninstall", "RestartStopped")
 STEP_LINE_RE = re.compile(
     r"^\s*nsExec::Exec(?:ToLog|ToStack)? '\"\$SYSDIR\\WindowsPowerShell\\v1\.0\\powershell\.exe\" "
     r"-NoProfile -NonInteractive -ExecutionPolicy Bypass "
@@ -389,7 +389,8 @@ GOOD_UNINSTALL = ("Section -un.Main\n" + step_line("PreUninstall", "$INSTDIR\\wi
                   + "    Delete x\n    RMDir /r y\nSectionEnd\n"
                   + "Function un.onInit\n" + step_line("UninstallCheck", "$INSTDIR\\windows", False, "ExecToStack")
                   + "FunctionEnd\n")
-GOOD_NSIS = GOOD_MAIN_HEAD + GOOD_MAIN_TAIL + GOOD_UNINSTALL
+GOOD_RESTART = "Function .onInstFailed\n" + step_line("RestartStopped") + "FunctionEnd\n"
+GOOD_NSIS = GOOD_MAIN_HEAD + GOOD_MAIN_TAIL + GOOD_RESTART + GOOD_UNINSTALL
 GOOD_SDDL = "O:BAD:PAI(A;OICI;FA;;;BA)(A;OICI;FA;;;SY)(A;OICI;0x1200a9;;;BU)"
 GOOD_FILES = {
     COMMON: GOOD_PS1 + "if ($t.Principal.LogonType -eq 1) { }\n'rem BEGIN GENERATED'\n'rem END GENERATED'\n",

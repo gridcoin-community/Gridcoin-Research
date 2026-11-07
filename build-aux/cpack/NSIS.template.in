@@ -283,6 +283,18 @@ no_smgroup:
 SectionEnd
 
 # Installer functions
+# An install that stops after StopCore (a file that cannot be written, or Cancel) starts again what
+# StopCore stopped. StopCore writes the state only when it stopped everything, and starts things again itself when it refuses.
+Function .onInstFailed
+    IfFileExists "$PLUGINSDIR\upgrade-state.json" 0 grc_no_restart
+    DetailPrint "The install stopped, so the Gridcoin cores that were stopped for it are started again ..."
+    !insertmacro GRC_NATIVE_BEGIN
+    nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\Invoke-GridcoinInstallStep.ps1" -Step RestartStopped -InstallDir "$INSTDIR" -StateFile "$PLUGINSDIR\upgrade-state.json"'
+    !insertmacro GRC_NATIVE_END
+    Pop $0
+grc_no_restart:
+FunctionEnd
+
 Function .onInit
     InitPluginsDir
     SetShellVarContext all

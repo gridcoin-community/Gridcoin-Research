@@ -36,7 +36,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('StopCore', 'HardenInstallDir', 'SwitchOver', 'StartCore', 'ReportPermissions', 'UninstallCheck', 'PreUninstall')]
+    [ValidateSet('StopCore', 'HardenInstallDir', 'SwitchOver', 'StartCore', 'ReportPermissions', 'UninstallCheck', 'PreUninstall', 'RestartStopped')]
     [string]$Step,
 
     # The installation directory, $INSTDIR.
@@ -797,6 +797,27 @@ function Invoke-GridcoinStartCore {
     if ($problems.Count -gt 0) { throw (($problems -join '; ') + '.') }
 }
 
+# RestartStopped. Run when the install fails after StopCore (a file that cannot be written, or
+# Cancel): it starts again what StopCore stopped, as StopCore's own refusal does, with no S4U
+# requirement because the switch-over may not have run and the old task is started as it was.
+# The state file is deleted afterwards, so a second call does nothing. No finish-run file and no
+# notice lines are written.
+function Invoke-GridcoinRestartStopped {
+    $script:StartedServices = @()
+    $script:StartedTaskSid = ''
+    if (-not $StateFile -or -not (Test-Path -LiteralPath $StateFile)) {
+        Write-Host 'Nothing was stopped by this installer, so nothing is started again.'
+        return
+    }
+    $saved = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json
+    $serviceNames = @(([string]$saved.services) -split ',' | Where-Object { $_ })
+    Write-Host 'The install stopped, so the Gridcoin cores that were running are started again ...'
+    $problems = @(Start-GridcoinCore -Services $serviceNames -CoreStartTask ([bool]$saved.coreStartTask))
+    Remove-Item -LiteralPath $StateFile -Force -ErrorAction SilentlyContinue
+    foreach ($problem in $problems) { Write-Host "WARNING: $problem." }
+    if ($problems.Count -gt 0) { throw 'not every core that was running could be started again.' }
+}
+
 # ReportPermissions.
 function Invoke-GridcoinReportPermissions {
     $baseDir = Join-Path $env:APPDATA 'GridcoinResearch'
@@ -879,6 +900,7 @@ try {
         'HardenInstallDir' { Set-GridcoinInstallDirAcl; $exitCode = 0 }
         'SwitchOver' { Invoke-GridcoinSwitchOver; $exitCode = 0 }
         'StartCore' { Invoke-GridcoinStartCore; $exitCode = 0 }
+        'RestartStopped' { Invoke-GridcoinRestartStopped; $exitCode = 0 }
         'ReportPermissions' { Invoke-GridcoinReportPermissions; $exitCode = 0 }
         'UninstallCheck' { $exitCode = Test-GridcoinServiceModeOff }
         'PreUninstall' { Invoke-GridcoinPreUninstall; $exitCode = 0 }
