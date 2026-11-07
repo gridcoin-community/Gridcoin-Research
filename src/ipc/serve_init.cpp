@@ -28,6 +28,7 @@
 #include "ipc/win_attest.h"
 #include "ipc/win_endpoint.h"
 #include "util/win_acl.h"
+#include "util/syserror.h"
 #endif
 
 #include <atomic>
@@ -218,7 +219,7 @@ public:
             m_attest_server = std::make_unique<win::AttestServer>(m_attest_self, m_attest_group);
             begun = m_attest_server->Begin();
         } catch (const std::exception& e) {
-            LogPrintf("IPC: could not begin the Windows identity check: %s", e.what());
+            LogPrintf("IPC: could not begin the Windows identity check: %s", AsciiWhat(e));
         }
         if (!begun) {
             m_attest_server.reset();
@@ -256,7 +257,7 @@ public:
         try {
             admitted = AdmitAttestedPeer();
         } catch (const std::exception& e) {
-            LogPrintf("IPC: the Windows identity check failed: %s", e.what());
+            LogPrintf("IPC: the Windows identity check failed: %s", AsciiWhat(e));
         }
         // Single use, and no other call reaches it once the check is Finishing.
         m_attest_server.reset();

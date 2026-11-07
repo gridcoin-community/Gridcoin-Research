@@ -8,6 +8,7 @@
 #include "tinyformat.h"
 #include "wallet/capability.h"
 #include "wallet/wallet.h"
+#include "util/syserror.h"
 
 #include <exception>
 #include <functional>
@@ -29,7 +30,7 @@ AutoUnlockSecretStore* UsableStore()
     try {
         if (store->Status().supported) return store;
     } catch (const std::exception& e) {
-        LogPrintf("ERROR: autounlock: the store could not report its status: %s", e.what());
+        LogPrintf("ERROR: autounlock: the store could not report its status: %s", AsciiWhat(e));
     } catch (...) {
         LogPrintf("ERROR: autounlock: the store could not report its status");
     }
@@ -103,7 +104,7 @@ AutoUnlockSetupResult CheckThenAct(CWallet& wallet, const SecureString& passphra
             try {
                 result = action(*store, error);
             } catch (const std::exception& e) {
-                error = e.what();
+                error = AsciiWhat(e);
                 result = AutoUnlockSetupResult::StoreFailed;
             } catch (...) {
                 error = "an unknown error";
@@ -218,7 +219,7 @@ AutoUnlockStoreStatus GetAutoUnlockStatus()
     try {
         return store->Status();
     } catch (const std::exception& e) {
-        status.problem = strprintf("the store could not report its status: %s", e.what());
+        status.problem = strprintf("the store could not report its status: %s", AsciiWhat(e));
     } catch (...) {
         status.problem = "the store could not report its status";
     }

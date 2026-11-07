@@ -85,7 +85,7 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
     try {
         sd.reset(winacl::MakeSecurityDescriptor(spec));
     } catch (const std::exception& e) {
-        error = strprintf("cannot make the access list for temporary file %s: %s", temp.string(), e.what());
+        error = strprintf("cannot make the access list for temporary file %s: %s", temp.string(), AsciiWhat(e));
         return std::nullopt;
     }
     SECURITY_ATTRIBUTES sa{};
@@ -113,7 +113,7 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
             return std::nullopt;
         }
     } catch (const std::exception& e) {
-        error = strprintf("cannot restrict temporary file %s: %s", temp.string(), e.what());
+        error = strprintf("cannot restrict temporary file %s: %s", temp.string(), AsciiWhat(e));
         return std::nullopt;
     }
 

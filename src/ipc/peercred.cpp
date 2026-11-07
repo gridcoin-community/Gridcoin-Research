@@ -13,6 +13,7 @@
 #ifdef WIN32
 #include "ipc/win_endpoint.h"
 #include "util/win_acl.h"
+#include "util/syserror.h"
 
 #include <exception>
 #endif
@@ -217,7 +218,7 @@ PeerVerdict ServerPeerPolicy(const PeerIdentity& peer)
         ctx.self_sid = util::winacl::FormatSid(util::winacl::CurrentTokenUser());
     } catch (const std::exception& e) {
         LogPrintf("IPC: refusing the peer %s: this process's account cannot be read (%s)", ShownSid(peer.sid),
-                  e.what());
+                  AsciiWhat(e));
         return PeerVerdict::Refuse;
     }
     ctx.attach_group_configured = win::AttachGroupSid().has_value();
@@ -232,7 +233,7 @@ PeerVerdict ClientPeerPolicy(const PeerIdentity& server, const fs::path&)
         expected = util::winacl::FormatSid(win::ExpectedServerSid());
     } catch (const std::exception& e) {
         LogPrintf("IPC: refusing the core %s: the node account to expect cannot be determined (%s)",
-                  ShownSid(server.sid), e.what());
+                  ShownSid(server.sid), AsciiWhat(e));
         return PeerVerdict::Refuse;
     }
 

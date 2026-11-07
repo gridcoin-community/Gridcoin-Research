@@ -12,8 +12,8 @@
 #include "sync.h"
 #include "threadsafety.h"
 #include "tinyformat.h"
-#include "util/threadnames.h"
 #include "util/syserror.h"
+#include "util/threadnames.h"
 
 #include <condition_variable>
 #include <exception>

@@ -983,6 +983,7 @@ public:
             Unreadable(path, ReasonOf(e));
             return;
         } catch (const std::exception& e) {
+            // what() is ASCII: a std::system_error is caught above, so only another exception arrives here.
             Unreadable(path, e.what());
             return;
         }
@@ -1086,6 +1087,7 @@ std::optional<std::string> NewFileAclProblem(HANDLE handle, const util::winacl::
     } catch (const std::system_error& e) {
         return "the access list of a file created there could not be read back (" + ReasonOf(e) + ")";
     } catch (const std::exception& e) {
+        // what() is ASCII: a std::system_error is caught above, so only another exception arrives here.
         return std::string{"the access list of a file created there could not be read back ("} + e.what() + ")";
     }
 
@@ -1110,6 +1112,7 @@ NewFileAcl MakeNewFileAcl()
     } catch (const std::system_error& e) {
         acl.error = ReasonOf(e);
     } catch (const std::exception& e) {
+        // what() is ASCII: a std::system_error is caught above, so only another exception arrives here.
         acl.error = e.what();
     }
 
@@ -1288,6 +1291,7 @@ WinOwnership ReadWinOwnership(const fs::path& path)
     } catch (const std::system_error& e) {
         ownership.error = ReasonOf(e);
     } catch (const std::exception& e) {
+        // what() is ASCII: a std::system_error is caught above, so only another exception arrives here.
         ownership.error = e.what();
     }
 
@@ -1315,7 +1319,7 @@ std::string WinNotOwnedText(const fs::path& path, bool service)
         const util::winacl::Sid self = util::winacl::CurrentTokenUser();
         return WinNotOwnedText(path, ownership, self, util::winacl::AccountNameOf(self), service);
     } catch (const std::exception& e) {
-        return std::string("it is not this account's, and this process's account could not be read (") + e.what() +
+        return std::string("it is not this account's, and this process's account could not be read (") + AsciiWhat(e) +
                ")";
     }
 }
@@ -1349,6 +1353,7 @@ AppendResult AppendToOwnedFile(const fs::path& path, const std::string& text)
     } catch (const std::system_error& e) {
         return {AppendStatus::OpenFailed, ReasonOf(e)};
     } catch (const std::exception& e) {
+        // what() is ASCII: a std::system_error is caught above, so only another exception arrives here.
         return {AppendStatus::OpenFailed, e.what()};
     }
 
@@ -1495,6 +1500,7 @@ KeepResult KeepPermissions(const fs::path& existing, void* handle)
         result.error = ReasonOf(e);
     } catch (const std::exception& e) {
         result.kind = KeepResult::Kind::NotKept;
+        // what() is ASCII: a std::system_error is caught above, so only another exception arrives here.
         result.error = e.what();
     }
 

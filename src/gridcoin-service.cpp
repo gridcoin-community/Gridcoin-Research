@@ -9,6 +9,7 @@
 #include "winsvc/setup.h"
 
 #include "util/system.h"
+#include "util/syserror.h"
 
 #include <cstdio>
 #include <exception>
@@ -63,7 +64,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[])
 #endif
         }
     } catch (const std::exception& e) {
-        std::cerr << "gridcoin-service.exe: " << e.what() << "\n";
+        std::cerr << "gridcoin-service.exe: " << AsciiWhat(e) << "\n";
     }
     return winsvc::EXIT_REFUSED;
 }

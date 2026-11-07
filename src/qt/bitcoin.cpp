@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include "qt/guilog.h"
+#include "util/syserror.h"
 #include <QTimer>
 
 #include "bitcoingui.h"
@@ -645,7 +646,7 @@ public:
             //       (or a prior notify()) has latched g_daemon_connection_lost, the
             //       GUI is tearing down and further proxy calls will keep throwing,
             //       so any event-handler exception in that state is disconnect fallout.
-            const std::string msg{e.what()};
+            const std::string msg{AsciiWhat(e)};
             if (IsDaemonDisconnectMessage(msg)) {
                 QuitOnDaemonConnectionLost("a GUI call was interrupted by the daemon disconnecting");
                 return true;
@@ -1180,12 +1181,12 @@ int main(int argc, char *argv[])
         try {
             token_elevated = util::winacl::CurrentTokenIsElevated();
         } catch (const std::exception& e) {
-            tfm::format(std::cerr, "Could not tell whether this process runs elevated: %s\n", e.what());
+            tfm::format(std::cerr, "Could not tell whether this process runs elevated: %s\n", AsciiWhat(e));
         }
         try {
             integrity_rid = util::winacl::CurrentTokenIntegrityRid();
         } catch (const std::exception& e) {
-            tfm::format(std::cerr, "Could not read this process's integrity level: %s\n", e.what());
+            tfm::format(std::cerr, "Could not read this process's integrity level: %s\n", AsciiWhat(e));
         }
         if (ipc::win::AboveMediumOrElevated(token_elevated, integrity_rid)) {
             const QString text = QObject::tr("The Gridcoin wallet must not run as administrator in multiprocess mode. "
@@ -1513,17 +1514,17 @@ int main(int argc, char *argv[])
         // misleading "lost the daemon connection".
         if (multiprocess)
         {
-            GUIError("IPC: lost the daemon connection during GUI startup: %s", e.what());
+            GUIError("IPC: lost the daemon connection during GUI startup: %s", AsciiWhat(e));
             QMessageBox::critical(nullptr, PACKAGE_NAME,
                     QObject::tr("Lost connection to the Gridcoin daemon during startup:\n%1")
-                        .arg(QString::fromStdString(e.what())));
+                        .arg(QString::fromStdString(AsciiWhat(e))));
         }
         else
         {
-            GUILogPrintf("Error during GUI startup: %s", e.what());
+            GUILogPrintf("Error during GUI startup: %s", AsciiWhat(e));
             QMessageBox::critical(nullptr, PACKAGE_NAME,
                     QObject::tr("An error occurred during startup:\n%1")
-                        .arg(QString::fromStdString(e.what())));
+                        .arg(QString::fromStdString(AsciiWhat(e))));
         }
         return EXIT_FAILURE;
     }
@@ -1671,7 +1672,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                             // A throw here would terminate the thread (and the
                             // process); contain it. The logger is left valid (the file is
                             // reopened before the cleanup step); the next tick retries.
-                            GUILogPrintf("WARNING: GUI log archive pass failed: %s", e.what());
+                            GUILogPrintf("WARNING: GUI log archive pass failed: %s", AsciiWhat(e));
                         }
                         g_gui_archive_running = false;
                     });
@@ -1679,7 +1680,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                     // std::thread construction can throw (e.g. resource exhaustion).
                     // Reset the guard so a later tick can retry, and don't let it
                     // escape the Qt slot (which would abort the GUI).
-                    GUILogPrintf("WARNING: could not start GUI log archive thread: %s", e.what());
+                    GUILogPrintf("WARNING: could not start GUI log archive thread: %s", AsciiWhat(e));
                     g_gui_archive_running = false;
                 }
             });
@@ -2006,9 +2007,9 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         // caught by the state arm also exits 0; the WARN in the log is what
         // distinguishes the two, not the exit code.
         RemoveGuiTerminationHandler(); // no-op if exec() already did it
-        if (IsDaemonDisconnectMessage(e.what()) || g_daemon_connection_lost.load()) {
+        if (IsDaemonDisconnectMessage(AsciiWhat(e)) || g_daemon_connection_lost.load()) {
             GUILogPrintf("IPC: the daemon connection was lost outside the GUI event loop "
-                         "(startup or teardown): %s; exiting cleanly", std::string(e.what()));
+                         "(startup or teardown): %s; exiting cleanly", std::string(AsciiWhat(e)));
             QuitOnDaemonConnectionLost("a GUI call outside the event loop was interrupted "
                                        "by the daemon disconnecting");
         } else {

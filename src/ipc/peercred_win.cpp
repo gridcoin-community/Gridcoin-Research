@@ -20,6 +20,7 @@
 #include "tinyformat.h"
 #include "util/strencodings.h"
 #include "util/win_acl.h"
+#include "util/syserror.h"
 
 #include <exception>
 #include <string>
@@ -89,7 +90,7 @@ ResolvedGroup ResolveAttachGroup(const std::string& name)
 
         return {account->sid, {}};
     } catch (const std::exception& e) {
-        return {std::nullopt, strprintf("The IPC attach group '%s' could not be looked up: %s", shown, e.what())};
+        return {std::nullopt, strprintf("The IPC attach group '%s' could not be looked up: %s", shown, AsciiWhat(e))};
     }
 }
 

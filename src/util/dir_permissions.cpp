@@ -6,6 +6,7 @@
 
 #include "tinyformat.h" // strprintf, for the errors when a directory cannot be restricted
 #include "util/win_acl.h"
+#include "util/syserror.h"
 
 #include <cerrno>
 #include <stdexcept>
@@ -178,7 +179,7 @@ CreateResult CreateAndRestrict(const fs::path& path, std::string& error)
         const auto* const not_kept = dynamic_cast<const winacl::AclNotKeptError*>(&e);
         if (VolumeKeepsAcls(parent)) {
             if (!not_kept) {
-                error = "could not create the directory " + path.string() + ": " + e.what();
+                error = "could not create the directory " + path.string() + ": " + AsciiWhat(e);
                 return CreateResult::Failed;
             }
             error = "created " + path.string() + " but could not restrict it to this account: " +
@@ -191,10 +192,10 @@ CreateResult CreateAndRestrict(const fs::path& path, std::string& error)
         boost::system::error_code plain_ec;
         if (!fs::create_directory(dir, plain_ec)) {
             error = "could not create the directory " + path.string() + ": " +
-                    (plain_ec ? plain_ec.message() : std::string{e.what()});
+                    (plain_ec ? plain_ec.message() : std::string{AsciiWhat(e)});
             return CreateResult::Failed;
         }
-        error = "created " + path.string() + " but could not restrict it to this account: " + e.what() +
+        error = "created " + path.string() + " but could not restrict it to this account: " + AsciiWhat(e) +
                 " (the volume keeps no ACLs)";
         return CreateResult::NoModes;
     }

@@ -5,8 +5,8 @@
 #include "qt/guiipcworker.h"
 
 #include "util.h" /* for LogPrintf */
-#include "util/threadnames.h"
 #include "util/syserror.h"
+#include "util/threadnames.h"
 
 #include <atomic>
 #include <exception>

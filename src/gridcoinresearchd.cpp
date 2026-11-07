@@ -148,7 +148,7 @@ static std::optional<std::string> ServiceAccountProblem()
         return util::winsvc::ServiceAccountRefusal(user, util::winacl::AccountNameOf(user),
                                                    util::winsvc::ServiceName());
     } catch (const std::exception& e) {
-        return strprintf("The Gridcoin service could not read the account it runs as: %s", e.what());
+        return strprintf("The Gridcoin service could not read the account it runs as: %s", AsciiWhat(e));
     }
 }
 
@@ -218,7 +218,7 @@ static std::optional<std::string> ImageDirectoryProblem()
             util::winsvc::IsRunningAsWindowsService(), util::winacl::CurrentTokenUser());
         reason = util::winacl::FindForeignWriterOnChain(exe, allowed);
     } catch (const std::exception& e) {
-        reason = strprintf("its access lists could not be read (%s)", e.what());
+        reason = strprintf("its access lists could not be read (%s)", AsciiWhat(e));
     }
 
     if (!reason) return std::nullopt;
@@ -742,7 +742,7 @@ bool AppInit(int argc, char* argv[])
                     std::string{"Fix the cause above, or start without -multiprocess."};
                 InitError(strprintf("Failed to start the multiprocess IPC listener: %s\n\n"
                                     "-multiprocess was requested, so this is fatal. %s",
-                                    e.what(), stale_advice));
+                                    AsciiWhat(e), stale_advice));
                 // Exit non-zero and take the normal shutdown path: the wait loop
                 // below sees the request immediately and falls through to
                 // Shutdown(), so the node stops cleanly instead of running on as a

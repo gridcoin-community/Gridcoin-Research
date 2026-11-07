@@ -5,6 +5,7 @@
 #include "wallet/autounlock_store.h"
 
 #include "logging.h"
+#include "util/syserror.h"
 
 #include <atomic>
 #include <exception>
@@ -64,7 +65,7 @@ void OnWalletPassphraseChanged(const SecureString& new_passphrase)
             return;
         }
     } catch (const std::exception& e) {
-        failure = e.what();
+        failure = AsciiWhat(e);
     } catch (...) {
         failure = "an unknown error";
     }
@@ -81,7 +82,7 @@ void OnWalletPassphraseChanged(const SecureString& new_passphrase)
     try {
         removed = store->Remove(error);
     } catch (const std::exception& e) {
-        error = e.what();
+        error = AsciiWhat(e);
     } catch (...) {
         error = "an unknown error";
     }
