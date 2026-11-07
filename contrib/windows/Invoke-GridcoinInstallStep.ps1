@@ -422,7 +422,11 @@ function Invoke-GridcoinSwitchOver {
     $helperDone = $false
     $dataDir = $null
     try {
-        if (Test-Path -LiteralPath $script:NoticePath) { Remove-Item -LiteralPath $script:NoticePath -Force }
+        try {
+            if (Test-Path -LiteralPath $script:NoticePath) { Remove-Item -LiteralPath $script:NoticePath -Force }
+        } catch {
+            $failures += "the old $script:NoticePath was not deleted ($($_.Exception.Message))"
+        }
 
         $oldTaskNames = @('Core-Start', 'Core-Stop', 'Autounlock')
         $mySid = Get-GridcoinCurrentSid

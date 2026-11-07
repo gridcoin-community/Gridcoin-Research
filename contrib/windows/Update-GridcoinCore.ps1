@@ -164,8 +164,12 @@ try {
     $noticePath = Join-Path $PSScriptRoot 'UPGRADE-NOTICE.txt'
     if ((Test-Path -LiteralPath $noticePath -PathType Leaf) -and
         (Get-Item -LiteralPath $noticePath).LastWriteTime -ge $installStarted) {
-        Write-Host "Notes from the installer ($noticePath):"
-        foreach ($noticeLine in @(Get-Content -LiteralPath $noticePath -Encoding UTF8)) { Write-Host $noticeLine }
+        try {
+            Write-Host "Notes from the installer ($noticePath):"
+            foreach ($noticeLine in @(Get-Content -LiteralPath $noticePath -Encoding UTF8)) { Write-Host $noticeLine }
+        } catch {
+            Write-Host "WARNING: the notes from the installer in $noticePath could not be printed: $($_.Exception.Message). The update itself succeeded."
+        }
     }
     $exitCode = 0
 } catch {

@@ -463,8 +463,8 @@ function ConvertTo-GridcoinConfBool {
     param([string]$Value)
     if ($Value.Length -eq 0) { return $true }
     $digits = $Value
-    if ($digits.Length -ge 2 -and $digits.Substring(0, 2) -ceq '+-') { return $false }
-    if ($digits.Substring(0, 1) -ceq '+') { $digits = $digits.Substring(1) }
+    if ($digits.StartsWith('+-', [System.StringComparison]::Ordinal)) { return $false }
+    if ($digits.StartsWith('+', [System.StringComparison]::Ordinal)) { $digits = $digits.Substring(1) }
     if ($digits -cnotmatch '^-?[0-9]+\z') { return $false }
     [int]$number = 0
     if (-not [int]::TryParse($digits, [System.Globalization.NumberStyles]::AllowLeadingSign,
@@ -491,22 +491,22 @@ function Read-GridcoinConfOptions {
     $prefix = ''
     foreach ($rawLine in @($Lines)) {
         $text = [string]$rawLine
-        $hashAt = $text.IndexOf('#')
+        $hashAt = $text.IndexOf([char]'#')
         if ($hashAt -ge 0) { $text = $text.Substring(0, $hashAt) }
         $text = $text.Trim($trimChars)
         if ($text.Length -eq 0) { continue }
-        if ($text[0] -ceq [char]'[' -and $text[$text.Length - 1] -ceq [char]']') {
+        if ([int]$text[0] -eq 0x5B -and [int]$text[$text.Length - 1] -eq 0x5D) {
             $prefix = $text.Substring(1, $text.Length - 2) + '.'
             continue
         }
-        if ($text[0] -ceq [char]'-') { continue }
-        $equalsAt = $text.IndexOf('=')
+        if ([int]$text[0] -eq 0x2D) { continue }
+        $equalsAt = $text.IndexOf([char]'=')
         if ($equalsAt -lt 0) { continue }
         $name = $prefix + $text.Substring(0, $equalsAt).Trim($trimChars)
         $optionValue = $text.Substring($equalsAt + 1).Trim($trimChars)
         $section = ''
         $key = $name
-        $dotAt = $name.IndexOf('.')
+        $dotAt = $name.IndexOf([char]'.')
         if ($dotAt -ge 0) {
             $section = $name.Substring(0, $dotAt)
             $key = $name.Substring($dotAt + 1)
@@ -572,13 +572,24 @@ function Read-GridcoinConfLines {
 # (ArgsManager::ReadConfigFiles, src/util/system.cpp:1265): the includeconf lines of the top level
 # and of the section of the network the file itself selects, a noincludeconf line dropping the
 # ones before it, relative names taken from the data directory, and an included file's own
-# includeconf lines ignored. A file that cannot be opened stops the core, so it is skipped here.
+# includeconf lines ignored. A file that cannot be opened stops the core, so it is skipped here;
+# so is an include whose name is not a valid path. The main file that exists but cannot be opened
+# is treated as absent, as the core does (ReadConfigFiles opens it with ReadConfigFileContents:
+# a failed fopen is ConfigFileRead::NotOpened, which is fine unless -conf was given, and the core
+# goes on without a file). Nothing here throws for a read problem, so a conf that cannot be read
+# never costs the user the old passphrase file.
 # The options of the included files come after those of the file, so they win for a repeated testnet.
 function Get-GridcoinConfNetwork {
     param([Parameter(Mandatory = $true)][string]$DataDir)
     $confForNetwork = Join-Path $DataDir 'gridcoinresearch.conf'
     if (-not (Test-Path -LiteralPath $confForNetwork -PathType Leaf)) { return 'main' }
-    $allOptions = @(Read-GridcoinConfOptions -Lines (Read-GridcoinConfLines -Path $confForNetwork))
+    $mainLines = $null
+    try {
+        $mainLines = Read-GridcoinConfLines -Path $confForNetwork
+    } catch {
+        return 'main'
+    }
+    $allOptions = @(Read-GridcoinConfOptions -Lines $mainLines)
 
     $ownNetwork = Get-GridcoinNetworkFromOptions -Options $allOptions
     $includeNames = @()
@@ -597,10 +608,15 @@ function Get-GridcoinConfNetwork {
         }
     }
     foreach ($includeName in $includeNames) {
-        $includePath = $includeName
-        if (-not [System.IO.Path]::IsPathRooted($includeName)) { $includePath = Join-Path $DataDir $includeName }
-        if (-not (Test-Path -LiteralPath $includePath -PathType Leaf)) { continue }
-        $allOptions += @(Read-GridcoinConfOptions -Lines (Read-GridcoinConfLines -Path $includePath))
+        try {
+            $includePath = $includeName
+            if (-not [System.IO.Path]::IsPathRooted($includeName)) { $includePath = Join-Path $DataDir $includeName }
+            if (-not (Test-Path -LiteralPath $includePath -PathType Leaf)) { continue }
+            $allOptions += @(Read-GridcoinConfOptions -Lines (Read-GridcoinConfLines -Path $includePath))
+        } catch {
+            # not a valid path, or not readable: skipped, as a missing file is
+            continue
+        }
     }
     return (Get-GridcoinNetworkFromOptions -Options $allOptions)
 }
