@@ -230,6 +230,46 @@ function Stop-GridcoinCore {
             throw ("a core started by hand is still running ($script:CorePath; " + ($described -join '; ') +
                    '); stop it and retry.')
         }
+
+        # The installer replaces gridcoinresearch.exe in the install directory and gridcoinresearchd.exe and
+        # gridcoin-service.exe in daemon\ (it also rewrites uninstall.exe), so every existing .exe in those two
+        # folders must be free to be replaced. A scan of a file just written, or a process still exiting, can
+        # hold one for a few seconds; the check opens each for reading with sharing None (no write access, so it
+        # never triggers a rescan), which fails while any other handle or a running image holds the file.
+        $replaced = @()
+        foreach ($exeDir in @($script:InstallRoot, (Join-Path $script:InstallRoot 'daemon'))) {
+            if (Test-Path -LiteralPath $exeDir -PathType Container) {
+                $replaced += @(Get-ChildItem -LiteralPath $exeDir -Filter '*.exe' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+            }
+        }
+        $held = @()
+        $heldDeadline = (Get-Date).AddSeconds(60)
+        $waitingShown = $false
+        while ($true) {
+            $held = @()
+            foreach ($exePath in $replaced) {
+                $probe = $null
+                try {
+                    $probe = [System.IO.File]::Open($exePath, 'Open', 'Read', 'None')
+                } catch [System.IO.FileNotFoundException] {
+                    # gone since the listing: nothing to replace
+                } catch {
+                    $held += $exePath
+                } finally {
+                    if ($null -ne $probe) { $probe.Dispose() }
+                }
+            }
+            if ($held.Count -eq 0 -or (Get-Date) -ge $heldDeadline) { break }
+            if (-not $waitingShown) {
+                Write-Host "Waiting up to 60 seconds for $($held -join ', ') to be released ..."
+                $waitingShown = $true
+            }
+            Start-Sleep -Seconds 1
+        }
+        if ($held.Count -gt 0) {
+            throw ("$($held -join ', ') is still open in another program after 60 seconds, so it cannot be replaced. " +
+                   'Close the program that has it open, or wait for a virus scan to finish, and run the installer again.')
+        }
     } catch {
         $stopFailure = $_.Exception.Message
         $restartProblems = @(Start-GridcoinCore -Services $stoppedServices -CoreStartTask $stoppedTask)

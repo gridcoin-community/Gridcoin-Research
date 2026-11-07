@@ -76,7 +76,7 @@ The core then autostarts on every boot. To upgrade, from an elevated console, wi
 
 It copies the installer to a protected staging directory and checks its Authenticode signature (valid, a chain to
 Microsoft's code-signing root, the signer pinned in `release-signer.txt`, a timestamp), then its SHA-256 in `SHA256SUMS`
-and its version, before it runs anything; with no signer pinned it refuses. After a silent install it prints the installer's `UPGRADE-NOTICE.txt` when the run wrote one. From an earlier version, upgrade with the installer:
+and its version, before it runs anything; with no signer pinned it refuses. The installer waits up to 60 seconds for its .exe files to be free and refuses before changing anything if one stays open, and the script checks that the installed `gridcoinresearchd.exe` reports the new version. After a silent install it prints the installer's `UPGRADE-NOTICE.txt` when the run wrote one. From an earlier version, upgrade with the installer:
 the `Update-GridcoinCore.ps1 -NewBinariesDir` of earlier versions does not replace the earlier tasks.
 To check a download you install by hand:
 

@@ -157,6 +157,15 @@ try {
     if ((ConvertTo-FourPartVersion $afterVersion) -ne $newVersion) {
         Stop-GridcoinUpdate "the installer exited 0 but DisplayVersion is '$afterText', not $newVersion."
     }
+    # A file the installer could not replace must not pass as an update: the program the install
+    # directory runs has to report the new version too.
+    $daemonPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'daemon\gridcoinresearchd.exe'
+    $daemonText = (Get-Item -LiteralPath $daemonPath).VersionInfo.FileVersion
+    $daemonVersion = $null
+    if (-not [version]::TryParse([string]$daemonText, [ref]$daemonVersion) -or
+        (ConvertTo-FourPartVersion $daemonVersion) -ne $newVersion) {
+        Stop-GridcoinUpdate "the installer exited 0, but $daemonPath is version ${daemonText}, not ${newVersion}: run the installer again."
+    }
     Write-Host "Updated: DisplayVersion is now $afterText."
 
     # The silent install never shows the finish page, so the notes it would show are printed here:

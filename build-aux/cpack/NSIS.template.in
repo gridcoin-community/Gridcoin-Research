@@ -99,6 +99,8 @@ CRCCheck force
 XPStyle on
 BrandingText " "
 ShowInstDetails show
+# A file that cannot be overwritten offers Retry or Cancel only; a silent install stops instead of skipping it with exit code 0.
+AllowSkipFiles off
 VIProductVersion "${VERSION}"
 VIAddVersionKey ProductName "@CPACK_NSIS_PACKAGE_NAME@"
 VIAddVersionKey ProductVersion "${VERSION}"
