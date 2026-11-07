@@ -3017,7 +3017,9 @@ static const RPCHelpMan abandontransaction_help{
     "This will mark this transaction and all its in-wallet descendants as abandoned, "
     "which will allow their inputs to be respent. It can be used to replace stuck or evicted transactions. "
     "It only works on transactions which are not included in a block and are not currently in the mempool. "
-    "It has no effect on transactions which are already conflicted or abandoned.",
+    "That includes a transaction a block has conflicted (a transaction in that block spends one of its inputs); once it is "
+    "abandoned, the wallet does not offer it back to the mempool if that block is later disconnected. "
+    "Calling it again on an abandoned transaction leaves it abandoned.",
     {
         {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
             "The transaction id (must be in the wallet)."},
