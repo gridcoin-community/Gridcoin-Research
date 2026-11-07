@@ -260,6 +260,17 @@ function Set-GridcoinInstallDirAcl {
         throw "the install directory $fullPath is a drive or a network path. Choose a directory on a local drive, such as C:\Gridcoin."
     }
 
+    # The list set below protects the directory only while every folder above it is closed to
+    # non-administrators too: whoever can write a parent can rename the directory away and put
+    # their own in its place. Checked before anything changes, so a refusal leaves every core running.
+    $parentPath = Split-Path -Parent $script:InstallRoot
+    $parentOffender = Get-GridcoinWriteVector -Path $parentPath -AllowedSids (Get-GridcoinPrivilegedSids) -ChainMasks
+    if ($parentOffender) {
+        throw ("a folder above the install directory $script:InstallRoot can be changed by accounts that are not administrators, " +
+               "so no access list on the directory itself can protect it. Found: $parentOffender. Install under Program Files " +
+               '(the default), or remove the write access of non-administrators from that folder, and retry.')
+    }
+
     $security = New-Object System.Security.AccessControl.DirectorySecurity
     $security.SetSecurityDescriptorSddlForm($script:InstallDirSddl, [System.Security.AccessControl.AccessControlSections]'Owner, Access')
 
