@@ -883,7 +883,7 @@ the installer is copied to a protected staging directory, its Authenticode signa
 release signer pinned in `release-signer.txt` (a chain to Microsoft's code-signing root, the pinned identity marker
 and subject name, and a timestamp), the installer must be listed in `SHA256SUMS` with a matching SHA-256, and its
 version must be newer than the installed one (`-AllowDowngrade` overrides). Only then does it run the staged copy of
-the installer silently. With no signer pinned it refuses.
+the installer silently, then prints the installer's `UPGRADE-NOTICE.txt` (removed tasks, autounlock not carried over, wide permissions found) when the run wrote one. With no signer pinned it refuses.
 For a download you install by hand, `.\Test-GridcoinRelease.ps1 -InstallerPath .\gridcoin-5.5.2.1-win64-setup.exe
 -SumsPath .\SHA256SUMS` checks the signature and prints the SHA-256 that `SHA256SUMS` lists for the file; compare it
 with `(Get-FileHash .\gridcoin-5.5.2.1-win64-setup.exe).Hash`.

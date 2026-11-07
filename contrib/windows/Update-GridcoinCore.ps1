@@ -19,7 +19,7 @@
       5. The installer's name must be listed in SHA256SUMS and its SHA-256 must match.
       6. Its file version must exceed the installed DisplayVersion, unless -AllowDowngrade.
       7. Only then run the staged installer with /S, wait, and require exit 0 and a new
-         DisplayVersion.
+         DisplayVersion. Then print the installer's UPGRADE-NOTICE.txt, when it wrote one.
 
     Nothing is stopped before step 7 passes; the installer stops and restarts the cores.
 
@@ -148,6 +148,7 @@ try {
     }
 
     Write-Host "Installing $newVersion over $installedVersion ..."
+    $installStarted = Get-Date
     $process = Start-Process -FilePath $stagedInstaller -ArgumentList '/S' -Wait -PassThru
     if ($process.ExitCode -ne 0) { Stop-GridcoinUpdate "the installer exited with code $($process.ExitCode)." }
     $afterText = (Get-ItemProperty -LiteralPath $uninstallKey).DisplayVersion
@@ -157,6 +158,15 @@ try {
         Stop-GridcoinUpdate "the installer exited 0 but DisplayVersion is '$afterText', not $newVersion."
     }
     Write-Host "Updated: DisplayVersion is now $afterText."
+
+    # The silent install never shows the finish page, so the notes it would show are printed here:
+    # the installer's UPGRADE-NOTICE.txt in this script's own folder, when this run wrote it.
+    $noticePath = Join-Path $PSScriptRoot 'UPGRADE-NOTICE.txt'
+    if ((Test-Path -LiteralPath $noticePath -PathType Leaf) -and
+        (Get-Item -LiteralPath $noticePath).LastWriteTime -ge $installStarted) {
+        Write-Host "Notes from the installer ($noticePath):"
+        foreach ($noticeLine in @(Get-Content -LiteralPath $noticePath -Encoding UTF8)) { Write-Host $noticeLine }
+    }
     $exitCode = 0
 } catch {
     $failure = $_.Exception.Message
