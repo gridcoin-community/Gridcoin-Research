@@ -478,7 +478,7 @@ std::optional<std::pair<std::string, std::string>> AttestServer::Begin()
             return challenge;
         }
     } catch (const std::exception& e) {
-        error = e.what();
+        error = AsciiWhat(e);
     }
 
     state.pipe.reset();
@@ -504,7 +504,7 @@ std::optional<TokenFacts> AttestServer::Finish()
         try {
             facts = state.Attest(error);
         } catch (const std::exception& e) {
-            error = e.what();
+            error = AsciiWhat(e);
         }
     }
     state.pipe.reset();
@@ -540,7 +540,7 @@ std::optional<AttestClientPipe> AttestClientPipe::Open(const std::string& suffix
     try {
         owner = util::winacl::ReadAcl(handle, /*kernel_object=*/true).owner;
     } catch (const std::exception& e) {
-        error = strprintf("could not read the owner of the node's identity-check pipe: %s", e.what());
+        error = strprintf("could not read the owner of the node's identity-check pipe: %s", AsciiWhat(e));
         return std::nullopt;
     }
     if (!owner) {
@@ -595,7 +595,7 @@ void RunClientAttestation(interfaces::Init& init, const Sid& expected_server)
     try {
         challenge = init.beginAttest();
     } catch (const std::exception& e) {
-        LogPrintf("IPC: the node did not begin the Windows identity check: %s", e.what());
+        LogPrintf("IPC: the node did not begin the Windows identity check: %s", AsciiWhat(e));
         throw std::runtime_error(NOT_CHECKED);
     }
     if (!challenge.served) {
@@ -621,7 +621,7 @@ void RunClientAttestation(interfaces::Init& init, const Sid& expected_server)
         admitted = init.finishAttest();
     } catch (const std::exception& e) {
         throw std::runtime_error(
-            strprintf("Lost connection to the node during the Windows identity check: %s", e.what()));
+            strprintf("Lost connection to the node during the Windows identity check: %s", AsciiWhat(e)));
     }
     if (!admitted) {
         throw std::runtime_error("The node refused this GUI's identity (wrong account, not in Gridcoin GUI Users, "

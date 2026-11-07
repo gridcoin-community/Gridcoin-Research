@@ -223,7 +223,7 @@ std::optional<UserAccount> FindUserAccount(const std::string& user, std::string&
             }
             sid = account->sid;
         } catch (const std::system_error& e) {
-            throw std::runtime_error(std::string("look the account up: ") + e.what());
+            throw std::runtime_error(std::string("look the account up: ") + AsciiWhat(e));
         }
     }
 

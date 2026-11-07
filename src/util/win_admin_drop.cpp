@@ -5,6 +5,7 @@
 #include "util/win_admin_drop.h"
 
 #include "tinyformat.h"
+#include "util/syserror.h"
 
 #include <algorithm>
 #include <array>
@@ -544,7 +545,7 @@ StartOutcome GiveUpAdminRights(bool service, bool rpc_client, bool report_permis
         outcome.refusal = RefusalMessage(strprintf("%s failed with Windows error %d", e.step(), e.code().value()));
     } catch (const std::exception& e) {
         outcome.kind = StartOutcome::Kind::Refused;
-        outcome.refusal = RefusalMessage(e.what());
+        outcome.refusal = RefusalMessage(AsciiWhat(e));
     }
 
     return outcome;

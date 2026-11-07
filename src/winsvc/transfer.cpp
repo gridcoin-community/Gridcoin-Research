@@ -1222,7 +1222,7 @@ private:
                 try {
                     FilterSettingsJson(text);
                 } catch (const std::runtime_error& e) {
-                    Fail(Shown(dir.Child(name)) + ": " + e.what() + ". Correct or remove it, then try again. "
+                    Fail(Shown(dir.Child(name)) + ": " + AsciiWhat(e) + ". Correct or remove it, then try again. "
                          "Nothing was copied.");
                     return false;
                 }
@@ -1380,7 +1380,7 @@ private:
         try {
             filtered = FilterSettingsJson(original);
         } catch (const std::runtime_error& e) {
-            Fail(Shown(from.Child(name)) + ": " + e.what() + ". Correct or remove it, then try again.");
+            Fail(Shown(from.Child(name)) + ": " + AsciiWhat(e) + ". Correct or remove it, then try again.");
             return false;
         }
         if (!filtered.second.empty() && !QuarantineFile(from, name, relative, &original)) return false;
@@ -1739,7 +1739,7 @@ std::vector<std::string> RunFollowUps(const std::vector<FollowUp>& steps)
             step.run();
             ok[i] = true;
         } catch (const std::exception& e) {
-            warnings.push_back(strprintf("%s failed: %s. To finish it: %s", step.name, e.what(), step.finish));
+            warnings.push_back(strprintf("%s failed: %s. To finish it: %s", step.name, AsciiWhat(e), step.finish));
         }
     }
     return warnings;

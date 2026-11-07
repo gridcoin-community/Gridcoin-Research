@@ -7,6 +7,7 @@
 #include "logging.h"
 #include "tinyformat.h"
 #include "util/strencodings.h"
+#include "util/syserror.h"
 
 #include <atomic>
 #include <chrono>
@@ -223,7 +224,7 @@ bool ServiceRunner::Run(const std::function<bool()>& app_main, const std::functi
     } catch (const std::system_error& e) {
         // The stop is still honoured and the exit reported; only the progress of a stop the
         // core began on its own is not.
-        LogPrintf("Service: the stop progress reporter could not be started: %s", e.what());
+        LogPrintf("Service: the stop progress reporter could not be started: %s", AsciiWhat(e));
     }
 
     bool app_ok = false;
@@ -658,7 +659,7 @@ std::string DescribeProcessToken()
         const std::string name = winacl::AccountNameOf(user);
         facts.user = name.empty() ? winacl::FormatSid(user) : name + " (" + winacl::FormatSid(user) + ")";
     } catch (const std::exception& e) {
-        unread.push_back(e.what());
+        unread.push_back(AsciiWhat(e));
     }
 
     try {
@@ -683,7 +684,7 @@ std::string DescribeProcessToken()
             }
         }
     } catch (const std::exception& e) {
-        unread.push_back(e.what());
+        unread.push_back(AsciiWhat(e));
     }
 
     try {
@@ -691,7 +692,7 @@ std::string DescribeProcessToken()
             winacl::QueryTokenInformation(token.get(), TokenRestrictedSids, "TokenRestrictedSids");
         facts.restricting_sids = reinterpret_cast<const TOKEN_GROUPS*>(buffer.data())->GroupCount;
     } catch (const std::exception& e) {
-        unread.push_back(e.what());
+        unread.push_back(AsciiWhat(e));
     }
 
     try {
@@ -700,13 +701,13 @@ std::string DescribeProcessToken()
         const DWORD flags = reinterpret_cast<const TOKEN_ACCESS_INFORMATION*>(buffer.data())->Flags;
         facts.write_restricted = (flags & TOKEN_FLAG_WRITE_RESTRICTED) != 0;
     } catch (const std::exception& e) {
-        unread.push_back(e.what());
+        unread.push_back(AsciiWhat(e));
     }
 
     try {
         facts.integrity_rid = winacl::CurrentTokenIntegrityRid();
     } catch (const std::exception& e) {
-        unread.push_back(e.what());
+        unread.push_back(AsciiWhat(e));
     }
 
     std::string text = DescribeTokenFacts(facts);

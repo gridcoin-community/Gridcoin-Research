@@ -6,6 +6,7 @@
 
 #include "util.h" /* for LogPrintf */
 #include "util/threadnames.h"
+#include "util/syserror.h"
 
 #include <atomic>
 #include <exception>
@@ -80,7 +81,7 @@ std::future<void> GuiIpcWorker::Post(std::function<void()> job)
         try {
             m_thread = std::thread([this] { Run(); });
         } catch (const std::system_error& e) {
-            LogPrintf("ERROR: %s: could not start the %s worker's thread: %s", __func__, RoleName(m_role), e.what());
+            LogPrintf("ERROR: %s: could not start the %s worker's thread: %s", __func__, RoleName(m_role), AsciiWhat(e));
             return {};
         }
     }
@@ -113,7 +114,7 @@ void GuiIpcWorker::Run()
         try {
             job->run();
         } catch (const std::exception& e) {
-            LogPrintf("ERROR: %s: a job on the %s worker failed: %s", __func__, RoleName(m_role), e.what());
+            LogPrintf("ERROR: %s: a job on the %s worker failed: %s", __func__, RoleName(m_role), AsciiWhat(e));
         } catch (...) {
             LogPrintf("ERROR: %s: a job on the %s worker failed", __func__, RoleName(m_role));
         }

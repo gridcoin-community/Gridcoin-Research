@@ -156,7 +156,7 @@ public:
             if (info) info->server_other_account = expected_server != util::winacl::CurrentTokenUser();
         } catch (const std::exception& e) {
             throw interfaces::PeerRefusedError(
-                strprintf("Refusing to connect: the node account to expect cannot be determined (%s)", e.what()));
+                strprintf("Refusing to connect: the node account to expect cannot be determined (%s)", AsciiWhat(e)));
         }
 #endif
         // A second handle on the socket lets the caller shut the connection down
@@ -180,7 +180,7 @@ public:
             try {
                 ipc::win::RunClientAttestation(*init, expected_server);
             } catch (const std::runtime_error& e) {
-                throw interfaces::PeerRefusedError(e.what());
+                throw interfaces::PeerRefusedError(AsciiWhat(e));
             }
         }
 #endif

@@ -173,7 +173,7 @@ std::optional<CheckedFile> ForeignAccess(HANDLE handle, const fs::path& path)
         acl = winacl::ReadAcl(handle, /*kernel_object=*/false);
         allowed = {winacl::CurrentTokenUser(), winacl::wellknown::System(), winacl::wellknown::Administrators()};
     } catch (const std::exception& e) {
-        return Refused("could not read the autounlock file's access control list", Display(path) + ": " + e.what(),
+        return Refused("could not read the autounlock file's access control list", Display(path) + ": " + AsciiWhat(e),
                        /*definite=*/false);
     }
 
@@ -214,7 +214,7 @@ std::optional<CheckedFile> ForeignWriterOnChain(HANDLE handle, const fs::path& p
         writer = winacl::FindForeignWriterOnDataChain(path, allowed, &leaf);
     } catch (const std::exception& e) {
         return Refused("could not read the access control lists of the autounlock file and the directories above it",
-                       Display(path) + ": " + e.what(), /*definite=*/false);
+                       Display(path) + ": " + AsciiWhat(e), /*definite=*/false);
     }
 
     if (!writer) return std::nullopt;
@@ -555,7 +555,7 @@ std::optional<SecureString> FetchAutoUnlockFromDpapiBlob(const fs::path& path, s
             error = Describe(file);
         }
     } catch (const std::exception& e) {
-        error = strprintf("could not read the autounlock file (%s: %s)", Display(path), e.what());
+        error = strprintf("could not read the autounlock file (%s: %s)", Display(path), AsciiWhat(e));
     }
 
     LogPrintf("autounlock: %s; the wallet stays locked", error);
@@ -570,7 +570,7 @@ AutoUnlockStoreOutcome DpapiBlobStore::Store(const SecureString& passphrase, std
     try {
         return StoreBlob(passphrase, error);
     } catch (const std::exception& e) {
-        error = strprintf("could not store the autounlock passphrase: %s", e.what());
+        error = strprintf("could not store the autounlock passphrase: %s", AsciiWhat(e));
         return AutoUnlockStoreOutcome::Failed;
     }
 }
@@ -598,7 +598,7 @@ bool DpapiBlobStore::Remove(std::string& error)
         error = strprintf("could not remove the autounlock file %s: %s", Display(*path),
                           "DeleteFileW failed: " + Win32ErrorText(delete_error));
     } catch (const std::exception& e) {
-        error = strprintf("could not remove the autounlock file: %s", e.what());
+        error = strprintf("could not remove the autounlock file: %s", AsciiWhat(e));
     }
 
     return false;
@@ -628,7 +628,7 @@ AutoUnlockStoreStatus DpapiBlobStore::Status()
 
         if (file.state == FileState::Refused) status.problem = Describe(file);
     } catch (const std::exception& e) {
-        status.problem = e.what();
+        status.problem = AsciiWhat(e);
     }
 
     return status;

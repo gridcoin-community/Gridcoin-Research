@@ -247,9 +247,9 @@ win::EndpointHold CheckEndpointBeforeConnect(const fs::path& socket_path)
     } catch (const std::system_error& e) {
         if (e.code() == std::errc::no_such_file_or_directory) throw;
         throw interfaces::PeerRefusedError(
-            strprintf("Refusing to connect: the IPC endpoint could not be checked (%s)", e.what()));
+            strprintf("Refusing to connect: the IPC endpoint could not be checked (%s)", AsciiWhat(e)));
     } catch (const std::exception& e) {
-        throw interfaces::PeerRefusedError(strprintf("Refusing to connect to the IPC endpoint: %s", e.what()));
+        throw interfaces::PeerRefusedError(strprintf("Refusing to connect to the IPC endpoint: %s", AsciiWhat(e)));
     }
 }
 #endif

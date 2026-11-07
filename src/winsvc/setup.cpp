@@ -163,9 +163,9 @@ int RunVerb(const std::function<void()>& body)
         body();
         return EXIT_OK;
     } catch (const Refusal& e) {
-        SayError(std::string("Refused: ") + e.what());
+        SayError(std::string("Refused: ") + AsciiWhat(e));
     } catch (const std::exception& e) {
-        SayError(std::string("Error: ") + e.what());
+        SayError(std::string("Error: ") + AsciiWhat(e));
     }
     return EXIT_REFUSED;
 }
@@ -1251,7 +1251,7 @@ std::pair<std::string, bool> EntryStatus(const LayoutEntry& entry)
     try {
         level = ReadLevel(entry.path);
     } catch (const std::exception& e) {
-        return {std::string("could not be read: ") + e.what(), false};
+        return {std::string("could not be read: ") + AsciiWhat(e), false};
     }
     if (!level.exists) return {"absent", false};
     if (level.reparse) return {"a reparse point (a junction or a link)", false};
@@ -1329,7 +1329,7 @@ void ShowStateFile(const fs::path& path)
         Say(strprintf("Wallet: moved in from %s by enable for %s, at %s", StateFileValue(text, "from").value_or("?"),
                       user, StateFileValue(text, "enabled_at").value_or("?")));
     } catch (const std::exception& e) {
-        Say("Wallet: " + Shown(path) + " could not be read: " + e.what());
+        Say("Wallet: " + Shown(path) + " could not be read: " + AsciiWhat(e));
     }
 }
 
@@ -1353,7 +1353,7 @@ void RemoveEmptyDirectories(const std::vector<fs::path>& dirs)
         try {
             level = ReadLevel(dir);
         } catch (const std::exception& e) {
-            Say("Kept " + Shown(dir) + ": " + e.what());
+            Say("Kept " + Shown(dir) + ": " + AsciiWhat(e));
             continue;
         }
         if (!level.exists) continue;
@@ -1586,7 +1586,7 @@ bool ShowService(Network net, const std::optional<fs::path>& exe, const fs::path
     try {
         return ShowServiceSettings(service.get(), net, exe, programdata);
     } catch (const std::exception& e) {
-        Say(std::string("  The service's settings could not be read: ") + e.what());
+        Say(std::string("  The service's settings could not be read: ") + AsciiWhat(e));
         return false;
     }
 }
@@ -1602,7 +1602,7 @@ bool ShowStatus(const ToolOptions& options)
         try {
             EnablePrivilege(SE_BACKUP_NAME);
         } catch (const std::exception& e) {
-            Say(std::string("Note: ") + e.what());
+            Say(std::string("Note: ") + AsciiWhat(e));
         }
     } else {
         Say("Not elevated: the entries this account cannot read are reported as such. Run it from an elevated "
@@ -1615,7 +1615,7 @@ bool ShowStatus(const ToolOptions& options)
         Say("Daemon next to this program: " + Shown(*exe));
     } catch (const std::exception& e) {
         matches = false;
-        Say(std::string("Daemon next to this program: ") + e.what());
+        Say(std::string("Daemon next to this program: ") + AsciiWhat(e));
     }
 
     const fs::path programdata = ProgramDataPath();
@@ -1628,7 +1628,7 @@ bool ShowStatus(const ToolOptions& options)
         try {
             sid = LocalGroupSid(group);
         } catch (const std::exception& e) {
-            Say(strprintf("Group \"%s\": %s", Shown(group), e.what()));
+            Say(strprintf("Group \"%s\": %s", Shown(group), AsciiWhat(e)));
         }
         if (sid) {
             Say(strprintf("Group \"%s\": %s", Shown(group), winacl::FormatSid(*sid)));
@@ -1665,7 +1665,7 @@ bool ShowStatus(const ToolOptions& options)
             }
         } catch (const std::exception& e) {
             matches = false;
-            Say(std::string("Configuration file: could not be read: ") + e.what());
+            Say(std::string("Configuration file: could not be read: ") + AsciiWhat(e));
         }
     }
 
@@ -1899,7 +1899,7 @@ bool CoreStartNetwork(const CoreStartTask& task, const fs::path& default_root, N
         core_net = NetworkOfConf(text);
         return true;
     } catch (const std::exception& e) {
-        why = e.what();
+        why = AsciiWhat(e);
         return false;
     }
 }
@@ -2109,7 +2109,7 @@ void EnableService(const ToolOptions& options)
             try {
                 SetCoreStartTaskEnabled(true);
             } catch (const std::exception& task_error) {
-                left.push_back(std::string("turn Core-Start back on: ") + task_error.what());
+                left.push_back(std::string("turn Core-Start back on: ") + AsciiWhat(task_error));
             }
         }
         if (lock_created) MarkForRemoval(lock.get());
@@ -2118,8 +2118,8 @@ void EnableService(const ToolOptions& options)
             left.empty() ? std::string("Nothing was changed: what was copied was removed again, and the data "
                                        "directory the wallet came from is as it was.")
                          : "Undoing it was not complete, so finish it by hand: " + Join(left, "; ") + ".";
-        if (dynamic_cast<const Refusal*>(&e) != nullptr) throw Refusal(std::string(e.what()) + " " + undo);
-        throw std::runtime_error(std::string(e.what()) + ". " + undo);
+        if (dynamic_cast<const Refusal*>(&e) != nullptr) throw Refusal(std::string(AsciiWhat(e)) + " " + undo);
+        throw std::runtime_error(std::string(AsciiWhat(e)) + ". " + undo);
     }
 
     // From here the service holds the only wallet, so nothing is undone: a step that fails is
@@ -2138,7 +2138,7 @@ void EnableService(const ToolOptions& options)
             left_behind = error;
         }
     } catch (const std::exception& e) {
-        left_behind = e.what();
+        left_behind = AsciiWhat(e);
     }
     if (!left_behind.empty()) {
         warnings.push_back(strprintf("Warning: the wallet is in the service, but part of its old tree was not "
@@ -2162,7 +2162,7 @@ void EnableService(const ToolOptions& options)
                 warnings.push_back("Warning: " + error);
             }
         } catch (const std::exception& e) {
-            warnings.push_back(std::string("Warning: ") + e.what());
+            warnings.push_back(std::string("Warning: ") + AsciiWhat(e));
         }
     }
     for (const fs::path& kept : result.source_kept) {
@@ -2383,7 +2383,7 @@ void DisableService(const ToolOptions& options)
             SetStartType(service.get(), names, previous_start);
             if (was_running) StartAndWait(service.get(), names);
         } catch (const std::exception& service_error) {
-            left.push_back(std::string("restore the service: ") + service_error.what());
+            left.push_back(std::string("restore the service: ") + AsciiWhat(service_error));
         }
 
         const std::string undo =
@@ -2391,8 +2391,8 @@ void DisableService(const ToolOptions& options)
                                      "wallet and its start type back%s.",
                                      was_running ? " and runs again" : "")
                          : "Undoing it was not complete, so finish it by hand: " + Join(left, "; ") + ".";
-        if (dynamic_cast<const Refusal*>(&e) != nullptr) throw Refusal(std::string(e.what()) + " " + undo);
-        throw std::runtime_error(std::string(e.what()) + ". " + undo);
+        if (dynamic_cast<const Refusal*>(&e) != nullptr) throw Refusal(std::string(AsciiWhat(e)) + " " + undo);
+        throw std::runtime_error(std::string(AsciiWhat(e)) + ". " + undo);
     }
 
     // From here the account holds the only wallet, so nothing is undone: a step that fails is
@@ -2412,7 +2412,7 @@ void DisableService(const ToolOptions& options)
             left_behind = error;
         }
     } catch (const std::exception& e) {
-        left_behind = e.what();
+        left_behind = AsciiWhat(e);
     }
     if (!left_behind.empty()) {
         warnings.push_back(strprintf("Warning: the wallet is back, but part of the service's copy was not removed: "
@@ -2430,7 +2430,7 @@ void DisableService(const ToolOptions& options)
             bool removed = false;
             if (!RemoveDirIfEmpty(datadir, L"testnet", removed, error)) warnings.push_back("Warning: " + error);
         } catch (const std::exception& e) {
-            warnings.push_back(std::string("Warning: ") + e.what());
+            warnings.push_back(std::string("Warning: ") + AsciiWhat(e));
         }
     }
 

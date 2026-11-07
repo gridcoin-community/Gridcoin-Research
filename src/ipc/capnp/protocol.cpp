@@ -11,6 +11,7 @@
 #include "ipc/protocol.h"
 #include "ipc/serve_init.h" // IPC_AUTH_DEADLINE
 #include "util.h"
+#include "util/syserror.h"
 
 #include <mp/proxy-io.h>
 #include <mp/proxy-types.h>
@@ -134,7 +135,7 @@ void InvokeDisconnectCb(const std::function<void()>& cb)
     try {
         cb();
     } catch (const std::exception& e) {
-        error("ipc: disconnect callback threw: %s", e.what());
+        error("ipc: disconnect callback threw: %s", AsciiWhat(e));
     } catch (...) {
         error("ipc: disconnect callback threw a non-standard exception");
     }
@@ -148,7 +149,7 @@ void RunConnectionClosed(interfaces::Init& init)
     try {
         init.connectionClosed();
     } catch (const std::exception& e) {
-        error("ipc: connection teardown threw: %s", e.what());
+        error("ipc: connection teardown threw: %s", AsciiWhat(e));
     } catch (...) {
         error("ipc: connection teardown threw a non-standard exception");
     }

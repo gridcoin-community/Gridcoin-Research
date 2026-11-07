@@ -13,6 +13,7 @@
 #include "threadsafety.h"
 #include "tinyformat.h"
 #include "util/threadnames.h"
+#include "util/syserror.h"
 
 #include <condition_variable>
 #include <exception>
@@ -241,7 +242,7 @@ std::optional<GuiConnection> ConnectToNode(const fs::path& ipc_dir, ConnectFailu
         watchdog.emplace(handshake_timeout);
     } catch (const std::system_error& e) {
         failure_out = {ConnectFailureKind::Handshake,
-                       strprintf("could not start the IPC handshake watchdog: %s", e.what())};
+                       strprintf("could not start the IPC handshake watchdog: %s", AsciiWhat(e))};
         return std::nullopt;
     }
 
@@ -262,17 +263,17 @@ std::optional<GuiConnection> ConnectToNode(const fs::path& ipc_dir, ConnectFailu
         conn.init = conn.ipc->connectAddress(address, [gate] { gate->Dropped(); }, &info);
     } catch (const interfaces::PeerRefusedError& e) {
         failure = ConnectFailure{ConnectFailureKind::PeerRefused,
-                                 strprintf("could not connect to the daemon on %s: %s", address, e.what())};
+                                 strprintf("could not connect to the daemon on %s: %s", address, AsciiWhat(e))};
     } catch (const std::system_error& e) {
         // Nothing listens on the path: there is no socket file, or a stopped
         // core left one behind.
         const bool not_listening = e.code() == std::errc::connection_refused ||
                                    e.code() == std::errc::no_such_file_or_directory;
         failure = ConnectFailure{not_listening ? ConnectFailureKind::NotListening : ConnectFailureKind::Handshake,
-                                 strprintf("could not connect to the daemon on %s: %s", address, e.what())};
+                                 strprintf("could not connect to the daemon on %s: %s", address, AsciiWhat(e))};
     } catch (const std::exception& e) {
         failure = ConnectFailure{ConnectFailureKind::Handshake,
-                                 strprintf("could not connect to the daemon on %s: %s", address, e.what())};
+                                 strprintf("could not connect to the daemon on %s: %s", address, AsciiWhat(e))};
     }
     if (!failure && !conn.init) {
         failure = ConnectFailure{ConnectFailureKind::NotListening,
