@@ -856,7 +856,8 @@ in plain text: delete it.
 ### Upgrading (Windows)
 
 Run the new installer as an administrator. It stops the running cores (Core-Stop for a task, `Stop-Service` for the
-service), installs, replaces the earlier tasks as above, and starts the cores it stopped. It refuses to
+service), installs, replaces the earlier tasks as above, and starts the cores it stopped; an install that
+stops partway (a file it cannot replace, or Cancel) also starts again the cores it stopped. It refuses to
 uninstall while the service mode is on: run `gridcoin-service.exe disable` for each network first. On the finish page,
 Run starts `gridcoinresearch.exe -multiprocess` (with the `-datadir` of the launcher, if it names one) when the
 installing account's own Core-Start was restarted, so the GUI attaches to that core; it is not ticked when a service or

@@ -15,6 +15,7 @@
       StopCore          before any file is replaced: stops each Gridcoin service that runs, then the
                         core of the \Gridcoin\Core-Start task (gracefully, through Core-Stop), and
                         refuses while a core started by hand from <InstallDir>\daemon still runs.
+                        Then waits up to 60 seconds for the program files to be free to be replaced.
                         What was running is written to -StateFile. On a refusal, what was stopped
                         is started again.
       SwitchOver        after the files are installed: registers again with the S4U logon
@@ -24,11 +25,14 @@
                         restores unattended start. Ends the earlier versions' autounlock helper and
                         task, replaces their shutdown script, and deletes their helper scripts and release-keys.txt.
       StartCore         starts again what StopCore found running.
+      RestartStopped    run by the installer when it stops after StopCore (a file that cannot be
+                        written, or Cancel): starts again what StopCore stopped, as it was.
       ReportPermissions runs the new core's -reportpermissions over this account's data
                         directories, and writes what it finds into UPGRADE-NOTICE.txt. It changes
                         nothing.
       UninstallCheck    before uninstalling: exit 3 while service mode is on.
-      PreUninstall      before any file is deleted: StopCore, Uninstall-GridcoinCoreTask.ps1 -All,
+      PreUninstall      before any file is deleted: StopCore (without the wait for the program
+                        files), Uninstall-GridcoinCoreTask.ps1 -All,
                         and gridcoin-service.exe uninstall for each service that is installed.
 
     Exit codes: 0 done; 1 failed, the reason printed; 3 (UninstallCheck) service mode is on.
@@ -175,9 +179,11 @@ function Start-GridcoinCore {
     return $problems
 }
 
-# StopCore. With SavePath, what was running is written there for StartCore.
+# StopCore. With SavePath, what was running is written there for StartCore. With
+# WaitForExecutables (the install's StopCore, not PreUninstall), it also waits for the program files
+# to be free to be replaced.
 function Stop-GridcoinCore {
-    param([string]$SavePath)
+    param([string]$SavePath, [switch]$WaitForExecutables)
     $stoppedServices = @()
     $stoppedTask = $false
     try {
@@ -231,44 +237,46 @@ function Stop-GridcoinCore {
                    '); stop it and retry.')
         }
 
-        # The installer replaces gridcoinresearch.exe in the install directory and gridcoinresearchd.exe and
-        # gridcoin-service.exe in daemon\ (it also rewrites uninstall.exe), so every existing .exe in those two
-        # folders must be free to be replaced. A scan of a file just written, or a process still exiting, can
-        # hold one for a few seconds; the check opens each for reading with sharing None (no write access, so it
-        # never triggers a rescan), which fails while any other handle or a running image holds the file.
-        $replaced = @()
-        foreach ($exeDir in @($script:InstallRoot, (Join-Path $script:InstallRoot 'daemon'))) {
-            if (Test-Path -LiteralPath $exeDir -PathType Container) {
-                $replaced += @(Get-ChildItem -LiteralPath $exeDir -Filter '*.exe' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
-            }
-        }
-        $held = @()
-        $heldDeadline = (Get-Date).AddSeconds(60)
-        $waitingShown = $false
-        while ($true) {
-            $held = @()
-            foreach ($exePath in $replaced) {
-                $probe = $null
-                try {
-                    $probe = [System.IO.File]::Open($exePath, 'Open', 'Read', 'None')
-                } catch [System.IO.FileNotFoundException] {
-                    # gone since the listing: nothing to replace
-                } catch {
-                    $held += $exePath
-                } finally {
-                    if ($null -ne $probe) { $probe.Dispose() }
+        if ($WaitForExecutables) {
+            # The installer replaces gridcoinresearch.exe in the install directory and gridcoinresearchd.exe and
+            # gridcoin-service.exe in daemon\ (it also rewrites uninstall.exe), so every existing .exe in those two
+            # folders must be free to be replaced. A scan of a file just written, or a process still exiting, can
+            # hold one for a few seconds; the check opens each for reading with sharing None (no write access, so it
+            # never triggers a rescan), which fails while any other handle or a running image holds the file.
+            $replaced = @()
+            foreach ($exeDir in @($script:InstallRoot, (Join-Path $script:InstallRoot 'daemon'))) {
+                if (Test-Path -LiteralPath $exeDir -PathType Container) {
+                    $replaced += @(Get-ChildItem -LiteralPath $exeDir -Filter '*.exe' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
                 }
             }
-            if ($held.Count -eq 0 -or (Get-Date) -ge $heldDeadline) { break }
-            if (-not $waitingShown) {
-                Write-Host "Waiting up to 60 seconds for $($held -join ', ') to be released ..."
-                $waitingShown = $true
+            $held = @()
+            $heldDeadline = (Get-Date).AddSeconds(60)
+            $waitingShown = $false
+            while ($true) {
+                $held = @()
+                foreach ($exePath in $replaced) {
+                    $probe = $null
+                    try {
+                        $probe = [System.IO.File]::Open($exePath, 'Open', 'Read', 'None')
+                    } catch [System.IO.FileNotFoundException] {
+                        # gone since the listing: nothing to replace
+                    } catch {
+                        $held += $exePath
+                    } finally {
+                        if ($null -ne $probe) { $probe.Dispose() }
+                    }
+                }
+                if ($held.Count -eq 0 -or (Get-Date) -ge $heldDeadline) { break }
+                if (-not $waitingShown) {
+                    Write-Host "Waiting up to 60 seconds for $($held -join ', ') to be released ..."
+                    $waitingShown = $true
+                }
+                Start-Sleep -Seconds 1
             }
-            Start-Sleep -Seconds 1
-        }
-        if ($held.Count -gt 0) {
-            throw ("$($held -join ', ') is still open in another program after 60 seconds, so it cannot be replaced. " +
-                   'Close the program that has it open, or wait for a virus scan to finish, and run the installer again.')
+            if ($held.Count -gt 0) {
+                throw ("$($held -join ', ') is still open in another program after 60 seconds, so it cannot be replaced. " +
+                       'Close the program that has it open, or wait for a virus scan to finish, and run the installer again.')
+            }
         }
     } catch {
         $stopFailure = $_.Exception.Message
@@ -279,7 +287,8 @@ function Stop-GridcoinCore {
 
     # The service names are one comma-separated string: Windows PowerShell 5.1 does not always
     # write an array as a JSON array.
-    if ($SavePath) {
+    # Written only when something was stopped: StartCore and RestartStopped read no file as nothing to start.
+    if ($SavePath -and ($stoppedServices.Count -gt 0 -or $stoppedTask)) {
         $saved = [ordered]@{ services = ($stoppedServices -join ','); coreStartTask = $stoppedTask }
         Set-Content -LiteralPath $SavePath -Encoding UTF8 -Value ($saved | ConvertTo-Json)
     }
@@ -781,6 +790,8 @@ function Invoke-GridcoinStartCore {
         return
     }
     $saved = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json
+    # Consumed here, so that RestartStopped, if the install fails after this step, starts nothing again.
+    Remove-Item -LiteralPath $StateFile -Force -ErrorAction SilentlyContinue
     $serviceNames = @(([string]$saved.services) -split ',' | Where-Object { $_ })
     $problems = @(Start-GridcoinCore -Services $serviceNames -CoreStartTask ([bool]$saved.coreStartTask) -RequireS4U)
 
@@ -896,7 +907,7 @@ try {
         throw 'this must run in 64-bit Windows PowerShell; the installer starts it with file system redirection off.'
     }
     switch ($Step) {
-        'StopCore' { Stop-GridcoinCore -SavePath $StateFile; $exitCode = 0 }
+        'StopCore' { Stop-GridcoinCore -SavePath $StateFile -WaitForExecutables; $exitCode = 0 }
         'HardenInstallDir' { Set-GridcoinInstallDirAcl; $exitCode = 0 }
         'SwitchOver' { Invoke-GridcoinSwitchOver; $exitCode = 0 }
         'StartCore' { Invoke-GridcoinStartCore; $exitCode = 0 }
