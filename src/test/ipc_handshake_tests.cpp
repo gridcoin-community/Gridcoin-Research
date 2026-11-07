@@ -77,6 +77,63 @@ BOOST_AUTO_TEST_SUITE(ipc_handshake_tests)
 
 // ---- ComputeIdentityToken ----
 
+#ifndef WIN32
+// A cookie the account may not read is not a cookie that is absent: ConnectToNode tells the first
+// "this account may not read it" and the second "no core is running". Root reads any file whatever
+// its mode, so the unreadable case cannot be made there.
+BOOST_AUTO_TEST_CASE(cookie_read_tells_missing_from_unreadable_from_read)
+{
+    const fs::path dir = fs::temp_directory_path() / strprintf("grc_ipc_cookie_denied_%d", GetTimeMillis());
+    fs::create_directories(dir);
+
+    // No file.
+    {
+        const ipc::CookieRead missing = ipc::ReadCookie(dir);
+        BOOST_CHECK(missing.status == ipc::CookieStatus::Missing);
+        BOOST_CHECK(!missing.cookie.has_value());
+    }
+
+    // No directory either.
+    BOOST_CHECK(ipc::ReadCookie(dir / "absent").status == ipc::CookieStatus::Missing);
+
+    // A good read.
+    const std::string cookie(64, 'b');
+    {
+        fsbridge::ofstream out(dir / "ipc.cookie", std::ios::binary);
+        out << cookie << "\n";
+    }
+    {
+        const ipc::CookieRead good = ipc::ReadCookie(dir);
+        BOOST_CHECK(good.status == ipc::CookieStatus::Read);
+        BOOST_CHECK_EQUAL(good.cookie.value_or(""), cookie);
+        BOOST_CHECK(good.error.empty());
+    }
+
+    // The file is there and the mode refuses the read.
+    if (::geteuid() == 0) {
+        BOOST_TEST_MESSAGE("running as root, which reads any file: the unreadable case is not tested");
+    } else {
+        BOOST_REQUIRE_EQUAL(::chmod((dir / "ipc.cookie").c_str(), 0), 0);
+
+        const ipc::CookieRead denied = ipc::ReadCookie(dir);
+        BOOST_CHECK(denied.status == ipc::CookieStatus::Unreadable);
+        BOOST_CHECK(!denied.cookie.has_value());
+        BOOST_CHECK(!denied.error.empty());
+
+        // The directory refuses it instead: the file cannot be told from a missing one by looking.
+        BOOST_REQUIRE_EQUAL(::chmod((dir / "ipc.cookie").c_str(), 0600), 0);
+        BOOST_REQUIRE_EQUAL(::chmod(dir.c_str(), 0), 0);
+        BOOST_CHECK(ipc::ReadCookie(dir).status == ipc::CookieStatus::Unreadable);
+        BOOST_REQUIRE_EQUAL(::chmod(dir.c_str(), 0700), 0);
+
+        BOOST_CHECK(ipc::ReadCookie(dir).status == ipc::CookieStatus::Read);
+    }
+
+    boost::system::error_code ec;
+    fs::remove_all(dir, ec);
+}
+#endif
+
 BOOST_AUTO_TEST_CASE(cookie_round_trip_and_delete)
 {
     // Own temp directory rather than GetDataDir(): this only needs somewhere to put a
@@ -96,7 +153,7 @@ BOOST_AUTO_TEST_CASE(cookie_round_trip_and_delete)
         out << cookie;
     }
 
-    const std::optional<std::string> read_back = ipc::ReadCookie(dir);
+    const std::optional<std::string> read_back = ipc::ReadCookie(dir).cookie;
     BOOST_REQUIRE(read_back.has_value());
     BOOST_CHECK_EQUAL(*read_back, cookie);
 
@@ -105,7 +162,7 @@ BOOST_AUTO_TEST_CASE(cookie_round_trip_and_delete)
     // Gone from disk, and gone as far as a GUI is concerned -- ReadCookie returning
     // nullopt is what stops ipc::ConnectToNode before it dials.
     BOOST_CHECK(!fs::exists(dir / "ipc.cookie"));
-    BOOST_CHECK(!ipc::ReadCookie(dir).has_value());
+    BOOST_CHECK(!ipc::ReadCookie(dir).cookie.has_value());
 
     // Removing an absent cookie is not an error. Shutdown must stay quiet after an
     // unclean previous exit, or when a user removed the file by hand.
@@ -118,12 +175,12 @@ BOOST_AUTO_TEST_CASE(cookie_round_trip_and_delete)
         const std::string written = ipc::WriteCookie(dir);
         BOOST_CHECK_EQUAL(written.size(), 64u); // 256 bits, hex
 
-        const std::optional<std::string> written_back = ipc::ReadCookie(dir);
+        const std::optional<std::string> written_back = ipc::ReadCookie(dir).cookie;
         BOOST_REQUIRE(written_back.has_value());
         BOOST_CHECK_EQUAL(*written_back, written);
 
         ipc::DeleteCookie(dir);
-        BOOST_CHECK(!ipc::ReadCookie(dir).has_value());
+        BOOST_CHECK(!ipc::ReadCookie(dir).cookie.has_value());
     } catch (const std::runtime_error& e) {
         if (!grc_test::RunningUnderWine()) {
             boost::system::error_code ec;
@@ -158,7 +215,7 @@ BOOST_AUTO_TEST_CASE(cookie_with_group_is_0640)
     const std::string with_group = ipc::WriteCookie(dir, ::getegid());
     BOOST_CHECK_EQUAL(mode_of(), static_cast<mode_t>(0640));
     BOOST_CHECK_EQUAL(group_of(), ::getegid());
-    BOOST_CHECK_EQUAL(ipc::ReadCookie(dir).value_or(""), with_group);
+    BOOST_CHECK_EQUAL(ipc::ReadCookie(dir).cookie.value_or(""), with_group);
     BOOST_CHECK(!fs::exists(dir / "ipc.cookie.tmp"));
 
     // A group other than the effective one shows the fchown is what sets it.
@@ -175,7 +232,7 @@ BOOST_AUTO_TEST_CASE(cookie_with_group_is_0640)
 
     const std::string without_group = ipc::WriteCookie(dir);
     BOOST_CHECK_EQUAL(mode_of(), static_cast<mode_t>(0600));
-    BOOST_CHECK_EQUAL(ipc::ReadCookie(dir).value_or(""), without_group);
+    BOOST_CHECK_EQUAL(ipc::ReadCookie(dir).cookie.value_or(""), without_group);
     BOOST_CHECK(with_group != without_group);
 
     fs::remove_all(dir);
@@ -240,7 +297,7 @@ BOOST_AUTO_TEST_CASE(a_widened_old_cookie_is_replaced_by_one_with_the_designed_l
     const std::string cookie = ipc::WriteCookie(dir);
     BOOST_CHECK(!has_users());
     BOOST_CHECK(util::winacl::ReadAcl(file).is_protected);
-    BOOST_CHECK_EQUAL(ipc::ReadCookie(dir).value_or(""), cookie);
+    BOOST_CHECK_EQUAL(ipc::ReadCookie(dir).cookie.value_or(""), cookie);
 
     fs::remove_all(dir);
 }
@@ -457,7 +514,7 @@ BOOST_AUTO_TEST_CASE(retry_policy)
     BOOST_CHECK(ipc::NextConnectStep({K::NotListening, ""}, std::chrono::seconds{0}) == S::Retry);
     BOOST_CHECK(ipc::NextConnectStep({K::NotListening, ""}, std::chrono::seconds{299}) == S::Retry);
     BOOST_CHECK(ipc::NextConnectStep({K::NotListening, ""}, std::chrono::seconds{300}) == S::GiveUp);
-    for (auto k : {K::PeerRefused, K::AlreadyAttached, K::Timeout, K::Handshake}) {
+    for (auto k : {K::CookieDenied, K::PeerRefused, K::AlreadyAttached, K::Timeout, K::Handshake}) {
         BOOST_CHECK(ipc::NextConnectStep({k, ""}, std::chrono::seconds{0}) == S::GiveUp);
     }
 

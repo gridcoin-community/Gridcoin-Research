@@ -201,6 +201,7 @@ constexpr std::chrono::seconds IPC_CONNECT_WAIT_MAX{300};
 //! Why ConnectToNode did not connect.
 enum class ConnectFailureKind {
     NoCookie,        //!< No ipc.cookie: no core serves the directory, or it is still starting.
+    CookieDenied,    //!< ipc.cookie is there and this account may not read it.
     NotListening,    //!< Nothing listens on node.sock: no socket file, or one a stopped core left.
     PeerRefused,     //!< The listening process failed the client peer check or, on Windows, the identity check.
     AlreadyAttached, //!< Another GUI holds the core's attach slot.
@@ -247,11 +248,27 @@ std::string WriteCookie(const fs::path& dir, std::optional<gid_t> group = std::n
 std::string WriteCookie(const fs::path& dir, const std::optional<std::string>& group_sid = std::nullopt);
 #endif
 
-//! GUI side: read the hex cookie from <dir>/ipc.cookie. Returns nullopt when the
-//! file is absent or cannot be opened. Absent means no -multiprocess node is
-//! serving <dir> (none is running with -multiprocess, one is still starting, or
-//! the last one shut down cleanly) -- do not dial.
-std::optional<std::string> ReadCookie(const fs::path& dir);
+//! How reading <dir>/ipc.cookie went.
+enum class CookieStatus {
+    Read,       //!< The file was read.
+    Missing,    //!< There is no such file (or no such directory).
+    Unreadable, //!< The file cannot be opened: access denied, or any other open error.
+};
+
+//! What ReadCookie found: \p cookie is set only when \p status is Read; \p error is the system's
+//! reason, in ASCII, when it is Unreadable.
+struct CookieRead {
+    CookieStatus status{CookieStatus::Missing};
+    std::optional<std::string> cookie;
+    std::string error;
+};
+
+//! GUI side: read the hex cookie from <dir>/ipc.cookie. Missing means no -multiprocess node is
+//! serving <dir> (none is running with -multiprocess, one is still starting, or the last one shut
+//! down cleanly) -- do not dial. Unreadable means a file is there that this account may not open
+//! (an account just added to the attach group has not signed in again, for one): a node is
+//! probably serving <dir>, and waiting will not change it.
+CookieRead ReadCookie(const fs::path& dir);
 
 //! Node side: remove <dir>/ipc.cookie at shutdown, mirroring upstream's
 //! DeleteAuthCookie(). The cookie is a live 256-bit credential for as long as the

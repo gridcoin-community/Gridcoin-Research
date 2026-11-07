@@ -206,13 +206,24 @@ std::optional<GuiConnection> ConnectToNode(const fs::path& ipc_dir, ConnectFailu
     //    this datadir (none is running with -multiprocess, one is still
     //    starting, or the last one shut down cleanly), so there is nothing to
     //    dial.
-    std::optional<std::string> cookie = ReadCookie(ipc_dir);
-    if (!cookie) {
+    const CookieRead cookie_read = ReadCookie(ipc_dir);
+    if (cookie_read.status == CookieStatus::Unreadable) {
+        // The core is there, and this account may not read what lets it in. Waiting will not
+        // change that; signing in again will, for an account just added to the attach group.
+        failure_out = {ConnectFailureKind::CookieDenied,
+                       strprintf("the Gridcoin core is there, but this account may not read its IPC cookie %s (%s). "
+                                 "If this account was just added to the group allowed to attach, sign out and sign in "
+                                 "again: group membership is read at sign-in.",
+                                 (ipc_dir / "ipc.cookie").string(), cookie_read.error)};
+        return std::nullopt;
+    }
+    if (!cookie_read.cookie) {
         failure_out = {ConnectFailureKind::NoCookie,
                        strprintf("no IPC cookie in %s -- is the Gridcoin daemon running with -multiprocess?",
                                  ipc_dir.string())};
         return std::nullopt;
     }
+    const std::string& cookie = *cookie_read.cookie;
 
     GuiConnection conn;
     // A connect-only GUI never listens, so it serves no Init: pass an empty
@@ -276,7 +287,7 @@ std::optional<GuiConnection> ConnectToNode(const fs::path& ipc_dir, ConnectFailu
     //    (vs the GUI's stored expectation) and the git_commit soft-warn banner
     //    are the caller's GUI-side steps, driven off conn.handshake.
     HandshakeResult hr;
-    if (!failure) hr = ClientHandshake(*conn.init, *cookie, Params().NetworkIDString());
+    if (!failure) hr = ClientHandshake(*conn.init, cookie, Params().NetworkIDString());
     const bool timed_out = watchdog->Finish();
     shutdown_fd.Close();
 

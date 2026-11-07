@@ -10,6 +10,7 @@
 #include "random.h"
 #include "tinyformat.h"
 #include "util/strencodings.h"
+#include "util/syserror.h"
 #ifdef WIN32
 #include "ipc/win_endpoint.h"
 #include "util/win_acl.h"
@@ -19,6 +20,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -42,9 +44,12 @@ namespace ipc {
 namespace {
 const char* const COOKIE_FILE = "ipc.cookie";
 
-//! Read an entire file into a string; nullopt if it cannot be opened.
-std::optional<std::string> ReadFile(const fs::path& path)
+//! Read an entire file into a string, or say why not: the file does not exist, or it is there and
+//! cannot be opened.
+CookieRead ReadFile(const fs::path& path)
 {
+    CookieRead result;
+
     // fsbridge::ifstream, not std::ifstream(path.string()): on Windows the GNU
     // runtime has no wide-char stream constructor, so a narrow open goes through
     // the system code page (fs.h, "GNU libstdc++ specific workaround") and cannot
@@ -54,10 +59,29 @@ std::optional<std::string> ReadFile(const fs::path& path)
     // and then read back as "no cookie", leaving the GUI stuck reporting that the
     // daemon is not running while it is running perfectly well. fsbridge::ifstream
     // opens via _wfopen and reads exactly the file the writer wrote.
+    errno = 0;
     fsbridge::ifstream in(path, std::ios::binary);
-    if (!in.good()) return std::nullopt;
-    std::string contents((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return contents;
+    if (!in.good()) {
+        // The open's own errno is the reason. Where it was not set, the file's presence decides.
+        const int open_error = errno;
+        bool missing = open_error == ENOENT || open_error == ENOTDIR;
+        if (open_error == 0) {
+            boost::system::error_code ec;
+            missing = !fs::exists(path, ec) && !ec;
+        }
+
+        if (missing) {
+            result.status = CookieStatus::Missing;
+        } else {
+            result.status = CookieStatus::Unreadable;
+            result.error = open_error != 0 ? SysErrorString(open_error) : "the file cannot be opened";
+        }
+        return result;
+    }
+
+    result.status = CookieStatus::Read;
+    result.cookie = std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    return result;
 }
 
 //! Deletes the atomic-write temp file unless explicitly released. The temp file
@@ -350,15 +374,16 @@ std::string WriteCookie(const fs::path& dir, const std::optional<std::string>& g
     return cookie;
 }
 
-std::optional<std::string> ReadCookie(const fs::path& dir)
+CookieRead ReadCookie(const fs::path& dir)
 {
-    auto contents = ReadFile(dir / COOKIE_FILE);
-    if (!contents) return std::nullopt;
+    CookieRead result = ReadFile(dir / COOKIE_FILE);
+    if (!result.cookie) return result;
     // Trim trailing whitespace/newline defensively.
-    while (!contents->empty() && (contents->back() == '\n' || contents->back() == '\r' || contents->back() == ' ')) {
-        contents->pop_back();
+    while (!result.cookie->empty() && (result.cookie->back() == '\n' || result.cookie->back() == '\r' ||
+                                       result.cookie->back() == ' ')) {
+        result.cookie->pop_back();
     }
-    return contents;
+    return result;
 }
 
 void DeleteCookie(const fs::path& dir)
@@ -491,6 +516,7 @@ ConnectStep NextConnectStep(const ConnectFailure& f, std::chrono::seconds elapse
     case ConnectFailureKind::NoCookie:
     case ConnectFailureKind::NotListening:
         return elapsed < IPC_CONNECT_WAIT_MAX ? ConnectStep::Retry : ConnectStep::GiveUp;
+    case ConnectFailureKind::CookieDenied:
     case ConnectFailureKind::PeerRefused:
     case ConnectFailureKind::AlreadyAttached:
     case ConnectFailureKind::Timeout:

@@ -607,6 +607,7 @@ static QString ConnectFailureText(const ipc::ConnectFailure& failure)
                            "program may be holding its IPC connection.")
             .arg(ipc::IPC_CLIENT_HANDSHAKE_TIMEOUT.count());
     case ipc::ConnectFailureKind::NoCookie:
+    case ipc::ConnectFailureKind::CookieDenied:
     case ipc::ConnectFailureKind::NotListening:
     case ipc::ConnectFailureKind::PeerRefused:
     case ipc::ConnectFailureKind::Handshake:
