@@ -2503,6 +2503,8 @@ void DisableService(const ToolOptions& options)
                   "administrator's own wallet uses Install-GridcoinCoreTask.ps1, run signed in as that account; a "
                   "standard account's uses the service mode.",
                   Shown(net_target), user_name));
+    // The service's autounlock file went with its copy, and enable had already removed the account's own.
+    Say("Autounlock: off. Set it up again in the GUI or with setautounlock once the wallet starts unattended.");
 }
 
 } // namespace
