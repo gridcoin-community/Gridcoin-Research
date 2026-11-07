@@ -47,9 +47,9 @@ timestamp service, in this order:
  3. the uninstaller, through an NSIS finalize hook that exists only when CI provides the signing command;
  4. the installer, last.
 
-The environment variables it reads are listed in [`ci_cd.md`](ci_cd.md#windows-release-signing). With any of
-them missing the signing steps print a warning and are skipped; the build does not fail, and the installer is
-then unsigned. The deploy job attaches an unsigned `SHA256SUMS` that lists the signed installer.
+The account's identifiers are plain values in the workflow, listed in
+[`ci_cd.md`](ci_cd.md#windows-release-signing). In another repository the signing steps print a warning and are
+skipped; the build does not fail, and the installer is then unsigned. The deploy job attaches an unsigned `SHA256SUMS` that lists the signed installer.
 
 One-time portal tasks, done by the release engineer:
 
@@ -57,7 +57,7 @@ One-time portal tasks, done by the release engineer:
  - W-2: individual identity validation for the account.
  - W-3: a public-trust certificate profile.
  - W-4: an Entra ID app with a federated credential for this repository's `windows-release` environment, and
-   the certificate profile signer role for that app. Then set the variables in the environment.
+   the certificate profile signer role for that app. Its identifiers go into the workflow.
 
 Pin the signer once the account exists. Download a signed installer from the draft, read its signer
 certificate (the extended key usage entry of the form `1.3.6.1.4.1.311.97.*` that identifies the validated

@@ -40,8 +40,7 @@ on:
     branches:
       - '**'
     tags:
-      - "v*"
-      - "5.*"
+      - "[0-9]*"
   pull_request:
     branches:
       - '**'

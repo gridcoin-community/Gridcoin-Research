@@ -126,15 +126,17 @@ with Microsoft Artifact Signing: `azure/login` with a federated credential, an a
 packing, the uninstaller through an NSIS `!uninstfinalize` hook (defined only when
 `GRIDCOIN_UNINSTALLER_SIGN_COMMAND` is set, so other builds are unchanged), and the installer last.
 
-Environment variables (not secrets) of `windows-release`:
+The job holds the account's identifiers as plain values in the workflow; they are not secrets, because the login
+is a federated credential that trusts only this repository's `windows-release` environment:
 
-| Variable | Meaning |
+| Value | Meaning |
 |---|---|
 | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | The Entra ID app with the federated credential |
 | `ARTIFACT_SIGNING_REGION` | The region of the account; the endpoint is `<region>.codesigning.azure.net` |
 | `ARTIFACT_SIGNING_ACCOUNT`, `ARTIFACT_SIGNING_PROFILE` | The account and certificate profile; the jsign alias is `<account>/<profile>` |
 
-With any of them missing the signing steps print a warning and are skipped, and the release keeps the unsigned Windows files. See `doc/release-process.md`
+In another repository the signing steps print a warning and are skipped, and the release keeps the unsigned
+Windows files. See `doc/release-process.md`
 for the one-time setup and for pinning the signer.
 
 -----

@@ -6,9 +6,9 @@ on:
     branches:
       - '**'
     # AND run on release tags (triggers the deploy job)
+    # Every Gridcoin release tag starts with a digit (5.5.2.0, 5.5.1.15-testnet, 6.0.0.0).
     tags:
-      - "v*"
-      - "5.*"
+      - "[0-9]*"
   pull_request:
     branches:
       - '**'
@@ -1556,9 +1556,10 @@ jobs:
   # JOB 4b: Sign and pack the Windows release (release tags only)
   # ----------------------------------------------------------------------
   # Microsoft Artifact Signing through jsign. The id-token permission and the environment
-  # are confined to this job. Every value comes from environment variables (vars.*) and a
-  # federated credential; with any of them missing the signing steps print a warning and are
-  # skipped, no signed artifact is produced and the release keeps the unsigned installer.
+  # are confined to this job. The values below are identifiers, not secrets: the login is a
+  # federated credential that trusts only this repository's windows-release environment. In
+  # another repository the signing steps print a warning and are skipped, and the release
+  # keeps the unsigned installer.
   windows-sign:
     name: Sign Windows Release
     needs: [depends-builds]
@@ -1568,25 +1569,22 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      # The Entra ID app gridcoin-release-signing, with its federated credential.
+      AZURE_CLIENT_ID: 6e333f84-7056-45dc-a0f5-4dd51cadd8c6
+      AZURE_TENANT_ID: 4856b0d4-ad23-4215-97f3-0a497e1bf791
+      AZURE_SUBSCRIPTION_ID: 11c5288b-e15a-4209-b8c2-096160b7d0c5
+      # The Artifact Signing account and certificate profile (https://eus.codesigning.azure.net/).
+      ARTIFACT_SIGNING_REGION: eus
+      ARTIFACT_SIGNING_ACCOUNT: gridcoin-signing
+      ARTIFACT_SIGNING_PROFILE: gridcoin-release
     steps:
       - uses: actions/checkout@v5
 
       - name: Check Signing Configuration
-        env:
-          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          ARTIFACT_SIGNING_REGION: ${{ vars.ARTIFACT_SIGNING_REGION }}
-          ARTIFACT_SIGNING_ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
-          ARTIFACT_SIGNING_PROFILE: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
         run: |
-          missing=""
-          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID \
-                      ARTIFACT_SIGNING_REGION ARTIFACT_SIGNING_ACCOUNT ARTIFACT_SIGNING_PROFILE; do
-            if [ -z "${!name}" ]; then missing="$missing $name"; fi
-          done
-          if [ -n "$missing" ]; then
-            echo "::warning::Windows signing is skipped; these environment variables are not set:$missing"
+          if [ "$GITHUB_REPOSITORY" != "gridcoin-community/Gridcoin-Research" ]; then
+            echo "::warning::Windows signing is skipped: it runs only in gridcoin-community/Gridcoin-Research"
           else
             echo "SIGNING=true" >> "$GITHUB_ENV"
           fi
@@ -1615,16 +1613,12 @@ jobs:
         if: env.SIGNING == 'true'
         uses: azure/login@v2
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Prepare Signing Tool
         if: env.SIGNING == 'true'
-        env:
-          ARTIFACT_SIGNING_REGION: ${{ vars.ARTIFACT_SIGNING_REGION }}
-          ARTIFACT_SIGNING_ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
-          ARTIFACT_SIGNING_PROFILE: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
         run: |
           set -euo pipefail
           # jsign 7.6. The digest is the one the GitHub release API reports for the asset
