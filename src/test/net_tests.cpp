@@ -250,6 +250,12 @@ BOOST_AUTO_TEST_CASE(version_time_checks_use_the_receive_time)
     for (const int64_t wait : {0, 300, 600}) {
         SetMockTime(received);
         CNode node(INVALID_SOCKET, CAddress(CService(LookupNumeric("127.0.0.1", 0)), NODE_NONE), "", true);
+        // The handler answers with our own VERSION and a VERACK. With the
+        // socket closed, SocketSendData() drops them rather than pass
+        // INVALID_SOCKET to send(). Closing marks the node for disconnection,
+        // and ProcessMessages() skips a node so marked, so clear the mark.
+        node.CloseSocketDisconnect();
+        node.fDisconnect = false;
         const SerializeData message = VersionMessage(received + 30);
 
         LOCK(node.cs_vRecvMsg);
@@ -258,9 +264,7 @@ BOOST_AUTO_TEST_CASE(version_time_checks_use_the_receive_time)
         SetMockTime(received + wait);
         g_peerman->ProcessMessages(&node);
 
-        // The handler sets nVersion only once the time check has passed. The
-        // node cannot send its own VERSION back without a socket, so it is
-        // marked for disconnection either way.
+        // The handler sets nVersion only once the time check has passed.
         BOOST_CHECK_MESSAGE(node.nVersion == PROTOCOL_VERSION, "wait " << wait << ": negotiated version " << node.nVersion.load());
         BOOST_CHECK_MESSAGE(node.nTimeOffset == 30, "wait " << wait << ": time offset " << node.nTimeOffset.load());
     }
