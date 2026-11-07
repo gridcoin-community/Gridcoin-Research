@@ -12,7 +12,8 @@
 
     The signature check requires all of:
       - a signer pinned in the signer file (release-signer.txt): "identity-eku=<OID>", the
-        Artifact Signing per-account identity marker, and "subject-cn=<name>"; with none, it refuses;
+        identity marker of the Artifact Signing certificate profile, and "subject-cn=<name>";
+        with none, it refuses;
       - an embedded signature that Get-AuthenticodeSignature reports as Valid;
       - the pinned identity marker in the signer certificate's extended key usage;
       - the pinned name as the common name of the signer certificate's subject;
@@ -72,6 +73,10 @@ function Read-GridcoinReleaseSigner {
     }
     if ($found['identity-eku'] -cnotmatch '^1\.3\.6\.1\.4\.1\.311\.97(\.[0-9]+)+$') {
         throw "identity-eku in $SignerFile is not an Artifact Signing identity OID (1.3.6.1.4.1.311.97.*)"
+    }
+    # Every Public Trust certificate carries this marker, so it identifies no one.
+    if ($found['identity-eku'] -ceq '1.3.6.1.4.1.311.97.1.0') {
+        throw "identity-eku in $SignerFile is the marker every Artifact Signing certificate carries, not a certificate profile's own"
     }
     return $found
 }

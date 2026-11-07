@@ -25,8 +25,9 @@ Rules
      the access lists of its program's directories through Users)
   9  the update script checks the Authenticode signature (Test-GridcoinReleaseSignature, which
      calls Get-AuthenticodeSignature) before it runs the installer, and the shipped
-     release-signer.txt has the right shape: every non-comment line is identity-eku=<dotted OID>
-     or subject-cn=<text>, each at most once, and nothing else (it ships with comments only)
+     release-signer.txt pins the signer: identity-eku=<1.3.6.1.4.1.311.97.* OID> and
+     subject-cn=<text>, each once, and nothing else; the identity marker is not
+     1.3.6.1.4.1.311.97.1.0, which every Artifact Signing certificate carries
 
 Usage
   lint-windows-scripts.py              check the tree
@@ -52,7 +53,8 @@ STEPS = "contrib/windows/Invoke-GridcoinInstallStep.ps1"
 UPDATE = "contrib/windows/Update-GridcoinCore.ps1"
 RELEASE_TEST = "contrib/windows/Test-GridcoinRelease.ps1"
 SIGNER = "contrib/windows/release-signer.txt"
-SIGNER_LINE_RE = re.compile(r"^(identity-eku=[0-9]+(?:\.[0-9]+)+|subject-cn=\S.*)$")
+SIGNER_LINE_RE = re.compile(r"^(identity-eku=1\.3\.6\.1\.4\.1\.311\.97(?:\.[0-9]+)+|subject-cn=\S.*)$")
+GENERIC_SIGNING_EKU = "1.3.6.1.4.1.311.97.1.0"
 
 HELPERS = ("Set-GridcoinAutounlock.ps1", "Invoke-GridcoinAutounlock.ps1")
 HELPER_NAME_ALLOWED_IN = (COMMON, STEPS)
@@ -329,12 +331,17 @@ def rule9(files):
                 continue
             match = SIGNER_LINE_RE.match(text)
             if not match:
-                failures.append(f"rule 9: {SIGNER}:{number}: not identity-eku=<dotted OID> or subject-cn=<text>: {text}")
+                failures.append(f"rule 9: {SIGNER}:{number}: not identity-eku=<1.3.6.1.4.1.311.97.* OID> or subject-cn=<text>: {text}")
             else:
-                key = match.group(1).split("=")[0]
+                key, value = match.group(1).split("=", 1)
                 if key in seen:
                     failures.append(f"rule 9: {SIGNER}:{number}: {key} is set twice")
+                if key == "identity-eku" and value == GENERIC_SIGNING_EKU:
+                    failures.append(f"rule 9: {SIGNER}:{number}: {GENERIC_SIGNING_EKU} is in every Artifact Signing certificate")
                 seen.add(key)
+        for key in ("identity-eku", "subject-cn"):
+            if key not in seen:
+                failures.append(f"rule 9: {SIGNER}: does not pin {key}")
     return failures
 
 
@@ -397,7 +404,7 @@ GOOD_FILES = {
     CMAKE: "install(FILES Install-GridcoinCoreTask.ps1)\n",
     UPDATE: GOOD_PS1 + "# Start-Process in a comment\nTest-GridcoinReleaseSignature -Path $p -SignerFile $s\nStart-Process $p\n",
     RELEASE_TEST: GOOD_PS1 + "Get-AuthenticodeSignature -LiteralPath $Path\n",
-    SIGNER: "# comments only\n\nidentity-eku=1.3.6.1.4.1.311.97.1.2\nsubject-cn=Some Name\n",
+    SIGNER: "# comments\n\nidentity-eku=1.3.6.1.4.1.311.97.11.22.33\nsubject-cn=Some Name\n",
 }
 
 # (rule, a file that breaks it) pairs, applied to GOOD_FILES
@@ -454,17 +461,22 @@ BAD_SAMPLES = (
     (8, {STEPS: GOOD_PS1 + "$script:InstallDirSddl = '" + GOOD_SDDL.replace("(A;OICI;FA;;;SY)", "") + "'\n"}),
     (8, {STEPS: GOOD_PS1 + "$script:InstallDirSddl = '" + GOOD_SDDL.replace("(A;OICI;FA;;;SY)", "(A;OICI;FR;;;SY)") + "'\n"}),
     # the installer run before the check, no check, a verifier without Get-AuthenticodeSignature,
-    # a pinned value in the shipped file, and a missing file
+    # and a missing file
     (9, {UPDATE: GOOD_PS1 + "Start-Process $p\nTest-GridcoinReleaseSignature -Path $p -SignerFile $s\n"}),
     (9, {UPDATE: GOOD_PS1 + "# Test-GridcoinReleaseSignature\nStart-Process $p\n"}),
     (9, {UPDATE: GOOD_PS1 + "Test-GridcoinReleaseSignature -Path $p -SignerFile $s\n"}),
     (9, {RELEASE_TEST: GOOD_PS1 + "Get-FileHash $Path\n"}),
-    # a stray key, a malformed OID, an empty name, a key twice, and a bare word
-    (9, {SIGNER: "# comments\nthumbprint=ab12\n"}),
-    (9, {SIGNER: "identity-eku=not-an-oid\n"}),
-    (9, {SIGNER: "subject-cn=\n"}),
-    (9, {SIGNER: "identity-eku=1.3.6.1.4.1.311.97.1\nidentity-eku=1.3.6.1.4.1.311.97.2\n"}),
-    (9, {SIGNER: "junk\n"}),
+    # a stray key, a malformed OID, an OID outside Artifact Signing, the generic marker, an empty
+    # name, a key twice, a bare word, nothing pinned, and one key missing
+    (9, {SIGNER: "# comments\nthumbprint=ab12\nidentity-eku=1.3.6.1.4.1.311.97.11.22\nsubject-cn=N\n"}),
+    (9, {SIGNER: "identity-eku=not-an-oid\nsubject-cn=N\n"}),
+    (9, {SIGNER: "identity-eku=1.2.3.4\nsubject-cn=N\n"}),
+    (9, {SIGNER: "identity-eku=1.3.6.1.4.1.311.97.1.0\nsubject-cn=N\n"}),
+    (9, {SIGNER: "identity-eku=1.3.6.1.4.1.311.97.11.22\nsubject-cn=\n"}),
+    (9, {SIGNER: "identity-eku=1.3.6.1.4.1.311.97.1\nidentity-eku=1.3.6.1.4.1.311.97.2\nsubject-cn=N\n"}),
+    (9, {SIGNER: "junk\nidentity-eku=1.3.6.1.4.1.311.97.11.22\nsubject-cn=N\n"}),
+    (9, {SIGNER: "# comments only\n"}),
+    (9, {SIGNER: "identity-eku=1.3.6.1.4.1.311.97.11.22\n"}),
     (9, {SIGNER: None}),
 )
 

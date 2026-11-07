@@ -59,16 +59,23 @@ One-time portal tasks, done by the release engineer:
  - W-4: an Entra ID app with a federated credential for this repository's `windows-release` environment, and
    the certificate profile signer role for that app. Its identifiers go into the workflow.
 
-Pin the signer once the account exists. Download a signed installer from the draft, read its signer
-certificate (the extended key usage entry of the form `1.3.6.1.4.1.311.97.*` that identifies the validated
-identity, and the common name of the subject), and put them in `contrib/windows/release-signer.txt`:
+The signer is pinned in `contrib/windows/release-signer.txt`:
 
     identity-eku=<OID>
     subject-cn=<name>
 
-The file ships with comments only (lint rule 9 checks its shape: those two keys, each once, nothing else), so `Update-GridcoinCore.ps1` refuses every update (`no release signer is
-pinned`) until a release has pinned them. The pin is delivered by the previous installer, so trust is anchored
-at the first install; a change of signer must ship in a release signed by the old one.
+`identity-eku` is the identity marker of the certificate profile: an extended key usage entry of the form
+`1.3.6.1.4.1.311.97.*` that Artifact Signing gives each certificate profile. It is the same in every
+certificate issued from the profile, for the life of the profile, while the certificates themselves last three
+days, so a thumbprint cannot be pinned. Deleting the profile and creating another gives a new marker. Every
+Public Trust certificate also carries `1.3.6.1.4.1.311.97.1.0`, which identifies no one; the verifier
+refuses it as a pin. `subject-cn` is the common name of the signer certificate's subject. Both values come
+from a signature made with the profile: `(Get-AuthenticodeSignature <file>).SignerCertificate` shows the
+subject and, in its extensions, the extended key usage list. Lint rule 9 checks that the file pins both
+keys, each once, and nothing else.
+
+The pin is delivered by the previous installer, so trust is anchored at the first install; a change of signer
+or of certificate profile must ship in a release signed by the old one.
 `test/lint/lint-windows-scripts.py` checks that the update script checks the signature before it runs the
 installer.
 

@@ -30,7 +30,7 @@ a normal one. (In a source checkout they live here in `contrib/windows/`.)
 | `Uninstall-GridcoinCoreTask.ps1` | Remove them (`-All` also removes the shutdown script and the old autounlock helper). |
 | `Update-GridcoinCore.ps1` | Installs a release only after its Authenticode signature verifies against the pinned release signer. |
 | `Test-GridcoinRelease.ps1` | Checks the Authenticode signature of a release file (also runnable on its own: `-InstallerPath`). |
-| `release-signer.txt` | The pinned release signer (identity marker and subject name); ships with none. |
+| `release-signer.txt` | The pinned release signer: the identity marker of the release certificate profile and the subject name. |
 | `Set-GridcoinShutdownFlush.ps1` | **Opt-in**: configure/remove a Group Policy shutdown script for a reliable DB flush on OS shutdown. |
 | `Start-GridcoinGui.ps1` | Launch the `-multiprocess` GUI from a normal (not elevated) console, for the task or, with `-Service`, for the Windows service (or drop a Start-Menu shortcut with `-CreateShortcut`). |
 | `GridcoinCommon.ps1` | Functions the scripts share (dot-sourced; not run on its own). |
