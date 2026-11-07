@@ -45,6 +45,10 @@ endif
 %:
 	dh $@ --buildsystem=cmake
 
+# Install the upstream CHANGELOG.md as changelog.gz.
+override_dh_installchangelogs:
+	dh_installchangelogs CHANGELOG.md
+
 override_dh_auto_configure:
 	dh_auto_configure -- \
 		-DENABLE_DAEMON=ON \
@@ -73,6 +77,7 @@ endif
 
 override_dh_installsystemd:
 	dh_installsystemd --no-enable --no-start
+	dh_installsystemd --no-enable --no-start --name=gridcoinresearchd-autounlock
 
 # No automatic -dbgsym packages: they clutter the user-facing repo and almost
 # nobody runs gdb against these; insiders rebuild locally with symbols when needed.

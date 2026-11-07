@@ -1,3 +1,5 @@
 #!/usr/bin/dh-exec
 usr/bin/gridcoinresearchd => usr/bin/gridcointestnetd
 usr/share/man/man1/gridcoinresearchd.1 => usr/share/man/man1/gridcointestnetd.1
+usr/share/gridcoin/gridcoin_autounlock.py => usr/share/gridcointestnet/gridcoin_autounlock.py
+debian/gridcointestnetd-autounlock@.service usr/lib/systemd/system/

@@ -1,3 +1,6 @@
 #!/usr/bin/dh-exec
 usr/bin/gridcoinresearch => usr/bin/gridcointestnet
 usr/share/man/man1/gridcoinresearch.1 => usr/share/man/man1/gridcointestnet.1
+debian/gridcointestnet.desktop usr/share/applications/
+usr/share/icons/hicolor/*/apps/gridcointestnet.png
+usr/share/icons/hicolor/scalable/apps/gridcointestnet.svg

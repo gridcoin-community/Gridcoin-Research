@@ -92,6 +92,37 @@ class TestConfig(unittest.TestCase):
             with self.assertRaises(ValueError, msg=conf):
                 au.resolve_connection(base, Args())
 
+    def test_chain_argument_sets_default_port_when_conf_selects_none(self):
+        # A core started with -testnet selects the chain on its command line, so its
+        # config usually names no chain. --chain test must then give the testnet port,
+        # never the mainnet one.
+        for chain, expected in (("test", 25715), ("regtest", 35715), ("main", 15715)):
+            args = Args()
+            args.chain = chain
+            c = au.resolve_connection({"rpcuser": "a", "rpcpassword": "b"}, args)
+            self.assertEqual(c["port"], expected, chain)
+
+    def test_chain_argument_agrees_with_conf_selector(self):
+        args = Args()
+        args.chain = "test"
+        c = au.resolve_connection({"rpcuser": "a", "rpcpassword": "b", "testnet": "1"}, args)
+        self.assertEqual(c["port"], 25715)
+
+    def test_chain_argument_conflicting_with_conf_refuses(self):
+        for conf in ({"chain": "main"}, {"testnet": "0", "chain": "main"}, {"regtest": "1"}):
+            args = Args()
+            args.chain = "test"
+            base = {"rpcuser": "a", "rpcpassword": "b"}
+            base.update(conf)
+            with self.assertRaises(ValueError, msg=conf):
+                au.resolve_connection(base, args)
+
+    def test_explicit_rpcport_wins_over_chain_argument(self):
+        args = Args()
+        args.chain = "test"
+        c = au.resolve_connection({"rpcuser": "a", "rpcpassword": "b", "rpcport": "9999"}, args)
+        self.assertEqual(c["port"], 9999)
+
     def test_explicit_rpcport_wins_over_chain_default(self):
         c = au.resolve_connection({"rpcuser": "a", "rpcpassword": "b",
                                    "testnet": "1", "rpcport": "9999"}, Args())
@@ -849,6 +880,29 @@ class TestMain(unittest.TestCase):
         with mock.patch.object(au, "RpcClient", return_value=BoomClient()):
             rc = au.main(self._argv(pf))  # must NOT raise
         self.assertEqual(rc, au.EXIT_TRANSIENT)
+
+    def _conffile(self, content):
+        f = tempfile.NamedTemporaryFile("w", delete=False)
+        f.write(content)
+        f.close()
+        self.addCleanup(os.unlink, f.name)
+        return f.name
+
+    def test_refused_configuration_is_unrecoverable_and_contacts_nothing(self):
+        # A config the helper refuses must exit with the code a service manager does
+        # not retry, and must never reach the RPC client.
+        base = "rpcuser=u\nrpcpassword=%s\n" % _RPCPASSWORD
+        cases = (([], base + "chain=main\n", ["--chain", "test"]),   # conflicts with --chain
+                 ([], base + "testnet=1\nregtest=1\n", []),          # ambiguous chain
+                 ([], "rpcpassword=%s\n" % _RPCPASSWORD, []))         # no rpcuser
+        for _, conf, extra in cases:
+            pf = self._passfile()
+            cf = self._conffile(conf)
+            with mock.patch.object(au, "RpcClient") as client, \
+                    mock.patch.object(au.sys, "stderr", io.StringIO()):
+                rc = au.main(["--passphrase-file", pf, "--conf", cf, "--once", *extra])
+            self.assertEqual(rc, au.EXIT_UNRECOVERABLE, conf)
+            client.assert_not_called()
 
     def test_main_registers_the_passphrase_and_rpcpassword_for_redaction(self):
         # Without this, an exception carrying either secret would be logged verbatim.

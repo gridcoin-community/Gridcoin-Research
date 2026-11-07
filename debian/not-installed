@@ -1,2 +1,4 @@
-usr/share/icons/hicolor/48x48/apps/gridcointestnet.png
+usr/share/icons/hicolor/*/apps/gridcointestnet.png
+usr/share/icons/hicolor/scalable/apps/gridcointestnet.svg
 usr/lib/systemd/system/gridcoinresearchd.service
+usr/lib/systemd/system/gridcoinresearchd-autounlock.service

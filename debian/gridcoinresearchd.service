@@ -24,7 +24,9 @@ ExecStart=/usr/bin/gridcoinresearchd -daemonwait \
                                      -datadir=/var/lib/gridcoinresearchd
 
 # /etc/gridcoin is created and owned by the service user via ConfigurationDirectory=
-# below, so no PermissionsStartOnly/ExecStartPre chgrp is needed.
+# below, so no PermissionsStartOnly/ExecStartPre chgrp is needed. (A chgrp here
+# would also need CAP_CHOWN, which the CapabilityBoundingSet= drop below removes,
+# and would fail against the read-only /etc from ProtectSystem=strict.)
 
 # Process management
 ####################

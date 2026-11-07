@@ -27,6 +27,10 @@ gridcoinresearch (5.5.2.0-1) unstable; urgency=medium
 
   Added
 
+    - debian: per-user gridcoinresearchd@.service and
+      gridcoinresearchd-autounlock@.service templates, so a desktop
+      -multiprocess GUI can attach to a packaged core, and a launcher
+      action that starts the GUI that way (@caraka)
     - doc: add client-facing integration guide for the API proxy #3494
       (@jamescowens)
     - qt: add the SIL OFL texts for the bundled Inter and Inconsolata fonts
