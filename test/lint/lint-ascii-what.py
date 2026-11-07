@@ -2,13 +2,19 @@
 # Copyright (c) 2026 The Gridcoin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://opensource.org/licenses/mit-license.php.
-"""Fail on an exception's what() printed from a Windows-only source without AsciiWhat.
+"""Fail on an exception's what() printed from our Windows code without AsciiWhat.
 
 std::system_error's what() carries the system's message, which Windows words in its display
-language, and a log line, a console or an error text carries ASCII only. In the Windows-only
-sources every .what() call must be the argument of AsciiWhat( (util/syserror.h), on the same line,
-unless that line or the one above carries "// what() is ASCII:" and a reason (for a catch that
-only sees an exception of our own with an ASCII message).
+language, and a log line, a console or an error text carries ASCII only. Every .what() call in the
+files below must be the argument of AsciiWhat( (util/syserror.h), on the same line, unless that line
+or the one above carries "// what() is ASCII:" and a reason (for a catch that only sees an
+exception of our own with an ASCII message, or one that comes after a std::system_error catch).
+
+Scope: the sources that raise or print the errors our Windows code raises (util::winacl, the
+endpoint and attest code, the service control code, the autounlock DPAPI store, handshake's WIN32
+branches), wherever the print site lives, including files that also build off Windows. It leaves
+out Bitcoin-inherited catch sites that never see those errors (RPC server, networking, wallet
+database), and exceptions the core raises and carries over IPC.
 """
 
 import glob
@@ -23,6 +29,22 @@ PATTERNS = [
     'src/ipc/win_*.cpp',
     'src/util/win*.cpp',
     'src/wallet/autounlock_dpapi.cpp',
+    'src/wallet/autounlock_store.cpp',
+    'src/wallet/autounlock_setup.cpp',
+    'src/util/dir_permissions.cpp',
+    'src/util/transfer_file.cpp',
+    'src/util/fsmodes.cpp',
+    'src/ipc/peercred.cpp',
+    'src/ipc/peercred_win.cpp',
+    'src/ipc/serve_init.cpp',
+    'src/ipc/connect.cpp',
+    'src/ipc/process.cpp',
+    'src/ipc/interfaces.cpp',
+    'src/ipc/handshake.cpp',
+    'src/gridcoin-service.cpp',
+    'src/gridcoinresearchd.cpp',
+    'src/qt/bitcoin.cpp',
+    'src/qt/guiipcworker.cpp',
 ]
 
 WHAT = re.compile(r'(?:\.|->)what\s*\(\s*\)')
@@ -30,10 +52,30 @@ WRAPPED = re.compile(r'AsciiWhat\s*\(\s*[A-Za-z_][A-Za-z0-9_]*\s*\)')
 EXEMPT = '// what() is ASCII:'
 
 
+def code_of(line):
+    """The part of the line before a // comment, a quote in a string or character literal not
+    starting one."""
+    quote = None
+    i = 0
+    while i < len(line):
+        c = line[i]
+        if quote:
+            if c == '\\':
+                i += 1
+            elif c == quote:
+                quote = None
+        elif c in '"\'':
+            quote = c
+        elif line.startswith('//', i):
+            return line[:i]
+        i += 1
+    return line
+
+
 def violations(path, lines):
     found = []
     for number, line in enumerate(lines, 1):
-        code = line.split('//')[0] if EXEMPT not in line else line
+        code = code_of(line)
         if not WHAT.search(code):
             continue
         if WRAPPED.search(line) and not WHAT.search(WRAPPED.sub('', code)):
@@ -50,12 +92,15 @@ def self_test():
         'error = AsciiWhat(e);',
         '// the what() of a system_error is not ASCII',
         'Say("a") + std::string(AsciiWhat(e));',
+        'LogPrintf("see http://x: %s", AsciiWhat(e)); // not e.what() here',
     ]
     bad = [
         'LogPrintf("x: %s", e.what());',
         'error = e.what();',
         'x = AsciiWhat(e) + other.what();',
         'x = p->what();',
+        'x = "http://x " + e.what();',
+        "x = '\"' + e.what(); // a quote character, then a call",
     ]
     exempt = ['// what() is ASCII: only our own runtime_error arrives here', 'error = e.what();']
     ok = True
