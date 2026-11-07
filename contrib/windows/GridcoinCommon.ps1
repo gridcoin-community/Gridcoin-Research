@@ -454,16 +454,155 @@ function Remove-GridcoinLegacyAutounlock {
     return $null
 }
 
-# The network a data directory's core runs on, as the core decides it: 'test' when the top-level
-# gridcoinresearch.conf there has testnet=1, else 'main'.
+# A configuration value as the core reads it as a boolean (InterpretBool, src/util/system.cpp:84):
+# an empty value is true; otherwise ParseInt32 (src/util/strencodings.cpp:330) must take the whole
+# string as one integer, with an optional single leading + and an optional -, and the value is true
+# when that integer is not zero. Anything else ("abc", "1abc", "1.5", a number too large for 32
+# bits) is false. It is not atoi: trailing characters make the whole value false.
+function ConvertTo-GridcoinConfBool {
+    param([string]$Value)
+    if ($Value.Length -eq 0) { return $true }
+    $digits = $Value
+    if ($digits.Length -ge 2 -and $digits.Substring(0, 2) -ceq '+-') { return $false }
+    if ($digits.Substring(0, 1) -ceq '+') { $digits = $digits.Substring(1) }
+    if ($digits -cnotmatch '^-?[0-9]+\z') { return $false }
+    [int]$number = 0
+    if (-not [int]::TryParse($digits, [System.Globalization.NumberStyles]::AllowLeadingSign,
+            [System.Globalization.CultureInfo]::InvariantCulture, [ref]$number)) {
+        return $false
+    }
+    return ($number -ne 0)
+}
+
+# The options of configuration file text, in order, as GetConfigOptions and InterpretOption read
+# it (src/util/system.cpp:1094 and :118): everything from # to the end of the line is a comment; a
+# line is trimmed of space, tab, CR and LF; a line [name] starts a section whose name prefixes the
+# keys after it until the next section line (nothing returns to the top level); a line without an
+# = (or one that starts with -) is a parse error in the core, which then does not start, and is
+# skipped here; key and value are trimmed at the first =. The name (prefix and key) is split at its
+# first . into a section and a key, and a key that starts with "no" is the negated form: the
+# option is the boolean "false" when its value reads as true, and the boolean "true" (a double
+# negative) when it reads as false. Keys are case-sensitive. Each option has Section, Key, IsBool,
+# Bool and Str.
+function Read-GridcoinConfOptions {
+    param([string[]]$Lines)
+    $trimChars = [char[]](' ', "`t", "`r", "`n")
+    $options = @()
+    $prefix = ''
+    foreach ($rawLine in @($Lines)) {
+        $text = [string]$rawLine
+        $hashAt = $text.IndexOf('#')
+        if ($hashAt -ge 0) { $text = $text.Substring(0, $hashAt) }
+        $text = $text.Trim($trimChars)
+        if ($text.Length -eq 0) { continue }
+        if ($text[0] -ceq [char]'[' -and $text[$text.Length - 1] -ceq [char]']') {
+            $prefix = $text.Substring(1, $text.Length - 2) + '.'
+            continue
+        }
+        if ($text[0] -ceq [char]'-') { continue }
+        $equalsAt = $text.IndexOf('=')
+        if ($equalsAt -lt 0) { continue }
+        $name = $prefix + $text.Substring(0, $equalsAt).Trim($trimChars)
+        $optionValue = $text.Substring($equalsAt + 1).Trim($trimChars)
+        $section = ''
+        $key = $name
+        $dotAt = $name.IndexOf('.')
+        if ($dotAt -ge 0) {
+            $section = $name.Substring(0, $dotAt)
+            $key = $name.Substring($dotAt + 1)
+        }
+        $isBool = $false
+        $boolValue = $false
+        if ($key.StartsWith('no', [System.StringComparison]::Ordinal)) {
+            $key = $key.Substring(2)
+            $isBool = $true
+            $boolValue = -not (ConvertTo-GridcoinConfBool $optionValue)
+        }
+        $options += [pscustomobject]@{ Section = $section; Key = $key; IsBool = $isBool; Bool = $boolValue; Str = $optionValue }
+    }
+    return $options
+}
+
+# The network the options select, as the core decides -testnet (ArgsManager::GetChainName,
+# src/util/system.cpp:1376, with GetSetting, src/util/settings.cpp:114, called with the chain name
+# flag): only options of the top-level section count, so a testnet line after a [main] or [test]
+# line (it is main.testnet or test.testnet) selects nothing; the LAST top-level testnet option
+# wins, not the first as for other options; and when that last one is a negated form with a true
+# reading (notestnet=1) it is skipped, which leaves the network main. A negated form with a false
+# reading (notestnet=0) is a double negative and means testnet. Otherwise the value is read as a
+# boolean (ConvertTo-GridcoinConfBool).
+function Get-GridcoinNetworkFromOptions {
+    param([object[]]$Options)
+    $found = @()
+    foreach ($option in @($Options)) {
+        if ($null -eq $option) { continue }
+        # Ordinal, as the core compares: -ceq compares by culture, which skips a byte order mark
+        # that the core keeps at the start of a first key.
+        if ($option.Section.Length -eq 0 -and [string]::Equals($option.Key, 'testnet', [System.StringComparison]::Ordinal)) {
+            $found += $option
+        }
+    }
+    if ($found.Count -eq 0) { return 'main' }
+    $last = $found[$found.Count - 1]
+    if ($last.IsBool) {
+        if ($last.Bool) { return 'test' }
+        return 'main'
+    }
+    if (ConvertTo-GridcoinConfBool $last.Str) { return 'test' }
+    return 'main'
+}
+
+# 'test' or 'main' for the text of one gridcoinresearch.conf, without any file it includes.
+function Get-GridcoinConfNetworkFromLines {
+    param([string[]]$Lines)
+    return (Get-GridcoinNetworkFromOptions -Options @(Read-GridcoinConfOptions -Lines $Lines))
+}
+
+# The lines of a configuration file the way the core reads it: bytes as UTF-8 without dropping a
+# byte order mark (the core keeps it, so the key of a first line that starts with one is not the
+# key it looks like), split at LF (CR is trimmed later).
+function Read-GridcoinConfLines {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $confText = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($Path))
+    return ($confText -split "`n")
+}
+
+# The network a data directory's core runs on, as the core decides it: gridcoinresearch.conf there,
+# then the files its includeconf lines name. The core reads those after the file itself
+# (ArgsManager::ReadConfigFiles, src/util/system.cpp:1265): the includeconf lines of the top level
+# and of the section of the network the file itself selects, a noincludeconf line dropping the
+# ones before it, relative names taken from the data directory, and an included file's own
+# includeconf lines ignored. A file that cannot be opened stops the core, so it is skipped here.
+# The options of the included files come after those of the file, so they win for a repeated testnet.
 function Get-GridcoinConfNetwork {
     param([Parameter(Mandatory = $true)][string]$DataDir)
     $confForNetwork = Join-Path $DataDir 'gridcoinresearch.conf'
-    if (Test-Path -LiteralPath $confForNetwork) {
-        $testnetLines = @(Get-Content -LiteralPath $confForNetwork | Where-Object { $_ -match '^\s*testnet\s*=\s*1\s*$' })
-        if ($testnetLines.Count -gt 0) { return 'test' }
+    if (-not (Test-Path -LiteralPath $confForNetwork -PathType Leaf)) { return 'main' }
+    $allOptions = @(Read-GridcoinConfOptions -Lines (Read-GridcoinConfLines -Path $confForNetwork))
+
+    $ownNetwork = Get-GridcoinNetworkFromOptions -Options $allOptions
+    $includeNames = @()
+    foreach ($includeSection in @($ownNetwork, '')) {
+        $listed = @()
+        foreach ($option in $allOptions) {
+            if ([string]::Equals($option.Section, $includeSection, [System.StringComparison]::Ordinal) -and
+                [string]::Equals($option.Key, 'includeconf', [System.StringComparison]::Ordinal)) { $listed += $option }
+        }
+        $firstUsed = 0
+        for ($index = 0; $index -lt $listed.Count; $index++) {
+            if ($listed[$index].IsBool -and -not $listed[$index].Bool) { $firstUsed = $index + 1 }
+        }
+        for ($index = $firstUsed; $index -lt $listed.Count; $index++) {
+            if (-not $listed[$index].IsBool) { $includeNames += $listed[$index].Str }
+        }
     }
-    return 'main'
+    foreach ($includeName in $includeNames) {
+        $includePath = $includeName
+        if (-not [System.IO.Path]::IsPathRooted($includeName)) { $includePath = Join-Path $DataDir $includeName }
+        if (-not (Test-Path -LiteralPath $includePath -PathType Leaf)) { continue }
+        $allOptions += @(Read-GridcoinConfOptions -Lines (Read-GridcoinConfLines -Path $includePath))
+    }
+    return (Get-GridcoinNetworkFromOptions -Options $allOptions)
 }
 
 # Whether the account Sid is a direct member of the local Administrators group: task mode is for an
@@ -537,7 +676,8 @@ function Remove-GridcoinLegacyPassphraseFile {
 # to a PowerShell parameter or held in a PowerShell variable (module logging, event 4103, records
 # bound parameters). PowerShell passes paths, the network name and SIDs only.
 #
-# Convert reads the old file with this user's DPAPI key, protects the passphrase with
+# Convert reads the old file with this user's DPAPI key, cleans the passphrase as the earlier
+# helper did (CleanPassphrase), protects it with
 # CryptProtectData and the flags the core's own writer uses (src/wallet/autounlock_dpapi.cpp:
 # CRYPTPROTECT_UI_FORBIDDEN | CRYPTPROTECT_AUDIT | CRYPTPROTECT_LOCAL_MACHINE, the description
 # "Gridcoin autounlock", the entropy "gridcoin-autounlock-v1:<network>"), builds the layout of
@@ -617,6 +757,40 @@ public static class GridcoinDpapi
         }
     }
 
+    // The passphrase bytes the way the 5.5.2.0 helper read them (Read-DpapiPassphrase): decoded as
+    // UTF-8, one leading byte order mark (U+FEFF) dropped, trailing CR and LF characters removed
+    // and nothing else, and an empty or whitespace-only result refused. The text is held only in
+    // a char array and the result in a byte array, both cleared by their owners, so no string
+    // ever holds the secret. The result is the UTF-8 of the cleaned text, the bytes the helper
+    // sent to the core, so a passphrase that unlocked under the helper unlocks after conversion.
+    private static byte[] CleanPassphrase(byte[] plain)
+    {
+        char[] chars = new char[Encoding.UTF8.GetMaxCharCount(plain.Length)];
+        try
+        {
+            int count = Encoding.UTF8.GetChars(plain, 0, plain.Length, chars, 0);
+            int start = 0;
+            if (count > 0 && chars[0] == '\uFEFF') start = 1;
+            int end = count;
+            while (end > start && (chars[end - 1] == '\r' || chars[end - 1] == '\n')) end--;
+            bool visible = false;
+            for (int i = start; i < end; i++)
+            {
+                if (!char.IsWhiteSpace(chars[i]))
+                {
+                    visible = true;
+                    break;
+                }
+            }
+            if (!visible) throw new InvalidDataException("the old autounlock file holds an empty or whitespace-only passphrase");
+            return Encoding.UTF8.GetBytes(chars, start, end - start);
+        }
+        finally
+        {
+            Array.Clear(chars, 0, chars.Length);
+        }
+    }
+
     public static void Convert(string oldPath, string newPath, string network, string[] sids)
     {
         if (network.Length < 1 || network.Length > 16) throw new ArgumentException("network name length");
@@ -626,12 +800,13 @@ public static class GridcoinDpapi
         }
 
         byte[] plain = null;
+        byte[] secret = null;
         byte[] entropy = Encoding.ASCII.GetBytes("gridcoin-autounlock-v1:" + network);
         try
         {
             plain = ProtectedData.Unprotect(File.ReadAllBytes(oldPath), null, DataProtectionScope.CurrentUser);
-            if (plain.Length == 0) throw new InvalidDataException("the old autounlock file holds an empty passphrase");
-            byte[] dpapi = Protect(plain, entropy);
+            secret = CleanPassphrase(plain);
+            byte[] dpapi = Protect(secret, entropy);
 
             byte[] name = Encoding.ASCII.GetBytes(network);
             byte[] magic = Encoding.ASCII.GetBytes("GRCAUB01");
@@ -648,6 +823,7 @@ public static class GridcoinDpapi
         finally
         {
             if (plain != null) Array.Clear(plain, 0, plain.Length);
+            if (secret != null) Array.Clear(secret, 0, secret.Length);
             Array.Clear(entropy, 0, entropy.Length);
         }
     }
