@@ -609,16 +609,16 @@ bool ArgsManager::ReadSettingsFile(std::vector<std::string>* errors)
         (void)InterpretOption(section, key, /* value */ {}); // Split setting key into section and argname
         const std::optional<unsigned int> flags = GetArgFlags('-' + key);
         if (!flags) {
-            LogPrintf("Ignoring unknown rw_settings value %s\n", name);
+            LogPrintf("Ignoring unknown rw_settings value %s", name);
         }
         const bool command_line_only = flags && (*flags & COMMAND_LINE_ONLY);
         if (IsRefusedSettingKey(name) || command_line_only) {
             // An unknown key has had its line above. The config file would not
             // take it either, so it is not advised there.
             if (command_line_only) {
-                LogPrintf("ignored %s from %s; it is accepted only on the command line\n", name, file);
+                LogPrintf("ignored %s from %s; it is accepted only on the command line", name, file);
             } else if (flags) {
-                LogPrintf("ignored %s from %s; set it in gridcoinresearch.conf if you want it\n", name, file);
+                LogPrintf("ignored %s from %s; set it in gridcoinresearch.conf if you want it", name, file);
             }
             m_settings.refused_rw_settings.emplace(name, std::move(value));
         } else {
@@ -662,7 +662,7 @@ bool ArgsManager::WriteSettingsFile(std::vector<std::string>* errors) const
     }
     const fsmodes::KeepResult kept = fsmodes::KeepPermissions(path, path_tmp);
     if (kept.kind == fsmodes::KeepResult::Kind::NotKept) {
-        LogPrintf("WARNING: the permissions of %s could not be kept on the new settings file (%s)\n",
+        LogPrintf("WARNING: the permissions of %s could not be kept on the new settings file (%s)",
                   path.string(), kept.error);
     }
     if (!RenameOver(path_tmp, path)) {
@@ -1154,7 +1154,7 @@ bool ArgsManager::ReadConfigStream(std::istream& stream, const std::string& file
             if (*flags & COMMAND_LINE_ONLY) {
                 // The daemon reads the configuration file more than once at startup.
                 if (m_logged_command_line_only_keys.insert(key).second) {
-                    LogPrintf("ignored %s from %s; it is accepted only on the command line\n", key, filepath);
+                    LogPrintf("ignored %s from %s; it is accepted only on the command line", key, filepath);
                 }
                 continue;
             }
@@ -1475,7 +1475,7 @@ void ArgsManager::LogArgs() const
     }
     for (const auto& setting : m_settings.rw_settings) {
         const std::optional<unsigned int> flags = GetArgFlags('-' + SettingFileKeyName(setting.first));
-        LogPrintf("Setting file arg: %s = %s\n", setting.first,
+        LogPrintf("Setting file arg: %s = %s", setting.first,
                   (flags && (*flags & SENSITIVE)) ? "****" : setting.second.write());
     }
     logArgsPrefix("Command-line arg:", "", m_settings.command_line_options);

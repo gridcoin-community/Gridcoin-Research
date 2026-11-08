@@ -45,11 +45,11 @@ std::optional<gid_t> LookUpGroupGid(const std::string& name)
         buf.resize(buf.size() * 2);
     }
     if (err != 0) {
-        LogPrintf("IPC: the group database lookup for the attach group failed (errno %d)\n", err);
+        LogPrintf("IPC: the group database lookup for the attach group failed (errno %d)", err);
         return std::nullopt;
     }
     if (result == nullptr) {
-        LogPrintf("IPC: the attach group is not in the group database\n");
+        LogPrintf("IPC: the attach group is not in the group database");
         return std::nullopt;
     }
     return grp.gr_gid;
@@ -84,7 +84,7 @@ PeerGroupsError PeerGroupsErrorAction(int err)
 std::optional<PeerIdentity> ReadPeerIdentity(int fd)
 {
     if (fd < 0) {
-        LogPrintf("IPC: cannot read the peer's identity: no socket fd is available\n");
+        LogPrintf("IPC: cannot read the peer's identity: no socket fd is available");
         return std::nullopt;
     }
 
@@ -98,11 +98,11 @@ std::optional<PeerIdentity> ReadPeerIdentity(int fd)
     socklen_t len = sizeof(cred);
     if (::getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0) {
         const int err = errno;
-        LogPrintf("IPC: cannot read the peer's identity: SO_PEERCRED failed (errno %d)\n", err);
+        LogPrintf("IPC: cannot read the peer's identity: SO_PEERCRED failed (errno %d)", err);
         return std::nullopt;
     }
     if (len != sizeof(cred)) {
-        LogPrintf("IPC: cannot read the peer's identity: SO_PEERCRED returned %u bytes, expected %u\n",
+        LogPrintf("IPC: cannot read the peer's identity: SO_PEERCRED returned %u bytes, expected %u",
                   static_cast<unsigned int>(len), static_cast<unsigned int>(sizeof(cred)));
         return std::nullopt;
     }
@@ -134,19 +134,19 @@ std::optional<PeerIdentity> ReadPeerIdentity(int fd)
             return peer;
         }
         if (err != ERANGE || attempt != 0 || glen == 0 || glen % sizeof(gid_t) != 0) {
-            LogPrintf("IPC: cannot read the peer's identity: SO_PEERGROUPS failed (errno %d)\n", err);
+            LogPrintf("IPC: cannot read the peer's identity: SO_PEERGROUPS failed (errno %d)", err);
             return std::nullopt;
         }
         peer.groups.resize(glen / sizeof(gid_t));
     }
-    LogPrintf("IPC: cannot read the peer's identity: SO_PEERGROUPS did not settle\n");
+    LogPrintf("IPC: cannot read the peer's identity: SO_PEERGROUPS did not settle");
     return std::nullopt;
 #endif
 #else
     // macOS, FreeBSD, OpenBSD and the other BSDs.
     if (::getpeereid(fd, &peer.uid, &peer.gid) != 0) {
         const int err = errno;
-        LogPrintf("IPC: cannot read the peer's identity: getpeereid failed (errno %d)\n", err);
+        LogPrintf("IPC: cannot read the peer's identity: getpeereid failed (errno %d)", err);
         return std::nullopt;
     }
 #endif
@@ -176,7 +176,7 @@ bool ConfigureAttachGroup(const std::string& name)
         g_attach_gid = gid;
     }
     if (gid) {
-        LogPrintf("IPC: -ipcattachgroup: non-root peers in the group with gid %u are also admitted\n", *gid);
+        LogPrintf("IPC: -ipcattachgroup: non-root peers in the group with gid %u are also admitted", *gid);
     }
     return true;
 }

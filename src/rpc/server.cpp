@@ -996,7 +996,7 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
         if (fd == INVALID_SOCKET) {
             const int err = errno;
             if (err != EAGAIN && err != ECONNABORTED && err != EINTR) {
-                LogPrintf("RPC: accept failed: %s\n", strerror(err));
+                LogPrintf("RPC: accept failed: %s", strerror(err));
             }
             return;
         }
@@ -1137,9 +1137,9 @@ static void RecordRpcBindFailure(std::vector<RpcBindAttempt>& attempts, RpcBindA
 {
     attempt.result = ClassifyRpcBindError(e.code());
     if (attempt.result == RpcBindError::Skip) {
-        LogPrintf("INFO: RPC: not listening on %s: %s\n", attempt.address, e.what());
+        LogPrintf("INFO: RPC: not listening on %s: %s", attempt.address, e.what());
     } else if (attempt.result == RpcBindError::Conflict) {
-        LogPrintf("ERROR: RPC: %s is already in use by another program (%s)\n", attempt.address, e.what());
+        LogPrintf("ERROR: RPC: %s is already in use by another program (%s)", attempt.address, e.what());
     }
     attempts.push_back(std::move(attempt));
 }
@@ -1219,7 +1219,7 @@ static bool StartRPCListenersOn(const std::vector<std::string>& binds, std::stri
                                port, host, e.what());
             RecordRpcBindFailure(attempts, std::move(attempt), e);
             if (attempts.back().result == RpcBindError::Other) {
-                LogPrintf("ERROR: StartRPCThreads: %s\n", strerr);
+                LogPrintf("ERROR: StartRPCThreads: %s", strerr);
             }
         }
     }
@@ -1523,7 +1523,7 @@ void StartRPCThreads()
         SetRPCBindWarning(warning);
         const std::string text = warning + " The node keeps running without RPC. Stop that program, then "
                                  "restart Gridcoin to use RPC.";
-        LogPrintf("ERROR: %s\n", text);
+        LogPrintf("ERROR: %s", text);
         uiInterface.ThreadSafeMessageBox(text, _("Warning"),
                                          CClientUIInterface::ICON_WARNING | CClientUIInterface::BTN_OK);
         return;

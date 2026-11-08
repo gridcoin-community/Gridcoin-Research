@@ -65,11 +65,11 @@ void CaptureFromEnvironment()
     unsetenv("NOTIFY_SOCKET");
 
     if (value.empty() || (value[0] != '/' && value[0] != '@')) {
-        LogPrintf("sdnotify: NOTIFY_SOCKET is neither an absolute path nor an abstract name, notifications disabled\n");
+        LogPrintf("sdnotify: NOTIFY_SOCKET is neither an absolute path nor an abstract name, notifications disabled");
         return;
     }
     if (value.size() > sizeof(g_addr.sun_path) - 1) {
-        LogPrintf("sdnotify: NOTIFY_SOCKET is too long, notifications disabled\n");
+        LogPrintf("sdnotify: NOTIFY_SOCKET is too long, notifications disabled");
         return;
     }
 
@@ -99,7 +99,7 @@ bool Send(const std::string& state)
     const int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
     if (fd < 0) {
         if (!g_failure_logged.exchange(true)) {
-            LogPrintf("sdnotify: socket() failed (errno %d), further failures not logged\n", errno);
+            LogPrintf("sdnotify: socket() failed (errno %d), further failures not logged", errno);
         }
         return false;
     }
@@ -111,7 +111,7 @@ bool Send(const std::string& state)
 
     if (n < 0 || static_cast<size_t>(n) != state.size()) {
         if (!g_failure_logged.exchange(true)) {
-            LogPrintf("sdnotify: sendto() failed (errno %d), further failures not logged\n", saved_errno);
+            LogPrintf("sdnotify: sendto() failed (errno %d), further failures not logged", saved_errno);
         }
         return false;
     }
@@ -265,7 +265,7 @@ void ScopedStartupHeartbeat::Run()
             const microseconds remaining =
                 max_total - std::chrono::duration_cast<microseconds>(std::chrono::steady_clock::now() - start);
             if (remaining.count() <= 0) {
-                LogPrintf("sdnotify: %s has run for %d seconds; the start timeout is no longer extended for it\n",
+                LogPrintf("sdnotify: %s has run for %d seconds; the start timeout is no longer extended for it",
                           m_status, std::chrono::duration_cast<std::chrono::seconds>(m_max_total).count());
                 return;
             }

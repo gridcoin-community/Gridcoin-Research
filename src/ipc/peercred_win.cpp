@@ -110,7 +110,7 @@ bool ConfigureAttachGroup(const std::string& name)
     if (!name.empty()) {
         ResolvedGroup resolved = ResolveAttachGroup(name);
         if (!resolved.sid) {
-            LogPrintf("IPC: %s\n", resolved.problem);
+            LogPrintf("IPC: %s", resolved.problem);
             return false;
         }
         sid = std::move(resolved.sid);

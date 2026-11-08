@@ -107,7 +107,7 @@ public:
         // The rejected closure, still held by the parameter, is destroyed on return,
         // after m_mutex is released.
         if (log_first_drop) {
-            LogPrintf("IPC: the GUI is not taking notifications; dropping until it catches up\n");
+            LogPrintf("IPC: the GUI is not taking notifications; dropping until it catches up");
         }
     }
 
@@ -141,7 +141,7 @@ private:
             }
 
             if (episode_dropped > 0) {
-                LogPrintf("IPC: the GUI is taking notifications again; dropped %u while it was behind\n",
+                LogPrintf("IPC: the GUI is taking notifications again; dropped %u while it was behind",
                           episode_dropped);
             }
         }

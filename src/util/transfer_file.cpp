@@ -143,7 +143,7 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
 #endif
 
     if (kept.kind == fsmodes::KeepResult::Kind::NotKept) {
-        LogPrintf("WARNING: the permissions of %s could not be kept on the file that replaces it (%s)\n",
+        LogPrintf("WARNING: the permissions of %s could not be kept on the file that replaces it (%s)",
                   dest.string(), kept.error);
     }
 

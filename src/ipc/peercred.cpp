@@ -114,7 +114,7 @@ PeerVerdict ServerPeerDecision(const PeerIdentity& peer, const ServerPeerContext
     if (peer.uid == ctx.self_uid) return PeerVerdict::Allow;
 
     if (peer.uid == 0) {
-        LogPrintf("IPC: refusing peer uid 0 (this process runs as uid %u): root is not an IPC peer\n",
+        LogPrintf("IPC: refusing peer uid 0 (this process runs as uid %u): root is not an IPC peer",
                   ctx.self_uid);
         return PeerVerdict::Refuse;
     }
@@ -138,7 +138,7 @@ PeerVerdict ClientPeerDecision(const PeerIdentity& server, const ClientPeerConte
     if (server.uid == ctx.self_uid) return PeerVerdict::Allow;
 
     const auto refuse = [&](const std::string& rule) {
-        LogPrintf("IPC: refusing the core at uid %u (this process runs as uid %u): %s\n",
+        LogPrintf("IPC: refusing the core at uid %u (this process runs as uid %u): %s",
                   server.uid, ctx.self_uid, rule);
         return PeerVerdict::Refuse;
     };

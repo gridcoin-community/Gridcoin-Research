@@ -2351,7 +2351,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // the long initialisation: another local account cannot take the port in the meantime. Until
     // initialisation finishes the server answers warmup to every method except stop.
     const bool fStartRPC = gArgs.GetBoolArg("-server", false);
-    LogPrintf("init: -server=%d, %s RPC server\n", fStartRPC, fStartRPC ? "starting" : "skipping");
+    LogPrintf("init: -server=%d, %s RPC server", fStartRPC, fStartRPC ? "starting" : "skipping");
     if (fStartRPC) StartRPCThreads();
 
     // Existing wallet files and directories are never re-moded here: their permissions (on
@@ -3117,7 +3117,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // The RPC listener has been open since the datadir lock, answering warmup to everything but
     // stop. Callers that need the scheduler above (walletpassphrase) are served from here.
     SetRPCWarmupFinished();
-    LogPrintf("init: RPC server warmup finished\n");
+    LogPrintf("init: RPC server warmup finished");
 
     // ********************************************************* Step 13: finished
 

@@ -65,7 +65,7 @@ int SpawnAndWait(const char* path, char* const argv[])
     posix_spawnattr_t attr;
     int spawn_error = posix_spawnattr_init(&attr);
     if (spawn_error != 0) {
-        LogPrintf("RunShellCommand error: posix_spawnattr_init failed with errno %d\n", spawn_error);
+        LogPrintf("RunShellCommand error: posix_spawnattr_init failed with errno %d", spawn_error);
         return -1;
     }
     sigset_t defaults;
@@ -121,7 +121,7 @@ int SpawnAndWait(const char* path, char* const argv[])
     posix_spawnattr_destroy(&attr);
 
     if (spawn_error != 0) {
-        LogPrintf("RunShellCommand error: posix_spawn(%s) failed with errno %d\n", path, spawn_error);
+        LogPrintf("RunShellCommand error: posix_spawn(%s) failed with errno %d", path, spawn_error);
         return -1;
     }
 
@@ -138,7 +138,7 @@ int SpawnAndWait(const char* path, char* const argv[])
     }
 
     if (waited != pid) {
-        LogPrintf("RunShellCommand error: waitpid(%d) failed with errno %d\n", static_cast<int>(pid), wait_errno);
+        LogPrintf("RunShellCommand error: waitpid(%d) failed with errno %d", static_cast<int>(pid), wait_errno);
         return -1;
     }
     return status;
@@ -228,7 +228,7 @@ void StopOrphanReaper()
     if (spawn_error != 0) {
         // Without a way to wake it the thread cannot be joined safely. It uses only
         // static state and ends at the next child event.
-        LogPrintf("StopOrphanReaper error: posix_spawn(/bin/true) failed with errno %d, leaving the reaper thread to end on its own\n", spawn_error);
+        LogPrintf("StopOrphanReaper error: posix_spawn(/bin/true) failed with errno %d, leaving the reaper thread to end on its own", spawn_error);
         thread.detach();
         return;
     }

@@ -273,7 +273,7 @@ public:
         // refusing the peer.
         if (!::RevertToSelf()) {
             const DWORD error = ::GetLastError();
-            LogPrintf("IPC: RevertToSelf failed after the Windows identity check (error %u); aborting\n", error);
+            LogPrintf("IPC: RevertToSelf failed after the Windows identity check (error %u); aborting", error);
             std::abort();
         }
     }
@@ -458,7 +458,7 @@ std::optional<std::pair<std::string, std::string>> AttestServer::Begin()
     State& state = *m_state;
     LOCK(state.mutex);
     if (state.phase != State::Phase::Idle) {
-        LogPrintf("IPC: the Windows identity check was begun a second time; refused\n");
+        LogPrintf("IPC: the Windows identity check was begun a second time; refused");
         return std::nullopt;
     }
     // Used from here on, whether or not the pipe can be made.
@@ -482,7 +482,7 @@ std::optional<std::pair<std::string, std::string>> AttestServer::Begin()
     }
 
     state.pipe.reset();
-    LogPrintf("IPC: could not begin the Windows identity check: %s\n", error);
+    LogPrintf("IPC: could not begin the Windows identity check: %s", error);
     return std::nullopt;
 }
 
@@ -491,7 +491,7 @@ std::optional<TokenFacts> AttestServer::Finish()
     State& state = *m_state;
     LOCK(state.mutex);
     if (state.phase != State::Phase::Begun) {
-        LogPrintf("IPC: the Windows identity check was finished without being begun, or a second time; refused\n");
+        LogPrintf("IPC: the Windows identity check was finished without being begun, or a second time; refused");
         return std::nullopt;
     }
     state.phase = State::Phase::Done;
@@ -509,7 +509,7 @@ std::optional<TokenFacts> AttestServer::Finish()
     }
     state.pipe.reset();
 
-    if (!facts) LogPrintf("IPC: the Windows identity check failed: %s\n", error);
+    if (!facts) LogPrintf("IPC: the Windows identity check failed: %s", error);
     return facts;
 }
 
