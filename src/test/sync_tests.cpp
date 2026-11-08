@@ -8,6 +8,7 @@
 #include <util/threadnames.h>
 
 #include <algorithm>
+#include <atomic>
 #include <functional>
 #include <list>
 #include <mutex>
@@ -277,9 +278,12 @@ BOOST_AUTO_TEST_CASE(cs_main_on_the_marked_thread_is_reported)
     unmarked.join();
     BOOST_CHECK_EQUAL(GuiThreadCsMainReports(), before);
 
-    std::thread marked([] {
+    // A Boost check cannot run on another thread, so the thread records what
+    // it saw and the case checks it after the join.
+    std::atomic<bool> marked_sees_its_mark{false};
+    std::thread marked([&marked_sees_its_mark] {
         MarkGuiThread();
-        BOOST_CHECK(IsGuiThread());
+        marked_sees_its_mark = IsGuiThread();
 
         CCriticalSection other;
         {
@@ -291,6 +295,7 @@ BOOST_AUTO_TEST_CASE(cs_main_on_the_marked_thread_is_reported)
         }
     });
     marked.join();
+    BOOST_CHECK(marked_sees_its_mark);
     BOOST_CHECK_EQUAL(GuiThreadCsMainReports(), before + 1);
 
     // The mark belongs to the thread that set it.
