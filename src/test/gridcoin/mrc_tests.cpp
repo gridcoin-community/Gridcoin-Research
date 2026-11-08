@@ -432,4 +432,14 @@ BOOST_AUTO_TEST_CASE(the_gui_cache_quote_is_the_trial_at_the_boost_asked)
     BOOST_CHECK_EQUAL(quote.fee, 0);
 }
 
+BOOST_AUTO_TEST_CASE(terms_hold_only_when_paying_no_more_and_receiving_no_less)
+{
+    // The user confirmed paying at most 10 and receiving at least 90.
+    BOOST_CHECK(GRC::MRCTermsHold(10, 100, 10, 90));
+    BOOST_CHECK(!GRC::MRCTermsHold(11, 100, 10, 90)); // fee higher
+    BOOST_CHECK(!GRC::MRCTermsHold(10, 99, 10, 90));  // net 89 < 90
+    BOOST_CHECK(GRC::MRCTermsHold(9, 100, 10, 90));   // pays less, nets more
+    BOOST_CHECK(!GRC::MRCTermsHold(10, 100, 10, 91)); // net 90 < 91
+}
+
 BOOST_AUTO_TEST_SUITE_END()

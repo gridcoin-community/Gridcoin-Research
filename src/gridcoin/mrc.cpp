@@ -280,6 +280,11 @@ bool GRC::MRCContractHandler::BlockValidate(const ContractContext& ctx, int& DoS
     return Validate(ctx.m_contract, ctx.m_tx, DoS);
 }
 
+bool GRC::MRCTermsHold(CAmount fee_now, CAmount reward_now, CAmount confirmed_fee, CAmount confirmed_net)
+{
+    return fee_now <= confirmed_fee && reward_now - fee_now >= confirmed_net;
+}
+
 namespace {
 //!
 //! \brief Sign the mrc.

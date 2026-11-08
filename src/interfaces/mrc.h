@@ -105,6 +105,14 @@ struct MRCSubmitResult
     //! the block advanced) without any further core read.
     int submitted_height = 0;
     CAmount research_subsidy = 0;
+
+    //! Only for submitConfirmed(): the claim rebuilt now no longer meets the terms
+    //! the user confirmed, so nothing was broadcast (\p success is false and \p
+    //! error says why). \p fresh_fee and \p fresh_reward are the total fee and
+    //! research reward of the rebuilt claim, for the user to confirm again.
+    bool terms_changed = false;
+    CAmount fresh_fee = 0;
+    CAmount fresh_reward = 0;
 };
 
 //! Called when the node's pending-MRC set changes (uiInterface.MRCChanged).
@@ -135,6 +143,15 @@ public:
     //! marshaling the contract payload. The caller must have unlocked the wallet
     //! first (\p wallet_locked false); a locked wallet yields an error result.
     virtual MRCSubmitResult submit(CAmount fee_boost, bool wallet_locked) = 0;
+
+    //! As submit(), but carrying the terms the user confirmed: the total fee they
+    //! agreed to pay and the net payout (reward less fee) they agreed to receive.
+    //! The claim is rebuilt under cs_main + cs_wallet and broadcast only if the
+    //! user pays no more and receives no less (GRC::MRCTermsHold); otherwise
+    //! nothing is broadcast and the result has \p terms_changed with the fresh
+    //! fee and reward to confirm again.
+    virtual MRCSubmitResult submitConfirmed(CAmount fee_boost, bool wallet_locked,
+                                            CAmount confirmed_fee, CAmount confirmed_net) = 0;
 
     //! Live out-of-sync (OutOfSyncByAge) reading. Separate from the snapshot's
     //! cached out_of_sync because this check is purely time-based

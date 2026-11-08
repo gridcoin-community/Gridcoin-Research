@@ -101,12 +101,16 @@ namespace ipc {
 //! GuiState (gui_state.capnp), through which the node pushes the state the GUI
 //! shows that needs cs_main, so the GUI no longer takes cs_main to refresh it;
 //! and MRCSnapshot gained `matureBalance @17` (mrc.capnp), so the MRC page needs
-//! no balance read of its own. Additive, but each half fails against an older
-//! node: makeGuiState is a method it does not serve, so a GUI that calls it gets
-//! the UNIMPLEMENTED reply back as a std::runtime_error; and its MRCSnapshot
-//! arrives with the mature balance 0, so a page that reads it reports every
-//! wallet short of the 1 GRC mature balance a claim needs. The minor turns both
-//! into the "Update the node" hard fail at connect.
+//! no balance read of its own; and MRC gained `submitConfirmed @5`, which carries
+//! the fee and net payout the user confirmed, with MRCSubmitResult gaining
+//! `termsChanged @4`, `freshFee @5` and `freshReward @6`, so a claim whose terms
+//! moved is refused instead of broadcast. Additive, but each part fails against
+//! an older node: makeGuiState and submitConfirmed are methods it does not serve,
+//! so a GUI that calls either gets the UNIMPLEMENTED reply back as a
+//! std::runtime_error; and its MRCSnapshot arrives with the mature balance 0, so
+//! a page that reads it reports every wallet short of the 1 GRC mature balance a
+//! claim needs. The minor turns all of it into the "Update the node" hard fail at
+//! connect.
 constexpr uint32_t IPC_SCHEMA_MAJOR = 4;
 constexpr uint32_t IPC_SCHEMA_MINOR = 2;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;

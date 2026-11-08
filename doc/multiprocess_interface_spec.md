@@ -260,12 +260,14 @@ into the "Update the node" hard fail at connect.
 **Minor 2** (under major 4) adds `Init.makeGuiState @15` and its interface,
 `GuiState` (`gui_state.capnp`, §4.10), through which the node pushes the state the
 GUI shows that needs `cs_main`, and `MRCSnapshot.matureBalance @17`
-(`mrc.capnp`), so the MRC page needs no balance read of its own. Additive, but
-each half fails against an older node: `makeGuiState` is a method that node does
-not serve, so a GUI that calls it gets the `UNIMPLEMENTED` reply back as a
+(`mrc.capnp`), so the MRC page needs no balance read of its own; and
+`MRC.submitConfirmed @5` with `MRCSubmitResult.termsChanged @4`, `freshFee @5`
+and `freshReward @6` (§4.5). Additive, but each part fails against an older
+node: `makeGuiState` and `submitConfirmed` are methods that node does not serve,
+so a GUI that calls either gets the `UNIMPLEMENTED` reply back as a
 `std::runtime_error`; and its `MRCSnapshot` arrives with the mature balance 0, so
 a page that reads it reports every wallet short of the 1 GRC mature balance a
-claim needs. The minor turns both into the "Update the node" hard fail at
+claim needs. The minor turns all of it into the "Update the node" hard fail at
 connect.
 
 
@@ -434,6 +436,15 @@ Manual Research Claims. `snapshot(fee_boost, wallet_locked, researcher_eligible)
 -> MRCSnapshot` (one atomic node-side read of eligibility + fee-queue state);
 `submit(fee_boost, wallet_locked) -> MRCSubmitResult`; `isOutOfSync()`;
 `handleMRCChanged`.
+
+`submitConfirmed(fee_boost, wallet_locked, confirmed_fee, confirmed_net) ->
+MRCSubmitResult` carries the terms the user confirmed: the total fee they agreed
+to pay and the net payout (reward less fee) they agreed to receive. The node
+rebuilds the claim under `cs_main` + `cs_wallet`, exactly as `submit` does, and
+broadcasts only if the user pays no more and receives no less
+(`GRC::MRCTermsHold`). Otherwise it broadcasts nothing and returns
+`terms_changed` with `fresh_fee` and `fresh_reward` for the user to confirm
+again. `submit` is unchanged, for a GUI older than the node.
 
 ### 4.6 VotingManager — `src/interfaces/voting.h`, `voting.capnp`
 

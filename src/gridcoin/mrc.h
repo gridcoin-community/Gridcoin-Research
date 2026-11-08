@@ -389,6 +389,12 @@ void CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CW
                bool quiet = false);
 
 //!
+//! \brief Whether the claim as rebuilt now still meets the terms the user confirmed: the user pays no more than
+//! confirmed_fee and receives no less than confirmed_net (the reward less the fee).
+//!
+bool MRCTermsHold(CAmount fee_now, CAmount reward_now, CAmount confirmed_fee, CAmount confirmed_net);
+
+//!
 //! \brief The MRC request page's state at the chain tip, read in one cs_main hold:
 //! the version gate, a trial claim at the given fee boost, the mempool MRC queue
 //! measured against it, and the wallet's mature balance. The body of

@@ -279,6 +279,35 @@ public:
 
     MRCSubmitResult submit(CAmount fee_boost, bool wallet_locked) override
     {
+        return Submit(fee_boost, wallet_locked, nullptr);
+    }
+
+    MRCSubmitResult submitConfirmed(CAmount fee_boost, bool wallet_locked,
+                                    CAmount confirmed_fee, CAmount confirmed_net) override
+    {
+        const std::pair<CAmount, CAmount> terms{confirmed_fee, confirmed_net};
+
+        return Submit(fee_boost, wallet_locked, &terms);
+    }
+
+    bool isOutOfSync() override
+    {
+        // OutOfSyncByAge() is a lock-free time comparison (GetAdjustedTime() vs
+        // the g_previous_block_time global), matching the former direct GUI-thread
+        // call in MRCModel::getMRCModelStatus().
+        return OutOfSyncByAge();
+    }
+
+    std::unique_ptr<Handler> handleMRCChanged(MRCChangedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.MRCChanged_connect(interfaces::GuardNotify(std::move(fn))));
+    }
+
+private:
+    //! The body of submit() and submitConfirmed(). With \p terms (the confirmed fee
+    //! and net payout) the rebuilt claim is broadcast only if it still meets them.
+    MRCSubmitResult Submit(CAmount fee_boost, bool wallet_locked, const std::pair<CAmount, CAmount>* terms)
+    {
         MRCSubmitResult res;
 
         // A locked wallet cannot sign the claim: CreateMRC would build it
@@ -342,6 +371,17 @@ public:
             return res;
         }
 
+        // The user confirmed a fee and a net payout. If the rebuilt claim no longer
+        // meets them, broadcast nothing and hand back the fresh figures.
+        if (terms && !GRC::MRCTermsHold(fee, reward, terms->first, terms->second)) {
+            res.terms_changed = true;
+            res.fresh_fee = fee;
+            res.fresh_reward = reward;
+            res.error = "The fee or the net payout of your MRC changed since you confirmed it. "
+                        "Review the new figures and confirm again.";
+            return res;
+        }
+
         uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
 
         auto [wtx, e_str] = GRC::SendContract(GRC::MakeContract<GRC::MRC>(contract_version,
@@ -358,20 +398,6 @@ public:
         return res;
     }
 
-    bool isOutOfSync() override
-    {
-        // OutOfSyncByAge() is a lock-free time comparison (GetAdjustedTime() vs
-        // the g_previous_block_time global), matching the former direct GUI-thread
-        // call in MRCModel::getMRCModelStatus().
-        return OutOfSyncByAge();
-    }
-
-    std::unique_ptr<Handler> handleMRCChanged(MRCChangedFn fn) override
-    {
-        return MakeSignalHandler(uiInterface.MRCChanged_connect(interfaces::GuardNotify(std::move(fn))));
-    }
-
-private:
     CWallet* m_wallet;
 };
 
