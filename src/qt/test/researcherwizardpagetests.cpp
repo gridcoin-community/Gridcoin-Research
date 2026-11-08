@@ -9,6 +9,7 @@
 #include "qt/researcher/researcherwizardmodedetailpage.h"
 #include "qt/researcher/researcherwizardmodepage.h"
 #include "qt/researcher/researcherwizardpoolpage.h"
+#include "qt/researcher/researcherwizardprojectspage.h"
 #include "qt/test/interfacefakes.h"
 #include "qt/test/researcherfixture.h"
 
@@ -155,4 +156,30 @@ void ResearcherWizardPageTests::authPageFollowsTheVerificationCodeOnABeaconChang
     f.Push(qt_test::ResearcherFixture::Pushed(2, researcher));
 
     QCOMPARE(code->text(), QStringLiteral("original-code"));
+}
+
+void ResearcherWizardPageTests::projectsPageRefreshesItsTableOnReloadNotOnAPush()
+{
+    // The table reads the core's projects, which takes cs_main, so a push must
+    // repaint the page's labels from the snapshot without calling the core.
+    qt_test::ResearcherFixture f;
+
+    ResearcherWizardProjectsPage page;
+    page.setModel(&f.m_model);
+
+    const int baseline = f.m_context.m_projects_calls;
+
+    interfaces::ResearcherSnapshot researcher;
+    researcher.out_of_sync = false;
+    researcher.email = "someone@example.com";
+    f.Push(qt_test::ResearcherFixture::Pushed(1, researcher));
+
+    auto* email = page.findChild<QLabel*>("emailLabel");
+    QVERIFY(email);
+    QCOMPARE(email->text(), QStringLiteral("someone@example.com"));
+    QCOMPARE(f.m_context.m_projects_calls, baseline);
+
+    f.m_model.reload();
+
+    QTRY_VERIFY(f.m_context.m_projects_calls > baseline);
 }

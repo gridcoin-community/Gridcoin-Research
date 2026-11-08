@@ -49,9 +49,10 @@ void ResearcherWizardSummaryPage::setModel(ResearcherModel *model)
     connect(model, &ResearcherModel::beaconChanged, this, &ResearcherWizardSummaryPage::refreshSummary);
 
     // The reload runs off the GUI thread and its result reaches the model with
-    // the next push, so the projects tab shows what the model holds whenever
-    // either arrives.
-    connect(model, &ResearcherModel::researcherChanged, this, &ResearcherWizardSummaryPage::refreshProjects);
+    // the next push. A push repaints only what the model's snapshot holds; the
+    // project table reads the core's projects, which takes cs_main, so it
+    // refreshes only when the user's reload finishes (and on tab entry).
+    connect(model, &ResearcherModel::researcherChanged, this, &ResearcherWizardSummaryPage::refreshProjectsStatus);
     connect(model, &ResearcherModel::reloaded, this, &ResearcherWizardSummaryPage::refreshProjects);
     connect(ui->refreshButton, &QPushButton::clicked, this, &ResearcherWizardSummaryPage::reloadProjects);
     connect(ui->tabWidget, &QTabWidget::currentChanged, this, &ResearcherWizardSummaryPage::onTabChanged);
@@ -164,6 +165,17 @@ void ResearcherWizardSummaryPage::refreshProjects()
         return;
     }
 
+    refreshProjectsStatus();
+
+    m_table_model->refresh();
+}
+
+void ResearcherWizardSummaryPage::refreshProjectsStatus()
+{
+    if (ui->tabWidget->currentIndex() != TabProjects) {
+        return;
+    }
+
     ui->emailLabel->setText(m_researcher_model->email());
     ui->boincPathLabel->setText(m_researcher_model->formatBoincPath());
     ui->selectedCpidLabel->setText(m_researcher_model->formatCpid());
@@ -177,8 +189,6 @@ void ResearcherWizardSummaryPage::refreshProjects()
         ui->selectedCpidIconLabel->setPixmap(
             QIcon(":/icons/white_and_red_x").pixmap(icon_size, icon_size));
     }
-
-    m_table_model->refresh();
 }
 
 void ResearcherWizardSummaryPage::reloadProjects()

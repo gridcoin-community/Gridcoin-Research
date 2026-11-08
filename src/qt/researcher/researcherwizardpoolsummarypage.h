@@ -35,6 +35,7 @@ private:
 private slots:
     void refresh();
     void showPoolStatus();
+    void showProjects();
 };
 
 #endif // GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDPOOLSUMMARYPAGE_H

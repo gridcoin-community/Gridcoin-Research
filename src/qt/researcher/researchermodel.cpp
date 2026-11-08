@@ -594,7 +594,8 @@ bool ResearcherModel::switchToSolo(const QString& email)
 {
     // Optimistically clear the noncruncher flag so the wizard's immediately
     // following page selection sees the new mode (the former model set the
-    // member directly before calling ChangeMode).
+    // member directly before calling ChangeMode). An older push already in
+    // flight can overwrite it until the update requested below lands.
     m_snapshot.configured_for_noncruncher_mode = false;
 
     const bool result = m_researcher_context.switchMode(interfaces::ResearcherMode::SOLO, email.toStdString());

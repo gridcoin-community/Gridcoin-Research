@@ -52,10 +52,11 @@ void ResearcherWizardPoolSummaryPage::setModel(ResearcherModel *model)
     connect(ui->refreshButton, &QPushButton::clicked, this, &ResearcherWizardPoolSummaryPage::refresh);
 
     // The reload runs off the GUI thread and its result reaches the model with
-    // the next push, so the page shows what the model holds whenever either
-    // arrives.
+    // the next push. A push repaints only what the model's snapshot holds; the
+    // project table reads the core's projects, which takes cs_main, so it
+    // refreshes only when the user's reload finishes (and on entry).
     connect(model, &ResearcherModel::researcherChanged, this, &ResearcherWizardPoolSummaryPage::showPoolStatus);
-    connect(model, &ResearcherModel::reloaded, this, &ResearcherWizardPoolSummaryPage::showPoolStatus);
+    connect(model, &ResearcherModel::reloaded, this, &ResearcherWizardPoolSummaryPage::showProjects);
 }
 
 void ResearcherWizardPoolSummaryPage::initializePage()
@@ -80,14 +81,20 @@ void ResearcherWizardPoolSummaryPage::refresh()
 {
     m_researcher_model->reload();
 
+    showProjects();
+}
+
+void ResearcherWizardPoolSummaryPage::showProjects()
+{
     showPoolStatus();
+
+    m_table_model->refresh();
 }
 
 void ResearcherWizardPoolSummaryPage::showPoolStatus()
 {
     const int icon_size = ui->poolStatusIconLabel->width();
 
-    m_table_model->refresh();
     ui->boincPathLabel->setText(m_researcher_model->formatBoincPath());
 
     if (m_researcher_model->hasPoolProjects()) {

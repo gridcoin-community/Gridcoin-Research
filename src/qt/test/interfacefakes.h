@@ -123,6 +123,7 @@ public:
     int m_switch_mode_calls = 0;
     int m_snapshot_calls = 0;
     int m_try_snapshot_calls = 0;
+    int m_projects_calls = 0;
     std::atomic<int> m_reload_calls{0};
 
     interfaces::ResearcherSnapshot snapshot() override
@@ -137,7 +138,11 @@ public:
     }
     bool outOfSync() override { return m_snapshot.out_of_sync; }
     bool hasV3CapableProjects() override { return false; }
-    std::vector<interfaces::ResearcherProjectRow> projects(bool /*extended*/) override { return {}; }
+    std::vector<interfaces::ResearcherProjectRow> projects(bool /*extended*/) override
+    {
+        ++m_projects_calls;
+        return {};
+    }
     std::vector<interfaces::WhitelistProject> whitelistProjects() override { return {}; }
     std::vector<interfaces::PoolRow> activePools() override { return m_pools; }
     int maxProjectNameLength() override { return 0; }
