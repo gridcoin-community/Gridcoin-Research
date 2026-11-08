@@ -697,8 +697,9 @@ bool BlockRewardRules::CheckResearchReward(std::string& error_out) const EXCLUSI
 
     // The below is required to deal with a conditional application in historical rewards for research newbies
     // after the original newbie fix height that already made it into the chain. Please see the extensive
-    // commentary in GetNewbieSuperblockAccrualCorrection().
-    if (m_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight() && cpid) {
+    // commentary in GetNewbieSuperblockAccrualCorrection(). From block version 15 the claim is checked against the
+    // CPID's accrual.
+    if (m_block_version < 15 && m_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight() && cpid) {
         CAmount newbie_correction = Tally::GetNewbieSuperblockAccrualCorrection(
             *cpid, Quorum::CurrentSuperblock());
 

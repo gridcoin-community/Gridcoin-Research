@@ -2138,7 +2138,10 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc) EXCLUS
     // one block lower than the head).
     research_owed = GRC::Tally::GetAccrual(*cpid, mrc_time, mrc_last_pindex);
 
-    if (mrc_last_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
+    // Every caller checks the MRC for the block after mrc_last_pindex. Block validation passes the block's parent, the
+    // miner the block it builds on, and the mempool the tip. From block version 15, which that block has when v15 is
+    // enabled at its height, the MRC's research reward is checked against the CPID's accrual.
+    if (!IsV15Enabled(mrc_last_pindex->nHeight + 1) && mrc_last_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
         // The below is required to deal with a conditional application in historical rewards for
         // research newbies after the original newbie fix height that already made it into the chain.
         // Please see the extensive commentary in the below function.

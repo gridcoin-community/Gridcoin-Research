@@ -1562,7 +1562,9 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(
     //    correction if the claimed value by the block fails the original CheckReward. If the original computed reward
     //    plus the correction equals the claimed reward, then the block is passed with a warning. This enables any
     //    node to conditionally validate a block that was staked with the accrual correction active, even if the
-    //    receiving node does not have the NEW correction active.
+    //    receiving node does not have the NEW correction active. ValidateMRC() adds the correction to the accrual it
+    //    checks an MRC's research reward against. Both apply below block version 15. From block version 15 a research
+    //    reward is checked against the CPID's accrual.
 
     // This function computes the accrual that should have been recorded in the periods between the first superblock that
     // posted that validated the original verified beacon in a chain of renewals and the current superblock. This uses a
