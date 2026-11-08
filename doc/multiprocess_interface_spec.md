@@ -228,7 +228,7 @@ handshake (`ipc/handshake.h`):
 
 ```cpp
 constexpr uint32_t IPC_SCHEMA_MAJOR   = 4;
-constexpr uint32_t IPC_SCHEMA_MINOR   = 1;
+constexpr uint32_t IPC_SCHEMA_MINOR   = 2;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 ```
 
@@ -256,6 +256,17 @@ needs a full unlock on a staking-only wallet calls a method the node does not
 serve, and the `UNIMPLEMENTED` reply comes back as a `std::runtime_error` thrown
 out of a send, vote or claim path where nothing catches it. The minor turns that
 into the "Update the node" hard fail at connect.
+
+**Minor 2** (under major 4) adds `Init.makeGuiState @15` and its interface,
+`GuiState` (`gui_state.capnp`, §4.10), through which the node pushes the state the
+GUI shows that needs `cs_main`, and `MRCSnapshot.matureBalance @17`
+(`mrc.capnp`), so the MRC page needs no balance read of its own. Additive, but
+each half fails against an older node: `makeGuiState` is a method that node does
+not serve, so a GUI that calls it gets the `UNIMPLEMENTED` reply back as a
+`std::runtime_error`; and its `MRCSnapshot` arrives with the mature balance 0, so
+a page that reads it reports every wallet short of the 1 GRC mature balance a
+claim needs. The minor turns both into the "Update the node" hard fail at
+connect.
 
 
 Rules a client must honor (from `ClientHandshake` and design §4.2):
@@ -328,6 +339,7 @@ The per-process bootstrap. Beyond the handshake methods (`authenticate`,
 | `makeResearcherContext()` | `ResearcherContext` | null before wallet startup |
 | `makePSGTPoolContext()` | `PSGTPoolContext` | null before wallet startup |
 | `makeSideStakeManager()` | `SideStakeManager` | always available |
+| `makeGuiState()` | `GuiState` | null before the GUI state cache starts (§4.10) |
 
 The `init.capnp` `Init` interface additionally declares `construct @0
 (threadMap …)` — the libmultiprocess lifecycle entry point (a `ThreadMap`
@@ -477,6 +489,39 @@ returns the active mandatory and local sidestakes together (`is_mandatory` tells
 them apart). The bundled MP GUI builds `OptionsModel` (and its
 `SideStakeTableModel`) from the remote node's `Init`, so its sidestake table and
 its edits go to the node (`src/qt/bitcoin.cpp`).
+
+### 4.10 GuiState — `src/interfaces/gui_state.h`, `gui_state.capnp`
+
+The state a GUI shows that needs `cs_main` to compute, computed by the node's GUI
+state cache (`src/node/gui_cache.h`) and pushed, so a front end never takes
+`cs_main` (or waits on the node) to refresh it. One value type,
+`GuiStateSnapshot`: chain height and time, difficulty, initial-download and
+out-of-sync flags, peers' height, network weight, the miner's state, the wallet
+balances, the PSGT pool status, and, only while the node is synced, the
+unboosted MRC figures, the estimated time to stake and the researcher state. Each
+synced part carries a present flag; absent means "unavailable until the wallet
+is synced". A `sequence` orders the snapshots (it never decreases, may repeat,
+and is 0 before the first update).
+
+- `handleChanged(fn)` subscribes to the snapshots. Unlike the refetch triggers of
+  §5.1 the push carries the data: keep a snapshot when its sequence is higher than
+  the last one's. The cache computes only while at least one subscription is
+  alive, so a node with no front end attached pays nothing; the first
+  subscription also asks for a forced update, so a front end that attaches gets a
+  computed snapshot within one timer cycle.
+- `current()` returns the cache's copy (a leaf lock in the node, never `cs_main`),
+  for a front end that attaches or misses a push.
+- `requestUpdate()` asks for a forced update, delivered to the `handleChanged`
+  fns; it returns at once.
+- `requestMRCQuote(fee_boost, request_id)` asks for the MRC figures at a fee boost
+  and returns at once; `handleMRCQuote(fn)` receives the answer with the request's
+  id. One quote is pending at a time and only the latest request is answered, so
+  drop an answer whose id is not your latest.
+
+The node computes updates at most every four seconds (once synced, about one a
+block) and serves requests and quotes outside that interval, on its cache's own
+thread. Callbacks arrive from that thread; a slow callback delays the node's next
+push to every front end, so enqueue and return (§5.1).
 
 ---
 

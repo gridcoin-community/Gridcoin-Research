@@ -7,13 +7,18 @@
 //! \brief The node's GUI state cache (node/gui_cache.h): its rate limit, its
 //! timer, the parts it recomputes, and the lock rules it keeps.
 //!
-//! The cases run the cache on fakes passed through its own constructor: a
-//! Compute whose parts count their calls, a manual clock that moves only when a
-//! case moves it, and a run_under_cs_main that takes the real cs_main and counts
-//! the timer's acquisitions. An in-scope update is what SetBestChain does: mark
-//! the parts dirty and call UpdateLocked under cs_main. The timer cases use short
-//! intervals so its real-time waits stay short; whether an update is due is
-//! decided by the manual clock alone, so a case controls it exactly.
+//! The cases run the cache on fakes passed through its own constructor
+//! (test/gui_cache_fakes.h): a Compute whose parts count their calls, a manual
+//! clock that moves only when a case moves it, and a run_under_cs_main that takes
+//! the real cs_main and counts the timer's acquisitions. An in-scope update is
+//! what SetBestChain does: mark the parts dirty and call UpdateLocked under
+//! cs_main. The timer cases use short intervals so its real-time waits stay
+//! short; whether an update is due is decided by the manual clock alone, so a
+//! case controls it exactly.
+//!
+//! The cache computes nothing while no GUI is subscribed, so every case but
+//! the one about that subscribes first (AddSubscriber), as a GUI's
+//! GuiState::handleChanged does.
 //!
 
 #include "gridcoin/staking/status.h"
@@ -21,6 +26,7 @@
 #include "logging.h"
 #include "node/gui_cache.h"
 #include "sync.h"
+#include "test/gui_cache_fakes.h"
 #include "wallet/wallet.h"
 
 #include <boost/test/unit_test.hpp>
@@ -43,10 +49,11 @@ namespace {
 
 using node::GuiCache;
 using interfaces::GuiStateSnapshot;
-
-//! The bound on a wait that should end almost at once. It only stops a broken
-//! cache from hanging the run.
-constexpr auto WAIT_LIMIT = 10s;
+using gui_cache_test::Deliveries;
+using gui_cache_test::FakeCompute;
+using gui_cache_test::InScope;
+using gui_cache_test::Quotes;
+using gui_cache_test::WaitUntil;
 
 //! Timer-case cadence. Short, so the timer's real-time waits stay short.
 constexpr auto INTERVAL = 200ms;
@@ -55,165 +62,6 @@ constexpr auto TICK = 300ms;
 //! Long enough for the timer to have woken, settled and acted at least once
 //! if it was going to.
 constexpr auto TIMER_CHANCE = TICK + GuiCache::SETTLE + INTERVAL;
-
-//!
-//! \brief A Compute whose parts count their calls and fill only what a case
-//! reads, on a manual clock.
-//!
-class FakeCompute
-{
-public:
-    std::atomic<int> chain_calls{0};
-    std::atomic<int> balances_calls{0};
-    std::atomic<int> miner_calls{0};
-    std::atomic<int> mrc_calls{0};
-    std::atomic<int> etts_calls{0};
-    std::atomic<int> researcher_calls{0};
-
-    //! Calls of run_under_cs_main: only the timer makes them.
-    std::atomic<int> cs_main_runs{0};
-
-    //! The thread the chain part last ran on.
-    std::atomic<std::thread::id> chain_thread{};
-
-    //! What the chain and miner parts report.
-    std::atomic<int> height{0};
-    std::atomic<bool> staking{false};
-
-    //! The MRC part throws while set.
-    std::atomic<bool> mrc_throws{false};
-
-    std::atomic<bool> out_of_sync{false};
-    std::atomic<int64_t> clock_ms{1000000};
-
-    //! Run inside the chain part, with cs_main held. Set before the cache is
-    //! constructed.
-    std::function<void()> chain_hook;
-
-    GuiCache::Compute Make()
-    {
-        GuiCache::Compute compute;
-
-        compute.chain = [this](GuiStateSnapshot& snap) {
-            ++chain_calls;
-            chain_thread = std::this_thread::get_id();
-            snap.height = height.load();
-            if (chain_hook) chain_hook();
-        };
-        compute.balances = [this](GuiStateSnapshot& snap) {
-            ++balances_calls;
-            snap.has_balances = true;
-        };
-        compute.miner = [this](GuiStateSnapshot& snap) {
-            ++miner_calls;
-            snap.staking = staking.load();
-        };
-        compute.mrc = [this](GuiStateSnapshot& snap) {
-            ++mrc_calls;
-            if (mrc_throws) throw std::runtime_error("the MRC part failed");
-            snap.has_mrc = true;
-        };
-        compute.etts = [this](GuiStateSnapshot& snap) {
-            ++etts_calls;
-            snap.has_etts = true;
-        };
-        compute.researcher = [this](GuiStateSnapshot& snap) {
-            ++researcher_calls;
-            snap.has_researcher = true;
-        };
-        compute.out_of_sync = [this] { return out_of_sync.load(); };
-        compute.now_ms = [this] { return clock_ms.load(); };
-        compute.run_under_cs_main = [this](const std::function<void()>& fn) {
-            ++cs_main_runs;
-            LOCK(cs_main);
-            fn();
-        };
-
-        return compute;
-    }
-
-    void Advance(std::chrono::milliseconds by) { clock_ms += by.count(); }
-};
-
-//!
-//! \brief Records what the cache delivers, and whether the delivering thread
-//! held any lock while it did.
-//!
-class Deliveries
-{
-public:
-    GuiCache::DeliverFn Make()
-    {
-        return [this](const GuiStateSnapshot& snap) {
-            // Checked before this recorder takes its own lock. Without
-            // DEBUG_LOCKORDER the check always passes.
-            const bool no_lock_held = LockStackEmpty();
-            {
-                LOCK(m_mutex);
-                m_delivered.push_back(snap);
-                if (!no_lock_held) ++m_delivered_under_a_lock;
-            }
-            m_cv.notify_all();
-        };
-    }
-
-    //! Wait until a delivered snapshot satisfies \p pred.
-    bool WaitFor(const std::function<bool(const GuiStateSnapshot&)>& pred)
-    {
-        const auto deadline = std::chrono::steady_clock::now() + WAIT_LIMIT;
-        WAIT_LOCK(m_mutex, lock);
-        while (true) {
-            for (const GuiStateSnapshot& snap : m_delivered) {
-                if (pred(snap)) return true;
-            }
-            if (m_cv.wait_until(lock, deadline) == std::cv_status::timeout) return false;
-        }
-    }
-
-    size_t Count()
-    {
-        LOCK(m_mutex);
-        return m_delivered.size();
-    }
-
-    GuiStateSnapshot Last()
-    {
-        LOCK(m_mutex);
-        return m_delivered.empty() ? GuiStateSnapshot{} : m_delivered.back();
-    }
-
-    int DeliveredUnderALock()
-    {
-        LOCK(m_mutex);
-        return m_delivered_under_a_lock;
-    }
-
-private:
-    Mutex m_mutex;
-    std::condition_variable m_cv;
-    std::vector<GuiStateSnapshot> m_delivered GUARDED_BY(m_mutex);
-    int m_delivered_under_a_lock GUARDED_BY(m_mutex){0};
-};
-
-//! What SetBestChain does: mark the parts and update under the cs_main it holds.
-void InScope(GuiCache& cache, uint32_t parts)
-{
-    LOCK(cs_main);
-    cache.MarkDirty(parts);
-    cache.UpdateLocked(false);
-}
-
-//! A Boost check cannot run on another thread, so the cases wait for flags
-//! the other threads set.
-bool WaitUntil(const std::function<bool()>& condition)
-{
-    const auto deadline = std::chrono::steady_clock::now() + WAIT_LIMIT;
-    while (!condition()) {
-        if (std::chrono::steady_clock::now() > deadline) return false;
-        std::this_thread::sleep_for(5ms);
-    }
-    return true;
-}
 
 } // anonymous namespace
 
@@ -224,6 +72,7 @@ BOOST_AUTO_TEST_CASE(update_in_scope_is_rate_limited)
     FakeCompute compute;
     Deliveries deliveries;
     GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms);
+    cache.AddSubscriber();
 
     // Fifty blocks inside one interval: only the first computes.
     {
@@ -255,6 +104,7 @@ BOOST_AUTO_TEST_CASE(timer_catches_the_last_block_of_a_burst)
     FakeCompute compute;
     Deliveries deliveries;
     GuiCache cache(compute.Make(), deliveries.Make(), INTERVAL, TICK);
+    cache.AddSubscriber();
 
     InScope(cache, GuiCache::CHAIN);
     cache.StartTimer();
@@ -291,6 +141,7 @@ BOOST_AUTO_TEST_CASE(timer_does_not_take_cs_main_when_nothing_is_due)
     FakeCompute compute;
     Deliveries deliveries;
     GuiCache cache(compute.Make(), deliveries.Make(), INTERVAL, TICK);
+    cache.AddSubscriber();
 
     InScope(cache, GuiCache::CHAIN);
     cache.StartTimer();
@@ -324,6 +175,7 @@ BOOST_AUTO_TEST_CASE(untouched_parts_are_not_recomputed)
     FakeCompute compute;
     Deliveries deliveries;
     GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms);
+    cache.AddSubscriber();
 
     // The first update computes every part: the cache starts empty.
     InScope(cache, GuiCache::CHAIN);
@@ -358,6 +210,7 @@ BOOST_AUTO_TEST_CASE(synced_parts_absent_while_out_of_sync)
     FakeCompute compute;
     Deliveries deliveries;
     GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms);
+    cache.AddSubscriber();
 
     // Out of sync from the start: the synced parts are never computed.
     compute.out_of_sync = true;
@@ -407,6 +260,7 @@ BOOST_AUTO_TEST_CASE(periodic_tick_flips_synced_parts_without_a_block)
     FakeCompute compute;
     Deliveries deliveries;
     GuiCache cache(compute.Make(), deliveries.Make(), INTERVAL, TICK);
+    cache.AddSubscriber();
 
     compute.out_of_sync = true;
     InScope(cache, GuiCache::CHAIN);
@@ -438,6 +292,7 @@ BOOST_AUTO_TEST_CASE(a_miner_pass_recomputes_etts_only_when_staking_flips)
     FakeCompute compute;
     Deliveries deliveries;
     GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms);
+    cache.AddSubscriber();
 
     InScope(cache, GuiCache::CHAIN);
     BOOST_CHECK_EQUAL(compute.etts_calls.load(), 1);
@@ -476,6 +331,7 @@ BOOST_AUTO_TEST_CASE(a_failing_part_is_retried_at_the_interval_while_sync_has_tu
     FakeCompute compute;
     Deliveries deliveries;
     GuiCache cache(compute.Make(), deliveries.Make(), INTERVAL, TICK);
+    cache.AddSubscriber();
 
     compute.out_of_sync = true;
     InScope(cache, GuiCache::CHAIN);
@@ -517,6 +373,7 @@ BOOST_AUTO_TEST_CASE(request_update_forces_an_update_off_the_caller_thread)
     FakeCompute compute;
     Deliveries deliveries;
     GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms);
+    cache.AddSubscriber();
 
     InScope(cache, GuiCache::CHAIN);
     cache.StartTimer();
@@ -534,11 +391,115 @@ BOOST_AUTO_TEST_CASE(request_update_forces_an_update_off_the_caller_thread)
     cache.Stop();
 }
 
+BOOST_AUTO_TEST_CASE(nothing_is_computed_without_a_subscriber)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+
+    // A long tick, so that only a wake can send the timer to work within the
+    // case's waits.
+    GuiCache cache(compute.Make(), deliveries.Make(), INTERVAL, 30000ms);
+    cache.StartTimer();
+
+    // No GUI subscribed: blocks an interval apart compute nothing in scope, and
+    // the timer, which the request wakes, takes no cs_main: not for the parts
+    // the blocks leave marked, nor for the request, which no one would see
+    // answered and which it drops.
+    for (int i = 0; i < 3; ++i) {
+        compute.Advance(INTERVAL);
+        InScope(cache, GuiCache::ALL);
+        std::this_thread::sleep_for(TIMER_CHANCE);
+    }
+    cache.RequestUpdate();
+    std::this_thread::sleep_for(TIMER_CHANCE);
+
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 0);
+    BOOST_CHECK_EQUAL(compute.researcher_calls.load(), 0);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), 0);
+    BOOST_CHECK_EQUAL(cache.Current().sequence, 0U);
+    BOOST_CHECK_EQUAL(deliveries.Count(), 0U);
+
+    // Two GUIs subscribe; only the first subscription says it is the first.
+    // The next due update, a block in scope, computes what was left marked
+    // meanwhile: all of it.
+    BOOST_CHECK(cache.AddSubscriber());
+    BOOST_CHECK(!cache.AddSubscriber());
+    InScope(cache, GuiCache::CHAIN);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 1);
+    BOOST_CHECK_EQUAL(compute.researcher_calls.load(), 1);
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+
+    // One of the two leaves: computing goes on.
+    cache.RemoveSubscriber();
+    compute.Advance(INTERVAL);
+    InScope(cache, GuiCache::CHAIN);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 2);
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 2; }));
+
+    // The last leaves: computing stops, in scope and on the timer, though the
+    // block leaves its mark and the interval passes. Counted from the timer at
+    // rest: a machine that stalls the update above for longer than the settle
+    // lets the timer take cs_main for it once (gui_cache.h, SETTLE).
+    cache.RemoveSubscriber();
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    const int runs = compute.cs_main_runs.load();
+
+    compute.Advance(INTERVAL);
+    InScope(cache, GuiCache::CHAIN);
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    compute.Advance(INTERVAL);
+    std::this_thread::sleep_for(TIMER_CHANCE);
+
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 2);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), runs);
+    BOOST_CHECK_EQUAL(cache.Current().sequence, 2U);
+
+    cache.Stop();
+}
+
+BOOST_AUTO_TEST_CASE(a_quote_is_answered_on_the_timer_inside_the_interval)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    Quotes quotes;
+    GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms, quotes.Make());
+    cache.AddSubscriber();
+
+    InScope(cache, GuiCache::CHAIN);
+    cache.StartTimer();
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+
+    // Inside the interval (the clock does not move), a quote is still computed,
+    // at the boost asked, on the timer thread under cs_main, and answered with
+    // its request's id. It updates no part of the snapshot.
+    cache.RequestMRCQuote(25, 7);
+    BOOST_REQUIRE(quotes.WaitForCount(1));
+
+    // And a second one at once: quotes are not held to the interval either.
+    cache.RequestMRCQuote(30, 8);
+    BOOST_REQUIRE(quotes.WaitForCount(2));
+
+    const std::vector<Quotes::Answer> answers = quotes.Answers();
+    BOOST_CHECK_EQUAL(answers[0].request_id, 7U);
+    BOOST_CHECK_EQUAL(answers[0].quote.fee, 25);
+    BOOST_CHECK_EQUAL(answers[0].thread, gui_cache_test::TIMER_THREAD);
+    BOOST_CHECK_EQUAL(answers[1].request_id, 8U);
+    BOOST_CHECK_EQUAL(answers[1].quote.fee, 30);
+    BOOST_CHECK_EQUAL(compute.quote_calls.load(), 2);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), 2);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 1);
+    BOOST_CHECK_EQUAL(cache.Current().sequence, 1U);
+    BOOST_CHECK_EQUAL(quotes.AnsweredUnderALock(), 0);
+
+    cache.Stop();
+}
+
 BOOST_AUTO_TEST_CASE(sequence_increases_when_height_decreases)
 {
     FakeCompute compute;
     Deliveries deliveries;
     GuiCache cache(compute.Make(), deliveries.Make(), INTERVAL, TICK);
+    cache.AddSubscriber();
 
     BOOST_CHECK_EQUAL(cache.Current().sequence, 0U);
 
@@ -566,6 +527,7 @@ BOOST_AUTO_TEST_CASE(delivery_holds_no_lock)
     FakeCompute compute;
     Deliveries deliveries;
     GuiCache cache(compute.Make(), deliveries.Make(), INTERVAL, TICK);
+    cache.AddSubscriber();
 
     // One delivery of each origin: an in-scope update, a request, and the
     // timer's own update at the end of an interval.
@@ -604,6 +566,7 @@ BOOST_AUTO_TEST_CASE(stop_joins_while_a_compute_runs)
     };
 
     GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms);
+    cache.AddSubscriber();
 
     InScope(cache, GuiCache::CHAIN);
     cache.StartTimer();
@@ -656,10 +619,11 @@ BOOST_AUTO_TEST_CASE(lock_order_all_paths_at_once)
         if (line.find("POTENTIAL DEADLOCK DETECTED") != std::string::npos) ++reports;
     });
 
-    // The production lock shapes: the timer's updates take the real cs_main,
-    // the balances part takes the real wallet lock inside it, and the miner part
-    // takes the miner-status lock through its accessor. The clock is the real
-    // steady clock, with a short interval so every path runs many times.
+    // The production lock shapes: the timer's updates and quotes take the real
+    // cs_main, the balances part and the quote take the real wallet lock inside
+    // it, and the miner part takes the miner-status lock through its accessor.
+    // The clock is the real steady clock, with a short interval so every path
+    // runs many times.
     GuiCache::Compute compute;
     compute.chain = [](GuiStateSnapshot& snap) { ++snap.height; };
     compute.balances = [](GuiStateSnapshot& snap) {
@@ -676,6 +640,12 @@ BOOST_AUTO_TEST_CASE(lock_order_all_paths_at_once)
         snap.has_etts = true;
     };
     compute.researcher = [](GuiStateSnapshot& snap) { snap.has_researcher = true; };
+    compute.mrc_quote = [](CAmount fee_boost, const GuiStateSnapshot&) {
+        LOCK(pwalletMain->cs_wallet);
+        interfaces::MRCSnapshot quote;
+        quote.fee = fee_boost;
+        return quote;
+    };
     compute.out_of_sync = [] { return false; };
     compute.now_ms = [] {
         return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -687,7 +657,9 @@ BOOST_AUTO_TEST_CASE(lock_order_all_paths_at_once)
     };
 
     Deliveries deliveries;
-    GuiCache cache(std::move(compute), deliveries.Make(), 5ms, 20ms);
+    Quotes quotes;
+    GuiCache cache(std::move(compute), deliveries.Make(), 5ms, 20ms, quotes.Make());
+    cache.AddSubscriber();
     cache.StartTimer();
 
     // A signal emitted under another lock: its handler only marks.
@@ -704,10 +676,12 @@ BOOST_AUTO_TEST_CASE(lock_order_all_paths_at_once)
             std::this_thread::sleep_for(1ms);
         }
     });
-    // The GUI's on-demand requests.
+    // The GUI's on-demand requests: updates, and MRC quotes.
     threads.emplace_back([&] {
+        uint64_t request_id = 0;
         while (running) {
             cache.RequestUpdate();
+            cache.RequestMRCQuote(/*fee_boost=*/1, ++request_id);
             std::this_thread::sleep_for(3ms);
         }
     });
@@ -741,10 +715,12 @@ BOOST_AUTO_TEST_CASE(lock_order_all_paths_at_once)
 
     BOOST_CHECK_EQUAL(reports.load(), 0);
     BOOST_CHECK_EQUAL(deliveries.DeliveredUnderALock(), 0);
+    BOOST_CHECK_EQUAL(quotes.AnsweredUnderALock(), 0);
 
-    // Every path ran: the cache updated and delivered many times.
+    // Every path ran: the cache updated, delivered and quoted many times.
     BOOST_CHECK_GT(cache.Current().sequence, 10U);
     BOOST_CHECK_GT(deliveries.Count(), 10U);
+    BOOST_CHECK_GT(quotes.Answers().size(), 10U);
 }
 #endif // DEBUG_LOCKORDER
 

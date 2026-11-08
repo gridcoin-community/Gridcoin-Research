@@ -15,6 +15,7 @@ class CWallet;
 
 namespace interfaces {
 
+class GuiState;
 class MRC;
 class Node;
 class PSGTPoolContext;
@@ -169,6 +170,12 @@ public:
     //! — issue #3183). Same lifecycle contract as makeWalletTxSource, including
     //! taking no wallet argument (see makeMRC).
     virtual std::shared_ptr<WalletCoinSource> makeWalletCoinSource();
+
+    //! Returns the GUI's view of the node's GUI state cache: the state the GUI
+    //! shows that needs cs_main, computed by the node and pushed, and the GUI's
+    //! requests for a fresh snapshot or an MRC quote (interfaces/gui_state.h).
+    //! Returns nullptr before the cache starts (AppInit2).
+    virtual std::unique_ptr<GuiState> makeGuiState();
 };
 
 //! Return the monolithic-build Init implementation.

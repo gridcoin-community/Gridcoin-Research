@@ -2758,13 +2758,19 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // The GUI state cache (node/gui_cache.h): the node computes the state the GUI
     // shows that needs cs_main and pushes it, so the GUI never takes cs_main to
-    // refresh it. Chain state and the wallet are loaded by here. SetBestChain
-    // keeps it fresh in its own scope; the timer delivers each new snapshot, and
-    // takes cs_main only for what SetBestChain leaves pending.
+    // refresh it. Chain state and the wallet are loaded by here. It computes only
+    // while a GUI is subscribed (interfaces::GuiState::handleChanged), so a node
+    // with no GUI attached pays nothing for it. SetBestChain keeps it fresh in its
+    // own scope; the timer delivers each new snapshot and each MRC quote a GUI
+    // asks for, and takes cs_main only for what SetBestChain leaves pending and
+    // for those requests.
     node::StartGuiCache(std::make_unique<node::GuiCache>(
         node::MakeProductionCompute(),
         [](const interfaces::GuiStateSnapshot& snapshot) { uiInterface.GuiStateChanged(snapshot); },
-        node::GUI_CACHE_MIN_INTERVAL, node::GUI_CACHE_TICK));
+        node::GUI_CACHE_MIN_INTERVAL, node::GUI_CACHE_TICK,
+        [](uint64_t request_id, const interfaces::MRCSnapshot& quote) {
+            uiInterface.GuiStateMRCQuote(request_id, quote);
+        }));
 
     // The cache's other triggers. Their signals are emitted under other locks
     // (MinerStatusChanged under the miner-status lock, the wallet's transaction

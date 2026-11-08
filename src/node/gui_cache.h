@@ -5,7 +5,9 @@
 #ifndef GRIDCOIN_NODE_GUI_CACHE_H
 #define GRIDCOIN_NODE_GUI_CACHE_H
 
+#include "amount.h"
 #include "interfaces/gui_state.h"
+#include "interfaces/mrc.h"
 #include "sync.h"
 
 #include <atomic>
@@ -15,6 +17,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <thread>
 
 extern CCriticalSection cs_main;
@@ -49,6 +52,21 @@ static constexpr std::chrono::milliseconds GUI_CACHE_TICK{30000};
 //! RESEARCHER are computed only while the node is synced; while it is out of
 //! sync they are absent.
 //!
+//! The cache works only while a GUI is subscribed (AddSubscriber; a GUI's
+//! interfaces::GuiState::handleChanged counts as one while its Handler lives).
+//! With none, UpdateLocked returns after its lock-free check and the timer
+//! computes nothing and takes no cs_main; the marks just accumulate. The
+//! subscription that ends that (the first) asks for a forced update
+//! (RequestUpdate), so a GUI that attaches gets a computed snapshot within one
+//! timer cycle. The monolithic GUI subscribes when it starts, so it always has
+//! one; a daemon computes only while a multiprocess GUI is attached, and one
+//! with no GUI pays nothing for the cache.
+//!
+//! A GUI may also ask for the MRC figures at a fee boost (RequestMRCQuote). The
+//! timer serves the latest such request under cs_main, not held to the
+//! interval, and answers it through its own fn (QuoteFn) with the request's id.
+//! Quotes are user-paced, so they do not wait for a subscriber.
+//!
 //! Lock invariants (a deadlock is a matter of order; cs_main being recursive
 //! does not prevent one):
 //!  1. Every lock an update takes is taken after cs_main, and each such pair
@@ -60,7 +78,8 @@ static constexpr std::chrono::milliseconds GUI_CACHE_TICK{30000};
 //!     takes cs_main while holding the wake mutex.
 //!  4. Nothing is delivered while any lock is held.
 //!  5. A handler of a signal emitted under another lock only marks (MarkDirty):
-//!     an atomic or and the wake notify.
+//!     an atomic or and the wake notify. A GUI's subscription and request calls
+//!     only count, record and notify, too.
 //!
 class GuiCache
 {
@@ -82,6 +101,13 @@ public:
         //! MRC, so a part may read both.
         std::function<void(interfaces::GuiStateSnapshot&)> chain, balances, miner, mrc, etts, researcher;
 
+        //! The MRC figures at a fee boost, for a GUI's quote request: the MRC
+        //! part's trial claim at that boost. Runs with cs_main held by the caller
+        //! (the timer). \p current is the cache's snapshot, whose researcher part
+        //! gives the eligibility, as it does for the MRC part.
+        std::function<interfaces::MRCSnapshot(CAmount fee_boost, const interfaces::GuiStateSnapshot& current)>
+            mrc_quote;
+
         //! OutOfSyncByAge(). Lock-free: the timer calls it holding nothing.
         std::function<bool()> out_of_sync;
 
@@ -97,6 +123,10 @@ public:
     //! while a delivery copies the snapshot is delivered then and again after.
     using DeliverFn = std::function<void(const interfaces::GuiStateSnapshot&)>;
 
+    //! Receives each quote answer (RequestMRCQuote), on the timer thread,
+    //! holding no lock, with the id of the request it answers.
+    using QuoteFn = std::function<void(uint64_t request_id, const interfaces::MRCSnapshot&)>;
+
     //! How long the timer waits, once an update looks due to it, before it takes
     //! cs_main for it. An update SetBestChain is about to make in its own scope
     //! (it marks first, then updates) lands within that time, and then the timer
@@ -110,8 +140,10 @@ public:
     //! trigger but RequestUpdate() (GUI_CACHE_MIN_INTERVAL in production).
     //! \param tick How long the timer sleeps with nothing pending
     //! (GUI_CACHE_TICK in production).
+    //! \param deliver_quote Receives the quote answers; none, and they go
+    //! nowhere.
     GuiCache(Compute compute, DeliverFn deliver, std::chrono::milliseconds min_interval,
-             std::chrono::milliseconds tick);
+             std::chrono::milliseconds tick, QuoteFn deliver_quote = {});
 
     //! Stops the timer (Stop()).
     ~GuiCache();
@@ -120,9 +152,9 @@ public:
     GuiCache& operator=(const GuiCache&) = delete;
 
     //! Recompute the marked parts and swap the new snapshot in, if an update is
-    //! due: marks are pending, or the out-of-sync test has turned, and the
-    //! interval has passed since the last update; or \p force. Not due, it
-    //! returns at once, having taken no lock.
+    //! due: a GUI is subscribed, marks are pending or the out-of-sync test has
+    //! turned, and the interval has passed since the last update; or \p force
+    //! with a GUI subscribed. Not due, it returns at once, having taken no lock.
     //! Never takes cs_main itself, and never delivers: it leaves the delivery to
     //! the timer and wakes it. An exception from a part propagates, the snapshot is
     //! left as it was, and the parts stay marked for the next due update.
@@ -134,8 +166,29 @@ public:
 
     //! The GUI asks for a fresh snapshot: every part is marked and the timer
     //! makes a forced update, taking cs_main on its own thread, then delivers it.
-    //! A request made while one is pending joins it. Never blocks.
+    //! A request made while one is pending joins it. One the timer takes while no
+    //! GUI is subscribed is dropped: no one would see its answer. Never blocks.
     void RequestUpdate();
+
+    //! Count a GUI subscribed to the deliveries. Returns whether it is the
+    //! first: that GUI's GuiState then asks for a forced update
+    //! (RequestUpdate), since nothing was computed while there was none, and
+    //! that request wakes the timer. Counting wakes nothing, so the timer sees
+    //! the subscriber and the request together and makes one forced update. The
+    //! marks left pending meanwhile are otherwise taken by the next due update.
+    //! Never blocks.
+    bool AddSubscriber();
+
+    //! A subscribed GUI has gone (its Handler was disconnected or destroyed):
+    //! once per AddSubscriber. With none left, the cache stops computing.
+    void RemoveSubscriber();
+
+    //! The GUI asks for the MRC figures at \p fee_boost. The timer computes them
+    //! under cs_main (Compute::mrc_quote), not held to the interval, and answers
+    //! through the QuoteFn with \p request_id. One quote is pending at a time: a
+    //! request made before the timer takes the pending one replaces it, so only
+    //! the latest is answered. Never blocks.
+    void RequestMRCQuote(CAmount fee_boost, uint64_t request_id);
 
     //! Start the timer thread ("grc-guistate"). Once; not after Stop().
     void StartTimer();
@@ -155,10 +208,21 @@ private:
     //! The parts that exist only while the node is synced.
     static constexpr uint32_t SYNCED_PARTS = MRC | ETTS | RESEARCHER;
 
+    //! A GUI's pending quote request.
+    struct QuoteRequest {
+        CAmount fee_boost = 0;
+        uint64_t request_id = 0;
+    };
+
     const Compute m_compute;
     const DeliverFn m_deliver;
     const std::chrono::milliseconds m_min_interval;
     const std::chrono::milliseconds m_tick;
+    const QuoteFn m_deliver_quote;
+
+    //! The GUIs subscribed to the deliveries (AddSubscriber). None, and the
+    //! cache computes nothing.
+    std::atomic<int> m_subscribers{0};
 
     //! Parts marked since the last update. All at first: the cache starts empty.
     std::atomic<uint32_t> m_dirty{ALL};
@@ -189,11 +253,18 @@ private:
     std::condition_variable m_wake_cv;
     bool m_wake GUARDED_BY(m_wake_mutex){false};
 
+    //! The latest quote request the timer has not taken yet.
+    std::optional<QuoteRequest> m_quote GUARDED_BY(m_wake_mutex);
+
     //! Serializes starting and joining the timer.
     Mutex m_timer_mutex;
     std::thread m_timer GUARDED_BY(m_timer_mutex);
 
-    //! Marks are pending, or the out-of-sync test has turned (lock-free).
+    //! A GUI is subscribed (lock-free).
+    bool HasSubscribers() const;
+
+    //! A GUI is subscribed, and marks are pending or the out-of-sync test has
+    //! turned (lock-free).
     bool IsPending() const;
 
     //! Pending, and the interval has passed since the last update (lock-free).
@@ -210,6 +281,10 @@ private:
 
     //! Deliver the pending snapshot, if any. The timer only, holding no lock.
     void Deliver();
+
+    //! Compute \p quote under cs_main and answer it holding no lock. The timer
+    //! only.
+    void ServeQuote(const QuoteRequest& quote);
 
     //! Wait SETTLE, or until Stop(). False when stopped.
     bool Settle();

@@ -999,7 +999,8 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     // Keep the GUI state cache fresh here, under the cs_main this function
     // already holds, after the block's effects are applied. The update is a
     // no-op unless the cache's interval has passed, so during a sync it runs at
-    // most every four seconds, from the latest tip. It never delivers: the
+    // most every four seconds, from the latest tip; and while no GUI is
+    // subscribed it is always one. It never delivers: the
     // cache's timer does that, holding no lock. Unconditional, reorg-back
     // included, as that path changes the wallet and mempool too. A failure is
     // logged and never leaves SetBestChain.

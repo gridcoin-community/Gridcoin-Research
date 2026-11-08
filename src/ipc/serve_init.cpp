@@ -7,6 +7,7 @@
 #include "ipc/handshake.h"
 // Complete types needed for the unique_ptr/shared_ptr the delegated factory
 // methods return (interfaces/init.h only forward-declares them).
+#include "interfaces/gui_state.h"
 #include "interfaces/mrc.h"
 #include "interfaces/node.h"
 #include "interfaces/psgt.h"
@@ -180,6 +181,12 @@ public:
     {
         RequireAuth();
         return m_inner->makeSideStakeManager();
+    }
+
+    std::unique_ptr<interfaces::GuiState> makeGuiState() override
+    {
+        RequireAuth();
+        return m_inner->makeGuiState();
     }
 
 private:

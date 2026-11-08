@@ -11,10 +11,16 @@
 #include "interfaces/researcher.h"
 #include "interfaces/wallet.h"
 
+#include "amount.h"
+
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <string>
 
 namespace interfaces {
+
+class Handler;
 
 //! The state the GUI shows that needs cs_main to compute, computed by the node
 //! and pushed (the node's GUI state cache, node/gui_cache.h). The GUI keeps its
@@ -64,6 +70,69 @@ struct GuiStateSnapshot
     bool has_researcher = false;
     ResearcherSnapshot researcher;
 };
+
+//!
+//! \brief The GUI's view of the node's GUI state cache (node/gui_cache.h): the
+//! snapshot the node pushes, and the requests a GUI may make of it.
+//!
+//! No method takes cs_main or waits for the node's work: a read takes the
+//! cache's leaf lock alone, and a request only records itself for the cache's
+//! timer, which takes cs_main on its own thread and answers through a
+//! registered fn. In the multiprocess build each call is an IPC round trip to
+//! the node, which answers at once, and the fns are called back from it.
+//!
+//! The cache computes nothing while no GUI is subscribed (handleChanged): a node
+//! with no GUI attached pays nothing for it.
+//!
+class GuiState
+{
+public:
+    virtual ~GuiState() = default;
+
+    //! The cache's current snapshot, copied under its leaf lock, never cs_main.
+    //! For a GUI that attaches, or misses a push; its sequence is 0 before the
+    //! first update.
+    virtual GuiStateSnapshot current() = 0;
+
+    //! Receives every snapshot the cache publishes, on the cache's timer thread,
+    //! holding no lock. The sequences never decrease but may repeat, so keep a
+    //! snapshot only when its sequence is higher than the last one's. The fn must
+    //! only hand the snapshot off (interfaces/handler.h, THE HANDLER CONTRACT).
+    using ChangedFn = std::function<void(const GuiStateSnapshot&)>;
+
+    //! Subscribe to the cache's snapshots (GuardNotify-wrapped). The cache
+    //! computes only while at least one subscription is alive. The first one
+    //! (none was alive) also asks for a forced update, so a GUI that attaches
+    //! gets a computed snapshot within one timer cycle. Disconnecting or
+    //! destroying the Handler ends the subscription.
+    virtual std::unique_ptr<Handler> handleChanged(ChangedFn fn) = 0;
+
+    //! Ask for a fresh snapshot: the cache's timer makes a forced update, not
+    //! held to the cache's interval, and delivers it to the handleChanged fns.
+    //! Returns at once. With no subscription alive there is no one to answer,
+    //! and nothing is computed.
+    virtual void requestUpdate() = 0;
+
+    //! Ask for the MRC figures at \p fee_boost (the boosted trial claim, as
+    //! interfaces::MRC::snapshot computes it, unsigned). Returns at once. The
+    //! cache's timer computes it under cs_main, not held to the cache's interval,
+    //! and answers the handleMRCQuote fns with \p request_id. One quote is
+    //! pending at a time: a request made before the timer takes the last one
+    //! replaces it, so only the latest is answered.
+    virtual void requestMRCQuote(CAmount fee_boost, uint64_t request_id) = 0;
+
+    //! Receives each quote answer, on the cache's timer thread, holding no lock,
+    //! with the id of the request it answers.
+    using MRCQuoteFn = std::function<void(uint64_t request_id, const MRCSnapshot&)>;
+
+    //! Subscribe to the quote answers (GuardNotify-wrapped).
+    virtual std::unique_ptr<Handler> handleMRCQuote(MRCQuoteFn fn) = 0;
+};
+
+//! Return a GuiState over the node's GUI state cache, or null if the cache is
+//! not running (node::GetGuiCache()). The cache outlives it: the node starts one
+//! per process and keeps it until exit.
+std::unique_ptr<GuiState> MakeGuiState();
 
 // Marshalability pin (interfaces/marshal.h).
 INTERFACES_ASSERT_MARSHALABLE(GuiStateSnapshot);

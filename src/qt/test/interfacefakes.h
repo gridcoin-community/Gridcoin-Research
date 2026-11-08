@@ -5,12 +5,15 @@
 #ifndef BITCOIN_QT_TEST_INTERFACEFAKES_H
 #define BITCOIN_QT_TEST_INTERFACEFAKES_H
 
+#include "interfaces/gui_state.h"
 #include "interfaces/handler.h"
+#include "interfaces/mrc.h"
 #include "interfaces/node.h"
 #include "interfaces/researcher.h"
 #include "interfaces/sidestake.h"
 #include "util/strencodings.h"
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <optional>
@@ -308,6 +311,77 @@ public:
     {
         return interfaces::MakeCleanupHandler([] {});
     }
+};
+
+//! Fake interfaces::GuiState: serves a settable snapshot from current(), and
+//! keeps the fns a model registers so a test can push a snapshot (Push) or
+//! answer a quote (AnswerQuote) to them, synchronously on the test's thread,
+//! where the node's cache would call them from its timer thread. Counts the
+//! requests the model makes and keeps the last quote request's arguments.
+//! Unlike the node, it computes nothing on a subscription and answers no
+//! request by itself: the test does. A Handler it returns must not outlive it.
+class FakeGuiState : public interfaces::GuiState
+{
+public:
+    // Canned response (set by the test, or by Push).
+    interfaces::GuiStateSnapshot m_snapshot;
+
+    // Recorded calls.
+    int m_request_update_calls = 0;
+    int m_quote_requests = 0;
+    CAmount m_last_quote_fee_boost = 0;
+    uint64_t m_last_quote_request_id = 0;
+
+    interfaces::GuiStateSnapshot current() override { return m_snapshot; }
+
+    std::unique_ptr<interfaces::Handler> handleChanged(ChangedFn fn) override
+    {
+        const int id = m_next_handler_id++;
+        m_changed_fns.emplace(id, std::move(fn));
+        return interfaces::MakeCleanupHandler([this, id] { m_changed_fns.erase(id); });
+    }
+
+    void requestUpdate() override { ++m_request_update_calls; }
+
+    void requestMRCQuote(CAmount fee_boost, uint64_t request_id) override
+    {
+        ++m_quote_requests;
+        m_last_quote_fee_boost = fee_boost;
+        m_last_quote_request_id = request_id;
+    }
+
+    std::unique_ptr<interfaces::Handler> handleMRCQuote(MRCQuoteFn fn) override
+    {
+        const int id = m_next_handler_id++;
+        m_quote_fns.emplace(id, std::move(fn));
+        return interfaces::MakeCleanupHandler([this, id] { m_quote_fns.erase(id); });
+    }
+
+    //! Make \p snapshot the current one and deliver it to every registered
+    //! handleChanged fn, as the node's cache publishes one.
+    void Push(const interfaces::GuiStateSnapshot& snapshot)
+    {
+        m_snapshot = snapshot;
+
+        // A copy: a fn may unsubscribe while it runs.
+        const std::map<int, ChangedFn> fns = m_changed_fns;
+        for (const auto& entry : fns) entry.second(snapshot);
+    }
+
+    //! Deliver a quote answer to every registered handleMRCQuote fn.
+    void AnswerQuote(uint64_t request_id, const interfaces::MRCSnapshot& quote)
+    {
+        const std::map<int, MRCQuoteFn> fns = m_quote_fns;
+        for (const auto& entry : fns) entry.second(request_id, quote);
+    }
+
+    //! The handleChanged subscriptions alive.
+    size_t ChangedSubscribers() const { return m_changed_fns.size(); }
+
+private:
+    int m_next_handler_id = 0;
+    std::map<int, ChangedFn> m_changed_fns;
+    std::map<int, MRCQuoteFn> m_quote_fns;
 };
 
 } // namespace qt_test

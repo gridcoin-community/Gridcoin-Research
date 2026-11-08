@@ -375,4 +375,61 @@ BOOST_AUTO_TEST_CASE(the_gui_cache_trial_with_nothing_accrued_logs_no_error)
     BOOST_CHECK(errors.m_lines[0].find("No positive research reward pending") != std::string::npos);
 }
 
+// A GUI's fee-boost quote (GuiState::requestMRCQuote) is the cache's trial claim
+// at the boost asked: the same shared MRC snapshot code with that boost, with the
+// researcher's eligibility read from the cache's snapshot, and as quiet.
+BOOST_AUTO_TEST_CASE(the_gui_cache_quote_is_the_trial_at_the_boost_asked)
+{
+    // Regtest opens the MRC version gate on this mock chain (see above). The
+    // fixture's StateGuard puts the network, the tip and the clock back.
+    SelectParams(CBaseChainParams::REGTEST);
+    account.m_accrual = 72;
+    g_previous_block_time = GetAdjustedTime();
+
+    LOCK(cs_main);
+    // The block createmrc_creates_valid_mrcs claims at.
+    pindexBest = pindex->pprev;
+    nBestHeight = pindexBest->nHeight;
+
+    // A synced, eligible researcher in the cache's snapshot.
+    interfaces::GuiStateSnapshot current;
+    current.out_of_sync = false;
+    current.has_researcher = true;
+    current.researcher.has_active_beacon = true;
+
+    const node::GuiCache::Compute compute = node::MakeProductionCompute();
+    CapturedErrors errors;
+
+    // Unboosted, the trial gives the reward and the minimum fee.
+    const interfaces::MRCSnapshot unboosted = compute.mrc_quote(0, current);
+    BOOST_CHECK(!unboosted.out_of_sync);
+    BOOST_CHECK(unboosted.block_version_valid);
+    BOOST_REQUIRE_MESSAGE(!unboosted.create_error, unboosted.create_error_msg);
+    BOOST_REQUIRE_GT(unboosted.reward, unboosted.min_fee);
+
+    // Boosted, the quote asks for the minimum fee plus the boost, and reruns the
+    // trial at that fee.
+    const CAmount boost = unboosted.reward - unboosted.min_fee;
+    interfaces::MRCSnapshot quote = compute.mrc_quote(boost, current);
+    BOOST_CHECK(!quote.create_error);
+    BOOST_CHECK(!quote.boosted_fee_error);
+    BOOST_CHECK_EQUAL(quote.reward, unboosted.reward);
+    BOOST_CHECK_EQUAL(quote.min_fee, unboosted.min_fee);
+    BOOST_CHECK_EQUAL(quote.fee, unboosted.reward);
+
+    // One unit more and the boosted rerun refuses the fee, in the quote alone.
+    quote = compute.mrc_quote(boost + 1, current);
+    BOOST_CHECK(quote.boosted_fee_error);
+    BOOST_CHECK(quote.boosted_fee_error_msg.find("greater than the computed research reward") != std::string::npos);
+    BOOST_CHECK_EQUAL(quote.fee, unboosted.reward + 1);
+    BOOST_CHECK(errors.m_lines.empty());
+
+    // Not an eligible researcher in the cache's snapshot: no trial at all.
+    current.researcher.has_active_beacon = false;
+    quote = compute.mrc_quote(boost, current);
+    BOOST_CHECK(!quote.create_error);
+    BOOST_CHECK_EQUAL(quote.reward, 0);
+    BOOST_CHECK_EQUAL(quote.fee, 0);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

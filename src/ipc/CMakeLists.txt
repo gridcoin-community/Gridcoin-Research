@@ -60,6 +60,7 @@ target_capnp_sources(gridcoin_ipc ${CMAKE_CURRENT_SOURCE_DIR}
     capnp/researcher.capnp
     capnp/psgt.capnp
     capnp/sidestake.capnp
+    capnp/gui_state.capnp
     capnp/init.capnp
 )
 

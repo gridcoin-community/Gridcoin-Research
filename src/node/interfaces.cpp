@@ -12,6 +12,7 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/upgrade.h"
 #include "init.h"
+#include "interfaces/gui_state.h"
 #include "interfaces/handler.h"
 #include "interfaces/init.h"
 #include "interfaces/mrc.h"
@@ -26,6 +27,7 @@
 #include "chain.h"
 #include "net.h"
 #include "netbase.h"
+#include "node/gui_cache.h"
 #include "node/ui_interface.h"
 #include "rpc/client.h"
 #include "rpc/server.h"
@@ -493,6 +495,75 @@ public:
     }
 };
 
+//! A GUI's subscription to the cache's snapshots (GuiState::handleChanged):
+//! the signal connection and the cache's subscriber count, released together,
+//! once, by whichever of disconnect() and destruction comes first.
+class GuiStateSubscription : public Handler
+{
+public:
+    GuiStateSubscription(std::unique_ptr<Handler> connection, node::GuiCache& cache)
+        : m_connection(std::move(connection)), m_cache(cache)
+    {
+    }
+
+    ~GuiStateSubscription() override { disconnect(); }
+
+    void disconnect() override
+    {
+        if (!m_connection) return;
+
+        m_connection->disconnect();
+        m_connection.reset();
+        m_cache.RemoveSubscriber();
+    }
+
+private:
+    std::unique_ptr<Handler> m_connection;
+    node::GuiCache& m_cache;
+};
+
+//! GuiState over the node's GUI state cache. Every method only reads under the
+//! cache's leaf lock, or records a request and wakes the cache's timer; none
+//! takes cs_main. The cache outlives this object: the node keeps it until exit
+//! (node/gui_cache.h, StopGuiCache).
+class GuiStateImpl : public GuiState
+{
+public:
+    explicit GuiStateImpl(node::GuiCache& cache) : m_cache(cache) {}
+
+    GuiStateSnapshot current() override { return m_cache.Current(); }
+
+    std::unique_ptr<Handler> handleChanged(ChangedFn fn) override
+    {
+        // Connected before it counts, so the update the first subscription asks
+        // for reaches this fn too.
+        std::unique_ptr<Handler> connection =
+            MakeSignalHandler(uiInterface.GuiStateChanged_connect(interfaces::GuardNotify(std::move(fn))));
+
+        // Nothing was computed while no GUI was subscribed, so the first asks for
+        // a forced update: it gets a computed snapshot within one timer cycle.
+        // Counted first, so the timer the request wakes sees a subscriber.
+        if (m_cache.AddSubscriber()) m_cache.RequestUpdate();
+
+        return std::make_unique<GuiStateSubscription>(std::move(connection), m_cache);
+    }
+
+    void requestUpdate() override { m_cache.RequestUpdate(); }
+
+    void requestMRCQuote(CAmount fee_boost, uint64_t request_id) override
+    {
+        m_cache.RequestMRCQuote(fee_boost, request_id);
+    }
+
+    std::unique_ptr<Handler> handleMRCQuote(MRCQuoteFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.GuiStateMRCQuote_connect(interfaces::GuardNotify(std::move(fn))));
+    }
+
+private:
+    node::GuiCache& m_cache;
+};
+
 //! Monolithic-build bootstrap: the factories construct the in-process
 //! wrappers around this process's node and wallet.
 class InitImpl : public Init
@@ -543,9 +614,18 @@ public:
     {
         return pwalletMain ? MakeWalletCoinSource(pwalletMain) : nullptr;
     }
+
+    std::unique_ptr<GuiState> makeGuiState() override { return MakeGuiState(); }
 };
 
 } // namespace
+
+std::unique_ptr<GuiState> MakeGuiState()
+{
+    node::GuiCache* cache = node::GetGuiCache();
+
+    return cache ? std::make_unique<GuiStateImpl>(*cache) : nullptr;
+}
 
 std::unique_ptr<Node> MakeNode()
 {

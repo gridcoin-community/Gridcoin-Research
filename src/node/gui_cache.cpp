@@ -24,11 +24,12 @@ extern CWallet* pwalletMain;
 namespace node {
 
 GuiCache::GuiCache(Compute compute, DeliverFn deliver, std::chrono::milliseconds min_interval,
-                   std::chrono::milliseconds tick)
+                   std::chrono::milliseconds tick, QuoteFn deliver_quote)
     : m_compute(std::move(compute))
     , m_deliver(std::move(deliver))
     , m_min_interval(min_interval)
     , m_tick(tick)
+    , m_deliver_quote(std::move(deliver_quote))
 {
 }
 
@@ -43,7 +44,9 @@ void GuiCache::UpdateLocked(bool force)
 
     const int64_t now = m_compute.now_ms();
 
-    if (!force && !IsDue(now)) {
+    // With no GUI subscribed nobody would see the update, so none is made, not
+    // even a forced one; the marks stay for the first subscriber's.
+    if (!HasSubscribers() || (!force && !IsDue(now))) {
         return;
     }
 
@@ -133,6 +136,28 @@ void GuiCache::RequestUpdate()
     Notify();
 }
 
+bool GuiCache::AddSubscriber()
+{
+    // Wakes nothing: the first subscriber's request (RequestUpdate) does, after
+    // this count, so the timer it wakes sees both and makes one forced update.
+    return m_subscribers.fetch_add(1) == 0;
+}
+
+void GuiCache::RemoveSubscriber()
+{
+    m_subscribers.fetch_sub(1);
+}
+
+void GuiCache::RequestMRCQuote(CAmount fee_boost, uint64_t request_id)
+{
+    {
+        LOCK(m_wake_mutex);
+        m_quote = QuoteRequest{fee_boost, request_id};
+        m_wake = true;
+    }
+    m_wake_cv.notify_one();
+}
+
 void GuiCache::StartTimer()
 {
     LOCK(m_timer_mutex);
@@ -183,9 +208,14 @@ interfaces::GuiStateSnapshot GuiCache::Current() const
     return m_snapshot;
 }
 
+bool GuiCache::HasSubscribers() const
+{
+    return m_subscribers.load() > 0;
+}
+
 bool GuiCache::IsPending() const
 {
-    return m_dirty.load() != 0 || SyncTurned();
+    return HasSubscribers() && (m_dirty.load() != 0 || SyncTurned());
 }
 
 bool GuiCache::IsDue(int64_t now_ms) const
@@ -249,6 +279,38 @@ void GuiCache::Deliver()
     }
 }
 
+void GuiCache::ServeQuote(const QuoteRequest& quote)
+{
+    interfaces::MRCSnapshot answer;
+
+    try {
+        // run_under_cs_main holds cs_main around this lambda, which the
+        // thread-safety analyzer cannot see through std::function (as in
+        // TimerLoop). The snapshot is read under it, so it is the one at the tip
+        // the quote is computed at.
+        m_compute.run_under_cs_main([&]() NO_THREAD_SAFETY_ANALYSIS {
+            AssertLockHeld(cs_main);
+            answer = m_compute.mrc_quote(quote.fee_boost, Current());
+        });
+    } catch (const std::exception& e) {
+        LogPrintf("ERROR: %s: the MRC quote failed: %s", __func__, e.what());
+        return;
+    } catch (...) {
+        LogPrintf("ERROR: %s: the MRC quote failed with an unknown exception", __func__);
+        return;
+    }
+
+    if (m_stop.load()) return;
+
+    try {
+        if (m_deliver_quote) m_deliver_quote(quote.request_id, answer);
+    } catch (const std::exception& e) {
+        LogPrintf("ERROR: %s: delivering the MRC quote failed: %s", __func__, e.what());
+    } catch (...) {
+        LogPrintf("ERROR: %s: delivering the MRC quote failed with an unknown exception", __func__);
+    }
+}
+
 bool GuiCache::Settle()
 {
     const auto until = std::chrono::steady_clock::now() + SETTLE;
@@ -267,6 +329,8 @@ bool GuiCache::Settle()
 void GuiCache::TimerLoop()
 {
     while (true) {
+        std::optional<QuoteRequest> quote;
+
         {
             WAIT_LOCK(m_wake_mutex, lock);
 
@@ -277,6 +341,7 @@ void GuiCache::TimerLoop()
             if (m_stop) return;
 
             m_wake = false;
+            quote = std::exchange(m_quote, std::nullopt);
         }
 
         // The wake mutex is released. From here the timer takes it again only to
@@ -284,7 +349,12 @@ void GuiCache::TimerLoop()
         // nothing.
         Deliver();
 
-        const bool request = m_request.exchange(false);
+        // A quote first: the user is waiting for it, and it is not held to the
+        // interval.
+        if (quote) ServeQuote(*quote);
+
+        // A request no GUI is subscribed to see answered is dropped.
+        const bool request = m_request.exchange(false) && HasSubscribers();
 
         if (!request) {
             if (!IsDue(m_compute.now_ms())) continue;
@@ -316,6 +386,18 @@ void GuiCache::TimerLoop()
         Deliver();
     }
 }
+
+namespace {
+//! Whether the researcher part of \p snap makes the wallet eligible for an MRC,
+//! derived as MRCModel::refresh derives it.
+bool ResearcherEligible(const interfaces::GuiStateSnapshot& snap)
+{
+    return snap.has_researcher
+        && snap.researcher.has_active_beacon
+        && !snap.researcher.configured_for_noncruncher_mode
+        && !snap.researcher.detected_pool_mode;
+}
+} // anonymous namespace
 
 GuiCache::Compute MakeProductionCompute()
 {
@@ -397,13 +479,20 @@ GuiCache::Compute MakeProductionCompute()
             return;
         }
 
-        const bool researcher_eligible = snap.has_researcher
-                && snap.researcher.has_active_beacon
-                && !snap.researcher.configured_for_noncruncher_mode
-                && !snap.researcher.detected_pool_mode;
-
-        snap.mrc = GRC::BuildMRCSnapshot(pwalletMain, /*fee_boost=*/0, /*no_sign=*/true, researcher_eligible);
+        snap.mrc = GRC::BuildMRCSnapshot(pwalletMain, /*fee_boost=*/0, /*no_sign=*/true, ResearcherEligible(snap));
         snap.has_mrc = true;
+    };
+
+    // The same trial claim at a GUI's fee boost (MRC::snapshot's boosted rerun),
+    // unsigned and quiet as the MRC part's. Eligibility comes from the cache's
+    // researcher part, as the MRC page takes it from its researcher model. Out of
+    // sync, BuildMRCSnapshot says so and computes nothing more.
+    compute.mrc_quote = [](CAmount fee_boost, const interfaces::GuiStateSnapshot& current) NO_THREAD_SAFETY_ANALYSIS {
+        AssertLockHeld(cs_main);
+
+        if (!pwalletMain) return interfaces::MRCSnapshot{};
+
+        return GRC::BuildMRCSnapshot(pwalletMain, fee_boost, /*no_sign=*/true, ResearcherEligible(current));
     };
 
     // StakingStatus::tryGetEstimatedTimeToStake, without the try. Seconds.
