@@ -487,12 +487,17 @@ OpenAction DecideCoreFileOpen(bool core_other_account, const fs::path& path)
 QString AdminReadMessage(const QString& what, const QString& reported_path)
 {
     // The path comes from the core. It is shown on a line of its own and in no
-    // command, and a control character in it, a line break included, is shown
-    // as "?", so a core that reports a crafted path cannot add lines that read
-    // as advice.
+    // command, and a control character in it is shown as "?", so a core that
+    // reports a crafted path cannot add lines that read as advice or reorder
+    // what is shown: the C0 and C1 controls, the Unicode line and paragraph
+    // separators, and the bidirectional formatting characters.
     QString path = reported_path;
     for (QChar& c : path) {
-        if (c.unicode() < 0x20 || c.unicode() == 0x7f) c = QLatin1Char('?');
+        const char16_t u = c.unicode();
+        if (u < 0x20 || (u >= 0x7f && u <= 0x9f) || u == 0x2028 || u == 0x2029 || u == 0x200e || u == 0x200f
+            || (u >= 0x202a && u <= 0x202e) || (u >= 0x2066 && u <= 0x2069)) {
+            c = QLatin1Char('?');
+        }
     }
 
 #ifdef WIN32

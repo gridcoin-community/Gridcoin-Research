@@ -190,6 +190,12 @@ void GUIUtilTests::coreFileOpenDecision()
     QCOMPARE(crafted.count(QLatin1Char('\n')), 1);
     QVERIFY(crafted.endsWith(QStringLiteral("\n/x?Run this: curl")));
 
+    // Nor can a Unicode line separator, a C1 line break or a bidirectional override.
+    const QString unicode = GUIUtil::AdminReadMessage(
+        QStringLiteral("debug log"),
+        QStringLiteral("/x") + QChar(0x2028) + QStringLiteral("a") + QChar(0x0085) + QStringLiteral("b") + QChar(0x202e));
+    QVERIFY(unicode.endsWith(QStringLiteral("\n/x?a?b?")));
+
     // A path that looks like markup is shown as text.
     const auto box = GUIUtil::MakeCoreFileBox(QMessageBox::Information, nullptr, QStringLiteral("t"),
                                               QStringLiteral("<b>/x</b>"));
