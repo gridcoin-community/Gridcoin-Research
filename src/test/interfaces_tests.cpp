@@ -596,6 +596,26 @@ BOOST_AUTO_TEST_CASE(gui_state_quote_latest_request_wins)
     };
 
     PublishedFakeCache published(compute, 4000ms, 30000ms);
+
+    // Declared after the published cache, so it runs before the cache is
+    // stopped: a failure that unwinds the case while the timer is held in the
+    // hook would otherwise leave the stop joining a thread nobody can release.
+    struct OpenLatchOnExit
+    {
+        Mutex& mutex;
+        std::condition_variable& cv;
+        bool& released;
+
+        ~OpenLatchOnExit()
+        {
+            {
+                LOCK(mutex);
+                released = true;
+            }
+            cv.notify_all();
+        }
+    } open_latch{latch_mutex, latch_cv, released};
+
     std::unique_ptr<interfaces::GuiState> gui_state = interfaces::MakeGuiState();
     BOOST_REQUIRE(gui_state);
 
