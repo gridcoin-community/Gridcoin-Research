@@ -92,6 +92,10 @@ private:
     //! The core's pushed state; owned by this, GUI thread only.
     GuiStateCache* m_gui_state_cache;
 
+    //! The snapshot the signals of the previous push were emitted for.
+    interfaces::GuiStateSnapshot m_last_pushed;
+    bool m_has_last_pushed{false};
+
     QTimer *pollTimer;
 
     //! Notification registrations held so they are disconnected on

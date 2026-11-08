@@ -105,3 +105,45 @@ void ClientModelTests::miner_status_comes_from_the_push()
     QCOMPARE(miner.at(0).at(3).toDouble(), 3600.0);
     QCOMPARE(node.m_chain_reads, 0);
 }
+
+void ClientModelTests::an_identical_push_emits_no_signal_and_a_miner_change_only_the_miner_one()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeGuiState gui_state;
+    ClientModel model(node, gui_state, nullptr);
+    QSignalSpy blocks(&model, &ClientModel::numBlocksChanged);
+    QSignalSpy difficulty(&model, &ClientModel::difficultyChanged);
+    QSignalSpy miner(&model, &ClientModel::minerStatusChanged);
+
+    // The first push emits all three.
+    gui_state.Push(Snapshot(1, 500, 600));
+    Deliver();
+    QCOMPARE(blocks.count(), 1);
+    QCOMPARE(difficulty.count(), 1);
+    QCOMPARE(miner.count(), 1);
+
+    // The same state under a new sequence emits none.
+    gui_state.Push(Snapshot(2, 500, 600));
+    Deliver();
+    QCOMPARE(blocks.count(), 1);
+    QCOMPARE(difficulty.count(), 1);
+    QCOMPARE(miner.count(), 1);
+
+    // A push that changes only the miner fields emits only the miner signal.
+    interfaces::GuiStateSnapshot snapshot = Snapshot(3, 500, 600);
+    snapshot.coin_weight = 77.0;
+    gui_state.Push(snapshot);
+    Deliver();
+    QCOMPARE(blocks.count(), 1);
+    QCOMPARE(difficulty.count(), 1);
+    QCOMPARE(miner.count(), 2);
+    QCOMPARE(miner.at(1).at(2).toDouble(), 77.0);
+
+    // A new block emits the block signal.
+    snapshot = Snapshot(4, 501, 600);
+    snapshot.coin_weight = 77.0;
+    gui_state.Push(snapshot);
+    Deliver();
+    QCOMPARE(blocks.count(), 2);
+    QCOMPARE(miner.count(), 2);
+}

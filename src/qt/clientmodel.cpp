@@ -107,9 +107,37 @@ void ClientModel::updateTimer()
 
 void ClientModel::updateFromGuiState()
 {
-    emit difficultyChanged(getDifficulty());
-    emit numBlocksChanged(getNumBlocks(), getNumBlocksOfPeers());
-    emitMinerStatus();
+    // A push comes whenever any part changed, about every eight seconds while the
+    // miner runs. Each signal is emitted only when a field its slots read has
+    // changed since the previous push; the first push emits all of them.
+    const interfaces::GuiStateSnapshot& now = m_gui_state_cache->snapshot();
+    const interfaces::GuiStateSnapshot& was = m_last_pushed;
+    const bool first = !m_has_last_pushed;
+
+    // setDifficulty reads the difficulty and the network weight.
+    if (first || now.difficulty != was.difficulty || now.net_weight != was.net_weight) {
+        emit difficultyChanged(getDifficulty());
+    }
+
+    // setNumBlocks reads the height, the peers' height, the tip time and the
+    // sync state; the status bar warnings it shows follow the sync state.
+    if (first || now.height != was.height || now.peers_height != was.peers_height
+        || now.tip_time != was.tip_time || now.initial_download != was.initial_download
+        || now.out_of_sync != was.out_of_sync) {
+        emit numBlocksChanged(getNumBlocks(), getNumBlocksOfPeers());
+    }
+
+    // setMinerStatus reads the staking flag, both weights, the estimate and the
+    // miner's errors (in the status bar warnings).
+    if (first || now.staking != was.staking || now.coin_weight != was.coin_weight
+        || now.net_weight != was.net_weight || now.has_etts != was.has_etts
+        || now.etts_seconds != was.etts_seconds || now.miner_errors != was.miner_errors
+        || now.out_of_sync != was.out_of_sync) {
+        emitMinerStatus();
+    }
+
+    m_last_pushed = now;
+    m_has_last_pushed = true;
 }
 
 void ClientModel::emitMinerStatus()

@@ -22,6 +22,7 @@ private slots:
     void push_updates_blocks_and_emits_once();
     void cache_accepts_lower_height_with_higher_sequence();
     void miner_status_comes_from_the_push();
+    void an_identical_push_emits_no_signal_and_a_miner_change_only_the_miner_one();
 };
 
 #endif // BITCOIN_QT_TEST_CLIENTMODELTESTS_H
