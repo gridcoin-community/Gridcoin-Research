@@ -165,6 +165,13 @@ struct Classification
 //! Medium integrity (elevated or uiAccess). Otherwise Owner when its user is
 //! \p self, AttachGroup when \p attach_group_configured and it is a member, and
 //! Refused for anyone else.
+//!
+//! The check identifies the process that writes the nonce, not the one that holds
+//! the connection. The boundary is the socket and cookie DACLs and the account
+//! check; the integrity rules are hygiene, not a boundary: a process those let
+//! connect and read the cookie, but that would be refused here (an elevated one,
+//! say), can have a cooperating Medium process of the same account complete the
+//! check for it.
 Classification ClassifyTokenFacts(const TokenFacts& facts, const Sid& self, bool attach_group_configured);
 
 //! Whether \p s is exactly 2 * ATTEST_SUFFIX_BYTES (32) lower-case hex digits.

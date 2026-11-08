@@ -251,6 +251,12 @@ run-time state. **Validate by rebooting once** and confirming a full `Shutdown: 
 wallet database …` sequence in `debug.log` just before the restart. (We deliberately don't *also*
 put a shutdown trigger on `Core-Stop` — the two would double-stop and race.)
 
+**Fast Startup.** With Fast Startup on, which is the Windows default, *Shut down* does not end
+the system session: Windows signs the users out and hibernates the rest, the task-mode core
+included, so the shutdown script does not run and the core carries on at the next start.
+*Restart*, *Update and shut down*, and *Shut down* with Fast Startup off end the session and run
+the script, so validate with a Restart.
+
 **Domains.** Local and domain-GPO shutdown scripts **stack** — all run at shutdown,
 additively, bounded collectively by the max-wait-time. But if a domain GPO enables **"Turn
 off Local Group Policy Objects processing,"** this *local* script is ignored; in that case
