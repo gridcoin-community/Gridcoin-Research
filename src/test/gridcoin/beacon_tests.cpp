@@ -2226,7 +2226,51 @@ BOOST_AUTO_TEST_CASE(beacon_registry_a_db_stored_at_version_3_is_rebuilt_on_the_
     BOOST_CHECK_EQUAL(registry.Initialize(), 0);
     BOOST_CHECK(registry.PendingBeacons().empty());
     BOOST_CHECK(registry.GetBeaconDB().find(advertisement) == registry.GetBeaconDB().end());
-    BOOST_CHECK_EQUAL(StoredBeaconDBVersion(), 4U);
+    BOOST_CHECK_EQUAL(StoredBeaconDBVersion(), 5U);
+
+    registry.Reset();
+}
+
+// The block version 15 release rebuilds the stored beacon history once from the beacon contracts: a node whose beacon
+// entry db is at version 4 discards its stored history on the first start and replays every beacon contract, as from
+// version 3.
+BOOST_AUTO_TEST_CASE(beacon_registry_a_db_stored_at_version_4_is_rebuilt_on_the_next_start)
+{
+    LOCK(cs_main);
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+    registry.Reset();
+
+    CKey key;
+    key.MakeNewKey(true);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+
+    const uint256 advertisement = AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME, 1);
+
+    // Store version 4, as the nodes before version 5 did.
+    {
+        CTxDB txdb("rw");
+
+        std::pair<std::string, std::string> version_key = std::make_pair(std::string("beacon_db"),
+                                                                         std::string("version"));
+        uint32_t version = 4;
+
+        BOOST_REQUIRE(txdb.WriteGenericSerializable(version_key, version));
+    }
+
+    // The next start erases the stored history and stores the current version, and the replay starts from the
+    // beginning.
+    registry.ResetInMemoryOnly();
+    BOOST_CHECK_EQUAL(registry.Initialize(), 0);
+    BOOST_CHECK(registry.PendingBeacons().empty());
+    BOOST_CHECK(registry.GetBeaconDB().find(advertisement) == registry.GetBeaconDB().end());
+    BOOST_CHECK_EQUAL(StoredBeaconDBVersion(), 5U);
+
+    // The start after that loads the stored history again.
+    AddPendingBeacon(registry, cpid, key.GetPubKey(), START_TIME, 1);
+    registry.ResetInMemoryOnly();
+    BOOST_CHECK_EQUAL(registry.Initialize(), 1);
+    BOOST_CHECK_EQUAL(registry.PendingBeacons().size(), 1U);
 
     registry.Reset();
 }

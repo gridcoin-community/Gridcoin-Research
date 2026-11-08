@@ -636,9 +636,11 @@ public:
     //! Version 2: 5.2.1.0 with hotfix and > 5.2.1.0
     //! Version 3: 5.4.5.5+
     //! Version 4: 5.5.2.1+ (no format change: rebuilds the stored history from the beacon contracts once)
+    //! Version 5: the block version 15 release (no format change: rebuilds the stored history from the beacon
+    //! contracts once)
     //!
     BeaconRegistry()
-        : m_beacon_db(4)
+        : m_beacon_db(5)
     {
     };
 
