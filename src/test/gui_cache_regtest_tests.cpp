@@ -296,10 +296,20 @@ private:
             // the cache's leaf lock only, so m_mutex is released around it to
             // keep the two apart.
             int read = -1;
+            bool stopped = false;
             {
                 REVERSE_LOCK(lock);
-                read = node::GetGuiCache()->Current().height;
+
+                // A delivery queued before StopGuiCache can be handled after it.
+                node::GuiCache* cache = node::GetGuiCache();
+                if (cache) {
+                    read = cache->Current().height;
+                } else {
+                    stopped = true;
+                }
             }
+
+            if (stopped) return;
 
             if (read < height) m_stale = true;
             ++m_handled;
