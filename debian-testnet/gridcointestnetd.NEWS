@@ -51,6 +51,15 @@ gridcoinresearch (5.5.2.1-1) unstable; urgency=medium
   build with per-user units had them switched over too, with the datadir they
   used, unless the system service was enabled or running.
 
+  To go back to an earlier version: remove
+  /etc/systemd/system/gridcointestnetd.service.d/50-gridcoin-service.conf and
+  /etc/systemd/system/gridcointestnetd.service.d/60-gridcoin-autounlock.conf, if they
+  are there, run "systemctl daemon-reload", install the earlier package, and,
+  if you used autounlock, enable its old unit again with "systemctl enable
+  --now gridcointestnetd-autounlock.service". The forking unit of the earlier version
+  does not start with the first drop-in in place. The credential stays root's,
+  which the old unit loads through systemd as before.
+
   If the switch-over did not finish, the upgrade said why, and
   /var/lib/gridcoin-service/switchover-test.state keeps what is left. Fix the
   cause and run "gridcointestnet-service switch-over
