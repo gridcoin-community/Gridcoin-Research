@@ -7,8 +7,10 @@ gridcoinresearch (5.5.2.1-1) unstable; urgency=medium
   /var/lib/gridcointestnetd to the new account at the service's first start,
   and /etc/gridcoin-testnet is now root:gridcointestnet 0710. A
   /etc/gridcoin-testnet/gridcoin.conf owned by root is given the group
-  gridcointestnet and made readable by that group only; one owned by gridcoin
-  must be given to root:gridcointestnet, mode 0640, by hand. A missing one is
+  gridcointestnet, which may read it; its other permissions are kept, and the
+  upgrade reports one that every account can read, with the chmod that closes
+  it. One owned by gridcoin must be given to root:gridcointestnet, mode 0640,
+  by hand. A missing one is
   created as root:gridcointestnet 0640 with generated RPC credentials.
 
   The unit is Type=notify: the core reports to systemd itself when it is

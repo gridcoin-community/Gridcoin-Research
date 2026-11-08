@@ -42,7 +42,10 @@ gridcoinresearch (5.5.2.1-1) unstable; urgency=medium
 
   /etc/gridcoin/gridcoin.conf is created, if it is missing, as root:gridcoin
   0640 with generated RPC credentials. An existing one owned by root is given
-  the group gridcoin and made readable by that group only.
+  the group gridcoin, which may read it; its other permissions are kept, and
+  the upgrade reports one that every account can read, with the chmod that
+  closes it. One owned by gridcoin is reported and left as it is: give it to
+  root:gridcoin, mode 0640, by hand.
 
   A desktop user attaches the GUI to the system service through membership of
   the gridcoin-gui group ("Connect to the system service" in the menu). A new

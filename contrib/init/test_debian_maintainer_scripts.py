@@ -113,12 +113,19 @@ exit 0
 '''
 STAT_STUB = '''#!/bin/sh
 # stat -c %%u <path>: 0 for the paths in $ROOT_OWNED, as if root owned them, and 1000 for every
-# other path, whoever really owns it (the suite runs as root in CI images).
+# other path, whoever really owns it (the suite runs as root in CI images). stat -c %%U answers
+# root for those, $SERVICE_ACCOUNT for the paths in $SERVICE_OWNED, and nobody otherwise.
 if [ "$1" = -c ] && [ "$2" = %%u ]; then
     case " $ROOT_OWNED " in
         *" $3 "*) echo 0 ;;
         *) echo 1000 ;;
     esac
+    exit 0
+fi
+if [ "$1" = -c ] && [ "$2" = %%U ]; then
+    case " $ROOT_OWNED " in *" $3 "*) echo root; exit 0 ;; esac
+    case " $SERVICE_OWNED " in *" $3 "*) echo "$SERVICE_ACCOUNT"; exit 0 ;; esac
+    echo nobody
     exit 0
 fi
 exec %(real)s "$@"
@@ -248,14 +255,16 @@ class FakeRoot:
             self.test.fail("%s:%d names %s outside the fake root" % (script, number, path))
         return text.replace("@ROOT@", self.root)
 
-    def run(self, script, *args, fail=(), root_owned=()):
+    def run(self, script, *args, fail=(), root_owned=(), service_owned=()):
         path = os.path.join(self.tmp.name, script)
         with open(path, "w", encoding="utf8") as f:
             f.write(self.rewrite(script))
         if os.path.exists(self.log):
             os.unlink(self.log)
         env = {"PATH": self.bin, "LOG": self.log, "ROOT": self.root, "FAIL": " ".join(fail), "LC_ALL": "C",
-               "ROOT_OWNED": " ".join(self.path(p) for p in root_owned), "HOME": self.tmp.name}
+               "ROOT_OWNED": " ".join(self.path(p) for p in root_owned), "HOME": self.tmp.name,
+               "SERVICE_OWNED": " ".join(self.path(p) for p in service_owned),
+               "SERVICE_ACCOUNT": self.net["account"]}
         proc = subprocess.run(["/bin/sh", path, *args], env=env, cwd=self.tmp.name, capture_output=True,
                               encoding="utf8")
         return proc.returncode, proc.stdout, proc.stderr
@@ -447,9 +456,40 @@ class PostinstTests(unittest.TestCase):
         self.assertEqual(fake.calls("chgrp"), [])
         rc, out, err = fake.run("postinst", "configure", OLD, root_owned=(fake.net["conf_dir"] + "/gridcoin.conf",))
         self.assertEqual(rc, 0, err)
-        self.assertEqual(os.stat(conf).st_mode & 0o777, 0o640)
+        # The service account's group may read it; what else the administrator allowed is kept,
+        # and a conf every account can read is reported, with the command to narrow it.
+        self.assertEqual(os.stat(conf).st_mode & 0o777, 0o644)
         self.assertEqual(fake.calls("chgrp"), ["chgrp gridcointestnet %s" % conf])
+        self.assertIn("can be read by every account", err)
+        self.assertIn("chmod o= %s" % conf, err)
         self.assertEqual(fake.read(conf), "rpcuser=x\n")
+
+    def test_a_root_conf_closed_to_others_is_not_reported(self):
+        fake = FakeRoot(self, "main")
+        conf = self.conf(fake)
+        with open(conf, "w", encoding="utf8") as f:
+            f.write("rpcuser=x\n")
+        os.chmod(conf, 0o600)
+        rc, out, err = fake.run("postinst", "configure", OLD, root_owned=(fake.net["conf_dir"] + "/gridcoin.conf",))
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(os.stat(conf).st_mode & 0o777, 0o640)
+        self.assertNotIn("every account", err)
+
+    def test_a_conf_the_service_owns_is_reported_and_kept(self):
+        for network in NETWORKS:
+            with self.subTest(network=network):
+                fake = FakeRoot(self, network)
+                conf = self.conf(fake)
+                with open(conf, "w", encoding="utf8") as f:
+                    f.write("rpcuser=x\n")
+                os.chmod(conf, 0o600)
+                rc, out, err = fake.run("postinst", "configure", OLD,
+                                        service_owned=(fake.net["conf_dir"] + "/gridcoin.conf",))
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(os.stat(conf).st_mode & 0o777, 0o600)
+                self.assertEqual(fake.calls("chgrp"), [])
+                self.assertEqual([call for call in fake.calls("chown") if conf in call], [])
+                self.assertIn("owned by the service account %s" % fake.net["account"], err)
 
     def write_state(self, fake, text):
         os.makedirs(os.path.dirname(fake.state_path()), exist_ok=True)

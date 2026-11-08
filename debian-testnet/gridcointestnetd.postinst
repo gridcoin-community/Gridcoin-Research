@@ -56,10 +56,20 @@ setup_conf() {
     elif [ ! -e "$CONF" ]; then
         create_conf
     elif [ "$(stat -c %u "$CONF")" = 0 ]; then
-        # A conf of root's (the service ran as gridcoin before): the service account
-        # gridcointestnet must be able to read it, and nobody else. No secret moves.
+        # A conf of root's (the service ran as gridcoin before; no secret moves): the service account must be able to read it. The rest of
+        # its permissions are the administrator's and are kept (a rewrite never narrows what
+        # someone chose); a conf every account can read is reported, with the command.
         chgrp "$ACCOUNT" "$CONF"
-        chmod g=r,o= "$CONF"
+        chmod g+r "$CONF"
+        if [ $((0$(stat -c %a "$CONF") & 4)) -ne 0 ]; then
+            echo "$DAEMON: $CONF can be read by every account on this machine, and it holds the RPC password." >&2
+            echo "To keep it to root and the service account: chmod o= $CONF" >&2
+        fi
+    elif [ "$(stat -c %U "$CONF")" = "$ACCOUNT" ]; then
+        # Kept as it is, and reported: the core can rewrite a conf its own account owns, and the
+        # system service's conf is root's so that it cannot.
+        echo "$DAEMON: $CONF is owned by the service account $ACCOUNT, so the core can rewrite its own" >&2
+        echo "configuration. To give it to root, as a new install has it: chown root:$ACCOUNT $CONF" >&2
     fi
 }
 
