@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include <init.h>
 #include <util.h>
 #include <util/proc_hardening.h>
 
@@ -29,23 +30,27 @@ struct ConfArgsManager : public ArgsManager
 
 BOOST_AUTO_TEST_SUITE(proc_hardening_tests)
 
-// The override is taken from the command line before the config file is read, as main does, so a conf line
-// cannot enable it.
+// The override is registered command line only (SetupServerArgs), so a config file line cannot enable it.
 BOOST_AUTO_TEST_CASE(override_is_command_line_only)
 {
+    gArgs.ClearArgs();
+    struct ClearOnExit { ~ClearOnExit() { gArgs.ClearArgs(); } } clear_on_exit;
+    SetupServerArgs();
+
+    const auto flags = gArgs.GetRegisteredArgFlags();
+    BOOST_REQUIRE(flags.count("-debugallowtracer"));
+    BOOST_CHECK(flags.at("-debugallowtracer") & ArgsManager::COMMAND_LINE_ONLY);
+
     ConfArgsManager args;
-    args.AddArg("-debugallowtracer", "", ArgsManager::ALLOW_BOOL, OptionsCategory::OPTIONS);
+    args.AddArg("-debugallowtracer", "", flags.at("-debugallowtracer"), OptionsCategory::OPTIONS);
 
     const char* argv[] = {"gridcoinresearchd"};
     std::string error;
     BOOST_REQUIRE(args.ParseParameters(1, argv, error));
-    const bool allow_tracer = args.GetBoolArg("-debugallowtracer", false);
-
     BOOST_REQUIRE(args.ReadConf("debugallowtracer=1\n"));
-    BOOST_CHECK(args.GetBoolArg("-debugallowtracer", false));
 
-    BOOST_CHECK(!allow_tracer);
-    BOOST_CHECK(DecideTracer(4242, allow_tracer) == TracerVerdict::Refuse);
+    BOOST_CHECK(!args.GetBoolArg("-debugallowtracer", false));
+    BOOST_CHECK(DecideTracer(4242, args.GetBoolArg("-debugallowtracer", false)) == TracerVerdict::Refuse);
 }
 
 BOOST_AUTO_TEST_CASE(parse_tracer_pid)
