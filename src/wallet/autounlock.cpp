@@ -47,7 +47,13 @@ std::optional<SecureString> FetchAutoUnlockPassphrase()
 namespace wallet {
 bool TryAutoUnlockStakingOnly(CWallet& wallet, const std::function<std::optional<SecureString>()>& fetch)
 {
-    if (!wallet.IsCrypted() || !wallet.IsLocked()) {
+    if (!wallet.IsCrypted()) return false;
+
+    // An unlock or a capability that began before the autounlock ran (an RPC
+    // request with the passphrase, after warmup) has the wallet unlocked for
+    // staking only already, and locks it again when it ends.
+    if (!wallet.IsLocked()) {
+        LogPrintf("autounlock: the wallet was already unlocked when the autounlock ran; it was not used");
         return false;
     }
 
