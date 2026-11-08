@@ -50,6 +50,64 @@ $ErrorActionPreference = 'Stop'
 # [CmdletBinding()], so the default is set here.
 if (-not $SignerFile) { $SignerFile = Join-Path $PSScriptRoot 'release-signer.txt' }
 
+# An elevated run loads modules only from the system's own module directories.
+$env:PSModulePath = "$PSHOME\Modules;$env:ProgramFiles\WindowsPowerShell\Modules"
+
+# The helpers below are dot-sourced, so their code runs elevated as soon as it is loaded. They,
+# and every directory above them, are checked first, with this copy of Get-GridcoinWriteVector
+# (GridcoinCommon.ps1): the function cannot come from the file it checks. Keep the two in step.
+function Get-PreloadWriteVector {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $allowed = @('S-1-5-18', 'S-1-5-32-544', 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
+    $fileMask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
+    $dirMask = [int]([System.Security.AccessControl.FileSystemRights]'CreateFiles, WriteExtendedAttributes, WriteAttributes, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
+    $inheritOnly = [int][System.Security.AccessControl.PropagationFlags]::InheritOnly
+    $sidType = [System.Security.Principal.SecurityIdentifier]
+
+    $current = $Path
+    while ($current) {
+        try {
+            $acl = Get-Acl -LiteralPath $current
+        } catch {
+            return "the access control list of '$current' could not be read"
+        }
+        $entries = @($acl.Access)
+        if ($entries.Count -eq 0) { return "'$current' has an empty DACL (everyone has full control)" }
+
+        $ownerSid = $null
+        try { $ownerSid = $acl.GetOwner($sidType).Value } catch { $ownerSid = $null }
+        if ($allowed -notcontains $ownerSid) { return "'$current' is owned by $($acl.Owner), who can rewrite its DACL at will" }
+
+        $mask = $fileMask
+        if (Test-Path -LiteralPath $current -PathType Container) { $mask = $dirMask }
+        foreach ($entry in $entries) {
+            if ($entry.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
+            if (([int]$entry.PropagationFlags -band $inheritOnly) -ne 0) { continue }
+            if (([int]$entry.FileSystemRights -band $mask) -eq 0) { continue }
+            $entrySid = $null
+            try { $entrySid = $entry.IdentityReference.Translate($sidType).Value } catch { $entrySid = $null }
+            if ($allowed -notcontains $entrySid) { return "'$current': $($entry.IdentityReference) has '$($entry.FileSystemRights)'" }
+        }
+
+        $parent = Split-Path -Parent $current
+        if (-not $parent -or $parent -eq $current) { return $null }
+        $current = $parent
+    }
+    return $null
+}
+
+foreach ($helper in @((Join-Path $PSScriptRoot 'GridcoinCommon.ps1'), (Join-Path $PSScriptRoot 'Test-GridcoinRelease.ps1'))) {
+    if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) {
+        Write-Error "REFUSED: '$helper' does not exist."
+        exit 1
+    }
+    $vector = Get-PreloadWriteVector -Path $helper
+    if ($vector) {
+        Write-Error "REFUSED: '$helper' can be rewritten by an unprivileged account, so it is not loaded: $vector"
+        exit 1
+    }
+}
+
 . (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')
 . (Join-Path $PSScriptRoot 'Test-GridcoinRelease.ps1')
 
