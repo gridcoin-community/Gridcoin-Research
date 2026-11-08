@@ -73,10 +73,7 @@ private:
 class ProjectTableData
 {
 public:
-    ProjectTableData()
-        : m_sort_column(static_cast<int>(ProjectTableModel::ColumnIndex::Name))
-    {
-    }
+    ProjectTableData() = default;
 
     size_t size() const
     {
@@ -108,8 +105,8 @@ public:
     }
 
 private:
-    int m_sort_column;
-    Qt::SortOrder m_sort_order;
+    int m_sort_column = static_cast<int>(ProjectTableModel::ColumnIndex::Name);
+    Qt::SortOrder m_sort_order = Qt::AscendingOrder;
     std::vector<ProjectRow> m_rows;
 
     void DoSort()
