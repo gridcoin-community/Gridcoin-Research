@@ -2935,6 +2935,49 @@ BOOST_AUTO_TEST_CASE(a_finished_polls_cached_result_survives_any_wall_clock)
 }
 
 //!
+//! A tally reads the beacon history, so an in-line rebuild of the beacon registry leaves no cached poll result: the
+//! next table tallies the finished poll again. With its transaction no longer indexed, that tally cannot read the poll,
+//! so the poll the cache served before the rebuild is missing from the table after it.
+//!
+BOOST_AUTO_TEST_CASE(an_inline_beacon_rebuild_leaves_no_cached_poll_result)
+{
+    grc_test::StateGuard guard;
+    RegistryReset reset;
+    CacheReset cache_reset;
+    LOCK(cs_main);
+
+    const unsigned int bits = pindexGenesisBlock->nBits;
+    const int64_t t0 = GetAdjustedTime() - 10 * DAY;
+    const PollTx poll = MakePollTx("Title", t0);
+    const LinkedTip polled = LinkBlock(pindexGenesisBlock, t0, GRC::Claim(), {poll.tx}, bits);
+    LinkBlock(polled.m_pindex, t0 + 8 * DAY, GRC::Claim(), {}, bits);
+    GRC::GetPollRegistry().Add({poll.contract, poll.tx, polled.m_pindex});
+
+    GRC::PollResultCache& cache = GRC::GetPollResultCache();
+    {
+        const TxIndexScope indexed(poll.tx, polled.m_tx_positions[0]);
+        const std::vector<GRC::PollResultItem> table = cache.BuildPollTable(GRC::NO_FILTER);
+        BOOST_REQUIRE_EQUAL(table.size(), 1U);
+        BOOST_REQUIRE(table[0].result.m_finished);
+    }
+
+    // Served from the cache while nothing it depends on has changed.
+    BOOST_REQUIRE_EQUAL(cache.BuildPollTable(GRC::NO_FILTER).size(), 1U);
+
+    for (const GRC::BeaconRebuildReason reason :
+         {GRC::BeaconRebuildReason::SUPERBLOCK_DISCONNECT, GRC::BeaconRebuildReason::V15_ACTIVATION}) {
+        {
+            const TxIndexScope indexed(poll.tx, polled.m_tx_positions[0]);
+            BOOST_REQUIRE_EQUAL(cache.BuildPollTable(GRC::NO_FILTER).size(), 1U);
+        }
+
+        GRC::RebuildBeaconRegistry(reason);
+
+        BOOST_CHECK(cache.BuildPollTable(GRC::NO_FILTER).empty());
+    }
+}
+
+//!
 //! An open poll's cached result is served at the tip it was tallied on, whatever the wall clock reads, and nowhere
 //! else.
 //!

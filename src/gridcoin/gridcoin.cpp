@@ -16,6 +16,7 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/upgrade.h"
+#include "gridcoin/voting/poll_result_cache.h"
 #include "gridcoin/beacon.h"
 #include "init.h"
 #include "util/fsmodes.h"
@@ -759,6 +760,9 @@ void GRC::RebuildBeaconRegistry(const BeaconRebuildReason reason) EXCLUSIVE_LOCK
     CBlockIndex* pindex_start = BlockFinder::FindByHeight(Params().GetConsensus().BlockV11Height);
 
     ReplayContracts(pindexBest, pindex_start, /* beacons_only */ true);
+
+    // A tally reads the beacon history this rebuild replaced, so no cached poll result can be served after it.
+    GetPollResultCache().Clear();
 
     LogPrintf("INFO: %s: beacon registry rebuild complete in %dms.", __func__, GetTimeMillis() - start_ms);
 }
