@@ -111,6 +111,15 @@ namespace ipc {
 //! a page that reads it reports every wallet short of the 1 GRC mature balance a
 //! claim needs. The minor turns all of it into the "Update the node" hard fail at
 //! connect.
+//!
+//! Also in minor 2: ResearcherSnapshot gained `cpidPresent @36` and
+//! `magnitudePresent @37` (researcher.capnp), which carry `has_cpid` and
+//! `has_magnitude`. The released `hasCpid @1` and `hasMagnitude @7` sit beside
+//! fields named `cpid` and `magnitude`, so mpgen read each as that field's
+//! presence companion and mapped no member to it: neither flag ever crossed, and
+//! the GUI's hasMagnitude() was always false. Additive; an older node leaves
+//! both false, which is what it always sent, and the minor already turns the
+//! mismatch into the "Update the node" hard fail.
 constexpr uint32_t IPC_SCHEMA_MAJOR = 4;
 constexpr uint32_t IPC_SCHEMA_MINOR = 2;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;

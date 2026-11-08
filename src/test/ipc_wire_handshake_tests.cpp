@@ -380,6 +380,9 @@ interfaces::GuiStateSnapshot DistinctSnapshot()
     snap.etts_seconds = 600;
     snap.has_researcher = true;
     snap.researcher.cpid = "abc";
+    snap.researcher.has_cpid = true;
+    snap.researcher.magnitude = 50.0;
+    snap.researcher.has_magnitude = true;
     snap.researcher.has_active_beacon = true;
     return snap;
 }
@@ -408,6 +411,11 @@ void CheckSameSnapshot(const interfaces::GuiStateSnapshot& got, const interfaces
     BOOST_CHECK_EQUAL(got.etts_seconds, want.etts_seconds);
     BOOST_CHECK_EQUAL(got.has_researcher, want.has_researcher);
     BOOST_CHECK_EQUAL(got.researcher.cpid, want.researcher.cpid);
+    // The two presence flags sit beside a value of the same name in the schema,
+    // where mpgen once read each as that value's companion and carried neither.
+    BOOST_CHECK_EQUAL(got.researcher.has_cpid, want.researcher.has_cpid);
+    BOOST_CHECK_EQUAL(got.researcher.magnitude, want.researcher.magnitude);
+    BOOST_CHECK_EQUAL(got.researcher.has_magnitude, want.researcher.has_magnitude);
     BOOST_CHECK_EQUAL(got.researcher.has_active_beacon, want.researcher.has_active_beacon);
 }
 
