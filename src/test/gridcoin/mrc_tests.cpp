@@ -338,8 +338,6 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
 
     LOCK2(cs_main, wallet->cs_wallet);
 
-    pindex->pprev->AddMRCResearcherContext(cpid, 72, 0.0);
-
     BOOST_CHECK(CreateRestOfTheBlock(block, mtxCoinbase, mtxCoinstake, pindex->pprev, mrc_map));
 
     GRC::MRC mrc;

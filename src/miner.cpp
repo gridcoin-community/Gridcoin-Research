@@ -1611,22 +1611,38 @@ bool CreateGridcoinReward(
     nReward += nFees;
 
     if (const GRC::CpidOption cpid = claim.m_mining_id.TryCpid()) {
-        claim.m_research_subsidy = GRC::Tally::GetAccrual(*cpid, blocknew.nTime, pindexPrev);
+        // The claim is formed from the tally. Check the CPID's reward blocks in
+        // the tally against the chain first (Tally::VerifyRewardBlocks()). When
+        // the check does not pass, stake as a non-cruncher and ask for the
+        // accrual snapshot rebuild. The accrual stays pending for a later stake.
+        if (const std::optional<GRC::Tally::RewardBlocks> found =
+                GRC::Tally::VerifyRewardBlocks(*cpid, pindexPrev))
+        {
+            const std::string details = strprintf("cpid=%s %s", cpid->ToString(), found->ToString());
 
-        // If no pending research subsidy value exists, build a non-cruncher claim.
-        // This avoids polluting the block index with non-research reward blocks
-        // that contain CPIDs which increases the effort needed to load research
-        // age context at start-up:
-        //
-        if (claim.m_research_subsidy <= 0) {
-            LogPrintf(
-                "CreateGridcoinReward: No positive research reward pending at "
-                "time of stake. Staking as non-cruncher.");
+            LogPrintf("INFO: CreateGridcoinReward: accrual check: %s. Staking as non-cruncher while research reward "
+                      "claims are paused.", details);
 
+            GRC::Tally::RequestAccrualRebuild(details);
             claim.m_mining_id = GRC::MiningId::ForNoncruncher();
         } else {
-            nReward += claim.m_research_subsidy;
-            claim.m_magnitude = GRC::Quorum::GetMagnitude(*cpid).Floating();
+            claim.m_research_subsidy = GRC::Tally::GetAccrual(*cpid, blocknew.nTime, pindexPrev);
+
+            // If no pending research subsidy value exists, build a non-cruncher claim.
+            // This avoids polluting the block index with non-research reward blocks
+            // that contain CPIDs which increases the effort needed to load research
+            // age context at start-up:
+            //
+            if (claim.m_research_subsidy <= 0) {
+                LogPrintf(
+                    "CreateGridcoinReward: No positive research reward pending at "
+                    "time of stake. Staking as non-cruncher.");
+
+                claim.m_mining_id = GRC::MiningId::ForNoncruncher();
+            } else {
+                nReward += claim.m_research_subsidy;
+                claim.m_magnitude = GRC::Quorum::GetMagnitude(*cpid).Floating();
+            }
         }
     }
 

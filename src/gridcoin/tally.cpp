@@ -22,6 +22,7 @@
 #include "node/ui_interface.h"
 
 #include <algorithm>
+#include <atomic>
 #include <optional>
 #include <unordered_map>
 
@@ -1922,6 +1923,130 @@ bool Tally::RemoveAccount(const Cpid& cpid) {
     }
 
     g_researcher_tally.m_researchers.erase(cpid);
+
+    return true;
+}
+
+// -----------------------------------------------------------------------------
+// Class: Tally -- reward block check and accrual snapshot rebuild
+// -----------------------------------------------------------------------------
+
+namespace {
+//! Set when the miner or MRC creation asks for a rebuild; the scheduled job
+//! clears it when it runs the rebuild.
+std::atomic<bool> g_accrual_rebuild_requested{false};
+
+//! Requests are taken while this is set. It is cleared at most once in a run of
+//! the process.
+std::atomic<bool> g_accrual_rebuild_armed{true};
+
+//! What the check found when the rebuild was asked for, for its log line.
+std::string g_accrual_rebuild_details GUARDED_BY(cs_main);
+
+std::string DescribeBlock(const CBlockIndex* const pindex)
+{
+    if (!pindex) {
+        return "none";
+    }
+
+    return strprintf("%d:%s", pindex->nHeight, pindex->phashBlock ? pindex->GetBlockHash().ToString() : "-");
+}
+} // Anonymous namespace
+
+std::string Tally::RewardBlocks::ToString() const
+{
+    return strprintf("recorded=%s found=%s paid_in=%s amount=%s kind=%s",
+                     DescribeBlock(m_recorded),
+                     DescribeBlock(m_expected),
+                     DescribeBlock(m_paid_in),
+                     FormatMoney(m_amount),
+                     m_paid_in ? (m_mrc ? "mrc" : "stake") : "none");
+}
+
+std::optional<Tally::RewardBlocks> Tally::VerifyRewardBlocks(const Cpid& cpid, const CBlockIndex* const tip)
+{
+    if (!tip) {
+        return std::nullopt;
+    }
+
+    const CBlockIndex* const recorded = GetAccount(cpid).m_last_block_ptr;
+    const int64_t floor = recorded ? recorded->nHeight : Quorum::CurrentSuperblock().m_height;
+
+    const CBlockIndex* pindex = tip;
+
+    for (; pindex && pindex->nHeight > floor; pindex = pindex->pprev) {
+        // The tally records an MRC after the block's own reward, so an MRC for
+        // the CPID decides the last reward block of the block that pays it:
+        for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
+            if (mrc_researcher->m_cpid == cpid) {
+                if (pindex->pprev == recorded) {
+                    return std::nullopt;
+                }
+
+                return RewardBlocks {recorded, pindex->pprev, pindex, mrc_researcher->m_research_subsidy, true};
+            }
+        }
+
+        if (pindex->ResearchSubsidy() > 0) {
+            const CpidOption claim_cpid = pindex->GetMiningId().TryCpid();
+
+            if (claim_cpid && *claim_cpid == cpid) {
+                return RewardBlocks {recorded, pindex, pindex, pindex->ResearchSubsidy(), false};
+            }
+        }
+    }
+
+    // No reward block above the account's last one. That block must be the
+    // chain's block at its height:
+    if (recorded && pindex != recorded) {
+        return RewardBlocks {recorded, nullptr, nullptr, 0, false};
+    }
+
+    return std::nullopt;
+}
+
+void Tally::RequestAccrualRebuild(const std::string& details)
+{
+    if (g_accrual_rebuild_armed && !g_accrual_rebuild_requested) {
+        g_accrual_rebuild_details = details;
+        g_accrual_rebuild_requested = true;
+    }
+}
+
+bool Tally::AccrualRebuildRequested()
+{
+    return g_accrual_rebuild_requested;
+}
+
+bool Tally::RunRequestedAccrualRebuild(const CpidOption& cpid)
+{
+    if (!g_accrual_rebuild_requested.exchange(false)) {
+        return true;
+    }
+
+    LogPrintf("INFO: %s: rebuilding the accrual snapshots (accrual check: %s).", __func__, g_accrual_rebuild_details);
+
+    if (!g_researcher_tally.RebuildAccrualSnapshots()) {
+        g_accrual_rebuild_armed = false;
+
+        return error("%s: the accrual snapshot rebuild failed.", __func__);
+    }
+
+    if (!cpid) {
+        return true;
+    }
+
+    if (const std::optional<RewardBlocks> found = VerifyRewardBlocks(*cpid, pindexBest)) {
+        g_accrual_rebuild_armed = false;
+        strMiscWarning = _("Research reward claims are paused for this run of the wallet.");
+
+        LogPrintf("INFO: %s: accrual check: cpid=%s %s. Research reward claims are paused for this run.",
+                  __func__, cpid->ToString(), found->ToString());
+
+        return true;
+    }
+
+    LogPrintf("INFO: %s: accrual check passes: cpid=%s.", __func__, cpid->ToString());
 
     return true;
 }

@@ -684,6 +684,23 @@ void SchedulePollNotifications(CScheduler& scheduler)
     scheduler.scheduleEvery(NotifyPoll, std::chrono::minutes{5});
 }
 
+void ScheduleAccrualRebuild(CScheduler& scheduler)
+{
+    // Every minute, run the accrual snapshot rebuild that the miner or MRC creation asked for. A very thin call while
+    // none is pending. Please see Tally::VerifyRewardBlocks().
+
+    scheduler.scheduleEvery([]{
+        if (!Tally::AccrualRebuildRequested()) {
+            return;
+        }
+
+        const CpidOption cpid = Researcher::Get()->Id().TryCpid();
+
+        LOCK(cs_main);
+        Tally::RunRequestedAccrualRebuild(cpid);
+    }, std::chrono::minutes{1});
+}
+
 } // Anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -822,6 +839,7 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
     ScheduleBackups(scheduler);
     ScheduleUpdateChecks(scheduler);
     ScheduleRegistriesPassivation(scheduler);
+    ScheduleAccrualRebuild(scheduler);
 
 #if HAVE_SYSTEM
     SchedulePollNotifications(scheduler);

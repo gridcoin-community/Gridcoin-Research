@@ -391,6 +391,15 @@ void GRC::CreateMRC(CBlockIndex* pindex,
     mrc.m_mining_id = researcher->Id();
 
     if (const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid()) {
+        // As in the miner: when the check of the CPID's reward blocks does not pass, ask for the accrual snapshot
+        // rebuild and form no MRC until it has run. The rebuild's log line carries what the check found.
+        if (const std::optional<GRC::Tally::RewardBlocks> found = GRC::Tally::VerifyRewardBlocks(*cpid, pindex)) {
+            GRC::Tally::RequestAccrualRebuild(strprintf("cpid=%s %s", cpid->ToString(), found->ToString()));
+
+            throw MRC_error(strprintf("%s: Research reward claims are paused; try again in a few minutes.",
+                                      __func__));
+        }
+
         mrc.m_research_subsidy = GRC::Tally::GetAccrual(*cpid, pindex->nTime, pindex);
 
         // If no pending research subsidy value exists, bail.
