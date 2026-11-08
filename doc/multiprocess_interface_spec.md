@@ -544,9 +544,8 @@ and is 0 before the first update).
 
 The node computes updates at most every four seconds (once synced, about one a
 block) and serves requests and quotes outside that interval, on its cache's own
-thread. Callbacks arrive from that thread, and the node waits for each to
-return: a slow callback delays the node's next push and quote answer, so enqueue
-and return (§5.1).
+thread. Callbacks arrive on the cache's own thread; a handler enqueues the
+value and returns (§5.1).
 
 ---
 

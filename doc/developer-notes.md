@@ -1377,9 +1377,10 @@ GUI
     The lock is taken in the core, after the IPC boundary, for the action only.
     The action re-checks the state in the core and does not trust what the GUI
     last showed.
-  - A push is computed on a core worker thread after the tip changes, never
-    inside block connection, and is coalesced during sync, so a catch-up makes a
-    few pushes and not one per block.
+  - A push is computed by the core, never by the GUI: in SetBestChain's scope
+    under the `cs_main` it already holds, or on the cache's own thread, which
+    takes `cs_main` first. Updates triggered by blocks are at least four seconds
+    apart, so a catch-up makes a few pushes and not one per block.
   - The GUI thread never blocks, even on a user action: the action runs off the
     GUI thread and reports back.
   - A rare race is never fixed with a lock that makes a freeze certain for
