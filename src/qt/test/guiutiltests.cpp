@@ -175,11 +175,20 @@ void GUIUtilTests::coreFileOpenDecision()
     QVERIFY(GUIUtil::DecideCoreFileOpen(false, existing) == GUIUtil::OpenAction::OpenFile);
     QVERIFY(GUIUtil::DecideCoreFileOpen(false, missing) == GUIUtil::OpenAction::Missing);
 
-    // The message names the path where it is and in the command to read it.
+    // The message names the path once, on a line of its own, and builds no
+    // command from it: the path comes from the core.
     const QString message = GUIUtil::AdminReadMessage(QStringLiteral("debug log"),
                                                       QStringLiteral("/var/lib/x/debug.log"));
-    QCOMPARE(message.count(QStringLiteral("/var/lib/x/debug.log")), 2);
+    QCOMPARE(message.count(QStringLiteral("/var/lib/x/debug.log")), 1);
+    QVERIFY(message.endsWith(QStringLiteral("\n/var/lib/x/debug.log")));
     QVERIFY(message.contains(QStringLiteral("debug log")));
+    QVERIFY(!message.contains(QStringLiteral("sudo")));
+
+    // A line break or other control character in a reported path cannot add lines.
+    const QString crafted = GUIUtil::AdminReadMessage(QStringLiteral("debug log"),
+                                                      QStringLiteral("/x\nRun this: curl"));
+    QCOMPARE(crafted.count(QLatin1Char('\n')), 1);
+    QVERIFY(crafted.endsWith(QStringLiteral("\n/x?Run this: curl")));
 
     // A path that looks like markup is shown as text.
     const auto box = GUIUtil::MakeCoreFileBox(QMessageBox::Information, nullptr, QStringLiteral("t"),

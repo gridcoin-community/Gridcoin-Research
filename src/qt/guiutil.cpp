@@ -484,16 +484,25 @@ OpenAction DecideCoreFileOpen(bool core_other_account, const fs::path& path)
     return fs::exists(path) ? OpenAction::OpenFile : OpenAction::Missing;
 }
 
-QString AdminReadMessage(const QString& what, const QString& path)
+QString AdminReadMessage(const QString& what, const QString& reported_path)
 {
+    // The path comes from the core. It is shown on a line of its own and in no
+    // command, and a control character in it, a line break included, is shown
+    // as "?", so a core that reports a crafted path cannot add lines that read
+    // as advice.
+    QString path = reported_path;
+    for (QChar& c : path) {
+        if (c.unicode() < 0x20 || c.unicode() == 0x7f) c = QLatin1Char('?');
+    }
+
 #ifdef WIN32
     return QObject::tr("The core runs under the service account, so its %1 is not readable from your account. "
-                       "It is at %2. Read it by opening %3 from an administrator account.")
-        .arg(what, path, path);
+                       "Open it from an administrator account. It is at:\n%2")
+        .arg(what, path);
 #else
     return QObject::tr("The core runs under the service account, so its %1 is not readable from your account. "
-                       "It is at %2. Read it as an administrator, for example: sudo less %3")
-        .arg(what, path, path);
+                       "Read it as an administrator. It is at:\n%2")
+        .arg(what, path);
 #endif
 }
 
@@ -541,7 +550,7 @@ void openCoreFile(const GuiIpcInfo& info, const QString& what, const std::string
 #endif
 
     if (!res) {
-        LogPrintf("GUI: no application could open a core file; check the operating system file associations\n");
+        LogPrintf("GUI: no application could open a core file; check the operating system file associations");
         MakeCoreFileBox(QMessageBox::Critical, parent, QObject::tr("File Association Error"),
                         QObject::tr("Unable to open the %1. Please check your operating system"
                                     " file associations.").arg(what))->exec();
