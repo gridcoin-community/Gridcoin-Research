@@ -489,6 +489,50 @@ BOOST_AUTO_TEST_CASE(submit_refuses_a_higher_fee_than_confirmed_and_broadcasts_n
     BOOST_CHECK_EQUAL(mempool.size(), pool_txs);
 }
 
+// DESIGN rule: a user action re-checks the state in the core. The GUI's eligibility
+// comes from a pushed snapshot that can be seconds old, so the core refuses a
+// submit while the tip has fallen behind, with nothing built or sent. The fixture's
+// StateGuard puts the clock back.
+BOOST_AUTO_TEST_CASE(submit_refuses_while_out_of_sync_and_broadcasts_nothing)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    account.m_accrual = 72;
+    g_previous_block_time = GetAdjustedTime();
+
+    LOCK(cs_main);
+    pindexBest = pindex->pprev;
+    nBestHeight = pindexBest->nHeight;
+
+    interfaces::GuiStateSnapshot current;
+    current.out_of_sync = false;
+    current.has_researcher = true;
+    current.researcher.has_active_beacon = true;
+
+    const node::GuiCache::Compute compute = node::MakeProductionCompute();
+    constexpr CAmount boost = 1;
+    const interfaces::MRCSnapshot quote = compute.mrc_quote(boost, current);
+    BOOST_REQUIRE_MESSAGE(!quote.create_error, quote.create_error_msg);
+    BOOST_REQUIRE(!quote.boosted_fee_error);
+    BOOST_REQUIRE_GT(quote.reward, quote.fee);
+
+    const size_t wallet_txs = WITH_LOCK(wallet->cs_wallet, return wallet->mapWallet.size());
+    const unsigned long pool_txs = mempool.size();
+
+    const std::unique_ptr<interfaces::MRC> mrc = interfaces::MakeMRC(wallet);
+
+    // The tip is now 900 s old (the limit), so the node is out of sync.
+    SetMockTime(GetTime() + 900);
+    BOOST_REQUIRE(OutOfSyncByAge());
+
+    const interfaces::MRCSubmitResult res = mrc->submitConfirmed(boost, /*wallet_locked=*/false,
+                                                                 quote.fee, quote.reward - quote.fee);
+    BOOST_CHECK(!res.success);
+    BOOST_CHECK(!res.terms_changed);
+    BOOST_CHECK_EQUAL(res.error, "The wallet is out of sync; the claim was not sent.");
+    BOOST_CHECK_EQUAL(WITH_LOCK(wallet->cs_wallet, return wallet->mapWallet.size()), wallet_txs);
+    BOOST_CHECK_EQUAL(mempool.size(), pool_txs);
+}
+
 BOOST_AUTO_TEST_CASE(terms_hold_only_when_paying_no_more_and_receiving_no_less)
 {
     // The user confirmed paying at most 10 and receiving at least 90.

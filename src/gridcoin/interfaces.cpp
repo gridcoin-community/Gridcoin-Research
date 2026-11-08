@@ -349,6 +349,14 @@ private:
             return res;
         }
 
+        // A user action re-checks the state in the core. The GUI's eligibility comes from a pushed
+        // snapshot that can be seconds old, so a claim could otherwise be built and sent against a tip
+        // that has fallen behind. Nothing has been built yet.
+        if (OutOfSyncByAge()) {
+            res.error = "The wallet is out of sync; the claim was not sent.";
+            return res;
+        }
+
         LOCK(m_wallet->cs_wallet);
 
         GRC::MRC mrc;
