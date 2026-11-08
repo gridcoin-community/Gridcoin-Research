@@ -278,6 +278,7 @@ void WalletTxStore::workerLoop()
 
         IntakeItem item = std::move(m_intake.front());
         m_intake.pop_front();
+        m_worker_busy = true;
 
         // Drop cs_intake while doing the O(N) store maintenance (which takes
         // cs_store). cs_intake and cs_store are NEVER held simultaneously, so the
@@ -302,6 +303,7 @@ void WalletTxStore::workerLoop()
                           "unknown exception", __func__);
             }
         }
+        m_worker_busy = false;
     }
 }
 

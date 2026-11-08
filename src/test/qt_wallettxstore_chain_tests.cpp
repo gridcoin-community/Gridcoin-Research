@@ -80,18 +80,16 @@ void registerProductionViews(WalletTxStore& store)
     store.registerView(GRC::VIEW_OVERVIEW, overview, GRC::TXCOL_STATUS, GRC::TXSORT_DESC);
 }
 
-//! Wait until the intake worker stops producing, so a test can assert on the
-//! ABSENCE of per-view events without racing it.
-void settle(WalletEventQueue& q)
+//! Wait until the intake worker has applied every queued item, so a test can
+//! assert on the ABSENCE of per-view events without racing it. The worker's own
+//! state decides it, not the event queue: a quiet queue can also mean a worker
+//! that has not been scheduled yet.
+void settle(WalletTxStore& store)
 {
-    std::size_t last = q.size();
-    int stable = 0;
-    for (int i = 0; i < 400 && stable < 4; ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        const std::size_t now = q.size();
-        stable = (now == last) ? stable + 1 : 0;
-        last = now;
+    for (int i = 0; i < 30000 && !store.IntakeIdleForTests(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+    BOOST_REQUIRE_MESSAGE(store.IntakeIdleForTests(), "the store-worker did not finish its intake within 30 s");
 }
 
 //! A mock chain holding a block that is BUILT but not yet CONNECTED — exactly the
@@ -380,13 +378,13 @@ std::map<int, ViewTally> Tally(WalletEventQueue& q)
 }
 
 //! Drive the real per-tip refresh, as onBlocksChanged does, and let the worker settle.
-void RefreshTip(WalletTxStore& store, WalletEventQueue& q)
+void RefreshTip(WalletTxStore& store)
 {
     {
         LOCK(cs_main);
         store.applyChainTipRefresh();
     }
-    settle(q);
+    settle(store);
 }
 
 int TipHeight() { return WITH_LOCK(cs_main, return nBestHeight); }
@@ -478,7 +476,7 @@ SentMap InsertFreshCoinstake(WalletTxStore& store, WalletEventQueue& q, const CT
     }
     parts_out = recs.size();
     store.enqueueInsert(recs, /*block_known=*/true);
-    settle(q);
+    settle(store);
     SentMap sent;
     Absorb(sent, Tally(q));
     BOOST_REQUIRE_EQUAL(sent.size(), 2 * recs.size());   // both views, every part
@@ -522,7 +520,7 @@ BOOST_AUTO_TEST_CASE(coinstakeFlipsIntoBothViewsOnRealChainTipRefresh)
     // yet the tip. That is the window in which the record must stay volatile so the
     // per-tip refresh below can ripen it -- the invariant this case exists to prove.
     store.enqueueInsert(recs, /*block_known=*/true);
-    settle(q);
+    settle(store);
 
     // Masked in both production views while NotAccepted — the invariant that makes
     // the flip-in load-bearing.
@@ -566,7 +564,7 @@ BOOST_AUTO_TEST_CASE(primeRebuildsCoinstakeRowsFromTheWallet)
     store.start();
 
     store.prime(false, 0);
-    settle(q);
+    settle(store);
 
     const std::size_t parts = producerRecordsFor(cs_hash).size();
     BOOST_REQUIRE(parts > 0);
@@ -627,7 +625,7 @@ BOOST_AUTO_TEST_CASE(oneUnrefreshableTxDoesNotFreezeTheRestOfTheWallet)
         good_hashes.push_back(cs.GetHash());
         store.enqueueInsert(producerRecordsFor(cs.GetHash()), /*block_known=*/true);
     }
-    settle(q);
+    settle(store);
 
     // All masked while NotAccepted.
     BOOST_CHECK_EQUAL(viewRowCount(store, GRC::VIEW_DETAILED), 0u);
@@ -655,7 +653,7 @@ BOOST_AUTO_TEST_CASE(oneUnrefreshableTxDoesNotFreezeTheRestOfTheWallet)
     // the earlier assertions do. Without this the check below races the worker
     // and reads an empty view on a loaded machine -- observed as "0 != 40" while
     // the rest of the suite was running, and not reproducible in isolation.
-    settle(q);
+    settle(store);
 
     // Every good transaction must have flipped in, wherever the poison record
     // landed in the bucket order. Two parts each (stake return + sidestake).
@@ -723,7 +721,7 @@ BOOST_AUTO_TEST_CASE(primeThatThrowsMidRescanStillReleasesTheIntakeWorker)
     InjectConfirmedTx(good, chain.hash_fresh);
 
     store.enqueueInsert(producerRecordsFor(good_hash), /*block_known=*/true);
-    settle(q);
+    settle(store);
 
     BOOST_CHECK_MESSAGE(store.rowForKey(GRC::VIEW_DETAILED, good_hash, 0) >= 0,
                         "the intake worker never resumed after prime() threw - "
@@ -762,7 +760,7 @@ BOOST_AUTO_TEST_CASE(heightOnlyRefreshesEmitNothingUntilTheMaturityFlip)
     int flip_tips = 0;
     for (int depth = 2; depth <= maturity_depth + 3; ++depth) {
         chain.extend();
-        RefreshTip(store, q);
+        RefreshTip(store);
         std::map<int, ViewTally> t = Tally(q);
         const std::map<int, TransactionStatus> truth = FreshStatuses(cs.GetHash());
         BOOST_REQUIRE_EQUAL(truth.begin()->second.depth, depth);
@@ -814,13 +812,13 @@ BOOST_AUTO_TEST_CASE(receivedTxEmitsOnlyAtTheTrustAndConfirmationFlips)
     BOOST_REQUIRE_EQUAL(static_cast<int>(recs[0].status.status), static_cast<int>(TransactionStatus::Confirming));
     BOOST_REQUIRE(!recs[0].status.countsForBalance);
     store.enqueueInsert(recs, /*block_known=*/true);
-    settle(q);
+    settle(store);
     Tally(q);
 
     std::vector<int> change_depths;
     for (int depth = 2; depth <= TransactionRecord::RecommendedNumConfirmations + 3; ++depth) {
         chain.extend();
-        RefreshTip(store, q);
+        RefreshTip(store);
         std::map<int, ViewTally> t = Tally(q);
         if (t[GRC::VIEW_DETAILED].changes > 0) change_depths.push_back(depth);
     }
@@ -849,11 +847,11 @@ BOOST_AUTO_TEST_CASE(aTipThatMovesBackIsAlwaysSent)
 
     for (int i = 0; i < 4; ++i) {
         chain.extend();
-        RefreshTip(store, q);
+        RefreshTip(store);
         BOOST_CHECK_EQUAL(Tally(q)[GRC::VIEW_DETAILED].changes, 0);
     }
     chain.disconnectTip();
-    RefreshTip(store, q);
+    RefreshTip(store);
     std::map<int, ViewTally> t = Tally(q);
     BOOST_CHECK_EQUAL(t[GRC::VIEW_DETAILED].changes, static_cast<int>(parts));
     Absorb(sent, t);
@@ -889,7 +887,7 @@ BOOST_AUTO_TEST_CASE(aRefreshThatThrowsIsResentToEveryViewOnTheNextTip)
         // Height-only tips up to the one before the flip.
         for (int depth = 2; depth < maturity_depth; ++depth) {
             chain.extend();
-            RefreshTip(store, q);
+            RefreshTip(store);
             Tally(q);
         }
 
@@ -904,14 +902,14 @@ BOOST_AUTO_TEST_CASE(aRefreshThatThrowsIsResentToEveryViewOnTheNextTip)
             throw std::runtime_error("injected refresh failure");
         });
         chain.extend();
-        RefreshTip(store, q);
+        RefreshTip(store);
         store.SetRefreshFaultHookForTests(nullptr);
         BOOST_REQUIRE_MESSAGE(thrown, "stage " << static_cast<int>(stage) << " was never reached");
         Absorb(sent, Tally(q));
 
         // The next tip: every (view, part) must end up holding the flipped status.
         chain.extend();
-        RefreshTip(store, q);
+        RefreshTip(store);
         Absorb(sent, Tally(q));
         const std::map<int, TransactionStatus> truth = FreshStatuses(cs.GetHash());
         for (const auto& [idx, st] : truth) {
@@ -921,7 +919,7 @@ BOOST_AUTO_TEST_CASE(aRefreshThatThrowsIsResentToEveryViewOnTheNextTip)
 
         // And the tip after that is quiet: the marker was cleared and the record is terminal.
         chain.extend();
-        RefreshTip(store, q);
+        RefreshTip(store);
         std::map<int, ViewTally> after = Tally(q);
         BOOST_CHECK_EQUAL(after[GRC::VIEW_DETAILED].changes + after[GRC::VIEW_OVERVIEW].changes, 0);
 
@@ -967,13 +965,13 @@ BOOST_AUTO_TEST_CASE(sentTxEmitsOnlyAtTheConfirmationFlip)
     BOOST_REQUIRE_EQUAL(static_cast<int>(recs[0].status.status), static_cast<int>(TransactionStatus::Confirming));
     BOOST_REQUIRE(recs[0].status.countsForBalance);
     store.enqueueInsert(recs, /*block_known=*/true);
-    settle(q);
+    settle(store);
     Tally(q);
 
     std::vector<int> change_depths;
     for (int depth = 2; depth <= TransactionRecord::RecommendedNumConfirmations + 3; ++depth) {
         chain.extend();
-        RefreshTip(store, q);
+        RefreshTip(store);
         if (Tally(q)[GRC::VIEW_DETAILED].changes > 0) change_depths.push_back(depth);
     }
     const std::vector<int> want{TransactionRecord::RecommendedNumConfirmations};
@@ -1006,7 +1004,7 @@ BOOST_AUTO_TEST_CASE(aForcedRefreshIsSentOnceThenTheGateReturns)
 
     for (int depth = 2; depth <= 4; ++depth) {
         chain.extend();
-        RefreshTip(store, q);
+        RefreshTip(store);
         Absorb(sent, Tally(q));
     }
 
@@ -1018,7 +1016,7 @@ BOOST_AUTO_TEST_CASE(aForcedRefreshIsSentOnceThenTheGateReturns)
         throw std::runtime_error("injected refresh failure");
     });
     chain.extend();
-    RefreshTip(store, q);
+    RefreshTip(store);
     store.SetRefreshFaultHookForTests(nullptr);
     BOOST_REQUIRE(thrown);
     std::map<int, ViewTally> at_throw = Tally(q);
@@ -1027,7 +1025,7 @@ BOOST_AUTO_TEST_CASE(aForcedRefreshIsSentOnceThenTheGateReturns)
 
     // Depth 6, height-only, but forced: every part re-sent to the detailed view.
     chain.extend();
-    RefreshTip(store, q);
+    RefreshTip(store);
     std::map<int, ViewTally> forced = Tally(q);
     BOOST_CHECK_EQUAL(forced[GRC::VIEW_DETAILED].changes, static_cast<int>(parts));
     BOOST_CHECK_GE(forced[GRC::VIEW_OVERVIEW].changes + forced[GRC::VIEW_OVERVIEW].inserts, 1);
@@ -1036,7 +1034,7 @@ BOOST_AUTO_TEST_CASE(aForcedRefreshIsSentOnceThenTheGateReturns)
 
     // Depth 7: the marker was cleared by that clean pass; height-only is gated again.
     chain.extend();
-    RefreshTip(store, q);
+    RefreshTip(store);
     std::map<int, ViewTally> after = Tally(q);
     BOOST_CHECK_EQUAL(after[GRC::VIEW_DETAILED].changes + after[GRC::VIEW_OVERVIEW].changes, 0);
     Absorb(sent, after);
@@ -1067,7 +1065,7 @@ BOOST_AUTO_TEST_CASE(aThrowAfterACursorMovedARowResetsEveryView)
     BOOST_REQUIRE(!recs.empty());
     BOOST_REQUIRE_EQUAL(static_cast<int>(recs[0].status.status), static_cast<int>(TransactionStatus::NotAccepted));
     store.enqueueInsert(recs, /*block_known=*/true);
-    settle(q);
+    settle(store);
     q.drain();
     BOOST_REQUIRE_EQUAL(viewRowCount(store, GRC::VIEW_DETAILED), 0u);   // masked while NotAccepted
 
@@ -1078,7 +1076,7 @@ BOOST_AUTO_TEST_CASE(aThrowAfterACursorMovedARowResetsEveryView)
         thrown = true;
         throw std::runtime_error("injected refresh failure");
     });
-    RefreshTip(store, q);
+    RefreshTip(store);
     store.SetRefreshFaultHookForTests(nullptr);
     BOOST_REQUIRE(thrown);
 
@@ -1094,7 +1092,7 @@ BOOST_AUTO_TEST_CASE(aThrowAfterACursorMovedARowResetsEveryView)
 
     // The next refresh is forced (the hash is marked): the remaining parts flip in with their
     // own Inserts, and every view ends up holding every part.
-    RefreshTip(store, q);
+    RefreshTip(store);
     std::map<int, ViewTally> next = Tally(q);
     BOOST_CHECK_EQUAL(next[GRC::VIEW_DETAILED].inserts, static_cast<int>(recs.size()) - 1);
     BOOST_CHECK_EQUAL(viewRowCount(store, GRC::VIEW_DETAILED), recs.size());
