@@ -7,8 +7,10 @@
 #ifdef __linux__
 
 #include <config/gridcoin-config.h>
+#include <test/umask_guard.h>
 #include <tinyformat.h>
 #include <util/childreaper.h>
+#include <util/dir_permissions.h>
 
 #include <algorithm>
 #include <atomic>
@@ -135,6 +137,19 @@ BOOST_AUTO_TEST_CASE(run_shell_command_returns_exit_status)
     BOOST_REQUIRE(killed != -1);
     BOOST_CHECK(WIFSIGNALED(killed));
     BOOST_CHECK_EQUAL(WTERMSIG(killed), 9);
+}
+
+// The node runs with an owner-only umask (util::SetOwnerOnlyUmask). A command it
+// runs for the user, as the *notify options do, gets the umask the process
+// started with back, so a script makes its files as it would when run by hand.
+BOOST_AUTO_TEST_CASE(a_shell_command_gets_the_umask_the_process_started_with)
+{
+    const grc_test::UmaskGuard started_with{022};
+    util::SetOwnerOnlyUmask();
+
+    const int status = util::RunShellCommand("[ \"$(umask)\" = 0022 ]");
+    BOOST_REQUIRE(status != -1);
+    BOOST_CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 0);
 }
 
 BOOST_AUTO_TEST_CASE(stop_without_start_and_repeated_calls_are_safe)

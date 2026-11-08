@@ -106,6 +106,12 @@ bool RestrictErrorMeansNoModes(int err);
 //! inherits.
 void SetOwnerOnlyUmask();
 
+//! The umask SetOwnerOnlyUmask() replaced, when it replaced one other than the
+//! owner-only mask itself. The commands the node runs for the user (the *notify
+//! options) get it back, so a script makes its files as it would when the user
+//! runs it by hand. Always empty on Windows.
+std::optional<unsigned int> InheritedUmask();
+
 #ifdef WIN32
 //! The owner-only access list: owned by this process's token user, with that user
 //! and SYSTEM at FILE_ALL_ACCESS (SYSTEM named once when it is the user), inherited

@@ -8,6 +8,8 @@
 
 #include <config/gridcoin-config.h>
 #include <logging.h>
+#include <tinyformat.h>
+#include <util/dir_permissions.h>
 #include <util/threadnames.h>
 
 #include <atomic>
@@ -16,6 +18,7 @@
 #include <condition_variable>
 #include <initializer_list>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <thread>
 
@@ -177,10 +180,17 @@ void ReaperLoop()
 
 int RunShellCommand(const std::string& command)
 {
+    // The node runs with an owner-only umask (SetOwnerOnlyUmask). A command it
+    // runs for the user gets the umask the process started with back, so a
+    // notify script makes its files as it would when run by hand. posix_spawn
+    // has no umask attribute, so the shell sets it.
+    const std::optional<unsigned int> inherited = InheritedUmask();
+    const std::string script = inherited ? strprintf("umask %03o; %s", *inherited, command) : command;
+
     char sh[] = "sh";
     char dash_c[] = "-c";
     // posix_spawn takes a non-const argv but does not modify the strings.
-    char* const argv[] = {sh, dash_c, const_cast<char*>(command.c_str()), nullptr};
+    char* const argv[] = {sh, dash_c, const_cast<char*>(script.c_str()), nullptr};
     return SpawnAndWait("/bin/sh", argv);
 }
 

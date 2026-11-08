@@ -8,6 +8,7 @@
 #include "util/win_acl.h"
 #include "util/syserror.h"
 
+#include <atomic>
 #include <cerrno>
 #include <stdexcept>
 #include <string>
@@ -94,11 +95,25 @@ void VerifyOwnerOnlyDacl(const fs::path& path)
 }
 #endif // WIN32
 
+namespace {
+//! The umask SetOwnerOnlyUmask() replaced, or -1.
+std::atomic<int> g_inherited_umask{-1};
+} // namespace
+
 void SetOwnerOnlyUmask()
 {
 #ifndef WIN32
-    ::umask(077);
+    const mode_t replaced = ::umask(077);
+    // A second call replaces the owner-only mask itself; the first answer stands.
+    if (replaced != 077) g_inherited_umask.store(static_cast<int>(replaced));
 #endif
+}
+
+std::optional<unsigned int> InheritedUmask()
+{
+    const int mask = g_inherited_umask.load();
+    if (mask < 0) return std::nullopt;
+    return static_cast<unsigned int>(mask);
 }
 
 #ifndef WIN32
