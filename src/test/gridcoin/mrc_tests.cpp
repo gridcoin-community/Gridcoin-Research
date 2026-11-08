@@ -10,6 +10,7 @@
 #include <gridcoin/mrc.h>
 #include <gridcoin/tally.h>
 #include <interfaces/gui_state.h>
+#include <interfaces/mrc.h>
 #include <key.h>
 #include <logging.h>
 #include <miner.h>
@@ -17,6 +18,7 @@
 #include <primitives/transaction.h>
 #include <rpc/blockchain.h>
 #include <test/state_guard.h>
+#include <txmempool.h>
 #include <test/test_gridcoin.h>
 
 #include <functional>
@@ -430,6 +432,61 @@ BOOST_AUTO_TEST_CASE(the_gui_cache_quote_is_the_trial_at_the_boost_asked)
     BOOST_CHECK(!quote.create_error);
     BOOST_CHECK_EQUAL(quote.reward, 0);
     BOOST_CHECK_EQUAL(quote.fee, 0);
+}
+
+// DESIGN rule: a submit whose rebuilt fee is higher, or whose net payout is lower,
+// than the terms the user confirmed is refused with the fresh figures and
+// broadcasts nothing. This runs the real MRCImpl::Submit on the mock chain of the
+// quote case above, with the fixture wallet signing the rebuilt claim.
+BOOST_AUTO_TEST_CASE(submit_refuses_a_higher_fee_than_confirmed_and_broadcasts_nothing)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    account.m_accrual = 72;
+    g_previous_block_time = GetAdjustedTime();
+
+    LOCK(cs_main);
+    pindexBest = pindex->pprev;
+    nBestHeight = pindexBest->nHeight;
+
+    interfaces::GuiStateSnapshot current;
+    current.out_of_sync = false;
+    current.has_researcher = true;
+    current.researcher.has_active_beacon = true;
+
+    const node::GuiCache::Compute compute = node::MakeProductionCompute();
+    // The fee the user confirms is the quoted one: the minimum plus a boost of one
+    // unit (the mock chain's minimum fee is zero).
+    constexpr CAmount boost = 1;
+    const interfaces::MRCSnapshot quote = compute.mrc_quote(boost, current);
+    BOOST_REQUIRE_MESSAGE(!quote.create_error, quote.create_error_msg);
+    BOOST_REQUIRE(!quote.boosted_fee_error);
+    BOOST_REQUIRE_GT(quote.reward, quote.fee);
+    BOOST_REQUIRE_EQUAL(quote.fee, quote.min_fee + boost);
+
+    const size_t wallet_txs = WITH_LOCK(wallet->cs_wallet, return wallet->mapWallet.size());
+    const unsigned long pool_txs = mempool.size();
+
+    const std::unique_ptr<interfaces::MRC> mrc = interfaces::MakeMRC(wallet);
+
+    // Fee: the user confirmed one unit below what the rebuilt claim pays.
+    interfaces::MRCSubmitResult res = mrc->submitConfirmed(boost, /*wallet_locked=*/false,
+                                                           quote.fee - 1, quote.reward - quote.fee);
+    BOOST_CHECK(res.terms_changed);
+    BOOST_CHECK(!res.success);
+    BOOST_CHECK(!res.error.empty());
+    BOOST_CHECK_EQUAL(res.fresh_fee, quote.fee);
+    BOOST_CHECK_EQUAL(res.fresh_reward, quote.reward);
+    BOOST_CHECK_EQUAL(WITH_LOCK(wallet->cs_wallet, return wallet->mapWallet.size()), wallet_txs);
+    BOOST_CHECK_EQUAL(mempool.size(), pool_txs);
+
+    // Net payout: the fee holds, the user confirmed one unit more than it nets.
+    res = mrc->submitConfirmed(boost, /*wallet_locked=*/false, quote.fee, quote.reward - quote.fee + 1);
+    BOOST_CHECK(res.terms_changed);
+    BOOST_CHECK(!res.success);
+    BOOST_CHECK_EQUAL(res.fresh_fee, quote.fee);
+    BOOST_CHECK_EQUAL(res.fresh_reward, quote.reward);
+    BOOST_CHECK_EQUAL(WITH_LOCK(wallet->cs_wallet, return wallet->mapWallet.size()), wallet_txs);
+    BOOST_CHECK_EQUAL(mempool.size(), pool_txs);
 }
 
 BOOST_AUTO_TEST_CASE(terms_hold_only_when_paying_no_more_and_receiving_no_less)
