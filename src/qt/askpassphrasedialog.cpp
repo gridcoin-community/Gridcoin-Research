@@ -398,8 +398,9 @@ void AskPassphraseDialog::accept()
 
                     showEncrypted(tr("Your wallet is now encrypted and locked. The Gridcoin core stops "
                                      "to finish the encryption when you close this message, or after a "
-                                     "minute if it is left open. If it runs as a service it starts again "
-                                     "by itself; otherwise start it again, then reopen the wallet."));
+                                     "minute if it is left open. The system service starts it again by "
+                                     "itself; a core you run yourself, from your own service or task, stays "
+                                     "stopped until you start it again. Then reopen the wallet."));
                     BitcoinGUI::requestQuit();
                 }
             }

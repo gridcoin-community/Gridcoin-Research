@@ -1156,6 +1156,9 @@ void AskPassphraseDialogTests::encryptionMessageSaysWhenTheCoreStops()
     QVERIFY2(run.text.contains(QStringLiteral("The Gridcoin core stops to finish the encryption when you close this "
                                               "message, or after a minute if it is left open.")),
              qPrintable(run.text));
+    // Only the system service starts the core again; a core the user runs stays stopped.
+    QVERIFY2(run.text.contains(QStringLiteral("a core you run yourself")), qPrintable(run.text));
+    QVERIFY2(!run.text.contains(QStringLiteral("If it runs as a service it starts again")), qPrintable(run.text));
     QVERIFY2(run.text.contains(QStringLiteral("IMPORTANT: Any earlier backups of your wallet file")),
              qPrintable(run.text));
     // The fake reports no backups from before the encryption, so none are listed.
