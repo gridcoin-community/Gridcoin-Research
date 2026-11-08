@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <string.h>
 #include <atomic>
+#include <algorithm>
 
 #include <compat/cpuid.h>
 
