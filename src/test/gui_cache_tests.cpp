@@ -756,6 +756,24 @@ BOOST_AUTO_TEST_CASE(stop_joins_while_a_compute_runs)
     GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms);
     cache.AddSubscriber();
 
+    // Declared after the cache, so it runs before the cache is stopped: a
+    // failure that unwinds the case while the timer is held in the hook would
+    // otherwise leave the stop joining a thread nobody can release.
+    struct OpenLatchOnExit
+    {
+        Mutex& mutex;
+        std::condition_variable& cv;
+        bool& released;
+        ~OpenLatchOnExit()
+        {
+            {
+                LOCK(mutex);
+                released = true;
+            }
+            cv.notify_all();
+        }
+    } open_latch{latch_mutex, latch_cv, released};
+
     InScope(cache, GuiCache::CHAIN);
     cache.StartTimer();
     BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
