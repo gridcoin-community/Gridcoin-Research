@@ -187,6 +187,7 @@ BOOST_AUTO_TEST_CASE(untouched_parts_are_not_recomputed)
     BOOST_CHECK_EQUAL(compute.researcher_calls.load(), 1);
 
     // A miner change alone recomputes the miner part and keeps the others.
+    compute.coin_weight = 1000;
     compute.Advance(4000ms);
     InScope(cache, GuiCache::MINER);
 
@@ -203,6 +204,70 @@ BOOST_AUTO_TEST_CASE(untouched_parts_are_not_recomputed)
     BOOST_CHECK(snap.has_mrc);
     BOOST_CHECK(snap.has_etts);
     BOOST_CHECK(snap.has_researcher);
+}
+
+BOOST_AUTO_TEST_CASE(a_miner_pass_that_changes_nothing_delivers_nothing)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    GuiCache cache(compute.Make(), deliveries.Make(), INTERVAL, TICK);
+    cache.AddSubscriber();
+
+    InScope(cache, GuiCache::CHAIN);
+    cache.StartTimer();
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+
+    // A miner pass that reports what the snapshot already holds: the part runs,
+    // and nothing is swapped, counted or delivered.
+    const int miner_calls = compute.miner_calls.load();
+    compute.Advance(INTERVAL);
+    cache.MarkDirty(GuiCache::MINER);
+    BOOST_REQUIRE(WaitUntil([&] { return compute.miner_calls.load() > miner_calls; }));
+    std::this_thread::sleep_for(TIMER_CHANCE);
+
+    BOOST_CHECK_EQUAL(cache.Current().sequence, 1U);
+    BOOST_CHECK_EQUAL(deliveries.Count(), 1U);
+
+    // The same pass with a changed coin weight is a real change.
+    compute.coin_weight = 1234;
+    compute.Advance(INTERVAL);
+    cache.MarkDirty(GuiCache::MINER);
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 2; }));
+
+    BOOST_CHECK_EQUAL(deliveries.Count(), 2U);
+    BOOST_CHECK_EQUAL(deliveries.Last().coin_weight, 1234);
+
+    cache.Stop();
+}
+
+BOOST_AUTO_TEST_CASE(a_request_is_answered_though_the_miner_part_is_unchanged)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    GuiCache cache(compute.Make(), deliveries.Make(), INTERVAL, TICK);
+    cache.AddSubscriber();
+
+    InScope(cache, GuiCache::CHAIN);
+    cache.StartTimer();
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+
+    // A miner mark and a request together: the request forces the update, so it
+    // is delivered although the miner part is as it was.
+    compute.Advance(INTERVAL);
+    cache.MarkDirty(GuiCache::MINER);
+    cache.RequestUpdate();
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 2; }));
+
+    // And a forced in-scope update with only the miner part marked.
+    compute.Advance(INTERVAL);
+    {
+        LOCK(cs_main);
+        cache.MarkDirty(GuiCache::MINER);
+        cache.UpdateLocked(true);
+    }
+    BOOST_CHECK_EQUAL(cache.Current().sequence, 3U);
+
+    cache.Stop();
 }
 
 BOOST_AUTO_TEST_CASE(synced_parts_absent_while_out_of_sync)
@@ -660,6 +725,7 @@ BOOST_AUTO_TEST_CASE(delivery_holds_no_lock)
     cache.RequestUpdate();
     BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 2; }));
 
+    compute.coin_weight = 1000;
     cache.MarkDirty(GuiCache::MINER);
     compute.Advance(INTERVAL);
     BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 3; }));

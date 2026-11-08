@@ -87,6 +87,23 @@ void GuiCache::UpdateLocked(bool force)
             // A miner pass changes no input of the staking-time estimate, but
             // whether the miner stakes is one: recompute it when that flips.
             if (next.staking != was_staking) parts |= ETTS;
+
+            // A miner pass is signalled about every eight seconds whether or not
+            // anything changed. When it is all that was marked, and it left the
+            // snapshot as it was, there is nothing to swap or to deliver: the
+            // work is dropped. Never for a forced update, which answers a
+            // request, and never for a snapshot not yet computed. A turn of the
+            // out-of-sync test adds parts above, so it is never dropped here.
+            if (!force && parts == MINER && m_gated_out_of_sync.load() == out_of_sync) {
+                const interfaces::GuiStateSnapshot kept = Current();
+
+                if (kept.sequence != 0 && kept.out_of_sync == next.out_of_sync
+                    && kept.staking == next.staking
+                    && kept.coin_weight == next.coin_weight
+                    && kept.miner_errors == next.miner_errors) {
+                    return;
+                }
+            }
         }
 
         if (out_of_sync) {

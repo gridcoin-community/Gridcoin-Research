@@ -71,6 +71,7 @@ public:
     //! What the chain and miner parts report.
     std::atomic<int> height{0};
     std::atomic<bool> staking{false};
+    std::atomic<double> coin_weight{0};
 
     //! The MRC part throws while set.
     std::atomic<bool> mrc_throws{false};
@@ -106,6 +107,7 @@ public:
         compute.miner = [this](interfaces::GuiStateSnapshot& snap) {
             ++miner_calls;
             snap.staking = staking.load();
+            snap.coin_weight = coin_weight.load();
         };
         compute.mrc = [this](interfaces::GuiStateSnapshot& snap) {
             ++mrc_calls;
