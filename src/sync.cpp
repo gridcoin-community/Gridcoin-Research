@@ -245,7 +245,7 @@ void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs
     // never aborts and never throws, so the acquisition goes on as before.
     if (g_gui_thread && cs == static_cast<void*>(&cs_main)) {
         ++g_gui_thread_cs_main_reports;
-        LogPrintf("GUI-THREAD-CS_MAIN: cs_main taken on the GUI thread at %s:%d%s\n",
+        LogPrintf("GUI-THREAD-CS_MAIN: cs_main taken on the GUI thread at %s:%d%s",
                   pszFile, nLine, fTry ? " (try-lock)" : "");
     }
 

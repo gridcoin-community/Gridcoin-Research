@@ -297,6 +297,26 @@ BOOST_AUTO_TEST_CASE(cs_main_on_the_marked_thread_is_reported)
     BOOST_CHECK(!IsGuiThread());
 }
 
+BOOST_AUTO_TEST_CASE(the_gui_thread_report_is_one_line)
+{
+    // The logger ends every log call's line itself, so the report is one line
+    // and leaves no blank line after it.
+    CaptureLog log;
+
+    std::thread marked([] {
+        MarkGuiThread();
+        LOCK(cs_main);
+    });
+    marked.join();
+
+    const auto report = std::find_if(log.m_lines.begin(), log.m_lines.end(), [](const std::string& line) {
+        return line.find("GUI-THREAD-CS_MAIN") != std::string::npos;
+    });
+    BOOST_REQUIRE(report != log.m_lines.end());
+    BOOST_CHECK_EQUAL(std::count(report->begin(), report->end(), '\n'), 1);
+    BOOST_CHECK_EQUAL(report->back(), '\n');
+}
+
 #endif // DEBUG_LOCKORDER
 
 BOOST_AUTO_TEST_SUITE_END()
