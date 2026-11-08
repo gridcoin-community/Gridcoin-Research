@@ -185,7 +185,7 @@ public:
     class UnlockContext
     {
     public:
-        UnlockContext(WalletModel *wallet, bool valid, bool end_elevation);
+        UnlockContext(WalletModel *wallet, bool valid, bool end_elevation, uint64_t generation = 0);
         ~UnlockContext();
 
         bool isValid() const { return valid; }
@@ -206,6 +206,9 @@ public:
         //! a wallet that needed none (unencrypted or fully unlocked) and for a
         //! context that was copied away. Mutable, as copying clears it.
         mutable bool end_elevation{false};
+        //! The value of WalletModel::m_elevation_generation when this context's
+        //! capability was begun.
+        uint64_t generation{0};
 
         void CopyFrom(const UnlockContext& rhs);
     };
@@ -216,7 +219,8 @@ public:
     //! is valid at once. A locked wallet, or one unlocked for staking only,
     //! raises requireUnlock(): the user is asked for the passphrase, and a
     //! capability for \p kind is begun with it. The context ends the capability
-    //! when it goes. Cancelled or
+    //! when it goes, unless a later
+    //! requestUnlock() has begun one since, which displaced it. Cancelled or
     //! refused, the context is invalid and nothing changed. Synchronous: it
     //! returns once the prompt has closed. While a prompt is open, a further
     //! call is refused with an invalid context and no prompt.
@@ -367,6 +371,11 @@ private:
 
     //! requestUnlock() is waiting on its prompt. GUI thread only.
     bool m_unlock_prompt_open{false};
+
+    //! Counts the capabilities requestUnlock() has begun. The IPC slot holds
+    //! one, the latest; a context whose capability a later one displaced does
+    //! not end the slot's. GUI thread only.
+    uint64_t m_elevation_generation{0};
 
 
 public slots:

@@ -31,6 +31,7 @@ private slots:
     void destructionWaitsForTheCoinLoad();
     void failureWithAForcedReloadOwedRunsItOnce();
     void coinSelectionModelReportsAFailedLoad();
+    void anOlderContextDoesNotEndALaterOperationsCapability();
 
 private:
     // The QSettings redirect OptionsModel needs (as in OptionsModelTests), and

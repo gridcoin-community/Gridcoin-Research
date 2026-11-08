@@ -236,3 +236,38 @@ void WalletModelTests::coinSelectionModelReportsAFailedLoad()
     QCOMPARE(finished.count(), 0);
     QVERIFY(selection.isLoading());
 }
+
+//! The IPC slot holds one capability, the latest begun. An operation that
+//! outlives its prompt (the MRC page's submit runs on a worker) must not end a
+//! capability a later operation began, or that operation is refused after the
+//! user typed the passphrase.
+void WalletModelTests::anOlderContextDoesNotEndALaterOperationsCapability()
+{
+    qt_test::FakeLockStateWallet wallet;
+    wallet.m_lock_state.crypted = true;
+    wallet.m_lock_state.locked = false;
+    wallet.m_lock_state.unlocked_for_staking_only = true;
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    OptionsModel options{node, sidestakes};
+    qt_test::FakeWalletTxSource tx_source;
+    qt_test::FakeCoinSource coin_source;
+    WalletModel model{wallet, tx_source, coin_source, &options};
+    QObject::connect(&model, &WalletModel::requireUnlock, &model, [&](CapabilityKind kind) {
+        if (wallet.beginElevation(SecureString(), kind)) model.setElevationBegun();
+    });
+
+    auto first = std::make_unique<WalletModel::UnlockContext>(model.requestUnlock(CapabilityKind::Contract));
+    QVERIFY(first->isValid());
+    {
+        const WalletModel::UnlockContext second = model.requestUnlock(CapabilityKind::Send);
+        QVERIFY(second.isValid());
+
+        // The first operation finishes while the second still needs its capability.
+        first.reset();
+        QCOMPARE(wallet.m_end_elevation_calls, 0);
+    }
+
+    // The second ends its own.
+    QCOMPARE(wallet.m_end_elevation_calls, 1);
+}

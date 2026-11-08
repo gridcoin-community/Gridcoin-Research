@@ -673,20 +673,28 @@ WalletModel::UnlockContext WalletModel::requestUnlock(CapabilityKind kind)
     }
 
     const bool began = std::exchange(m_elevation_begun, false);
+    if (began) ++m_elevation_generation;
 
-    return UnlockContext(this, began, began);
+    return UnlockContext(this, began, began, m_elevation_generation);
 }
 
-WalletModel::UnlockContext::UnlockContext(WalletModel *wallet, bool valid, bool end_elevation):
+WalletModel::UnlockContext::UnlockContext(WalletModel *wallet, bool valid, bool end_elevation, uint64_t generation):
         wallet(wallet),
         valid(valid),
-        end_elevation(end_elevation)
+        end_elevation(end_elevation),
+        generation(generation)
 {
 }
 
 WalletModel::UnlockContext::~UnlockContext()
 {
     if (!end_elevation) return;
+
+    // The IPC slot holds one capability, the latest begun. An operation can
+    // outlive its prompt (the MRC page submits on a worker), and once a later
+    // operation has begun its own capability, this one's was ended when it was
+    // displaced: ending the slot now would end the later operation's.
+    if (generation != wallet->m_elevation_generation) return;
 
     // Ends the capability this context began, exactly once: a copy takes the
     // duty with it. In the split build the call crosses IPC, and a destructor
@@ -726,6 +734,7 @@ void WalletModel::UnlockContext::CopyFrom(const UnlockContext& rhs)
     wallet = rhs.wallet;
     valid = rhs.valid;
     end_elevation = std::exchange(rhs.end_elevation, false);
+    generation = rhs.generation;
 }
 
 bool WalletModel::getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const
