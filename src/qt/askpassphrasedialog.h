@@ -88,6 +88,10 @@ private:
     Ui::AskPassphraseDialog *ui;
     Mode mode;
     WalletModel *model;
+
+    //! What the user is told once the passphrase has changed, with what is
+    //! left to do for an autounlock the core cannot update.
+    QString passphraseChangedText() const;
     bool fCapsLock;
     bool m_multiprocess{false};
     CapabilityKind m_kind{CapabilityKind::Send};

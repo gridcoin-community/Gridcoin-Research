@@ -5,6 +5,7 @@
 #include "wallet/autounlock_store.h"
 
 #include "logging.h"
+#include "util/system.h"
 #include "util/syserror.h"
 
 #include <atomic>
@@ -42,11 +43,23 @@ AutoUnlockSecretStore* PlatformAutoUnlockSecretStore()
 }
 #endif
 
+bool HelperServesAutoUnlock()
+{
+    return gArgs.IsArgSet("-autounlocksocket");
+}
+
 void OnWalletPassphraseChanged(const SecureString& new_passphrase)
 {
     AutoUnlockSecretStore* const store = GetAutoUnlockSecretStore();
 
-    if (!store) return;
+    if (!store) {
+        if (HelperServesAutoUnlock()) {
+            LogPrintf("WARNING: autounlock: the credential the autounlock helper serves is still the old passphrase. "
+                      "Encrypt the new one into it before the core next starts, or the wallet stays locked "
+                      "(doc/running-unattended.md).");
+        }
+        return;
+    }
 
     std::string location;
     std::string failure;

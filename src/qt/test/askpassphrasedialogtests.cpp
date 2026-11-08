@@ -641,6 +641,49 @@ void AskPassphraseDialogTests::passphraseChangedAfterCancelIsReported()
     QCOMPARE(shown, QStringList{AskPassphraseDialog::tr("Wallet passphrase was successfully changed.")});
 }
 
+// The Linux service setup keeps the autounlock passphrase where the core cannot
+// write it: after a change the user is told it is still the old one.
+void AskPassphraseDialogTests::passphraseChangeSaysAHelperServedAutoUnlockIsStale()
+{
+    qt_test::FakeWallet wallet;
+    wallet.m_autounlock_status.configured = true;
+    wallet.m_autounlock_status.scope = "helper";
+    wallet.m_autounlock_status.location = "the credential";
+    ModelOverFakeWallet fixture(wallet);
+    wallet.m_ignore_cancel = true;
+
+    AskPassphraseDialog dialog(AskPassphraseDialog::ChangePass);
+    dialog.setModel(&fixture.model);
+    const ReleaseOnExit release{wallet};
+
+    QStringList shown;
+    QTimer closer;
+    closer.setInterval(20);
+    QObject::connect(&closer, &QTimer::timeout, &dialog, [&shown] {
+        for (QWidget* const widget : QApplication::topLevelWidgets()) {
+            QMessageBox* const box = qobject_cast<QMessageBox*>(widget);
+            if (box && box->isVisible()) {
+                shown << box->text();
+                box->accept();
+            }
+        }
+    });
+    closer.start();
+
+    AtCancel at_cancel;
+    QElapsedTimer since_cancel;
+    ExecAndCancel(dialog, wallet, at_cancel, since_cancel, [&] {
+        QTimer::singleShot(100, &dialog, [&wallet] {
+            wallet.m_release_result = true;
+            wallet.m_release = true;
+        });
+    });
+
+    QCOMPARE(shown.size(), 1);
+    QVERIFY(shown.front().startsWith(AskPassphraseDialog::tr("Wallet passphrase was successfully changed.")));
+    QVERIFY(shown.front().contains("still has the old passphrase, in the credential"));
+}
+
 // The check runs on the process's modal worker, not on a thread of its own.
 void AskPassphraseDialogTests::checkRunsOnTheModalWorker()
 {

@@ -37,6 +37,7 @@ private slots:
     void cancelWhileWaitingEndsTheLoopAtOnce();
     void cancelPastTheTurnKeepsTheLoopRunning();
     void passphraseChangedAfterCancelIsReported();
+    void passphraseChangeSaysAHelperServedAutoUnlockIsStale();
     void checkRunsOnTheModalWorker();
     void cancelWhileQueuedEndsAtOnceAndTriesNothing();
     void destroyedUnderARunningCheckEndsItsCapability();

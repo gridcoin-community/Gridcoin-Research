@@ -17,7 +17,9 @@ struct AutoUnlockStoreStatus
     bool supported{false};
     //! Whether something is stored, whether or not it could be used.
     bool configured{false};
-    //! Who can decrypt what Store() writes: "machine" or "service" on Windows.
+    //! Who can decrypt what Store() writes: "machine" or "service" on Windows;
+    //! "helper" where the service setup keeps the passphrase and the autounlock
+    //! helper serves it (Linux, -autounlocksocket), which the core cannot write.
     std::string scope;
     //! Where the passphrase is kept, for the user.
     std::string location;
@@ -74,5 +76,10 @@ AutoUnlockSecretStore* PlatformAutoUnlockSecretStore();
 //! change that succeeded, with neither cs_main nor cs_wallet held: the store does file I/O
 //! and encryption.
 void OnWalletPassphraseChanged(const SecureString& new_passphrase);
+
+//! The core fetches the autounlock passphrase from the helper of the Linux
+//! service setup (-autounlocksocket), which keeps it where the core cannot
+//! write it.
+bool HelperServesAutoUnlock();
 
 #endif // GRIDCOIN_WALLET_AUTOUNLOCK_STORE_H

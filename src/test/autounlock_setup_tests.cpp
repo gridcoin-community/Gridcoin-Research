@@ -25,6 +25,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <vector>
 #include <thread>
 #include <utility>
 
@@ -599,6 +600,40 @@ BOOST_AUTO_TEST_CASE(setup_result_known_values)
     for (unsigned int value = 6; value <= 255; ++value) {
         BOOST_CHECK(!IsKnownAutoUnlockSetupResult(static_cast<AutoUnlockSetupResult>(value)));
     }
+}
+
+// The Linux service setup keeps the passphrase in a systemd credential that the
+// autounlock helper serves (-autounlocksocket). The core cannot rewrite it, so
+// it reports it, and after a passphrase change it says what is left to do:
+// otherwise the next start fetches the old passphrase and the wallet stays
+// locked, unattended.
+BOOST_AUTO_TEST_CASE(a_helper_served_autounlock_is_reported_and_its_change_flagged)
+{
+#ifndef WIN32
+    BOOST_REQUIRE(GetAutoUnlockSecretStore() == nullptr);
+    BOOST_CHECK(!GetAutoUnlockStatus().configured);
+
+    grc_test::ForcedArgGuard socket("autounlocksocket", "/run/gridcoin-autounlock/gridcoin.sock");
+    const AutoUnlockStoreStatus status = GetAutoUnlockStatus();
+    BOOST_CHECK(!status.supported);
+    BOOST_CHECK(status.configured);
+    BOOST_CHECK_EQUAL(status.scope, "helper");
+    BOOST_CHECK(!status.location.empty());
+
+    std::vector<std::string> lines;
+    const auto callback = LogInstance().PushBackCallback([&lines](const std::string& line) {
+        if (line.find("autounlock") != std::string::npos) lines.push_back(line);
+    });
+    struct CallbackRemover {
+        decltype(callback) it;
+        ~CallbackRemover() { LogInstance().DeleteCallback(it); }
+    } const remove_callback{callback};
+
+    OnWalletPassphraseChanged(SecureString("the new passphrase"));
+
+    BOOST_REQUIRE_EQUAL(lines.size(), 1U);
+    BOOST_CHECK(lines[0].find("still the old passphrase") != std::string::npos);
+#endif
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -633,8 +633,7 @@ void AskPassphraseDialog::checkFinished()
         }
 
         if (accepted && mode == ChangePass) {
-            QMessageBox::information(this, tr("Wallet encrypted"),
-                                     tr("Wallet passphrase was successfully changed."));
+            QMessageBox::information(this, tr("Wallet encrypted"), passphraseChangedText());
         }
 
         // Autounlock was set up or turned off all the same, or the call ran
@@ -666,8 +665,7 @@ void AskPassphraseDialog::checkFinished()
 
     if (mode == ChangePass) {
         if (accepted) {
-            QMessageBox::information(this, tr("Wallet encrypted"),
-                                     tr("Wallet passphrase was successfully changed."));
+            QMessageBox::information(this, tr("Wallet encrypted"), passphraseChangedText());
             QDialog::accept(); // Success
         } else if (!m_check_had_null) {
             // The dialog stays up: it is where the passphrase is retyped.
@@ -868,4 +866,23 @@ void AskPassphraseDialog::secureClearPassFields()
     ui->oldPassphraseEdit->clear();
     ui->newPassphraseEdit->clear();
     ui->repeatNewPassphraseEdit->clear();
+}
+
+QString AskPassphraseDialog::passphraseChangedText() const
+{
+    QString text = tr("Wallet passphrase was successfully changed.");
+
+    // The Linux service setup keeps the autounlock passphrase where the core
+    // cannot write it, so it is still the old one, and the next start would
+    // leave the wallet locked.
+    if (model) {
+        const AutoUnlockStoreStatus autounlock = model->getAutoUnlockStatus();
+        if (autounlock.configured && autounlock.scope == "helper") {
+            text += "\n\n" + tr("Autounlock for staking still has the old passphrase, in %1. Encrypt the new "
+                                 "passphrase into it before the core next starts, or the wallet stays locked.")
+                                  .arg(QString::fromStdString(autounlock.location));
+        }
+    }
+
+    return text;
 }

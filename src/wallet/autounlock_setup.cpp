@@ -214,7 +214,16 @@ AutoUnlockStoreStatus GetAutoUnlockStatus()
     AutoUnlockStoreStatus status;
     AutoUnlockSecretStore* const store = GetAutoUnlockSecretStore();
 
-    if (!store) return status;
+    if (!store) {
+        // Nothing here can set it up or change it, so it stays unsupported; it is
+        // reported so a passphrase change can say what is left to do.
+        if (HelperServesAutoUnlock()) {
+            status.configured = true;
+            status.scope = "helper";
+            status.location = "the wallet-passphrase credential the autounlock service serves";
+        }
+        return status;
+    }
 
     try {
         return store->Status();
