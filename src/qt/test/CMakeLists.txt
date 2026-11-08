@@ -17,6 +17,7 @@ add_executable(test_gridcoin-qt
     clientmodeltests.cpp
     mrcmodeltests.cpp
     pushedstatetests.cpp
+    overviewtxmodeltests.cpp
 )
 
 set_target_properties(test_gridcoin-qt PROPERTIES
