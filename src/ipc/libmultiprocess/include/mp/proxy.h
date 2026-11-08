@@ -11,6 +11,7 @@
 #include <functional>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <stddef.h>
 #include <tuple>
 #include <type_traits>
@@ -155,6 +156,25 @@ public:
     void invokeDestroy();
     using Interface_::Server::thisCap;
 
+    //! Keeps m_impl for the length of one method call. A destroy that arrives
+    //! while calls run is completed by the last one to finish; a call after a
+    //! destroy is refused.
+    class CallGuard
+    {
+    public:
+        explicit CallGuard(ProxyServerBase& server) : m_server(server), m_impl(server.enterCall()) {}
+        ~CallGuard() { m_server.leaveCall(); }
+        CallGuard(const CallGuard&) = delete;
+        CallGuard& operator=(const CallGuard&) = delete;
+        Impl* get() const { return m_impl; }
+
+    private:
+        ProxyServerBase& m_server;
+        Impl* m_impl;
+    };
+    Impl* enterCall();
+    void leaveCall();
+
     /**
      * Implementation pointer that may or may not be owned and deleted when this
      * capnp server goes out of scope. It is owned for servers created to wrap
@@ -170,6 +190,14 @@ public:
      * wrapped. */
     std::shared_ptr<Impl> m_impl;
     ProxyContext m_context;
+
+    //! Guards m_impl against a destroy that races a call (CallGuard), with the
+    //! two fields below.
+    std::mutex m_impl_mutex;
+    //! Method calls running on m_impl.
+    int m_calls_in_flight{0};
+    //! The client has called destroy.
+    bool m_destroy_requested{false};
 };
 
 //! Customizable (through template specialization) base class which ProxyServer
@@ -286,7 +314,9 @@ struct ProxyMethodTraits<MethodParams, Require<decltype(ProxyMethod<MethodParams
     template <typename ServerContext, typename... Args>
     static decltype(auto) invoke(ServerContext& server_context, Args&&... args)
     {
-        return (server_context.proxy_server.m_impl.get()->*ProxyMethod<MethodParams>::impl)(std::forward<Args>(args)...);
+        using Server = std::remove_reference_t<decltype(server_context.proxy_server)>;
+        const typename Server::CallGuard guard{server_context.proxy_server};
+        return (guard.get()->*ProxyMethod<MethodParams>::impl)(std::forward<Args>(args)...);
     }
 };
 

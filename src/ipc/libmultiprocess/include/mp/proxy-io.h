@@ -25,6 +25,7 @@
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 
@@ -712,7 +713,10 @@ ProxyServerBase<Interface, Impl>::~ProxyServerBase()
 
 //! If the capnp interface defined a special "destroy" method, as described the
 //! ProxyClientBase class, this method will be called and synchronously destroy
-//! m_impl before returning to the client.
+//! m_impl before returning to the client. If a call on the object is still
+//! running (a peer may send destroy at any time), the object is marked and the
+//! last call to finish destroys it, in the same order; calls that arrive after
+//! a destroy are refused (CallGuard).
 //!
 //! If the capnp interface does not define a "destroy" method, this will never
 //! be called and the ~ProxyServerBase destructor will be responsible for
@@ -730,8 +734,47 @@ ProxyServerBase<Interface, Impl>::~ProxyServerBase()
 template <typename Interface, typename Impl>
 void ProxyServerBase<Interface, Impl>::invokeDestroy()
 {
-    m_impl.reset();
+    std::shared_ptr<Impl> impl;
+    {
+        const std::lock_guard<std::mutex> lock(m_impl_mutex);
+        if (m_destroy_requested) return;
+        m_destroy_requested = true;
+        if (m_calls_in_flight > 0) return;
+        impl = std::move(m_impl);
+    }
+    impl.reset();
     CleanupRun(m_context.cleanup_fns);
+}
+
+template <typename Interface, typename Impl>
+Impl* ProxyServerBase<Interface, Impl>::enterCall()
+{
+    const std::lock_guard<std::mutex> lock(m_impl_mutex);
+    if (!m_impl || m_destroy_requested) {
+        throw std::runtime_error("IPC method called on an object the client has destroyed.");
+    }
+    ++m_calls_in_flight;
+    return m_impl.get();
+}
+
+template <typename Interface, typename Impl>
+void ProxyServerBase<Interface, Impl>::leaveCall()
+{
+    std::shared_ptr<Impl> impl;
+    {
+        const std::lock_guard<std::mutex> lock(m_impl_mutex);
+        if (--m_calls_in_flight > 0 || !m_destroy_requested || !m_impl) return;
+        impl = std::move(m_impl);
+    }
+    // The client destroyed the object while this call ran: finish the destroy
+    // here, as invokeDestroy would have. This runs in a destructor, so a
+    // cleanup function that throws is logged instead of ending the process.
+    impl.reset();
+    try {
+        CleanupRun(m_context.cleanup_fns);
+    } catch (const std::exception& e) {
+        MP_LOG(*m_context.loop, Log::Error) << "IPC cleanup after a deferred destroy failed: " << e.what();
+    }
 }
 
 //! Map from Connection to local or remote thread handle which will be used over

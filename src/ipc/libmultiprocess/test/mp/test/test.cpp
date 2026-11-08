@@ -346,6 +346,37 @@ KJ_TEST("Calling IPC method, disconnecting and blocking during the call")
     signal.set_value();
 }
 
+KJ_TEST("Destroying the server object during a call defers the destroy and refuses later calls")
+{
+    // The object outlives a call during which it is destroyed, and a later call
+    // is refused.
+    TestSetup setup;
+    ProxyClient<messages::FooInterface>* foo = setup.client.get();
+    KJ_EXPECT(foo->add(1, 2) == 3);
+
+    std::weak_ptr<FooImplementation> impl = setup.server->m_impl;
+    bool alive_after_destroy = false;
+    setup.server->m_impl->m_fn = [&] {
+        setup.server->invokeDestroy();
+        // A second destroy changes nothing.
+        setup.server->invokeDestroy();
+        alive_after_destroy = !impl.expired();
+    };
+    foo->callFn();
+    KJ_EXPECT(alive_after_destroy);
+    KJ_EXPECT(impl.expired());
+
+    bool refused = false;
+    try {
+        foo->add(1, 2);
+    } catch (const std::exception& e) {
+        refused = std::string_view{e.what()}.find("IPC method called on an object the client has destroyed.") !=
+                  std::string_view::npos;
+        KJ_LOG(INFO, e.what());
+    }
+    KJ_EXPECT(refused);
+}
+
 KJ_TEST("Worker thread destroyed before it is initialized")
 {
     // Regression test for bitcoin/bitcoin#34711, bitcoin/bitcoin#34756 where a
