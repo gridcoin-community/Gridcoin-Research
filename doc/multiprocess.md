@@ -42,7 +42,9 @@ to that socket instead of running the node in-process.
   the system service. The cookie, `ipc.cookie`, is a fresh random value for each run
   of the core: every process the peer check admits may read it, so it ties a connection
   to this run of the core rather than adding a second check of who connects. On Windows
-  the owner-only permissions of the socket and the cookie are the guard.
+  the guard is the access control list of the socket and of the cookie (owner-only, or
+  open to the attach group for the system service), and for the system service the
+  identity check the core makes before it compares the cookie.
 - **Matching builds.** The GUI and daemon must be the same build — the connection
   handshake rejects mismatched IPC schema/protocol versions. Use `gridcoinresearch`
   and `gridcoinresearchd` from the same release.
@@ -590,8 +592,7 @@ not. The protection therefore rests on non-dumpability and disabled core dumps, 
 
 Windows: a process running as you can read the memory of any other process running as you, the
 monolithic wallet's included (see section 2 of `doc/multiprocess_design.md`). The Windows service's core
-runs as its own account, whose memory a desktop account cannot read unless it is an administrator. macOS: the hardened
-runtime (see the macOS section).
+runs as its own account, whose memory a desktop account cannot read unless it is an administrator.
 
 ## Troubleshooting
 

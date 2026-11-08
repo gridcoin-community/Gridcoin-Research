@@ -66,10 +66,13 @@ and its processes. A desktop user attaches the GUI through membership of the att
 account, can:
 
 - stop the node (the service starts it again);
+- lock the wallet: it stays locked, and the node does not stake, until the service restarts and the autounlock
+  runs again;
 - hold the core's single GUI connection;
 - manage peers (`addnode`, `setban`), and change the settings that need no passphrase, such as staking on or off
   and the reserve balance;
-- see balances and history;
+- see balances and history, and relabel address-book entries, which another member then sees when choosing where to
+  send;
 - guess passphrases online, at the rate the core allows: each failure makes the next attempt wait longer, up to
   30 seconds;
 - capture the passphrase when the member types it into the GUI.

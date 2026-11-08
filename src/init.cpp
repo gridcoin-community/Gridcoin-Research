@@ -625,13 +625,13 @@ bool ReportDataDirPermissions(std::ostream& out)
 //!
 //! The expectation for a headless daemon is that it answers RPC on loopback, so that
 //! the local endpoint is controllable. No autounlock on Linux needs it: the core pulls
-//! the stake-only passphrase from the helper over a socket (-autounlocksocket). The
-//! Windows scheduled task's autounlock still unlocks over RPC.
+//! the stake-only passphrase from the helper over a socket (-autounlocksocket), and the
+//! Windows scheduled task's autounlock reads its own file (-autounlockblob).
 //!
 //! Scope, deliberately narrow:
 //!  - Only when an RPC server is actually being started. An explicit server=0 is a real
-//!    choice and is honoured -- the config is not touched (and the Windows scheduled
-//!    task's autounlock will not work, which is documented).
+//!    choice and is honoured -- the config is not touched (the Windows Core-Stop task,
+//!    which stops the core over RPC, then cannot).
 //!  - Only into a file this account owns (fsmodes::OwnedByUs: owned by the effective user,
 //!    and not a symbolic link; on Windows, owned by the process's token user, and not a
 //!    reparse point). A conf owned by root, by the administrators or by another account --

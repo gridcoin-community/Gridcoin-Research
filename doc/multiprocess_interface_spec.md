@@ -284,7 +284,7 @@ handshake (`ipc/handshake.h`):
 ```cpp
 constexpr uint32_t IPC_SCHEMA_MAJOR   = 5;
 constexpr uint32_t IPC_SCHEMA_MINOR   = 0;
-constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
+constexpr uint32_t IPC_PROTOCOL_VERSION = 2;
 ```
 
 **Major 4.** `SendCoinsStatus` gained `WalletUnlockedForStakingOnly`, so a
@@ -338,7 +338,10 @@ which is what it always sent, and the minor already turns the mismatch into the
 `endElevation @38`, and every wallet method that uses the keys for the GUI (the
 send, message and PSGT signing, MRC, poll, vote and beacon methods, and the
 console) runs under the capability they hold, one operation kind at a time.
-`elevateWallet @36` stays in the schema,
+A capability serves every operation of
+its kind on its connection until the GUI ends it or its deadline passes (from
+two minutes to an hour by kind, CapabilityTtl in src/wallet/capability.cpp); the
+GUI ends each one when the operation that asked for it is done. `elevateWallet @36` stays in the schema,
 because a released ordinal cannot be dropped, but always returns false.
 `RpcConsoleResult` gained `walletUnlockNeeded @2`, `SettingChangeResult` gained
 `elevationRequired @7`, `SideStakeEditStatus` gained `ELEVATION_REQUIRED`,
@@ -349,6 +352,9 @@ console's wallet passphrases as `SecureString`, `Node` gained
 config, settings and wallet file paths as the core sees them), which the
 GUI's "Open debug log" and "Open config" read, and `Init` gained
 `holdsAttachSlot @16`, which tells a second GUI that another is attached.
+`Init` also gained `beginAttest @17` and `finishAttest @18`, the Windows
+identity check, served before authentication (§2.5), with
+`IPC_PROTOCOL_VERSION` 2.
 `Wallet` also gained `beginBackup @40 (items)`, which returns a `FileSource`
 streaming copies the core makes in its own transfer directory under a Backup
 capability; `backupWallet @20` and `backupConfigFile @21` stay in the schema but
@@ -434,7 +440,7 @@ a map, not a field-by-field restatement.
 
 The per-process bootstrap. Beyond the handshake methods (`authenticate`,
 `getBuildInfo`, `getIdentity`, §2), `isCoreReady()` and `holdsAttachSlot()`
-(`@15`, schema major 5; whether this connection is the attached GUI, §2.1), it
+(`@16`, schema major 5; whether this connection is the attached GUI, §2.1), it
 hands out the factories below, to the attached GUI only:
 
 | Factory | Returns | Notes |

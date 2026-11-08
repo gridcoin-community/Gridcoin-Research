@@ -280,7 +280,9 @@ on-device), so the `-RestartCount` it used to be registered with never actually 
 ## Autounlock (opt-in, stake-only, DPAPI)
 
 Unattended **staking** on an encrypted wallet needs the wallet unlocked after every boot or
-restart. Autounlock is opt-in and unlocks **for staking only**, never for spending. The core does
+restart. Autounlock is opt-in and unlocks the wallet **for staking only**. It does not keep the
+passphrase from programs that run as the wallet's account, which can decrypt it (below); for that
+protection use the service mode. The core does
 it itself: you set it up once in the wallet (the GUI's *Autounlock for staking* dialog, or the
 `setautounlock` RPC; `clearautounlock` turns it off), and the core reads its own file at startup.
 The Core-Start launcher passes `-autounlockblob`, which names that file.

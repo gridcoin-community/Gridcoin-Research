@@ -20,7 +20,7 @@ import os
 import re
 import sys
 
-ROOTS = ("doc", "contrib/init", "contrib/docker")
+ROOTS = ("doc", "contrib/init", "contrib/docker", "contrib/windows", "debian", "debian-testnet")
 SKIP_DIRS = {"__pycache__", ".git"}
 HINT = "see doc/running-unattended.md for the current setup"
 
