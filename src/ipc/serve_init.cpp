@@ -277,7 +277,7 @@ public:
     bool holdsAttachSlot() override
     {
         RequireAuth();
-        return m_slot_held->load();
+        return m_slot_held->load() && !m_scope->closed();
     }
 
     //! Not served over capnp (no ordinal in init.capnp) and deliberately not
@@ -408,6 +408,12 @@ private:
     {
         if (!m_slot_held->load()) {
             throw std::runtime_error("another GUI is already attached to this core");
+        }
+        // A call dispatched before connectionClosed() can still be running, and
+        // the slot may be another GUI's by now: the closed connection is handed
+        // nothing more.
+        if (m_scope->closed()) {
+            throw std::runtime_error("the IPC connection has closed");
         }
     }
 

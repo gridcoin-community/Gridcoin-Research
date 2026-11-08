@@ -329,6 +329,26 @@ BOOST_AUTO_TEST_CASE(second_connection_does_not_get_the_slot)
     BOOST_CHECK(!c->holdsAttachSlot());
 }
 
+// A call can still be running on a connection when it closes: the listener tears
+// the connection down on the event loop while a worker is inside a factory. The
+// slot may be another GUI's by then, so the closed connection is handed nothing.
+BOOST_AUTO_TEST_CASE(a_closed_connection_is_handed_nothing_more)
+{
+    auto slot = ipc::MakeAttachSlot();
+    auto a = ipc::MakeServeInit(std::make_unique<StubInit>(), "c", {}, slot, {});
+    BOOST_REQUIRE(a->authenticate("c"));
+    BOOST_REQUIRE(a->holdsAttachSlot());
+    BOOST_CHECK_NO_THROW(a->makeNode());
+
+    a->connectionClosed();
+
+    const HasMessage closed{"connection has closed"};
+    BOOST_CHECK_EXCEPTION(a->makeNode(), std::runtime_error, closed);
+    BOOST_CHECK_EXCEPTION(a->makeWallet(), std::runtime_error, closed);
+    BOOST_CHECK_EXCEPTION(a->makeGuiState(), std::runtime_error, closed);
+    BOOST_CHECK(!a->holdsAttachSlot());
+}
+
 // The holder's teardown runs the slot hook before it gives the slot back, so a
 // capability of the GUI that went away is ended before another GUI can attach.
 // While the hook is still running, a new connection is refused the slot; once it

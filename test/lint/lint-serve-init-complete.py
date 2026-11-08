@@ -31,6 +31,13 @@ and could use the next GUI's capability after its own connection has closed. The
 check fails when it finds no such factory at all, since then it has stopped
 reading the interface headers and checks nothing.
 
+And it checks the attach slot. Only the connection that holds the listener's
+one attach slot is served any object (multiprocess_interface_spec.md section
+2.1), so every make* factory must call RequireAttachSlot() as well as
+RequireAuth(). A factory without it is served to a second, authenticated GUI
+while another is attached, and nothing else notices: the code compiles, and the
+unit test of the refusal names its factories by hand.
+
 If you are here because the lint failed, the fix is almost always to add the
 missing override to src/ipc/serve_init.cpp with RequireAuth() as its first
 statement, delegating to m_inner.
@@ -51,6 +58,7 @@ INTERFACE_HEADERS = "src/interfaces/*.h"
 FACTORY_RE = re.compile(r"\bvirtual\s+std::(?:unique|shared)_ptr<\s*(?:interfaces::)?(\w+)\s*>\s+(make\w+)\s*\(")
 BIND_RE = re.compile(r"\bbindConnectionScope\s*\(")
 BIND_RETURN_RE = re.compile(r"\breturn\s+BindToConnection\s*\(")
+SLOT_RE = re.compile(r"\bRequireAttachSlot\s*\(\s*\)")
 
 # Methods that must NOT be gated, with the reason each is exempt.
 UNGATED = {
@@ -239,6 +247,32 @@ def check_connection_binding(header_text, serve_text, interface_texts):
         errors.append(
             "found no make* factory on interfaces::Init whose interface declares bindConnectionScope(); "
             "the connection-binding check is not reading the interface headers, and so checks nothing")
+    return errors
+
+
+def check_attach_slot(header_text, serve_text):
+    """Every make* factory on interfaces::Init calls RequireAttachSlot() in
+    ServeInit. Returns the errors."""
+    init_body = class_body(header_text, "Init")
+    found = overrides_with_bodies(serve_text)
+    if init_body is None or found is None:
+        return ["could not locate class Init or class ServeInit for the attach-slot check"]
+    errors = []
+    factories = 0
+    for m in FACTORY_RE.finditer(strip_noncode(init_body)):
+        factory = m.group(2)
+        factories += 1
+        body = found.get((factory, 0))
+        if body is None:
+            continue  # the completeness check reports a missing override
+        if not SLOT_RE.search(body):
+            errors.append(
+                "ServeInit::{0}() does not call RequireAttachSlot(). It would be served to an "
+                "authenticated connection that does not hold the attach slot, a second GUI while "
+                "another is attached (multiprocess_interface_spec.md section 2.1). Call "
+                "RequireAttachSlot() after RequireAuth().".format(factory))
+    if factories == 0:
+        errors.append("found no make* factory on interfaces::Init; the attach-slot check checks nothing")
     return errors
 
 
@@ -440,6 +474,9 @@ def main():
     interface_texts = [t for t in (read(path) for path in sorted(glob.glob(INTERFACE_HEADERS))) if t is not None]
     errors.extend(check_connection_binding(header_text, serve_text, interface_texts))
 
+    # --- Sixth gate: every factory takes the attach slot ---
+    errors.extend(check_attach_slot(header_text, serve_text))
+
     # An UNGATED entry that calls RequireAuth() is a contradiction worth catching.
     for name in UNGATED:
         if any(k[0] == name and "RequireAuth()" in b for k, b in found.items()):
@@ -485,11 +522,13 @@ public:
     std::unique_ptr<interfaces::Wallet> makeWallet() override
     {
         RequireAuth();
+        RequireAttachSlot();
         return BindToConnection(m_inner->makeWallet());
     }
     std::unique_ptr<interfaces::StakingStatus> makeStakingStatus() override
     {
         RequireAuth();
+        RequireAttachSlot();
         return m_inner->makeStakingStatus();
     }
 };
@@ -514,6 +553,17 @@ def self_test():
     errors = check_connection_binding(SAMPLE_INIT_HEADER, SAMPLE_SERVE, [])
     if not any("found no make* factory" in e for e in errors):
         failures.append("no error when no factory is bindable; got: {}".format("; ".join(errors) or "none"))
+    # The attach-slot check passes the clean sample and fails a factory that
+    # does not take the slot.
+    clean = check_attach_slot(SAMPLE_INIT_HEADER, SAMPLE_SERVE)
+    if clean:
+        failures.append("the clean sample fails the attach-slot check: {}".format("; ".join(clean)))
+    slotless = SAMPLE_SERVE.replace("RequireAttachSlot();\n        return m_inner->makeStakingStatus();",
+                                    "return m_inner->makeStakingStatus();")
+    errors = check_attach_slot(SAMPLE_INIT_HEADER, slotless)
+    if not any("ServeInit::makeStakingStatus() does not call RequireAttachSlot()" in e for e in errors):
+        failures.append("no error for a makeStakingStatus() without the slot; got: {}".format(
+            "; ".join(errors) or "none"))
     for failure in failures:
         fail("self-test: " + failure)
     return 1 if failures else 0
