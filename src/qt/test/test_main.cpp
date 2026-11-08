@@ -8,6 +8,7 @@
 #include "autostarttests.h"
 #include "bitcoinguitests.h"
 #include "clientmodeltests.h"
+#include "mrcmodeltests.h"
 #include "bitcoinunitstests.h"
 #include "coinselectionmodeltests.h"
 #include "coinselectionviewtests.h"
@@ -118,6 +119,10 @@ int main(int argc, char *argv[])
 
     ClientModelTests test15;
     if (QTest::qExec(&test15) != 0)
+        fInvalid = true;
+
+    MRCModelTests test16;
+    if (QTest::qExec(&test16) != 0)
         fInvalid = true;
 
     return fInvalid;

@@ -13,6 +13,7 @@
 #include "interfaces/sidestake.h"
 #include "util/strencodings.h"
 
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -168,6 +169,56 @@ public:
     }
 
     std::unique_ptr<interfaces::Handler> handleBlocksChanged(interfaces::BlocksChangedFn /*fn*/) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+};
+
+//! Fake interfaces::MRC: counts snapshot(), submit() and submitConfirmed() so a
+//! test can show the model made no core read and sent nothing it should not,
+//! records the last confirmed terms, and answers submitConfirmed with a scripted
+//! result. submitConfirmed runs on a worker thread in the model, so the
+//! recorded values are atomics.
+class FakeMRC : public interfaces::MRC
+{
+public:
+    // Canned response (set by the test before use).
+    interfaces::MRCSubmitResult m_confirmed_result;
+
+    // Recorded calls.
+    std::atomic<int> m_snapshot_calls{0};
+    std::atomic<int> m_submit_calls{0};
+    std::atomic<int> m_submit_confirmed_calls{0};
+    std::atomic<CAmount> m_last_confirmed_fee{0};
+    std::atomic<CAmount> m_last_confirmed_net{0};
+    std::atomic<CAmount> m_last_fee_boost{0};
+
+    interfaces::MRCSnapshot snapshot(CAmount /*fee_boost*/, bool /*wallet_locked*/,
+                                     bool /*researcher_eligible*/) override
+    {
+        ++m_snapshot_calls;
+        return {};
+    }
+
+    interfaces::MRCSubmitResult submit(CAmount /*fee_boost*/, bool /*wallet_locked*/) override
+    {
+        ++m_submit_calls;
+        return {};
+    }
+
+    interfaces::MRCSubmitResult submitConfirmed(CAmount fee_boost, bool /*wallet_locked*/,
+                                                CAmount confirmed_fee, CAmount confirmed_net) override
+    {
+        m_last_fee_boost = fee_boost;
+        m_last_confirmed_fee = confirmed_fee;
+        m_last_confirmed_net = confirmed_net;
+        ++m_submit_confirmed_calls;
+        return m_confirmed_result;
+    }
+
+    bool isOutOfSync() override { return false; }
+
+    std::unique_ptr<interfaces::Handler> handleMRCChanged(interfaces::MRCChangedFn /*fn*/) override
     {
         return interfaces::MakeCleanupHandler([] {});
     }

@@ -8,8 +8,11 @@
 #include <QAbstractButton>
 #include <QDialog>
 
+#include <memory>
+
 #include "bitcoinamountfield.h"
 #include "mrcmodel.h"
+#include "walletmodel.h"
 
 class WalletModel;
 
@@ -33,7 +36,10 @@ private:
     MRCModel *m_mrc_model;
     WalletModel *m_wallet_model;
 
-    void updateMRCModel();
+    //! The unlock the submit asked for, held until the submit ends: the submit
+    //! runs on a worker thread, and the context hands the staking-only scope
+    //! back when it is released.
+    std::unique_ptr<WalletModel::UnlockContext> m_unlock_context;
 
     //!
     //! \brief showMRCStatus shows or hides the MRC status and submission widgets.
@@ -50,6 +56,8 @@ private slots:
     void setMRCFeeBoost();
     void setMRCFeeBoostToSubmitMinimum();
     void submitMRC();
+    void submitFinished(bool success);
+    void updateFromCore();
 };
 
 #endif // GRIDCOIN_QT_MRCREQUESTPAGE_H

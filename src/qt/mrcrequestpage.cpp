@@ -16,6 +16,7 @@ MRCRequestPage::MRCRequestPage(
     : QDialog(parent)
     , ui(new Ui::MRCRequestPage)
     , m_mrc_model(mrc_model)
+    , m_wallet_model(nullptr)
 {
     if (m_mrc_model) {
         m_wallet_model = m_mrc_model->getWalletModel();
@@ -33,9 +34,10 @@ MRCRequestPage::MRCRequestPage(
     connect(m_mrc_model, &MRCModel::walletStatusChangedSignal, this, &MRCRequestPage::updateMRCStatus);
 
     connect(ui->mrcRequestButtonBox, &QDialogButtonBox::clicked, this, &MRCRequestPage::buttonBoxClicked);
-    connect(ui->mrcUpdateButton, &QAbstractButton::clicked, this, &MRCRequestPage::updateMRCStatus);
+    connect(ui->mrcUpdateButton, &QAbstractButton::clicked, this, &MRCRequestPage::updateFromCore);
     connect(ui->mrcFeeBoostSpinBox, &BitcoinAmountField::textChanged, this, &MRCRequestPage::setMRCFeeBoost);
     connect(ui->mrcSubmitButton, &QAbstractButton::clicked, this, &MRCRequestPage::submitMRC);
+    connect(m_mrc_model, &MRCModel::submitFinished, this, &MRCRequestPage::submitFinished);
     connect(ui->mrcFeeBoostRaiseToMinimumButton, &QAbstractButton::clicked,
             this, &MRCRequestPage::setMRCFeeBoostToSubmitMinimum);
 
@@ -54,11 +56,15 @@ MRCRequestPage::~MRCRequestPage()
     delete ui;
 }
 
-void MRCRequestPage::updateMRCModel()
+void MRCRequestPage::updateFromCore()
 {
     if (!m_mrc_model) return;
 
-    m_mrc_model->refresh();
+    // The model refreshes itself on every push and quote; this asks the core
+    // for a push now.
+    m_mrc_model->requestUpdate();
+
+    updateMRCStatus();
 }
 
 void MRCRequestPage::setMRCFeeBoost()
@@ -69,7 +75,7 @@ void MRCRequestPage::setMRCFeeBoost()
 
     m_mrc_model->setMRCFeeBoost(fee_boost);
 
-    updateMRCStatus();
+    // The model signals the change, which updates the page.
 }
 
 void MRCRequestPage::setMRCFeeBoostToSubmitMinimum()
@@ -100,8 +106,6 @@ void MRCRequestPage::buttonBoxClicked(QAbstractButton* button)
 void MRCRequestPage::updateMRCStatus()
 {
     if (!m_mrc_model) return;
-
-    updateMRCModel();
 
     int display_unit = BitcoinUnits::BTC;
     if (m_wallet_model && m_wallet_model->getOptionsModel()) {
@@ -264,6 +268,38 @@ void MRCRequestPage::updateMRCStatus()
         ui->ErrorIconLabel->setToolTip("");
     }
 
+    // The fee and net payout the request would carry: the quote while one is
+    // outstanding is not yet those of the boost shown.
+    if (m_mrc_model->isQuoteUpdating()) {
+        ui->mrcTotalFee->setText(tr("Updating..."));
+        ui->mrcNetPayout->setText(tr("Updating..."));
+    } else {
+        ui->mrcTotalFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCTotalFee()));
+        ui->mrcNetPayout->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCNetPayout()));
+    }
+
+    const QString notice = m_mrc_model->getSubmitNotice();
+
+    if (!notice.isEmpty()) {
+        ui->ErrorIconLabel->show();
+        ui->ErrorIconLabel->setToolTip(notice);
+        ui->mrcSubmitButton->setToolTip(notice);
+    }
+
+    // The figures are not final while a quote is out, and nothing more can be
+    // sent while a submit runs.
+    if (m_mrc_model->isQuoteUpdating() || m_mrc_model->isSubmitting()) {
+        ui->mrcSubmitButton->setEnabled(false);
+
+        if (m_mrc_model->isSubmitting()) {
+            ui->mrcSubmitButton->setToolTip(tr("Submitting the MRC request..."));
+        }
+    }
+    if (m_mrc_model->isSubmitting()) {
+        ui->mrcFeeBoostSpinBox->setEnabled(false);
+        ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
+    }
+
     showMRCStatus(m_mrc_model->getMRCModelStatus());
 }
 
@@ -320,18 +356,21 @@ void MRCRequestPage::submitMRC()
     //
     // A researcher who unlocked for staking is exactly who files these, so
     // refusing outright would be hostile. The context elevates for this
-    // operation and hands the staking-only scope back when it expires, so the
-    // node keeps staking afterwards.
+    // operation and hands the staking-only scope back when it is released, so
+    // the node keeps staking afterwards. The submit runs on a worker thread, so
+    // the context is kept until the model reports the submit ended.
     //
     // MRCModel dereferences its wallet model in its own constructor, so a
     // constructed model always has one.
-    WalletModel::UnlockContext ctx(m_wallet_model->requestUnlock());
+    m_unlock_context = std::make_unique<WalletModel::UnlockContext>(m_wallet_model->requestUnlock());
 
-    if (!ctx.isValid()) {
+    if (!m_unlock_context->isValid()) {
         // Cancelled or wrong passphrase. The elevation widens the unlock in
         // place, so nothing was given up on the way to the prompt and a wallet
         // that was staking is still staking. The fee boost is left alone so a
         // retry keeps it.
+        m_unlock_context.reset();
+
         ui->mrcSubmitButton->setToolTip(tr("The wallet must be unlocked to submit a manual "
                                            "research claim."));
         return;
@@ -342,19 +381,31 @@ void MRCRequestPage::submitMRC()
     // or not, so the model's cached lock state is whatever that race left.
     //
     // Hand it the live status rather than calling refresh(): refresh() READS
-    // the cached flag and never writes it, so on its own it would re-run the
-    // snapshot against exactly the stale value. This is the only writer.
+    // the cached flag and never writes it. This is the only writer.
     m_mrc_model->walletStatusChanged(static_cast<int>(m_wallet_model->getEncryptionStatus()));
 
     if (!m_mrc_model->submitMRC(s, e)) {
+        m_unlock_context.reset();
+
         message = e + " MRC request cannot be submitted.";
 
         ui->mrcSubmitButton->setToolTip(message);
-    } else {
+    }
+
+    // On success the page is busy until submitFinished().
+}
+
+void MRCRequestPage::submitFinished(bool success)
+{
+    m_unlock_context.reset();
+
+    if (success) {
         // Since MRC was successfully submitted, reset the fee boost to zero.
         CAmount fee_boost = 0;
 
         ui->mrcFeeBoostSpinBox->setValue(fee_boost);
         m_mrc_model->setMRCFeeBoost(fee_boost);
     }
+
+    updateMRCStatus();
 }

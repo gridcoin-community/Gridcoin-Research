@@ -15,6 +15,7 @@ add_executable(test_gridcoin-qt
     rpcconsoletests.cpp
     bitcoinguitests.cpp
     clientmodeltests.cpp
+    mrcmodeltests.cpp
 )
 
 set_target_properties(test_gridcoin-qt PROPERTIES

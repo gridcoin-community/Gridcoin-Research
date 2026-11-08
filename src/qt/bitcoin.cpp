@@ -1517,7 +1517,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 WalletModel walletModel(*wallet, *wallet_tx_source, *wallet_coin_source,
                                         &optionsModel);
                 ResearcherModel researcherModel(*researcher_context);
-                MRCModel mrcModel(*mrc, &walletModel, &clientModel, &researcherModel);
+                MRCModel mrcModel(*mrc, *gui_state, &walletModel, &clientModel, &researcherModel);
                 VotingModel votingModel(*voting_manager, *researcher_context, clientModel, optionsModel, walletModel);
 
                 // Thread the PSGT pool interface to the page + dialog before
