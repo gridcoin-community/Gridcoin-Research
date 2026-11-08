@@ -15,6 +15,7 @@
 #include <QCoreApplication>
 #include <QLabel>
 #include <QPushButton>
+#include <QTest>
 
 namespace {
 interfaces::MRCSnapshot Figures(CAmount reward, CAmount min_fee)
@@ -315,4 +316,62 @@ void MRCModelTests::mrc_page_follows_lock_state_and_refuses_when_locked()
     f.model.walletStatusChanged(static_cast<int>(WalletModel::EncryptionStatus::Unlocked));
     QCOMPARE(f.model.getMRCRequestStatus(), MRCRequestStatus::ELIGIBLE);
     QVERIFY(submit->isEnabled());
+}
+
+void MRCModelTests::a_push_with_an_unchanged_mrc_part_does_not_requote()
+{
+    Fixture f;
+    f.Push(1, Figures(100, 10));
+
+    CAmount boost = 5;
+    f.model.setMRCFeeBoost(boost);
+    QTRY_COMPARE(f.gui_state.m_quote_requests, 1);
+    const uint64_t id = f.gui_state.m_last_quote_request_id;
+
+    // The quote lands; its figures are on the page.
+    interfaces::MRCSnapshot quote = Figures(100, 10);
+    quote.fee = 15;
+    f.gui_state.AnswerQuote(id, quote);
+    Deliver();
+    QCOMPARE(f.model.getMRCTotalFee(), CAmount{15});
+    QVERIFY(!f.model.isQuoteUpdating());
+
+    // A push with the same MRC part asks for no quote and leaves the quoted
+    // figures and the settled state alone.
+    f.Push(2, Figures(100, 10));
+    QTest::qWait(300);
+    QCOMPARE(f.gui_state.m_quote_requests, 1);
+    QCOMPARE(f.model.getMRCTotalFee(), CAmount{15});
+    QVERIFY(!f.model.isQuoteUpdating());
+
+    // A push whose MRC part changed does.
+    f.Push(3, Figures(120, 10));
+    QTRY_COMPARE(f.gui_state.m_quote_requests, 2);
+    QVERIFY(f.model.isQuoteUpdating());
+}
+
+void MRCModelTests::fresh_terms_survive_an_unchanged_push()
+{
+    Fixture f;
+    f.Push(1, Figures(100, 10));
+
+    f.mrc.m_confirmed_result.terms_changed = true;
+    f.mrc.m_confirmed_result.error = "terms changed";
+    f.mrc.m_confirmed_result.fresh_fee = 12;
+    f.mrc.m_confirmed_result.fresh_reward = 100;
+
+    MRCRequestStatus status;
+    QString error;
+    QVERIFY(f.model.submitMRC(status, error));
+    QTRY_VERIFY(!f.model.isSubmitting());
+    QCOMPARE(f.model.getMRCTotalFee(), CAmount{12});
+
+    // An unchanged push keeps the figures the notice quoted.
+    f.Push(2, Figures(100, 10));
+    QCOMPARE(f.model.getMRCTotalFee(), CAmount{12});
+    QCOMPARE(f.model.getMRCNetPayout(), CAmount{88});
+
+    // A changed one replaces them.
+    f.Push(3, Figures(120, 10));
+    QCOMPARE(f.model.getMRCTotalFee(), CAmount{10});
 }

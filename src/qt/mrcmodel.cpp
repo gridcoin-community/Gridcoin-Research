@@ -127,7 +127,7 @@ void MRCModel::setMRCFeeBoost(CAmount& fee_boost)
         // The pushed figures are those of no boost.
         m_quote_timer.stop();
         m_quote_updating = false;
-        applyPushedState();
+        takePushedState(/*force=*/true);
         return;
     }
 
@@ -376,7 +376,38 @@ void MRCModel::unsubscribeFromQuotes()
     m_quote_handler.reset();
 }
 
+namespace {
+//! Whether two MRC parts carry the same figures: the chain state, the trial claim
+//! and the queue.
+bool SameMRCPart(const interfaces::MRCSnapshot& a, const interfaces::MRCSnapshot& b)
+{
+    return a.out_of_sync == b.out_of_sync
+        && a.block_height == b.block_height
+        && a.block_version_valid == b.block_version_valid
+        && a.output_limit == b.output_limit
+        && a.create_error == b.create_error
+        && a.create_error_msg == b.create_error_msg
+        && a.boosted_fee_error == b.boosted_fee_error
+        && a.boosted_fee_error_msg == b.boosted_fee_error_msg
+        && a.reward == b.reward
+        && a.min_fee == b.min_fee
+        && a.fee == b.fee
+        && a.queue_length == b.queue_length
+        && a.pos == b.pos
+        && a.found_in_queue == b.found_in_queue
+        && a.queue_head_fee == b.queue_head_fee
+        && a.queue_tail_fee == b.queue_tail_fee
+        && a.queue_pay_limit_fee == b.queue_pay_limit_fee
+        && a.mature_balance == b.mature_balance;
+}
+} // anonymous namespace
+
 void MRCModel::applyPushedState()
+{
+    takePushedState(/*force=*/false);
+}
+
+void MRCModel::takePushedState(bool force)
 {
     if (!m_cache) {
         refresh();
@@ -386,26 +417,38 @@ void MRCModel::applyPushedState()
 
     const interfaces::GuiStateSnapshot& pushed = m_cache->snapshot();
 
-    m_snap_present = pushed.has_mrc;
-    m_fresh_terms.reset();
-    m_quote_failure.reset();
+    // The node pushes about every eight seconds whether or not the MRC part
+    // changed. When it did not, the figures on the page, a quote in flight and
+    // the fresh terms of a refused submit all stand: only the rest of the model
+    // (the researcher, the wallet) is read again below.
+    const bool unchanged = !force && pushed.has_mrc == m_last_pushed_has_mrc
+        && (!pushed.has_mrc || SameMRCPart(pushed.mrc, m_last_pushed_mrc));
 
-    if (!pushed.has_mrc) {
-        // The core is out of sync: a quote still on its way is for a state that
-        // is gone, and must not bring the figures back.
-        ++m_quote_id;
-        m_quote_updating = false;
-        m_quote_timer.stop();
-    }
+    if (!unchanged) {
+        m_last_pushed_has_mrc = pushed.has_mrc;
+        m_last_pushed_mrc = pushed.mrc;
 
-    if (pushed.has_mrc) {
-        m_snap = pushed.mrc;
+        m_snap_present = pushed.has_mrc;
+        m_fresh_terms.reset();
+        m_quote_failure.reset();
 
-        if (m_mrc_fee_boost != 0) {
-            // The pushed figures are for no boost: they stand in, marked as
-            // updating, until the quote against the new state lands.
+        if (!pushed.has_mrc) {
+            // The core is out of sync: a quote still on its way is for a state that
+            // is gone, and must not bring the figures back.
             ++m_quote_id;
-            issueQuote();
+            m_quote_updating = false;
+            m_quote_timer.stop();
+        }
+
+        if (pushed.has_mrc) {
+            m_snap = pushed.mrc;
+
+            if (m_mrc_fee_boost != 0) {
+                // The pushed figures are for no boost: they stand in, marked as
+                // updating, until the quote against the new state lands.
+                ++m_quote_id;
+                issueQuote();
+            }
         }
     }
 

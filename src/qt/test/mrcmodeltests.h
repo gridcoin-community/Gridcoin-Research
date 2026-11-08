@@ -18,6 +18,8 @@ private slots:
     void mrc_model_takes_no_core_call_on_a_push();
     void mrc_model_shows_out_of_sync_while_absent();
     void fee_boost_quote_latest_answer_wins();
+    void a_push_with_an_unchanged_mrc_part_does_not_requote();
+    void fresh_terms_survive_an_unchanged_push();
     void a_failed_quote_is_a_create_error_not_a_balance_error();
     void a_late_quote_does_not_undo_an_out_of_sync_push();
     void submit_sends_the_confirmed_terms();

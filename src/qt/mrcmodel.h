@@ -136,6 +136,9 @@ private:
     //! Takes the pushed state into the figures, and quotes again if a fee boost
     //! is set. Called when the cache changes and once at attach.
     void applyPushedState();
+    //! applyPushedState's body. \p force takes the pushed figures although the
+    //! MRC part is as the last push's, as when a fee boost is cleared.
+    void takePushedState(bool force);
     //! Applies an answered quote when it is the latest request's.
     void applyQuote(uint64_t request_id, const interfaces::MRCSnapshot& quote);
     void issueQuote();
@@ -206,6 +209,10 @@ private:
     //! Fee and reward the core returned for a submit refused on changed terms.
     std::optional<std::pair<CAmount, CAmount>> m_fresh_terms;
     QString m_submit_notice;
+
+    //! The MRC part of the last push that changed it, to tell an unchanged one.
+    bool m_last_pushed_has_mrc = false;
+    interfaces::MRCSnapshot m_last_pushed_mrc;
 
     //! The message of the latest quote, if it failed to compute.
     std::optional<QString> m_quote_failure;
