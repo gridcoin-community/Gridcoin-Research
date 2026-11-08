@@ -28,6 +28,13 @@ Rules
      release-signer.txt pins the signer: identity-eku=<1.3.6.1.4.1.311.97.* OID> and
      subject-cn=<text>, each once, and nothing else; the identity marker is not
      1.3.6.1.4.1.311.97.1.0, which every Artifact Signing certificate carries
+  10 no script-level parameter default reads the script's own path
+  11 every script that runs elevated sets PSModulePath to the system's module directories
+     before it dot-sources anything
+  12 the installer's running-GUI check runs $SYSDIR\\cmd.exe, and the installer reads no uninstaller
+     from HKCU
+  13 the update script checks its helpers before it dot-sources them, with a copy of
+     Get-GridcoinWriteVector whose masks and privileged SIDs equal GridcoinCommon.ps1's
 
 Usage
   lint-windows-scripts.py              check the tree
@@ -53,6 +60,12 @@ STEPS = "contrib/windows/Invoke-GridcoinInstallStep.ps1"
 UPDATE = "contrib/windows/Update-GridcoinCore.ps1"
 RELEASE_TEST = "contrib/windows/Test-GridcoinRelease.ps1"
 SIGNER = "contrib/windows/release-signer.txt"
+UNINSTALL = "contrib/windows/Uninstall-GridcoinCoreTask.ps1"
+ELEVATED = (INSTALL, STEPS, SHUTDOWN, UNINSTALL, UPDATE, RELEASE_TEST)
+PIN_RE = re.compile(r'^\$env:PSModulePath = "\$PSHOME\\Modules;\$env:ProgramFiles\\WindowsPowerShell\\Modules"\s*$')
+DOT_SOURCE_RE = re.compile(r"^\. \(Join-Path\b")
+MASK_RE = re.compile(r"^\s*\$(fileMask|dirMask) = \[int\]\(\[System\.Security\.AccessControl\.FileSystemRights\]'([^']*)'\)\s*$")
+SID_RE = re.compile(r"'(S-1-5-[0-9-]+)'")
 SIGNER_LINE_RE = re.compile(r"^(identity-eku=1\.3\.6\.1\.4\.1\.311\.97(?:\.[0-9]+)+|subject-cn=\S.*)$")
 GENERIC_SIGNING_EKU = "1.3.6.1.4.1.311.97.1.0"
 
@@ -364,7 +377,83 @@ def rule10(files):
     return failures
 
 
-RULES = (rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9, rule10)
+def rule11(files):
+    failures = []
+    for path in ELEVATED:
+        text = files.get(path)
+        if text is None:
+            continue
+        lines = text.splitlines()
+        pin = first_line(lines, PIN_RE)
+        dot = first_line(lines, DOT_SOURCE_RE)
+        if pin is None:
+            failures.append(f"rule 11: {path}: does not set PSModulePath to the system's module directories")
+        elif dot is not None and pin > dot:
+            failures.append(f"rule 11: {path}: sets PSModulePath only after it dot-sources a script")
+    return failures
+
+
+def rule12(files):
+    failures = []
+    nsis = files.get(NSIS)
+    if nsis is None:
+        return failures
+    # comments do not count
+    nsis = "\n".join(line for line in nsis.splitlines() if not line.lstrip().startswith((";", "#")))
+    if "%COMSPEC%" in nsis.upper():
+        failures.append(f"rule 12: {NSIS}: uses %COMSPEC%; the running-GUI check runs $SYSDIR\\cmd.exe")
+    if re.search(r"ReadRegStr\s+\S+\s+HKCU\b[^\n]*UninstallString", nsis):
+        failures.append(f"rule 12: {NSIS}: reads an uninstaller from an HKCU UninstallString")
+    if "tasklist.exe" in nsis and 'StrCpy $1 "$SYSDIR\\cmd.exe"' not in nsis:
+        failures.append(f"rule 12: {NSIS}: the running-GUI check does not run $SYSDIR\\cmd.exe")
+    return failures
+
+
+def function_body(text, name):
+    start = text.find("function " + name)
+    if start < 0:
+        return None
+    end = text.find("\n}\n", start)
+    return text[start:end] if end >= 0 else text[start:]
+
+
+def masks_and_sids(body):
+    masks = {}
+    for line in body.splitlines():
+        m = MASK_RE.match(line)
+        if m:
+            masks[m.group(1)] = m.group(2)
+    return masks, set(SID_RE.findall(body))
+
+
+def rule13(files):
+    failures = []
+    update, common = files.get(UPDATE), files.get(COMMON)
+    if update is None or common is None:
+        return failures
+    copy = function_body(update, "Get-PreloadWriteVector")
+    if copy is None:
+        return [f"rule 13: {UPDATE}: has no Get-PreloadWriteVector pre-load check"]
+    lines = update.splitlines()
+    call = first_line(lines, re.compile(r"\$vector = Get-PreloadWriteVector\b"))
+    dot = first_line(lines, DOT_SOURCE_RE)
+    if call is None or (dot is not None and call > dot):
+        failures.append(f"rule 13: {UPDATE}: does not run the pre-load check before it dot-sources the helpers")
+    real = function_body(common, "Get-GridcoinWriteVector")
+    sids = function_body(common, "Get-GridcoinPrivilegedSids")
+    if real is None or sids is None:
+        return failures + [f"rule 13: {COMMON}: Get-GridcoinWriteVector or Get-GridcoinPrivilegedSids is missing"]
+    copy_masks, copy_sids = masks_and_sids(copy)
+    real_masks, _ = masks_and_sids(real)
+    _, real_sids = masks_and_sids(sids)
+    if not real_masks or copy_masks != real_masks:
+        failures.append(f"rule 13: {UPDATE}: the pre-load check's masks differ from Get-GridcoinWriteVector's")
+    if not real_sids or copy_sids != real_sids:
+        failures.append(f"rule 13: {UPDATE}: the pre-load check's privileged SIDs differ from Get-GridcoinPrivilegedSids'")
+    return failures
+
+
+RULES = (rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9, rule10, rule11, rule12, rule13)
 
 GOOD_PS1 = "#Requires -Version 5.1\nSet-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n"
 
@@ -392,24 +481,44 @@ GOOD_UNINSTALL = ("Section -un.Main\n" + step_line("PreUninstall", "$INSTDIR\\wi
 GOOD_RESTART = "Function .onInstFailed\n" + step_line("RestartStopped") + "FunctionEnd\n"
 GOOD_NSIS = GOOD_MAIN_HEAD + GOOD_MAIN_TAIL + GOOD_RESTART + GOOD_UNINSTALL
 GOOD_SDDL = "O:BAD:PAI(A;OICI;FA;;;BA)(A;OICI;FA;;;SY)(A;OICI;0x1200a9;;;BU)"
+PIN_LINE = '$env:PSModulePath = "$PSHOME\\Modules;$env:ProgramFiles\\WindowsPowerShell\\Modules"\n'
+GOOD_MASKS = ("    $fileMask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete')\n"
+              "    $dirMask = [int]([System.Security.AccessControl.FileSystemRights]'CreateFiles, Delete')\n")
+GOOD_CHECKER = ("function Get-GridcoinPrivilegedSids {\n    return @('S-1-5-18', 'S-1-5-32-544')\n}\n"
+                "function Get-GridcoinWriteVector {\n" + GOOD_MASKS + "}\n")
+GOOD_PRELOAD = ("function Get-PreloadWriteVector {\n    $allowed = @('S-1-5-18', 'S-1-5-32-544')\n" + GOOD_MASKS + "}\n"
+                "$vector = Get-PreloadWriteVector -Path $helper\n")
+GOOD_UPDATE = (GOOD_PS1 + PIN_LINE + GOOD_PRELOAD + ". (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')\n"
+               "# Start-Process in a comment\nTest-GridcoinReleaseSignature -Path $p -SignerFile $s\nStart-Process $p\n")
 GOOD_FILES = {
-    COMMON: GOOD_PS1 + "if ($t.Principal.LogonType -eq 1) { }\n'rem BEGIN GENERATED'\n'rem END GENERATED'\n",
-    INSTALL: GOOD_PS1 + "if ($DataDir -match '\\\\$') { throw 'x' }\n",
-    SHUTDOWN: GOOD_PS1 + "'rem BEGIN GENERATED'\n'rem END GENERATED'\n",
+    COMMON: GOOD_PS1 + "if ($t.Principal.LogonType -eq 1) { }\n'rem BEGIN GENERATED'\n'rem END GENERATED'\n" + GOOD_CHECKER,
+    INSTALL: GOOD_PS1 + PIN_LINE + "if ($DataDir -match '\\\\$') { throw 'x' }\n",
+    SHUTDOWN: GOOD_PS1 + PIN_LINE + "'rem BEGIN GENERATED'\n'rem END GENERATED'\n",
     GUI: GOOD_PS1 + "if ($DataDir -match '\\\\$') { throw 'x' }\n",
     "contrib/windows/Other.ps1": GOOD_PS1 + (
         "$l = @(\n    'rem BEGIN GENERATED',\n    '\"%SystemRoot%\\System32\\PING.EXE\" -n 121 127.0.0.1 >nul',\n"
         "    'rem ping and find in a comment',\n    'rem END GENERATED'\n)\n"),
     NSIS: GOOD_NSIS,
-    STEPS: GOOD_PS1 + "$script:InstallDirSddl = '" + GOOD_SDDL + "'\n",
+    STEPS: GOOD_PS1 + PIN_LINE + "$script:InstallDirSddl = '" + GOOD_SDDL + "'\n",
     CMAKE: "install(FILES Install-GridcoinCoreTask.ps1)\n",
-    UPDATE: GOOD_PS1 + "# Start-Process in a comment\nTest-GridcoinReleaseSignature -Path $p -SignerFile $s\nStart-Process $p\n",
-    RELEASE_TEST: GOOD_PS1 + "Get-AuthenticodeSignature -LiteralPath $Path\n",
+    UPDATE: GOOD_UPDATE,
+    RELEASE_TEST: GOOD_PS1 + PIN_LINE + "Get-AuthenticodeSignature -LiteralPath $Path\n",
     SIGNER: "# comments\n\nidentity-eku=1.3.6.1.4.1.311.97.11.22.33\nsubject-cn=Some Name\n",
 }
 
 # (rule, a file that breaks it) pairs, applied to GOOD_FILES
 BAD_SAMPLES = (
+    (11, {INSTALL: GOOD_PS1 + "if ($DataDir -match '\\\\$') { throw 'x' }\n"}),
+    (11, {STEPS: GOOD_PS1 + ". (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')\n" + PIN_LINE
+                 + "$script:InstallDirSddl = '" + GOOD_SDDL + "'\n"}),
+    (12, {NSIS: GOOD_NSIS + '    ExpandEnvStrings $1 "%COMSPEC%"\n'}),
+    (12, {NSIS: GOOD_NSIS + '    ReadRegStr $1 HKCU "SOFTWARE\\x" "UninstallString"\n'}),
+    (12, {NSIS: GOOD_NSIS + "    ExecWait '$1 /C tasklist.exe'\n"}),
+    (13, {UPDATE: GOOD_UPDATE.replace(GOOD_PRELOAD, "")}),
+    (13, {UPDATE: GOOD_UPDATE.replace("'CreateFiles, Delete')\n}", "'CreateFiles')\n}")}),
+    (13, {UPDATE: GOOD_UPDATE.replace("$allowed = @('S-1-5-18', 'S-1-5-32-544')", "$allowed = @('S-1-5-18')")}),
+    (13, {UPDATE: GOOD_UPDATE.replace("$vector = Get-PreloadWriteVector -Path $helper\n. (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')\n",
+                                      ". (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')\n$vector = Get-PreloadWriteVector -Path $helper\n")}),
     (10, {"contrib/windows/Other.ps1": "#Requires -Version 5.1\n[CmdletBinding()]\nparam(\n    [string]$X = (Join-Path $PSScriptRoot 'x')\n)\nSet-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n"}),
     (1, {"contrib/windows/Other.ps1": GOOD_PS1 + "Register-ScheduledTask -User u -Password p\n"}),
     (1, {"contrib/windows/Other.ps1": GOOD_PS1 + "$x = [TASK_LOGON_PASSWORD]\n"}),
