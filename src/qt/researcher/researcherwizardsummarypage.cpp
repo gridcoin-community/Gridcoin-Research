@@ -47,6 +47,12 @@ void ResearcherWizardSummaryPage::setModel(ResearcherModel *model)
 
     connect(model, &ResearcherModel::researcherChanged, this, &ResearcherWizardSummaryPage::refreshSummary);
     connect(model, &ResearcherModel::beaconChanged, this, &ResearcherWizardSummaryPage::refreshSummary);
+
+    // The reload runs off the GUI thread and its result reaches the model with
+    // the next push, so the projects tab shows what the model holds whenever
+    // either arrives.
+    connect(model, &ResearcherModel::researcherChanged, this, &ResearcherWizardSummaryPage::refreshProjects);
+    connect(model, &ResearcherModel::reloaded, this, &ResearcherWizardSummaryPage::refreshProjects);
     connect(ui->refreshButton, &QPushButton::clicked, this, &ResearcherWizardSummaryPage::reloadProjects);
     connect(ui->tabWidget, &QTabWidget::currentChanged, this, &ResearcherWizardSummaryPage::onTabChanged);
 }

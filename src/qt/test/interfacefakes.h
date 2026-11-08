@@ -116,22 +116,26 @@ public:
     // Canned responses (set by the test before use).
     interfaces::ResearcherSnapshot m_snapshot;
     std::vector<interfaces::PoolRow> m_pools;
-    //! trySnapshot() answers as if cs_main were busy.
-    bool m_main_busy = false;
-    //! When set, outOfSync() answers this rather than the snapshot's flag: the
-    //! flag as read before a block finished, with the snapshot taken after it.
-    std::optional<bool> m_out_of_sync_flag;
 
-    // Recorded calls.
+    // Recorded calls. The model reads the snapshot from the pushed state and
+    // takes none from here, so these stay 0. reload() runs on a worker thread
+    // in the model, so its count is atomic.
     int m_switch_mode_calls = 0;
+    int m_snapshot_calls = 0;
+    int m_try_snapshot_calls = 0;
+    std::atomic<int> m_reload_calls{0};
 
-    interfaces::ResearcherSnapshot snapshot() override { return m_snapshot; }
-    std::optional<interfaces::ResearcherSnapshot> trySnapshot() override
+    interfaces::ResearcherSnapshot snapshot() override
     {
-        if (m_main_busy) return std::nullopt;
+        ++m_snapshot_calls;
         return m_snapshot;
     }
-    bool outOfSync() override { return m_out_of_sync_flag.value_or(m_snapshot.out_of_sync); }
+    std::optional<interfaces::ResearcherSnapshot> trySnapshot() override
+    {
+        ++m_try_snapshot_calls;
+        return m_snapshot;
+    }
+    bool outOfSync() override { return m_snapshot.out_of_sync; }
     bool hasV3CapableProjects() override { return false; }
     std::vector<interfaces::ResearcherProjectRow> projects(bool /*extended*/) override { return {}; }
     std::vector<interfaces::WhitelistProject> whitelistProjects() override { return {}; }
@@ -149,7 +153,7 @@ public:
     interfaces::BeaconAdvertiseResult advertiseBeacon() override { return {}; }
     std::string generateBeaconKeyForV3() override { return {}; }
     interfaces::BeaconAdvertiseResult advertiseBeaconV3(const std::string& /*ownership_proof_xml*/) override { return {}; }
-    void reload() override {}
+    void reload() override { ++m_reload_calls; }
 
     // Notification delivery is not exercised here; see the note on
     // FakeSideStakeManager's handlers.

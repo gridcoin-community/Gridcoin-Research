@@ -36,6 +36,12 @@ interfaces::GuiStateSnapshot Pushed(uint64_t sequence, const interfaces::MRCSnap
     snapshot.out_of_sync = false;
     snapshot.has_mrc = true;
     snapshot.mrc = mrc;
+
+    // The researcher part the node pushes beside it: the MRC page reads the
+    // researcher model for eligibility, which the node's snapshot carries.
+    snapshot.has_researcher = true;
+    snapshot.researcher.has_active_beacon = true;
+    snapshot.researcher.out_of_sync = false;
     return snapshot;
 }
 
@@ -64,17 +70,9 @@ struct Fixture
     ResearcherModel researcher_model;
     MRCModel model;
 
-    static interfaces::ResearcherSnapshot Researcher()
-    {
-        interfaces::ResearcherSnapshot snapshot;
-        snapshot.has_active_beacon = true;
-        snapshot.out_of_sync = false;
-        return snapshot;
-    }
-
     Fixture()
         : client_model(node, gui_state, nullptr)
-        , researcher_model((researcher_context.m_snapshot = Researcher(), researcher_context))
+        , researcher_model(researcher_context, gui_state, *client_model.guiState())
         , model(mrc, gui_state, nullptr, &client_model, &researcher_model)
     {
     }

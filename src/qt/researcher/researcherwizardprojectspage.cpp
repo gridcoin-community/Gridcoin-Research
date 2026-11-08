@@ -47,6 +47,12 @@ void ResearcherWizardProjectsPage::setModel(ResearcherModel *model)
     ui->projectTableView->hideColumn(ProjectTableModel::Magnitude);
 
     connect(ui->refreshButton, &QPushButton::clicked, this, &ResearcherWizardProjectsPage::refresh);
+
+    // The reload runs off the GUI thread and its result reaches the model with
+    // the next push, so the page shows what the model holds whenever either
+    // arrives.
+    connect(model, &ResearcherModel::researcherChanged, this, &ResearcherWizardProjectsPage::showProjects);
+    connect(model, &ResearcherModel::reloaded, this, &ResearcherWizardProjectsPage::showProjects);
 }
 
 void ResearcherWizardProjectsPage::initializePage()
@@ -78,6 +84,11 @@ void ResearcherWizardProjectsPage::refresh()
 {
     m_researcher_model->reload();
 
+    showProjects();
+}
+
+void ResearcherWizardProjectsPage::showProjects()
+{
     ui->emailLabel->setText(m_researcher_model->email());
     ui->boincPathLabel->setText(m_researcher_model->formatBoincPath());
     ui->selectedCpidLabel->setText(m_researcher_model->formatCpid());
