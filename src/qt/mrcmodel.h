@@ -119,11 +119,18 @@ public:
     //! until the next submit or fee boost edit.
     QString getSubmitNotice() const { return m_submit_notice; }
 
-    //! Starts the submit of the figures shown (their fee and net payout are the
-    //! terms the core holds the send to). Returns false, with \p e set, if the
-    //! request cannot be submitted now; true once the submit runs. The outcome
-    //! arrives as submitFinished().
-    bool submitMRC(MRCRequestStatus& s, QString& e);
+    //! Starts the submit. \p confirmed_fee and \p confirmed_net are the terms
+    //! the user confirmed at the click (the figures then shown); the core holds
+    //! the send to them, whatever the figures have become since. Returns false,
+    //! with \p e set, if the request cannot be submitted now; true once the
+    //! submit runs. The outcome arrives as submitFinished().
+    bool submitMRC(MRCRequestStatus& s, QString& e, CAmount confirmed_fee, CAmount confirmed_net);
+    //! The request can be submitted now: eligible, no quote outstanding, no
+    //! submit running.
+    bool canSubmit() const
+    {
+        return m_mrc_status == MRCRequestStatus::ELIGIBLE && !m_quote_updating && !m_submitting;
+    }
     bool isWalletLocked();
 
     //! Asks the core to push its state now (the page's update button).

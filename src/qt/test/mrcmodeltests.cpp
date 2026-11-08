@@ -230,7 +230,7 @@ void MRCModelTests::submit_sends_the_confirmed_terms()
 
     MRCRequestStatus status;
     QString error;
-    QVERIFY(f.model.submitMRC(status, error));
+    QVERIFY(f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout()));
     QVERIFY(f.model.isSubmitting());
     QTRY_VERIFY(!f.model.isSubmitting());
 
@@ -239,6 +239,36 @@ void MRCModelTests::submit_sends_the_confirmed_terms()
     QCOMPARE(f.mrc.m_last_confirmed_net.load(), CAmount{90});
     QCOMPARE(f.mrc.m_submit_calls.load(), 0);
     QCOMPARE(f.model.getMRCRequestStatus(), MRCRequestStatus::PENDING);
+}
+
+void MRCModelTests::submit_sends_the_terms_given_at_the_click()
+{
+    Fixture f;
+    f.Push(1, Figures(100, 10));
+    f.mrc.m_confirmed_result.success = true;
+    f.mrc.m_confirmed_result.submitted_height = 100;
+    f.mrc.m_confirmed_result.research_subsidy = 100;
+
+    // The terms the user confirmed at the click.
+    const CAmount clicked_fee = f.model.getMRCTotalFee();
+    const CAmount clicked_net = f.model.getMRCNetPayout();
+    QCOMPARE(clicked_fee, CAmount{10});
+    QCOMPARE(clicked_net, CAmount{90});
+
+    // A push lands before the submit starts (the unlock prompt's event loop)
+    // and moves the figures to worse ones.
+    f.Push(2, Figures(80, 30));
+    QCOMPARE(f.model.getMRCTotalFee(), CAmount{30});
+    QCOMPARE(f.model.getMRCNetPayout(), CAmount{50});
+
+    MRCRequestStatus status;
+    QString error;
+    QVERIFY(f.model.submitMRC(status, error, clicked_fee, clicked_net));
+    QTRY_VERIFY(!f.model.isSubmitting());
+
+    QCOMPARE(f.mrc.m_submit_confirmed_calls.load(), 1);
+    QCOMPARE(f.mrc.m_last_confirmed_fee.load(), clicked_fee);
+    QCOMPARE(f.mrc.m_last_confirmed_net.load(), clicked_net);
 }
 
 void MRCModelTests::submit_refused_on_changed_terms_shows_fresh_figures()
@@ -254,7 +284,7 @@ void MRCModelTests::submit_refused_on_changed_terms_shows_fresh_figures()
 
     MRCRequestStatus status;
     QString error;
-    QVERIFY(f.model.submitMRC(status, error));
+    QVERIFY(f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout()));
     QTRY_VERIFY(!f.model.isSubmitting());
 
     QCOMPARE(f.mrc.m_submit_confirmed_calls.load(), 1);
@@ -280,7 +310,7 @@ void MRCModelTests::submit_error_shows_the_error_and_requotes()
 
     MRCRequestStatus status;
     QString error;
-    QVERIFY(f.model.submitMRC(status, error));
+    QVERIFY(f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout()));
     QTRY_VERIFY(!f.model.isSubmitting());
 
     QVERIFY(f.model.isMRCError(status, error));
@@ -309,7 +339,7 @@ void MRCModelTests::mrc_page_follows_lock_state_and_refuses_when_locked()
 
     MRCRequestStatus status;
     QString error;
-    QVERIFY(!f.model.submitMRC(status, error));
+    QVERIFY(!f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout()));
     QCOMPARE(f.mrc.m_submit_confirmed_calls.load(), 0);
 
     // The same figures once unlocked.
@@ -362,7 +392,7 @@ void MRCModelTests::fresh_terms_survive_an_unchanged_push()
 
     MRCRequestStatus status;
     QString error;
-    QVERIFY(f.model.submitMRC(status, error));
+    QVERIFY(f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout()));
     QTRY_VERIFY(!f.model.isSubmitting());
     QCOMPARE(f.model.getMRCTotalFee(), CAmount{12});
 

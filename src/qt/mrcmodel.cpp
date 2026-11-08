@@ -226,7 +226,7 @@ bool MRCModel::isMRCError(MRCRequestStatus &s, QString& e)
     return false;
 }
 
-bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e)
+bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e, CAmount confirmed_fee, CAmount confirmed_net)
 {
     if (m_submitting) {
         e = tr("A submit is already in progress.");
@@ -245,12 +245,12 @@ bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e)
 
     m_submit_notice.clear();
 
-    // The terms the user is looking at. The core sends the request only if it
-    // would pay no more, and the user receive no less, than these.
+    // The terms are those the caller took when the user confirmed, not the
+    // current figures: a push can land between the click and here (while the
+    // unlock prompt is open). The core sends the request only if it would pay
+    // no more, and the user receive no less, than these.
     const CAmount fee_boost = m_mrc_fee_boost;
     const bool wallet_locked = m_wallet_locked;
-    const CAmount confirmed_fee = getMRCTotalFee();
-    const CAmount confirmed_net = getMRCNetPayout();
 
     m_submitting = true;
     s = m_mrc_status;

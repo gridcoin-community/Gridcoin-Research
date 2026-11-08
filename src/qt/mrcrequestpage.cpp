@@ -349,6 +349,16 @@ void MRCRequestPage::submitMRC()
 
     if (!m_mrc_model) return;
 
+    // Nothing to confirm if the request cannot be submitted now; do not open
+    // the unlock prompt for it.
+    if (!m_mrc_model->canSubmit()) return;
+
+    // The terms the user confirmed are the ones on the page at the click. The
+    // unlock prompt runs a nested event loop, in which a push or a quote can
+    // change the figures, so take them before it.
+    const CAmount confirmed_fee = m_mrc_model->getMRCTotalFee();
+    const CAmount confirmed_net = m_mrc_model->getMRCNetPayout();
+
     // Ask for an unlock, the same way the send dialog and every other contract
     // surface does. This page was the one that did not, which mattered once the
     // builder began refusing a staking-only wallet: the claim simply failed and
@@ -384,7 +394,7 @@ void MRCRequestPage::submitMRC()
     // the cached flag and never writes it. This is the only writer.
     m_mrc_model->walletStatusChanged(static_cast<int>(m_wallet_model->getEncryptionStatus()));
 
-    if (!m_mrc_model->submitMRC(s, e)) {
+    if (!m_mrc_model->submitMRC(s, e, confirmed_fee, confirmed_net)) {
         m_unlock_context.reset();
 
         message = e + " MRC request cannot be submitted.";
