@@ -4,10 +4,12 @@
 
 #include "qt/test/mrcmodeltests.h"
 
+#include "interfaces/wallet_coin_source.h"
 #include "qt/bitcoinunits.h"
 #include "qt/clientmodel.h"
 #include "qt/mrcmodel.h"
 #include "qt/mrcrequestpage.h"
+#include "qt/optionsmodel.h"
 #include "qt/researcher/researchermodel.h"
 #include "qt/test/interfacefakes.h"
 #include "qt/walletmodel.h"
@@ -82,6 +84,46 @@ struct Fixture
     {
         gui_state.Push(Pushed(sequence, figures));
         Deliver();
+    }
+};
+
+//! A fixture with a wallet model on a fake wallet, to follow the submit's
+//! unlock context. The model is heap-held so a test can destroy it while the
+//! rest stands.
+struct WalletFixture
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    qt_test::FakeGuiState gui_state;
+    qt_test::FakeMRC mrc;
+    qt_test::FakeResearcherContext researcher_context;
+    qt_test::FakeWallet wallet;
+    qt_test::FakeWalletTxSource tx_source;
+    std::shared_ptr<interfaces::WalletCoinSource> coin_source = interfaces::MakeSyntheticCoinSource(0, 0);
+    OptionsModel options;
+    ClientModel client_model;
+    ResearcherModel researcher_model;
+    WalletModel wallet_model;
+    std::unique_ptr<MRCModel> model;
+
+    WalletFixture()
+        : options(node, sidestakes)
+        , client_model(node, gui_state, nullptr)
+        , researcher_model(researcher_context, gui_state, *client_model.guiState())
+        , wallet_model(wallet, tx_source, *coin_source, &options)
+        , model(std::make_unique<MRCModel>(mrc, gui_state, &wallet_model, &client_model, &researcher_model))
+    {
+        gui_state.Push(Pushed(1, Figures(100, 10)));
+        Deliver();
+        mrc.m_confirmed_result.success = true;
+        mrc.m_confirmed_result.submitted_height = 100;
+        mrc.m_confirmed_result.research_subsidy = 100;
+    }
+
+    //! A valid context that locks the wallet when released.
+    std::unique_ptr<WalletModel::UnlockContext> RelockingContext()
+    {
+        return std::make_unique<WalletModel::UnlockContext>(&wallet_model, true, true);
     }
 };
 
@@ -230,7 +272,7 @@ void MRCModelTests::submit_sends_the_confirmed_terms()
 
     MRCRequestStatus status;
     QString error;
-    QVERIFY(f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout()));
+    QVERIFY(f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout(), nullptr));
     QVERIFY(f.model.isSubmitting());
     QTRY_VERIFY(!f.model.isSubmitting());
 
@@ -239,6 +281,39 @@ void MRCModelTests::submit_sends_the_confirmed_terms()
     QCOMPARE(f.mrc.m_last_confirmed_net.load(), CAmount{90});
     QCOMPARE(f.mrc.m_submit_calls.load(), 0);
     QCOMPARE(f.model.getMRCRequestStatus(), MRCRequestStatus::PENDING);
+}
+
+void MRCModelTests::the_submit_unlock_is_released_when_the_submit_finishes()
+{
+    WalletFixture f;
+
+    MRCRequestStatus status;
+    QString error;
+    QVERIFY(f.model->submitMRC(status, error, f.model->getMRCTotalFee(), f.model->getMRCNetPayout(),
+                               f.RelockingContext()));
+    QVERIFY(f.model->isSubmitting());
+
+    // Held while the submit runs and until it is reported finished.
+    QCOMPARE(f.wallet.m_lock_wallet_calls, 0);
+
+    QTRY_VERIFY(!f.model->isSubmitting());
+    QCOMPARE(f.wallet.m_lock_wallet_calls, 1);
+}
+
+void MRCModelTests::the_submit_unlock_is_released_when_the_model_is_destroyed_mid_submit()
+{
+    WalletFixture f;
+
+    MRCRequestStatus status;
+    QString error;
+    QVERIFY(f.model->submitMRC(status, error, f.model->getMRCTotalFee(), f.model->getMRCNetPayout(),
+                               f.RelockingContext()));
+    QCOMPARE(f.wallet.m_lock_wallet_calls, 0);
+
+    // The finished signal is never delivered: the event loop does not run.
+    f.model.reset();
+
+    QCOMPARE(f.wallet.m_lock_wallet_calls, 1);
 }
 
 void MRCModelTests::submit_sends_the_terms_given_at_the_click()
@@ -263,7 +338,7 @@ void MRCModelTests::submit_sends_the_terms_given_at_the_click()
 
     MRCRequestStatus status;
     QString error;
-    QVERIFY(f.model.submitMRC(status, error, clicked_fee, clicked_net));
+    QVERIFY(f.model.submitMRC(status, error, clicked_fee, clicked_net, nullptr));
     QTRY_VERIFY(!f.model.isSubmitting());
 
     QCOMPARE(f.mrc.m_submit_confirmed_calls.load(), 1);
@@ -284,7 +359,7 @@ void MRCModelTests::submit_refused_on_changed_terms_shows_fresh_figures()
 
     MRCRequestStatus status;
     QString error;
-    QVERIFY(f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout()));
+    QVERIFY(f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout(), nullptr));
     QTRY_VERIFY(!f.model.isSubmitting());
 
     QCOMPARE(f.mrc.m_submit_confirmed_calls.load(), 1);
@@ -310,7 +385,7 @@ void MRCModelTests::submit_error_shows_the_error_and_requotes()
 
     MRCRequestStatus status;
     QString error;
-    QVERIFY(f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout()));
+    QVERIFY(f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout(), nullptr));
     QTRY_VERIFY(!f.model.isSubmitting());
 
     QVERIFY(f.model.isMRCError(status, error));
@@ -339,7 +414,7 @@ void MRCModelTests::mrc_page_follows_lock_state_and_refuses_when_locked()
 
     MRCRequestStatus status;
     QString error;
-    QVERIFY(!f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout()));
+    QVERIFY(!f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout(), nullptr));
     QCOMPARE(f.mrc.m_submit_confirmed_calls.load(), 0);
 
     // The same figures once unlocked.
@@ -392,7 +467,7 @@ void MRCModelTests::fresh_terms_survive_an_unchanged_push()
 
     MRCRequestStatus status;
     QString error;
-    QVERIFY(f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout()));
+    QVERIFY(f.model.submitMRC(status, error, f.model.getMRCTotalFee(), f.model.getMRCNetPayout(), nullptr));
     QTRY_VERIFY(!f.model.isSubmitting());
     QCOMPARE(f.model.getMRCTotalFee(), CAmount{12});
 

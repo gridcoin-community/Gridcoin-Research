@@ -368,18 +368,18 @@ void MRCRequestPage::submitMRC()
     // refusing outright would be hostile. The context elevates for this
     // operation and hands the staking-only scope back when it is released, so
     // the node keeps staking afterwards. The submit runs on a worker thread, so
-    // the context is kept until the model reports the submit ended.
+    // the context is handed to the model, which releases it when the submit
+    // ends or when the model is destroyed, even if this page never hears of it.
     //
     // MRCModel dereferences its wallet model in its own constructor, so a
     // constructed model always has one.
-    m_unlock_context = std::make_unique<WalletModel::UnlockContext>(m_wallet_model->requestUnlock());
+    auto unlock = std::make_unique<WalletModel::UnlockContext>(m_wallet_model->requestUnlock());
 
-    if (!m_unlock_context->isValid()) {
+    if (!unlock->isValid()) {
         // Cancelled or wrong passphrase. The elevation widens the unlock in
         // place, so nothing was given up on the way to the prompt and a wallet
         // that was staking is still staking. The fee boost is left alone so a
         // retry keeps it.
-        m_unlock_context.reset();
 
         ui->mrcSubmitButton->setToolTip(tr("The wallet must be unlocked to submit a manual "
                                            "research claim."));
@@ -394,9 +394,7 @@ void MRCRequestPage::submitMRC()
     // the cached flag and never writes it. This is the only writer.
     m_mrc_model->walletStatusChanged(static_cast<int>(m_wallet_model->getEncryptionStatus()));
 
-    if (!m_mrc_model->submitMRC(s, e, confirmed_fee, confirmed_net)) {
-        m_unlock_context.reset();
-
+    if (!m_mrc_model->submitMRC(s, e, confirmed_fee, confirmed_net, std::move(unlock))) {
         message = e + " MRC request cannot be submitted.";
 
         ui->mrcSubmitButton->setToolTip(message);
@@ -407,8 +405,6 @@ void MRCRequestPage::submitMRC()
 
 void MRCRequestPage::submitFinished(bool success)
 {
-    m_unlock_context.reset();
-
     if (success) {
         // Since MRC was successfully submitted, reset the fee boost to zero.
         CAmount fee_boost = 0;

@@ -530,6 +530,8 @@ class FakeWallet : public interfaces::Wallet
 public:
     // Recorded calls.
     int m_try_get_balances_calls = 0;
+    //! lockWallet() calls: what a relocking WalletModel::UnlockContext makes when released.
+    int m_lock_wallet_calls = 0;
 
     bool tryGetBalances(interfaces::WalletBalances&) override
     {
@@ -546,7 +548,11 @@ public:
     bool isUnlockedForStakingOnly() override { return false; }
     bool getUnlockStakingOnlyFlag() override { return false; }
     bool encryptWallet(const SecureString&) override { return false; }
-    bool lockWallet() override { return false; }
+    bool lockWallet() override
+    {
+        ++m_lock_wallet_calls;
+        return true;
+    }
     bool restrictToStakingOnly() override { return false; }
     bool elevateWallet(const SecureString&) override { return false; }
     bool unlockWallet(const SecureString&, bool) override { return false; }

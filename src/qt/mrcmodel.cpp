@@ -95,6 +95,12 @@ MRCModel::~MRCModel()
 
     unsubscribeFromQuotes();
     waitForSubmit();
+
+    // The submit's finished signal may never be delivered now, so release the
+    // unlock here, or a wallet unlocked or elevated for it stays so (the node
+    // keeps running under -multiprocess). The wallet model outlives this one:
+    // bitcoin.cpp constructs it first.
+    m_submit_unlock.reset();
 }
 
 WalletModel* MRCModel::getWalletModel()
@@ -226,17 +232,21 @@ bool MRCModel::isMRCError(MRCRequestStatus &s, QString& e)
     return false;
 }
 
-bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e, CAmount confirmed_fee, CAmount confirmed_net)
+bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e, CAmount confirmed_fee, CAmount confirmed_net,
+                         std::unique_ptr<WalletModel::UnlockContext> unlock)
 {
+    // Every refusal below releases the unlock at once.
     if (m_submitting) {
         e = tr("A submit is already in progress.");
         s = m_mrc_status;
+        unlock.reset();
         return false;
     }
 
     if (m_mrc_status != MRCRequestStatus::ELIGIBLE || m_quote_updating) {
         s = m_mrc_status;
         e = tr("The MRC request cannot be submitted now.");
+        unlock.reset();
 
         return GUIError("%s: submitMRC called while m_mrc_status, %i, is not ELIGIBLE or the figures are updating.",
                         __func__,
@@ -253,6 +263,7 @@ bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e, CAmount confirmed_fee,
     const bool wallet_locked = m_wallet_locked;
 
     m_submitting = true;
+    m_submit_unlock = std::move(unlock);
     s = m_mrc_status;
 
     // submitConfirmed takes cs_main in the core, so it runs off the GUI thread.
@@ -282,6 +293,9 @@ void MRCModel::finishSubmit()
     const interfaces::MRCSubmitResult result = m_submit_watcher.result();
 
     m_submitting = false;
+
+    // Hand the unlock back before anything reports the end of the submit.
+    m_submit_unlock.reset();
 
     if (result.success) {
         m_submitted_research_subsidy = result.research_subsidy;

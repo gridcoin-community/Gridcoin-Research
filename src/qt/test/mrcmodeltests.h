@@ -23,6 +23,8 @@ private slots:
     void a_failed_quote_is_a_create_error_not_a_balance_error();
     void a_late_quote_does_not_undo_an_out_of_sync_push();
     void submit_sends_the_confirmed_terms();
+    void the_submit_unlock_is_released_when_the_submit_finishes();
+    void the_submit_unlock_is_released_when_the_model_is_destroyed_mid_submit();
     void submit_sends_the_terms_given_at_the_click();
     void submit_refused_on_changed_terms_shows_fresh_figures();
     void submit_error_shows_the_error_and_requotes();

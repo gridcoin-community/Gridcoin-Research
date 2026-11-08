@@ -16,8 +16,8 @@
 #include "amount.h"
 #include "interfaces/mrc.h"
 #include "qt/notificationlifetime.h"
+#include "qt/walletmodel.h"
 
-class WalletModel;
 class ClientModel;
 class ResearcherModel;
 class MRCRequestPage;
@@ -124,7 +124,14 @@ public:
     //! the send to them, whatever the figures have become since. Returns false,
     //! with \p e set, if the request cannot be submitted now; true once the
     //! submit runs. The outcome arrives as submitFinished().
-    bool submitMRC(MRCRequestStatus& s, QString& e, CAmount confirmed_fee, CAmount confirmed_net);
+    //!
+    //! \p unlock is the unlock the caller took for this submit (it may be null).
+    //! The model owns it from here: it is released when the submit finishes,
+    //! before submitFinished() is emitted, or when the model is destroyed, and at
+    //! once if the submit does not start. The page may be gone by then, so it
+    //! cannot be the owner.
+    bool submitMRC(MRCRequestStatus& s, QString& e, CAmount confirmed_fee, CAmount confirmed_net,
+                   std::unique_ptr<WalletModel::UnlockContext> unlock);
     //! The request can be submitted now: eligible, no quote outstanding, no
     //! submit running.
     bool canSubmit() const
@@ -213,6 +220,8 @@ private:
 
     bool m_submitting;
     QFutureWatcher<interfaces::MRCSubmitResult> m_submit_watcher;
+    //! The unlock held for the submit in flight.
+    std::unique_ptr<WalletModel::UnlockContext> m_submit_unlock;
     //! Fee and reward the core returned for a submit refused on changed terms.
     std::optional<std::pair<CAmount, CAmount>> m_fresh_terms;
     QString m_submit_notice;
