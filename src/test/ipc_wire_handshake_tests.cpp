@@ -39,7 +39,9 @@
 #include "ipc/protocol.h"
 #include "ipc/serve_init.h"
 #include "logging.h"
+#include "node/gui_cache.h"
 #include "sync.h"
+#include "test/gui_cache_fakes.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -227,6 +229,10 @@ struct WireLink {
 //! A kept fn is a proxy for the client's callback, so a case clears the store
 //! before the WireLink goes (the server's loop must outlive the proxy).
 struct GuiStateStore {
+    //! The node has destroyed the connection's Init: its side of the
+    //! connection is torn down.
+    std::atomic<bool> init_released{false};
+
     Mutex mutex;
     interfaces::GuiState::ChangedFn changed GUARDED_BY(mutex);
     interfaces::GuiState::MRCQuoteFn quote GUARDED_BY(mutex);
@@ -264,6 +270,23 @@ struct GuiStateStore {
     }
 };
 
+//! Clears a GuiStateStore at any exit of a case. Declared after the case's
+//! WireLink, so it runs before the link goes: the callback proxies the store
+//! keeps are released while the server's loop still runs, also when a REQUIRE
+//! ends the case early.
+class ClearAtExit
+{
+public:
+    explicit ClearAtExit(GuiStateStore& store) : m_store(store) {}
+    ~ClearAtExit() { m_store.Clear(); }
+
+    ClearAtExit(const ClearAtExit&) = delete;
+    ClearAtExit& operator=(const ClearAtExit&) = delete;
+
+private:
+    GuiStateStore& m_store;
+};
+
 struct StoringGuiState : interfaces::GuiState {
     explicit StoringGuiState(GuiStateStore& store) : m_store(store) {}
 
@@ -292,6 +315,7 @@ struct StoringGuiState : interfaces::GuiState {
 
 struct GuiStateInner : interfaces::Init {
     explicit GuiStateInner(GuiStateStore& store) : m_store(store) {}
+    ~GuiStateInner() override { m_store.init_released = true; }
 
     std::unique_ptr<interfaces::GuiState> makeGuiState() override
     {
@@ -300,6 +324,12 @@ struct GuiStateInner : interfaces::Init {
 
     GuiStateStore& m_store;
 };
+
+using namespace std::chrono_literals;
+
+//! Long enough for the node's cache timer to have acted on anything it was
+//! going to act on, at a 4 s interval on a manual clock: a wake and a settle.
+constexpr auto TIMER_CHANCE = node::GuiCache::SETTLE + 250ms;
 
 //! What the client's callbacks received, on the client's IPC worker thread.
 template <typename T>
@@ -658,6 +688,7 @@ BOOST_AUTO_TEST_CASE(wire_gui_state_push_reaches_the_client)
     WireLink link([&store, &id](int) -> std::unique_ptr<interfaces::Init> {
         return ipc::MakeServeInit(std::make_unique<GuiStateInner>(store), "the-cookie", id);
     });
+    ClearAtExit clear_store(store);
     BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
 
     std::unique_ptr<interfaces::GuiState> gui_state = link.client->makeGuiState();
@@ -682,10 +713,6 @@ BOOST_AUTO_TEST_CASE(wire_gui_state_push_reaches_the_client)
     BOOST_CHECK(got->has_mrc);
     BOOST_CHECK_EQUAL(got->mrc.reward, 5);
     CheckSameSnapshot(*got, pushed);
-
-    handler.reset();
-    gui_state.reset();
-    store.Clear();
 }
 
 // The quote answer over the wire: a request id and an MRC snapshot.
@@ -697,6 +724,7 @@ BOOST_AUTO_TEST_CASE(wire_gui_state_quote_reaches_the_client)
     WireLink link([&store, &id](int) -> std::unique_ptr<interfaces::Init> {
         return ipc::MakeServeInit(std::make_unique<GuiStateInner>(store), "the-cookie", id);
     });
+    ClearAtExit clear_store(store);
     BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
 
     std::unique_ptr<interfaces::GuiState> gui_state = link.client->makeGuiState();
@@ -722,10 +750,6 @@ BOOST_AUTO_TEST_CASE(wire_gui_state_quote_reaches_the_client)
     BOOST_CHECK_EQUAL(got->second.min_fee, 28);
     BOOST_CHECK(got->second.boosted_fee_error);
     BOOST_CHECK_EQUAL(got->second.boosted_fee_error_msg, "too much");
-
-    handler.reset();
-    gui_state.reset();
-    store.Clear();
 }
 
 // A GUI that goes away while the node still holds its fn: the node's next push
@@ -739,6 +763,7 @@ BOOST_AUTO_TEST_CASE(push_to_a_disconnected_gui_is_dropped)
     WireLink link([&store, &id](int) -> std::unique_ptr<interfaces::Init> {
         return ipc::MakeServeInit(std::make_unique<GuiStateInner>(store), "the-cookie", id);
     });
+    ClearAtExit clear_store(store);
     BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
 
     std::unique_ptr<interfaces::GuiState> gui_state = link.client->makeGuiState();
@@ -752,18 +777,79 @@ BOOST_AUTO_TEST_CASE(push_to_a_disconnected_gui_is_dropped)
     store.Push(DistinctSnapshot());
     BOOST_CHECK_EQUAL(calls.load(), 1);
 
-    // The GUI exits: its proxies go, then its connection (joining its loop).
+    // The GUI exits: its proxies go, then its connection (joining its loop). The
+    // node then tears its side down on its own; the case waits for that, so
+    // that the IPC category, on for the push alone, logs the push and nothing
+    // else.
     handler.reset();
     gui_state.reset();
     link.client.reset();
     link.client_proto.reset();
+    BOOST_REQUIRE(gui_cache_test::WaitUntil([&store] { return store.init_released.load(); }));
 
-    DroppedNotifications dropped;
-    BOOST_CHECK_NO_THROW(store.Push(DistinctSnapshot()));
-    BOOST_CHECK_EQUAL(calls.load(), 1);
-    BOOST_CHECK_EQUAL(dropped.Count(), 1);
+    {
+        DroppedNotifications dropped;
+        BOOST_CHECK_NO_THROW(store.Push(DistinctSnapshot()));
+        BOOST_CHECK_EQUAL(calls.load(), 1);
+        BOOST_CHECK_EQUAL(dropped.Count(), 1);
+    }
+}
 
-    store.Clear();
+// A GUI subscribed through the node's own GuiState (ServeInit over the
+// monolithic Init, over a published cache) whose connection drops with the
+// subscription alive: the node releases the subscription with the connection,
+// so its cache stops computing for it.
+BOOST_AUTO_TEST_CASE(a_dropped_gui_connection_ends_its_subscription)
+{
+    gui_cache_test::FakeCompute compute;
+    gui_cache_test::Deliveries deliveries;
+    gui_cache_test::PublishedFakeCache published(compute, 4000ms, 30000ms);
+    node::GuiCache& cache = published.Cache();
+
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    WireLink link([&id](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(interfaces::MakeGridcoinInit(), "the-cookie", id);
+    });
+    BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
+
+    std::unique_ptr<interfaces::GuiState> gui_state = link.client->makeGuiState();
+    BOOST_REQUIRE(gui_state);
+
+    // The subscription's forced update reaches the client over the wire, and so
+    // does the next due update.
+    std::unique_ptr<interfaces::Handler> handler = gui_state->handleChanged(deliveries.Make());
+    BOOST_REQUIRE(deliveries.WaitFor([](const interfaces::GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+
+    compute.Advance(4000ms);
+    gui_cache_test::InScope(cache, node::GuiCache::CHAIN);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 2);
+    BOOST_REQUIRE(deliveries.WaitFor([](const interfaces::GuiStateSnapshot& snap) { return snap.sequence == 2; }));
+
+    // Only the subscription is left alive on the client; then the connection
+    // drops under it.
+    gui_state.reset();
+    link.client.reset();
+    link.server->disconnectIncoming();
+
+    // The node cleans up the GUI's objects on its own: once it has, a due block
+    // computes nothing.
+    BOOST_REQUIRE_MESSAGE(gui_cache_test::WaitUntil([&] {
+        const int before = compute.chain_calls.load();
+        compute.Advance(4000ms);
+        gui_cache_test::InScope(cache, node::GuiCache::CHAIN);
+        return compute.chain_calls.load() == before;
+    }), "the cache kept computing for a GUI whose connection dropped");
+
+    // And it stays stopped, on the timer too.
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    const int chain_calls = compute.chain_calls.load();
+    const int runs = compute.cs_main_runs.load();
+    compute.Advance(4000ms);
+    gui_cache_test::InScope(cache, node::GuiCache::CHAIN);
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), chain_calls);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), runs);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

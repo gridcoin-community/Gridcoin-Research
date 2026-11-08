@@ -494,6 +494,128 @@ BOOST_AUTO_TEST_CASE(a_quote_is_answered_on_the_timer_inside_the_interval)
     cache.Stop();
 }
 
+BOOST_AUTO_TEST_CASE(a_request_made_while_the_timer_settles_joins_its_update)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms);
+    cache.AddSubscriber();
+
+    InScope(cache, GuiCache::CHAIN);
+    cache.StartTimer();
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    const int runs = compute.cs_main_runs.load();
+
+    // A trigger that is not a block makes an update due once the interval has
+    // passed: the timer wakes and settles before it takes cs_main for it. A GUI
+    // request made during that settle (the first subscriber's, say) is answered
+    // by that one update, forced: one cs_main, one new snapshot, and no second,
+    // empty pass for the request.
+    compute.Advance(4000ms);
+    cache.MarkDirty(GuiCache::MINER);
+    std::this_thread::sleep_for(GuiCache::SETTLE / 5);
+    cache.RequestUpdate();
+
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 2; }));
+    std::this_thread::sleep_for(TIMER_CHANCE);
+
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), runs + 1);
+    BOOST_CHECK_EQUAL(cache.Current().sequence, 2U);
+    // Forced: the request's marks (all of them) were computed in it.
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 2);
+
+    cache.Stop();
+}
+
+BOOST_AUTO_TEST_CASE(a_quote_is_never_answered_from_a_snapshot_never_computed)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    Quotes quotes;
+    GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms, quotes.Make());
+
+    // A GUI subscribes, asks for its first update and, before the timer runs,
+    // for a quote: the timer updates first, then quotes from that update.
+    cache.AddSubscriber();
+    cache.RequestUpdate();
+    cache.RequestMRCQuote(25, 7);
+    cache.StartTimer();
+
+    BOOST_REQUIRE(quotes.WaitForCount(1));
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+    BOOST_CHECK_EQUAL(compute.quote_saw_sequence.load(), 1U);
+    BOOST_CHECK(compute.quote_saw_researcher.load());
+
+    // A quote alone while the snapshot is still at sequence 0 makes the update
+    // first too.
+    FakeCompute compute2;
+    Deliveries deliveries2;
+    Quotes quotes2;
+    GuiCache cache2(compute2.Make(), deliveries2.Make(), 4000ms, 30000ms, quotes2.Make());
+    cache2.AddSubscriber();
+    cache2.RequestMRCQuote(25, 8);
+    cache2.StartTimer();
+
+    BOOST_REQUIRE(quotes2.WaitForCount(1));
+    BOOST_CHECK_EQUAL(compute2.quote_saw_sequence.load(), 1U);
+    BOOST_CHECK(compute2.quote_saw_researcher.load());
+    BOOST_CHECK_EQUAL(quotes2.Answers()[0].request_id, 8U);
+
+    cache2.Stop();
+    cache.Stop();
+}
+
+BOOST_AUTO_TEST_CASE(a_quote_without_a_subscriber_reads_a_researcher_part_of_its_own)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    Quotes quotes;
+    GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms, quotes.Make());
+    cache.StartTimer();
+
+    // No GUI subscribed, so the cache keeps no snapshot (sequence 0): the quote
+    // computes the researcher part it reads, for itself, and nothing else.
+    cache.RequestMRCQuote(25, 9);
+    BOOST_REQUIRE(quotes.WaitForCount(1));
+
+    BOOST_CHECK_EQUAL(quotes.Answers()[0].request_id, 9U);
+    BOOST_CHECK_EQUAL(quotes.Answers()[0].quote.fee, 25);
+    BOOST_CHECK(compute.quote_saw_researcher.load());
+    BOOST_CHECK_EQUAL(compute.researcher_calls.load(), 1);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 0);
+    BOOST_CHECK_EQUAL(cache.Current().sequence, 0U);
+    BOOST_CHECK_EQUAL(deliveries.Count(), 0U);
+
+    cache.Stop();
+}
+
+BOOST_AUTO_TEST_CASE(a_failed_quote_is_answered_with_its_error)
+{
+    FakeCompute compute;
+    Deliveries deliveries;
+    Quotes quotes;
+    GuiCache cache(compute.Make(), deliveries.Make(), 4000ms, 30000ms, quotes.Make());
+    cache.AddSubscriber();
+
+    InScope(cache, GuiCache::CHAIN);
+    cache.StartTimer();
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+
+    // The GUI shows that it is updating until its answer arrives, so a quote
+    // that fails is answered too: with the error, as the trial's own are.
+    compute.quote_throws = true;
+    cache.RequestMRCQuote(25, 10);
+    BOOST_REQUIRE(quotes.WaitForCount(1));
+
+    const Quotes::Answer answer = quotes.Answers()[0];
+    BOOST_CHECK_EQUAL(answer.request_id, 10U);
+    BOOST_CHECK(answer.quote.create_error);
+    BOOST_CHECK(answer.quote.create_error_msg.find("the quote failed") != std::string::npos);
+
+    cache.Stop();
+}
+
 BOOST_AUTO_TEST_CASE(sequence_increases_when_height_decreases)
 {
     FakeCompute compute;

@@ -21,6 +21,7 @@
 #include "interfaces/gui_state.h"
 #include "interfaces/mrc.h"
 #include "node/gui_cache.h"
+#include "node/ui_interface.h"
 #include "sync.h"
 #include "util/threadnames.h"
 
@@ -29,6 +30,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -73,6 +75,13 @@ public:
     //! The MRC part throws while set.
     std::atomic<bool> mrc_throws{false};
 
+    //! The quote throws while set.
+    std::atomic<bool> quote_throws{false};
+
+    //! What the last quote read of the snapshot it was handed.
+    std::atomic<uint64_t> quote_saw_sequence{0};
+    std::atomic<bool> quote_saw_researcher{false};
+
     std::atomic<bool> out_of_sync{false};
     std::atomic<int64_t> clock_ms{1000000};
 
@@ -112,8 +121,11 @@ public:
             snap.has_researcher = true;
         };
         // The quote reports the boost it was asked for as its fee.
-        compute.mrc_quote = [this](CAmount fee_boost, const interfaces::GuiStateSnapshot&) {
+        compute.mrc_quote = [this](CAmount fee_boost, const interfaces::GuiStateSnapshot& current) {
             ++quote_calls;
+            quote_saw_sequence = current.sequence;
+            quote_saw_researcher = current.has_researcher;
+            if (quote_throws) throw std::runtime_error("the quote failed");
             interfaces::MRCSnapshot quote;
             quote.fee = fee_boost;
             return quote;
@@ -257,6 +269,34 @@ private:
     std::condition_variable m_cv;
     std::vector<Answer> m_answers GUARDED_BY(m_mutex);
     int m_answered_under_a_lock GUARDED_BY(m_mutex){0};
+};
+
+//!
+//! \brief Publishes a cache on a FakeCompute as the node's for a case,
+//! delivering through the uiInterface signals as init.cpp's does, and
+//! unpublishes and stops it at any exit. Declare the recorders its deliveries
+//! reach before it, so its timer is joined before they go.
+//!
+class PublishedFakeCache
+{
+public:
+    PublishedFakeCache(FakeCompute& compute, std::chrono::milliseconds interval, std::chrono::milliseconds tick)
+    {
+        node::StartGuiCache(std::make_unique<node::GuiCache>(
+            compute.Make(),
+            [](const interfaces::GuiStateSnapshot& snapshot) { uiInterface.GuiStateChanged(snapshot); },
+            interval, tick,
+            [](uint64_t request_id, const interfaces::MRCSnapshot& quote) {
+                uiInterface.GuiStateMRCQuote(request_id, quote);
+            }));
+    }
+
+    ~PublishedFakeCache() { node::StopGuiCache(); }
+
+    PublishedFakeCache(const PublishedFakeCache&) = delete;
+    PublishedFakeCache& operator=(const PublishedFakeCache&) = delete;
+
+    node::GuiCache& Cache() { return *node::GetGuiCache(); }
 };
 
 //! What SetBestChain does: mark the parts and update under the cs_main it holds.

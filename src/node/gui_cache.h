@@ -18,6 +18,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <string>
 #include <thread>
 
 extern CCriticalSection cs_main;
@@ -54,17 +55,18 @@ static constexpr std::chrono::milliseconds GUI_CACHE_TICK{30000};
 //!
 //! The cache works only while a GUI is subscribed (AddSubscriber; a GUI's
 //! interfaces::GuiState::handleChanged counts as one while its Handler lives).
-//! With none, UpdateLocked returns after its lock-free check and the timer
-//! computes nothing and takes no cs_main; the marks just accumulate. The
-//! subscription that ends that (the first) asks for a forced update
-//! (RequestUpdate), so a GUI that attaches gets a computed snapshot within one
-//! timer cycle. The monolithic GUI subscribes when it starts, so it always has
-//! one; a daemon computes only while a multiprocess GUI is attached, and one
-//! with no GUI pays nothing for the cache.
+//! With none, UpdateLocked returns after its lock-free check and the timer makes
+//! no update and takes no cs_main for one; the marks just accumulate. Only a
+//! quote a GUI asks for is still computed. The subscription that ends that (the
+//! first) asks for a forced update (RequestUpdate), so a GUI that attaches gets
+//! a computed snapshot within one timer cycle. The monolithic GUI subscribes
+//! once it starts, so it always has one; a daemon computes only while a
+//! multiprocess GUI is attached, and one with no GUI pays nothing for the cache.
 //!
 //! A GUI may also ask for the MRC figures at a fee boost (RequestMRCQuote). The
 //! timer serves the latest such request under cs_main, not held to the
-//! interval, and answers it through its own fn (QuoteFn) with the request's id.
+//! interval, after any update due or asked for in the same hold, and answers it
+//! through its own fn (QuoteFn) with the request's id, a failure included.
 //! Quotes are user-paced, so they do not wait for a subscriber.
 //!
 //! Lock invariants (a deadlock is a matter of order; cs_main being recursive
@@ -103,8 +105,10 @@ public:
 
         //! The MRC figures at a fee boost, for a GUI's quote request: the MRC
         //! part's trial claim at that boost. Runs with cs_main held by the caller
-        //! (the timer). \p current is the cache's snapshot, whose researcher part
-        //! gives the eligibility, as it does for the MRC part.
+        //! (the timer). \p current gives the eligibility through its researcher
+        //! part, as for the MRC part: the cache's snapshot, or, while the cache
+        //! keeps none (no GUI subscribed, or never computed), a copy whose
+        //! researcher part was computed for this quote.
         std::function<interfaces::MRCSnapshot(CAmount fee_boost, const interfaces::GuiStateSnapshot& current)>
             mrc_quote;
 
@@ -166,17 +170,21 @@ public:
 
     //! The GUI asks for a fresh snapshot: every part is marked and the timer
     //! makes a forced update, taking cs_main on its own thread, then delivers it.
-    //! A request made while one is pending joins it. One the timer takes while no
-    //! GUI is subscribed is dropped: no one would see its answer. Never blocks.
+    //! A request made while one is pending joins it. A request made before the
+    //! timer takes cs_main for an update, one made while it settles included, is
+    //! answered by that update; one made later gets an update of its own. One the
+    //! timer takes while no GUI is subscribed is dropped: no one would see its
+    //! answer. Never blocks.
     void RequestUpdate();
 
     //! Count a GUI subscribed to the deliveries. Returns whether it is the
     //! first: that GUI's GuiState then asks for a forced update
     //! (RequestUpdate), since nothing was computed while there was none, and
-    //! that request wakes the timer. Counting wakes nothing, so the timer sees
-    //! the subscriber and the request together and makes one forced update. The
-    //! marks left pending meanwhile are otherwise taken by the next due update.
-    //! Never blocks.
+    //! that request wakes the timer. Counting wakes nothing. A timer already
+    //! awake when the count lands may find an update due before the request
+    //! does; it settles first, and a request made by then is answered by that
+    //! same update (RequestUpdate). The marks left pending meanwhile are
+    //! otherwise taken by the next due update. Never blocks.
     bool AddSubscriber();
 
     //! A subscribed GUI has gone (its Handler was disconnected or destroyed):
@@ -184,10 +192,12 @@ public:
     void RemoveSubscriber();
 
     //! The GUI asks for the MRC figures at \p fee_boost. The timer computes them
-    //! under cs_main (Compute::mrc_quote), not held to the interval, and answers
-    //! through the QuoteFn with \p request_id. One quote is pending at a time: a
-    //! request made before the timer takes the pending one replaces it, so only
-    //! the latest is answered. Never blocks.
+    //! under cs_main (Compute::mrc_quote), not held to the interval, after any
+    //! update due or asked for (forced while the snapshot was never computed),
+    //! and answers through the QuoteFn with \p request_id: a quote that fails
+    //! is answered with its error (create_error). One quote is pending at a
+    //! time: a request made before the timer takes the pending one replaces it,
+    //! so only the latest is answered. Never blocks.
     void RequestMRCQuote(CAmount fee_boost, uint64_t request_id);
 
     //! Start the timer thread ("grc-guistate"). Once; not after Stop().
@@ -282,9 +292,20 @@ private:
     //! Deliver the pending snapshot, if any. The timer only, holding no lock.
     void Deliver();
 
-    //! Compute \p quote under cs_main and answer it holding no lock. The timer
-    //! only.
-    void ServeQuote(const QuoteRequest& quote);
+    //! The MRC figures at \p fee_boost (Compute::mrc_quote), or, if computing
+    //! them throws, an answer that says so (FailedQuote). The timer only.
+    interfaces::MRCSnapshot QuoteLocked(CAmount fee_boost) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //! Answer a quote request, holding no lock; not after Stop(). The timer only.
+    void AnswerQuote(uint64_t request_id, const interfaces::MRCSnapshot& answer);
+
+    //! An answer for a quote whose figures could not be computed: the error, as
+    //! the trial claim reports its own (create_error), so the GUI's wait ends.
+    static interfaces::MRCSnapshot FailedQuote(const std::string& what);
+
+    //! Take a pending GUI request. One taken while no GUI is subscribed is
+    //! dropped: no one would see its answer.
+    bool TakeRequest();
 
     //! Wait SETTLE, or until Stop(). False when stopped.
     bool Settle();

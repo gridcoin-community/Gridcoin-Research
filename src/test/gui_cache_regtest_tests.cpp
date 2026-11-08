@@ -147,8 +147,8 @@ BOOST_AUTO_TEST_CASE(setbestchain_keeps_the_cache_at_the_tip_without_waiting_on_
 {
     GatedDeliveries gate;
     {
-        // A GUI is subscribed from the start, as the monolithic GUI is: the
-        // cache computes nothing without one.
+        // A GUI is subscribed before the cache starts, so the timer's first
+        // update needs no request: the cache computes nothing without one.
         auto subscribed = std::make_unique<node::GuiCache>(node::MakeProductionCompute(), gate.Make(),
                                                            INTERVAL, 30000ms);
         subscribed->AddSubscriber();

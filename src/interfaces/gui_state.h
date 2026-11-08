@@ -81,8 +81,9 @@ struct GuiStateSnapshot
 //! registered fn. In the multiprocess build each call is an IPC round trip to
 //! the node, which answers at once, and the fns are called back from it.
 //!
-//! The cache computes nothing while no GUI is subscribed (handleChanged): a node
-//! with no GUI attached pays nothing for it.
+//! The cache makes no update while no GUI is subscribed (handleChanged), so a
+//! node with no GUI attached pays nothing for it; only a quote a GUI asks for is
+//! computed then.
 //!
 class GuiState
 {
@@ -116,9 +117,11 @@ public:
     //! Ask for the MRC figures at \p fee_boost (the boosted trial claim, as
     //! interfaces::MRC::snapshot computes it, unsigned). Returns at once. The
     //! cache's timer computes it under cs_main, not held to the cache's interval,
-    //! and answers the handleMRCQuote fns with \p request_id. One quote is
-    //! pending at a time: a request made before the timer takes the last one
-    //! replaces it, so only the latest is answered.
+    //! after any update due or asked for, and answers the handleMRCQuote fns with
+    //! \p request_id. Every request it takes is answered: one whose figures
+    //! cannot be computed carries the error (create_error, create_error_msg). One
+    //! quote is pending at a time: a request made before the timer takes the last
+    //! one replaces it, so only the latest is answered.
     virtual void requestMRCQuote(CAmount fee_boost, uint64_t request_id) = 0;
 
     //! Receives each quote answer, on the cache's timer thread, holding no lock,

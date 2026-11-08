@@ -279,36 +279,60 @@ void GuiCache::Deliver()
     }
 }
 
-void GuiCache::ServeQuote(const QuoteRequest& quote)
+interfaces::MRCSnapshot GuiCache::QuoteLocked(CAmount fee_boost)
 {
-    interfaces::MRCSnapshot answer;
+    AssertLockHeld(cs_main);
 
     try {
-        // run_under_cs_main holds cs_main around this lambda, which the
-        // thread-safety analyzer cannot see through std::function (as in
-        // TimerLoop). The snapshot is read under it, so it is the one at the tip
-        // the quote is computed at.
-        m_compute.run_under_cs_main([&]() NO_THREAD_SAFETY_ANALYSIS {
-            AssertLockHeld(cs_main);
-            answer = m_compute.mrc_quote(quote.fee_boost, Current());
-        });
+        interfaces::GuiStateSnapshot current = Current();
+
+        // The cache's researcher part gives the eligibility while the cache keeps
+        // it: a GUI subscribed and the snapshot computed. Otherwise the part is
+        // computed here, for this quote alone, behind the same sync gate, and
+        // nothing is swapped into the cache.
+        if (!HasSubscribers() || current.sequence == 0) {
+            current.out_of_sync = m_compute.out_of_sync();
+            current.has_researcher = false;
+            current.researcher = {};
+
+            if (!current.out_of_sync) m_compute.researcher(current);
+        }
+
+        return m_compute.mrc_quote(fee_boost, current);
     } catch (const std::exception& e) {
         LogPrintf("ERROR: %s: the MRC quote failed: %s", __func__, e.what());
-        return;
+        return FailedQuote(e.what());
     } catch (...) {
         LogPrintf("ERROR: %s: the MRC quote failed with an unknown exception", __func__);
-        return;
+        return FailedQuote("unknown exception");
     }
+}
 
+void GuiCache::AnswerQuote(uint64_t request_id, const interfaces::MRCSnapshot& answer)
+{
     if (m_stop.load()) return;
 
     try {
-        if (m_deliver_quote) m_deliver_quote(quote.request_id, answer);
+        if (m_deliver_quote) m_deliver_quote(request_id, answer);
     } catch (const std::exception& e) {
         LogPrintf("ERROR: %s: delivering the MRC quote failed: %s", __func__, e.what());
     } catch (...) {
         LogPrintf("ERROR: %s: delivering the MRC quote failed with an unknown exception", __func__);
     }
+}
+
+interfaces::MRCSnapshot GuiCache::FailedQuote(const std::string& what)
+{
+    interfaces::MRCSnapshot answer;
+    answer.create_error = true;
+    answer.create_error_msg = "The MRC figures could not be computed: " + what;
+
+    return answer;
+}
+
+bool GuiCache::TakeRequest()
+{
+    return m_request.exchange(false) && HasSubscribers();
 }
 
 bool GuiCache::Settle()
@@ -349,41 +373,64 @@ void GuiCache::TimerLoop()
         // nothing.
         Deliver();
 
-        // A quote first: the user is waiting for it, and it is not held to the
-        // interval.
-        if (quote) ServeQuote(*quote);
-
         // A request no GUI is subscribed to see answered is dropped.
-        const bool request = m_request.exchange(false) && HasSubscribers();
+        bool request = TakeRequest();
 
-        if (!request) {
+        // With nothing asked for, the timer acts only on an update it finds due,
+        // and waits SETTLE first: an update SetBestChain is making in its own
+        // scope lands in that time, and then there is nothing left to do. A
+        // request made meanwhile (the first subscriber's, say) is answered by
+        // this same update, forced, so it costs no second pass. A quote made
+        // meanwhile has set the wake, and is served on the next turn.
+        if (!request && !quote) {
             if (!IsDue(m_compute.now_ms())) continue;
 
-            // An update SetBestChain is making in its own scope lands in this
-            // time, and then there is nothing left for the timer to do.
             if (!Settle()) return;
 
             Deliver();
 
-            if (!IsDue(m_compute.now_ms())) continue;
+            request = TakeRequest();
+
+            if (!request && !IsDue(m_compute.now_ms())) continue;
         }
+
+        // One cs_main hold for the update and the quote, the update first, so a
+        // quote reads the snapshot it leaves. The update is forced for a request,
+        // and for a quote while the snapshot was never computed; otherwise it is
+        // made only if due, and one that fails is retried when it is due again,
+        // an interval after the attempt. A quote is answered whatever fails
+        // here, so the GUI's wait for it always ends: QuoteLocked answers its
+        // own failure, and an exception that reaches the catch below came before
+        // the quote was computed.
+        interfaces::MRCSnapshot answer;
 
         try {
             // run_under_cs_main holds cs_main around this lambda, which the
-            // thread-safety analyzer cannot see through std::function. Only a
-            // request is forced: anything else is due, and an update that fails
-            // is retried when it is due again, an interval after the attempt.
-            m_compute.run_under_cs_main([this, request]() NO_THREAD_SAFETY_ANALYSIS {
+            // thread-safety analyzer cannot see through std::function.
+            m_compute.run_under_cs_main([&]() NO_THREAD_SAFETY_ANALYSIS {
                 AssertLockHeld(cs_main);
-                UpdateLocked(request);
+
+                try {
+                    UpdateLocked(request || (quote && Current().sequence == 0));
+                } catch (const std::exception& e) {
+                    LogPrintf("ERROR: TimerLoop: the GUI state update failed: %s", e.what());
+                } catch (...) {
+                    LogPrintf("ERROR: TimerLoop: the GUI state update failed with an unknown exception");
+                }
+
+                if (quote) answer = QuoteLocked(quote->fee_boost);
             });
         } catch (const std::exception& e) {
             LogPrintf("ERROR: %s: the GUI state update failed: %s", __func__, e.what());
+            if (quote) answer = FailedQuote(e.what());
         } catch (...) {
             LogPrintf("ERROR: %s: the GUI state update failed with an unknown exception", __func__);
+            if (quote) answer = FailedQuote("unknown exception");
         }
 
         Deliver();
+
+        if (quote) AnswerQuote(quote->request_id, answer);
     }
 }
 

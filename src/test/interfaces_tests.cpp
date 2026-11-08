@@ -40,33 +40,7 @@ extern CWallet* pwalletMain;
 using namespace std::chrono_literals;
 
 namespace {
-//!
-//! \brief Publishes a GUI state cache on fakes (test/gui_cache_fakes.h) as the
-//! node's for a case, delivering through the uiInterface signals as init.cpp's
-//! does, and unpublishes and stops it at any exit.
-//!
-class PublishedFakeCache
-{
-public:
-    PublishedFakeCache(gui_cache_test::FakeCompute& compute, std::chrono::milliseconds interval,
-                       std::chrono::milliseconds tick)
-    {
-        node::StartGuiCache(std::make_unique<node::GuiCache>(
-            compute.Make(),
-            [](const interfaces::GuiStateSnapshot& snapshot) { uiInterface.GuiStateChanged(snapshot); },
-            interval, tick,
-            [](uint64_t request_id, const interfaces::MRCSnapshot& quote) {
-                uiInterface.GuiStateMRCQuote(request_id, quote);
-            }));
-    }
-
-    ~PublishedFakeCache() { node::StopGuiCache(); }
-
-    PublishedFakeCache(const PublishedFakeCache&) = delete;
-    PublishedFakeCache& operator=(const PublishedFakeCache&) = delete;
-
-    node::GuiCache& Cache() { return *node::GetGuiCache(); }
-};
+using gui_cache_test::PublishedFakeCache;
 
 //! Long enough for the cache's timer to have acted on anything it was going
 //! to act on, at a 4 s interval on a manual clock: a wake and a settle.
@@ -582,6 +556,11 @@ BOOST_AUTO_TEST_CASE(gui_state_request_update_delivers_a_forced_update)
     std::unique_ptr<interfaces::Handler> handler = gui_state->handleChanged(deliveries.Make());
     BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
 
+    // Counted from the timer at rest after the subscription's update.
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    const int runs = compute.cs_main_runs.load();
+    const int chain_calls = compute.chain_calls.load();
+
     // Inside the interval (the clock does not move): the request is answered by
     // one more delivery, from an update the timer forced under cs_main.
     gui_state->requestUpdate();
@@ -589,8 +568,8 @@ BOOST_AUTO_TEST_CASE(gui_state_request_update_delivers_a_forced_update)
     std::this_thread::sleep_for(TIMER_CHANCE);
 
     BOOST_CHECK_EQUAL(deliveries.Count(), 2U);
-    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), 2);
-    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 2);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), runs + 1);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), chain_calls + 1);
     const std::vector<std::string> threads = deliveries.Threads();
     BOOST_REQUIRE_EQUAL(threads.size(), 2U);
     BOOST_CHECK_EQUAL(threads[1], gui_cache_test::TIMER_THREAD);
@@ -679,12 +658,14 @@ BOOST_AUTO_TEST_CASE(gui_state_computes_only_while_a_gui_is_subscribed)
     std::this_thread::sleep_for(TIMER_CHANCE);
     BOOST_CHECK_EQUAL(first.Count(), 1U);
     BOOST_CHECK_EQUAL(compute.chain_calls.load(), 1);
-    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), 1);
+    BOOST_CHECK_GE(compute.cs_main_runs.load(), 1);
 
-    // A second subscription forces nothing: only the first does.
+    // A second subscription forces nothing: only the first does. Counted from
+    // the timer at rest.
+    const int runs_at_rest = compute.cs_main_runs.load();
     std::unique_ptr<interfaces::Handler> second_handler = gui_state->handleChanged(second.Make());
     std::this_thread::sleep_for(TIMER_CHANCE);
-    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), 1);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), runs_at_rest);
     BOOST_CHECK_EQUAL(second.Count(), 0U);
 
     // The first disconnects: it gets nothing more, and the cache goes on

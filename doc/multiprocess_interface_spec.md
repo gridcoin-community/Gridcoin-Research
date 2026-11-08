@@ -505,23 +505,28 @@ and is 0 before the first update).
 
 - `handleChanged(fn)` subscribes to the snapshots. Unlike the refetch triggers of
   §5.1 the push carries the data: keep a snapshot when its sequence is higher than
-  the last one's. The cache computes only while at least one subscription is
-  alive, so a node with no front end attached pays nothing; the first
-  subscription also asks for a forced update, so a front end that attaches gets a
-  computed snapshot within one timer cycle.
+  the last one's. The cache makes updates only while at least one subscription
+  is alive, so a node with no front end attached pays nothing for them (only a
+  quote, below, is computed then); the first subscription also asks for a forced
+  update, so a front end that attaches gets a computed snapshot within one timer
+  cycle.
 - `current()` returns the cache's copy (a leaf lock in the node, never `cs_main`),
   for a front end that attaches or misses a push.
 - `requestUpdate()` asks for a forced update, delivered to the `handleChanged`
-  fns; it returns at once.
+  fns; it returns at once. With no subscription alive it is dropped: there is no
+  one to deliver to, and nothing is computed.
 - `requestMRCQuote(fee_boost, request_id)` asks for the MRC figures at a fee boost
   and returns at once; `handleMRCQuote(fn)` receives the answer with the request's
-  id. One quote is pending at a time and only the latest request is answered, so
-  drop an answer whose id is not your latest.
+  id. The node computes it after any update due or asked for, and answers every
+  request it takes: one whose figures cannot be computed carries the error
+  (`create_error`, `create_error_msg`). One quote is pending at a time and only
+  the latest request is answered, so drop an answer whose id is not your latest.
 
 The node computes updates at most every four seconds (once synced, about one a
 block) and serves requests and quotes outside that interval, on its cache's own
-thread. Callbacks arrive from that thread; a slow callback delays the node's next
-push to every front end, so enqueue and return (§5.1).
+thread. Callbacks arrive from that thread, and the node waits for each to
+return: a slow callback delays the node's next push and quote answer, so enqueue
+and return (§5.1).
 
 ---
 
