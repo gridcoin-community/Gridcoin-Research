@@ -166,6 +166,12 @@ void VotingPage::updateAvailability()
     for (auto* tab : m_tabs) {
         tab->setEnabled(available);
     }
+
+    // The active tab read the polls once, before the first push, when they were
+    // unavailable (PollTab::refresh then does nothing): read them now.
+    if (available) {
+        getActiveTab()->refresh();
+    }
 }
 
 void VotingPage::setOptionsModel(OptionsModel* model)

@@ -201,3 +201,33 @@ void PushedStateTests::voting_unavailable_until_synced()
     Deliver();
     QVERIFY(!model.available());
 }
+
+void PushedStateTests::poll_title_is_read_when_the_first_synced_push_arrives()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    qt_test::FakeGuiState gui_state;
+    qt_test::FakeWallet wallet;
+    qt_test::FakeWalletTxSource tx_source;
+    qt_test::FakeVotingManager voting;
+    qt_test::FakeResearcherContext researcher_context;
+    auto coin_source = interfaces::MakeSyntheticCoinSource(0, 0);
+    OptionsModel options(node, sidestakes);
+    WalletModel wallet_model(wallet, tx_source, *coin_source, &options);
+
+    // Constructed before the first push, as at startup: the title reads empty.
+    ClientModel client(node, gui_state, nullptr);
+    VotingModel model(voting, researcher_context, client, options, wallet_model);
+    QVERIFY(!model.available());
+    QVERIFY(model.getCurrentPollTitle().isEmpty());
+
+    // The first synced push makes polls available, announces it, and the title
+    // is then the fixture poll's: this signal is what the overview refreshes on.
+    QSignalSpy spy(&model, &VotingModel::availableChanged);
+    gui_state.Push(Synced(1, false));
+    Deliver();
+
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(spy.at(0).at(0).toBool());
+    QCOMPARE(model.getCurrentPollTitle(), QStringLiteral("title"));
+}

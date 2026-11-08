@@ -19,6 +19,7 @@ private slots:
     void psgt_page_status_from_push();
     void wallet_balances_from_push();
     void voting_unavailable_until_synced();
+    void poll_title_is_read_when_the_first_synced_push_arrives();
 };
 
 #endif // BITCOIN_QT_TEST_PUSHEDSTATETESTS_H

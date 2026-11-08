@@ -1092,7 +1092,11 @@ void BitcoinGUI::setVotingModel(VotingModel *votingModel)
         return;
     }
 
-    overviewPage->setCurrentPollTitle(votingModel->getCurrentPollTitle());
+    updateCurrentPollTitle();
+
+    // Polls wait for the sync: the title is read again when they become
+    // available, and not only by the expiry check a minute on.
+    connect(votingModel, &VotingModel::availableChanged, this, &BitcoinGUI::updateCurrentPollTitle);
 
     connect(votingModel, &VotingModel::newPollReceived, this, &BitcoinGUI::handleNewPoll);
 
@@ -2340,6 +2344,19 @@ void BitcoinGUI::updateBeaconIcon()
     }
 }
 
+void BitcoinGUI::updateCurrentPollTitle()
+{
+    if (!votingModel) {
+        return;
+    }
+
+    // While polls are unavailable the title is not read; say why it is not
+    // there. Once available, an empty title means there is no current poll.
+    overviewPage->setCurrentPollTitle(votingModel->available()
+        ? votingModel->getCurrentPollTitle()
+        : tr("Available once the wallet is in sync"));
+}
+
 void BitcoinGUI::handleNewPoll()
 {
     if (!clientModel || !clientModel->getOptionsModel()) {
@@ -2357,7 +2374,7 @@ void BitcoinGUI::handleNewPoll()
         return;
     }
 
-    overviewPage->setCurrentPollTitle(votingModel->getCurrentPollTitle());
+    updateCurrentPollTitle();
 }
 
 //!
@@ -2410,7 +2427,7 @@ void BitcoinGUI::handleExpiredPoll()
         }
     }
 
-    overviewPage->setCurrentPollTitle(votingModel->getCurrentPollTitle());
+    updateCurrentPollTitle();
 }
 
 // -----------------------------------------------------------------------------
