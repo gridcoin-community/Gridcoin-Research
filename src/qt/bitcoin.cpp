@@ -1516,6 +1516,8 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 ClientModel clientModel(*node, *gui_state, &optionsModel);
                 WalletModel walletModel(*wallet, *wallet_tx_source, *wallet_coin_source,
                                         &optionsModel);
+                // Balances come from the state the core pushes.
+                walletModel.setGuiState(clientModel.guiState());
                 ResearcherModel researcherModel(*researcher_context, *gui_state, *clientModel.guiState());
                 MRCModel mrcModel(*mrc, *gui_state, &walletModel, &clientModel, &researcherModel);
                 VotingModel votingModel(*voting_manager, *researcher_context, clientModel, optionsModel, walletModel);

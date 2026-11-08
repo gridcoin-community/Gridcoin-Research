@@ -5,6 +5,7 @@
 #include "psgtpoolpage.h"
 
 #include "clientmodel.h"
+#include "guistatecache.h"
 #include "interfaces/psgt.h"
 #include "multisigndialog.h"
 #include "psgtpooltablemodel.h"
@@ -176,7 +177,18 @@ void PSGTPoolPage::createTableModelIfReady()
 void PSGTPoolPage::setClientModel(ClientModel* client_model)
 {
     m_client_model = client_model;
+
+    if (m_gui_state_connection) {
+        disconnect(m_gui_state_connection);
+    }
+
     if (!client_model) return;
+
+    // The pool status comes from the state the core pushes. One already computed
+    // when the cache was built emits no changed(), so it is read once here.
+    m_gui_state_connection = connect(client_model->guiState(), &GuiStateCache::changed,
+                                     this, &PSGTPoolPage::applyPushedStatus);
+    applyPushedStatus();
 
     // Keep ages and the pool-active banner current as blocks arrive.
     connect(client_model, &ClientModel::numBlocksChanged, this, [this]() {
@@ -191,8 +203,16 @@ void PSGTPoolPage::setClientModel(ClientModel* client_model)
                 if (m_table_model) m_table_model->handlePoolChanged(revision_hash, change_type, reason);
                 updateButtons();
             });
+}
+
+void PSGTPoolPage::applyPushedStatus()
+{
+    if (m_client_model) {
+        m_pool_status = m_client_model->guiState()->snapshot().psgt_status;
+    }
 
     updateActiveState();
+    updateButtons();
 }
 
 void PSGTPoolPage::setMultisignDialog(MultisignPSGTDialog* dialog)
@@ -204,12 +224,10 @@ void PSGTPoolPage::setMultisignDialog(MultisignPSGTDialog* dialog)
 void PSGTPoolPage::updateActiveState()
 {
     // The pool is available only once v15 has activated AND the node is not out
-    // of sync by age (mirrors EnsurePSGTPoolActive()); the interface reads that
-    // chain state node-side. Before the interface is wired, present as inactive.
-    const interfaces::PSGTPoolStatus status =
-        m_psgt_context ? m_psgt_context->poolStatus() : interfaces::PSGTPoolStatus{};
-    const bool v15_enabled = status.v15_enabled;
-    const bool out_of_sync = status.out_of_sync;
+    // of sync by age (mirrors EnsurePSGTPoolActive()); the core computes that
+    // and pushes it. Before the first push, present as inactive.
+    const bool v15_enabled = m_pool_status.v15_enabled;
+    const bool out_of_sync = m_pool_status.out_of_sync;
 
     if (v15_enabled && !out_of_sync) {
         m_banner->setVisible(false);
@@ -252,7 +270,7 @@ void PSGTPoolPage::updateButtons()
     // Gate the pool actions on availability, mirroring EnsurePSGTPoolActive()
     // (src/rpc/psgt.cpp): with the pool inactive (pre-v15 or out of sync) the
     // Sign/Remove/Details actions have nothing to act on.
-    const bool pool_active = m_psgt_context && m_psgt_context->poolStatus().active;
+    const bool pool_active = m_pool_status.active;
 
     m_sign_button->setEnabled(pool_active && have_pool_selection && row
                               && row->status == PSGTPoolTableModel::RowStatus::AwaitingYourSignature);

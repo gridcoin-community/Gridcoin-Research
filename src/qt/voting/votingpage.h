@@ -19,6 +19,7 @@ class VotingModel;
 
 QT_BEGIN_NAMESPACE
 class QAction;
+class QLabel;
 class QResizeEvent;
 class QString;
 QT_END_NAMESPACE
@@ -43,6 +44,12 @@ private:
     std::array<PollTab*, 2> m_tabs;
     std::unique_ptr<QAction> m_filter_action;
     QString m_current_filter;
+
+    //! Shown instead of polls and voting until the wallet is synced.
+    QLabel* m_unavailable_label;
+
+    //! Follow VotingModel::available(): the label, the tabs and the actions.
+    void updateAvailability();
 
 
 private slots:

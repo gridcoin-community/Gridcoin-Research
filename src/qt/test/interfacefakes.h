@@ -9,8 +9,12 @@
 #include "interfaces/handler.h"
 #include "interfaces/mrc.h"
 #include "interfaces/node.h"
+#include "interfaces/psgt.h"
 #include "interfaces/researcher.h"
 #include "interfaces/sidestake.h"
+#include "interfaces/voting.h"
+#include "interfaces/wallet.h"
+#include "interfaces/wallet_tx_source.h"
 #include "util/strencodings.h"
 
 #include <atomic>
@@ -446,6 +450,149 @@ private:
     int m_next_handler_id = 0;
     std::map<int, ChangedFn> m_changed_fns;
     std::map<int, MRCQuoteFn> m_quote_fns;
+};
+
+//! Fake interfaces::PSGTPoolContext: serves a canned poolStatus() and counts
+//! the calls, so a test can show a page took its status from the push and made
+//! no call. Everything else answers with an empty default.
+class FakePSGTPoolContext : public interfaces::PSGTPoolContext
+{
+public:
+    // Canned response (set by the test).
+    interfaces::PSGTPoolStatus m_status;
+
+    // Recorded calls.
+    int m_pool_status_calls = 0;
+
+    interfaces::PSGTPoolStatus poolStatus() override
+    {
+        ++m_pool_status_calls;
+        return m_status;
+    }
+
+    std::vector<interfaces::PSGTPoolRow> entries() override { return {}; }
+    interfaces::PSGTSignStatus signPoolEntry(const std::string&, std::string&, std::string&) override { return {}; }
+    bool removePoolEntry(const std::string&) override { return false; }
+    interfaces::PSGTBytes poolEntryPsgt(const std::string&) override { return {}; }
+    interfaces::PSGTDescription describePSGT(const interfaces::PSGTBytes&) override { return {}; }
+    interfaces::PSGTSignResult signPSGT(const interfaces::PSGTBytes&) override { return {}; }
+    interfaces::PSGTCombineResult combinePSGTs(const std::vector<interfaces::PSGTBytes>&) override { return {}; }
+    interfaces::PSGTSubmitResult submitPSGTToPool(const interfaces::PSGTBytes&) override { return {}; }
+    interfaces::PSGTFinalizeResult finalizeToRawTxHex(const interfaces::PSGTBytes&) override { return {}; }
+    interfaces::PSGTDecodeResult decodePSGT(const interfaces::PSGTBytes&) override { return {}; }
+    bool walletHasSignature(const interfaces::PSGTBytes&) override { return false; }
+    bool walletMustSignRevision(const std::string&) override { return false; }
+};
+
+//! Fake interfaces::VotingManager: counts the calls that reach the core's poll
+//! state (the ones that take cs_main in the real node), so a test can show a
+//! model made none while the wallet is not synced.
+class FakeVotingManager : public interfaces::VotingManager
+{
+public:
+    // Recorded calls.
+    int m_poll_table_calls = 0;
+    int m_current_title_calls = 0;
+    int m_latest_poll_time_calls = 0;
+
+    std::vector<interfaces::PollTableItem> buildPollTable(int) override
+    {
+        ++m_poll_table_calls;
+        return {};
+    }
+
+    std::string currentPollTitle() override
+    {
+        ++m_current_title_calls;
+        return "title";
+    }
+
+    int64_t latestActivePollTime() override
+    {
+        ++m_latest_poll_time_calls;
+        return 0;
+    }
+
+    std::vector<interfaces::PollTypeMeta> getPollTypes() override { return {}; }
+    bool pollV3Enabled() override { return false; }
+    CAmount estimatePollFee() override { return 0; }
+    interfaces::VotingSubmitResult submitPoll(const interfaces::PollSubmission&) override { return {}; }
+    interfaces::VotingSubmitResult submitVote(const std::string&, const std::vector<uint8_t>&) override { return {}; }
+    std::unique_ptr<interfaces::Handler> handleNewPollReceived(interfaces::NewPollReceivedFn) override { return interfaces::MakeCleanupHandler([] {}); }
+    std::unique_ptr<interfaces::Handler> handleNewVoteReceived(interfaces::NewVoteReceivedFn) override { return interfaces::MakeCleanupHandler([] {}); }
+};
+
+//! Fake interfaces::Wallet: counts tryGetBalances(), so a test can show a wallet
+//! model took its balances from the push. Everything else answers with an empty
+//! default.
+class FakeWallet : public interfaces::Wallet
+{
+public:
+    // Recorded calls.
+    int m_try_get_balances_calls = 0;
+
+    bool tryGetBalances(interfaces::WalletBalances&) override
+    {
+        ++m_try_get_balances_calls;
+        return false;
+    }
+
+    int64_t getBalance() override { return 0; }
+    int64_t getStake() override { return 0; }
+    int64_t getUnconfirmedBalance() override { return 0; }
+    int64_t getImmatureBalance() override { return 0; }
+    int getNumTransactions() override { return 0; }
+    interfaces::WalletLockState getLockState() override { return {}; }
+    bool isUnlockedForStakingOnly() override { return false; }
+    bool getUnlockStakingOnlyFlag() override { return false; }
+    bool encryptWallet(const SecureString&) override { return false; }
+    bool lockWallet() override { return false; }
+    bool restrictToStakingOnly() override { return false; }
+    bool elevateWallet(const SecureString&) override { return false; }
+    bool unlockWallet(const SecureString&, bool) override { return false; }
+    bool changeWalletPassphrase(const SecureString&, const SecureString&) override { return false; }
+    bool getPubKey(const CKeyID&, CPubKey&) override { return false; }
+    bool getKeyFromPool(const std::string&, CPubKey&) override { return false; }
+    std::vector<interfaces::WalletOutput> getOutputs(const std::vector<COutPoint>&) override { return {}; }
+    interfaces::CoinControlSummary computeCoinControlSummary(const interfaces::WalletCoinControl&,
+                                                             const std::vector<int64_t>&, bool) override { return {}; }
+    unsigned int getMaxConsolidationInputs() override { return 0; }
+    interfaces::SendCoinsResult sendCoins(const std::vector<interfaces::WalletSendRecipient>&,
+                                          const std::optional<interfaces::WalletCoinControl>&, int64_t) override { return {}; }
+    bool backupWallet(const std::string&) override { return false; }
+    bool backupConfigFile(const std::string&) override { return false; }
+    interfaces::MessageSignStatus signMessage(const std::string&, const std::string&, std::string&) override { return {}; }
+    interfaces::MessageVerifyStatus verifyMessage(const std::string&, const std::string&,
+                                                  const std::vector<unsigned char>&) override { return {}; }
+    std::vector<interfaces::WalletAddress> getAddresses() override { return {}; }
+    bool getAddressLabel(const std::string&, std::string&) override { return false; }
+    bool isMine(const std::string&) override { return false; }
+    void setAddressBook(const std::string&, const std::string&) override {}
+    bool delAddressBook(const std::string&) override { return false; }
+    bool getNewReceiveAddress(std::string&) override { return false; }
+    bool getNewReceiveAddressWithLabel(const std::string&, std::string&) override { return false; }
+    std::vector<std::string> getUnbookedReceiveAddresses() override { return {}; }
+    std::unique_ptr<interfaces::Handler> handleStatusChanged(StatusChangedFn) override { return interfaces::MakeCleanupHandler([] {}); }
+    std::unique_ptr<interfaces::Handler> handleAddressBookChanged(AddressBookChangedFn) override { return interfaces::MakeCleanupHandler([] {}); }
+    std::unique_ptr<interfaces::Handler> handleTransactionChanged(TransactionChangedFn) override { return interfaces::MakeCleanupHandler([] {}); }
+};
+
+//! Fake interfaces::WalletTxSource with no transactions.
+class FakeWalletTxSource : public interfaces::WalletTxSource
+{
+public:
+    void registerView(int, GRC::FilterSpec, int, int) override {}
+    void unregisterView(int) override {}
+    void setViewSort(int, int, int) override {}
+    void setViewFilter(int, GRC::FilterSpec) override {}
+    void setViewLimit(int, int) override {}
+    GRC::RowsResult getRows(int, int, int) override { return {}; }
+    GRC::RowsResult getAllRows(int) override { return {}; }
+    int rowForKey(int, const uint256&, int) override { return -1; }
+    GRC::WalletTxDetail getRowDetail(const uint256&, int) override { return {}; }
+    void prime(bool, int64_t) override {}
+    std::vector<GRC::WalletEvent> drainEvents(std::size_t) override { return {}; }
+    void noteAddressBookChanged(const std::string&, const std::string&) override {}
 };
 
 } // namespace qt_test

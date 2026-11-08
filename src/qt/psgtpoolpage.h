@@ -5,6 +5,8 @@
 #ifndef BITCOIN_QT_PSGTPOOLPAGE_H
 #define BITCOIN_QT_PSGTPOOLPAGE_H
 
+#include "interfaces/psgt.h"
+
 #include <QWidget>
 
 #include <string>
@@ -52,6 +54,7 @@ private Q_SLOTS:
     void details();
     void updateActiveState();
     void updateButtons();
+    void applyPushedStatus();
 
 private:
     interfaces::PSGTPoolContext* m_psgt_context = nullptr;
@@ -59,6 +62,11 @@ private:
     ClientModel* m_client_model = nullptr;
     MultisignPSGTDialog* m_multisign_dialog = nullptr;
     PSGTPoolTableModel* m_table_model = nullptr;
+
+    //! The pool status as the core last pushed it (ClientModel::guiState()); the
+    //! page never asks the core for it. Not active until the first push.
+    interfaces::PSGTPoolStatus m_pool_status;
+    QMetaObject::Connection m_gui_state_connection;
 
     QLabel* m_banner = nullptr;
     QTableView* m_table = nullptr;

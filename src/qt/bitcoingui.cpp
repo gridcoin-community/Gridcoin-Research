@@ -2386,8 +2386,8 @@ void BitcoinGUI::handleExpiredPoll()
         return;
     }
 
-    // Only do if in sync.
-    if (researcherModel && !researcherModel->outOfSync() && votingPage->getActiveTab()) {
+    // Only do if in sync (polls and votes wait for the sync, VotingModel::available()).
+    if (votingModel->available() && votingPage->getActiveTab()) {
 
         // First refresh the active poll tab and underlying table
         votingPage->getActiveTab()->refresh();

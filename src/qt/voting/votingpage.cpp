@@ -12,7 +12,9 @@
 #include "qt/voting/votingpage.h"
 
 #include <QAction>
+#include <QBoxLayout>
 #include <QIcon>
+#include <QLabel>
 #include <QMenu>
 
 using namespace GRC;
@@ -47,8 +49,16 @@ VotingPage::VotingPage(QWidget* parent)
     , ui(new Ui::VotingPage)
     , m_voting_model(nullptr)
     , m_filter_action(new QAction())
+    , m_unavailable_label(nullptr)
 {
     ui->setupUi(this);
+
+    // Polls and voting are not available until the wallet is synced.
+    m_unavailable_label = new QLabel(tr("Polls and voting are available once the wallet is synced."), this);
+    m_unavailable_label->setAlignment(Qt::AlignCenter);
+    m_unavailable_label->setWordWrap(true);
+    qobject_cast<QBoxLayout*>(ui->tabWidget->parentWidget()->layout())->insertWidget(0, m_unavailable_label);
+    m_unavailable_label->hide();
 
     GRC::ScaleFontPointSize(ui->headerTitleLabel, 15);
 
@@ -128,6 +138,9 @@ void VotingPage::setVotingModel(VotingModel* model)
         return;
     }
 
+    connect(model, &VotingModel::availableChanged, this, &VotingPage::updateAvailability);
+    updateAvailability();
+
     // Now that PollItem caching is available, automatically refresh current poll tab on receipt of new poll or vote.
     connect(model, &VotingModel::newPollReceived, [this]() {
         ui->pollReceivedLabel->show();
@@ -140,6 +153,19 @@ void VotingPage::setVotingModel(VotingModel* model)
     connect(getActiveTab(), &PollTab::newVoteReceivedAndPollMarkedDirty, [this]() {
         getActiveTab()->refresh();
     });
+}
+
+void VotingPage::updateAvailability()
+{
+    const bool available = m_voting_model && m_voting_model->available();
+
+    m_unavailable_label->setVisible(!available);
+    ui->createPollButton->setEnabled(available);
+    ui->refreshButton->setEnabled(available);
+
+    for (auto* tab : m_tabs) {
+        tab->setEnabled(available);
+    }
 }
 
 void VotingPage::setOptionsModel(OptionsModel* model)
