@@ -226,16 +226,19 @@ void WalletModel::drainEventQueue()
             }
         }
 
-        // General "wallet transactions changed" pulse (OverviewPage refreshes its
-        // recent list on it). The windowed views (OverviewTxModel / DetailedTxModel)
-        // and the new-transaction balloon consume the event batch directly through
-        // walletEventsDrained below; per-row confirmation refresh is likewise driven
-        // by each view's own ChainTipChanged handling, not a full-replica model.
-        emit transactionUpdated();
-
-        // Fan the same batch out to the per-view windowed consumers (OverviewTxModel),
-        // which filter to their own viewId. The queue is drained exactly once, here.
+        // Fan the batch out to the per-view windowed consumers (OverviewTxModel,
+        // DetailedTxModel) and the new-transaction balloon, which filter to their
+        // own viewId. The queue is drained exactly once, here. Per-row confirmation
+        // refresh is driven by each view's own ChainTipChanged handling, not a
+        // full-replica model.
         emit walletEventsDrained(events);
+
+        // General "wallet transactions changed" pulse, after the views have applied
+        // the batch: OverviewPage refreshes its recent list on it and shows or hides
+        // the list by the overview model's row count, so the rows this batch brought
+        // must already be there. Emitted first, the refresh saw an empty model and
+        // hid the list until something else refreshed it.
+        emit transactionUpdated();
 
         // The coin channel drains on the same tick (its own queue, own guard).
         drainCoinEventQueue();
