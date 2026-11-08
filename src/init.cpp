@@ -1316,6 +1316,10 @@ void SetupServerArgs()
                    "it with the request, so this one command may use the wallet's keys while the wallet stays "
                    "unlocked for staking only. A UTF-8 byte-order mark at the start of the input is ignored.",
                    ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
+    argsman.AddArg("-stdin", "RPC client: read the remaining parameters from standard input, one per line until the "
+                   "end of the input, after any passphrase lines. For key material such as a private key or a seed "
+                   "phrase, which other users can read on the command line.",
+                   ArgsManager::ALLOW_BOOL | ArgsManager::COMMAND_LINE_ONLY, OptionsCategory::RPC);
     argsman.AddArg("-rpcthreads=<n>", "Set the number of threads to service RPC calls (default: 4)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcservertimeout=<n>", strprintf("Close an RPC connection that has been idle "

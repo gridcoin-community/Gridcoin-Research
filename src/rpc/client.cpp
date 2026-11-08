@@ -34,6 +34,7 @@
 #include <cstdio>
 #include <optional>
 #include <iostream>
+#include <map>
 #include <memory>
 
 using namespace std;
@@ -721,6 +722,37 @@ static std::vector<SecureString> ReadMethodPassphrases(const std::string& method
     return secrets;
 }
 
+//! How many parameters a call of a method that takes key material (a private key, a seed phrase
+//! or its password) has once it includes the first of them. Given on the command line, they can
+//! be read by other users (/proc/<pid>/cmdline) and are kept in the shell history.
+static std::optional<size_t> KeyMaterialParamCount(const std::string& method)
+{
+    static const std::map<std::string, size_t> counts{
+        {"importprivkey", 1}, {"makeseedphrase", 1}, {"restoreseedphrase", 1}, {"sendalert", 2},
+        {"sendalert2", 1}, {"sethdseed", 2}, {"signrawtransaction", 3}, {"signrawtransactionwithkey", 2},
+    };
+
+    const auto it = counts.find(method);
+    if (it == counts.end()) return std::nullopt;
+    return it->second;
+}
+
+//! Appends the parameters read from standard input (-stdin), one per line until the end of the
+//! input. A carriage return ending a line is dropped, and so is a UTF-8 byte-order mark at the
+//! start of the input when \p first_read (no passphrase line came before).
+static void ReadStdinParams(std::vector<std::string>& params, bool first_read)
+{
+    std::string line;
+    bool first = first_read;
+
+    while (std::getline(std::cin, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (first && line.rfind("\xEF\xBB\xBF", 0) == 0) line.erase(0, 3);
+        first = false;
+        params.push_back(line);
+    }
+}
+
 bool IsRpcClientCommandLine(int argc, const char* const argv[])
 {
     for (int i = 1; i < argc; i++) {
@@ -765,26 +797,24 @@ int CommandLineRPC(int argc, char *argv[])
                                           strMethod));
         }
 
-        // Everything is read from standard input before the connection is made.
+        // Everything is read from standard input before the connection is made: the passphrase
+        // lines first, then the parameters of -stdin.
         SecureString elevate_passphrase;
         RpcCallOptions call_options;
 
-        UniValue params;
-
-        if (stdin_passphrase) {
-            std::vector<SecureString> secrets = ReadMethodPassphrases(strMethod);
-            params = BuildParamsWithSecrets(strMethod, strParams, secrets);
-        } else {
-            if (passphrase_method && !strParams.empty()) {
-                tfm::format(std::cerr, "warning: the passphrase was given on the command line, where other users and "
-                                       "the shell history can see it; use -stdinwalletpassphrase\n");
-            }
-
-            params = RPCConvertValues(strMethod, strParams);
+        if (!stdin_passphrase && passphrase_method && !strParams.empty()) {
+            tfm::format(std::cerr, "warning: the passphrase was given on the command line, where other users and "
+                                   "the shell history can see it; use -stdinwalletpassphrase\n");
         }
 
-        // Cleanses the passphrases in the params however this scope is left.
-        const PassphraseParamsCleanser params_cleanser(strMethod, params);
+        if (const std::optional<size_t> count = KeyMaterialParamCount(strMethod); count && strParams.size() >= *count) {
+            tfm::format(std::cerr, "warning: %s was given key material on the command line, where other users and "
+                                   "the shell history can see it; give its parameters on standard input with -stdin\n",
+                        strMethod);
+        }
+
+        std::vector<SecureString> secrets;
+        if (stdin_passphrase) secrets = ReadMethodPassphrases(strMethod);
 
         if (stdin_elevate) {
             if (!PromptSecretLine("Wallet passphrase for this request> ", elevate_passphrase)) {
@@ -801,6 +831,14 @@ int CommandLineRPC(int argc, char *argv[])
             CleanseString(*encoded);
             call_options.elevate_passphrase = &elevate_passphrase;
         }
+
+        if (gArgs.GetBoolArg("-stdin", false)) ReadStdinParams(strParams, !stdin_passphrase && !stdin_elevate);
+
+        UniValue params = stdin_passphrase ? BuildParamsWithSecrets(strMethod, strParams, secrets)
+                                           : RPCConvertValues(strMethod, strParams);
+
+        // Cleanses the passphrases in the params however this scope is left.
+        const PassphraseParamsCleanser params_cleanser(strMethod, params);
 
         // Execute
         // Under -rpcwait a daemon that is still initialising answers RPC_IN_WARMUP; call again

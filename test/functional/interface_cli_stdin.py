@@ -21,7 +21,9 @@ passphrase.
   - encryptwallet names the automatic backups from before the encryption and deletes none;
   - -stdinelevate sends the passphrase base64-encoded in the header;
   - the flags are refused for methods they do not apply to, and a short input is reported;
-  - the command-line form still works and warns.
+  - the command-line form still works and warns;
+  - -stdin reads the remaining parameters from standard input, after any passphrase line, and key
+    material given on the command line instead is warned about.
 """
 import base64
 import os
@@ -201,6 +203,30 @@ class InterfaceCLIStdinTest(GridcoinTestFramework):
         self.log.info("No warning when the passphrase comes from standard input")
         result = self.run_client("-stdinwalletpassphrase", "walletpassphrase", 60, input=NEW_PASSPHRASE + "\n")
         assert "given on the command line" not in result.stderr, result.stderr
+
+        self.log.info("-stdin reads the remaining parameters from standard input")
+        result = self.run_client("-stdin", "validateaddress", input=address + "\n")
+        self.assert_client_ok(result)
+        assert '"isvalid": true' in result.stdout, result.stdout
+
+        self.log.info("Key material on the command line warns; from standard input it does not")
+        result = self.run_client("importprivkey", "notakey")
+        assert "given key material on the command line" in result.stderr, result.stderr
+        result = self.run_client("-stdin", "importprivkey", input="notakey\n")
+        assert "given key material on the command line" not in result.stderr, result.stderr
+        assert '"code":-5' in result.stderr and "Invalid private key" in result.stderr, result.stderr
+
+        self.log.info("With -stdinelevate the passphrase line comes first, then the -stdin parameters")
+        port = rpc_port(1)
+        server = CaptureServer(port)
+        try:
+            result = self.run_client("-rpcconnect=127.0.0.1", "-rpcport=" + str(port), "-stdinelevate", "-stdin",
+                                     "signmessage", input=PASSPHRASE + "\n" + address + "\nm\n")
+        finally:
+            request = server.finish()
+        self.assert_client_ok(result)
+        assert expected in request.split("\r\n"), request
+        assert '"params":["{}","m"]'.format(address) in request.replace(" ", ""), request
 
 
 if __name__ == '__main__':

@@ -175,7 +175,7 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
         "-privdb", "-flushwallet", "-upgradewallet", "-blockv15height", "-messagecontractdisableheight",
         "-pendingpoolretention", "-rpcssl", "-rpcsslcertificatechainfile", "-rpcsslprivatekeyfile",
         "-rpcsslciphers", "-socks", "-debugallowtracer", "-rpcserviceuser", "-rpcskiplistenercheck",
-        "-stdinwalletpassphrase", "-stdinelevate", "-ipcdir", "-ipcattachgroup",
+        "-stdinwalletpassphrase", "-stdinelevate", "-stdin", "-ipcdir", "-ipcattachgroup",
         "-ipcserviceuser", "-reportpermissions"};
 #ifdef __linux__
     refuse.insert("-autounlocksocket");
@@ -212,7 +212,7 @@ BOOST_AUTO_TEST_CASE(every_registered_argument_has_its_settings_class)
     // The developer and client overrides, and the autounlock options of the service
     // units, are honoured only from the command line.
     std::vector<std::string> command_line_only{"-debugallowtracer", "-rpcskiplistenercheck", "-stdinwalletpassphrase",
-                                               "-stdinelevate", "-reportpermissions"};
+                                               "-stdinelevate", "-stdin", "-reportpermissions"};
 #ifdef __linux__
     command_line_only.push_back("-autounlocksocket");
 #endif
