@@ -1831,7 +1831,9 @@ same answer.
 - Every RPC and IPC method that `src/test/data/key_entry_points.json` lists as reaching the
   wallet's keys must be of class `elevate`, or `dispatch` for a console method, which reaches
   the keys only through the RPC it carries (that RPC's own row is `elevate`). The lint fails
-  when that list is missing.
+  when that list is missing. Conversely, an entry here whose effect is `keys` or `key_writer`
+  (other than an `elevated_handle`) must appear in that list, as a row the staking-only test
+  drives or as a `*_not_rows` entry with its reason.
 - When unsure of a class, choose `elevate`.
 
 Functional tests

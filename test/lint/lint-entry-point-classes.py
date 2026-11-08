@@ -63,7 +63,9 @@ means. This lint keeps the file true against the code:
       elevate or dispatch here. A dispatch entry reaches the keys only
       through the RPC it carries, whose own row rule 1 and the dispatcher
       gate hold to elevate, and rule 7 confines dispatch to the console
-      methods.
+      methods. Conversely, every entry here whose effect is keys or
+      key_writer, other than an elevated_handle, is named in the list, as a
+      row or in a *_not_rows section.
   11. The file is formatted as json.dumps(data, indent=2, sort_keys=True)
       plus a newline.
 
@@ -698,9 +700,31 @@ def check_key_entry_points(path, data):
                 return
         rpc = [row["name"] for row in listing["rpc"]]
         ipc = ["{}.{}".format(row["interface"], row["method"]) for row in listing["ipc"]]
+        # Every section that names an entry point, rows and reasoned non-rows alike.
+        listed = {"rpc": set(), "ipc": set()}
+        for section, rows in listing.items():
+            if not isinstance(rows, list) or not section.startswith(("rpc", "ipc")):
+                continue
+            table = "rpc" if section.startswith("rpc") else "ipc"
+            for row in rows:
+                listed[table].add(row["name"] if table == "rpc" else "{}.{}".format(row["interface"], row["method"]))
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         fail(path, "cannot read its rpc and ipc lists: {}".format(e))
         return
+    # The converse: an entry whose effect is the keys is in the key table, as a
+    # row the staking-only test drives or as a non-row with its reason. A method
+    # that reaches the keys only through a wrapper (CreateTransaction,
+    # SignSignature) changes no direct-call count, so this is what makes it get
+    # a row. An elevated handle is reached only through the elevate method that
+    # mints it, which has its own row.
+    for table in ("rpc", "ipc"):
+        for name, entry in sorted(data[table].items()):
+            if not isinstance(entry, dict) or entry.get("effect") not in ("keys", "key_writer"):
+                continue
+            if entry.get("class") == "elevated_handle" or name in listed[table]:
+                continue
+            fail("{}.{}".format(table, name), "its effect is {}, so {} must list it (a row, or a not_rows "
+                 "entry with the reason it reaches no key while staking only)".format(entry["effect"], path))
     for table, names in (("rpc", rpc), ("ipc", ipc)):
         for name in names:
             entry = data[table].get(name) if isinstance(name, str) else None
