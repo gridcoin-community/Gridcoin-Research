@@ -343,6 +343,14 @@ BOOST_AUTO_TEST_CASE(a_simulated_sync_reaches_the_gui_without_a_gui_thread_cs_ma
         cache->AddSubscriber();
         node::StartGuiCache(std::move(cache));
 
+        // Stops the published cache at any exit from this block, a failed
+        // BOOST_REQUIRE included, so its timer never outlives the objects it
+        // reaches. StopGuiCache is idempotent.
+        struct StopOnExit
+        {
+            ~StopOnExit() { node::StopGuiCache(); }
+        } stop_on_exit;
+
         // 200 blocks, back to back, as a catch-up connects them.
         std::string err;
         // The premine has few outputs, and an output staked into a block can stake
@@ -365,8 +373,6 @@ BOOST_AUTO_TEST_CASE(a_simulated_sync_reaches_the_gui_without_a_gui_thread_cs_ma
         BOOST_CHECK(gui.WaitForHeight(tip));
         BOOST_CHECK(gui.Handled() > 0U);
         BOOST_CHECK(!gui.Stale());
-
-        node::StopGuiCache();
     }
 
     // Nothing took cs_main on the marked thread: the GUI's only contact with
