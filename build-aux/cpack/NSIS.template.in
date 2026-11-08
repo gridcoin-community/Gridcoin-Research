@@ -319,6 +319,12 @@ Function .onInit
     ; removes it, then runs this installer again.
     ReadRegStr $0 HKCU "${REGKEY}" "Path"
     ${IfThen} $0 == "" ${|} Return ${|}
+    ; Gone already, and its registry entries left behind: removing those runs nothing.
+    ${IfNot} ${FileExists} "$0\uninstall.exe"
+      DeleteRegValue HKCU "${REGKEY}" "Path"
+      DeleteRegKey HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)"
+      Return
+    ${EndIf}
     MessageBox MB_OK|MB_ICONSTOP \
       "An old version installed for your account only is in $0. Uninstall it first, from Apps in Settings or with its own uninstaller, then run this installer again. Your wallet data is not affected." \
       /SD IDOK
