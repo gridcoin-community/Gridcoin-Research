@@ -53,6 +53,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# An elevated run loads modules only from the system's own module directories.
+$env:PSModulePath = "$PSHOME\Modules;$env:ProgramFiles\WindowsPowerShell\Modules"
+
 . (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')
 
 # The access list of an install directory outside Program Files: owner Administrators; protected;

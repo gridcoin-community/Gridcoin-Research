@@ -50,6 +50,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# An elevated run loads modules only from the system's own module directories.
+$env:PSModulePath = "$PSHOME\Modules;$env:ProgramFiles\WindowsPowerShell\Modules"
+
 # The subject of Microsoft's code-signing identity-verification root, matched by name.
 $script:GridcoinMicrosoftRootSubject = '^CN=Microsoft Identity Verification Root Certificate Authority\b'
 
