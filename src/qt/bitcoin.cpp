@@ -1505,6 +1505,16 @@ int main(int argc, char *argv[])
         // the main window is shown (migrateElevatedCoreSettings).
         optionsModel->readNodeSettings();
         optionsModel->migrateCoreSettings();
+        // The monolith's core has not started yet. The proxy and UPnP an earlier
+        // version kept are applied for this run, as that version applied them,
+        // so the first start does not connect without the proxy while the
+        // passphrase to move them is still to be asked. This widens nothing the
+        // config file does not: the monolith runs in the account that writes it.
+        if (!multiprocess) {
+            for (const auto& [name, value] : optionsModel->legacyNetworkSettingsForThisRun()) {
+                gArgs.SoftSetArg("-" + name, value);
+            }
+        }
     }
     catch (const std::exception& e)
     {
@@ -1875,13 +1885,18 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // wallet passphrase, so this waits until the main window can ask
                 // for it. A wallet that needs no passphrase is not asked, and
                 // nothing is asked when there is nothing to move.
-                optionsModel.migrateElevatedCoreSettings([&window, &walletModel](const std::function<void()>& apply) {
+                const bool kept_for_the_run = optionsModel.legacyNetworkSettingsApplied();
+                optionsModel.migrateElevatedCoreSettings([&window, &walletModel, kept_for_the_run](const std::function<void()>& apply) {
                     const WalletModel::EncryptionStatus status = walletModel.getEncryptionStatus();
                     if (status == WalletModel::Locked || status == WalletModel::UnlockedForStakingOnly) {
-                        QMessageBox::information(&window, PACKAGE_NAME,
-                            QObject::tr("This version keeps the proxy and UPnP settings in the core. To keep "
-                                        "the ones you set in an earlier version, enter your wallet passphrase. "
-                                        "If you cancel, they are discarded."));
+                        QMessageBox::information(&window, PACKAGE_NAME, kept_for_the_run
+                            ? QObject::tr("This version keeps the proxy and UPnP settings in the core. To keep "
+                                          "the ones you set in an earlier version, enter your wallet passphrase. "
+                                          "If you cancel, they are used for this session only, and you are asked "
+                                          "again at the next start.")
+                            : QObject::tr("This version keeps the proxy and UPnP settings in the core. To keep "
+                                          "the ones you set in an earlier version, enter your wallet passphrase. "
+                                          "If you cancel, they are discarded."));
                     }
 
                     WalletModel::UnlockContext ctx(walletModel.requestUnlock(CapabilityKind::Settings));

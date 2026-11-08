@@ -96,10 +96,27 @@ public:
     //! passphrase, so the composition root calls this once the wallet can ask
     //! for it, through \p with_elevation, and only for values that differ from
     //! the node's; an old value the node already uses is removed without
-    //! asking. Without the passphrase, the old values are discarded. Marks it
-    //! done with the QSettings key "coreElevatedSettingsMigrated", except when
-    //! the node could not store them: the next start then tries again.
+    //! asking. Without the passphrase, the old values are discarded, except
+    //! those the monolith applied for this run (legacyNetworkSettingsForThisRun),
+    //! which are kept and asked for again at the next start. Marks it done with
+    //! the QSettings key "coreElevatedSettingsMigrated", except when the node
+    //! could not store them or they were kept: the next start then tries again.
     void migrateElevatedCoreSettings(const WithElevation& with_elevation);
+
+    //! The proxy and UPnP values an earlier version kept in Gridcoin-Qt.conf
+    //! that migrateElevatedCoreSettings() has still to move, each set neither
+    //! in the config file nor on the command line and different from the
+    //! node's. The monolith soft-sets them before its core starts, as that
+    //! version applied them, so the first start after the upgrade does not
+    //! connect without the proxy while the passphrase to move them is still to
+    //! be asked. The values are remembered: once soft-set the node reports them
+    //! as set, and migrateElevatedCoreSettings() moves them all the same. Call
+    //! after migrateCoreSettings(). The split build does not call it; its core
+    //! is already running.
+    std::vector<std::pair<std::string, std::string>> legacyNetworkSettingsForThisRun();
+
+    //! legacyNetworkSettingsForThisRun() found values to apply for this run.
+    bool legacyNetworkSettingsApplied() const { return !m_legacy_network_settings.empty(); }
 
     //! Whether submitting these widget values changes an Elevate-class core setting: UPnP, proxy use,
     //! the proxy address or port while the proxy is (being) enabled, or side staking.
@@ -192,6 +209,8 @@ private:
 
     //! Settings command/query surface; owned by the process, outlives this model.
     interfaces::Node& m_node;
+    //! What legacyNetworkSettingsForThisRun() returned.
+    std::vector<std::pair<std::string, std::string>> m_legacy_network_settings;
     int nDisplayUnit;
     bool fMinimizeToTray;
     bool fStartAtStartup;

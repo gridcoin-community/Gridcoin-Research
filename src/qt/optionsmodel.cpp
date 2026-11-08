@@ -12,6 +12,7 @@
 
 #include "amount.h" // For MIN_STAKE_SPLIT_VALUE_GRC.
 
+#include <algorithm>
 #include <optional>
 #include <utility>
 
@@ -230,12 +231,19 @@ void OptionsModel::migrateElevatedCoreSettings(const WithElevation& with_elevati
         return;
     }
 
+    // The values the monolith applied for this run (legacyNetworkSettingsForThisRun)
+    // were chosen by the rules below before the core started; the node reports
+    // them as set now, so they are taken as they are.
+    std::vector<std::pair<std::string, std::string>> migrate = m_legacy_network_settings;
+    const auto taken = [&](const std::string& name) {
+        return std::any_of(migrate.begin(), migrate.end(), [&](const auto& setting) { return setting.first == name; });
+    };
+
     // As in migrateCoreSettings(), a setting already set in the config file or
     // on the command line keeps that value. An old value the node already uses
     // would change nothing, so it is not moved and does not ask for the
     // passphrase; its old keys are removed.
-    std::vector<std::pair<std::string, std::string>> migrate;
-    if (!m_node.isSettingSet("proxy")
+    if (!taken("proxy") && !m_node.isSettingSet("proxy")
             && settings.value("fUseProxy", false).toBool() && settings.contains("addrProxy")) {
         const std::string proxy = settings.value("addrProxy").toString().toStdString();
         if (proxy == m_node.getSettingStr("proxy", "")) {
@@ -245,7 +253,7 @@ void OptionsModel::migrateElevatedCoreSettings(const WithElevation& with_elevati
             migrate.emplace_back("proxy", proxy);
         }
     }
-    if (!m_node.isSettingSet("upnp") && settings.contains("fUseUPnP")) {
+    if (!taken("upnp") && !m_node.isSettingSet("upnp") && settings.contains("fUseUPnP")) {
         const bool upnp = settings.value("fUseUPnP").toBool();
         // What the Options dialog shows, which is the node's own default here.
         if (upnp == data(index(MapPortUPnP), Qt::EditRole).toBool()) {
@@ -262,6 +270,20 @@ void OptionsModel::migrateElevatedCoreSettings(const WithElevation& with_elevati
 
     bool stored = false;
     const bool elevated = with_elevation([&] { stored = m_node.changeSettings(migrate).ok; });
+
+    if (!elevated && !m_legacy_network_settings.empty()) {
+        // The monolith applied them for this run. Discarding them would make
+        // every later start connect without the proxy, so they are kept, and
+        // the next start applies them again and asks again.
+        std::string kept;
+        for (const auto& [name, value] : migrate) {
+            if (!kept.empty()) kept += ", ";
+            kept += name + "=" + value;
+        }
+        GUILogPrintf("Kept the proxy and UPnP settings an earlier version set (%s) for this session only: "
+                     "the wallet passphrase was not given; it is asked for again at the next start", kept);
+        return;
+    }
 
     if (!elevated) {
         // Without the passphrase the core cannot take them, and keeping them
@@ -287,6 +309,28 @@ void OptionsModel::migrateElevatedCoreSettings(const WithElevation& with_elevati
     if (stored) {
         settings.setValue("coreElevatedSettingsMigrated", true);
     }
+}
+
+std::vector<std::pair<std::string, std::string>> OptionsModel::legacyNetworkSettingsForThisRun()
+{
+    m_legacy_network_settings.clear();
+    QSettings settings;
+    if (settings.value("coreElevatedSettingsMigrated", false).toBool()) return {};
+
+    // The values migrateElevatedCoreSettings() would move: an old value the node
+    // already uses changes nothing, there as here.
+    if (!m_node.isSettingSet("proxy")
+            && settings.value("fUseProxy", false).toBool() && settings.contains("addrProxy")) {
+        const std::string proxy = settings.value("addrProxy").toString().toStdString();
+        if (proxy != m_node.getSettingStr("proxy", "")) m_legacy_network_settings.emplace_back("proxy", proxy);
+    }
+    if (!m_node.isSettingSet("upnp") && settings.contains("fUseUPnP")) {
+        const bool upnp = settings.value("fUseUPnP").toBool();
+        if (upnp != data(index(MapPortUPnP), Qt::EditRole).toBool()) {
+            m_legacy_network_settings.emplace_back("upnp", upnp ? "1" : "0");
+        }
+    }
+    return m_legacy_network_settings;
 }
 
 bool OptionsModel::needsSettingsElevation(const QMap<OptionID, QVariant>& submitted) const

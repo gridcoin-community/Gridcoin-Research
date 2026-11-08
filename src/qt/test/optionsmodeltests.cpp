@@ -1106,6 +1106,89 @@ void OptionsModelTests::elevatedMigrationMovesOnlyTheValuesThatDiffer()
     QVERIFY(settings.value("coreElevatedSettingsMigrated", false).toBool());
 }
 
+//! The monolith soft-sets what legacyNetworkSettingsForThisRun() returns, as the
+//! node would then report: set, with that value.
+static void ApplyForTheRun(qt_test::FakeNode& node, const std::vector<std::pair<std::string, std::string>>& run)
+{
+    for (const auto& [name, value] : run) node.m_settings[name] = value;
+}
+
+// A Tor user upgrading from a version that kept the proxy in Gridcoin-Qt.conf:
+// the monolith applies it before its core starts, so the first start does not
+// connect without it.
+void OptionsModelTests::legacyNetworkSettingsAreAppliedForTheFirstRun()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    SeedLegacySettings(true);
+    OptionsModel model(node, sidestakes);
+    model.migrateCoreSettings();
+
+    const auto run = model.legacyNetworkSettingsForThisRun();
+    const std::vector<std::pair<std::string, std::string>> expected{{"proxy", "1.2.3.4:9050"}, {"upnp", MovedUpnp()}};
+    QCOMPARE(run, expected);
+    QVERIFY(model.legacyNetworkSettingsApplied());
+
+    // Moved already: nothing for the run.
+    QSettings().setValue("coreElevatedSettingsMigrated", true);
+    QVERIFY(model.legacyNetworkSettingsForThisRun().empty());
+}
+
+void OptionsModelTests::legacyNetworkSettingsAppliedForTheRunAreMovedWhenElevated()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    SeedLegacySettings(true);
+    OptionsModel model(node, sidestakes);
+    model.migrateCoreSettings();
+    ApplyForTheRun(node, model.legacyNetworkSettingsForThisRun());
+    node.m_change_calls.clear();
+
+    int calls = 0;
+    model.migrateElevatedCoreSettings(CountingElevation(calls, true, node.m_elevated));
+
+    // Set for the run only, so still moved into the core behind the passphrase.
+    QCOMPARE(calls, 1);
+    QCOMPARE(node.m_change_calls.size(), size_t{1});
+    const std::vector<std::pair<std::string, std::string>> moved{{"proxy", "1.2.3.4:9050"}, {"upnp", MovedUpnp()}};
+    QCOMPARE(node.m_change_calls.front(), moved);
+    QVERIFY(QSettings().value("coreElevatedSettingsMigrated", false).toBool());
+}
+
+void OptionsModelTests::declinedLegacyNetworkSettingsAppliedForTheRunAreKeptAndAskedAgain()
+{
+    qt_test::FakeNode node;
+    qt_test::FakeSideStakeManager sidestakes;
+    node.m_needs_elevation = ELEVATE_SETTINGS;
+    SeedLegacySettings(true);
+    OptionsModel model(node, sidestakes);
+    model.migrateCoreSettings();
+    ApplyForTheRun(node, model.legacyNetworkSettingsForThisRun());
+
+    int calls = 0;
+    model.migrateElevatedCoreSettings(CountingElevation(calls, false, node.m_elevated));
+    QCOMPARE(calls, 1);
+
+    // Kept: discarding them would make every later start connect without the
+    // proxy. The next start applies them again and asks again.
+    QSettings settings;
+    QVERIFY(settings.contains("addrProxy"));
+    QVERIFY(settings.value("fUseProxy", false).toBool());
+    QVERIFY(settings.contains("fUseUPnP"));
+    QVERIFY(!settings.value("coreElevatedSettingsMigrated", false).toBool());
+
+    qt_test::FakeNode next_node;
+    next_node.m_needs_elevation = ELEVATE_SETTINGS;
+    OptionsModel next(next_node, sidestakes);
+    next.migrateCoreSettings();
+    ApplyForTheRun(next_node, next.legacyNetworkSettingsForThisRun());
+    QVERIFY(next.legacyNetworkSettingsApplied());
+    next.migrateElevatedCoreSettings(CountingElevation(calls, false, next_node.m_elevated));
+    QCOMPARE(calls, 2);
+}
+
 void OptionsModelTests::needsSettingsElevationOnlyForChangedNetworkAndSideStakeFields_data()
 {
     QTest::addColumn<bool>("proxyStoredOn");
