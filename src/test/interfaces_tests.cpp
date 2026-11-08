@@ -1429,7 +1429,7 @@ BOOST_AUTO_TEST_CASE(ipc_signmessage_needs_a_signmessage_capability)
 
     std::string signature;
     BOOST_CHECK(wallet->signMessage(EncodeDestination(fx.id), "a message", signature)
-                == interfaces::MessageSignStatus::KeyNotAvailable);
+                == interfaces::MessageSignStatus::Refused);
     BOOST_CHECK(signature.empty());
 }
 
@@ -1454,7 +1454,7 @@ BOOST_AUTO_TEST_CASE(ipc_signmessage_runs_under_a_signmessage_capability)
     wallet->endElevation();
 
     std::string after;
-    BOOST_CHECK(wallet->signMessage(address, "a message", after) == interfaces::MessageSignStatus::KeyNotAvailable);
+    BOOST_CHECK(wallet->signMessage(address, "a message", after) == interfaces::MessageSignStatus::Refused);
     BOOST_CHECK(after.empty());
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 }
@@ -1471,7 +1471,7 @@ BOOST_AUTO_TEST_CASE(ipc_capability_wrong_kind)
 
     std::string signature;
     BOOST_CHECK(wallet->signMessage(EncodeDestination(fx.id), "a message", signature)
-                == interfaces::MessageSignStatus::KeyNotAvailable);
+                == interfaces::MessageSignStatus::Refused);
     BOOST_CHECK(signature.empty());
 
     const interfaces::PSGTSignResult result = psgt_context->signPSGT(PsgtSpendingTheFixtureCoin(fx));
@@ -1552,7 +1552,7 @@ BOOST_AUTO_TEST_CASE(ipc_begin_elevation_on_a_closed_connection_ends_it)
 
     std::string signature;
     BOOST_CHECK(wallet->signMessage(EncodeDestination(fx.id), "a message", signature)
-                == interfaces::MessageSignStatus::KeyNotAvailable);
+                == interfaces::MessageSignStatus::Refused);
 }
 
 // A begin whose connection has closed before the capability reaches the slot
@@ -1614,7 +1614,7 @@ BOOST_AUTO_TEST_CASE(ipc_closed_connection_neither_uses_nor_ends_the_next_guis_c
     BOOST_REQUIRE(next_id.has_value());
 
     std::string signature;
-    BOOST_CHECK(gone->signMessage(address, "a message", signature) == interfaces::MessageSignStatus::KeyNotAvailable);
+    BOOST_CHECK(gone->signMessage(address, "a message", signature) == interfaces::MessageSignStatus::Refused);
     BOOST_CHECK(signature.empty());
 
     gone->endElevation();

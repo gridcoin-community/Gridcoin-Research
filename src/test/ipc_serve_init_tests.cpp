@@ -528,7 +528,7 @@ BOOST_AUTO_TEST_CASE(served_interfaces_are_bound_to_their_connection)
     BOOST_REQUIRE(d_id.has_value());
 
     std::string signature;
-    BOOST_CHECK(a_wallet->signMessage(address, "a message", signature) == interfaces::MessageSignStatus::KeyNotAvailable);
+    BOOST_CHECK(a_wallet->signMessage(address, "a message", signature) == interfaces::MessageSignStatus::Refused);
     a_wallet->endElevation();
     BOOST_CHECK(fx.wallet.IpcCapability({}) == d_id);
 

@@ -1095,8 +1095,9 @@ std::map<std::string, IpcDriver> IpcDrivers()
             interfaces::MakeWallet(&fx.wallet)->signMessage(EncodeDestination(CTxDestination(fx.own_id)), "x", signature);
         const std::string name = StatusName(status, {{interfaces::MessageSignStatus::OK, "OK"},
                                                      {interfaces::MessageSignStatus::KeyNotAvailable, "KeyNotAvailable"},
-                                                     {interfaces::MessageSignStatus::SigningFailed, "SigningFailed"}});
-        return DriverOutcome{status == interfaces::MessageSignStatus::KeyNotAvailable,
+                                                     {interfaces::MessageSignStatus::SigningFailed, "SigningFailed"},
+                                                     {interfaces::MessageSignStatus::Refused, "Refused"}});
+        return DriverOutcome{status == interfaces::MessageSignStatus::Refused,
                              status == interfaces::MessageSignStatus::OK, name, name};
     };
 

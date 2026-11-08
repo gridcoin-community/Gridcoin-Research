@@ -1273,7 +1273,7 @@ BOOST_AUTO_TEST_CASE(wire_wallet_elevation_round_trip)
     std::string signature;
 
     BOOST_CHECK(wallet->signMessage(address, "over the wire", signature)
-                == interfaces::MessageSignStatus::KeyNotAvailable);
+                == interfaces::MessageSignStatus::Refused);
 
     BOOST_CHECK(!wallet->beginElevation(SecureString("not the passphrase"), CapabilityKind::SignMessage));
     BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
@@ -1298,7 +1298,7 @@ BOOST_AUTO_TEST_CASE(wire_wallet_elevation_round_trip)
     BOOST_CHECK(!fx.wallet.IpcCapability({}).has_value());
 
     std::string after;
-    BOOST_CHECK(wallet->signMessage(address, "over the wire", after) == interfaces::MessageSignStatus::KeyNotAvailable);
+    BOOST_CHECK(wallet->signMessage(address, "over the wire", after) == interfaces::MessageSignStatus::Refused);
     BOOST_CHECK(fx.wallet.IsUnlockedForStakingOnly());
 
     wallet.reset();

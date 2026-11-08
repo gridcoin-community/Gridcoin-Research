@@ -765,6 +765,16 @@ public:
         CapabilityScope scope(*m_wallet, m_wallet->IpcCapability(m_connection_closed), CapabilityKind::SignMessage);
 
         try {
+            // A key the wallet holds but may not use now is a refusal, not a
+            // missing key: the capability may have expired, been displaced or
+            // ended with its connection.
+            if (!WITH_LOCK(m_wallet->cs_wallet, return m_wallet->HaveKey(*key_id))) {
+                return MessageSignStatus::KeyNotAvailable;
+            }
+            if (m_wallet->IsLocked() || !m_wallet->CanUseKeys()) {
+                return MessageSignStatus::Refused;
+            }
+
             CKey key;
             if (!WITH_LOCK(m_wallet->cs_wallet, return m_wallet->GetKey(*key_id, key))) {
                 return MessageSignStatus::KeyNotAvailable;

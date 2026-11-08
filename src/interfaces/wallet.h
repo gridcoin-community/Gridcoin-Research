@@ -168,6 +168,8 @@ enum class MessageSignStatus
     OK,
     KeyNotAvailable, //!< No private key for the address in this wallet.
     SigningFailed,   //!< SignCompact failed.
+    Refused,         //!< The wallet cannot use its keys: locked, or unlocked for staking only
+                     //!< with no SignMessage capability for this request.
 };
 
 //! Result of Wallet::verifyMessage (pure crypto, but kept behind the interface

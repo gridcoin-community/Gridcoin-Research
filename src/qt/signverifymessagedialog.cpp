@@ -141,6 +141,11 @@ void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
         ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_SM->setText(QString("<nobr>") + tr("Message signing failed.") + QString("</nobr>"));
         return;
+    case interfaces::MessageSignStatus::Refused:
+        ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
+        ui->statusLabel_SM->setText(tr("The wallet did not allow the signature: it is locked or unlocked for "
+                                       "staking only. Sign again and enter the wallet passphrase."));
+        return;
     case interfaces::MessageSignStatus::OK:
         break;
     }
