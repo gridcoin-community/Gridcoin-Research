@@ -97,13 +97,16 @@ class TestDecide(unittest.TestCase):
         allowed, reason = self.decide(pidfd=None)
         self.assertTrue(allowed, reason)
 
-    def test_fallback_refuses_process_started_after_accept(self):
+    def test_fallback_refuses_process_started_after_the_helper(self):
         allowed, reason = h.decide(PEER, UID, UID, None, 1000, never, lambda pid: 1001, never)
         self.assertFalse(allowed)
-        self.assertEqual(reason, "started after accept")
+        self.assertEqual(reason, "started after this helper")
+
+    def test_fallback_refuses_an_unreadable_start_time_and_says_why(self):
+        # A /proc mounted with hidepid hides the core's stat from the helper's account.
         allowed, reason = h.decide(PEER, UID, UID, None, 1000, never, lambda pid: None, never)
         self.assertFalse(allowed)
-        self.assertEqual(reason, "started after accept")
+        self.assertIn("hidepid", reason)
 
     def test_fallback_refuses_pid_reused_during_query(self):
         allowed, reason = self.decide(pidfd=None, starts=(500, 501))
@@ -271,6 +274,7 @@ class TestServe(unittest.TestCase):
         d = {
             "main_pid": lambda unit: os.getpid(),
             "start_ticks": lambda pid, proc="/proc": 1,
+            "self_start_ticks": lambda: 10 ** 9,
             "boottime_ticks": lambda: 10 ** 9,
             "pidfd": lambda conn: None,
             "pidfd_pid": lambda fd: os.getpid(),
@@ -313,6 +317,15 @@ class TestServe(unittest.TestCase):
         self.assertEqual(self.opened, [self.sentinel])
         self.assertIn("served gridcoinresearchd@alice.service main pid", self.log.getvalue())
         self.assertNotIn("hunter2", self.log.getvalue())
+
+    def test_fallback_bound_is_the_helpers_own_start(self):
+        # The peer started after this helper did, though before the accept: refused, nothing read.
+        rc, data = self.run_serve(start_ticks=lambda pid, proc="/proc": 600, self_start_ticks=lambda: 500,
+                                  boottime_ticks=lambda: 10 ** 9)
+        self.assertEqual(rc, h.EXIT_REFUSED)
+        self.assertEqual(data, b"")
+        self.assertEqual(self.opened, [])
+        self.assertIn("started after this helper", self.log.getvalue())
 
     def test_refusal_sends_nothing(self):
         rc, data = self.run_serve(main_pid=lambda unit: os.getpid() + 1)

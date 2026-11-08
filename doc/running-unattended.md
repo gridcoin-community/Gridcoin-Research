@@ -551,13 +551,13 @@ which prints `Nothing to switch over.` when there is nothing left.
 
   | Status | Journal line | Meaning |
   |---|---|---|
-  | 3 | `refused peer pid … uid …: <reason>` | What connected was not the main process of the core's unit, or ran as another account. A core started by hand is refused; so is any other program. |
+  | 3 | `refused peer pid … uid …: <reason>` | What connected was not the main process of the core's unit, or ran as another account. A core started by hand is refused; so is any other program. On a kernel before 6.5 (Debian 12 runs 6.1) the helper reads the core's start time from `/proc`; with `/proc` mounted with `hidepid`, the reason is `start time unreadable (is /proc mounted with hidepid?)` and autounlock cannot work. |
   | 4 | `no connection within 5 s` | Started, but nothing was waiting on the socket. Harmless. |
   | 5 | `credential unusable: missing`, `empty`, `too long` or `not valid UTF-8` | Encrypt the passphrase again. |
   | 6 | `systemd query failed for <unit>: …` | The helper could not ask systemd for the core's main process, so it read no credential. Usually D-Bus (below). |
   | 64 | `usage: …` | The helper unit's command line was changed. |
   | 70 | `internal error: <type>` | A bug; please report it. |
-  | 243 (`CREDENTIALS`) | from systemd, before the helper runs | systemd could not decrypt the credential: a missing file, one encrypted without `--name=wallet-passphrase`, on another machine, or sealed to a PCR that has changed (see `--tpm2-pcrs=""` above). Encrypt it again. |
+  | 243 (`CREDENTIALS`) | from systemd, before the helper runs | systemd could not decrypt the credential: a missing file, one encrypted without `--name=wallet-passphrase`, on another machine, or sealed to a PCR that has changed (see `--tpm2-pcrs=""` above). Encrypt it again. After a few failed starts systemd stops the socket as well, and the core then reports `connect failed`; once the credential is fixed, restart the core, which starts the socket again. |
 
 - **D-Bus is missing.** The helper unit requires `dbus.socket`, since it asks systemd over D-Bus which process is
   the core's main process. On a minimal host or container without D-Bus the helper cannot start, and the wallet

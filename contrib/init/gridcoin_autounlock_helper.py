@@ -143,7 +143,10 @@ def query_main_pid(unit, run=subprocess.run):
         raise SystemdQueryError("unexpected systemctl output") from None
 
 
-def decide(peer_pid, peer_uid, expected_uid, pidfd, accept_ticks, main_pid_fn, start_ticks_fn, pidfd_pid_fn):
+def decide(peer_pid, peer_uid, expected_uid, pidfd, bound_ticks, main_pid_fn, start_ticks_fn, pidfd_pid_fn):
+    # Without a pidfd (kernels before 6.5) the peer is its pid and start time. systemd starts this
+    # helper only once a connection is waiting, so a process that started after it (bound_ticks)
+    # cannot have made that connection: a pid recycled in between is refused.
     if peer_uid != expected_uid:
         return False, "uid"
     if peer_pid <= 0:
@@ -151,8 +154,10 @@ def decide(peer_pid, peer_uid, expected_uid, pidfd, accept_ticks, main_pid_fn, s
     s1 = None
     if pidfd is None:
         s1 = start_ticks_fn(peer_pid)
-        if s1 is None or s1 > accept_ticks:
-            return False, "started after accept"
+        if s1 is None:
+            return False, "start time unreadable (is /proc mounted with hidepid?)"
+        if s1 > bound_ticks:
+            return False, "started after this helper"
     # SystemdQueryError propagates to the caller
     m = main_pid_fn()
     if m <= 0:
@@ -193,6 +198,7 @@ def default_deps():
     return {
         "main_pid": query_main_pid,
         "start_ticks": process_start_ticks,
+        "self_start_ticks": lambda: process_start_ticks(os.getpid()),
         "boottime_ticks": boottime_ticks,
         "pidfd": peer_pidfd,
         "pidfd_pid": pidfd_pid,
@@ -218,8 +224,11 @@ def serve_once(listen_fd, bound_unit, peer_user, env, deps):
             log_line(deps, "no connection within %s s" % deps["accept_timeout"])
             return EXIT_NO_CONNECTION
         conn, _ = listener.accept()
-        # the start-time bound for the fallback check is taken as soon as the peer is accepted
-        accept_ticks = deps["boottime_ticks"]()
+        # The start-time bound for the fallback check: this helper's own start, which came after
+        # the connection; the accept time when that cannot be read.
+        bound_ticks = deps["self_start_ticks"]()
+        if bound_ticks is None:
+            bound_ticks = deps["boottime_ticks"]()
     finally:
         listener.close()
     try:
@@ -231,7 +240,7 @@ def serve_once(listen_fd, bound_unit, peer_user, env, deps):
             log_line(deps, "refused peer pid %d uid %d: unknown peer user" % (peer_pid, peer_uid))
             return EXIT_REFUSED
         try:
-            allowed, reason = decide(peer_pid, peer_uid, expected_uid, pidfd, accept_ticks,
+            allowed, reason = decide(peer_pid, peer_uid, expected_uid, pidfd, bound_ticks,
                                      lambda: deps["main_pid"](bound_unit), deps["start_ticks"],
                                      deps["pidfd_pid"])
         except SystemdQueryError as e:
