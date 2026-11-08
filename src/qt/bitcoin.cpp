@@ -26,7 +26,8 @@
 #include "interfaces/psgt.h"
 #include "interfaces/researcher.h"
 #include "interfaces/sidestake.h"
-#include "interfaces/staking.h"
+#include "interfaces/gui_state.h"
+#include "interfaces/handler.h"
 #include "interfaces/voting.h"
 #include "interfaces/wallet.h"
 #include "interfaces/wallet_coin_source.h"
@@ -702,6 +703,24 @@ static void RemoveGuiTerminationHandler() {}
 //! of StartGridcoinQt can reap it; the monolithic build never starts one, leaving
 //! this a permanent no-op there.
 static std::atomic<bool> g_gui_archive_running{false};
+//! Stands in for the core's GUI state cache when the core runs none: the GUI
+//! keeps the state it shows at startup, as no snapshot ever arrives.
+class NoGuiState : public interfaces::GuiState
+{
+public:
+    interfaces::GuiStateSnapshot current() override { return {}; }
+    std::unique_ptr<interfaces::Handler> handleChanged(ChangedFn) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+    void requestUpdate() override {}
+    void requestMRCQuote(CAmount, uint64_t) override {}
+    std::unique_ptr<interfaces::Handler> handleMRCQuote(MRCQuoteFn) override
+    {
+        return interfaces::MakeCleanupHandler([] {});
+    }
+};
+
 static std::thread g_gui_archive_thread;
 
 //! Reap the log-archive worker. Safe to call more than once and when none was ever
@@ -1401,7 +1420,15 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // before calling Shutdown(). interface_init (created above, ahead
                 // of the readiness wait) outlives every model constructed here.
                 std::unique_ptr<interfaces::Node> node = interface_init->makeNode();
-                std::unique_ptr<interfaces::StakingStatus> staking_status = interface_init->makeStakingStatus();
+                // The core's pushed chain and staking state. The core starts the cache
+                // before this point; if it is not running, the GUI keeps the state it
+                // shows at startup (no snapshot ever arrives) rather than crash.
+                std::unique_ptr<interfaces::GuiState> gui_state = interface_init->makeGuiState();
+                if (!gui_state) {
+                    GUILogPrintf("WARNING: the core's GUI state cache is not running; the GUI will not "
+                                 "show chain or staking state.");
+                    gui_state = std::make_unique<NoGuiState>();
+                }
                 // Wallet startup completed above, so pwalletMain is set and
                 // the monolithic Init must hand out a wallet interface. If
                 // that invariant is ever broken, fail loudly instead of
@@ -1486,7 +1513,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                     throw std::runtime_error("PSGT pool interface unavailable after init");
                 }
 
-                ClientModel clientModel(*node, *staking_status, &optionsModel);
+                ClientModel clientModel(*node, *gui_state, &optionsModel);
                 WalletModel walletModel(*wallet, *wallet_tx_source, *wallet_coin_source,
                                         &optionsModel);
                 ResearcherModel researcherModel(*researcher_context);

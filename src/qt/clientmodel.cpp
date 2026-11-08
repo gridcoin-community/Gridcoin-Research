@@ -3,6 +3,7 @@
 #include "qt/bantablemodel.h"
 #include "qt/peertablemodel.h"
 #include "guiconstants.h"
+#include "qt/guistatecache.h"
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
 #include "transactiontablemodel.h"
@@ -18,26 +19,21 @@
 
 #include <boost/version.hpp>
 
+#include <algorithm>
 #include <sstream>
 
 static const int64_t nClientStartupTime = GetTime();
 
 ClientModel::ClientModel(interfaces::Node& node,
-                         interfaces::StakingStatus& staking_status,
+                         interfaces::GuiState& gui_state,
                          OptionsModel *optionsModel,
                          QObject *parent)
     : QObject(parent)
     , m_node(node)
-    , m_staking_status(staking_status)
     , optionsModel(optionsModel)
     , peerTableModel(nullptr)
     , banTableModel(nullptr)
-    , m_cached_num_blocks(-1)
-    , m_cached_num_blocks_of_peers(-1)
-    , m_cached_best_block_time(-1)
-    , m_cached_difficulty(-1)
-    , m_cached_net_weight(-1)
-    , m_cached_etts_days(0)
+    , m_gui_state_cache(new GuiStateCache(gui_state, this))
     , pollTimer(nullptr)
 {
     peerTableModel = new PeerTableModel(this);
@@ -46,6 +42,8 @@ ClientModel::ClientModel(interfaces::Node& node,
     pollTimer->setInterval(MODEL_UPDATE_DELAY);
     pollTimer->start();
     connect(pollTimer, &QTimer::timeout, this, &ClientModel::updateTimer);
+
+    connect(m_gui_state_cache, &GuiStateCache::changed, this, &ClientModel::updateFromGuiState);
 
     subscribeToCoreSignals();
 }
@@ -62,38 +60,22 @@ int ClientModel::getNumConnections() const
 
 int ClientModel::getNumBlocks() const
 {
-    if (m_cached_num_blocks == -1) {
-        m_cached_num_blocks = m_node.getNumBlocks();
-    }
-
-    return m_cached_num_blocks;
+    return m_gui_state_cache->snapshot().height;
 }
 
 int ClientModel::getNumBlocksOfPeers() const
 {
-    if (m_cached_num_blocks_of_peers == -1) {
-        m_cached_num_blocks_of_peers = m_node.getNumBlocksOfPeers();
-    }
-
-    return m_cached_num_blocks_of_peers;
+    return std::max(m_gui_state_cache->snapshot().peers_height, 0);
 }
 
 double ClientModel::getDifficulty() const
 {
-    if (m_cached_difficulty == -1) {
-        m_cached_difficulty = m_node.getDifficulty();
-    }
-
-    return m_cached_difficulty;
+    return m_gui_state_cache->snapshot().difficulty;
 }
 
 double ClientModel::getNetWeight() const
 {
-    if (m_cached_net_weight == -1) {
-        m_cached_net_weight = m_staking_status.getNetworkWeight() / interfaces::STAKE_WEIGHT_UNITS_PER_COIN;
-    }
-
-    return m_cached_net_weight;
+    return m_gui_state_cache->snapshot().net_weight / interfaces::STAKE_WEIGHT_UNITS_PER_COIN;
 }
 
 quint64 ClientModel::getTotalBytesRecv() const
@@ -108,11 +90,7 @@ quint64 ClientModel::getTotalBytesSent() const
 
 QDateTime ClientModel::getLastBlockDate() const
 {
-    if (m_cached_best_block_time != -1) {
-        return QDateTime::fromSecsSinceEpoch(m_cached_best_block_time);
-    }
-
-    if (const int64_t tip_time = m_node.getLastBlockTime()) {
+    if (const int64_t tip_time = m_gui_state_cache->snapshot().tip_time) {
         return QDateTime::fromSecsSinceEpoch(tip_time);
     }
 
@@ -127,25 +105,19 @@ void ClientModel::updateTimer()
     }
 }
 
-void ClientModel::updateNumBlocks(int height, int64_t best_time, uint32_t target_bits)
+void ClientModel::updateFromGuiState()
 {
-    m_cached_num_blocks = height;
-    m_cached_best_block_time = best_time;
-    m_cached_difficulty = m_node.getBlockDifficulty(target_bits);
-
-    // Non-blocking: skip the refreshes rather than wait on a contended
-    // cs_main from a GUI-thread slot (same semantics as the previous
-    // TRY_LOCK).
-    if (const auto peers_height = m_node.tryGetNumBlocksOfPeers()) {
-        m_cached_num_blocks_of_peers = *peers_height;
-    }
-
-    if (const auto net_weight = m_staking_status.tryGetNetworkWeight()) {
-        m_cached_net_weight = *net_weight / interfaces::STAKE_WEIGHT_UNITS_PER_COIN;
-    }
-
     emit difficultyChanged(getDifficulty());
     emit numBlocksChanged(getNumBlocks(), getNumBlocksOfPeers());
+    emitMinerStatus();
+}
+
+void ClientModel::emitMinerStatus()
+{
+    const interfaces::GuiStateSnapshot& snapshot = m_gui_state_cache->snapshot();
+
+    emit minerStatusChanged(snapshot.staking, getNetWeight(), snapshot.coin_weight,
+                            snapshot.has_etts ? snapshot.etts_seconds : 0.0);
 }
 
 void ClientModel::updateNumConnections(int numConnections)
@@ -173,25 +145,12 @@ void ClientModel::updateAlert(const QString &hash, int status)
     emit numBlocksChanged(getNumBlocks(), getNumBlocksOfPeers());
 }
 
-void ClientModel::updateMinerStatus(bool staking, double coin_weight)
-{
-    if (staking) {
-        // Non-blocking: keep the previous estimate when cs_main is contended
-        // (same semantics as the previous TRY_LOCK).
-        if (const auto etts_days = m_staking_status.tryGetEstimatedTimeToStake()) {
-            m_cached_etts_days = *etts_days;
-        }
-    }
-
-    emit minerStatusChanged(staking, getNetWeight(), coin_weight, m_cached_etts_days);
-}
-
 void ClientModel::refreshMinerStatus()
 {
-    // Re-feed the current staking state and coin weight to the overview. Used
-    // when a GUI-side change (e.g. privacy mode) must refresh the staking
-    // fields that are normally pushed from the core via MinerStatusChanged.
-    updateMinerStatus(m_staking_status.isStaking(), m_staking_status.getCoinWeight());
+    // Re-emit the staking state and coin weight of the pushed copy. Used when a
+    // GUI-side change (e.g. privacy mode) must refresh the staking fields, and
+    // to hydrate them when the GUI attaches.
+    emitMinerStatus();
 }
 
 void ClientModel::updateScraper(int scraperEventtype, int status, const QString message)
@@ -224,7 +183,7 @@ bool ClientModel::isMainNet() const
 
 bool ClientModel::inInitialBlockDownload() const
 {
-    return m_node.isInitialBlockDownload();
+    return m_gui_state_cache->snapshot().initial_download;
 }
 
 QString ClientModel::getStatusBarWarnings() const
@@ -236,7 +195,7 @@ QString ClientModel::getStatusBarWarnings() const
         warnings += tr("Low difficulty!; ");
     }
 
-    if (!m_staking_status.isStaking()) {
+    if (!m_gui_state_cache->snapshot().staking) {
         warnings += tr("Miner: ");
         warnings += getMinerWarnings();
     }
@@ -246,7 +205,7 @@ QString ClientModel::getStatusBarWarnings() const
 
 QString ClientModel::getMinerWarnings() const
 {
-    return QString::fromStdString(m_staking_status.getErrors());
+    return QString::fromStdString(m_gui_state_cache->snapshot().miner_errors);
 }
 
 OptionsModel *ClientModel::getOptionsModel()
@@ -296,33 +255,6 @@ void ClientModel::updateBanlist()
 
 
 // Handlers for core signals
-static void NotifyBlocksChanged(
-    ClientModel *clientmodel,
-    bool syncing,
-    int height,
-    int64_t best_time,
-    uint32_t target_bits)
-{
-    // Avoid spamming update events during the initial block download. A node
-    // can trigger this signal hundreds of times per second.
-    //
-    if (syncing) {
-        static int64_t last_update_ms = 0; // Thread synchronization not needed.
-        const int64_t now = GetTimeMillis();
-
-        if (last_update_ms + MODEL_UPDATE_DELAY > now) {
-            return;
-        }
-
-        last_update_ms = now;
-    }
-
-    QMetaObject::invokeMethod(clientmodel, "updateNumBlocks", Qt::QueuedConnection,
-                              Q_ARG(int, height),
-                              Q_ARG(int64_t, best_time),
-                              Q_ARG(uint32_t, target_bits));
-}
-
 static void NotifyNumConnectionsChanged(ClientModel *clientmodel, int newNumConnections)
 {
     GUILogPrint(GUILogCategory::NOISY, "NotifyNumConnectionsChanged %i", newNumConnections);
@@ -353,14 +285,6 @@ static void NotifyScraperEvent(ClientModel *clientmodel, const scrapereventtypes
                               Q_ARG(QString, QString::fromStdString(message)));
 }
 
-static void MinerStatusChanged(ClientModel *clientmodel, bool staking, double coin_weight)
-{
-    qDebug() << QString("%1").arg(__func__);
-    QMetaObject::invokeMethod(clientmodel, "updateMinerStatus", Qt::QueuedConnection,
-                              Q_ARG(bool, staking),
-                              Q_ARG(double, coin_weight));
-}
-
 static void PSGTPoolChanged(ClientModel *clientmodel, const uint256& revision_hash, ChangeType status, int reason)
 {
     QMetaObject::invokeMethod(clientmodel, "updatePSGTPool", Qt::QueuedConnection,
@@ -383,10 +307,6 @@ void ClientModel::subscribeToCoreSignals()
     // below) both stops future deliveries and blocks until any in-flight callback
     // has finished. Without it, ThreadStakeMiner emitting MinerStatusChanged while
     // this object is being destroyed is a use-after-free.
-    m_handlers.emplace_back(m_node.handleNotifyBlocksChanged(m_notify_lifetime.guard(
-        [this](bool syncing, int height, int64_t best_time, uint32_t target_bits) {
-            NotifyBlocksChanged(this, syncing, height, best_time, target_bits);
-        })));
     m_handlers.emplace_back(m_node.handleBannedListChanged(m_notify_lifetime.guard(
         [this]() { BannedListChanged(this); })));
     m_handlers.emplace_back(m_node.handleNotifyNumConnectionsChanged(m_notify_lifetime.guard(
@@ -397,8 +317,6 @@ void ClientModel::subscribeToCoreSignals()
         [this](const scrapereventtypes& event_type, ChangeType status, const std::string& message) {
             NotifyScraperEvent(this, event_type, status, message);
         })));
-    m_handlers.emplace_back(m_node.handleMinerStatusChanged(m_notify_lifetime.guard(
-        [this](bool staking, double coin_weight) { MinerStatusChanged(this, staking, coin_weight); })));
     m_handlers.emplace_back(m_node.handlePSGTPoolChanged(m_notify_lifetime.guard(
         [this](const uint256& revision_hash, ChangeType status, int reason) {
             PSGTPoolChanged(this, revision_hash, status, reason);

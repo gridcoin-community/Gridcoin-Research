@@ -194,6 +194,10 @@ public:
     // failure, as the node does when it rejects a value or cannot store it.
     bool m_fail_changes{false};
 
+    // Counts the chain-state reads a model makes of the node (the ones that
+    // take cs_main in the real node), so a test can show a model made none.
+    int m_chain_reads = 0;
+
     std::string getSettingStr(const std::string& name, const std::string& default_val) override
     {
         const auto it = m_settings.find(name);
@@ -243,13 +247,13 @@ public:
     int getNodeCount() override { return 0; }
     uint64_t getTotalBytesRecv() override { return 0; }
     uint64_t getTotalBytesSent() override { return 0; }
-    int getNumBlocks() override { return 0; }
+    int getNumBlocks() override { ++m_chain_reads; return 0; }
     uint256 getBestBlockHash() override { return uint256(); }
-    int64_t getLastBlockTime() override { return 0; }
-    int getNumBlocksOfPeers() override { return 0; }
-    std::optional<int> tryGetNumBlocksOfPeers() override { return std::nullopt; }
-    double getDifficulty() override { return 0.0; }
-    bool isInitialBlockDownload() override { return false; }
+    int64_t getLastBlockTime() override { ++m_chain_reads; return 0; }
+    int getNumBlocksOfPeers() override { ++m_chain_reads; return 0; }
+    std::optional<int> tryGetNumBlocksOfPeers() override { ++m_chain_reads; return std::nullopt; }
+    double getDifficulty() override { ++m_chain_reads; return 0.0; }
+    bool isInitialBlockDownload() override { ++m_chain_reads; return false; }
     bool isOutOfSyncByAge() override { return false; }
     std::string getWarnings() override { return {}; }
     std::string getClientVersion() override { return {}; }
@@ -258,7 +262,7 @@ public:
     void startShutdown() override {}
     interfaces::LatestVersionInfo checkForLatestUpdate() override { return {}; }
     std::vector<interfaces::DiagnosticResult> runDiagnostics() override { return {}; }
-    double getBlockDifficulty(uint32_t /*target_bits*/) override { return 0.0; }
+    double getBlockDifficulty(uint32_t /*target_bits*/) override { ++m_chain_reads; return 0.0; }
     std::string getAlertStatusBarMessage(const uint256& /*hash*/) override { return {}; }
     std::vector<interfaces::BannedNode> getBanned() override { return {}; }
     std::vector<interfaces::PeerInfo> getPeers() override { return {}; }

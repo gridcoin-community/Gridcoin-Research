@@ -1,12 +1,13 @@
 #ifndef BITCOIN_QT_CLIENTMODEL_H
 #define BITCOIN_QT_CLIENTMODEL_H
 
+#include "interfaces/gui_state.h"
 #include "interfaces/node.h"
+#include "qt/guistatecache.h"
 #include "qt/notificationlifetime.h"
 
 #include <QObject>
 
-#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -18,7 +19,6 @@ class PeerTableModel;
 
 namespace interfaces {
 class Handler;
-class StakingStatus;
 } // namespace interfaces
 
 QT_BEGIN_NAMESPACE
@@ -32,12 +32,14 @@ class ClientModel : public QObject
     Q_OBJECT
 public:
     explicit ClientModel(interfaces::Node& node,
-                         interfaces::StakingStatus& staking_status,
+                         interfaces::GuiState& gui_state,
                          OptionsModel* optionsModel,
                          QObject* parent = nullptr);
     ~ClientModel();
 
     interfaces::Node& node() const { return m_node; }
+    //! The core's pushed chain and staking state, as the GUI last received it.
+    GuiStateCache* guiState() const { return m_gui_state_cache; }
     OptionsModel *getOptionsModel();
     PeerTableModel *getPeerTableModel();
     BanTableModel *getBanTableModel();
@@ -67,9 +69,9 @@ public:
     //! Get miner and staking status warnings
     QString getMinerWarnings() const;
 
-    //! Re-feed the current staking state and coin weight to the overview
-    //! (used when a GUI-side change, e.g. privacy mode, must refresh the
-    //! staking fields normally pushed from the core).
+    //! Re-emit the staking state and coin weight of the pushed copy to the
+    //! overview (used when a GUI-side change, e.g. privacy mode, must refresh the
+    //! staking fields).
     void refreshMinerStatus();
 
     QString formatFullVersion() const;
@@ -83,17 +85,12 @@ public:
     interfaces::ScraperConvergenceSnapshot getScraperConvergenceSnapshot() const;
 private:
     interfaces::Node& m_node;
-    interfaces::StakingStatus& m_staking_status;
     OptionsModel *optionsModel;
     PeerTableModel *peerTableModel;
     BanTableModel *banTableModel;
 
-    mutable std::atomic<int> m_cached_num_blocks;
-    mutable std::atomic<int> m_cached_num_blocks_of_peers;
-    mutable std::atomic<int64_t> m_cached_best_block_time;
-    mutable std::atomic<double> m_cached_difficulty;
-    mutable std::atomic<double> m_cached_net_weight;
-    mutable std::atomic<double> m_cached_etts_days;
+    //! The core's pushed state; owned by this, GUI thread only.
+    GuiStateCache* m_gui_state_cache;
 
     QTimer *pollTimer;
 
@@ -108,6 +105,9 @@ private:
     //! callback already executing on a core thread. See qt/notificationlifetime.h.
     NotificationLifetime m_notify_lifetime;
 
+    //! Emit minerStatusChanged from the pushed copy.
+    void emitMinerStatus();
+
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
 signals:
@@ -115,7 +115,7 @@ signals:
     void numBlocksChanged(int count, int countOfPeers);
     void difficultyChanged(double difficulty);
     void bytesChanged(quint64 totalBytesIn, quint64 totalBytesOut);
-    void minerStatusChanged(bool staking, double netWeight, double coinWeight, double etts_days);
+    void minerStatusChanged(bool staking, double netWeight, double coinWeight, double etts_seconds);
     void updateScraperLog(QString message);
     void updateScraperStatus(int ScraperEventtype, int status);
 
@@ -130,12 +130,11 @@ signals:
     void error(const QString &title, const QString &message, bool modal);
 
 public slots:
-    void updateNumBlocks(int height, int64_t best_time, uint32_t target_bits);
+    void updateFromGuiState();
     void updateTimer();
     void updateBanlist();
     void updateNumConnections(int numConnections);
     void updateAlert(const QString &hash, int status);
-    void updateMinerStatus(bool staking, double coin_weight);
     void updateScraper(int scraperEventtype, int status, const QString message);
     void updatePSGTPool(const QString &revision_hash, int status, int reason);
 };
