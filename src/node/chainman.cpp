@@ -387,7 +387,7 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
                       "to maintain consensus.",
                       __func__, sb_cross_count,
                       stale_superblock_state ? ", superblock state not current" : "");
-            GRC::RebuildBeaconRegistry();
+            GRC::RebuildBeaconRegistry(GRC::BeaconRebuildReason::SUPERBLOCK_DISCONNECT);
         }
     }
 
@@ -833,6 +833,13 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         cnt_con++;
 
         UpdateSyncTime(pindexBest);
+
+        // The beacon registry is rebuilt from the chain's beacon contracts as the first block version 15 block
+        // connects, here on its way into the chain and again if a block at that height connects after a
+        // disconnect.
+        if (pindexBest->pprev && IsV15Enabled(nBestHeight) && !IsV15Enabled(nBestHeight - 1)) {
+            GRC::RebuildBeaconRegistry(GRC::BeaconRebuildReason::V15_ACTIVATION);
+        }
 
         if (IsV9Enabled_Tally(nBestHeight)
             && !IsV11Enabled(nBestHeight)

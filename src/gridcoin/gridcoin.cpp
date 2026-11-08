@@ -684,12 +684,17 @@ bool fResetBlockchainRequest = false;
 // Functions
 // -----------------------------------------------------------------------------
 
-void GRC::RebuildBeaconRegistry() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+void GRC::RebuildBeaconRegistry(const BeaconRebuildReason reason) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
-    LogPrintf("INFO: %s: starting in-line beacon registry rebuild after a runtime reorg that disconnected "
-              "superblocks.", __func__);
+    if (reason == BeaconRebuildReason::V15_ACTIVATION) {
+        LogPrintf("INFO: %s: starting in-line beacon registry rebuild at the first block version 15 block, height %d.",
+                  __func__, pindexBest->nHeight);
+    } else {
+        LogPrintf("INFO: %s: starting in-line beacon registry rebuild after a runtime reorg that disconnected "
+                  "superblocks.", __func__);
+    }
 
     // Non-blocking informational popup in the GUI ONLY. In daemon mode the
     // log line above is the entire notification -- no stderr spam, no popup
@@ -704,7 +709,7 @@ void GRC::RebuildBeaconRegistry() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     // "rebuilding beacon registry" notice while the wallet is unresponsive;
     // they dismiss the popup at their convenience (it does NOT auto-dismiss).
     // The rebuild itself only takes seconds on SSD.
-    if (fQtActive) {
+    if (fQtActive && reason == BeaconRebuildReason::SUPERBLOCK_DISCONNECT) {
         uiInterface.ThreadSafeMessageBox(
             _("Gridcoin detected a multi-superblock chain reorganization and is "
               "rebuilding the beacon registry to maintain consensus with the "
@@ -716,8 +721,9 @@ void GRC::RebuildBeaconRegistry() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     const int64_t start_ms = GetTimeMillis();
 
-    // Only the beacon registry is rebuilt. The disconnect that called for the rebuild reverted every other
-    // registry block by block and moved its db height down to the new tip, so they are left as they are: the
+    // Only the beacon registry is rebuilt. Every other registry is already at the tip: a disconnect that called for
+    // the rebuild reverted them block by block and moved their db heights down to the new tip, and the first block
+    // version 15 block applied its contracts to them as it connected. So they are left as they are: the
     // startup routine (InitializeContracts) is not run, so no other registry is reloaded or replayed and no
     // -clear<type>history flag acts. Wipe the beacon registry (in memory and its LevelDB beacon db), open the empty
     // db, and replay the beacon contracts and the superblock activations from V11 to the tip.
