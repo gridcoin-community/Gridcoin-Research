@@ -257,6 +257,7 @@ add_library(gridcoin_util STATIC
     node/blockstorage.cpp
     node/chainman.cpp
     node/coherence.cpp
+    node/gui_cache.cpp
     node/interfaces.cpp
     node/mempool_persist.cpp
     node/orphan_blocks.cpp

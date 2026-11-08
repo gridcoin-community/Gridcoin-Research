@@ -2,6 +2,7 @@
 #include "qt/guilog.h"
 #include "guiconstants.h"
 #include "optionsmodel.h"
+#include "qt/guistatecache.h"
 #include "addresstablemodel.h"
 #include "transactiontablemodel.h"
 
@@ -61,11 +62,8 @@ WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource&
     // Drain the producer→GUI event stream at a steady cadence. 500ms is
     // imperceptible for transaction-list updates while still giving the
     // queue room to absorb bursts (e.g. a reorg flood) without per-event
-    // round-trips to the Qt event loop. This single timer also drives the
-    // balance / row-confirmation refresh that used to be done by a
-    // separate 4-second pollBalanceChanged timer; refresh now fires off
-    // ChainTipChanged events the source pushes from its NotifyBlocksChanged
-    // subscriber.
+    // round-trips to the Qt event loop. The balances are not drained
+    // here: the core pushes them (setGuiState).
     eventDrainTimer = new QTimer(this);
     connect(eventDrainTimer, &QTimer::timeout, this, &WalletModel::drainEventQueue);
     eventDrainTimer->start(MODEL_EVENT_DRAIN_INTERVAL);
@@ -117,47 +115,37 @@ void WalletModel::updateStatus()
         emit encryptionStatusChanged(newEncryptionStatus);
 }
 
-void WalletModel::checkBalanceChanged()
+void WalletModel::setGuiState(GuiStateCache* cache)
 {
-    // The balance scans iterate the wallet's full mapWallet and become
-    // INCREDIBLY expensive on large wallets. Two layers of protection:
-    //
-    //  1. A MODEL_UPDATE_DELAY (4s) stale-time gate: only actually recompute
-    //     at most once per gate interval. Bursts of rapid-fire wallet events
-    //     during a resync, rescan, or large consolidation collapse into a
-    //     single recompute. Checked first — it is free, while the interface
-    //     call below takes lock attempts even when it bows out.
-    //
-    //  2. tryGetBalances: bows out cleanly (returns false) if the core is
-    //     holding cs_main/cs_wallet (e.g. during a wallet rescan). This is
-    //     the same TRY_LOCK guard pollBalanceChanged used to apply, now on
-    //     the node side of the interface boundary.
-    //
-    // The gate timestamp advances only on an actual recompute — NOT when a
-    // busy core makes tryGetBalances bow out, and not only when a change is
-    // detected. The gate exists to rate-limit the expensive scans
-    // themselves; if the timestamp only advanced on a detected change, a
-    // long-stable balance would leave the gate permanently open and every
-    // drain tick (which can fire back-to-back when drainEventQueue re-arms
-    // to clear a backlog) would run a fresh full-wallet scan.
-    //
-    // A call that fails either layer isn't lost: the next ChainTipChanged
-    // event (or the next drain pass with events in it) re-runs this
-    // function, which by then will pass.
-    // Plain wall clock, not GetAdjustedTime(): this is a purely local rate
-    // limiter, and a network-time offset step must not wedge or bypass it.
-    int64_t current_time = GetTime();
+    // The balances are computed by the core and pushed (GuiStateCache); this
+    // model never asks the wallet for them, so a balance scan never runs on the
+    // GUI thread or waits for cs_main/cs_wallet. A snapshot already computed
+    // when the cache was built emits no changed(), so it is read once here.
+    if (m_gui_state_connection) {
+        disconnect(m_gui_state_connection);
+    }
 
-    if (current_time - last_balance_update_time <= MODEL_UPDATE_DELAY / 1000) {
+    if (!cache) {
         return;
     }
 
-    interfaces::WalletBalances balances;
-    if (!m_wallet.tryGetBalances(balances)) {
+    m_gui_state_connection = connect(cache, &GuiStateCache::changed, this, [this, cache]() {
+        applyPushedBalances(*cache);
+    });
+
+    applyPushedBalances(*cache);
+}
+
+void WalletModel::applyPushedBalances(const GuiStateCache& cache)
+{
+    const interfaces::GuiStateSnapshot& pushed = cache.snapshot();
+
+    // A node running without a wallet pushes no balances.
+    if (!pushed.has_balances) {
         return;
     }
 
-    last_balance_update_time = current_time;
+    const interfaces::WalletBalances& balances = pushed.balances;
 
     if (cachedBalance != balances.balance
             || cachedStake != balances.stake
@@ -193,7 +181,7 @@ void WalletModel::drainEventQueue()
 
     // Multiprocess safety net: every core-touching call in this drain — the
     // drainEvents() round-trip AND the apply path reached through
-    // walletEventsDrained (each windowed view's getRows) and checkBalanceChanged
+    // walletEventsDrained (each windowed view's getRows)
     // — is a synchronous IPC call that throws std::runtime_error("IPC client
     // method called after disconnect.") once the node process is gone. A drop can
     // land mid-drain, and a posted BitcoinGUI::requestQuit() (from the IPC
@@ -252,8 +240,8 @@ void WalletModel::drainEventQueue()
         // The coin channel drains on the same tick (its own queue, own guard).
         drainCoinEventQueue();
 
-        // Balance and number of transactions might have changed.
-        checkBalanceChanged();
+        // The number of transactions might have changed. (The balances are
+        // pushed by the core: setGuiState.)
 
         int newNumTransactions = getNumTransactions();
         if (cachedNumTransactions != newNumTransactions) {
@@ -291,7 +279,7 @@ void WalletModel::drainEventQueue()
 
         // Anything else is a bug in an apply slot, not a dead node — and this is
         // the ONLY periodic pump feeding both windowed transaction views and the
-        // balance refresh, with no restart path anywhere in the tree. Stopping it
+        // transaction count, with no restart path anywhere in the tree. Stopping it
         // for a transient throw silenced the whole wallet UI for the rest of the
         // session (#3257 review). Log and keep draining; give up only if the
         // failures are persistent, so a hard loop cannot spin forever.

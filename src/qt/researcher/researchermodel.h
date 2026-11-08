@@ -7,24 +7,26 @@
 
 #include "amount.h"
 #include "interfaces/researcher.h"
-#include "qt/notificationlifetime.h"
 
-#include <atomic>
-#include <memory>
 #include <optional>
 #include <utility>
 #include <vector>
 
+#include <QFutureWatcher>
 #include <QObject>
 #include <QString>
 
 QT_BEGIN_NAMESPACE
 class QIcon;
-class QTimer;
 QT_END_NAMESPACE
 
+class GuiStateCache;
 class ResearcherWizard;
 class WalletModel;
+
+namespace interfaces {
+class GuiState;
+} // namespace interfaces
 
 //!
 //! \brief Describes the researcher's current beacon status.
@@ -72,18 +74,25 @@ public:
 //!
 //! \brief Presents researcher context state for UI components.
 //!
-//! Backed by an interfaces::ResearcherContext (Phase 1d-iv): the model caches a
-//! value ResearcherSnapshot refreshed on the researcher/beacon/accrual/tip
-//! notifications, and every getter reads that snapshot instead of a
-//! GRC::Researcher / GRC::Beacon. Beacon/mode operations and the project-table
-//! fusion run node-side behind the interface.
+//! Backed by the researcher part of the state the core pushes (GuiStateCache):
+//! the model keeps a value ResearcherSnapshot, replaced when a push changes it,
+//! and every getter reads that snapshot instead of a GRC::Researcher /
+//! GRC::Beacon. It takes no core lock to refresh it. While the part is absent
+//! (the node computes it only when synced) the model keeps its last snapshot
+//! marked out of sync, so a researcher whose state has never been computed is
+//! shown as waiting for sync and never as an investor. Beacon/mode operations
+//! and the project-table fusion run node-side behind the interface.
 //!
 class ResearcherModel : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit ResearcherModel(interfaces::ResearcherContext& researcher_context);
+    //! Reads \p cache once, since a state already pushed when the cache was
+    //! built emits no change, then follows it. \p gui_state is only asked for
+    //! an update after a user action.
+    ResearcherModel(interfaces::ResearcherContext& researcher_context, interfaces::GuiState& gui_state,
+                    GuiStateCache& cache);
     ~ResearcherModel();
 
     static QString mapBeaconStatus(const BeaconStatus status);
@@ -149,49 +158,28 @@ public:
 
 private:
     interfaces::ResearcherContext& m_researcher_context;
+    interfaces::GuiState& m_gui_state;
+    GuiStateCache& m_cache;
 
-    //! Cached value snapshot of the researcher/beacon context. Refreshed on the
-    //! interface notifications (and by the wizard commands); every getter reads it.
+    //! The researcher part of the last pushed state, or the last such part
+    //! marked out of sync. Every getter reads it.
     interfaces::ResearcherSnapshot m_snapshot;
-
-    //! Rate-limit state for the per-block refresh, written from the CORE thread
-    //! (the notification is emitted under cs_main) and read there too, hence
-    //! atomic -- the model itself lives on the GUI thread.
-    //!
-    //! ResearcherModel is the one per-block GUI consumer that subscribes to the
-    //! core signal directly. Every other one (MRCModel, the PSGT pool page) goes
-    //! through ClientModel::numBlocksChanged, which is already throttled, so this
-    //! model was the only path with no rate limit at all.
-    std::atomic<int64_t> m_last_block_refresh_ms{0};
-    std::atomic<bool> m_last_syncing{false};
-
-    //! How often updateSyncState() polls. OutOfSyncByAge()'s threshold is
-    //! minutes long, so this delays showing the change by at most one interval.
-    static constexpr int SYNC_STATE_POLL_INTERVAL_MS = 30 * 1000;
-
-    //! Drives updateSyncState(). Owned by this model (QObject parent).
-    QTimer* m_sync_state_timer = nullptr;
-
-    //! The last refresh() skipped its snapshot because cs_main was busy, so
-    //! updateSyncState() retries it.
-    bool m_snapshot_skipped = false;
 
     bool m_wizard_open;
     bool m_privacy_enabled;
     QString m_theme_suffix;
     QString m_cached_beacon_pubkey_hex;
 
-    void subscribeToCoreSignals();
-    void unsubscribeFromCoreSignals();
+    //! The core's reload, which takes cs_main, runs on a worker so the GUI
+    //! thread never waits on it.
+    QFutureWatcher<void> m_reload_watcher;
 
-    //! Retained interface-notification handlers, cleared on teardown so a signal
-    //! that fires after this model is destroyed cannot invoke a slot bound to
-    //! freed memory (issue #3129).
-    std::vector<std::unique_ptr<interfaces::Handler>> m_handlers;
+    //! A reload was asked for while one was running; one more follows it.
+    bool m_reload_again = false;
 
-    //! Closes the destruction race that disconnecting alone leaves open.
-    //! See qt/notificationlifetime.h.
-    NotificationLifetime m_notify_lifetime;
+    //! Install \p next as the snapshot. With \p notify, report the signals of
+    //! the groups of fields that differ.
+    void install(interfaces::ResearcherSnapshot next, bool notify);
 
     //! Map one node-side project row into a Qt ProjectRow, translating the
     //! whitelist status and resolving the (translatable) error label.
@@ -203,20 +191,25 @@ signals:
     void magnitudeChanged();
     void accrualChanged();
 
+    //! The core finished a reload() and an update was asked for. The project
+    //! table reads the core's projects, which are current now; the fields the
+    //! snapshot carries follow with the pushed state.
+    void reloaded();
+
 public slots:
+    //! Reload the core's researcher state (a user action), off the GUI thread.
     void reload();
-    void refresh();
-    //! Refresh if the node's sync state differs from the cached one, or the
-    //! last refresh skipped its snapshot. Polled by m_sync_state_timer, because
-    //! no notification reports a node falling out of sync.
-    void updateSyncState();
-    void onResearcherChanged();
     bool switchToSolo(const QString& email);
     bool switchToPool();
     bool switchToNoncruncher();
-    void updateBeacon();
     BeaconStatus advertiseBeacon();
     void onWizardClose();
+
+private slots:
+    //! Follow the cache: install its researcher part, or the last snapshot out
+    //! of sync when it has none.
+    void applyPushedState();
+    void finishReload();
 };
 
 #endif // GRIDCOIN_QT_RESEARCHER_RESEARCHERMODEL_H

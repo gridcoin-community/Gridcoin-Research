@@ -35,6 +35,7 @@ add_library(gridcoinqt STATIC
     bitcoinunits.cpp
     clicklabel.cpp
     clientmodel.cpp
+    guistatecache.cpp
     coincontroldialog.cpp
     coinselectionmodel.cpp
     coinselectionview.cpp

@@ -21,6 +21,7 @@ using Voting = import "voting.capnp";
 using Researcher = import "researcher.capnp";
 using PSGT = import "psgt.capnp";
 using SideStake = import "sidestake.capnp";
+using GuiState = import "gui_state.capnp";
 
 # Per-process bootstrap interface (interfaces::Init). construct @0 is the
 # libmultiprocess lifecycle entry point (ThreadMap exchange); the makeX methods
@@ -55,6 +56,7 @@ interface Init $Proxy.wrap("interfaces::Init") {
     makePSGTPoolContext @12 (context :Proxy.Context) -> (result :PSGT.PSGTPoolContext);
     makeSideStakeManager @13 (context :Proxy.Context) -> (result :SideStake.SideStakeManager);
     makeWalletCoinSource @14 (context :Proxy.Context) -> (result :WalletCoinSource.WalletCoinSource);
+    makeGuiState @15 (context :Proxy.Context) -> (result :GuiState.GuiState);
 }
 
 struct BuildInfo $Proxy.wrap("interfaces::BuildInfo") {

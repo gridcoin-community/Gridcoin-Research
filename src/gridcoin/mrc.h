@@ -18,15 +18,22 @@
 #include <stdexcept>
 
 class CPubKey;
+class CWallet;
 extern CCriticalSection cs_main;
+
+namespace interfaces {
+struct MRCSnapshot;
+} // namespace interfaces
 
 namespace GRC {
 class MRC_error : public std::runtime_error
 {
 public:
-    explicit MRC_error(const std::string& str) : std::runtime_error("ERROR: " + str)
+    //! \p log false leaves the error to the exception alone: a trial claim's,
+    //! whose caller reports it (see CreateMRC's quiet).
+    explicit MRC_error(const std::string& str, bool log = true) : std::runtime_error("ERROR: " + str)
     {
-        LogPrintf("ERROR: %s", str);
+        if (log) LogPrintf("ERROR: %s", str);
     }
 };
 
@@ -372,9 +379,39 @@ public:
 //! \param fee: The MRC fees to be taken out of the research reward (in/out parameter)
 //! \param pwallet: The wallet object
 //! \param no_sign: If true, don't sign the MRC (trial run).
+//! \param quiet: If true, report an error by the MRC_error alone, without its
+//! default-level log line: a trial claim whose caller reports the error (the MRC
+//! request page's quote, which the GUI state cache makes on every tip, where "no
+//! positive research reward pending" is routine). The RPC and the submit log.
 //! \return
 //!
-void CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet, bool no_sign = false);
+void CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet, bool no_sign = false,
+               bool quiet = false);
+
+//!
+//! \brief Whether the claim as rebuilt now still meets the terms the user confirmed: the user pays no more than
+//! confirmed_fee and receives no less than confirmed_net (the reward less the fee).
+//!
+bool MRCTermsHold(CAmount fee_now, CAmount reward_now, CAmount confirmed_fee, CAmount confirmed_net);
+
+//!
+//! \brief The MRC request page's state at the chain tip, read in one cs_main hold:
+//! the version gate, a trial claim at the given fee boost, the mempool MRC queue
+//! measured against it, and the wallet's mature balance. The body of
+//! interfaces::MRC::snapshot(), shared with the node's GUI state cache
+//! (node/gui_cache.cpp), which pushes the unboosted quote. Defined in
+//! gridcoin/interfaces.cpp, beside the MRC interface.
+//!
+//! \param wallet: The wallet the claim is for; not null.
+//! \param fee_boost: Added to the minimum fee for the boosted trial; 0 for none.
+//! \param no_sign: Build the trial claim unsigned. A quote needs no signature,
+//! and a locked wallet cannot give one. The trial is quiet either way: its
+//! errors go into the snapshot, not the log.
+//! \param researcher_eligible: Active beacon, not non-cruncher, not pool. When
+//! false the trial claim, the queue scan and the balance read are skipped.
+//!
+interfaces::MRCSnapshot BuildMRCSnapshot(CWallet* wallet, CAmount fee_boost, bool no_sign, bool researcher_eligible)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 
 } // namespace GRC

@@ -4,6 +4,7 @@
 
 #include "interfaces/init.h"
 
+#include "interfaces/gui_state.h"
 #include "interfaces/mrc.h"
 #include "interfaces/node.h"
 #include "interfaces/psgt.h"
@@ -58,5 +59,7 @@ std::unique_ptr<Wallet> Init::makeWallet() { return nullptr; }
 std::shared_ptr<WalletTxSource> Init::makeWalletTxSource() { return nullptr; }
 
 std::shared_ptr<WalletCoinSource> Init::makeWalletCoinSource() { return nullptr; }
+
+std::unique_ptr<GuiState> Init::makeGuiState() { return nullptr; }
 
 } // namespace interfaces

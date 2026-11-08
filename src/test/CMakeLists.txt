@@ -27,6 +27,9 @@ add_executable(test_gridcoin
     chain_setup_tests.cpp
     # Whole-balance subtract-fee sends on the fixture chain.
     wallet_send_subtract_fee_tests.cpp
+    # The GUI state cache on fakes, and on the fixture chain with the production compute.
+    gui_cache_tests.cpp
+    gui_cache_regtest_tests.cpp
     addressbook_tests.cpp
     addrman_tests.cpp
     allocator_tests.cpp

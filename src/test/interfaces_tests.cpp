@@ -5,17 +5,21 @@
 #include "amount.h"
 #include "chain.h"
 #include "clientversion.h"
+#include "interfaces/gui_state.h"
 #include "interfaces/handler.h"
 #include "interfaces/init.h"
+#include "interfaces/mrc.h"
 #include "interfaces/node.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
 #include "key.h"
 #include "key_io.h"
+#include "node/gui_cache.h"
 #include "node/ui_interface.h"
 #include "gridcoin/scraper/fwd.h"
 #include "primitives/transaction.h"
 #include "sync.h"
+#include "test/gui_cache_fakes.h"
 #include "txmempool.h"
 #include "util.h"
 #include "wallet/wallet.h"
@@ -24,7 +28,24 @@
 #include <boost/test/unit_test.hpp>
 #include "consensus/consensus.h"
 
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <memory>
+#include <thread>
+#include <vector>
+
 extern CWallet* pwalletMain;
+
+using namespace std::chrono_literals;
+
+namespace {
+using gui_cache_test::PublishedFakeCache;
+
+//! Long enough for the cache's timer to have acted on anything it was going
+//! to act on, at a 4 s interval on a manual clock: a wake and a settle.
+constexpr auto TIMER_CHANCE = node::GuiCache::SETTLE + 250ms;
+} // anonymous namespace
 
 BOOST_AUTO_TEST_SUITE(interfaces_tests)
 
@@ -477,6 +498,226 @@ BOOST_AUTO_TEST_CASE(init_hands_out_interfaces)
     // pwalletMain exists in the unit-test environment, so the monolithic
     // Init must hand out a wallet interface for it.
     BOOST_CHECK(init->makeWallet() != nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(gui_state_wraps_the_cache)
+{
+    using interfaces::GuiStateSnapshot;
+
+    // No cache runs in the unit-test environment, so there is no GuiState.
+    BOOST_CHECK(interfaces::MakeGuiState() == nullptr);
+    BOOST_CHECK(interfaces::MakeGridcoinInit()->makeGuiState() == nullptr);
+
+    // The recorders outlive the cache, so its timer is joined before they go.
+    gui_cache_test::FakeCompute compute;
+    gui_cache_test::Deliveries deliveries;
+    compute.height = 42;
+    PublishedFakeCache published(compute, 4000ms, 30000ms);
+
+    BOOST_CHECK(interfaces::MakeGridcoinInit()->makeGuiState() != nullptr);
+    std::unique_ptr<interfaces::GuiState> gui_state = interfaces::MakeGuiState();
+    BOOST_REQUIRE(gui_state);
+
+    // The subscription's own update is the first publish, and it reaches the
+    // registered fn.
+    std::unique_ptr<interfaces::Handler> handler = gui_state->handleChanged(deliveries.Make());
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+
+    // current() is the cache's Current().
+    const GuiStateSnapshot current = gui_state->current();
+    const GuiStateSnapshot cached = published.Cache().Current();
+    BOOST_CHECK_EQUAL(current.sequence, 1U);
+    BOOST_CHECK_EQUAL(current.sequence, cached.sequence);
+    BOOST_CHECK_EQUAL(current.height, 42);
+    BOOST_CHECK_EQUAL(current.height, cached.height);
+    BOOST_CHECK_EQUAL(current.has_balances, cached.has_balances);
+
+    // So does the next publish: a block in SetBestChain's scope once the
+    // interval has passed.
+    compute.height = 43;
+    compute.Advance(4000ms);
+    gui_cache_test::InScope(published.Cache(), node::GuiCache::CHAIN);
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) {
+        return snap.sequence == 2 && snap.height == 43;
+    }));
+    BOOST_CHECK_EQUAL(gui_state->current().height, 43);
+}
+
+BOOST_AUTO_TEST_CASE(gui_state_request_update_delivers_a_forced_update)
+{
+    using interfaces::GuiStateSnapshot;
+
+    gui_cache_test::FakeCompute compute;
+    gui_cache_test::Deliveries deliveries;
+    PublishedFakeCache published(compute, 4000ms, 30000ms);
+    std::unique_ptr<interfaces::GuiState> gui_state = interfaces::MakeGuiState();
+    BOOST_REQUIRE(gui_state);
+
+    std::unique_ptr<interfaces::Handler> handler = gui_state->handleChanged(deliveries.Make());
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+
+    // Counted from the timer at rest after the subscription's update.
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    const int runs = compute.cs_main_runs.load();
+    const int chain_calls = compute.chain_calls.load();
+
+    // Inside the interval (the clock does not move): the request is answered by
+    // one more delivery, from an update the timer forced under cs_main.
+    gui_state->requestUpdate();
+    BOOST_REQUIRE(deliveries.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 2; }));
+    std::this_thread::sleep_for(TIMER_CHANCE);
+
+    BOOST_CHECK_EQUAL(deliveries.Count(), 2U);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), runs + 1);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), chain_calls + 1);
+    const std::vector<std::string> threads = deliveries.Threads();
+    BOOST_REQUIRE_EQUAL(threads.size(), 2U);
+    BOOST_CHECK_EQUAL(threads[1], gui_cache_test::TIMER_THREAD);
+    BOOST_CHECK_EQUAL(deliveries.DeliveredUnderALock(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(gui_state_quote_latest_request_wins)
+{
+    gui_cache_test::FakeCompute compute;
+    gui_cache_test::Deliveries deliveries;
+    gui_cache_test::Quotes quotes;
+
+    // Holds the timer inside the subscription's update, so that both requests
+    // below are made before it can serve either.
+    Mutex latch_mutex;
+    std::condition_variable latch_cv;
+    bool released = false; // guarded by latch_mutex
+    std::atomic<bool> entered{false};
+
+    compute.chain_hook = [&] {
+        entered = true;
+        WAIT_LOCK(latch_mutex, lock);
+        while (!released) latch_cv.wait(lock);
+    };
+
+    PublishedFakeCache published(compute, 4000ms, 30000ms);
+
+    // Declared after the published cache, so it runs before the cache is
+    // stopped: a failure that unwinds the case while the timer is held in the
+    // hook would otherwise leave the stop joining a thread nobody can release.
+    struct OpenLatchOnExit
+    {
+        Mutex& mutex;
+        std::condition_variable& cv;
+        bool& released;
+
+        ~OpenLatchOnExit()
+        {
+            {
+                LOCK(mutex);
+                released = true;
+            }
+            cv.notify_all();
+        }
+    } open_latch{latch_mutex, latch_cv, released};
+
+    std::unique_ptr<interfaces::GuiState> gui_state = interfaces::MakeGuiState();
+    BOOST_REQUIRE(gui_state);
+
+    std::unique_ptr<interfaces::Handler> quote_handler = gui_state->handleMRCQuote(quotes.Make());
+    std::unique_ptr<interfaces::Handler> handler = gui_state->handleChanged(deliveries.Make());
+    BOOST_REQUIRE(gui_cache_test::WaitUntil([&] { return entered.load(); }));
+
+    // Both return at once, with the timer busy.
+    gui_state->requestMRCQuote(10, 1);
+    gui_state->requestMRCQuote(20, 2);
+
+    {
+        LOCK(latch_mutex);
+        released = true;
+    }
+    latch_cv.notify_all();
+
+    BOOST_REQUIRE(quotes.WaitForCount(1));
+    std::this_thread::sleep_for(TIMER_CHANCE);
+
+    // One answer: the second request's, at its boost.
+    const std::vector<gui_cache_test::Quotes::Answer> answers = quotes.Answers();
+    BOOST_REQUIRE_EQUAL(answers.size(), 1U);
+    BOOST_CHECK_EQUAL(answers[0].request_id, 2U);
+    BOOST_CHECK_EQUAL(answers[0].quote.fee, 20);
+    BOOST_CHECK_EQUAL(answers[0].thread, gui_cache_test::TIMER_THREAD);
+    BOOST_CHECK_EQUAL(compute.quote_calls.load(), 1);
+    BOOST_CHECK_EQUAL(quotes.AnsweredUnderALock(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(gui_state_computes_only_while_a_gui_is_subscribed)
+{
+    using interfaces::GuiStateSnapshot;
+
+    gui_cache_test::FakeCompute compute;
+    gui_cache_test::Deliveries first;
+    gui_cache_test::Deliveries second;
+    gui_cache_test::Deliveries third;
+    PublishedFakeCache published(compute, 4000ms, 30000ms);
+    node::GuiCache& cache = published.Cache();
+
+    // No GUI: blocks in SetBestChain's scope compute nothing, and the timer
+    // takes no cs_main.
+    for (int i = 0; i < 3; ++i) {
+        compute.Advance(4000ms);
+        gui_cache_test::InScope(cache, node::GuiCache::ALL);
+    }
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 0);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), 0);
+    BOOST_CHECK_EQUAL(cache.Current().sequence, 0U);
+
+    std::unique_ptr<interfaces::GuiState> gui_state = interfaces::MakeGuiState();
+    BOOST_REQUIRE(gui_state);
+
+    // A GUI subscribes inside the interval (the clock does not move): one
+    // forced update, delivered to it.
+    std::unique_ptr<interfaces::Handler> first_handler = gui_state->handleChanged(first.Make());
+    BOOST_REQUIRE(first.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    BOOST_CHECK_EQUAL(first.Count(), 1U);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 1);
+    BOOST_CHECK_GE(compute.cs_main_runs.load(), 1);
+
+    // A second subscription forces nothing: only the first does. Counted from
+    // the timer at rest.
+    const int runs_at_rest = compute.cs_main_runs.load();
+    std::unique_ptr<interfaces::Handler> second_handler = gui_state->handleChanged(second.Make());
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), runs_at_rest);
+    BOOST_CHECK_EQUAL(second.Count(), 0U);
+
+    // The first disconnects: it gets nothing more, and the cache goes on
+    // computing for the second.
+    first_handler->disconnect();
+    compute.Advance(4000ms);
+    gui_cache_test::InScope(cache, node::GuiCache::CHAIN);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 2);
+    BOOST_REQUIRE(second.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 2; }));
+    BOOST_CHECK_EQUAL(first.Count(), 1U);
+
+    // The second is destroyed: computing stops, in scope and on the timer.
+    // Counted from the timer at rest: a machine that stalls the update above
+    // for longer than the settle lets the timer take cs_main for it once
+    // (node/gui_cache.h, SETTLE).
+    second_handler.reset();
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    const int runs = compute.cs_main_runs.load();
+
+    compute.Advance(4000ms);
+    gui_cache_test::InScope(cache, node::GuiCache::CHAIN);
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 2);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), runs);
+
+    // Destroying the handler the first disconnected releases nothing twice:
+    // the next subscription is a first one again, and forces its update.
+    first_handler.reset();
+    std::unique_ptr<interfaces::Handler> third_handler = gui_state->handleChanged(third.Make());
+    BOOST_REQUIRE(third.WaitFor([](const GuiStateSnapshot& snap) { return snap.sequence == 3; }));
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 3);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), runs + 1);
 }
 
 namespace {

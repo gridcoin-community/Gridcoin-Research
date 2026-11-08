@@ -14,6 +14,7 @@
 #include "qt/notificationlifetime.h"
 #include "support/allocators/secure.h" /* for SecureString */
 
+class GuiStateCache;
 class OptionsModel;
 class AddressTableModel;
 class TransactionTableModel;
@@ -56,6 +57,12 @@ public:
                          OptionsModel* optionsModel,
                          QObject* parent = nullptr);
     ~WalletModel();
+
+    //! Take the balances from the state the core pushes (ClientModel::guiState()),
+    //! and read the one already computed. Call once, after construction. The
+    //! model asks the wallet for no balance scan; balanceChanged is emitted
+    //! when a pushed figure differs from the last one shown.
+    void setGuiState(GuiStateCache* cache);
 
     enum StatusCode // Returned by sendCoins
     {
@@ -276,8 +283,6 @@ private:
     EncryptionStatus cachedEncryptionStatus;
     int cachedNumBlocks;
 
-    int64_t last_balance_update_time = 0;
-
     QTimer *eventDrainTimer;
 
     //! Coalescing guard for requestEventDrainSoon() (PR4-fix D): true while a
@@ -301,7 +306,10 @@ private:
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
-    void checkBalanceChanged();
+    void applyPushedBalances(const GuiStateCache& cache);
+
+    //! The connection to the cache's changed(), kept so a new cache replaces it.
+    QMetaObject::Connection m_gui_state_connection;
 
     //! Retained interface notification handlers (status and address-book
     //! changes), cleared on teardown. interfaces::Handler disconnects on

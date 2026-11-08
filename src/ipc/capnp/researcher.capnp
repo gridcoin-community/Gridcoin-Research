@@ -84,6 +84,14 @@ struct ResearcherSnapshot $Proxy.wrap("interfaces::ResearcherSnapshot") {
     timeToPendingBeaconExpiration @33 :Int64 $Proxy.name("time_to_pending_beacon_expiration");
     boincDataDir @34 :Text $Proxy.name("boinc_data_dir");
     isV14Enabled @35 :Bool $Proxy.name("is_v14_enabled");
+    # hasCpid @1 and hasMagnitude @7 sit beside a field named cpid and magnitude,
+    # so mpgen reads each as that field's presence companion and maps no member
+    # to it (mergeFields in mp/gen.cpp): has_cpid and has_magnitude never
+    # crossed. They are plain members beside plain values, so these two carry
+    # them under names that pair with no field. The old ordinals stay, released
+    # in 5.5.2.0, and are ignored by the node and the GUI.
+    cpidPresent @36 :Bool $Proxy.name("has_cpid");
+    magnitudePresent @37 :Bool $Proxy.name("has_magnitude");
 }
 
 struct ResearcherProjectRow $Proxy.wrap("interfaces::ResearcherProjectRow") {

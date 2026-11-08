@@ -22,6 +22,8 @@
 // Complete types for the unique_ptrs the gated factory methods return: the
 // pre-auth test destroys those unique_ptrs (they never get a value, but the
 // destructor is still instantiated).
+#include "interfaces/gui_state.h"
+#include "interfaces/handler.h"
 #include "interfaces/node.h"
 #include "interfaces/mrc.h"
 #include "interfaces/psgt.h"
@@ -36,6 +38,10 @@
 #include "ipc/handshake.h"
 #include "ipc/protocol.h"
 #include "ipc/serve_init.h"
+#include "logging.h"
+#include "node/gui_cache.h"
+#include "sync.h"
+#include "test/gui_cache_fakes.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -45,11 +51,16 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdlib> // mkdtemp
 #include <cstring>
+#include <functional>
+#include <list>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>
+#include <utility>
 
 namespace {
 
@@ -151,6 +162,7 @@ struct RecordingInner : interfaces::Init {
         std::atomic<bool> researcher{false};
         std::atomic<bool> psgt{false};
         std::atomic<bool> sidestake{false};
+        std::atomic<bool> gui_state{false};
         std::atomic<bool> core_ready{false};
     };
 
@@ -167,6 +179,7 @@ struct RecordingInner : interfaces::Init {
     std::unique_ptr<interfaces::ResearcherContext> makeResearcherContext() override { m_seen.researcher = true; return nullptr; }
     std::unique_ptr<interfaces::PSGTPoolContext> makePSGTPoolContext() override { m_seen.psgt = true; return nullptr; }
     std::unique_ptr<interfaces::SideStakeManager> makeSideStakeManager() override { m_seen.sidestake = true; return nullptr; }
+    std::unique_ptr<interfaces::GuiState> makeGuiState() override { m_seen.gui_state = true; return nullptr; }
 
     Seen& m_seen;
 };
@@ -207,6 +220,235 @@ struct WireLink {
         client_proto.reset();    // joins the client loop thread
         server.reset();          // joins the server loop thread
     }
+};
+
+//! The server side of a GUI state subscription. The inner Init's makeGuiState
+//! returns a StoringGuiState, which keeps here the fns the client registers, so
+//! a case can push through them from the server, as the node's cache timer
+//! does. It keeps them as the node's GuiState does: behind interfaces::GuardNotify.
+//! A kept fn is a proxy for the client's callback, so a case clears the store
+//! before the WireLink goes (the server's loop must outlive the proxy).
+struct GuiStateStore {
+    //! The node has destroyed the connection's Init: its side of the
+    //! connection is torn down.
+    std::atomic<bool> init_released{false};
+
+    Mutex mutex;
+    interfaces::GuiState::ChangedFn changed GUARDED_BY(mutex);
+    interfaces::GuiState::MRCQuoteFn quote GUARDED_BY(mutex);
+    interfaces::GuiStateSnapshot current GUARDED_BY(mutex);
+
+    bool HasChanged()
+    {
+        LOCK(mutex);
+        return static_cast<bool>(changed);
+    }
+
+    //! Call the client's changed fn, as the cache's timer does: synchronously,
+    //! holding no lock (the fn is copied out first).
+    void Push(const interfaces::GuiStateSnapshot& snapshot)
+    {
+        interfaces::GuiState::ChangedFn fn = WITH_LOCK(mutex, return changed);
+        fn(snapshot);
+    }
+
+    void AnswerQuote(uint64_t request_id, const interfaces::MRCSnapshot& snapshot)
+    {
+        interfaces::GuiState::MRCQuoteFn fn = WITH_LOCK(mutex, return quote);
+        fn(request_id, snapshot);
+    }
+
+    void Clear()
+    {
+        interfaces::GuiState::ChangedFn changed_fn;
+        interfaces::GuiState::MRCQuoteFn quote_fn;
+        {
+            LOCK(mutex);
+            std::swap(changed_fn, changed);
+            std::swap(quote_fn, quote);
+        }
+    }
+};
+
+//! Clears a GuiStateStore at any exit of a case. Declared after the case's
+//! WireLink, so it runs before the link goes: the callback proxies the store
+//! keeps are released while the server's loop still runs, also when a REQUIRE
+//! ends the case early.
+class ClearAtExit
+{
+public:
+    explicit ClearAtExit(GuiStateStore& store) : m_store(store) {}
+    ~ClearAtExit() { m_store.Clear(); }
+
+    ClearAtExit(const ClearAtExit&) = delete;
+    ClearAtExit& operator=(const ClearAtExit&) = delete;
+
+private:
+    GuiStateStore& m_store;
+};
+
+struct StoringGuiState : interfaces::GuiState {
+    explicit StoringGuiState(GuiStateStore& store) : m_store(store) {}
+
+    interfaces::GuiStateSnapshot current() override { return WITH_LOCK(m_store.mutex, return m_store.current); }
+
+    std::unique_ptr<interfaces::Handler> handleChanged(ChangedFn fn) override
+    {
+        LOCK(m_store.mutex);
+        m_store.changed = interfaces::GuardNotify(std::move(fn));
+        return interfaces::MakeCleanupHandler([] {});
+    }
+
+    void requestUpdate() override {}
+
+    void requestMRCQuote(CAmount, uint64_t) override {}
+
+    std::unique_ptr<interfaces::Handler> handleMRCQuote(MRCQuoteFn fn) override
+    {
+        LOCK(m_store.mutex);
+        m_store.quote = interfaces::GuardNotify(std::move(fn));
+        return interfaces::MakeCleanupHandler([] {});
+    }
+
+    GuiStateStore& m_store;
+};
+
+struct GuiStateInner : interfaces::Init {
+    explicit GuiStateInner(GuiStateStore& store) : m_store(store) {}
+    ~GuiStateInner() override { m_store.init_released = true; }
+
+    std::unique_ptr<interfaces::GuiState> makeGuiState() override
+    {
+        return std::make_unique<StoringGuiState>(m_store);
+    }
+
+    GuiStateStore& m_store;
+};
+
+using namespace std::chrono_literals;
+
+//! Long enough for the node's cache timer to have acted on anything it was
+//! going to act on, at a 4 s interval on a manual clock: a wake and a settle.
+constexpr auto TIMER_CHANCE = node::GuiCache::SETTLE + 250ms;
+
+//! What the client's callbacks received, on the client's IPC worker thread.
+template <typename T>
+class Received
+{
+public:
+    void Set(T value)
+    {
+        LOCK(m_mutex);
+        m_value = std::move(value);
+    }
+
+    std::optional<T> Get()
+    {
+        LOCK(m_mutex);
+        return m_value;
+    }
+
+private:
+    Mutex m_mutex;
+    std::optional<T> m_value GUARDED_BY(m_mutex);
+};
+
+//! A snapshot with a distinct value in a field of every part, so a field that
+//! does not cross shows as a mismatch.
+interfaces::GuiStateSnapshot DistinctSnapshot()
+{
+    interfaces::GuiStateSnapshot snap;
+    snap.sequence = 7;
+    snap.height = 123;
+    snap.tip_time = 1700000000;
+    snap.difficulty = 2.5;
+    snap.initial_download = false;
+    snap.out_of_sync = false;
+    snap.peers_height = 124;
+    snap.net_weight = 3.25;
+    snap.staking = true;
+    snap.coin_weight = 4.5;
+    snap.miner_errors = "not staking";
+    snap.has_balances = true;
+    snap.balances.balance = 11;
+    snap.balances.immature_balance = 12;
+    snap.psgt_status.v15_enabled = true;
+    snap.has_mrc = true;
+    snap.mrc.reward = 5;
+    snap.mrc.mature_balance = 13;
+    snap.has_etts = true;
+    snap.etts_seconds = 600;
+    snap.has_researcher = true;
+    snap.researcher.cpid = "abc";
+    snap.researcher.has_cpid = true;
+    snap.researcher.magnitude = 50.0;
+    snap.researcher.has_magnitude = true;
+    snap.researcher.has_active_beacon = true;
+    return snap;
+}
+
+void CheckSameSnapshot(const interfaces::GuiStateSnapshot& got, const interfaces::GuiStateSnapshot& want)
+{
+    BOOST_CHECK_EQUAL(got.sequence, want.sequence);
+    BOOST_CHECK_EQUAL(got.height, want.height);
+    BOOST_CHECK_EQUAL(got.tip_time, want.tip_time);
+    BOOST_CHECK_EQUAL(got.difficulty, want.difficulty);
+    BOOST_CHECK_EQUAL(got.initial_download, want.initial_download);
+    BOOST_CHECK_EQUAL(got.out_of_sync, want.out_of_sync);
+    BOOST_CHECK_EQUAL(got.peers_height, want.peers_height);
+    BOOST_CHECK_EQUAL(got.net_weight, want.net_weight);
+    BOOST_CHECK_EQUAL(got.staking, want.staking);
+    BOOST_CHECK_EQUAL(got.coin_weight, want.coin_weight);
+    BOOST_CHECK_EQUAL(got.miner_errors, want.miner_errors);
+    BOOST_CHECK_EQUAL(got.has_balances, want.has_balances);
+    BOOST_CHECK_EQUAL(got.balances.balance, want.balances.balance);
+    BOOST_CHECK_EQUAL(got.balances.immature_balance, want.balances.immature_balance);
+    BOOST_CHECK_EQUAL(got.psgt_status.v15_enabled, want.psgt_status.v15_enabled);
+    BOOST_CHECK_EQUAL(got.has_mrc, want.has_mrc);
+    BOOST_CHECK_EQUAL(got.mrc.reward, want.mrc.reward);
+    BOOST_CHECK_EQUAL(got.mrc.mature_balance, want.mrc.mature_balance);
+    BOOST_CHECK_EQUAL(got.has_etts, want.has_etts);
+    BOOST_CHECK_EQUAL(got.etts_seconds, want.etts_seconds);
+    BOOST_CHECK_EQUAL(got.has_researcher, want.has_researcher);
+    BOOST_CHECK_EQUAL(got.researcher.cpid, want.researcher.cpid);
+    // The two presence flags sit beside a value of the same name in the schema,
+    // where mpgen once read each as that value's companion and carried neither.
+    BOOST_CHECK_EQUAL(got.researcher.has_cpid, want.researcher.has_cpid);
+    BOOST_CHECK_EQUAL(got.researcher.magnitude, want.researcher.magnitude);
+    BOOST_CHECK_EQUAL(got.researcher.has_magnitude, want.researcher.has_magnitude);
+    BOOST_CHECK_EQUAL(got.researcher.has_active_beacon, want.researcher.has_active_beacon);
+}
+
+//! Counts, while alive, the notifications interfaces::GuardNotify drops as sent
+//! to a disconnected client. Those are logged in the IPC category, which it
+//! turns on for its lifetime.
+class DroppedNotifications
+{
+public:
+    DroppedNotifications()
+        : m_was_enabled(LogInstance().WillLogCategory(BCLog::LogFlags::IPC))
+        , m_callback(LogInstance().PushBackCallback([this](const std::string& line) {
+              if (line.find("dropped a notification to a disconnected client") != std::string::npos) ++m_count;
+          }))
+    {
+        LogInstance().EnableCategory(BCLog::LogFlags::IPC);
+    }
+
+    ~DroppedNotifications()
+    {
+        LogInstance().DeleteCallback(m_callback);
+        if (!m_was_enabled) LogInstance().DisableCategory(BCLog::LogFlags::IPC);
+    }
+
+    DroppedNotifications(const DroppedNotifications&) = delete;
+    DroppedNotifications& operator=(const DroppedNotifications&) = delete;
+
+    int Count() const { return m_count.load(); }
+
+private:
+    const bool m_was_enabled;
+    std::atomic<int> m_count{0};
+    std::list<std::function<void(const std::string&)>>::iterator m_callback;
 };
 
 } // namespace
@@ -416,6 +658,7 @@ BOOST_AUTO_TEST_CASE(wire_every_init_factory_reaches_the_server)
     link.client->makeResearcherContext();
     link.client->makePSGTPoolContext();
     link.client->makeSideStakeManager();
+    link.client->makeGuiState();
 
     BOOST_CHECK_MESSAGE(seen.core_ready.load(), "isCoreReady did not reach the server");
     BOOST_CHECK_MESSAGE(seen.node.load(), "makeNode did not reach the server");
@@ -431,6 +674,190 @@ BOOST_AUTO_TEST_CASE(wire_every_init_factory_reaches_the_server)
     BOOST_CHECK_MESSAGE(seen.researcher.load(), "makeResearcherContext did not reach the server");
     BOOST_CHECK_MESSAGE(seen.psgt.load(), "makePSGTPoolContext did not reach the server");
     BOOST_CHECK_MESSAGE(seen.sidestake.load(), "makeSideStakeManager did not reach the server");
+    BOOST_CHECK_MESSAGE(seen.gui_state.load(), "makeGuiState did not reach the server");
+}
+
+// The GUI state push, end to end over the wire: the client registers its fn
+// through the remote GuiState, the server calls the fn it was handed (the node's
+// cache timer does this on every publish), and the client receives the snapshot
+// with every part intact. The snapshot is a struct argument of a callback, which
+// no other notification in this tree carries, and nests the MRC, researcher,
+// PSGT and wallet structs.
+BOOST_AUTO_TEST_CASE(wire_gui_state_push_reaches_the_client)
+{
+    GuiStateStore store;
+    {
+        LOCK(store.mutex);
+        store.current = DistinctSnapshot();
+    }
+
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    WireLink link([&store, &id](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(std::make_unique<GuiStateInner>(store), "the-cookie", id);
+    });
+    ClearAtExit clear_store(store);
+    BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
+
+    std::unique_ptr<interfaces::GuiState> gui_state = link.client->makeGuiState();
+    BOOST_REQUIRE(gui_state);
+
+    // current() returns the snapshot as a result.
+    CheckSameSnapshot(gui_state->current(), DistinctSnapshot());
+
+    Received<interfaces::GuiStateSnapshot> received;
+    std::unique_ptr<interfaces::Handler> handler =
+        gui_state->handleChanged([&received](const interfaces::GuiStateSnapshot& snap) { received.Set(snap); });
+    BOOST_REQUIRE(store.HasChanged());
+
+    // The call returns once the client's callback has run.
+    interfaces::GuiStateSnapshot pushed = DistinctSnapshot();
+    pushed.sequence = 8;
+    store.Push(pushed);
+
+    const std::optional<interfaces::GuiStateSnapshot> got = received.Get();
+    BOOST_REQUIRE(got);
+    BOOST_CHECK_EQUAL(got->height, 123);
+    BOOST_CHECK(got->has_mrc);
+    BOOST_CHECK_EQUAL(got->mrc.reward, 5);
+    CheckSameSnapshot(*got, pushed);
+}
+
+// The quote answer over the wire: a request id and an MRC snapshot.
+BOOST_AUTO_TEST_CASE(wire_gui_state_quote_reaches_the_client)
+{
+    GuiStateStore store;
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    WireLink link([&store, &id](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(std::make_unique<GuiStateInner>(store), "the-cookie", id);
+    });
+    ClearAtExit clear_store(store);
+    BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
+
+    std::unique_ptr<interfaces::GuiState> gui_state = link.client->makeGuiState();
+    BOOST_REQUIRE(gui_state);
+
+    Received<std::pair<uint64_t, interfaces::MRCSnapshot>> received;
+    std::unique_ptr<interfaces::Handler> handler =
+        gui_state->handleMRCQuote([&received](uint64_t request_id, const interfaces::MRCSnapshot& quote) {
+            received.Set({request_id, quote});
+        });
+
+    interfaces::MRCSnapshot quote;
+    quote.fee = 33;
+    quote.min_fee = 28;
+    quote.boosted_fee_error = true;
+    quote.boosted_fee_error_msg = "too much";
+    store.AnswerQuote(9, quote);
+
+    const auto got = received.Get();
+    BOOST_REQUIRE(got);
+    BOOST_CHECK_EQUAL(got->first, 9U);
+    BOOST_CHECK_EQUAL(got->second.fee, 33);
+    BOOST_CHECK_EQUAL(got->second.min_fee, 28);
+    BOOST_CHECK(got->second.boosted_fee_error);
+    BOOST_CHECK_EQUAL(got->second.boosted_fee_error_msg, "too much");
+}
+
+// A GUI that goes away while the node still holds its fn: the node's next push
+// returns to the caller (the cache's timer) without throwing, and is dropped as
+// a notification to a disconnected client, not as some other failure.
+BOOST_AUTO_TEST_CASE(push_to_a_disconnected_gui_is_dropped)
+{
+    GuiStateStore store;
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    WireLink link([&store, &id](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(std::make_unique<GuiStateInner>(store), "the-cookie", id);
+    });
+    ClearAtExit clear_store(store);
+    BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
+
+    std::unique_ptr<interfaces::GuiState> gui_state = link.client->makeGuiState();
+    BOOST_REQUIRE(gui_state);
+
+    std::atomic<int> calls{0};
+    std::unique_ptr<interfaces::Handler> handler =
+        gui_state->handleChanged([&calls](const interfaces::GuiStateSnapshot&) { ++calls; });
+    BOOST_REQUIRE(store.HasChanged());
+
+    store.Push(DistinctSnapshot());
+    BOOST_CHECK_EQUAL(calls.load(), 1);
+
+    // The GUI exits: its proxies go, then its connection (joining its loop). The
+    // node then tears its side down on its own; the case waits for that, so
+    // that the IPC category, on for the push alone, logs the push and nothing
+    // else.
+    handler.reset();
+    gui_state.reset();
+    link.client.reset();
+    link.client_proto.reset();
+    BOOST_REQUIRE(gui_cache_test::WaitUntil([&store] { return store.init_released.load(); }));
+
+    {
+        DroppedNotifications dropped;
+        BOOST_CHECK_NO_THROW(store.Push(DistinctSnapshot()));
+        BOOST_CHECK_EQUAL(calls.load(), 1);
+        BOOST_CHECK_EQUAL(dropped.Count(), 1);
+    }
+}
+
+// A GUI subscribed through the node's own GuiState (ServeInit over the
+// monolithic Init, over a published cache) whose connection drops with the
+// subscription alive: the node releases the subscription with the connection,
+// so its cache stops computing for it.
+BOOST_AUTO_TEST_CASE(a_dropped_gui_connection_ends_its_subscription)
+{
+    gui_cache_test::FakeCompute compute;
+    gui_cache_test::Deliveries deliveries;
+    gui_cache_test::PublishedFakeCache published(compute, 4000ms, 30000ms);
+    node::GuiCache& cache = published.Cache();
+
+    interfaces::NodeIdentity id;
+    id.network = "main";
+    WireLink link([&id](int) -> std::unique_ptr<interfaces::Init> {
+        return ipc::MakeServeInit(interfaces::MakeGridcoinInit(), "the-cookie", id);
+    });
+    BOOST_REQUIRE(ipc::ClientHandshake(*link.client, "the-cookie", "main").ok);
+
+    std::unique_ptr<interfaces::GuiState> gui_state = link.client->makeGuiState();
+    BOOST_REQUIRE(gui_state);
+
+    // The subscription's forced update reaches the client over the wire, and so
+    // does the next due update.
+    std::unique_ptr<interfaces::Handler> handler = gui_state->handleChanged(deliveries.Make());
+    BOOST_REQUIRE(deliveries.WaitFor([](const interfaces::GuiStateSnapshot& snap) { return snap.sequence == 1; }));
+
+    compute.Advance(4000ms);
+    gui_cache_test::InScope(cache, node::GuiCache::CHAIN);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), 2);
+    BOOST_REQUIRE(deliveries.WaitFor([](const interfaces::GuiStateSnapshot& snap) { return snap.sequence == 2; }));
+
+    // Only the subscription is left alive on the client; then the connection
+    // drops under it.
+    gui_state.reset();
+    link.client.reset();
+    link.server->disconnectIncoming();
+
+    // The node cleans up the GUI's objects on its own: once it has, a due block
+    // computes nothing.
+    BOOST_REQUIRE_MESSAGE(gui_cache_test::WaitUntil([&] {
+        const int before = compute.chain_calls.load();
+        compute.Advance(4000ms);
+        gui_cache_test::InScope(cache, node::GuiCache::CHAIN);
+        return compute.chain_calls.load() == before;
+    }), "the cache kept computing for a GUI whose connection dropped");
+
+    // And it stays stopped, on the timer too.
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    const int chain_calls = compute.chain_calls.load();
+    const int runs = compute.cs_main_runs.load();
+    compute.Advance(4000ms);
+    gui_cache_test::InScope(cache, node::GuiCache::CHAIN);
+    std::this_thread::sleep_for(TIMER_CHANCE);
+    BOOST_CHECK_EQUAL(compute.chain_calls.load(), chain_calls);
+    BOOST_CHECK_EQUAL(compute.cs_main_runs.load(), runs);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

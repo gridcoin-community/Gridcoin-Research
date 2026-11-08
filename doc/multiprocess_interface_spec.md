@@ -228,7 +228,7 @@ handshake (`ipc/handshake.h`):
 
 ```cpp
 constexpr uint32_t IPC_SCHEMA_MAJOR   = 4;
-constexpr uint32_t IPC_SCHEMA_MINOR   = 1;
+constexpr uint32_t IPC_SCHEMA_MINOR   = 2;
 constexpr uint32_t IPC_PROTOCOL_VERSION = 1;
 ```
 
@@ -256,6 +256,28 @@ needs a full unlock on a staking-only wallet calls a method the node does not
 serve, and the `UNIMPLEMENTED` reply comes back as a `std::runtime_error` thrown
 out of a send, vote or claim path where nothing catches it. The minor turns that
 into the "Update the node" hard fail at connect.
+
+**Minor 2** (under major 4) adds `Init.makeGuiState @15` and its interface,
+`GuiState` (`gui_state.capnp`, §4.10), through which the node pushes the state the
+GUI shows that needs `cs_main`, and `MRCSnapshot.matureBalance @17`
+(`mrc.capnp`), so the MRC page needs no balance read of its own; and
+`MRC.submitConfirmed @5` with `MRCSubmitResult.termsChanged @4`, `freshFee @5`
+and `freshReward @6` (§4.5). Additive, but each part fails against an older
+node: `makeGuiState` and `submitConfirmed` are methods that node does not serve,
+so a GUI that calls either gets the `UNIMPLEMENTED` reply back as a
+`std::runtime_error`; and its `MRCSnapshot` arrives with the mature balance 0, so
+a page that reads it reports every wallet short of the 1 GRC mature balance a
+claim needs. The minor turns all of it into the "Update the node" hard fail at
+connect.
+
+Also in minor 2, `ResearcherSnapshot` gains `cpidPresent @36` and
+`magnitudePresent @37` (`researcher.capnp`), which carry `has_cpid` and
+`has_magnitude`. The released `hasCpid @1` and `hasMagnitude @7` sit beside
+fields named `cpid` and `magnitude`, so mpgen read each as that field's presence
+companion and mapped no member to it: neither flag ever crossed, and the GUI's
+`hasMagnitude()` was always false. Additive; an older node leaves both false,
+which is what it always sent, and the minor already turns the mismatch into the
+"Update the node" hard fail.
 
 
 Rules a client must honor (from `ClientHandshake` and design §4.2):
@@ -328,6 +350,7 @@ The per-process bootstrap. Beyond the handshake methods (`authenticate`,
 | `makeResearcherContext()` | `ResearcherContext` | null before wallet startup |
 | `makePSGTPoolContext()` | `PSGTPoolContext` | null before wallet startup |
 | `makeSideStakeManager()` | `SideStakeManager` | always available |
+| `makeGuiState()` | `GuiState` | null before the GUI state cache starts (§4.10) |
 
 The `init.capnp` `Init` interface additionally declares `construct @0
 (threadMap …)` — the libmultiprocess lifecycle entry point (a `ThreadMap`
@@ -423,6 +446,15 @@ Manual Research Claims. `snapshot(fee_boost, wallet_locked, researcher_eligible)
 `submit(fee_boost, wallet_locked) -> MRCSubmitResult`; `isOutOfSync()`;
 `handleMRCChanged`.
 
+`submitConfirmed(fee_boost, wallet_locked, confirmed_fee, confirmed_net) ->
+MRCSubmitResult` carries the terms the user confirmed: the total fee they agreed
+to pay and the net payout (reward less fee) they agreed to receive. The node
+rebuilds the claim under `cs_main` + `cs_wallet`, exactly as `submit` does, and
+broadcasts only if the user pays no more and receives no less
+(`GRC::MRCTermsHold`). Otherwise it broadcasts nothing and returns
+`terms_changed` with `fresh_fee` and `fresh_reward` for the user to confirm
+again. `submit` is unchanged, for a GUI older than the node.
+
 ### 4.6 VotingManager — `src/interfaces/voting.h`, `voting.capnp`
 
 Polls and votes. `buildPollTable(filter_flags) -> vector<PollTableItem>`
@@ -477,6 +509,43 @@ returns the active mandatory and local sidestakes together (`is_mandatory` tells
 them apart). The bundled MP GUI builds `OptionsModel` (and its
 `SideStakeTableModel`) from the remote node's `Init`, so its sidestake table and
 its edits go to the node (`src/qt/bitcoin.cpp`).
+
+### 4.10 GuiState — `src/interfaces/gui_state.h`, `gui_state.capnp`
+
+The state a GUI shows that needs `cs_main` to compute, computed by the node's GUI
+state cache (`src/node/gui_cache.h`) and pushed, so a front end never takes
+`cs_main` (or waits on the node) to refresh it. One value type,
+`GuiStateSnapshot`: chain height and time, difficulty, initial-download and
+out-of-sync flags, peers' height, network weight, the miner's state, the wallet
+balances, the PSGT pool status, and, only while the node is synced, the
+unboosted MRC figures, the estimated time to stake and the researcher state. Each
+synced part carries a present flag; absent means "unavailable until the wallet
+is synced". A `sequence` orders the snapshots (it never decreases, may repeat,
+and is 0 before the first update).
+
+- `handleChanged(fn)` subscribes to the snapshots. Unlike the refetch triggers of
+  §5.1 the push carries the data: keep a snapshot when its sequence is higher than
+  the last one's. The cache makes updates only while at least one subscription
+  is alive, so a node with no front end attached pays nothing for them (only a
+  quote, below, is computed then); the first subscription also asks for a forced
+  update, so a front end that attaches gets a computed snapshot within one timer
+  cycle.
+- `current()` returns the cache's copy (a leaf lock in the node, never `cs_main`),
+  for a front end that attaches or misses a push.
+- `requestUpdate()` asks for a forced update, delivered to the `handleChanged`
+  fns; it returns at once. With no subscription alive it is dropped: there is no
+  one to deliver to, and nothing is computed.
+- `requestMRCQuote(fee_boost, request_id)` asks for the MRC figures at a fee boost
+  and returns at once; `handleMRCQuote(fn)` receives the answer with the request's
+  id. The node computes it after any update due or asked for, and answers every
+  request it takes: one whose figures cannot be computed carries the error
+  (`create_error`, `create_error_msg`). One quote is pending at a time and only
+  the latest request is answered, so drop an answer whose id is not your latest.
+
+The node computes updates at most every four seconds (once synced, about one a
+block) and serves requests and quotes outside that interval, on its cache's own
+thread. Callbacks arrive on the cache's own thread; a handler enqueues the
+value and returns (§5.1).
 
 ---
 

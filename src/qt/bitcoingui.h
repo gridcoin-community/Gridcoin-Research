@@ -412,6 +412,7 @@ private slots:
     void updateScraperIcon(int scraperEventtype, int status);
     void updateBeaconIcon();
 
+    void updateCurrentPollTitle();
     void handleNewPoll();
     void extracted(QStringList& expiring_polls, QString& notification);
     void handleExpiredPoll();

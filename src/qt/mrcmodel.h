@@ -5,18 +5,26 @@
 #ifndef GRIDCOIN_QT_MRCMODEL_H
 #define GRIDCOIN_QT_MRCMODEL_H
 
+#include <QFutureWatcher>
 #include <QObject>
+#include <QString>
+#include <QTimer>
+#include <cstdint>
 #include <memory>
 #include <optional>
+#include <utility>
 #include "amount.h"
+#include "interfaces/mrc.h"
 #include "qt/notificationlifetime.h"
+#include "qt/walletmodel.h"
 
-class WalletModel;
 class ClientModel;
 class ResearcherModel;
 class MRCRequestPage;
+class GuiStateCache;
 
 namespace interfaces {
+class GuiState;
 class Handler;
 class MRC;
 } // namespace interfaces
@@ -46,12 +54,18 @@ enum class MRCRequestStatus
 //!
 //! Note that the MRC queue is "synthetic". It is filtered from the transactions in the memory pool and consists
 //! of the transactions that have a valid MRC contract.
+//!
+//! The model takes no core lock and makes no core read on the GUI thread. It
+//! classifies from the MRC part of the state the core pushes (GuiStateCache),
+//! asks the core for a quote when the fee boost is not zero, and submits through
+//! interfaces::MRC::submitConfirmed on a worker thread.
 class MRCModel : public QObject
 {
     Q_OBJECT
 
 public:
     explicit MRCModel(interfaces::MRC& mrc,
+                      interfaces::GuiState& gui_state,
                       WalletModel* wallet_model,
                       ClientModel* client_model,
                       ResearcherModel* researcher_model,
@@ -87,22 +101,75 @@ public:
     int getMRCOutputLimit();
     ModelStatus getMRCModelStatus();
     bool isMRCError(MRCRequestStatus& s, QString& e);
-    bool submitMRC(MRCRequestStatus& s, QString& e);
+    MRCRequestStatus getMRCRequestStatus() const { return m_mrc_status; }
+
+    //! The total fee the request pays: the boosted fee when a boost is set, else
+    //! the minimum fee. Shows the fresh figure after a submit refused on changed
+    //! terms.
+    CAmount getMRCTotalFee() const;
+    //! The reward less the total fee.
+    CAmount getMRCNetPayout() const;
+
+    //! A quote for the current fee boost is outstanding; the figures shown are
+    //! not yet those of the boost.
+    bool isQuoteUpdating() const { return m_quote_updating; }
+    //! A submit is running on its worker thread.
+    bool isSubmitting() const { return m_submitting; }
+    //! The message of the last refused or failed submit (empty if none), kept
+    //! until the next submit or fee boost edit.
+    QString getSubmitNotice() const { return m_submit_notice; }
+
+    //! Starts the submit. \p confirmed_fee and \p confirmed_net are the terms
+    //! the user confirmed at the click (the figures then shown); the core holds
+    //! the send to them, whatever the figures have become since. Returns false,
+    //! with \p e set, if the request cannot be submitted now; true once the
+    //! submit runs. The outcome arrives as submitFinished().
+    //!
+    //! \p unlock is the unlock the caller took for this submit (it may be null).
+    //! The model owns it from here: it is released when the submit finishes,
+    //! before submitFinished() is emitted, or when the model is destroyed, and at
+    //! once if the submit does not start. The page may be gone by then, so it
+    //! cannot be the owner.
+    bool submitMRC(MRCRequestStatus& s, QString& e, CAmount confirmed_fee, CAmount confirmed_net,
+                   std::unique_ptr<WalletModel::UnlockContext> unlock);
+    //! The request can be submitted now: eligible, no quote outstanding, no
+    //! submit running.
+    bool canSubmit() const
+    {
+        return m_mrc_status == MRCRequestStatus::ELIGIBLE && !m_quote_updating && !m_submitting;
+    }
     bool isWalletLocked();
 
+    //! Asks the core to push its state now (the page's update button).
+    void requestUpdate();
+
 private:
-    void subscribeToCoreSignals();
-    void unsubscribeFromCoreSignals();
+    void subscribeToQuotes();
+    void unsubscribeFromQuotes();
 
-    //! The node-side MRC boundary: one atomic snapshot() per refresh and a
-    //! submit() command, both taken under core locks on the node side. Owned by
-    //! bitcoin.cpp and outlives this model (Phase 1d-i).
+    //! Takes the pushed state into the figures, and quotes again if a fee boost
+    //! is set. Called when the cache changes and once at attach.
+    void applyPushedState();
+    //! applyPushedState's body. \p force takes the pushed figures although the
+    //! MRC part is as the last push's, as when a fee boost is cleared.
+    void takePushedState(bool force);
+    //! Applies an answered quote when it is the latest request's.
+    void applyQuote(uint64_t request_id, const interfaces::MRCSnapshot& quote);
+    void issueQuote();
+    void finishSubmit();
+    void waitForSubmit();
+
+    //! The node-side MRC boundary, used only for submitConfirmed on a worker
+    //! thread. Owned by bitcoin.cpp and outlives this model.
     interfaces::MRC& m_mrc;
+    interfaces::GuiState& m_gui_state;
 
-    //! Retained MRCChanged subscription, released on teardown so a signal that
-    //! fires after this model is destroyed cannot invoke a slot bound to freed
-    //! memory (issue #3129). The Handler disconnects on destruction.
-    std::unique_ptr<interfaces::Handler> m_mrc_handler;
+    //! The pushed state (ClientModel::guiState()). Null only without a client
+    //! model.
+    GuiStateCache* m_cache;
+
+    //! Retained quote subscription, severed on teardown (issue #3129).
+    std::unique_ptr<interfaces::Handler> m_quote_handler;
 
     //! Closes the destruction race that disconnecting alone leaves open.
     //! See qt/notificationlifetime.h.
@@ -113,9 +180,13 @@ private:
     ResearcherModel* m_researcher_model;
     MRCRequestPage* m_mrc_request;
 
-    //! Research subsidy of the last submitted MRC (empty if none pending) —
-    //! retained to detect a stale/unbound MRC without a further core read; the
-    //! full contract lives node-side (Phase 1d-i).
+    //! The figures being classified: the pushed ones, or the latest quote's.
+    interfaces::MRCSnapshot m_snap;
+    //! False while the core has pushed no MRC state (out of sync, or not yet).
+    bool m_snap_present;
+
+    //! Research subsidy of the last submitted MRC (empty if none pending) --
+    //! retained to detect a stale/unbound MRC without a further core read.
     std::optional<CAmount> m_submitted_research_subsidy;
     MRCRequestStatus m_mrc_status;
     CAmount m_reward;
@@ -133,26 +204,47 @@ private:
     QString m_mrc_error_desc;
     bool m_wallet_locked;
 
-    //! Snapshot-cached version gate (from interfaces::MRCSnapshot), so
-    //! getMRCModelStatus() classifies the block version without a core read. It
-    //! is block-driven, so it cannot go stale without a refresh; out-of-sync is
-    //! instead queried live (m_mrc.isOutOfSync()) because it is time-based.
+    //! The version gate from the figures (block-driven).
     bool m_block_version_valid;
 
     int m_init_block_height;
     int m_block_height;
     int m_submitted_height;
 
+    //! The id of the latest quote request; an answer for any other is ignored.
+    //! Every fee boost edit takes a new one, so an answer for an earlier boost
+    //! can never be applied, even before the debounced request is sent.
+    uint64_t m_quote_id;
+    bool m_quote_updating;
+    QTimer m_quote_timer;
+
+    bool m_submitting;
+    QFutureWatcher<interfaces::MRCSubmitResult> m_submit_watcher;
+    //! The unlock held for the submit in flight.
+    std::unique_ptr<WalletModel::UnlockContext> m_submit_unlock;
+    //! Fee and reward the core returned for a submit refused on changed terms.
+    std::optional<std::pair<CAmount, CAmount>> m_fresh_terms;
+    QString m_submit_notice;
+
+    //! The MRC part of the last push that changed it, to tell an unchanged one.
+    bool m_last_pushed_has_mrc = false;
+    interfaces::MRCSnapshot m_last_pushed_mrc;
+
+    //! The message of the latest quote, if it failed to compute.
+    std::optional<QString> m_quote_failure;
+
 signals:
     void mrcChanged();
     void walletStatusChangedSignal();
+    //! A submit ended; \p success is true if the request was sent.
+    void submitFinished(bool success);
 
 public slots:
     //!
     //! \brief refresh does the brunt of the work in the MRCModel.
     //!
-    //! It runs trial CreateMRCs and loops through the memory pool to construct the synthetic MRC queue and
-    //! provides the necessary information for the MRCRequestPage to control the MRC submission by the user.
+    //! It classifies the MRC figures the core pushed (or quoted) and provides the necessary information for the
+    //! MRCRequestPage to control the MRC submission by the user. It calls no core method.
     //!
     //! It provides structured status and error states of the MRC request(s).
     //!

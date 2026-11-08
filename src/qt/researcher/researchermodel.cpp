@@ -2,58 +2,154 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "interfaces/handler.h"
+#include "interfaces/gui_state.h"
 #include "interfaces/researcher.h"
 
 #include "qt/bitcoinunits.h"
-#include "qt/guiconstants.h"
+#include "qt/guistatecache.h"
 #include "qt/guiutil.h"
 #include "qt/researcher/researchermodel.h"
 #include "qt/researcher/researcherwizard.h"
-#include "util/time.h"
 
 #include <QApplication>
 #include <QDateTime>
 #include <QIcon>
 #include <QMessageBox>
-#include <QTimer>
+#include <QtConcurrentRun>
 
 #include <cassert>
+#include <exception>
 
 // -----------------------------------------------------------------------------
 // Class: ResearcherModel
 // -----------------------------------------------------------------------------
 
-ResearcherModel::ResearcherModel(interfaces::ResearcherContext& researcher_context)
+namespace {
+//! Which of the four signals a change between two snapshots calls for. Each
+//! group lists every field its signal's listeners read, and the sync state,
+//! which they all show.
+struct Changes
+{
+    bool researcher = false;
+    bool magnitude = false;
+    bool accrual = false;
+    bool beacon = false;
+};
+
+Changes Compare(const interfaces::ResearcherSnapshot& a, const interfaces::ResearcherSnapshot& b)
+{
+    const bool sync = a.out_of_sync != b.out_of_sync;
+
+    Changes changes;
+
+    changes.researcher = sync
+        || a.cpid != b.cpid
+        || a.has_cpid != b.has_cpid
+        || a.has_split_cpid != b.has_split_cpid
+        || a.has_rac != b.has_rac
+        || a.email != b.email
+        || a.configured_for_noncruncher_mode != b.configured_for_noncruncher_mode
+        || a.detected_pool_mode != b.detected_pool_mode
+        || a.mining_status != b.mining_status
+        || a.has_eligible_projects != b.has_eligible_projects
+        || a.has_pool_projects != b.has_pool_projects
+        || a.action_needed != b.action_needed
+        || a.boinc_data_dir != b.boinc_data_dir
+        || a.is_v14_enabled != b.is_v14_enabled;
+
+    changes.magnitude = sync
+        || a.magnitude != b.magnitude
+        || a.magnitude_text != b.magnitude_text
+        || a.has_magnitude != b.has_magnitude;
+
+    changes.accrual = sync
+        || a.accrual != b.accrual
+        || a.accrual_near_limit != b.accrual_near_limit;
+
+    changes.beacon = sync
+        || a.beacon_status != b.beacon_status
+        || a.beacon_present != b.beacon_present
+        || a.pending_beacon_present != b.pending_beacon_present
+        || a.has_active_beacon != b.has_active_beacon
+        || a.has_pending_beacon != b.has_pending_beacon
+        || a.has_renewable_beacon != b.has_renewable_beacon
+        || a.beacon_expired != b.beacon_expired
+        || a.needs_beacon_auth != b.needs_beacon_auth
+        || a.beacon_address != b.beacon_address
+        || a.beacon_verification_code != b.beacon_verification_code
+        || a.beacon_error != b.beacon_error
+        || a.cached_beacon_pubkey_hex != b.cached_beacon_pubkey_hex
+        || a.beacon_timestamp != b.beacon_timestamp
+        || a.beacon_age != b.beacon_age
+        || a.time_to_beacon_expiration != b.time_to_beacon_expiration
+        || a.time_to_pending_beacon_expiration != b.time_to_pending_beacon_expiration;
+
+    return changes;
+}
+} // anonymous namespace
+
+ResearcherModel::ResearcherModel(interfaces::ResearcherContext& researcher_context,
+                                 interfaces::GuiState& gui_state, GuiStateCache& cache)
     : m_researcher_context(researcher_context)
+    , m_gui_state(gui_state)
+    , m_cache(cache)
     , m_wizard_open(false)
     , m_privacy_enabled(false)
     , m_theme_suffix("_dark")
 {
-    // Prime the cached snapshot before any getter can run, then subscribe.
-    m_snapshot = m_researcher_context.snapshot();
-    subscribeToCoreSignals();
+    // Nothing has been computed until the core pushes it, and the node does not
+    // compute this part while it syncs: a researcher never computed is shown as
+    // waiting for sync, not as an investor.
+    m_snapshot.out_of_sync = true;
 
-    // The 30-second polling refresh timer that used to live here is gone in
-    // favour of an event-driven refresh on the interface's block-tip
-    // notification (subscribed below). Per-block accrual updates propagate
-    // within one chain-tip-advance event. The researcher/beacon/accrual
-    // notifications drive their own targeted refreshes as before.
-    //
-    // The one change no notification reports is falling out of sync:
-    // OutOfSyncByAge() turns true when blocks STOP arriving, so a stalled node
-    // would keep showing itself in sync, and the wizard would keep offering to
-    // send a beacon. This timer polls that flag alone, which is lock-free, and
-    // refreshes only when it changes.
-    m_sync_state_timer = new QTimer(this);
-    m_sync_state_timer->setObjectName("syncStateTimer");
-    connect(m_sync_state_timer, &QTimer::timeout, this, &ResearcherModel::updateSyncState);
-    m_sync_state_timer->start(SYNC_STATE_POLL_INTERVAL_MS);
+    connect(&m_cache, &GuiStateCache::changed, this, &ResearcherModel::applyPushedState);
+    connect(&m_reload_watcher, &QFutureWatcher<void>::finished, this, &ResearcherModel::finishReload);
+
+    // A state pushed before the cache was built emits no change, so read it
+    // once. Nothing listens to this model yet.
+    if (m_cache.snapshot().has_researcher) {
+        install(m_cache.snapshot().researcher, false);
+    }
 }
 
 ResearcherModel::~ResearcherModel()
 {
-    unsubscribeFromCoreSignals();
+    // Join the worker: it uses the researcher context. It contains its own
+    // exceptions, so this does not throw out of the destructor.
+    m_reload_watcher.waitForFinished();
+}
+
+void ResearcherModel::install(interfaces::ResearcherSnapshot next, bool notify)
+{
+    const Changes changes = Compare(m_snapshot, next);
+
+    // The new snapshot is in place before any signal goes out: the listeners,
+    // such as the wizard's beacon and authentication pages, read it, and the
+    // one replaced may be an out-of-sync one.
+    m_snapshot = std::move(next);
+
+    if (!notify) return;
+
+    if (changes.researcher) emit researcherChanged();
+    if (changes.magnitude) emit magnitudeChanged();
+    if (changes.accrual) emit accrualChanged();
+    if (changes.beacon) emit beaconChanged();
+}
+
+void ResearcherModel::applyPushedState()
+{
+    const interfaces::GuiStateSnapshot& pushed = m_cache.snapshot();
+
+    if (pushed.has_researcher) {
+        install(pushed.researcher, true);
+        return;
+    }
+
+    // The part is absent while the node is out of sync. Keep the last snapshot,
+    // out of sync, so nothing computed earlier is shown as current.
+    interfaces::ResearcherSnapshot kept = m_snapshot;
+    kept.out_of_sync = true;
+    install(std::move(kept), true);
 }
 
 QString ResearcherModel::mapBeaconStatus(const BeaconStatus status)
@@ -133,9 +229,6 @@ void ResearcherModel::showWizard(WalletModel* wallet_model)
         return;
     }
 
-    // Decide on the live flag, not one up to a poll interval old.
-    updateSyncState();
-
     if (outOfSync()) {
         QMessageBox::warning(QApplication::activeWindow(),
             QObject::tr("Wallet Not In Sync"),
@@ -178,7 +271,12 @@ void ResearcherModel::setMaskCpidMagnitudeAccrual(bool privacy)
 {
     m_privacy_enabled = privacy;
 
-    refresh();
+    // The masking only changes how the held snapshot is formatted, so the
+    // listeners repaint from it, with no call to the core.
+    emit researcherChanged();
+    emit magnitudeChanged();
+    emit accrualChanged();
+    emit beaconChanged();
 }
 
 bool ResearcherModel::configuredForNoncruncherMode() const
@@ -461,116 +559,73 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
 
 void ResearcherModel::reload()
 {
-    m_researcher_context.reload();
-    onResearcherChanged();
-}
-
-void ResearcherModel::refresh()
-{
-    // Full refresh via TRY_LOCK: bow out cleanly under cs_main contention rather
-    // than stalling the GUI thread during heavy chain catch-up.
-    if (auto snap = m_researcher_context.trySnapshot()) {
-        // researcherChanged goes out once the new snapshot is in place. Its
-        // listeners, such as the wizard's beacon and authentication pages, read
-        // the snapshot, and the one replaced may be an out-of-sync one, which has
-        // no beacon fields. After a skipped snapshot it goes out again, since the
-        // skip may have reported a sync change with the old snapshot.
-        //
-        // The snapshot's own flag says whether the sync state changed. A flag
-        // read before the snapshot, without cs_main, can be a block behind it:
-        // the block that puts the node back in sync can finish between the two,
-        // and the snapshot then holds the recovery while the flag read did not.
-        // Installed without the signal, it would leave the pages that repaint on
-        // it alone with the out-of-sync state, and every later flag read matches
-        // the snapshot, so nothing would report the recovery afterwards.
-        const bool notify_researcher = snap->out_of_sync != m_snapshot.out_of_sync || m_snapshot_skipped;
-
-        m_snapshot = std::move(*snap);
-        m_snapshot_skipped = false;
-
-        if (notify_researcher) {
-            emit researcherChanged();
-        }
-        emit magnitudeChanged();
-        emit accrualChanged();
-        emit beaconChanged();
-    } else {
-        // Without a snapshot, the flag is still readable, lock-free, so report
-        // a sync change on its own now, as the former refresh() did: the
-        // "Waiting for sync..." state must update even when cs_main is
-        // contended.
-        const bool out_of_sync = m_researcher_context.outOfSync();
-
-        if (out_of_sync != m_snapshot.out_of_sync) {
-            m_snapshot.out_of_sync = out_of_sync;
-            emit researcherChanged();
-        }
-        m_snapshot_skipped = true;
+    // A user action that keeps its core call, made on a worker: the call takes
+    // cs_main. A request made while one runs is joined by one more run after it.
+    if (m_reload_watcher.isRunning()) {
+        m_reload_again = true;
+        return;
     }
+
+    m_reload_watcher.setFuture(QtConcurrent::run([this]() {
+        try {
+            m_researcher_context.reload();
+        } catch (const std::exception&) {
+            // Nothing to report: the next push shows whatever state the core is in.
+        } catch (...) {
+        }
+    }));
 }
 
-void ResearcherModel::updateSyncState()
+void ResearcherModel::finishReload()
 {
-    // Each poll reads only the flag. A change is rare, and gets the refresh a new
-    // block would: the overview repaints magnitude and accrual only on their own
-    // signals, and the beacon status is derived from the sync state too. A
-    // refresh that had to skip its snapshot is retried here as well: once the
-    // flag has been updated, a stalled node has no block left to retry it.
-    if (m_snapshot_skipped || m_researcher_context.outOfSync() != m_snapshot.out_of_sync) {
-        refresh();
+    // The result reaches the model with the next push; ask for it now rather
+    // than wait for the core's cadence.
+    m_gui_state.requestUpdate();
+
+    emit reloaded();
+
+    if (m_reload_again) {
+        m_reload_again = false;
+        reload();
     }
-}
-
-void ResearcherModel::onResearcherChanged()
-{
-    // A researcher-context change is significant and infrequent; take the full
-    // (blocking) snapshot and repaint everything, matching the former
-    // resetResearcher() -> emit researcherChanged() + updateBeacon() sequence.
-    m_snapshot = m_researcher_context.snapshot();
-
-    emit researcherChanged();
-    emit beaconChanged();
-    emit magnitudeChanged();
-    emit accrualChanged();
 }
 
 bool ResearcherModel::switchToSolo(const QString& email)
 {
     // Optimistically clear the noncruncher flag so the wizard's immediately
     // following page selection sees the new mode (the former model set the
-    // member directly before calling ChangeMode).
+    // member directly before calling ChangeMode). An older push already in
+    // flight can overwrite it until the update requested below lands.
     m_snapshot.configured_for_noncruncher_mode = false;
 
-    return m_researcher_context.switchMode(interfaces::ResearcherMode::SOLO, email.toStdString());
+    const bool result = m_researcher_context.switchMode(interfaces::ResearcherMode::SOLO, email.toStdString());
+    m_gui_state.requestUpdate();
+    return result;
 }
 
 bool ResearcherModel::switchToPool()
 {
     m_snapshot.configured_for_noncruncher_mode = false;
 
-    return m_researcher_context.switchMode(interfaces::ResearcherMode::POOL, std::string());
+    const bool result = m_researcher_context.switchMode(interfaces::ResearcherMode::POOL, std::string());
+    m_gui_state.requestUpdate();
+    return result;
 }
 
 bool ResearcherModel::switchToNoncruncher()
 {
     m_snapshot.configured_for_noncruncher_mode = true;
 
-    return m_researcher_context.switchMode(interfaces::ResearcherMode::NONCRUNCHER, std::string());
-}
-
-void ResearcherModel::updateBeacon()
-{
-    // Beacon state lives in the snapshot; refetch (blocking — beacon changes are
-    // infrequent) and repaint the beacon display.
-    m_snapshot = m_researcher_context.snapshot();
-
-    emit beaconChanged();
-    emit researcherChanged();
+    const bool result = m_researcher_context.switchMode(interfaces::ResearcherMode::NONCRUNCHER, std::string());
+    m_gui_state.requestUpdate();
+    return result;
 }
 
 BeaconStatus ResearcherModel::advertiseBeacon()
 {
-    return m_researcher_context.advertiseBeacon().status;
+    const BeaconStatus status = m_researcher_context.advertiseBeacon().status;
+    m_gui_state.requestUpdate();
+    return status;
 }
 
 bool ResearcherModel::isV14Enabled() const
@@ -623,7 +678,9 @@ QString ResearcherModel::generateBeaconKeyForV3()
 
 BeaconStatus ResearcherModel::advertiseBeaconV3(const QString& ownership_proof_xml)
 {
-    return m_researcher_context.advertiseBeaconV3(ownership_proof_xml.toStdString()).status;
+    const BeaconStatus status = m_researcher_context.advertiseBeaconV3(ownership_proof_xml.toStdString()).status;
+    m_gui_state.requestUpdate();
+    return status;
 }
 
 QString ResearcherModel::cachedBeaconPubKeyHex() const
@@ -635,67 +692,4 @@ void ResearcherModel::onWizardClose()
 {
     m_cached_beacon_pubkey_hex.clear();
     m_wizard_open = false;
-}
-
-void ResearcherModel::subscribeToCoreSignals()
-{
-    // Subscribe to the interface notifications, retaining each handler so it is
-    // severed in unsubscribeFromCoreSignals() (from ~ResearcherModel). The
-    // callbacks fire on a core thread, so each marshals to the GUI thread via a
-    // queued invocation of the matching slot; a signal firing after this object
-    // is gone would otherwise touch freed memory (issue #3129).
-    m_handlers.emplace_back(m_researcher_context.handleResearcherChanged(m_notify_lifetime.guard(
-        [this]() { QMetaObject::invokeMethod(this, "onResearcherChanged", Qt::QueuedConnection); })));
-
-    m_handlers.emplace_back(m_researcher_context.handleBeaconChanged(m_notify_lifetime.guard(
-        [this]() { QMetaObject::invokeMethod(this, "updateBeacon", Qt::QueuedConnection); })));
-
-    m_handlers.emplace_back(m_researcher_context.handleAccrualChanged(m_notify_lifetime.guard(
-        [this]() { QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection); })));
-
-    // Rate-limit the per-block refresh while the chain is catching up. refresh()
-    // runs a full trySnapshot(): DeriveBeacon, ComputeActionNeeded, magnitude and
-    // accrual, all under a cs_main TRY_LOCK. None of that is worth doing once per
-    // block during a sync -- no human can read it at that rate, and the same
-    // MODEL_UPDATE_DELAY gate is what ClientModel::NotifyBlocksChanged already
-    // applies to its own subscription using this very flag.
-    //
-    // This matters on two paths, not one. A FRESH install additionally pays a BOINC
-    // data directory probe inside the snapshot (registry + filesystem on Windows,
-    // where a wallet installed before BOINC finds nothing and cannot be fixed via
-    // the wizard until sync completes, because the wizard is gated on being synced).
-    // But a RESYNC of an established wallet -- valid CPID or non-cruncher, every
-    // lookup succeeding -- pays the beacon/magnitude/accrual work per block just the
-    // same, and only this gate removes it.
-    //
-    // The syncing edge forces a refresh: without it the panel would hold whatever
-    // the last throttled pass produced until the next block, and at ~90s block
-    // spacing that is a visible stall exactly when the user is watching sync finish.
-    m_handlers.emplace_back(m_researcher_context.handleBlocksChanged(m_notify_lifetime.guard(
-        [this](bool syncing, int, int64_t, uint32_t) {
-            const bool was_syncing = m_last_syncing.exchange(syncing);
-
-            if (syncing && was_syncing) {
-                const int64_t now = GetTimeMillis();
-
-                if (m_last_block_refresh_ms.load() + MODEL_UPDATE_DELAY > now) {
-                    return;
-                }
-
-                m_last_block_refresh_ms.store(now);
-            }
-
-            QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
-        })));
-}
-
-void ResearcherModel::unsubscribeFromCoreSignals()
-{
-    // Retire before disconnecting: severing a Handler does not wait for a
-    // callback already running on a core thread (qt/notificationlifetime.h).
-    m_notify_lifetime.retire();
-
-    // Clearing the retained handlers runs each Handler's destructor, which
-    // disconnects it (issue #3129).
-    m_handlers.clear();
 }

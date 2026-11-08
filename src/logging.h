@@ -222,7 +222,13 @@ static inline void LogPrintf(const char* fmt, const Args&... args)
             /* Log the raw format string; the newline appended below covers this path too. */
             log_msg = "Error \"" + std::string(fmterr.what()) + "\" while formatting log message: " + fmt;
         }
-        // The \n here is for legacy formatting of Gridcoin LogPrintf's, which usually don't have \n's on them.
+        // Each log call writes exactly one line: the logger appends the newline,
+        // so a format string never ends with "\n" (a trailing "\n" leaves a blank
+        // line). Bitcoin Core leaves the newline to the caller, and a call that
+        // forgets it runs the next message, from whichever thread logs next, onto
+        // the same line without a timestamp. Starting a new line is the logger's
+        // job, not every caller's. Code ported from Bitcoin Core drops its
+        // trailing "\n". LogPrint and error below follow the same rule.
         LogInstance().LogPrintStr(log_msg + "\n");
     }
 }

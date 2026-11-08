@@ -153,6 +153,12 @@ struct TestingSetup {
         assert(leveldb::DB::Open(db_options, "", &txdb).ok());
         noui_connect();
         bitdb.MakeMock();
+        // No background wallet flush in the unit tests. The flush thread runs
+        // until a shutdown is requested, which a test run never does, and keeps
+        // a reference to this wallet's file name. Deleting the wallet at teardown
+        // while the thread flushes, two seconds after any wallet's last write,
+        // is a use-after-free that ThreadSanitizer reports. No test relies on it.
+        gArgs.ForceSetArg("-flushwallet", "0");
         bool fFirstRun;
         pwalletMain = new CWallet("wallet.dat");
         pwalletMain->LoadWallet(fFirstRun);

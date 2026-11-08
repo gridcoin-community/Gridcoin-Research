@@ -280,6 +280,11 @@ bool GRC::MRCContractHandler::BlockValidate(const ContractContext& ctx, int& DoS
     return Validate(ctx.m_contract, ctx.m_tx, DoS);
 }
 
+bool GRC::MRCTermsHold(CAmount fee_now, CAmount reward_now, CAmount confirmed_fee, CAmount confirmed_net)
+{
+    return fee_now <= confirmed_fee && reward_now - fee_now >= confirmed_net;
+}
+
 namespace {
 //!
 //! \brief Sign the mrc.
@@ -348,7 +353,7 @@ void GRC::CreateMRC(CBlockIndex* pindex,
                     MRC& mrc,
                     CAmount &nReward,
                     CAmount &fee,
-                    CWallet* pwallet, bool no_sign) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+                    CWallet* pwallet, bool no_sign, bool quiet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
 
@@ -361,15 +366,15 @@ void GRC::CreateMRC(CBlockIndex* pindex,
         err = false;
         break;
     case GRC::ResearcherStatus::NO_BEACON:
-        throw MRC_error(strprintf("%s: CPID eligible but no active beacon key so MRC cannot be formed.", __func__));
+        throw MRC_error(strprintf("%s: CPID eligible but no active beacon key so MRC cannot be formed.", __func__), !quiet);
     case GRC::ResearcherStatus::NONCRUNCHER:
-        throw MRC_error(strprintf("%s: MRC request cannot be sent while wallet is in non-cruncher mode.", __func__));
+        throw MRC_error(strprintf("%s: MRC request cannot be sent while wallet is in non-cruncher mode.", __func__), !quiet);
     case GRC::ResearcherStatus::NO_PROJECTS:
         // This is handled as no positive research reward pending below.
         err = false;
         break;
     case GRC::ResearcherStatus::POOL:
-        throw MRC_error(strprintf("%s: MRC request cannot be sent while wallet is in pool mode.", __func__));
+        throw MRC_error(strprintf("%s: MRC request cannot be sent while wallet is in pool mode.", __func__), !quiet);
     }
     // Invariant: every ResearcherStatus has a case above that either clears err
     // or throws. Guards against a new status added without a case, which would
@@ -383,7 +388,7 @@ void GRC::CreateMRC(CBlockIndex* pindex,
 
         // If no pending research subsidy value exists, bail.
         if (mrc.m_research_subsidy <= 0) {
-            throw MRC_error(strprintf("%s: No positive research reward pending at time of mrc.", __func__));
+            throw MRC_error(strprintf("%s: No positive research reward pending at time of mrc.", __func__), !quiet);
         } else {
             nReward = mrc.m_research_subsidy;
             mrc.m_magnitude = GRC::Quorum::GetMagnitude(*cpid).Floating();
@@ -413,19 +418,19 @@ void GRC::CreateMRC(CBlockIndex* pindex,
                                       "the minimum calculated fee of %s.",
                                       __func__,
                                       FormatMoney(provided_fee),
-                                      FormatMoney(computed_mrc_fee)));
+                                      FormatMoney(computed_mrc_fee)), !quiet);
         } else {
             throw MRC_error(strprintf("%s: Invalid fee specified for mrc. The specified fee of %s is greater than "
                                       "the computed research reward of %s.",
                                       __func__,
                                       FormatMoney(provided_fee),
-                                      FormatMoney(mrc.m_research_subsidy)));
+                                      FormatMoney(mrc.m_research_subsidy)), !quiet);
 
         }
     }
 
     if (!no_sign && !TrySignMRC(pwallet, pindex, mrc)) {
-        throw MRC_error(strprintf("%s: Failed to sign mrc.", __func__));
+        throw MRC_error(strprintf("%s: Failed to sign mrc.", __func__), !quiet);
     }
 
     LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: for %s mrc request created: magnitude %d, "

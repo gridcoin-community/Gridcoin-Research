@@ -25,6 +25,7 @@ interface MRC $Proxy.wrap("interfaces::MRC") {
     submit @2 (context :Proxy.Context, feeBoost :Int64, walletLocked :Bool) -> (result :MRCSubmitResult);
     isOutOfSync @3 (context :Proxy.Context) -> (result :Bool);
     handleMRCChanged @4 (context :Proxy.Context, callback :Node.VoidCallback) -> (result :Handler.Handler);
+    submitConfirmed @5 (context :Proxy.Context, feeBoost :Int64, walletLocked :Bool, confirmedFee :Int64, confirmedNet :Int64) -> (result :MRCSubmitResult);
 }
 
 struct MRCSnapshot $Proxy.wrap("interfaces::MRCSnapshot") {
@@ -45,6 +46,7 @@ struct MRCSnapshot $Proxy.wrap("interfaces::MRCSnapshot") {
     queueHeadFee @14 :Int64 $Proxy.name("queue_head_fee");
     queueTailFee @15 :Int64 $Proxy.name("queue_tail_fee");
     queuePayLimitFee @16 :Int64 $Proxy.name("queue_pay_limit_fee");
+    matureBalance @17 :Int64 $Proxy.name("mature_balance");
 }
 
 struct MRCSubmitResult $Proxy.wrap("interfaces::MRCSubmitResult") {
@@ -52,4 +54,7 @@ struct MRCSubmitResult $Proxy.wrap("interfaces::MRCSubmitResult") {
     error @1 :Text;
     submittedHeight @2 :Int32 $Proxy.name("submitted_height");
     researchSubsidy @3 :Int64 $Proxy.name("research_subsidy");
+    termsChanged @4 :Bool $Proxy.name("terms_changed");
+    freshFee @5 :Int64 $Proxy.name("fresh_fee");
+    freshReward @6 :Int64 $Proxy.name("fresh_reward");
 }
