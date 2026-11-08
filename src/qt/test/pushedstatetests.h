@@ -17,6 +17,7 @@ class PushedStateTests : public QObject
 
 private slots:
     void psgt_page_status_from_push();
+    void a_snapshot_published_while_subscribing_is_not_lost();
     void wallet_balances_from_push();
     void voting_unavailable_until_synced();
     void poll_title_is_read_when_the_first_synced_push_arrives();

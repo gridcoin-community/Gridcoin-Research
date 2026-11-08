@@ -6,6 +6,7 @@
 
 #include "interfaces/wallet_coin_source.h"
 #include "qt/clientmodel.h"
+#include "qt/guistatecache.h"
 #include "qt/optionsmodel.h"
 #include "qt/psgtpoolpage.h"
 #include "qt/test/interfacefakes.h"
@@ -42,7 +43,31 @@ interfaces::GuiStateSnapshot Synced(uint64_t sequence, bool out_of_sync)
     snapshot.out_of_sync = out_of_sync;
     return snapshot;
 }
+
+//! A GuiState whose subscription call advances the current snapshot, as if the
+//! node published one in the gap between the cache reading it and subscribing.
+class PublishesWhileSubscribing : public qt_test::FakeGuiState
+{
+public:
+    std::unique_ptr<interfaces::Handler> handleChanged(ChangedFn fn) override
+    {
+        // Moves the current snapshot on without delivering it.
+        m_snapshot = Synced(m_snapshot.sequence + 1, false);
+
+        return qt_test::FakeGuiState::handleChanged(std::move(fn));
+    }
+};
 } // anonymous namespace
+
+void PushedStateTests::a_snapshot_published_while_subscribing_is_not_lost()
+{
+    PublishesWhileSubscribing gui_state;
+    gui_state.m_snapshot = Synced(5, false);
+
+    GuiStateCache cache(gui_state);
+
+    QCOMPARE(cache.snapshot().sequence, uint64_t{6});
+}
 
 void PushedStateTests::psgt_page_status_from_push()
 {
