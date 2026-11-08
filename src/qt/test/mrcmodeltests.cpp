@@ -168,6 +168,12 @@ void MRCModelTests::a_failed_quote_is_a_create_error_not_a_balance_error()
 {
     Fixture f;
     f.Push(1, Figures(100, 10));
+    // A later block, so the model is past its first one.
+    interfaces::MRCSnapshot later = Figures(100, 10);
+    later.block_height = 101;
+    f.Push(2, later);
+    MRCRequestPage page(nullptr, &f.model);
+    QCOMPARE(f.model.getMRCModelStatus(), MRCModel::ModelStatus::VALID);
 
     CAmount boost = 5;
     f.model.setMRCFeeBoost(boost);
@@ -186,6 +192,33 @@ void MRCModelTests::a_failed_quote_is_a_create_error_not_a_balance_error()
     QCOMPARE(status, MRCRequestStatus::CREATE_ERROR);
     QCOMPARE(error, QString("The MRC figures could not be computed: x"));
     QVERIFY(!f.model.isQuoteUpdating());
+
+    // The chain state of the last good figures stands: the page shows the
+    // error, not a block version message.
+    QCOMPARE(f.model.getMRCModelStatus(), MRCModel::ModelStatus::VALID);
+    QVERIFY(!page.findChild<QWidget*>("mrcStatusSubmitFrame")->isHidden());
+    QVERIFY(page.findChild<QWidget*>("waitForNextBlockUpdateFrame")->isHidden());
+    QVERIFY(page.findChild<QLabel*>("ErrorIconLabel")->toolTip().contains("could not be computed"));
+    QVERIFY(!page.findChild<QPushButton*>("mrcSubmitButton")->isEnabled());
+}
+
+void MRCModelTests::a_late_quote_does_not_undo_an_out_of_sync_push()
+{
+    Fixture f;
+    f.Push(1, Figures(100, 10));
+
+    CAmount boost = 5;
+    f.model.setMRCFeeBoost(boost);
+    QTRY_COMPARE(f.gui_state.m_quote_requests, 1);
+    const uint64_t id = f.gui_state.m_last_quote_request_id;
+
+    f.gui_state.Push(PushedAbsent(2));
+    Deliver();
+    QCOMPARE(f.model.getMRCModelStatus(), MRCModel::ModelStatus::OUT_OF_SYNC);
+
+    f.gui_state.AnswerQuote(id, Figures(222, 10));
+    Deliver();
+    QCOMPARE(f.model.getMRCModelStatus(), MRCModel::ModelStatus::OUT_OF_SYNC);
 }
 
 void MRCModelTests::submit_sends_the_confirmed_terms()

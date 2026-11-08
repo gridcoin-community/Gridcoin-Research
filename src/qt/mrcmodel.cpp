@@ -118,6 +118,7 @@ void MRCModel::setMRCFeeBoost(CAmount& fee_boost)
     m_mrc_fee_boost = fee_boost;
     m_submit_notice.clear();
     m_fresh_terms.reset();
+    m_quote_failure.reset();
 
     // Whatever quote is out or waiting was for another boost.
     ++m_quote_id;
@@ -307,6 +308,11 @@ void MRCModel::finishSubmit()
                 .arg(BitcoinUnits::formatWithUnit(display_unit, result.fresh_fee),
                      BitcoinUnits::formatWithUnit(display_unit, result.fresh_reward - result.fresh_fee));
 
+        // issueQuote() marks the figures as updating, which would disable
+        // Submit. Cleared again on purpose: the user may accept the fresh terms
+        // at once, and Submit always sends exactly the terms shown at the click
+        // (the core refuses if they moved again), so a quote landing later only
+        // replaces the figures with newer ones.
         ++m_quote_id;
         issueQuote();
         m_quote_updating = false;
@@ -382,6 +388,15 @@ void MRCModel::applyPushedState()
 
     m_snap_present = pushed.has_mrc;
     m_fresh_terms.reset();
+    m_quote_failure.reset();
+
+    if (!pushed.has_mrc) {
+        // The core is out of sync: a quote still on its way is for a state that
+        // is gone, and must not bring the figures back.
+        ++m_quote_id;
+        m_quote_updating = false;
+        m_quote_timer.stop();
+    }
 
     if (pushed.has_mrc) {
         m_snap = pushed.mrc;
@@ -410,8 +425,17 @@ void MRCModel::applyQuote(uint64_t request_id, const interfaces::MRCSnapshot& qu
 
     m_quote_updating = false;
     m_fresh_terms.reset();
-    m_snap = quote;
-    m_snap_present = !quote.out_of_sync;
+
+    if (quote.create_error && !quote.block_version_valid && !quote.out_of_sync) {
+        // A quote that failed to compute is answered with the error alone.
+        // Keep the last good figures and chain state (block height, version
+        // gate) and show the error over them.
+        m_quote_failure = QString::fromStdString(quote.create_error_msg);
+    } else {
+        m_quote_failure.reset();
+        m_snap = quote;
+        m_snap_present = !quote.out_of_sync;
+    }
 
     refresh();
     emit mrcChanged();
@@ -464,13 +488,11 @@ void MRCModel::refresh()
 
     m_block_height = snap.block_height;
 
-    // A quote that failed to compute is answered with the error alone: nothing
-    // else is filled in, so classify it before the balance and version gates,
-    // which would read its zeroes as a short balance or an old block version.
-    if (snap.create_error && !snap.block_version_valid) {
+    // A quote that failed to compute: the error wins over the figures kept.
+    if (m_quote_failure) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::CREATE_ERROR;
-        m_mrc_error_desc = QString::fromStdString(snap.create_error_msg);
+        m_mrc_error_desc = *m_quote_failure;
         return;
     }
 

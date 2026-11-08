@@ -207,6 +207,9 @@ private:
     std::optional<std::pair<CAmount, CAmount>> m_fresh_terms;
     QString m_submit_notice;
 
+    //! The message of the latest quote, if it failed to compute.
+    std::optional<QString> m_quote_failure;
+
 signals:
     void mrcChanged();
     void walletStatusChangedSignal();
