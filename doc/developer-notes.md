@@ -1068,6 +1068,15 @@ Strings and formatting
   - *Rationale*: Confusion of these can result in runtime exceptions due to
     formatting mismatch, and it is easy to get wrong because of subtly similar naming.
 
+- Every log call (`LogPrintf`, `LogPrint`, `error`) writes exactly one line; the logger appends the
+  newline. Do not end a format string with `\n`: it leaves a blank line in `debug.log`.
+
+  - *Rationale*: This differs from Bitcoin Core on purpose. There the caller must append the `\n`,
+    and a call that forgets it runs the next message, from whichever thread logs next, onto the same
+    line without its timestamp, so two unrelated messages read as one. Starting a new line is the
+    logger's job, not every caller's. When porting from Bitcoin Core, drop the trailing `\n` from its
+    log calls.
+
 - Use `std::string`, avoid C string manipulation functions.
 
   - *Rationale*: C++ string handling is marginally safer, less scope for
