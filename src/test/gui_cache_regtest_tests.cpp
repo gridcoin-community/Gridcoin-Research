@@ -16,13 +16,17 @@
 #include "interfaces/gui_state.h"
 #include "node/gui_cache.h"
 #include "primitives/block.h"
+#include "gridcoin/staking/kernel.h"
 #include "sync.h"
 #include "test/chain_setup.h"
+#include "util/time.h"
 
 #include <boost/test/unit_test.hpp>
 
 #include <chrono>
+#include <algorithm>
 #include <condition_variable>
+#include <deque>
 #include <future>
 #include <memory>
 #include <string>
@@ -210,5 +214,155 @@ BOOST_AUTO_TEST_CASE(setbestchain_keeps_the_cache_at_the_tip_without_waiting_on_
     // Stopped and unpublished: SetBestChain no longer reaches it.
     BOOST_CHECK(node::GetGuiCache() == nullptr);
 }
+
+#ifdef DEBUG_LOCKORDER
+namespace {
+
+//!
+//! \brief Stands in for the GUI thread: a thread that carries the GUI mark, to
+//! which the cache's deliveries are handed, and which does what the GUI does on
+//! a delivery, that is, reads the pushed state. It is the GUI's only contact
+//! with the core, so a cs_main taken anywhere on this thread is a report.
+//!
+class MarkedGuiThread
+{
+public:
+    MarkedGuiThread() : m_thread([this] { Run(); }) {}
+
+    ~MarkedGuiThread()
+    {
+        {
+            LOCK(m_mutex);
+            m_stop = true;
+        }
+        m_cv.notify_all();
+        m_thread.join();
+    }
+
+    MarkedGuiThread(const MarkedGuiThread&) = delete;
+    MarkedGuiThread& operator=(const MarkedGuiThread&) = delete;
+
+    //! The cache's delivery handler: runs on the cache's timer thread and only
+    //! queues, as the Qt side's queued connection does.
+    node::GuiCache::DeliverFn Make()
+    {
+        return [this](const interfaces::GuiStateSnapshot& snap) {
+            {
+                LOCK(m_mutex);
+                m_queue.push_back(snap.height);
+            }
+            m_cv.notify_all();
+        };
+    }
+
+    //! Wait until a delivery at \p height has been handled on the marked thread.
+    bool WaitForHeight(int height)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + WAIT_LIMIT;
+        WAIT_LOCK(m_mutex, lock);
+        while (m_handled_height < height) {
+            if (m_cv.wait_until(lock, deadline) == std::cv_status::timeout) return false;
+        }
+        return true;
+    }
+
+    size_t Handled()
+    {
+        LOCK(m_mutex);
+        return m_handled;
+    }
+
+    //! Set by the marked thread if it saw a state that was not the delivered one.
+    bool Stale()
+    {
+        LOCK(m_mutex);
+        return m_stale;
+    }
+
+private:
+    void Run()
+    {
+        MarkGuiThread();
+
+        WAIT_LOCK(m_mutex, lock);
+        while (true) {
+            while (m_queue.empty() && !m_stop) m_cv.wait(lock);
+            if (m_queue.empty()) return;
+
+            const int height = m_queue.front();
+            m_queue.pop_front();
+
+            // What the GUI does on a delivery: read the pushed copy. This takes
+            // the cache's leaf lock only, so m_mutex is released around it to
+            // keep the two apart.
+            int read = -1;
+            {
+                REVERSE_LOCK(lock);
+                read = node::GetGuiCache()->Current().height;
+            }
+
+            if (read < height) m_stale = true;
+            ++m_handled;
+            m_handled_height = std::max(m_handled_height, height);
+            m_cv.notify_all();
+        }
+    }
+
+    Mutex m_mutex;
+    std::condition_variable m_cv;
+    std::deque<int> m_queue GUARDED_BY(m_mutex);
+    bool m_stop GUARDED_BY(m_mutex){false};
+    bool m_stale GUARDED_BY(m_mutex){false};
+    size_t m_handled GUARDED_BY(m_mutex){0};
+    int m_handled_height GUARDED_BY(m_mutex){-1};
+    std::thread m_thread;
+};
+
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(a_simulated_sync_reaches_the_gui_without_a_gui_thread_cs_main)
+{
+    const uint64_t reports_before = GuiThreadCsMainReports();
+
+    MarkedGuiThread gui;
+    int tip = -1;
+    {
+        // The real cache with the production compute, a GUI subscribed.
+        auto cache = std::make_unique<node::GuiCache>(node::MakeProductionCompute(), gui.Make(),
+                                                      50ms, 30000ms);
+        cache->AddSubscriber();
+        node::StartGuiCache(std::move(cache));
+
+        // 200 blocks, back to back, as a catch-up connects them.
+        std::string err;
+        // The premine has few outputs, and an output staked into a block can stake
+        // again only after the minimum stake age, so the mock clock is moved past
+        // that age before each block. No wall-clock time passes.
+        for (int i = 0; i < 200; ++i) {
+            SetMockTime(GetMockTime().count() + static_cast<int64_t>(nStakeMinAge) + 3600);
+
+            CBlock block;
+            if (!grc_test::CreateAndProcessBlock(block, err)) break;
+        }
+        BOOST_REQUIRE_MESSAGE(err.empty(), err);
+
+        {
+            LOCK(cs_main);
+            tip = nBestHeight;
+        }
+
+        // The tip reaches the marked thread, which read it from the cache.
+        BOOST_CHECK(gui.WaitForHeight(tip));
+        BOOST_CHECK(gui.Handled() > 0U);
+        BOOST_CHECK(!gui.Stale());
+
+        node::StopGuiCache();
+    }
+
+    // Nothing took cs_main on the marked thread: the GUI's only contact with
+    // the core is the cache's leaf-locked copy.
+    BOOST_CHECK_EQUAL(GuiThreadCsMainReports(), reports_before);
+}
+#endif // DEBUG_LOCKORDER
 
 BOOST_AUTO_TEST_SUITE_END()

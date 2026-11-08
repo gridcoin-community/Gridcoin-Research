@@ -871,6 +871,7 @@ Gridcoin is a multi-threaded application. Key threads include:
 | `ThreadDNSAddressSeed` | `src/net.cpp` | Resolves DNS seeds to bootstrap peer discovery |
 | `ThreadDumpAddress` | `src/net.cpp` | Periodically dumps known peer addresses to `peers.dat` |
 | RPC threads | `src/rpc/server.cpp` | Thread pool serving JSON-RPC requests |
+| `grc-guistate` | `src/node/gui_cache.cpp` | The GUI state cache's timer thread: computes the state the GUI needs (under `cs_main`, on this thread) and pushes it to the subscribed GUI; runs only while a GUI is subscribed |
 | Scheduler | `src/scheduler.cpp` | Runs deferred and periodic tasks |
 
 Ignoring IDE/editor files
@@ -1357,6 +1358,42 @@ GUI
 
   - *Rationale*: Blocking the GUI thread can increase latency, and lead to
     hangs and deadlocks.
+
+- The GUI does not take `cs_main`. The core computes the state and pushes it.
+
+  The rule, in jco's words: "Look blockchain and state machine stuff that
+  requires cs_main should be done by the core at all times AND PUSHED to the
+  GUI. The only exceptions are actions INITIATED BY THE USER, such as a spend,
+  and similar that REQUIRE a momentary canonical lock on the core to complete
+  the action properly. (The lock is taken in the core after the IPC boundary.)"
+
+  What follows from it:
+
+  - The GUI never takes `cs_main`, directly or through an `interfaces::` method
+    that takes it. It reads the copy the core pushed (`GuiState` and the other
+    pushed parts), which is held under a leaf lock and costs the GUI thread no
+    wait on block connection.
+  - A user action (a spend, a vote, an MRC submission) is the one exception.
+    The lock is taken in the core, after the IPC boundary, for the action only.
+    The action re-checks the state in the core and does not trust what the GUI
+    last showed.
+  - A push is computed on a core worker thread after the tip changes, never
+    inside block connection, and is coalesced during sync, so a catch-up makes a
+    few pushes and not one per block.
+  - The GUI thread never blocks, even on a user action: the action runs off the
+    GUI thread and reports back.
+  - A rare race is never fixed with a lock that makes a freeze certain for
+    every user who is syncing.
+
+  In a monolithic build with `ENABLE_DEBUG_LOCKORDER`, the Qt main thread is
+  marked, and taking `cs_main` on it logs a `GUI-THREAD-CS_MAIN` line with the
+  file and line. The check only logs: it never aborts. Every such line is a
+  place that still breaks the rule and is to be fixed, not silenced. A
+  `-multiprocess` GUI is not marked, because it has no `cs_main`.
+
+  - *Rationale*: Block connection holds `cs_main`, so a GUI thread that waits
+    for it waits for the block in flight, and every click queued behind it
+    stalls.
 
 Subtrees
 ----------

@@ -40,6 +40,7 @@
 #endif
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
+#include "sync.h"
 #include "txdb.h"
 #include "util.h"
 #include "util/dir_permissions.h"
@@ -1122,6 +1123,13 @@ int main(int argc, char *argv[])
     interfaces::Init* interface_init = local_init.get();
     GuiIpcInfo ipc_info;
     const bool multiprocess = gArgs.GetBoolArg("-multiprocess", false);
+
+    // Mark this, the Qt main thread, so that a DEBUG_LOCKORDER build reports any
+    // cs_main taken on it (sync.h). Only the monolithic build: a -multiprocess
+    // GUI runs no core and has no cs_main of its own to take. The mode is known
+    // only here, after the arguments are parsed, which is why the mark is not
+    // beside the thread name above.
+    if (!multiprocess) MarkGuiThread();
 #ifdef ENABLE_MULTIPROCESS
     std::optional<ipc::GuiConnection> node_connection;
     if (multiprocess)
