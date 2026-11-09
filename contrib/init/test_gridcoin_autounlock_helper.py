@@ -16,6 +16,7 @@ import os
 import socket
 import sys
 import tempfile
+import threading
 import unittest
 
 HELPER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gridcoin_autounlock_helper.py")
@@ -51,10 +52,10 @@ class TestEnvironment(unittest.TestCase):
 
 
 class TestDecide(unittest.TestCase):
-    def decide(self, peer_pid=PEER, peer_uid=UID, pidfd=7, accept_ticks=1000, main=PEER,
-               starts=(500, 500), pidfd_pid=PEER):
+    def decide(self, peer_pid=PEER, peer_uid=UID, answer_pid=PEER, answer_uid=UID, pidfd=7, challenge_ticks=1000,
+               main=PEER, starts=(500, 500), pidfd_pid=PEER):
         starts = iter(starts)
-        return h.decide(peer_pid, peer_uid, UID, pidfd, accept_ticks,
+        return h.decide(peer_pid, peer_uid, answer_pid, answer_uid, UID, pidfd, challenge_ticks,
                         lambda: main, lambda pid: next(starts), lambda fd: pidfd_pid)
 
     def test_main_pid_peer_served(self):
@@ -69,7 +70,7 @@ class TestDecide(unittest.TestCase):
     def test_cgroup_child_refused(self):
         # a child in the unit's cgroup is not MainPID; no cgroup lookup exists
         self.assertFalse(hasattr(h, "cgroup_members"))
-        allowed, reason = self.decide(peer_pid=PEER + 5, pidfd_pid=PEER + 5, main=PEER)
+        allowed, reason = self.decide(peer_pid=PEER + 5, answer_pid=PEER + 5, pidfd_pid=PEER + 5, main=PEER)
         self.assertFalse(allowed)
         self.assertEqual(reason, "not the main process")
 
@@ -79,14 +80,26 @@ class TestDecide(unittest.TestCase):
         self.assertEqual(reason, "not the main process")
 
     def test_wrong_uid_refused(self):
-        allowed, reason = h.decide(PEER, UID + 1, UID, 7, 1000, never, never, never)
+        allowed, reason = h.decide(PEER, UID + 1, PEER, UID, UID, 7, 1000, never, never, never)
+        self.assertFalse(allowed)
+        self.assertEqual(reason, "uid")
+
+    def test_answer_under_another_uid_refused(self):
+        allowed, reason = h.decide(PEER, UID, PEER, UID + 1, UID, 7, 1000, never, never, never)
         self.assertFalse(allowed)
         self.assertEqual(reason, "uid")
 
     def test_unknown_pid_refused(self):
-        allowed, reason = h.decide(0, UID, UID, 7, 1000, never, never, never)
+        allowed, reason = h.decide(0, UID, 0, UID, UID, 7, 1000, never, never, never)
         self.assertFalse(allowed)
         self.assertEqual(reason, "pid unknown")
+
+    def test_answer_from_another_process_refused(self):
+        # The process that connected did not send the answer, with a pidfd or without.
+        for pidfd in (7, None):
+            allowed, reason = h.decide(PEER, UID, PEER + 1, UID, UID, pidfd, 1000, never, never, never)
+            self.assertFalse(allowed)
+            self.assertEqual(reason, "the answer came from another process")
 
     def test_no_main_process_refused(self):
         allowed, reason = self.decide(main=0)
@@ -97,14 +110,21 @@ class TestDecide(unittest.TestCase):
         allowed, reason = self.decide(pidfd=None)
         self.assertTrue(allowed, reason)
 
-    def test_fallback_refuses_process_started_after_the_helper(self):
-        allowed, reason = h.decide(PEER, UID, UID, None, 1000, never, lambda pid: 1001, never)
-        self.assertFalse(allowed)
-        self.assertEqual(reason, "started after this helper")
+    def test_fallback_refuses_a_process_started_once_the_challenge_was_taken(self):
+        # The answer was sent after the challenge, so a process that started in the challenge's tick or later
+        # cannot be the one that sent it: its pid was another process's then.
+        for start in (1000, 1001):
+            allowed, reason = h.decide(PEER, UID, PEER, UID, UID, None, 1000, never, lambda pid: start, never)
+            self.assertFalse(allowed)
+            self.assertEqual(reason, "started after the challenge")
+
+    def test_fallback_served_for_a_process_started_before_the_challenge(self):
+        allowed, reason = self.decide(pidfd=None, starts=(999, 999))
+        self.assertTrue(allowed, reason)
 
     def test_fallback_refuses_an_unreadable_start_time_and_says_why(self):
         # A /proc mounted with hidepid hides the core's stat from the helper's account.
-        allowed, reason = h.decide(PEER, UID, UID, None, 1000, never, lambda pid: None, never)
+        allowed, reason = h.decide(PEER, UID, PEER, UID, UID, None, 1000, never, lambda pid: None, never)
         self.assertFalse(allowed)
         self.assertIn("hidepid", reason)
 
@@ -122,7 +142,7 @@ class TestDecide(unittest.TestCase):
         def fail():
             raise h.SystemdQueryError("boom")
         with self.assertRaises(h.SystemdQueryError):
-            h.decide(PEER, UID, UID, 7, 1000, fail, never, never)
+            h.decide(PEER, UID, PEER, UID, UID, 7, 1000, fail, never, never)
 
 
 class TestCredential(unittest.TestCase):
@@ -190,6 +210,48 @@ class TestProc(unittest.TestCase):
         self.addCleanup(a.close)
         self.addCleanup(b.close)
         self.assertEqual(h.peer_credentials(a), (os.getpid(), os.getuid(), os.getgid()))
+
+    def answer_pair(self):
+        a, b = socket.socketpair()
+        self.addCleanup(a.close)
+        self.addCleanup(b.close)
+        a.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+        return a, b
+
+    def test_answer_carries_the_senders_pid(self):
+        a, b = self.answer_pair()
+        b.sendall(b"0123456789abcdef")
+        self.assertEqual(h.read_answer(a, 16, 1.0), (b"0123456789abcdef", os.getpid(), os.getuid()))
+
+    def test_answer_sent_by_a_child_carries_the_childs_pid(self):
+        # The kernel stamps the process that sends, not the one that connected, and keeps the stamp after it exits.
+        a, b = self.answer_pair()
+        pid = os.fork()
+        if pid == 0:
+            b.sendall(b"0123456789abcdef")
+            os._exit(0)
+        os.waitpid(pid, 0)
+        self.assertEqual(h.read_answer(a, 16, 1.0), (b"0123456789abcdef", pid, os.getuid()))
+
+    def test_answer_split_between_two_processes_is_none(self):
+        a, b = self.answer_pair()
+        pid = os.fork()
+        if pid == 0:
+            b.sendall(b"01234567")
+            os._exit(0)
+        os.waitpid(pid, 0)
+        b.sendall(b"89abcdef")
+        self.assertIsNone(h.read_answer(a, 16, 1.0))
+
+    def test_short_answer_is_none(self):
+        a, b = self.answer_pair()
+        b.sendall(b"01234567")
+        b.shutdown(socket.SHUT_WR)
+        self.assertIsNone(h.read_answer(a, 16, 1.0))
+
+    def test_no_answer_is_none_once_the_wait_is_over(self):
+        a, b = self.answer_pair()
+        self.assertIsNone(h.read_answer(a, 16, 0.05))
 
     def test_start_ticks_without_close_paren(self):
         with tempfile.TemporaryDirectory() as proc:
@@ -268,13 +330,13 @@ class TestServe(unittest.TestCase):
         # a sentinel credential directory that must stay untouched on refusal
         self.sentinel = os.path.join(self.tmp.name, "never-opened")
         self.opened = []
+        self.challenges = []
         self.log = io.StringIO()
 
     def deps(self, **over):
         d = {
             "main_pid": lambda unit: os.getpid(),
             "start_ticks": lambda pid, proc="/proc": 1,
-            "self_start_ticks": lambda: 10 ** 9,
             "boottime_ticks": lambda: 10 ** 9,
             "pidfd": lambda conn: None,
             "pidfd_pid": lambda fd: os.getpid(),
@@ -282,6 +344,7 @@ class TestServe(unittest.TestCase):
             "uid_of_user": lambda name: os.getuid(),
             "log": self.log,
             "accept_timeout": 2.0,
+            "answer_timeout": 2.0,
         }
         d.update(over)
         return d
@@ -290,9 +353,14 @@ class TestServe(unittest.TestCase):
         self.opened.append(cred_dir)
         return b"hunter2"
 
-    def run_serve(self, **over):
-        # serve through a unix listener
-        path = os.path.join(self.tmp.name, "s.sock")
+    @staticmethod
+    def echo(conn, challenge):
+        conn.sendall(challenge)
+
+    def run_serve(self, answer=None, **over):
+        # Serve through a unix listener. The client, on a thread of this process, reads the challenge, answers it
+        # with answer(conn, challenge) (by default it sends it back) and reads the rest to end of file.
+        path = os.path.join(self.tmp.name, "s%d.sock" % len(self.challenges))
         lst = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         lst.bind(path)
         lst.listen(1)
@@ -300,15 +368,32 @@ class TestServe(unittest.TestCase):
         c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.addCleanup(c.close)
         c.connect(path)
+        c.settimeout(10)
+        got = {"challenge": b"", "data": b""}
+
+        def client():
+            while len(got["challenge"]) < h.CHALLENGE_BYTES:
+                chunk = c.recv(h.CHALLENGE_BYTES - len(got["challenge"]))
+                if not chunk:
+                    return
+                got["challenge"] += chunk
+            (answer or self.echo)(c, got["challenge"])
+            while True:
+                chunk = c.recv(100)
+                if not chunk:
+                    return
+                got["data"] += chunk
+
+        thread = threading.Thread(target=client)
+        thread.start()
         env = {"CREDENTIALS_DIRECTORY": self.sentinel}
-        rc = h.serve_once(os.dup(lst.fileno()), "gridcoinresearchd@alice.service", "alice", env, self.deps(**over))
-        data = b""
-        while True:
-            chunk = c.recv(100)
-            if not chunk:
-                break
-            data += chunk
-        return rc, data
+        try:
+            rc = h.serve_once(os.dup(lst.fileno()), "gridcoinresearchd@alice.service", "alice", env,
+                              self.deps(**over))
+        finally:
+            thread.join(10)
+        self.challenges.append(got["challenge"])
+        return rc, got["data"]
 
     def test_served(self):
         rc, data = self.run_serve()
@@ -318,14 +403,52 @@ class TestServe(unittest.TestCase):
         self.assertIn("served gridcoinresearchd@alice.service main pid", self.log.getvalue())
         self.assertNotIn("hunter2", self.log.getvalue())
 
-    def test_fallback_bound_is_the_helpers_own_start(self):
-        # The peer started after this helper did, though before the accept: refused, nothing read.
-        rc, data = self.run_serve(start_ticks=lambda pid, proc="/proc": 600, self_start_ticks=lambda: 500,
-                                  boottime_ticks=lambda: 10 ** 9)
+    def test_each_connection_gets_a_fresh_challenge(self):
+        self.run_serve()
+        self.run_serve()
+        self.assertEqual([len(c) for c in self.challenges], [h.CHALLENGE_BYTES, h.CHALLENGE_BYTES])
+        self.assertNotEqual(self.challenges[0], self.challenges[1])
+
+    def test_fallback_bound_is_the_time_of_the_challenge(self):
+        # The peer started in the tick the challenge was taken in: refused, nothing read.
+        rc, data = self.run_serve(start_ticks=lambda pid, proc="/proc": 600, boottime_ticks=lambda: 600)
         self.assertEqual(rc, h.EXIT_REFUSED)
         self.assertEqual(data, b"")
         self.assertEqual(self.opened, [])
-        self.assertIn("started after this helper", self.log.getvalue())
+        self.assertIn("started after the challenge", self.log.getvalue())
+        # One tick earlier it is served.
+        rc, data = self.run_serve(start_ticks=lambda pid, proc="/proc": 599, boottime_ticks=lambda: 600)
+        self.assertEqual(rc, h.EXIT_SERVED)
+        self.assertEqual(data, b"hunter2")
+
+    def test_wrong_answer_reads_no_credential(self):
+        rc, data = self.run_serve(answer=lambda conn, challenge: conn.sendall(bytes(len(challenge))))
+        self.assertEqual(rc, h.EXIT_REFUSED)
+        self.assertEqual(data, b"")
+        self.assertEqual(self.opened, [])
+        self.assertIn("the challenge was not answered", self.log.getvalue())
+
+    def test_no_answer_reads_no_credential(self):
+        rc, data = self.run_serve(answer=lambda conn, challenge: None, answer_timeout=0.1)
+        self.assertEqual(rc, h.EXIT_REFUSED)
+        self.assertEqual(data, b"")
+        self.assertEqual(self.opened, [])
+        self.assertIn("the challenge was not answered", self.log.getvalue())
+
+    def test_answer_from_a_child_process_reads_no_credential(self):
+        # Another process answers on the connection the main process made: the kernel's stamp names it.
+        def from_child(conn, challenge):
+            pid = os.fork()
+            if pid == 0:
+                conn.sendall(challenge)
+                os._exit(0)
+            os.waitpid(pid, 0)
+
+        rc, data = self.run_serve(answer=from_child)
+        self.assertEqual(rc, h.EXIT_REFUSED)
+        self.assertEqual(data, b"")
+        self.assertEqual(self.opened, [])
+        self.assertIn("the answer came from another process", self.log.getvalue())
 
     def test_refusal_sends_nothing(self):
         rc, data = self.run_serve(main_pid=lambda unit: os.getpid() + 1)

@@ -14,6 +14,10 @@
 #include <string>
 
 namespace autounlock {
+//! The length of the helper's challenge, which the client sends back before the passphrase comes; CHALLENGE_BYTES in
+//! contrib/init/gridcoin_autounlock_helper.py is the same.
+static constexpr size_t CHALLENGE_BYTES{16};
+
 //! The retry budget of one fetch. The wait before attempt n+1 is first_delay * 2^(n-1), so the defaults wait 1, 2, 4
 //! and 8 s between five attempts, and with a receive timeout of 10 s per attempt the whole fetch takes at most about
 //! 65 s. That stays far below the start timeout of the service unit, which matters because the autounlock runs before
@@ -29,10 +33,12 @@ struct SocketFetchParams {
 //! error: "relative path", "path too long" or "connect failed: <strerror>".
 int ConnectAutoUnlockSocket(const fs::path& socket_path, std::string& error);
 
-//! Read the passphrase from the helper listening on socket_path. The client sends nothing; the helper writes the
-//! passphrase and closes, so the reply is read to end of file. Zero bytes, more than max_bytes, a timeout or a failure to
-//! connect is a failed attempt, which is logged by reason (never the data) and retried within the budget. Returns
-//! nullopt when the attempts are used up, when the path can never work, or once a shutdown is requested.
+//! Read the passphrase from the helper listening on socket_path. The helper first sends a challenge of CHALLENGE_BYTES
+//! bytes, which the client sends back: the kernel stamps that answer with this process's pid, which the helper checks
+//! against the core unit's main process. The helper then writes the passphrase and closes, so the reply is read to end
+//! of file. Zero bytes, more than max_bytes, a timeout (receive_timeout covers the challenge and the reply together) or
+//! a failure to connect is a failed attempt, which is logged by reason (never the data) and retried within the budget.
+//! Returns nullopt when the attempts are used up, when the path can never work, or once a shutdown is requested.
 std::optional<SecureString> FetchFromSocket(const fs::path& socket_path, const SocketFetchParams& params = {});
 } // namespace autounlock
 

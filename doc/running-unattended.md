@@ -337,9 +337,11 @@ How it works: at each start, once the wallet is loaded, the core connects to tha
 helper, `gridcoin-autounlock@alice.service`, under the system account `gridcoin-autounlock` (testnet
 `gridcointestnet-autounlock`), which no desktop process uses, with the credential decrypted for that account
 alone. The helper serves the passphrase only to the main process of `gridcoinresearchd@alice.service` as
-systemd records it (a child of the core, such as a notify command, is refused), and exits. The core unlocks for
-staking only, never fully, and wipes its copy. If the helper does not serve it, the core tries five times over
-about a minute, then logs why and stays locked. The core never sends anything on that socket.
+systemd records it (a child of the core, such as a notify command, is refused), and exits. Before it serves, it
+sends a random challenge, which the core sends back: the kernel marks that answer with the process that sent it,
+so the helper knows the main process answered after the challenge went out. The core unlocks for staking only,
+never fully, and wipes its copy. If the helper does not serve it, the core tries five times over about a minute,
+then logs why and stays locked. The core sends nothing else on that socket.
 
 ### Changing the passphrase, turning autounlock off, and a suspected compromise
 
@@ -554,7 +556,7 @@ which prints `Nothing to switch over.` when there is nothing left.
 
   | Status | Journal line | Meaning |
   |---|---|---|
-  | 3 | `refused peer pid … uid …: <reason>` | What connected was not the main process of the core's unit, or ran as another account. A core started by hand is refused; so is any other program. On a kernel before 6.5 (Debian 12 runs 6.1) the helper reads the core's start time from `/proc`; with `/proc` mounted with `hidepid`, the reason is `start time unreadable (is /proc mounted with hidepid?)` and autounlock cannot work. |
+  | 3 | `refused peer pid … uid …: <reason>` | What connected was not the main process of the core's unit, or ran as another account. A core started by hand is refused; so is any other program. `the challenge was not answered` and `the answer came from another process` mean the same: the challenge did not come back, or came back from another process. On a kernel before 6.5 (Debian 12 runs 6.1) the helper reads the core's start time from `/proc`, and a process that started after the challenge went out is refused (`started after the challenge`); with `/proc` mounted with `hidepid`, the reason is `start time unreadable (is /proc mounted with hidepid?)` and autounlock cannot work. |
   | 4 | `no connection within 5 s` | Started, but nothing was waiting on the socket. Harmless. |
   | 5 | `credential unusable: missing`, `empty`, `too long` or `not valid UTF-8` | Encrypt the passphrase again. |
   | 6 | `systemd query failed for <unit>: …` | The helper could not ask systemd for the core's main process, so it read no credential. Usually D-Bus (below). |

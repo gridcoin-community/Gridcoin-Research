@@ -57,18 +57,23 @@ struct ShutdownForThisCase
     ~ShutdownForThisCase() { AbortShutdown(); }
 };
 
-//! A helper stand-in. It binds the socket after bind_delay, accepts connections, writes the reply to each one and
-//! closes it. It stops after max_connections or when asked to. With a drip interval it instead sends one byte per
-//! interval and never closes, until the client goes away. It sets flags only, which the main thread checks, because
-//! Boost.Test assertions are not safe on this thread.
+//! The challenge the stand-in sends, CHALLENGE_BYTES long.
+const std::string CHALLENGE{"challenge-012345"};
+
+//! A helper stand-in. It binds the socket after bind_delay and accepts connections. To each one it sends the
+//! challenge, waits up to two seconds for it to come back, and then writes the reply and closes the connection; an
+//! answer that is missing or differs gets no reply. With an empty challenge it writes the reply at once. It stops
+//! after max_connections or when asked to. With a drip interval it instead sends one byte per interval and never
+//! closes, until the client goes away. It sets flags only, which the main thread checks, because Boost.Test
+//! assertions are not safe on this thread.
 class Listener
 {
 public:
     Listener(const fs::path& path, std::string reply, int max_connections,
              std::chrono::milliseconds bind_delay = std::chrono::milliseconds(0),
-             std::chrono::milliseconds drip_interval = std::chrono::milliseconds(0))
+             std::chrono::milliseconds drip_interval = std::chrono::milliseconds(0), std::string challenge = CHALLENGE)
         : m_path(path), m_reply(std::move(reply)), m_max(max_connections), m_bind_delay(bind_delay),
-          m_drip_interval(drip_interval)
+          m_drip_interval(drip_interval), m_challenge(std::move(challenge))
     {
         if (bind_delay.count() == 0) {
             Bind();
@@ -89,6 +94,8 @@ public:
 
     int Accepted() const { return m_accepted; }
     bool Bound() const { return m_bound; }
+    //! The number of connections that sent the challenge back.
+    int Answered() const { return m_answered; }
 
 private:
     void Bind()
@@ -127,6 +134,14 @@ private:
 
             ++m_accepted;
 
+            if (m_drip_interval.count() == 0 && !m_challenge.empty()) {
+                if (!Challenge(conn)) {
+                    ::close(conn);
+                    continue;
+                }
+                ++m_answered;
+            }
+
             if (m_drip_interval.count() > 0) {
                 while (!m_stop && ::send(conn, "x", 1, MSG_NOSIGNAL) == 1) {
                     std::this_thread::sleep_for(m_drip_interval);
@@ -149,14 +164,48 @@ private:
         }
     }
 
+    //! Sends the challenge and reads the answer: true when the same bytes came back within two seconds.
+    bool Challenge(int conn)
+    {
+        const ssize_t sent = ::send(conn, m_challenge.data(), m_challenge.size(), MSG_NOSIGNAL);
+
+        if (sent != static_cast<ssize_t>(m_challenge.size())) {
+            return false;
+        }
+
+        std::string answer;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+
+        while (answer.size() < m_challenge.size() && std::chrono::steady_clock::now() < deadline) {
+            pollfd pfd{conn, POLLIN, 0};
+
+            if (::poll(&pfd, 1, 20) <= 0) {
+                continue;
+            }
+
+            char buffer[64];
+            const ssize_t n = ::recv(conn, buffer, std::min(sizeof(buffer), m_challenge.size() - answer.size()), 0);
+
+            if (n <= 0) {
+                return false;
+            }
+
+            answer.append(buffer, static_cast<size_t>(n));
+        }
+
+        return answer == m_challenge;
+    }
+
     fs::path m_path;
     std::string m_reply;
     int m_max;
     std::chrono::milliseconds m_bind_delay;
     std::chrono::milliseconds m_drip_interval;
+    std::string m_challenge;
     int m_fd{-1};
     std::atomic<bool> m_bound{false};
     std::atomic<int> m_accepted{0};
+    std::atomic<int> m_answered{0};
     std::atomic<bool> m_stop{false};
     std::thread m_thread;
 };
@@ -182,6 +231,22 @@ BOOST_AUTO_TEST_CASE(fetch_reads_passphrase_to_eof)
     const auto value = autounlock::FetchFromSocket(p, QuickParams());
     BOOST_REQUIRE(value.has_value());
     BOOST_CHECK(*value == "secret");
+    BOOST_CHECK_EQUAL(listener.Answered(), 1);
+}
+
+BOOST_AUTO_TEST_CASE(challenge_is_the_documented_length)
+{
+    BOOST_CHECK_EQUAL(CHALLENGE.size(), autounlock::CHALLENGE_BYTES);
+}
+
+BOOST_AUTO_TEST_CASE(helper_that_closes_before_its_challenge_is_a_refusal)
+{
+    TempDir dir;
+    const fs::path p = dir.path / "au.sock";
+    Listener listener(p, "", 100, std::chrono::milliseconds(0), std::chrono::milliseconds(0), /*challenge=*/"");
+
+    BOOST_CHECK(!autounlock::FetchFromSocket(p, QuickParams()).has_value());
+    BOOST_CHECK_EQUAL(listener.Accepted(), 5);
 }
 
 BOOST_AUTO_TEST_CASE(connected_fd_is_cloexec)
@@ -200,12 +265,14 @@ BOOST_AUTO_TEST_CASE(connected_fd_is_cloexec)
 
 BOOST_AUTO_TEST_CASE(zero_bytes_is_refusal)
 {
+    // The challenge is answered, and the helper then closes without a passphrase.
     TempDir dir;
     const fs::path p = dir.path / "au.sock";
     Listener listener(p, "", 100);
 
     BOOST_CHECK(!autounlock::FetchFromSocket(p, QuickParams()).has_value());
     BOOST_CHECK_EQUAL(listener.Accepted(), 5);
+    BOOST_CHECK_EQUAL(listener.Answered(), 5);
 }
 
 BOOST_AUTO_TEST_CASE(oversize_reply_refused)

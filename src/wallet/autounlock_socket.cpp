@@ -54,30 +54,21 @@ bool WaitUnlessShutdown(std::chrono::milliseconds delay)
     return !ShutdownRequested();
 }
 
-//! Reads to end of file into the secure string, through a stack buffer that is cleansed. Returns an empty string on
-//! success and the failure reason otherwise. Neither the bytes nor a copy of them is ever in a std::string.
-std::string ReadReply(int fd, const SocketFetchParams& params, SecureString& reply, bool& stopped)
+//! Waits until fd can be read, or is at end of file. Returns an empty string then, and otherwise the reason:
+//! "shutdown", with stopped set, "timed out" once the deadline has passed, or a failed poll.
+std::string WaitReadable(int fd, std::chrono::steady_clock::time_point deadline, bool& stopped)
 {
-    const auto deadline = std::chrono::steady_clock::now() + params.receive_timeout;
-    char buffer[256];
-    std::string reason;
-
-    // reserved up front so that appending never reallocates and leaves a stale copy behind
-    reply.reserve(params.max_bytes + 1);
-
     while (true) {
         if (ShutdownRequested()) {
             stopped = true;
-            reason = "shutdown";
-            break;
+            return "shutdown";
         }
 
         const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
                     deadline - std::chrono::steady_clock::now());
 
         if (remaining.count() <= 0) {
-            reason = "timed out";
-            break;
+            return "timed out";
         }
 
         pollfd pfd{fd, POLLIN, 0};
@@ -89,13 +80,82 @@ std::string ReadReply(int fd, const SocketFetchParams& params, SecureString& rep
                 continue;
             }
 
-            reason = "read failed: " + SysErrorString(errno);
-            break;
+            return "read failed: " + SysErrorString(errno);
         }
 
-        if (ready == 0) {
-            // the deadline is checked at the top of the loop
-            continue;
+        if (ready > 0) {
+            return {};
+        }
+    }
+}
+
+//! Reads the helper's challenge, CHALLENGE_BYTES bytes, and sends it back. The kernel stamps what this process sends
+//! with its pid, which the helper checks against the core unit's main process. Returns an empty string when the
+//! challenge was answered, and the failure reason otherwise.
+std::string AnswerChallenge(int fd, std::chrono::steady_clock::time_point deadline, bool& stopped)
+{
+    unsigned char challenge[CHALLENGE_BYTES];
+    size_t got = 0;
+
+    while (got < sizeof(challenge)) {
+        std::string reason = WaitReadable(fd, deadline, stopped);
+
+        if (!reason.empty()) {
+            return reason;
+        }
+
+        const ssize_t n = ::recv(fd, challenge + got, sizeof(challenge) - got, 0);
+
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
+            return "read failed: " + SysErrorString(errno);
+        }
+
+        if (n == 0) {
+            return got == 0 ? "the helper refused (see journalctl -u <helper unit>)" : "the challenge was cut short";
+        }
+
+        got += static_cast<size_t>(n);
+    }
+
+    size_t sent = 0;
+
+    while (sent < sizeof(challenge)) {
+        const ssize_t n = ::send(fd, challenge + sent, sizeof(challenge) - sent, MSG_NOSIGNAL);
+
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
+            return "write failed: " + SysErrorString(errno);
+        }
+
+        sent += static_cast<size_t>(n);
+    }
+
+    return {};
+}
+
+//! Reads to end of file into the secure string, through a stack buffer that is cleansed. Returns an empty string on
+//! success and the failure reason otherwise. Neither the bytes nor a copy of them is ever in a std::string.
+std::string ReadReply(int fd, const SocketFetchParams& params, std::chrono::steady_clock::time_point deadline,
+                      SecureString& reply, bool& stopped)
+{
+    char buffer[256];
+    std::string reason;
+
+    // reserved up front so that appending never reallocates and leaves a stale copy behind
+    reply.reserve(params.max_bytes + 1);
+
+    while (true) {
+        reason = WaitReadable(fd, deadline, stopped);
+
+        if (!reason.empty()) {
+            break;
         }
 
         // one byte more than the limit is enough to know that the reply is too long
@@ -200,8 +260,15 @@ std::optional<SecureString> FetchFromSocket(const fs::path& socket_path, const S
         const int fd = ConnectAutoUnlockSocket(socket_path, reason);
 
         if (fd >= 0) {
+            // One deadline for the attempt, the challenge and the passphrase together.
+            const auto deadline = std::chrono::steady_clock::now() + params.receive_timeout;
             bool stopped = false;
-            reason = ReadReply(fd, params, reply, stopped);
+            reason = AnswerChallenge(fd, deadline, stopped);
+
+            if (reason.empty()) {
+                reason = ReadReply(fd, params, deadline, reply, stopped);
+            }
+
             ::close(fd);
 
             if (stopped) {

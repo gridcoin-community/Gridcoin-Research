@@ -10,6 +10,11 @@ passphrase.
 It serves the passphrase to exactly one client, the MainPID of the bound core unit,
 and exits. Python 3 standard library only.
 
+Before serving, it sends a challenge of CHALLENGE_BYTES random bytes, which the client
+sends back. The kernel stamps that answer with the pid of the process that sent it, when
+it was sent, so the answer ties the connection to a process that existed after the
+challenge was taken.
+
 The decision order in decide() is the security property. The passphrase file is
 read only after decide() has allowed the peer, and a failed systemd query ends the
 run without opening the credential. Cgroup membership is never consulted, because a
@@ -20,6 +25,7 @@ Exit status
   unusable, 6 systemd query failed, 64 usage, 70 internal error.
 """
 
+import hmac
 import os
 import pwd
 import select
@@ -32,7 +38,11 @@ import time
 EXIT_SERVED, EXIT_REFUSED, EXIT_NO_CONNECTION, EXIT_CREDENTIAL, EXIT_SYSTEMD, EXIT_USAGE, EXIT_INTERNAL = 0, 3, 4, 5, 6, 64, 70
 
 ACCEPT_WAIT_SECONDS = 5
+ANSWER_WAIT_SECONDS = 10
 SEND_TIMEOUT_SECONDS = 10
+# The challenge's length; CHALLENGE_BYTES in src/wallet/autounlock_socket.h is the same.
+CHALLENGE_BYTES = 16
+UCRED = struct.Struct("3i")
 MAX_PASSPHRASE_BYTES = 1024
 CREDENTIAL_NAME = "wallet-passphrase"
 SYSTEMCTL_PATH = "/usr/bin:/bin"
@@ -68,6 +78,35 @@ def peer_credentials(conn):
     raw = conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
     pid, uid, gid = struct.unpack("3i", raw)
     return pid, uid, gid
+
+
+def read_answer(conn, size, timeout):
+    # The answer to the challenge as (bytes, pid, uid), the pid and uid those the kernel stamped on it for the process
+    # that sent it (SO_PASSCRED is set on conn). None when fewer than size bytes arrive within timeout seconds, or
+    # when what arrives carries no stamp, or the stamps of more than one process.
+    deadline = time.monotonic() + timeout
+    data = b""
+    sender = None
+    while len(data) < size:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        conn.settimeout(remaining)
+        try:
+            chunk, ancdata, _, _ = conn.recvmsg(size - len(data), socket.CMSG_SPACE(UCRED.size))
+        except OSError:
+            return None
+        if not chunk:
+            return None
+        stamp = None
+        for level, kind, payload in ancdata:
+            if level == socket.SOL_SOCKET and kind == socket.SCM_CREDENTIALS and len(payload) >= UCRED.size:
+                stamp = UCRED.unpack(payload[:UCRED.size])
+        if stamp is None or stamp[0] <= 0 or (sender is not None and stamp != sender):
+            return None
+        sender = stamp
+        data += chunk
+    return data, sender[0], sender[1]
 
 
 def peer_pidfd(conn):
@@ -143,21 +182,25 @@ def query_main_pid(unit, run=subprocess.run):
         raise SystemdQueryError("unexpected systemctl output") from None
 
 
-def decide(peer_pid, peer_uid, expected_uid, pidfd, bound_ticks, main_pid_fn, start_ticks_fn, pidfd_pid_fn):
-    # Without a pidfd (kernels before 6.5) the peer is its pid and start time. systemd starts this
-    # helper only once a connection is waiting, so a process that started after it (bound_ticks)
-    # cannot have made that connection: a pid recycled in between is refused.
-    if peer_uid != expected_uid:
+def decide(peer_pid, peer_uid, answer_pid, answer_uid, expected_uid, pidfd, challenge_ticks, main_pid_fn,
+           start_ticks_fn, pidfd_pid_fn):
+    # The process that connected must be the one that answered the challenge, by the kernel's stamp on the answer.
+    # With a pidfd (kernels from 6.5) the pidfd names that process for good. Without one the peer is its pid and
+    # start time: a process with that pid that started before the challenge was taken (challenge_ticks) and still
+    # runs is the one that sent the answer, which came after the challenge. A pid recycled since is refused.
+    if peer_uid != expected_uid or answer_uid != expected_uid:
         return False, "uid"
     if peer_pid <= 0:
         return False, "pid unknown"
+    if answer_pid != peer_pid:
+        return False, "the answer came from another process"
     s1 = None
     if pidfd is None:
         s1 = start_ticks_fn(peer_pid)
         if s1 is None:
             return False, "start time unreadable (is /proc mounted with hidepid?)"
-        if s1 > bound_ticks:
-            return False, "started after this helper"
+        if s1 >= challenge_ticks:
+            return False, "started after the challenge"
     # SystemdQueryError propagates to the caller
     m = main_pid_fn()
     if m <= 0:
@@ -198,7 +241,6 @@ def default_deps():
     return {
         "main_pid": query_main_pid,
         "start_ticks": process_start_ticks,
-        "self_start_ticks": lambda: process_start_ticks(os.getpid()),
         "boottime_ticks": boottime_ticks,
         "pidfd": peer_pidfd,
         "pidfd_pid": pidfd_pid,
@@ -206,6 +248,7 @@ def default_deps():
         "uid_of_user": lambda name: pwd.getpwnam(name).pw_uid,
         "log": sys.stderr,
         "accept_timeout": ACCEPT_WAIT_SECONDS,
+        "answer_timeout": ANSWER_WAIT_SECONDS,
     }
 
 
@@ -224,11 +267,6 @@ def serve_once(listen_fd, bound_unit, peer_user, env, deps):
             log_line(deps, "no connection within %s s" % deps["accept_timeout"])
             return EXIT_NO_CONNECTION
         conn, _ = listener.accept()
-        # The start-time bound for the fallback check: this helper's own start, which came after
-        # the connection; the accept time when that cannot be read.
-        bound_ticks = deps["self_start_ticks"]()
-        if bound_ticks is None:
-            bound_ticks = deps["boottime_ticks"]()
     finally:
         listener.close()
     try:
@@ -239,8 +277,21 @@ def serve_once(listen_fd, bound_unit, peer_user, env, deps):
         except KeyError:
             log_line(deps, "refused peer pid %d uid %d: unknown peer user" % (peer_pid, peer_uid))
             return EXIT_REFUSED
+        # The stamps are asked for before the challenge is sent, so the answer, which comes after it, carries one.
+        conn.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+        challenge_ticks = deps["boottime_ticks"]()
+        challenge = os.urandom(CHALLENGE_BYTES)
         try:
-            allowed, reason = decide(peer_pid, peer_uid, expected_uid, pidfd, bound_ticks,
+            conn.settimeout(SEND_TIMEOUT_SECONDS)
+            conn.sendall(challenge)
+            answer = read_answer(conn, CHALLENGE_BYTES, deps["answer_timeout"])
+        except OSError:
+            answer = None
+        if answer is None or not hmac.compare_digest(answer[0], challenge):
+            log_line(deps, "refused peer pid %d uid %d: the challenge was not answered" % (peer_pid, peer_uid))
+            return EXIT_REFUSED
+        try:
+            allowed, reason = decide(peer_pid, peer_uid, answer[1], answer[2], expected_uid, pidfd, challenge_ticks,
                                      lambda: deps["main_pid"](bound_unit), deps["start_ticks"],
                                      deps["pidfd_pid"])
         except SystemdQueryError as e:
