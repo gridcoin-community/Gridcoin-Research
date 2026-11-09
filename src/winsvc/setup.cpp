@@ -2342,6 +2342,9 @@ void DisableService(const ToolOptions& options)
     TransferResult result;
     bool lock_created = false;
     UniqueHandle lock;
+    const fs::path quarantine =
+        QuarantineDir(programdata) /
+        Utf8ToWide(strprintf("%s-%s", Shown(names.datadir_leaf), FormatISO8601DateTimeDashSep(GetTime())));
     try {
         if (was_running) {
             SERVICE_STATUS control{};
@@ -2362,11 +2365,19 @@ void DisableService(const ToolOptions& options)
 
         lock = HoldDataDirectoryLock(NetDataDir(programdata, net) / L".lock", lock_created);
 
-        result = TransferTree(datadir, target, rules, fs::path());
+        result = TransferTree(datadir, target, rules, quarantine);
         if (!result.ok) throw std::runtime_error("the copy failed: " + result.error);
         copied = true;
         Say(strprintf("Copied %u files (%u bytes) from %s to %s; each was read back and matched", result.files,
                       result.bytes, Shown(NetDataDir(programdata, net)), Shown(net_target)));
+        for (const fs::path& path : result.quarantined) {
+            Say("Quarantined, as the account's core would read it as its own: " + Shown(path));
+        }
+        if (!result.dropped_settings.empty()) {
+            Say(strprintf("Dropped from gridcoinsettings.json, as the core takes them only from its configuration file: "
+                          "%s",
+                          Join(result.dropped_settings, ", ")));
+        }
 
         // Owner-only for the account: the target when this made it, and otherwise each entry made.
         const winacl::AclSpec owner_only = OwnerOnlySpec(*user);
@@ -2394,6 +2405,12 @@ void DisableService(const ToolOptions& options)
                 root = target.parent_path();
             }
             if (std::string error = RemoveCopy(root, made); !error.empty()) left.push_back(error);
+            if (!result.quarantined.empty()) {
+                if (std::string error = RemoveCopy(QuarantineDir(programdata), {quarantine.filename()});
+                    !error.empty()) {
+                    left.push_back(error);
+                }
+            }
         }
         // As it was before, with the lock let go so that the core can start again.
         if (lock) {

@@ -808,7 +808,9 @@ cd "C:\Program Files\GridcoinResearch\daemon"
   followed by a restart: the service's recovery actions start it again.
 - **`disable`** stops the service, sets it to Disabled, and moves the wallet back where it came from (`--to=` for
   another place), owner-only for alice; she leaves the attach group, and a Core-Start task that `enable` disabled
-  is enabled again. It ends with `Disabled. The wallet is back in <directory>; <account> can start the plain GUI.`,
+  is enabled again. As on `enable`, a configuration file or `DB_CONFIG` in the service's data directory is set
+  aside, not carried over, and `gridcoinsettings.json` loses the settings the core takes only from its
+  configuration file; `disable` names each. It ends with `Disabled. The wallet is back in <directory>; <account> can start the plain GUI.`,
   and how to get unattended start: `Install-GridcoinCoreTask.ps1` for an administrator's own wallet, the service mode
   for a standard account's.
 - **Paths.** `enable` and `disable` resolve the path of each data directory they move a wallet between once,

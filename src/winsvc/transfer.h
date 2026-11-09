@@ -96,9 +96,9 @@ constexpr uint64_t SETTINGS_SIZE_LIMIT = 1 << 20;
 //! gridcoinsettings.json. Main leaves out the top-level testnet directory; Test takes only it.
 TransferRules RulesForEnable(Network net);
 
-//! Moving the service's tree back to a user: skip node.sock, ipc.cookie, .lock,
-//! gridcoinresearchd.pid and autounlock (the service's autounlock directory), and nothing else.
-//! Main leaves out a top-level testnet directory; Test takes only it.
+//! Moving the service's tree back to a user: the rules of RulesForEnable, so the service's
+//! autounlock directory is skipped, and a gridcoinresearch.conf or DB_CONFIG in the service's
+//! directory, which the account's core would read as its own, is quarantined.
 TransferRules RulesForDisable(Network net);
 
 //! Whether the entry at \p relative is part of the transfer by \p rules' top-level scope.

@@ -502,31 +502,39 @@ BOOST_AUTO_TEST_CASE(transfer_skips_runtime_files)
     BOOST_CHECK(created.count("autounlock") == 0);
 }
 
+// Into the service and back out of it alike. Production change that would fail this: a direction
+// whose rules carry a configuration file or DB_CONFIG over.
 BOOST_AUTO_TEST_CASE(transfer_quarantines_conf_and_db_config)
 {
-    const TempTree tree;
-    const fs::path src = tree.root / "src";
-    const fs::path dst = tree.root / "dst";
-    const fs::path quarantine = tree.root / "quarantine";
-    MakeWalletTree(src);
-    WriteFile(src / "gridcoinresearch.conf", "blocknotify=evil\n");
-    WriteFile(src / "DB_CONFIG", "set_lg_dir /elsewhere\n");
+    for (const bool disable : {false, true}) {
+        BOOST_TEST_CONTEXT((disable ? "disable" : "enable"))
+        {
+            const TempTree tree;
+            const fs::path src = tree.root / "src";
+            const fs::path dst = tree.root / "dst";
+            const fs::path quarantine = tree.root / "quarantine";
+            MakeWalletTree(src);
+            WriteFile(src / "gridcoinresearch.conf", "blocknotify=evil\n");
+            WriteFile(src / "DB_CONFIG", "set_lg_dir /elsewhere\n");
 
-    const TransferResult result = TransferTree(src, dst, RulesForEnable(Network::Main), quarantine);
-    BOOST_REQUIRE_MESSAGE(result.ok, result.error);
-    BOOST_CHECK(!fs::exists(dst / "gridcoinresearch.conf"));
-    BOOST_CHECK(!fs::exists(dst / "DB_CONFIG"));
-    BOOST_CHECK_EQUAL(ReadFile(quarantine / "gridcoinresearch.conf"), "blocknotify=evil\n");
-    BOOST_CHECK_EQUAL(ReadFile(quarantine / "DB_CONFIG"), "set_lg_dir /elsewhere\n");
+            const TransferRules rules = disable ? RulesForDisable(Network::Main) : RulesForEnable(Network::Main);
+            const TransferResult result = TransferTree(src, dst, rules, quarantine);
+            BOOST_REQUIRE_MESSAGE(result.ok, result.error);
+            BOOST_CHECK(!fs::exists(dst / "gridcoinresearch.conf"));
+            BOOST_CHECK(!fs::exists(dst / "DB_CONFIG"));
+            BOOST_CHECK_EQUAL(ReadFile(quarantine / "gridcoinresearch.conf"), "blocknotify=evil\n");
+            BOOST_CHECK_EQUAL(ReadFile(quarantine / "DB_CONFIG"), "set_lg_dir /elsewhere\n");
 
-    std::set<fs::path> quarantined(result.quarantined.begin(), result.quarantined.end());
-    BOOST_CHECK(quarantined == std::set<fs::path>({quarantine / "gridcoinresearch.conf", quarantine / "DB_CONFIG"}));
+            std::set<fs::path> quarantined(result.quarantined.begin(), result.quarantined.end());
+            BOOST_CHECK(quarantined == std::set<fs::path>({quarantine / "gridcoinresearch.conf", quarantine / "DB_CONFIG"}));
 
-    // A quarantined file stays in the source: it is not among the entries taken.
-    std::set<fs::path> taken(result.source_remove.begin(), result.source_remove.end());
-    BOOST_CHECK(taken.count("gridcoinresearch.conf") == 0);
-    BOOST_CHECK(taken.count("DB_CONFIG") == 0);
-    BOOST_CHECK(fs::exists(src / "gridcoinresearch.conf"));
+            // A quarantined file stays in the source: it is not among the entries taken.
+            std::set<fs::path> taken(result.source_remove.begin(), result.source_remove.end());
+            BOOST_CHECK(taken.count("gridcoinresearch.conf") == 0);
+            BOOST_CHECK(taken.count("DB_CONFIG") == 0);
+            BOOST_CHECK(fs::exists(src / "gridcoinresearch.conf"));
+        }
+    }
 }
 
 BOOST_AUTO_TEST_CASE(transfer_filters_settings)
@@ -1007,10 +1015,10 @@ BOOST_AUTO_TEST_CASE(decide_table)
     BOOST_CHECK(InScope("blocks", main_rules));
     BOOST_CHECK(!InScope("testnet", main_rules));
 
-    // Moving back out quarantines and filters nothing.
+    // Moving back out quarantines and filters as moving in does.
     const TransferRules back = RulesForDisable(Network::Main);
-    BOOST_CHECK(DecideFor("gridcoinresearch.conf", Type::Regular, back) == EntryDecision::Copy);
-    BOOST_CHECK(DecideFor("gridcoinsettings.json", Type::Regular, back) == EntryDecision::Copy);
+    BOOST_CHECK(DecideFor("gridcoinresearch.conf", Type::Regular, back) == EntryDecision::Quarantine);
+    BOOST_CHECK(DecideFor("gridcoinsettings.json", Type::Regular, back) == EntryDecision::FilterSettings);
     BOOST_CHECK(DecideFor("autounlock", Type::Directory, back) == EntryDecision::Skip);
     BOOST_CHECK(DecideFor("testnet", Type::Directory, back) == EntryDecision::Skip);
     BOOST_CHECK(DecideFor("wallet.dat", Type::Regular, back, 2) == EntryDecision::Refuse);
@@ -1028,10 +1036,12 @@ BOOST_AUTO_TEST_CASE(rules_for_each_direction)
         BOOST_CHECK(in.quarantine_names == std::vector<std::string>({"gridcoinresearch.conf", "DB_CONFIG"}));
         BOOST_CHECK(in.filter_settings_names == std::vector<std::string>({"gridcoinsettings.json"}));
 
+        // Back to the account the same: the service's directory is not the account's, and what is
+        // in it comes from the service.
         const TransferRules out = RulesForDisable(net);
         BOOST_CHECK(out.skip_names == runtime);
-        BOOST_CHECK(out.quarantine_names.empty());
-        BOOST_CHECK(out.filter_settings_names.empty());
+        BOOST_CHECK(out.quarantine_names == in.quarantine_names);
+        BOOST_CHECK(out.filter_settings_names == in.filter_settings_names);
 
         for (const TransferRules& rules : {in, out}) {
             if (net == Network::Main) {

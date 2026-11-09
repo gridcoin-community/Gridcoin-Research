@@ -123,9 +123,9 @@ TransferRules RulesForEnable(Network net)
 
 TransferRules RulesForDisable(Network net)
 {
-    TransferRules rules;
-    rules.skip_names = RUNTIME_NAMES;
-    return WithScope(net, std::move(rules));
+    // As into the service: what the service's directory holds came from the service, and the
+    // account's core would read a configuration file or DB_CONFIG there as its own.
+    return RulesForEnable(net);
 }
 
 bool InScope(const fs::path& relative, const TransferRules& rules)
