@@ -1696,22 +1696,9 @@ BOOST_AUTO_TEST_CASE(a_passphrase_change_derives_without_holding_cs_wallet)
     grc_test::EncryptedWallet fx;
     BOOST_REQUIRE(fx.wallet.IsLocked());
 
-    // A long derivation, at an iteration count set here: five million
-    // iterations take a second or more on any machine. The crypted master key
-    // is cut short by a byte so that no key decrypts it (CBC refuses a
-    // ciphertext that is not a whole number of blocks), and the attempt is
-    // refused as soon as its derivation ends.
-    {
-        LOCK(fx.wallet.cs_wallet);
-        BOOST_REQUIRE(!fx.wallet.mapMasterKeys.empty());
-
-        for (auto& entry : fx.wallet.mapMasterKeys) {
-            entry.second.nDeriveIterations = 5000000;
-
-            BOOST_REQUIRE(!entry.second.vchCryptedKey.empty());
-            entry.second.vchCryptedKey.pop_back();
-        }
-    }
+    // A derivation of about two seconds on this machine, which no key passes,
+    // so the attempt is refused as soon as its derivation ends.
+    fx.MakeEveryDerivationLongAndFutile(std::chrono::seconds{2});
 
     std::atomic<bool> began{false};
     std::future<bool> change = std::async(std::launch::async, [&fx, &began] {

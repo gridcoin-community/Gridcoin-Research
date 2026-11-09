@@ -779,28 +779,13 @@ BOOST_AUTO_TEST_CASE(unlock_derives_without_holding_cs_wallet)
     EncryptedWallet fx;
     BOOST_REQUIRE(fx.wallet.IsLocked());
 
-    // A long derivation, at an iteration count set here rather than scaled
-    // from the calibrated one: five million iterations take a second or more
-    // on any machine.
-    //
-    // The crypted master key is also cut short by a byte, so that no key
-    // decrypts it: CBC decryption refuses a ciphertext that is not a whole
-    // number of blocks. A wrong key would otherwise pass the padding check
-    // about once in 255 tries, and the attempt would then take cs_wallet again
-    // to install it, which this thread holds. As it is, the unlock below is
-    // refused as soon as the derivation ends, without taking cs_wallet, and
-    // the refusal is counted before its delay is slept.
-    {
-        LOCK(fx.wallet.cs_wallet);
-        BOOST_REQUIRE(!fx.wallet.mapMasterKeys.empty());
-
-        for (auto& entry : fx.wallet.mapMasterKeys) {
-            entry.second.nDeriveIterations = 5000000;
-
-            BOOST_REQUIRE(!entry.second.vchCryptedKey.empty());
-            entry.second.vchCryptedKey.pop_back();
-        }
-    }
+    // A derivation of about two seconds on this machine, which no key passes.
+    // A wrong key would otherwise pass the padding check about once in 255
+    // tries, and the attempt would then take cs_wallet again to install it,
+    // which this thread holds. As it is, the unlock below is refused as soon
+    // as the derivation ends, without taking cs_wallet, and the refusal is
+    // counted before its delay is slept.
+    fx.MakeEveryDerivationLongAndFutile(std::chrono::seconds{2});
 
     std::atomic<bool> began{false};
     std::future<bool> unlock = std::async(std::launch::async, [&fx, &began] {

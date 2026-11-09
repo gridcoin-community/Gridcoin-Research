@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_TEST_STAKING_TEST_PEERS_H
 #define GRIDCOIN_TEST_STAKING_TEST_PEERS_H
 
+#include "crypter.h"
 #include "init.h"
 #include "key.h"
 #include "keystore.h"
@@ -17,6 +18,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <memory>
 #include <thread>
@@ -91,6 +93,35 @@ struct EncryptedWallet
 
     EncryptedWallet(const EncryptedWallet&) = delete;
     EncryptedWallet& operator=(const EncryptedWallet&) = delete;
+
+    //! Gives every master key a derivation of about \p duration on this machine, timed here rather
+    //! than scaled from the calibrated count, and cuts its crypted key short by a byte so that no key
+    //! decrypts it (CBC refuses a ciphertext that is not a whole number of blocks): an unlock or a
+    //! passphrase change is then refused as soon as its derivation ends. Timed, since a count that
+    //! takes a second here can take minutes under the CI's emulation of another architecture.
+    void MakeEveryDerivationLongAndFutile(std::chrono::milliseconds duration)
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(!wallet.mapMasterKeys.empty());
+
+        constexpr unsigned int SAMPLE = 100000;
+        const CMasterKey& first = wallet.mapMasterKeys.begin()->second;
+        CCrypter crypter;
+        const auto started = std::chrono::steady_clock::now();
+        BOOST_REQUIRE(crypter.SetKeyFromPassphrase(SecureString("timing"), first.vchSalt, SAMPLE,
+                                                   first.nDerivationMethod));
+        const double sample = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+        const double wanted = std::chrono::duration<double>(duration).count();
+        const unsigned int iterations =
+            static_cast<unsigned int>(std::clamp(SAMPLE * wanted / std::max(sample, 1e-6), 2.0 * SAMPLE, 4e9));
+
+        for (auto& entry : wallet.mapMasterKeys) {
+            entry.second.nDeriveIterations = iterations;
+
+            BOOST_REQUIRE(!entry.second.vchCryptedKey.empty());
+            entry.second.vchCryptedKey.pop_back();
+        }
+    }
 
     void UnlockFor(UnlockScope scope)
     {
