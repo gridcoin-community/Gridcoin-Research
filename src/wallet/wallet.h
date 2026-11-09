@@ -676,6 +676,14 @@ private:
     //! CapabilityScope checks before it grants.
     bool IsCapabilityLive(CapabilityId id, CapabilityKind kind) const LOCKS_EXCLUDED(m_capability_mutex);
 
+    //! BeginElevation()'s last step: store a capability of \p kind, lasting
+    //! \p ttl, that made the unlock \p made_epoch for itself or matched the
+    //! unlock \p matched_epoch in progress, and return its id. Ones past their
+    //! deadline are dropped meanwhile. For an encrypted wallet it runs while the
+    //! attempt's passphrase turn is held.
+    CapabilityId StoreCapability(CapabilityKind kind, std::chrono::seconds ttl, std::optional<uint64_t> made_epoch,
+                                 std::optional<uint64_t> matched_epoch) LOCKS_EXCLUDED(m_capability_mutex);
+
     friend class CapabilityScope;
     friend struct PassphraseTurnTestPeer;
 

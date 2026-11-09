@@ -1088,9 +1088,21 @@ std::optional<CapabilityId> CWallet::BeginElevation(const SecureString& passphra
             return std::nullopt;
         }
 
+        // Stored before the turn is handed on. A passphrase change holds its
+        // turn through the change and the ending of every capability, so this
+        // one, proved with the passphrase as it is now, is stored before any
+        // change, which then ends it, and never after one.
+        const CapabilityId id = StoreCapability(kind, ttl, made_epoch, matched_epoch);
         turn.Accepted();
+        return id;
     }
 
+    return StoreCapability(kind, ttl, made_epoch, matched_epoch);
+}
+
+CapabilityId CWallet::StoreCapability(CapabilityKind kind, std::chrono::seconds ttl,
+                                      std::optional<uint64_t> made_epoch, std::optional<uint64_t> matched_epoch)
+{
     // Drawn and timed before the mutex is taken: it is a leaf, and the
     // generator takes a lock of its own. Never 0.
     CapabilityId id = GetRand(std::numeric_limits<uint64_t>::max() - 1) + 1;

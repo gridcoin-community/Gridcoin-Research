@@ -42,6 +42,16 @@ struct PassphraseTurnTestPeer
         LOCK(wallet.m_passphrase_turn_mutex);
         return wallet.m_next_passphrase_ticket;
     }
+
+    //! The ticket whose attempt is served now.
+    static uint64_t Served(const CWallet& wallet)
+    {
+        LOCK(wallet.m_passphrase_turn_mutex);
+        return wallet.m_served_passphrase_ticket;
+    }
+
+    //! The mutex a capability is stored under, for a case to hold an elevation at that step.
+    static Mutex& CapabilityMutex(CWallet& wallet) { return wallet.m_capability_mutex; }
 };
 
 namespace {
@@ -1241,6 +1251,52 @@ BOOST_AUTO_TEST_CASE(a_passphrase_change_ends_every_capability)
 // passphrase change ends it, as EndElevation() would end it: the wallet is locked again
 // at once rather than when the capability's timer fires. An unlock the user made is
 // left as it was.
+// A capability is stored while its passphrase turn is still held. A passphrase change holds its
+// turn through the change and the ending of every capability, so a capability proved with the old
+// passphrase is stored before the change, which then ends it, never after. Production change that
+// would fail this: a BeginElevation() that hands its turn on (Accepted()) before it stores the
+// record.
+BOOST_AUTO_TEST_CASE(a_capability_is_stored_before_its_turn_is_handed_on)
+{
+    EncryptedWallet fx;
+    SchedulerForThisCase scheduler;
+    BOOST_REQUIRE(fx.wallet.IsLocked());
+    const SecureString changed("capability-test-changed");
+
+    std::optional<CapabilityId> id;
+    std::thread elevation;
+    std::thread change;
+    bool change_done = false;
+    uint64_t served_while_storing = 0;
+    const uint64_t ticket = PassphraseTurnTestPeer::AttemptsAsked(fx.wallet);
+    {
+        // The elevation's store waits for this mutex.
+        LOCK(PassphraseTurnTestPeer::CapabilityMutex(fx.wallet));
+        elevation = std::thread([&] { id = fx.wallet.BeginElevation(Passphrase(), CapabilityKind::Send); });
+
+        // Its passphrase has been checked once it has unlocked the wallet for itself, and it then
+        // stores its record, held here.
+        for (int i = 0; i < 12000 && fx.wallet.IsLocked(); ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        BOOST_REQUIRE(!fx.wallet.IsLocked());
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        served_while_storing = PassphraseTurnTestPeer::Served(fx.wallet);
+
+        // A change asked for now waits for that turn.
+        change = std::thread([&] { change_done = fx.wallet.ChangeWalletPassphrase(Passphrase(), changed); });
+        BOOST_REQUIRE(WaitForAttemptsAsked(fx.wallet, ticket + 2));
+    }
+    elevation.join();
+    change.join();
+
+    BOOST_CHECK_EQUAL(served_while_storing, ticket);
+    BOOST_REQUIRE(id.has_value());
+    BOOST_REQUIRE(change_done);
+    CapabilityScope scope(fx.wallet, id, CapabilityKind::Send);
+    BOOST_CHECK(!scope.Active());
+}
+
 BOOST_AUTO_TEST_CASE(a_passphrase_change_locks_what_its_capabilities_unlocked)
 {
     EncryptedWallet fx;
