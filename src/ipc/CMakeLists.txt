@@ -36,10 +36,6 @@ add_library(gridcoin_ipc STATIC EXCLUDE_FROM_ALL
     interfaces.cpp
     handshake.cpp
     peercred.cpp
-    # The platform backends of the peer-check hooks; each compiles to nothing
-    # off its platform.
-    peercred_posix.cpp
-    peercred_win.cpp
     # The Windows endpoint's access lists and the GUI's check before it connects;
     # its rules are pure and build everywhere.
     win_endpoint.cpp
@@ -50,6 +46,14 @@ add_library(gridcoin_ipc STATIC EXCLUDE_FROM_ALL
     connect.cpp
     capnp/protocol.cpp
 )
+
+# The platform backend of the peer-check hooks. The other one would compile to
+# nothing, and Apple's ranlib warns about an archive member with no symbols.
+if(WIN32)
+    target_sources(gridcoin_ipc PRIVATE peercred_win.cpp)
+else()
+    target_sources(gridcoin_ipc PRIVATE peercred_posix.cpp)
+endif()
 
 # handshake.cpp allows __DATE__ and __TIME__ in one line with a #pragma that GCC
 # before 13 ignores in C++ (GCC bug 53431), so for those compilers -Wdate-time is
