@@ -1885,11 +1885,21 @@ bool CoreStartNetwork(const CoreStartTask& task, const fs::path& default_root, N
         why = "its action does not run a launcher";
         return false;
     }
+    // The task's paths are the account's to write, so each is checked to be on a local drive
+    // before anything opens it: a network path would have this elevated process connect where the
+    // account chose.
+    const auto local_path = [](const std::string& text, const std::string& what) {
+        const std::wstring wide = Utf8ToWide(text);
+        if (const std::optional<std::string> problem = LocalTreePathProblem(wide)) {
+            throw Refusal(strprintf("%s %s is not read: %s", what, text, *problem));
+        }
+        return fs::path(wide);
+    };
     try {
         std::string text;
         bool absent = false;
         std::string error;
-        const fs::path launcher = PinnedTreePath(Utf8ToWide(*launcher_path));
+        const fs::path launcher = PinnedTreePath(local_path(*launcher_path, "its launcher"));
         if (!ReadFileNoFollow(launcher, SETTINGS_SIZE_LIMIT, text, absent, error)) {
             why = absent ? "its launcher " + Shown(launcher) + " is not there" : error;
             return false;
@@ -1903,8 +1913,8 @@ bool CoreStartNetwork(const CoreStartTask& task, const fs::path& default_root, N
             core_net = Network::Test;
             return true;
         }
-        const fs::path conf = PinnedTreePath((core->datadir ? fs::path(Utf8ToWide(*core->datadir)) : default_root) /
-                                             L"gridcoinresearch.conf");
+        const fs::path conf_dir = core->datadir ? local_path(*core->datadir, "its data directory") : default_root;
+        const fs::path conf = PinnedTreePath(conf_dir / L"gridcoinresearch.conf");
         if (!ReadFileNoFollow(conf, SETTINGS_SIZE_LIMIT, text, absent, error)) {
             why = absent ? Shown(conf) + " is not there" : error;
             return false;

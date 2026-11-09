@@ -1083,7 +1083,8 @@ BOOST_AUTO_TEST_CASE(local_tree_paths)
     BOOST_CHECK(!LocalTreePathProblem(L"D:/Grid coin/data").has_value());
     BOOST_CHECK(!LocalTreePathProblem(L"C:\\Users\\Jos\u00e9 Garc\u00eda\\AppData\\Roaming\\GridcoinResearch").has_value());
     for (const std::wstring path : {L"", L"GridcoinResearch", L"\\Users\\x", L"C:", L"C:relative",
-                                    L"\\\\server\\share\\dir", L"\\\\?\\C:\\x", L"C:\\a\\..\\b", L"C:\\a\\.\\b",
+                                    L"\\\\server\\share\\dir", L"//server/share/dir", L"\\\\?\\C:\\x",
+                                    L"C:\\a\\..\\b", L"C:\\a\\.\\b",
                                     L"1:\\x", L"C:\\x\\", L"C:\\a\\\\b"}) {
         BOOST_CHECK_MESSAGE(LocalTreePathProblem(path).has_value(), "accepted a path it must refuse");
     }
