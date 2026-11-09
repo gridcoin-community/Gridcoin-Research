@@ -119,6 +119,9 @@ either way.
 - **A file the core rewrites keeps the permissions it had.** That covers the settings file, the configuration file,
   `peers.dat`, `banlist.dat`, the log after a rotation and `wallet.dat` after encryption. The core warns at start
   where they are wider than it would make them, and never changes them itself. A file it creates new is owner-only.
+  On a filesystem that cannot keep a file owner-only (a FAT stick, many network shares) it is still written, and
+  the core logs a warning: a `dumpwallet` file you send there, or the configuration file it writes on its first
+  start in a data directory there. Where you put a dump is your choice.
   The IPC cookie and the autounlock file are the exceptions: each is written afresh with the narrowest
   permissions that work.
 - **A core started by hand has no autounlock.** The helper that holds the passphrase serves only the main process
@@ -663,7 +666,9 @@ mode concedes the list for a core that runs as you, and the service mode the lis
 - **A file the core rewrites keeps the permissions it had.** That covers the settings file, the configuration file,
   `peers.dat`, `banlist.dat`, the log after a rotation and `wallet.dat` after encryption. The core warns at start
   where they are wider than it would make them, and never changes them itself. A file it creates new is owner-only
-  (your account and SYSTEM). The IPC cookie and the autounlock file are the exceptions: each is written afresh with
+  (your account and SYSTEM). On a volume that keeps no access lists (FAT, exFAT) or a share that refuses them it is
+  still written, and the core logs a warning: a `dumpwallet` file you send there, or the configuration file it
+  writes on its first start in a data directory there. Where you put a dump is your choice. The IPC cookie and the autounlock file are the exceptions: each is written afresh with
   the narrowest permissions that work. The installer reports such files on an upgrade (below).
 - **Mainnet and testnet in one account share trust.** A testnet core running as the account that holds a mainnet
   wallet can read and change that wallet's files. Run testnet as the testnet service if you would not trust a test
