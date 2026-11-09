@@ -524,14 +524,14 @@ bool ParseFixedPoint(const std::string &val, int decimals, int64_t *amount_out)
 std::string ToLower(const std::string& str)
 {
     std::string r;
-    for (auto ch : str) r += ToLower((unsigned char)ch);
+    for (auto ch : str) r += ToLower(ch);
     return r;
 }
 
 std::string ToUpper(const std::string& str)
 {
     std::string r;
-    for (auto ch : str) r += ToUpper((unsigned char)ch);
+    for (auto ch : str) r += ToUpper(ch);
     return r;
 }
 
