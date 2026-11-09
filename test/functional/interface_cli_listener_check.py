@@ -12,7 +12,8 @@ configuration file names with rpcserviceuser).
 
   - the framework's node, owned by this account, is accepted and answers;
   - -rpcserviceuser on the command line is ignored with a warning, and the call succeeds;
-  - so is rpcserviceuser in a configuration file this account owns;
+  - so is rpcserviceuser in a configuration file this account owns, unless this account is
+    root, whose file is where it is honoured;
   - -rpcskiplistenercheck sends without the check and says so on stderr;
   - rpcskiplistenercheck in a configuration file is ignored: the check still runs and the
     client does not say it was skipped.
@@ -79,7 +80,13 @@ class InterfaceCLIListenerCheckTest(GridcoinTestFramework):
         self.assert_answers(result, height)
         assert IGNORED_SERVICE_USER in result.stderr, result.stderr
 
-        self.log.info("rpcserviceuser in a configuration file this account owns is ignored too")
+        # Run as root (the distribution CI containers), the configuration file is root's,
+        # which is where rpcserviceuser is honoured.
+        as_root = os.geteuid() == 0
+        if as_root:
+            self.log.info("rpcserviceuser in a configuration file root owns is honoured")
+        else:
+            self.log.info("rpcserviceuser in a configuration file this account owns is ignored too")
         conf = os.path.join(node.datadir, self.chain, "gridcoinresearch.conf")
         with open(conf, encoding="utf8") as f:
             original = f.read()
@@ -88,7 +95,10 @@ class InterfaceCLIListenerCheckTest(GridcoinTestFramework):
                 f.write("rpcserviceuser=nobody\n")
             result = self.run_client()
             self.assert_answers(result, height)
-            assert IGNORED_SERVICE_USER in result.stderr, result.stderr
+            if as_root:
+                assert IGNORED_SERVICE_USER not in result.stderr, result.stderr
+            else:
+                assert IGNORED_SERVICE_USER in result.stderr, result.stderr
         finally:
             with open(conf, "w", encoding="utf8") as f:
                 f.write(original)
