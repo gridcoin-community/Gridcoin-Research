@@ -45,6 +45,11 @@ enum class PrivilegeState
     Enabled,
 };
 PrivilegeState TokenPrivilegeState(const wchar_t* name);
+
+//! The Win32 error a thread gets when it opens \p path for reading while it impersonates this
+//! process's own token lowered to Low integrity, or 0 when the open succeeds. The DACL admits
+//! that token as it admits this account, so the file's mandatory label decides.
+unsigned long OpenForReadAtLowIntegrity(const fs::path& path);
 #endif
 
 } // namespace grc_test

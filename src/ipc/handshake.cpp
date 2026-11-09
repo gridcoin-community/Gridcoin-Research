@@ -156,8 +156,10 @@ void WriteFileAtomic(const fs::path& path, const std::string& contents, const ut
     // The descriptor states the owner and a protected DACL: without the
     // protection the parent directory's inheritable ACEs would be merged into the
     // new file's DACL, which would defeat the point of naming the trustees here.
-    const std::unique_ptr<void, void (*)(void*)> sd(util::winacl::MakeSecurityDescriptor(spec),
-                                                    util::winacl::FreeSecurityDescriptor);
+    // It also carries a Medium label with no read-up.
+    const std::unique_ptr<void, void (*)(void*)> sd(
+        util::winacl::MakeSecurityDescriptor(spec, util::winacl::MandatoryLabel::MediumNoReadUp),
+        util::winacl::FreeSecurityDescriptor);
     SECURITY_ATTRIBUTES sa{};
     sa.nLength = sizeof(sa);
     sa.lpSecurityDescriptor = sd.get();

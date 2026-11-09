@@ -311,6 +311,26 @@ BOOST_AUTO_TEST_CASE(a_widened_old_cookie_is_replaced_by_one_with_the_designed_l
 
     fs::remove_all(dir);
 }
+
+// The cookie's Medium label does not read up: a Low-integrity process of this account, which
+// the list admits, cannot read it, and this account still can.
+BOOST_AUTO_TEST_CASE(a_low_integrity_reader_is_refused_the_cookie)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no mandatory label; this case runs on Windows");
+        return;
+    }
+
+    const fs::path dir = fs::temp_directory_path() / strprintf("grc_ipc_cookie_low_%d", GetTimeMillis());
+    fs::create_directories(dir);
+
+    const std::string cookie = ipc::WriteCookie(dir);
+    BOOST_CHECK_EQUAL(grc_test::OpenForReadAtLowIntegrity(dir / "ipc.cookie"),
+                      static_cast<unsigned long>(ERROR_ACCESS_DENIED));
+    BOOST_CHECK_EQUAL(ipc::ReadCookie(dir).cookie.value_or(""), cookie);
+
+    fs::remove_all(dir);
+}
 #endif
 
 BOOST_AUTO_TEST_CASE(identity_token_empty_uuid_is_empty)

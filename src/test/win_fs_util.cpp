@@ -160,6 +160,42 @@ PrivilegeState TokenPrivilegeState(const wchar_t* name)
 
     return PrivilegeState::NotHeld;
 }
+
+unsigned long OpenForReadAtLowIntegrity(const fs::path& path)
+{
+    HANDLE process_token = nullptr;
+    BOOST_REQUIRE_MESSAGE(::OpenProcessToken(::GetCurrentProcess(), TOKEN_DUPLICATE | TOKEN_QUERY, &process_token),
+                          "OpenProcessToken failed with Windows error " << ::GetLastError());
+    const util::winacl::UniqueHandle process_guard(process_token);
+
+    HANDLE low_token = nullptr;
+    BOOST_REQUIRE_MESSAGE(::DuplicateTokenEx(process_token, TOKEN_IMPERSONATE | TOKEN_QUERY | TOKEN_ADJUST_DEFAULT,
+                                             nullptr, SecurityImpersonation, TokenImpersonation, &low_token),
+                          "DuplicateTokenEx failed with Windows error " << ::GetLastError());
+    const util::winacl::UniqueHandle low_guard(low_token);
+
+    std::optional<util::winacl::Sid> low = util::winacl::ParseSidString("S-1-16-4096");
+    BOOST_REQUIRE(low.has_value());
+    TOKEN_MANDATORY_LABEL label{};
+    label.Label.Attributes = SE_GROUP_INTEGRITY;
+    label.Label.Sid = low->data();
+    BOOST_REQUIRE_MESSAGE(::SetTokenInformation(low_token, TokenIntegrityLevel, &label,
+                                                static_cast<DWORD>(sizeof(label) + low->size())),
+                          "SetTokenInformation failed with Windows error " << ::GetLastError());
+
+    BOOST_REQUIRE_MESSAGE(::SetThreadToken(nullptr, low_token),
+                          "SetThreadToken failed with Windows error " << ::GetLastError());
+    const HANDLE file = ::CreateFileW(path.wstring().c_str(), GENERIC_READ,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                      FILE_ATTRIBUTE_NORMAL, nullptr);
+    const DWORD error = file == INVALID_HANDLE_VALUE ? ::GetLastError() : 0;
+    // Back to this process's own token before anything can stop the case.
+    const bool reverted = ::RevertToSelf();
+    if (file != INVALID_HANDLE_VALUE) ::CloseHandle(file);
+    BOOST_REQUIRE_MESSAGE(reverted, "RevertToSelf failed with Windows error " << ::GetLastError());
+
+    return error;
+}
 #endif // WIN32
 
 } // namespace grc_test

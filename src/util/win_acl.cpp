@@ -823,13 +823,38 @@ void* BuildDacl(const std::vector<AceSpec>& aces)
     return memory.release();
 }
 
-void* MakeSecurityDescriptor(const AclSpec& spec)
+namespace {
+//! A SACL holding one mandatory label: Medium integrity (S-1-16-8192) with NO_READ_UP and
+//! NO_WRITE_UP. The caller owns the result and must LocalFree() it. Throws std::system_error.
+void* BuildMediumNoReadUpSacl()
+{
+    Sid medium{1, 1, 0, 0, 0, 0, 0, 16};
+    AppendLittleEndian(medium, SECURITY_MANDATORY_MEDIUM_RID);
+
+    // The one label entry is its header and mask followed by the SID.
+    const size_t size = sizeof(ACL) + sizeof(ACE_HEADER) + sizeof(ACCESS_MASK) + medium.size();
+    LocalPtr memory(::LocalAlloc(LPTR, size));
+    if (!memory) ThrowWin32(::GetLastError(), "LocalAlloc");
+    const PACL sacl = static_cast<PACL>(memory.get());
+
+    if (!::InitializeAcl(sacl, static_cast<DWORD>(size), ACL_REVISION)) ThrowWin32(::GetLastError(), "InitializeAcl");
+    if (!::AddMandatoryAce(sacl, ACL_REVISION, 0, SYSTEM_MANDATORY_LABEL_NO_READ_UP | SYSTEM_MANDATORY_LABEL_NO_WRITE_UP,
+                           medium.data())) {
+        ThrowWin32(::GetLastError(), "AddMandatoryAce");
+    }
+
+    return memory.release();
+}
+} // namespace
+
+void* MakeSecurityDescriptor(const AclSpec& spec, MandatoryLabel label)
 {
     RequireWellFormed(spec.owner, "the owner");
     const LocalPtr dacl(BuildDacl(spec.aces));
+    const LocalPtr sacl(label == MandatoryLabel::MediumNoReadUp ? BuildMediumNoReadUpSacl() : nullptr);
     Sid owner = spec.owner;
 
-    // The absolute descriptor points at the owner and DACL above. The self-relative copy
+    // The absolute descriptor points at the owner, DACL and SACL above. The self-relative copy
     // made from it holds its own, and outlives them.
     SECURITY_DESCRIPTOR absolute{};
     LocalPtr relative;
@@ -843,6 +868,8 @@ void* MakeSecurityDescriptor(const AclSpec& spec)
         failed = "SetSecurityDescriptorDacl";
     } else if (!::SetSecurityDescriptorControl(&absolute, SE_DACL_PROTECTED, SE_DACL_PROTECTED)) {
         failed = "SetSecurityDescriptorControl";
+    } else if (sacl && !::SetSecurityDescriptorSacl(&absolute, TRUE, static_cast<PACL>(sacl.get()), FALSE)) {
+        failed = "SetSecurityDescriptorSacl";
     } else {
         // The first call sizes the buffer; it fails with ERROR_INSUFFICIENT_BUFFER by design.
         DWORD length = 0;

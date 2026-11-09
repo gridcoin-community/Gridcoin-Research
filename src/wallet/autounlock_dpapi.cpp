@@ -372,13 +372,14 @@ std::optional<SecureString> Decrypt(const AutoUnlockBlob& blob, const fs::path& 
 }
 
 //! Write \p bytes to the new file \p path, owner-only from the moment it exists, and
-//! flush it to disk. A file there already, left by a Store() that did not finish, is
-//! removed first: CREATE_NEW never writes into a file this call did not make. With
+//! flush it to disk, labelled Medium with no read-up. A file there already, left by a Store()
+//! that did not finish, is removed first: CREATE_NEW never writes into a file this call did not make. With
 //! FILE_FLAG_OPEN_REPARSE_POINT a link at the name counts as taken, as a file does, and is
 //! removed itself, so nothing is created where it leads.
 bool WriteNewFile(const fs::path& path, const std::vector<unsigned char>& bytes, std::string& error)
 {
-    const winacl::UniqueSecurityDescriptor sd(winacl::MakeSecurityDescriptor(util::OwnerOnlyAclSpec(/*inheritable=*/false)));
+    const winacl::UniqueSecurityDescriptor sd(winacl::MakeSecurityDescriptor(util::OwnerOnlyAclSpec(/*inheritable=*/false),
+                                                                           winacl::MandatoryLabel::MediumNoReadUp));
     SECURITY_ATTRIBUTES sa{};
     sa.nLength = sizeof(sa);
     sa.lpSecurityDescriptor = sd.get();

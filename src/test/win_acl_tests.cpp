@@ -14,6 +14,7 @@
 #include <vector>
 
 #ifdef WIN32
+#include "test/win_fs_util.h"
 #include "test/wine.h"
 #include "util/dir_permissions.h"
 
@@ -1056,6 +1057,44 @@ BOOST_AUTO_TEST_CASE(security_descriptor_creates_a_matching_file)
         BOOST_TEST_MESSAGE("security_descriptor_creates_a_matching_file: this token's default owner is this "
                            "account, so the owner check cannot fail; run the suite elevated to cover it");
     }
+}
+
+// A Medium label that does not read up keeps out a reader below Medium that the DACL admits;
+// without it, the default, the same reader gets in. The label leaves the DACL as the spec states.
+BOOST_AUTO_TEST_CASE(a_medium_label_keeps_a_low_integrity_reader_out)
+{
+    if (RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no mandatory label; a_medium_label_keeps_a_low_integrity_reader_out runs on Windows");
+        return;
+    }
+
+    TempDir dir;
+    const fs::path plain = dir.path / "plain";
+    const fs::path labelled = dir.path / "labelled";
+    const Sid self = CurrentTokenUser();
+    const AclSpec spec{self, {
+        {self, FILE_ALL_ACCESS, Inherit::None},
+        {wellknown::System(), FILE_ALL_ACCESS, Inherit::None},
+    }};
+
+    CreateWithAcl(plain, spec);
+
+    const UniqueSecurityDescriptor sd(MakeSecurityDescriptor(spec, MandatoryLabel::MediumNoReadUp));
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof(sa);
+    sa.lpSecurityDescriptor = sd.get();
+    sa.bInheritHandle = FALSE;
+    const HANDLE handle = ::CreateFileW(labelled.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW,
+                                        FILE_ATTRIBUTE_NORMAL, nullptr);
+    const DWORD error = ::GetLastError();
+    BOOST_REQUIRE_MESSAGE(handle != INVALID_HANDLE_VALUE, "CreateFileW failed with error " << error);
+    ::CloseHandle(handle);
+
+    BOOST_CHECK_EQUAL(grc_test::OpenForReadAtLowIntegrity(plain), 0ul);
+    BOOST_CHECK_EQUAL(grc_test::OpenForReadAtLowIntegrity(labelled), static_cast<unsigned long>(ERROR_ACCESS_DENIED));
+
+    const std::optional<std::string> reason = CheckMatchesSpec(ReadAcl(labelled), spec);
+    BOOST_CHECK_MESSAGE(!reason.has_value(), reason.value_or(""));
 }
 
 // The integrity level is read from this process's token: the last sub-authority of

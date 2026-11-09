@@ -223,7 +223,10 @@ schema-diff lint against the previous release tag.
   also admits a non-root peer in that group. Root is never admitted through the group.
   Each refusal is logged with the uid(s) and the rule that failed. Windows AF_UNIX
   exposes no peer-credential API at all, so there the explicit-owner PROTECTED DACL on
-  the socket and cookie (applied and verified by read-back) decides who may connect,
+  the socket and cookie (applied and verified by read-back) decides who may connect
+  (the cookie and the autounlock file also carry a Medium no-read-up label, so a
+  Low-integrity process of the account cannot read them; node.sock needs write
+  access, which the default label already denies it),
   and the peer is identified, in every mode, by a named-pipe identity check that runs
   before `authenticate()` (`Init::beginAttest` / `Init::finishAttest`,
   `src/ipc/win_attest.h`). The core reads the GUI's token user, attach-group

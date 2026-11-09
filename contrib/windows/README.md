@@ -289,10 +289,12 @@ The Core-Start launcher passes `-autounlockblob`, which names that file.
 
 - **Secret at rest = DPAPI (machine key).** The passphrase is encrypted with `CryptProtectData` and
   the machine's key, and written to `<datadir>\autounlock\passphrase.dpapi` (`testnet\autounlock`
-  for testnet), readable by the account, SYSTEM and Administrators only. It is never stored in the
-  wallet, on a command line, or in a log. **Every account on the machine can decrypt a file made
-  with the machine key**, so only the file's access control list keeps it to the wallet's account:
-  it protects the wallet from other accounts, not from a program running as the wallet's account.
+  for testnet), readable by the account, SYSTEM and Administrators only, and labelled Medium
+  integrity with no read-up, so a sandboxed program of the account running at Low integrity cannot
+  read it either. It is never stored in the wallet, on a command line, or in a log. **Every account
+  on the machine can decrypt a file made with the machine key**, so only the file's access control
+  list and label keep it to the wallet's account: they protect the wallet from other accounts and
+  from Low-integrity programs, not from an ordinary program running as the wallet's account.
   For a wallet that must resist its own account being compromised, use the service mode, where
   the file is encrypted for the service account and lives in the service's data directory.
 - **Physical access.** DPAPI's machine and service secrets are kept in the registry hives on the

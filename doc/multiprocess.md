@@ -455,9 +455,10 @@ wallet (**Settings → Autounlock for staking...** in the GUI, or `setautounlock
 `-autounlockblob` (Core-Start and the Windows service start it so) reads the stored passphrase at each start and
 unlocks the wallet for staking only. The passphrase is encrypted with DPAPI, with the machine's key in the
 same-account mode and the service account's in the service mode, into `autounlock\passphrase.dpapi` in the data
-directory, which only the core's account, SYSTEM and Administrators can read. A passphrase change re-encrypts it;
-`clearautounlock` deletes it and locks the wallet. In the same-account mode every program running as you can
-decrypt it; the service mode keeps it from desktop accounts. Setup, rotation and turning it off:
+directory, which only the core's account, SYSTEM and Administrators can read; its Medium integrity label (no
+read-up) keeps out a Low-integrity program of that account as well. A passphrase change re-encrypts it;
+`clearautounlock` deletes it and locks the wallet. In the same-account mode every ordinary program running as you
+can decrypt it; the service mode keeps it from desktop accounts. Setup, rotation and turning it off:
 [`running-unattended.md` → *Autounlock setup (Windows)*](running-unattended.md#autounlock-setup-windows).
 
 ## The command-line client

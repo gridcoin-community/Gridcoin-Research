@@ -9,6 +9,7 @@
 #include "chainparamsbase.h"
 #include "logging.h"
 #include "test/state_guard.h"
+#include "test/win_fs_util.h"
 #include "test/wine.h"
 #include "tinyformat.h"
 #include "util/dir_permissions.h"
@@ -176,6 +177,10 @@ BOOST_AUTO_TEST_CASE(dpapi_store_fetch_roundtrip_local_machine)
     const std::optional<std::string> reason = CheckMatchesSpec(ReadAcl(path), util::OwnerOnlyAclSpec(false));
     BOOST_CHECK_MESSAGE(!reason.has_value(), reason.value_or(""));
     BOOST_CHECK(!fs::exists(path.string() + ".tmp"));
+
+    // A Low-integrity process of this account, which the list admits, cannot read it: the file's
+    // Medium label does not read up. Machine-scope DPAPI would decrypt it for any reader.
+    BOOST_CHECK_EQUAL(grc_test::OpenForReadAtLowIntegrity(path), static_cast<unsigned long>(ERROR_ACCESS_DENIED));
 
     std::optional<SecureString> fetched = FetchAutoUnlockFromDpapiBlob(path, error);
     BOOST_REQUIRE_MESSAGE(fetched.has_value(), error);

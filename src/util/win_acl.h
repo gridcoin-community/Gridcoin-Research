@@ -405,9 +405,19 @@ void CopyDacl(void* from, void* to);
 //! trustee is not a well-formed SID.
 void* BuildDacl(const std::vector<AceSpec>& aces);
 
-//! \p spec as a self-relative security descriptor with a protected DACL, for
-//! SECURITY_ATTRIBUTES. Free it with FreeSecurityDescriptor. Throws as BuildDacl does.
-void* MakeSecurityDescriptor(const AclSpec& spec);
+//! The mandatory label a new object is created with. Default gives it none. MediumNoReadUp gives
+//! it an explicit Medium label with NO_READ_UP and NO_WRITE_UP. A creator may set a label up to its
+//! own integrity level, so this needs no privilege at Medium or above.
+enum class MandatoryLabel : uint8_t
+{
+    Default,
+    MediumNoReadUp,
+};
+
+//! \p spec as a self-relative security descriptor with a protected DACL, and \p label in its
+//! SACL unless it is Default, for SECURITY_ATTRIBUTES. Free it with FreeSecurityDescriptor.
+//! Throws as BuildDacl does.
+void* MakeSecurityDescriptor(const AclSpec& spec, MandatoryLabel label = MandatoryLabel::Default);
 
 //! Create the directory \p dir with \p spec as its owner and protected DACL from the
 //! start (CreateDirectoryW with MakeSecurityDescriptor(spec)), so it is never there
