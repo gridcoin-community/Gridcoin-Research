@@ -688,6 +688,44 @@ function Remove-GridcoinLegacyPassphraseFile {
     return $left
 }
 
+# Compiles C# for Add-Type in a directory that only SYSTEM and Administrators can write. Windows
+# PowerShell compiles through the system's C# compiler, which writes the source and the assembly it
+# then loads into the temporary directory; the account's own %TEMP% can be written by its processes
+# that are not elevated. The directory is new, under Program Files, owned by Administrators with a
+# protected list, checked like a helper before use, and removed afterwards. Elevated only.
+function Add-GridcoinCompiledType {
+    param(
+        [Parameter(Mandatory = $true)][string]$TypeDefinition,
+        [string[]]$ReferencedAssemblies = @()
+    )
+    $administrators = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
+    $security = New-Object System.Security.AccessControl.DirectorySecurity
+    $security.SetOwner($administrators)
+    $security.SetAccessRuleProtection($true, $false)
+    foreach ($sid in @('S-1-5-18', 'S-1-5-32-544')) {
+        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+            (New-Object System.Security.Principal.SecurityIdentifier($sid)), 'FullControl', 'ContainerInherit, ObjectInherit',
+            'None', 'Allow')))
+    }
+    $directory = Join-Path $env:ProgramFiles ('gridcoin-compile-' + [guid]::NewGuid().ToString('N'))
+    [System.IO.Directory]::CreateDirectory($directory, $security) | Out-Null
+    try {
+        $vector = Get-GridcoinWriteVector -Path $directory -AllowedSids (Get-GridcoinPrivilegedSids)
+        if ($vector) { throw "REFUSED: the directory to compile in can be written by an unprivileged account: $vector" }
+        $saved = @($env:TMP, $env:TEMP)
+        try {
+            $env:TMP = $directory
+            $env:TEMP = $directory
+            Add-Type -TypeDefinition $TypeDefinition -ReferencedAssemblies $ReferencedAssemblies
+        } finally {
+            $env:TMP = $saved[0]
+            $env:TEMP = $saved[1]
+        }
+    } finally {
+        Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # The secret path of the autounlock migration lives in C#, so that no passphrase byte is ever bound
 # to a PowerShell parameter or held in a PowerShell variable (module logging, event 4103, records
 # bound parameters). PowerShell passes paths, the network name and SIDs only.
@@ -884,7 +922,7 @@ public static class GridcoinDpapi
     }
 }
 '@
-    Add-Type -TypeDefinition $source -ReferencedAssemblies 'System.Security'
+    Add-GridcoinCompiledType -TypeDefinition $source -ReferencedAssemblies 'System.Security'
 }
 
 # Carries autounlock across the upgrade: converts the old file (decrypted with the current user's

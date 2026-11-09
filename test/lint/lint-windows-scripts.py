@@ -44,6 +44,9 @@ Rules
      version and leaves the computer half empty)
   16 the update script reads the uninstall key the installer writes: Uninstall\\<CPACK_NSIS_PACKAGE_NAME>
      (64-bit), the package name the root CMakeLists.txt sets
+  17 no script compiles C# with Add-Type (-TypeDefinition, -MemberDefinition, -Path, -LiteralPath) but
+     GridcoinCommon.ps1's Add-GridcoinCompiledType, which compiles in a directory only SYSTEM and
+     Administrators can write
 
 Usage
   lint-windows-scripts.py              check the tree
@@ -550,8 +553,30 @@ def rule16(files):
     return failures
 
 
+ADD_TYPE_COMPILE_RE = re.compile(r"\bAdd-Type\b[^\n]*-(TypeDefinition|MemberDefinition|Path|LiteralPath)\b", re.IGNORECASE)
+COMPILER = "Add-GridcoinCompiledType"
+
+
+def rule17(files):
+    failures = []
+    for path, text in sorted(ps1_files(files).items()):
+        # GridcoinCommon.ps1's compiler is the one place that compiles, in its own directory.
+        skip = range(0)
+        body = function_body(text, COMPILER) if path == COMMON else None
+        if body is not None:
+            first = text[:text.find(body)].count("\n") + 1
+            skip = range(first, first + body.count("\n") + 1)
+        for number, line in enumerate(text.splitlines(), 1):
+            if number in skip:
+                continue
+            if ADD_TYPE_COMPILE_RE.search(line.split("#", 1)[0]):
+                failures.append(f"rule 17: {path}:{number}: compiles C# with Add-Type outside {COMPILER}, in a "
+                                "temporary directory that processes of the account which are not elevated can write")
+    return failures
+
+
 RULES = (rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9, rule10, rule11, rule12, rule13, rule14, rule15,
-         rule16)
+         rule16, rule17)
 
 GOOD_PS1 = "#Requires -Version 5.1\nSet-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n"
 
@@ -600,8 +625,12 @@ GOOD_PRELOAD = ("function Get-PreloadWriteVector {\n    $allowed = @('S-1-5-18',
 GOOD_KEY_LINE = "$uninstallKey = 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Gridcoin (64-bit)'\n"
 GOOD_UPDATE = (GOOD_PS1 + PIN_LINE + GOOD_PRELOAD + ". (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')\n" + GOOD_KEY_LINE
                + "# Start-Process in a comment\nTest-GridcoinReleaseSignature -Path $p -SignerFile $s\nStart-Process $p\n")
+GOOD_COMPILER = ("function Add-GridcoinCompiledType {\n    $env:TMP = $directory\n"
+                 "    Add-Type -TypeDefinition $TypeDefinition -ReferencedAssemblies $ReferencedAssemblies\n}\n"
+                 "Add-Type -AssemblyName System.Security\n")
 GOOD_FILES = {
-    COMMON: GOOD_PS1 + "if ($t.Principal.LogonType -eq 1) { }\n'rem BEGIN GENERATED'\n'rem END GENERATED'\n" + GOOD_CHECKER,
+    COMMON: (GOOD_PS1 + "if ($t.Principal.LogonType -eq 1) { }\n'rem BEGIN GENERATED'\n'rem END GENERATED'\n" + GOOD_CHECKER
+             + GOOD_COMPILER),
     INSTALL: GOOD_PS1 + PIN_LINE + "if ($DataDir -match '\\\\$') { throw 'x' }\n",
     SHUTDOWN: GOOD_SHUTDOWN,
     GUI: GOOD_PS1 + "if ($DataDir -match '\\\\$') { throw 'x' }\n",
@@ -631,6 +660,10 @@ BAD_SAMPLES = (
     (16, {ROOT_CMAKE: GOOD_FILES[ROOT_CMAKE].replace('project("Gridcoin"', 'project("GridcoinResearch"')}),
     (16, {NSIS: GOOD_NSIS.replace('Name "@CPACK_NSIS_PACKAGE_NAME@ (@CPACK_WINDOWS_BITS@-bit)"', 'Name "Gridcoin"')}),
     (16, {UPDATE: GOOD_UPDATE.replace(GOOD_KEY_LINE, "")}),
+    (17, {COMMON: GOOD_FILES[COMMON] + "Add-Type -TypeDefinition $source -ReferencedAssemblies 'System.Security'\n"}),
+    (17, {INSTALL: GOOD_FILES[INSTALL] + "Add-Type -MemberDefinition $sig -Name Native -Namespace G\n"}),
+    (17, {"contrib/windows/Other.ps1": GOOD_PS1 + "Add-Type -Path .\\x.cs\n"}),
+    (17, {"contrib/windows/Other.ps1": GOOD_PS1 + "Add-Type -LiteralPath $cs\n"}),
     (15, {SHUTDOWN: GOOD_SHUTDOWN.replace("($userVersion * 65536 + ($computerVersion % 65535) + 1)",
                                           "([int]$Matches[1] + 65536)")}),
     (15, {SHUTDOWN: GOOD_SHUTDOWN + "Set-ShutdownScriptState $cmdPath\n"}),
