@@ -997,6 +997,8 @@ def create_dir(name, dir_fd, display, owner=None):
     if owner is not None and os.geteuid() == 0:
         os.fchown(fd, owner.pw_uid, owner.pw_gid)
     os.fchmod(fd, 0o700)
+    # Its entry in dir_fd is on disk before anything is put in it.
+    os.fsync(dir_fd)
     return fd
 
 
@@ -1399,17 +1401,18 @@ def copy_as(src, dst, src_user, dst_user, exclude_top, host):
 
 
 def write_file_as(dir_fd, name, data, pw, host):
-    """Create name in dir_fd as pw (when root): 0600, exclusively, without following a symlink."""
-    def body():
-        with os.fdopen(os.open(name, NEW_FILE_FLAGS, 0o600, dir_fd=dir_fd), "wb") as f:
-            f.write(data)
-
-    run_as(host, pw, body, (dir_fd,))
+    """Create name in dir_fd as pw (when root), as write_new_file does."""
+    run_as(host, pw, lambda: write_new_file(dir_fd, name, data), (dir_fd,))
 
 
 def write_new_file(dir_fd, name, data):
+    """Create name in dir_fd: 0600, exclusively, without following a symlink. The file, and then its
+    entry in dir_fd, are on disk when this returns, before anything it stands in for is removed."""
     with os.fdopen(os.open(name, NEW_FILE_FLAGS, 0o600, dir_fd=dir_fd), "wb") as f:
         f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    os.fsync(dir_fd)
 
 
 def hold_datadir_lock(path, owner_uid):
@@ -1484,6 +1487,12 @@ def stash_source(parent_fd, name, src_fd, stash_name, keep, display, copies=None
                 if os.geteuid() == 0 and copy_owner is not None:
                     os.fchown(f.fileno(), copy_owner.pw_uid, copy_owner.pw_gid)
                 f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+        # What moved, and the copies, are on disk in the stash, and gone from the source, before
+        # the owner record names the stash.
+        os.fsync(stash_fd)
+        os.fsync(src_fd)
     finally:
         os.close(stash_fd)
 

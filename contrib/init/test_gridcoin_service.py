@@ -1813,6 +1813,66 @@ class CopyTests(ServiceTestBase):
 
         self.assertEqual(synced, [(ino("a/f"), None), (ino("g"), None), (ino("."), ["a", "g"]), (ino("a"), ["f"])])
 
+    def fsync_recorder(self, log):
+        """An os.fsync that appends, for each call, the inode synced and, for a directory, its
+        entries then, to the file log, so that a child's calls are seen too."""
+        real_fsync = os.fsync
+
+        def recording_fsync(fd):
+            st = os.fstat(fd)
+            names = None
+            if stat.S_ISDIR(st.st_mode):
+                fresh = os.open(".", os.O_RDONLY | os.O_DIRECTORY, dir_fd=fd)
+                try:
+                    names = sorted(os.listdir(fresh))
+                finally:
+                    os.close(fresh)
+            with open(log, "a", encoding="utf8") as f:
+                f.write(json.dumps([st.st_ino, names]) + "\n")
+            real_fsync(fd)
+
+        return recording_fsync
+
+    def synced(self, log):
+        if not os.path.exists(log):
+            return []
+        with open(log, encoding="utf8") as f:
+            return [json.loads(line) for line in f]
+
+    def test_new_files_and_directories_are_synced_with_their_entries(self):
+        # The owner record, the quarantined copies and the settings file, and the directories the tool
+        # makes, are on disk before anything they stand in for is removed: each file, then the
+        # directory that names it.
+        log = os.path.join(self.tmp.name, "fsync.log")
+        dir_fd = os.open(self.dst, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, dir_fd)
+        with mock.patch.object(svc.os, "fsync", self.fsync_recorder(log)):
+            svc.write_new_file(dir_fd, "a", b"1")
+            os.close(svc.create_dir("d", dir_fd, "d"))
+            svc.write_file_as(dir_fd, "b", b"2", self.host.getpwnam("bob"), self.host)
+
+        def ino(rel):
+            return os.lstat(os.path.join(self.dst, rel)).st_ino
+
+        top = os.lstat(self.dst).st_ino
+        self.assertEqual(self.synced(log), [[ino("a"), None], [top, ["a"]], [top, ["a", "d"]], [ino("b"), None],
+                                            [top, ["a", "b", "d"]]])
+
+    def test_a_stash_is_synced_with_what_moved_into_it(self):
+        write_tree(self.src, {"wallet.dat": b"w", "keep.conf": b"k"})
+        log = os.path.join(self.tmp.name, "fsync.log")
+        parent_fd = os.open(self.tmp.name, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, parent_fd)
+        src_fd = os.open(self.src, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, src_fd)
+        with mock.patch.object(svc.os, "fsync", self.fsync_recorder(log)):
+            svc.stash_source(parent_fd, "src", src_fd, "stash", {"keep.conf"}, "stash", copies={"copy.conf": b"c"})
+        stash = os.path.join(self.tmp.name, "stash")
+        self.assertEqual(self.synced(log)[0][0], os.lstat(self.tmp.name).st_ino)
+        self.assertEqual(self.synced(log)[1:], [[os.lstat(os.path.join(stash, "copy.conf")).st_ino, None],
+                                                [os.lstat(stash).st_ino, ["copy.conf", "wallet.dat"]],
+                                                [os.lstat(self.src).st_ino, ["keep.conf"]]])
+
     def test_extract_refuses_data_after_the_archive(self):
         stream = crafted_stream([("f", tarfile.REGTYPE, b"1")])
         raw = stream.getvalue() + b"trailing"
