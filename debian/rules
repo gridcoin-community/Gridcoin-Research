@@ -97,8 +97,9 @@ endif
 
 # The system units are handed to dh_installsystemd as debian/gridcoinresearchd.<unit>
 # (listed in debian/clean), so it installs them and writes their maintainer script
-# snippets: not enabled or started on install, stopped on removal, and try-restarted
-# after an upgrade so that a running service runs the new daemon and unit.
+# snippets: not enabled or started on install, and stopped on removal. The core is neither stopped
+# nor restarted by them on an upgrade (--no-stop-on-upgrade): the postinst try-restarts a running
+# one once the switch-over has run, and leaves one whose switch-over failed as it runs.
 execute_before_dh_installsystemd:
 	cp $(UNITDIR)/gridcoinresearchd.service debian/gridcoinresearchd.gridcoinresearchd.service
 ifeq ($(AUTOUNLOCK),ON)
@@ -107,7 +108,7 @@ ifeq ($(AUTOUNLOCK),ON)
 endif
 
 override_dh_installsystemd:
-	dh_installsystemd -pgridcoinresearchd --name=gridcoinresearchd --no-enable --no-start --restart-after-upgrade
+	dh_installsystemd -pgridcoinresearchd --name=gridcoinresearchd --no-enable --no-start --no-stop-on-upgrade
 ifeq ($(AUTOUNLOCK),ON)
 	dh_installsystemd -pgridcoinresearchd --name=gridcoin-autounlock --no-enable --no-start --restart-after-upgrade
 endif

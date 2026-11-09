@@ -519,28 +519,49 @@ class PostinstTests(unittest.TestCase):
                 units = ["%s@%s.service" % (fake.net["daemon"], user) for user in ("alice", "bob", "carol")]
                 fake.active(*units)
                 restart = ["systemctl try-restart --no-block " + unit for unit in units]
+                system = "systemctl try-restart --no-block %s.service" % fake.net["daemon"]
                 # bob's switch-over is still unfinished; it is not restarted.
                 fake.set_tool(1)
                 self.write_state(fake, "core bob\ncore-active bob\n")
                 rc, out, err = fake.run("postinst", "configure", NEW)
                 self.assertEqual(rc, 0, err)
-                self.assertEqual(fake.calls("systemctl try-restart"), [restart[0], restart[2]])
+                self.assertEqual(fake.calls("systemctl try-restart"), [restart[0], restart[2], system])
                 # A core the switch-over has just handled is not restarted a second time.
                 fake.set_tool(0)
                 rc, out, err = fake.run("postinst", "configure", LATER)
                 self.assertEqual(rc, 0, err)
-                self.assertEqual(fake.calls("systemctl try-restart"), [restart[0], restart[2]])
+                self.assertEqual(fake.calls("systemctl try-restart"), [restart[0], restart[2], system])
                 # No state file: every running core.
                 rc, out, err = fake.run("postinst", "configure", LATER)
                 self.assertEqual(rc, 0, err)
-                self.assertEqual(fake.calls("systemctl try-restart"), restart)
-                # Upgrading from a version before the switch-over leaves the restarts to it, and a
-                # fresh install restarts nothing.
-                for args in (("configure", OLD), ("configure", "")):
+                self.assertEqual(fake.calls("systemctl try-restart"), restart + [system])
+                # Upgrading from a version before the switch-over leaves the per-user cores to it, and
+                # restarts the system service; a fresh install restarts nothing.
+                for args, expected in ((("configure", OLD), [system]), (("configure", ""), [])):
                     self.write_state(fake, "core-active alice\n")
                     rc, out, err = fake.run("postinst", *args)
                     self.assertEqual(rc, 0, err)
-                    self.assertEqual(fake.calls("systemctl try-restart"), [])
+                    self.assertEqual(fake.calls("systemctl try-restart"), expected)
+
+    def test_the_system_service_is_restarted_unless_its_switch_over_failed(self):
+        # debhelper does not restart it (--no-stop-on-upgrade): the postinst does, after the
+        # switch-over, and not while a failed switch-over still has the system service pending, which
+        # then keeps running on its old command line, as NEWS says.
+        for network in NETWORKS:
+            with self.subTest(network=network):
+                fake = FakeRoot(self, network)
+                fake.systemd_running()
+                system = "systemctl try-restart --no-block %s.service" % fake.net["daemon"]
+                for rc_tool, state, expected in ((1, "system-core\n", []), (1, "system-autounlock\n", []),
+                                                 (0, "system-core\n", [system]),
+                                                 (1, "core-active alice\n", [system])):
+                    with self.subTest(rc=rc_tool, state=state):
+                        fake.set_tool(rc_tool)
+                        self.write_state(fake, state)
+                        rc, out, err = fake.run("postinst", "configure", OLD)
+                        self.assertEqual(rc, 0, err)
+                        self.assertEqual(fake.calls("systemctl try-restart --no-block %s.service"
+                                                    % fake.net["daemon"]), expected)
 
     def test_restarts_honour_policy_rc_d(self):
         for network in NETWORKS:
@@ -549,13 +570,15 @@ class PostinstTests(unittest.TestCase):
                 fake.systemd_running()
                 units = ["%s@%s.service" % (fake.net["daemon"], user) for user in ("alice", "bob")]
                 fake.active(*units)
+                # The system service is asked about, and restarted, after them.
+                every = units + ["%s.service" % fake.net["daemon"]]
                 # Refused with 101: no restart, and the line deb-systemd-invoke prints.
                 fake.set_policy(101)
                 rc, out, err = fake.run("postinst", "configure", LATER)
                 self.assertEqual(rc, 0, err)
                 self.assertEqual(fake.calls("systemctl try-restart"), [])
-                self.assertEqual(fake.calls("policy-rc.d"), ["policy-rc.d %s try-restart" % unit for unit in units])
-                for unit in units:
+                self.assertEqual(fake.calls("policy-rc.d"), ["policy-rc.d %s try-restart" % unit for unit in every])
+                for unit in every:
                     self.assertIn("/usr/sbin/policy-rc.d returned 101, not running 'try-restart %s'" % unit, err)
                 # Any other status goes ahead, without the line.
                 for status in (0, 104, 1):
@@ -563,19 +586,19 @@ class PostinstTests(unittest.TestCase):
                     rc, out, err = fake.run("postinst", "configure", LATER)
                     self.assertEqual(rc, 0, err)
                     self.assertEqual(fake.calls("systemctl try-restart"),
-                                     ["systemctl try-restart --no-block " + unit for unit in units])
+                                     ["systemctl try-restart --no-block " + unit for unit in every])
                     self.assertNotIn("policy-rc.d returned", err)
                 # No policy-rc.d: go ahead.
                 os.unlink(fake.path("usr/sbin/policy-rc.d"))
                 rc, out, err = fake.run("postinst", "configure", LATER)
                 self.assertEqual(rc, 0, err)
-                self.assertEqual(len(fake.calls("systemctl try-restart")), 2)
+                self.assertEqual(len(fake.calls("systemctl try-restart")), 3)
                 # One that is not executable is no policy.
                 fake.set_policy(101)
                 os.chmod(fake.path("usr/sbin/policy-rc.d"), 0o644)
                 rc, out, err = fake.run("postinst", "configure", LATER)
                 self.assertEqual(rc, 0, err)
-                self.assertEqual(len(fake.calls("systemctl try-restart")), 2)
+                self.assertEqual(len(fake.calls("systemctl try-restart")), 3)
 
     def test_without_systemd_the_rerun_is_named(self):
         fake = FakeRoot(self, "test")
@@ -753,6 +776,17 @@ class VersionTests(unittest.TestCase):
             with open(os.path.join(SOURCE_ROOT, net["tree"], "%s.NEWS" % net["package"]), encoding="utf8") as f:
                 version = re.match(r"\S+ \(([^)]+)\)", f.readline()).group(1)
             self.assertEqual(version.rsplit("-", 1)[0], first[:-1], net["tree"])
+
+
+class RulesTests(unittest.TestCase):
+    def test_debhelper_neither_stops_nor_restarts_the_core_on_an_upgrade(self):
+        # The postinst restarts it once the switch-over has run (see PostinstTests); debhelper's own
+        # try-restart would restart a core whose switch-over failed.
+        for net in NETWORKS.values():
+            with open(os.path.join(SOURCE_ROOT, net["tree"], "rules"), encoding="utf8") as f:
+                rules = f.read()
+            self.assertIn("dh_installsystemd -p%s --name=%s --no-enable --no-start --no-stop-on-upgrade\n"
+                          % (net["package"], net["daemon"]), rules)
 
 
 class NewsTests(unittest.TestCase):

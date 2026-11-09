@@ -105,6 +105,19 @@ restart_running_cores() {
     done
 }
 
+# After an upgrade the system service runs the new daemon and unit: try-restarted here, not by
+# debhelper (--no-stop-on-upgrade in debian/rules), so that a system service whose switch-over
+# failed keeps running on its old command line, as NEWS says. A stopped one stays stopped.
+restart_system_service() {
+    if [ "$switch_over_failed" = 1 ] && printf '%s\n' "$pending" | grep -q '^system-'; then
+        return 0
+    fi
+    if policy_refuses "$DAEMON.service"; then
+        return 0
+    fi
+    systemctl try-restart --no-block "$DAEMON.service" || true
+}
+
 conf_tmp=
 
 case "$1" in
@@ -126,17 +139,22 @@ case "$1" in
         if [ -e "$STATE" ]; then
             pending=$(cat "$STATE")
         fi
+        switch_over_failed=
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload || true
             if [ -e "$STATE" ]; then
                 # The services the preinst found move to the new units.
                 if ! "$TOOL" switch-over --state="$STATE"; then
+                    switch_over_failed=1
                     echo "$DAEMON: the switch-over did not finish, for the reasons above." >&2
                     echo "Once they are fixed, run: $TOOL switch-over --state=$STATE" >&2
                 fi
             fi
             if [ -n "$2" ] && dpkg --compare-versions "$2" ge "$FIRST_NEW_VERSION"; then
                 restart_running_cores
+            fi
+            if [ -n "$2" ]; then
+                restart_system_service
             fi
         elif [ -e "$STATE" ]; then
             echo "$DAEMON: systemd is not running, so nothing was switched over to the new units." >&2
