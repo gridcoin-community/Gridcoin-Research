@@ -21,8 +21,9 @@
 param(
     [string]$TaskFolder = 'Gridcoin',
 
-    # The datadir whose old autounlock files are looked for (-All only).
-    [string]$DataDir = (Join-Path $env:APPDATA 'GridcoinResearch'),
+    # The datadir whose old autounlock files are looked for (-All only). Made without Join-Path, as
+    # a default is evaluated before the module path is pinned below.
+    [string]$DataDir = [System.IO.Path]::Combine($env:APPDATA, 'GridcoinResearch'),
 
     [switch]$All
 )

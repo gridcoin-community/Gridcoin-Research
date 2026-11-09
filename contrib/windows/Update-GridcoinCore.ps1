@@ -46,12 +46,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# An elevated run loads modules only from the system's own module directories: first, before any
+# command a module provides is called.
+$env:PSModulePath = "$PSHOME\Modules;$env:ProgramFiles\WindowsPowerShell\Modules"
+
 # Windows PowerShell 5.1 leaves $PSScriptRoot empty in a parameter default of a script with
 # [CmdletBinding()], so the default is set here.
 if (-not $SignerFile) { $SignerFile = Join-Path $PSScriptRoot 'release-signer.txt' }
-
-# An elevated run loads modules only from the system's own module directories.
-$env:PSModulePath = "$PSHOME\Modules;$env:ProgramFiles\WindowsPowerShell\Modules"
 
 # The helpers below are dot-sourced, so their code runs elevated as soon as it is loaded. They,
 # and every directory above them, are checked first, with this copy of Get-GridcoinWriteVector

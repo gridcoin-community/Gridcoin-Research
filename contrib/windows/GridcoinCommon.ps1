@@ -795,6 +795,36 @@ public static class GridcoinDpapi
     [DllImport("kernel32.dll")]
     private static extern IntPtr LocalFree(IntPtr memory);
 
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool ConvertStringSecurityDescriptorToSecurityDescriptorW(string sddl, int revision,
+        out IntPtr descriptor, IntPtr size);
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool ConvertSecurityDescriptorToStringSecurityDescriptorW(IntPtr descriptor, int revision,
+        int information, out IntPtr sddl, IntPtr size);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool GetSecurityDescriptorSacl(IntPtr descriptor, out bool present, out IntPtr sacl,
+        out bool defaulted);
+
+    [DllImport("advapi32.dll")]
+    private static extern int SetSecurityInfo(SafeHandle handle, int objectType, int information, IntPtr owner,
+        IntPtr group, IntPtr dacl, IntPtr sacl);
+
+    [DllImport("advapi32.dll")]
+    private static extern int GetSecurityInfo(SafeHandle handle, int objectType, int information, IntPtr owner,
+        IntPtr group, IntPtr dacl, IntPtr sacl, out IntPtr descriptor);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool MoveFileExW(string from, string to, int flags);
+
+    private const int SE_FILE_OBJECT = 1;
+    private const int LABEL_SECURITY_INFORMATION = 0x10;
+    private const int MOVEFILE_REPLACE_EXISTING = 0x1;
+    private const int MOVEFILE_WRITE_THROUGH = 0x8;
+    // Medium integrity, with no read up and no write up, as the core labels the file it writes.
+    private const string MEDIUM_NO_READ_UP = "S:(ML;;NRNW;;;ME)";
+
     private const int UI_FORBIDDEN = 0x1;
     private const int LOCAL_MACHINE = 0x4;
     private const int AUDIT = 0x10;
@@ -939,15 +969,82 @@ public static class GridcoinDpapi
 
         string temporary = path + ".tmp";
         if (File.Exists(temporary)) File.Delete(temporary);
-        using (FileStream stream = new FileStream(temporary, FileMode.CreateNew,
-            FileSystemRights.Write | FileSystemRights.Delete, FileShare.None, 4096, FileOptions.WriteThrough,
-            fileSecurity))
+        try
         {
-            stream.Write(file, 0, file.Length);
-            stream.Flush();
+            // WRITE_OWNER and READ_CONTROL to set the label and read it back.
+            using (FileStream stream = new FileStream(temporary, FileMode.CreateNew,
+                FileSystemRights.Write | FileSystemRights.Delete | FileSystemRights.TakeOwnership |
+                FileSystemRights.ReadPermissions, FileShare.None, 4096, FileOptions.WriteThrough, fileSecurity))
+            {
+                // Labelled before anything is written: a Low-integrity process of the account, which
+                // the list admits, cannot read it.
+                SetMediumNoReadUp(stream.SafeFileHandle);
+                stream.Write(file, 0, file.Length);
+                stream.Flush();
+            }
+            // Renamed over a file there, which keeps this file's own list; File.Replace would keep
+            // the replaced file's.
+            if (!MoveFileExW(temporary, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
         }
-        if (File.Exists(path)) File.Replace(temporary, path, null);
-        else File.Move(temporary, path);
+        catch
+        {
+            if (File.Exists(temporary)) File.Delete(temporary);
+            throw;
+        }
+    }
+
+    private static void SetMediumNoReadUp(SafeHandle handle)
+    {
+        IntPtr descriptor;
+        if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(MEDIUM_NO_READ_UP, 1, out descriptor, IntPtr.Zero))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+        try
+        {
+            bool present;
+            bool defaulted;
+            IntPtr sacl;
+            if (!GetSecurityDescriptorSacl(descriptor, out present, out sacl, out defaulted) || !present)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            int set = SetSecurityInfo(handle, SE_FILE_OBJECT, LABEL_SECURITY_INFORMATION, IntPtr.Zero, IntPtr.Zero,
+                IntPtr.Zero, sacl);
+            if (set != 0) throw new Win32Exception(set);
+        }
+        finally
+        {
+            LocalFree(descriptor);
+        }
+
+        IntPtr read;
+        int got = GetSecurityInfo(handle, SE_FILE_OBJECT, LABEL_SECURITY_INFORMATION, IntPtr.Zero, IntPtr.Zero,
+            IntPtr.Zero, IntPtr.Zero, out read);
+        if (got != 0) throw new Win32Exception(got);
+        try
+        {
+            IntPtr text;
+            if (!ConvertSecurityDescriptorToStringSecurityDescriptorW(read, 1, LABEL_SECURITY_INFORMATION, out text,
+                IntPtr.Zero))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            string label = Marshal.PtrToStringUni(text);
+            LocalFree(text);
+            if (label.IndexOf("ML;", StringComparison.Ordinal) < 0 || label.IndexOf("NR", StringComparison.Ordinal) < 0 ||
+                label.IndexOf(";ME)", StringComparison.Ordinal) < 0)
+            {
+                throw new InvalidDataException("the autounlock file did not keep its Medium integrity label (" + label + ")");
+            }
+        }
+        finally
+        {
+            LocalFree(read);
+        }
     }
 }
 '@
