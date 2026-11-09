@@ -111,7 +111,7 @@ foreach ($helper in @((Join-Path $PSScriptRoot 'GridcoinCommon.ps1'), (Join-Path
 . (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')
 . (Join-Path $PSScriptRoot 'Test-GridcoinRelease.ps1')
 
-$uninstallKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\GridcoinResearch (64-bit)'
+$uninstallKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Gridcoin (64-bit)'
 
 function ConvertTo-FourPartVersion {
     param([Parameter(Mandatory = $true)][version]$Value)

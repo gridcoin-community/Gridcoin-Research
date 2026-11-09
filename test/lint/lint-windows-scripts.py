@@ -42,6 +42,8 @@ Rules
      starts no task once shutdown is in progress, so a shutdown script cannot start Core-Stop), and
      its gpt.ini bump is of the computer version, the LOW 16 bits (adding 65536 bumps the user
      version and leaves the computer half empty)
+  16 the update script reads the uninstall key the installer writes: Uninstall\\<CPACK_NSIS_PACKAGE_NAME>
+     (64-bit), the package name the root CMakeLists.txt sets
 
 Usage
   lint-windows-scripts.py              check the tree
@@ -59,6 +61,7 @@ WIN_DIR = "contrib/windows"
 CPACK_DIR = "build-aux/cpack"
 NSIS = "build-aux/cpack/NSIS.template.in"
 CMAKE = "src/CMakeLists.txt"
+ROOT_CMAKE = "CMakeLists.txt"
 COMMON = "contrib/windows/GridcoinCommon.ps1"
 INSTALL = "contrib/windows/Install-GridcoinCoreTask.ps1"
 GUI = "contrib/windows/Start-GridcoinGui.ps1"
@@ -119,6 +122,7 @@ def load_tree(root):
     files = {}
     paths = glob.glob(os.path.join(root, WIN_DIR, "*")) + glob.glob(os.path.join(root, CPACK_DIR, "*"))
     paths.append(os.path.join(root, CMAKE))
+    paths.append(os.path.join(root, ROOT_CMAKE))
     for path in paths:
         if not os.path.isfile(path):
             continue
@@ -519,7 +523,35 @@ def rule15(files):
     return failures
 
 
-RULES = (rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9, rule10, rule11, rule12, rule13, rule14, rule15)
+UNINSTALL_KEY_RE = re.compile(r"^\$uninstallKey = 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\(.+)'\s*$",
+                              re.MULTILINE)
+NSIS_NAME = 'Name "@CPACK_NSIS_PACKAGE_NAME@ (@CPACK_WINDOWS_BITS@-bit)"'
+
+
+def rule16(files):
+    failures = []
+    update, root_cmake, nsis = files.get(UPDATE), files.get(ROOT_CMAKE), files.get(NSIS)
+    if update is None or root_cmake is None or nsis is None:
+        return failures
+    # The installer is named "<CPACK_NSIS_PACKAGE_NAME> (<bits>-bit)" and writes its uninstall key under that name.
+    if not any(line.strip() == NSIS_NAME for line in nsis.splitlines()):
+        failures.append(f"rule 16: {NSIS}: the installer's Name is not {NSIS_NAME}")
+    package = re.search(r"^set\(CPACK_NSIS_PACKAGE_NAME\s+(\S+?)\)", root_cmake, re.MULTILINE)
+    project = re.search(r'^project\("([^"]+)"', root_cmake, re.MULTILINE)
+    name = package.group(1) if package else None
+    if name == "${PROJECT_NAME}":
+        name = project.group(1) if project else None
+    if name is None:
+        return failures + [f"rule 16: {ROOT_CMAKE}: CPACK_NSIS_PACKAGE_NAME cannot be read"]
+    keys = UNINSTALL_KEY_RE.findall(update)
+    if keys != [f"{name} (64-bit)"]:
+        failures.append(f"rule 16: {UPDATE}: reads the uninstall key {keys}, not the installer's "
+                        f"'{name} (64-bit)'")
+    return failures
+
+
+RULES = (rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9, rule10, rule11, rule12, rule13, rule14, rule15,
+         rule16)
 
 GOOD_PS1 = "#Requires -Version 5.1\nSet-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n"
 
@@ -544,7 +576,8 @@ GOOD_UNINSTALL = ("Section -un.Main\n" + step_line("PreUninstall", "$INSTDIR\\wi
                   + "    Delete x\n    RMDir /r y\nSectionEnd\n"
                   + "Function un.onInit\n    !insertmacro GRC_ADMIN_PLUGINSDIR uninstall\n"
                   + step_line("UninstallCheck", "$INSTDIR\\windows", False, "ExecToStack") + "FunctionEnd\n")
-GOOD_PLUGINSDIR = ('!define GRC_PROGRAMFILES "$PROGRAMFILES64"\n'
+GOOD_PLUGINSDIR = ('Name "@CPACK_NSIS_PACKAGE_NAME@ (@CPACK_WINDOWS_BITS@-bit)"\n'
+                   '!define GRC_PROGRAMFILES "$PROGRAMFILES64"\n'
                    "!macro GRC_ADMIN_PLUGINSDIR NAME\n"
                    '    StrCpy $0 "${GRC_PROGRAMFILES}\\x.${NAME}"\n'
                    "    RMDir /r $0\n    CreateDirectory $0\n    UnsafeStrCpy $PLUGINSDIR $0\n!macroend\n"
@@ -564,8 +597,9 @@ GOOD_CHECKER = ("function Get-GridcoinPrivilegedSids {\n    return @('S-1-5-18',
                 "function Get-GridcoinWriteVector {\n" + GOOD_MASKS + "}\n")
 GOOD_PRELOAD = ("function Get-PreloadWriteVector {\n    $allowed = @('S-1-5-18', 'S-1-5-32-544')\n" + GOOD_MASKS + "}\n"
                 "$vector = Get-PreloadWriteVector -Path $helper\n")
-GOOD_UPDATE = (GOOD_PS1 + PIN_LINE + GOOD_PRELOAD + ". (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')\n"
-               "# Start-Process in a comment\nTest-GridcoinReleaseSignature -Path $p -SignerFile $s\nStart-Process $p\n")
+GOOD_KEY_LINE = "$uninstallKey = 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Gridcoin (64-bit)'\n"
+GOOD_UPDATE = (GOOD_PS1 + PIN_LINE + GOOD_PRELOAD + ". (Join-Path $PSScriptRoot 'GridcoinCommon.ps1')\n" + GOOD_KEY_LINE
+               + "# Start-Process in a comment\nTest-GridcoinReleaseSignature -Path $p -SignerFile $s\nStart-Process $p\n")
 GOOD_FILES = {
     COMMON: GOOD_PS1 + "if ($t.Principal.LogonType -eq 1) { }\n'rem BEGIN GENERATED'\n'rem END GENERATED'\n" + GOOD_CHECKER,
     INSTALL: GOOD_PS1 + PIN_LINE + "if ($DataDir -match '\\\\$') { throw 'x' }\n",
@@ -577,6 +611,7 @@ GOOD_FILES = {
     NSIS: GOOD_NSIS,
     STEPS: GOOD_PS1 + PIN_LINE + "$script:InstallDirSddl = '" + GOOD_SDDL + "'\n",
     CMAKE: "install(FILES Install-GridcoinCoreTask.ps1)\n",
+    ROOT_CMAKE: 'project("Gridcoin"\n    VERSION 1.2.3.4\n)\nset(CPACK_NSIS_PACKAGE_NAME ${PROJECT_NAME})\n',
     UPDATE: GOOD_UPDATE,
     RELEASE_TEST: GOOD_PS1 + PIN_LINE + "Get-AuthenticodeSignature -LiteralPath $Path\n",
     SIGNER: "# comments\n\nidentity-eku=1.3.6.1.4.1.311.97.11.22.33\nsubject-cn=Some Name\n",
@@ -592,6 +627,10 @@ BAD_SAMPLES = (
     (12, {NSIS: GOOD_NSIS + "    ExecWait '$1 /C tasklist.exe'\n"}),
     (12, {NSIS: GOOD_NSIS.replace("$1 /D /C", "$1 /C")}),
     (12, {NSIS: GOOD_NSIS + "    ExecWait '\"$SYSDIR\\cmd.exe\" /C x' $0\n"}),
+    (16, {UPDATE: GOOD_UPDATE.replace("Uninstall\\Gridcoin (64-bit)", "Uninstall\\GridcoinResearch (64-bit)")}),
+    (16, {ROOT_CMAKE: GOOD_FILES[ROOT_CMAKE].replace('project("Gridcoin"', 'project("GridcoinResearch"')}),
+    (16, {NSIS: GOOD_NSIS.replace('Name "@CPACK_NSIS_PACKAGE_NAME@ (@CPACK_WINDOWS_BITS@-bit)"', 'Name "Gridcoin"')}),
+    (16, {UPDATE: GOOD_UPDATE.replace(GOOD_KEY_LINE, "")}),
     (15, {SHUTDOWN: GOOD_SHUTDOWN.replace("($userVersion * 65536 + ($computerVersion % 65535) + 1)",
                                           "([int]$Matches[1] + 65536)")}),
     (15, {SHUTDOWN: GOOD_SHUTDOWN + "Set-ShutdownScriptState $cmdPath\n"}),
