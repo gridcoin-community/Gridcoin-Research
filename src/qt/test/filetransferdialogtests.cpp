@@ -12,6 +12,7 @@
 #include "qt/guiipcworker.h"
 #include "qt/guiutil.h"
 #include "sync.h"
+#include "test/wine.h"
 #include "uint256.h"
 
 #include <QApplication>
@@ -41,6 +42,12 @@
 #include <vector>
 
 namespace {
+
+//! Why a case that downloads to a file is skipped under Wine, as the unit tests' cases are: the
+//! temporary file a download writes needs a protected access list, which Wine does not keep
+//! (util::TransferTempFile refuses it there). Windows runs them.
+constexpr const char* NO_LIST_UNDER_WINE = "Wine keeps no protected access list, which a download's temporary file needs";
+
 using namespace std::chrono_literals;
 
 std::vector<unsigned char> Bytes(size_t n)
@@ -426,6 +433,8 @@ void FileTransferDialogTests::downloadWithoutWorkerIsALocalError()
 // total, and the file arrives whole.
 void FileTransferDialogTests::downloadShowsProgressAndSavesTheFile()
 {
+    if (grc_test::RunningUnderWine()) QSKIP(NO_LIST_UNDER_WINE);
+
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
 
     // Asked first, so that the worker's thread is running before the transfer
@@ -484,6 +493,8 @@ void FileTransferDialogTests::downloadShowsProgressAndSavesTheFile()
 // nothing is left at the destination, and the source was told to stop.
 void FileTransferDialogTests::cancelStopsTheDownloadAndLeavesNothing()
 {
+    if (grc_test::RunningUnderWine()) QSKIP(NO_LIST_UNDER_WINE);
+
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -659,6 +670,8 @@ void FileTransferDialogTests::jobShowsItsBytesOnceReportedAndIsToldOfCancel()
 // The entry is saved after it, and the source is destroyed on the worker too.
 void FileTransferDialogTests::backupBeginsOnTheWorkerWhileTheWindowRuns()
 {
+    if (grc_test::RunningUnderWine()) QSKIP(NO_LIST_UNDER_WINE);
+
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
 
     std::thread::id worker_thread;
@@ -758,6 +771,8 @@ void FileTransferDialogTests::cancelWhileTheBackupBeginsSavesNothing()
 // its first chunk, not with the first file's counts.
 void FileTransferDialogTests::backupDialogNamesTheFileBeingSaved()
 {
+    if (grc_test::RunningUnderWine()) QSKIP(NO_LIST_UNDER_WINE);
+
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -897,6 +912,8 @@ void FileTransferDialogTests::backupResultText()
 // only once it has stopped, with events still processed meanwhile.
 void FileTransferDialogTests::loopExitCancelsAndWaitsForTheTransfer()
 {
+    if (grc_test::RunningUnderWine()) QSKIP(NO_LIST_UNDER_WINE);
+
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());

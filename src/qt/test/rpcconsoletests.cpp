@@ -18,7 +18,9 @@
 #include "qt/test/interfacefakes.h"
 #include "qt/walletmodel.h"
 #include "support/lockedpool.h"
+#include "test/wine.h"
 #include "uint256.h"
+#include "univalue.h"
 #include "util.h"
 
 #include <QApplication>
@@ -54,6 +56,12 @@ using RPCConsoleDetail::DispatchConsoleCommand;
 using RPCConsoleDetail::RedactSensitiveArgs;
 
 namespace {
+
+//! Why a case that downloads to a file is skipped under Wine, as the unit tests' cases are: the
+//! temporary file a download writes needs a protected access list, which Wine does not keep
+//! (util::TransferTempFile refuses it there). Windows runs them.
+constexpr const char* NO_LIST_UNDER_WINE = "Wine keeps no protected access list, which a download's temporary file needs";
+
 // Placeholder values in the shape claimhtlc takes: htlc_txid, vout,
 // preimage_hex, destination_addr.
 const QString HTLC_TXID = QStringLiteral("4f1c2b7a9e0d3c5b8a6f2e1d0c9b8a7f6e5d4c3b2a19087f6e5d4c3b2a190876");
@@ -132,6 +140,14 @@ QString PaneText(RPCConsole& console)
 QString Quoted(const fs::path& path)
 {
     return QStringLiteral("\"") + GUIUtil::boostPathToQString(path) + QStringLiteral("\"");
+}
+
+//! The reply's file field as the pane shows it, naming \p dest: a JSON string, so with Windows'
+//! backslashes escaped.
+QString FileField(const fs::path& dest)
+{
+    return QStringLiteral("\"exported_to_file\": %1")
+        .arg(QString::fromStdString(UniValue(GUIUtil::boostPathToQString(dest).toStdString()).write()));
 }
 
 //! What a test source or sink saw. Written on the thread its calls run on, and read by the test
@@ -766,10 +782,19 @@ void RPCConsoleTests::fileCommandBareNameResolvesToDataDir()
     QCOMPARE(bare->local_path, GetDataDir() / "out.txt");
     QVERIFY(bare->core_args.empty());
 
+    // An absolute path on each platform, the expected one made from wide characters on Windows so
+    // that the UTF-8 argument's conversion is checked.
+#ifdef WIN32
+    const std::string absolute = "C:/tmp/a b/\xc3\xbc.txt";
+    const fs::path expected(L"C:/tmp/a b/\u00fc.txt");
+#else
+    const std::string absolute = "/tmp/a b/\xc3\xbc.txt";
+    const fs::path expected(absolute);
+#endif
     const std::optional<RPCConsoleDetail::ConsoleFileRequest> quoted =
-        RPCConsoleDetail::ParseConsoleFileRequest("dumpwallet \"/tmp/a b/\xc3\xbc.txt\"", error);
+        RPCConsoleDetail::ParseConsoleFileRequest("dumpwallet \"" + absolute + "\"", error);
     QVERIFY2(quoted, error.c_str());
-    QCOMPARE(quoted->local_path, fs::path("/tmp/a b/\xc3\xbc.txt"));
+    QCOMPARE(quoted->local_path, expected);
     QVERIFY(quoted->core_args.empty());
 }
 
@@ -778,11 +803,16 @@ void RPCConsoleTests::dumpcontractsPathIsSecondArgument()
 {
     std::string error;
 
+#ifdef WIN32
+    const std::string absolute = "C:/tmp/b.txt";
+#else
+    const std::string absolute = "/tmp/b.txt";
+#endif
     const std::optional<RPCConsoleDetail::ConsoleFileRequest> request =
-        RPCConsoleDetail::ParseConsoleFileRequest("dumpcontracts beacon /tmp/b.txt true", error);
+        RPCConsoleDetail::ParseConsoleFileRequest("dumpcontracts beacon " + absolute + " true", error);
     QVERIFY2(request, error.c_str());
     QCOMPARE(std::string(request->cmd->method), std::string("dumpcontracts"));
-    QCOMPARE(request->local_path, fs::path("/tmp/b.txt"));
+    QCOMPARE(request->local_path, fs::path(absolute));
     QCOMPARE(request->core_args, (std::vector<std::string>{"beacon", "true"}));
 }
 
@@ -880,6 +910,8 @@ void RPCConsoleTests::fileCommandNeedsALoadedWallet()
 // command's reply, which names the local file, not the core's.
 void RPCConsoleTests::downloadRunsOnTheWorkerAndShowsWhatItWrote()
 {
+    if (grc_test::RunningUnderWine()) QSKIP(NO_LIST_UNDER_WINE);
+
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     const std::thread::id worker_thread = ThreadOf(worker);
     QVERIFY(worker_thread != std::thread::id{});
@@ -929,7 +961,7 @@ void RPCConsoleTests::downloadRunsOnTheWorkerAndShowsWhatItWrote()
     QVERIFY2(pane.contains(QStringLiteral("Wrote 3 bytes to %1 (SHA-256 %2)").arg(shown_dest, ABC_SHA256)),
              qPrintable(pane));
     QVERIFY2(pane.contains(QStringLiteral("\"number_of_contracts_exported\": 7")), qPrintable(pane));
-    QVERIFY2(pane.contains(QStringLiteral("\"exported_to_file\": \"%1\"").arg(shown_dest)), qPrintable(pane));
+    QVERIFY2(pane.contains(FileField(dest)), qPrintable(pane));
     QVERIFY2(!pane.contains(QStringLiteral("/core/data/transfers")), qPrintable(pane));
 
     // The history keeps the line, as it does every command (RedactSensitiveArgs leaves it as it is).
@@ -945,6 +977,8 @@ void RPCConsoleTests::downloadRunsOnTheWorkerAndShowsWhatItWrote()
 // destroyed, and ends then. A wallet that needs none asks nothing.
 void RPCConsoleTests::downloadHoldsItsOwnCapabilityUntilTheSourceIsGone()
 {
+    if (grc_test::RunningUnderWine()) QSKIP(NO_LIST_UNDER_WINE);
+
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -1013,6 +1047,8 @@ void RPCConsoleTests::downloadNoteNamesTheLocalFile()
 // entry with no file), is read, and its note is shown. Nothing is written.
 void RPCConsoleTests::downloadWithNothingToSendIsReportedNotWritten()
 {
+    if (grc_test::RunningUnderWine()) QSKIP(NO_LIST_UNDER_WINE);
+
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -1043,6 +1079,8 @@ void RPCConsoleTests::downloadWithNothingToSendIsReportedNotWritten()
 // the local file named, as for any other.
 void RPCConsoleTests::downloadOfAnEmptyFileWritesItAndShowsTheReply()
 {
+    if (grc_test::RunningUnderWine()) QSKIP(NO_LIST_UNDER_WINE);
+
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -1071,7 +1109,7 @@ void RPCConsoleTests::downloadOfAnEmptyFileWritesItAndShowsTheReply()
                                           "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)")
                                .arg(shown_dest)),
              qPrintable(pane));
-    QVERIFY2(pane.contains(QStringLiteral("\"exported_to_file\": \"%1\"").arg(shown_dest)), qPrintable(pane));
+    QVERIFY2(pane.contains(FileField(dest)), qPrintable(pane));
     QVERIFY2(!pane.contains(QStringLiteral("/core/data/transfers")), qPrintable(pane));
 }
 
@@ -1079,6 +1117,8 @@ void RPCConsoleTests::downloadOfAnEmptyFileWritesItAndShowsTheReply()
 // and nothing is left at the destination.
 void RPCConsoleTests::downloadFirstReadErrorIsShown()
 {
+    if (grc_test::RunningUnderWine()) QSKIP(NO_LIST_UNDER_WINE);
+
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -1232,6 +1272,8 @@ void RPCConsoleTests::downloadToADestinationThatCannotBeCheckedSaysSo()
 // the pane says so.
 void RPCConsoleTests::downloadCancelLeavesNothing()
 {
+    if (grc_test::RunningUnderWine()) QSKIP(NO_LIST_UNDER_WINE);
+
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -1362,6 +1404,8 @@ void RPCConsoleTests::uploadSendsTheFileAndShowsTheOutput()
 // parseaccrualsnapshotfile on the same wallet still ask.
 void RPCConsoleTests::dumpcontractsAsksForNoPassphrase()
 {
+    if (grc_test::RunningUnderWine()) QSKIP(NO_LIST_UNDER_WINE);
+
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -1519,6 +1563,8 @@ void RPCConsoleTests::uploadCancelIsReportedUnlessTheCommandRan()
 // about: a second capability would displace the transfer's. Its refusal is shown as it is.
 void RPCConsoleTests::noPromptWhileAFileCommandHoldsItsCapability()
 {
+    if (grc_test::RunningUnderWine()) QSKIP(NO_LIST_UNDER_WINE);
+
     GuiIpcWorker worker(GuiIpcWorker::Role::Modal);
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
