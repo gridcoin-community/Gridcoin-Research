@@ -2159,26 +2159,27 @@ BOOST_AUTO_TEST_CASE(settings_rewrite_keeps_the_mode_of_the_file)
     BOOST_REQUIRE(gArgs.WriteSettingsFile());
     struct stat st;
     BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+    // mode_t is 16 bits on macOS, where the masked mode is an int; compare it unsigned.
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0640U);
 
     // Again, to show the kept mode is not a one-off.
     BOOST_REQUIRE(gArgs.WriteSettingsFile());
     BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0640U);
 
     // A read-only settings file is rewritten and stays read-only. Production change that would
     // fail this: giving the temporary file the old mode before WriteSettings reopens it to write.
     BOOST_REQUIRE_EQUAL(::chmod(scope.m_path.string().c_str(), 0400), 0);
     BOOST_REQUIRE(gArgs.WriteSettingsFile());
     BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0400U);
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0400U);
     BOOST_REQUIRE_EQUAL(::chmod(scope.m_path.string().c_str(), 0600), 0);
 
     // Nothing there: owner-only from creation.
     BOOST_REQUIRE(fs::remove(scope.m_path));
     BOOST_REQUIRE(gArgs.WriteSettingsFile());
     BOOST_REQUIRE_EQUAL(::stat(scope.m_path.string().c_str(), &st), 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0600U);
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0600U);
 }
 #else
 // A Users read entry on the settings file is still there after the core rewrites it, a

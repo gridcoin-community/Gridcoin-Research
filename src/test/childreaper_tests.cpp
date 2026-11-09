@@ -106,8 +106,6 @@ public:
         }
     }
 
-    const std::vector<long>& Baseline() const { return m_baseline; }
-
 private:
     std::vector<long> m_baseline;
 };

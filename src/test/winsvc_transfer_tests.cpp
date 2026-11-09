@@ -239,11 +239,12 @@ BOOST_AUTO_TEST_CASE(transfer_copies_tree_and_verifies)
     // Owner-only, whatever the umask.
     struct stat st{};
     BOOST_REQUIRE(::lstat((dst / "wallet.dat").c_str(), &st) == 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0600U);
+    // mode_t is 16 bits on macOS, where the masked mode is an int; compare it unsigned.
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0600U);
     BOOST_REQUIRE(::lstat((dst / "blocks" / "index").c_str(), &st) == 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0700U);
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0700U);
     BOOST_REQUIRE(::lstat(dst.c_str(), &st) == 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0700U);
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0700U);
 #endif
 }
 

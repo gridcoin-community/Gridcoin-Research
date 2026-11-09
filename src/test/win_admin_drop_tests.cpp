@@ -44,8 +44,9 @@ constexpr uint32_t LOGON_ID = 0xC0000000 | ENABLED;
 // An integrity label: SE_GROUP_INTEGRITY and SE_GROUP_INTEGRITY_ENABLED.
 constexpr uint32_t INTEGRITY_LABEL = 0x20 | 0x40;
 
-//! A domain, standing in for the machine's or a real domain's.
-const std::string DOMAIN = "S-1-5-21-1004336348-1177238915-682003330";
+//! A domain, standing in for the machine's or a real domain's. Not named DOMAIN:
+//! macOS's <math.h> defines that as a macro.
+const std::string DOMAIN_SID = "S-1-5-21-1004336348-1177238915-682003330";
 
 Sid SidOf(const std::string& text)
 {
@@ -108,7 +109,7 @@ BOOST_AUTO_TEST_CASE(filtered_groups_are_the_documented_list)
     }
     BOOST_CHECK(IsUacFilteredGroup(SidOf("S-1-5-114")));
     for (const char* rid : {"498", "512", "516", "517", "518", "519", "520", "521", "553"}) {
-        BOOST_CHECK_MESSAGE(IsUacFilteredGroup(SidOf(DOMAIN + "-" + rid)), DOMAIN << "-" << rid);
+        BOOST_CHECK_MESSAGE(IsUacFilteredGroup(SidOf(DOMAIN_SID + "-" + rid)), DOMAIN_SID << "-" << rid);
         // Any domain.
         BOOST_CHECK(IsUacFilteredGroup(SidOf(std::string("S-1-5-21-1-2-3-") + rid)));
     }
@@ -132,9 +133,9 @@ BOOST_AUTO_TEST_CASE(other_groups_are_not_filtered)
         "S-1-5-32-573",              // Event Log Readers
         "S-1-16-8192",               // Medium integrity
         "S-1-16-12288",              // High integrity
-        DOMAIN + "-500",             // the local Administrator account
-        DOMAIN + "-513",             // Domain Users, or None
-        DOMAIN + "-1001",            // a user
+        DOMAIN_SID + "-500",         // the local Administrator account
+        DOMAIN_SID + "-513",         // Domain Users, or None
+        DOMAIN_SID + "-1001",        // a user
         // Look-alikes: the RIDs under another authority, the wrong domain form, or the wrong length.
         "S-1-2-32-544",
         "S-1-5-80-544",
@@ -159,7 +160,7 @@ BOOST_AUTO_TEST_CASE(other_groups_are_not_filtered)
 BOOST_AUTO_TEST_CASE(deny_only_selection_takes_the_enabled_filtered_groups)
 {
     const std::vector<TokenGroup> groups{
-        Group(DOMAIN + "-1001", ENABLED),        // the user's own SID
+        Group(DOMAIN_SID + "-1001", ENABLED),    // the user's own SID
         Group("S-1-1-0", ENABLED),               // Everyone
         Group("S-1-5-114", ENABLED),             // Local account and member of Administrators
         Group("S-1-5-32-544", ENABLED),          // Administrators
@@ -167,7 +168,7 @@ BOOST_AUTO_TEST_CASE(deny_only_selection_takes_the_enabled_filtered_groups)
         Group("S-1-5-4", ENABLED),               // INTERACTIVE
         Group("S-1-5-11", ENABLED),              // Authenticated Users
         Group("S-1-5-5-0-1234567", LOGON_ID),    // the logon SID
-        Group(DOMAIN + "-512", ENABLED),         // Domain Admins
+        Group(DOMAIN_SID + "-512", ENABLED),     // Domain Admins
         Group("S-1-5-32-551", 0),                // Backup Operators, disabled
         Group("S-1-5-32-547", GROUP_USE_FOR_DENY_ONLY),                 // Power Users, already deny-only
         Group("S-1-5-32-548", GROUP_USE_FOR_DENY_ONLY | GROUP_ENABLED), // the same, with the enabled bit
@@ -175,11 +176,11 @@ BOOST_AUTO_TEST_CASE(deny_only_selection_takes_the_enabled_filtered_groups)
     };
 
     const std::vector<Sid> selected = SelectDenyOnlyGroups(groups);
-    const std::vector<Sid> expected{SidOf("S-1-5-114"), SidOf("S-1-5-32-544"), SidOf(DOMAIN + "-512")};
+    const std::vector<Sid> expected{SidOf("S-1-5-114"), SidOf("S-1-5-32-544"), SidOf(DOMAIN_SID + "-512")};
     BOOST_CHECK(selected == expected);
 
     BOOST_CHECK(SelectDenyOnlyGroups({}).empty());
-    BOOST_CHECK(SelectDenyOnlyGroups({Group(DOMAIN + "-1001", ENABLED), Group("S-1-5-32-545", ENABLED)}).empty());
+    BOOST_CHECK(SelectDenyOnlyGroups({Group(DOMAIN_SID + "-1001", ENABLED), Group("S-1-5-32-545", ENABLED)}).empty());
 }
 
 BOOST_AUTO_TEST_CASE(drop_needed_by_elevation_integrity_or_an_enabled_group)

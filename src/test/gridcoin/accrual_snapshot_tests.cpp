@@ -291,7 +291,8 @@ BOOST_AUTO_TEST_CASE(a_registry_rewrite_keeps_the_mode_of_the_registry)
 
     struct stat st;
     BOOST_REQUIRE_EQUAL(::stat(path.c_str(), &st), 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+    // mode_t is 16 bits on macOS, where the masked mode is an int; compare it unsigned.
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0640U);
 
     // With no registry, the rewrite creates it owner-only.
     BOOST_REQUIRE(fs::remove(RegistryPath()));
@@ -302,7 +303,8 @@ BOOST_AUTO_TEST_CASE(a_registry_rewrite_keeps_the_mode_of_the_registry)
         BOOST_REQUIRE(repo.CloseRegistryFile());
     }
     BOOST_REQUIRE_EQUAL(::stat(path.c_str(), &st), 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0600U);
+    // mode_t is 16 bits on macOS, where the masked mode is an int; compare it unsigned.
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0600U);
 }
 #endif
 

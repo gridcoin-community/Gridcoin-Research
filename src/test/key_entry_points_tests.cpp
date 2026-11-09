@@ -592,7 +592,7 @@ public:
 
 private:
     const fs::path m_saved_log_dir;
-    grc_test::RegistryReset m_scrapers{{GRC::ContractType::SCRAPER}};
+    grc_test::RegistryReset m_scrapers{GRC::ContractType::SCRAPER};
     CTransaction m_tx;
     CBlockIndex m_index{};
     std::optional<grc_test::ForcedArgGuard> m_key;

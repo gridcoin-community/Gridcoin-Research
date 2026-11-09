@@ -315,7 +315,8 @@ BOOST_AUTO_TEST_CASE(archive_recreates_the_log_with_the_mode_it_had)
 
     struct stat st;
     BOOST_REQUIRE_EQUAL(::stat(log.string().c_str(), &st), 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+    // mode_t is 16 bits on macOS, where the masked mode is an int; compare it unsigned.
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0640U);
 
     logger.DisconnectTestLogger();
     for (fs::directory_iterator it(archive_dir), end; it != end; ++it) {

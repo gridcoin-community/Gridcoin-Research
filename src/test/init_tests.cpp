@@ -484,7 +484,8 @@ BOOST_AUTO_TEST_CASE(first_run_conf_is_created_owner_only)
     struct stat st;
     BOOST_REQUIRE_EQUAL(::lstat(conf.string().c_str(), &st), 0);
     BOOST_CHECK(S_ISREG(st.st_mode));
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0600u);
+    // mode_t is 16 bits on macOS, where the masked mode is an int; compare it unsigned.
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0600u);
 
     const std::string text = ReadText(conf);
     BOOST_CHECK(text.find("rpcuser=gridcoinrpc\n") != std::string::npos);
@@ -595,7 +596,8 @@ BOOST_AUTO_TEST_CASE(clean_config_keeps_the_mode_of_the_conf)
     BOOST_CHECK_EQUAL(ReadText(conf).find("privatekey"), std::string::npos);
     struct stat st;
     BOOST_REQUIRE_EQUAL(::stat(conf.string().c_str(), &st), 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+    // mode_t is 16 bits on macOS, where the masked mode is an int; compare it unsigned.
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0640U);
 }
 
 // The cleaned file is written under a temporary name that is created exclusively and
@@ -622,7 +624,8 @@ BOOST_AUTO_TEST_CASE(clean_config_does_not_follow_a_link_at_its_temporary_name)
     struct stat st;
     BOOST_REQUIRE_EQUAL(::lstat(conf.string().c_str(), &st), 0);
     BOOST_CHECK(S_ISREG(st.st_mode));
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0600u);
+    // mode_t is 16 bits on macOS, where the masked mode is an int; compare it unsigned.
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0600u);
     BOOST_CHECK_EQUAL(ReadText(conf), "rpcuser=a\n");
 }
 #endif
@@ -896,7 +899,8 @@ BOOST_AUTO_TEST_CASE(report_permissions_names_each_wide_file_with_its_fix)
     // Nothing changed and nothing was made.
     struct stat st;
     BOOST_REQUIRE_EQUAL(::stat(wallet.string().c_str(), &st), 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0644U);
+    // mode_t is 16 bits on macOS, where the masked mode is an int; compare it unsigned.
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0644U);
     BOOST_CHECK(EntryNames(datadir.path) == (std::set<std::string>{"etc", "wallet.dat"}));
 }
 #else

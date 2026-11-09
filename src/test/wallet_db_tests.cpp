@@ -81,9 +81,10 @@ BOOST_AUTO_TEST_CASE(rewrite_keeps_the_mode_of_the_wallet_file)
 
     struct stat st;
     BOOST_REQUIRE_EQUAL(::stat(rewritten.c_str(), &st), 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+    // mode_t is 16 bits on macOS, where the masked mode is an int; compare it unsigned.
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0640U);
     BOOST_REQUIRE_EQUAL(::stat(wallet.c_str(), &st), 0);
-    BOOST_CHECK_EQUAL(st.st_mode & 07777, 0640U);
+    BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0640U);
 
     // No wallet file: nothing to keep, and not a failure.
     fs::remove(wallet);
