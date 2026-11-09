@@ -165,8 +165,8 @@ function Get-GridcoinCoreStartPids {
     return $found
 }
 
-# Ends the core the way the shutdown script does: it runs Core-Stop, then waits for the launcher of
-# the running Core-Start instance to exit. True when no instance is left within TimeoutSec.
+# Ends the core: it runs Core-Stop, then waits for the launcher of the running Core-Start instance to
+# exit. True when no instance is left within TimeoutSec.
 function Wait-GridcoinCoreStopped {
     param(
         [int]$TimeoutSec = 300,
@@ -356,8 +356,8 @@ function Register-GridcoinCoreTasks {
     $startAction.Arguments = '/s /c ""' + $launcher + '""'
     Register-GridcoinTask -TargetFolder $folder -RegisteredName 'Core-Start' -TaskDefinition $startDefinition -AccountSid $userSid
 
-    # Core-Stop has no trigger, on purpose: a stop at shutdown is the Group Policy script's job
-    # (Set-GridcoinShutdownFlush.ps1), and two of them would race.
+    # Core-Stop has no trigger, on purpose: Task Scheduler starts no task once Windows' shutdown is in
+    # progress, and the core stops itself on Windows' shutdown signal.
     $stopDefinition = New-GridcoinTaskDefinition -SchedulerService $service -TimeLimit 'PT10M' `
         -Description 'Graceful RPC stop of the Gridcoin core. Start this task to stop the core; never end Core-Start.'
     $stopDefinition.Settings.Enabled = $StopEnabled

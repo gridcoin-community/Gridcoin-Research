@@ -38,6 +38,10 @@ Rules
   14 the installer and the uninstaller point $PLUGINSDIR at a new folder under Program Files as
      the first thing .onInit and un.onInit do (GRC_ADMIN_PLUGINSDIR, which sets it with
      UnsafeStrCpy), and nothing calls InitPluginsDir
+  15 Set-GridcoinShutdownFlush.ps1 sets up no shutdown script, it only removes one (Task Scheduler
+     starts no task once shutdown is in progress, so a shutdown script cannot start Core-Stop), and
+     its gpt.ini bump is of the computer version, the LOW 16 bits (adding 65536 bumps the user
+     version and leaves the computer half empty)
 
 Usage
   lint-windows-scripts.py              check the tree
@@ -182,7 +186,7 @@ def generated_lines(text):
 
 def rule4(files):
     failures = []
-    for path in (COMMON, SHUTDOWN):
+    for path in (COMMON,):
         if path in files and "BEGIN GENERATED" not in files[path]:
             failures.append(f"rule 4: {path}: has no BEGIN GENERATED / END GENERATED block")
     for path, text in sorted(ps1_files(files).items()):
@@ -492,7 +496,21 @@ def rule14(files):
     return failures
 
 
-RULES = (rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9, rule10, rule11, rule12, rule13, rule14)
+def rule15(files):
+    failures = []
+    text = files.get(SHUTDOWN)
+    if text is None:
+        return failures
+    code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    if re.search(r"\+\s*65536\b|Version=65536\b", code):
+        failures.append(f"rule 15: {SHUTDOWN}: adds 65536 to gpt.ini's Version, which bumps the user version")
+    if re.search(r"Set-ShutdownScriptState|\$psText\s*=\s*@'|CmdLine=\$cmdPath", code):
+        failures.append(f"rule 15: {SHUTDOWN}: sets up a shutdown script, which cannot start Core-Stop: Task Scheduler "
+                        "starts no task once shutdown is in progress")
+    return failures
+
+
+RULES = (rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9, rule10, rule11, rule12, rule13, rule14, rule15)
 
 GOOD_PS1 = "#Requires -Version 5.1\nSet-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n"
 
@@ -525,6 +543,10 @@ GOOD_PLUGINSDIR = ('!define GRC_PROGRAMFILES "$PROGRAMFILES64"\n'
 GOOD_RESTART = "Function .onInstFailed\n" + step_line("RestartStopped") + "FunctionEnd\n"
 GOOD_NSIS = GOOD_PLUGINSDIR + GOOD_MAIN_HEAD + GOOD_MAIN_TAIL + GOOD_RESTART + GOOD_UNINSTALL
 GOOD_SDDL = "O:BAD:PAI(A;OICI;FA;;;BA)(A;OICI;FA;;;SY)(A;OICI;0x1200a9;;;BU)"
+GOOD_SHUTDOWN = ("#Requires -Version 5.1\nSet-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n"
+                 + '$env:PSModulePath = "$PSHOME\\Modules;$env:ProgramFiles\\WindowsPowerShell\\Modules"\n'
+                 + "            $lines[$i] = 'Version=' + ($userVersion * 65536 + ($computerVersion % 65535) + 1)\n"
+                 + "if ($Remove) { Remove-ShutdownScriptState $cmdPath }\n")
 PIN_LINE = '$env:PSModulePath = "$PSHOME\\Modules;$env:ProgramFiles\\WindowsPowerShell\\Modules"\n'
 GOOD_MASKS = ("    $fileMask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete')\n"
               "    $dirMask = [int]([System.Security.AccessControl.FileSystemRights]'CreateFiles, Delete')\n")
@@ -537,7 +559,7 @@ GOOD_UPDATE = (GOOD_PS1 + PIN_LINE + GOOD_PRELOAD + ". (Join-Path $PSScriptRoot 
 GOOD_FILES = {
     COMMON: GOOD_PS1 + "if ($t.Principal.LogonType -eq 1) { }\n'rem BEGIN GENERATED'\n'rem END GENERATED'\n" + GOOD_CHECKER,
     INSTALL: GOOD_PS1 + PIN_LINE + "if ($DataDir -match '\\\\$') { throw 'x' }\n",
-    SHUTDOWN: GOOD_PS1 + PIN_LINE + "'rem BEGIN GENERATED'\n'rem END GENERATED'\n",
+    SHUTDOWN: GOOD_SHUTDOWN,
     GUI: GOOD_PS1 + "if ($DataDir -match '\\\\$') { throw 'x' }\n",
     "contrib/windows/Other.ps1": GOOD_PS1 + (
         "$l = @(\n    'rem BEGIN GENERATED',\n    '\"%SystemRoot%\\System32\\PING.EXE\" -n 121 127.0.0.1 >nul',\n"
@@ -558,6 +580,10 @@ BAD_SAMPLES = (
     (12, {NSIS: GOOD_NSIS + '    ExpandEnvStrings $1 "%COMSPEC%"\n'}),
     (12, {NSIS: GOOD_NSIS + '    ReadRegStr $1 HKCU "SOFTWARE\\x" "UninstallString"\n'}),
     (12, {NSIS: GOOD_NSIS + "    ExecWait '$1 /C tasklist.exe'\n"}),
+    (15, {SHUTDOWN: GOOD_SHUTDOWN.replace("($userVersion * 65536 + ($computerVersion % 65535) + 1)",
+                                          "([int]$Matches[1] + 65536)")}),
+    (15, {SHUTDOWN: GOOD_SHUTDOWN + "Set-ShutdownScriptState $cmdPath\n"}),
+    (15, {SHUTDOWN: GOOD_SHUTDOWN + "$psText = @'\nexit 0\n'@\n"}),
     (14, {NSIS: GOOD_NSIS.replace("Section -Main\n", "Section -Main\n    InitPluginsDir\n")}),
     (14, {NSIS: GOOD_NSIS.replace("Function .onInit\n    !insertmacro GRC_ADMIN_PLUGINSDIR setup\n",
                                   "Function .onInit\n    SetShellVarContext all\n    !insertmacro GRC_ADMIN_PLUGINSDIR setup\n")}),
@@ -581,7 +607,6 @@ BAD_SAMPLES = (
     (3, {"contrib/windows/Other.ps1": "Set-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n"}),
     (3, {"contrib/windows/Other.ps1": "#Requires -Version 5.1\n$ErrorActionPreference = 'Stop'\n"}),
     (3, {"contrib/windows/Other.ps1": "#Requires -Version 5.1\nSet-StrictMode -Version Latest\n"}),
-    (4, {SHUTDOWN: GOOD_PS1}),
     (4, {COMMON: GOOD_PS1}),
     (4, {"contrib/windows/Other.ps1": GOOD_PS1 + "'rem BEGIN GENERATED'\n'ping -n 121 127.0.0.1 >nul'\n'rem END GENERATED'\n"}),
     (4, {"contrib/windows/Other.ps1": GOOD_PS1 + "'rem BEGIN GENERATED'\n'x | find /i y'\n'rem END GENERATED'\n"}),

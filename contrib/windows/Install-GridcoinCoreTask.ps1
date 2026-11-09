@@ -16,8 +16,8 @@
                    On demand only: to stop the core, START this task. Never end Core-Start, which
                    is a hard kill.
 
-    A clean flush at Windows shutdown is a Group Policy shutdown script, which Windows waits for:
-    set it up once with Set-GridcoinShutdownFlush.ps1.
+    When Windows shuts down, the core stops itself on Windows' shutdown signal and flushes its
+    databases; there is nothing more to set up.
 
     It adds an inbound Windows Firewall rule for the daemon (skip with -SkipFirewallRule): the
     headless core gets no firewall prompt, and in multiprocess mode the core does the P2P.
@@ -26,7 +26,7 @@
     unregistered, the resident autounlock helper is ended and removed, and its passphrase file is
     converted into the file the core reads itself (skip with -NoAutounlockMigration).
 
-    One installation registers one pair of tasks: they share its launcher and the shutdown script.
+    One installation registers one pair of tasks: they share its launcher.
     -TaskFolder names another folder for that pair; the script refuses while the pair is already
     registered in another folder (Uninstall-GridcoinCoreTask.ps1 -TaskFolder <that folder> first).
     A second wallet runs in the service mode instead.
@@ -157,11 +157,11 @@ $ownAndPrivileged = $privileged + @($mySid)
 
 $launcherPath = Get-GridcoinLauncherPath
 
-# One pair of tasks per installation: they share the launcher and the shutdown script.
+# One pair of tasks per installation: they share the launcher.
 $otherFolders = @(Get-GridcoinLauncherFolders -LauncherPath $launcherPath -ExceptFolder $TaskFolder)
 if ($otherFolders.Count -gt 0) {
     throw ("The tasks of this installation are already registered in \$($otherFolders[0])\, and one installation " +
-           "registers one pair: they share the launcher '$launcherPath' and the shutdown script. Run " +
+           "registers one pair: they share the launcher '$launcherPath'. Run " +
            "Uninstall-GridcoinCoreTask.ps1 -TaskFolder '$($otherFolders[0])' first, or run a second wallet in the " +
            "service mode.")
 }
@@ -243,6 +243,3 @@ Write-Host ""
 Write-Host "  Start the core now :  Start-ScheduledTask -TaskPath '\$TaskFolder\' -TaskName 'Core-Start'"
 Write-Host "  Stop the core      :  Start-ScheduledTask -TaskPath '\$TaskFolder\' -TaskName 'Core-Stop'   (graceful; never end Core-Start)"
 Write-Host "  Attach the GUI     :  .\Start-GridcoinGui.ps1 -DataDir '$DataDir'   (from a normal, not elevated, console)"
-Write-Host ""
-Write-Host "  For a clean database flush at Windows shutdown, also run once:" -ForegroundColor Yellow
-Write-Host "     .\Set-GridcoinShutdownFlush.ps1" -ForegroundColor Yellow

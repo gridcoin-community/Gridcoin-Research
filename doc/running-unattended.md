@@ -731,12 +731,13 @@ cd "C:\Program Files\GridcoinResearch\windows"
 - **Stop the core by starting Core-Stop:** `Start-ScheduledTask -TaskPath '\Gridcoin\' -TaskName 'Core-Stop'`. It
   runs `gridcoinresearchd.exe stop`, which flushes the databases. Ending the Core-Start task instead is a hard kill
   with no flush.
-- **A clean flush when Windows shuts down** needs a Group Policy shutdown script, because Windows does not wait for
-  a task: `.\Set-GridcoinShutdownFlush.ps1` (elevated) sets one up, and `-Remove` takes it away. See
+- **When Windows shuts down** the core stops itself on Windows' shutdown signal and flushes its databases; nothing
+  needs setting up. The Group Policy shutdown script earlier versions offered is removed by the installer
+  (`.\Set-GridcoinShutdownFlush.ps1 -Remove` by hand). See
   [`../contrib/windows/README.md`](../contrib/windows/README.md#clean-database-flush-on-os-shutdown).
-- **Remove the tasks:** `.\Uninstall-GridcoinCoreTask.ps1` (elevated); `-All` also removes the shutdown script and
-  the firewall rule. It never deletes a wallet file.
-- **One pair of tasks per installation.** The pair shares the installation's launcher and the shutdown script, so
+- **Remove the tasks:** `.\Uninstall-GridcoinCoreTask.ps1` (elevated); `-All` also removes an earlier version's
+  shutdown script and the firewall rule. It never deletes a wallet file.
+- **One pair of tasks per installation.** The pair shares the installation's launcher, so
   `Install-GridcoinCoreTask.ps1` refuses a second pair in another `-TaskFolder`. Run a second wallet, such as
   testnet's, in the service mode.
 

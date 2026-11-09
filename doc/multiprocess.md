@@ -245,8 +245,9 @@ cd "C:\Program Files\GridcoinResearch\windows"
    elevated. The GUI connects to the running core. It will not start one for you: if nothing is listening it says
    so and stops.
 
-6. **For an unattended machine:** a Group Policy shutdown script for a clean database flush, and stake-only
-   autounlock. Both are covered in [`running-unattended.md`](running-unattended.md#same-account-the-core-task).
+6. **For an unattended machine:** stake-only autounlock, covered in
+   [`running-unattended.md`](running-unattended.md#same-account-the-core-task). When Windows shuts down, the core
+   flushes its databases on its own.
 
 #### B. Retrofit an existing wallet (Windows)
 

@@ -31,7 +31,7 @@ a normal one. (In a source checkout they live here in `contrib/windows/`.)
 | `Update-GridcoinCore.ps1` | Installs a release only after its Authenticode signature verifies against the pinned release signer. |
 | `Test-GridcoinRelease.ps1` | Checks the Authenticode signature of a release file (also runnable on its own: `-InstallerPath`). |
 | `release-signer.txt` | The pinned release signer: the identity marker of the release certificate profile and the subject name. |
-| `Set-GridcoinShutdownFlush.ps1` | **Opt-in**: configure/remove a Group Policy shutdown script for a reliable DB flush on OS shutdown. |
+| `Set-GridcoinShutdownFlush.ps1` | Removes the Group Policy shutdown script earlier versions set up (`-Remove`); it sets nothing up. |
 | `Start-GridcoinGui.ps1` | Launch the `-multiprocess` GUI from a normal (not elevated) console, for the task or, with `-Service`, for the Windows service (or drop a Start-Menu shortcut with `-CreateShortcut`). |
 | `GridcoinCommon.ps1` | Functions the scripts share (dot-sourced; not run on its own). |
 | `Invoke-GridcoinInstallStep.ps1` | The installer's steps: stop and restart the cores, switch over from the earlier tasks, harden a custom install directory, report wider permissions, the checks before uninstall. The installer runs it; it is not for use by hand. |
@@ -227,40 +227,24 @@ adds the same kind of rule for the service.
 
 ## Clean database flush on OS shutdown
 
-`Core-Stop` carries **no** OS-shutdown trigger. A scheduled task can't make Windows wait,
-so an event-triggered (EventID-13) stop is best-effort and gets cut short mid-flush —
-confirmed on real hardware, where reboots produced no logged graceful shutdown (the core
-was effectively hard-killed, and only recovered clean thanks to LevelDB's crash-resilience).
-BDB (the wallet) is less forgiving of a mid-write kill, so for a **guaranteed** flush use a
-Group Policy **Computer → Shutdown** script, which Windows runs **synchronously and waits
-for** (bounded by *Maximum wait time for Group Policy scripts*, default 600 s).
+The core stops itself. When Windows shuts down or restarts, it sends the programs still running a
+shutdown signal; the core takes it as a stop, flushes its databases and exits, and `debug.log` shows
+the usual `Shutdown: … Final flush of wallet database …` sequence ending in `Gridcoin exited`. On
+a Windows 11 test machine the core was done one to five seconds after it began, and a test program
+that would not exit after the same signal was left to run about six seconds, until Windows finished
+shutting down. Windows decides that time, so a flush that takes longer can be cut short. Where that
+is not acceptable, use the service mode: Windows waits for a service up to its preshutdown timeout.
 
-Configure it (opt-in, elevated):
-
-```powershell
-.\Set-GridcoinShutdownFlush.ps1   # -Remove to undo; -WaitSeconds N caps the wait (default 300)
-```
-
-It writes two small files into the machine shutdown script folder: `GridcoinShutdownFlush.cmd`
-(one line that starts Windows PowerShell) and `GridcoinShutdownFlush.ps1`. At shutdown the `.ps1`
-runs **as SYSTEM**, reads the process ID of the running **Core-Start** instance (the launcher, which
-exits only after the core), starts the **Core-Stop** task and waits for that process to exit. SYSTEM
-reads no file of the wallet user and runs no Gridcoin program: the task stops the core, as the
-wallet user. The script then wires the `.cmd` into the local machine shutdown scripts and the
-run-time state. **Validate by rebooting once** and confirming a full `Shutdown: … Final flush of
-wallet database …` sequence in `debug.log` just before the restart. (We deliberately don't *also*
-put a shutdown trigger on `Core-Stop` — the two would double-stop and race.)
+There is nothing to set up. `Core-Stop` carries no shutdown trigger and there is no shutdown script:
+once shutdown is in progress Task Scheduler starts no task (Core-Stop fails with
+`ERROR_SHUTDOWN_IN_PROGRESS`), so neither could stop the core. Earlier versions offered a Group Policy
+shutdown script for this; the installer removes it, and `.\Set-GridcoinShutdownFlush.ps1 -Remove`
+(elevated) takes it out by hand.
 
 **Fast Startup.** With Fast Startup on, which is the Windows default, *Shut down* does not end
 the system session: Windows signs the users out and hibernates the rest, the task-mode core
-included, so the shutdown script does not run and the core carries on at the next start.
-*Restart*, *Update and shut down*, and *Shut down* with Fast Startup off end the session and run
-the script, so validate with a Restart.
-
-**Domains.** Local and domain-GPO shutdown scripts **stack** — all run at shutdown,
-additively, bounded collectively by the max-wait-time. But if a domain GPO enables **"Turn
-off Local Group Policy Objects processing,"** this *local* script is ignored; in that case
-deploy the same two files via a **domain GPO** instead.
+included, and the core carries on at the next start. *Restart*, *Update and shut down*, and *Shut
+down* with Fast Startup off end the session, and the core stops as above.
 
 ## Crash recovery
 
@@ -315,7 +299,7 @@ suspected compromise, are in
 
 ## Status
 
-The S4U registration, the shutdown script, the guards and the switch-over from the earlier
+The S4U registration, the guards and the switch-over from the earlier
 tasks are tested on a Windows 11 machine before each release. The earlier
 registration was validated on Windows 11 against a populated mainnet wallet (2026-08-12).
 

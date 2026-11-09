@@ -23,7 +23,7 @@
                         and carries this account's autounlock file over. Another account's
                         such tasks are removed, and UPGRADE-NOTICE.txt says how that account
                         restores unattended start. Ends the earlier versions' autounlock helper and
-                        task, replaces their shutdown script, and deletes their helper scripts and release-keys.txt.
+                        task, removes their shutdown script, and deletes their helper scripts and release-keys.txt.
       StartCore         starts again what StopCore found running.
       RestartStopped    run by the installer when it stops after StopCore (a file that cannot be
                         written, or Cancel): starts again what StopCore stopped, as it was.
@@ -468,7 +468,7 @@ function Invoke-GridcoinSwitchOver {
     # Everything below runs inside one try, so that an unexpected throw anywhere in the first part
     # (the task enumeration, the classification, the other accounts' notices) still reaches the
     # finally block, which removes the earlier autounlock helper (it holds the decrypted passphrase
-    # in memory), replaces the earlier shutdown script and deletes the earlier scripts. Each item
+    # in memory), removes the earlier shutdown script and deletes the earlier scripts. Each item
     # of the first part records its own failure and the next one goes on.
     $failures = @()
     $helperDone = $false
@@ -697,7 +697,7 @@ function Invoke-GridcoinSwitchOver {
         $failures += "SwitchOver stopped early ($($_.Exception.Message))"
     } finally {
         # Whatever happened above, the earlier helper goes (its decrypted passphrase would stay in memory), the earlier
-        # shutdown script is replaced and the earlier scripts are deleted. Their failures are recorded.
+        # shutdown script is removed and the earlier scripts are deleted. Their failures are recorded.
         if (-not $helperDone) {
             try {
                 $fallbackDir = $dataDir
@@ -709,23 +709,16 @@ function Invoke-GridcoinSwitchOver {
             }
         }
 
-        # The earlier versions' shutdown script ran the core as SYSTEM. It is replaced by the one that
-        # starts Core-Stop, or removed when there is no Core-Stop to start.
+        # Earlier versions set up a Group Policy shutdown script (the oldest ran the core as SYSTEM). None
+        # can stop the core: Task Scheduler starts no task once shutdown is in progress. It is removed;
+        # the core stops itself on Windows' shutdown signal.
         try {
             $shutdownCmd = Join-Path $env:SystemRoot 'System32\GroupPolicy\Machine\Scripts\Shutdown\GridcoinShutdownFlush.cmd'
             if (Test-Path -LiteralPath $shutdownCmd) {
-                $current = [string](Get-Content -LiteralPath $shutdownCmd -Raw)
-                if ($current -notmatch 'GridcoinShutdownFlush\.ps1') {
-                    $flushScript = Join-Path $script:WindowsDir 'Set-GridcoinShutdownFlush.ps1'
-                    if ($null -ne (Get-GridcoinTask -Name 'Core-Stop')) {
-                        & $flushScript
-                    } else {
-                        & $flushScript -Remove
-                    }
-                }
+                & (Join-Path $script:WindowsDir 'Set-GridcoinShutdownFlush.ps1') -Remove
             }
         } catch {
-            $failures += "the shutdown script was not replaced ($($_.Exception.Message))"
+            $failures += "the earlier shutdown script was not removed ($($_.Exception.Message))"
         }
 
         foreach ($oldName in @('Set-GridcoinAutounlock.ps1', 'Invoke-GridcoinAutounlock.ps1', 'release-keys.txt')) {
