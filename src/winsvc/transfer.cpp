@@ -260,6 +260,14 @@ AclSpec OwnerOnlySpec(const Sid& user)
                     {winacl::wellknown::System(), detail::FULL, Inherit::ContainerAndObject}}};
 }
 
+AclSpec CreatedSpec(const Sid& user, const Sid& creator)
+{
+    AclSpec spec = OwnerOnlySpec(user);
+    spec.owner = creator;
+    spec.aces.push_back({creator, detail::FULL, Inherit::ContainerAndObject});
+    return spec;
+}
+
 AclSpec SpecForFile(const AclSpec& spec)
 {
     AclSpec file = spec;
@@ -579,12 +587,14 @@ public:
     }
 
     //! A new file \p name, which must not be there, opened to be written and read back, with the
-    //! access list this directory passes down.
-    std::optional<File> Create(const fs::path& name, std::string& error) const
+    //! security descriptor \p sd from the start when one is given, and otherwise the access list
+    //! this directory passes down.
+    std::optional<File> Create(const fs::path& name, std::string& error, void* sd = nullptr) const
     {
         const std::wstring path = ChildPath(name);
-        winacl::UniqueHandle handle(::CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE | DELETE, 0, nullptr,
-                                                  CREATE_NEW,
+        SECURITY_ATTRIBUTES sa{static_cast<DWORD>(sizeof(SECURITY_ATTRIBUTES)), sd, FALSE};
+        winacl::UniqueHandle handle(::CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE | DELETE, 0,
+                                                  sd ? &sa : nullptr, CREATE_NEW,
                                                   FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS |
                                                       FILE_FLAG_OPEN_REPARSE_POINT,
                                                   nullptr));
@@ -598,12 +608,13 @@ public:
         return File(std::move(handle), Child(name));
     }
 
-    //! A new directory \p name, which must not be there, with the access list this directory
-    //! passes down.
-    bool MakeDir(const fs::path& name, std::string& error) const
+    //! A new directory \p name, which must not be there, with the security descriptor \p sd from
+    //! the start when one is given, and otherwise the access list this directory passes down.
+    bool MakeDir(const fs::path& name, std::string& error, void* sd = nullptr) const
     {
         const std::wstring path = ChildPath(name);
-        if (!::CreateDirectoryW(path.c_str(), nullptr)) {
+        SECURITY_ATTRIBUTES sa{static_cast<DWORD>(sizeof(SECURITY_ATTRIBUTES)), sd, FALSE};
+        if (!::CreateDirectoryW(path.c_str(), sd ? &sa : nullptr)) {
             const DWORD code = ::GetLastError();
             error = code == ERROR_ALREADY_EXISTS ? Shown(Child(name)) + " is already there"
                                                  : "create " + Shown(Child(name)) + ": " + Win32ErrorText(code);
@@ -954,7 +965,8 @@ public:
         return File(std::move(guard), Child(name));
     }
 
-    std::optional<File> Create(const fs::path& name, std::string& error) const
+    //! The security descriptor is Windows': what is made here is owner-only already.
+    std::optional<File> Create(const fs::path& name, std::string& error, void* /*sd*/ = nullptr) const
     {
         const int fd = ::openat(m_fd.Get(), name.c_str(), O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
         if (fd < 0) {
@@ -972,7 +984,7 @@ public:
         return File(std::move(guard), Child(name));
     }
 
-    bool MakeDir(const fs::path& name, std::string& error) const
+    bool MakeDir(const fs::path& name, std::string& error, void* /*sd*/ = nullptr) const
     {
         if (::mkdirat(m_fd.Get(), name.c_str(), 0700) != 0) {
             error = errno == EEXIST ? Shown(Child(name)) + " is already there"
@@ -1153,13 +1165,24 @@ public:
         if (!Plan(*source, fs::path())) return;
         if (const std::optional<std::string> refusal = DestinationRefusal(src, dst, m_rules)) return Fail(*refusal);
 
+#ifdef WIN32
+        if (m_rules.created_acl) {
+            try {
+                m_dir_sd.reset(winacl::MakeSecurityDescriptor(*m_rules.created_acl));
+                m_file_sd.reset(winacl::MakeSecurityDescriptor(SpecForFile(*m_rules.created_acl)));
+            } catch (const std::exception& e) {
+                return Fail("make the access list of what the transfer makes: " + AsciiWhat(e));
+            }
+        }
+#endif
+
         m_dst_name = dst.filename();
         m_dst = Dir::Open(dst, absent, error);
         if (!m_dst) {
             if (!absent) return Fail(error);
             m_dst_parent = Dir::Open(dst.parent_path(), absent, error);
             if (!m_dst_parent) return Fail(error);
-            if (!m_dst_parent->MakeDir(dst.filename(), error)) return Fail(error);
+            if (!m_dst_parent->MakeDir(dst.filename(), error, DirSd())) return Fail(error);
             m_result.created_dst = true;
             m_dst = m_dst_parent->Sub(dst.filename(), error);
             if (!m_dst) return FailAndUndo(error);
@@ -1308,7 +1331,7 @@ private:
                     }
                 }
                 if (!merge) {
-                    if (!to.MakeDir(name, error)) {
+                    if (!to.MakeDir(name, error, DirSd())) {
                         Fail(error);
                         return false;
                     }
@@ -1337,7 +1360,7 @@ private:
                 Fail(error);
                 return false;
             }
-            std::optional<File> out = to.Create(name, error);
+            std::optional<File> out = to.Create(name, error, FileSd());
             if (!out) {
                 Fail(error);
                 return false;
@@ -1384,7 +1407,7 @@ private:
         }
         if (!filtered.second.empty() && !QuarantineFile(from, name, relative, &original)) return false;
 
-        std::optional<File> out = to.Create(name, error);
+        std::optional<File> out = to.Create(name, error, FileSd());
         if (!out) {
             Fail(error);
             return false;
@@ -1526,6 +1549,30 @@ private:
     const TransferRules& m_rules;
     const fs::path m_quarantine_root;
     TransferResult& m_result;
+#ifdef WIN32
+    //! TransferRules::created_acl as security descriptors for the directories and the files the
+    //! transfer makes; empty when it is not set.
+    winacl::UniqueSecurityDescriptor m_dir_sd;
+    winacl::UniqueSecurityDescriptor m_file_sd;
+#endif
+
+    void* DirSd() const
+    {
+#ifdef WIN32
+        return m_dir_sd.get();
+#else
+        return nullptr;
+#endif
+    }
+
+    void* FileSd() const
+    {
+#ifdef WIN32
+        return m_file_sd.get();
+#else
+        return nullptr;
+#endif
+    }
     std::optional<Dir> m_dst_parent;
     std::optional<Dir> m_dst;
     fs::path m_dst_name;

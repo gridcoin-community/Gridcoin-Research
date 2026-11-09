@@ -80,6 +80,11 @@ struct TransferRules
     //! directory's lock file, as a path below the source's root. The transfer skips it, and
     //! leaves it and the directories it is in out of TransferResult::source_remove.
     std::optional<fs::path> hold;
+    //! Windows: when set, every directory and file the transfer makes, the destination's root
+    //! included, is given this owner and protected list as it is made (a file without the list's
+    //! inheritance, as SpecForFile), not the list its directory passes down. Elsewhere what the
+    //! transfer makes is owner-only already.
+    std::optional<util::winacl::AclSpec> created_acl;
 };
 
 //! The most a settings file may hold for FilterSettings to read it.
@@ -231,6 +236,12 @@ MovedTreeSecurity EnableSecurity(const fs::path& programdata, Network net, const
 //! The owner-only list a tree moved back to \p user gets: owned by \p user, with \p user and
 //! SYSTEM given FILE_ALL_ACCESS, inherited by what a directory holds. Pure.
 util::winacl::AclSpec OwnerOnlySpec(const Sid& user);
+
+//! What a tree moved back to \p user is made with, until ResetTreeSecurity gives it
+//! OwnerOnlySpec(\p user): owned by \p creator, the account that copies it, with OwnerOnlySpec's
+//! entries and \p creator given FILE_ALL_ACCESS too, inherited by what a directory holds, so that
+//! the copy goes on making entries in the directories it made. Pure.
+util::winacl::AclSpec CreatedSpec(const Sid& user, const Sid& creator);
 
 //! \p spec for a file: the same owner and entries, none of them passed down. Pure.
 util::winacl::AclSpec SpecForFile(const util::winacl::AclSpec& spec);

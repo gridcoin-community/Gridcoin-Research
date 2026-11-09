@@ -8,6 +8,7 @@
 #include "util/strencodings.h"
 #include "util/system.h"
 #include "util/win_acl.h"
+#include "test/wine.h"
 #include "winsvc/layout.h"
 #include "winsvc/transfer.h"
 
@@ -247,6 +248,53 @@ BOOST_AUTO_TEST_CASE(transfer_copies_tree_and_verifies)
     BOOST_CHECK_EQUAL(static_cast<unsigned>(st.st_mode & 07777), 0700U);
 #endif
 }
+
+#ifdef WIN32
+// What the transfer makes is given the list it is given as it is made, not the one the destination
+// passes down: a parent whose list gives Users read passes nothing to what is copied in. Production
+// change that would fail this: a transfer that makes its entries with the inherited list and sets
+// theirs only afterwards.
+BOOST_AUTO_TEST_CASE(transfer_gives_what_it_makes_the_list_it_is_given)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list; skipping");
+        return;
+    }
+    namespace winacl = util::winacl;
+    const TempTree tree;
+    const fs::path src = tree.root / "src";
+    MakeWalletTree(src);
+    const winacl::Sid me = winacl::CurrentTokenUser();
+    const fs::path open = tree.root / "open";
+    BOOST_REQUIRE(winacl::CreateDirectoryWithAcl(
+        open, winacl::AclSpec{me,
+                              {{me, FILE_ALL_ACCESS, winacl::Inherit::ContainerAndObject},
+                               {winacl::wellknown::Users(), FILE_GENERIC_READ, winacl::Inherit::ContainerAndObject}}}));
+    const fs::path dst = open / "dst";
+
+    // The account the tree is moved to is not the one copying it, as for disable, which copies
+    // elevated: the copier goes on making entries in the directories it made.
+    const winacl::Sid user = *winacl::ParseSidString("S-1-5-19");
+    TransferRules rules = RulesForDisable(Network::Main);
+    rules.created_acl = CreatedSpec(user, me);
+    const TransferResult result = TransferTree(src, dst, rules, fs::path());
+    BOOST_REQUIRE_MESSAGE(result.ok, result.error);
+    BOOST_CHECK(result.created_dst);
+
+    std::vector<fs::path> made{dst};
+    for (fs::recursive_directory_iterator it(dst), end; it != end; ++it) made.push_back(it->path());
+    BOOST_CHECK(made.size() > 3);
+    for (const fs::path& entry : made) {
+        const winacl::ObservedAcl acl = winacl::ReadAcl(entry);
+        BOOST_CHECK_MESSAGE(acl.is_protected, entry.string());
+        BOOST_CHECK_MESSAGE(std::none_of(acl.aces.begin(), acl.aces.end(),
+                                         [](const winacl::ObservedAce& ace) {
+                                             return ace.trustee == winacl::wellknown::Users();
+                                         }),
+                            entry.string());
+    }
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(transfer_into_an_existing_empty_destination)
 {

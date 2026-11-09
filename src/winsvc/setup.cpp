@@ -2289,7 +2289,10 @@ void DisableService(const ToolOptions& options)
         }
     }
     const fs::path datadir = DataDir(programdata, net);
-    const TransferRules rules = RulesForDisable(net);
+    TransferRules rules = RulesForDisable(net);
+    // What the copy makes is closed from the start to all but the account, SYSTEM and this process,
+    // not open to what the target passes down until the reset below gives it the account's list.
+    rules.created_acl = CreatedSpec(*user, winacl::CurrentTokenUser());
     if (const std::optional<std::string> refusal = DestinationRefusal(datadir, target, rules)) throw Refusal(*refusal);
     // A directory of the account's that is there already, such as the test network's with the
     // configuration file enable left in it, is gone into when it is the account's own. What is made
