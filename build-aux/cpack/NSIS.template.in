@@ -333,9 +333,9 @@ Function .onInit
     ${EndIf}
 !endif
     loop:
-    ; The system's own cmd.exe.
+    ; The system's own cmd.exe, with /D.
     StrCpy $1 "$SYSDIR\cmd.exe"
-    ExecWait '$1 /C "$\"$SYSDIR\tasklist.exe$\" /NH /FI $\"IMAGENAME eq ${GRIDCOIN_GUI_NAME}$\" | $\"$SYSDIR\find.exe$\" /I $\"${GRIDCOIN_GUI_NAME}$\""' $0
+    ExecWait '$1 /D /C "$\"$SYSDIR\tasklist.exe$\" /NH /FI $\"IMAGENAME eq ${GRIDCOIN_GUI_NAME}$\" | $\"$SYSDIR\find.exe$\" /I $\"${GRIDCOIN_GUI_NAME}$\""' $0
     StrCmp $0 0 0 notRunning_gui
     MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION 'The Gridcoin wallet (${GRIDCOIN_GUI_NAME}) is running. Please close before continuing.' /SD IDCANCEL IDOK loop IDCANCEL end
     notRunning_gui:

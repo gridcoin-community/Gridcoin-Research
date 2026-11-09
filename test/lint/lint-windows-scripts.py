@@ -31,8 +31,8 @@ Rules
   10 no script-level parameter default reads the script's own path
   11 every script that runs elevated sets PSModulePath to the system's module directories
      before it dot-sources anything
-  12 the installer's running-GUI check runs $SYSDIR\\cmd.exe, and the installer reads no uninstaller
-     from HKCU
+  12 the installer runs cmd.exe only with /D, its running-GUI check runs $SYSDIR\\cmd.exe, and it reads
+     no uninstaller from HKCU
   13 the update script checks its helpers before it dot-sources them, with a copy of
      Get-GridcoinWriteVector whose masks and privileged SIDs equal GridcoinCommon.ps1's
   14 the installer and the uninstaller point $PLUGINSDIR at a new folder under Program Files as
@@ -418,6 +418,15 @@ def rule12(files):
         failures.append(f"rule 12: {NSIS}: reads an uninstaller from an HKCU UninstallString")
     if "tasklist.exe" in nsis and 'StrCpy $1 "$SYSDIR\\cmd.exe"' not in nsis:
         failures.append(f"rule 12: {NSIS}: the running-GUI check does not run $SYSDIR\\cmd.exe")
+    # A run of cmd.exe, by name or through $1 (which holds $SYSDIR\cmd.exe for the running-GUI
+    # check), passes /D.
+    for line in nsis.splitlines():
+        if not re.search(r"\bExec(?:Wait|Shell|ToLog|ToStack)?\b", line):
+            continue
+        if not re.search(r"cmd\.exe|'\$1\s", line, re.IGNORECASE):
+            continue
+        if not re.search(r"(?:cmd\.exe\"?|'\$1)\s+/D\s", line, re.IGNORECASE):
+            failures.append(f"rule 12: {NSIS}: runs cmd.exe without /D: {line.strip()}")
     return failures
 
 
@@ -539,7 +548,8 @@ GOOD_PLUGINSDIR = ('!define GRC_PROGRAMFILES "$PROGRAMFILES64"\n'
                    "!macro GRC_ADMIN_PLUGINSDIR NAME\n"
                    '    StrCpy $0 "${GRC_PROGRAMFILES}\\x.${NAME}"\n'
                    "    RMDir /r $0\n    CreateDirectory $0\n    UnsafeStrCpy $PLUGINSDIR $0\n!macroend\n"
-                   "Function .onInit\n    !insertmacro GRC_ADMIN_PLUGINSDIR setup\n    SetShellVarContext all\nFunctionEnd\n")
+                   "Function .onInit\n    !insertmacro GRC_ADMIN_PLUGINSDIR setup\n    SetShellVarContext all\n"
+                   '    StrCpy $1 "$SYSDIR\\cmd.exe"\n    ExecWait \'$1 /D /C "tasklist.exe"\' $0\nFunctionEnd\n')
 GOOD_RESTART = "Function .onInstFailed\n" + step_line("RestartStopped") + "FunctionEnd\n"
 GOOD_NSIS = GOOD_PLUGINSDIR + GOOD_MAIN_HEAD + GOOD_MAIN_TAIL + GOOD_RESTART + GOOD_UNINSTALL
 GOOD_SDDL = "O:BAD:PAI(A;OICI;FA;;;BA)(A;OICI;FA;;;SY)(A;OICI;0x1200a9;;;BU)"
@@ -580,6 +590,8 @@ BAD_SAMPLES = (
     (12, {NSIS: GOOD_NSIS + '    ExpandEnvStrings $1 "%COMSPEC%"\n'}),
     (12, {NSIS: GOOD_NSIS + '    ReadRegStr $1 HKCU "SOFTWARE\\x" "UninstallString"\n'}),
     (12, {NSIS: GOOD_NSIS + "    ExecWait '$1 /C tasklist.exe'\n"}),
+    (12, {NSIS: GOOD_NSIS.replace("$1 /D /C", "$1 /C")}),
+    (12, {NSIS: GOOD_NSIS + "    ExecWait '\"$SYSDIR\\cmd.exe\" /C x' $0\n"}),
     (15, {SHUTDOWN: GOOD_SHUTDOWN.replace("($userVersion * 65536 + ($computerVersion % 65535) + 1)",
                                           "([int]$Matches[1] + 65536)")}),
     (15, {SHUTDOWN: GOOD_SHUTDOWN + "Set-ShutdownScriptState $cmdPath\n"}),
