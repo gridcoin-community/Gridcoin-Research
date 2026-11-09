@@ -409,7 +409,8 @@ opens with the old passphrase. Move the coins to a new wallet instead:
 - **Both networks in one data directory.** Testnet's data directory is `~/.GridcoinResearch/testnet`, so a
   mainnet `enable` leaves `testnet/` and the configuration file (which testnet reads too) in place, and a testnet
   `enable` moves only `testnet/`. A mainnet `enable` refuses a configuration file that selects testnet
-  (`testnet=` or `chain=`) or includes other files (`includeconf=`). Each refuses while the other network's
+  (`testnet=` or `chain=`), includes other files (`includeconf=`) or sets `datadir=` elsewhere, and either
+  `enable` refuses a data directory with no `wallet.dat`: the node keeps its wallet elsewhere. Each refuses while the other network's
   per-user core of that user runs:
 
   ```
@@ -432,7 +433,8 @@ On an upgrade from a release with the earlier units (a forking `gridcoinresearch
 - The **switch-over** moves each recorded service to the new units:
   - **Per-user cores:** every drop-in of `gridcoinresearchd@<user>.service` that the tool did not write is renamed
     to `<name>.disabled-by-gridcoin-switchover`, after the `-datadir` of its command line is read; the tool's own
-    drop-in carries that data directory. An old command line with any other option the new one would drop is
+    drop-in carries that data directory, the released unit's `/home/<user>/.GridcoinResearch` included, so a
+    `datadir=` line in the user's configuration file does not start to apply. An old command line with any other option the new one would drop is
     refused, and so are a copy of the unit in `/etc/systemd/system` and a drop-in for every instance
     (`gridcoinresearchd@.service.d`) that sets `ExecStart=`, `Type=`, `PIDFile=`, `NotifyAccess=` or `User=`.
     Autounlock is turned on again with the credential file where it is. The core is re-enabled if it was enabled,

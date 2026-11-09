@@ -873,6 +873,22 @@ def conf_selects_testnet(text):
     return selected or (chain is not None and chain != "main")
 
 
+def conf_datadir(text):
+    """The datadir= a conf sets in its top level, before any [section] line, the last one winning,
+    as the core reads it; None when it sets none."""
+    found = None
+    for line in text.split("\n"):
+        body = line.split("#", 1)[0].strip(" \t\r\n")
+        if body.startswith("[") and body.endswith("]"):
+            break
+        if "=" not in body:
+            continue
+        name, value = (part.strip(" \t\r\n") for part in body.split("=", 1))
+        if name == "datadir":
+            found = value
+    return found
+
+
 def conf_includes_files(text):
     """Whether a conf has an includeconf= line, in any section, a network prefix or a leading dash
     included: the files it names are not read here."""
@@ -1922,6 +1938,15 @@ def enable(args, net, host, paths, progress):
             if conf_selects_testnet(conf_text):
                 raise UserError("%s selects testnet (testnet= or chain=), so this user's node runs testnet; use "
                                 "--network=test" % conf_display)
+            other = conf_datadir(conf_text)
+            if other is not None and os.path.normpath(other) != os.path.normpath(d_display):
+                raise UserError("%s sets datadir=%s, so this user's node keeps its data there, not in %s, which is "
+                                "all enable moves; refusing" % (conf_display, shown(other), d_display))
+        # All enable moves is that directory, so the wallet must be in it.
+        if "wallet.dat" not in s_names:
+            raise UserError("%s holds no wallet.dat, so this user's node does not keep its wallet there (a -datadir "
+                            "or datadir= elsewhere, say); enable moves only that directory, so there is nothing to "
+                            "move" % s_display)
         refuse_other_network_core(host, args.network, pw.pw_name)
 
         # 2. Stop both cores that could use either datadir. From here on every failure says what
@@ -2427,11 +2452,12 @@ def dropin_texts(directory):
 
 
 def switched_datadir(net, pw, directory, paths):
-    """The datadir the user's core ran in under the old unit, as enable-user's --datadir: None for
-    the core's default under the home directory. It is the last -datadir of the last ExecStart= the
-    drop-ins in directory set, this tool's own included (a rerun); without one, the old unit's
-    /home/<user>/.GridcoinResearch. An old command line with options the new one would drop is
-    refused, naming them."""
+    """The datadir the user's core ran in under the old unit, as enable-user's --datadir: None when
+    the old command line gave no -datadir, so the core's default or a datadir= in the user's conf
+    applied, as it does on the new one. It is the last -datadir of the last ExecStart= the drop-ins
+    in directory set, this tool's own included (a rerun); without one, the old unit's
+    /home/<user>/.GridcoinResearch, which its own command line gave. An old command line with
+    options the new one would drop is refused, naming them."""
     command = None
     for path, text in dropin_texts(directory):
         for value in unit_file_settings(text or "", "Service", "ExecStart"):
@@ -2450,8 +2476,16 @@ def switched_datadir(net, pw, directory, paths):
                                 "configuration file, or remove them, then rerun"
                                 % (display, " ".join(shown(word) for word in dropped)))
         datadir = datadir_from_command(words, pw, display)
-    if datadir is None or datadir == os.path.join(pw.pw_dir, DATADIR_NAME):
+    if datadir is None:
         return None
+    # A -datadir the old command line gave goes on the new one too: without it a datadir= line in the
+    # user's conf would apply, which that -datadir overrode. The core's default spelled out is kept
+    # as written, as the old command line had it; any other path is checked as --datadir is.
+    if datadir == os.path.join(pw.pw_dir, DATADIR_NAME):
+        if UNSAFE_PATH_RE.search(datadir):
+            raise UserError("the datadir %s from %s may not contain whitespace, quotes, backslash, $, %% or ;"
+                            % (shown(datadir), display))
+        return datadir
     return resolve_datadir(pw, datadir, "the datadir %s from %s" % (shown(datadir), display))
 
 

@@ -2402,6 +2402,35 @@ class EnableTests(SwitchTestBase):
         self.assertEqual(rc, 1)
         self.assertNotIn("runs testnet", err)
 
+    def test_enable_refuses_a_source_without_a_wallet(self):
+        # The default datadir is all enable moves: without a wallet there it is not where this user's
+        # node keeps its data.
+        for network, prefix in (("main", ""), ("test", "testnet/")):
+            with self.subTest(network=network):
+                files = {prefix + k: v for k, v in self.user_files().items() if k != "wallet.dat"}
+                svc_rmtree(self.datadir)
+                write_tree(self.datadir, files)
+                self.host.calls.clear()
+                rc, out, err = self.run_main("enable", "bob", "--network=" + network)
+                self.assertEqual(rc, 1)
+                self.assertIn("holds no wallet.dat", err)
+                self.assertEqual(self.host.calls, [])
+
+    def test_mainnet_enable_refuses_a_conf_that_moves_the_datadir(self):
+        files = self.user_files()
+        files["gridcoinresearch.conf"] = ("staking=1\ndatadir=%s\n" % os.path.join(self.home, "grc")).encode()
+        write_tree(self.datadir, files)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("sets datadir=", err)
+        self.assertEqual(self.host.calls, [])
+        # The default datadir named as it is moves nothing elsewhere.
+        files["gridcoinresearch.conf"] = ("staking=1\ndatadir=%s\n" % self.datadir).encode()
+        svc_rmtree(self.datadir)
+        write_tree(self.datadir, files)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+
     def test_mainnet_enable_refuses_a_conf_on_another_chain_or_with_includes(self):
         for conf, expected in ((b"staking=1\nchain=test\n", "runs testnet"),
                                (b"staking=1\nincludeconf=more.conf\n", "includeconf=")):
@@ -3360,8 +3389,10 @@ class SwitchOverTests(ServiceTestBase):
         rc, out, err = self.run_main("switch-over", "--state=" + state)
         self.assertEqual(rc, 0, err)
         core = self.dropin("gridcoinresearchd@alice.service")
-        self.assertIn("ExecStart=/usr/bin/gridcoinresearchd  -nodaemon -nodaemonwait -multiprocess "
-                      "$GRIDCOIN_AUTOUNLOCK_ARGS\n", core)
+        # The released unit's -datadir is kept on the new command line.
+        self.assertIn("ExecStart=/usr/bin/gridcoinresearchd  -nodaemon -nodaemonwait -multiprocess -datadir=%s "
+                      "$GRIDCOIN_AUTOUNLOCK_ARGS\n" % os.path.join(self.host.users["alice"].pw_dir, ".GridcoinResearch"),
+                      core)
         socket = self.dropin("gridcoinresearchd@alice.service", "60-gridcoin-autounlock.conf")
         self.assertIn("Wants=gridcoin-autounlock@alice.socket\n", socket)
         self.assertIn("Environment=GRIDCOIN_AUTOUNLOCK_ARGS=-autounlocksocket=/run/gridcoin-autounlock/alice.sock\n",
@@ -3428,12 +3459,15 @@ class SwitchOverTests(ServiceTestBase):
               "b.conf": "[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=/nowhere -datadir=%s\n" % data}, data),
             # A command line without -datadir ran in the core's default, under the home directory.
             ({"override.conf": "[Service]\nExecStart=\nExecStart=/usr/bin/x -daemonwait\n"}, None),
-            # A -datadir outside [Service], or commented out, did not run.
+            # A -datadir outside [Service], or commented out, did not run: the released unit's own
+            # command line did, with its -datadir.
             ({"override.conf": "[Unit]\nExecStart=/usr/bin/x -datadir=%s\n[Service]\n# ExecStart=/usr/bin/x "
-                               "-datadir=%s\nNice=5\n" % (other, other)}, None),
-            # The core's default spelled out is still the default.
+                               "-datadir=%s\nNice=5\n" % (other, other)}, os.path.join(pw.pw_dir, ".GridcoinResearch")),
+            # The core's default spelled out stays on the new command line, as the released unit's own
+            # -datadir does: without it a datadir= line in the user's conf would apply.
             ({"override.conf": "[Service]\nExecStart=\nExecStart=/usr/bin/x -datadir=%s/.GridcoinResearch\n"
-                               % pw.pw_dir}, None),
+                               % pw.pw_dir}, os.path.join(pw.pw_dir, ".GridcoinResearch")),
+            ({}, os.path.join(pw.pw_dir, ".GridcoinResearch")),
         ]
         for files, expected in cases:
             with self.subTest(files=sorted(files)):
@@ -3497,6 +3531,18 @@ class SwitchOverTests(ServiceTestBase):
         rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("core bob\n"))
         self.assertEqual(rc, 1)
         self.assertIn("-testnet", err)
+
+    def test_switch_over_keeps_the_released_units_datadir_on_the_command_line(self):
+        # The released unit ran -datadir=/home/%i/.GridcoinResearch, which a datadir= line in the
+        # user's conf could not move; the new unit names it too.
+        default = os.path.join(self.paths.old_unit_home, "alice", ".GridcoinResearch")
+        os.makedirs(default)
+        with open(os.path.join(default, "gridcoinresearch.conf"), "w", encoding="utf8") as f:
+            f.write("datadir=%s\n" % os.path.join(self.tmp.name, "elsewhere"))
+        rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("core alice\n"))
+        self.assertEqual(rc, 0, err)
+        self.assertIn(" -multiprocess -datadir=%s $GRIDCOIN_AUTOUNLOCK_ARGS\n" % default,
+                      self.dropin("gridcoinresearchd@alice.service"))
 
     def test_switch_over_keeps_an_old_unit_datadir_outside_the_home(self):
         # The old unit's /home/<user>/.GridcoinResearch, for a user whose home is elsewhere.
