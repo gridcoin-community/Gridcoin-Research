@@ -525,6 +525,19 @@ jobs:
             echo
           done
 
+      - name: Backtrace a crashing unit test on test failure
+        # The runner may write no crash report at all. lldb runs the unit suite
+        # again, with the signal left to the system, and at a crash prints every
+        # thread's stack; the test_suite log level names the case it was in.
+        if: failure()
+        timeout-minutes: 15
+        env:
+          BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
+        run: |
+          cd build/src/test
+          lldb --batch -o run -k "thread backtrace all" -k "quit 1" -- ./test_gridcoin --log_level=test_suite \
+            2>&1 | tail -c 200000 || true
+
       # The hardening check's lief has macOS wheels only up to CPython 3.14, and
       # the image's Homebrew python3 can be newer. The check gets its own
       # interpreter; update-environment: false leaves python3 on the PATH as it is.
@@ -932,6 +945,19 @@ jobs:
             head -c 20000 "$f"
             echo
           done
+
+      - name: Backtrace a crashing unit test on test failure
+        # The runner may write no crash report at all. lldb runs the unit suite
+        # again, with the signal left to the system, and at a crash prints every
+        # thread's stack; the test_suite log level names the case it was in.
+        if: failure()
+        timeout-minutes: 15
+        env:
+          BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
+        run: |
+          cd build/src/test
+          lldb --batch -o run -k "thread backtrace all" -k "quit 1" -- ./test_gridcoin --log_level=test_suite \
+            2>&1 | tail -c 200000 || true
 
       # The hardening check's lief has macOS wheels only up to CPython 3.14, and
       # the image's Homebrew python3 can be newer. The check gets its own
