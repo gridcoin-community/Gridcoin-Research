@@ -767,7 +767,8 @@ DPAPI key, so it works only in a desktop session of yours; pass `-NoAutounlockMi
 autounlock up again in the wallet instead. The installer keeps what was turned off: a disabled Core-Start, or one
 whose boot trigger is off, is registered again the same way, and an Autounlock task that was turned off is not
 converted. Where it does not convert, it deletes the old `passphrase.cred`, and `UPGRADE-NOTICE.txt` says so, or
-names the file to delete when it could not. Another account's earlier tasks are removed; the notice tells an
+names the file to delete when it could not: one of another name (a custom `-CredPath`), or one of another account's
+that is not that account's own, is left. Another account's earlier tasks are removed; the notice tells an
 administrator's account to run `Install-GridcoinCoreTask.ps1` signed in as itself, and a standard account to ask an
 administrator for the service mode (`gridcoin-service.exe install`, then `enable --user=<account>`).
 

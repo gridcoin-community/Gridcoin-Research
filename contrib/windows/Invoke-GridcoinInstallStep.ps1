@@ -619,7 +619,9 @@ function Invoke-GridcoinSwitchOver {
                     $otherCred = $unlockFacts.CredPath
                     if (-not $otherCred -and $unlockFacts.DataDir) { $otherCred = Join-Path $unlockFacts.DataDir 'autounlock\passphrase.cred' }
                     $otherLeft = @()
-                    if ($otherCred) { $otherLeft = @(Remove-GridcoinLegacyPassphraseFile -CredPath $otherCred) }
+                    if ($otherCred) {
+                        $otherLeft = @(Remove-GridcoinLegacyPassphraseFile -CredPath $otherCred -AccountSid ([string]$others[$account].Sid))
+                    }
                     Add-GridcoinAutounlockNotice -AccountName $account -Off (-not ($unlockFacts.Enabled -and $unlockFacts.BootOn)) `
                         -CredPath ([string]$otherCred) -NotDeleted $otherLeft
                 }
