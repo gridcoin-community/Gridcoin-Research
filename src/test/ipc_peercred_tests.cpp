@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <cstdlib>
 #endif
 
@@ -94,6 +95,24 @@ struct TempDir
         fs::remove_all(path, ec);
     }
 };
+#endif
+
+#ifdef SO_PEERGROUPS
+//! Whether this process can read SO_PEERGROUPS. qemu-user hands the option to the
+//! kernel with room for one int, so a process with supplementary groups gets ERANGE
+//! whatever size it asks for; a real kernel never does for room for every group.
+bool PeerGroupsReadable()
+{
+    int fds[2];
+    if (::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) != 0) return true;
+    std::vector<gid_t> groups(static_cast<size_t>(std::max(::sysconf(_SC_NGROUPS_MAX), 1L)));
+    socklen_t len = static_cast<socklen_t>(groups.size() * sizeof(gid_t));
+    const int result = ::getsockopt(fds[0], SOL_SOCKET, SO_PEERGROUPS, groups.data(), &len);
+    const int err = errno;
+    ::close(fds[0]);
+    ::close(fds[1]);
+    return result == 0 || err != ERANGE;
+}
 #endif
 
 //! A Windows peer's identity, as the rules read it.
@@ -201,6 +220,12 @@ BOOST_AUTO_TEST_CASE(client_wrong_service_uid_refused)
 // this process's own identity.
 BOOST_AUTO_TEST_CASE(read_peer_identity_socketpair_is_self)
 {
+#ifdef SO_PEERGROUPS
+    if (!PeerGroupsReadable()) {
+        BOOST_TEST_MESSAGE("SO_PEERGROUPS cannot be read here (qemu-user gives it room for one int); skipping");
+        return;
+    }
+#endif
     int sv[2];
     BOOST_REQUIRE_EQUAL(::socketpair(AF_UNIX, SOCK_STREAM, 0, sv), 0);
     for (const int fd : sv) {
@@ -262,6 +287,12 @@ BOOST_AUTO_TEST_CASE(peer_groups_error_action)
 // socketpair the peer is this process and its groups are getgroups().
 BOOST_AUTO_TEST_CASE(peer_identity_reads_groups)
 {
+#ifdef SO_PEERGROUPS
+    if (!PeerGroupsReadable()) {
+        BOOST_TEST_MESSAGE("SO_PEERGROUPS cannot be read here (qemu-user gives it room for one int); skipping");
+        return;
+    }
+#endif
     int fds[2];
     BOOST_REQUIRE_EQUAL(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
     const auto id = ipc::ReadPeerIdentity(fds[0]);

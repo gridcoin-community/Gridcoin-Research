@@ -30,6 +30,16 @@
 #include <unistd.h>
 
 namespace {
+//! Whether this process can be made a child subreaper: reading the setting and
+//! setting it to the value it has changes nothing. Older qemu-user refuses
+//! PR_SET_CHILD_SUBREAPER; Linux has had it since 3.4.
+bool CanBeSubreaper()
+{
+    int current = 0;
+    if (prctl(PR_GET_CHILD_SUBREAPER, &current, 0, 0, 0) != 0) return false;
+    return prctl(PR_SET_CHILD_SUBREAPER, current, 0, 0, 0) == 0;
+}
+
 //! Makes this process the reaper of its orphaned descendants and runs the orphan
 //! reaper, and on every exit path stops the reaper and restores the previous
 //! subreaper setting.
@@ -176,6 +186,10 @@ BOOST_AUTO_TEST_CASE(stop_without_start_and_repeated_calls_are_safe)
 
 BOOST_AUTO_TEST_CASE(orphans_are_reaped)
 {
+    if (!CanBeSubreaper()) {
+        BOOST_TEST_MESSAGE("this process cannot be made a child subreaper (older qemu-user); skipping");
+        return;
+    }
     ReaperGuard guard;
     BOOST_REQUIRE(guard.SubreaperSet());
 
@@ -225,6 +239,10 @@ BOOST_AUTO_TEST_CASE(spawned_status_not_stolen)
 BOOST_AUTO_TEST_CASE(stop_returns_with_a_live_orphan)
 {
     ChildCleanup cleanup;
+    if (!CanBeSubreaper()) {
+        BOOST_TEST_MESSAGE("this process cannot be made a child subreaper (older qemu-user); skipping");
+        return;
+    }
     ReaperGuard guard;
     BOOST_REQUIRE(guard.SubreaperSet());
 
