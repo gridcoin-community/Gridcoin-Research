@@ -133,18 +133,21 @@ SOCKET CreateCloexecSocket(int domain, int type, int protocol)
     return ::WSASocketW(domain, type, protocol, nullptr, 0,
                         WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
 #elif defined(SOCK_CLOEXEC)
-    return ::socket(domain, type | SOCK_CLOEXEC, protocol);
+    // socket() returns an int, -1 on failure; INVALID_SOCKET is that value as a SOCKET, and
+    // the conversion is spelled out so a sanitizer does not report the sign change.
+    const int fd = ::socket(domain, type | SOCK_CLOEXEC, protocol);
+    return fd == -1 ? INVALID_SOCKET : static_cast<SOCKET>(fd);
 #else
-    SOCKET s = ::socket(domain, type, protocol);
-    if (s == INVALID_SOCKET) return INVALID_SOCKET;
-    const int flags = ::fcntl(s, F_GETFD);
-    if (flags == -1 || ::fcntl(s, F_SETFD, flags | FD_CLOEXEC) == -1) {
+    const int fd = ::socket(domain, type, protocol);
+    if (fd == -1) return INVALID_SOCKET;
+    const int flags = ::fcntl(fd, F_GETFD);
+    if (flags == -1 || ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == -1) {
         const int saved = errno;
-        ::close(s);
+        ::close(fd);
         errno = saved;
         return INVALID_SOCKET;
     }
-    return s;
+    return static_cast<SOCKET>(fd);
 #endif
 }
 
@@ -165,18 +168,21 @@ SOCKET AcceptCloexec(SOCKET listen_socket, sockaddr* addr, socklen_t* addr_len)
     }
     return s;
 #elif defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
-    return ::accept4(listen_socket, addr, addr_len, SOCK_CLOEXEC);
+    // As in CreateCloexecSocket(): -1 becomes INVALID_SOCKET explicitly. The non-blocking
+    // listener's accept fails with EAGAIN often, so the implicit conversion was reported often.
+    const int fd = ::accept4(listen_socket, addr, addr_len, SOCK_CLOEXEC);
+    return fd == -1 ? INVALID_SOCKET : static_cast<SOCKET>(fd);
 #else
-    SOCKET s = ::accept(listen_socket, addr, addr_len);
-    if (s == INVALID_SOCKET) return INVALID_SOCKET;
-    const int flags = ::fcntl(s, F_GETFD);
-    if (flags == -1 || ::fcntl(s, F_SETFD, flags | FD_CLOEXEC) == -1) {
+    const int fd = ::accept(listen_socket, addr, addr_len);
+    if (fd == -1) return INVALID_SOCKET;
+    const int flags = ::fcntl(fd, F_GETFD);
+    if (flags == -1 || ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == -1) {
         const int saved = errno;
-        ::close(s);
+        ::close(fd);
         errno = saved;
         return INVALID_SOCKET;
     }
-    return s;
+    return static_cast<SOCKET>(fd);
 #endif
 }
 
