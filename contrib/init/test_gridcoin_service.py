@@ -2368,6 +2368,9 @@ class EnableTests(SwitchTestBase):
                 self.assertNotIn("drop-ins", err)
                 if verb != "enable":
                     self.assertIn("nothing was copied", err)
+                    # A failed stop of the system service says the user's core was stopped already.
+                    if verb == "stop":
+                        self.assertIn("gridcoinresearchd@bob.service is disabled and stopped", err)
                     self.assertNotIn(("add_to_group", "bob", "gridcoin-gui"), host.calls)
                     self.assertFalse(os.path.exists(self.target()))
                 else:

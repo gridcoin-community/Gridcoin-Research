@@ -2003,6 +2003,7 @@ def enable(args, net, host, paths, progress):
         progress.state = "nothing was copied"
         unit = "%s@%s.service" % (net.daemon, pw.pw_name)
         step(host, "disable", "--now", *core_units(net, pw.pw_name), state=None)
+        progress.state = "%s is disabled and stopped; nothing was copied" % unit
         step(host, "stop", net.daemon + ".service", state=None)
         progress.state = "%s is disabled and %s.service stopped; nothing was copied" % (unit, net.daemon)
 
