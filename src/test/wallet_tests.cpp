@@ -1729,7 +1729,8 @@ BOOST_AUTO_TEST_CASE(a_passphrase_change_derives_without_holding_cs_wallet)
     // counted, only if it derives without cs_wallet. It takes cs_wallet briefly
     // to copy the records when it begins; if this thread took it before that,
     // nothing is counted while it is held, and the round is given up for
-    // another.
+    // another. A round waits up to two minutes, since CI also runs the suite under
+    // QEMU emulation, many times slower.
     bool refused_while_held{false};
     bool waited_for_the_lock{false};
 
@@ -1745,7 +1746,7 @@ BOOST_AUTO_TEST_CASE(a_passphrase_change_derives_without_holding_cs_wallet)
 
         if (fx.wallet.FailedUnlockCount() != 0) break;
 
-        for (int i = 0; i < 2000 && fx.wallet.FailedUnlockCount() == 0; ++i) {
+        for (int i = 0; i < 12000 && fx.wallet.FailedUnlockCount() == 0; ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 

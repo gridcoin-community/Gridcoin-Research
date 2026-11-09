@@ -810,7 +810,8 @@ BOOST_AUTO_TEST_CASE(unlock_derives_without_holding_cs_wallet)
     // thread still took it before that, the attempt waits for it and nothing
     // is counted while it is held, so the round is given up for another. A
     // round lasts several times the derivation on a loaded machine, so that an
-    // attempt that is only slow is not mistaken for one that waits.
+    // attempt that is only slow is not mistaken for one that waits: up to two
+    // minutes, since CI also runs the suite under QEMU emulation, many times slower.
     bool refused_while_held{false};
     bool waited_for_the_lock{false};
 
@@ -827,7 +828,7 @@ BOOST_AUTO_TEST_CASE(unlock_derives_without_holding_cs_wallet)
         // Counted before this thread held the lock, so nothing is left to show.
         if (fx.wallet.FailedUnlockCount() != 0) break;
 
-        for (int i = 0; i < 2000 && fx.wallet.FailedUnlockCount() == 0; ++i) {
+        for (int i = 0; i < 12000 && fx.wallet.FailedUnlockCount() == 0; ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
