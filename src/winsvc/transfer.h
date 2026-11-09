@@ -264,6 +264,20 @@ std::optional<std::string> InheritedOnlyRefusal(const util::winacl::ObservedAcl&
 //! SeRestorePrivilege, for an owner other than this account. Throws std::runtime_error naming the
 //! path.
 void ResetTreeSecurity(const fs::path& root, const Sid& owner, const util::winacl::AclSpec& root_spec);
+
+//! \p path as Windows finds it now, in the "X:\..." form: each junction and link on the way to it
+//! followed, and each name as it is on disk. Its last component is taken as itself, not followed;
+//! when nothing is there, the directory that would hold it is resolved and the name joined to it.
+//!
+//! TransferTree, DestinationRefusal, MergedDirectories, RemoveTreeNoFollow, RemoveDirIfEmpty,
+//! ReadFileNoFollow and ResetTreeSecurity open the directory they are given only where it was asked
+//! for, and refuse it when Windows resolves it anywhere else. So a root is resolved once, before
+//! the first step, and every step after acts at that path: a directory on the way to it moved
+//! between two steps and a junction put in its place is refused, not followed.
+//!
+//! nullopt with \p error when \p path cannot be resolved or is on a network share, and with
+//! \p absent too when neither it nor the directory that would hold it is there.
+std::optional<fs::path> ResolvedTreePath(const fs::path& path, bool& absent, std::string& error);
 #endif
 
 } // namespace winsvc

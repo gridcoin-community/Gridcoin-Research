@@ -481,7 +481,8 @@ private:
 class Dir
 {
 public:
-    //! \p path opened as a directory, itself and not what a link at it names. nullopt with
+    //! \p path opened as a directory, itself and not what a link at it names, and only where it was
+    //! asked for: refused when Windows resolves it anywhere else (ResolvedTreePath). nullopt with
     //! \p absent when nothing is there, and with \p error otherwise.
     static std::optional<Dir> Open(const fs::path& path, bool& absent, std::string& error)
     {
@@ -502,6 +503,14 @@ public:
         }
         if (final_path->compare(0, 8, L"\\\\?\\UNC\\") == 0) {
             error = Shown(path) + " is on a network share; the wallet is moved between local directories only";
+            return std::nullopt;
+        }
+        // A junction or a link on the way to it is not followed, as when a directory above was
+        // moved and a junction put in its place since the path was resolved.
+        if (!SamePath(*final_path, ExactPath(path))) {
+            error = strprintf("%s is not where it was looked for: Windows finds it at %s, as a directory on its path is "
+                              "a junction or a link, or was moved or replaced since the path was resolved",
+                              Shown(path), Shown(fs::path(final_path->substr(4))));
             return std::nullopt;
         }
         return FromHandle(std::move(handle), *final_path, path, error);
@@ -1938,6 +1947,50 @@ void ResetTreeSecurity(const fs::path& root, const Sid& owner, const AclSpec& ro
     const std::optional<Dir> dir = Dir::FromHandle(std::move(handle), *final_path, root, error);
     if (!dir) throw std::runtime_error(error);
     ResetBelow(*dir, owner, root_spec);
+}
+
+std::optional<fs::path> ResolvedTreePath(const fs::path& path, bool& absent, std::string& error)
+{
+    absent = false;
+    const auto open = [](const fs::path& at) {
+        return winacl::UniqueHandle(::CreateFileW(ExactPath(at).c_str(), FILE_READ_ATTRIBUTES,
+                                                  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                                  OPEN_EXISTING,
+                                                  FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    };
+    fs::path at = path;
+    fs::path name;
+    winacl::UniqueHandle handle = open(at);
+    DWORD code = handle ? ERROR_SUCCESS : ::GetLastError();
+    if (!handle && IsNotFound(code)) {
+        // Nothing there: the directory that would hold it, with the name joined to it.
+        name = path.filename();
+        at = path.parent_path();
+        handle = open(at);
+        code = handle ? ERROR_SUCCESS : ::GetLastError();
+        if (!handle && IsNotFound(code)) {
+            absent = true;
+            error = Shown(path) + " is not there, and neither is the directory that would hold it";
+            return std::nullopt;
+        }
+    }
+    if (!handle) {
+        error = code == winacl::WIN32_UNTRUSTED_MOUNT_POINT
+                    ? Shown(at) + ": " + winacl::UNTRUSTED_MOUNT_POINT_REASON
+                    : "open " + Shown(at) + ": " + Win32ErrorText(code);
+        return std::nullopt;
+    }
+    std::optional<std::wstring> final_path = FinalPath(handle.get(), code);
+    if (!final_path) {
+        error = "read the path of " + Shown(at) + ": " + Win32ErrorText(code);
+        return std::nullopt;
+    }
+    if (final_path->compare(0, 8, L"\\\\?\\UNC\\") == 0) {
+        error = Shown(path) + " is on a network share; the wallet is moved between local directories only";
+        return std::nullopt;
+    }
+    if (final_path->compare(0, 4, L"\\\\?\\") == 0) final_path->erase(0, 4);
+    return name.empty() ? fs::path(*final_path) : fs::path(*final_path) / name;
 }
 #endif // WIN32
 

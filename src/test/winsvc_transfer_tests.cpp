@@ -8,6 +8,7 @@
 #include "util/strencodings.h"
 #include "util/system.h"
 #include "util/win_acl.h"
+#include "test/win_fs_util.h"
 #include "test/wine.h"
 #include "winsvc/layout.h"
 #include "winsvc/transfer.h"
@@ -53,6 +54,15 @@ struct TempTree
     TempTree()
     {
         fs::create_directories(root);
+#ifdef WIN32
+        // As Windows finds it, as the tool resolves a root before it acts on it: the steps open a
+        // root only at the path they are given (ResolvedTreePath).
+        bool absent = false;
+        std::string error;
+        const std::optional<fs::path> resolved = ResolvedTreePath(root, absent, error);
+        BOOST_REQUIRE_MESSAGE(resolved, error);
+        root = *resolved;
+#endif
     }
 
     ~TempTree()
@@ -293,6 +303,84 @@ BOOST_AUTO_TEST_CASE(transfer_gives_what_it_makes_the_list_it_is_given)
                                          }),
                             entry.string());
     }
+}
+
+// Each step of a move opens the root it is given only where it was asked for. With a junction on
+// the way, as when a directory above the root was moved and a junction put in its place between
+// two steps, every step refuses, and nothing where the junction leads is read, changed or removed.
+// The root resolved once beforehand (ResolvedTreePath) is where the steps then act. Production
+// change that would fail this: a root open that takes the path Windows resolved without
+// comparing it with the one asked for.
+BOOST_AUTO_TEST_CASE(root_steps_refuse_a_path_windows_resolves_elsewhere)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine does not make junctions as Windows does; skipping");
+        return;
+    }
+    namespace winacl = util::winacl;
+    const TempTree tree;
+    const fs::path src = tree.root / "src";
+    MakeWalletTree(src);
+    const fs::path elsewhere = tree.root / "elsewhere";
+    MakeWalletTree(elsewhere / "data");
+    const fs::path link = tree.root / "link";
+    grc_test::MakeJunction(link, elsewhere);
+    const fs::path through = link / "data";
+    const bool untrusted = grc_test::JunctionUntrustedOn(through);
+    BOOST_TEST_MESSAGE((untrusted ? "Windows does not follow the junction" : "Windows follows the junction"));
+
+    const std::map<std::string, std::string> before = Snapshot(elsewhere);
+    const winacl::ObservedAcl blocks_acl = winacl::ReadAcl(elsewhere / "data" / "blocks");
+    const winacl::Sid me = winacl::CurrentTokenUser();
+
+    std::string error;
+    BOOST_CHECK(!RemoveTreeNoFollow(through, {"wallet.dat"}, error));
+    BOOST_TEST_MESSAGE("remove: " << error);
+    bool removed = false;
+    BOOST_CHECK(!RemoveDirIfEmpty(through, fs::path("walletbackups") / "empty", removed, error));
+    BOOST_CHECK(!removed);
+    std::string text;
+    bool absent = false;
+    BOOST_CHECK(!ReadFileNoFollow(through / "wallet.dat", 1024, text, absent, error));
+    BOOST_CHECK(text.empty());
+    const TransferResult into = TransferTree(src, through / "fresh", RulesForDisable(Network::Main), fs::path());
+    BOOST_CHECK(!into.ok);
+    BOOST_TEST_MESSAGE("copy into: " << into.error);
+    const TransferResult out_of =
+        TransferTree(through, tree.root / "out", RulesForDisable(Network::Main), fs::path());
+    BOOST_CHECK(!out_of.ok);
+    BOOST_CHECK_THROW(ResetTreeSecurity(through / "blocks", me, OwnerOnlySpec(me)), std::runtime_error);
+
+    BOOST_CHECK(Snapshot(elsewhere) == before);
+    BOOST_CHECK(grc_test::SameAcl(winacl::ReadAcl(elsewhere / "data" / "blocks"), blocks_acl));
+    BOOST_CHECK(!fs::exists(tree.root / "out"));
+
+    // Resolved first, the root is where the junction leads, and the steps act there. The junction
+    // itself, as the last component, is not followed.
+    const std::optional<fs::path> real = ResolvedTreePath(elsewhere / "data", absent, error);
+    BOOST_REQUIRE_MESSAGE(real, error);
+    const std::optional<fs::path> resolved = ResolvedTreePath(through, absent, error);
+    if (untrusted) {
+        BOOST_CHECK(!resolved);
+    } else {
+        BOOST_REQUIRE_MESSAGE(resolved, error);
+        BOOST_CHECK_EQUAL(resolved->string(), real->string());
+        BOOST_REQUIRE_MESSAGE(RemoveTreeNoFollow(*resolved, {"peers.dat"}, error), error);
+        BOOST_CHECK(!fs::exists(elsewhere / "data" / "peers.dat"));
+        const std::optional<fs::path> fresh = ResolvedTreePath(through / "fresh", absent, error);
+        BOOST_REQUIRE_MESSAGE(fresh, error);
+        BOOST_CHECK_EQUAL(fresh->string(), (*real / "fresh").string());
+    }
+    const std::optional<fs::path> root = ResolvedTreePath(tree.root, absent, error);
+    BOOST_REQUIRE_MESSAGE(root, error);
+    const std::optional<fs::path> junction = ResolvedTreePath(link, absent, error);
+    BOOST_REQUIRE_MESSAGE(junction, error);
+    BOOST_CHECK_EQUAL(junction->string(), (*root / "link").string());
+    BOOST_CHECK(!ResolvedTreePath(tree.root / "none" / "deeper", absent, error));
+    BOOST_CHECK(absent);
+
+    // The junction itself, so that the cleanup does not go through it.
+    BOOST_CHECK(::RemoveDirectoryW(link.wstring().c_str()));
 }
 #endif
 

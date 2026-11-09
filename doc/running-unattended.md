@@ -811,6 +811,10 @@ cd "C:\Program Files\GridcoinResearch\daemon"
   is enabled again. It ends with `Disabled. The wallet is back in <directory>; <account> can start the plain GUI.`,
   and how to get unattended start: `Install-GridcoinCoreTask.ps1` for an administrator's own wallet, the service mode
   for a standard account's.
+- **Paths.** `enable` and `disable` resolve the path of each data directory they move a wallet between once,
+  before they change anything. Each step that copies, removes or sets an access list opens it at that path only: if
+  a directory on the way is moved while they run and a junction put in its place, the step refuses rather than
+  follow it.
 - **`uninstall`** removes the service, its firewall rule and the empty directories. It refuses while the service is
   enabled or its data directory holds a wallet.
 - **The stored passphrase** is encrypted for the service account. Code that runs as the service can decrypt it, as

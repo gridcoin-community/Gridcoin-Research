@@ -1792,6 +1792,19 @@ fs::path TreePathOption(const std::string& option, const std::string& text)
     return fs::path(wide);
 }
 
+//! \p path as Windows finds it now (ResolvedTreePath): the path the later steps of enable or
+//! disable that copy, remove or set access lists open, so that a junction put on the way to it
+//! after this is refused, not followed. A path that is not there, nor the directory that would
+//! hold it, is kept as it is given, for the checks that follow to refuse.
+fs::path PinnedTreePath(const fs::path& path)
+{
+    bool absent = false;
+    std::string error;
+    if (const std::optional<fs::path> resolved = ResolvedTreePath(path, absent, error)) return *resolved;
+    if (absent) return path;
+    throw Refusal(error);
+}
+
 //! The names of \p entries, at most five of them, for a message.
 std::string FirstNames(const std::vector<LevelEntryFacts>& entries)
 {
@@ -1876,7 +1889,7 @@ bool CoreStartNetwork(const CoreStartTask& task, const fs::path& default_root, N
         std::string text;
         bool absent = false;
         std::string error;
-        const fs::path launcher = Utf8ToWide(*launcher_path);
+        const fs::path launcher = PinnedTreePath(Utf8ToWide(*launcher_path));
         if (!ReadFileNoFollow(launcher, SETTINGS_SIZE_LIMIT, text, absent, error)) {
             why = absent ? "its launcher " + Shown(launcher) + " is not there" : error;
             return false;
@@ -1890,8 +1903,8 @@ bool CoreStartNetwork(const CoreStartTask& task, const fs::path& default_root, N
             core_net = Network::Test;
             return true;
         }
-        const fs::path conf = (core->datadir ? fs::path(Utf8ToWide(*core->datadir)) : default_root) /
-                              L"gridcoinresearch.conf";
+        const fs::path conf = PinnedTreePath((core->datadir ? fs::path(Utf8ToWide(*core->datadir)) : default_root) /
+                                             L"gridcoinresearch.conf");
         if (!ReadFileNoFollow(conf, SETTINGS_SIZE_LIMIT, text, absent, error)) {
             why = absent ? Shown(conf) + " is not there" : error;
             return false;
@@ -1918,7 +1931,7 @@ void EnableService(const ToolOptions& options)
     // removes entries there and gives the moved tree the service's owner.
     EnablePrivilege(SE_BACKUP_NAME);
     EnablePrivilege(SE_RESTORE_NAME);
-    const fs::path programdata = ProgramDataPath();
+    const fs::path programdata = PinnedTreePath(ProgramDataPath());
 
     // The service must be installed, disabled and stopped.
     const UniqueServiceHandle scm = OpenScm(SC_MANAGER_CONNECT);
@@ -1986,6 +1999,9 @@ void EnableService(const ToolOptions& options)
                                     Shown(root), *problem));
         }
     }
+    // Resolved once: the steps below that copy, remove or set access lists open it at this path
+    // only, and refuse it if Windows later finds it elsewhere.
+    root = PinnedTreePath(root);
     const fs::path net_root = net == Network::Test ? root / L"testnet" : root;
     Say("From: " + Shown(net_root));
     const Level wallet = ReadLevel(net_root / L"wallet.dat");
@@ -2222,7 +2238,7 @@ void DisableService(const ToolOptions& options)
     // moved tree the account's owner.
     EnablePrivilege(SE_BACKUP_NAME);
     EnablePrivilege(SE_RESTORE_NAME);
-    const fs::path programdata = ProgramDataPath();
+    const fs::path programdata = PinnedTreePath(ProgramDataPath());
 
     const UniqueServiceHandle scm = OpenScm(SC_MANAGER_CONNECT);
     const UniqueServiceHandle service =
@@ -2259,8 +2275,10 @@ void DisableService(const ToolOptions& options)
         throw Refusal(strprintf("%s does not say where the wallet came from (from). Give it with --to=<directory>.",
                                 Shown(state_path)));
     }
-    const fs::path target = options.to ? TreePathOption("--to", *options.to)
-                                       : TreePathOption("from in " + Shown(state_path), *from);
+    // Resolved once: the steps below that copy, remove or set access lists open it at this path
+    // only, and refuse it if Windows later finds it elsewhere.
+    const fs::path target = PinnedTreePath(options.to ? TreePathOption("--to", *options.to)
+                                                      : TreePathOption("from in " + Shown(state_path), *from));
     const fs::path net_target = net == Network::Test ? target / L"testnet" : target;
     Say("Account: " + user_name);
     Say("To: " + Shown(net_target));
