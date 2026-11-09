@@ -1012,7 +1012,8 @@ UniValue votedetails(const UniValue& params)
 
 static const RPCHelpMan testpollnotification_help{
     "testpollnotification",
-    "Test the poll notification system for the specified poll.",
+    "Test the poll notification system for the specified poll. The reply shows the -pollnotify command, a\n"
+    "sensitive setting, as ****, as listsettings does.",
     {
         {"poll_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the poll to test notification."},
     },
@@ -1042,7 +1043,9 @@ UniValue testpollnotification(const UniValue& params)
         throw JSONRPCError(RPC_MISC_ERROR, "No poll exists for that ID");
     }
 
-    std::string cmd = ref->Notify(PollReference::PollNotificationType::POLL_NOTIFY_TEST);
+    const std::string cmd = ref->Notify(PollReference::PollNotificationType::POLL_NOTIFY_TEST);
 
-    return strprintf("Notification command: %s", cmd);
+    // -pollnotify is a sensitive setting, which may hold a token: like listsettings and the startup
+    // log, the reply says whether one is set, not what it is.
+    return strprintf("Notification command: %s", cmd.empty() ? "" : "****");
 }

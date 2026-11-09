@@ -7,6 +7,9 @@
 A vote holds each choice as one byte, so a choice id outside 0..255 is a
 parameter error. An id inside that range reaches the vote builder, which
 refuses one that names no choice of the poll, or one given twice.
+
+The same poll serves testpollnotification, whose reply shows the sensitive
+-pollnotify command as ****, and whose log line does not name it.
 """
 
 from decimal import Decimal, ROUND_DOWN
@@ -31,7 +34,9 @@ class VoteByIdTest(GridcoinTestFramework):
         self.num_nodes = 1
         self.chain = "regtest"
         self.setup_clean_chain = True
-        self.extra_args = [["-staking=0", "-connect=0", "-listen=0"]]
+        # The notify command carries a marker that must show in no reply and no log.
+        self.extra_args = [["-staking=0", "-connect=0", "-listen=0", "-debug=misc",
+                            "-pollnotify=true pollnotify-secret-%s1"]]
 
     def setup_network(self):
         self.add_nodes(self.num_nodes, self.extra_args)
@@ -80,6 +85,11 @@ class VoteByIdTest(GridcoinTestFramework):
                                 node.votebyid, single["id"], 3)
         assert_raises_rpc_error(-1, "\"255\" is not a valid poll choice",
                                 node.votebyid, single["id"], 255)
+
+        # The test notification runs the command, but neither the reply nor the log shows it.
+        assert_equal(node.testpollnotification(single["id"]), "Notification command: ****")
+        with open(node.debug_log_path, encoding="utf8", errors="replace") as f:
+            assert "pollnotify-secret" not in f.read()
 
 
 if __name__ == "__main__":

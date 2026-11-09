@@ -848,7 +848,9 @@ std::string PollReference::Notify(const PollNotificationType& notify_type) const
             ReplaceAll(strCmd, "%s2", NotifyTypeToString(notify_type));
             boost::thread t(runCommand, strCmd); // thread runs free
 
-            LogPrint(BCLog::LogFlags::MISC, "INFO: %s: poll notify command: %s", __func__, strCmd);
+            // -pollnotify is a sensitive setting, so the log names the poll, not the command.
+            LogPrint(BCLog::LogFlags::MISC, "INFO: %s: poll notify command run for %s (%s)", __func__,
+                     m_txid.ToString(), NotifyTypeToString(notify_type));
 
             if (notify_type == POLL_EXPIRE_WARNING) {
                 m_expiration_warn_notified = true;
