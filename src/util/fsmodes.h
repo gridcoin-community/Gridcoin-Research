@@ -338,8 +338,10 @@ struct KeepResult
 //!
 //! POSIX: the permission bits (st_mode & 0777, never set-user-ID, set-group-ID or sticky) of the
 //! name itself (lstat; a link has none to carry, so a link at \p existing is NoOldFile) and, where this process may set it, the group,
-//! set through the descriptor (fchown, then fchmod; a group that cannot be set, EPERM, stays as
-//! it is). The path of the new file is never changed.
+//! set through the descriptor (fchown, then fchmod). A group that cannot be set (EPERM) stays as it
+//! is, and then nothing is carried (NotKept) when the old file gives its group any permission, so
+//! that the old group's permissions do not reach another group. The path of the new file is never
+//! changed.
 //!
 //! Windows: the access list (DACL) and whether it is protected, read through a handle on
 //! \p existing opened with READ_CONTROL and without following a reparse point, and set through

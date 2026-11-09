@@ -1314,6 +1314,35 @@ BOOST_AUTO_TEST_CASE(keep_permissions_own_only_skips_another_accounts_file)
     BOOST_CHECK_EQUAL(::close(fd), 0);
 }
 
+// The group's permissions belong to the old file's group. When the new file cannot have that group
+// they are not given to the group it has instead: nothing is carried, and the result says why.
+// Production change that would fail this: a KeepPermissions that applies the old mode after a
+// failed fchown of the group.
+BOOST_AUTO_TEST_CASE(keep_permissions_carries_no_group_bits_to_another_group)
+{
+    // /etc/passwd is root's group's, with group read; a process that is not root and not in that
+    // group cannot give a file that group.
+    const fs::path old_file = "/etc/passwd";
+    struct stat old_st;
+    BOOST_REQUIRE_EQUAL(::lstat(old_file.c_str(), &old_st), 0);
+    std::vector<gid_t> groups(static_cast<size_t>(std::max(::getgroups(0, nullptr), 0)));
+    groups.resize(static_cast<size_t>(std::max(::getgroups(static_cast<int>(groups.size()), groups.data()), 0)));
+    if (::geteuid() == 0 || ::getegid() == old_st.st_gid ||
+        std::find(groups.begin(), groups.end(), old_st.st_gid) != groups.end() || (old_st.st_mode & 0070) == 0) {
+        BOOST_TEST_MESSAGE("this process may take the group of /etc/passwd, or it gives its group nothing; skipping");
+        return;
+    }
+    const ScratchDir scratch;
+    const UmaskGuard permissive(0);
+    const fs::path temp = scratch.m_path / "new.tmp";
+    MakeFile(temp, 0600);
+
+    const fsmodes::KeepResult result = fsmodes::KeepPermissions(old_file, temp);
+    BOOST_CHECK(result.kind == fsmodes::KeepResult::Kind::NotKept);
+    BOOST_CHECK_MESSAGE(result.error.find("group") != std::string::npos, result.error);
+    BOOST_CHECK_EQUAL(ModeOf(temp), 0600U);
+}
+
 // With nothing at the old name the temporary file stays as created, 0600 whatever the umask.
 BOOST_AUTO_TEST_CASE(keep_permissions_with_no_old_file_leaves_the_temp_file_owner_only)
 {

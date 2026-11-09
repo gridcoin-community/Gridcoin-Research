@@ -118,8 +118,9 @@ either way.
   work as they do then, and switching back to the plain GUI is a matter of stopping the unit.
 - **A file the core rewrites keeps the permissions it had.** That covers the settings file, the configuration file,
   `peers.dat`, `banlist.dat`, the log after a rotation and `wallet.dat` after encryption. The core warns at start
-  where they are wider than it would make them, and never changes them itself. A file it creates new is owner-only.
-  On a filesystem that cannot keep a file owner-only (a FAT stick, many network shares) it is still written, and
+  where they are wider than it would make them, and never changes them itself. The one exception is a file whose
+  group this account cannot take and which gives that group access: its rewrite is owner-only, with a warning,
+  rather than give that access to another group. A file it creates new is owner-only. On a filesystem that cannot keep a file owner-only (a FAT stick, many network shares) it is still written, and
   the core logs a warning: a `dumpwallet` file you send there, or the configuration file it writes on its first
   start in a data directory there. Where you put a dump is your choice. A backup or dump the GUI saves over a
   file you own keeps that file's permissions; over another account's file it is owner-only, and a name that was

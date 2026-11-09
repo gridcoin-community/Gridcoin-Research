@@ -796,11 +796,19 @@ KeepResult KeepPermissions(const fs::path& existing, int fd, bool own_only)
         return result;
     }
 
-    // The group is set where this process may set it. EPERM, as for a group it is not in, leaves
-    // the group the new file has, which is not a failure. It comes first, as a change of group
-    // clears the set-user-ID and set-group-ID bits that the mode below puts back.
+    // The group is set where this process may set it. It comes first, as a change of group clears
+    // the set-user-ID and set-group-ID bits that the mode below puts back. The group's permissions
+    // belong to the old group: when the new file cannot have it (EPERM, as for a group this process
+    // is not in), they would reach the group the new file has instead, so nothing is carried,
+    // unless the old file gives its group nothing.
     if (new_st.st_gid != old_st.st_gid && ::fchown(fd, static_cast<uid_t>(-1), old_st.st_gid) != 0) {
-        // The group stays as the new file has it.
+        const int err = errno;
+        if ((old_st.st_mode & 0070) != 0) {
+            result.kind = KeepResult::Kind::NotKept;
+            result.error = strprintf("cannot give the new file the group of %s: %s", existing.string(),
+                                     SysErrorString(err));
+            return result;
+        }
     }
 
     // The permission bits only: never set-user-ID, set-group-ID or sticky.
