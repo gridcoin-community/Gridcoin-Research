@@ -80,6 +80,18 @@ QMessageBox* VisibleMessageBox()
     return nullptr;
 }
 
+//! The encryption flow's two message boxes, told apart by their text: a QMessageBox has
+//! no window title on macOS.
+bool IsEncryptionConfirmation(const QMessageBox& box)
+{
+    return box.text().contains(QStringLiteral("Are you sure you wish to encrypt your wallet?"));
+}
+
+bool IsEncryptedMessage(const QMessageBox& box)
+{
+    return box.text().contains(QStringLiteral("IMPORTANT: Any earlier backups of your wallet file"));
+}
+
 //! The thread the process's modal worker runs its jobs on.
 std::thread::id ModalWorkerThread()
 {
@@ -238,13 +250,13 @@ QuitWhileEncryptionMessage EncryptAndQuitWhileTheMessageIsOpen(QObject& context,
         if (!box || run.closed_by_case) return;
 
         if (!run.confirmed) {
-            if (box->windowTitle() != QStringLiteral("Confirm wallet encryption")) return;
+            if (!IsEncryptionConfirmation(*box)) return;
             run.confirmed = true;
             box->button(QMessageBox::Yes)->click();
             return;
         }
 
-        if (box->windowTitle() != QStringLiteral("Wallet encrypted")) return;
+        if (!IsEncryptedMessage(*box)) return;
 
         if (!run.asked) {
             run.asked = true;
@@ -320,13 +332,13 @@ EncryptionMessage EncryptAndReadTheMessage(QObject& context, bool multiprocess, 
         if (!box || closed) return;
 
         if (!run.confirmed) {
-            if (box->windowTitle() != QStringLiteral("Confirm wallet encryption")) return;
+            if (!IsEncryptionConfirmation(*box)) return;
             run.confirmed = true;
             box->button(QMessageBox::Yes)->click();
             return;
         }
 
-        if (box->windowTitle() != QStringLiteral("Wallet encrypted")) return;
+        if (!IsEncryptedMessage(*box)) return;
 
         run.text = box->text();
         run.details = box->detailedText();
