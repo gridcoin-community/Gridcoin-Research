@@ -839,12 +839,19 @@ void* BuildDacl(const std::vector<AceSpec>& aces)
 }
 
 namespace {
+//! Medium integrity, S-1-16-8192.
+Sid MediumLabelSid()
+{
+    Sid medium{1, 1, 0, 0, 0, 0, 0, 16};
+    AppendLittleEndian(medium, SECURITY_MANDATORY_MEDIUM_RID);
+    return medium;
+}
+
 //! A SACL holding one mandatory label: Medium integrity (S-1-16-8192) with NO_READ_UP and
 //! NO_WRITE_UP. The caller owns the result and must LocalFree() it. Throws std::system_error.
 void* BuildMediumNoReadUpSacl()
 {
-    Sid medium{1, 1, 0, 0, 0, 0, 0, 16};
-    AppendLittleEndian(medium, SECURITY_MANDATORY_MEDIUM_RID);
+    Sid medium = MediumLabelSid();
 
     // The one label entry is its header and mask followed by the SID.
     const size_t size = sizeof(ACL) + sizeof(ACE_HEADER) + sizeof(ACCESS_MASK) + medium.size();
@@ -861,6 +868,28 @@ void* BuildMediumNoReadUpSacl()
     return memory.release();
 }
 } // namespace
+
+bool HasMediumNoReadUpLabel(void* handle)
+{
+    PACL sacl = nullptr;
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    const DWORD rc = ::GetSecurityInfo(static_cast<HANDLE>(handle), SE_FILE_OBJECT, LABEL_SECURITY_INFORMATION, nullptr,
+                                       nullptr, nullptr, &sacl, &sd);
+    const LocalPtr sd_guard(sd);
+    if (rc != ERROR_SUCCESS) ThrowWin32(rc, "GetSecurityInfo(LABEL_SECURITY_INFORMATION)");
+    if (sacl == nullptr) return false;
+
+    const Sid medium = MediumLabelSid();
+    for (DWORD i = 0; i < sacl->AceCount; ++i) {
+        void* ace = nullptr;
+        if (!::GetAce(sacl, i, &ace)) ThrowWin32(::GetLastError(), "GetAce");
+        if (static_cast<const ACE_HEADER*>(ace)->AceType != SYSTEM_MANDATORY_LABEL_ACE_TYPE) continue;
+        auto* label = static_cast<SYSTEM_MANDATORY_LABEL_ACE*>(ace);
+        const std::optional<Sid> sid = SidAt(&label->SidStart);
+        return sid == medium && (label->Mask & SYSTEM_MANDATORY_LABEL_NO_READ_UP) != 0;
+    }
+    return false;
+}
 
 void* MakeSecurityDescriptor(const AclSpec& spec, MandatoryLabel label)
 {

@@ -427,6 +427,11 @@ enum class MandatoryLabel : uint8_t
 //! Throws as BuildDacl does.
 void* MakeSecurityDescriptor(const AclSpec& spec, MandatoryLabel label = MandatoryLabel::Default);
 
+//! Whether the object \p handle, opened with READ_CONTROL, carries the label
+//! MandatoryLabel::MediumNoReadUp gives: Medium integrity with NO_READ_UP. A volume that keeps no
+//! label, or an object made without one, does not. Throws std::system_error when it cannot be read.
+bool HasMediumNoReadUpLabel(void* handle);
+
 //! Create the directory \p dir with \p spec as its owner and protected DACL from the
 //! start (CreateDirectoryW with MakeSecurityDescriptor(spec)), so it is never there
 //! with another list, then read the list back through a handle on the directory

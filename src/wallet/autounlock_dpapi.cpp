@@ -372,14 +372,16 @@ std::optional<SecureString> Decrypt(const AutoUnlockBlob& blob, const fs::path& 
 }
 
 //! Write \p bytes to the new file \p path, owner-only from the moment it exists, and
-//! flush it to disk, labelled Medium with no read-up. A file there already, left by a Store()
+//! flush it to disk, labelled Medium with no read-up. The list and the label are read back through
+//! the new file's handle before anything is written to it, so that a volume that keeps neither
+//! never holds the encrypted passphrase. A file there already, left by a Store()
 //! that did not finish, is removed first: CREATE_NEW never writes into a file this call did not make. With
 //! FILE_FLAG_OPEN_REPARSE_POINT a link at the name counts as taken, as a file does, and is
 //! removed itself, so nothing is created where it leads.
 bool WriteNewFile(const fs::path& path, const std::vector<unsigned char>& bytes, std::string& error)
 {
-    const winacl::UniqueSecurityDescriptor sd(winacl::MakeSecurityDescriptor(util::OwnerOnlyAclSpec(/*inheritable=*/false),
-                                                                           winacl::MandatoryLabel::MediumNoReadUp));
+    const winacl::AclSpec spec = util::OwnerOnlyAclSpec(/*inheritable=*/false);
+    const winacl::UniqueSecurityDescriptor sd(winacl::MakeSecurityDescriptor(spec, winacl::MandatoryLabel::MediumNoReadUp));
     SECURITY_ATTRIBUTES sa{};
     sa.nLength = sizeof(sa);
     sa.lpSecurityDescriptor = sd.get();
@@ -387,12 +389,12 @@ bool WriteNewFile(const fs::path& path, const std::vector<unsigned char>& bytes,
 
     const std::wstring wpath = path.wstring();
     const DWORD flags = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT;
-    HANDLE created = ::CreateFileW(wpath.c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW, flags, nullptr);
+    HANDLE created = ::CreateFileW(wpath.c_str(), GENERIC_WRITE | READ_CONTROL, 0, &sa, CREATE_NEW, flags, nullptr);
     DWORD create_error = ::GetLastError();
 
     if (created == INVALID_HANDLE_VALUE && create_error == ERROR_FILE_EXISTS) {
         if (::DeleteFileW(wpath.c_str())) {
-            created = ::CreateFileW(wpath.c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW, flags, nullptr);
+            created = ::CreateFileW(wpath.c_str(), GENERIC_WRITE | READ_CONTROL, 0, &sa, CREATE_NEW, flags, nullptr);
             create_error = ::GetLastError();
         } else {
             create_error = ::GetLastError();
@@ -403,6 +405,26 @@ bool WriteNewFile(const fs::path& path, const std::vector<unsigned char>& bytes,
 
     if (!file) {
         error = strprintf("could not create %s: %s", Display(path), "CreateFileW failed: " + Win32ErrorText(create_error));
+        return false;
+    }
+
+    std::string not_kept;
+    try {
+        if (const std::optional<std::string> reason =
+                winacl::CheckMatchesSpec(winacl::ReadAcl(file.get(), /*kernel_object=*/false), spec)) {
+            not_kept = "it did not keep its owner-only access control list (" + *reason + ")";
+        } else if (!winacl::HasMediumNoReadUpLabel(file.get())) {
+            not_kept = "it did not keep its Medium integrity label";
+        }
+    } catch (const std::exception& e) {
+        not_kept = "its access control list and label could not be read back (" + AsciiWhat(e) + ")";
+    }
+    if (!not_kept.empty()) {
+        file.reset();
+        ::DeleteFileW(wpath.c_str());
+        error = strprintf("could not make %s owner-only, so nothing was written to it: %s; keep the data directory on "
+                          "an NTFS volume",
+                          Display(path), not_kept);
         return false;
     }
 
@@ -499,11 +521,11 @@ AutoUnlockStoreOutcome StoreBlob(const SecureString& passphrase, std::string& er
 
     if (g_read_back_hook) g_read_back_hook(*path);
 
-    // Read back as the fetch reads it. A file the fetch would refuse for what it is, as on
-    // a volume that keeps no access control lists, is removed now rather than left in
-    // place. One that could not be read back, as when another process holds it for longer
-    // than the retries wait, or a shutdown cut the wait short, is kept: it is the file just
-    // written, and only the check is missing.
+    // Read back as the fetch reads it. A file the fetch would refuse for what it is is removed
+    // now rather than left in place. One that could not be read back, as when another process
+    // holds it for longer than the retries wait, or a shutdown cut the wait short, is kept: it is
+    // the file just written, whose list and label were read back before anything was written to
+    // it, and only this check is missing.
     const CheckedFile written = ReadChecked(*path, FETCH_ATTEMPTS);
 
     if (written.state == FileState::Usable && written.bytes == bytes) return AutoUnlockStoreOutcome::Verified;

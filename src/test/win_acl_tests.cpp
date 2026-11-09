@@ -1093,6 +1093,15 @@ BOOST_AUTO_TEST_CASE(a_medium_label_keeps_a_low_integrity_reader_out)
     BOOST_CHECK_EQUAL(grc_test::OpenForReadAtLowIntegrity(plain), 0ul);
     BOOST_CHECK_EQUAL(grc_test::OpenForReadAtLowIntegrity(labelled), static_cast<unsigned long>(ERROR_ACCESS_DENIED));
 
+    // Read back through a handle, as the autounlock file's is before anything is written to it.
+    for (const auto& [path, expected] : {std::pair{plain, false}, std::pair{labelled, true}}) {
+        const HANDLE read = ::CreateFileW(path.wstring().c_str(), READ_CONTROL, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                          FILE_ATTRIBUTE_NORMAL, nullptr);
+        BOOST_REQUIRE(read != INVALID_HANDLE_VALUE);
+        const UniqueHandle guard(read);
+        BOOST_CHECK_MESSAGE(HasMediumNoReadUpLabel(read) == expected, path.string());
+    }
+
     const std::optional<std::string> reason = CheckMatchesSpec(ReadAcl(labelled), spec);
     BOOST_CHECK_MESSAGE(!reason.has_value(), reason.value_or(""));
 }
