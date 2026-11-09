@@ -19,7 +19,7 @@ import subprocess
 import sys
 import tempfile
 
-from test_framework.test_framework import GridcoinTestFramework
+from test_framework.test_framework import GridcoinTestFramework, SkipTest
 from test_framework.util import rpc_port
 
 LISTFDS = """\
@@ -58,7 +58,7 @@ class NotifyFdInheritanceTest(GridcoinTestFramework):
 
     def skip_test_if_missing_module(self):
         if not sys.platform.startswith("linux"):
-            self.skip_test("reads /proc/<pid>/fd, Linux only")
+            raise SkipTest("reads /proc/<pid>/fd, Linux only")
 
     def setup_network(self):
         self.tmpdir_notify = tempfile.mkdtemp(prefix="notifyfd")

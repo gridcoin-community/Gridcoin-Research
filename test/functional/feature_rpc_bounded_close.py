@@ -19,7 +19,7 @@ import socket
 import sys
 import time
 
-from test_framework.test_framework import GridcoinTestFramework
+from test_framework.test_framework import GridcoinTestFramework, SkipTest
 from test_framework.util import rpc_port
 
 
@@ -46,7 +46,7 @@ class RpcBoundedCloseTest(GridcoinTestFramework):
 
     def skip_test_if_missing_module(self):
         if not sys.platform.startswith("linux"):
-            self.skip_test("reads /proc/net/tcp, Linux only")
+            raise SkipTest("reads /proc/net/tcp, Linux only")
 
     def setup_network(self):
         self.add_nodes(self.num_nodes, self.extra_args)
