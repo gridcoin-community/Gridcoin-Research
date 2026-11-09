@@ -618,13 +618,25 @@ BOOST_AUTO_TEST_CASE(image_path_testnet_flags)
 BOOST_AUTO_TEST_CASE(image_path_quotes_spaced_and_non_ascii_paths)
 {
     const fs::path exe(L"D:\\Apps\\Grid coin\\daemon\\gridcoinresearchd.exe");
+    const fs::path spaced(L"E:\\Data\\Grid coin");
+
+    std::wstring image_path = BuildImagePath(exe, Network::Main, spaced);
+    BOOST_CHECK(image_path.rfind(L"\"D:\\Apps\\Grid coin\\daemon\\gridcoinresearchd.exe\" ", 0) == 0);
+    BOOST_CHECK(Contains(image_path, L"-conf=\"E:\\Data\\Grid coin\\Gridcoin\\conf\\mainnet.conf\""));
+    BOOST_CHECK(Contains(image_path, L"-datadir=\"E:\\Data\\Grid coin\\Gridcoin\\mainnet\""));
+    BOOST_CHECK(Contains(image_path, L"-ipcdir=\"E:\\Data\\Grid coin\\Gridcoin\\ipc\\mainnet\""));
+
+#ifdef WIN32
+    // Elsewhere a path converts between wide and narrow text through the process
+    // locale, which a test run may leave at "C", and the image path is built only
+    // on Windows.
     const fs::path pd(L"E:\\Data\\Jos\u00e9 Garc\u00eda");
 
-    const std::wstring image_path = BuildImagePath(exe, Network::Main, pd);
-    BOOST_CHECK(image_path.rfind(L"\"D:\\Apps\\Grid coin\\daemon\\gridcoinresearchd.exe\" ", 0) == 0);
+    image_path = BuildImagePath(exe, Network::Main, pd);
     BOOST_CHECK(Contains(image_path, L"-conf=\"E:\\Data\\Jos\u00e9 Garc\u00eda\\Gridcoin\\conf\\mainnet.conf\""));
     BOOST_CHECK(Contains(image_path, L"-datadir=\"E:\\Data\\Jos\u00e9 Garc\u00eda\\Gridcoin\\mainnet\""));
     BOOST_CHECK(Contains(image_path, L"-ipcdir=\"E:\\Data\\Jos\u00e9 Garc\u00eda\\Gridcoin\\ipc\\mainnet\""));
+#endif
 }
 
 BOOST_AUTO_TEST_CASE(image_path_executable_is_the_daemon)
