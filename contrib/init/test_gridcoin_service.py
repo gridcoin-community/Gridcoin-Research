@@ -1373,9 +1373,22 @@ class RefusedKeyTests(unittest.TestCase):
             ("notestnet=1\n", False), ("[main]\ntestnet=1\n", False), ("staking=1\n[test]\ntestnet=1\n", False),
             ("main.testnet=1\n", False), ("testnet=+1\n", True), ("testnet=+-1\n", False),
             ("testnet=99999999999\n", False), ("# testnet=1\n", False), ("", False),
+            # chain= selects a network too (GetChainName), and the core refuses to start on one that
+            # contradicts testnet=, so any value but main counts.
+            ("chain=test\n", True), ("chain = test # c\n", True), ("chain=regtest\n", True), ("chain=main\n", False),
+            ("chain=main\ntestnet=1\n", True), ("[main]\nchain=test\n", False), ("main.chain=test\n", False),
         ]
         for text, expected in cases:
             self.assertEqual(svc.conf_selects_testnet(text), expected, repr(text))
+
+    def test_conf_includes_files(self):
+        # An includeconf= line anywhere: the files it names are not read here.
+        cases = [
+            ("includeconf=other.conf\n", True), ("staking=1\n[test]\nincludeconf=t.conf\n", True),
+            (" includeconf = x\n", True), ("# includeconf=x\n", False), ("rpcuser=x\n", False), ("", False),
+        ]
+        for text, expected in cases:
+            self.assertEqual(svc.conf_includes_files(text), expected, repr(text))
 
     def test_every_command_line_only_example_is_refused(self):
         # The pattern file covers the switch's own concerns: commands, files and secrets.
@@ -2388,6 +2401,20 @@ class EnableTests(SwitchTestBase):
         rc, out, err = self.run_main("enable", "bob", "--network=test")
         self.assertEqual(rc, 1)
         self.assertNotIn("runs testnet", err)
+
+    def test_mainnet_enable_refuses_a_conf_on_another_chain_or_with_includes(self):
+        for conf, expected in ((b"staking=1\nchain=test\n", "runs testnet"),
+                               (b"staking=1\nincludeconf=more.conf\n", "includeconf=")):
+            with self.subTest(conf=conf):
+                files = self.user_files()
+                files["gridcoinresearch.conf"] = conf
+                svc_rmtree(self.datadir)
+                write_tree(self.datadir, files)
+                self.host.calls.clear()
+                rc, out, err = self.run_main("enable", "bob")
+                self.assertEqual(rc, 1)
+                self.assertIn(expected, err)
+                self.assertEqual(self.host.calls, [])
 
     def test_mainnet_enable_keeps_a_conf_testnet_shares(self):
         files = self.user_files()
@@ -4140,8 +4167,12 @@ class SwitchOverTests(ServiceTestBase):
         outside = os.path.join(self.tmp.name, "etc-other", "gridcoin.conf")
         os.makedirs(os.path.dirname(outside))
         for words, conf in (("-datadir=%s" % data, inside), ("-conf=%s -datadir=%s" % (outside, data), outside)):
-            for line in ("testnet=1", "testnet=0", "  testnet = 1", "[main]\ntestnet=1", "main.testnet=1",
-                         "-testnet=1", "notestnet=1"):
+            for line, expected in (("testnet=1", "has a testnet= line"), ("testnet=0", "has a testnet= line"),
+                                   ("  testnet = 1", "has a testnet= line"), ("[main]\ntestnet=1", "has a testnet= line"),
+                                   ("main.testnet=1", "has a testnet= line"), ("-testnet=1", "has a testnet= line"),
+                                   ("notestnet=1", "has a testnet= line"), ("chain=test", "has a chain= line"),
+                                   ("-chain=regtest", "has a chain= line"), ("[main]\nchain=test", "has a chain= line"),
+                                   ("includeconf=more.conf", "includes other files")):
                 with self.subTest(conf=conf, line=line):
                     svc_rmtree(self.system_unit_dir())
                     self.write_text(conf, "rpcuser=x\n%s\naddnode=a\n" % line)
@@ -4149,13 +4180,13 @@ class SwitchOverTests(ServiceTestBase):
                     state = self.write_state("system-core\n")
                     rc, out, err = self.run_main("switch-over", "--state=" + state)
                     self.assertEqual(rc, 1)
-                    self.assertIn("%s has a testnet= line" % conf, err)
+                    self.assertIn("%s %s" % (conf, expected), err)
                     self.assertTrue(os.path.exists(override))
                     with open(state, encoding="utf8") as f:
                         self.assertEqual(f.read(), "system-core\n")
-        # A comment is no setting, and the testnet unit's conf may set testnet=.
+        # A comment is no setting, chain=main names mainnet, and the testnet unit's conf may set testnet=.
         svc_rmtree(self.system_unit_dir())
-        self.write_text(inside, "rpcuser=x\n# testnet=1\n#main.testnet=1\n")
+        self.write_text(inside, "rpcuser=x\n# testnet=1\n#main.testnet=1\nchain=main\n")
         self.system_override("-datadir=%s" % data)
         rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
         self.assertEqual(rc, 0, err)

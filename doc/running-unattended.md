@@ -408,7 +408,9 @@ opens with the old passphrase. Move the coins to a new wallet instead:
   applies.
 - **Both networks in one data directory.** Testnet's data directory is `~/.GridcoinResearch/testnet`, so a
   mainnet `enable` leaves `testnet/` and the configuration file (which testnet reads too) in place, and a testnet
-  `enable` moves only `testnet/`. Each refuses while the other network's per-user core of that user runs:
+  `enable` moves only `testnet/`. A mainnet `enable` refuses a configuration file that selects testnet
+  (`testnet=` or `chain=`) or includes other files (`includeconf=`). Each refuses while the other network's
+  per-user core of that user runs:
 
   ```
   gridcoin-service: gridcointestnetd@alice.service is running and shares alice's datadir and conf; stop it first with: systemctl stop gridcointestnetd@alice.service
@@ -447,8 +449,9 @@ On an upgrade from a release with the earlier units (a forking `gridcoinresearch
     would drop, or with no `-conf` when its data directory has no `gridcoinresearch.conf`; on testnet, one without
     `-testnet`; a file to be renamed that also sets `BindPaths=`, `BindReadOnlyPaths=`, `RootDirectory=`,
     `RootImage=`, `TemporaryFileSystem=`, `MountImages=`, `ExtensionDirectories=` or `RequiresMountsFor=` (move
-    those to a drop-in of their own); and a carried configuration file that anyone but root and `gridcoin` can
-    write. The message names the file and what to change. Until then a copy of the unit keeps running on its old
+    those to a drop-in of their own); for the mainnet service, a carried configuration file with a `testnet=` line,
+    a `chain=` line for another network than main, or an `includeconf=` line (the files it includes are not read);
+    and a carried configuration file that anyone but root and `gridcoin` can write. The message names the file and what to change. Until then a copy of the unit keeps running on its old
     command line, and drop-ins alone keep the service from starting if they make the daemon fork, or run it on
     its old command line otherwise.
   - **The system service's autounlock:** its credential, `/etc/gridcoin/wallet-passphrase.cred`, stays where it

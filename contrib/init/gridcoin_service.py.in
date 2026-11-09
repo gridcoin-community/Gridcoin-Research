@@ -850,10 +850,13 @@ def interpret_bool(value):
 
 
 def conf_selects_testnet(text):
-    """Whether a conf selects testnet in its top level, before any [section] line, as the core reads
-    it: lines as GetConfigOptions reads them, testnet=<v> as InterpretBool(v) and notestnet=<v> as
-    its negation (InterpretOption), the last such line winning."""
+    """Whether a conf selects a network other than mainnet in its top level, before any [section]
+    line, as the core reads it: lines as GetConfigOptions reads them, testnet=<v> as InterpretBool(v)
+    and notestnet=<v> as its negation (InterpretOption), the last such line winning, and chain=<v>,
+    the last one winning, for any network but main (GetChainName; the core refuses to start when
+    the two disagree)."""
     selected = False
+    chain = None
     for line in text.split("\n"):
         body = line.split("#", 1)[0].strip(" \t\r\n")
         if body.startswith("[") and body.endswith("]"):
@@ -865,7 +868,19 @@ def conf_selects_testnet(text):
             selected = interpret_bool(value)
         elif name == "notestnet":
             selected = not interpret_bool(value)
-    return selected
+        elif name == "chain":
+            chain = value
+    return selected or (chain is not None and chain != "main")
+
+
+def conf_includes_files(text):
+    """Whether a conf has an includeconf= line, in any section, a network prefix or a leading dash
+    included: the files it names are not read here."""
+    for line in text.split("\n"):
+        body = line.split("#", 1)[0].strip(" \t\r\n")
+        if "=" in body and body.split("=", 1)[0].strip(" \t\r\n").rsplit(".", 1)[-1].lstrip("-") == "includeconf":
+            return True
+    return False
 
 
 def list_dir(dir_fd):
@@ -1900,9 +1915,13 @@ def enable(args, net, host, paths, progress):
         if not net.testnet and CONF_NAME in names:
             conf_display = os.path.join(d_display, CONF_NAME)
             conf = read_owned_file(d_fd, CONF_NAME, (pw.pw_uid,), conf_display)
-            if conf_selects_testnet(conf.decode("utf8", "surrogateescape")):
-                raise UserError("%s sets testnet=1, so this user's node runs testnet; use --network=test"
-                                % conf_display)
+            conf_text = conf.decode("utf8", "surrogateescape")
+            if conf_includes_files(conf_text):
+                raise UserError("%s includes other files (includeconf=), so which network this user's node runs "
+                                "cannot be told from it alone; move their settings into it, then rerun" % conf_display)
+            if conf_selects_testnet(conf_text):
+                raise UserError("%s selects testnet (testnet= or chain=), so this user's node runs testnet; use "
+                                "--network=test" % conf_display)
         refuse_other_network_core(host, args.network, pw.pw_name)
 
         # 2. Stop both cores that could use either datadir. From here on every failure says what
@@ -2637,11 +2656,14 @@ def system_dropped_words(net, words):
             and not core_option(word).startswith("-conf=")]
 
 
-def refuse_testnet_line(fd, path):
-    """Refuse the conf open at fd for the mainnet unit when any line names testnet: testnet= at
-    the top level, the first value winning, would have made the core a testnet node, and rather
-    than read it as the core does, any testnet= line refuses, in a section, with a network
-    prefix, a leading dash or negated (notestnet=) too. Comments are no setting."""
+def refuse_other_network_lines(fd, path):
+    """Refuse the conf open at fd for the mainnet unit when a line may have made the core another
+    network's node, or when it includes other files. testnet= at the top level, the first value
+    winning, would have made the core a testnet node, and rather than read it as the core does, any
+    testnet= line refuses, in a section, with a network prefix, a leading dash or negated
+    (notestnet=) too; so does any chain= line that names another network than main. An
+    includeconf= line refuses too: the files it names are neither read for those lines nor checked
+    for who can write them (check_conf_writers). Comments are no setting."""
     with os.fdopen(fd, "rb", closefd=False) as f:
         data = f.read(MAX_CONFIG_BYTES + 1)
     if len(data) > MAX_CONFIG_BYTES:
@@ -2651,10 +2673,18 @@ def refuse_testnet_line(fd, path):
         if not line or line.startswith("#"):
             continue
         name = line.split("=", 1)[0].strip().rsplit(".", 1)[-1].lstrip("-")
+        value = line.split("=", 1)[1].split("#", 1)[0].strip() if "=" in line else ""
         if name in ("testnet", "notestnet"):
             raise UserError("%s has a testnet= line, so the core that read it may not have been a mainnet node; "
                             "if it is a mainnet node, remove that line, and if it is a testnet node, run it from "
                             "the testnet package's unit, then rerun the switch-over" % path)
+        if name == "chain" and value != "main":
+            raise UserError("%s has a chain= line for another network than main, so the core that read it may not "
+                            "have been a mainnet node; if it is a mainnet node, remove that line, and if it is a "
+                            "testnet node, run it from the testnet package's unit, then rerun the switch-over" % path)
+        if name == "includeconf":
+            raise UserError("%s includes other files (includeconf=), which the switch-over neither reads nor checks "
+                            "for who can write them; move their settings into it, then rerun the switch-over" % path)
 
 
 def check_conf_writers(net, path, name, datadir, host):
@@ -2719,7 +2749,7 @@ def check_conf_writers(net, path, name, datadir, host):
                 raise UserError("%s changed while it was checked; rerun the switch-over" % name)
             check(st, path, "it")
             if not net.testnet:
-                refuse_testnet_line(file_fd, path)
+                refuse_other_network_lines(file_fd, path)
         finally:
             os.close(file_fd)
     finally:
