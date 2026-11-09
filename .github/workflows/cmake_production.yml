@@ -528,14 +528,18 @@ jobs:
       - name: Backtrace a crashing unit test on test failure
         # The runner may write no crash report at all. lldb runs the unit suite
         # again, with the signal left to the system, and at a crash prints every
-        # thread's stack; the test_suite log level names the case it was in.
+        # thread's stack; the test_suite log level names the case it was in. The
+        # suite raises SIGPIPE, SIGHUP, SIGXFSZ and SIGUSR2 on purpose, at which
+        # lldb would stop, so they are passed on, set once the run is at main.
         if: failure()
         timeout-minutes: 15
         env:
           BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
         run: |
           cd build/src/test
-          lldb --batch -o run -k "thread backtrace all" -k "quit 1" -- ./test_gridcoin --log_level=test_suite \
+          lldb --batch -o "breakpoint set -n main" -o run \
+            -o "process handle SIGPIPE SIGHUP SIGXFSZ SIGUSR2 -s false -n false -p true" -o continue \
+            -k "thread backtrace all" -k "quit 1" -- ./test_gridcoin --log_level=test_suite \
             2>&1 | tail -c 200000 || true
 
       # The hardening check's lief has macOS wheels only up to CPython 3.14, and
@@ -949,14 +953,18 @@ jobs:
       - name: Backtrace a crashing unit test on test failure
         # The runner may write no crash report at all. lldb runs the unit suite
         # again, with the signal left to the system, and at a crash prints every
-        # thread's stack; the test_suite log level names the case it was in.
+        # thread's stack; the test_suite log level names the case it was in. The
+        # suite raises SIGPIPE, SIGHUP, SIGXFSZ and SIGUSR2 on purpose, at which
+        # lldb would stop, so they are passed on, set once the run is at main.
         if: failure()
         timeout-minutes: 15
         env:
           BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
         run: |
           cd build/src/test
-          lldb --batch -o run -k "thread backtrace all" -k "quit 1" -- ./test_gridcoin --log_level=test_suite \
+          lldb --batch -o "breakpoint set -n main" -o run \
+            -o "process handle SIGPIPE SIGHUP SIGXFSZ SIGUSR2 -s false -n false -p true" -o continue \
+            -k "thread backtrace all" -k "quit 1" -- ./test_gridcoin --log_level=test_suite \
             2>&1 | tail -c 200000 || true
 
       # The hardening check's lief has macOS wheels only up to CPython 3.14, and
