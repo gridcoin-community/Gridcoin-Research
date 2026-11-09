@@ -137,23 +137,28 @@ std::optional<TcpConnEntry> ParseLine(std::string_view line, bool ipv6)
 
 #ifdef WIN32
 
-//! What GetExtendedTcpTable gives for \p family (AF_INET or AF_INET6) with
-//! TCP_TABLE_OWNER_PID_CONNECTIONS, every connection but the listening sockets, in a buffer sized
-//! to fit. nullopt when it fails.
-std::optional<std::vector<unsigned char>> GetConnectionTable(ULONG family)
+//! What GetExtendedTcpTable gives for \p family (AF_INET or AF_INET6) and \p table, in a buffer
+//! sized to fit. nullopt when it fails.
+std::optional<std::vector<unsigned char>> GetTcpTable(ULONG family, TCP_TABLE_CLASS table)
 {
     std::vector<unsigned char> buffer;
     // The table can grow between the call that sizes the buffer and the call that fills it.
     for (int attempt = 0; attempt < 4; ++attempt) {
         DWORD size = static_cast<DWORD>(buffer.size());
-        const DWORD rc = ::GetExtendedTcpTable(buffer.empty() ? nullptr : buffer.data(), &size, FALSE, family,
-                                               TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
+        const DWORD rc =
+            ::GetExtendedTcpTable(buffer.empty() ? nullptr : buffer.data(), &size, FALSE, family, table, 0);
         if (rc == NO_ERROR) return buffer;
         if (rc != ERROR_INSUFFICIENT_BUFFER) return std::nullopt;
-        // Room for a few rows more than the size asked for.
-        buffer.assign(static_cast<size_t>(size) + 16 * sizeof(MIB_TCP6ROW_OWNER_PID), 0);
+        // Room for a few rows more than the size asked for, of the largest row type read.
+        buffer.assign(static_cast<size_t>(size) + 16 * sizeof(MIB_TCP6ROW_OWNER_MODULE), 0);
     }
     return std::nullopt;
+}
+
+//! TCP_TABLE_OWNER_PID_CONNECTIONS: every connection but the listening sockets.
+std::optional<std::vector<unsigned char>> GetConnectionTable(ULONG family)
+{
+    return GetTcpTable(family, TCP_TABLE_OWNER_PID_CONNECTIONS);
 }
 
 //! The rows of a table GetConnectionTable read: Table is MIB_TCPTABLE_OWNER_PID or
@@ -240,9 +245,61 @@ std::optional<std::vector<TcpConnEntry>> ReadWindowsTcpTable(ULONG family)
     return entries;
 }
 
+//! A row's creation time as a count of 100 ns.
+uint64_t CountOf(const LARGE_INTEGER& stamp)
+{
+    return static_cast<uint64_t>(stamp.QuadPart);
+}
+
 #endif // WIN32
 
 } // namespace
+
+#ifdef WIN32
+std::optional<uint64_t> ListenerCreationTime(const TcpConnEntry& server_side)
+{
+    const bool ipv6 = !server_side.local.IsIPv4();
+    const std::optional<std::vector<unsigned char>> buffer =
+        GetTcpTable(ipv6 ? AF_INET6 : AF_INET, TCP_TABLE_OWNER_MODULE_LISTENER);
+    if (!buffer) return std::nullopt;
+
+    // The socket at the connection's own address, else the one on every address of the port:
+    // 0.0.0.0, or "::", the all-zero address.
+    const CNetAddr any_ipv4{in_addr{}};
+    const CNetAddr any_ipv6;
+    std::optional<uint64_t> exact;
+    std::optional<uint64_t> unspecified;
+    const auto consider = [&](const CNetAddr& addr, DWORD port, DWORD pid, const LARGE_INTEGER& created) {
+        if (PortOfRow(port) != server_side.local.GetPort() || pid != server_side.owner) return;
+        if (addr == static_cast<const CNetAddr&>(server_side.local)) {
+            exact = CountOf(created);
+        } else if (addr == any_ipv4 || addr == any_ipv6) {
+            unspecified = CountOf(created);
+        }
+    };
+    if (!ipv6) {
+        const std::optional<std::vector<MIB_TCPROW_OWNER_MODULE>> rows =
+            TableRows<MIB_TCPTABLE_OWNER_MODULE, MIB_TCPROW_OWNER_MODULE>(*buffer);
+        if (!rows) return std::nullopt;
+        for (const MIB_TCPROW_OWNER_MODULE& row : *rows) {
+            in_addr local{};
+            local.s_addr = row.dwLocalAddr;
+            consider(CNetAddr(local), row.dwLocalPort, row.dwOwningPid, row.liCreateTimestamp);
+        }
+    } else {
+        const std::optional<std::vector<MIB_TCP6ROW_OWNER_MODULE>> rows =
+            TableRows<MIB_TCP6TABLE_OWNER_MODULE, MIB_TCP6ROW_OWNER_MODULE>(*buffer);
+        if (!rows) return std::nullopt;
+        for (const MIB_TCP6ROW_OWNER_MODULE& row : *rows) {
+            in6_addr local{};
+            static_assert(sizeof(local) == sizeof(row.ucLocalAddr));
+            std::memcpy(&local, row.ucLocalAddr, sizeof(local));
+            consider(CNetAddr(local, row.dwLocalScopeId), row.dwLocalPort, row.dwOwningPid, row.liCreateTimestamp);
+        }
+    }
+    return exact ? exact : unspecified;
+}
+#endif // WIN32
 
 std::vector<TcpConnEntry> ParseProcNetTcp(std::istream& in, bool ipv6)
 {
@@ -419,6 +476,15 @@ std::string FoldWindowsPath(const std::string& path)
 }
 
 } // namespace
+
+bool ProcessPredatesListener(uint64_t process_created, uint64_t listener_created)
+{
+    const uint64_t slack = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                    LISTENER_CREATION_SLACK)
+                                                    .count() /
+                                                100);
+    return process_created <= listener_created || process_created - listener_created <= slack;
+}
 
 bool IsInstalledCoreImage(const std::string& listener_image, const std::string& self_image)
 {
@@ -678,9 +744,9 @@ std::optional<std::string> TokenUserSid(HANDLE token)
 
 std::optional<ListenerIdentity> IdentifyListener(const TcpConnEntry& server_side)
 {
-    // The table's pid for the server side of a connection: the process that holds the socket, the
-    // listener's while the connection waits in its backlog. 0, the System Idle Process, is no
-    // process that can hold one.
+    // The table's pid for the server side of a connection: the process that made the listening
+    // socket, while the connection waits in its backlog and once it is accepted. 0, the System Idle
+    // Process, is no process that can hold one.
     if (server_side.owner == 0 || server_side.owner > std::numeric_limits<DWORD>::max()) return std::nullopt;
     const DWORD pid = static_cast<DWORD>(server_side.owner);
 
@@ -698,6 +764,21 @@ std::optional<ListenerIdentity> IdentifyListener(const TcpConnEntry& server_side
         if (!tables) return std::nullopt;
         const std::optional<TcpConnEntry> again = FindServerSide(*tables, server_side.remote, server_side.local);
         if (!again || again->owner != server_side.owner) return std::nullopt;
+
+        // The table goes on naming the process that made the listening socket after it has ended,
+        // while another one holds the socket on, so the pid may have been given to a later
+        // process before it was opened. The process opened must be as old as the socket.
+        const std::optional<uint64_t> listener_created = ListenerCreationTime(server_side);
+        FILETIME created{};
+        FILETIME exited{};
+        FILETIME kernel{};
+        FILETIME user{};
+        if (!listener_created || !::GetProcessTimes(process.get(), &created, &exited, &kernel, &user)) {
+            return std::nullopt;
+        }
+        const uint64_t process_created =
+            (static_cast<uint64_t>(created.dwHighDateTime) << 32) | static_cast<uint64_t>(created.dwLowDateTime);
+        if (!ProcessPredatesListener(process_created, *listener_created)) return std::nullopt;
 
         const std::optional<std::string> image = ProcessImagePath(process.get());
         const std::optional<std::string> self = OwnImagePath();

@@ -620,6 +620,21 @@ BOOST_AUTO_TEST_CASE(refusal_messages)
                       "refusing to send RPC credentials: could not identify the owner of the listener at [::1]:15715.");
 }
 
+// A process created after a listening socket, by more than the slack, did not make it, whatever pid
+// the table names. Production change that would fail this: a decision that takes the table's pid
+// as the maker of the socket whatever the age of the process that has it now.
+BOOST_AUTO_TEST_CASE(process_younger_than_the_listener_did_not_make_it)
+{
+    constexpr uint64_t SECOND{10'000'000};
+    const uint64_t listener = 134'000'000'000'000'000ULL;
+    const uint64_t slack = static_cast<uint64_t>(LISTENER_CREATION_SLACK.count()) * SECOND;
+    BOOST_CHECK(ProcessPredatesListener(listener - 3600 * SECOND, listener));
+    BOOST_CHECK(ProcessPredatesListener(listener, listener));
+    BOOST_CHECK(ProcessPredatesListener(listener + slack, listener));
+    BOOST_CHECK(!ProcessPredatesListener(listener + slack + 1, listener));
+    BOOST_CHECK(!ProcessPredatesListener(listener + 3600 * SECOND, listener));
+}
+
 BOOST_AUTO_TEST_CASE(conf_trust_predicate)
 {
     const PathSecurityFacts root{"0", false};
@@ -686,6 +701,80 @@ BOOST_AUTO_TEST_CASE(live_loopback_lookup_own_uid)
     const ListenerCheckResult result = CheckRpcListener(client_local, client_remote);
     BOOST_CHECK_MESSAGE(result.verdict == ListenerVerdict::Accept, result.reason);
 }
+
+#ifdef WIN32
+
+// The table's creation time of a listening socket is when this process made it, and this process
+// is older: the age check accepts the process that made the socket, as the end-to-end case above
+// shows for the whole check.
+BOOST_AUTO_TEST_CASE(live_listener_creation_time_is_when_it_was_made)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine's TCP table names no owning process; skipping");
+        return;
+    }
+    const auto now = [] {
+        FILETIME time{};
+        ::GetSystemTimeAsFileTime(&time);
+        return (static_cast<uint64_t>(time.dwHighDateTime) << 32) | time.dwLowDateTime;
+    };
+    const uint64_t before = now();
+    unsigned short port{0};
+    const std::shared_ptr<Sock> listener = MakeLoopbackListener(port);
+    const uint64_t after = now();
+
+    Sock client(CreateCloexecSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
+    CService client_local;
+    CService client_remote;
+    ConnectLoopback(client, port, client_local, client_remote);
+    const std::optional<std::vector<TcpConnEntry>> tables = ReadTcpConnectionTables();
+    BOOST_REQUIRE(tables);
+    const std::optional<TcpConnEntry> found = FindServerSide(*tables, client_local, client_remote);
+    BOOST_REQUIRE(found);
+
+    const std::optional<uint64_t> created = ListenerCreationTime(*found);
+    BOOST_REQUIRE(created);
+    BOOST_TEST_MESSAGE("the table's creation time is " << static_cast<int64_t>(*created - before)
+                       << " x 100 ns after the listener was begun; " << (*created % 10'000'000)
+                       << " x 100 ns past its second");
+    const uint64_t slack = static_cast<uint64_t>(LISTENER_CREATION_SLACK.count()) * 10'000'000;
+    BOOST_CHECK(*created + slack >= before);
+    BOOST_CHECK(*created <= after + slack);
+
+    FILETIME process_created{};
+    FILETIME exited{};
+    FILETIME kernel{};
+    FILETIME user{};
+    BOOST_REQUIRE(::GetProcessTimes(::GetCurrentProcess(), &process_created, &exited, &kernel, &user));
+    const uint64_t self =
+        (static_cast<uint64_t>(process_created.dwHighDateTime) << 32) | process_created.dwLowDateTime;
+    BOOST_CHECK(ProcessPredatesListener(self, *created));
+
+    // An IPv6 socket on every address that takes IPv4 too: for its IPv4 connection, too, the
+    // listening socket is found.
+    Sock dual(CreateCloexecSocket(AF_INET6, SOCK_STREAM, IPPROTO_TCP));
+    BOOST_REQUIRE(dual.Get() != INVALID_SOCKET);
+    DWORD v6only = 0;
+    BOOST_REQUIRE(::setsockopt(dual.Get(), IPPROTO_IPV6, IPV6_V6ONLY, reinterpret_cast<const char*>(&v6only),
+                               sizeof(v6only)) == 0);
+    sockaddr_in6 any6{};
+    any6.sin6_family = AF_INET6;
+    BOOST_REQUIRE(::bind(dual.Get(), reinterpret_cast<sockaddr*>(&any6), sizeof(any6)) == 0);
+    BOOST_REQUIRE(::listen(dual.Get(), 1) == 0);
+    socklen_t len = sizeof(any6);
+    BOOST_REQUIRE(::getsockname(dual.Get(), reinterpret_cast<sockaddr*>(&any6), &len) == 0);
+    Sock client4(CreateCloexecSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
+    CService client4_local;
+    CService client4_remote;
+    ConnectLoopback(client4, ntohs(any6.sin6_port), client4_local, client4_remote);
+    const std::optional<std::vector<TcpConnEntry>> tables4 = ReadTcpConnectionTables();
+    BOOST_REQUIRE(tables4);
+    const std::optional<TcpConnEntry> found4 = FindServerSide(*tables4, client4_local, client4_remote);
+    BOOST_REQUIRE(found4);
+    BOOST_CHECK(ListenerCreationTime(*found4));
+}
+
+#endif // WIN32
 
 #ifdef __linux__
 

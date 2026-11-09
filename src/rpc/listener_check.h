@@ -51,6 +51,28 @@ bool ServerSideAccepted(const TcpConnEntry& server_side);
 //! this is for Linux only.
 std::optional<TcpConnEntry> WaitForAcceptedServerSide(const TcpConnEntry& server_side, std::chrono::milliseconds wait);
 
+//! Windows: how much later than a listening socket the process the TCP table names for it may have
+//! been created and still be the one that made it: the two times are read from clocks that can be
+//! a little apart, and may be rounded. See ProcessPredatesListener.
+constexpr std::chrono::seconds LISTENER_CREATION_SLACK{2};
+
+//! Windows: whether a process created at \p process_created can be the one the TCP table names
+//! for a listening socket created at \p listener_created, both counts of 100 ns as a FILETIME
+//! holds them. The table names the process that made the socket, for the socket and for every
+//! connection to it, and goes on naming it after that process has ended while another one holds the
+//! socket: a pid a later process may have taken. One created more than LISTENER_CREATION_SLACK
+//! after the socket did not make it.
+bool ProcessPredatesListener(uint64_t process_created, uint64_t listener_created);
+
+#ifdef WIN32
+//! Windows: when the listening socket that \p server_side (a row FindServerSide found) is a
+//! connection of was created: the LISTEN row of GetExtendedTcpTable's
+//! TCP_TABLE_OWNER_MODULE_LISTENER on its local port, at its local address or the unspecified
+//! one, made by the process \p server_side names. nullopt when there is no such row or the table
+//! cannot be read.
+std::optional<uint64_t> ListenerCreationTime(const TcpConnEntry& server_side);
+#endif
+
 //! This host's TCP connection table, IPv4 and IPv6 together. Linux reads /proc/net/tcp and
 //! /proc/net/tcp6 (a missing tcp6 is not an error); Windows GetExtendedTcpTable's
 //! TCP_TABLE_OWNER_PID_CONNECTIONS for AF_INET and AF_INET6. nullopt when the table cannot be read,
