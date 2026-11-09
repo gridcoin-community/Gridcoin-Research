@@ -99,11 +99,12 @@ std::optional<CService> ParseEndpoint(std::string_view text, bool ipv6)
     return CService(addr, static_cast<unsigned short>(*port));
 }
 
-//! One line of the table: sl local_address rem_address st tx_queue:rx_queue tr:tm->when retrnsmt uid ...
+//! One line of the table: sl local_address rem_address st tx_queue:rx_queue tr:tm->when retrnsmt uid timeout
+//! inode ...
 std::optional<TcpConnEntry> ParseLine(std::string_view line, bool ipv6)
 {
     const std::vector<std::string_view> fields = SplitFields(line);
-    if (fields.size() < 8) return std::nullopt;
+    if (fields.size() < 10) return std::nullopt;
 
     const std::string_view slot = fields[0];
     if (slot.size() < 2 || slot.back() != ':' || !IsDecimal(slot.substr(0, slot.size() - 1))) return std::nullopt;
@@ -112,22 +113,25 @@ std::optional<TcpConnEntry> ParseLine(std::string_view line, bool ipv6)
     const std::optional<CService> remote = ParseEndpoint(fields[2], ipv6);
     const std::optional<uint32_t> state = ParseFixedHex(fields[3], 2);
     uint64_t owner{0};
-    if (!local || !remote || !state || !IsDecimal(fields[7]) || !ParseUInt64(std::string(fields[7]), &owner)) {
+    uint64_t inode{0};
+    if (!local || !remote || !state || !IsDecimal(fields[7]) || !ParseUInt64(std::string(fields[7]), &owner) ||
+        !IsDecimal(fields[9]) || !ParseUInt64(std::string(fields[9]), &inode)) {
         return std::nullopt;
     }
 
     TcpConnEntry entry;
     entry.local = *local;
     entry.remote = *remote;
-    // TCP_ESTABLISHED covers a connection still waiting in the listener's accept queue. A
-    // connection whose last handshake packet the listener has not taken in yet (its accept queue
-    // was full) is listed as TCP_SYN_RECV, with the listener's owner.
+    // TCP_ESTABLISHED covers a connection still waiting in the listener's accept queue, with inode 0
+    // until a process accepts it. A connection whose last handshake packet the listener has not
+    // taken in yet (its accept queue was full) is listed as TCP_SYN_RECV, with the listener's owner.
     if (*state == 0x01) {
         entry.state = TcpState::Established;
     } else if (*state == 0x03) {
         entry.state = TcpState::SynReceived;
     }
     entry.owner = owner;
+    entry.inode = inode;
     return entry;
 }
 
@@ -266,6 +270,11 @@ std::optional<TcpConnEntry> FindServerSide(const std::vector<TcpConnEntry>& entr
     return found;
 }
 
+bool ServerSideAccepted(const TcpConnEntry& server_side)
+{
+    return server_side.state == TcpState::Established && server_side.inode != 0;
+}
+
 std::optional<std::vector<TcpConnEntry>> ReadTcpConnectionTables()
 {
 #if defined(__linux__)
@@ -292,6 +301,24 @@ std::optional<std::vector<TcpConnEntry>> ReadTcpConnectionTables()
 #else
     return std::nullopt;
 #endif
+}
+
+std::optional<TcpConnEntry> WaitForAcceptedServerSide(const TcpConnEntry& server_side, std::chrono::milliseconds wait)
+{
+    const auto deadline = std::chrono::steady_clock::now() + wait;
+    std::chrono::milliseconds pause{1};
+    std::optional<TcpConnEntry> entry = server_side;
+    while (!entry || !ServerSideAccepted(*entry)) {
+        if (std::chrono::steady_clock::now() >= deadline) return std::nullopt;
+        UninterruptibleSleep(pause);
+        pause = std::min(pause * 2, LISTENER_ACCEPT_POLL_MAX);
+        // A read of the table can miss the row while the table changes, so a miss is read again too.
+        entry.reset();
+        if (const std::optional<std::vector<TcpConnEntry>> tables = ReadTcpConnectionTables()) {
+            entry = FindServerSide(*tables, server_side.remote, server_side.local);
+        }
+    }
+    return entry;
 }
 
 bool IsLocalPeerAddress(const CNetAddr& addr, const std::vector<CNetAddr>& host_addrs)
@@ -502,10 +529,13 @@ CallerIdentity GetCallerIdentity()
 
 std::optional<ListenerIdentity> IdentifyListener(const TcpConnEntry& server_side)
 {
-    // The table's uid for the server side of a connection: while it waits in the accept queue, the
-    // account that created the listening socket; once accepted, the account of the process that
-    // accepted it, which holds it.
-    return ListenerIdentity{ToString(server_side.owner), true};
+    // The table's uid for the server side of a connection is the account of the process that accepted
+    // it, which holds it. Until a process accepts it the uid names no such process: kernels up to 6.16
+    // show 0, root, for every connection in the accept queue. So the check waits for the accept,
+    // which the core makes as soon as one of its RPC threads is free.
+    const std::optional<TcpConnEntry> accepted = WaitForAcceptedServerSide(server_side, LISTENER_ACCEPT_WAIT);
+    if (!accepted) return std::nullopt;
+    return ListenerIdentity{ToString(accepted->owner), true};
 }
 
 void GetConfFacts(std::optional<PathSecurityFacts>& conf, std::optional<PathSecurityFacts>& conf_dir)

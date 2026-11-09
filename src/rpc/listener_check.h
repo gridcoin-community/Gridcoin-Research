@@ -27,6 +27,7 @@ struct TcpConnEntry {
     CService remote;
     TcpState state{TcpState::Other};
     uint64_t owner{0}; //!< uid (Linux), pid (Windows)
+    uint64_t inode{0}; //!< Linux: the socket's inode, 0 until a process accepts the connection
 };
 
 //! /proc/net/tcp (ipv6=false) or /proc/net/tcp6. Skips the header and malformed lines. Each address
@@ -37,6 +38,18 @@ std::vector<TcpConnEntry> ParseProcNetTcp(std::istream& in, bool ipv6);
 //! nullopt when absent or not unique. CService equality makes ::ffff:a.b.c.d equal to a.b.c.d.
 std::optional<TcpConnEntry> FindServerSide(const std::vector<TcpConnEntry>& entries,
                                            const CService& client_local, const CService& client_remote);
+
+//! Linux: a process has accepted the server side of the connection, which the table shows as
+//! Established with a nonzero inode. Only then does the row's uid name the account of a process
+//! that holds the connection. Before that, kernels up to 6.16 show 0, root, and later ones the
+//! account that created the listening socket.
+bool ServerSideAccepted(const TcpConnEntry& server_side);
+
+//! Linux: the row of server_side once ServerSideAccepted holds for it. The table is read again until
+//! it does, the first time after 1 ms and each pause twice the last, at most
+//! LISTENER_ACCEPT_POLL_MAX; nullopt once \p wait has passed. The Windows table has no inode, so
+//! this is for Linux only.
+std::optional<TcpConnEntry> WaitForAcceptedServerSide(const TcpConnEntry& server_side, std::chrono::milliseconds wait);
 
 //! This host's TCP connection table, IPv4 and IPv6 together. Linux reads /proc/net/tcp and
 //! /proc/net/tcp6 (a missing tcp6 is not an error); Windows GetExtendedTcpTable's
@@ -134,13 +147,19 @@ std::string UnidentifiedListenerMessage(const std::string& listener_address);
 using ListenerCheckFn = std::function<ListenerCheckResult(const CService& local, const CService& remote)>;
 
 //! Production check. Find the server side of the exact 4-tuple (LISTENER_LOOKUP_ATTEMPTS reads,
-//! LISTENER_LOOKUP_RETRY_DELAY apart). Found: gather the facts, the configuration file's from what
-//! ReadConfigFiles recorded, and apply DecideListenerOwner, whatever the address. Not found:
+//! LISTENER_LOOKUP_RETRY_DELAY apart). Found: on Linux wait up to LISTENER_ACCEPT_WAIT for the
+//! listener to accept the connection (WaitForAcceptedServerSide), and refuse when it does not; gather
+//! the facts, the configuration file's from what ReadConfigFiles recorded, and apply
+//! DecideListenerOwner, whatever the address. Not found:
 //! Accept with reason "remote" when ClassifyLookup says Remote, else Refuse. Platforms without a
 //! backend (macOS, the BSDs): Accept with reason "unsupported" (today's behaviour).
 ListenerCheckResult CheckRpcListener(const CService& local, const CService& remote);
 
 static constexpr int LISTENER_LOOKUP_ATTEMPTS{5};
 static constexpr std::chrono::milliseconds LISTENER_LOOKUP_RETRY_DELAY{20};
+//! The core accepts a connection when one of its -rpcthreads is free, and a thread that an idle
+//! client holds is freed within the server's idle timeout, 30 seconds by default.
+static constexpr std::chrono::seconds LISTENER_ACCEPT_WAIT{30};
+static constexpr std::chrono::milliseconds LISTENER_ACCEPT_POLL_MAX{250};
 
 #endif // GRIDCOIN_RPC_LISTENER_CHECK_H

@@ -9,6 +9,7 @@
 #include <test/wine.h>
 #include <util/sock.h>
 #include <util/string.h>
+#include <util/time.h>
 
 #include <boost/test/unit_test.hpp>
 #include <univalue.h>
@@ -44,6 +45,10 @@ const std::string TCP4_LINE2 =
 const std::string TCP4_LINE3 =
     "   3: 0100007F:3D63 0100007F:A1B2 01 00000000:00000000 00:00000000 00000000  1000        0 40004 1 0000000000000000 20 4 30 10 -1\n";
 const std::string TCP4 = TCP4_HEADER + TCP4_LINE0 + TCP4_LINE1 + TCP4_LINE2 + TCP4_LINE3;
+// The server side of TCP4_LINE3's connection before a process accepts it, as kernels up to 6.16 list
+// it: uid 0 and no inode.
+const std::string TCP4_LINE3_UNACCEPTED =
+    "   3: 0100007F:3D63 0100007F:A1B2 01 00000000:00000000 00:00000000 00000000     0        0 0 1 0000000000000000 20 4 30 10 -1\n";
 
 const std::string TCP6_HEADER =
     "  sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n";
@@ -226,6 +231,7 @@ BOOST_AUTO_TEST_CASE(parse_tcp4)
     BOOST_CHECK_EQUAL(entries[2].owner, 1001U);
 
     BOOST_CHECK_EQUAL(entries[3].owner, 1000U);
+    BOOST_CHECK_EQUAL(entries[3].inode, 40004U);
     BOOST_CHECK(entries[3].state == TcpState::Established);
     BOOST_CHECK(entries[3].local == Svc("127.0.0.1", 15715));
     BOOST_CHECK(entries[3].remote == Svc("127.0.0.1", 41394));
@@ -236,7 +242,9 @@ BOOST_AUTO_TEST_CASE(parse_skips_malformed)
     const std::string truncated = "   4: 0100007F:3D63 0100007F:A1B5 01 00000000:00000000\n";
     const std::string bad_hex =
         "   5: ZZZZZZZZ:3D63 0100007F:A1B6 01 00000000:00000000 00:00000000 00000000  1000        0 40005 1 0000000000000000 20 4 30 10 -1\n";
-    const std::vector<TcpConnEntry> entries = Parse(TCP4_HEADER + TCP4_LINE0 + truncated + bad_hex + TCP4_LINE3, false);
+    const std::string no_inode = "   6: 0100007F:3D63 0100007F:A1B7 01 00000000:00000000 00:00000000 00000000  1000        0\n";
+    const std::vector<TcpConnEntry> entries =
+        Parse(TCP4_HEADER + TCP4_LINE0 + truncated + bad_hex + no_inode + TCP4_LINE3, false);
     BOOST_REQUIRE_EQUAL(entries.size(), 2U);
     BOOST_CHECK(entries[0].state == TcpState::Other);
     BOOST_CHECK(entries[1].remote == Svc("127.0.0.1", 41394));
@@ -285,6 +293,30 @@ BOOST_AUTO_TEST_CASE(find_syn_recv)
     BOOST_REQUIRE(found);
     BOOST_CHECK(found->state == TcpState::SynReceived);
     BOOST_CHECK_EQUAL(found->owner, 1000U);
+}
+
+BOOST_AUTO_TEST_CASE(server_side_accepted_needs_an_inode)
+{
+    // Accepted: established, with the inode of the socket the accepting process holds.
+    const std::optional<TcpConnEntry> accepted =
+        FindServerSide(Parse(TCP4, false), Svc("127.0.0.1", 41394), Svc("127.0.0.1", 15715));
+    BOOST_REQUIRE(accepted);
+    BOOST_CHECK(ServerSideAccepted(*accepted));
+
+    // Still in the accept queue: no inode, and a uid that names no process holding the connection.
+    const std::string waiting = TCP4_HEADER + TCP4_LINE0 + TCP4_LINE1 + TCP4_LINE2 + TCP4_LINE3_UNACCEPTED;
+    const std::optional<TcpConnEntry> queued =
+        FindServerSide(Parse(waiting, false), Svc("127.0.0.1", 41394), Svc("127.0.0.1", 15715));
+    BOOST_REQUIRE(queued);
+    BOOST_CHECK_EQUAL(queued->owner, 0U);
+    BOOST_CHECK_EQUAL(queued->inode, 0U);
+    BOOST_CHECK(!ServerSideAccepted(*queued));
+
+    // A handshake the listener has not completed is not accepted, whatever the row's inode.
+    const std::optional<TcpConnEntry> half_open =
+        FindServerSide(Parse(TCP4_HEADER + Line3WithState("03"), false), Svc("127.0.0.1", 41394), Svc("127.0.0.1", 15715));
+    BOOST_REQUIRE(half_open);
+    BOOST_CHECK(!ServerSideAccepted(*half_open));
 }
 
 BOOST_AUTO_TEST_CASE(find_ignores_time_wait)
@@ -603,6 +635,24 @@ BOOST_AUTO_TEST_CASE(conf_trust_predicate)
 // The platforms with a backend.
 #if defined(__linux__) || defined(WIN32)
 
+namespace {
+
+//! Connects client to the loopback listener on port, and gives the two ends of the connection as the
+//! client sees them.
+void ConnectLoopback(const Sock& client, unsigned short port, CService& client_local, CService& client_remote)
+{
+    BOOST_REQUIRE(client.Get() != INVALID_SOCKET);
+    sockaddr_in server_addr = LoopbackAddr(port);
+    BOOST_REQUIRE(::connect(client.Get(), reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr)) == 0);
+    sockaddr_in client_addr;
+    socklen_t len = sizeof(client_addr);
+    BOOST_REQUIRE(::getsockname(client.Get(), reinterpret_cast<sockaddr*>(&client_addr), &len) == 0);
+    BOOST_REQUIRE(client_local.SetSockAddr(reinterpret_cast<sockaddr*>(&client_addr)));
+    BOOST_REQUIRE(client_remote.SetSockAddr(reinterpret_cast<sockaddr*>(&server_addr)));
+}
+
+} // namespace
+
 BOOST_AUTO_TEST_CASE(live_loopback_lookup_own_uid)
 {
     if (grc_test::RunningUnderWine()) {
@@ -612,28 +662,23 @@ BOOST_AUTO_TEST_CASE(live_loopback_lookup_own_uid)
     unsigned short port{0};
     const std::shared_ptr<Sock> listener = MakeLoopbackListener(port);
 
-    // Connected and left in the accept queue: the server side exists before anyone accepts it.
+    // Connected and accepted, as the core accepts each connection.
     Sock client(CreateCloexecSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
-    BOOST_REQUIRE(client.Get() != INVALID_SOCKET);
-    sockaddr_in server_addr = LoopbackAddr(port);
-    BOOST_REQUIRE(::connect(client.Get(), reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr)) == 0);
-    sockaddr_in client_addr;
-    socklen_t len = sizeof(client_addr);
-    BOOST_REQUIRE(::getsockname(client.Get(), reinterpret_cast<sockaddr*>(&client_addr), &len) == 0);
-
     CService client_local;
     CService client_remote;
-    BOOST_REQUIRE(client_local.SetSockAddr(reinterpret_cast<sockaddr*>(&client_addr)));
-    BOOST_REQUIRE(client_remote.SetSockAddr(reinterpret_cast<sockaddr*>(&server_addr)));
+    ConnectLoopback(client, port, client_local, client_remote);
+    Sock accepted(AcceptCloexec(listener->Get(), nullptr, nullptr));
+    BOOST_REQUIRE(accepted.Get() != INVALID_SOCKET);
 
     const std::optional<std::vector<TcpConnEntry>> tables = ReadTcpConnectionTables();
     BOOST_REQUIRE(tables);
     const std::optional<TcpConnEntry> found = FindServerSide(*tables, client_local, client_remote);
     BOOST_REQUIRE(found);
 #ifdef WIN32
-    // The Windows table gives the process that holds the listener.
+    // The Windows table gives the process that holds the connection.
     BOOST_CHECK_EQUAL(found->owner, static_cast<uint64_t>(::GetCurrentProcessId()));
 #else
+    BOOST_CHECK(ServerSideAccepted(*found));
     BOOST_CHECK_EQUAL(found->owner, static_cast<uint64_t>(::geteuid()));
 #endif
 
@@ -641,6 +686,43 @@ BOOST_AUTO_TEST_CASE(live_loopback_lookup_own_uid)
     const ListenerCheckResult result = CheckRpcListener(client_local, client_remote);
     BOOST_CHECK_MESSAGE(result.verdict == ListenerVerdict::Accept, result.reason);
 }
+
+#ifdef __linux__
+
+BOOST_AUTO_TEST_CASE(live_owner_read_once_the_connection_is_accepted)
+{
+    unsigned short port{0};
+    const std::shared_ptr<Sock> listener = MakeLoopbackListener(port);
+    Sock client(CreateCloexecSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
+    CService client_local;
+    CService client_remote;
+    ConnectLoopback(client, port, client_local, client_remote);
+
+    const std::optional<std::vector<TcpConnEntry>> tables = ReadTcpConnectionTables();
+    BOOST_REQUIRE(tables);
+    const std::optional<TcpConnEntry> queued = FindServerSide(*tables, client_local, client_remote);
+    BOOST_REQUIRE(queued);
+
+    // In the accept queue the row names no process that holds the connection, so no owner is read.
+    BOOST_CHECK(!ServerSideAccepted(*queued));
+    BOOST_CHECK(!WaitForAcceptedServerSide(*queued, std::chrono::milliseconds{200}));
+
+    // Accepted while the check waits: the row then names this process's account.
+    SOCKET accepted_socket{INVALID_SOCKET};
+    std::thread acceptor([&listener, &accepted_socket] {
+        UninterruptibleSleep(std::chrono::milliseconds{100});
+        accepted_socket = AcceptCloexec(listener->Get(), nullptr, nullptr);
+    });
+    const std::optional<TcpConnEntry> accepted = WaitForAcceptedServerSide(*queued, std::chrono::seconds{10});
+    acceptor.join();
+    const Sock accepted_sock(accepted_socket);
+    BOOST_REQUIRE(accepted_socket != INVALID_SOCKET);
+    BOOST_REQUIRE(accepted);
+    BOOST_CHECK(accepted->inode != 0);
+    BOOST_CHECK_EQUAL(accepted->owner, static_cast<uint64_t>(::geteuid()));
+}
+
+#endif // __linux__
 
 BOOST_AUTO_TEST_CASE(live_absent_tuple_refused)
 {
