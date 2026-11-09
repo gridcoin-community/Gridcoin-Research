@@ -250,6 +250,15 @@ class ValidateUserTests(ServiceTestBase):
                 svc.validate_user(name, host, self.paths)
         self.assertEqual(svc.validate_user("bob", host, self.paths).pw_uid, 1000)
 
+    def test_names_systemd_or_a_command_would_read_otherwise_refused(self):
+        # User=%i takes a name made only of digits as a numeric ID, and a command line takes a name
+        # that starts with "-" as an option.
+        for name in ("1000", "0", "-x", "-", "--help"):
+            with self.assertRaises(svc.UserError, msg=name):
+                svc.validate_name(name)
+        for name in ("bob", "a1", "_x", "x-y", "x.y", "1a"):
+            svc.validate_name(name)
+
     def test_names_made_only_of_dots_refused(self):
         host = FakeHost(users={name: Passwd(name, 1000, self.home) for name in (".", "..", "...")})
         for name in (".", "..", "..."):

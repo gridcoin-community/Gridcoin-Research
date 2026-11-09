@@ -72,9 +72,11 @@ TEMPLATE_REFUSED_KEYS = ("ExecStart", "Type", "PIDFile", "NotifyAccess", "User")
 # The words of an old per-user command line the new one carries or replaces; any other is lost.
 OLD_COMMAND_WORDS = ("-daemon", "-daemonwait", "-nodaemon", "-nodaemonwait", "-multiprocess")
 OLD_COMMAND_PREFIXES = ("-daemon=", "-daemonwait=", "-pid=", "-datadir=")
-# A name made only of dots is refused: "." and ".." name directories. Matched with
-# fullmatch and \Z, so a trailing newline is refused too.
-USER_RE = re.compile(r"(?!\.+\Z)[A-Za-z0-9._-]+\Z")
+# A name made only of dots is refused: "." and ".." name directories. So is one made only of
+# digits, which systemd takes in User=%i as a numeric ID, and one that starts with "-", which a
+# command line takes as an option. Matched with fullmatch and \Z, so a trailing newline is
+# refused too.
+USER_RE = re.compile(r"(?!\.+\Z)(?![0-9]+\Z)[A-Za-z0-9._][A-Za-z0-9._-]*\Z")
 UNSAFE_PATH_RE = re.compile(r"[\s\"'\\$%;]")
 ROOT_EQUIVALENT_GROUPS = ("docker", "lxd", "incus", "libvirt", "disk", "wheel", "sudo", "adm", "systemd-journal")
 
