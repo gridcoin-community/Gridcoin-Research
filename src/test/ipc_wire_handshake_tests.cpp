@@ -54,6 +54,7 @@
 #include "test/autounlock_fake_store.h"
 #include "test/gui_cache_fakes.h"
 #include "test/lone_best_block.h"
+#include "test/peer_groups.h"
 #include "test/staking_test_peers.h"
 #include "test/state_guard.h"
 #include "test/wallet_file_placeholder.h"
@@ -1709,6 +1710,10 @@ BOOST_AUTO_TEST_CASE(wire_console_upload_runs_a_command_on_the_file)
 // this account. The server admits the client through ServerPeerPolicy.
 BOOST_FIXTURE_TEST_CASE(wire_connect_address_reports_same_account, grc_test::StateGuard)
 {
+    if (!grc_test::PeerGroupsReadable()) {
+        BOOST_TEST_MESSAGE("SO_PEERGROUPS cannot be read here (qemu-user gives it room for one int); skipping");
+        return;
+    }
     // Declared before the pair, so it outlives the server's factory.
     std::atomic<int> served{0};
     IpcPair pair;
@@ -1965,6 +1970,10 @@ BOOST_AUTO_TEST_CASE(wire_connect_without_listener_is_not_listening)
 // reported to the GUI as a lost session.
 BOOST_AUTO_TEST_CASE(wire_connect_times_out_against_a_mute_listener)
 {
+    if (!grc_test::PeerGroupsReadable()) {
+        BOOST_TEST_MESSAGE("SO_PEERGROUPS cannot be read here (qemu-user gives it room for one int); skipping");
+        return;
+    }
     TempIpcDir ipcdir;
     ipc::WriteCookie(ipcdir.dir);
     const int listen_fd = BindUnixSocket(ipcdir.dir / "node.sock", /*listen=*/true);
@@ -2004,6 +2013,10 @@ BOOST_AUTO_TEST_CASE(wire_connect_times_out_against_a_mute_listener)
 // handler was registered, and the drop the watchdog causes must not reach it.
 BOOST_FIXTURE_TEST_CASE(wire_connect_times_out_against_a_stalled_handshake, grc_test::StateGuard)
 {
+    if (!grc_test::PeerGroupsReadable()) {
+        BOOST_TEST_MESSAGE("SO_PEERGROUPS cannot be read here (qemu-user gives it room for one int); skipping");
+        return;
+    }
     std::promise<void> release;
     const std::shared_future<void> released = release.get_future().share();
     ServedCore core([released](int) -> std::unique_ptr<interfaces::Init> {
@@ -2037,6 +2050,10 @@ BOOST_FIXTURE_TEST_CASE(wire_connect_times_out_against_a_stalled_handshake, grc_
 // disconnect handler is armed: when the core drops it, the handler runs.
 BOOST_FIXTURE_TEST_CASE(wire_connect_to_node_attaches_one_gui, grc_test::StateGuard)
 {
+    if (!grc_test::PeerGroupsReadable()) {
+        BOOST_TEST_MESSAGE("SO_PEERGROUPS cannot be read here (qemu-user gives it room for one int); skipping");
+        return;
+    }
     ServedCore core;
 
     std::atomic<bool> a_dropped{false};
