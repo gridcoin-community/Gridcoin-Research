@@ -440,6 +440,37 @@ void ApplyEndpointAcl(const fs::path& path, IpcObject obj)
     ApplyEndpointAcl(path, ThisProcessEndpointAclSpec(obj, AttachGroupSid()));
 }
 
+void ApplyBoundSocketAcl(const fs::path& path)
+{
+    // Opened without following a reparse point at it, and without sharing delete, so that while
+    // the handle is open the path keeps naming the socket checked.
+    const UniqueHandle handle(OpenNoFollow(path, /*share_delete=*/false));
+    const EndpointEntry entry = ReadEntry(handle.get(), path);
+    if (entry.kind != EntryKind::UnixSocket) {
+        throw std::runtime_error(strprintf("Refusing to serve IPC: '%s' is not the socket this process bound: it is "
+                                           "not an AF_UNIX socket",
+                                           path.string()));
+    }
+    // A socket another account put at the name is that account's: it cannot give it the owner
+    // this process's token gives what it creates, or this process's account.
+    if (entry.acl.owner != util::winacl::CurrentTokenOwner() && entry.acl.owner != util::winacl::CurrentTokenUser()) {
+        throw std::runtime_error(strprintf("Refusing to serve IPC: '%s' is not the socket this process bound: its "
+                                           "owner is %s, not this process's account",
+                                           path.string(),
+                                           entry.acl.owner ? util::winacl::FormatSid(*entry.acl.owner)
+                                                           : std::string("an owner that cannot be read")));
+    }
+
+    const AclSpec spec = ThisProcessEndpointAclSpec(IpcObject::Socket, AttachGroupSid());
+    ApplyEndpointAcl(path, spec);
+
+    // ApplyAcl went by the path; the handle holds the socket that was checked.
+    if (std::optional<std::string> reason =
+            util::winacl::CheckMatchesSpec(util::winacl::ReadAcl(handle.get(), /*kernel_object=*/false), spec)) {
+        throw std::runtime_error(EndpointAclNotKeptText(path, *reason));
+    }
+}
+
 Sid ExpectedServerSid()
 {
     const std::string account = ConfiguredOption("-ipcserviceuser");

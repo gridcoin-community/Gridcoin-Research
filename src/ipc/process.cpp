@@ -734,10 +734,11 @@ public:
                 // Same fail-closed contract as the mode set above: give the
                 // socket its access list (this account and SYSTEM, and with an
                 // attach group that group's right to connect; non-inheritable,
-                // protected, verified by read-back), and refuse to serve rather
-                // than listen unprotected if that fails.
+                // protected, verified by read-back), only once what is at the
+                // path is checked to be the socket just bound, and refuse to
+                // serve rather than listen unprotected if either fails.
                 try {
-                    win::ApplyEndpointAcl(path, win::IpcObject::Socket);
+                    win::ApplyBoundSocketAcl(path);
                 } catch (...) {
                     CloseSocket(fd);
                     throw;

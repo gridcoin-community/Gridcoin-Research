@@ -234,6 +234,16 @@ void ApplyEndpointAcl(const fs::path& path, const util::winacl::AclSpec& spec);
 //! ApplyEndpointAcl(path, ThisProcessEndpointAclSpec(obj, AttachGroupSid())).
 void ApplyEndpointAcl(const fs::path& path, IpcObject obj);
 
+//! Give the socket this process just bound at \p path its list (ApplyEndpointAcl with
+//! IpcObject::Socket), only when what is at \p path is that socket: an AF_UNIX socket, not
+//! followed, owned as this process's token makes what it creates (CurrentTokenOwner) or by this
+//! process's account. It is held without sharing delete from that check until its list is read
+//! back through the hold. In a directory another account can change, that account could
+//! otherwise have renamed the socket away between the bind and the list and put one of its own at
+//! the name. Throws std::runtime_error, worded as the refusal to serve IPC, for anything else, and
+//! std::system_error when a call fails.
+void ApplyBoundSocketAcl(const fs::path& path);
+
 //! Expected server: SID of -ipcserviceuser when set, else CurrentTokenUser().
 //! The option must pass ServiceUserNameRefusal and what it maps to
 //! ServiceUserAccountRefusal. Throws std::runtime_error naming the account when it

@@ -622,6 +622,16 @@ Sid ReadTokenUser(void* token)
     return *sid;
 }
 
+Sid ReadTokenOwner(void* token)
+{
+    const std::vector<unsigned char> buffer = QueryTokenInformation(token, TokenOwner, "TokenOwner");
+
+    std::optional<Sid> sid = SidAt(reinterpret_cast<const TOKEN_OWNER*>(buffer.data())->Owner);
+    if (!sid) ThrowWin32(ERROR_INVALID_SID, "GetTokenInformation(TokenOwner)");
+
+    return *sid;
+}
+
 std::vector<TokenGroup> ReadTokenGroups(void* token)
 {
     const std::vector<unsigned char> buffer = QueryTokenInformation(token, TokenGroups, "TokenGroups");
@@ -665,6 +675,11 @@ bool ReadTokenElevated(void* token)
 Sid CurrentTokenUser()
 {
     return ReadTokenUser(OpenOwnTokenForQuery().get());
+}
+
+Sid CurrentTokenOwner()
+{
+    return ReadTokenOwner(OpenOwnTokenForQuery().get());
 }
 
 uint32_t CurrentTokenIntegrityRid()

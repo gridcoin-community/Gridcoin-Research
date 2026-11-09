@@ -336,6 +336,10 @@ std::vector<unsigned char> QueryTokenInformation(void* token, int information_cl
 //! The SID of this process's token user. Throws std::system_error.
 Sid CurrentTokenUser();
 
+//! The owner this process's token gives what it creates (TokenOwner): its user, or for an
+//! elevated administrator by default Administrators. Throws std::system_error.
+Sid CurrentTokenOwner();
+
 //! Whether this process's token is elevated (TokenElevation). Throws std::system_error.
 bool CurrentTokenIsElevated();
 
@@ -350,6 +354,10 @@ std::vector<TokenGroup> CurrentTokenGroups();
 //! The user of the access token \p token, opened for TOKEN_QUERY (TokenUser). Throws
 //! std::system_error.
 Sid ReadTokenUser(void* token);
+
+//! The default owner of the access token \p token, opened for TOKEN_QUERY (TokenOwner).
+//! Throws std::system_error.
+Sid ReadTokenOwner(void* token);
 
 //! The groups of the access token \p token, opened for TOKEN_QUERY, in the token's order
 //! (TokenGroups). Throws std::system_error.

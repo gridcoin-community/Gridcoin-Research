@@ -969,6 +969,74 @@ BOOST_FIXTURE_TEST_CASE(win_bound_socket_passes_the_check, grc_test::StateGuard)
     BOOST_CHECK(client.fd != -1);
 }
 
+// The socket a bind made gets its list only when what is at its name is that socket: held without
+// sharing delete, so that it cannot be renamed away meanwhile, and an AF_UNIX socket this process
+// owns. A plain file at the name, or a socket another account owns, keeps the list it had.
+// Production change that would fail this: a bound socket's list set by the name alone, as
+// ApplyEndpointAcl sets it.
+BOOST_FIXTURE_TEST_CASE(win_bound_socket_list_goes_to_this_process_socket_only, grc_test::StateGuard)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
+        return;
+    }
+    gArgs.ClearForcedArg("-ipcdir");
+    gArgs.ClearForcedArg("-ipcattachgroup");
+    gArgs.ClearForcedArg("-ipcserviceuser");
+
+    WinTempDir dir;
+    const fs::path ipcdir = dir.path / "ipc";
+    std::string address = "unix";
+    SocketCloser server{ipc::MakeProcess()->bind(ipcdir, address)};
+    BOOST_REQUIRE(server.fd != -1);
+    const fs::path socket = ipcdir / "node.sock";
+    const AclSpec spec = ThisProcessEndpointAclSpec(IpcObject::Socket, std::nullopt);
+    BOOST_CHECK(!CheckMatchesSpec(ReadAcl(socket), spec));
+    BOOST_CHECK_NO_THROW(ApplyBoundSocketAcl(socket));
+
+    // What the hold relies on: while a handle on the socket that asks for a data right and does
+    // not share delete is open, the socket cannot be renamed. Without the data right Windows does
+    // not check the sharing, and it can.
+    for (const bool data : {true, false}) {
+        const HANDLE held = ::CreateFileW(socket.wstring().c_str(),
+                                          READ_CONTROL | FILE_READ_ATTRIBUTES | (data ? FILE_READ_DATA : 0),
+                                          FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                                          FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+        BOOST_REQUIRE(held != INVALID_HANDLE_VALUE);
+        const UniqueHandle guard(held);
+        const fs::path moved = ipcdir / "moved.sock";
+        const bool renamed = ::MoveFileExW(socket.wstring().c_str(), moved.wstring().c_str(), 0);
+        const DWORD error = ::GetLastError();
+        if (renamed) ::MoveFileExW(moved.wstring().c_str(), socket.wstring().c_str(), 0);
+        BOOST_CHECK_EQUAL(renamed, !data);
+        if (data) BOOST_CHECK_EQUAL(error, static_cast<DWORD>(ERROR_SHARING_VIOLATION));
+    }
+
+    const fs::path plain = ipcdir / "plain.sock";
+    WriteFile(plain);
+    const ObservedAcl plain_before = ReadAcl(plain);
+    CheckRefusedByRule([&] { ApplyBoundSocketAcl(plain); }, "not an AF_UNIX socket");
+    BOOST_CHECK(grc_test::SameAcl(ReadAcl(plain), plain_before));
+
+    // A socket another account owns, here one this case binds and gives to LocalService, which
+    // needs SeRestorePrivilege.
+    if (grc_test::TokenPrivilegeState(SE_RESTORE_NAME) != grc_test::PrivilegeState::Enabled) {
+        BOOST_TEST_MESSAGE("SeRestorePrivilege is not enabled in this token, so no socket of another account's can be "
+                           "made; that refusal is not checked");
+        return;
+    }
+    const fs::path other_socket = ipcdir / "other.sock";
+    std::string other_address = "unix:" + other_socket.string();
+    SocketCloser other{ipc::MakeProcess()->bind(ipcdir, other_address)};
+    BOOST_REQUIRE(other.fd != -1);
+    AclSpec foreign = spec;
+    foreign.owner = *ParseSidString("S-1-5-19");
+    ApplyAcl(other_socket, foreign);
+    const ObservedAcl other_before = ReadAcl(other_socket);
+    CheckRefusedByRule([&] { ApplyBoundSocketAcl(other_socket); }, "owner");
+    BOOST_CHECK(grc_test::SameAcl(ReadAcl(other_socket), other_before));
+}
+
 // The socket's path reaches afunix as UTF-8: ParseAddress (ipc/process.cpp) fills sun_path
 // from path.string(). A data directory under a profile with a non-ASCII name puts such bytes
 // there. The bind and the connect must use the directory under its intended name, which they
