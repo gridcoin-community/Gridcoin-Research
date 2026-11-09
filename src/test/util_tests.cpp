@@ -1158,6 +1158,27 @@ BOOST_AUTO_TEST_CASE(test_ToUpper)
     BOOST_CHECK_EQUAL(ToUpper("\x00\xfe\xff"), "\x00\xfe\xff");
 }
 
+// Every byte: only the ASCII letters change, whether char is signed or not. Keys and labels are
+// folded with these, so the result must not depend on the platform's char.
+BOOST_AUTO_TEST_CASE(test_ToLower_ToUpper_every_byte)
+{
+    std::string all;
+    std::string all_lower;
+    std::string all_upper;
+    for (int b = 0; b < 256; ++b) {
+        const char c = static_cast<char>(b);
+        const char lower = (b >= 'A' && b <= 'Z') ? static_cast<char>(b + ('a' - 'A')) : c;
+        const char upper = (b >= 'a' && b <= 'z') ? static_cast<char>(b - ('a' - 'A')) : c;
+        BOOST_CHECK_EQUAL(ToLower(c), lower);
+        BOOST_CHECK_EQUAL(ToUpper(c), upper);
+        all += c;
+        all_lower += lower;
+        all_upper += upper;
+    }
+    BOOST_CHECK(ToLower(all) == all_lower);
+    BOOST_CHECK(ToUpper(all) == all_upper);
+}
+
 BOOST_AUTO_TEST_CASE(test_Capitalize)
 {
     BOOST_CHECK_EQUAL(Capitalize(""), "");
