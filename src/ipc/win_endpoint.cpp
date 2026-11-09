@@ -330,7 +330,11 @@ using util::winacl::UniqueHandle;
 HANDLE OpenNoFollow(const fs::path& path, bool share_delete)
 {
     const DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | (share_delete ? FILE_SHARE_DELETE : 0);
-    const HANDLE handle = ::CreateFileW(path.wstring().c_str(), READ_CONTROL | FILE_READ_ATTRIBUTES, share, nullptr,
+    // A hold that does not share delete also asks for FILE_READ_DATA (FILE_LIST_DIRECTORY on a
+    // directory): Windows checks an open's sharing only against opens that ask for data, execute
+    // or delete rights, so one that asks only for the attributes and the list keeps nothing in place.
+    const DWORD access = READ_CONTROL | FILE_READ_ATTRIBUTES | (share_delete ? 0 : FILE_READ_DATA);
+    const HANDLE handle = ::CreateFileW(path.wstring().c_str(), access, share, nullptr,
                                         OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
                                         nullptr);
     if (handle == INVALID_HANDLE_VALUE) {

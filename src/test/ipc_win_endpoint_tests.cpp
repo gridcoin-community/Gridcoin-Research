@@ -948,6 +948,22 @@ BOOST_FIXTURE_TEST_CASE(win_bound_socket_passes_the_check, grc_test::StateGuard)
     ApplyEndpointAcl(socket, EndpointAclSpec(IpcObject::Socket, self, wellknown::Users()));
     BOOST_CHECK_EQUAL(CheckServerEndpointBeforeConnect(socket, self).size(), 2U);
 
+    // While held, neither the directory nor its parent can be renamed, so the path the connect goes
+    // through names what was checked. Production change that would fail this: a hold that asks for
+    // no data right, whose sharing Windows does not check.
+    {
+        const EndpointHold hold = CheckServerEndpointBeforeConnect(socket, self);
+        BOOST_REQUIRE_EQUAL(hold.size(), 2U);
+        for (const fs::path& held : {ipcdir, dir.path}) {
+            const fs::path moved = held.wstring() + L".moved";
+            const bool renamed = ::MoveFileExW(held.wstring().c_str(), moved.wstring().c_str(), 0);
+            const DWORD error = ::GetLastError();
+            if (renamed) ::MoveFileExW(moved.wstring().c_str(), held.wstring().c_str(), 0);
+            BOOST_CHECK_MESSAGE(!renamed, held.string() << " was renamed while it was held");
+            BOOST_TEST_MESSAGE("renaming " << held.string() << ": error " << error);
+        }
+    }
+
     std::string client_address = "unix";
     SocketCloser client{ipc::MakeProcess()->connect(ipcdir, client_address)};
     BOOST_CHECK(client.fd != -1);
