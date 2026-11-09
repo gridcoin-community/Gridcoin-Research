@@ -26,6 +26,12 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <stdio.h>
+#endif
+#ifdef __linux__
+#include <sys/syscall.h>
+#endif
 #endif
 
 namespace util {
@@ -55,6 +61,53 @@ void SyncDirectory(const fs::path& dir)
     (void)::fsync(fd);
     ::close(fd);
 }
+
+//! An errno from link() that says the filesystem keeps no hard links (FAT, a share that refuses
+//! them), rather than that the link was refused.
+bool NoHardLinks(int err)
+{
+    switch (err) {
+    case EPERM:
+    case ENOSYS:
+    case ENOTSUP:
+#if defined(EOPNOTSUPP) && EOPNOTSUPP != ENOTSUP
+    case EOPNOTSUPP:
+#endif
+        return true;
+    default:
+        return false;
+    }
+}
+
+//! Renames \p from to \p to only when nothing is at \p to. Returns 0, EEXIST when the name is taken,
+//! or another errno. Linux renames with RENAME_NOREPLACE and macOS with RENAME_EXCL. Where the
+//! filesystem does not take that flag, and on other systems, the file is linked in at \p to and its
+//! old name removed: a link refuses a taken name too. On a filesystem that keeps no hard links the
+//! name is checked just before a plain rename, so a name made between the two is replaced; that
+//! is the one gap left.
+int RenameNoReplace(const fs::path& from, const fs::path& to)
+{
+#if defined(__linux__) && defined(SYS_renameat2)
+    // RENAME_NOREPLACE in <linux/fs.h>, which clashes with the C library's headers.
+    constexpr unsigned int RENAME_NOREPLACE_FLAG{1};
+    if (::syscall(SYS_renameat2, AT_FDCWD, from.c_str(), AT_FDCWD, to.c_str(), RENAME_NOREPLACE_FLAG) == 0) return 0;
+    if (errno != EINVAL && errno != ENOSYS) return errno;
+#elif defined(__APPLE__)
+    if (::renamex_np(from.c_str(), to.c_str(), RENAME_EXCL) == 0) return 0;
+    if (errno != ENOTSUP && errno != EINVAL) return errno;
+#endif
+    if (::link(from.c_str(), to.c_str()) == 0) {
+        // The file is in place under both names; the old one goes.
+        (void)::unlink(from.c_str());
+        return 0;
+    }
+    if (!NoHardLinks(errno)) return errno;
+
+    struct stat st;
+    if (::lstat(to.c_str(), &st) == 0) return EEXIST;
+    if (errno != ENOENT) return errno;
+    return ::rename(from.c_str(), to.c_str()) == 0 ? 0 : errno;
+}
 #endif
 
 } // namespace
@@ -76,6 +129,13 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
     f.m_dest = dest;
     f.m_temp = temp;
 
+    // A destination that is there now may be replaced at the commit: the user chose it. One that is
+    // not is never replaced, also by a file that appears at its name while the data arrives. A name
+    // that cannot be examined is taken to be there. (symlink_status sets ENOENT for a name that is
+    // not there, so the type tells it, not the error.)
+    boost::system::error_code status_error;
+    f.m_replace = fs::symlink_status(dest, status_error).type() != fs::file_not_found;
+
 #ifdef WIN32
     // Owner-only from creation: the list is given to CreateFileW, so the file never exists
     // with the list it would inherit, and it is read back through the handle, because a
@@ -93,7 +153,7 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
     sa.lpSecurityDescriptor = sd.get();
     sa.bInheritHandle = FALSE;
 
-    // WRITE_DAC lets KeepPermissions give the file the access list of the destination it will replace.
+    // WRITE_DAC lets Commit() give the file the access list of the destination it will replace.
     HANDLE h = ::CreateFileW(temp.c_str(), GENERIC_WRITE | READ_CONTROL | WRITE_DAC, 0, &sa, CREATE_NEW,
                              FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
 
@@ -116,9 +176,6 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
         error = strprintf("cannot restrict temporary file %s: %s", temp.string(), AsciiWhat(e));
         return std::nullopt;
     }
-
-    // A destination that exists keeps its permissions when the temporary file replaces it.
-    const fsmodes::KeepResult kept = fsmodes::KeepPermissions(dest, f.m_handle);
 #else
     // O_EXCL refuses any existing name and O_NOFOLLOW refuses a symlink in the last
     // component, so a name planted ahead of time is never written through.
@@ -137,15 +194,7 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
         error = strprintf("cannot restrict temporary file %s: %s", temp.string(), SysErrorString(errno));
         return std::nullopt;
     }
-
-    // A destination that exists keeps its permissions when the temporary file replaces it.
-    const fsmodes::KeepResult kept = fsmodes::KeepPermissions(dest, fd);
 #endif
-
-    if (kept.kind == fsmodes::KeepResult::Kind::NotKept) {
-        LogPrintf("WARNING: the permissions of %s could not be kept on the file that replaces it (%s)",
-                  dest.string(), kept.error);
-    }
 
     return std::optional<TransferTempFile>(std::move(f));
 }
@@ -175,6 +224,7 @@ void TransferTempFile::MoveFrom(TransferTempFile& other) noexcept
     m_dest = std::move(other.m_dest);
     m_temp = std::move(other.m_temp);
     m_active = other.m_active;
+    m_replace = other.m_replace;
     m_remove_failed = other.m_remove_failed;
     m_hasher = other.m_hasher;
     m_size = other.m_size;
@@ -313,6 +363,24 @@ bool TransferTempFile::Commit(uint64_t expected_size, const uint256& expected_sh
     }
 #endif
 
+    // A destination that exists keeps its permissions when the temporary file replaces it. They go
+    // on the file only now, so it is owner-only while it fills, and only from this account's own
+    // file: another account's says nothing of what this one wants.
+    if (m_replace) {
+#ifdef WIN32
+        const fsmodes::KeepResult kept = fsmodes::KeepPermissions(m_dest, m_handle, /*own_only=*/true);
+#else
+        const fsmodes::KeepResult kept = fsmodes::KeepPermissions(m_dest, m_fd, /*own_only=*/true);
+#endif
+        if (kept.kind == fsmodes::KeepResult::Kind::NotKept) {
+            LogPrintf("WARNING: the permissions of %s could not be kept on the file that replaces it (%s)",
+                      m_dest.string(), kept.error);
+        } else if (kept.kind == fsmodes::KeepResult::Kind::NotOurs) {
+            LogPrintf("WARNING: %s belongs to another account, so the file that replaces it is owner-only",
+                      m_dest.string());
+        }
+    }
+
     CloseHandle();
 
     if (m_size != expected_size) {
@@ -329,18 +397,30 @@ bool TransferTempFile::Commit(uint64_t expected_size, const uint256& expected_sh
         return false;
     }
 
+    const std::string appeared =
+        strprintf("%s appeared while the file was being received, and was not replaced", m_dest.string());
 #ifdef WIN32
-    if (!::MoveFileExW(m_temp.c_str(), m_dest.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+    const DWORD move_flags = MOVEFILE_WRITE_THROUGH | (m_replace ? MOVEFILE_REPLACE_EXISTING : 0);
+    if (!::MoveFileExW(m_temp.c_str(), m_dest.c_str(), move_flags)) {
         const DWORD last_error = ::GetLastError();
-        error = strprintf("cannot rename %s over %s (error %u)", m_temp.string(), m_dest.string(),
-                          static_cast<unsigned>(last_error));
+        if (!m_replace && (last_error == ERROR_ALREADY_EXISTS || last_error == ERROR_FILE_EXISTS)) {
+            error = appeared;
+        } else {
+            error = strprintf("cannot rename %s over %s (error %u)", m_temp.string(), m_dest.string(),
+                              static_cast<unsigned>(last_error));
+        }
         Abort();
         AppendRemoveNote(error);
         return false;
     }
 #else
-    if (::rename(m_temp.c_str(), m_dest.c_str()) != 0) {
-        error = strprintf("cannot rename %s over %s: %s", m_temp.string(), m_dest.string(), SysErrorString(errno));
+    const int rename_error = m_replace ? (::rename(m_temp.c_str(), m_dest.c_str()) == 0 ? 0 : errno)
+                                       : RenameNoReplace(m_temp, m_dest);
+    if (rename_error != 0) {
+        error = rename_error == EEXIST && !m_replace
+                    ? appeared
+                    : strprintf("cannot rename %s over %s: %s", m_temp.string(), m_dest.string(),
+                                SysErrorString(rename_error));
         Abort();
         AppendRemoveNote(error);
         return false;

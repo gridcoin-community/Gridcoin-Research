@@ -177,6 +177,96 @@ BOOST_AUTO_TEST_CASE(commit_over_an_existing_destination_keeps_its_permissions)
 #endif
 }
 
+// While it is written the temporary file is owner-only, also when the destination it will replace
+// is wider: the destination's permissions are put on it only at the commit. Production change that
+// would fail this: CreateAt() carrying the destination's permissions onto the temporary file.
+BOOST_AUTO_TEST_CASE(the_part_file_stays_owner_only_until_the_commit)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
+    std::string err;
+    const fs::path dest = dir / "existing.bin";
+    const fs::path temp = dir / "existing.bin.0011223344556677.part";
+#ifndef WIN32
+    WriteAll(dest, "old");
+    BOOST_REQUIRE_EQUAL(::chmod(dest.c_str(), 0640), 0);
+#else
+    util::winacl::AclSpec spec = util::OwnerOnlyAclSpec(/*inheritable=*/false);
+    spec.aces.push_back({util::winacl::wellknown::Users(), FILE_GENERIC_READ, util::winacl::Inherit::None});
+    grc_test::CreateFileWithAcl(dest, spec, "old");
+#endif
+
+    auto t = util::TransferTempFile::CreateAt(dest, temp, err);
+    BOOST_REQUIRE_MESSAGE(t, err);
+    BOOST_REQUIRE(t->Write(reinterpret_cast<const unsigned char*>(kBytes.data()), kBytes.size(), err));
+#ifndef WIN32
+    BOOST_CHECK_EQUAL(ModeOf(temp), 0600u);
+#else
+    const std::optional<std::string> reason = util::winacl::CheckMatchesSpec(
+        util::winacl::ReadAcl(temp), util::OwnerOnlyAclSpec(/*inheritable=*/false));
+    BOOST_CHECK_MESSAGE(!reason, reason.value_or(""));
+#endif
+
+    BOOST_REQUIRE_MESSAGE(t->Commit(kBytes.size(), Sha256Of(kBytes), err), err);
+    BOOST_CHECK_EQUAL(ReadAll(dest), kBytes);
+#ifndef WIN32
+    BOOST_CHECK_EQUAL(ModeOf(dest), 0640u);
+#endif
+}
+
+#ifndef WIN32
+// A destination that another account owns lends the file that replaces it nothing: what that
+// account chose says nothing of what this one wants, so the new file is owner-only. Only root can
+// make such a file here; the CI containers run as root. Production change that would fail this: a
+// Commit() that carries the destination's mode without own_only.
+BOOST_AUTO_TEST_CASE(another_accounts_destination_lends_no_permissions)
+{
+    if (::geteuid() != 0) {
+        BOOST_TEST_MESSAGE("only root can give the destination another owner; skipping");
+        return;
+    }
+    std::string err;
+    const fs::path dest = dir / "theirs.bin";
+    WriteAll(dest, "old");
+    BOOST_REQUIRE_EQUAL(::chmod(dest.c_str(), 0644), 0);
+    // Any uid but root's will do; 65534 is nobody on Linux.
+    BOOST_REQUIRE_EQUAL(::chown(dest.c_str(), 65534, static_cast<gid_t>(-1)), 0);
+
+    auto t = util::TransferTempFile::Create(dest, err);
+    BOOST_REQUIRE_MESSAGE(t, err);
+    BOOST_REQUIRE(t->Write(reinterpret_cast<const unsigned char*>(kBytes.data()), kBytes.size(), err));
+    BOOST_REQUIRE_MESSAGE(t->Commit(kBytes.size(), Sha256Of(kBytes), err), err);
+
+    BOOST_CHECK_EQUAL(ReadAll(dest), kBytes);
+    BOOST_CHECK_EQUAL(ModeOf(dest), 0600u);
+}
+#endif
+
+// A destination that did not exist when the transfer began is never replaced: a file that appears
+// at its name while the data arrives is left as it is, and the transfer fails. Production change
+// that would fail this: a Commit() that renames over whatever is at the name.
+BOOST_AUTO_TEST_CASE(a_destination_that_appears_during_the_transfer_is_not_replaced)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
+    std::string err;
+    const fs::path dest = dir / "new.bin";
+
+    auto t = util::TransferTempFile::Create(dest, err);
+    BOOST_REQUIRE_MESSAGE(t, err);
+    BOOST_REQUIRE(t->Write(reinterpret_cast<const unsigned char*>(kBytes.data()), kBytes.size(), err));
+    WriteAll(dest, "theirs");
+
+    BOOST_CHECK(!t->Commit(kBytes.size(), Sha256Of(kBytes), err));
+    BOOST_CHECK_MESSAGE(err.find("appeared") != std::string::npos, err);
+    BOOST_CHECK_EQUAL(ReadAll(dest), "theirs");
+    BOOST_CHECK_EQUAL(CountPartFiles(dir), 0u);
+}
+
 BOOST_AUTO_TEST_CASE(commit_refuses_size_or_hash_mismatch)
 {
     if (grc_test::RunningUnderWine()) {

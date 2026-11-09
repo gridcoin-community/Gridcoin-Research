@@ -765,7 +765,7 @@ std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::option
     return file;
 }
 
-KeepResult KeepPermissions(const fs::path& existing, int fd)
+KeepResult KeepPermissions(const fs::path& existing, int fd, bool own_only)
 {
     KeepResult result;
 
@@ -783,6 +783,11 @@ KeepResult KeepPermissions(const fs::path& existing, int fd)
     // A link has no permissions of its own, and the file that replaces it is not the file it
     // leads to, so the new file stays as created.
     if (S_ISLNK(old_st.st_mode)) return result;
+
+    if (own_only && old_st.st_uid != ::geteuid()) {
+        result.kind = KeepResult::Kind::NotOurs;
+        return result;
+    }
 
     struct stat new_st;
     if (::fstat(fd, &new_st) != 0) {
@@ -1476,7 +1481,7 @@ std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::option
     return file;
 }
 
-KeepResult KeepPermissions(const fs::path& existing, void* handle)
+KeepResult KeepPermissions(const fs::path& existing, void* handle, bool own_only)
 {
     KeepResult result;
 
@@ -1493,6 +1498,12 @@ KeepResult KeepPermissions(const fs::path& existing, void* handle)
     }
 
     try {
+        // The owner is read through the same handle as the list that would be copied.
+        if (own_only && util::winacl::ReadAcl(old.get(), /*kernel_object=*/false).owner !=
+                            util::winacl::CurrentTokenUser()) {
+            result.kind = KeepResult::Kind::NotOurs;
+            return result;
+        }
         util::winacl::CopyDacl(old.get(), handle);
         result.kind = KeepResult::Kind::Kept;
     } catch (const std::system_error& e) {
@@ -1575,6 +1586,9 @@ std::FILE* CreateReplacementFile(const fs::path& target, const fs::path& temp, s
     case KeepResult::Kind::NotKept:
         warning = strprintf("the permissions of %s could not be kept on %s (%s)", target.string(), temp.string(),
                             kept.error);
+        break;
+    case KeepResult::Kind::NotOurs:
+        // Not asked for here: every account's file lends its permissions.
         break;
     }
 

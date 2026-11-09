@@ -36,6 +36,7 @@
 #include "test/win_fs_util.h"
 #include "test/wine.h"
 
+#include <io.h>
 #include <windows.h>
 #endif
 
@@ -1280,6 +1281,39 @@ BOOST_AUTO_TEST_CASE(keep_permissions_copies_only_the_permission_bits)
     BOOST_CHECK_EQUAL(ModeOf(temp2), 0600U);
 }
 
+// Asked for this account's files only, KeepPermissions does not carry the mode of a file another
+// account owns: the new file stays owner-only, and the result says why. This account's own file
+// still lends its mode. Production change that would fail this: a KeepPermissions that does not
+// compare the old file's owner with the effective user.
+BOOST_AUTO_TEST_CASE(keep_permissions_own_only_skips_another_accounts_file)
+{
+    if (::geteuid() == 0) {
+        BOOST_TEST_MESSAGE("run as root, which owns the system's files too; skipping");
+        return;
+    }
+    const ScratchDir scratch;
+    const UmaskGuard permissive(0);
+
+    // A file every system has, which another account (root) owns and others may read.
+    const fs::path foreign = "/etc/passwd";
+    struct stat foreign_st;
+    BOOST_REQUIRE_EQUAL(::lstat(foreign.c_str(), &foreign_st), 0);
+    BOOST_REQUIRE(foreign_st.st_uid != ::geteuid());
+
+    const fs::path temp = scratch.m_path / "new.tmp";
+    MakeFile(temp, 0600);
+    const int fd = ::open(temp.c_str(), O_RDWR | O_CLOEXEC);
+    BOOST_REQUIRE(fd >= 0);
+    BOOST_CHECK(fsmodes::KeepPermissions(foreign, fd, /*own_only=*/true).kind == fsmodes::KeepResult::Kind::NotOurs);
+    BOOST_CHECK_EQUAL(ModeOf(temp), 0600U);
+
+    const fs::path own = scratch.m_path / "own";
+    MakeFile(own, 0640);
+    BOOST_CHECK(fsmodes::KeepPermissions(own, fd, /*own_only=*/true).kind == fsmodes::KeepResult::Kind::Kept);
+    BOOST_CHECK_EQUAL(ModeOf(temp), 0640U);
+    BOOST_CHECK_EQUAL(::close(fd), 0);
+}
+
 // With nothing at the old name the temporary file stays as created, 0600 whatever the umask.
 BOOST_AUTO_TEST_CASE(keep_permissions_with_no_old_file_leaves_the_temp_file_owner_only)
 {
@@ -1525,6 +1559,36 @@ BOOST_AUTO_TEST_CASE(keep_permissions_carries_the_users_entry_and_protection)
 
     // The old file is not changed.
     BOOST_CHECK(grc_test::SameAcl(ReadAcl(old_file), before));
+}
+
+// Asked for this account's files only, KeepPermissions does not carry the access list of a file
+// another account owns (the system's hosts file): the new file keeps its owner-only list.
+// Production change that would fail this: a KeepPermissions that does not compare the old file's
+// owner with the token user.
+BOOST_AUTO_TEST_CASE(keep_permissions_own_only_skips_another_accounts_file)
+{
+    if (SkipUnderWine()) return;
+
+    wchar_t system_dir[MAX_PATH];
+    const UINT length = ::GetSystemDirectoryW(system_dir, MAX_PATH);
+    BOOST_REQUIRE(length > 0 && length < MAX_PATH);
+    const fs::path foreign = fs::path(std::wstring(system_dir, length)) / "drivers" / "etc" / "hosts";
+    BOOST_REQUIRE(ReadAcl(foreign).owner != CurrentTokenUser());
+
+    const WinTempDir dir;
+    const fs::path temp = dir.path / "new.tmp";
+    bool taken = false;
+    std::optional<std::string> not_owner_only;
+    std::string error;
+    std::FILE* file = fsmodes::CreateNewOwnerOnlyFile(temp, taken, not_owner_only, error);
+    BOOST_REQUIRE_MESSAGE(file, error);
+    const ObservedAcl before = ReadAcl(temp);
+
+    void* const handle = reinterpret_cast<void*>(::_get_osfhandle(::_fileno(file)));
+    BOOST_CHECK(fsmodes::KeepPermissions(foreign, handle, /*own_only=*/true).kind ==
+                fsmodes::KeepResult::Kind::NotOurs);
+    BOOST_CHECK_EQUAL(std::fclose(file), 0);
+    BOOST_CHECK(grc_test::SameAcl(ReadAcl(temp), before));
 }
 
 // A list that was not protected stays unprotected, and its explicit entries stay.

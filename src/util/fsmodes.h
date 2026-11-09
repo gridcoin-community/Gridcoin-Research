@@ -319,6 +319,9 @@ struct KeepResult
         //! The old file exists but its permissions could not be read or put on the new file (\p error
         //! says why). The new file stays as it was created, owner-only.
         NotKept,
+        //! Asked for this account's files only: the old file is another account's, whose permissions
+        //! say nothing of what this account wants. The new file stays as it was created, owner-only.
+        NotOurs,
     };
 
     Kind kind{Kind::NoOldFile};
@@ -351,11 +354,15 @@ KeepResult KeepPermissions(const fs::path& existing, std::FILE* temp);
 KeepResult KeepPermissions(const fs::path& existing, const fs::path& temp);
 
 #ifndef WIN32
-//! The same on an open file descriptor, for a caller that holds one and no FILE*.
-KeepResult KeepPermissions(const fs::path& existing, int fd);
+//! The same on an open file descriptor, for a caller that holds one and no FILE*. With \p own_only,
+//! the permissions of an old file this process's effective user does not own are not carried
+//! (NotOurs), as compared on the same lstat that reads them.
+KeepResult KeepPermissions(const fs::path& existing, int fd, bool own_only = false);
 #else
-//! The same on a handle opened with WRITE_DAC.
-KeepResult KeepPermissions(const fs::path& existing, void* handle);
+//! The same on a handle opened with WRITE_DAC. With \p own_only, the access list of an old file whose
+//! owner, read through the same handle as its list, is not this process's token user is not
+//! carried (NotOurs).
+KeepResult KeepPermissions(const fs::path& existing, void* handle, bool own_only = false);
 #endif
 
 //! Creates \p temp, a file that will replace \p target, and returns it open for writing, or

@@ -21,7 +21,8 @@ namespace util {
 //! replaces the destination only when the size and SHA-256 given at the end match
 //! what was written. On every other path the temporary file is removed and the
 //! destination is left as it was. Nothing is held in memory beyond the caller's
-//! current buffer.
+//! current buffer. A destination that is not there when the transfer begins is never
+//! replaced; one that is there keeps its permissions when it is this account's file.
 class TransferTempFile
 {
 public:
@@ -52,9 +53,12 @@ public:
     //! SHA-256 of the bytes written so far.
     uint256 Sha256() const;
 
-    //! fsync and close, then refuse (removing the temporary file) unless Size() equals
-    //! expected_size and Sha256() equals expected_sha256, then rename over the
-    //! destination. A failed rename removes the temporary file.
+    //! fsync, give the temporary file the permissions of a destination that was there when
+    //! the transfer began, if this account owns it (fsmodes::KeepPermissions with own_only),
+    //! and close; then refuse (removing the temporary file) unless Size() equals
+    //! expected_size and Sha256() equals expected_sha256; then rename over the destination,
+    //! or, for a destination that was not there, onto its name only while that is still
+    //! free. A failed rename removes the temporary file.
     bool Commit(uint64_t expected_size, const uint256& expected_sha256, std::string& error);
 
     //! Close and remove the temporary file. Idempotent.
@@ -81,6 +85,8 @@ private:
     int m_fd{-1};
 #endif
     bool m_active{false};
+    //! The destination was there when the transfer began, so the commit may replace it.
+    bool m_replace{false};
     bool m_remove_failed{false};
     CSHA256 m_hasher;
     uint64_t m_size{0};
