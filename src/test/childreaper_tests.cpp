@@ -186,10 +186,32 @@ BOOST_AUTO_TEST_CASE(stop_without_start_and_repeated_calls_are_safe)
 
 BOOST_AUTO_TEST_CASE(orphans_are_reaped)
 {
+    ChildCleanup cleanup;
     if (!CanBeSubreaper()) {
         BOOST_TEST_MESSAGE("this process cannot be made a child subreaper (older qemu-user); skipping");
         return;
     }
+
+    // A child of this process's own that runs on, as one another suite started may: it is no
+    // orphan, and the case is about the orphan alone.
+    const pid_t own = fork();
+    BOOST_REQUIRE(own != -1);
+    if (own == 0) {
+        execl("/bin/sleep", "sleep", "60", static_cast<char*>(nullptr));
+        _exit(127);
+    }
+
+    // Compared with the children present now, as above, so that one another suite left does not
+    // matter.
+    const std::vector<long> baseline = ChildPids();
+    const auto new_children = [&baseline] {
+        std::vector<long> added;
+        for (const long pid : ChildPids()) {
+            if (std::find(baseline.begin(), baseline.end(), pid) == baseline.end()) added.push_back(pid);
+        }
+        return added;
+    };
+
     ReaperGuard guard;
     BOOST_REQUIRE(guard.SubreaperSet());
 
@@ -201,12 +223,12 @@ BOOST_AUTO_TEST_CASE(orphans_are_reaped)
     // Give the sleep time to end and the reaper time to run, bounded for a loaded machine.
     std::this_thread::sleep_for(std::chrono::seconds(1));
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
-    while (!ChildPids().empty() && std::chrono::steady_clock::now() < deadline) {
+    while (!new_children().empty() && std::chrono::steady_clock::now() < deadline) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
     BOOST_CHECK(!AnyZombieChild());
-    BOOST_CHECK(ChildPids().empty());
+    BOOST_CHECK(new_children().empty());
 }
 
 BOOST_AUTO_TEST_CASE(spawned_status_not_stolen)

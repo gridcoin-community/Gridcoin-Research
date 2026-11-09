@@ -4,6 +4,7 @@
 
 #include "crypto/sha256.h"
 #include "fs.h"
+#include "random.h"
 #include "univalue.h"
 #include "util/strencodings.h"
 #include "util/system.h"
@@ -95,18 +96,13 @@ std::string Sha256Hex(const std::string& data)
     return HexStr(hash);
 }
 
-//! \p size bytes that are not all alike, so a copy that drops or moves a block shows.
+//! \p size bytes that are not all alike, so a copy that drops or moves a block shows. The same
+//! bytes every run.
 std::string Pattern(size_t size)
 {
-    std::string data(size, '\0');
-    uint32_t x = 2463534242U;
-    for (char& c : data) {
-        x ^= x << 13;
-        x ^= x >> 17;
-        x ^= x << 5;
-        c = static_cast<char>(x & 0xff);
-    }
-    return data;
+    FastRandomContext rng(/*fDeterministic=*/true);
+    const std::vector<unsigned char> bytes = rng.randbytes(size);
+    return std::string(bytes.begin(), bytes.end());
 }
 
 //! Every entry below \p root, by its relative path in generic form, as "dir", "file:<sha256>",
