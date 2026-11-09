@@ -6,12 +6,15 @@
 .DESCRIPTION
     The installer runs, elevated and in 64-bit Windows PowerShell, in this order:
 
-      HardenInstallDir  before any file is replaced, for an install directory outside Program
-                        Files: gives it the owner Administrators and a protected access list
-                        (Administrators and SYSTEM full control, Users read and execute), so that
-                        only administrators can change the programs in it. Refuses a directory
-                        that another account owns, a link, a drive, a network path, and an
-                        existing directory with other files than an earlier install.
+      HardenInstallDir  before any file is replaced: gives the install directory the owner
+                        Administrators and a protected access list (Administrators and SYSTEM full
+                        control, Users read and execute), so that only administrators can change
+                        the programs in it. A directory under Program Files keeps the list Program
+                        Files passes down when that already does so. Refuses a directory that
+                        another account owns, a link, a drive, a network path, a folder above it
+                        that another account can change, and an existing directory with other
+                        files than an earlier install, or with an entry an earlier install left
+                        that is a link or a junction, or that another account owns or can change.
       StopCore          before any file is replaced: stops each Gridcoin service that runs, then the
                         core of the \Gridcoin\Core-Start task (gracefully, through Core-Stop), and
                         refuses while a core started by hand from <InstallDir>\daemon still runs.
@@ -299,13 +302,36 @@ function Stop-GridcoinCore {
 }
 
 # HardenInstallDir.
+# The first entry below the directory $Dir that keeps it from being the administrators' alone, or
+# $null: a link or a junction, which is never followed, and with -All also an entry that another
+# account owns or can change.
+function Get-GridcoinInstallTreeOffender {
+    param(
+        [Parameter(Mandatory = $true)][string]$Dir,
+        [switch]$All
+    )
+    $allowed = Get-GridcoinPrivilegedSids
+    $pending = New-Object System.Collections.Generic.Stack[string]
+    $pending.Push($Dir)
+    while ($pending.Count -gt 0) {
+        foreach ($item in @(Get-ChildItem -LiteralPath $pending.Pop() -Force)) {
+            if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                return "'$($item.FullName)' is a link or a junction"
+            }
+            if ($All) {
+                $offender = Get-GridcoinWriteVector -Path $item.FullName -AllowedSids $allowed
+                if ($offender) { return $offender }
+            }
+            if ($item.PSIsContainer) { $pending.Push($item.FullName) }
+        }
+    }
+    return $null
+}
+
 function Set-GridcoinInstallDirAcl {
     $programFiles = [Environment]::GetFolderPath('ProgramFiles').TrimEnd('\')
-    if ($script:InstallRoot -ieq $programFiles -or
-        $script:InstallRoot.StartsWith($programFiles + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
-        Write-Host "$script:InstallRoot is under $programFiles, whose access list keeps it for administrators."
-        return
-    }
+    $underProgramFiles = $script:InstallRoot -ieq $programFiles -or
+        $script:InstallRoot.StartsWith($programFiles + '\', [System.StringComparison]::OrdinalIgnoreCase)
     $fullPath = [System.IO.Path]::GetFullPath($InstallDir)
     $root = [System.IO.Path]::GetPathRoot($fullPath)
     if ($fullPath.StartsWith('\\') -or $fullPath.TrimEnd('\') -ieq $root.TrimEnd('\')) {
@@ -333,7 +359,8 @@ function Set-GridcoinInstallDirAcl {
     $security = New-Object System.Security.AccessControl.DirectorySecurity
     $security.SetSecurityDescriptorSddlForm($script:InstallDirSddl, [System.Security.AccessControl.AccessControlSections]'Owner, Access')
 
-    if (Test-Path -LiteralPath $script:InstallRoot) {
+    $existed = Test-Path -LiteralPath $script:InstallRoot
+    if ($existed) {
         $item = Get-Item -LiteralPath $script:InstallRoot -Force
         if (-not $item.PSIsContainer) { throw "$script:InstallRoot is a file, not a directory." }
         if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
@@ -353,17 +380,44 @@ function Set-GridcoinInstallDirAcl {
         if ($entries.Count -gt 0 -and -not $earlier) {
             throw "$script:InstallRoot already holds other files. Choose an empty or a new directory, or the directory of an earlier Gridcoin install."
         }
+        # Before the list is set, as setting it reaches every entry below that inherits.
+        $link = Get-GridcoinInstallTreeOffender -Dir $script:InstallRoot
+        if ($link) {
+            throw "$script:InstallRoot holds a link or a junction: $link. Remove it, then run the installer again."
+        }
+    }
+
+    # Under Program Files the list Program Files passes down keeps the directory for administrators,
+    # and is left as it is while it does.
+    $keepInherited = $underProgramFiles -and
+        (-not $existed -or -not (Get-GridcoinWriteVector -Path $script:InstallRoot -AllowedSids (Get-GridcoinPrivilegedSids)))
+    if ($keepInherited) {
+        Write-Host "$script:InstallRoot is under $programFiles, whose access list keeps it for administrators."
+    } elseif ($existed) {
         $item.SetAccessControl($security)
         Write-Host "Gave $script:InstallRoot the owner Administrators and an access list that only administrators can change."
     } else {
         [void][System.IO.Directory]::CreateDirectory($script:InstallRoot, $security)
         Write-Host "Created $script:InstallRoot with the owner Administrators and an access list that only administrators can change."
     }
+    if (-not $existed -and $keepInherited) { return }
 
     $check = Get-Acl -LiteralPath $script:InstallRoot
     $offender = Get-GridcoinWriteVector -Path $script:InstallRoot -AllowedSids (Get-GridcoinPrivilegedSids)
-    if (-not $check.AreAccessRulesProtected -or $offender) {
+    if ((-not $keepInherited -and -not $check.AreAccessRulesProtected) -or $offender) {
         throw "the access list of $script:InstallRoot is not the one just set: $offender"
+    }
+
+    # What an earlier install left in it: the installer runs the scripts in its windows folder
+    # elevated, so every entry must be the administrators' alone, as the directory is. Read after
+    # the list is set, which replaces what the entries inherited from it.
+    if ($existed) {
+        $inside = Get-GridcoinInstallTreeOffender -Dir $script:InstallRoot -All
+        if ($inside) {
+            throw ("$script:InstallRoot holds an entry that an account that is not an administrator can change: $inside. " +
+                   'The installer runs programs from this directory elevated, so it is not used. Remove that entry, or ' +
+                   'uninstall the earlier version and remove the directory, then run the installer again.')
+        }
     }
 }
 

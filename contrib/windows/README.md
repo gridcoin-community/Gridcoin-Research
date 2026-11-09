@@ -34,7 +34,7 @@ a normal one. (In a source checkout they live here in `contrib/windows/`.)
 | `Set-GridcoinShutdownFlush.ps1` | Removes the Group Policy shutdown script earlier versions set up (`-Remove`); it sets nothing up. |
 | `Start-GridcoinGui.ps1` | Launch the `-multiprocess` GUI from a normal (not elevated) console, for the task or, with `-Service`, for the Windows service (or drop a Start-Menu shortcut with `-CreateShortcut`). |
 | `GridcoinCommon.ps1` | Functions the scripts share (dot-sourced; not run on its own). |
-| `Invoke-GridcoinInstallStep.ps1` | The installer's steps: stop and restart the cores, switch over from the earlier tasks, harden a custom install directory, report wider permissions, the checks before uninstall. The installer runs it; it is not for use by hand. |
+| `Invoke-GridcoinInstallStep.ps1` | The installer's steps: stop and restart the cores, switch over from the earlier tasks, harden the install directory and check what an earlier install left in it, report wider permissions, the checks before uninstall. The installer runs it; it is not for use by hand. |
 | `..\daemon\gridcoin-service.exe` | The service mode: `install`, `enable --user=<account>`, `disable`, `status`, `uninstall` (elevated; `help` lists the options). |
 
 Autounlock is **opt-in** and is set up in the wallet itself (see [Autounlock](#autounlock-opt-in-stake-only-dpapi) below); there is no separate helper to run.
