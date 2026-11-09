@@ -2039,11 +2039,13 @@ bool AskBackupDestination(QWidget* parent, const QString& title, QString suggest
         std::string error;
 
         if (!interfaces::CheckDestination(path, core_files, core_datadir, error)) {
-            QMessageBox::warning(parent, title,
-                                 QObject::tr("The backup cannot be saved there: %1").arg(QString::fromStdString(error)));
+            GUIUtil::MakeCoreFileBox(QMessageBox::Warning, parent, title,
+                                     QObject::tr("The backup cannot be saved there: %1").arg(QString::fromStdString(error)))
+                ->exec();
         } else if (std::any_of(taken.begin(), taken.end(), [&path](const fs::path& t) { return SameBackupPath(path, t); })) {
-            QMessageBox::warning(parent, title,
-                                 QObject::tr("%1 is already chosen for another file of this backup.").arg(chosen));
+            GUIUtil::MakeCoreFileBox(QMessageBox::Warning, parent, title,
+                                     QObject::tr("%1 is already chosen for another file of this backup.").arg(chosen))
+                ->exec();
         } else {
             dest = path;
             return true;
@@ -2144,8 +2146,10 @@ void BitcoinGUI::backupWallet()
             {wallet_dest, second_dest}, results, error);
     }
 
+    // The texts below carry what the core reported (an error, a note, a path), so they are shown as
+    // plain text, never rendered as rich text.
     if (!begun) {
-        QMessageBox::warning(this, tr("Backup Failed"), QString::fromStdString(error));
+        GUIUtil::MakeCoreFileBox(QMessageBox::Warning, this, tr("Backup Failed"), QString::fromStdString(error))->exec();
         return;
     }
 
@@ -2153,9 +2157,9 @@ void BitcoinGUI::backupWallet()
     const QString text = BackupResultText(results, failed);
 
     if (failed) {
-        QMessageBox::warning(this, tr("Backup Failed"), text);
+        GUIUtil::MakeCoreFileBox(QMessageBox::Warning, this, tr("Backup Failed"), text)->exec();
     } else {
-        QMessageBox::information(this, tr("Backup Wallet"), text);
+        GUIUtil::MakeCoreFileBox(QMessageBox::Information, this, tr("Backup Wallet"), text)->exec();
     }
 }
 
@@ -2181,11 +2185,12 @@ void BitcoinGUI::autoUnlock()
 
     // A status that could not be read says why in its problem.
     if (!status.supported) {
-        QMessageBox::warning(this, title,
-                             status.problem.empty()
-                                 ? tr("Autounlock setup is not available on this platform.")
-                                 : tr("The autounlock status could not be read: %1")
-                                       .arg(QString::fromStdString(status.problem)));
+        GUIUtil::MakeCoreFileBox(QMessageBox::Warning, this, title,
+                                 status.problem.empty()
+                                     ? tr("Autounlock setup is not available on this platform.")
+                                     : tr("The autounlock status could not be read: %1")
+                                           .arg(QString::fromStdString(status.problem)))
+            ->exec();
         return;
     }
 

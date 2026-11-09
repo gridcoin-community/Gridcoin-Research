@@ -6,6 +6,7 @@
 
 #include "clientmodel.h"
 #include "guistatecache.h"
+#include "guiutil.h"
 #include "interfaces/psgt.h"
 #include "multisigndialog.h"
 #include "psgtpooltablemodel.h"
@@ -313,8 +314,10 @@ void PSGTPoolPage::sign()
                                 "this PSGT."));
         break;
     case interfaces::PSGTSignStatus::FAILED:
-        QMessageBox::critical(this, tr("Sign PSGT"),
-                              tr("Signing failed: %1").arg(QString::fromStdString(error)));
+        // The reason is the core's, so it is shown as plain text.
+        GUIUtil::MakeCoreFileBox(QMessageBox::Critical, this, tr("Sign PSGT"),
+                                 tr("Signing failed: %1").arg(QString::fromStdString(error)))
+            ->exec();
         break;
     case interfaces::PSGTSignStatus::NOT_FOUND:
         QMessageBox::warning(this, tr("Sign PSGT"),
