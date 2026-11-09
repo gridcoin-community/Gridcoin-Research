@@ -500,6 +500,11 @@ jobs:
         # ran to the six-hour job default on a runner billed at ten times the
         # Linux rate, and produced no usable log when it was finally cancelled.
         timeout-minutes: 45
+        # Boost.Test catches a crash's signal and reports only the case it was
+        # in. With the signal left to the system, macOS writes the symbolicated
+        # report the next step prints.
+        env:
+          BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
         run: ctest --test-dir build --output-on-failure --timeout 1800
 
       - name: Dump crash reports on test failure
@@ -904,8 +909,10 @@ jobs:
 
       - name: Test
         # See the arm64 job: bounded twice so a hang is reported rather than
-        # running to the six-hour job default.
+        # running to the six-hour job default. Crashes reach the system, as there.
         timeout-minutes: 45
+        env:
+          BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
         run: ctest --test-dir build --output-on-failure --timeout 1800
 
       - name: Dump crash reports on test failure
