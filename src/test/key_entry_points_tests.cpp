@@ -41,6 +41,7 @@
 #include "test/psgt_test_helpers.h"
 #include "test/staking_test_peers.h"
 #include "test/state_guard.h"
+#include "test/wine.h"
 #include "util/fraction.h"
 #include "util/strencodings.h"
 #include "util/system.h"
@@ -71,7 +72,6 @@
 
 #ifdef WIN32
 #include "test/win_fs_util.h"
-#include "test/wine.h"
 #include "util/dir_permissions.h"
 #include "util/win_acl.h"
 
@@ -1755,11 +1755,15 @@ BOOST_AUTO_TEST_CASE(dumpwallet_refuses_an_existing_destination)
     // A symbolic link to a file, and one that leads nowhere. Where links cannot
     // be made this part is skipped.
     bool linked{false};
-    try {
-        fs::create_symlink(target, path);
-        linked = true;
-    } catch (const std::exception& e) {
-        BOOST_TEST_MESSAGE("no symbolic link: " << e.what());
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine does not report its symbolic links as links; the link part is skipped");
+    } else {
+        try {
+            fs::create_symlink(target, path);
+            linked = true;
+        } catch (const std::exception& e) {
+            BOOST_TEST_MESSAGE("no symbolic link: " << e.what());
+        }
     }
 
     if (linked) {

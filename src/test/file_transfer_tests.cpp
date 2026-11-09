@@ -7,6 +7,7 @@
 #include "interfaces/file_transfer.h"
 #include "test/file_size_limit_guard.h"
 #include "test/test_gridcoin.h"
+#include "test/wine.h"
 #include "uint256.h"
 #include "util/system.h"
 
@@ -297,6 +298,10 @@ BOOST_FIXTURE_TEST_SUITE(file_transfer_tests, DirFixture)
 
 BOOST_AUTO_TEST_CASE(download_chunks_and_verifies)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     FakeSource src(Bytes(1'000'003));
     src.reported_size = -2;
     std::atomic<bool> cancel{false};
@@ -317,6 +322,10 @@ BOOST_AUTO_TEST_CASE(download_chunks_and_verifies)
 
 BOOST_AUTO_TEST_CASE(download_trailer_mismatch_is_verify_failed)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     FakeSource src(Bytes(20'000));
     src.wrong_sha = true;
     std::atomic<bool> cancel{false};
@@ -331,6 +340,10 @@ BOOST_AUTO_TEST_CASE(download_trailer_mismatch_is_verify_failed)
 // A source that fails mid-stream leaves no temporary file and the destination unchanged
 BOOST_AUTO_TEST_CASE(download_source_error_mid_stream_removes_part)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     {
         std::ofstream((dir / "d.bin").string(), std::ios::binary) << "old";
     }
@@ -360,6 +373,10 @@ BOOST_AUTO_TEST_CASE(download_source_error_mid_stream_removes_part)
 
 BOOST_AUTO_TEST_CASE(download_cancel_calls_source_cancel)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     FakeSource src(Bytes(100'000));
     std::atomic<bool> cancel{false};
     int chunks = 0;
@@ -398,6 +415,10 @@ BOOST_AUTO_TEST_CASE(download_no_space_refused_before_create)
 
 BOOST_AUTO_TEST_CASE(download_generated_entry_has_unknown_total)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     FakeSource src(Bytes(10'000));
     std::atomic<bool> cancel{false};
     int64_t last_total = 0;
@@ -482,6 +503,10 @@ BOOST_AUTO_TEST_CASE(upload_cancel_and_failures)
 
 BOOST_AUTO_TEST_CASE(download_cancel_after_final_chunk_is_honoured)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     // one chunk holds the whole file; cancel is set from the final progress callback
     FakeSource src(Bytes(1000));
     std::atomic<bool> cancel{false};
@@ -495,6 +520,10 @@ BOOST_AUTO_TEST_CASE(download_cancel_after_final_chunk_is_honoured)
 
 BOOST_AUTO_TEST_CASE(download_more_than_declared_size_fails_at_once)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     FakeSource src(Bytes(100'000));
     src.reported_size = 5000;
     std::atomic<bool> cancel{false};
@@ -510,6 +539,10 @@ BOOST_AUTO_TEST_CASE(download_more_than_declared_size_fails_at_once)
 
 BOOST_AUTO_TEST_CASE(download_declared_size_differs_from_received)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     // declared larger than the data the source delivers, trailer matches the data
     FakeSource src(Bytes(10'000));
     src.reported_size = 20'000;
@@ -525,6 +558,10 @@ BOOST_AUTO_TEST_CASE(download_declared_size_differs_from_received)
 
 BOOST_AUTO_TEST_CASE(download_oversized_and_empty_chunks_are_refused)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     std::atomic<bool> cancel{false};
 
     FakeSource big(Bytes(100'000));
@@ -544,6 +581,10 @@ BOOST_AUTO_TEST_CASE(download_oversized_and_empty_chunks_are_refused)
 
 BOOST_AUTO_TEST_CASE(download_trailer_not_ok_and_bad_entry_index)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     std::atomic<bool> cancel{false};
 
     FakeSource src(Bytes(10'000));
@@ -865,6 +906,10 @@ BOOST_AUTO_TEST_CASE(entry_with_a_note_and_content_is_not_skipped)
 
 BOOST_AUTO_TEST_CASE(backup_skips_an_entry_with_a_note)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     // A missing configuration file between the wallet and the settings file: the
     // settings file must still arrive.
     MultiSource src({{"wallet.dat", Bytes(10'000), ""},
@@ -916,6 +961,10 @@ BOOST_AUTO_TEST_CASE(backup_skips_an_entry_with_a_note)
 
 BOOST_AUTO_TEST_CASE(backup_stops_at_the_first_failure)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     MultiSource src({{"wallet.dat", Bytes(10'000), ""}, {"gridcoinsettings.json", Bytes(300), ""}});
     src.error_entry = 0;
     std::atomic<bool> cancel{false};
@@ -956,6 +1005,10 @@ BOOST_AUTO_TEST_CASE(backup_stops_at_the_first_failure)
 
 BOOST_AUTO_TEST_CASE(backup_cancel_leaves_nothing_and_stops_the_rest)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     MultiSource src({{"wallet.dat", Bytes(100'000), ""}, {"gridcoinsettings.json", Bytes(300), ""}});
     std::atomic<bool> cancel{false};
     int chunks = 0;

@@ -6,6 +6,7 @@
 #include <rpc/listener_check.h>
 #include <netbase.h>
 #include <test/state_guard.h>
+#include <test/wine.h>
 #include <util/sock.h>
 #include <util/string.h>
 
@@ -604,6 +605,10 @@ BOOST_AUTO_TEST_CASE(conf_trust_predicate)
 
 BOOST_AUTO_TEST_CASE(live_loopback_lookup_own_uid)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine's TCP table names no owning process; skipping");
+        return;
+    }
     unsigned short port{0};
     const std::shared_ptr<Sock> listener = MakeLoopbackListener(port);
 

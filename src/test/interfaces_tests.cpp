@@ -38,6 +38,7 @@
 #include "test/staking_test_peers.h"
 #include "test/state_guard.h"
 #include "test/wallet_file_placeholder.h"
+#include "test/wine.h"
 #include "txmempool.h"
 #include "util.h"
 #include "util/dir_permissions.h"
@@ -2460,6 +2461,10 @@ BOOST_FIXTURE_TEST_CASE(begin_backup_with_capability_passes_the_gate, BackupCase
 
 BOOST_FIXTURE_TEST_CASE(begin_backup_unencrypted_streams_wallet_and_ends_capability, BackupCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const grc_test::WalletFilePlaceholder wallet_file;
     grc_test::RequireWalletFileNotInUse();
 
@@ -2518,6 +2523,10 @@ BOOST_FIXTURE_TEST_CASE(begin_backup_unencrypted_streams_wallet_and_ends_capabil
 // thread's scope for the capability is still open.
 BOOST_FIXTURE_TEST_CASE(begin_backup_locked_wallet_relocks_once_the_copy_exists, BackupCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     // Read before EncryptedWallet swaps pwalletMain.
     const std::string file_name = pwalletMain->strWalletFile;
     const grc_test::WalletFilePlaceholder wallet_file;
@@ -2549,6 +2558,10 @@ BOOST_FIXTURE_TEST_CASE(begin_backup_locked_wallet_relocks_once_the_copy_exists,
 // one of another kind the client holds is left for its own operation.
 BOOST_FIXTURE_TEST_CASE(begin_backup_on_a_full_unlock_leaves_another_kinds_capability, BackupCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const std::string file_name = pwalletMain->strWalletFile;
     const grc_test::WalletFilePlaceholder wallet_file;
     grc_test::RequireWalletFileNotInUse();
@@ -2578,6 +2591,10 @@ BOOST_FIXTURE_TEST_CASE(begin_backup_on_a_full_unlock_leaves_another_kinds_capab
 
 BOOST_FIXTURE_TEST_CASE(begin_backup_config_refused_in_service_mode, BackupCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const grc_test::WalletFilePlaceholder wallet_file;
     grc_test::RequireWalletFileNotInUse();
 
@@ -2625,6 +2642,10 @@ BOOST_FIXTURE_TEST_CASE(begin_backup_config_refused_in_service_mode, BackupCase)
 
 BOOST_FIXTURE_TEST_CASE(begin_backup_lists_a_missing_file_with_a_note, BackupCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const grc_test::WalletFilePlaceholder wallet_file;
     grc_test::RequireWalletFileNotInUse();
 
@@ -2655,6 +2676,10 @@ BOOST_FIXTURE_TEST_CASE(begin_backup_lists_a_missing_file_with_a_note, BackupCas
 
 BOOST_FIXTURE_TEST_CASE(begin_backup_failure_removes_the_snapshots_made, BackupCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const grc_test::WalletFilePlaceholder wallet_file;
     grc_test::RequireWalletFileNotInUse();
 
@@ -2680,6 +2705,10 @@ BOOST_FIXTURE_TEST_CASE(begin_backup_failure_removes_the_snapshots_made, BackupC
 
 BOOST_FIXTURE_TEST_CASE(begin_backup_snapshot_goes_with_the_connection, BackupCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const grc_test::WalletFilePlaceholder wallet_file;
     grc_test::RequireWalletFileNotInUse();
 
@@ -2718,6 +2747,10 @@ BOOST_FIXTURE_TEST_CASE(old_backup_methods_always_false, BackupCase)
 
 BOOST_FIXTURE_TEST_CASE(second_transfer_refused_while_one_is_live, BackupCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const grc_test::WalletFilePlaceholder wallet_file;
     grc_test::RequireWalletFileNotInUse();
 
@@ -2975,6 +3008,10 @@ BOOST_AUTO_TEST_CASE(console_transfer_refuses_too_many_arguments)
 // parseaccrualsnapshotfile on the same wallet are still refused without one.
 BOOST_FIXTURE_TEST_CASE(console_dumpcontracts_needs_no_passphrase, BackupCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const grc_test::LoneBestBlock tip;
 
     EncryptedWallet fx;
@@ -3021,6 +3058,10 @@ BOOST_FIXTURE_TEST_CASE(console_dumpcontracts_needs_no_passphrase, BackupCase)
 // refusal and leaves no file in the transfer directory.
 BOOST_FIXTURE_TEST_CASE(console_dumpcontracts_refuses_a_height_off_the_chain, BackupCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const grc_test::LoneBestBlock tip; // one block, at height 0
 
     std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(pwalletMain);
@@ -3111,6 +3152,10 @@ BOOST_FIXTURE_TEST_CASE(console_download_goes_with_the_connection, BackupCase)
 // so the capability that let the transfer begin is ended as it begins.
 BOOST_FIXTURE_TEST_CASE(console_upload_parses_a_snapshot_and_ends_capability, BackupCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     EncryptedWallet fx;
     fx.UnlockFor(UnlockScope::StakingOnly);
     std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);
@@ -3144,6 +3189,10 @@ BOOST_FIXTURE_TEST_CASE(console_upload_parses_a_snapshot_and_ends_capability, Ba
 // left in the transfer directory.
 BOOST_FIXTURE_TEST_CASE(console_upload_refused_partway_reports_the_reason, BackupCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     EncryptedWallet fx;
     fx.UnlockFor(UnlockScope::StakingOnly);
     std::unique_ptr<interfaces::Wallet> w = interfaces::MakeWallet(&fx.wallet);

@@ -6,6 +6,7 @@
 #include "fs.h"
 #include "test/file_size_limit_guard.h"
 #include "test/test_gridcoin.h"
+#include "test/wine.h"
 #include "uint256.h"
 #include "util/system.h"
 #include "util/transfer_file.h"
@@ -26,7 +27,6 @@
 #include <unistd.h>
 #else
 #include "test/win_fs_util.h"
-#include "test/wine.h"
 #include "util/dir_permissions.h"
 #include "util/win_acl.h"
 #endif
@@ -116,6 +116,10 @@ BOOST_FIXTURE_TEST_SUITE(transfer_file_tests, DirFixture)
 
 BOOST_AUTO_TEST_CASE(commit_renames_when_trailer_matches)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     std::string err;
     auto t = util::TransferTempFile::Create(dir / "out.bin", err);
     BOOST_REQUIRE(t);
@@ -175,6 +179,10 @@ BOOST_AUTO_TEST_CASE(commit_over_an_existing_destination_keeps_its_permissions)
 
 BOOST_AUTO_TEST_CASE(commit_refuses_size_or_hash_mismatch)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const unsigned char* p = reinterpret_cast<const unsigned char*>(kBytes.data());
     std::string err;
 
@@ -203,6 +211,10 @@ BOOST_AUTO_TEST_CASE(commit_refuses_size_or_hash_mismatch)
 
 BOOST_AUTO_TEST_CASE(abort_and_destruction_leave_nothing)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const unsigned char* p = reinterpret_cast<const unsigned char*>(kBytes.data());
     std::string err;
 
@@ -312,6 +324,10 @@ BOOST_AUTO_TEST_CASE(write_failure_leaves_destination_untouched)
 // A destination with non-ASCII characters and a space round-trips
 BOOST_AUTO_TEST_CASE(non_ascii_destination_round_trips)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     // UTF-8 for "Sicherung äöü 测试.dat", with a space
     const std::string name = "Sicherung \xc3\xa4\xc3\xb6\xc3\xbc \xe6\xb5\x8b\xe8\xaf\x95.dat";
     const fs::path dest = dir / fs::path(name);

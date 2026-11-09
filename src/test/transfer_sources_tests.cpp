@@ -18,6 +18,7 @@
 #include "test/state_guard.h"
 #include "test/wallet_file_placeholder.h"
 #include "test/win_fs_util.h"
+#include "test/wine.h"
 #include "uint256.h"
 #include "util/system.h"
 #include "util/time.h"
@@ -42,7 +43,6 @@
 #include <vector>
 
 #ifdef WIN32
-#include "test/wine.h"
 #include "util/win_acl.h"
 #endif
 
@@ -268,6 +268,10 @@ BOOST_AUTO_TEST_SUITE(transfer_sources_tests)
 
 BOOST_FIXTURE_TEST_CASE(snapshot_source_streams_file_then_deletes_it, TransferCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const Bytes bytes = PatternBytes(2500);
     const fs::path source = dir / "source.bin";
     WriteBytes(source, bytes);
@@ -316,6 +320,10 @@ BOOST_FIXTURE_TEST_CASE(snapshot_source_streams_file_then_deletes_it, TransferCa
 
 BOOST_FIXTURE_TEST_CASE(snapshot_source_is_single_use, TransferCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const Bytes bytes = PatternBytes(300);
 
     // Read again after its end.
@@ -377,6 +385,10 @@ BOOST_FIXTURE_TEST_CASE(snapshot_source_is_single_use, TransferCase)
 
 BOOST_FIXTURE_TEST_CASE(snapshot_source_reads_one_entry_at_a_time, TransferCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const Bytes a_bytes = PatternBytes(1000);
     const Bytes b_bytes = BytesOf("the second entry");
     const fs::path a = Snapshot("a", a_bytes);
@@ -419,6 +431,10 @@ BOOST_FIXTURE_TEST_CASE(snapshot_source_reads_one_entry_at_a_time, TransferCase)
 
 BOOST_FIXTURE_TEST_CASE(snapshot_source_caps_chunk_size, TransferCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const Bytes bytes = PatternBytes(5 * 1024 * 1024);
     const fs::path snapshot = Snapshot("big", bytes);
 
@@ -453,6 +469,10 @@ BOOST_FIXTURE_TEST_CASE(snapshot_source_caps_chunk_size, TransferCase)
 // Review Focus 2: a GUI that goes away mid-transfer leaves no snapshot behind.
 BOOST_FIXTURE_TEST_CASE(connection_close_deletes_snapshot_files, TransferCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const auto scope = interfaces::MakeConnectionScope();
     const fs::path a = Snapshot("a", PatternBytes(1000));
     const fs::path b = Snapshot("b", PatternBytes(10));
@@ -556,6 +576,10 @@ BOOST_FIXTURE_TEST_CASE(connection_close_leaves_a_file_being_read_to_that_read, 
 
 BOOST_FIXTURE_TEST_CASE(snapshot_source_destruction_deletes_its_files, TransferCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     // Part read, and not read at all.
     {
         const auto scope = interfaces::MakeConnectionScope();
@@ -596,6 +620,10 @@ BOOST_FIXTURE_TEST_CASE(snapshot_source_destruction_deletes_its_files, TransferC
 
 BOOST_FIXTURE_TEST_CASE(snapshot_source_read_error_deletes_the_rest, TransferCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const fs::path a = Snapshot("a", PatternBytes(10));
     const fs::path b = Snapshot("b", PatternBytes(10));
 
@@ -618,6 +646,10 @@ BOOST_FIXTURE_TEST_CASE(snapshot_source_read_error_deletes_the_rest, TransferCas
 
 BOOST_FIXTURE_TEST_CASE(snapshot_source_lists_an_item_with_nothing_to_send, TransferCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const Bytes bytes = BytesOf("wallet bytes");
     const fs::path a = Snapshot("a", bytes);
 
@@ -853,6 +885,10 @@ BOOST_FIXTURE_TEST_CASE(snapshot_refused_into_a_linked_transfer_dir, TransferCas
 
 BOOST_FIXTURE_TEST_CASE(snapshot_wallet_copies_the_wallet_file, TransferCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const grc_test::WalletFilePlaceholder wallet_file;
     grc_test::RequireWalletFileNotInUse();
 
@@ -1346,6 +1382,10 @@ BOOST_FIXTURE_TEST_CASE(import_sink_rejects_oversize_and_bad_hash, TransferCase)
 // at finish, and which is gone on every path.
 BOOST_FIXTURE_TEST_CASE(rpc_file_sink_parses_uploaded_snapshot_and_deletes_temp, TransferCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     const fs::path local = dir / "5000000";
     {
         GRC::AccrualSnapshotWriter writer(local);
@@ -1454,6 +1494,10 @@ BOOST_FIXTURE_TEST_CASE(rpc_file_sink_parses_uploaded_snapshot_and_deletes_temp,
 // deleted.
 BOOST_FIXTURE_TEST_CASE(rpc_output_source_streams_the_produced_file, TransferCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     std::vector<std::vector<std::string>> calls;
     const wallet::RpcRunner runner = [&calls](const std::string& method, const std::vector<std::string>& args) {
         BOOST_CHECK_EQUAL(method, "dumpcontracts");
@@ -1502,6 +1546,10 @@ BOOST_FIXTURE_TEST_CASE(rpc_output_source_streams_the_produced_file, TransferCas
 // writes no file: no source, the error said, nothing left behind.
 BOOST_FIXTURE_TEST_CASE(rpc_output_source_runner_throw_leaves_nothing, TransferCase)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
     std::string error;
 
     const wallet::RpcRunner partial_then_rpc_error = [](const std::string&,

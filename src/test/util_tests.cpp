@@ -24,6 +24,7 @@
 #include <util/strencodings.h>
 #include <util/refused_setting_keys.h>
 #include <test/data/refused-setting-keys.txt.h>
+#include <test/wine.h>
 #include <logging.h>
 #include <util/string.h>
 #include <util/dir_permissions.h>
@@ -468,6 +469,10 @@ BOOST_AUTO_TEST_CASE(config_file_facts_are_the_file_read)
 #else
 BOOST_AUTO_TEST_CASE(config_file_facts_are_the_file_read)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
+        return;
+    }
     // base/held/real.conf, which sets datadir= to base/other. The file, its directory and the other
     // directory each have an access list of their own length, so the recorded lists show which one
     // they came from.
@@ -2186,6 +2191,10 @@ BOOST_AUTO_TEST_CASE(settings_rewrite_keeps_the_mode_of_the_file)
 // protected list stays protected, and a file that is not there is created owner-only.
 BOOST_AUTO_TEST_CASE(settings_rewrite_keeps_the_access_list_of_the_file)
 {
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected DACL; skipping");
+        return;
+    }
     SettingsFileScope scope;
     scope.Write({{"free_probe", "a"}});
 
