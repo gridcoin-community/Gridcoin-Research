@@ -284,6 +284,15 @@ function Stop-GridcoinCore {
                        'Close the program that has it open, or wait for a virus scan to finish, and run the installer again.')
             }
         }
+
+        # The service names are one comma-separated string: Windows PowerShell 5.1 does not always
+        # write an array as a JSON array.
+        # Written only when something was stopped: StartCore and RestartStopped read no file as nothing to start.
+        # Inside the block, so that a record that cannot be written starts again what was stopped.
+        if ($SavePath -and ($stoppedServices.Count -gt 0 -or $stoppedTask)) {
+            $saved = [ordered]@{ services = ($stoppedServices -join ','); coreStartTask = $stoppedTask }
+            Set-Content -LiteralPath $SavePath -Encoding UTF8 -Value ($saved | ConvertTo-Json)
+        }
     } catch {
         $stopFailure = $_.Exception.Message
         $restartProblems = @(Start-GridcoinCore -Services $stoppedServices -CoreStartTask $stoppedTask)
@@ -291,13 +300,6 @@ function Stop-GridcoinCore {
         throw $stopFailure
     }
 
-    # The service names are one comma-separated string: Windows PowerShell 5.1 does not always
-    # write an array as a JSON array.
-    # Written only when something was stopped: StartCore and RestartStopped read no file as nothing to start.
-    if ($SavePath -and ($stoppedServices.Count -gt 0 -or $stoppedTask)) {
-        $saved = [ordered]@{ services = ($stoppedServices -join ','); coreStartTask = $stoppedTask }
-        Set-Content -LiteralPath $SavePath -Encoding UTF8 -Value ($saved | ConvertTo-Json)
-    }
     if ($stoppedServices.Count -eq 0 -and -not $stoppedTask) { Write-Host 'No Gridcoin core was running.' }
 }
 
