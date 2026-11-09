@@ -76,7 +76,8 @@ int SpawnAndWait(const char* path, char* const argv[])
     // posix_spawnattr_setflags takes a short; the flags fit.
     short flags = static_cast<short>(POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK);
 
-    posix_spawn_file_actions_t actions;
+    // Unused where neither branch below applies, as with musl.
+    [[maybe_unused]] posix_spawn_file_actions_t actions;
     posix_spawn_file_actions_t* used_actions = nullptr;
 #if HAVE_POSIX_SPAWN_CLOSEFROM
     // The shell gets none of the descriptors the core holds open.
@@ -102,7 +103,7 @@ int SpawnAndWait(const char* path, char* const argv[])
     }
 #else
     // Where neither closefrom nor POSIX_SPAWN_CLOEXEC_DEFAULT is available (glibc
-    // before 2.34, for one) the shell inherits every descriptor that is not
+    // before 2.34 and musl, for two) the shell inherits every descriptor that is not
     // close-on-exec, as with system(). The core opens its sockets close-on-exec; a
     // file opened without it reaches the shell.
 #endif

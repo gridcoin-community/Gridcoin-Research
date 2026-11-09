@@ -773,7 +773,6 @@ private:
 class Fd
 {
 public:
-    Fd() = default;
     explicit Fd(int fd) : m_fd(fd) {}
     Fd(Fd&& other) noexcept : m_fd(std::exchange(other.m_fd, -1)) {}
     Fd& operator=(Fd&& other) noexcept

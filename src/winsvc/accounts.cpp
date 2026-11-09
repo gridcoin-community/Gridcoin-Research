@@ -47,6 +47,10 @@ struct WtsProcessInfoEx
 extern "C" BOOL WINAPI WTSEnumerateProcessesExW(HANDLE hServer, DWORD* pLevel, DWORD SessionId,
                                                 LPWSTR* ppProcessInfo, DWORD* pCount);
 #endif
+// Older mingw-w64 headers also lack the session value that asks for every session.
+#ifndef WTS_ANY_SESSION
+#define WTS_ANY_SESSION ((DWORD)-2)
+#endif
 
 namespace winsvc {
 

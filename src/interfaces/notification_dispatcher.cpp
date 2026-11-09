@@ -32,14 +32,11 @@ public:
     Dispatcher(const Dispatcher&) = delete;
     Dispatcher& operator=(const Dispatcher&) = delete;
 
-    // The process is ending when this runs. A thread still delivering to a stalled
-    // GUI must not be joined, since that could block the exit, and a joinable
-    // std::thread would abort it, so the thread is detached. GetDispatcher() never
-    // destroys the instance, so the detached thread keeps valid members.
-    ~Dispatcher() NO_THREAD_SAFETY_ANALYSIS
-    {
-        if (m_thread.joinable()) m_thread.detach();
-    }
+    // GetDispatcher() never destroys the instance. At process exit a thread still
+    // delivering to a stalled GUI must not be joined, since that could block the
+    // exit, and a joinable std::thread would abort it, so the thread and its
+    // members outlive the process's static destructors.
+    ~Dispatcher() = delete;
 
     void Start()
     {

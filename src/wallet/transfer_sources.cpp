@@ -421,8 +421,6 @@ SnapshotSource::Release SnapshotSource::StopLocked(const std::string& reason)
     Release release;
 
     // A read in progress owns the open file and its entry's file.
-    const std::optional<uint32_t> in_use = m_in_read ? m_current : std::nullopt;
-
     if (!m_in_read) {
         release.file = std::exchange(m_file, nullptr);
     }
@@ -430,7 +428,9 @@ SnapshotSource::Release SnapshotSource::StopLocked(const std::string& reason)
     for (uint32_t i = 0; i < m_entries.size(); ++i) {
         Entry& e = m_entries[i];
 
-        if (e.removed || in_use == i) continue;
+        // Compared in place: GCC 12 to 14 warn falsely that a local copy of
+        // m_current may be used uninitialized.
+        if (e.removed || (m_in_read && m_current == i)) continue;
 
         e.removed = true;
         release.paths.push_back(e.snapshot.path);

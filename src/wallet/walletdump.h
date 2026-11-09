@@ -6,6 +6,7 @@
 #define GRIDCOIN_WALLET_WALLETDUMP_H
 
 #include "pubkey.h"
+#include "wallet/wallet.h"
 
 #include <univalue.h>
 
@@ -16,8 +17,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-
-class CWallet;
 
 //! \brief The text dumpwallet writes, a few whole lines at a time.
 //!
@@ -60,7 +59,7 @@ private:
 
     //! The line at the current position, after skipping a key the dump leaves
     //! out. False at the end. Needs the locks Next() takes.
-    bool LineHere(std::string& line);
+    bool LineHere(std::string& line) EXCLUSIVE_LOCKS_REQUIRED(m_wallet.cs_wallet);
 
     //! Move past the line LineHere() gave.
     void Advance();
