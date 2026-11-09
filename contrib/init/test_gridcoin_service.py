@@ -90,16 +90,23 @@ class FakeHost:
     def unit_files(self, unit):
         """systemctl show's FragmentPath, DropInPaths and NeedDaemonReload for the files a test
         made: the copy in /etc/systemd/system, else the packaged unit; the *.conf drop-ins of its
-        directory there, then extra_dropins."""
+        directory there, then extra_dropins. An instance loads as systemd loads it: from its own
+        copy, else its template's copy, else the packaged template, with the drop-ins of the
+        template's directory and then its own."""
         if "show" in self.fail:
             raise svc.StepError("step 'systemctl show %s' failed with exit status 1" % unit)
         paths = self.paths_of()
-        copy = os.path.join(paths.etc_systemd, unit)
-        fragment = self.fragments.get(unit) or (copy if os.path.lexists(copy) else
-                                                os.path.join(paths.packaged_units, unit))
-        directory = os.path.join(paths.etc_systemd, unit + ".d")
-        dropins = sorted(os.path.join(directory, name) for name in os.listdir(directory)
-                         if name.endswith(".conf")) if os.path.isdir(directory) else []
+        template = unit.split("@", 1)[0] + "@.service" if "@" in unit else unit
+        names = [unit, template] if template != unit else [unit]
+        copies = [os.path.join(paths.etc_systemd, name) for name in names
+                  if os.path.lexists(os.path.join(paths.etc_systemd, name))]
+        fragment = self.fragments.get(unit) or (copies[0] if copies else os.path.join(paths.packaged_units, template))
+        dropins = []
+        for name in reversed(names):
+            directory = os.path.join(paths.etc_systemd, name + ".d")
+            if os.path.isdir(directory):
+                dropins += sorted(os.path.join(directory, entry) for entry in os.listdir(directory)
+                                  if entry.endswith(".conf"))
         return fragment, dropins + list(self.extra_dropins.get(unit, ())), unit in self.need_reload
 
     def run_by_package(self):
@@ -792,6 +799,55 @@ class AutounlockTests(ServiceTestBase):
                 self.assertNotIn("BindReadOnlyPaths", text)
                 self.assertIn(("enable", "--now", sock), self.host.calls)
                 self.assertNotIn(("restart", "--no-block", unit), self.host.calls)
+
+    def test_autounlock_enable_refuses_a_core_unit_not_as_packaged(self):
+        # The helper serves the unit's main process, which is the core only as packaged: a copy of
+        # the unit, or a drop-in other than this tool's own that sets how the core starts, is
+        # refused, and nothing is written.
+        cases = [
+            (True, "gridcoinresearchd@.service", "[Service]\nExecStart=/bin/sh -c x\n", "loads"),
+            (True, "gridcoinresearchd@bob.service", "[Service]\nExecStart=/bin/sh -c x\n", "loads"),
+            (True, "gridcoinresearchd@.service.d/override.conf", "[Service]\nExecStart=\nExecStart=/bin/sh -c x\n",
+             "sets ExecStart="),
+            (True, "gridcoinresearchd@bob.service.d/99-mine.conf", "[Service]\nType=simple\n", "sets Type="),
+            (False, "gridcoinresearchd.service", "[Service]\nExecStart=/bin/sh -c x\n", "loads"),
+            (False, "gridcoinresearchd.service.d/override.conf", "[Service]\nUser=root\n", "sets User="),
+        ]
+        for per_user, rel, text, expected in cases:
+            with self.subTest(rel=rel):
+                svc_rmtree(self.paths.etc_systemd)
+                os.makedirs(self.paths.etc_systemd)
+                self.make_credential("gridcoinresearch-bob.wallet-passphrase" if per_user
+                                     else "gridcoinresearch.wallet-passphrase")
+                path = os.path.join(self.paths.etc_systemd, rel)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf8") as f:
+                    f.write(text)
+                self.host.calls.clear()
+                rc, out, err = self.run_main("autounlock", "enable", "bob" if per_user else "--system")
+                self.assertEqual(rc, 1)
+                self.assertIn(expected, err)
+                self.assertEqual(self.host.calls, [])
+                unit = "gridcoinresearchd@bob.service" if per_user else "gridcoinresearchd.service"
+                self.assertFalse(os.path.exists(os.path.join(self.paths.etc_systemd, unit + ".d",
+                                                             "60-gridcoin-autounlock.conf")))
+
+    def test_autounlock_enable_takes_the_tools_own_core_dropin(self):
+        rc, out, err = self.run_main("enable-user", "bob")
+        self.assertEqual(rc, 0, err)
+        self.make_credential("gridcoinresearch-bob.wallet-passphrase")
+        rc, out, err = self.run_main("autounlock", "enable", "bob")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("Wants=gridcoin-autounlock@bob.socket",
+                      self.dropin("gridcoinresearchd@bob.service", "60-gridcoin-autounlock.conf"))
+
+    def test_autounlock_enable_refuses_unit_files_changed_since_the_last_reload(self):
+        self.make_credential("gridcoinresearch-bob.wallet-passphrase")
+        self.host.need_reload.add("gridcoinresearchd@bob.service")
+        rc, out, err = self.run_main("autounlock", "enable", "bob")
+        self.assertEqual(rc, 1)
+        self.assertIn("daemon-reload", err)
+        self.assertEqual(self.host.calls, [])
 
     def test_autounlock_restarts_active_core_without_blocking(self):
         self.make_credential("gridcoinresearch-bob.wallet-passphrase")

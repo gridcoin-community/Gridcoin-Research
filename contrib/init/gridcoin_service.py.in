@@ -651,6 +651,43 @@ def cmd_disable_user(args, net, host, paths):
     return 0
 
 
+def packaged_unit_paths(paths, name):
+    """Where the package installs the unit file name: paths.packaged_units and, without a merged
+    /usr, /lib/systemd/system too, where dh_installsystemd (compat 13) may put it."""
+    packaged_dirs = [paths.packaged_units]
+    if paths.packaged_units.startswith("/usr/lib/"):
+        packaged_dirs.append("/lib/" + paths.packaged_units[len("/usr/lib/"):])
+    return [os.path.join(directory, name) for directory in packaged_dirs]
+
+
+def refuse_unpackaged_core_unit(net, user, host, paths):
+    """Refuse autounlock for a core unit that systemd loads other than as packaged, as systemctl show
+    reports it: the helper serves the unit's main process, which is the core only then. The unit's
+    file must be the packaged one (the template, for a user's instance), and no drop-in but this
+    tool's own core drop-in may set TEMPLATE_REFUSED_KEYS. What systemd reports is of its last
+    daemon-reload, so files changed since then are refused too."""
+    unit, _, _ = autounlock_target(net, user)
+    fragment, dropins, need_reload = host.unit_files(unit)
+    if need_reload:
+        raise UserError("the files of %s changed since systemd last read them; run systemctl daemon-reload, then "
+                        "rerun" % unit)
+    name = "%s@.service" % net.daemon if user is not None else net.daemon + ".service"
+    packaged = packaged_unit_paths(paths, name)
+    if not fragment or os.path.realpath(fragment) not in [os.path.realpath(path) for path in packaged]:
+        raise UserError("systemd loads %s from %s, not from %s, so its main process need not be the core that "
+                        "autounlock is for; remove that file, run systemctl daemon-reload, then rerun"
+                        % (unit, fragment or "no file", " or ".join(packaged)))
+    own = os.path.realpath(os.path.join(dropin_dir(paths, unit), DROPIN_MAIN))
+    for path in dropins:
+        if os.path.realpath(path) == own:
+            continue
+        keys = set_keys(read_dropin_text(path) if os.path.exists(path) else None, TEMPLATE_REFUSED_KEYS)
+        if keys:
+            raise UserError("%s sets %s for %s, so its main process need not be the core that autounlock is for; "
+                            "move it aside, run systemctl daemon-reload, then rerun"
+                            % (path, ", ".join(key + "=" for key in keys), unit))
+
+
 def enable_autounlock(net, user, host, paths, restart=True):
     """autounlock enable, after the checks: the core's drop-in, the helper socket, and, with
     restart, a restart of a running core so that it pulls the passphrase."""
@@ -673,6 +710,7 @@ def cmd_autounlock(args, net, host, paths):
             validate_name(user)
     unit, socket_unit, _ = autounlock_target(net, user)
     if args.action == "enable":
+        refuse_unpackaged_core_unit(net, user, host, paths)
         check_credential(paths, net, user)
         enable_autounlock(net, user, host, paths)
     else:
@@ -3015,12 +3053,7 @@ def refuse_unseen_unit_files(net, host, paths, copy, masked):
     if need_reload:
         raise UserError("the files of %s changed since systemd last read them; run systemctl daemon-reload, then "
                         "rerun the switch-over" % unit)
-    # Without a merged /usr, dh_installsystemd (compat 13) may install the unit under
-    # /lib/systemd/system, which is then another directory than /usr/lib/systemd/system.
-    packaged_dirs = [paths.packaged_units]
-    if paths.packaged_units.startswith("/usr/lib/"):
-        packaged_dirs.append("/lib/" + paths.packaged_units[len("/usr/lib/"):])
-    packaged = [os.path.join(directory, unit) for directory in packaged_dirs]
+    packaged = packaged_unit_paths(paths, unit)
     if not masked:
         known = packaged + ([copy] if copy is not None else [])
         if not fragment or os.path.realpath(fragment) not in [os.path.realpath(path) for path in known]:

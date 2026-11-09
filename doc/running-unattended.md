@@ -334,7 +334,9 @@ sudo gridcoin-service autounlock enable alice        # the system service: --sys
 ```
 
 It refuses when the credential file is missing (`no credential at <path>; create it first`), and warns when the
-file is not root's with mode 0600. It writes the drop-in `60-gridcoin-autounlock.conf` for the core, which then
+file is not root's with mode 0600. It also refuses a core unit that systemd loads other than as packaged (a copy
+in `/etc/systemd/system`, or a drop-in other than the tool's own that sets `ExecStart=`, `Type=`, `PIDFile=`,
+`NotifyAccess=` or `User=`): the helper serves the unit's main process, which is then the core. It writes the drop-in `60-gridcoin-autounlock.conf` for the core, which then
 starts with `-autounlocksocket=/run/gridcoin-autounlock/alice.sock`, enables `gridcoin-autounlock@alice.socket`,
 and restarts a running core without waiting, so that it unlocks.
 
