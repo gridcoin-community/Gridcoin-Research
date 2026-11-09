@@ -1026,7 +1026,9 @@ def extract_stream(inp, dst_dir, created=None):
     and without following a symlink, inside a directory the same stream created. A member of any
     other type, or with an absolute or unnormalised name, raises TreeError. Each top-level name is
     appended to created (a list) just before its entry is made, and removed again if that fails,
-    so the names are known after a failure too.
+    so the names are known after a failure too. Each file is synced once written, and each
+    directory, dst_dir included, once the stream is done, so the copy is on disk before its source
+    can be removed.
     Returns the number of file bytes written."""
     top = open_dir(dst_dir) if isinstance(dst_dir, str) else dst_dir
     dirs = {"": top}
@@ -1064,6 +1066,8 @@ def extract_stream(inp, dst_dir, created=None):
                             break
                         f.write(chunk)
                         written += len(chunk)
+                    f.flush()
+                    os.fsync(f.fileno())
         # Read to the end, so the writing side never blocks on its padding; only zeros may follow.
         while True:
             chunk = inp.read(1 << 16)
@@ -1071,6 +1075,8 @@ def extract_stream(inp, dst_dir, created=None):
                 break
             if chunk.count(0) != len(chunk):
                 raise TreeError("data after the end of the archive")
+        for fd in dirs.values():
+            os.fsync(fd)
     finally:
         for name, fd in dirs.items():
             if name:

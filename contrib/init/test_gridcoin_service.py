@@ -1715,6 +1715,35 @@ class CopyTests(ServiceTestBase):
         self.assertEqual(svc.extract_stream(stream, self.dst), 5)
         self.assertEqual(read_tree(self.dst), {"a/": None, "a/f": b"12345", "g": b""})
 
+    def test_extract_syncs_each_file_and_then_each_directory(self):
+        # disable empties the service datadir once the copy returns, so by then the copy is on disk:
+        # each file, and each directory once the entries made in it exist.
+        stream = crafted_stream([("a", tarfile.DIRTYPE, b""), ("a/f", tarfile.REGTYPE, b"12345"),
+                                 ("g", tarfile.REGTYPE, b"")])
+        synced = []
+        real_fsync = os.fsync
+
+        def listing(fd):
+            # A descriptor of its own: a listing through fd itself starts where fd's position is.
+            fresh = os.open(".", os.O_RDONLY | os.O_DIRECTORY, dir_fd=fd)
+            try:
+                return sorted(os.listdir(fresh))
+            finally:
+                os.close(fresh)
+
+        def recording_fsync(fd):
+            st = os.fstat(fd)
+            synced.append((st.st_ino, listing(fd) if stat.S_ISDIR(st.st_mode) else None))
+            real_fsync(fd)
+
+        with mock.patch.object(svc.os, "fsync", recording_fsync):
+            svc.extract_stream(stream, self.dst)
+
+        def ino(rel):
+            return os.lstat(os.path.join(self.dst, rel)).st_ino
+
+        self.assertEqual(synced, [(ino("a/f"), None), (ino("g"), None), (ino("."), ["a", "g"]), (ino("a"), ["f"])])
+
     def test_extract_refuses_data_after_the_archive(self):
         stream = crafted_stream([("f", tarfile.REGTYPE, b"1")])
         raw = stream.getvalue() + b"trailing"
