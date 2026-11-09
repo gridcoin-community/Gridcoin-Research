@@ -35,6 +35,9 @@ Rules
      from HKCU
   13 the update script checks its helpers before it dot-sources them, with a copy of
      Get-GridcoinWriteVector whose masks and privileged SIDs equal GridcoinCommon.ps1's
+  14 the installer and the uninstaller point $PLUGINSDIR at a new folder under Program Files as
+     the first thing .onInit and un.onInit do (GRC_ADMIN_PLUGINSDIR, which sets it with
+     UnsafeStrCpy), and nothing calls InitPluginsDir
 
 Usage
   lint-windows-scripts.py              check the tree
@@ -92,6 +95,7 @@ STEP_LINE_RE = re.compile(
 STEP_COPY_RE = re.compile(r"^\s*File /oname=\$PLUGINSDIR\\(Invoke-GridcoinInstallStep|GridcoinCommon)\.ps1 ")
 INSTALLED_FILE_RE = re.compile(r"^\s*File (?!/oname=\$PLUGINSDIR\\)")
 DELETION_RE = re.compile(r"^\s*(?:Delete|RMDir)\b", re.IGNORECASE)
+UNINSTALL_SECTION_RE = re.compile(r"^\s*Section\b.*\s-?un\.")
 
 # The access list of a custom install directory (rule 8), as SDDL.
 SDDL_RE = re.compile(r"^\$script:InstallDirSddl = '([^']*)'\s*$", re.MULTILINE)
@@ -232,7 +236,11 @@ def rule5(files):
             if len(copied) < 2 or index < max(copied):
                 failures.append(f"rule 5: {NSIS}:{index + 1}: {step} runs before the step script and "
                                 "GridcoinCommon.ps1 are copied to $PLUGINSDIR")
-    deleted = first_line(lines, DELETION_RE)
+    # The uninstaller's first deletion, in its sections, which start at the first "un." one. A
+    # deletion before them (GRC_ADMIN_PLUGINSDIR clearing its own leftover folder) removes no
+    # installed file.
+    uninstall_start = first_line(lines, UNINSTALL_SECTION_RE) or 0
+    deleted = next((i for i in range(uninstall_start, len(lines)) if DELETION_RE.search(lines[i])), None)
     for index in runs.get("PreUninstall", []):
         if deleted is not None and index > deleted:
             failures.append(f"rule 5: {NSIS}:{index + 1}: PreUninstall runs after the first file is deleted")
@@ -453,7 +461,38 @@ def rule13(files):
     return failures
 
 
-RULES = (rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9, rule10, rule11, rule12, rule13)
+ADMIN_PLUGINSDIR_RE = re.compile(r"^\s*!insertmacro\s+GRC_ADMIN_PLUGINSDIR\s+\w+\s*$")
+PROGRAMFILES_DEFINE_RE = re.compile(r'^\s*!define\s+GRC_PROGRAMFILES\s+"(\S+)"\s*$')
+
+
+def rule14(files):
+    failures = []
+    nsis = files.get(NSIS)
+    if nsis is None:
+        return failures
+    # comments and blank lines do not count
+    lines = [line for line in nsis.splitlines() if line.strip() and not line.lstrip().startswith((";", "#"))]
+    if any(re.match(r"^\s*InitPluginsDir\b", line) for line in lines):
+        failures.append(f"rule 14: {NSIS}: calls InitPluginsDir; set $PLUGINSDIR with GRC_ADMIN_PLUGINSDIR")
+    defines = [m.group(1) for m in map(PROGRAMFILES_DEFINE_RE.match, lines) if m]
+    if not defines or any(value not in ("$PROGRAMFILES64", "$PROGRAMFILES") for value in defines):
+        failures.append(f"rule 14: {NSIS}: GRC_PROGRAMFILES is not defined as $PROGRAMFILES64 or $PROGRAMFILES")
+    start = next((i for i, line in enumerate(lines) if re.match(r"^\s*!macro\s+GRC_ADMIN_PLUGINSDIR\b", line)), None)
+    end = next((i for i in range(start or 0, len(lines)) if lines[i].strip() == "!macroend"), None)
+    body = lines[start:end] if start is not None and end is not None else []
+    sets = [line for line in body if re.match(r'^\s*UnsafeStrCpy\s+\$PLUGINSDIR\s', line)]
+    made = [line for line in body if re.match(r'^\s*StrCpy\s+\$0\s+"\$\{GRC_PROGRAMFILES\}\\', line)]
+    if not sets or not made:
+        failures.append(f"rule 14: {NSIS}: GRC_ADMIN_PLUGINSDIR does not set $PLUGINSDIR to a folder under "
+                        "${GRC_PROGRAMFILES}")
+    for function in (".onInit", "un.onInit"):
+        index = next((i for i, line in enumerate(lines) if line.split() == ["Function", function]), None)
+        if index is None or index + 1 >= len(lines) or not ADMIN_PLUGINSDIR_RE.match(lines[index + 1]):
+            failures.append(f"rule 14: {NSIS}: {function} does not start with GRC_ADMIN_PLUGINSDIR")
+    return failures
+
+
+RULES = (rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9, rule10, rule11, rule12, rule13, rule14)
 
 GOOD_PS1 = "#Requires -Version 5.1\nSet-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n"
 
@@ -476,10 +515,15 @@ GOOD_MAIN_TAIL = ("    File x\\gridcoinresearch.exe\n"
                   + step_line("ReportPermissions", "$INSTDIR\\windows") + "SectionEnd\n")
 GOOD_UNINSTALL = ("Section -un.Main\n" + step_line("PreUninstall", "$INSTDIR\\windows", False)
                   + "    Delete x\n    RMDir /r y\nSectionEnd\n"
-                  + "Function un.onInit\n" + step_line("UninstallCheck", "$INSTDIR\\windows", False, "ExecToStack")
-                  + "FunctionEnd\n")
+                  + "Function un.onInit\n    !insertmacro GRC_ADMIN_PLUGINSDIR uninstall\n"
+                  + step_line("UninstallCheck", "$INSTDIR\\windows", False, "ExecToStack") + "FunctionEnd\n")
+GOOD_PLUGINSDIR = ('!define GRC_PROGRAMFILES "$PROGRAMFILES64"\n'
+                   "!macro GRC_ADMIN_PLUGINSDIR NAME\n"
+                   '    StrCpy $0 "${GRC_PROGRAMFILES}\\x.${NAME}"\n'
+                   "    RMDir /r $0\n    CreateDirectory $0\n    UnsafeStrCpy $PLUGINSDIR $0\n!macroend\n"
+                   "Function .onInit\n    !insertmacro GRC_ADMIN_PLUGINSDIR setup\n    SetShellVarContext all\nFunctionEnd\n")
 GOOD_RESTART = "Function .onInstFailed\n" + step_line("RestartStopped") + "FunctionEnd\n"
-GOOD_NSIS = GOOD_MAIN_HEAD + GOOD_MAIN_TAIL + GOOD_RESTART + GOOD_UNINSTALL
+GOOD_NSIS = GOOD_PLUGINSDIR + GOOD_MAIN_HEAD + GOOD_MAIN_TAIL + GOOD_RESTART + GOOD_UNINSTALL
 GOOD_SDDL = "O:BAD:PAI(A;OICI;FA;;;BA)(A;OICI;FA;;;SY)(A;OICI;0x1200a9;;;BU)"
 PIN_LINE = '$env:PSModulePath = "$PSHOME\\Modules;$env:ProgramFiles\\WindowsPowerShell\\Modules"\n'
 GOOD_MASKS = ("    $fileMask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete')\n"
@@ -514,6 +558,13 @@ BAD_SAMPLES = (
     (12, {NSIS: GOOD_NSIS + '    ExpandEnvStrings $1 "%COMSPEC%"\n'}),
     (12, {NSIS: GOOD_NSIS + '    ReadRegStr $1 HKCU "SOFTWARE\\x" "UninstallString"\n'}),
     (12, {NSIS: GOOD_NSIS + "    ExecWait '$1 /C tasklist.exe'\n"}),
+    (14, {NSIS: GOOD_NSIS.replace("Section -Main\n", "Section -Main\n    InitPluginsDir\n")}),
+    (14, {NSIS: GOOD_NSIS.replace("Function .onInit\n    !insertmacro GRC_ADMIN_PLUGINSDIR setup\n",
+                                  "Function .onInit\n    SetShellVarContext all\n    !insertmacro GRC_ADMIN_PLUGINSDIR setup\n")}),
+    (14, {NSIS: GOOD_NSIS.replace("    !insertmacro GRC_ADMIN_PLUGINSDIR uninstall\n", "")}),
+    (14, {NSIS: GOOD_NSIS.replace("    UnsafeStrCpy $PLUGINSDIR $0\n", "")}),
+    (14, {NSIS: GOOD_NSIS.replace('"${GRC_PROGRAMFILES}\\x.${NAME}"', '"$TEMP\\x.${NAME}"')}),
+    (14, {NSIS: GOOD_NSIS.replace('!define GRC_PROGRAMFILES "$PROGRAMFILES64"', '!define GRC_PROGRAMFILES "$TEMP"')}),
     (13, {UPDATE: GOOD_UPDATE.replace(GOOD_PRELOAD, "")}),
     (13, {UPDATE: GOOD_UPDATE.replace("'CreateFiles, Delete')\n}", "'CreateFiles')\n}")}),
     (13, {UPDATE: GOOD_UPDATE.replace("$allowed = @('S-1-5-18', 'S-1-5-32-544')", "$allowed = @('S-1-5-18')")}),

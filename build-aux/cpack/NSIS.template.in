@@ -68,6 +68,32 @@ Unicode true
 !endif
 !macroend
 
+# The installer keeps its plug-ins (nsExec, and the StartMenu and nsDialogs plug-ins the pages use),
+# the steps of Invoke-GridcoinInstallStep.ps1 and their state files in $PLUGINSDIR, which .onInit and
+# un.onInit first point at a new folder under Program Files. NSIS deletes $PLUGINSDIR when the program
+# exits.
+!if "@CPACK_WINDOWS_BITS@" == "64"
+!define GRC_PROGRAMFILES "$PROGRAMFILES64"
+!else
+!define GRC_PROGRAMFILES "$PROGRAMFILES"
+!endif
+!macro GRC_ADMIN_PLUGINSDIR NAME
+    StrCpy $0 "${GRC_PROGRAMFILES}\@CPACK_PACKAGE_INSTALL_DIRECTORY@.${NAME}"
+    ; Left by a run that did not exit. Only an administrator can have made it.
+    RMDir /r $0
+    ${If} ${FileExists} "$0\*.*"
+        MessageBox MB_OK|MB_ICONSTOP "The folder $0 is left from an earlier run and could not be removed. Remove it, then run this program again." /SD IDOK
+        Abort
+    ${EndIf}
+    ClearErrors
+    CreateDirectory $0
+    ${If} ${Errors}
+        MessageBox MB_OK|MB_ICONSTOP "The folder $0 could not be created, so nothing was changed." /SD IDOK
+        Abort
+    ${EndIf}
+    UnsafeStrCpy $PLUGINSDIR $0
+!macroend
+
 # Variables
 Var StartMenuGroup
 # From the StartCore step: task (the account's own Core-Start was restarted), othr (a service or
@@ -115,10 +141,10 @@ ShowUninstDetails show
 # Installer sections
 Section -Main SEC0000
     # Before anything is replaced, the steps of Invoke-GridcoinInstallStep.ps1 run from
-    # $PLUGINSDIR, as $INSTDIR may not exist yet or may hold an earlier version. HardenInstallDir
-    # comes first, so that a directory it refuses leaves every core running; StopCore starts again
-    # what it stopped when it refuses.
-    InitPluginsDir
+    # $PLUGINSDIR (under Program Files, GRC_ADMIN_PLUGINSDIR), as $INSTDIR may not exist yet, may
+    # hold an earlier version, or may be a directory HardenInstallDir has yet to check.
+    # HardenInstallDir comes first, so that a directory it refuses leaves every core running;
+    # StopCore starts again what it stopped when it refuses.
     File /oname=$PLUGINSDIR\Invoke-GridcoinInstallStep.ps1 @CPACK_TEMPORARY_DIRECTORY@\daemon\windows\Invoke-GridcoinInstallStep.ps1
     File /oname=$PLUGINSDIR\GridcoinCommon.ps1 @CPACK_TEMPORARY_DIRECTORY@\daemon\windows\GridcoinCommon.ps1
     DetailPrint "Checking the install directory $INSTDIR ..."
@@ -296,7 +322,7 @@ grc_no_restart:
 FunctionEnd
 
 Function .onInit
-    InitPluginsDir
+    !insertmacro GRC_ADMIN_PLUGINSDIR setup
     SetShellVarContext all
 !if "@CPACK_WINDOWS_BITS@" == "64"
     ${If} ${RunningX64}
@@ -362,6 +388,7 @@ FunctionEnd
 
 # Uninstaller functions
 Function un.onInit
+    !insertmacro GRC_ADMIN_PLUGINSDIR uninstall
     SetShellVarContext all
 !if "@CPACK_WINDOWS_BITS@" == "64"
     ${If} ${RunningX64}
