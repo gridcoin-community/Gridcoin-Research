@@ -1698,7 +1698,7 @@ BOOST_AUTO_TEST_CASE(a_passphrase_change_derives_without_holding_cs_wallet)
 
     // A derivation of about two seconds on this machine, which no key passes,
     // so the attempt is refused as soon as its derivation ends.
-    fx.MakeEveryDerivationLongAndFutile(std::chrono::seconds{2});
+    const std::string derivation = fx.MakeEveryDerivationLongAndFutile(std::chrono::seconds{2});
 
     std::atomic<bool> began{false};
     std::future<bool> change = std::async(std::launch::async, [&fx, &began] {
@@ -1720,6 +1720,15 @@ BOOST_AUTO_TEST_CASE(a_passphrase_change_derives_without_holding_cs_wallet)
     // QEMU emulation, many times slower.
     bool refused_while_held{false};
     bool waited_for_the_lock{false};
+    // What each round saw, for the failure message.
+    const auto began_at = std::chrono::steady_clock::now();
+    const auto since_began = [&began_at] {
+        return ToString(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                  std::chrono::steady_clock::now() - began_at)
+                                  .count()) +
+               " ms";
+    };
+    std::string rounds;
 
     for (int round = 0; round < 3 && !refused_while_held; ++round) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -1730,6 +1739,8 @@ BOOST_AUTO_TEST_CASE(a_passphrase_change_derives_without_holding_cs_wallet)
         if (std::chrono::steady_clock::now() - asked >= std::chrono::milliseconds(500)) {
             waited_for_the_lock = true;
         }
+        rounds += "; round " + ToString(round) + " held cs_wallet at " + since_began() + " with " +
+                  ToString(fx.wallet.FailedUnlockCount()) + " refusals";
 
         if (fx.wallet.FailedUnlockCount() != 0) break;
 
@@ -1738,11 +1749,12 @@ BOOST_AUTO_TEST_CASE(a_passphrase_change_derives_without_holding_cs_wallet)
         }
 
         refused_while_held = fx.wallet.FailedUnlockCount() == 1;
+        rounds += ", " + ToString(fx.wallet.FailedUnlockCount()) + " at " + since_began();
     }
 
     BOOST_CHECK(!change.get());
 
-    BOOST_CHECK(refused_while_held);
+    BOOST_CHECK_MESSAGE(refused_while_held, "the refusal was not counted while cs_wallet was held: " << derivation << rounds);
     BOOST_CHECK(!waited_for_the_lock);
     BOOST_CHECK(fx.wallet.IsLocked());
 }

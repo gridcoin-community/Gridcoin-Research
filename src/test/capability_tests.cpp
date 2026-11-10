@@ -16,6 +16,7 @@
 #include "sync.h"
 #include "test/staking_test_peers.h"
 #include "test/state_guard.h"
+#include "util/string.h"
 #include "util/time.h"
 #include "wallet/capability.h"
 #include "wallet/wallet.h"
@@ -785,7 +786,7 @@ BOOST_AUTO_TEST_CASE(unlock_derives_without_holding_cs_wallet)
     // which this thread holds. As it is, the unlock below is refused as soon
     // as the derivation ends, without taking cs_wallet, and the refusal is
     // counted before its delay is slept.
-    fx.MakeEveryDerivationLongAndFutile(std::chrono::seconds{2});
+    const std::string derivation = fx.MakeEveryDerivationLongAndFutile(std::chrono::seconds{2});
 
     std::atomic<bool> began{false};
     std::future<bool> unlock = std::async(std::launch::async, [&fx, &began] {
@@ -809,6 +810,15 @@ BOOST_AUTO_TEST_CASE(unlock_derives_without_holding_cs_wallet)
     // minutes, since CI also runs the suite under QEMU emulation, many times slower.
     bool refused_while_held{false};
     bool waited_for_the_lock{false};
+    // What each round saw, for the failure message.
+    const auto began_at = std::chrono::steady_clock::now();
+    const auto since_began = [&began_at] {
+        return ToString(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                  std::chrono::steady_clock::now() - began_at)
+                                  .count()) +
+               " ms";
+    };
+    std::string rounds;
 
     for (int round = 0; round < 3 && !refused_while_held; ++round) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -819,6 +829,8 @@ BOOST_AUTO_TEST_CASE(unlock_derives_without_holding_cs_wallet)
         if (std::chrono::steady_clock::now() - asked >= std::chrono::milliseconds(500)) {
             waited_for_the_lock = true;
         }
+        rounds += "; round " + ToString(round) + " held cs_wallet at " + since_began() + " with " +
+                  ToString(fx.wallet.FailedUnlockCount()) + " refusals";
 
         // Counted before this thread held the lock, so nothing is left to show.
         if (fx.wallet.FailedUnlockCount() != 0) break;
@@ -828,13 +840,14 @@ BOOST_AUTO_TEST_CASE(unlock_derives_without_holding_cs_wallet)
         }
 
         refused_while_held = fx.wallet.FailedUnlockCount() == 1;
+        rounds += ", " + ToString(fx.wallet.FailedUnlockCount()) + " at " + since_began();
     }
 
     BOOST_CHECK(!unlock.get());
 
     // The attempt finished deriving while this thread held cs_wallet, and
     // taking cs_wallet never waited for a derivation.
-    BOOST_CHECK(refused_while_held);
+    BOOST_CHECK_MESSAGE(refused_while_held, "the refusal was not counted while cs_wallet was held: " << derivation << rounds);
     BOOST_CHECK(!waited_for_the_lock);
     BOOST_CHECK(fx.wallet.IsLocked());
 }

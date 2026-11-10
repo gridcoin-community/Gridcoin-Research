@@ -13,6 +13,7 @@
 #include "scheduler.h"
 #include "support/allocators/secure.h"
 #include "sync.h"
+#include "util/string.h"
 #include "util/time.h"
 #include "wallet/wallet.h"
 
@@ -21,6 +22,7 @@
 #include <algorithm>
 #include <chrono>
 #include <memory>
+#include <string>
 #include <thread>
 
 // The two test peers make tokens that elsewhere only the named factories and
@@ -99,7 +101,8 @@ struct EncryptedWallet
     //! decrypts it (CBC refuses a ciphertext that is not a whole number of blocks): an unlock or a
     //! passphrase change is then refused as soon as its derivation ends. Timed, since a count that
     //! takes a second here can take minutes under the CI's emulation of another architecture.
-    void MakeEveryDerivationLongAndFutile(std::chrono::milliseconds duration)
+    //! Returns the count and the sample it was scaled from, for a failure message.
+    std::string MakeEveryDerivationLongAndFutile(std::chrono::milliseconds duration)
     {
         LOCK(wallet.cs_wallet);
         BOOST_REQUIRE(!wallet.mapMasterKeys.empty());
@@ -121,6 +124,9 @@ struct EncryptedWallet
             BOOST_REQUIRE(!entry.second.vchCryptedKey.empty());
             entry.second.vchCryptedKey.pop_back();
         }
+
+        return ToString(iterations) + " iterations, " + ToString(SAMPLE) + " of which took " +
+               ToString(static_cast<long long>(sample * 1000)) + " ms";
     }
 
     void UnlockFor(UnlockScope scope)
