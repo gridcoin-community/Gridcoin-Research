@@ -1111,9 +1111,21 @@ static void OpenRpcAcceptor(boost::asio::ip::tcp::acceptor& acceptor, const boos
 #endif
 }
 
-void OpenRpcAcceptorForTest(boost::asio::ip::tcp::acceptor& acceptor, const boost::asio::ip::tcp& protocol)
+RpcBindError BindRpcAcceptorForTest(const std::string& address, unsigned short port,
+                                    const std::function<void(unsigned short)>& while_listening)
 {
-    OpenRpcAcceptor(acceptor, protocol);
+    boost::asio::io_context io;
+    boost::asio::ip::tcp::acceptor acceptor(io);
+    const boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address(address), port);
+    try {
+        OpenRpcAcceptor(acceptor, endpoint.protocol());
+        acceptor.bind(endpoint);
+        acceptor.listen();
+    } catch (const boost::system::system_error& e) {
+        return ClassifyRpcBindError(e.code());
+    }
+    if (while_listening) while_listening(acceptor.local_endpoint().port());
+    return RpcBindError::None;
 }
 
 //! Bind one acceptor per -rpcbind entry.

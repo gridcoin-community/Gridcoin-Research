@@ -112,41 +112,28 @@ BOOST_AUTO_TEST_CASE(live_conflict_classified)
     socklen_t len = sizeof(sin);
     BOOST_REQUIRE(::getsockname(holder, reinterpret_cast<sockaddr*>(&sin), &len) == 0);
 
-    boost::asio::io_context io;
-    boost::asio::ip::tcp::acceptor acceptor(io);
-    const boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address_v4::loopback(), ntohs(sin.sin_port));
-    bool threw = false;
-    try {
-        OpenRpcAcceptorForTest(acceptor, endpoint.protocol());
-        acceptor.bind(endpoint);
-        acceptor.listen();
-    } catch (const boost::system::system_error& e) {
-        threw = true;
-        BOOST_CHECK(ClassifyRpcBindError(e.code()) == RpcBindError::Conflict);
-    }
-    BOOST_CHECK(threw);
+    BOOST_CHECK(BindRpcAcceptorForTest("127.0.0.1", ntohs(sin.sin_port)) == RpcBindError::Conflict);
     ::close(holder);
 }
 #else
 BOOST_AUTO_TEST_CASE(windows_exclusive_blocks_cobind)
 {
-    boost::asio::io_context io;
-    boost::asio::ip::tcp::acceptor acceptor(io);
-    OpenRpcAcceptorForTest(acceptor, boost::asio::ip::tcp::v4());
-    acceptor.bind(boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v4::loopback(), 0));
-    acceptor.listen();
-    const unsigned short port = acceptor.local_endpoint().port();
-
-    SOCKET s = CreateCloexecSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    BOOST_REQUIRE(s != INVALID_SOCKET);
-    BOOL one = TRUE;
-    ::setsockopt(s, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&one), sizeof(one));
-    sockaddr_in sin{};
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    sin.sin_port = htons(port);
-    BOOST_CHECK(::bind(s, reinterpret_cast<sockaddr*>(&sin), sizeof(sin)) != 0);
-    ::closesocket(s);
+    bool listened = false;
+    const RpcBindError bound = BindRpcAcceptorForTest("127.0.0.1", 0, [&listened](unsigned short port) {
+        listened = true;
+        SOCKET s = CreateCloexecSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        BOOST_REQUIRE(s != INVALID_SOCKET);
+        BOOL one = TRUE;
+        ::setsockopt(s, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&one), sizeof(one));
+        sockaddr_in sin{};
+        sin.sin_family = AF_INET;
+        sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        sin.sin_port = htons(port);
+        BOOST_CHECK(::bind(s, reinterpret_cast<sockaddr*>(&sin), sizeof(sin)) != 0);
+        ::closesocket(s);
+    });
+    BOOST_CHECK(bound == RpcBindError::None);
+    BOOST_CHECK(listened);
 }
 #endif
 

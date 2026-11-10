@@ -8,6 +8,7 @@
 #define BITCOIN_RPC_SERVER_H
 
 #include <fs.h>
+#include <rpc/bind_policy.h>
 #include <support/allocators/secure.h>
 
 #include <boost/asio/ip/address.hpp>
@@ -73,8 +74,14 @@ bool RPCRefusedInWarmup(const std::string& method);
 //! tableRPC outside the socket server (the GUI console) applies it too.
 void ThrowIfRefusedInWarmup(const std::string& method);
 
-//! Test hook for the file-static acceptor setup, so a test binds exactly as the RPC server does.
-void OpenRpcAcceptorForTest(boost::asio::ip::tcp::acceptor& acceptor, const boost::asio::ip::tcp& protocol);
+//! Test hook for the file-static acceptor setup: opens an acceptor exactly as the RPC server does,
+//! binds it to \p address (a numeric address) and \p port and listens, and returns how the bind
+//! failed, or RpcBindError::None when it listens, after \p while_listening (when given) has run with
+//! the port it listens on. Every Boost.Asio object stays in this file: the test binary is built as
+//! C++20 and this library as C++17, and an asio object made under one and used under the other is not
+//! the same class (with Homebrew's Boost 1.92 an acceptor made in the test crashed in assign()).
+RpcBindError BindRpcAcceptorForTest(const std::string& address, unsigned short port,
+                                    const std::function<void(unsigned short)>& while_listening = {});
 void StopRPCThreads();
 int CommandLineRPC(int argc, char *argv[]);
 
