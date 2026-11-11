@@ -529,6 +529,7 @@ def rule15(files):
 UNINSTALL_KEY_RE = re.compile(r"^\$uninstallKey = 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\(.+)'\s*$",
                               re.MULTILINE)
 NSIS_NAME = 'Name "@CPACK_NSIS_PACKAGE_NAME@ (@CPACK_WINDOWS_BITS@-bit)"'
+NSIS_UNINSTALL_KEY = '"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\$(^Name)"'
 
 
 def rule16(files):
@@ -539,6 +540,15 @@ def rule16(files):
     # The installer is named "<CPACK_NSIS_PACKAGE_NAME> (<bits>-bit)" and writes its uninstall key under that name.
     if not any(line.strip() == NSIS_NAME for line in nsis.splitlines()):
         failures.append(f"rule 16: {NSIS}: the installer's Name is not {NSIS_NAME}")
+    # Every line that writes under an Uninstall key writes under that name's.
+    written = [line.strip() for line in nsis.splitlines()
+               if re.match(r"\s*WriteReg\w+\s", line) and "\\Uninstall\\" in line]
+    for line in written:
+        if not re.match(r"WriteReg\w+ HKLM " + re.escape(NSIS_UNINSTALL_KEY) + r" ", line):
+            failures.append(f"rule 16: {NSIS}: writes an uninstall value elsewhere than {NSIS_UNINSTALL_KEY}: {line}")
+    if not any(re.match(r"WriteRegStr HKLM " + re.escape(NSIS_UNINSTALL_KEY) + r" DisplayVersion ", line)
+               for line in written):
+        failures.append(f"rule 16: {NSIS}: no DisplayVersion is written under {NSIS_UNINSTALL_KEY}")
     package = re.search(r"^set\(CPACK_NSIS_PACKAGE_NAME\s+(\S+?)\)", root_cmake, re.MULTILINE)
     project = re.search(r'^project\("([^"]+)"', root_cmake, re.MULTILINE)
     name = package.group(1) if package else None
@@ -599,7 +609,9 @@ def step_line(step, where="$PLUGINSDIR", state=True, run="ExecToLog"):
 GOOD_COPIES = ("    File /oname=$PLUGINSDIR\\Invoke-GridcoinInstallStep.ps1 x\\Invoke-GridcoinInstallStep.ps1\n"
                "    File /oname=$PLUGINSDIR\\GridcoinCommon.ps1 x\\GridcoinCommon.ps1\n")
 GOOD_MAIN_HEAD = "Section -Main\n" + GOOD_COPIES + step_line("StopCore") + step_line("HardenInstallDir")
-GOOD_MAIN_TAIL = ("    File x\\gridcoinresearch.exe\n"
+GOOD_KEY_WRITE = ('    WriteRegStr HKLM "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\$(^Name)" '
+                  'DisplayVersion "${VERSION}"\n')
+GOOD_MAIN_TAIL = ("    File x\\gridcoinresearch.exe\n" + GOOD_KEY_WRITE
                   + step_line("SwitchOver", "$INSTDIR\\windows") + step_line("StartCore", "$INSTDIR\\windows")
                   + step_line("ReportPermissions", "$INSTDIR\\windows") + "SectionEnd\n")
 GOOD_UNINSTALL = ("Section -un.Main\n" + step_line("PreUninstall", "$INSTDIR\\windows", False)
@@ -665,6 +677,9 @@ BAD_SAMPLES = (
     (16, {ROOT_CMAKE: GOOD_FILES[ROOT_CMAKE].replace('project("Gridcoin"', 'project("GridcoinResearch"')}),
     (16, {NSIS: GOOD_NSIS.replace('Name "@CPACK_NSIS_PACKAGE_NAME@ (@CPACK_WINDOWS_BITS@-bit)"', 'Name "Gridcoin"')}),
     (16, {UPDATE: GOOD_UPDATE.replace(GOOD_KEY_LINE, "")}),
+    # The key's own lines: written under another name, or the version not written at all.
+    (16, {NSIS: GOOD_NSIS.replace("Uninstall\\$(^Name)", "Uninstall\\Gridcoin")}),
+    (16, {NSIS: GOOD_NSIS.replace(GOOD_KEY_WRITE, "")}),
     (17, {COMMON: GOOD_FILES[COMMON] + "Add-Type -TypeDefinition $source -ReferencedAssemblies 'System.Security'\n"}),
     (17, {INSTALL: GOOD_FILES[INSTALL] + "Add-Type -MemberDefinition $sig -Name Native -Namespace G\n"}),
     (17, {"contrib/windows/Other.ps1": GOOD_PS1 + "Add-Type -Path .\\x.cs\n"}),
