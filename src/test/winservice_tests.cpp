@@ -122,6 +122,17 @@ struct FakeScm
         return reports;
     }
 
+    //! Whether \p count reports in \p state came within ten seconds.
+    bool WaitForCount(SvcState state, size_t count)
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        return cv.wait_for(lock, std::chrono::seconds{10}, [&] {
+            return static_cast<size_t>(std::count_if(reports.begin(), reports.end(), [&](const SvcStatus& s) {
+                       return s.state == state;
+                   })) >= count;
+        });
+    }
+
     //! Whether a report in \p state came within ten seconds.
     bool WaitFor(SvcState state)
     {
@@ -614,8 +625,9 @@ BOOST_AUTO_TEST_CASE(runner_self_stop_reports_progress_and_exits_1)
     std::thread service([&] {
         runner.Run([&] {
             const bool stopped = RunUntil(scm.shutdown);
-            // The shutdown takes a while, long enough for several progress reports.
-            std::this_thread::sleep_for(std::chrono::milliseconds{80});
+            // The shutdown takes a while: until several progress reports have come, however long
+            // a busy machine takes to run the watcher.
+            scm.WaitForCount(SvcState::StopPending, 3);
             return stopped;
         });
     });
