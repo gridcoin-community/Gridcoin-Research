@@ -389,10 +389,10 @@ function Set-GridcoinInstallDirAcl {
         }
     }
 
-    # Under Program Files the list Program Files passes down keeps the directory for administrators,
-    # and is left as it is while it does.
-    $keepInherited = $underProgramFiles -and
-        (-not $existed -or -not (Get-GridcoinWriteVector -Path $script:InstallRoot -AllowedSids (Get-GridcoinPrivilegedSids)))
+    # Under Program Files an existing directory keeps the list Program Files passes down while that
+    # keeps it for administrators. A new one is made with the protected list wherever it is.
+    $keepInherited = $underProgramFiles -and $existed -and
+        -not (Get-GridcoinWriteVector -Path $script:InstallRoot -AllowedSids (Get-GridcoinPrivilegedSids))
     if ($keepInherited) {
         Write-Host "$script:InstallRoot is under $programFiles, whose access list keeps it for administrators."
     } elseif ($existed) {
@@ -402,10 +402,10 @@ function Set-GridcoinInstallDirAcl {
         [void][System.IO.Directory]::CreateDirectory($script:InstallRoot, $security)
         Write-Host "Created $script:InstallRoot with the owner Administrators and an access list that only administrators can change."
     }
-    if (-not $existed -and $keepInherited) { return }
 
+    # With the folders above it again, as this may have made some of them.
     $check = Get-Acl -LiteralPath $script:InstallRoot
-    $offender = Get-GridcoinWriteVector -Path $script:InstallRoot -AllowedSids (Get-GridcoinPrivilegedSids)
+    $offender = Get-GridcoinWriteVector -Path $script:InstallRoot -AllowedSids (Get-GridcoinPrivilegedSids) -ChainMasks
     if ((-not $keepInherited -and -not $check.AreAccessRulesProtected) -or $offender) {
         throw "the access list of $script:InstallRoot is not the one just set: $offender"
     }
@@ -619,9 +619,8 @@ function Invoke-GridcoinSwitchOver {
                     $otherCred = $unlockFacts.CredPath
                     if (-not $otherCred -and $unlockFacts.DataDir) { $otherCred = Join-Path $unlockFacts.DataDir 'autounlock\passphrase.cred' }
                     $otherLeft = @()
-                    if ($otherCred) {
-                        $otherLeft = @(Remove-GridcoinLegacyPassphraseFile -CredPath $otherCred -AccountSid ([string]$others[$account].Sid))
-                    }
+                    # Another account's file is left for that account to delete: the notice names it.
+                    if ($otherCred) { $otherLeft = @("$otherCred (it is $account's to delete)") }
                     Add-GridcoinAutounlockNotice -AccountName $account -Off (-not ($unlockFacts.Enabled -and $unlockFacts.BootOn)) `
                         -CredPath ([string]$otherCred) -NotDeleted $otherLeft
                 }

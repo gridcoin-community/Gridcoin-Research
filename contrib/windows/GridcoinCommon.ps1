@@ -661,39 +661,16 @@ function Get-GridcoinSessionUserSid {
 # account, so when the delete is refused and the owner is privileged, Administrators are first given
 # the right to delete it. Returns what is left, each with why; empty when nothing is.
 # The path comes from a task, which the account it runs as can rewrite, so only a file named
-# passphrase.cred is deleted, as the default an earlier version used is. With -AccountSid, for
-# another account's task, each file must be a plain file that account owns, and nothing is given
-# the right to delete it.
+# passphrase.cred is deleted, as the default an earlier version used is. For this account's own
+# file only: another account's is left for that account.
 function Remove-GridcoinLegacyPassphraseFile {
-    param(
-        [Parameter(Mandatory = $true)][string]$CredPath,
-        [string]$AccountSid
-    )
+    param([Parameter(Mandatory = $true)][string]$CredPath)
     $left = @()
     if ((Split-Path -Leaf $CredPath) -ne 'passphrase.cred') {
         return @("$CredPath (not deleted: an earlier version's passphrase file is named passphrase.cred)")
     }
     $oldDirectory = Split-Path -Parent $CredPath
     foreach ($oldFile in @($CredPath, (Join-Path $oldDirectory 'autounlock.log'), (Join-Path $oldDirectory 'autounlock.log.1'))) {
-        if ($PSBoundParameters.ContainsKey('AccountSid')) {
-            try {
-                $item = Get-Item -LiteralPath $oldFile -Force -ErrorAction SilentlyContinue
-                if ($null -eq $item) { continue }
-                if ($item.PSIsContainer -or ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
-                    $left += "$oldFile (not deleted: it is not a plain file)"
-                    continue
-                }
-                $owner = (Get-Acl -LiteralPath $oldFile).GetOwner([System.Security.Principal.SecurityIdentifier]).Value
-                if (-not $AccountSid -or $owner -ne $AccountSid) {
-                    $left += "$oldFile (not deleted: it belongs to $(Get-GridcoinAccountName $owner), not to the account whose task named it)"
-                    continue
-                }
-                [System.IO.File]::Delete($oldFile)
-            } catch {
-                $left += "$oldFile ($($_.Exception.Message))"
-            }
-            continue
-        }
         try {
             # No error for a file that does not exist; one for a directory that does not.
             [System.IO.File]::Delete($oldFile)

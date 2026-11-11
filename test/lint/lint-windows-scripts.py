@@ -44,9 +44,9 @@ Rules
      version and leaves the computer half empty)
   16 the update script reads the uninstall key the installer writes: Uninstall\\<CPACK_NSIS_PACKAGE_NAME>
      (64-bit), the package name the root CMakeLists.txt sets
-  17 no script compiles C# with Add-Type (-TypeDefinition, -MemberDefinition, -Path, -LiteralPath) but
-     GridcoinCommon.ps1's Add-GridcoinCompiledType, which compiles in a directory only SYSTEM and
-     Administrators can write
+  17 no script uses Add-Type, but to load an assembly by name (-AssemblyName, the whole statement on
+     one line), outside GridcoinCommon.ps1's Add-GridcoinCompiledType, which compiles in a directory
+     only SYSTEM and Administrators can write
 
 Usage
   lint-windows-scripts.py              check the tree
@@ -553,8 +553,12 @@ def rule16(files):
     return failures
 
 
-ADD_TYPE_COMPILE_RE = re.compile(r"\bAdd-Type\b[^\n]*-(TypeDefinition|MemberDefinition|Path|LiteralPath)\b", re.IGNORECASE)
+ADD_TYPE_RE = re.compile(r"\bAdd-Type\b", re.IGNORECASE)
+# The one use of Add-Type that compiles nothing: an assembly loaded by name, the whole statement
+# on its line.
+ADD_TYPE_BY_NAME_RE = re.compile(r"\s*Add-Type\s+-AssemblyName\s+[\w.]+\s*", re.IGNORECASE)
 COMPILER = "Add-GridcoinCompiledType"
+COMPILER_RE = re.compile(r"^function " + COMPILER + r"\s*\{.*?^\}$", re.MULTILINE | re.DOTALL)
 
 
 def rule17(files):
@@ -562,14 +566,15 @@ def rule17(files):
     for path, text in sorted(ps1_files(files).items()):
         # GridcoinCommon.ps1's compiler is the one place that compiles, in its own directory.
         skip = range(0)
-        body = function_body(text, COMPILER) if path == COMMON else None
+        body = COMPILER_RE.search(text) if path == COMMON else None
         if body is not None:
-            first = text[:text.find(body)].count("\n") + 1
-            skip = range(first, first + body.count("\n") + 1)
+            first = text[:body.start()].count("\n") + 1
+            skip = range(first, first + body.group(0).count("\n") + 1)
         for number, line in enumerate(text.splitlines(), 1):
             if number in skip:
                 continue
-            if ADD_TYPE_COMPILE_RE.search(line.split("#", 1)[0]):
+            code = line.split("#", 1)[0]
+            if ADD_TYPE_RE.search(code) and not ADD_TYPE_BY_NAME_RE.fullmatch(code):
                 failures.append(f"rule 17: {path}:{number}: compiles C# with Add-Type outside {COMPILER}, in a "
                                 "temporary directory that processes of the account which are not elevated can write")
     return failures
@@ -664,6 +669,11 @@ BAD_SAMPLES = (
     (17, {INSTALL: GOOD_FILES[INSTALL] + "Add-Type -MemberDefinition $sig -Name Native -Namespace G\n"}),
     (17, {"contrib/windows/Other.ps1": GOOD_PS1 + "Add-Type -Path .\\x.cs\n"}),
     (17, {"contrib/windows/Other.ps1": GOOD_PS1 + "Add-Type -LiteralPath $cs\n"}),
+    # The compile parameter on a later line, or splatted, and a function that only begins with the
+    # compiler's name.
+    (17, {"contrib/windows/Other.ps1": GOOD_PS1 + "Add-Type `\n    -TypeDefinition $source\n"}),
+    (17, {"contrib/windows/Other.ps1": GOOD_PS1 + "Add-Type @arguments\n"}),
+    (17, {COMMON: GOOD_FILES[COMMON] + "function Add-GridcoinCompiledTypeToo {\n    Add-Type -TypeDefinition $s\n}\n"}),
     (15, {SHUTDOWN: GOOD_SHUTDOWN.replace("($userVersion * 65536 + ($computerVersion % 65535) + 1)",
                                           "([int]$Matches[1] + 65536)")}),
     (15, {SHUTDOWN: GOOD_SHUTDOWN + "Set-ShutdownScriptState $cmdPath\n"}),
