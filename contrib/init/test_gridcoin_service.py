@@ -1442,9 +1442,15 @@ class RefusedKeyTests(unittest.TestCase):
             # contradicts testnet=, so any value but main counts.
             ("chain=test\n", True), ("chain = test # c\n", True), ("chain=regtest\n", True), ("chain=main\n", False),
             ("chain=main\ntestnet=1\n", True), ("[main]\nchain=test\n", False), ("main.chain=test\n", False),
+            # The first chain= wins, as for any setting of the file but testnet=.
+            ("chain=test\nchain=main\n", True), ("chain=main\nchain=test\n", False),
         ]
         for text, expected in cases:
             self.assertEqual(svc.conf_selects_testnet(text), expected, repr(text))
+
+    def test_conf_datadir_takes_the_first_line(self):
+        self.assertEqual(svc.conf_datadir("datadir=/a\ndatadir=/b\n"), "/a")
+        self.assertEqual(svc.conf_datadir("staking=1\n[test]\ndatadir=/t\n"), None)
 
     def test_conf_includes_files(self):
         # An includeconf= line anywhere: the files it names are not read here.
@@ -2687,6 +2693,15 @@ class EnableTests(SwitchTestBase):
                     self.assertEqual(rc, 1)
                     self.assertIn(refused, err)
                     self.assertEqual(self.host.calls, [])
+
+    def test_enable_takes_a_per_user_unit_that_names_the_default_datadir(self):
+        # As the switch-over keeps the released unit's -datadir: it is the directory enable moves.
+        write_tree(self.datadir, self.user_files())
+        rc, out, err = self.run_main("enable-user", "bob", "--datadir=" + self.datadir)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("-datadir=" + self.datadir, self.dropin("gridcoinresearchd@bob.service"))
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
 
     def test_enable_refuses_a_per_user_unit_with_its_own_datadir(self):
         write_tree(self.datadir, self.user_files())
@@ -4365,9 +4380,15 @@ class SwitchOverTests(ServiceTestBase):
         rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\n"))
         self.assertEqual(rc, 0, err)
         os.makedirs(os.path.join(data, "testnet"))
-        self.write_text(os.path.join(data, "testnet", "gridcoinresearch.conf"), "testnet=1\n")
+        # The testnet unit's conf may not include other files either.
+        testnet_conf = os.path.join(data, "testnet", "gridcoinresearch.conf")
+        self.write_text(testnet_conf, "testnet=1\nincludeconf=more.conf\n")
         self.system_override("-testnet -datadir=%s" % data, daemon="gridcointestnetd")
         state = self.write_state("system-core\n", network="test")
+        rc, out, err = self.run_main("switch-over", "--state=" + state, "--network=test")
+        self.assertEqual(rc, 1)
+        self.assertIn("%s includes other files" % testnet_conf, err)
+        self.write_text(testnet_conf, "testnet=1\n")
         rc, out, err = self.run_main("switch-over", "--state=" + state, "--network=test")
         self.assertEqual(rc, 0, err)
 
@@ -4837,8 +4858,9 @@ class SwitchOverTests(ServiceTestBase):
         self.host.calls.clear()
         rc, out, err = self.run_main("switch-over", "--state=" + self.write_state("system-core\nsystem-autounlock\n"))
         self.assertEqual(rc, 1)
-        if svc.autounlock_units_installed():
-            self.assertIn(("enable", "--now", "gridcoin-autounlock.socket"), self.host.calls)
+        # Nor is its autounlock switched before the service itself.
+        self.assertNotIn(("enable", "--now", "gridcoin-autounlock.socket"), self.host.calls)
+        self.assertIn("autounlock: not switched", err)
         self.assertFalse([call for call in self.host.calls if call[0] in ("restart", "try-restart")])
         os.unlink(os.path.join(self.system_unit_dir(), "override.conf"))
         # A run from the package leaves the restart to the package, and says so.

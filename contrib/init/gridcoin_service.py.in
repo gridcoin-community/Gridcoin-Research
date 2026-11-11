@@ -509,9 +509,19 @@ def check_dropin_dir(directory):
     return True
 
 
+def sync_directory(path):
+    """Put the entries of the directory at path on disk."""
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def ensure_dropin_dir(directory):
     if not check_dropin_dir(directory):
         os.mkdir(directory, 0o755)
+        sync_directory(os.path.dirname(directory))
 
 
 def write_dropin(paths, unit, filename, text):
@@ -523,10 +533,13 @@ def write_dropin(paths, unit, filename, text):
     try:
         with os.fdopen(fd, "w", encoding="utf8") as f:
             f.write(text)
-        os.chmod(temp, 0o644)
-        if os.geteuid() == 0:
-            os.chown(temp, 0, 0)
+            os.fchmod(f.fileno(), 0o644)
+            if os.geteuid() == 0:
+                os.fchown(f.fileno(), 0, 0)
+            f.flush()
+            os.fsync(f.fileno())
         os.rename(temp, final)
+        sync_directory(directory)
     except BaseException:
         if os.path.exists(temp):
             os.unlink(temp)
@@ -893,8 +906,8 @@ def conf_selects_testnet(text):
     """Whether a conf selects a network other than mainnet in its top level, before any [section]
     line, as the core reads it: lines as GetConfigOptions reads them, testnet=<v> as InterpretBool(v)
     and notestnet=<v> as its negation (InterpretOption), the last such line winning, and chain=<v>,
-    the last one winning, for any network but main (GetChainName; the core refuses to start when
-    the two disagree)."""
+    the first one winning as for any other setting of the file, for any network but main
+    (GetChainName; the core refuses to start when the two disagree)."""
     selected = False
     chain = None
     for line in text.split("\n"):
@@ -908,15 +921,14 @@ def conf_selects_testnet(text):
             selected = interpret_bool(value)
         elif name == "notestnet":
             selected = not interpret_bool(value)
-        elif name == "chain":
+        elif name == "chain" and chain is None:
             chain = value
     return selected or (chain is not None and chain != "main")
 
 
 def conf_datadir(text):
-    """The datadir= a conf sets in its top level, before any [section] line, the last one winning,
-    as the core reads it; None when it sets none."""
-    found = None
+    """The datadir= a conf sets in its top level, before any [section] line, the first one winning,
+    as the core reads its configuration file; None when it sets none."""
     for line in text.split("\n"):
         body = line.split("#", 1)[0].strip(" \t\r\n")
         if body.startswith("[") and body.endswith("]"):
@@ -925,8 +937,8 @@ def conf_datadir(text):
             continue
         name, value = (part.strip(" \t\r\n") for part in body.split("=", 1))
         if name == "datadir":
-            found = value
-    return found
+            return value
+    return None
 
 
 def conf_includes_files(text):
@@ -1569,7 +1581,9 @@ def roll_back_enable(host, acct, s_fd, s_display, s_parent_fd, stash_name, stash
 
 def open_tool_state(paths):
     """The tool's own state directory, root's (/var/lib/gridcoin-service, from tmpfiles.d)."""
-    os.makedirs(paths.tool_state, 0o700, exist_ok=True)
+    if not os.path.isdir(paths.tool_state):
+        os.makedirs(paths.tool_state, 0o700, exist_ok=True)
+        sync_directory(os.path.dirname(paths.tool_state))
     return open_dir(paths.tool_state, uids=(os.geteuid(),))
 
 
@@ -1850,7 +1864,9 @@ def refuse_system_unit_datadir(paths, net, command_name):
 
 
 def refuse_user_unit_datadir(paths, net, user, d_display):
-    """enable moves only the default datadir, so the per-user unit must not have one of its own."""
+    """enable moves only the default datadir, so the per-user unit must not name another one. A
+    -datadir that names the default itself, as the switch-over keeps the released unit's, is the
+    directory enable moves."""
     unit = "%s@%s.service" % (net.daemon, user)
     directory = dropin_dir(paths, unit)
     if not check_dropin_dir(directory):
@@ -1865,9 +1881,10 @@ def refuse_user_unit_datadir(paths, net, user, d_display):
         raise UserError("%s is not UTF-8, so its -datadir cannot be checked; refusing" % path) from None
     except OSError as e:
         raise UserError("cannot read %s: %s; refusing" % (path, e.strerror)) from None
-    if re.search(r"(?m)^ExecStart=.*\s-datadir=", text):
-        raise UserError("%s gives %s a -datadir of its own, but enable moves only %s; move that wallet there "
-                        "first, then rerun enable-user without --datadir" % (path, unit, d_display))
+    for given in re.findall(r"(?m)^ExecStart=.*\s-datadir=(\S*)", text):
+        if os.path.realpath(given) != os.path.realpath(d_display):
+            raise UserError("%s gives %s a -datadir of its own, but enable moves only %s; move that wallet there "
+                            "first, then rerun enable-user without --datadir" % (path, unit, d_display))
 
 
 class Progress:
@@ -1993,9 +2010,9 @@ def enable(args, net, host, paths, progress):
                                 "all enable moves; refusing" % (conf_display, shown(other), d_display))
         # All enable moves is that directory, so the wallet must be in it.
         if "wallet.dat" not in s_names:
-            raise UserError("%s holds no wallet.dat, so this user's node does not keep its wallet there (a -datadir "
-                            "or datadir= elsewhere, say); enable moves only that directory, so there is nothing to "
-                            "move" % s_display)
+            raise UserError("%s holds no wallet.dat, so this user's node does not keep its wallet there (a -datadir, "
+                            "datadir= or wallet= elsewhere, say); enable moves only that directory, so there is "
+                            "nothing to move" % s_display)
         refuse_other_network_core(host, args.network, pw.pw_name)
 
         # 2. Stop both cores that could use either datadir. From here on every failure says what
@@ -2323,7 +2340,10 @@ def write_switchover_state(path, entries):
     lines = "".join("%s\n" % kind if user is None else "%s %s\n" % (kind, user) for kind, user in entries)
     with os.fdopen(os.open(temp, NEW_FILE_FLAGS, 0o600), "w", encoding="utf8") as f:
         f.write(lines)
+        f.flush()
+        os.fsync(f.fileno())
     os.rename(temp, path)
+    sync_directory(os.path.dirname(path))
 
 
 def scan_old_installs(net, host, paths):
@@ -2656,7 +2676,10 @@ def write_system_core_record(path, reenable):
     temp = "%s.%d.tmp" % (path, os.getpid())
     with os.fdopen(os.open(temp, NEW_FILE_FLAGS, 0o600), "w", encoding="utf8") as f:
         f.write(json.dumps({"reenable": reenable}) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
     os.rename(temp, path)
+    sync_directory(os.path.dirname(path))
 
 
 # The account the earlier system units ran as.
@@ -2740,9 +2763,10 @@ def system_dropped_words(net, words):
             and not core_option(word).startswith("-conf=")]
 
 
-def refuse_other_network_lines(fd, path):
-    """Refuse the conf open at fd for the mainnet unit when a line may have made the core another
-    network's node, or when it includes other files. testnet= at the top level, the first value
+def refuse_other_network_lines(fd, path, testnet=False):
+    """Refuse the conf open at fd when it includes other files, and for the mainnet unit also when
+    a line may have made the core another network's node (the testnet unit runs with -testnet,
+    whatever the file says). testnet= at the top level, the first value
     winning, would have made the core a testnet node, and rather than read it as the core does, any
     testnet= line refuses, in a section, with a network prefix, a leading dash or negated
     (notestnet=) too; so does any chain= line that names another network than main. An
@@ -2758,11 +2782,11 @@ def refuse_other_network_lines(fd, path):
             continue
         name = line.split("=", 1)[0].strip().rsplit(".", 1)[-1].lstrip("-")
         value = line.split("=", 1)[1].split("#", 1)[0].strip() if "=" in line else ""
-        if name in ("testnet", "notestnet"):
+        if not testnet and name in ("testnet", "notestnet"):
             raise UserError("%s has a testnet= line, so the core that read it may not have been a mainnet node; "
                             "if it is a mainnet node, remove that line, and if it is a testnet node, run it from "
                             "the testnet package's unit, then rerun the switch-over" % path)
-        if name == "chain" and value != "main":
+        if not testnet and name == "chain" and value != "main":
             raise UserError("%s has a chain= line for another network than main, so the core that read it may not "
                             "have been a mainnet node; if it is a mainnet node, remove that line, and if it is a "
                             "testnet node, run it from the testnet package's unit, then rerun the switch-over" % path)
@@ -2832,8 +2856,7 @@ def check_conf_writers(net, path, name, datadir, host):
             if not stat.S_ISREG(st.st_mode) or (st.st_dev, st.st_ino) != (lst.st_dev, lst.st_ino):
                 raise UserError("%s changed while it was checked; rerun the switch-over" % name)
             check(st, path, "it")
-            if not net.testnet:
-                refuse_other_network_lines(file_fd, path)
+            refuse_other_network_lines(file_fd, path, net.testnet)
         finally:
             os.close(file_fd)
     finally:
@@ -3263,6 +3286,10 @@ def cmd_switch_over(args, net, host, paths):
               % (user, net.daemon, user, datadir or "the default, under the home directory"))
     if (SYSTEM_AUTOUNLOCK, None) in entries:
         try:
+            # Its helper serves the service's core, so it waits for the service's own switch-over.
+            if (SYSTEM_CORE, None) in failed:
+                raise UserError("not switched, as the switch-over of %s.service itself did not finish"
+                                % net.daemon)
             system_changed = switch_system_autounlock(net, host, paths) or system_changed
         except (UserError, StepError, OSError) as e:
             print("%s: %s.service's autounlock: %s" % (net.tool_name, net.daemon, e), file=sys.stderr)

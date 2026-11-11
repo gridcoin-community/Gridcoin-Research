@@ -454,12 +454,12 @@ On an upgrade from a release with the earlier units (a forking `gridcoinresearch
     would drop, or with no `-conf` when its data directory has no `gridcoinresearch.conf`; on testnet, one without
     `-testnet`; a file to be renamed that also sets `BindPaths=`, `BindReadOnlyPaths=`, `RootDirectory=`,
     `RootImage=`, `TemporaryFileSystem=`, `MountImages=`, `ExtensionDirectories=` or `RequiresMountsFor=` (move
-    those to a drop-in of their own); for the mainnet service, a carried configuration file with a `testnet=` line,
-    a `chain=` line for another network than main, or an `includeconf=` line (the files it includes are not read);
-    and a carried configuration file that anyone but root and `gridcoin` can write. The message names the file and what to change. Until then a copy of the unit keeps running on its old
+    those to a drop-in of their own); for the mainnet service, a carried configuration file with a `testnet=` line
+    or a `chain=` line for another network than main; on either network, one with an `includeconf=` line (the
+    files it includes are not read); and a carried configuration file that anyone but root and `gridcoin` can write. The message names the file and what to change. Until then a copy of the unit keeps running on its old
     command line, and drop-ins alone keep the service from starting if they make the daemon fork, or run it on
     its old command line otherwise.
-  - **The system service's autounlock:** its credential, `/etc/gridcoin/wallet-passphrase.cred`, stays where it
+  - **The system service's autounlock** is switched only once the service itself is: its credential, `/etc/gridcoin/wallet-passphrase.cred`, stays where it
     is, owned by root with mode 0600, and the drop-in
     `/etc/systemd/system/gridcoin-autounlock.service.d/50-existing-credential.conf` points the helper at it. It is
     not decrypted, re-encrypted or moved.
