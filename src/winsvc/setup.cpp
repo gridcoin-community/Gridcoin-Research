@@ -2023,7 +2023,7 @@ void EnableService(const ToolOptions& options)
                                 "--from=<directory>.",
                                 Shown(root)));
     }
-    const bool root_redirected = !SamePath(root.wstring(), given_root.wstring());
+    const bool root_redirected = TreePathRedirected(given_root, root);
     if (!MovedRootOwnerAllowed(root_level.acl.owner, user->sid, root_redirected)) {
         throw Refusal(strprintf("%s%s is owned by %s, not %s%s, so no wallet is moved out of it. Give the account's "
                                 "own data directory with --from=<directory>.",
@@ -2034,18 +2034,28 @@ void EnableService(const ToolOptions& options)
                                 user->name, root_redirected ? "" : ", SYSTEM or Administrators"));
     }
     // A file the account's configuration includes would go into the service with the data directory
-    // and come back on disable as the account's own.
-    {
+    // and come back on disable as the account's own. The core reads the file in the data directory
+    // and then, as a testnet node, the one in its testnet directory, so both are read here. A
+    // datadir line in either says the core's wallet is in another directory than this one.
+    std::vector<fs::path> conf_paths{root / L"gridcoinresearch.conf"};
+    if (net == Network::Test) conf_paths.push_back(net_root / L"gridcoinresearch.conf");
+    for (const fs::path& conf_path : conf_paths) {
         std::string conf_text;
         bool absent = false;
         std::string error;
-        const fs::path conf_path = root / L"gridcoinresearch.conf";
         if (ReadFileNoFollow(conf_path, SETTINGS_SIZE_LIMIT, conf_text, absent, error)) {
             if (!ServiceConfAcceptable(conf_text)) {
                 throw Refusal(strprintf("%s includes other files (an includeconf line), which enable neither reads "
                                         "nor sets aside. Move their settings into it and remove the line, then run "
                                         "enable again.",
                                         Shown(conf_path)));
+            }
+            if (ConfNamesDataDir(conf_text)) {
+                throw Refusal(strprintf("%s names a data directory (a datadir line), so the wallet the core uses "
+                                        "may not be in %s. Remove the line if the core does not run on that "
+                                        "directory, or give that directory with --from=<directory>, then run "
+                                        "enable again.",
+                                        Shown(conf_path), Shown(net_root)));
             }
         } else if (!absent) {
             throw Refusal(strprintf("%s cannot be read, so it cannot be checked for an includeconf line: %s.",
@@ -2328,7 +2338,7 @@ void DisableService(const ToolOptions& options)
     const fs::path given_target = options.to ? TreePathOption("--to", *options.to)
                                              : TreePathOption("from in " + Shown(state_path), *from);
     const fs::path target = PinnedTreePath(given_target);
-    const bool target_redirected = !SamePath(target.wstring(), given_target.wstring());
+    const bool target_redirected = TreePathRedirected(given_target, target);
     const fs::path net_target = net == Network::Test ? target / L"testnet" : target;
     Say("Account: " + user_name);
     Say("To: " + Shown(net_target));

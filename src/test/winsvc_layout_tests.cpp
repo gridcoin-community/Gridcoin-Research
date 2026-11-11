@@ -721,6 +721,17 @@ BOOST_AUTO_TEST_CASE(existing_conf_with_includeconf_refused)
     }
 }
 
+BOOST_AUTO_TEST_CASE(a_conf_that_names_a_data_directory)
+{
+    for (const std::string text : {"datadir=D:\\grc\n", " DataDir = D:\\grc\r\n", "test.datadir=D:\\grc\n",
+                                   "[test]\ndatadir=D:\\grc\n", "-datadir=D:\\grc\n", "rpcuser=a\ndatadir=x"}) {
+        BOOST_CHECK_MESSAGE(ConfNamesDataDir(text), "not seen: " << text);
+    }
+    for (const std::string text : {"", "# datadir=D:\\grc\n", "rpcuser=a # datadir=x\n", "walletdir=x\n", "rpcpassword=datadir\n"}) {
+        BOOST_CHECK_MESSAGE(!ConfNamesDataDir(text), "seen: " << text);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(missing_conf_lines)
 {
     // install's own file needs nothing.

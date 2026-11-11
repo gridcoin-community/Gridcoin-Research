@@ -274,6 +274,15 @@ bool ServiceConfAcceptable(const std::string& conf_text)
     return true;
 }
 
+bool ConfNamesDataDir(const std::string& conf_text)
+{
+    for (std::string name : ConfNames(conf_text)) {
+        name.erase(0, name.find_first_not_of('-'));
+        if (ToLower(name) == "datadir") return true;
+    }
+    return false;
+}
+
 std::string MissingServiceConfLines(Network net, const std::string& conf_text, const std::string& rpcpassword)
 {
     // CBaseChainParams::MAIN and TESTNET, the sections ArgsManager reads for each network.

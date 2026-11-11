@@ -160,6 +160,10 @@ std::string BuildServiceConf(Network net, const std::string& rpcpassword);
 //! does not. The CLI honours rpcserviceuser only from a file without one.
 bool ServiceConfAcceptable(const std::string& conf_text);
 
+//! Whether a line of \p conf_text sets datadir, read as ServiceConfAcceptable reads includeconf: in
+//! any section, in any case, with a leading '-'. A comment does not.
+bool ConfNamesDataDir(const std::string& conf_text);
+
 //! What install adds to an existing configuration file \p conf_text that it accepts: the lines of
 //! BuildServiceConf that set rpcuser, rpcpassword (\p rpcpassword) and rpcserviceuser, each only
 //! when the file does not set that name for \p net. As ArgsManager reads the file, a name set at

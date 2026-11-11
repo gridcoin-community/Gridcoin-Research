@@ -2024,6 +2024,51 @@ std::optional<fs::path> ResolvedTreePath(const fs::path& path, bool& absent, std
     if (final_path->compare(0, 4, L"\\\\?\\") == 0) final_path->erase(0, 4);
     return name.empty() ? fs::path(*final_path) : fs::path(*final_path) / name;
 }
+
+bool TreePathRedirected(const fs::path& given, const fs::path& resolved)
+{
+    // Each of the two calls returns the length it wrote, or the size it needs when that is more.
+    const auto filled = [](const std::wstring& from, const auto& call) -> std::optional<std::wstring> {
+        std::wstring out(from.size() + MAX_PATH, L'\0');
+        for (;;) {
+            const DWORD size = call(out);
+            if (size == 0) return std::nullopt;
+            if (size < out.size()) {
+                out.resize(size);
+                return out;
+            }
+            out.resize(size);
+        }
+    };
+    const auto long_name = [&filled](const std::wstring& path) {
+        return filled(path, [&path](std::wstring& out) {
+            return ::GetLongPathNameW(path.c_str(), out.data(), static_cast<DWORD>(out.size()));
+        });
+    };
+
+    // The given path with ".", doubled and trailing separators taken out, then each name as it is
+    // on disk. Neither call follows a junction or a link, so one on the way still differs.
+    const std::wstring text = given.wstring();
+    std::optional<std::wstring> full = filled(text, [&text](std::wstring& out) {
+        return ::GetFullPathNameW(text.c_str(), static_cast<DWORD>(out.size()), out.data(), nullptr);
+    });
+    if (!full) return true;
+    while (full->size() > 3 && full->back() == L'\\') full->pop_back();
+    std::wstring spelled = *full;
+    if (const std::optional<std::wstring> all = long_name(*full)) {
+        spelled = *all;
+    } else {
+        // Nothing at the name: the directory that would hold it, as ResolvedTreePath takes it.
+        const fs::path path(*full);
+        if (const std::optional<std::wstring> parent = long_name(path.parent_path().wstring())) {
+            spelled = (fs::path(*parent) / path.filename()).wstring();
+        }
+    }
+    const std::wstring found = resolved.wstring();
+    // As NTFS compares names: without regard to case, by Windows' own upper-case table.
+    return ::CompareStringOrdinal(spelled.c_str(), static_cast<int>(spelled.size()), found.c_str(),
+                                  static_cast<int>(found.size()), TRUE) != CSTR_EQUAL;
+}
 #endif // WIN32
 
 } // namespace winsvc

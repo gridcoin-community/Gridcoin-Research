@@ -375,6 +375,29 @@ BOOST_AUTO_TEST_CASE(root_steps_refuse_a_path_windows_resolves_elsewhere)
     BOOST_CHECK(!ResolvedTreePath(tree.root / "none" / "deeper", absent, error));
     BOOST_CHECK(absent);
 
+    // Another spelling of a place is not another place (TreePathRedirected); a junction on the way
+    // to it is. Production change that would fail this: comparing the given path as it was typed.
+    BOOST_CHECK(!TreePathRedirected(*real, *real));
+    BOOST_CHECK(!TreePathRedirected(fs::path(real->wstring() + L"\\"), *real));
+    BOOST_CHECK(!TreePathRedirected(fs::path(real->parent_path().wstring() + L"\\.\\\\data"), *real));
+    std::wstring upper = real->wstring();
+    ::CharUpperBuffW(upper.data(), static_cast<DWORD>(upper.size()));
+    BOOST_CHECK(!TreePathRedirected(fs::path(upper), *real));
+    BOOST_CHECK(!TreePathRedirected(fs::path(upper) / "none", *real / "none"));
+    const fs::path long_named = real->parent_path() / "a longer directory name";
+    fs::create_directory(long_named);
+    std::wstring short_name(long_named.wstring().size() + MAX_PATH, L'\0');
+    short_name.resize(::GetShortPathNameW(long_named.wstring().c_str(), short_name.data(),
+                                          static_cast<DWORD>(short_name.size())));
+    if (!short_name.empty() && short_name != long_named.wstring()) {
+        BOOST_CHECK(!TreePathRedirected(fs::path(short_name), long_named));
+    } else {
+        BOOST_TEST_MESSAGE("this volume gives " << long_named.string() << " no short name; not checked");
+    }
+    fs::remove(long_named);
+    BOOST_CHECK(TreePathRedirected(real->parent_path(), *real));
+    if (!untrusted) BOOST_CHECK(TreePathRedirected(through, *resolved));
+
     // The junction itself, so that the cleanup does not go through it.
     BOOST_CHECK(::RemoveDirectoryW(link.wstring().c_str()));
 }

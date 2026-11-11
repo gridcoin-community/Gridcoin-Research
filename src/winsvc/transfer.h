@@ -278,6 +278,12 @@ void ResetTreeSecurity(const fs::path& root, const Sid& owner, const util::winac
 //! nullopt with \p error when \p path cannot be resolved or is on a network share, and with
 //! \p absent too when neither it nor the directory that would hold it is there.
 std::optional<fs::path> ResolvedTreePath(const fs::path& path, bool& absent, std::string& error);
+
+//! Whether \p resolved, what ResolvedTreePath made of \p given, is another place than the one
+//! \p given names: a junction or a link on the way led elsewhere. Another spelling of the same
+//! place is not: other case, a trailing or doubled separator, a "." component, or a short (8.3)
+//! name. True as well when \p given cannot be spelled out.
+bool TreePathRedirected(const fs::path& given, const fs::path& resolved);
 #endif
 
 } // namespace winsvc
