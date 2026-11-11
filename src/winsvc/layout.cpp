@@ -501,10 +501,12 @@ std::optional<std::string> LevelEntryRefusal(const std::vector<LayoutEntry>& lay
            (entry.owner_name.empty() ? sid : entry.owner_name + " (" + sid + ")");
 }
 
-bool DisableTargetOwnerAllowed(const std::optional<Sid>& owner, const Sid& user)
+bool MovedRootOwnerAllowed(const std::optional<Sid>& owner, const Sid& user, bool redirected)
 {
-    return owner && (*owner == user || *owner == util::winacl::wellknown::System() ||
-                     *owner == util::winacl::wellknown::Administrators());
+    if (!owner) return false;
+    if (*owner == user) return true;
+    return !redirected && (*owner == util::winacl::wellknown::System() ||
+                           *owner == util::winacl::wellknown::Administrators());
 }
 
 } // namespace winsvc

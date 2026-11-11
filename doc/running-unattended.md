@@ -767,8 +767,8 @@ DPAPI key, so it works only in a desktop session of yours; pass `-NoAutounlockMi
 autounlock up again in the wallet instead. The installer keeps what was turned off: a disabled Core-Start, or one
 whose boot trigger is off, is registered again the same way, and an Autounlock task that was turned off is not
 converted. Where it does not convert, it deletes the old `passphrase.cred`, and `UPGRADE-NOTICE.txt` says so, or
-names the file to delete when it could not: one of another name (a custom `-CredPath`), or one of another account's
-that is not that account's own, is left. Another account's earlier tasks are removed; the notice tells an
+names the file to delete when it could not: one of another name (a custom `-CredPath`), or another account's, is
+left. Another account's earlier tasks are removed; the notice tells an
 administrator's account to run `Install-GridcoinCoreTask.ps1` signed in as itself, and a standard account to ask an
 administrator for the service mode (`gridcoin-service.exe install`, then `enable --user=<account>`).
 
@@ -790,7 +790,8 @@ cd "C:\Program Files\GridcoinResearch\daemon"
 - **`enable --user=alice`** moves alice's wallet into the service and starts it. alice's cores must be stopped: it
   refuses while a `gridcoinresearch.exe` or `gridcoinresearchd.exe` of hers runs, or while her data directory is
   locked. It disables her Core-Start task of the same network if she has one, copies her data directory (`--from=` for another one),
-  reads every copied file back, and then removes her copy. Her configuration file and `DB_CONFIG` are not carried
+  reads every copied file back, and then removes her copy. It refuses a `gridcoinresearch.conf` of hers with an
+  `includeconf` line: move the included settings into the file first. Her configuration file and `DB_CONFIG` are not carried
   over (the service reads only its own configuration file); `enable` names each file it set aside, and each setting
   it dropped from `gridcoinsettings.json` because the core takes it only from its configuration file. It adds alice
   to the attach group and prints, first:
@@ -817,7 +818,8 @@ cd "C:\Program Files\GridcoinResearch\daemon"
 - **Paths.** `enable` and `disable` resolve the path of each data directory they move a wallet between once,
   before they change anything. Each step that copies, removes or sets an access list opens it at that path only: if
   a directory on the way is moved while they run and a junction put in its place, the step refuses rather than
-  follow it.
+  follow it. A data directory that Windows finds elsewhere than the path given, through a junction or a link on
+  the way, must be owned by the account itself; otherwise Administrators and SYSTEM are accepted as owners too.
 - **`uninstall`** removes the service, its firewall rule and the empty directories. It refuses while the service is
   enabled or its data directory holds a wallet.
 - **The stored passphrase** is encrypted for the service account. Code that runs as the service can decrypt it, as

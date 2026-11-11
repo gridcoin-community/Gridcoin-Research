@@ -473,6 +473,13 @@ public:
         return false;
     }
 
+    //! Why the owner and access list read back through this file's handle are not \p spec, or
+    //! nullopt. Throws std::system_error when they cannot be read.
+    std::optional<std::string> AclDiffers(const winacl::AclSpec& spec) const
+    {
+        return winacl::CheckMatchesSpec(winacl::ReadAcl(m_handle.get(), /*kernel_object=*/false), spec);
+    }
+
 private:
     winacl::UniqueHandle m_handle;
     fs::path m_path;
@@ -1375,6 +1382,7 @@ private:
                 return false;
             }
             if (record) m_result.created_top.push_back(prefix / name);
+            if (!KeptCreatedList(*out, to.Child(name))) return false;
             uint64_t bytes = 0;
             if (!WriteAndVerify(&*in, nullptr, *out, to.Child(name), bytes, error)) {
                 Fail(error);
@@ -1387,6 +1395,29 @@ private:
         if (kept || top) {
             m_result.source_remove.insert(m_result.source_remove.end(), mine.begin(), mine.end());
         }
+        return true;
+    }
+
+    //! Whether \p out, just made at \p path, has the list it was made with (TransferRules'
+    //! created_acl), read back through its handle before anything is written to it: a volume that
+    //! keeps another list fails the transfer here, with nothing in the file.
+    bool KeptCreatedList(const File& out, const fs::path& path)
+    {
+#ifdef WIN32
+        if (!m_rules.created_acl) return true;
+        try {
+            if (const std::optional<std::string> differs = out.AclDiffers(SpecForFile(*m_rules.created_acl))) {
+                Fail(Shown(path) + " did not keep the access list it was made with: " + *differs);
+                return false;
+            }
+        } catch (const std::exception& e) {
+            Fail("read the access list of " + Shown(path) + ": " + AsciiWhat(e));
+            return false;
+        }
+#else
+        (void)out;
+        (void)path;
+#endif
         return true;
     }
 
@@ -1422,6 +1453,7 @@ private:
             return false;
         }
         if (!created_as.empty()) m_result.created_top.push_back(created_as);
+        if (!KeptCreatedList(*out, to.Child(name))) return false;
         uint64_t bytes = 0;
         if (!WriteAndVerify(nullptr, &filtered.first, *out, to.Child(name), bytes, error)) {
             Fail(error);

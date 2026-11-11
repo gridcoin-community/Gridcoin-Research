@@ -1168,12 +1168,18 @@ BOOST_AUTO_TEST_CASE(disable_target_owner_follows_the_core_rule)
     // check (fsmodes) accepts this account, SYSTEM and Administrators as owners, and so does disable.
     const Sid user = SidOf("S-1-5-21-1547161642-583907252-1801674531-1110");
     const Sid other = SidOf("S-1-5-21-1547161642-583907252-1801674531-1111");
-    BOOST_CHECK(DisableTargetOwnerAllowed(user, user));
-    BOOST_CHECK(DisableTargetOwnerAllowed(winacl::wellknown::Administrators(), user));
-    BOOST_CHECK(DisableTargetOwnerAllowed(winacl::wellknown::System(), user));
-    BOOST_CHECK(!DisableTargetOwnerAllowed(other, user));
-    BOOST_CHECK(!DisableTargetOwnerAllowed(SidOf("S-1-5-32-545"), user));
-    BOOST_CHECK(!DisableTargetOwnerAllowed(std::nullopt, user));
+    BOOST_CHECK(MovedRootOwnerAllowed(user, user, false));
+    BOOST_CHECK(MovedRootOwnerAllowed(winacl::wellknown::Administrators(), user, false));
+    BOOST_CHECK(MovedRootOwnerAllowed(winacl::wellknown::System(), user, false));
+    BOOST_CHECK(!MovedRootOwnerAllowed(other, user, false));
+    BOOST_CHECK(!MovedRootOwnerAllowed(SidOf("S-1-5-32-545"), user, false));
+    BOOST_CHECK(!MovedRootOwnerAllowed(std::nullopt, user, false));
+
+    // Found elsewhere than the path given, only the account's own directory is taken.
+    BOOST_CHECK(MovedRootOwnerAllowed(user, user, true));
+    BOOST_CHECK(!MovedRootOwnerAllowed(winacl::wellknown::Administrators(), user, true));
+    BOOST_CHECK(!MovedRootOwnerAllowed(winacl::wellknown::System(), user, true));
+    BOOST_CHECK(!MovedRootOwnerAllowed(other, user, true));
 }
 
 BOOST_AUTO_TEST_CASE(launcher_core_line_gives_network_flag_and_datadir)

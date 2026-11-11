@@ -2011,9 +2011,47 @@ void EnableService(const ToolOptions& options)
     }
     // Resolved once: the steps below that copy, remove or set access lists open it at this path
     // only, and refuse it if Windows later finds it elsewhere.
+    const fs::path given_root = root;
     root = PinnedTreePath(root);
     const fs::path net_root = net == Network::Test ? root / L"testnet" : root;
     Say("From: " + Shown(net_root));
+    // The account's own directory. One that Windows found elsewhere than the path given must be the
+    // account's itself.
+    const Level root_level = ReadLevel(root);
+    if (!root_level.exists || root_level.reparse || !root_level.directory) {
+        throw Refusal(strprintf("%s is not a plain directory. Give the account's data directory with "
+                                "--from=<directory>.",
+                                Shown(root)));
+    }
+    const bool root_redirected = !SamePath(root.wstring(), given_root.wstring());
+    if (!MovedRootOwnerAllowed(root_level.acl.owner, user->sid, root_redirected)) {
+        throw Refusal(strprintf("%s%s is owned by %s, not %s%s, so no wallet is moved out of it. Give the account's "
+                                "own data directory with --from=<directory>.",
+                                Shown(root),
+                                root_redirected ? " (where Windows finds " + Shown(given_root) + ")" : std::string(),
+                                root_level.acl.owner ? Describe(*root_level.acl.owner)
+                                                     : std::string("an owner that cannot be read"),
+                                user->name, root_redirected ? "" : ", SYSTEM or Administrators"));
+    }
+    // A file the account's configuration includes would go into the service with the data directory
+    // and come back on disable as the account's own.
+    {
+        std::string conf_text;
+        bool absent = false;
+        std::string error;
+        const fs::path conf_path = root / L"gridcoinresearch.conf";
+        if (ReadFileNoFollow(conf_path, SETTINGS_SIZE_LIMIT, conf_text, absent, error)) {
+            if (!ServiceConfAcceptable(conf_text)) {
+                throw Refusal(strprintf("%s includes other files (an includeconf line), which enable neither reads "
+                                        "nor sets aside. Move their settings into it and remove the line, then run "
+                                        "enable again.",
+                                        Shown(conf_path)));
+            }
+        } else if (!absent) {
+            throw Refusal(strprintf("%s cannot be read, so it cannot be checked for an includeconf line: %s.",
+                                    Shown(conf_path), error));
+        }
+    }
     const Level wallet = ReadLevel(net_root / L"wallet.dat");
     if (!wallet.exists) {
         throw Refusal(strprintf("%s holds no wallet.dat, so there is no wallet to move. Give the data directory with "
@@ -2287,8 +2325,10 @@ void DisableService(const ToolOptions& options)
     }
     // Resolved once: the steps below that copy, remove or set access lists open it at this path
     // only, and refuse it if Windows later finds it elsewhere.
-    const fs::path target = PinnedTreePath(options.to ? TreePathOption("--to", *options.to)
-                                                      : TreePathOption("from in " + Shown(state_path), *from));
+    const fs::path given_target = options.to ? TreePathOption("--to", *options.to)
+                                             : TreePathOption("from in " + Shown(state_path), *from);
+    const fs::path target = PinnedTreePath(given_target);
+    const bool target_redirected = !SamePath(target.wstring(), given_target.wstring());
     const fs::path net_target = net == Network::Test ? target / L"testnet" : target;
     Say("Account: " + user_name);
     Say("To: " + Shown(net_target));
@@ -2301,19 +2341,32 @@ void DisableService(const ToolOptions& options)
                                     "--to=<directory>.",
                                     Shown(target)));
         }
-        if (!DisableTargetOwnerAllowed(target_level.acl.owner, *user)) {
-            throw Refusal(strprintf("%s is owned by %s, not %s, SYSTEM or Administrators, so the wallet is not moved "
-                                    "into it. Give a directory of the account's own with --to=<directory>.",
+        if (!MovedRootOwnerAllowed(target_level.acl.owner, *user, target_redirected)) {
+            throw Refusal(strprintf("%s%s is owned by %s, not %s%s, so the wallet is not moved into it. Give a "
+                                    "directory of the account's own with --to=<directory>.",
                                     Shown(target),
+                                    target_redirected ? " (where Windows finds " + Shown(given_target) + ")"
+                                                      : std::string(),
                                     target_level.acl.owner ? Describe(*target_level.acl.owner)
                                                            : std::string("an owner that cannot be read"),
-                                    user_name));
+                                    user_name, target_redirected ? "" : ", SYSTEM or Administrators"));
         }
     } else {
         const Level parent = ReadLevel(target.parent_path());
         if (!parent.exists || parent.reparse || !parent.directory) {
             throw Refusal(strprintf("%s is not there, and neither is the directory it would be made in, %s.",
                                     Shown(target), Shown(target.parent_path())));
+        }
+        // Made in a directory Windows found elsewhere than the path given only when that is the
+        // account's own.
+        if (target_redirected && !MovedRootOwnerAllowed(parent.acl.owner, *user, true)) {
+            throw Refusal(strprintf("%s (where Windows finds %s) would be made in a directory owned by %s, not %s, so "
+                                    "the wallet is not moved into it. Give a directory of the account's own with "
+                                    "--to=<directory>.",
+                                    Shown(target), Shown(given_target),
+                                    parent.acl.owner ? Describe(*parent.acl.owner)
+                                                     : std::string("an owner that cannot be read"),
+                                    user_name));
         }
     }
     const fs::path datadir = DataDir(programdata, net);
