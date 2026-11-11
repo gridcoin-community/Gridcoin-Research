@@ -259,6 +259,18 @@ CheckedFile ReadOnce(const fs::path& path, bool& transient)
     // account's alone. Checked on the handle that is read, before it is read.
     if (expected == BlobScope::LocalMachine) {
         if (std::optional<CheckedFile> foreign = ForeignAccess(file.get(), path)) return std::move(*foreign);
+
+        // And labelled as Store() labels it, so that a Low-integrity process of this account, which
+        // the list admits, cannot read it.
+        try {
+            if (!winacl::HasMediumNoReadUpLabel(file.get())) {
+                return Refused("the autounlock file does not have the Medium integrity label it is written with",
+                               Display(path), /*definite=*/true);
+            }
+        } catch (const std::exception& e) {
+            return Refused("could not read the autounlock file's integrity label", Display(path) + ": " + AsciiWhat(e),
+                           /*definite=*/false);
+        }
     }
 
     // The service's file, and the directories above it, may be changed only by the service's
@@ -419,12 +431,18 @@ bool WriteNewFile(const fs::path& path, const std::vector<unsigned char>& bytes,
     } catch (const std::exception& e) {
         not_kept = "its access control list and label could not be read back (" + AsciiWhat(e) + ")";
     }
+    // What is said when a file this call made cannot be removed again.
+    const auto remove_again = [&wpath]() -> std::string {
+        if (::DeleteFileW(wpath.c_str()) || ::GetLastError() == ERROR_FILE_NOT_FOUND) return {};
+        return "; it could not be removed again (" + Win32ErrorText(::GetLastError()) + "), so remove it by hand";
+    };
+
     if (!not_kept.empty()) {
         file.reset();
-        ::DeleteFileW(wpath.c_str());
+        const std::string left = remove_again();
         error = strprintf("could not make %s owner-only, so nothing was written to it: %s; keep the data directory on "
-                          "an NTFS volume",
-                          Display(path), not_kept);
+                          "an NTFS volume%s",
+                          Display(path), not_kept, left);
         return false;
     }
 
@@ -449,8 +467,8 @@ bool WriteNewFile(const fs::path& path, const std::vector<unsigned char>& bytes,
 
     if (!failure.empty()) {
         file.reset();
-        ::DeleteFileW(wpath.c_str());
-        error = strprintf("could not write %s: %s", Display(path), failure);
+        const std::string left = remove_again();
+        error = strprintf("could not write %s: %s%s", Display(path), failure, left);
         return false;
     }
 

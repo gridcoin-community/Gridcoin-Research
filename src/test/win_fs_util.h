@@ -31,6 +31,11 @@ void CreateFileWithAcl(const fs::path& path, const util::winacl::AclSpec& spec, 
 //! to the directory \p target. No privilege is needed for that.
 void MakeJunction(const fs::path& link, const fs::path& target);
 
+//! Give the file \p path the mandatory label of the SACL in \p sddl, such as L"S:(ML;;NR;;;LW)" for
+//! Low with no read-up, or none with L"S:". A label up to this process's own level needs no
+//! privilege.
+void SetMandatoryLabel(const fs::path& path, const wchar_t* sddl);
+
 //! Whether Windows refuses to open \p path, following any junction on it, with
 //! ERROR_UNTRUSTED_MOUNT_POINT: current Windows 11 builds do not follow a junction that
 //! an account that is not an administrator made. Decides which behaviour a case states.

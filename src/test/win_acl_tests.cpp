@@ -1093,8 +1093,13 @@ BOOST_AUTO_TEST_CASE(a_medium_label_keeps_a_low_integrity_reader_out)
     BOOST_CHECK_EQUAL(grc_test::OpenForReadAtLowIntegrity(plain), 0ul);
     BOOST_CHECK_EQUAL(grc_test::OpenForReadAtLowIntegrity(labelled), static_cast<unsigned long>(ERROR_ACCESS_DENIED));
 
+    // Another label than the one asked for is not it either.
+    const fs::path low = dir.path / "low";
+    CreateWithAcl(low, spec);
+    grc_test::SetMandatoryLabel(low, L"S:(ML;;NR;;;LW)");
+
     // Read back through a handle, as the autounlock file's is before anything is written to it.
-    for (const auto& [path, expected] : {std::pair{plain, false}, std::pair{labelled, true}}) {
+    for (const auto& [path, expected] : {std::pair{plain, false}, std::pair{labelled, true}, std::pair{low, false}}) {
         const HANDLE read = ::CreateFileW(path.wstring().c_str(), READ_CONTROL, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                           FILE_ATTRIBUTE_NORMAL, nullptr);
         BOOST_REQUIRE(read != INVALID_HANDLE_VALUE);

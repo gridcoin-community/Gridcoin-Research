@@ -19,6 +19,8 @@
 #include <vector>
 
 #include <windows.h>
+#include <aclapi.h>
+#include <sddl.h>
 #include <winioctl.h>
 #endif
 
@@ -113,6 +115,25 @@ void MakeJunction(const fs::path& link, const fs::path& target)
     const DWORD error = ::GetLastError();
     ::CloseHandle(handle);
     BOOST_REQUIRE_MESSAGE(set, "FSCTL_SET_REPARSE_POINT failed with Windows error " << error);
+}
+
+void SetMandatoryLabel(const fs::path& path, const wchar_t* sddl)
+{
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    BOOST_REQUIRE_MESSAGE(::ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION_1, &sd, nullptr),
+                          "ConvertStringSecurityDescriptorToSecurityDescriptorW failed with Windows error "
+                              << ::GetLastError());
+    BOOL present = FALSE;
+    BOOL defaulted = FALSE;
+    PACL sacl = nullptr;
+    const BOOL got = ::GetSecurityDescriptorSacl(sd, &present, &sacl, &defaulted);
+    std::wstring name = path.wstring();
+    const DWORD rc = got ? ::SetNamedSecurityInfoW(name.data(), SE_FILE_OBJECT, LABEL_SECURITY_INFORMATION, nullptr,
+                                                   nullptr, nullptr, sacl)
+                         : ::GetLastError();
+    ::LocalFree(sd);
+    BOOST_REQUIRE_MESSAGE(rc == ERROR_SUCCESS, "setting the label of " << path.string() << " failed with Windows error "
+                                                                         << rc);
 }
 
 bool JunctionUntrustedOn(const fs::path& path)

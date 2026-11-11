@@ -224,6 +224,28 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_loose_acl)
     BOOST_CHECK_MESSAGE(Contains(status.problem, "readable by other accounts"), status.problem);
 }
 
+// A machine-scope file must carry the Medium label Store() gives it, or a Low-integrity process of
+// the account could read and decrypt it. Production change that would fail this: a fetch that
+// reads the file whatever its label.
+BOOST_AUTO_TEST_CASE(dpapi_fetch_refuses_a_file_without_its_label)
+{
+    if (SkipUnderWine()) return;
+
+    TempDataDir datadir;
+    const fs::path path = datadir.BlobPath();
+    DpapiBlobStore store;
+    std::string error;
+
+    BOOST_REQUIRE_MESSAGE(store.Store(SecureString("dpapi-label"), error) == AutoUnlockStoreOutcome::Verified, error);
+    BOOST_REQUIRE_MESSAGE(FetchAutoUnlockFromDpapiBlob(path, error).has_value(), error);
+
+    for (const wchar_t* label : {L"S:", L"S:(ML;;NR;;;LW)"}) {
+        grc_test::SetMandatoryLabel(path, label);
+        BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
+        BOOST_CHECK_MESSAGE(Contains(error, "Medium integrity label"), error);
+    }
+}
+
 // The autounlock file is made only for access, so a new Store() always replaces the old file with
 // one that has the owner-only list, whatever list the old one had: the rule that a rewritten
 // file keeps its permissions does not apply to it. Production change that would fail this:
@@ -478,7 +500,7 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_missing_or_oversize_file)
     BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
     BOOST_CHECK_MESSAGE(Contains(error, "autounlock is not set up"), error);
 
-    // One byte over the limit, owner-only so that only its size is wrong.
+    // One byte over the limit, owner-only and labelled so that only its size is wrong.
     std::string dir_error;
     BOOST_REQUIRE_MESSAGE(util::CreateOwnerOnlyDirectory(path.parent_path(), dir_error), dir_error);
     {
@@ -487,6 +509,7 @@ BOOST_AUTO_TEST_CASE(dpapi_fetch_missing_or_oversize_file)
         file << std::string(AUTOUNLOCK_BLOB_MAX_BYTES + 1, 'x');
     }
     util::ApplyOwnerOnlyDacl(path, /*inheritable=*/false);
+    grc_test::SetMandatoryLabel(path, L"S:(ML;;NRNW;;;ME)");
 
     BOOST_CHECK(!FetchAutoUnlockFromDpapiBlob(path, error).has_value());
     BOOST_CHECK_MESSAGE(Contains(error, "larger than"), error);
