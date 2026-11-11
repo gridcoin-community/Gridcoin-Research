@@ -306,6 +306,8 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
     int64_t nStart = GetTimeMillis();
     int nLoaded = 0;
     int nAlreadyIndexed = 0;
+    int nNoParent = 0;
+    int nRefused = 0;
     bool read_whole_file = false;
 
     bool display_progress = (file_size > 0 && (percent_end - percent_start) > 0) ? true : false;
@@ -393,9 +395,17 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                         continue;
                     }
 
+                    // ProcessBlock reports success for a block whose previous block is not in the index, and drops
+                    // it, because an import has no peer to ask for the missing block.
+                    const bool parent_known = block.hashPrevBlock.IsNull() || mapBlockIndex.count(block.hashPrevBlock);
+
                     CValidationState load_state;
                     if (ProcessBlock(nullptr, &block, false, load_state)) {
-                        ++nLoaded;
+                        if (parent_known) {
+                            ++nLoaded;
+                        } else {
+                            ++nNoParent;
+                        }
 
                         if (display_progress) {
                             unsigned int percent_progress = percent_start + (uint64_t) nPos
@@ -408,7 +418,7 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
 
                                 cached_percent_progress = percent_progress;
                             }
-                        } else if (nLoaded % 10000 == 0) {
+                        } else if (parent_known && nLoaded % 10000 == 0) {
                             LogPrintf("Blocks/s: %f", nLoaded / ((GetTimeMillis() - nStart) / 1000.0));
                         }
 
@@ -418,6 +428,9 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                         LogPrintf("WARN: %s: The block at offset %u could not be stored. The load stops here.",
                                   __func__, nPos);
                         break;
+                    } else {
+                        // The scan goes on from the block's message start, as it did before this count.
+                        ++nRefused;
                     }
                 }
             }
@@ -429,6 +442,12 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
     }
     LogPrintf("Loaded %i blocks from external file in %" PRId64 "ms, skipped %i already in the block index", nLoaded,
               GetTimeMillis() - nStart, nAlreadyIndexed);
+
+    if (nNoParent > 0 || nRefused > 0) {
+        LogPrintf("WARN: %s: %i block(s) in the file were not loaded because their previous block is not in the block "
+                  "index, and %i were refused. The chain may end below the last block in the file.",
+                  __func__, nNoParent, nRefused);
+    }
 
     // A file stopped part way by a shutdown request, a read error or a block that could not be stored is not counted
     // as loaded, whatever it yielded: a reindex deletes its source files only after every one of them was loaded.

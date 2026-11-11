@@ -1709,7 +1709,7 @@ BlockTimeCheck CheckBlockTime(int64_t block_time, int64_t parent_time, int64_t a
     return BlockTimeCheck::OK;
 }
 
-bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me, bool imported) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -1846,7 +1846,14 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
                          pindexPrev->GetBlockHash().ToString());
         }
 
-        if (g_seen_stakes.ContainsProof(hashProof)
+        // A block from a peer is refused for a stake proof that another block used, unless blocks that build on it
+        // are already waiting as orphans, in which case the node asked for it. An imported block has no peer to ask
+        // and the import keeps no orphans, so the check would refuse the block for good, and every block after it in
+        // the file would be left without a parent. A node's own block data files hold such pairs: a block that lost
+        // to a block with the same proof stays in the file ahead of it. The import takes both, and chain trust
+        // decides between them as it did when they arrived.
+        if (!imported
+            && g_seen_stakes.ContainsProof(hashProof)
             && !g_orphan_blocks.HasChildrenOf(hash))
         {
             return error(
