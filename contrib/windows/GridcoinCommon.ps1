@@ -98,16 +98,21 @@ function Get-GridcoinTaskPrincipalSid {
 # counts. On a directory, the mask adds CreateFiles (a new entry can shadow the item) but leaves
 # out AppendData, which the default volume root grants to Users. With ChainMasks, Path and every
 # ancestor directory are checked, because write access to a containing directory is enough to
-# replace the item. Without it, Path alone.
+# replace the item. Without it, Path alone. With PassedDown, the entries of Path, a directory, that
+# only its later entries inherit are checked too, by either mask and the generic rights such an
+# entry may hold; the one for CREATOR OWNER is left out, as it names whoever makes the entry.
 function Get-GridcoinWriteVector {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][string[]]$AllowedSids,
-        [switch]$ChainMasks
+        [switch]$ChainMasks,
+        [switch]$PassedDown
     )
     $fileMask = [int]([System.Security.AccessControl.FileSystemRights]'Write, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
     $dirMask = [int]([System.Security.AccessControl.FileSystemRights]'CreateFiles, WriteExtendedAttributes, WriteAttributes, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership')
     $inheritOnly = [int][System.Security.AccessControl.PropagationFlags]::InheritOnly
+    # GENERIC_ALL and GENERIC_WRITE, which an inherit-only entry keeps as they are.
+    $passedDownMask = $fileMask -bor $dirMask -bor 0x10000000 -bor 0x40000000
 
     $current = $Path
     while ($current) {
@@ -132,10 +137,17 @@ function Get-GridcoinWriteVector {
         foreach ($entry in $entries) {
             if ($entry.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
             # An inherit-only entry grants nothing on this object; its children carry it as a real
-            # entry, and the walk checks them in their own right.
-            if (([int]$entry.PropagationFlags -band $inheritOnly) -ne 0) { continue }
-            if (([int]$entry.FileSystemRights -band $mask) -eq 0) { continue }
+            # entry, and the walk checks them in their own right. PassedDown checks it for the
+            # entries still to be made.
+            $entryMask = $mask
+            $entryInheritOnly = ([int]$entry.PropagationFlags -band $inheritOnly) -ne 0
+            if ($entryInheritOnly) {
+                if (-not $PassedDown -or $current -ne $Path) { continue }
+                $entryMask = $passedDownMask
+            }
+            if (([int]$entry.FileSystemRights -band $entryMask) -eq 0) { continue }
             $entrySid = Resolve-GridcoinSid $entry.IdentityReference
+            if ($entryInheritOnly -and $entrySid -eq 'S-1-3-0') { continue }
             if ($null -eq $entrySid) {
                 return "'$current': $($entry.IdentityReference) (a SID that cannot be resolved) has '$($entry.FileSystemRights)'"
             }
@@ -670,6 +682,19 @@ function Remove-GridcoinLegacyPassphraseFile {
         return @("$CredPath (not deleted: an earlier version's passphrase file is named passphrase.cred)")
     }
     $oldDirectory = Split-Path -Parent $CredPath
+    # The delete goes where the path says and no further: a junction or a link on the way to the
+    # file would send it to another directory.
+    $reparse = [int][System.IO.FileAttributes]::ReparsePoint
+    $above = $oldDirectory
+    while ($above) {
+        $aboveItem = Get-Item -LiteralPath $above -Force -ErrorAction SilentlyContinue
+        if ($aboveItem -and (([int]$aboveItem.Attributes -band $reparse) -ne 0)) {
+            return @("$CredPath (not deleted: $above is a junction or a link)")
+        }
+        $next = Split-Path -Parent $above
+        if (-not $next -or $next -eq $above) { break }
+        $above = $next
+    }
     foreach ($oldFile in @($CredPath, (Join-Path $oldDirectory 'autounlock.log'), (Join-Path $oldDirectory 'autounlock.log.1'))) {
         try {
             # No error for a file that does not exist; one for a directory that does not.

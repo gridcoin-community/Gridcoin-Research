@@ -390,9 +390,10 @@ function Set-GridcoinInstallDirAcl {
     }
 
     # Under Program Files an existing directory keeps the list Program Files passes down while that
-    # keeps it for administrators. A new one is made with the protected list wherever it is.
+    # keeps it, and the files still to be installed in it, for administrators. A new one is made
+    # with the protected list wherever it is.
     $keepInherited = $underProgramFiles -and $existed -and
-        -not (Get-GridcoinWriteVector -Path $script:InstallRoot -AllowedSids (Get-GridcoinPrivilegedSids))
+        -not (Get-GridcoinWriteVector -Path $script:InstallRoot -AllowedSids (Get-GridcoinPrivilegedSids) -PassedDown)
     if ($keepInherited) {
         Write-Host "$script:InstallRoot is under $programFiles, whose access list keeps it for administrators."
     } elseif ($existed) {
