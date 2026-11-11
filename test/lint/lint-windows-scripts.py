@@ -546,6 +546,11 @@ def rule16(files):
     for line in written:
         if not re.match(r"WriteReg\w+ HKLM " + re.escape(NSIS_UNINSTALL_KEY) + r" ", line):
             failures.append(f"rule 16: {NSIS}: writes an uninstall value elsewhere than {NSIS_UNINSTALL_KEY}: {line}")
+    # Nor through a name defined for the key, which those lines would not show.
+    for line in nsis.splitlines():
+        if re.match(r"\s*!define\s", line) and "\\Uninstall" in line:
+            failures.append(f"rule 16: {NSIS}: defines a name for an uninstall key, which is written as "
+                            f"{NSIS_UNINSTALL_KEY} itself: {line.strip()}")
     if not any(re.match(r"WriteRegStr HKLM " + re.escape(NSIS_UNINSTALL_KEY) + r" DisplayVersion ", line)
                for line in written):
         failures.append(f"rule 16: {NSIS}: no DisplayVersion is written under {NSIS_UNINSTALL_KEY}")
@@ -680,6 +685,8 @@ BAD_SAMPLES = (
     # The key's own lines: written under another name, or the version not written at all.
     (16, {NSIS: GOOD_NSIS.replace("Uninstall\\$(^Name)", "Uninstall\\Gridcoin")}),
     (16, {NSIS: GOOD_NSIS.replace(GOOD_KEY_WRITE, "")}),
+    (16, {NSIS: GOOD_NSIS + '!define GRC_KEY "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Gridcoin"\n'
+                '    WriteRegStr HKLM "${GRC_KEY}" DisplayName "x"\n'}),
     (17, {COMMON: GOOD_FILES[COMMON] + "Add-Type -TypeDefinition $source -ReferencedAssemblies 'System.Security'\n"}),
     (17, {INSTALL: GOOD_FILES[INSTALL] + "Add-Type -MemberDefinition $sig -Name Native -Namespace G\n"}),
     (17, {"contrib/windows/Other.ps1": GOOD_PS1 + "Add-Type -Path .\\x.cs\n"}),
@@ -688,7 +695,7 @@ BAD_SAMPLES = (
     # compiler's name.
     (17, {"contrib/windows/Other.ps1": GOOD_PS1 + "Add-Type `\n    -TypeDefinition $source\n"}),
     (17, {"contrib/windows/Other.ps1": GOOD_PS1 + "Add-Type @arguments\n"}),
-    (17, {COMMON: GOOD_FILES[COMMON] + "function Add-GridcoinCompiledTypeToo {\n    Add-Type -TypeDefinition $s\n}\n"}),
+    (17, {COMMON: GOOD_FILES[COMMON].replace("function Add-GridcoinCompiledType {", "function Add-GridcoinCompiledTypeToo {")}),
     (15, {SHUTDOWN: GOOD_SHUTDOWN.replace("($userVersion * 65536 + ($computerVersion % 65535) + 1)",
                                           "([int]$Matches[1] + 65536)")}),
     (15, {SHUTDOWN: GOOD_SHUTDOWN + "Set-ShutdownScriptState $cmdPath\n"}),
