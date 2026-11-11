@@ -1274,8 +1274,11 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidatio
         return true;
     }
 
+    // A block with no peer that this node did not stake comes from a block data file.
+    const bool imported = !pfrom && !generated_by_me;
+
     // Store to disk
-    if (!AcceptBlock(*pblock, state, generated_by_me))
+    if (!AcceptBlock(*pblock, state, generated_by_me, imported))
         return error("ProcessBlock() : AcceptBlock FAILED");
 
     // Recursively process any orphan blocks that depended on this one.
@@ -1286,7 +1289,8 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidatio
     // access AcceptBlock makes downstream.
     g_orphan_blocks.ProcessQueue(hash, [&](CBlock& orphan) NO_THREAD_SAFETY_ANALYSIS -> bool {
         CValidationState orphan_state;
-        return AcceptBlock(orphan, orphan_state, generated_by_me);
+        // Only a block from a peer is held as an orphan.
+        return AcceptBlock(orphan, orphan_state, generated_by_me, /*imported=*/false);
     });
 
     return true;

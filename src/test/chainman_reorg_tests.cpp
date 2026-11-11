@@ -18,13 +18,19 @@
 //!
 
 #include "chain.h"
+#include "consensus/merkle.h"
 #include "dbwrapper.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/contract/contract.h"
 #include "gridcoin/staking/chain_trust.h"
 #include "node/chainman.h"
 #include "primitives/block.h"
+#include "streams.h"
 #include "sync.h"
 #include "test/chain_setup.h"
 #include "uint256.h"
+#include "validation.h"
+#include "version.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -40,6 +46,38 @@ CBlock MineOne()
     std::string err;
     BOOST_REQUIRE_MESSAGE(grc_test::CreateAndProcessBlock(block, err), err);
     return block;
+}
+
+//! A second block on the same parent with the same stake as \p block: the same
+//! coinstake, so the same stake proof, and a claim that differs, so another
+//! hash. Signed with the premine key, which the fixture stakes with.
+CBlock SiblingWithSameStake(const CBlock& block)
+{
+    CBlock changed = block;
+
+    GRC::Claim claim = changed.PullClaim();
+    claim.m_organization = "sibling";
+
+    CMutableTransaction coinbase(changed.vtx[0]);
+    coinbase.vContracts[0] = GRC::MakeContract<GRC::Claim>(
+        coinbase.vContracts[0].m_version,
+        GRC::ContractAction::ADD,
+        std::move(claim));
+    changed.vtx[0] = CTransaction(std::move(coinbase));
+    changed.hashMerkleRoot = BlockMerkleRoot(changed);
+
+    CKey key = grc_test::PremineKey();
+    BOOST_REQUIRE(key.Sign(changed.GetHash(), changed.vchBlockSig));
+
+    // Through serialization, so that the sibling carries none of the memory-only
+    // caches of the block it was copied from.
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    stream << changed;
+
+    CBlock sibling;
+    stream >> sibling;
+
+    return sibling;
 }
 
 } // anonymous namespace
@@ -116,6 +154,46 @@ BOOST_AUTO_TEST_CASE(setbestchain_reverts_a_reorg_that_lowers_chain_trust)
     uint256 best_on_disk;
     BOOST_CHECK(txdb.ReadHashBestChain(best_on_disk));
     BOOST_CHECK(best_on_disk == hashBestChain);
+}
+
+// A node's block data files can hold two blocks with the same stake proof on
+// one parent: the one that arrived first, and the one the chain went on with.
+// From a peer the second is refused while no block that builds on it is
+// waiting. An import has no peer and keeps no waiting blocks, so it must take
+// the second, or it leaves every block after it in the file without a parent.
+BOOST_AUTO_TEST_CASE(an_imported_block_is_taken_with_a_stake_proof_another_block_used)
+{
+    const CBlock first = MineOne();
+    CBlock second = SiblingWithSameStake(first);
+
+    const uint256 first_hash = first.GetHash(true);
+    const uint256 second_hash = second.GetHash(true);
+    BOOST_REQUIRE(second_hash != first_hash);
+    BOOST_REQUIRE(second.vtx[1].GetHash() == first.vtx[1].GetHash());
+
+    LOCK(cs_main);
+
+    BOOST_REQUIRE(hashBestChain == first_hash);
+
+    // As from a peer: refused, and not indexed.
+    CValidationState peer_state;
+    BOOST_CHECK(!AcceptBlock(second, peer_state, /*generated_by_me=*/false, /*imported=*/false));
+    BOOST_CHECK(!mapBlockIndex.count(second_hash));
+
+    // As from a block data file: indexed beside the first. Its trust is the
+    // same, so the first stays the tip, and a block that builds on either one
+    // decides between them.
+    CValidationState import_state;
+    BOOST_CHECK(ProcessBlock(nullptr, &second, /*generated_by_me=*/false, import_state));
+    BOOST_REQUIRE(mapBlockIndex.count(second_hash));
+    BOOST_CHECK(mapBlockIndex.at(second_hash)->pprev == mapBlockIndex.at(first_hash)->pprev);
+    BOOST_CHECK(hashBestChain == first_hash);
+
+    // The suite's cases share one chain and may run in any order. Park the
+    // chain at genesis again, where a case that runs after this one expects it.
+    BOOST_REQUIRE(pindexGenesisBlock);
+    BOOST_CHECK(ForceReorganizeToHash(pindexGenesisBlock->GetBlockHash()));
+    BOOST_CHECK_EQUAL(nBestHeight, 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
