@@ -320,6 +320,32 @@ BOOST_AUTO_TEST_CASE(download_chunks_and_verifies)
     BOOST_CHECK_EQUAL(CountEntries(dir), 1u);
 }
 
+// A caller that never replaces has a name already taken refused, and the file there kept: the
+// console's download asks for this. Production change that would fail this: DownloadEntry() not
+// passing the caller's choice to the temporary file.
+BOOST_AUTO_TEST_CASE(download_that_never_replaces_keeps_a_file_at_the_name)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
+    FakeSource src(Bytes(4096));
+    std::atomic<bool> cancel{false};
+    const fs::path dest = dir / "taken.bin";
+    {
+        std::ofstream there(dest.string(), std::ios::binary);
+        there << "there";
+    }
+
+    auto out = interfaces::DownloadEntry(src, 0, dest, [](uint64_t, int64_t) {}, cancel,
+                                         interfaces::FILE_TRANSFER_CHUNK_BYTES, util::TransferTempFile::Replace::Never);
+
+    BOOST_CHECK(out.status == interfaces::TransferStatus::LocalError);
+    BOOST_CHECK_MESSAGE(out.message.find("is already there") != std::string::npos, out.message);
+    BOOST_CHECK_EQUAL(ReadAll(dest), "there");
+    BOOST_CHECK_EQUAL(CountEntries(dir), 1u);
+}
+
 BOOST_AUTO_TEST_CASE(download_trailer_mismatch_is_verify_failed)
 {
     if (grc_test::RunningUnderWine()) {

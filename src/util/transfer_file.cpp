@@ -133,16 +133,23 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
 
     // A destination that is there now may be replaced at the commit: the user chose it. One that is
     // not is never replaced, also by a file that appears at its name while the data arrives. A name
-    // that cannot be examined is taken to be there. (symlink_status sets ENOENT for a name that is
-    // not there, so the type tells it, not the error.)
+    // that cannot be examined is taken to be there, and is refused below. (symlink_status sets
+    // ENOENT for a name that is not there, so the type tells it, not the error.)
     boost::system::error_code status_error;
     f.m_replace = fs::symlink_status(dest, status_error).type() != fs::file_not_found;
     if (f.m_replace && replace == Replace::Never) {
         error = strprintf("%s is already there, and is not replaced", dest.string());
         return std::nullopt;
     }
-    // Which file it is, so that the commit carries permissions from this one and no other.
-    if (f.m_replace) f.m_dest_identity = fsmodes::IdentityOf(dest);
+    // Which file it is, so that the commit carries permissions from this one, and replaces this
+    // one, and no other. One that cannot be told from another later is not replaced.
+    if (f.m_replace) {
+        f.m_dest_identity = fsmodes::IdentityOf(dest);
+        if (!f.m_dest_identity) {
+            error = strprintf("%s cannot be examined, so it is not replaced", dest.string());
+            return std::nullopt;
+        }
+    }
 
 #ifdef WIN32
     // Owner-only from creation: the list is given to CreateFileW, so the file never exists
@@ -378,10 +385,12 @@ bool TransferTempFile::Commit(uint64_t expected_size, const uint256& expected_sh
     // Only from the file that was there when the transfer began: another at the name by now is not
     // the one the user chose, and is not replaced.
     if (m_replace && !m_dest_identity) {
-        LogPrintf("WARNING: %s could not be identified when the transfer began, so the file that replaces it is "
-                  "owner-only",
-                  m_dest.string());
-    } else if (m_replace) {
+        error = strprintf("%s could not be examined when the transfer began, and was not replaced", m_dest.string());
+        Abort();
+        AppendRemoveNote(error);
+        return false;
+    }
+    if (m_replace) {
 #ifdef WIN32
         const fsmodes::KeepResult kept =
             fsmodes::KeepPermissions(m_dest, m_handle, /*own_only=*/true, &*m_dest_identity);

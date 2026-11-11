@@ -246,6 +246,20 @@ BOOST_AUTO_TEST_CASE(a_transfer_that_never_replaces_refuses_a_taken_name)
     BOOST_CHECK_EQUAL(CountPartFiles(dir), 0u);
 }
 
+#ifndef WIN32
+// A destination that cannot be examined cannot be told from another file at the commit, so the
+// transfer does not begin. Production change that would fail this: CreateAt() going on without the
+// destination's identity. (On Windows a name too long to examine counts as not there.)
+BOOST_AUTO_TEST_CASE(a_destination_that_cannot_be_examined_is_not_replaced)
+{
+    std::string err;
+    const fs::path dest = dir / std::string(300, 'n');
+    BOOST_CHECK(!util::TransferTempFile::CreateAt(dest, dir / "t.part", err));
+    BOOST_CHECK_MESSAGE(err.find("cannot be examined") != std::string::npos, err);
+    BOOST_CHECK_EQUAL(CountPartFiles(dir), 0u);
+}
+#endif
+
 // While it is written the temporary file is owner-only, also when the destination it will replace
 // is wider: the destination's permissions are put on it only at the commit. Production change that
 // would fail this: CreateAt() carrying the destination's permissions onto the temporary file.
