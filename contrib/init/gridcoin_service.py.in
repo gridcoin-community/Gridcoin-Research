@@ -510,8 +510,9 @@ def check_dropin_dir(directory):
 
 
 def sync_directory(path):
-    """Put the entries of the directory at path on disk."""
-    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    """Put the entries of the directory at path on disk. An empty path, as os.path.dirname gives for
+    a bare file name, is the current directory."""
+    fd = os.open(path or ".", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     try:
         os.fsync(fd)
     finally:
@@ -905,10 +906,12 @@ def interpret_bool(value):
 def conf_selects_testnet(text):
     """Whether a conf selects a network other than mainnet in its top level, before any [section]
     line, as the core reads it: lines as GetConfigOptions reads them, testnet=<v> as InterpretBool(v)
-    and notestnet=<v> as its negation (InterpretOption), the last such line winning, and chain=<v>,
-    the first one winning as for any other setting of the file, for any network but main
-    (GetChainName; the core refuses to start when the two disagree)."""
+    and notestnet=<v> as its negation (InterpretOption), the last such line winning, regtest=<v> and
+    noregtest=<v> read the same way, and chain=<v>, the first one winning as for any other setting
+    of the file, for any network but main (GetChainName; the core refuses to start when more than
+    one of them selects a network)."""
     selected = False
+    regtest = False
     chain = None
     for line in text.split("\n"):
         body = line.split("#", 1)[0].strip(" \t\r\n")
@@ -921,9 +924,13 @@ def conf_selects_testnet(text):
             selected = interpret_bool(value)
         elif name == "notestnet":
             selected = not interpret_bool(value)
+        elif name == "regtest":
+            regtest = interpret_bool(value)
+        elif name == "noregtest":
+            regtest = not interpret_bool(value)
         elif name == "chain" and chain is None:
             chain = value
-    return selected or (chain is not None and chain != "main")
+    return selected or regtest or (chain is not None and chain != "main")
 
 
 def conf_datadir(text):
@@ -1881,8 +1888,16 @@ def refuse_user_unit_datadir(paths, net, user, d_display):
         raise UserError("%s is not UTF-8, so its -datadir cannot be checked; refusing" % path) from None
     except OSError as e:
         raise UserError("cannot read %s: %s; refusing" % (path, e.strerror)) from None
-    for given in re.findall(r"(?m)^ExecStart=.*\s-datadir=(\S*)", text):
-        if os.path.realpath(given) != os.path.realpath(d_display):
+    for line in text.split("\n"):
+        if not line.startswith("ExecStart="):
+            continue
+        # Each word as systemd and the core read it: quoted or not, with one dash or two.
+        for word in command_words(line[len("ExecStart="):], path)[1:]:
+            if not core_option(word).startswith("-datadir="):
+                continue
+            given = core_option(word)[len("-datadir="):]
+            if os.path.realpath(given) == os.path.realpath(d_display):
+                continue
             raise UserError("%s gives %s a -datadir of its own, but enable moves only %s; move that wallet there "
                             "first, then rerun enable-user without --datadir" % (path, unit, d_display))
 
@@ -2002,8 +2017,9 @@ def enable(args, net, host, paths, progress):
                 raise UserError("%s includes other files (includeconf=), so which network this user's node runs "
                                 "cannot be told from it alone; move their settings into it, then rerun" % conf_display)
             if conf_selects_testnet(conf_text):
-                raise UserError("%s selects testnet (testnet= or chain=), so this user's node runs testnet; use "
-                                "--network=test" % conf_display)
+                raise UserError("%s selects another network than mainnet (testnet=, regtest= or chain=), so this "
+                                "user's node runs testnet or regtest; for a testnet node use --network=test"
+                                % conf_display)
             other = conf_datadir(conf_text)
             if other is not None and os.path.normpath(other) != os.path.normpath(d_display):
                 raise UserError("%s sets datadir=%s, so this user's node keeps its data there, not in %s, which is "
@@ -2769,7 +2785,9 @@ def refuse_other_network_lines(fd, path, testnet=False):
     whatever the file says). testnet= at the top level, the first value
     winning, would have made the core a testnet node, and rather than read it as the core does, any
     testnet= line refuses, in a section, with a network prefix, a leading dash or negated
-    (notestnet=) too; so does any chain= line that names another network than main. An
+    (notestnet=) too; so does any chain= line that names another network than main. A regtest= or
+    signet= line, which the core reads for its network as well, refuses for either unit: with it the
+    core is a regtest node, or does not start beside -testnet. An
     includeconf= line refuses too: the files it names are neither read for those lines nor checked
     for who can write them (check_conf_writers). Comments are no setting."""
     with os.fdopen(fd, "rb", closefd=False) as f:
@@ -2790,6 +2808,9 @@ def refuse_other_network_lines(fd, path, testnet=False):
             raise UserError("%s has a chain= line for another network than main, so the core that read it may not "
                             "have been a mainnet node; if it is a mainnet node, remove that line, and if it is a "
                             "testnet node, run it from the testnet package's unit, then rerun the switch-over" % path)
+        if name in ("regtest", "noregtest", "signet", "nosignet"):
+            raise UserError("%s has a %s= line, which the core reads for the network it runs on; remove that "
+                            "line, then rerun the switch-over" % (path, name))
         if name == "includeconf":
             raise UserError("%s includes other files (includeconf=), which the switch-over neither reads nor checks "
                             "for who can write them; move their settings into it, then rerun the switch-over" % path)

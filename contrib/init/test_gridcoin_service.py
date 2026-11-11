@@ -1444,6 +1444,9 @@ class RefusedKeyTests(unittest.TestCase):
             ("chain=main\ntestnet=1\n", True), ("[main]\nchain=test\n", False), ("main.chain=test\n", False),
             # The first chain= wins, as for any setting of the file but testnet=.
             ("chain=test\nchain=main\n", True), ("chain=main\nchain=test\n", False),
+            # regtest= selects a network as testnet= does.
+            ("regtest=1\n", True), ("regtest=0\n", False), ("noregtest=0\n", True), ("regtest=1\nregtest=0\n", False),
+            ("[main]\nregtest=1\n", False),
         ]
         for text, expected in cases:
             self.assertEqual(svc.conf_selects_testnet(text), expected, repr(text))
@@ -2720,6 +2723,36 @@ class EnableTests(SwitchTestBase):
         self.assertEqual(rc, 0, err)
         rc, out, err = self.run_main("enable", "bob")
         self.assertEqual(rc, 0, err)
+
+    def test_enable_reads_a_per_user_unit_datadir_as_systemd_and_the_core_do(self):
+        # A hand-edited drop-in: a quoted word and two dashes name a -datadir as well, and a quoted
+        # value is the path within the quotes.
+        write_tree(self.datadir, self.user_files())
+        elsewhere = os.path.join(self.home, "elsewhere")
+        os.makedirs(elsewhere)
+        path = os.path.join(self.paths.etc_systemd, "gridcoinresearchd@bob.service.d", "50-gridcoin-service.conf")
+        rc, out, err = self.run_main("enable-user", "bob")
+        self.assertEqual(rc, 0, err)
+
+        def write(text):
+            with open(path, "w", encoding="utf8") as f:
+                f.write(text)
+
+        for word in ('"-datadir=%s"' % elsewhere, "--datadir=%s" % elsewhere, "'--datadir=%s'" % elsewhere):
+            with self.subTest(word=word):
+                self.host.calls.clear()
+                write("[Service]\nExecStart=\nExecStart=/usr/bin/gridcoinresearchd %s\n" % word)
+                rc, out, err = self.run_main("enable", "bob")
+                self.assertEqual(rc, 1)
+                self.assertIn("%s gives" % path, err)
+                self.assertEqual(self.host.calls, [])
+        write('[Service]\nExecStart=\nExecStart=/usr/bin/gridcoinresearchd -datadir="%s"\n'
+                        % self.datadir)
+        rc, out, err = self.run_main("enable", "bob")
+        self.assertEqual(rc, 0, err)
+
+    def test_sync_directory_takes_the_empty_directory_of_a_bare_name(self):
+        svc.sync_directory(os.path.dirname("state"))
 
     def test_every_failure_after_the_stop_reports_what_it_left(self):
         def run(host=None):
@@ -4361,6 +4394,8 @@ class SwitchOverTests(ServiceTestBase):
                                    ("main.testnet=1", "has a testnet= line"), ("-testnet=1", "has a testnet= line"),
                                    ("notestnet=1", "has a testnet= line"), ("chain=test", "has a chain= line"),
                                    ("-chain=regtest", "has a chain= line"), ("[main]\nchain=test", "has a chain= line"),
+                                   ("regtest=1", "has a regtest= line"), ("noregtest=0", "has a noregtest= line"),
+                                   ("main.regtest=1", "has a regtest= line"), ("signet=1", "has a signet= line"),
                                    ("includeconf=more.conf", "includes other files")):
                 with self.subTest(conf=conf, line=line):
                     svc_rmtree(self.system_unit_dir())
@@ -4388,6 +4423,11 @@ class SwitchOverTests(ServiceTestBase):
         rc, out, err = self.run_main("switch-over", "--state=" + state, "--network=test")
         self.assertEqual(rc, 1)
         self.assertIn("%s includes other files" % testnet_conf, err)
+        # Nor a regtest= line, with which the core does not start beside -testnet.
+        self.write_text(testnet_conf, "testnet=1\nregtest=1\n")
+        rc, out, err = self.run_main("switch-over", "--state=" + state, "--network=test")
+        self.assertEqual(rc, 1)
+        self.assertIn("%s has a regtest= line" % testnet_conf, err)
         self.write_text(testnet_conf, "testnet=1\n")
         rc, out, err = self.run_main("switch-over", "--state=" + state, "--network=test")
         self.assertEqual(rc, 0, err)
