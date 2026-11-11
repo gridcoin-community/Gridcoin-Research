@@ -585,25 +585,15 @@ void runCommand(std::string strCommand)
     try {
         command = Utf8ToWide(strCommand);
     } catch (const std::range_error&) {
-        // Escape each byte that is not ASCII, as \xNN, so that debug.log stays UTF-8.
-        std::string escaped;
-        for (const char ch : strCommand) {
-            const unsigned int byte = static_cast<unsigned char>(ch);
-            // sign-compare checked: byte is unsigned int; 0x80U is a non-negative literal, so
-            // both sides are unsigned.
-            if (byte < 0x80U) {
-                escaped += ch;
-            } else {
-                escaped += strprintf("\\x%02x", byte);
-            }
-        }
-        LogPrintf("runCommand error: %s is not valid UTF-8 and was not run", escaped);
+        // The command is not logged: a notify command may hold a token.
+        LogPrintf("runCommand error: a command is not valid UTF-8 and was not run");
         return;
     }
     int nErr = ::_wsystem(command.c_str());
 #endif
+    // The command is not logged: a notify command may hold a token.
     if (nErr)
-        LogPrintf("runCommand error: shell command %s returned %d", strCommand, nErr);
+        LogPrintf("runCommand error: a shell command returned %d", nErr);
 }
 #endif
 
