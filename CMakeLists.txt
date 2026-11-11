@@ -279,6 +279,14 @@ if(ENABLE_TESTS)
     list(APPEND BOOST_HUNTER_COMPONENTS test)
 endif()
 
+# Boost.Asio is header-only, and from Boost 1.92 its configuration follows the
+# language standard: on macOS with a 14.4 or later deployment target a C++20
+# translation unit gets a mutex built on std::atomic::wait, a C++17 one the
+# pthread mutex. Most of this tree is C++17, and what links gridcoin_ipc is
+# C++20, so the two would share asio's inline code with two layouts of its
+# classes. This keeps asio's configuration the same under both.
+add_compile_definitions(BOOST_ASIO_DISABLE_STD_ATOMIC_WAIT)
+
 find_package(Atomics REQUIRED)
 find_package(Threads REQUIRED)
 
