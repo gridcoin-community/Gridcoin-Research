@@ -413,8 +413,8 @@ opens with the old passphrase. Move the coins to a new wallet instead:
   applies.
 - **Both networks in one data directory.** Testnet's data directory is `~/.GridcoinResearch/testnet`, so a
   mainnet `enable` leaves `testnet/` and the configuration file (which testnet reads too) in place, and a testnet
-  `enable` moves only `testnet/`. A mainnet `enable` refuses a configuration file that selects testnet
-  (`testnet=` or `chain=`), includes other files (`includeconf=`) or sets `datadir=` elsewhere, and either
+  `enable` moves only `testnet/`. A mainnet `enable` refuses a configuration file that selects another network
+  (`testnet=`, `regtest=` or `chain=`), includes other files (`includeconf=`) or sets `datadir=` elsewhere, and either
   `enable` refuses a data directory with no `wallet.dat`: the node keeps its wallet elsewhere. Each refuses while the other network's
   per-user core of that user runs:
 
@@ -457,8 +457,8 @@ On an upgrade from a release with the earlier units (a forking `gridcoinresearch
     `-testnet`; a file to be renamed that also sets `BindPaths=`, `BindReadOnlyPaths=`, `RootDirectory=`,
     `RootImage=`, `TemporaryFileSystem=`, `MountImages=`, `ExtensionDirectories=` or `RequiresMountsFor=` (move
     those to a drop-in of their own); for the mainnet service, a carried configuration file with a `testnet=` line
-    or a `chain=` line for another network than main; on either network, one with an `includeconf=` line (the
-    files it includes are not read); and a carried configuration file that anyone but root and `gridcoin` can write. The message names the file and what to change. Until then a copy of the unit keeps running on its old
+    or a `chain=` line for another network than main; on either network, one with a `regtest=` or `signet=` line,
+    or with an `includeconf=` line (the files it includes are not read); and a carried configuration file that anyone but root and `gridcoin` can write. The message names the file and what to change. Until then a copy of the unit keeps running on its old
     command line, and drop-ins alone keep the service from starting if they make the daemon fork, or run it on
     its old command line otherwise.
   - **The system service's autounlock** is switched only once the service itself is: its credential, `/etc/gridcoin/wallet-passphrase.cred`, stays where it
@@ -793,8 +793,9 @@ cd "C:\Program Files\GridcoinResearch\daemon"
 - **`enable --user=alice`** moves alice's wallet into the service and starts it. alice's cores must be stopped: it
   refuses while a `gridcoinresearch.exe` or `gridcoinresearchd.exe` of hers runs, or while her data directory is
   locked. It disables her Core-Start task of the same network if she has one, copies her data directory (`--from=` for another one),
-  reads every copied file back, and then removes her copy. It refuses a `gridcoinresearch.conf` of hers with an
-  `includeconf` line: move the included settings into the file first. Her configuration file and `DB_CONFIG` are not carried
+  reads every copied file back, and then removes her copy. It refuses a `gridcoinresearch.conf` of hers (for testnet, the one in
+  `testnet\` as well) with an `includeconf` line (move the included settings into the file first) or with a `datadir` line
+  (her core may keep its wallet in that directory: remove the line, or give the directory with `--from=`). Her configuration file and `DB_CONFIG` are not carried
   over (the service reads only its own configuration file); `enable` names each file it set aside, and each setting
   it dropped from `gridcoinsettings.json` because the core takes it only from its configuration file. It adds alice
   to the attach group and prints, first:
