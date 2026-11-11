@@ -7,6 +7,7 @@
 
 #include "fs.h"
 #include "uint256.h"
+#include "util/transfer_file.h"
 
 #include <atomic>
 #include <cstddef>
@@ -131,8 +132,10 @@ using ProgressFn = std::function<void(uint64_t done, int64_t total)>;
 //! eof (cancel is checked between chunks and calls src.cancel()), then the trailer,
 //! then the verified rename. Any exception from src, such as a lost connection, is a
 //! SourceError. The temporary file is gone on every path other than Ok.
+//! \p replace says whether a file at dest is replaced or refuses the download (TransferTempFile).
 TransferOutcome DownloadEntry(FileSource& src, uint32_t entry, const fs::path& dest, const ProgressFn& progress,
-                              const std::atomic<bool>& cancel, uint32_t chunk_bytes = FILE_TRANSFER_CHUNK_BYTES);
+                              const std::atomic<bool>& cancel, uint32_t chunk_bytes = FILE_TRANSFER_CHUNK_BYTES,
+                              util::TransferTempFile::Replace replace = util::TransferTempFile::Replace::IfThere);
 
 //! Reads local in chunk_bytes pieces, hashing as it goes, then finish(size, sha).
 //! Setting cancel calls sink.cancel(). A refused write ends the upload with the reason

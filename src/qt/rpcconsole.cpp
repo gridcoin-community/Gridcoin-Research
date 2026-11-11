@@ -606,7 +606,10 @@ ConsoleFileResult RunConsoleDownload(interfaces::Wallet& wallet, const ConsoleFi
     // downloaded whatever its size: an entry with nothing to send refuses its first read, with its
     // reason, and that is what is shown.
     result.note = infos[0].note;
-    result.outcome = interfaces::DownloadEntry(*source, 0, request.local_path, progress, cancel);
+    // The console's download replaces nothing: a file at the name by now is refused here too.
+    result.outcome = interfaces::DownloadEntry(*source, 0, request.local_path, progress, cancel,
+                                               interfaces::FILE_TRANSFER_CHUNK_BYTES,
+                                               util::TransferTempFile::Replace::Never);
 
     return result;
 }

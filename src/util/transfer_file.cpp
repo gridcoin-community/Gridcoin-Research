@@ -63,7 +63,8 @@ void SyncDirectory(const fs::path& dir)
 }
 
 //! An errno from link() that says the filesystem keeps no hard links (FAT, a share that refuses
-//! them), rather than that the link was refused.
+//! them), rather than that the name is taken. EPERM is what such a filesystem gives; a link refused
+//! with it for another reason is taken the same way, and the name is then checked before the rename.
 bool NoHardLinks(int err)
 {
     switch (err) {
@@ -112,7 +113,7 @@ int RenameNoReplace(const fs::path& from, const fs::path& to)
 
 } // namespace
 
-std::optional<TransferTempFile> TransferTempFile::Create(const fs::path& dest, std::string& error)
+std::optional<TransferTempFile> TransferTempFile::Create(const fs::path& dest, std::string& error, Replace replace)
 {
     unsigned char rnd[8];
     GetRandBytes(Span<unsigned char>(rnd, sizeof(rnd)));
@@ -120,10 +121,11 @@ std::optional<TransferTempFile> TransferTempFile::Create(const fs::path& dest, s
     fs::path temp = dest;
     temp += "." + HexStr(Span<const unsigned char>(rnd, sizeof(rnd))) + ".part";
 
-    return CreateAt(dest, temp, error);
+    return CreateAt(dest, temp, error, replace);
 }
 
-std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest, const fs::path& temp, std::string& error)
+std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest, const fs::path& temp, std::string& error,
+                                                           Replace replace)
 {
     TransferTempFile f;
     f.m_dest = dest;
@@ -135,6 +137,12 @@ std::optional<TransferTempFile> TransferTempFile::CreateAt(const fs::path& dest,
     // not there, so the type tells it, not the error.)
     boost::system::error_code status_error;
     f.m_replace = fs::symlink_status(dest, status_error).type() != fs::file_not_found;
+    if (f.m_replace && replace == Replace::Never) {
+        error = strprintf("%s is already there, and is not replaced", dest.string());
+        return std::nullopt;
+    }
+    // Which file it is, so that the commit carries permissions from this one and no other.
+    if (f.m_replace) f.m_dest_identity = fsmodes::IdentityOf(dest);
 
 #ifdef WIN32
     // Owner-only from creation: the list is given to CreateFileW, so the file never exists
@@ -225,6 +233,7 @@ void TransferTempFile::MoveFrom(TransferTempFile& other) noexcept
     m_temp = std::move(other.m_temp);
     m_active = other.m_active;
     m_replace = other.m_replace;
+    m_dest_identity = other.m_dest_identity;
     m_remove_failed = other.m_remove_failed;
     m_hasher = other.m_hasher;
     m_size = other.m_size;
@@ -366,12 +375,26 @@ bool TransferTempFile::Commit(uint64_t expected_size, const uint256& expected_sh
     // A destination that exists keeps its permissions when the temporary file replaces it. They go
     // on the file only now, so it is owner-only while it fills, and only from this account's own
     // file: another account's says nothing of what this one wants.
-    if (m_replace) {
+    // Only from the file that was there when the transfer began: another at the name by now is not
+    // the one the user chose, and is not replaced.
+    if (m_replace && !m_dest_identity) {
+        LogPrintf("WARNING: %s could not be identified when the transfer began, so the file that replaces it is "
+                  "owner-only",
+                  m_dest.string());
+    } else if (m_replace) {
 #ifdef WIN32
-        const fsmodes::KeepResult kept = fsmodes::KeepPermissions(m_dest, m_handle, /*own_only=*/true);
+        const fsmodes::KeepResult kept =
+            fsmodes::KeepPermissions(m_dest, m_handle, /*own_only=*/true, &*m_dest_identity);
 #else
-        const fsmodes::KeepResult kept = fsmodes::KeepPermissions(m_dest, m_fd, /*own_only=*/true);
+        const fsmodes::KeepResult kept = fsmodes::KeepPermissions(m_dest, m_fd, /*own_only=*/true, &*m_dest_identity);
 #endif
+        if (kept.kind == fsmodes::KeepResult::Kind::Changed) {
+            error = strprintf("%s is not the file that was there when the transfer began, and was not replaced",
+                              m_dest.string());
+            Abort();
+            AppendRemoveNote(error);
+            return false;
+        }
         if (kept.kind == fsmodes::KeepResult::Kind::NotKept) {
             LogPrintf("WARNING: the permissions of %s could not be kept on the file that replaces it (%s)",
                       m_dest.string(), kept.error);

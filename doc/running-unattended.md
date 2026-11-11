@@ -123,8 +123,10 @@ either way.
   rather than give that access to another group. A file it creates new is owner-only. On a filesystem that cannot keep a file owner-only (a FAT stick, many network shares) it is still written, and
   the core logs a warning: a `dumpwallet` file you send there, or the configuration file it writes on its first
   start in a data directory there. Where you put a dump is your choice. A backup or dump the GUI saves over a
-  file you own keeps that file's permissions; over another account's file it is owner-only, and a name that was
-  free when the save began is never written over.
+  file you own keeps that file's permissions; over another account's file it is owner-only. A name that was
+  free when the save began is not written over, and neither is a file that took the chosen one's place meanwhile.
+  On a filesystem without hard links or a rename that refuses a taken name (FAT on some systems), the free name is
+  checked just before the rename.
   The IPC cookie and the autounlock file are the exceptions: each is written afresh with the narrowest
   permissions that work.
 - **A core started by hand has no autounlock.** The helper that holds the passphrase serves only the main process
@@ -679,8 +681,9 @@ mode concedes the list for a core that runs as you, and the service mode the lis
   (your account and SYSTEM). On a volume that keeps no access lists (FAT, exFAT) or a share that refuses them it is
   still written, and the core logs a warning: a `dumpwallet` file you send there, or the configuration file it
   writes on its first start in a data directory there. Where you put a dump is your choice. A backup or dump the
-  GUI saves over a file you own keeps that file's permissions; over another account's file it is owner-only, and a
-  name that was free when the save began is never written over. The IPC cookie and the autounlock file are the exceptions: each is written afresh with
+  GUI saves over a file you own keeps that file's permissions; over another account's file it is owner-only. A
+  name that was free when the save began is not written over, and neither is a file that took the chosen one's
+  place meanwhile (on a filesystem without hard links the free name is checked just before the rename). The IPC cookie and the autounlock file are the exceptions: each is written afresh with
   the narrowest permissions that work. The installer reports such files on an upgrade (below).
 - **Mainnet and testnet in one account share trust.** A testnet core running as the account that holds a mainnet
   wallet can read and change that wallet's files. Run testnet as the testnet service if you would not trust a test

@@ -136,7 +136,8 @@ const ConsoleFileCommand* FindConsoleFileCommand(const std::string& method)
 }
 
 TransferOutcome DownloadEntry(FileSource& src, uint32_t entry, const fs::path& dest, const ProgressFn& progress,
-                              const std::atomic<bool>& cancel, uint32_t chunk_bytes)
+                              const std::atomic<bool>& cancel, uint32_t chunk_bytes,
+                              util::TransferTempFile::Replace replace)
 {
     if (chunk_bytes == 0) {
         return Fail(TransferStatus::LocalError, 0, "the chunk size must not be zero");
@@ -179,7 +180,7 @@ TransferOutcome DownloadEntry(FileSource& src, uint32_t entry, const fs::path& d
         return Fail(TransferStatus::LocalError, 0, error);
     }
 
-    std::optional<util::TransferTempFile> tmp = util::TransferTempFile::Create(dest, error);
+    std::optional<util::TransferTempFile> tmp = util::TransferTempFile::Create(dest, error, replace);
 
     if (!tmp) {
         CancelQuietly(src);

@@ -21,12 +21,13 @@
 #include <string>
 #include <vector>
 
+#include "test/win_fs_util.h"
+
 #ifndef WIN32
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #else
-#include "test/win_fs_util.h"
 #include "util/dir_permissions.h"
 #include "util/win_acl.h"
 #endif
@@ -175,6 +176,74 @@ BOOST_AUTO_TEST_CASE(commit_over_an_existing_destination_keeps_its_permissions)
         return ace.trustee == util::winacl::wellknown::Users();
     }));
 #endif
+}
+
+// The permissions carried at the commit are those of the file that was at the destination when the
+// transfer began. Another file put at the name meanwhile lends nothing and is not replaced.
+// Production change that would fail this: a commit that reads the permissions of whatever is at
+// the name by then.
+BOOST_AUTO_TEST_CASE(commit_refuses_a_destination_that_is_another_file_by_then)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
+    std::string err;
+    const fs::path dest = dir / "chosen.bin";
+    const fs::path other = dir / "other.bin";
+    grc_test::WriteOwnFile(dest, "old");
+    grc_test::WriteOwnFile(other, "another file");
+#ifndef WIN32
+    BOOST_REQUIRE_EQUAL(::chmod(other.c_str(), 0644), 0);
+#endif
+
+    auto t = util::TransferTempFile::Create(dest, err);
+    BOOST_REQUIRE_MESSAGE(t, err);
+    BOOST_REQUIRE(t->Write(reinterpret_cast<const unsigned char*>(kBytes.data()), kBytes.size(), err));
+    fs::rename(other, dest);
+
+    BOOST_CHECK(!t->Commit(kBytes.size(), Sha256Of(kBytes), err));
+    BOOST_CHECK_MESSAGE(err.find("is not the file that was there") != std::string::npos, err);
+    BOOST_CHECK_EQUAL(ReadAll(dest), "another file");
+    BOOST_CHECK_EQUAL(CountPartFiles(dir), 0u);
+
+    // So is a destination that is gone by then.
+    t = util::TransferTempFile::Create(dest, err);
+    BOOST_REQUIRE_MESSAGE(t, err);
+    BOOST_REQUIRE(t->Write(reinterpret_cast<const unsigned char*>(kBytes.data()), kBytes.size(), err));
+    fs::remove(dest);
+    BOOST_CHECK(!t->Commit(kBytes.size(), Sha256Of(kBytes), err));
+    BOOST_CHECK(!fs::exists(dest));
+    BOOST_CHECK_EQUAL(CountPartFiles(dir), 0u);
+}
+
+// A caller that replaces nothing is refused a destination that is there when the transfer begins,
+// and one that appears while the data arrives, as any transfer to a free name is. Production
+// change that would fail this: a transfer that takes a file at the name as the caller's choice
+// whatever the caller said.
+BOOST_AUTO_TEST_CASE(a_transfer_that_never_replaces_refuses_a_taken_name)
+{
+    if (grc_test::RunningUnderWine()) {
+        BOOST_TEST_MESSAGE("Wine keeps no protected access list, which the transfer directory and files need; skipping");
+        return;
+    }
+    std::string err;
+    const fs::path dest = dir / "taken.bin";
+    grc_test::WriteOwnFile(dest, "there");
+
+    BOOST_CHECK(!util::TransferTempFile::Create(dest, err, util::TransferTempFile::Replace::Never));
+    BOOST_CHECK_MESSAGE(err.find("is already there") != std::string::npos, err);
+    BOOST_CHECK_EQUAL(ReadAll(dest), "there");
+    BOOST_CHECK_EQUAL(CountPartFiles(dir), 0u);
+
+    fs::remove(dest);
+    auto t = util::TransferTempFile::Create(dest, err, util::TransferTempFile::Replace::Never);
+    BOOST_REQUIRE_MESSAGE(t, err);
+    BOOST_REQUIRE(t->Write(reinterpret_cast<const unsigned char*>(kBytes.data()), kBytes.size(), err));
+    grc_test::WriteOwnFile(dest, "appeared");
+    BOOST_CHECK(!t->Commit(kBytes.size(), Sha256Of(kBytes), err));
+    BOOST_CHECK_EQUAL(ReadAll(dest), "appeared");
+    BOOST_CHECK_EQUAL(CountPartFiles(dir), 0u);
 }
 
 // While it is written the temporary file is owner-only, also when the destination it will replace

@@ -765,7 +765,14 @@ std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::option
     return file;
 }
 
-KeepResult KeepPermissions(const fs::path& existing, int fd, bool own_only)
+std::optional<FileIdentity> IdentityOf(const fs::path& path)
+{
+    struct stat st;
+    if (::lstat(path.string().c_str(), &st) != 0) return std::nullopt;
+    return FileIdentity{static_cast<uint64_t>(st.st_dev), static_cast<uint64_t>(st.st_ino)};
+}
+
+KeepResult KeepPermissions(const fs::path& existing, int fd, bool own_only, const FileIdentity* only)
 {
     KeepResult result;
 
@@ -773,10 +780,19 @@ KeepResult KeepPermissions(const fs::path& existing, int fd, bool own_only)
     struct stat old_st;
     if (::lstat(existing.string().c_str(), &old_st) != 0) {
         const int err = errno;
-        if (err == ENOENT || err == ENOTDIR) return result;
+        if (err == ENOENT || err == ENOTDIR) {
+            if (only) result.kind = KeepResult::Kind::Changed;
+            return result;
+        }
 
         result.kind = KeepResult::Kind::NotKept;
         result.error = strprintf("cannot read the permissions of %s: %s", existing.string(), SysErrorString(err));
+        return result;
+    }
+
+    // The file the caller named, by the same lstat its permissions are read from.
+    if (only && FileIdentity{static_cast<uint64_t>(old_st.st_dev), static_cast<uint64_t>(old_st.st_ino)} != *only) {
+        result.kind = KeepResult::Kind::Changed;
         return result;
     }
 
@@ -1489,7 +1505,25 @@ std::FILE* CreateNewOwnerOnlyFile(const fs::path& path, bool& taken, std::option
     return file;
 }
 
-KeepResult KeepPermissions(const fs::path& existing, void* handle, bool own_only)
+namespace {
+//! The identity of the file \p handle is open on, or nullopt when it cannot be read.
+std::optional<FileIdentity> IdentityOfHandle(HANDLE handle)
+{
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!::GetFileInformationByHandle(handle, &info)) return std::nullopt;
+    return FileIdentity{info.dwVolumeSerialNumber,
+                        (static_cast<uint64_t>(info.nFileIndexHigh) << 32) | info.nFileIndexLow};
+}
+} // anonymous namespace
+
+std::optional<FileIdentity> IdentityOf(const fs::path& path)
+{
+    const UniqueHandle handle = OpenForCheck(path, /*follow_link=*/false);
+    if (!handle) return std::nullopt;
+    return IdentityOfHandle(handle.get());
+}
+
+KeepResult KeepPermissions(const fs::path& existing, void* handle, bool own_only, const FileIdentity* only)
 {
     KeepResult result;
 
@@ -1497,11 +1531,20 @@ KeepResult KeepPermissions(const fs::path& existing, void* handle, bool own_only
     DWORD open_error = 0;
     const UniqueHandle old = OpenForCheck(existing, /*follow_link=*/false, &open_error);
     if (!old) {
-        if (open_error == ERROR_FILE_NOT_FOUND || open_error == ERROR_PATH_NOT_FOUND) return result;
+        if (open_error == ERROR_FILE_NOT_FOUND || open_error == ERROR_PATH_NOT_FOUND) {
+            if (only) result.kind = KeepResult::Kind::Changed;
+            return result;
+        }
 
         result.kind = KeepResult::Kind::NotKept;
         result.error = strprintf("cannot read the access list of %s: %s", existing.string(),
                                  Win32ErrorText(open_error));
+        return result;
+    }
+
+    // The file the caller named, through the same handle its list is read from.
+    if (only && IdentityOfHandle(old.get()) != *only) {
+        result.kind = KeepResult::Kind::Changed;
         return result;
     }
 
@@ -1596,7 +1639,8 @@ std::FILE* CreateReplacementFile(const fs::path& target, const fs::path& temp, s
                             kept.error);
         break;
     case KeepResult::Kind::NotOurs:
-        // Not asked for here: every account's file lends its permissions.
+    case KeepResult::Kind::Changed:
+        // Not asked for here: whatever file is at the name lends its permissions, any account's.
         break;
     }
 
