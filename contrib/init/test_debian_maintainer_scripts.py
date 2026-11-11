@@ -212,14 +212,16 @@ class FakeRoot:
             f.write(text)
         os.chmod(path, 0o755)
 
-    def set_tool(self, rc, removes_state=None):
+    def set_tool(self, rc, removes_state=None, leaves=None):
         """The service tool: logs, and exits rc. With rc 0 it removes the state file, as the real one does
-        on success."""
+        on success; with leaves it rewrites it to that, as the real one does with what is left to do."""
         state = self.state_path()
         removes = (rc == 0) if removes_state is None else removes_state
         body = 'printf "%%s\\n" "%s $*" >> "$LOG"\n' % self.net["tool"]
         if removes:
             body += 'rm -f "%s"\n' % state
+        if leaves is not None:
+            body += 'printf "%%s" "%s" > "%s"\n' % (leaves.replace("\n", "\\n"), state)
         self.write_executable(self.path("usr/sbin/" + self.net["tool"]), "#!/bin/sh\n%sexit %d\n" % (body, rc))
 
     def set_policy(self, rc):
@@ -552,11 +554,14 @@ class PostinstTests(unittest.TestCase):
                 fake = FakeRoot(self, network)
                 fake.systemd_running()
                 system = "systemctl try-restart --no-block %s.service" % fake.net["daemon"]
-                for rc_tool, state, expected in ((1, "system-core\n", []), (1, "system-autounlock\n", []),
-                                                 (0, "system-core\n", [system]),
-                                                 (1, "core-active alice\n", [system])):
-                    with self.subTest(rc=rc_tool, state=state):
-                        fake.set_tool(rc_tool)
+                # The last: the system part was done and only a user's is left, which the tool's
+                # rewritten state file shows.
+                for rc_tool, state, left, expected in (
+                        (1, "system-core\n", None, []), (1, "system-autounlock\n", None, []),
+                        (0, "system-core\n", None, [system]), (1, "core-active alice\n", None, [system]),
+                        (1, "system-core\ncore-active alice\n", "core-active alice\n", [system])):
+                    with self.subTest(rc=rc_tool, state=state, left=left):
+                        fake.set_tool(rc_tool, leaves=left)
                         self.write_state(fake, state)
                         rc, out, err = fake.run("postinst", "configure", OLD)
                         self.assertEqual(rc, 0, err)

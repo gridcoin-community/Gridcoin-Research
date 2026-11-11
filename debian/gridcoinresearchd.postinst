@@ -109,7 +109,7 @@ restart_running_cores() {
 # debhelper (--no-stop-on-upgrade in debian/rules), so that a system service whose switch-over
 # failed keeps running on its old command line, as NEWS says. A stopped one stays stopped.
 restart_system_service() {
-    if [ "$switch_over_failed" = 1 ] && printf '%s\n' "$pending" | grep -q '^system-'; then
+    if [ "$switch_over_failed" = 1 ] && printf '%s\n' "$left" | grep -q '^system-'; then
         return 0
     fi
     if policy_refuses "$DAEMON.service"; then
@@ -139,6 +139,7 @@ case "$1" in
         if [ -e "$STATE" ]; then
             pending=$(cat "$STATE")
         fi
+        left=$pending
         switch_over_failed=
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload || true
@@ -146,6 +147,10 @@ case "$1" in
                 # The services the preinst found move to the new units.
                 if ! "$TOOL" switch-over --state="$STATE"; then
                     switch_over_failed=1
+                    # What the tool left to do: it rewrites the state file as it goes.
+                    if [ -e "$STATE" ]; then
+                        left=$(cat "$STATE")
+                    fi
                     echo "$DAEMON: the switch-over did not finish, for the reasons above." >&2
                     echo "Once they are fixed, run: $TOOL switch-over --state=$STATE" >&2
                 fi
