@@ -333,8 +333,12 @@ jobs:
 
       - name: Unit suite under Valgrind
         run: |
+          # --fair-sched: Valgrind runs one thread at a time, and by default
+          # a thread that computes can keep the others from running for
+          # seconds. Cases that time one thread against another need each
+          # to get its turn.
           valgrind --suppressions=contrib/valgrind.supp --gen-suppressions=all \
-            --error-exitcode=1 --quiet \
+            --error-exitcode=1 --quiet --fair-sched=yes \
             build_valgrind/src/test/test_gridcoin
 
       - name: Functional suite under Valgrind
